@@ -496,7 +496,7 @@ author's daily set working end to end without the stock KDE Connect client.
 | MAG-P4-A | done | MAG-P3 | Clipboard both ways with the tile and share target | peer tests, JVM tests |
 | MAG-P4-B | done | MAG-P3 | Notifications with actions and replies | peer tests, JVM tests |
 | MAG-P4-C | done | MAG-P3 | Resumable file share both ways under revocation | peer tests |
-| MAG-P4-D | planned | MAG-P3 | Media control both ways | peer tests, MPRIS consumer tests |
+| MAG-P4-D | done | MAG-P3 | Media control both ways | peer tests, MPRIS consumer tests |
 | MAG-P4-E | planned | MAG-P1-E | Contacts sync and name resolution | peer tests, JVM tests |
 | MAG-P4-F | planned | MAG-P4-E | SMS conversations, send, receive, MMS attachments | peer tests, JVM tests |
 | MAG-P4-G | planned | MAG-P4-E | Call state, mute, answer, hang up; shell phone menu shows the call | peer tests, shell consumer tests |

@@ -11,7 +11,7 @@ use std::process::Command;
 
 use magnetita_link::discovery::{parse_peers, Peer as Advertised, SERVICE_TYPE};
 
-pub use magnetita_mobile::phone::{clipboard_text, describe, share_fields, Incoming};
+pub use magnetita_mobile::phone::{clipboard_text, describe, media_fields, share_fields, Incoming};
 pub use magnetita_mobile::{Phone, PhoneSession};
 
 /// The Magnetita desktops Avahi sees right now.

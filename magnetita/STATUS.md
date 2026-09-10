@@ -3,8 +3,9 @@
 - **Updated:** 2026-09-09
 - **Implementation:** `MAG-P4`, the daily set on the own wire, is the
   active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-2`; the clipboard both ways, the notifications with actions and
-  replies, and the resumable file share are done. `MAG-P3`, the
+  `AND-2`; the clipboard, the notifications, the resumable file share and
+  the media control, all both ways, are done; contacts, SMS and telephony
+  remain. `MAG-P3`, the
   Android application foundation, met its exit on 2026-09-09 and is
   archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
@@ -30,6 +31,9 @@
 
 ## Current checkout truth
 
+- The phone's player shows on the desktop's media card over the own wire
+  and the desktop's buttons drive it; the desktop's MPRIS players reach
+  the phone through the same playerctl worker while it asks (`MAG-P4-D`).
 - Files travel both ways on the own wire on their own streams and resume
   after a broken link; received files are published in the downloads
   directory only while the device is still paired (`MAG-P4-C`).

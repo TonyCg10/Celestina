@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -15,6 +15,7 @@ use std::time::Duration;
 use magnetita_link::trust::fingerprint_text;
 use magnetita_link::LinkError;
 use magnetita_peer::{browse, clipboard_text, describe, dir_default, Incoming, Phone};
+use magnetita_proto::daily::media::MediaState;
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 
 fn dir() -> PathBuf {
@@ -24,7 +25,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -107,6 +108,25 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                     .await?;
                 println!("notification sent");
             }
+            if let Some(spec) = flag(args, "--media") {
+                // PLAYER|TITLE|ARTIST as a playing state.
+                let mut parts = spec.splitn(3, '|');
+                let state = MediaState {
+                    player: parts.next().unwrap_or("peer").into(),
+                    title: parts.next().unwrap_or("").into(),
+                    artist: parts.next().unwrap_or("").into(),
+                    album: String::new(),
+                    playing: true,
+                    position_ms: 0,
+                    length_ms: 0,
+                    can_seek: false,
+                    can_next: true,
+                    can_previous: true,
+                    volume: 50,
+                };
+                session.send_media_state(&state).await?;
+                println!("media state sent");
+            }
             let sending = match flag(args, "--send-file") {
                 Some(path) => {
                     let path = PathBuf::from(path);
@@ -150,6 +170,21 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                 }
                                 session.finish_transfer(id).await?;
                                 println!("sent from offset {offset}");
+                            }
+                            (6, 1, _) => {
+                                let m = magnetita_peer::media_fields(&env);
+                                if let Some(state) = m.state {
+                                    println!(
+                                        "media: {} playing={} {} - {}",
+                                        state.player, state.playing, state.artist, state.title
+                                    );
+                                }
+                            }
+                            (6, 2, _) => {
+                                let m = magnetita_peer::media_fields(&env);
+                                if let Some(c) = m.command {
+                                    println!("media command: {} {:?}", c.player, c.button);
+                                }
                             }
                             _ => match clipboard_text(&env) {
                                 Some(text) => println!("clipboard: {text}"),

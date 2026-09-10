@@ -31,6 +31,7 @@ use magnetita_link::{
 use magnetita_proto::daily::battery::BatteryStatus;
 use magnetita_proto::daily::clipboard::{ClipboardRequest, ClipboardText};
 use magnetita_proto::daily::find::FindRing;
+use magnetita_proto::daily::media::{MediaCommand, MediaRequest, MediaState};
 use magnetita_proto::daily::notifications::{
     NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
 };
@@ -40,6 +41,7 @@ use rand_core::{OsRng, RngCore};
 
 use crate::devices::{command_channel, Command, DeviceEntry};
 pub(crate) mod discovery;
+pub(crate) mod media;
 pub(crate) mod notifications;
 pub(crate) mod share;
 
@@ -148,6 +150,10 @@ fn hello(device_id: &str) -> Hello {
             },
             CapabilityVersion {
                 capability: capability::SHARE,
+                version: 1,
+            },
+            CapabilityVersion {
+                capability: capability::MEDIA,
                 version: 1,
             },
         ],
@@ -587,6 +593,16 @@ impl Wire {
             self.adapters.download_dir.clone(),
             outbox,
         );
+        let media = Arc::new(media::SessionMedia::default());
+        if daemon.settings.lock_ok().media {
+            let req = media::SessionMedia::request();
+            if let Err(e) = session
+                .send_message(req.capability, req.kind, req.body)
+                .await
+            {
+                log("link", &format!("{name}: media request: {e}"));
+            }
+        }
         // Bulk streams are accepted by their own task: `select!` drops the
         // future of a branch that loses the race, and a dropped half-accepted
         // stream is a lost transfer. A channel receive is cancel-safe.
@@ -617,6 +633,9 @@ impl Wire {
                     Ok(env) if env.capability == capability::PAIRING && env.kind == pair_kind::QR_PROOF => {
                         self.prove_again(&session, &name, &env.body).await;
                     }
+                    Ok(env) if env.capability == capability::MEDIA => {
+                        self.handle_media(&device_id, &name, &media, &env);
+                    }
                     Ok(env) if env.capability == capability::SHARE => {
                         if let Some(reply) = shares.handle(&env) {
                             if let Err(e) = session.send_message(reply.capability, reply.kind, reply.body).await {
@@ -637,6 +656,12 @@ impl Wire {
                     }
                 }
                 _ = tick.tick() => {
+                    media.set_active(daemon.settings.lock_ok().media);
+                    for state in media.tick() {
+                        if let Err(e) = session.send_message(state.capability, state.kind, state.body).await {
+                            log("link", &format!("{name}: media: {e}"));
+                        }
+                    }
                     // The desktop's clipboard changes land in the shared slot
                     // for every device; this wire drains its own entry here.
                     if let Some(text) = daemon.pending_clipboards.take(&device_id) {
@@ -658,7 +683,7 @@ impl Wire {
                         break;
                     }
                     while let Ok(command) = commands.try_recv() {
-                        if let Err(e) = self.command(&session, &shares, command).await {
+                        if let Err(e) = self.command(&session, &shares, &media, command).await {
                             log("link", &format!("{name}: command: {e}"));
                         }
                     }
@@ -672,6 +697,41 @@ impl Wire {
         acceptor.abort();
         daemon.pending_clipboards.clear(&device_id);
         self.adapters.notifications.forget_device(&device_id);
+    }
+
+    /// Media envelopes from the phone: its player onto the registry's card,
+    /// its buttons onto the desktop's players, its request onto the tick.
+    fn handle_media(
+        &self,
+        device_id: &str,
+        name: &str,
+        media: &media::SessionMedia,
+        env: &magnetita_proto::Envelope,
+    ) {
+        if !self.daemon.settings.lock_ok().media {
+            return;
+        }
+        match env.kind {
+            MediaState::KIND => match MediaState::decode(&env.body) {
+                Ok(state) => {
+                    media.note_phone_state(&state);
+                    let mapped = media::player_state(&state);
+                    let stale =
+                        crate::devices::set_media(&self.daemon.devices, device_id, mapped.as_ref());
+                    if let Some(path) = stale {
+                        crate::artwork::discard(&path);
+                    }
+                    self.daemon.notify_change();
+                }
+                Err(e) => log("link", &format!("{name}: media: {e}")),
+            },
+            MediaCommand::KIND => match MediaCommand::decode(&env.body) {
+                Ok(command) => media.drive(&command),
+                Err(e) => log("link", &format!("{name}: media: {e}")),
+            },
+            MediaRequest::KIND => media.wanted(),
+            _ => {}
+        }
     }
 
     /// A phone that forgot this desktop while the desktop still pins it is
@@ -768,9 +828,17 @@ impl Wire {
         &self,
         session: &Session,
         shares: &Arc<share::SessionShare>,
+        media: &Arc<media::SessionMedia>,
         command: Command,
     ) -> Result<(), LinkError> {
         match command {
+            Command::Media(action) => {
+                if let Some(env) = media.command_for_phone(action) {
+                    session
+                        .send_message(env.capability, env.kind, env.body)
+                        .await?;
+                }
+            }
             Command::SendFile(path) => match shares.offer(path) {
                 Ok(offer) => {
                     session
@@ -811,9 +879,6 @@ impl Wire {
                         NotificationDismissed { key }.encode(),
                     )
                     .await?;
-            }
-            Command::Media(_) => {
-                log("link", "media commands reach the own wire in MAG-P4-D");
             }
         }
         Ok(())
@@ -955,14 +1020,18 @@ mod tests {
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
 
         // The desktop asks for the phone's clipboard as the session opens.
-        let first = rt
-            .block_on(async { tokio::time::timeout(Duration::from_secs(5), session.recv()).await })
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            (first.capability, first.kind),
-            (capability::CLIPBOARD, ClipboardRequest::KIND)
-        );
+        let first = rt.block_on(async {
+            loop {
+                let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if env.capability == capability::CLIPBOARD {
+                    break env;
+                }
+            }
+        });
+        assert_eq!(first.kind, ClipboardRequest::KIND);
 
         // Phone to desktop: the text lands in the sink, recorded as last synced.
         rt.block_on(async {
@@ -993,14 +1062,18 @@ mod tests {
         daemon
             .pending_clipboards
             .replace_for(["phone3".to_owned()], "copied on the desk".into());
-        let env = rt
-            .block_on(async { tokio::time::timeout(Duration::from_secs(5), session.recv()).await })
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            (env.capability, env.kind),
-            (capability::CLIPBOARD, ClipboardText::KIND)
-        );
+        let env = rt.block_on(async {
+            loop {
+                let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if env.capability == capability::CLIPBOARD {
+                    break env;
+                }
+            }
+        });
+        assert_eq!(env.kind, ClipboardText::KIND);
         assert_eq!(
             ClipboardText::decode(&env.body).unwrap().text,
             "copied on the desk"
@@ -1296,6 +1369,115 @@ mod tests {
     }
 
     #[test]
+    fn the_phone_player_reaches_the_card_and_the_desktop_buttons_reach_the_phone() {
+        use magnetita_proto::daily::media::MediaButton;
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: Arc::new(notifications::NoServer),
+                notifications: Arc::new(notifications::Bridge::default()),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
+            },
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone6") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+
+        // The desktop asks for the phone's media as the session opens.
+        let first = rt.block_on(async {
+            loop {
+                let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if env.capability == capability::MEDIA {
+                    break env;
+                }
+            }
+        });
+        assert_eq!(first.kind, MediaRequest::KIND);
+
+        rt.block_on(
+            session.send_message(
+                capability::MEDIA,
+                MediaState::KIND,
+                MediaState {
+                    player: "YT Music".into(),
+                    title: "Song".into(),
+                    artist: "Band".into(),
+                    album: String::new(),
+                    playing: true,
+                    position_ms: 10_000,
+                    length_ms: 200_000,
+                    can_seek: true,
+                    can_next: true,
+                    can_previous: true,
+                    volume: 60,
+                }
+                .encode(),
+            ),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let entry = daemon.devices.lock_ok().get("phone6").cloned();
+            if let Some(e) = entry.filter(|e| e.media_player == "YT Music") {
+                assert_eq!(
+                    (e.media_title.as_str(), e.media_now_playing.as_str()),
+                    ("Song", "Band - Song")
+                );
+                assert!(e.media_playing && e.media_can_next);
+                assert_eq!(e.media_length, 200_000);
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the phone's player never reached the card"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+
+        daemon
+            .commands
+            .lock_ok()
+            .get("phone6")
+            .unwrap()
+            .try_send(Command::Media(magnetita_core::MediaAction::Next))
+            .unwrap();
+        let env = rt.block_on(async {
+            loop {
+                let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if env.capability == capability::MEDIA && env.kind == MediaCommand::KIND {
+                    break env;
+                }
+            }
+        });
+        let command = MediaCommand::decode(&env.body).unwrap();
+        assert_eq!(
+            (command.player.as_str(), command.button),
+            ("YT Music", Some(MediaButton::Next))
+        );
+        session.close("done");
+        drop(wire);
+    }
+
+    #[test]
     fn a_phone_that_forgot_the_desktop_pairs_again_while_still_pinned() {
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -1463,7 +1645,7 @@ mod tests {
         let ring = rt.block_on(async {
             loop {
                 let env = session.recv().await.unwrap();
-                if env.capability != capability::CLIPBOARD {
+                if env.capability != capability::CLIPBOARD && env.capability != capability::MEDIA {
                     break env;
                 }
             }

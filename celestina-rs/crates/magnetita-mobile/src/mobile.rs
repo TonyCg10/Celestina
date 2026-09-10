@@ -12,8 +12,10 @@ use std::time::Duration;
 use magnetita_link::trust::fingerprint_text;
 
 use crate::phone::{
-    clipboard_text, describe, notification_fields, share_fields, Incoming, Phone, PhoneSession,
+    button_from_index, button_index, clipboard_text, describe, media_fields, notification_fields,
+    share_fields, Incoming, Phone, PhoneSession,
 };
+use magnetita_proto::daily::media::{MediaCommand, MediaState};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 
 /// Why a call failed, as Kotlin sees it.
@@ -80,6 +82,68 @@ pub struct Event {
     pub complete: Option<bool>,
     /// Where a received file landed on this phone.
     pub path: Option<String>,
+    /// One of the desktop's players, when the message is its state.
+    pub media: Option<MobileMediaState>,
+    /// The desktop's command for one of this phone's players.
+    pub media_command: Option<MobileMediaCommand>,
+}
+
+/// One player's state, either side's.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileMediaState {
+    pub player: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub playing: bool,
+    pub position_ms: u64,
+    pub length_ms: u64,
+    pub can_seek: bool,
+    pub can_next: bool,
+    pub can_previous: bool,
+    pub volume: u8,
+}
+
+/// A button (0 play, 1 pause, 2 play/pause, 3 next, 4 previous, 5 stop),
+/// a seek or a volume for one player.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileMediaCommand {
+    pub player: String,
+    pub button: Option<u8>,
+    pub seek_ms: Option<u64>,
+    pub volume: Option<u8>,
+}
+
+fn media_state_out(s: MobileMediaState) -> MediaState {
+    MediaState {
+        player: s.player,
+        title: s.title,
+        artist: s.artist,
+        album: s.album,
+        playing: s.playing,
+        position_ms: s.position_ms,
+        length_ms: s.length_ms,
+        can_seek: s.can_seek,
+        can_next: s.can_next,
+        can_previous: s.can_previous,
+        volume: s.volume,
+    }
+}
+
+fn media_state_in(s: MediaState) -> MobileMediaState {
+    MobileMediaState {
+        player: s.player,
+        title: s.title,
+        artist: s.artist,
+        album: s.album,
+        playing: s.playing,
+        position_ms: s.position_ms,
+        length_ms: s.length_ms,
+        can_seek: s.can_seek,
+        can_next: s.can_next,
+        can_previous: s.can_previous,
+        volume: s.volume,
+    }
 }
 
 /// The kind [`MobileSession::next`] uses for a file this phone finished
@@ -256,6 +320,31 @@ impl MobileSession {
         Ok(self.handle.block_on(self.inner.reject_file(transfer))?)
     }
 
+    /// Reports one of this phone's players; an empty player name clears it.
+    pub fn send_media_state(&self, state: MobileMediaState) -> Result<(), MobileError> {
+        Ok(self
+            .handle
+            .block_on(self.inner.send_media_state(&media_state_out(state)))?)
+    }
+
+    /// Drives one of the desktop's players.
+    pub fn send_media_command(&self, command: MobileMediaCommand) -> Result<(), MobileError> {
+        let command = MediaCommand {
+            player: command.player,
+            button: command.button.and_then(button_from_index),
+            seek_ms: command.seek_ms,
+            volume: command.volume,
+        };
+        Ok(self
+            .handle
+            .block_on(self.inner.send_media_command(&command))?)
+    }
+
+    /// Asks the desktop for its players' states.
+    pub fn request_media(&self) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.request_media())?)
+    }
+
     /// Shares a URL or a snippet with the desktop.
     pub fn send_text(&self, text: String) -> Result<(), MobileError> {
         Ok(self.handle.block_on(self.inner.send_text(&text))?)
@@ -270,6 +359,7 @@ impl MobileSession {
             Incoming::Envelope(e) => {
                 let (key, action, reply) = notification_fields(&e);
                 let share = share_fields(&e);
+                let media = media_fields(&e);
                 Event {
                     capability: e.capability,
                     kind: e.kind,
@@ -282,6 +372,13 @@ impl MobileSession {
                     offset: share.offset,
                     complete: share.complete,
                     path: None,
+                    media: media.state.map(media_state_in),
+                    media_command: media.command.map(|c| MobileMediaCommand {
+                        player: c.player,
+                        button: c.button.map(button_index),
+                        seek_ms: c.seek_ms,
+                        volume: c.volume,
+                    }),
                     body: e.body,
                 }
             }
@@ -301,6 +398,8 @@ impl MobileSession {
                 offset: None,
                 complete: Some(complete),
                 path: Some(path.to_string_lossy().into_owned()),
+                media: None,
+                media_command: None,
                 body: Vec::new(),
             },
         }))

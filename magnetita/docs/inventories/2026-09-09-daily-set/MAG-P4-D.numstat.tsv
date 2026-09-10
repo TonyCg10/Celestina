@@ -1,0 +1,29 @@
+# MAG-P4-D exact change inventory
+
+Base revision	b0eba0003b8790ff0cd436cb7b6aa49028a42135
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/media.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/evidence/2026-09-09-media-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-D.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-daily-set.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+100	1	501ac153ef192f239c2714de7115d2b224ea6ccb904b466d2b38ea6175852aec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+81	0	b108de23171673c8839e07c0a513efe8b76f0a2d51bc8c3311853528fccbd2e7	celestina-rs/crates/magnetita-mobile/src/phone.rs
+1	1	7bf63ef3beb13c171d14a0261a6c42a6d4909200b6339dd972fd482060192d6e	celestina-rs/crates/magnetita-peer/src/lib.rs
+37	2	3726cea812d337a252dba3e538c79f5140bc3cd848d160c47abf24f1cda0643f	celestina-rs/crates/magnetita-peer/src/main.rs
+324	0	11867f5ffc695d0a917fb4fdf2f72375779f3b170fd5c93d44f094c187b50de1	celestina-rs/crates/magnetitad/src/link_wire/media.rs
+203	21	35181dbb46c74990066c4693b551f1f83c8b492d24854ce86f5d3c9107a74e29	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+1	1	fcbbbfab56b565162973aa3dfc38380a35530459f911f73cbcd1dd45063c6f04	magnetita/ROADMAP.md
+6	2	2ffd8100455803b3c147960cbace2ebe2216979a5890701967f9d708dfb91fe6	magnetita/STATUS.md
+61	0	16130efd47d8b0953634605f089badfb65ee4db6725503ab1211b03560ecaf2c	magnetita/docs/evidence/2026-09-09-media-own-wire.md
+29	0	self	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-D.numstat.tsv
+1	1	ffbed2ed072e65afa38f852496ed812bfff9b52631d85ffe6fb073b867736a96	magnetita/docs/plans/active/2026-09-09-daily-set.md

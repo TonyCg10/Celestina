@@ -16,6 +16,7 @@ use magnetita_link::{
 };
 use magnetita_proto::daily::battery::BatteryStatus;
 use magnetita_proto::daily::clipboard::ClipboardText;
+use magnetita_proto::daily::media::{MediaButton, MediaCommand, MediaRequest, MediaState};
 use magnetita_proto::daily::notifications::{
     NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
 };
@@ -465,6 +466,30 @@ impl PhoneSession {
         Ok(())
     }
 
+    /// Reports one of this phone's players; an empty player name clears it.
+    pub async fn send_media_state(&self, state: &MediaState) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::MEDIA, MediaState::KIND, state.encode())
+            .await?;
+        Ok(())
+    }
+
+    /// Drives one of the desktop's players.
+    pub async fn send_media_command(&self, command: &MediaCommand) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::MEDIA, MediaCommand::KIND, command.encode())
+            .await?;
+        Ok(())
+    }
+
+    /// Asks the desktop for its players' states.
+    pub async fn request_media(&self) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::MEDIA, MediaRequest::KIND, MediaRequest.encode())
+            .await?;
+        Ok(())
+    }
+
     /// Shares a URL or a snippet, no stream needed.
     pub async fn send_text(&self, text: &str) -> Result<(), LinkError> {
         self.session
@@ -600,6 +625,59 @@ pub fn share_fields(env: &Envelope) -> ShareFields {
     }
 }
 
+/// The media fields a desktop envelope names, for the application.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MediaFields {
+    pub state: Option<MediaState>,
+    pub command: Option<MediaCommand>,
+    pub request: bool,
+}
+
+pub fn media_fields(env: &Envelope) -> MediaFields {
+    if env.capability != capability::MEDIA {
+        return MediaFields::default();
+    }
+    match env.kind {
+        MediaState::KIND => MediaFields {
+            state: MediaState::decode(&env.body).ok(),
+            ..Default::default()
+        },
+        MediaCommand::KIND => MediaFields {
+            command: MediaCommand::decode(&env.body).ok(),
+            ..Default::default()
+        },
+        MediaRequest::KIND => MediaFields {
+            request: true,
+            ..Default::default()
+        },
+        _ => MediaFields::default(),
+    }
+}
+
+/// The wire's button index, for the application's side of the enum.
+pub fn button_index(button: MediaButton) -> u8 {
+    match button {
+        MediaButton::Play => 0,
+        MediaButton::Pause => 1,
+        MediaButton::PlayPause => 2,
+        MediaButton::Next => 3,
+        MediaButton::Previous => 4,
+        MediaButton::Stop => 5,
+    }
+}
+
+pub fn button_from_index(index: u8) -> Option<MediaButton> {
+    Some(match index {
+        0 => MediaButton::Play,
+        1 => MediaButton::Pause,
+        2 => MediaButton::PlayPause,
+        3 => MediaButton::Next,
+        4 => MediaButton::Previous,
+        5 => MediaButton::Stop,
+        _ => return None,
+    })
+}
+
 /// The text a clipboard envelope carries, once decoded by the protocol crate.
 pub fn clipboard_text(env: &Envelope) -> Option<String> {
     if env.capability == capability::CLIPBOARD && env.kind == ClipboardText::KIND {
@@ -649,6 +727,9 @@ pub fn describe(env: &Envelope) -> String {
         (capability::SHARE, 3) => "share: rejected".into(),
         (capability::SHARE, 4) => "share: done".into(),
         (capability::SHARE, 5) => "share: text".into(),
+        (capability::MEDIA, 1) => "media: state".into(),
+        (capability::MEDIA, 2) => "media: command".into(),
+        (capability::MEDIA, 3) => "media: requested".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
     }
 }
