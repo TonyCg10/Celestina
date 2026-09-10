@@ -58,6 +58,12 @@ class MainActivity : ComponentActivity() {
                 var phoneGranted by remember { mutableStateOf(PhonePermissions.allGranted(this)) }
                 val mirrorInput = remember(link, phoneGranted) { org.celestina.magnetita.mirror.MirrorInput.enabled(this) }
                 var storageShared by remember { mutableStateOf(org.celestina.magnetita.storage.PhoneStorage(this).available()) }
+                var wholePhone by remember { mutableStateOf(org.celestina.magnetita.storage.PhoneStorage(this).wholePhone()) }
+                // The all-files grant is given on a system page; re-read it when the app comes back.
+                LaunchedEffect(link, phoneGranted) {
+                    wholePhone = org.celestina.magnetita.storage.PhoneStorage(this@MainActivity).wholePhone()
+                    storageShared = org.celestina.magnetita.storage.PhoneStorage(this@MainActivity).available()
+                }
                 val pickTree = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
                     if (tree != null) org.celestina.magnetita.storage.PhoneStorage.granted(this, tree)
                     storageShared = org.celestina.magnetita.storage.PhoneStorage(this).available()
@@ -99,7 +105,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val battery = readBattery()
                     DeviceScreen(
-                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted, mirrorInput, storageShared),
+                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted, mirrorInput, storageShared, wholePhone),
                         onScan = { scanning = true },
                         onForget = { id -> LinkService.forget(this, id) },
                         onStopRinging = { LinkService.stopRinging(this) },
@@ -107,6 +113,7 @@ class MainActivity : ComponentActivity() {
                         onPhoneAccess = { askPhone.launch(PhonePermissions.ALL) },
                         onMirrorInput = { startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                         onStorage = { pickTree.launch(null) },
+                        onWholePhone = { startActivity(org.celestina.magnetita.storage.PhoneStorage.allFilesIntent(this)) },
                         onControl = { page = 1 },
                         onMedia = { button -> desktopMedia?.let { LinkService.send(this, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
                     )

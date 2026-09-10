@@ -3,7 +3,7 @@
 - **Updated:** 2026-09-10
 - **Implementation:** `AND-5`, the phone's files over the link, is the
   active checkpoint since 2026-09-10, paired with Magnetita's `MAG-P7`; its
-  unit is done and the browse is `VAL-MAG-15`. `AND-4`, the mirror over
+  two units are done and the browse is `VAL-MAG-15`. `AND-4`, the mirror over
   the link, is implemented and archived; `VAL-MAG-14` carries the author's
   observation. `AND-3`, remote control,
   met its exit the same day and is archived; `VAL-MAG-13` carries the
@@ -16,7 +16,8 @@
 
 ## Current checkout truth
 
-- The folder picked in the "Archivos" row is the phone's shared root: the
+- The whole phone (with the all-files grant) or the folder picked in the
+  "Archivos" row is the shared root: the
   desktop's listings, reads, writes, renames and deletions run through
   the documents contract on one storage thread, and the link says whether
   a root is shared on every connect (`AND-5-A`).

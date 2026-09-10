@@ -131,7 +131,12 @@ class LinkService : LifecycleService() {
             ACTION_CALL_ENDED -> calls.restoreRinger()
             ACTION_PHONE_GRANTED -> offMain { book.send(0); messages.sendConversations() }
             ACTION_STORAGE_GRANTED -> controller?.send(Outbound.StorageState(storage.available()))
-            ACTION_FOCUS -> { inFront = true; offerClipboard() }
+            ACTION_FOCUS -> {
+                inFront = true
+                offerClipboard()
+                // The all-files grant is given on a system page: on return, tell the desktop.
+                controller?.send(Outbound.StorageState(storage.available()))
+            }
             ACTION_BLUR -> inFront = false
             ACTION_FORGET -> intent.getStringExtra(EXTRA_DEVICE_ID)?.let { id ->
                 lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {

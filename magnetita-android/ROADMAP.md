@@ -22,18 +22,20 @@ that folder through the daemon's mount with no `sshfs`.
 
 ## Scope
 
-- The storage adapter over the shared document tree, its grant row, the
-  state on connect and on grant.
+- The storage adapter over the shared document tree or, with the
+  all-files grant, the whole phone; its grant row, the state on connect
+  and on grant.
 
 ## Exclusions
 
-- `MANAGE_EXTERNAL_STORAGE`; the `MediaStore` beyond the shared tree.
+- The `MediaStore` beyond the shared root.
 
 ## Build order
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
 | AND-5-A | done | MAG-P7-A | The storage adapter over the document tree | JVM tests, lint |
+| AND-5-B | done | AND-5-A | The whole phone as the root with the all-files grant | JVM tests, lint |
 
 ## Implementation exit
 
@@ -47,6 +49,7 @@ lint pass, the build is on the S25U.
 ## Closed evidence
 
 - `AND-5-A`: [storage tree](docs/evidence/2026-09-10-storage-tree.md)
+- `AND-5-B`: [whole phone](docs/evidence/2026-09-10-storage-whole-phone.md)
 
 ## AND-4 — The mirror over the link
 

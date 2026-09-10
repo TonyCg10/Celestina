@@ -1,0 +1,29 @@
+# AND-5-B exact change inventory
+
+Base revision	1f46b63ac8dd5cef64d27983738469dee121ca4c
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/docs/evidence/2026-09-10-storage-whole-phone.md
+Pathspec	magnetita-android/docs/inventories/2026-09-10-storage/AND-5-B.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-10-storage.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	3	62553fca221d84a443250aadc8a0527bb3fa81e7813b937f4121e45d143c7ad7	magnetita-android/ROADMAP.md
+3	2	6b1e847736669434e81ca964d45e63ffaa90d77a87f21866d71c2a2b87393050	magnetita-android/STATUS.md
+4	0	37c86b3bbadfe5a4a96417dcb03d8ad65a23459f86d0e6c7b12b3c372be9136a	magnetita-android/app/src/main/AndroidManifest.xml
+8	1	91cc09d0c7edacf9f6b6753aa5a778fe26f887b4989bae757a20d858ec959241	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+6	1	e37d1a34aec5a21eaf48cb78a6708336a1e4bdfdb5ee719286b18158b14422c0	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+68	1	d8290cfe4d74321dd1832fe6d722a4cd90141099b7c0094028d330db66a3041b	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+16	2	b47b582d545b3637fb75552a15feb9532b6401bec98669d77720f178d55a1d2e	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+4	1	99c6662d7d8dabd2771405d295a65488e04ee1e8dfd601656f8b5016eecfd616	magnetita-android/app/src/main/res/values/strings.xml
+42	0	55f4bd5948e32a31bd4c3423622ecf2883a5eb4c9e4d9c959cbffb2b017c42e0	magnetita-android/docs/evidence/2026-09-10-storage-whole-phone.md
+29	0	self	magnetita-android/docs/inventories/2026-09-10-storage/AND-5-B.numstat.tsv
+6	2	6f973a684fd6082a28360446b4bcb04863a52107db6009108a9dc22db8033a45	magnetita-android/docs/plans/active/2026-09-10-storage.md

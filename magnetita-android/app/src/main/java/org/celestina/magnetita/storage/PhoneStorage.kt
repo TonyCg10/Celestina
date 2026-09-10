@@ -8,8 +8,10 @@ import org.celestina.magnetita.link.LinkService
 import org.celestina.magnetita.link.LiveSession
 import org.celestina.magnetita.link.StorageEntry
 import org.celestina.magnetita.link.StorageRequest
+import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 
 /**
  * The desktop's browse of this phone through the document tree the person
@@ -24,7 +26,10 @@ class PhoneStorage(private val context: Context) {
     /** The shared tree, or null until the person picks one. */
     fun tree(): Uri? = prefs.getString(KEY_TREE, null)?.let(Uri::parse)?.takeIf { hasGrant(it) }
 
-    fun available(): Boolean = tree() != null
+    /** Whether the whole phone is shared: the all-files grant the settings give. */
+    fun wholePhone(): Boolean = android.os.Environment.isExternalStorageManager()
+
+    fun available(): Boolean = wholePhone() || tree() != null
 
     private fun hasGrant(tree: Uri): Boolean =
         context.contentResolver.persistedUriPermissions.any { it.uri == tree && it.isReadPermission && it.isWritePermission }
@@ -37,6 +42,10 @@ class PhoneStorage(private val context: Context) {
 
     /** Answers one request on `live`. */
     fun answer(request: StorageRequest, live: LiveSession) {
+        if (wholePhone()) {
+            answerFiles(android.os.Environment.getExternalStorageDirectory(), request, live)
+            return
+        }
         val tree = tree()
         if (tree == null) {
             fail(request, live, "no shared root")
@@ -79,6 +88,60 @@ class PhoneStorage(private val context: Context) {
             }
         }.onFailure { fail(request, live, it.message ?: "failed") }
     }
+
+    /** The same requests over plain files when the whole phone is shared. */
+    private fun answerFiles(root: File, request: StorageRequest, live: LiveSession) {
+        if (!DocumentPaths.valid(request.path) || !DocumentPaths.valid(request.to)) {
+            fail(request, live, "bad path")
+            return
+        }
+        val file = if (request.path.isEmpty()) root else File(root, request.path)
+        runCatching {
+            when (request.kind) {
+                StorageRequest.LIST -> {
+                    val all = (file.listFiles() ?: error("not a directory")).map { entryOf(it) }.sortedBy { it.name }
+                    val page = all.drop(request.offset.toInt()).take(PAGE)
+                    live.sendListing(request.request, page, all.size > request.offset.toInt() + PAGE, "")
+                }
+                StorageRequest.STAT -> live.sendStatReply(request.request, if (file.exists()) entryOf(file) else null)
+                StorageRequest.READ -> RandomAccessFile(file, "r").use { raf ->
+                    raf.seek(request.offset)
+                    val buffer = ByteArray(request.len)
+                    var filled = 0
+                    while (filled < buffer.size) {
+                        val n = raf.read(buffer, filled, buffer.size - filled)
+                        if (n < 0) break
+                        filled += n
+                    }
+                    live.sendData(request.request, buffer.copyOf(filled), "")
+                }
+                StorageRequest.WRITE -> {
+                    RandomAccessFile(file, "rw").use { raf ->
+                        raf.seek(request.offset)
+                        raf.write(request.bytes)
+                        if (request.truncate) raf.setLength(request.offset + request.bytes.size)
+                    }
+                    live.sendDone(request.request, true, "")
+                }
+                StorageRequest.MKDIR -> {
+                    if (!file.mkdir()) error("not created")
+                    live.sendDone(request.request, true, "")
+                }
+                StorageRequest.RENAME -> {
+                    if (!file.renameTo(File(root, request.to))) error("not moved")
+                    live.sendDone(request.request, true, "")
+                }
+                StorageRequest.DELETE -> {
+                    if (!file.delete()) error("not deleted")
+                    live.sendDone(request.request, true, "")
+                }
+                else -> error("unknown request")
+            }
+        }.onFailure { fail(request, live, it.message ?: "failed") }
+    }
+
+    private fun entryOf(file: File): StorageEntry =
+        StorageEntry(file.name, file.isDirectory, if (file.isDirectory) 0 else file.length(), file.lastModified())
 
     private fun fail(request: StorageRequest, live: LiveSession, why: String) {
         when (request.kind) {
@@ -176,6 +239,10 @@ class PhoneStorage(private val context: Context) {
             DocumentsContract.Document.COLUMN_SIZE,
             DocumentsContract.Document.COLUMN_LAST_MODIFIED,
         )
+
+        /** The system page where the person grants access to all files. */
+        fun allFilesIntent(context: Context): Intent =
+            Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + context.packageName))
 
         /** The picker's result: keep the grant and tell the desktop. */
         fun granted(context: Context, tree: Uri) {

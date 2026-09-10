@@ -52,6 +52,8 @@ data class DeviceShown(
     val mirrorInputEnabled: Boolean = false,
     /** Whether a root of the phone's files is shared with the desktop. */
     val storageShared: Boolean = false,
+    /** Whether the whole phone is the shared root. */
+    val wholePhone: Boolean = false,
 )
 
 /**
@@ -71,6 +73,7 @@ fun DeviceScreen(
     onPhoneAccess: () -> Unit = {},
     onMirrorInput: () -> Unit = {},
     onStorage: () -> Unit = {},
+    onWholePhone: () -> Unit = {},
     onControl: () -> Unit = {},
 ) {
     val scroll = rememberScrollState()
@@ -153,9 +156,20 @@ fun DeviceScreen(
                 )
                 GroupRow(
                     title = stringResource(R.string.label_storage),
-                    detail = stringResource(if (shown.storageShared) R.string.detail_storage_on else R.string.detail_storage_off),
+                    detail = stringResource(
+                        when {
+                            shown.wholePhone -> R.string.detail_storage_whole
+                            shown.storageShared -> R.string.detail_storage_on
+                            else -> R.string.detail_storage_off
+                        },
+                    ),
                     trailing = {
-                        TextButton(onClick = onStorage) { Text(stringResource(if (shown.storageShared) R.string.action_change else R.string.action_allow)) }
+                        if (shown.wholePhone) {
+                            StateChip(stringResource(R.string.chip_on), ChipTone.Alive)
+                        } else {
+                            TextButton(onClick = onWholePhone) { Text(stringResource(R.string.action_whole_phone)) }
+                            TextButton(onClick = onStorage) { Text(stringResource(R.string.action_folder)) }
+                        }
                     },
                 )
                 GroupRow(
