@@ -43,6 +43,9 @@ only what both ends share.
 - `MAG-P7-E` — the mount's caches: listings and attributes answered
   once per browse, reads fetched by the wire's megabyte and served to the
   kernel's smaller reads from that window.
+- `MAG-P7-F` — the range bound: a read or write carries the envelope's
+  megabyte less room for its own fields, so a full window never trips the
+  link's body bound.
 - `MAG-P7-D` — the `adb`/`scrcpy` mirror path removed once `VAL-MAG-14`
   has observed the own mirror after a reboot; `Mirror1` keeps its methods.
 
@@ -54,7 +57,7 @@ only what both ends share.
 
 ## Build order
 
-1. `MAG-P7-A`, `-B`, `-C`, `-E`; `-D` after `VAL-MAG-14`.
+1. `MAG-P7-A`, `-B`, `-C`, `-E`, `-F`; `-D` after `VAL-MAG-14`.
 
 ## Implementation exit
 
@@ -72,4 +75,5 @@ the shrunk daemon.
 | MAG-P7-B | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-B.numstat.tsv) | 19 files, +1508/-126 | The daemon's storage client and FUSE mount; `MAG-P6` archived and `MAG-P7` opened | [record](../../evidence/2026-09-10-phone-mount.md) | `VAL-MAG-15` |
 | MAG-P7-C | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-C.numstat.tsv) | 45 files, +342/-8045 | The KDE Connect wire, pairing v8 and the `sshfs` mount removed | [record](../../evidence/2026-09-10-kde-wire-removed.md) | `VAL-MAG-15` |
 | MAG-P7-E | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-E.numstat.tsv) | 5 files, +178/-26 | The mount's listing, attribute and read-window caches | [record](../../evidence/2026-09-10-mount-caches.md) | `VAL-MAG-15` |
+| MAG-P7-F | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-F.numstat.tsv) | 7 files, +81/-8 | The range bound under the envelope's body limit | [record](../../evidence/2026-09-10-range-bound.md) | `VAL-MAG-15` |
 | MAG-P7-D | `magnetita:` | planned | `celestina-rs/crates/magnetitad/src/mirror.rs`, `mirror_discovery.rs`, `src/devices.rs` | — | The `adb`/`scrcpy` mirror path removed after `VAL-MAG-14` | record | `VAL-MAG-14` |

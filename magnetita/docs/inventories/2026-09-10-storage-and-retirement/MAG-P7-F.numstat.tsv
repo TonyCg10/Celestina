@@ -1,0 +1,21 @@
+# MAG-P7-F exact change inventory
+
+Base revision	5b0879a3e0ff795a8e80fc514e175d5b4373ecc9
+Pathspec	celestina-rs/crates/magnetita-proto/src/storage.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/storage.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/docs/evidence/2026-09-10-range-bound.md
+Pathspec	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-F.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+Pathspec	magnetita/docs/protocol.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+17	5	6880b8eff16cd6a780253ea6455b41794e3b96922ec20d1fcc0c397952615a36	celestina-rs/crates/magnetita-proto/src/storage.rs
+1	1	e377ee9a9c9196558668b6f901f7cbdde0e019f1cdf3747c858348a2daaf96e7	celestina-rs/crates/magnetitad/src/link_wire/storage.rs
+1	0	f0e4b120a0883caff5a1cf4c2ce2cfa066d07bcb293bff697e0e71fd0df8a294	magnetita/ROADMAP.md
+35	0	68c9e9f366ca169efafe7d768598a0db74eb1687ff2b01c4f6717605ba263fe3	magnetita/docs/evidence/2026-09-10-range-bound.md
+21	0	self	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-F.numstat.tsv
+5	1	31a0840b9215952b0f5ce885e33913f2893103e292bd56978c5802aede365d93	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+1	1	1e8299ec06aa6ccd5b47a42f87ec953a60761626bf41ed82d6a2c6abfc44bd04	magnetita/docs/protocol.md

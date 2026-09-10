@@ -8,6 +8,10 @@ use crate::bound::{self, MAX_BYTES, MAX_LIST, MAX_TEXT};
 use crate::codec::{self, required, Map};
 use crate::error::DecodeError;
 
+/// The most bytes one read or write carries: the envelope's body bound
+/// less room for the request id, the path and the map itself.
+pub const MAX_RANGE: usize = MAX_BYTES - 8192;
+
 /// Phone → desktop: whether a root is shared at all. Kind 1.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StorageState {
@@ -62,7 +66,7 @@ pub struct Read {
     pub request: u32,
     pub path: String,
     pub offset: u64,
-    /// At most [`MAX_BYTES`].
+    /// At most [`MAX_RANGE`].
     pub len: u32,
 }
 
@@ -343,7 +347,7 @@ impl Read {
             Ok(true)
         })?;
         let len = required(len, "len")?;
-        if len as usize > MAX_BYTES {
+        if len as usize > MAX_RANGE {
             return Err(DecodeError::Malformed("read length"));
         }
         Ok(Self {
@@ -371,7 +375,7 @@ impl Data {
         codec::read(body, "data", |k, d| {
             match k {
                 0 => request = Some(bound::u32(d, "request")?),
-                1 => bytes = Some(bound::bytes(d, "bytes", MAX_BYTES)?),
+                1 => bytes = Some(bound::bytes(d, "bytes", MAX_RANGE)?),
                 2 => error = Some(bound::text(d, "error", MAX_TEXT)?),
                 _ => return Ok(false),
             }
@@ -406,7 +410,7 @@ impl Write {
                 0 => request = Some(bound::u32(d, "request")?),
                 1 => path = Some(path_field(d, "path")?),
                 2 => offset = Some(bound::u64(d, "offset")?),
-                3 => bytes = Some(bound::bytes(d, "bytes", MAX_BYTES)?),
+                3 => bytes = Some(bound::bytes(d, "bytes", MAX_RANGE)?),
                 4 => truncate = Some(bound::bool(d, "truncate")?),
                 _ => return Ok(false),
             }
@@ -652,8 +656,16 @@ mod tests {
             request: 1,
             path: "a".into(),
             offset: 0,
-            len: MAX_BYTES as u32 + 1,
+            len: MAX_RANGE as u32 + 1,
         };
         assert!(Read::decode(&big.encode()).is_err());
+        // A full range answers inside the envelope's bound with room to spare.
+        let full = Data {
+            request: 1,
+            bytes: vec![0; MAX_RANGE],
+            error: String::new(),
+        };
+        assert!(full.encode().len() <= MAX_BYTES);
+        assert_eq!(Data::decode(&full.encode()).unwrap().bytes.len(), MAX_RANGE);
     }
 }

@@ -35,7 +35,7 @@ const TTL: Duration = Duration::from_secs(15);
 /// Bytes per read message: the wire's bound, so a file arrives in as few
 /// round trips as the wire allows and the kernel's 128 KiB reads are served
 /// from the window already fetched.
-const READ_CHUNK: u32 = magnetita_proto::bound::MAX_BYTES as u32;
+const READ_CHUNK: u32 = magnetita_proto::storage::MAX_RANGE as u32;
 /// How long a fetched read window stays good for the next kernel read.
 const WINDOW_TTL: Duration = Duration::from_secs(5);
 
