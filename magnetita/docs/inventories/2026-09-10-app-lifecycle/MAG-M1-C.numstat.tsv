@@ -1,0 +1,15 @@
+# MAG-M1-C exact change inventory
+
+Base revision	95d1f393696dd1a89378b0996cdbd9174d07ab62
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/evidence/2026-09-10-app-lifecycle-exit.md
+Pathspec	magnetita/docs/inventories/2026-09-10-app-lifecycle/MAG-M1-C.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+11	8	eb72566bfced9e00a21fbda9ed3e9b83b10d49e2fbe9bb16afb0362c94275b15	magnetita/STATUS.md
+27	0	b5ad63433da1b492c38602c6813ce0549c63721e61a356ef9766f56b83ffdb6d	magnetita/docs/evidence/2026-09-10-app-lifecycle-exit.md
+15	0	self	magnetita/docs/inventories/2026-09-10-app-lifecycle/MAG-M1-C.numstat.tsv
+62	0	e2f66d1a59d1f9169628fc4b743619af9729d144312ad4869efa61466eafd1c0	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md

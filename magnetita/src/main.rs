@@ -1,6 +1,7 @@
 mod commands;
 mod controller;
 mod devices;
+mod lifecycle;
 mod messages;
 mod pairing;
 mod projection;

@@ -146,21 +146,35 @@ pub fn recent_log() -> Result<Vec<LogEntry>, String> {
     Ok(raw.iter().map(parse_log).collect())
 }
 
-/// Blocks watching the device-set `Changed` signal, coalesced.
-pub fn watch_changes<F: Fn() + Send + 'static>(on_change: F) -> Result<(), String> {
-    watch("Changed", on_change)
+/// Blocks watching the device-set `Changed` signal, coalesced, until the
+/// owner closes.
+pub fn watch_changes<F: Fn() + Send + 'static>(
+    guard: crate::lifecycle::Guard,
+    on_change: F,
+) -> Result<(), String> {
+    watch("Changed", guard, on_change)
 }
 
-/// Blocks watching the connection-log `Event` signal, coalesced.
-pub fn watch_events<F: Fn() + Send + 'static>(on_event: F) -> Result<(), String> {
-    watch("Event", on_event)
+/// Blocks watching the connection-log `Event` signal, coalesced, until the
+/// owner closes.
+pub fn watch_events<F: Fn() + Send + 'static>(
+    guard: crate::lifecycle::Guard,
+    on_event: F,
+) -> Result<(), String> {
+    watch("Event", guard, on_event)
 }
 
 /// The shared signal-watch loop: subscribe, coalesce a burst, call back. The
 /// match rule is set up even if Magnetita is not up yet. A second bus watcher
 /// reports service owner acquisition/loss, so stale device or log snapshots are
 /// cleared when the daemon exits without getting a chance to emit a signal.
-fn watch<F: Fn() + Send + 'static>(signal: &'static str, on_change: F) -> Result<(), String> {
+/// Returns when the owner closes; the two bus threads end with their
+/// connections, which the return drops.
+fn watch<F: Fn() + Send + 'static>(
+    signal: &'static str,
+    guard: crate::lifecycle::Guard,
+    on_change: F,
+) -> Result<(), String> {
     let connection =
         Connection::session().map_err(|error| format!("bus de sesión no disponible: {error}"))?;
     let proxy = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE)
@@ -180,10 +194,14 @@ fn watch<F: Fn() + Send + 'static>(signal: &'static str, on_change: F) -> Result
     });
 
     let owner_tx = tx;
+    let owner_guard = guard.clone();
     std::thread::spawn(move || {
         let Ok(connection) = Connection::session() else {
             return;
         };
+        if !owner_guard.open() {
+            return;
+        }
         let Ok(proxy) = DBusProxy::new(&connection) else {
             return;
         };
@@ -197,8 +215,17 @@ fn watch<F: Fn() + Send + 'static>(signal: &'static str, on_change: F) -> Result
         }
     });
 
-    while rx.recv().is_ok() {
+    while guard.open() {
+        // Wake regularly so a closing owner is noticed within a slice.
+        match rx.recv_timeout(Duration::from_millis(250)) {
+            Ok(()) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
         while rx.recv_timeout(Duration::from_millis(200)).is_ok() {}
+        if !guard.open() {
+            break;
+        }
         on_change();
     }
     drop(connection);

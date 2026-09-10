@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-P7-E` of
-  [`../plans/active/2026-09-10-storage-and-retirement.md`](../plans/active/2026-09-10-storage-and-retirement.md):
+  [`../plans/archive/2026-09-10-storage-and-retirement.md`](../plans/archive/2026-09-10-storage-and-retirement.md):
   `celestina-rs/crates/magnetitad/src/link_wire/storage.rs`, this record
 - **Environment:** the workspace's tests; the author's browse of the S25U
 - **Artifact:** `magnetitad`, deployed

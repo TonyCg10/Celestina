@@ -1,8 +1,9 @@
 # MAG-P7 — Storage over the own wire and retiring the second path
 
 - **Opened:** 2026-09-10
+- **Closed:** 2026-09-10
 - **Plan ID:** storage-and-retirement
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "sigue con MAG-P7" on 2026-09-10 with
   `MAG-P6` implemented
 - **Scope:** magnetita, magnetitad, magnetita-core, magnetita-net,
@@ -10,7 +11,8 @@
 - **Implementation checkpoint:** MAG-P7
 - **Author-validation checkpoint:** `VAL-MAG-15` in
   [`../../../VALIDATION.md`](../../../VALIDATION.md); `MAG-P7-D` waits on
-  `VAL-MAG-14`
+  `VAL-MAG-14` and runs as a maintenance unit when the author records it
+- **Successor:** MAG-M1
 
 ## Hypothesis
 
@@ -46,7 +48,7 @@ only what both ends share.
 - `MAG-P7-F` — the range bound: a read or write carries the envelope's
   megabyte less room for its own fields, so a full window never trips the
   link's body bound.
-- `MAG-P7-D` — the `adb`/`scrcpy` mirror path removed once `VAL-MAG-14`
+- `MAG-P7-D` — not in this ledger: the `adb`/`scrcpy` mirror path removed once `VAL-MAG-14`
   has observed the own mirror after a reboot; `Mirror1` keeps its methods.
 
 ## Exclusions
@@ -76,4 +78,3 @@ the shrunk daemon.
 | MAG-P7-C | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-C.numstat.tsv) | 45 files, +342/-8045 | The KDE Connect wire, pairing v8 and the `sshfs` mount removed | [record](../../evidence/2026-09-10-kde-wire-removed.md) | `VAL-MAG-15` |
 | MAG-P7-E | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-E.numstat.tsv) | 5 files, +178/-26 | The mount's listing, attribute and read-window caches | [record](../../evidence/2026-09-10-mount-caches.md) | `VAL-MAG-15` |
 | MAG-P7-F | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-F.numstat.tsv) | 7 files, +81/-8 | The range bound under the envelope's body limit | [record](../../evidence/2026-09-10-range-bound.md) | `VAL-MAG-15` |
-| MAG-P7-D | `magnetita:` | planned | `celestina-rs/crates/magnetitad/src/mirror.rs`, `mirror_discovery.rs`, `src/devices.rs` | — | The `adb`/`scrcpy` mirror path removed after `VAL-MAG-14` | record | `VAL-MAG-14` |

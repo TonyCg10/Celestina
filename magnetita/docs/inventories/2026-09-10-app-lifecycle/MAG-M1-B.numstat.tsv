@@ -1,0 +1,41 @@
+# MAG-M1-B exact change inventory
+
+Base revision	95d1f393696dd1a89378b0996cdbd9174d07ab62
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/docs/evidence/2026-09-10-kde-wire-removed.md
+Pathspec	magnetita/docs/evidence/2026-09-10-mount-caches.md
+Pathspec	magnetita/docs/evidence/2026-09-10-owned-models.md
+Pathspec	magnetita/docs/evidence/2026-09-10-phone-mount.md
+Pathspec	magnetita/docs/evidence/2026-09-10-range-bound.md
+Pathspec	magnetita/docs/evidence/2026-09-10-storage-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-10-app-lifecycle/MAG-M1-B.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md
+Pathspec	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-10-storage-and-retirement.md
+Pathspec	magnetita/docs/plans/archive/README.md
+Pathspec	magnetita/src/commands.rs
+Pathspec	magnetita/src/controller.rs
+Pathspec	magnetita/src/devices.rs
+Pathspec	magnetita/src/messages.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+11	8	d0561e9add299e3027b0a479513a2fbe38fcf420e07558372a2d94a01d65c4a1	magnetita/ROADMAP.md
+1	1	96c377c0b9ce07b40a11b0dc91362b89eb5e8891e2274903c5b5fb0136d1c201	magnetita/docs/evidence/2026-09-10-kde-wire-removed.md
+1	1	bbd7fc77a754f4dfdc7f14989d836c27ffeb1ca0ec645ea807613866b265dafc	magnetita/docs/evidence/2026-09-10-mount-caches.md
+42	0	6c472ca32e9d85b2a804de30f1c1ca08402829e43e1b33791f5ae2359472f731	magnetita/docs/evidence/2026-09-10-owned-models.md
+1	1	65b3828eacb48cff9cf41f77dad8e5f44c6e9a1800edb9d3c3dba20252d9d3bb	magnetita/docs/evidence/2026-09-10-phone-mount.md
+1	1	7510f985da7150043cd08c3080fa6cb146af596664b811ac4ada204b2f8c2ddc	magnetita/docs/evidence/2026-09-10-range-bound.md
+1	1	3148cb1c5b54a3d0596d802c31842650377f346873c69a78c966b82e441fc618	magnetita/docs/evidence/2026-09-10-storage-wire.md
+41	0	self	magnetita/docs/inventories/2026-09-10-app-lifecycle/MAG-M1-B.numstat.tsv
+62	0	e2f66d1a59d1f9169628fc4b743619af9729d144312ad4869efa61466eafd1c0	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md
+0	79	deleted	magnetita/docs/plans/active/2026-09-10-storage-and-retirement.md
+7	4	994eec2e1807bcb27c7e5e768d0f81df4baaead5da0937256b50ea6593bb6566	magnetita/docs/plans/active/README.md
+80	0	ecaffc413a0a17d295142a975afd97d23e74c4adc5e2e40e5d1f9c7a710d1cd7	magnetita/docs/plans/archive/2026-09-10-storage-and-retirement.md
+1	0	c23ec71bb67d66ff3f463b2c74436642459855436ff1d1fa1f361bdc946a79ba	magnetita/docs/plans/archive/README.md
+14	5	b263669cf9b6245978422bab4dbecde6ac80879784b594a2c8202c0b38d13804	magnetita/src/commands.rs
+126	127	269fe31fad2615a3926317d283ab1db9003f45d262788aad9aba743c51b1c41e	magnetita/src/controller.rs
+35	8	80c39c2c0378139150b01d47c2fe0859706ba8ee6d37e011dcf785d7ba3019ed	magnetita/src/devices.rs
+7	1	73a288461b1119ce5454f2682c414bf6b1969a03e8d373598b1a66249cd8ce4e	magnetita/src/messages.rs

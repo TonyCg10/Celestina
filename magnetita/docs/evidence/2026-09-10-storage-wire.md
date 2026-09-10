@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-P7-A` of
-  [`../plans/active/2026-09-10-storage-and-retirement.md`](../plans/active/2026-09-10-storage-and-retirement.md):
+  [`../plans/archive/2026-09-10-storage-and-retirement.md`](../plans/archive/2026-09-10-storage-and-retirement.md):
   `celestina-rs/crates/magnetita-proto/src/storage.rs`,
   `celestina-rs/crates/magnetita-mobile/src/storage.rs` and the core's
   events and senders, the peer's `--serve DIR`, `docs/protocol.md`, the

@@ -50,13 +50,18 @@ pub struct CommandsModelRust {
     command_lines: QStringList,
     available: bool,
     ids: Vec<u32>,
+    /// The refresh and edit threads, joined on drop; a late list is dropped.
+    owned: crate::lifecycle::Owned,
 }
 
 impl qobject::CommandsModel {
     pub fn refresh(mut self: Pin<&mut Self>) {
         let qt = self.as_mut().qt_thread();
-        std::thread::spawn(move || {
+        self.rust().owned.spawn(move |guard| {
             let list = crate::devices::list_commands();
+            if !guard.open() {
+                return;
+            }
             let _ = qt.queue(
                 move |mut model: Pin<&mut qobject::CommandsModel>| match list {
                     Ok(list) => {
@@ -98,11 +103,13 @@ impl qobject::CommandsModel {
         let (name, program, args) = (name.to_string(), program.to_string(), args.to_string());
         let args: Vec<String> = args.split_whitespace().map(str::to_owned).collect();
         let qt = self.as_mut().qt_thread();
-        std::thread::spawn(move || {
+        self.rust().owned.spawn(move |guard| {
             if let Err(error) = crate::devices::set_command(0, &name, &program, &args) {
                 eprintln!("magnetita: command not registered: {error}");
             }
-            let _ = qt.queue(|model: Pin<&mut qobject::CommandsModel>| model.refresh());
+            if guard.open() {
+                let _ = qt.queue(|model: Pin<&mut qobject::CommandsModel>| model.refresh());
+            }
         });
     }
 
@@ -114,11 +121,13 @@ impl qobject::CommandsModel {
             return;
         };
         let qt = self.as_mut().qt_thread();
-        std::thread::spawn(move || {
+        self.rust().owned.spawn(move |guard| {
             if let Err(error) = crate::devices::remove_command(id) {
                 eprintln!("magnetita: command not removed: {error}");
             }
-            let _ = qt.queue(|model: Pin<&mut qobject::CommandsModel>| model.refresh());
+            if guard.open() {
+                let _ = qt.queue(|model: Pin<&mut qobject::CommandsModel>| model.refresh());
+            }
         });
     }
 }

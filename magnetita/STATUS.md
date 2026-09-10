@@ -1,11 +1,14 @@
 # Magnetita status
 
 - **Updated:** 2026-09-10
-- **Implementation:** `MAG-P7`, storage over the own wire and the
-  retirement of the second path, is the active checkpoint since 2026-09-10,
-  paired with `magnetita-android`'s `AND-5`; the storage capability, the
-  FUSE mount and the removal of the KDE Connect wire are done, and
-  `MAG-P7-D` (the `adb` mirror path) waits on `VAL-MAG-14`. `MAG-P6`, the
+- **Implementation:** `MAG-M1`, the app's deterministic read/watch
+  lifecycle, is the active checkpoint since 2026-09-10 and its three units
+  are done: every thread the app spawns answers to one owner per model,
+  joined on drop. `MAG-P7`, storage over the own wire and the retirement
+  of the second path, is archived, paired with `magnetita-android`'s
+  `AND-5`; the storage capability, the FUSE mount and the removal of the
+  KDE Connect wire are done, and `MAG-P7-D` (the `adb` mirror path) waits
+  on `VAL-MAG-14`. `MAG-P6`, the
   mirror as a capability of the link, is implemented and archived.
   `MAG-P5`, commands, trackpad and keyboard, met its exit the same day and
   is archived; `VAL-MAG-13` carries the author's hand. `MAG-P4`, the
@@ -26,8 +29,7 @@
   `MAG-R1` (the one-button wireless mirror) are delivered, committed and
   deployed; `MAG-S1`'s plan is archived with its canonical production exit
   still pending as a deployment action. `MAG-R2` (the mirror without
-  discovery) is committed but **not deployed**. `MAG-M1` remains planned and
-  unimplemented
+  discovery) is committed but **not deployed**. `MAG-M1` is done
 - **Author validation:** the original 1.0 daily set passed on the real phone,
   before the 2026-07-29 hardening. **Every one of `VAL-MAG-01` through
   `VAL-MAG-04` and `VAL-MAG-06` through `VAL-MAG-09` is still pending**, so no
@@ -177,7 +179,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P7](docs/plans/active/2026-09-10-storage-and-retirement.md)
+- [Active plan MAG-M1](docs/plans/active/2026-09-10-app-lifecycle.md)
+- [Archived plan MAG-P7](docs/plans/archive/2026-09-10-storage-and-retirement.md)
 - [Archived plan MAG-P6](docs/plans/archive/2026-09-09-link-mirror.md)
 - [Archived plan MAG-P5](docs/plans/archive/2026-09-09-remote-control.md)
 - [Archived plan MAG-P4](docs/plans/archive/2026-09-09-daily-set.md)

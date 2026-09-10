@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-P7-F` of
-  [`../plans/active/2026-09-10-storage-and-retirement.md`](../plans/active/2026-09-10-storage-and-retirement.md):
+  [`../plans/archive/2026-09-10-storage-and-retirement.md`](../plans/archive/2026-09-10-storage-and-retirement.md):
   `celestina-rs/crates/magnetita-proto/src/storage.rs`,
   `celestina-rs/crates/magnetitad/src/link_wire/storage.rs`,
   `docs/protocol.md`, this record

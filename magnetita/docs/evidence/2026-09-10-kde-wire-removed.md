@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-P7-C` of
-  [`../plans/active/2026-09-10-storage-and-retirement.md`](../plans/active/2026-09-10-storage-and-retirement.md):
+  [`../plans/archive/2026-09-10-storage-and-retirement.md`](../plans/archive/2026-09-10-storage-and-retirement.md):
   `celestina-rs/crates/magnetita-core` (packets, identity, pairing,
   session, sftp, share, ping, battery, findmyphone, payload ports
   deleted; clipboard, notification and media trimmed to the shared

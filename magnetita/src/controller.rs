@@ -9,6 +9,8 @@ use core::pin::Pin;
 use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
 use std::thread::JoinHandle;
 
+use crate::lifecycle::{Guard, Owned, Reload};
+
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use magnetita_core::MediaAction;
@@ -241,12 +243,12 @@ pub struct DevicesModelRust {
     pairing_watch: Option<crate::pairing::Watch>,
     watch_started: bool,
     event_watch_started: bool,
-    device_reload_in_flight: bool,
-    device_reload_pending: bool,
-    log_reload_in_flight: bool,
-    log_reload_pending: bool,
-    settings_reload_in_flight: bool,
-    settings_reload_pending: bool,
+    device_reload: Reload,
+    log_reload: Reload,
+    settings_reload: Reload,
+    /// Every thread this model spawns answers to it: joined on drop, and a
+    /// result that arrives after shutdown began is dropped, never applied.
+    owned: Owned,
     devices: Vec<crate::devices::Device>,
     paired: Vec<crate::devices::Paired>,
     plugin_states: Vec<bool>,
@@ -257,6 +259,9 @@ pub struct DevicesModelRust {
 
 impl Drop for DevicesModelRust {
     fn drop(&mut self) {
+        // Refuse late deliveries first, then let the action worker drain
+        // its queue and join it; the reads and watches join with the owner.
+        self.owned.close();
         self.command_sender.take();
         if let Some(worker) = self.command_worker.take() {
             let _ = worker.join();
@@ -318,6 +323,26 @@ impl ClientCommand {
 }
 
 impl qobject::DevicesModel {
+    /// Runs `read` on an owned thread and applies its result on the GUI
+    /// thread, unless the model began closing meanwhile.
+    fn read_owned<T, R, A>(mut self: Pin<&mut Self>, read: R, apply: A)
+    where
+        T: Send + 'static,
+        R: FnOnce() -> T + Send + 'static,
+        A: FnOnce(Pin<&mut qobject::DevicesModel>, T) + Send + 'static,
+    {
+        let qt = self.as_mut().qt_thread();
+        self.rust().owned.spawn(move |guard: Guard| {
+            let result = read();
+            if !guard.open() {
+                return;
+            }
+            let _ = qt.queue(move |model: Pin<&mut qobject::DevicesModel>| {
+                apply(model, result);
+            });
+        });
+    }
+
     /// Arms the signal watches and schedules D-Bus reads away from the GUI
     /// thread. Bursts coalesce to at most one follow-up snapshot.
     pub fn reload(mut self: Pin<&mut Self>) {
@@ -363,17 +388,11 @@ impl qobject::DevicesModel {
     }
 
     fn request_device_reload(mut self: Pin<&mut Self>) {
-        if self.rust().device_reload_in_flight {
-            self.as_mut().rust_mut().get_mut().device_reload_pending = true;
+        if !self.as_mut().rust_mut().get_mut().device_reload.request() {
             return;
         }
-        self.as_mut().rust_mut().get_mut().device_reload_in_flight = true;
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let result = crate::devices::list_devices();
-            let _ = qt.queue(move |model: Pin<&mut qobject::DevicesModel>| {
-                model.finish_device_reload(result);
-            });
+        self.read_owned(crate::devices::list_devices, |model, result| {
+            model.finish_device_reload(result);
         });
     }
 
@@ -392,12 +411,10 @@ impl qobject::DevicesModel {
                 self.as_mut().set_devices_available(false);
             }
         }
-        let pending = self.rust().device_reload_pending;
-        let state = self.as_mut().rust_mut().get_mut();
-        state.device_reload_in_flight = false;
-        state.device_reload_pending = false;
-        if pending {
-            self.as_mut().request_device_reload();
+        if self.as_mut().rust_mut().get_mut().device_reload.finish() {
+            self.read_owned(crate::devices::list_devices, |model, result| {
+                model.finish_device_reload(result);
+            });
         }
     }
 
@@ -616,17 +633,11 @@ impl qobject::DevicesModel {
 
     /// Load the Settings surface — the paired devices and the plugin toggles.
     pub fn reload_settings(mut self: Pin<&mut Self>) {
-        if self.rust().settings_reload_in_flight {
-            self.as_mut().rust_mut().get_mut().settings_reload_pending = true;
+        if !self.as_mut().rust_mut().get_mut().settings_reload.request() {
             return;
         }
-        self.as_mut().rust_mut().get_mut().settings_reload_in_flight = true;
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let result = crate::devices::settings_snapshot();
-            let _ = qt.queue(move |model: Pin<&mut qobject::DevicesModel>| {
-                model.finish_settings_reload(result);
-            });
+        self.read_owned(crate::devices::settings_snapshot, |model, result| {
+            model.finish_settings_reload(result);
         });
     }
 
@@ -644,12 +655,10 @@ impl qobject::DevicesModel {
                 self.as_mut().set_settings_available(false);
             }
         }
-        let pending = self.rust().settings_reload_pending;
-        let state = self.as_mut().rust_mut().get_mut();
-        state.settings_reload_in_flight = false;
-        state.settings_reload_pending = false;
-        if pending {
-            self.as_mut().reload_settings();
+        if self.as_mut().rust_mut().get_mut().settings_reload.finish() {
+            self.read_owned(crate::devices::settings_snapshot, |model, result| {
+                model.finish_settings_reload(result);
+            });
         }
     }
 
@@ -730,17 +739,11 @@ impl qobject::DevicesModel {
     }
 
     fn request_log_reload(mut self: Pin<&mut Self>) {
-        if self.rust().log_reload_in_flight {
-            self.as_mut().rust_mut().get_mut().log_reload_pending = true;
+        if !self.as_mut().rust_mut().get_mut().log_reload.request() {
             return;
         }
-        self.as_mut().rust_mut().get_mut().log_reload_in_flight = true;
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let result = crate::devices::recent_log();
-            let _ = qt.queue(move |model: Pin<&mut qobject::DevicesModel>| {
-                model.finish_log_reload(result);
-            });
+        self.read_owned(crate::devices::recent_log, |model, result| {
+            model.finish_log_reload(result);
         });
     }
 
@@ -758,12 +761,10 @@ impl qobject::DevicesModel {
                 self.as_mut().set_log_available(false);
             }
         }
-        let pending = self.rust().log_reload_pending;
-        let state = self.as_mut().rust_mut().get_mut();
-        state.log_reload_in_flight = false;
-        state.log_reload_pending = false;
-        if pending {
-            self.as_mut().request_log_reload();
+        if self.as_mut().rust_mut().get_mut().log_reload.finish() {
+            self.read_owned(crate::devices::recent_log, |model, result| {
+                model.finish_log_reload(result);
+            });
         }
     }
 
@@ -792,8 +793,12 @@ impl qobject::DevicesModel {
         }
         self.as_mut().rust_mut().get_mut().event_watch_started = true;
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let result = crate::devices::watch_events(move || {
+        self.rust().owned.spawn(move |guard: Guard| {
+            let delivery = guard.clone();
+            let result = crate::devices::watch_events(guard, move || {
+                if !delivery.open() {
+                    return;
+                }
                 let _ = qt.queue(|model: Pin<&mut qobject::DevicesModel>| {
                     model.request_log_reload();
                 });
@@ -814,8 +819,12 @@ impl qobject::DevicesModel {
         }
         self.as_mut().rust_mut().get_mut().watch_started = true;
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let result = crate::devices::watch_changes(move || {
+        self.rust().owned.spawn(move |guard: Guard| {
+            let delivery = guard.clone();
+            let result = crate::devices::watch_changes(guard, move || {
+                if !delivery.open() {
+                    return;
+                }
                 let _ = qt.queue(|model: Pin<&mut qobject::DevicesModel>| {
                     model.request_device_reload();
                 });
@@ -831,56 +840,50 @@ impl qobject::DevicesModel {
     /// Reads the mirror snapshot off the GUI thread and applies it whole, so
     /// the state and the reason that explains it are never from different
     /// moments.
-    pub fn reload_mirror(mut self: Pin<&mut Self>) {
-        let qt = self.as_mut().qt_thread();
-        std::thread::spawn(move || {
-            let snapshot = crate::devices::mirror_snapshot();
-            let _ = qt.queue(
-                move |mut model: Pin<&mut qobject::DevicesModel>| match snapshot {
-                    Ok(snapshot) => {
-                        let label =
-                            crate::projection::mirror_label(&snapshot.state, &snapshot.reason);
-                        model.as_mut().set_mirror_label(QString::from(&label));
-                        model.as_mut().set_mirror_can_pair(snapshot.can_pair);
-                        model
-                            .as_mut()
-                            .set_mirror_active(crate::projection::mirror_is_active(
-                                &snapshot.state,
-                            ));
-                        model.as_mut().set_mirror_available(true);
-                        let option = |key: &str, fallback: &str| {
-                            QString::from(
-                                snapshot
-                                    .options
-                                    .get(key)
-                                    .map(String::as_str)
-                                    .unwrap_or(fallback),
-                            )
-                        };
-                        model
-                            .as_mut()
-                            .set_mirror_resolution(option("resolution", "balanced"));
-                        model.as_mut().set_mirror_rate(option("rate", "smooth"));
-                        model
-                            .as_mut()
-                            .set_mirror_quality(option("quality", "everyday"));
-                        model.as_mut().set_mirror_audio(option("audio", "phone"));
-                        model.as_mut().set_mirror_screen_off(
-                            snapshot.options.get("screenOff").map(String::as_str) == Some("true"),
-                        );
-                        model.as_mut().set_mirror_stay_awake(
-                            snapshot.options.get("stayAwake").map(String::as_str) == Some("true"),
-                        );
-                    }
-                    Err(error) => {
-                        eprintln!("magnetita: mirror snapshot unavailable: {error}");
-                        model.as_mut().set_mirror_available(false);
-                        model.as_mut().set_mirror_can_pair(false);
-                        model.as_mut().set_mirror_active(false);
-                    }
-                },
-            );
-        });
+    pub fn reload_mirror(self: Pin<&mut Self>) {
+        self.read_owned(
+            crate::devices::mirror_snapshot,
+            |mut model: Pin<&mut qobject::DevicesModel>, snapshot| match snapshot {
+                Ok(snapshot) => {
+                    let label = crate::projection::mirror_label(&snapshot.state, &snapshot.reason);
+                    model.as_mut().set_mirror_label(QString::from(&label));
+                    model.as_mut().set_mirror_can_pair(snapshot.can_pair);
+                    model
+                        .as_mut()
+                        .set_mirror_active(crate::projection::mirror_is_active(&snapshot.state));
+                    model.as_mut().set_mirror_available(true);
+                    let option = |key: &str, fallback: &str| {
+                        QString::from(
+                            snapshot
+                                .options
+                                .get(key)
+                                .map(String::as_str)
+                                .unwrap_or(fallback),
+                        )
+                    };
+                    model
+                        .as_mut()
+                        .set_mirror_resolution(option("resolution", "balanced"));
+                    model.as_mut().set_mirror_rate(option("rate", "smooth"));
+                    model
+                        .as_mut()
+                        .set_mirror_quality(option("quality", "everyday"));
+                    model.as_mut().set_mirror_audio(option("audio", "phone"));
+                    model.as_mut().set_mirror_screen_off(
+                        snapshot.options.get("screenOff").map(String::as_str) == Some("true"),
+                    );
+                    model.as_mut().set_mirror_stay_awake(
+                        snapshot.options.get("stayAwake").map(String::as_str) == Some("true"),
+                    );
+                }
+                Err(error) => {
+                    eprintln!("magnetita: mirror snapshot unavailable: {error}");
+                    model.as_mut().set_mirror_available(false);
+                    model.as_mut().set_mirror_can_pair(false);
+                    model.as_mut().set_mirror_active(false);
+                }
+            },
+        );
     }
 
     pub fn start_mirror(mut self: Pin<&mut Self>) {
@@ -908,7 +911,7 @@ impl qobject::DevicesModel {
             .enqueue_command(ClientCommand::MirrorPair(code));
     }
 
-    pub fn start_pairing(mut self: Pin<&mut Self>) {
+    pub fn start_pairing(self: Pin<&mut Self>) {
         let known: Vec<String> = self
             .rust()
             .devices
@@ -916,27 +919,23 @@ impl qobject::DevicesModel {
             .filter(|device| device.paired)
             .map(|device| device.id.clone())
             .collect();
-        let qt = self.as_mut().qt_thread();
-        std::thread::spawn(move || {
-            let shown =
-                crate::devices::start_pairing().and_then(|uri| crate::pairing::matrix(&uri));
-            let _ = qt.queue(
-                move |mut model: Pin<&mut qobject::DevicesModel>| match shown {
-                    Ok(matrix) => {
-                        model.as_mut().rust_mut().pairing_watch = Some(
-                            crate::pairing::Watch::open(known.iter().map(String::as_str)),
-                        );
-                        model.as_mut().set_pairing_arrived(QString::default());
-                        model
-                            .as_mut()
-                            .set_pairing_window(crate::pairing::WINDOW_SECONDS);
-                        model.as_mut().set_pairing_matrix(QString::from(&matrix));
-                        model.as_mut().set_pairing_active(true);
-                    }
-                    Err(error) => eprintln!("magnetita: pairing window unavailable: {error}"),
-                },
-            );
-        });
+        self.read_owned(
+            || crate::devices::start_pairing().and_then(|uri| crate::pairing::matrix(&uri)),
+            move |mut model: Pin<&mut qobject::DevicesModel>, shown| match shown {
+                Ok(matrix) => {
+                    model.as_mut().rust_mut().pairing_watch = Some(crate::pairing::Watch::open(
+                        known.iter().map(String::as_str),
+                    ));
+                    model.as_mut().set_pairing_arrived(QString::default());
+                    model
+                        .as_mut()
+                        .set_pairing_window(crate::pairing::WINDOW_SECONDS);
+                    model.as_mut().set_pairing_matrix(QString::from(&matrix));
+                    model.as_mut().set_pairing_active(true);
+                }
+                Err(error) => eprintln!("magnetita: pairing window unavailable: {error}"),
+            },
+        );
     }
 
     pub fn dismiss_pairing(mut self: Pin<&mut Self>) {

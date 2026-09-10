@@ -1,0 +1,17 @@
+# MAG-M1-A exact change inventory
+
+Base revision	95d1f393696dd1a89378b0996cdbd9174d07ab62
+Pathspec	magnetita/docs/evidence/2026-09-10-app-lifecycle.md
+Pathspec	magnetita/docs/inventories/2026-09-10-app-lifecycle/MAG-M1-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md
+Pathspec	magnetita/src/lifecycle.rs
+Pathspec	magnetita/src/main.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+57	0	4bebf05a237fa8081a0c8c36dd5a349ea93eba2ff12d52497d968ffa8937a147	magnetita/docs/evidence/2026-09-10-app-lifecycle.md
+17	0	self	magnetita/docs/inventories/2026-09-10-app-lifecycle/MAG-M1-A.numstat.tsv
+62	0	e2f66d1a59d1f9169628fc4b743619af9729d144312ad4869efa61466eafd1c0	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md
+198	0	ef324b81671633654c4e0ffcb7869eb959e74c9e616a75980e1025f02dbde9c1	magnetita/src/lifecycle.rs
+1	0	ecedcc9505d7c350fbf73a806948671dacdc9c5eb232a9ebdfac855741fa4f65	magnetita/src/main.rs

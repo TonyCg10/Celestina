@@ -72,10 +72,13 @@ pub struct MessagesModelRust {
     available: bool,
     sender: Option<SyncSender<(String, u64, String)>>,
     worker: Option<JoinHandle<()>>,
+    /// The refresh threads, joined on drop; a late snapshot is dropped.
+    owned: crate::lifecycle::Owned,
 }
 
 impl Drop for MessagesModelRust {
     fn drop(&mut self) {
+        self.owned.close();
         self.sender.take();
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
@@ -96,7 +99,7 @@ impl qobject::MessagesModel {
         }
         let open = self.rust().open_thread.to_string().parse::<u64>().ok();
         let qt = self.as_mut().qt_thread();
-        std::thread::spawn(move || {
+        self.rust().owned.spawn(move |guard| {
             let conversations = crate::devices::sms_conversations(&device);
             let thread = open.map(|t| {
                 (
@@ -108,6 +111,9 @@ impl qobject::MessagesModel {
                 conversations,
                 thread,
             });
+            if !guard.open() {
+                return;
+            }
             let _ = qt.queue(
                 move |mut model: Pin<&mut qobject::MessagesModel>| match snapshot {
                     Ok(snapshot) => model.as_mut().apply(snapshot),

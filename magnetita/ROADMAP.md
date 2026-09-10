@@ -1,13 +1,16 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P7
+- **Active implementation checkpoint:** MAG-M1
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P7` is executing under
-[its plan](docs/plans/active/2026-09-10-storage-and-retirement.md), paired
-with the `magnetita-android` project's own `AND-5`. `MAG-P6` is closed under
+`MAG-M1` is executing under
+[its plan](docs/plans/active/2026-09-10-app-lifecycle.md). `MAG-P7` is
+closed under
+[its archived plan](docs/plans/archive/2026-09-10-storage-and-retirement.md),
+paired with the `magnetita-android` project's own `AND-5`, its `MAG-P7-D`
+waiting on the author's `VAL-MAG-14`. `MAG-P6` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-link-mirror.md), paired
 with `AND-4`, its last observation the author's `VAL-MAG-14`. `MAG-P5` is
 closed under
@@ -24,7 +27,7 @@ under [its own](docs/plans/archive/2026-09-07-own-protocol-spikes.md).
 units are all done and committed under
 [its archived plan](docs/plans/archive/2026-08-05-network-input-hardening.md);
 its canonical production exit is still a pending deployment action recorded in
-[STATUS.md](STATUS.md). `MAG-M1` remains settled and has no execution plan.
+[STATUS.md](STATUS.md).
 
 ## MAG-S1 — Hostile network input at the daemon's boundaries
 
@@ -110,9 +113,9 @@ repeatedly with every owned worker joined and no stale snapshot applied.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-M1-A | planned | none | Complete ownership map and failing close/burst regression | Focused app lifecycle test |
-| MAG-M1-B | planned | MAG-M1-A | Cancelable, joined read/watch lifecycle | Repeated create/burst/close test |
-| MAG-M1-C | planned | MAG-M1-B | App, daemon and D-Bus consumers remain compatible; installed bytes are current | `scripts/complete-production.sh` |
+| MAG-M1-A | done | none | Complete ownership map and failing close/burst regression | Focused app lifecycle test |
+| MAG-M1-B | done | MAG-M1-A | Cancelable, joined read/watch lifecycle | Repeated create/burst/close test |
+| MAG-M1-C | done | MAG-M1-B | App, daemon and D-Bus consumers remain compatible; installed bytes are current | `scripts/complete-production.sh` |
 
 ## Implementation exit
 

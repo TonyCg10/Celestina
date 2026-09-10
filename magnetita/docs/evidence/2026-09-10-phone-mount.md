@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-P7-B` of
-  [`../plans/active/2026-09-10-storage-and-retirement.md`](../plans/active/2026-09-10-storage-and-retirement.md):
+  [`../plans/archive/2026-09-10-storage-and-retirement.md`](../plans/archive/2026-09-10-storage-and-retirement.md):
   `celestina-rs/crates/magnetitad/src/link_wire/storage.rs`, the session's
   storage branches in `link_wire/mod.rs`, the `fuser` dependency, the
   plan and roadmap records that archive `MAG-P6` and open `MAG-P7`,
