@@ -1,14 +1,16 @@
 # AND-4 — The mirror over the link
 
 - **Opened:** 2026-09-09
+- **Closed:** 2026-09-10
 - **Plan ID:** link-mirror
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "sigue con todo" on 2026-09-09 with
   `AND-3`'s exit met
 - **Scope:** magnetita-android
 - **Implementation checkpoint:** AND-4
 - **Author-validation checkpoint:** `VAL-MAG-14` in Magnetita's
   [`../../../../magnetita/VALIDATION.md`](../../../../magnetita/VALIDATION.md)
+- **Successor:** AND-5
 
 ## Hypothesis
 
@@ -48,6 +50,9 @@ device screen offers.
 
 The geometry and the signals have JVM tests, `lintRelease` passes, the
 release build is on the S25U; the mirror after a reboot is `VAL-MAG-14`.
+
+Met on 2026-09-09 as far as this project can meet it; the S25U received the
+capture request live. `VAL-MAG-14` stays pending.
 
 ## Change and commit ledger
 

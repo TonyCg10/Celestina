@@ -57,6 +57,11 @@ class MainActivity : ComponentActivity() {
                 val desktopMedia by LinkService.desktopMedia.collectAsState()
                 var phoneGranted by remember { mutableStateOf(PhonePermissions.allGranted(this)) }
                 val mirrorInput = remember(link, phoneGranted) { org.celestina.magnetita.mirror.MirrorInput.enabled(this) }
+                var storageShared by remember { mutableStateOf(org.celestina.magnetita.storage.PhoneStorage(this).available()) }
+                val pickTree = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+                    if (tree != null) org.celestina.magnetita.storage.PhoneStorage.granted(this, tree)
+                    storageShared = org.celestina.magnetita.storage.PhoneStorage(this).available()
+                }
                 val askPhone = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
                     phoneGranted = PhonePermissions.allGranted(this)
                     if (phoneGranted) LinkService.phoneGranted(this)
@@ -94,13 +99,14 @@ class MainActivity : ComponentActivity() {
                 } else {
                     val battery = readBattery()
                     DeviceScreen(
-                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted, mirrorInput),
+                        shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted, mirrorInput, storageShared),
                         onScan = { scanning = true },
                         onForget = { id -> LinkService.forget(this, id) },
                         onStopRinging = { LinkService.stopRinging(this) },
                         onNotificationAccess = { startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                         onPhoneAccess = { askPhone.launch(PhonePermissions.ALL) },
                         onMirrorInput = { startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                        onStorage = { pickTree.launch(null) },
                         onControl = { page = 1 },
                         onMedia = { button -> desktopMedia?.let { LinkService.send(this, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
                     )

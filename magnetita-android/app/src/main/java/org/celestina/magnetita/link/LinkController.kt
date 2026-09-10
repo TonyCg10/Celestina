@@ -204,6 +204,7 @@ class LinkController(
                             is Outbound.Media -> live.sendMediaState(op.state)
                             is Outbound.MediaControl -> live.sendMediaCommand(op.command.player, op.command.button, op.command.seekMs, op.command.volume)
                             Outbound.MediaWanted -> live.requestMedia()
+                            is Outbound.StorageState -> live.sendStorageState(op.available)
                             is Outbound.Contacts -> live.sendContacts(op.version, op.contacts, op.removed, op.complete)
                             is Outbound.Conversations -> live.sendSmsConversations(op.list)
                             is Outbound.Thread -> live.sendSmsThread(op.thread, op.messages)

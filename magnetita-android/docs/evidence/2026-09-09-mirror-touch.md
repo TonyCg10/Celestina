@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-4-B` of
-  [`../plans/active/2026-09-09-link-mirror.md`](../plans/active/2026-09-09-link-mirror.md):
+  [`../plans/archive/2026-09-09-link-mirror.md`](../plans/archive/2026-09-09-link-mirror.md):
   `app/src/main/java/org/celestina/magnetita/mirror/MirrorInput.kt`,
   `app/src/main/res/xml/mirror_input.xml`, this record
 - **Environment:** as `AND-1-A`

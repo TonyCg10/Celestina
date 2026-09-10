@@ -73,6 +73,9 @@ sealed interface DesktopSignal {
 
     /** 0 back, 1 home, 2 recents. */
     data class MirrorGlobal(val action: Int) : DesktopSignal
+
+    /** The desktop browses the shared root. */
+    data class Storage(val request: StorageRequest) : DesktopSignal
     data class Other(val capability: Int, val kind: Int) : DesktopSignal
 
     companion object {
@@ -84,6 +87,7 @@ sealed interface DesktopSignal {
         const val CAPABILITY_MEDIA = 6
         const val CAPABILITY_COMMANDS = 7
         const val CAPABILITY_MIRROR = 9
+        const val CAPABILITY_STORAGE = 13
         const val CAPABILITY_SMS = 10
         const val CAPABILITY_CONTACTS = 11
         const val CAPABILITY_TELEPHONY = 12
@@ -152,7 +156,7 @@ sealed interface DesktopSignal {
             CAPABILITY_MIRROR to 5 ->
                 if (event.mirrorKey != null && event.mirrorKeyPressed != null) MirrorKey(event.mirrorKey, event.mirrorKeyPressed) else Other(event.capability, event.kind)
             CAPABILITY_MIRROR to 6 -> event.mirrorGlobal?.let { MirrorGlobal(it) } ?: Other(event.capability, event.kind)
-            else -> Other(event.capability, event.kind)
+            else -> if (event.capability == CAPABILITY_STORAGE && event.storage != null) Storage(event.storage) else Other(event.capability, event.kind)
         }
     }
 }

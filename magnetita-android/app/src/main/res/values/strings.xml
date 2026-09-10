@@ -76,4 +76,8 @@
     <string name="label_mirror_input">Control de pantalla</string>
     <string name="detail_mirror_input_on">El escritorio puede tocar la pantalla mientras la ve</string>
     <string name="detail_mirror_input_off">Permite el acceso para tocar la pantalla desde el escritorio</string>
+    <string name="label_storage">Archivos</string>
+    <string name="detail_storage_on">El escritorio ve la carpeta compartida como una unidad</string>
+    <string name="detail_storage_off">Elige una carpeta para verla desde el escritorio</string>
+    <string name="action_change">Cambiar</string>
 </resources>

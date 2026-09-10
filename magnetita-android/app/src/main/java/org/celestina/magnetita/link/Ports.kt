@@ -55,6 +55,12 @@ interface LiveSession {
     fun sendMirrorStarted(width: Int, height: Int, codec: Int, audio: Boolean): Boolean
     fun sendMirrorStop(): Boolean
 
+    fun sendStorageState(available: Boolean): Boolean
+    fun sendListing(request: Int, entries: List<StorageEntry>, more: Boolean, error: String): Boolean
+    fun sendStatReply(request: Int, entry: StorageEntry?): Boolean
+    fun sendData(request: Int, bytes: ByteArray, error: String): Boolean
+    fun sendDone(request: Int, ok: Boolean, error: String): Boolean
+
     fun sendMediaState(state: MediaState): Boolean
 
     /** Drives one of the desktop's players. */
@@ -132,7 +138,41 @@ data class LinkEvent(
     val mirrorKey: Int? = null,
     val mirrorKeyPressed: Boolean? = null,
     val mirrorGlobal: Int? = null,
+    val storage: StorageRequest? = null,
 )
+
+/** One browse request from the desktop; `kind` is one of the constants. */
+class StorageRequest(
+    val kind: Int,
+    val request: Int,
+    val path: String,
+    val to: String,
+    val offset: Long,
+    val len: Int,
+    val bytes: ByteArray,
+    val truncate: Boolean,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is StorageRequest && other.kind == kind && other.request == request && other.path == path &&
+            other.to == to && other.offset == offset && other.len == len && other.bytes.contentEquals(bytes) && other.truncate == truncate
+
+    override fun hashCode(): Int = request
+
+    override fun toString(): String = "StorageRequest($kind, $request, $path)"
+
+    companion object {
+        const val LIST = 0
+        const val STAT = 1
+        const val READ = 2
+        const val WRITE = 3
+        const val MKDIR = 4
+        const val RENAME = 5
+        const val DELETE = 6
+    }
+}
+
+/** One file or directory as the wire carries it. */
+data class StorageEntry(val name: String, val dir: Boolean, val size: Long, val mtimeMs: Long)
 
 /** What the desktop asks the mirror to be; `codec` 0 HEVC, 1 H.264. */
 data class MirrorOptions(val maxSize: Int, val fps: Int, val bitrateKbps: Int, val codec: Int, val audio: Boolean)
@@ -200,6 +240,9 @@ sealed interface Outbound {
 
     /** The desktop's players are wanted now. */
     data object MediaWanted : Outbound
+
+    /** Whether a root is shared; sent on connect and when the grant changes. */
+    data class StorageState(val available: Boolean) : Outbound
 
     data class Contacts(val version: Long, val contacts: List<PhoneContact>, val removed: List<Long>, val complete: Boolean) : Outbound
     data class Conversations(val list: List<SmsConversation>) : Outbound

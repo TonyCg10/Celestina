@@ -1,9 +1,11 @@
 # Magnetita Android status
 
-- **Updated:** 2026-09-09
-- **Implementation:** `AND-4`, the mirror over the link, is the active
-  checkpoint since 2026-09-09, paired with Magnetita's `MAG-P6`; both its
-  units are done and it waits on `VAL-MAG-14`. `AND-3`, remote control,
+- **Updated:** 2026-09-10
+- **Implementation:** `AND-5`, the phone's files over the link, is the
+  active checkpoint since 2026-09-10, paired with Magnetita's `MAG-P7`; its
+  unit is done and the browse is `VAL-MAG-15`. `AND-4`, the mirror over
+  the link, is implemented and archived; `VAL-MAG-14` carries the author's
+  observation. `AND-3`, remote control,
   met its exit the same day and is archived; `VAL-MAG-13` carries the
   author's hand. `AND-2`, the daily set, met its exit the same day and is
   archived; `VAL-MAG-12` closes it. `AND-1`, the foundation, has its four units done and waits for
@@ -14,6 +16,10 @@
 
 ## Current checkout truth
 
+- The folder picked in the "Archivos" row is the phone's shared root: the
+  desktop's listings, reads, writes, renames and deletions run through
+  the documents contract on one storage thread, and the link says whether
+  a root is shared on every connect (`AND-5-A`).
 - The desktop's Mirror asks for the screen; the phone consents through
   the system's dialog (opened at once in front, from a notification
   otherwise), captures into an HEVC encoder and streams it on the link's
@@ -71,7 +77,8 @@ None. The SDK and NDK are the author's, outside the repository.
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan AND-4](docs/plans/active/2026-09-09-link-mirror.md)
+- [Active plan AND-5](docs/plans/active/2026-09-10-storage.md)
+- [Archived plan AND-4](docs/plans/archive/2026-09-09-link-mirror.md)
 - [Archived plan AND-3](docs/plans/archive/2026-09-09-remote-control.md)
 - [Archived plan AND-2](docs/plans/archive/2026-09-09-daily-set.md)
 - [Archived plan AND-1](docs/plans/archive/2026-09-09-foundation.md)

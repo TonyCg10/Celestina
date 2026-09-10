@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `AND-4-A` of
-  [`../plans/active/2026-09-09-link-mirror.md`](../plans/active/2026-09-09-link-mirror.md):
+  [`../plans/archive/2026-09-09-link-mirror.md`](../plans/archive/2026-09-09-link-mirror.md):
   `app/src/main/java/org/celestina/magnetita/mirror/{ScreenMirror,MirrorService,MirrorConsentActivity,MirrorGeometry}.kt`,
   the mirror ports and signals in `link/`, the link service's ask, the
   manifest, strings, the tests; the plan and roadmap records that archive

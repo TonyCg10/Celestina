@@ -50,6 +50,8 @@ data class DeviceShown(
     val phoneGranted: Boolean = false,
     /** Whether the desktop may touch the mirrored screen. */
     val mirrorInputEnabled: Boolean = false,
+    /** Whether a root of the phone's files is shared with the desktop. */
+    val storageShared: Boolean = false,
 )
 
 /**
@@ -68,6 +70,7 @@ fun DeviceScreen(
     onMedia: (button: Int) -> Unit = {},
     onPhoneAccess: () -> Unit = {},
     onMirrorInput: () -> Unit = {},
+    onStorage: () -> Unit = {},
     onControl: () -> Unit = {},
 ) {
     val scroll = rememberScrollState()
@@ -146,6 +149,13 @@ fun DeviceScreen(
                         } else {
                             TextButton(onClick = onMirrorInput) { Text(stringResource(R.string.action_allow)) }
                         }
+                    },
+                )
+                GroupRow(
+                    title = stringResource(R.string.label_storage),
+                    detail = stringResource(if (shown.storageShared) R.string.detail_storage_on else R.string.detail_storage_off),
+                    trailing = {
+                        TextButton(onClick = onStorage) { Text(stringResource(if (shown.storageShared) R.string.action_change else R.string.action_allow)) }
                     },
                 )
                 GroupRow(

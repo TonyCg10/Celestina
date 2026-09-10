@@ -3,6 +3,7 @@ package org.celestina.magnetita.link
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import uniffi.magnetita_mobile.MobileContact
+import uniffi.magnetita_mobile.MobileEntry
 import uniffi.magnetita_mobile.MobileConversation
 import uniffi.magnetita_mobile.MobileMediaCommand
 import uniffi.magnetita_mobile.MobileSmsMessage
@@ -71,6 +72,18 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
         runCatching { inner.sendMirrorStarted(width.toUShort(), height.toUShort(), codec.toUByte(), audio) }.isSuccess
     override fun sendMirrorStop(): Boolean = runCatching { inner.sendMirrorStop() }.isSuccess
 
+    override fun sendStorageState(available: Boolean): Boolean = runCatching { inner.sendStorageState(available) }.isSuccess
+    override fun sendListing(request: Int, entries: List<StorageEntry>, more: Boolean, error: String): Boolean =
+        runCatching { inner.sendListing(request.toUInt(), entries.map { e -> e.toMobile() }, more, error) }.isSuccess
+    override fun sendStatReply(request: Int, entry: StorageEntry?): Boolean =
+        runCatching { inner.sendStatReply(request.toUInt(), entry?.toMobile()) }.isSuccess
+    override fun sendData(request: Int, bytes: ByteArray, error: String): Boolean =
+        runCatching { inner.sendData(request.toUInt(), bytes, error) }.isSuccess
+    override fun sendDone(request: Int, ok: Boolean, error: String): Boolean =
+        runCatching { inner.sendDone(request.toUInt(), ok, error) }.isSuccess
+
+    private fun StorageEntry.toMobile(): MobileEntry = MobileEntry(name, dir, size.toULong(), mtimeMs.toULong())
+
     override fun sendMediaState(state: MediaState): Boolean = runCatching {
         inner.sendMediaState(
             MobileMediaState(
@@ -128,6 +141,7 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
             it.mirrorStop,
             it.mirrorTouch?.let { t -> MirrorTouch(t.phase.toInt(), t.x.toInt(), t.y.toInt(), t.pointer.toInt()) },
             it.mirrorKey?.toInt(), it.mirrorKeyPressed, it.mirrorGlobal?.toInt(),
+            it.storage?.let { s -> StorageRequest(s.kind.toInt(), s.request.toInt(), s.path, s.to, s.offset.toLong(), s.len.toInt(), s.bytes, s.truncate) },
         ) }
     }
 

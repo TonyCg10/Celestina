@@ -1,8 +1,8 @@
 # Magnetita Android implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** AND-4
-- **Related author validation:** `VAL-MAG-11` through `VAL-MAG-14` in
+- **Active implementation checkpoint:** AND-5
+- **Related author validation:** `VAL-MAG-11` through `VAL-MAG-15` in
   Magnetita's [VALIDATION.md](../magnetita/VALIDATION.md); they do not
   block
 
@@ -10,6 +10,43 @@ This roadmap is the application half of Magnetita's own-protocol program;
 the Rust half and the desktop are in
 [Magnetita's roadmap](../magnetita/ROADMAP.md) (`MAG-P3` onwards). Each
 `AND-` checkpoint pairs with a `MAG-P` one.
+
+## AND-5 — The phone's files over the link
+
+## Hypothesis and tangible outcome
+
+The folder the person picks once in the system's tree picker is the root
+the desktop browses through the documents contract; the wire's paths map
+onto document ids by appending. The tangible outcome is Siderita browsing
+that folder through the daemon's mount with no `sshfs`.
+
+## Scope
+
+- The storage adapter over the shared document tree, its grant row, the
+  state on connect and on grant.
+
+## Exclusions
+
+- `MANAGE_EXTERNAL_STORAGE`; the `MediaStore` beyond the shared tree.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| AND-5-A | done | MAG-P7-A | The storage adapter over the document tree | JVM tests, lint |
+
+## Implementation exit
+
+Close `AND-5` when the path arithmetic and the signals have JVM tests,
+`lintRelease` passes and the release build is on the S25U; the browse is
+`VAL-MAG-15`.
+
+Met on 2026-09-10 as far as this project can meet it: 26 JVM tests and
+lint pass, the build is on the S25U.
+
+## Closed evidence
+
+- `AND-5-A`: [storage tree](docs/evidence/2026-09-10-storage-tree.md)
 
 ## AND-4 — The mirror over the link
 

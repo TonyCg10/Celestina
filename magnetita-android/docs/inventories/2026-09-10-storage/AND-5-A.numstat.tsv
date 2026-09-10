@@ -1,0 +1,53 @@
+# AND-5-A exact change inventory
+
+Base revision	b4fe624a50764b88e3cf91dd42d78e6dba588643
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/DocumentPaths.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/storage/DocumentPathsTest.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-09-mirror-capture.md
+Pathspec	magnetita-android/docs/evidence/2026-09-09-mirror-touch.md
+Pathspec	magnetita-android/docs/evidence/2026-09-10-storage-tree.md
+Pathspec	magnetita-android/docs/inventories/2026-09-10-storage/AND-5-A.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-09-link-mirror.md
+Pathspec	magnetita-android/docs/plans/active/2026-09-10-storage.md
+Pathspec	magnetita-android/docs/plans/active/README.md
+Pathspec	magnetita-android/docs/plans/archive/2026-09-09-link-mirror.md
+Pathspec	magnetita-android/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+39	2	c2d18c9d9c179a6a5ae06eabaf67c7233b13e3cacd2987af3d7ff3d39ff3566c	magnetita-android/ROADMAP.md
+12	5	006069004ede0dafd4e69fe6616fafd4e988dffaa323b1398dd0eb2a674c5e5f	magnetita-android/STATUS.md
+7	1	24190b8fdbff2ad83f3315f8ec048100dae420224226e309dc9107d73fea4683	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+14	0	4d779a3e438901f5d15fe1faf0cc4db60c3333b21a82e7acfcb51c3d66f7a7f8	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+5	1	dcd87a418473c7fa8336fd3bf172ace9fb551ebdb0cfa2b14f5243e1e2287e43	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+1	0	c92111a79480ddfeea1aa771e99657f7e5787866dd1680061c55bd6d8b7d1154	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+23	1	28e5ad3cab08b6b01c452ae02bbf4492f3dc09e96e1a3b59e2b9b7c0b3df1730	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+43	0	f5d640f1666649fa8aad742c43388e463999e7007974ab181810e1644cc467f2	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+28	0	2083568abe69aeedc816e9dc794f30960a844d1cd3589187d0df2b27c527fa1c	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/DocumentPaths.kt
+186	0	01bbeccf9b3ef3008452a3e22eaacd1df703c69e13a48183b28099109319d548	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+10	0	59919d7f7efc405a6ae44f71884a641bb0ff7c783b350b4a881688c88d60b8f7	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/DeviceScreen.kt
+4	0	0a551d5066154cf86d8e5be5dceebc701063ea9b1dac4507816d0ba537153614	magnetita-android/app/src/main/res/values/strings.xml
+5	0	4265f3f7d37247bf9ade2eb3795458b2713dc47a6c85682516eea434be958781	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+35	0	6766ee500a9a9ce50291b5ffbcd442042d09ac7609fe12d6432eca238020cae2	magnetita-android/app/src/test/java/org/celestina/magnetita/storage/DocumentPathsTest.kt
+1	1	5c48d35091e3c0b9843788f2e5fa473ddb432b37f11abb1f94924b9e7f2b6ac0	magnetita-android/docs/evidence/2026-09-09-mirror-capture.md
+1	1	378b679cfbfafb532eccc7f07fa118466d7b35f89720a5c43ec058f81ac0e46b	magnetita-android/docs/evidence/2026-09-09-mirror-touch.md
+49	0	3d758126887c22f6bf9029dd9e7694cbad382f83aca2ce130016b639fa074c7c	magnetita-android/docs/evidence/2026-09-10-storage-tree.md
+53	0	self	magnetita-android/docs/inventories/2026-09-10-storage/AND-5-A.numstat.tsv
+0	57	deleted	magnetita-android/docs/plans/active/2026-09-09-link-mirror.md
+50	0	250cc4a6970d6acf81cad1552d22d741c09c6b5e34936f2181da23bdaa7a4e48	magnetita-android/docs/plans/active/2026-09-10-storage.md
+4	2	a1aece4914c97230f34b2dc106cc5ce700ca9d53ffb2cb813c1f5dab79f11098	magnetita-android/docs/plans/active/README.md
+62	0	30d5a1f05680707d4a48c21dcfd215ceba2847294d456de3d4e196ff726bb081	magnetita-android/docs/plans/archive/2026-09-09-link-mirror.md
+1	0	607a22448f4e473e7e28e20893d4ba6a5ccc99dd809be51a659ae2fb0d127d57	magnetita-android/docs/plans/archive/README.md

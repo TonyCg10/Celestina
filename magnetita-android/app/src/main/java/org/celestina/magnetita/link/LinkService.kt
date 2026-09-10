@@ -42,6 +42,8 @@ class LinkService : LifecycleService() {
     private val book by lazy { org.celestina.magnetita.phone.PhoneBook(applicationContext) }
     private val messages by lazy { org.celestina.magnetita.phone.Messages(applicationContext) }
     private val calls by lazy { org.celestina.magnetita.phone.Calls(applicationContext) }
+    private val storage by lazy { org.celestina.magnetita.storage.PhoneStorage(applicationContext) }
+    private val storageExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val clipboard by lazy { getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
 
     // Fires only while this app has the focus: the in-front half of the
@@ -72,7 +74,14 @@ class LinkService : LifecycleService() {
         controller = c
         controllerRef = c
         loop = lifecycleScope.launch {
-            launch { c.state.collect { s -> _state.value = s; update(notification(describe(s))) } }
+            launch {
+                c.state.collect { s ->
+                    _state.value = s
+                    update(notification(describe(s)))
+                    // The desktop mounts the phone only while a root is shared.
+                    if (s is LinkState.Connected) c.send(Outbound.StorageState(storage.available()))
+                }
+            }
             launch {
                 c.signals.collect { signal ->
                     when (signal) {
@@ -100,6 +109,10 @@ class LinkService : LifecycleService() {
                         is DesktopSignal.MirrorTouched -> org.celestina.magnetita.mirror.MirrorService.touch(signal.touch.phase, signal.touch.x, signal.touch.y, signal.touch.pointer)
                         is DesktopSignal.MirrorGlobal -> org.celestina.magnetita.mirror.MirrorInput.instance?.global(signal.action)
                         is DesktopSignal.MirrorKey -> {}
+                        is DesktopSignal.Storage -> {
+                            val live = controllerRef?.live
+                            if (live != null) storageExecutor.execute { storage.answer(signal.request, live) }
+                        }
                         else -> {}
                     }
                 }
@@ -117,6 +130,7 @@ class LinkService : LifecycleService() {
             ACTION_OUTBOUND -> { while (true) { val op = pending.pollFirst() ?: break; controller?.send(op) } }
             ACTION_CALL_ENDED -> calls.restoreRinger()
             ACTION_PHONE_GRANTED -> offMain { book.send(0); messages.sendConversations() }
+            ACTION_STORAGE_GRANTED -> controller?.send(Outbound.StorageState(storage.available()))
             ACTION_FOCUS -> { inFront = true; offerClipboard() }
             ACTION_BLUR -> inFront = false
             ACTION_FORGET -> intent.getStringExtra(EXTRA_DEVICE_ID)?.let { id ->
@@ -130,6 +144,7 @@ class LinkService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        storageExecutor.shutdownNow()
         loop?.cancel()
         runCatching { clipboard.removePrimaryClipChangedListener(clipListener) }
         media.stop()
@@ -318,6 +333,13 @@ class LinkService : LifecycleService() {
         /** The app came to the front: the clipboard may be read now. */
         fun focused(context: Context) {
             context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_FOCUS))
+        }
+
+        private const val ACTION_STORAGE_GRANTED = "org.celestina.magnetita.STORAGE_GRANTED"
+
+        /** A root was shared (or withdrawn): the desktop learns at once. */
+        fun storageGranted(context: Context) {
+            context.startForegroundService(Intent(context, LinkService::class.java).setAction(ACTION_STORAGE_GRANTED))
         }
 
         /** The app left the front. */
