@@ -38,6 +38,11 @@ ApplicationWindow {
     readonly property int mediaControlIndex: mediaIndex >= 0 ? mediaIndex : primaryIndex
 
     property bool settingsOpen: false
+    property bool messagesOpen: false
+
+    MessagesModel {
+        id: messagesModel
+    }
 
     Item {
         id: appSurface
@@ -57,6 +62,7 @@ ApplicationWindow {
                 id: appHeader
                 width: parent.width
                 settingsOpen: window.settingsOpen
+                messagesOpen: window.messagesOpen
                 deviceCount: devicesModel.devicesAvailable
                              ? devicesModel.deviceNames.length : 0
                 devicesAvailable: devicesModel.devicesAvailable
@@ -66,10 +72,20 @@ ApplicationWindow {
                     if (window.settingsOpen)
                         devicesModel.reloadSettings()
                 }
+                onMessagesRequested: window.messagesOpen = !window.messagesOpen
+            }
+
+            MessagesPage {
+                visible: window.messagesOpen && !window.settingsOpen
+                width: parent.width
+                height: parent.height - y
+                messages: messagesModel
+                deviceId: window.primaryIndex >= 0 && window.primaryIndex < devicesModel.deviceIds.length
+                          ? devicesModel.deviceIds[window.primaryIndex] : ""
             }
 
             DevicesPage {
-                visible: !window.settingsOpen
+                visible: !window.settingsOpen && !window.messagesOpen
                 width: parent.width
                 height: parent.height - y
                 devices: devicesModel

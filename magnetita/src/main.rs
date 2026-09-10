@@ -1,5 +1,6 @@
 mod controller;
 mod devices;
+mod messages;
 mod pairing;
 mod projection;
 

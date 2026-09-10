@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -17,6 +17,9 @@ use magnetita_link::LinkError;
 use magnetita_peer::{browse, clipboard_text, describe, dir_default, Incoming, Phone};
 use magnetita_proto::daily::media::MediaState;
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
+use magnetita_proto::phone::contacts::{Contact, ContactsSync};
+use magnetita_proto::phone::sms::{SmsMessage, SmsReceived};
+use magnetita_proto::phone::telephony::{CallEvent, CallState};
 
 fn dir() -> PathBuf {
     std::env::var_os("MAGNETITA_PEER_DIR")
@@ -25,7 +28,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -127,6 +130,54 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                 session.send_media_state(&state).await?;
                 println!("media state sent");
             }
+            if let Some(spec) = flag(args, "--contact") {
+                // NAME|TEL as one vCard at version 1.
+                let (name, tel) = spec.split_once('|').unwrap_or((spec, ""));
+                session
+                    .send_contacts(&ContactsSync {
+                        version: 1,
+                        contacts: vec![Contact {
+                            id: 1,
+                            version: 1,
+                            vcard: format!(
+                                "BEGIN:VCARD\r\nVERSION:4.0\r\nFN:{name}\r\nTEL:{tel}\r\nEND:VCARD\r\n"
+                            ),
+                        }],
+                        removed: vec![],
+                        complete: true,
+                    })
+                    .await?;
+                println!("contact sent");
+            }
+            if let Some(spec) = flag(args, "--sms") {
+                // ADDRESS|BODY as a received message in thread 1.
+                let (address, body) = spec.split_once('|').unwrap_or((spec, ""));
+                session
+                    .send_sms_received(&SmsReceived {
+                        thread: 1,
+                        message: SmsMessage {
+                            id: 1,
+                            from_me: false,
+                            address: address.into(),
+                            body: body.into(),
+                            timestamp_ms: 0,
+                            attachments: vec![],
+                        },
+                    })
+                    .await?;
+                println!("sms sent");
+            }
+            if let Some(number) = flag(args, "--call") {
+                session
+                    .send_call_event(&CallEvent {
+                        state: CallState::Ringing,
+                        number: number.into(),
+                        name: None,
+                        timestamp_ms: 0,
+                    })
+                    .await?;
+                println!("ringing sent");
+            }
             let sending = match flag(args, "--send-file") {
                 Some(path) => {
                     let path = PathBuf::from(path);
@@ -185,6 +236,16 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                 if let Some(c) = m.command {
                                     println!("media command: {} {:?}", c.player, c.button);
                                 }
+                            }
+                            (10, 4, _) => {
+                                let p = magnetita_peer::phone_fields(&env);
+                                if let Some(send) = p.sms_send {
+                                    println!("sms send: thread {} {:?}", send.thread, send.body);
+                                }
+                            }
+                            (12, 2, _) => {
+                                let p = magnetita_peer::phone_fields(&env);
+                                println!("call action: {:?}", p.call_action);
                             }
                             _ => match clipboard_text(&env) {
                                 Some(text) => println!("clipboard: {text}"),

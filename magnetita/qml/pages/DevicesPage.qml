@@ -65,6 +65,71 @@ ScrollPage {
         bottomPadding: CelestinaTheme.spaceMd
     }
 
+    // The phone's call, while there is one: who, and the three things the
+    // desktop may do about it, as glyphs.
+    CelestinaSurface {
+        readonly property string callState: root.primaryIndex >= 0 && root.primaryIndex < root.devices.deviceCallStates.length
+                                            ? root.devices.deviceCallStates[root.primaryIndex] : ""
+        readonly property string callName: root.primaryIndex >= 0 && root.primaryIndex < root.devices.deviceCallNames.length
+                                           ? root.devices.deviceCallNames[root.primaryIndex] : ""
+        id: callBanner
+        width: parent.width
+        visible: callState.length > 0
+        height: visible ? 64 : 0
+        role: CelestinaSurface.Tonal
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: CelestinaTheme.spaceMd
+            anchors.rightMargin: CelestinaTheme.spaceSm
+            spacing: CelestinaTheme.spaceSm
+
+            CelestinaIcon {
+                width: CelestinaTheme.iconMd
+                height: width
+                name: "phone"
+                fallbackName: "phone"
+                tone: CelestinaIcon.Device
+            }
+
+            Text {
+                Layout.fillWidth: true
+                // Peer-supplied text: never interpreted as markup.
+                textFormat: Text.PlainText
+                text: (callBanner.callState === "ringing" ? qsTr("Llamada entrante: ")
+                       : callBanner.callState === "answered" ? qsTr("En llamada: ")
+                       : qsTr("Llamada perdida: ")) + callBanner.callName
+                color: callBanner.ink
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontRowTitle
+                font.weight: CelestinaTheme.weightDemiBold
+                elide: Text.ElideRight
+            }
+
+            CelestinaIconButton {
+                iconName: "bell-off"
+                visible: callBanner.callState === "ringing"
+                helpText: qsTr("Silenciar")
+                onClicked: root.devices.callAction(root.primaryIndex, "Mute")
+            }
+
+            CelestinaIconButton {
+                iconName: "phone"
+                visible: callBanner.callState === "ringing"
+                role: CelestinaButton.Primary
+                helpText: qsTr("Responder")
+                onClicked: root.devices.callAction(root.primaryIndex, "Answer")
+            }
+
+            CelestinaIconButton {
+                iconName: "x"
+                visible: callBanner.callState === "ringing" || callBanner.callState === "answered"
+                helpText: qsTr("Colgar")
+                onClicked: root.devices.callAction(root.primaryIndex, "HangUp")
+            }
+        }
+    }
+
     Column {
         id: deviceBlock
         visible: root.devices.devicesAvailable

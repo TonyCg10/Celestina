@@ -13,10 +13,15 @@ use magnetita_link::trust::fingerprint_text;
 
 use crate::phone::{
     button_from_index, button_index, clipboard_text, describe, media_fields, notification_fields,
-    share_fields, Incoming, Phone, PhoneSession,
+    phone_fields, share_fields, Incoming, Phone, PhoneSession,
 };
 use magnetita_proto::daily::media::{MediaCommand, MediaState};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
+use magnetita_proto::phone::contacts::{Contact, ContactsSync};
+use magnetita_proto::phone::sms::{
+    Attachment, Conversation, SmsConversations, SmsMessage, SmsReceived, SmsThread,
+};
+use magnetita_proto::phone::telephony::{CallEvent, CallState};
 
 /// Why a call failed, as Kotlin sees it.
 #[derive(Debug, uniffi::Error)]
@@ -86,6 +91,62 @@ pub struct Event {
     pub media: Option<MobileMediaState>,
     /// The desktop's command for one of this phone's players.
     pub media_command: Option<MobileMediaCommand>,
+    /// Contacts changed since this version are wanted.
+    pub contacts_since: Option<u64>,
+    /// The conversation list is wanted.
+    pub conversations_wanted: bool,
+    /// A page of this thread is wanted, older than `before_ms`.
+    pub thread: Option<u64>,
+    pub before_ms: Option<u64>,
+    pub limit: Option<u16>,
+    /// Send `text` in `thread` (with `text`).
+    pub sms_send: bool,
+    /// 0 mute, 1 answer, 2 hang up.
+    pub call_action: Option<u8>,
+}
+
+/// One contact as its vCard.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileContact {
+    pub id: u64,
+    pub version: u64,
+    pub vcard: String,
+}
+
+/// One conversation in the list.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileConversation {
+    pub thread: u64,
+    pub addresses: Vec<String>,
+    pub snippet: String,
+    pub timestamp_ms: u64,
+    pub unread: u16,
+}
+
+/// One message; attachments are counted by the mime types they carry.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileSmsMessage {
+    pub id: u64,
+    pub from_me: bool,
+    pub address: String,
+    pub body: String,
+    pub timestamp_ms: u64,
+    pub attachment_mimes: Vec<String>,
+}
+
+fn message_out(m: MobileSmsMessage) -> SmsMessage {
+    SmsMessage {
+        id: m.id,
+        from_me: m.from_me,
+        address: m.address,
+        body: m.body,
+        timestamp_ms: m.timestamp_ms,
+        attachments: m
+            .attachment_mimes
+            .into_iter()
+            .map(|mime| Attachment { transfer: 0, mime })
+            .collect(),
+    }
 }
 
 /// One player's state, either side's.
@@ -345,6 +406,100 @@ impl MobileSession {
         Ok(self.handle.block_on(self.inner.request_media())?)
     }
 
+    /// A page of this phone's contacts changed since the desktop's version.
+    pub fn send_contacts(
+        &self,
+        version: u64,
+        contacts: Vec<MobileContact>,
+        removed: Vec<u64>,
+        complete: bool,
+    ) -> Result<(), MobileError> {
+        let page = ContactsSync {
+            version,
+            contacts: contacts
+                .into_iter()
+                .map(|c| Contact {
+                    id: c.id,
+                    version: c.version,
+                    vcard: c.vcard,
+                })
+                .collect(),
+            removed,
+            complete,
+        };
+        Ok(self.handle.block_on(self.inner.send_contacts(&page))?)
+    }
+
+    /// Every conversation, newest first.
+    pub fn send_sms_conversations(&self, list: Vec<MobileConversation>) -> Result<(), MobileError> {
+        let list = SmsConversations {
+            conversations: list
+                .into_iter()
+                .map(|c| Conversation {
+                    thread: c.thread,
+                    addresses: c.addresses,
+                    snippet: c.snippet,
+                    timestamp_ms: c.timestamp_ms,
+                    unread: c.unread,
+                })
+                .collect(),
+        };
+        Ok(self
+            .handle
+            .block_on(self.inner.send_sms_conversations(&list))?)
+    }
+
+    /// A page of one thread, oldest first.
+    pub fn send_sms_thread(
+        &self,
+        thread: u64,
+        messages: Vec<MobileSmsMessage>,
+    ) -> Result<(), MobileError> {
+        let page = SmsThread {
+            thread,
+            messages: messages.into_iter().map(message_out).collect(),
+        };
+        Ok(self.handle.block_on(self.inner.send_sms_thread(&page))?)
+    }
+
+    /// A message arrived or was sent.
+    pub fn send_sms_received(
+        &self,
+        thread: u64,
+        message: MobileSmsMessage,
+    ) -> Result<(), MobileError> {
+        let received = SmsReceived {
+            thread,
+            message: message_out(message),
+        };
+        Ok(self
+            .handle
+            .block_on(self.inner.send_sms_received(&received))?)
+    }
+
+    /// A call changed state: 0 ringing, 1 answered, 2 missed, 3 ended.
+    pub fn send_call_event(
+        &self,
+        state: u8,
+        number: String,
+        name: Option<String>,
+        timestamp_ms: u64,
+    ) -> Result<(), MobileError> {
+        let state = match state {
+            0 => CallState::Ringing,
+            1 => CallState::Answered,
+            2 => CallState::Missed,
+            _ => CallState::Ended,
+        };
+        let event = CallEvent {
+            state,
+            number,
+            name,
+            timestamp_ms,
+        };
+        Ok(self.handle.block_on(self.inner.send_call_event(&event))?)
+    }
+
     /// Shares a URL or a snippet with the desktop.
     pub fn send_text(&self, text: String) -> Result<(), MobileError> {
         Ok(self.handle.block_on(self.inner.send_text(&text))?)
@@ -360,11 +515,12 @@ impl MobileSession {
                 let (key, action, reply) = notification_fields(&e);
                 let share = share_fields(&e);
                 let media = media_fields(&e);
+                let phone = phone_fields(&e);
+                let text = clipboard_text(&e).or(reply).or(share.text);
                 Event {
                     capability: e.capability,
                     kind: e.kind,
                     description: describe(&e),
-                    text: clipboard_text(&e).or(reply).or(share.text),
                     key,
                     action,
                     transfer: share.transfer,
@@ -379,6 +535,18 @@ impl MobileSession {
                         seek_ms: c.seek_ms,
                         volume: c.volume,
                     }),
+                    contacts_since: phone.contacts_since,
+                    conversations_wanted: phone.conversations_wanted,
+                    thread: phone
+                        .thread_request
+                        .as_ref()
+                        .map(|r| r.thread)
+                        .or(phone.sms_send.as_ref().map(|s| s.thread)),
+                    before_ms: phone.thread_request.as_ref().and_then(|r| r.before_ms),
+                    limit: phone.thread_request.as_ref().map(|r| r.limit),
+                    sms_send: phone.sms_send.is_some(),
+                    call_action: phone.call_action,
+                    text: text.or(phone.sms_send.map(|s| s.body)),
                     body: e.body,
                 }
             }
@@ -400,6 +568,13 @@ impl MobileSession {
                 path: Some(path.to_string_lossy().into_owned()),
                 media: None,
                 media_command: None,
+                contacts_since: None,
+                conversations_wanted: false,
+                thread: None,
+                before_ms: None,
+                limit: None,
+                sms_send: false,
+                call_action: None,
                 body: Vec::new(),
             },
         }))

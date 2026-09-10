@@ -175,7 +175,11 @@ impl Daemon {
                 // The stock client carries no notification replies on this wire.
                 Command::NotificationAction { .. }
                 | Command::NotificationReply { .. }
-                | Command::NotificationDismiss { .. } => {}
+                | Command::NotificationDismiss { .. }
+                | Command::SmsList
+                | Command::SmsThread { .. }
+                | Command::SmsSend { .. }
+                | Command::CallAction(_) => {}
                 Command::SendFile(_) if !device.is_paired() || !settings.share => {}
                 Command::SendFile(path) => {
                     let name = path

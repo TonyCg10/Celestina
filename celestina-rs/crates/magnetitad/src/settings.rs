@@ -31,6 +31,12 @@ pub struct Settings {
     pub findmyphone: bool,
     #[serde(default = "on")]
     pub media: bool,
+    #[serde(default = "on")]
+    pub contacts: bool,
+    #[serde(default = "on")]
+    pub sms: bool,
+    #[serde(default = "on")]
+    pub telephony: bool,
 }
 
 fn on() -> bool {
@@ -46,6 +52,9 @@ impl Default for Settings {
             share: true,
             findmyphone: true,
             media: true,
+            contacts: true,
+            sms: true,
+            telephony: true,
         }
     }
 }
@@ -80,6 +89,9 @@ impl Settings {
             "share" => self.share = enabled,
             "findmyphone" => self.findmyphone = enabled,
             "media" => self.media = enabled,
+            "contacts" => self.contacts = enabled,
+            "sms" => self.sms = enabled,
+            "telephony" => self.telephony = enabled,
             _ => return false,
         }
         true
@@ -99,7 +111,7 @@ impl Settings {
     }
 
     /// The flags as `(name, enabled)` pairs, in a stable order for the UI.
-    pub fn entries(&self) -> [(&'static str, bool); 6] {
+    pub fn entries(&self) -> [(&'static str, bool); 9] {
         [
             ("battery", self.battery),
             ("notifications", self.notifications),
@@ -107,6 +119,9 @@ impl Settings {
             ("share", self.share),
             ("findmyphone", self.findmyphone),
             ("media", self.media),
+            ("contacts", self.contacts),
+            ("sms", self.sms),
+            ("telephony", self.telephony),
         ]
     }
 }

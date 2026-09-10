@@ -32,10 +32,14 @@ use magnetita_proto::daily::battery::BatteryStatus;
 use magnetita_proto::daily::clipboard::{ClipboardRequest, ClipboardText};
 use magnetita_proto::daily::find::FindRing;
 use magnetita_proto::daily::media::{MediaCommand, MediaRequest, MediaState};
+use magnetita_proto::daily::notifications::Action;
 use magnetita_proto::daily::notifications::{
     NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
 };
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing, QrPayload};
+use magnetita_proto::phone::contacts::ContactsSync;
+use magnetita_proto::phone::sms::{SmsConversations, SmsReceived, SmsThread};
+use magnetita_proto::phone::telephony::{CallEvent, CallState};
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
 use rand_core::{OsRng, RngCore};
 
@@ -43,6 +47,7 @@ use crate::devices::{command_channel, Command, DeviceEntry};
 pub(crate) mod discovery;
 pub(crate) mod media;
 pub(crate) mod notifications;
+pub(crate) mod phone;
 pub(crate) mod share;
 
 use crate::lock::LockOk;
@@ -154,6 +159,18 @@ fn hello(device_id: &str) -> Hello {
             },
             CapabilityVersion {
                 capability: capability::MEDIA,
+                version: 1,
+            },
+            CapabilityVersion {
+                capability: capability::CONTACTS,
+                version: 1,
+            },
+            CapabilityVersion {
+                capability: capability::SMS,
+                version: 1,
+            },
+            CapabilityVersion {
+                capability: capability::TELEPHONY,
                 version: 1,
             },
         ],
@@ -603,6 +620,25 @@ impl Wire {
                 log("link", &format!("{name}: media request: {e}"));
             }
         }
+        {
+            let settings = *daemon.settings.lock_ok();
+            let mut greetings = Vec::new();
+            if settings.contacts {
+                let since = phone::store().with(&device_id, |book| book.contacts_version);
+                greetings.push(phone::contacts_request(since));
+            }
+            if settings.sms {
+                greetings.push(phone::conversations_request());
+            }
+            for env in greetings {
+                if let Err(e) = session
+                    .send_message(env.capability, env.kind, env.body)
+                    .await
+                {
+                    log("link", &format!("{name}: phone request: {e}"));
+                }
+            }
+        }
         // Bulk streams are accepted by their own task: `select!` drops the
         // future of a branch that loses the race, and a dropped half-accepted
         // stream is a lost transfer. A channel receive is cancel-safe.
@@ -635,6 +671,9 @@ impl Wire {
                     }
                     Ok(env) if env.capability == capability::MEDIA => {
                         self.handle_media(&device_id, &name, &media, &env);
+                    }
+                    Ok(env) if matches!(env.capability, capability::CONTACTS | capability::SMS | capability::TELEPHONY) => {
+                        self.handle_phone(&device_id, &name, &env);
                     }
                     Ok(env) if env.capability == capability::SHARE => {
                         if let Some(reply) = shares.handle(&env) {
@@ -683,7 +722,7 @@ impl Wire {
                         break;
                     }
                     while let Ok(command) = commands.try_recv() {
-                        if let Err(e) = self.command(&session, &shares, &media, command).await {
+                        if let Err(e) = self.command(&session, &shares, &media, &device_id, command).await {
                             log("link", &format!("{name}: command: {e}"));
                         }
                     }
@@ -695,6 +734,7 @@ impl Wire {
             }
         }
         acceptor.abort();
+        phone::store().forget_device(&device_id);
         daemon.pending_clipboards.clear(&device_id);
         self.adapters.notifications.forget_device(&device_id);
     }
@@ -731,6 +771,148 @@ impl Wire {
             },
             MediaRequest::KIND => media.wanted(),
             _ => {}
+        }
+    }
+
+    /// Contacts, SMS and calls from the phone: into the store, onto the
+    /// registry, and the ones a person must see onto the notification server.
+    fn handle_phone(&self, device_id: &str, name: &str, env: &magnetita_proto::Envelope) {
+        let settings = *self.daemon.settings.lock_ok();
+        let store = phone::store();
+        match (env.capability, env.kind) {
+            (capability::CONTACTS, ContactsSync::KIND) if settings.contacts => {
+                match ContactsSync::decode(&env.body) {
+                    Ok(page) => {
+                        let (people, version) = store.with(device_id, |book| {
+                            book.sync(&page);
+                            (book.people.len(), book.contacts_version)
+                        });
+                        if page.complete {
+                            log(
+                                "link",
+                                &format!("{name}: {people} contacts at version {version}"),
+                            );
+                        }
+                    }
+                    Err(e) => log("link", &format!("{name}: contacts: {e}")),
+                }
+            }
+            (capability::SMS, SmsConversations::KIND) if settings.sms => {
+                match SmsConversations::decode(&env.body) {
+                    Ok(list) => {
+                        store.with(device_id, |book| book.conversations = list.conversations);
+                        self.daemon.notify_change();
+                    }
+                    Err(e) => log("link", &format!("{name}: sms: {e}")),
+                }
+            }
+            (capability::SMS, SmsThread::KIND) if settings.sms => {
+                match SmsThread::decode(&env.body) {
+                    Ok(page) => {
+                        store.with(device_id, |book| phone::merge_thread(book, &page));
+                        self.daemon.notify_change();
+                    }
+                    Err(e) => log("link", &format!("{name}: sms: {e}")),
+                }
+            }
+            (capability::SMS, SmsReceived::KIND) if settings.sms => {
+                match SmsReceived::decode(&env.body) {
+                    Ok(received) => {
+                        let label = store.with(device_id, |book| {
+                            book.received(received.thread, &received.message);
+                            book.label(std::slice::from_ref(&received.message.address))
+                        });
+                        self.daemon.notify_change();
+                        if !received.message.from_me {
+                            let note = NotificationPosted {
+                                key: format!("{}{}", phone::SMS_KEY_PREFIX, received.thread),
+                                app_name: "SMS".into(),
+                                title: label,
+                                body: received.message.body.clone(),
+                                timestamp_ms: received.message.timestamp_ms,
+                                replyable: true,
+                                actions: Vec::new(),
+                                icon: None,
+                            };
+                            if let Some(line) = self.adapters.notifications.posted(
+                                self.adapters.notification_server.as_ref(),
+                                device_id,
+                                name,
+                                &note,
+                            ) {
+                                ui_log(&self.daemon, name, &line, false);
+                            }
+                        }
+                    }
+                    Err(e) => log("link", &format!("{name}: sms: {e}")),
+                }
+            }
+            (capability::TELEPHONY, CallEvent::KIND) if settings.telephony => {
+                match CallEvent::decode(&env.body) {
+                    Ok(event) => self.call_changed(device_id, name, event),
+                    Err(e) => log("link", &format!("{name}: call: {e}")),
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn call_changed(&self, device_id: &str, name: &str, event: CallEvent) {
+        let store = phone::store();
+        let resolved = store.with(device_id, |book| {
+            let resolved = book.resolve(&event.number);
+            book.call = Some(event.clone());
+            resolved
+        });
+        let (what, who) = phone::call_line(&event, resolved.as_deref());
+        {
+            let mut devices = self.daemon.devices.lock_ok();
+            if let Some(entry) = devices.get_mut(device_id) {
+                entry.call_state = if event.state == CallState::Ended {
+                    String::new()
+                } else {
+                    phone::call_state_word(event.state).to_owned()
+                };
+                entry.call_number = event.number.clone();
+                entry.call_name = who.clone();
+            }
+        }
+        self.daemon.notify_change();
+        let server = self.adapters.notification_server.as_ref();
+        match event.state {
+            CallState::Ended => {
+                self.adapters
+                    .notifications
+                    .dismissed(server, device_id, phone::CALL_KEY);
+            }
+            state => {
+                let note = NotificationPosted {
+                    key: phone::CALL_KEY.into(),
+                    app_name: "Tel\u{e9}fono".into(),
+                    title: format!("{what}: {who}"),
+                    body: if who == event.number {
+                        String::new()
+                    } else {
+                        event.number.clone()
+                    },
+                    timestamp_ms: event.timestamp_ms,
+                    replyable: false,
+                    actions: phone::call_buttons(state)
+                        .into_iter()
+                        .map(|(label, _)| Action {
+                            label: label.into(),
+                        })
+                        .collect(),
+                    icon: None,
+                };
+                if let Some(line) = self
+                    .adapters
+                    .notifications
+                    .posted(server, device_id, name, &note)
+                {
+                    ui_log(&self.daemon, name, &line, false);
+                }
+            }
         }
     }
 
@@ -829,9 +1011,60 @@ impl Wire {
         session: &Session,
         shares: &Arc<share::SessionShare>,
         media: &Arc<media::SessionMedia>,
+        device_id: &str,
         command: Command,
     ) -> Result<(), LinkError> {
         match command {
+            Command::SmsList => {
+                let env = phone::conversations_request();
+                session
+                    .send_message(env.capability, env.kind, env.body)
+                    .await?;
+            }
+            Command::SmsThread { thread, before_ms } => {
+                let env = phone::thread_request(thread, before_ms);
+                session
+                    .send_message(env.capability, env.kind, env.body)
+                    .await?;
+            }
+            Command::SmsSend { thread, body } => {
+                let env = phone::sms_send(thread, &body);
+                session
+                    .send_message(env.capability, env.kind, env.body)
+                    .await?;
+            }
+            Command::CallAction(action) => {
+                let env = phone::call_command(action);
+                session
+                    .send_message(env.capability, env.kind, env.body)
+                    .await?;
+            }
+            // A reply on an SMS notification is a send in that thread; a
+            // button on the call notification is a call action.
+            Command::NotificationReply { key, text } if key.starts_with(phone::SMS_KEY_PREFIX) => {
+                if let Ok(thread) = key[phone::SMS_KEY_PREFIX.len()..].parse::<u64>() {
+                    let env = phone::sms_send(thread, &text);
+                    session
+                        .send_message(env.capability, env.kind, env.body)
+                        .await?;
+                }
+            }
+            Command::NotificationAction { key, action } if key == phone::CALL_KEY => {
+                let state =
+                    phone::store().with(device_id, |book| book.call.as_ref().map(|c| c.state));
+                if let Some(state) = state {
+                    if let Some((_, call_action)) =
+                        phone::call_buttons(state).get(usize::from(action))
+                    {
+                        let env = phone::call_command(*call_action);
+                        session
+                            .send_message(env.capability, env.kind, env.body)
+                            .await?;
+                    }
+                }
+            }
+            Command::NotificationDismiss { key }
+                if key == phone::CALL_KEY || key.starts_with(phone::SMS_KEY_PREFIX) => {}
             Command::Media(action) => {
                 if let Some(env) = media.command_for_phone(action) {
                     session
@@ -1478,6 +1711,200 @@ mod tests {
     }
 
     #[test]
+    fn contacts_name_the_sms_and_the_call_and_the_desktop_answers_both() {
+        use magnetita_proto::phone::contacts::{Contact, ContactsRequest};
+        use magnetita_proto::phone::sms::{SmsMessage, SmsSend};
+        use magnetita_proto::phone::telephony::{CallAction, CallCommand};
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let recorder = Arc::new(notifications::testing::Recorder::default());
+        let bridge = Arc::new(notifications::Bridge::default());
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: recorder.clone(),
+                notifications: Arc::clone(&bridge),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
+            },
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone7") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+        let next_of = |cap: u16, kind: u16| {
+            rt.block_on(async {
+                loop {
+                    let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                        .await
+                        .expect("an envelope in time")
+                        .unwrap();
+                    if env.capability == cap && env.kind == kind {
+                        break env;
+                    }
+                }
+            })
+        };
+
+        // The desktop asks for contacts from version 0 and for the conversations.
+        let ask = next_of(capability::CONTACTS, ContactsRequest::KIND);
+        assert_eq!(ContactsRequest::decode(&ask.body).unwrap().since_version, 0);
+        next_of(capability::SMS, SmsConversations::KIND);
+
+        rt.block_on(session.send_message(
+            capability::CONTACTS,
+            ContactsSync::KIND,
+            ContactsSync {
+                version: 3,
+                contacts: vec![Contact {
+                    id: 1,
+                    version: 3,
+                    vcard: "BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Ana\r\nTEL:+34600111222\r\nEND:VCARD\r\n".into(),
+                }],
+                removed: vec![],
+                complete: true,
+            }
+            .encode(),
+        ))
+        .unwrap();
+        let message = SmsMessage {
+            id: 5,
+            from_me: false,
+            address: "600111222".into(),
+            body: "are you coming".into(),
+            timestamp_ms: 1,
+            attachments: vec![],
+        };
+        rt.block_on(
+            session.send_message(
+                capability::SMS,
+                SmsReceived::KIND,
+                SmsReceived {
+                    thread: 42,
+                    message,
+                }
+                .encode(),
+            ),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while recorder.posted.lock_ok().is_empty() {
+            assert!(Instant::now() < deadline, "the SMS never showed");
+            thread::sleep(Duration::from_millis(50));
+        }
+        let shown = recorder.posted.lock_ok()[0].clone();
+        assert_eq!((shown.app.as_str(), shown.summary.as_str()), ("SMS", "Ana"));
+        assert!(shown.replyable);
+        assert_eq!(phone::store().conversations("phone7").len(), 1);
+
+        // Replying on that notification sends in the thread.
+        let (device, command) = bridge
+            .command_for(notifications::ServerSignal::Replied(shown.id, "yes".into()))
+            .unwrap();
+        daemon
+            .commands
+            .lock_ok()
+            .get(&device)
+            .unwrap()
+            .try_send(command)
+            .unwrap();
+        let sent = next_of(capability::SMS, SmsSend::KIND);
+        let sent = SmsSend::decode(&sent.body).unwrap();
+        assert_eq!((sent.thread, sent.body.as_str()), (42, "yes"));
+
+        // A ringing call: the registry names Ana, the notification has three buttons.
+        rt.block_on(
+            session.send_message(
+                capability::TELEPHONY,
+                CallEvent::KIND,
+                CallEvent {
+                    state: CallState::Ringing,
+                    number: "+34600111222".into(),
+                    name: None,
+                    timestamp_ms: 2,
+                }
+                .encode(),
+            ),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let entry = daemon.devices.lock_ok().get("phone7").cloned();
+            if let Some(e) = entry.filter(|e| e.call_state == "ringing") {
+                assert_eq!(e.call_name, "Ana");
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the call never reached the registry"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        let call = recorder
+            .posted
+            .lock_ok()
+            .iter()
+            .find(|p| p.app == "Tel\u{e9}fono")
+            .cloned()
+            .expect("the call notification");
+        assert_eq!(call.buttons.len(), 3);
+        let (device, command) = bridge
+            .command_for(notifications::ServerSignal::Action(call.id, "2".into()))
+            .unwrap();
+        daemon
+            .commands
+            .lock_ok()
+            .get(&device)
+            .unwrap()
+            .try_send(command)
+            .unwrap();
+        let hang = next_of(capability::TELEPHONY, CallCommand::KIND);
+        assert_eq!(
+            CallCommand::decode(&hang.body).unwrap().action,
+            CallAction::HangUp
+        );
+
+        // The call ends: the registry clears and the notification closes.
+        rt.block_on(
+            session.send_message(
+                capability::TELEPHONY,
+                CallEvent::KIND,
+                CallEvent {
+                    state: CallState::Ended,
+                    number: "+34600111222".into(),
+                    name: None,
+                    timestamp_ms: 3,
+                }
+                .encode(),
+            ),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !recorder.closed.lock_ok().contains(&call.id) {
+            assert!(
+                Instant::now() < deadline,
+                "the call notification never closed"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(
+            daemon.devices.lock_ok().get("phone7").unwrap().call_state,
+            ""
+        );
+        session.close("done");
+        drop(wire);
+    }
+
+    #[test]
     fn a_phone_that_forgot_the_desktop_pairs_again_while_still_pinned() {
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -1645,7 +2072,7 @@ mod tests {
         let ring = rt.block_on(async {
             loop {
                 let env = session.recv().await.unwrap();
-                if env.capability != capability::CLIPBOARD && env.capability != capability::MEDIA {
+                if env.capability == capability::FIND {
                     break env;
                 }
             }

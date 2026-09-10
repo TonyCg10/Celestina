@@ -62,6 +62,12 @@ pub struct DeviceEntry {
     pub(crate) pair_generation: Generation,
     /// The local path the device is mounted at, or empty when not mounted.
     pub mount_path: String,
+    /// The phone's call, additively: "" when none, else "ringing",
+    /// "answered", "missed" or "ended", with the number and the name the
+    /// contact book resolved.
+    pub call_state: String,
+    pub call_number: String,
+    pub call_name: String,
     /// Battery percent, or -1 when unknown.
     pub battery: i32,
     /// Whether the phone is charging.
@@ -106,6 +112,9 @@ impl DeviceEntry {
             paired: false,
             pair_generation: Generation::INITIAL,
             mount_path: String::new(),
+            call_state: String::new(),
+            call_number: String::new(),
+            call_name: String::new(),
             battery: -1,
             charging: false,
             fingerprint,
@@ -139,6 +148,9 @@ impl DeviceEntry {
             ("mounted", Value::from(self.mounted)),
             ("paired", Value::from(self.paired)),
             ("mountPath", Value::from(self.mount_path.clone())),
+            ("callState", Value::from(self.call_state.clone())),
+            ("callNumber", Value::from(self.call_number.clone())),
+            ("callName", Value::from(self.call_name.clone())),
             ("battery", Value::from(self.battery)),
             ("charging", Value::from(self.charging)),
             ("fingerprint", Value::from(self.fingerprint.clone())),
@@ -362,6 +374,14 @@ pub enum Command {
     NotificationReply { key: String, text: String },
     /// Dismiss one of the phone's notifications (own wire).
     NotificationDismiss { key: String },
+    /// Ask the phone for its conversation list (own wire).
+    SmsList,
+    /// Ask the phone for a page of one thread, older than `before_ms`.
+    SmsThread { thread: u64, before_ms: Option<u64> },
+    /// Send an SMS in a conversation (own wire).
+    SmsSend { thread: u64, body: String },
+    /// Do something about the phone's call (own wire).
+    CallAction(magnetita_proto::phone::telephony::CallAction),
 }
 
 /// Why a URI handed to [`Devices::send_file_uri`] names no local file.
@@ -611,6 +631,55 @@ impl Devices {
     /// Dismiss a phone notification on the phone.
     fn dismiss_notification(&self, device_id: String, key: String) -> zbus::fdo::Result<()> {
         self.forward(&device_id, Command::NotificationDismiss { key })
+    }
+
+    /// The phone's conversations as the daemon holds them, newest first,
+    /// each `thread`, `label`, `addresses`, `snippet`, `timestamp`, `unread`;
+    /// asking also refreshes them from the phone (`Changed` follows).
+    fn sms_conversations(
+        &self,
+        device_id: String,
+    ) -> zbus::fdo::Result<Vec<HashMap<String, OwnedValue>>> {
+        let _ = self.forward(&device_id, Command::SmsList);
+        Ok(crate::link_wire::phone::store().conversations(&device_id))
+    }
+
+    /// One conversation's cached messages, oldest first, each `id`, `fromMe`,
+    /// `address`, `name`, `body`, `timestamp`, `attachments`; asking fetches
+    /// the newest page from the phone when none is held (`Changed` follows).
+    fn sms_thread(
+        &self,
+        device_id: String,
+        thread: u64,
+    ) -> zbus::fdo::Result<Vec<HashMap<String, OwnedValue>>> {
+        let held = crate::link_wire::phone::store().thread(&device_id, thread);
+        if held.is_empty() {
+            let _ = self.forward(
+                &device_id,
+                Command::SmsThread {
+                    thread,
+                    before_ms: None,
+                },
+            );
+        }
+        Ok(held)
+    }
+
+    /// Send `body` in conversation `thread` from the phone.
+    fn sms_send(&self, device_id: String, thread: u64, body: String) -> zbus::fdo::Result<()> {
+        if body.trim().is_empty() {
+            return Err(zbus::fdo::Error::InvalidArgs(
+                "el mensaje est\u{e1} vac\u{ed}o".into(),
+            ));
+        }
+        self.forward(&device_id, Command::SmsSend { thread, body })
+    }
+
+    /// "Mute", "Answer" or "HangUp" the phone's call.
+    fn call_action(&self, device_id: String, action: String) -> zbus::fdo::Result<()> {
+        let action = crate::link_wire::phone::call_action(&action)
+            .ok_or_else(|| zbus::fdo::Error::InvalidArgs("acci\u{f3}n desconocida".into()))?;
+        self.forward(&device_id, Command::CallAction(action))
     }
 
     /// Send a local file to the connected device, named by a plain path.

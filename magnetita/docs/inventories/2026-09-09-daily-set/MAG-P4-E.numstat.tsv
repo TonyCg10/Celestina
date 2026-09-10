@@ -1,0 +1,37 @@
+# MAG-P4-E exact change inventory
+
+Base revision	02f74cb9b2064e4679c2aafcece0c15323ddb543
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/src/devices.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_commands.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/phone.rs
+Pathspec	celestina-rs/crates/magnetitad/src/settings.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/evidence/2026-09-09-contacts-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-E.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-daily-set.md
+Pathspec	magnetita/docs/protocol.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+177	2	d2926924a56b75bbf95827911b04b5379ea3c9fff6ba2a5e342d120a37617421	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+96	0	fefb676b0200d787063381b07ed08569d90e2676c6056a710d86244eda61e4e9	celestina-rs/crates/magnetita-mobile/src/phone.rs
+3	1	bf1af3cdf058db9c0860d503654ef638d61bfadaaf3101e953578ac1a6be9002	celestina-rs/crates/magnetita-peer/src/lib.rs
+63	2	de9427619f2ec04b89b89b455fcc08dabe30d30213e06583f926c77fc7fdc1c1	celestina-rs/crates/magnetita-peer/src/main.rs
+69	0	67672cbc47a8f967b178e260881353cae0a73e84f8d4729864a242102212ee50	celestina-rs/crates/magnetitad/src/devices.rs
+5	1	7a3bc291001502d6115c8d53644f2227d1b688ce2690322f236ef0113b255559	celestina-rs/crates/magnetitad/src/link_commands.rs
+429	2	b99e3edf5dcb00c71f63d2de3d0da7de16975ecd1377d4ecb970f66585f9ef94	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+495	0	b62acf707a3809fb3b94497a59f86081f06c032b2b1eeb644f3dab546d1437e7	celestina-rs/crates/magnetitad/src/link_wire/phone.rs
+16	1	cd38474ff5b951a636706eb0cb421b280208c0a8145bcfbeb492a1df20e0a104	celestina-rs/crates/magnetitad/src/settings.rs
+10	3	8758ea39fab3b25e201b4ca53ecc24d719110fd92e2e9074f6815221602760e6	magnetita/ROADMAP.md
+7	3	5fe68f5ca9cb8eeb071870043df0b828342e7bea8256fbdda72e48e1e5aa3d42	magnetita/STATUS.md
+51	0	f2a82eff2bdd230598485d102794f641277cc8f3a08de29200a9b7f62dff6fd6	magnetita/docs/evidence/2026-09-09-contacts-own-wire.md
+37	0	self	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-E.numstat.tsv
+3	3	884f5f42e6896c40df552d9977449b11d7941daa4a0ad0b4d4cb0b783fb27203	magnetita/docs/plans/active/2026-09-09-daily-set.md
+1	1	386788beacb389917b7ef06b98ad1dc0137a714bd3cc7ed0f128d5fa11008825	magnetita/docs/protocol.md

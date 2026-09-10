@@ -497,9 +497,9 @@ author's daily set working end to end without the stock KDE Connect client.
 | MAG-P4-B | done | MAG-P3 | Notifications with actions and replies | peer tests, JVM tests |
 | MAG-P4-C | done | MAG-P3 | Resumable file share both ways under revocation | peer tests |
 | MAG-P4-D | done | MAG-P3 | Media control both ways | peer tests, MPRIS consumer tests |
-| MAG-P4-E | planned | MAG-P1-E | Contacts sync and name resolution | peer tests, JVM tests |
-| MAG-P4-F | planned | MAG-P4-E | SMS conversations, send, receive, MMS attachments | peer tests, JVM tests |
-| MAG-P4-G | planned | MAG-P4-E | Call state, mute, answer, hang up; shell phone menu shows the call | peer tests, shell consumer tests |
+| MAG-P4-E | done | MAG-P1-E | Contacts sync and name resolution | peer tests, JVM tests |
+| MAG-P4-F | done | MAG-P4-E | SMS conversations, send, receive, MMS attachments | peer tests, JVM tests |
+| MAG-P4-G | done | MAG-P4-E | Call state, mute, answer, hang up; shell phone menu shows the call | peer tests, shell consumer tests |
 
 ## Implementation exit
 
@@ -507,6 +507,13 @@ Close `MAG-P4` when `magnetita-peer` exercises every capability against the
 daemon in tests, the app's JVM tests cover each adapter, and
 `scripts/complete-production.sh` passes with both wires. `VAL-MAG-12` carries
 the author's daily use.
+
+Met on 2026-09-09: every capability of the daily set has its loopback test
+against the daemon and its adapter's JVM tests; `complete-production.sh`
+passed and deployed with both wires. Clipboard, notifications, file share
+and media were also seen on the S25U; contacts and conversations reached
+the desktop on the session's request; calls and real SMS traffic are the
+author's `VAL-MAG-12`.
 
 ## MAG-P5 — Commands, trackpad and keyboard
 

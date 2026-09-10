@@ -37,6 +37,9 @@ pub struct Device {
     pub charging: bool,
     /// Symmetric short code for the active pairing exchange, empty otherwise.
     pub verification_key: String,
+    /// The phone's call: "" or "ringing", "answered", "missed"; and who.
+    pub call_state: String,
+    pub call_name: String,
     /// The phone's now-playing, for the media card. `media_player` empty means
     /// nothing is playing; the `can_*` flags gate the transport buttons.
     pub media_player: String,
@@ -68,6 +71,8 @@ impl Default for Device {
             battery: -1,
             charging: false,
             verification_key: String::new(),
+            call_state: String::new(),
+            call_name: String::new(),
             media_player: String::new(),
             media_title: String::new(),
             media_artist: String::new(),
@@ -215,6 +220,99 @@ pub fn start_pairing() -> Result<String, String> {
         .map_err(|error| error.to_string())
 }
 
+/// One conversation as the daemon lists it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Conversation {
+    pub thread: u64,
+    pub label: String,
+    pub snippet: String,
+    pub timestamp: u64,
+    pub unread: u32,
+}
+
+/// One message of a thread as the daemon holds it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Message {
+    pub from_me: bool,
+    pub name: String,
+    pub body: String,
+    pub timestamp: u64,
+}
+
+/// The phone's conversations; asking also refreshes them from the phone.
+pub fn sms_conversations(device_id: &str) -> Result<Vec<Conversation>, String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    let raw: Vec<HashMap<String, OwnedValue>> = proxy
+        .call("SmsConversations", &(device_id,))
+        .map_err(|error| error.to_string())?;
+    Ok(raw
+        .iter()
+        .map(|d| Conversation {
+            thread: u64_field(d, "thread"),
+            label: str_field(d, "label"),
+            snippet: str_field(d, "snippet"),
+            timestamp: u64_field(d, "timestamp"),
+            unread: u64_field(d, "unread") as u32,
+        })
+        .collect())
+}
+
+/// One thread's cached page, oldest first.
+pub fn sms_thread(device_id: &str, thread: u64) -> Result<Vec<Message>, String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    let raw: Vec<HashMap<String, OwnedValue>> = proxy
+        .call("SmsThread", &(device_id, thread))
+        .map_err(|error| error.to_string())?;
+    Ok(raw
+        .iter()
+        .map(|d| Message {
+            from_me: bool_field(d, "fromMe"),
+            name: str_field(d, "name"),
+            body: str_field(d, "body"),
+            timestamp: u64_field(d, "timestamp"),
+        })
+        .collect())
+}
+
+/// Send `body` in `thread` from the phone.
+pub fn sms_send(device_id: &str, thread: u64, body: &str) -> Result<(), String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    proxy
+        .call("SmsSend", &(device_id, thread, body))
+        .map_err(|error| error.to_string())
+}
+
+/// "Mute", "Answer" or "HangUp" the phone's call.
+pub fn call_action(device_id: &str, action: &str) -> Result<(), String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    proxy
+        .call("CallAction", &(device_id, action))
+        .map_err(|error| error.to_string())
+}
+
+fn u64_field(dict: &HashMap<String, OwnedValue>, key: &str) -> u64 {
+    dict.get(key)
+        .and_then(|value| {
+            u64::try_from(value)
+                .ok()
+                .or_else(|| u32::try_from(value).ok().map(u64::from))
+                .or_else(|| {
+                    i64::try_from(value)
+                        .ok()
+                        .and_then(|v| u64::try_from(v).ok())
+                })
+        })
+        .unwrap_or(0)
+}
+
 /// Ask Magnetita to drop the pairing (best-effort).
 pub fn unpair(device_id: &str) -> Result<(), String> {
     call_method("Unpair", device_id)
@@ -359,6 +457,8 @@ fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
         battery: i32_field(dict, "battery"),
         charging: bool_field(dict, "charging"),
         verification_key: str_field(dict, "verificationKey"),
+        call_state: str_field(dict, "callState"),
+        call_name: str_field(dict, "callName"),
         media_player,
         media_title: str_field(dict, "mediaTitle"),
         media_artist: str_field(dict, "mediaArtist"),

@@ -22,6 +22,11 @@ use magnetita_proto::daily::notifications::{
 };
 use magnetita_proto::daily::share::{ShareAccept, ShareDone, ShareOffer, ShareReject, ShareText};
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, Pinned, QrPairing, QrPayload};
+use magnetita_proto::phone::contacts::{ContactsRequest, ContactsSync};
+use magnetita_proto::phone::sms::{
+    SmsConversations, SmsReceived, SmsSend, SmsThread, SmsThreadRequest,
+};
+use magnetita_proto::phone::telephony::{CallCommand, CallEvent};
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Envelope, Hello};
 
 /// How long one of the QR's addresses gets before the next is tried.
@@ -490,6 +495,46 @@ impl PhoneSession {
         Ok(())
     }
 
+    /// A page of this phone's contacts.
+    pub async fn send_contacts(&self, page: &ContactsSync) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::CONTACTS, ContactsSync::KIND, page.encode())
+            .await?;
+        Ok(())
+    }
+
+    /// Every conversation, newest first.
+    pub async fn send_sms_conversations(&self, list: &SmsConversations) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::SMS, SmsConversations::KIND, list.encode())
+            .await?;
+        Ok(())
+    }
+
+    /// A page of one thread, oldest first.
+    pub async fn send_sms_thread(&self, page: &SmsThread) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::SMS, SmsThread::KIND, page.encode())
+            .await?;
+        Ok(())
+    }
+
+    /// A message arrived or was sent.
+    pub async fn send_sms_received(&self, received: &SmsReceived) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::SMS, SmsReceived::KIND, received.encode())
+            .await?;
+        Ok(())
+    }
+
+    /// A call changed state.
+    pub async fn send_call_event(&self, event: &CallEvent) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::TELEPHONY, CallEvent::KIND, event.encode())
+            .await?;
+        Ok(())
+    }
+
     /// Shares a URL or a snippet, no stream needed.
     pub async fn send_text(&self, text: &str) -> Result<(), LinkError> {
         self.session
@@ -678,6 +723,52 @@ pub fn button_from_index(index: u8) -> Option<MediaButton> {
     })
 }
 
+/// The phone-side requests a desktop envelope carries, for the application.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PhoneFields {
+    /// Contacts changed since this version are wanted.
+    pub contacts_since: Option<u64>,
+    /// The conversation list is wanted.
+    pub conversations_wanted: bool,
+    pub thread_request: Option<SmsThreadRequest>,
+    pub sms_send: Option<SmsSend>,
+    /// 0 mute, 1 answer, 2 hang up.
+    pub call_action: Option<u8>,
+}
+
+pub fn phone_fields(env: &Envelope) -> PhoneFields {
+    match (env.capability, env.kind) {
+        (capability::CONTACTS, ContactsRequest::KIND) => PhoneFields {
+            contacts_since: ContactsRequest::decode(&env.body)
+                .ok()
+                .map(|r| r.since_version),
+            ..Default::default()
+        },
+        (capability::SMS, SmsConversations::KIND) => PhoneFields {
+            conversations_wanted: SmsConversations::decode(&env.body)
+                .is_ok_and(|l| l.conversations.is_empty()),
+            ..Default::default()
+        },
+        (capability::SMS, SmsThreadRequest::KIND) => PhoneFields {
+            thread_request: SmsThreadRequest::decode(&env.body).ok(),
+            ..Default::default()
+        },
+        (capability::SMS, SmsSend::KIND) => PhoneFields {
+            sms_send: SmsSend::decode(&env.body).ok(),
+            ..Default::default()
+        },
+        (capability::TELEPHONY, CallCommand::KIND) => PhoneFields {
+            call_action: CallCommand::decode(&env.body).ok().map(|c| match c.action {
+                magnetita_proto::phone::telephony::CallAction::Mute => 0,
+                magnetita_proto::phone::telephony::CallAction::Answer => 1,
+                magnetita_proto::phone::telephony::CallAction::HangUp => 2,
+            }),
+            ..Default::default()
+        },
+        _ => PhoneFields::default(),
+    }
+}
+
 /// The text a clipboard envelope carries, once decoded by the protocol crate.
 pub fn clipboard_text(env: &Envelope) -> Option<String> {
     if env.capability == capability::CLIPBOARD && env.kind == ClipboardText::KIND {
@@ -730,6 +821,11 @@ pub fn describe(env: &Envelope) -> String {
         (capability::MEDIA, 1) => "media: state".into(),
         (capability::MEDIA, 2) => "media: command".into(),
         (capability::MEDIA, 3) => "media: requested".into(),
+        (capability::CONTACTS, 1) => "contacts: requested".into(),
+        (capability::SMS, 1) => "sms: conversations requested".into(),
+        (capability::SMS, 2) => "sms: thread requested".into(),
+        (capability::SMS, 4) => "sms: send".into(),
+        (capability::TELEPHONY, 2) => "call: command".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
     }
 }

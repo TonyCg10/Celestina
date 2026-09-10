@@ -3,9 +3,8 @@
 - **Updated:** 2026-09-09
 - **Implementation:** `MAG-P4`, the daily set on the own wire, is the
   active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-2`; the clipboard, the notifications, the resumable file share and
-  the media control, all both ways, are done; contacts, SMS and telephony
-  remain. `MAG-P3`, the
+  `AND-2`; its seven units are done and its exit is met on 2026-09-09;
+  `VAL-MAG-12` carries the author's daily use. `MAG-P3`, the
   Android application foundation, met its exit on 2026-09-09 and is
   archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
@@ -31,6 +30,11 @@
 
 ## Current checkout truth
 
+- Contacts, SMS and calls reach the desktop over the own wire: the contact
+  book names numbers, conversations and threads show on the desktop app's
+  messages page and replies go back, received messages and calls become
+  notifications with reply and buttons, and `Devices1` publishes the call
+  state and the SMS methods (`MAG-P4-E`, `-F`, `-G`).
 - The phone's player shows on the desktop's media card over the own wire
   and the desktop's buttons drive it; the desktop's MPRIS players reach
   the phone through the same playerctl worker while it asks (`MAG-P4-D`).

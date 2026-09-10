@@ -32,6 +32,7 @@ pub mod qobject {
         #[qobject]
         #[qml_element]
         #[qproperty(QStringList, device_names)]
+        #[qproperty(QStringList, device_ids)]
         #[qproperty(QStringList, device_types)]
         #[qproperty(QStringList, device_mounts)]
         #[qproperty(QStringList, device_states)]
@@ -42,6 +43,9 @@ pub mod qobject {
         #[qproperty(QStringList, device_charging)]
         // Per-device pairing flag ("true"/"false"), parallel to the lists above.
         #[qproperty(QStringList, device_paired)]
+        // The phone's call, per device: "" or ringing/answered/missed, and who.
+        #[qproperty(QStringList, device_call_states)]
+        #[qproperty(QStringList, device_call_names)]
         // The phone's now-playing line ("Artista — Título"), "" when nothing is
         // playing (which hides the media card), and parallel "true"/"false"
         // flags for the play/pause state and whether next/prev are available.
@@ -119,6 +123,10 @@ pub mod qobject {
         #[qinvokable]
         fn ring_device(self: Pin<&mut DevicesModel>, index: i32);
 
+        /// "Mute", "Answer" or "HangUp" device `index`'s call.
+        #[qinvokable]
+        fn call_action(self: Pin<&mut DevicesModel>, index: i32, action: QString);
+
         /// Toggle play/pause on device `index`'s current player.
         #[qinvokable]
         fn media_play_pause(self: Pin<&mut DevicesModel>, index: i32);
@@ -180,6 +188,7 @@ pub mod qobject {
 #[derive(Default)]
 pub struct DevicesModelRust {
     device_names: QStringList,
+    device_ids: QStringList,
     device_types: QStringList,
     device_mounts: QStringList,
     device_states: QStringList,
@@ -187,6 +196,8 @@ pub struct DevicesModelRust {
     device_battery: QStringList,
     device_charging: QStringList,
     device_paired: QStringList,
+    device_call_states: QStringList,
+    device_call_names: QStringList,
     device_media: QStringList,
     device_media_players: QStringList,
     device_media_titles: QStringList,
@@ -254,19 +265,23 @@ impl Drop for DevicesModelRust {
 }
 
 /// The plugins the Settings surface shows, in order: (D-Bus key, Spanish label).
-const PLUGINS: [(&str, &str); 6] = [
+const PLUGINS: [(&str, &str); 9] = [
     ("battery", "Batería"),
     ("notifications", "Notificaciones del móvil"),
     ("clipboard", "Portapapeles"),
     ("share", "Compartir archivos"),
     ("findmyphone", "Sonar el móvil"),
     ("media", "Control de medios"),
+    ("contacts", "Contactos"),
+    ("sms", "Mensajes SMS"),
+    ("telephony", "Llamadas"),
 ];
 
 enum ClientCommand {
     Pair(String),
     Unpair(String),
     Ring(String),
+    CallAction(String, String),
     Media(String, MediaAction),
     Forget(String),
     SetPlugin(&'static str, bool),
@@ -283,6 +298,7 @@ impl ClientCommand {
             Self::Pair(id) => crate::devices::request_pair(&id),
             Self::Unpair(id) => crate::devices::unpair(&id),
             Self::Ring(id) => crate::devices::ring(&id),
+            Self::CallAction(id, action) => crate::devices::call_action(&id, &action),
             Self::Media(id, action) => crate::devices::media_action(&id, action),
             Self::Forget(id) => crate::devices::forget(&id),
             Self::SetPlugin(plugin, enabled) => crate::devices::set_plugin(plugin, enabled),
@@ -383,6 +399,21 @@ impl qobject::DevicesModel {
     }
 
     fn apply_devices(mut self: Pin<&mut Self>, devices: Vec<crate::devices::Device>) {
+        let ids: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.id.as_str()))
+            .collect();
+        self.as_mut().set_device_ids(ids);
+        let call_states: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.call_state.as_str()))
+            .collect();
+        let call_names: QStringList = devices
+            .iter()
+            .map(|device| QString::from(device.call_name.as_str()))
+            .collect();
+        self.as_mut().set_device_call_states(call_states);
+        self.as_mut().set_device_call_names(call_names);
         let names: QStringList = devices
             .iter()
             .map(|device| QString::from(device.name.as_str()))
@@ -544,6 +575,17 @@ impl qobject::DevicesModel {
     }
 
     /// Toggle play/pause on device `index`'s current player.
+    pub fn call_action(self: Pin<&mut Self>, index: i32, action: QString) {
+        let device_id = self
+            .rust()
+            .devices
+            .get(usize::try_from(index).unwrap_or(usize::MAX))
+            .map(|device| device.id.clone());
+        if let Some(device_id) = device_id {
+            self.enqueue_command(ClientCommand::CallAction(device_id, action.to_string()));
+        }
+    }
+
     pub fn media_play_pause(self: Pin<&mut Self>, index: i32) {
         self.media(index, MediaAction::PlayPause);
     }

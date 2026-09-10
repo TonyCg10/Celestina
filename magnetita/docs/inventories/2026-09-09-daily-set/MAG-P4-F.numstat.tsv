@@ -1,0 +1,33 @@
+# MAG-P4-F exact change inventory
+
+Base revision	02f74cb9b2064e4679c2aafcece0c15323ddb543
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-sms-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-F.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-daily-set.md
+Pathspec	magnetita/qml/Main.qml
+Pathspec	magnetita/qml/components/AppHeader.qml
+Pathspec	magnetita/qml/components/ConversationRow.qml
+Pathspec	magnetita/qml/components/MessageBubble.qml
+Pathspec	magnetita/qml/pages/MessagesPage.qml
+Pathspec	magnetita/src/controller.rs
+Pathspec	magnetita/src/devices.rs
+Pathspec	magnetita/src/main.rs
+Pathspec	magnetita/src/messages.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	1	efb4e89906ada1b7eb21c948810af01e99da5569bdcd08a285f5baf0fbcd9fdc	magnetita/build.rs
+59	0	413396d973225858dd6d86fa10f9a579df2429a2f7c4cc5a74ff1dfa7b9f25ba	magnetita/docs/evidence/2026-09-09-sms-own-wire.md
+33	0	self	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-F.numstat.tsv
+3	3	884f5f42e6896c40df552d9977449b11d7941daa4a0ad0b4d4cb0b783fb27203	magnetita/docs/plans/active/2026-09-09-daily-set.md
+17	1	ff7268e1b6a0a725b61116ab2bc2d10afa1dbbd32b3af2160c0fd8da8321c078	magnetita/qml/Main.qml
+28	8	06fb962d7f6b1f21dc3338e8a0e9b51ba92c419a862865feaedb0639ea3692ba	magnetita/qml/components/AppHeader.qml
+81	0	11e3707a1bbf4386a4f0b1e83717a87ee939c5e3a3703993253b451f485e466a	magnetita/qml/components/ConversationRow.qml
+39	0	7d906b9b3aa5abaa700f24e5bf0f00f8a656be6419ff6109144fad412ad06258	magnetita/qml/components/MessageBubble.qml
+141	0	a4f9bd9e2fda76583243063463634e3711d914d984a9a61f6db064396def97f9	magnetita/qml/pages/MessagesPage.qml
+43	1	3399cc57dfbf12c804f51dc9411495706b3cd5240a4b9a1ec2cbcb1c5034cd30	magnetita/src/controller.rs
+100	0	921a3027eb52fe0ef8588a2509bb1500b4e4ee346a928107769a908f0e53d142	magnetita/src/devices.rs
+1	0	7743dfefd54478a6794c501108465be625d8caec06d7d2c47e514ecf23645370	magnetita/src/main.rs
+211	0	3fe1c11ef0a39b3b6db4f82dc4bc15ce9fcd8055461dd727fa4734ba13176273	magnetita/src/messages.rs

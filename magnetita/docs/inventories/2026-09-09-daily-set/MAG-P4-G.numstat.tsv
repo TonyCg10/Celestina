@@ -1,0 +1,15 @@
+# MAG-P4-G exact change inventory
+
+Base revision	02f74cb9b2064e4679c2aafcece0c15323ddb543
+Pathspec	magnetita/docs/evidence/2026-09-09-telephony-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-G.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-daily-set.md
+Pathspec	magnetita/qml/pages/DevicesPage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+52	0	c3f24d8f73673a3f2d76dc368e9864fb15c7d1c043a86b0ff93e9e1b09d20b91	magnetita/docs/evidence/2026-09-09-telephony-own-wire.md
+15	0	self	magnetita/docs/inventories/2026-09-09-daily-set/MAG-P4-G.numstat.tsv
+3	3	884f5f42e6896c40df552d9977449b11d7941daa4a0ad0b4d4cb0b783fb27203	magnetita/docs/plans/active/2026-09-09-daily-set.md
+65	0	154efd142cffb403885d9cf0809fd5fa8ec0d65ed9ce489a0aca94792f3a1c15	magnetita/qml/pages/DevicesPage.qml

@@ -33,6 +33,9 @@ const QML_FILES: &[&str] = &[
     // The scrolling page both pages are built on.
     "qml/components/ScrollPage.qml",
     "qml/pages/DevicesPage.qml",
+    "qml/pages/MessagesPage.qml",
+    "qml/components/ConversationRow.qml",
+    "qml/components/MessageBubble.qml",
     "qml/pages/SettingsPage.qml",
     "qml/Main.qml",
 ];
@@ -75,6 +78,6 @@ fn main() {
         // Inter Variable, compiled in so the app renders in the suite's typeface
         // (the canonical fonts.qrc lives in ../celestina-style, symlinked into qml/).
         .qrc("qml/fonts.qrc")
-        .files(["src/controller.rs"])
+        .files(["src/controller.rs", "src/messages.rs"])
         .build();
 }
