@@ -1,0 +1,57 @@
+# MAG-P5-B exact change inventory
+
+Base revision	97a346502d4125605b58967f7043a60951673653
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/Cargo.toml
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/input.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-09-09-clipboard-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-contacts-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-input-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-media-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-notifications-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-share-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-sms-own-wire.md
+Pathspec	magnetita/docs/evidence/2026-09-09-telephony-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-remote-control/MAG-P5-B.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-daily-set.md
+Pathspec	magnetita/docs/plans/active/2026-09-09-remote-control.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-09-daily-set.md
+Pathspec	magnetita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+64	0	2a4a473c1c8dfa1b95f67bbf8c44f03665235fa64fb76d6f3c7fe3b4c031f3a9	celestina-rs/Cargo.lock
+63	2	61128ba28f5c1b72562ff19cfba7668133756dce1ba0459dd40a5ce5bf5982fb	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+91	0	112b0f37469ced4114b171ea31f84489a94fd54510d3176b1aeb399742cf074f	celestina-rs/crates/magnetita-mobile/src/phone.rs
+1	1	fa01827c73ae2c551b9964dfe60cc779d090bb593130b5a488004ad1c3f30af2	celestina-rs/crates/magnetita-peer/src/lib.rs
+24	2	8756125893b8360ac393832e3ec100a60cc784638fdbdfdadd3bbb97068b49c7	celestina-rs/crates/magnetita-peer/src/main.rs
+1	0	f4b0e7ecd78451764b99ceef2de8fd2fd4d6d828f2a64733d3810c7bbd3bdc65	celestina-rs/crates/magnetitad/Cargo.toml
+416	0	3d04f4cca8b1c1486e117a3961ab27e98d4cad72c8a2ed05a6324375306a412d	celestina-rs/crates/magnetitad/src/link_wire/input.rs
+213	0	298f44fc229004194f9217e92882ef7c258ece2e9a8d6057fab8fff49e5875b5	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+8	6	f1f6e40d9881000e2fc07ee87873f1a99d2e5ac30d94a5d3e9b664d25a9ebdad	magnetita/ROADMAP.md
+11	4	95155b7a7a4af4edc931f59de160d84a016a4dda346bfc01730c28e62f8669a5	magnetita/STATUS.md
+15	0	e8d1cee7ec98b72ad1613ab6758f16f70ac0a90c01b4ee4fba763ddf36a98246	magnetita/VALIDATION.md
+1	1	4a5245fcee65ad33780f1d6d2c905634e7e6e638e80acff9e45172b2f1c25f5d	magnetita/docs/evidence/2026-09-09-clipboard-own-wire.md
+1	1	34ea48e4bbd5c3854c9ac61a8060c42b4d7f4f2c357b0c5e89724d9d88d2f650	magnetita/docs/evidence/2026-09-09-contacts-own-wire.md
+50	0	c88756420ceaf0bbc563c2b8d860e71fb21fdd8502b96eb03b9fcac927e4ab6f	magnetita/docs/evidence/2026-09-09-input-own-wire.md
+1	1	0b888c26ce4907a8fa0398e770ff9390c776350abd16e61c6d473db8c37b3278	magnetita/docs/evidence/2026-09-09-media-own-wire.md
+1	1	58c99deda7b16b664e75fa5a0b7a9939ba362522cd6c8e814c6135e4539be12e	magnetita/docs/evidence/2026-09-09-notifications-own-wire.md
+1	1	fd9d52c73ffb961cd862a5657bc46fbe942b82753d47cf30b70e4c21ad1dd45c	magnetita/docs/evidence/2026-09-09-share-own-wire.md
+1	1	17470e2c4be85692183a6453ec99f2a239d23e15f46d07de83ce93b8b3401128	magnetita/docs/evidence/2026-09-09-sms-own-wire.md
+1	1	a231dc0bd5807777becf631edbaaf80d972b0d910115b8b9338a85a647ddefb5	magnetita/docs/evidence/2026-09-09-telephony-own-wire.md
+57	0	self	magnetita/docs/inventories/2026-09-09-remote-control/MAG-P5-B.numstat.tsv
+0	65	deleted	magnetita/docs/plans/active/2026-09-09-daily-set.md
+56	0	01e1ac5a8fef8171f656496b1bf8704a4550376747f0c3ae3bc06142f5d2cbd0	magnetita/docs/plans/active/2026-09-09-remote-control.md
+4	2	27dd285b083f2490089e83cd2c1442c861d0bf79f7732bab1d360b04fc21b7b9	magnetita/docs/plans/active/README.md
+67	0	d441953bf3f52f4f7d1ef21c5a5308ecc091526bfb4e2d4d43a747bc1c9e38d7	magnetita/docs/plans/archive/2026-09-09-daily-set.md
+1	0	ec5f7ba3e70a36300658d906b0a5d5f3a314130492fe046ec7ecda01dc15d4a9	magnetita/docs/plans/archive/README.md

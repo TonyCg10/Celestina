@@ -382,6 +382,8 @@ pub enum Command {
     SmsSend { thread: u64, body: String },
     /// Do something about the phone's call (own wire).
     CallAction(magnetita_proto::phone::telephony::CallAction),
+    /// The registered commands changed: publish the list again (own wire).
+    CommandsChanged,
 }
 
 /// Why a URI handed to [`Devices::send_file_uri`] names no local file.
@@ -503,6 +505,14 @@ impl Devices {
     }
 
     /// Forwards a command to the device's link thread, if it is connected.
+    /// A command for every connected device's queue, best effort.
+    fn broadcast(&self, command: Command) {
+        let senders: Vec<_> = self.commands.lock_ok().values().cloned().collect();
+        for sender in senders {
+            let _ = sender.try_send(command.clone());
+        }
+    }
+
     fn forward(&self, device_id: &str, command: Command) -> zbus::fdo::Result<()> {
         let sender = self
             .commands
@@ -673,6 +683,55 @@ impl Devices {
             ));
         }
         self.forward(&device_id, Command::SmsSend { thread, body })
+    }
+
+    /// The registered commands: each `id`, `name`, `program`, `args`.
+    fn list_commands(&self) -> Vec<HashMap<String, OwnedValue>> {
+        crate::link_wire::commands::store()
+            .list()
+            .into_iter()
+            .map(|r| {
+                [
+                    ("id", Value::from(r.id)),
+                    ("name", Value::from(r.name)),
+                    ("program", Value::from(r.program)),
+                    ("args", Value::from(r.args)),
+                ]
+                .into_iter()
+                .map(|(k, v)| {
+                    (
+                        k.to_owned(),
+                        OwnedValue::try_from(v).expect("a basic value always converts"),
+                    )
+                })
+                .collect()
+            })
+            .collect()
+    }
+
+    /// Adds (`id` 0) or replaces a registered command; returns its id and
+    /// tells every phone.
+    fn set_command(
+        &self,
+        id: u32,
+        name: String,
+        program: String,
+        args: Vec<String>,
+    ) -> zbus::fdo::Result<u32> {
+        let id = crate::link_wire::commands::store()
+            .set(id, &name, &program, args)
+            .map_err(zbus::fdo::Error::InvalidArgs)?;
+        self.broadcast(Command::CommandsChanged);
+        Ok(id)
+    }
+
+    /// Removes a registered command and tells every phone.
+    fn remove_command(&self, id: u32) -> zbus::fdo::Result<bool> {
+        let removed = crate::link_wire::commands::store()
+            .remove(id)
+            .map_err(zbus::fdo::Error::Failed)?;
+        self.broadcast(Command::CommandsChanged);
+        Ok(removed)
     }
 
     /// "Mute", "Answer" or "HangUp" the phone's call.

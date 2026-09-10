@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P4-D` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   `celestina-rs/crates/magnetitad/src/link_wire/{mod,media}.rs`,
   `celestina-rs/crates/magnetita-mobile/src/{phone,mobile}.rs`,
   `celestina-rs/crates/magnetita-peer/`, this record

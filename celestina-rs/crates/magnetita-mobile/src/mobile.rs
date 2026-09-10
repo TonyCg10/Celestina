@@ -12,9 +12,10 @@ use std::time::Duration;
 use magnetita_link::trust::fingerprint_text;
 
 use crate::phone::{
-    button_from_index, button_index, clipboard_text, describe, media_fields, notification_fields,
-    phone_fields, share_fields, Incoming, Phone, PhoneSession,
+    button_from_index, button_index, clipboard_text, command_fields, describe, media_fields,
+    notification_fields, phone_fields, share_fields, Incoming, Phone, PhoneSession,
 };
+use magnetita_proto::control::input::Button;
 use magnetita_proto::daily::media::{MediaCommand, MediaState};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 use magnetita_proto::phone::contacts::{Contact, ContactsSync};
@@ -103,6 +104,18 @@ pub struct Event {
     pub sms_send: bool,
     /// 0 mute, 1 answer, 2 hang up.
     pub call_action: Option<u8>,
+    /// The desktop's registered commands, when the message is the list.
+    pub commands: Option<Vec<MobileCommand>>,
+    /// A run's result: the id and whether it succeeded.
+    pub command_id: Option<u32>,
+    pub command_ok: Option<bool>,
+}
+
+/// One registered command as the phone sees it.
+#[derive(uniffi::Record, Clone)]
+pub struct MobileCommand {
+    pub id: u32,
+    pub name: String,
 }
 
 /// One contact as its vCard.
@@ -500,6 +513,43 @@ impl MobileSession {
         Ok(self.handle.block_on(self.inner.send_call_event(&event))?)
     }
 
+    /// Runs the desktop's registered command `id`.
+    pub fn run_command(&self, id: u32) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.send_command_run(id))?)
+    }
+
+    /// Pointer motion, unreliable and cheap.
+    pub fn pointer_move(&self, dx: i16, dy: i16) -> Result<(), MobileError> {
+        Ok(self.inner.send_pointer_move(dx, dy)?)
+    }
+
+    /// 0 left, 1 right, 2 middle.
+    pub fn pointer_button(&self, button: u8, pressed: bool) -> Result<(), MobileError> {
+        let button = match button {
+            0 => Button::Left,
+            1 => Button::Right,
+            _ => Button::Middle,
+        };
+        Ok(self
+            .handle
+            .block_on(self.inner.send_pointer_button(button, pressed))?)
+    }
+
+    /// Scroll in 1/120 wheel steps.
+    pub fn scroll(&self, dx: i16, dy: i16) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.send_scroll(dx, dy))?)
+    }
+
+    /// A Linux evdev key code, down or up.
+    pub fn key(&self, code: u16, pressed: bool) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.send_key(code, pressed))?)
+    }
+
+    /// Types text on the desktop.
+    pub fn type_text(&self, text: String) -> Result<(), MobileError> {
+        Ok(self.handle.block_on(self.inner.send_typed_text(&text))?)
+    }
+
     /// Shares a URL or a snippet with the desktop.
     pub fn send_text(&self, text: String) -> Result<(), MobileError> {
         Ok(self.handle.block_on(self.inner.send_text(&text))?)
@@ -516,6 +566,7 @@ impl MobileSession {
                 let share = share_fields(&e);
                 let media = media_fields(&e);
                 let phone = phone_fields(&e);
+                let commands = command_fields(&e);
                 let text = clipboard_text(&e).or(reply).or(share.text);
                 Event {
                     capability: e.capability,
@@ -546,6 +597,13 @@ impl MobileSession {
                     limit: phone.thread_request.as_ref().map(|r| r.limit),
                     sms_send: phone.sms_send.is_some(),
                     call_action: phone.call_action,
+                    commands: commands.list.map(|l| {
+                        l.into_iter()
+                            .map(|(id, name)| MobileCommand { id, name })
+                            .collect()
+                    }),
+                    command_id: commands.result.map(|r| r.0),
+                    command_ok: commands.result.map(|r| r.1),
                     text: text.or(phone.sms_send.map(|s| s.body)),
                     body: e.body,
                 }
@@ -575,6 +633,9 @@ impl MobileSession {
                 limit: None,
                 sms_send: false,
                 call_action: None,
+                commands: None,
+                command_id: None,
+                command_ok: None,
                 body: Vec::new(),
             },
         }))

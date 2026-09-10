@@ -1,0 +1,37 @@
+# MAG-P5-A exact change inventory
+
+Base revision	97a346502d4125605b58967f7043a60951673653
+Pathspec	celestina-rs/crates/magnetitad/src/devices.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_commands.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/commands.rs
+Pathspec	celestina-rs/crates/magnetitad/src/settings.rs
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/docs/evidence/2026-09-09-commands-own-wire.md
+Pathspec	magnetita/docs/inventories/2026-09-09-remote-control/MAG-P5-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-09-remote-control.md
+Pathspec	magnetita/qml/Main.qml
+Pathspec	magnetita/qml/components/CommandRow.qml
+Pathspec	magnetita/qml/pages/SettingsPage.qml
+Pathspec	magnetita/src/commands.rs
+Pathspec	magnetita/src/controller.rs
+Pathspec	magnetita/src/devices.rs
+Pathspec	magnetita/src/main.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+59	0	4341a4681e6344d609c010e2e752019e2748d06068ade9b879b2b9a62ef621e7	celestina-rs/crates/magnetitad/src/devices.rs
+2	1	491ff75111be261fbe1c0c24d7d8d117154924fd4024e89fb1576a91aff9f97e	celestina-rs/crates/magnetitad/src/link_commands.rs
+191	0	2d017f2fee262a0a498c84840c4922e5de17a8ecd049d7edd4446f3b89d190e4	celestina-rs/crates/magnetitad/src/link_wire/commands.rs
+11	1	5a02274ea8ac04da069412c929f83c7e5b1cecd0be5d228dd1b7598a6164d7b4	celestina-rs/crates/magnetitad/src/settings.rs
+2	1	daf655795d7eeb8185bcda12397dcb6fc181e8921cac5e9fe2b6225304f92dae	magnetita/build.rs
+47	0	5c44ea9275d15be0cac9689069215be4251d92ff4fdf1066bf85a065498bad67	magnetita/docs/evidence/2026-09-09-commands-own-wire.md
+37	0	self	magnetita/docs/inventories/2026-09-09-remote-control/MAG-P5-A.numstat.tsv
+56	0	01e1ac5a8fef8171f656496b1bf8704a4550376747f0c3ae3bc06142f5d2cbd0	magnetita/docs/plans/active/2026-09-09-remote-control.md
+8	1	5b99167a1254b0c8c62c6d4a87397d5252a7aa270d9a1f1a46bd278b2d99332c	magnetita/qml/Main.qml
+54	0	4fac7d47028574e86ed4a65e2d873a4e275139f10edb97de1c074d9704685cc9	magnetita/qml/components/CommandRow.qml
+83	0	f315fba237ed4647be3b6acf3f8779a908cb578ab211881687405ec754fa3236	magnetita/qml/pages/SettingsPage.qml
+124	0	708df4d2fde8100d0ec79620eb87bcb83affd93dc33aec2cbf017032ab506726	magnetita/src/commands.rs
+3	1	d14a579d18bdf0ad612c51b3d6f03db7d72c7e0f7684d0a12770f6c0c2e0ac11	magnetita/src/controller.rs
+49	0	e1a7d1fb5b66ca6624d0d3b51d3bde7308160061e7263cfc21535cdbb20ea24f	magnetita/src/devices.rs
+1	0	1fb42ea238a338ec62b84f0044f06397df4abcd0b87f4b2f940a68e263349a23	magnetita/src/main.rs

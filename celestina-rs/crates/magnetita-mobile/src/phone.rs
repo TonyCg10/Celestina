@@ -14,6 +14,8 @@ use magnetita_link::{
     fingerprint_of, DeviceCert, Endpoint, EndpointConfig, LinkError, SendStream, Session,
     Transfers, TrustStore, TrustedPeer,
 };
+use magnetita_proto::control::commands::{CommandList, CommandResult, CommandRun};
+use magnetita_proto::control::input::{Button, Key, PointerButton, PointerMove, Scroll, Text};
 use magnetita_proto::daily::battery::BatteryStatus;
 use magnetita_proto::daily::clipboard::ClipboardText;
 use magnetita_proto::daily::media::{MediaButton, MediaCommand, MediaRequest, MediaState};
@@ -535,6 +537,70 @@ impl PhoneSession {
         Ok(())
     }
 
+    /// Runs the desktop's registered command `id`.
+    pub async fn send_command_run(&self, id: u32) -> Result<(), LinkError> {
+        self.session
+            .send_message(
+                capability::COMMANDS,
+                CommandRun::KIND,
+                CommandRun { id }.encode(),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Pointer motion, as a datagram: a late sample is worse than a lost one.
+    pub fn send_pointer_move(&self, dx: i16, dy: i16) -> Result<(), LinkError> {
+        self.session.send_datagram(
+            capability::INPUT,
+            PointerMove::KIND,
+            PointerMove { dx, dy }.encode(),
+        )
+    }
+
+    pub async fn send_pointer_button(
+        &self,
+        button: Button,
+        pressed: bool,
+    ) -> Result<(), LinkError> {
+        self.session
+            .send_message(
+                capability::INPUT,
+                PointerButton::KIND,
+                PointerButton { button, pressed }.encode(),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub async fn send_scroll(&self, dx: i16, dy: i16) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::INPUT, Scroll::KIND, Scroll { dx, dy }.encode())
+            .await?;
+        Ok(())
+    }
+
+    pub async fn send_key(&self, code: u16, pressed: bool) -> Result<(), LinkError> {
+        self.session
+            .send_message(capability::INPUT, Key::KIND, Key { code, pressed }.encode())
+            .await?;
+        Ok(())
+    }
+
+    pub async fn send_typed_text(&self, text: &str) -> Result<(), LinkError> {
+        self.session
+            .send_message(
+                capability::INPUT,
+                Text::KIND,
+                Text {
+                    text: text.to_owned(),
+                }
+                .encode(),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Shares a URL or a snippet, no stream needed.
     pub async fn send_text(&self, text: &str) -> Result<(), LinkError> {
         self.session
@@ -723,6 +789,29 @@ pub fn button_from_index(index: u8) -> Option<MediaButton> {
     })
 }
 
+/// The registered commands a desktop envelope carries, or a run's result.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CommandFields {
+    pub list: Option<Vec<(u32, String)>>,
+    pub result: Option<(u32, bool)>,
+}
+
+pub fn command_fields(env: &Envelope) -> CommandFields {
+    match (env.capability, env.kind) {
+        (capability::COMMANDS, CommandList::KIND) => CommandFields {
+            list: CommandList::decode(&env.body)
+                .ok()
+                .map(|l| l.commands.into_iter().map(|c| (c.id, c.name)).collect()),
+            ..Default::default()
+        },
+        (capability::COMMANDS, CommandResult::KIND) => CommandFields {
+            result: CommandResult::decode(&env.body).ok().map(|r| (r.id, r.ok)),
+            ..Default::default()
+        },
+        _ => CommandFields::default(),
+    }
+}
+
 /// The phone-side requests a desktop envelope carries, for the application.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PhoneFields {
@@ -826,6 +915,8 @@ pub fn describe(env: &Envelope) -> String {
         (capability::SMS, 2) => "sms: thread requested".into(),
         (capability::SMS, 4) => "sms: send".into(),
         (capability::TELEPHONY, 2) => "call: command".into(),
+        (capability::COMMANDS, 1) => "commands: list".into(),
+        (capability::COMMANDS, 3) => "commands: result".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
     }
 }

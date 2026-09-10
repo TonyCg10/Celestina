@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P4-E` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   the contact book in `celestina-rs/crates/magnetitad/src/link_wire/phone.rs`,
   the `contacts` setting, the session's greeting and handler in
   `link_wire/mod.rs`, the core's `send_contacts` and request decoding, the

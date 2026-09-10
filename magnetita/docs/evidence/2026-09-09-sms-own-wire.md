@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P4-F` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   the conversation and thread cache in `link_wire/phone.rs`, the handler
   and the commands in `link_wire/mod.rs`, `Devices1.SmsConversations`,
   `SmsThread` and `SmsSend`, the `sms` setting, the desktop app's

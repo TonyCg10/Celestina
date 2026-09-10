@@ -1,3 +1,4 @@
+mod commands;
 mod controller;
 mod devices;
 mod messages;

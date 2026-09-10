@@ -3,6 +3,21 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-13 — The phone as trackpad, keyboard and command deck
+
+- **Status:** pending
+- **Related implementation:** `MAG-P5` / `AND-3`
+- **Requires:** the deployed daemon, the release build on the S25U, the
+  phone connected, a command registered in the desktop app's settings
+- **Procedure:** open the control screen on the phone; drag,
+  tap, drag with two fingers, hold; type a sentence in the field and
+  press the key row; run the registered command
+- **Pass condition:** the desktop's pointer follows the finger, clicks
+  and scrolls land, the sentence appears where the desktop's focus is,
+  and the command runs
+- **Result:** not run
+- **Evidence:** the daemon's log lines and the desktop itself
+
 ## VAL-MAG-12 — The daily set on the own wire
 
 - **Status:** pending

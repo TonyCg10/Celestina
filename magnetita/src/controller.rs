@@ -265,7 +265,7 @@ impl Drop for DevicesModelRust {
 }
 
 /// The plugins the Settings surface shows, in order: (D-Bus key, Spanish label).
-const PLUGINS: [(&str, &str); 9] = [
+const PLUGINS: [(&str, &str); 11] = [
     ("battery", "Batería"),
     ("notifications", "Notificaciones del móvil"),
     ("clipboard", "Portapapeles"),
@@ -275,6 +275,8 @@ const PLUGINS: [(&str, &str); 9] = [
     ("contacts", "Contactos"),
     ("sms", "Mensajes SMS"),
     ("telephony", "Llamadas"),
+    ("commands", "\u{d3}rdenes desde el m\u{f3}vil"),
+    ("input", "Trackpad y teclado"),
 ];
 
 enum ClientCommand {

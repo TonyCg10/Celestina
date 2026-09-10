@@ -28,6 +28,7 @@ use magnetita_link::trust::fingerprint_text;
 use magnetita_link::{
     Backoff, DeviceCert, Endpoint, EndpointConfig, LinkError, Session, TrustStore, TrustedPeer,
 };
+use magnetita_proto::control::commands::{CommandResult, CommandRun};
 use magnetita_proto::daily::battery::BatteryStatus;
 use magnetita_proto::daily::clipboard::{ClipboardRequest, ClipboardText};
 use magnetita_proto::daily::find::FindRing;
@@ -44,7 +45,9 @@ use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
 use rand_core::{OsRng, RngCore};
 
 use crate::devices::{command_channel, Command, DeviceEntry};
+pub(crate) mod commands;
 pub(crate) mod discovery;
+pub(crate) mod input;
 pub(crate) mod media;
 pub(crate) mod notifications;
 pub(crate) mod phone;
@@ -173,6 +176,14 @@ fn hello(device_id: &str) -> Hello {
                 capability: capability::TELEPHONY,
                 version: 1,
             },
+            CapabilityVersion {
+                capability: capability::COMMANDS,
+                version: 1,
+            },
+            CapabilityVersion {
+                capability: capability::INPUT,
+                version: 1,
+            },
         ],
     }
 }
@@ -193,6 +204,8 @@ pub(crate) struct Adapters {
     /// Where received files land; partials of broken transfers stay here.
     pub(crate) download_dir: std::path::PathBuf,
     pub(crate) shares: Arc<share::ShareStore>,
+    /// Where the phone's trackpad and keyboard events go.
+    pub(crate) input: Arc<dyn input::InputSink>,
 }
 
 /// The address a phone on this LAN would reach us at, for the QR. Best
@@ -259,6 +272,7 @@ pub(crate) fn install(
             notifications: bridge,
             download_dir: crate::incoming_file::download_dir(),
             shares: Arc::new(share::ShareStore::default()),
+            input: Arc::new(input::LazyUinput::default()),
         },
     ) {
         Ok((wire, addr)) => {
@@ -601,6 +615,7 @@ impl Wire {
 
         let (outbox, mut outbox_rx) =
             tokio::sync::mpsc::unbounded_channel::<magnetita_proto::Envelope>();
+        let shares_outbox = outbox.clone();
         let shares = share::SessionShare::new(
             Arc::clone(daemon),
             &device_id,
@@ -610,6 +625,7 @@ impl Wire {
             self.adapters.download_dir.clone(),
             outbox,
         );
+        let governor = input::Governor::default();
         let media = Arc::new(media::SessionMedia::default());
         if daemon.settings.lock_ok().media {
             let req = media::SessionMedia::request();
@@ -629,6 +645,9 @@ impl Wire {
             }
             if settings.sms {
                 greetings.push(phone::conversations_request());
+            }
+            if settings.commands {
+                greetings.push(commands::store().published());
             }
             for env in greetings {
                 if let Err(e) = session
@@ -675,6 +694,28 @@ impl Wire {
                     Ok(env) if matches!(env.capability, capability::CONTACTS | capability::SMS | capability::TELEPHONY) => {
                         self.handle_phone(&device_id, &name, &env);
                     }
+                    Ok(env) if env.capability == capability::INPUT => {
+                        self.handle_input(&name, &governor, env.kind, &env.body);
+                    }
+                    Ok(env) if env.capability == capability::COMMANDS && env.kind == CommandRun::KIND => {
+                        if self.daemon.settings.lock_ok().commands {
+                            if let Ok(run) = CommandRun::decode(&env.body) {
+                                let outbox = shares_outbox.clone();
+                                let stop = Arc::clone(&self.stop);
+                                let who = name.clone();
+                                tokio::task::spawn_blocking(move || {
+                                    let result = commands::store().run(run.id, &stop);
+                                    log("link", &format!("{who}: command {} {}", run.id, if result.ok { "ok" } else { "failed" }));
+                                    let _ = outbox.send(magnetita_proto::Envelope {
+                                        capability: capability::COMMANDS,
+                                        kind: CommandResult::KIND,
+                                        id: 0,
+                                        body: result.encode(),
+                                    });
+                                });
+                            }
+                        }
+                    }
                     Ok(env) if env.capability == capability::SHARE => {
                         if let Some(reply) = shares.handle(&env) {
                             if let Err(e) = session.send_message(reply.capability, reply.kind, reply.body).await {
@@ -689,6 +730,17 @@ impl Wire {
                     }
                 },
                 Some((transfer, stream)) = streams_rx.recv() => shares.stream_arrived(transfer, stream),
+                // Motion may arrive as datagrams: same body, no reliability.
+                datagram = session.recv_datagram() => match datagram {
+                    Ok(env) if env.capability == capability::INPUT => {
+                        self.handle_input(&name, &governor, env.kind, &env.body);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        log("link", &format!("{name}: {e}"));
+                        break;
+                    }
+                },
                 Some(reply) = outbox_rx.recv() => {
                     if let Err(e) = session.send_message(reply.capability, reply.kind, reply.body).await {
                         log("link", &format!("{name}: share: {e}"));
@@ -771,6 +823,17 @@ impl Wire {
             },
             MediaRequest::KIND => media.wanted(),
             _ => {}
+        }
+    }
+
+    /// Trackpad and keyboard events: gated by the setting, bounded by the
+    /// governor, decoded at this boundary, and handed to the sink.
+    fn handle_input(&self, name: &str, governor: &input::Governor, kind: u16, body: &[u8]) {
+        if !self.daemon.settings.lock_ok().input || !governor.admit() {
+            return;
+        }
+        if let Err(e) = input::apply(self.adapters.input.as_ref(), kind, body) {
+            log("link", &format!("{name}: input: {e}"));
         }
     }
 
@@ -1015,6 +1078,12 @@ impl Wire {
         command: Command,
     ) -> Result<(), LinkError> {
         match command {
+            Command::CommandsChanged => {
+                let env = commands::store().published();
+                session
+                    .send_message(env.capability, env.kind, env.body)
+                    .await?;
+            }
             Command::SmsList => {
                 let env = phone::conversations_request();
                 session
@@ -1243,6 +1312,7 @@ mod tests {
                 notifications: Arc::new(notifications::Bridge::default()),
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1336,6 +1406,7 @@ mod tests {
                 notifications: Arc::clone(&bridge),
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1468,6 +1539,7 @@ mod tests {
                 notifications: Arc::new(notifications::Bridge::default()),
                 download_dir: downloads.clone(),
                 shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1620,6 +1692,7 @@ mod tests {
                 notifications: Arc::new(notifications::Bridge::default()),
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1733,6 +1806,7 @@ mod tests {
                 notifications: Arc::clone(&bridge),
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1905,6 +1979,143 @@ mod tests {
     }
 
     #[test]
+    fn a_registered_command_runs_by_id_and_input_reaches_the_sink_by_stream_and_datagram() {
+        use magnetita_proto::control::commands::CommandList;
+        use magnetita_proto::control::input::{Key, PointerMove, Text};
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let recorder = Arc::new(input::testing::Recorder::default());
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: Arc::new(notifications::NoServer),
+                notifications: Arc::new(notifications::Bridge::default()),
+                download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
+                shares: Arc::new(share::ShareStore::default()),
+                input: recorder.clone(),
+            },
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone8") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+        let next_of = |cap: u16, kind: u16| {
+            rt.block_on(async {
+                loop {
+                    let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                        .await
+                        .expect("an envelope in time")
+                        .unwrap();
+                    if env.capability == cap && env.kind == kind {
+                        break env;
+                    }
+                }
+            })
+        };
+
+        // The session greets with the registered commands; the registry is
+        // the daemon's one store, so the test registers and cleans up its own.
+        let published = next_of(capability::COMMANDS, CommandList::KIND);
+        let before = CommandList::decode(&published.body).unwrap().commands.len();
+        let id = commands::store()
+            .set(0, "Loopback true", "true", vec![])
+            .unwrap();
+        daemon
+            .commands
+            .lock_ok()
+            .get("phone8")
+            .unwrap()
+            .try_send(Command::CommandsChanged)
+            .unwrap();
+        let published = next_of(capability::COMMANDS, CommandList::KIND);
+        let list = CommandList::decode(&published.body).unwrap();
+        assert_eq!(list.commands.len(), before + 1);
+        assert!(list
+            .commands
+            .iter()
+            .any(|c| c.id == id && c.name == "Loopback true"));
+
+        rt.block_on(session.send_message(
+            capability::COMMANDS,
+            CommandRun::KIND,
+            CommandRun { id }.encode(),
+        ))
+        .unwrap();
+        let result =
+            CommandResult::decode(&next_of(capability::COMMANDS, CommandResult::KIND).body)
+                .unwrap();
+        assert!(result.ok && result.id == id);
+        rt.block_on(session.send_message(
+            capability::COMMANDS,
+            CommandRun::KIND,
+            CommandRun { id: 999_999 }.encode(),
+        ))
+        .unwrap();
+        let result =
+            CommandResult::decode(&next_of(capability::COMMANDS, CommandResult::KIND).body)
+                .unwrap();
+        assert!(!result.ok, "an unknown id runs nothing");
+        commands::store().remove(id).unwrap();
+
+        // Input: a key and a text on the stream, motion as a datagram.
+        rt.block_on(async {
+            session
+                .send_message(
+                    capability::INPUT,
+                    Key::KIND,
+                    Key {
+                        code: 30,
+                        pressed: true,
+                    }
+                    .encode(),
+                )
+                .await
+                .unwrap();
+            session
+                .send_message(
+                    capability::INPUT,
+                    Text::KIND,
+                    Text { text: "hi".into() }.encode(),
+                )
+                .await
+                .unwrap();
+            session
+                .send_datagram(
+                    capability::INPUT,
+                    PointerMove::KIND,
+                    PointerMove { dx: 5, dy: -3 }.encode(),
+                )
+                .unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let seen = recorder.0.lock_ok().clone();
+            if seen.len() >= 3 {
+                assert!(seen.contains(&"key 30 true".to_string()));
+                assert!(seen.contains(&"text hi".to_string()));
+                assert!(seen.contains(&"move 5 -3".to_string()));
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "input never reached the sink: {seen:?}"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        session.close("done");
+        drop(wire);
+    }
+
+    #[test]
     fn a_phone_that_forgot_the_desktop_pairs_again_while_still_pinned() {
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -1922,6 +2133,7 @@ mod tests {
                 notifications: Arc::new(notifications::Bridge::default()),
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
             },
         )
         .unwrap();
@@ -1997,6 +2209,7 @@ mod tests {
                 notifications: Arc::new(notifications::Bridge::default()),
                 download_dir: std::env::temp_dir().join("magnetita-test-downloads"),
                 shares: Arc::new(share::ShareStore::default()),
+                input: Arc::new(input::testing::Recorder::default()),
             },
         )
         .unwrap();

@@ -37,6 +37,10 @@ pub struct Settings {
     pub sms: bool,
     #[serde(default = "on")]
     pub telephony: bool,
+    #[serde(default = "on")]
+    pub commands: bool,
+    #[serde(default = "on")]
+    pub input: bool,
 }
 
 fn on() -> bool {
@@ -55,6 +59,8 @@ impl Default for Settings {
             contacts: true,
             sms: true,
             telephony: true,
+            commands: true,
+            input: true,
         }
     }
 }
@@ -92,6 +98,8 @@ impl Settings {
             "contacts" => self.contacts = enabled,
             "sms" => self.sms = enabled,
             "telephony" => self.telephony = enabled,
+            "commands" => self.commands = enabled,
+            "input" => self.input = enabled,
             _ => return false,
         }
         true
@@ -111,7 +119,7 @@ impl Settings {
     }
 
     /// The flags as `(name, enabled)` pairs, in a stable order for the UI.
-    pub fn entries(&self) -> [(&'static str, bool); 9] {
+    pub fn entries(&self) -> [(&'static str, bool); 11] {
         [
             ("battery", self.battery),
             ("notifications", self.notifications),
@@ -122,6 +130,8 @@ impl Settings {
             ("contacts", self.contacts),
             ("sms", self.sms),
             ("telephony", self.telephony),
+            ("commands", self.commands),
+            ("input", self.input),
         ]
     }
 }

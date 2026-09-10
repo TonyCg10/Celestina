@@ -313,6 +313,55 @@ fn u64_field(dict: &HashMap<String, OwnedValue>, key: &str) -> u64 {
         .unwrap_or(0)
 }
 
+/// One registered command as the daemon holds it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegisteredCommand {
+    pub id: u32,
+    pub name: String,
+    pub program: String,
+    pub args: Vec<String>,
+}
+
+pub fn list_commands() -> Result<Vec<RegisteredCommand>, String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    let raw: Vec<HashMap<String, OwnedValue>> = proxy
+        .call("ListCommands", &())
+        .map_err(|error| error.to_string())?;
+    Ok(raw
+        .iter()
+        .map(|d| RegisteredCommand {
+            id: u64_field(d, "id") as u32,
+            name: str_field(d, "name"),
+            program: str_field(d, "program"),
+            args: d
+                .get("args")
+                .and_then(|v| Vec::<String>::try_from(v.clone()).ok())
+                .unwrap_or_default(),
+        })
+        .collect())
+}
+
+/// Adds (`id` 0) or replaces a registered command.
+pub fn set_command(id: u32, name: &str, program: &str, args: &[String]) -> Result<u32, String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    proxy
+        .call("SetCommand", &(id, name, program, args))
+        .map_err(|error| error.to_string())
+}
+
+pub fn remove_command(id: u32) -> Result<bool, String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    proxy
+        .call("RemoveCommand", &(id,))
+        .map_err(|error| error.to_string())
+}
+
 /// Ask Magnetita to drop the pairing (best-effort).
 pub fn unpair(device_id: &str) -> Result<(), String> {
     call_method("Unpair", device_id)

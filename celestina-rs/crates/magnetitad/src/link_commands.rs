@@ -179,7 +179,8 @@ impl Daemon {
                 | Command::SmsList
                 | Command::SmsThread { .. }
                 | Command::SmsSend { .. }
-                | Command::CallAction(_) => {}
+                | Command::CallAction(_)
+                | Command::CommandsChanged => {}
                 Command::SendFile(_) if !device.is_paired() || !settings.share => {}
                 Command::SendFile(path) => {
                     let name = path

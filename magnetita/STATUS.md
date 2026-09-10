@@ -1,10 +1,11 @@
 # Magnetita status
 
 - **Updated:** 2026-09-09
-- **Implementation:** `MAG-P4`, the daily set on the own wire, is the
+- **Implementation:** `MAG-P5`, commands, trackpad and keyboard, is the
   active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-2`; its seven units are done and its exit is met on 2026-09-09;
-  `VAL-MAG-12` carries the author's daily use. `MAG-P3`, the
+  `AND-3`; the registry and the virtual device are done. `MAG-P4`, the
+  daily set, met its exit the same day and is archived; `VAL-MAG-12`
+  carries the author's daily use. `MAG-P3`, the
   Android application foundation, met its exit on 2026-09-09 and is
   archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
@@ -30,6 +31,11 @@
 
 ## Current checkout truth
 
+- Registered commands (name, program, arguments) live in the daemon's
+  configuration and reach the phone as ids and names; a run is a bounded
+  process group. The phone's trackpad and keyboard drive one virtual
+  `uinput` device the daemon owns, through a rate governor
+  (`MAG-P5-A`, `-B`).
 - Contacts, SMS and calls reach the desktop over the own wire: the contact
   book names numbers, conversations and threads show on the desktop app's
   messages page and replies go back, received messages and calls become
@@ -155,7 +161,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-P4](docs/plans/active/2026-09-09-daily-set.md)
+- [Active plan MAG-P5](docs/plans/active/2026-09-09-remote-control.md)
+- [Archived plan MAG-P4](docs/plans/archive/2026-09-09-daily-set.md)
 - [Archived plan MAG-P3](docs/plans/archive/2026-09-09-android-foundation.md)
 - [Archived plan MAG-P2](docs/plans/archive/2026-09-09-link.md)
 - [Archived plan MAG-P1](docs/plans/archive/2026-09-09-protocol-core.md)

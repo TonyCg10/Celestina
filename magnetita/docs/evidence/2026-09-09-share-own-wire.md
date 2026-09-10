@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P4-C` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   `celestina-rs/crates/magnetita-link/src/{session,lib}.rs`,
   `celestina-rs/crates/magnetitad/src/link_wire/{mod,share}.rs`,
   `celestina-rs/crates/magnetitad/Cargo.toml`,

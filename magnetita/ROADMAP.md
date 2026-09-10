@@ -1,13 +1,15 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-P4
+- **Active implementation checkpoint:** MAG-P5
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-P4` is executing under
-[its plan](docs/plans/active/2026-09-09-daily-set.md), paired with the
-`magnetita-android` project's own `AND-2`. `MAG-P3` is closed under
+`MAG-P5` is executing under
+[its plan](docs/plans/active/2026-09-09-remote-control.md), paired with the
+`magnetita-android` project's own `AND-3`. `MAG-P4` is closed under
+[its archived plan](docs/plans/archive/2026-09-09-daily-set.md), paired with
+`AND-2`. `MAG-P3` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-android-foundation.md),
 paired with `AND-1`. `MAG-P2` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-link.md), `MAG-P1` under
@@ -545,8 +547,8 @@ commands screen that runs the author's registered scripts.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-P5-A | planned | MAG-P4 | Registered commands, published and executed by id | peer tests, subprocess tests |
-| MAG-P5-B | planned | MAG-P0-D | Virtual pointer and keyboard in the daemon, nest-only tests | daemon tests, nest evidence |
+| MAG-P5-A | done | MAG-P4 | Registered commands, published and executed by id | peer tests, subprocess tests |
+| MAG-P5-B | done | MAG-P0-D | Virtual pointer and keyboard in the daemon, nest-only tests | daemon tests, nest evidence |
 | MAG-P5-C | planned | MAG-P5-B | Trackpad and keyboard screens on the phone | JVM tests |
 
 ## Implementation exit

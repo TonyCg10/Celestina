@@ -44,6 +44,10 @@ ApplicationWindow {
         id: messagesModel
     }
 
+    CommandsModel {
+        id: commandsModel
+    }
+
     Item {
         id: appSurface
         anchors.fill: parent
@@ -69,8 +73,10 @@ ApplicationWindow {
                 settingsAvailable: devicesModel.settingsAvailable
                 onToggleRequested: {
                     window.settingsOpen = !window.settingsOpen
-                    if (window.settingsOpen)
+                    if (window.settingsOpen) {
                         devicesModel.reloadSettings()
+                        commandsModel.refresh()
+                    }
                 }
                 onMessagesRequested: window.messagesOpen = !window.messagesOpen
             }
@@ -99,6 +105,7 @@ ApplicationWindow {
                 width: parent.width
                 height: parent.height - y
                 devices: devicesModel
+                commands: commandsModel
             }
         }
     }

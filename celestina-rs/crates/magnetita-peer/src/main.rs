@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -28,7 +28,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--send-file PATH] [--media PLAYER|TITLE|ARTIST] [--contact NAME|TEL] [--sms ADDRESS|BODY] [--call NUMBER] [--run ID] [--type TEXT] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -178,6 +178,18 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                     .await?;
                 println!("ringing sent");
             }
+            if let Some(id) = flag(args, "--run").and_then(|v| v.parse::<u32>().ok()) {
+                session.send_command_run(id).await?;
+                println!("run {id} requested");
+            }
+            if let Some(text) = flag(args, "--type") {
+                session.send_typed_text(text).await?;
+                session.send_pointer_move(10, 0)?;
+                println!(
+                    "typed {} chars and nudged the pointer",
+                    text.chars().count()
+                );
+            }
             let sending = match flag(args, "--send-file") {
                 Some(path) => {
                     let path = PathBuf::from(path);
@@ -242,6 +254,16 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                 if let Some(send) = p.sms_send {
                                     println!("sms send: thread {} {:?}", send.thread, send.body);
                                 }
+                            }
+                            (7, 1, _) => {
+                                let c = magnetita_peer::command_fields(&env);
+                                for (id, name) in c.list.unwrap_or_default() {
+                                    println!("command {id}: {name}");
+                                }
+                            }
+                            (7, 3, _) => {
+                                let c = magnetita_peer::command_fields(&env);
+                                println!("command result: {:?}", c.result);
                             }
                             (12, 2, _) => {
                                 let p = magnetita_peer::phone_fields(&env);

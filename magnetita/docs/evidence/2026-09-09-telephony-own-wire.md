@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-09
 - **Scope:** `MAG-P4-G` of
-  [`../plans/active/2026-09-09-daily-set.md`](../plans/active/2026-09-09-daily-set.md):
+  [`../plans/archive/2026-09-09-daily-set.md`](../plans/archive/2026-09-09-daily-set.md):
   the call lines and buttons in `link_wire/phone.rs`, `call_changed` in
   `link_wire/mod.rs`, the registry's `callState`, `callNumber` and
   `callName`, `Devices1.CallAction`, the `telephony` setting, the desktop
