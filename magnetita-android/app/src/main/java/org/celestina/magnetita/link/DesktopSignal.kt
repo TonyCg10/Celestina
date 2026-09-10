@@ -25,6 +25,21 @@ sealed interface DesktopSignal {
 
     /** The desktop answered one of this phone's notifications inline. */
     data class NotificationReply(val key: String, val text: String) : DesktopSignal
+
+    /** The desktop offers a file. */
+    data class ShareOffered(val transfer: Int, val name: String, val size: Long) : DesktopSignal
+
+    /** The desktop accepted this phone's offer; send from `offset`. */
+    data class ShareAccepted(val transfer: Int, val offset: Long) : DesktopSignal
+
+    /** The desktop declined this phone's offer, or a transfer ended (`complete`). */
+    data class ShareEnded(val transfer: Int, val complete: Boolean) : DesktopSignal
+
+    /** A file the core finished receiving on this phone. */
+    data class FileReceived(val transfer: Int, val path: String, val complete: Boolean) : DesktopSignal
+
+    /** The desktop shared a URL or a snippet. */
+    data class ShareText(val text: String) : DesktopSignal
     data class Other(val capability: Int, val kind: Int) : DesktopSignal
 
     companion object {
@@ -32,6 +47,14 @@ sealed interface DesktopSignal {
         const val CAPABILITY_CLIPBOARD = 2
         const val CAPABILITY_NOTIFICATIONS = 3
         const val CAPABILITY_FIND = 4
+        const val CAPABILITY_SHARE = 5
+        const val KIND_SHARE_OFFER = 1
+        const val KIND_SHARE_ACCEPT = 2
+        const val KIND_SHARE_REJECT = 3
+        const val KIND_SHARE_DONE = 4
+        const val KIND_SHARE_TEXT = 5
+        /** The core's own kind for a file it finished receiving; not on the wire. */
+        const val KIND_FILE_RECEIVED = 100
         const val KIND_NOTIFICATION_DISMISSED = 2
         const val KIND_NOTIFICATION_ACTION = 3
         const val KIND_NOTIFICATION_REPLY = 4
@@ -54,6 +77,18 @@ sealed interface DesktopSignal {
                 if (event.key != null && event.action != null) NotificationAction(event.key, event.action) else Other(event.capability, event.kind)
             CAPABILITY_NOTIFICATIONS to KIND_NOTIFICATION_REPLY ->
                 if (event.key != null && event.text != null) NotificationReply(event.key, event.text) else Other(event.capability, event.kind)
+            CAPABILITY_SHARE to KIND_SHARE_OFFER ->
+                if (event.transfer != null && event.text != null && event.size != null) ShareOffered(event.transfer, event.text, event.size) else Other(event.capability, event.kind)
+            CAPABILITY_SHARE to KIND_SHARE_ACCEPT ->
+                if (event.transfer != null) ShareAccepted(event.transfer, event.offset ?: 0) else Other(event.capability, event.kind)
+            CAPABILITY_SHARE to KIND_SHARE_REJECT ->
+                if (event.transfer != null) ShareEnded(event.transfer, false) else Other(event.capability, event.kind)
+            CAPABILITY_SHARE to KIND_SHARE_DONE ->
+                if (event.transfer != null) ShareEnded(event.transfer, event.complete ?: false) else Other(event.capability, event.kind)
+            CAPABILITY_SHARE to KIND_FILE_RECEIVED ->
+                if (event.transfer != null && event.path != null) FileReceived(event.transfer, event.path, event.complete ?: false) else Other(event.capability, event.kind)
+            CAPABILITY_SHARE to KIND_SHARE_TEXT ->
+                event.text?.let { ShareText(it) } ?: Other(event.capability, event.kind)
             else -> Other(event.capability, event.kind)
         }
     }

@@ -60,8 +60,10 @@ class LinkService : LifecycleService() {
             connector = CoreConnector(phone),
             discovery = NsdDiscovery(applicationContext),
             battery = { readBattery() },
+            files = { uri -> runCatching { contentResolver.openInputStream(android.net.Uri.parse(uri)) }.getOrNull() },
             log = { android.util.Log.i(TAG, it) },
         )
+        c.receiveDir = java.io.File(cacheDir, "received").absolutePath
         controller = c
         loop = lifecycleScope.launch {
             launch { c.state.collect { s -> _state.value = s; update(notification(describe(s))) } }
@@ -75,6 +77,8 @@ class LinkService : LifecycleService() {
                         is DesktopSignal.NotificationDismiss -> PhoneNotifications.instance?.dismiss(signal.key)
                         is DesktopSignal.NotificationAction -> PhoneNotifications.instance?.press(signal.key, signal.action)
                         is DesktopSignal.NotificationReply -> PhoneNotifications.instance?.reply(signal.key, signal.text)
+                        is DesktopSignal.FileReceived -> if (signal.complete) publishReceived(signal.path)
+                        is DesktopSignal.ShareText -> receiveClipboard(signal.text)
                         else -> {}
                     }
                 }
@@ -130,6 +134,24 @@ class LinkService : LifecycleService() {
         }
     }
 
+    /** A complete file in the cache becomes a public download, then a notification. */
+    private fun publishReceived(path: String) {
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val saved = runCatching { org.celestina.magnetita.share.Downloads.publish(applicationContext, java.io.File(path)) }.getOrNull()
+            _clipboardNote.value = if (saved != null) getString(R.string.file_received, saved) else getString(R.string.file_failed)
+            if (saved != null) {
+                val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                manager.createNotificationChannel(NotificationChannel(FILES_CHANNEL, getString(R.string.channel_files), NotificationManager.IMPORTANCE_DEFAULT))
+                manager.notify(saved.hashCode(), Notification.Builder(this@LinkService, FILES_CHANNEL)
+                    .setContentTitle(getString(R.string.file_received_title))
+                    .setContentText(saved)
+                    .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                    .setAutoCancel(true)
+                    .build())
+            }
+        }
+    }
+
     private fun readBattery(): Pair<Int, Boolean> {
         val status = applicationContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val level = status?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
@@ -167,6 +189,7 @@ class LinkService : LifecycleService() {
     companion object {
         private const val TAG = "magnetita-link"
         private const val CHANNEL = "link"
+        private const val FILES_CHANNEL = "files"
         private const val NOTIFICATION_ID = 1
 
         private val _state = MutableStateFlow<LinkState>(LinkState.NeedsPairing)

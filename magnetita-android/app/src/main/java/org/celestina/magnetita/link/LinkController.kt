@@ -34,6 +34,7 @@ class LinkController(
     private val connector: Connector,
     private val discovery: Discovery,
     private val battery: BatterySource,
+    private val files: FileSource = FileSource { null },
     private val io: CoroutineContext = Dispatchers.IO,
     private val pollMs: Long = 1_000,
     private val log: (String) -> Unit = {},
@@ -80,6 +81,38 @@ class LinkController(
     /** The first address a pairing link names, for the screen; the core parses the rest. */
     private fun pairAddress(uri: String): String =
         uri.substringAfter("addr=", "").substringBefore('&').substringBefore(',').ifBlank { "pairing" }
+
+    private val offered = HashMap<Int, Outbound.File>()
+
+    /** Where offered files are received; null declines every offer. */
+    @Volatile var receiveDir: String? = null
+
+    /** Streams one accepted file from `offset`, off the loop's dispatcher. */
+    private suspend fun pump(live: LiveSession, transfer: Int, file: Outbound.File, offset: Long) {
+        withContext(io) {
+            val stream = files.open(file.uri)
+            if (stream == null) {
+                live.finishTransfer(transfer)
+                return@withContext
+            }
+            stream.use { input ->
+                var skipped = 0L
+                while (skipped < offset) {
+                    val n = input.skip(offset - skipped)
+                    if (n <= 0) break
+                    skipped += n
+                }
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    if (n > 0 && !live.writeTransfer(transfer, buffer.copyOf(n))) return@withContext
+                }
+            }
+            live.finishTransfer(transfer)
+            log("sent ${file.name}")
+        }
+    }
 
     /** Runs until cancelled. */
     suspend fun run() = coroutineScope {
@@ -158,6 +191,11 @@ class LinkController(
                             is Outbound.Clipboard -> live.sendClipboard(op.text)
                             is Outbound.Notification -> live.sendNotification(op.note)
                             is Outbound.NotificationGone -> live.sendNotificationGone(op.key)
+                            is Outbound.File -> {
+                                val id = live.offerFile(op.name, op.size, op.mime)
+                                if (id != null) offered[id] = op
+                                id != null
+                            }
                         }
                     }
                     if (!sent) return@launch
@@ -178,6 +216,14 @@ class LinkController(
                 if (signal == DesktopSignal.BatteryRequested) {
                     val (l, c) = battery.read()
                     withContext(io) { live.reportBattery(l, c) }
+                }
+                if (signal is DesktopSignal.ShareAccepted) {
+                    offered.remove(signal.transfer)?.let { file -> pump(live, signal.transfer, file, signal.offset) }
+                }
+                if (signal is DesktopSignal.ShareEnded && !signal.complete) offered.remove(signal.transfer)
+                if (signal is DesktopSignal.ShareOffered) {
+                    val dir = receiveDir
+                    withContext(io) { if (dir != null) live.acceptFile(signal.transfer, dir) else live.rejectFile(signal.transfer) }
                 }
                 _signals.tryEmit(signal)
             }

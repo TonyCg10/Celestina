@@ -45,8 +45,26 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
     override fun sendNotificationGone(key: String): Boolean =
         runCatching { inner.sendNotificationGone(key) }.isSuccess
 
+    override fun offerFile(name: String, size: Long, mime: String): Int? =
+        runCatching { inner.offerFile(name, size.toULong(), mime).toInt() }.getOrNull()
+
+    override fun writeTransfer(transfer: Int, bytes: ByteArray): Boolean =
+        runCatching { inner.writeTransfer(transfer.toUInt(), bytes) }.isSuccess
+
+    override fun finishTransfer(transfer: Int): Boolean =
+        runCatching { inner.finishTransfer(transfer.toUInt()) }.isSuccess
+
+    override fun acceptFile(transfer: Int, dir: String): Boolean =
+        runCatching { inner.acceptFile(transfer.toUInt(), dir) }.isSuccess
+
+    override fun rejectFile(transfer: Int): Boolean =
+        runCatching { inner.rejectFile(transfer.toUInt()) }.isSuccess
+
     override suspend fun next(timeoutMs: Long): LinkEvent? = withContext(Dispatchers.IO) {
-        inner.next(timeoutMs.toULong())?.let { LinkEvent(it.capability.toInt(), it.kind.toInt(), it.description, it.text, it.key, it.action?.toInt()) }
+        inner.next(timeoutMs.toULong())?.let { LinkEvent(
+            it.capability.toInt(), it.kind.toInt(), it.description, it.text, it.key, it.action?.toInt(),
+            it.transfer?.toInt(), it.size?.toLong(), it.offset?.toLong(), it.complete, it.path,
+        ) }
     }
 
     override fun close(reason: String) = inner.close(reason)

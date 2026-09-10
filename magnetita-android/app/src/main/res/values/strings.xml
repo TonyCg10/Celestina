@@ -45,4 +45,12 @@
     <string name="chip_on">Activo</string>
     <string name="action_allow">Permitir</string>
     <string name="notification_listener">Notificaciones en el escritorio</string>
+    <string name="channel_files">Archivos recibidos</string>
+    <string name="file_received_title">Archivo recibido del escritorio</string>
+    <string name="file_received">Recibido en Descargas/Magnetita: %1$s</string>
+    <string name="file_failed">No se pudo guardar el archivo recibido</string>
+    <plurals name="files_offered">
+        <item quantity="one">Enviando %d archivo al escritorio</item>
+        <item quantity="other">Enviando %d archivos al escritorio</item>
+    </plurals>
 </resources>

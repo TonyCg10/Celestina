@@ -34,6 +34,20 @@ interface LiveSession {
     /** A notification left this phone. */
     fun sendNotificationGone(key: String): Boolean
 
+    /** Offers a file; the transfer id, or null when the session is gone. */
+    fun offerFile(name: String, size: Long, mime: String): Int?
+
+    /** Writes the next bytes of an accepted transfer. */
+    fun writeTransfer(transfer: Int, bytes: ByteArray): Boolean
+
+    /** Ends an accepted transfer. */
+    fun finishTransfer(transfer: Int): Boolean
+
+    /** Accepts an offered file into `dir`; its end arrives as a signal. */
+    fun acceptFile(transfer: Int, dir: String): Boolean
+
+    fun rejectFile(transfer: Int): Boolean
+
     /**
      * Waits up to `timeoutMs` for the next envelope: a short description, or
      * null on timeout. Throws when the session is gone. Suspends, so the
@@ -55,6 +69,11 @@ data class LinkEvent(
     val text: String? = null,
     val key: String? = null,
     val action: Int? = null,
+    val transfer: Int? = null,
+    val size: Long? = null,
+    val offset: Long? = null,
+    val complete: Boolean? = null,
+    val path: String? = null,
 )
 
 /** One of this phone's notifications, as the wire carries it. */
@@ -74,6 +93,9 @@ sealed interface Outbound {
     data class Clipboard(val text: String) : Outbound
     data class Notification(val note: PhoneNotification) : Outbound
     data class NotificationGone(val key: String) : Outbound
+
+    /** A file to offer: what the content resolver knows about it. */
+    data class File(val uri: String, val name: String, val size: Long, val mime: String) : Outbound
 }
 
 /** Where a desktop is advertising, one entry per (id, address). */
@@ -82,6 +104,11 @@ data class Advertised(val deviceId: String, val address: String)
 /** The LAN's answer to "who is here", asked once per attempt. */
 fun interface Discovery {
     suspend fun browse(): List<Advertised>
+}
+
+/** Opens the bytes of a file this phone offers, by the URI the share gave. */
+fun interface FileSource {
+    fun open(uri: String): java.io.InputStream?
 }
 
 /** What the phone knows about itself that the desktop wants. */

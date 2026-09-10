@@ -24,6 +24,15 @@ class LinkControllerTest {
         val notes = mutableListOf<String>()
         override fun sendNotification(note: PhoneNotification): Boolean { notes += "post:" + note.key; return alive }
         override fun sendNotificationGone(key: String): Boolean { notes += "gone:$key"; return alive }
+        val offers = mutableListOf<String>()
+        val written = java.io.ByteArrayOutputStream()
+        var finished = false
+        val accepted = mutableListOf<Pair<Int, String>>()
+        override fun offerFile(name: String, size: Long, mime: String): Int? { offers += "$name:$size"; return 9 }
+        override fun writeTransfer(transfer: Int, bytes: ByteArray): Boolean { written.write(bytes); return alive }
+        override fun finishTransfer(transfer: Int): Boolean { finished = true; return alive }
+        override fun acceptFile(transfer: Int, dir: String): Boolean { accepted += transfer to dir; return alive }
+        override fun rejectFile(transfer: Int): Boolean = alive
         override suspend fun next(timeoutMs: Long): LinkEvent? {
             if (!alive) throw IllegalStateException("connection lost")
             incoming.removeFirstOrNull()?.let { return it }
@@ -172,6 +181,33 @@ class LinkControllerTest {
             seen,
         )
         watcher.cancel()
+        job.cancel()
+    }
+
+    @Test
+    fun anOfferedFileIsStreamedFromTheAcceptedOffsetAndOffersAreAcceptedIntoTheDir() = runTest {
+        val session = FakeSession("desk", "Celestina")
+        val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
+        val payload = ByteArray(200_000) { (it % 251).toByte() }
+        val controller = LinkController(
+            connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false },
+            files = { uri -> if (uri == "content://photo") payload.inputStream() else null },
+            io = coroutineContext, pollMs = 100,
+        )
+        controller.receiveDir = "/tmp/received"
+        val job = launch { controller.run() }
+        advanceTimeBy(200)
+        controller.send(Outbound.File("content://photo", "photo.bin", payload.size.toLong(), "application/octet-stream"))
+        advanceTimeBy(200)
+        assertEquals(listOf("photo.bin:200000"), session.offers)
+        session.incoming += LinkEvent(5, 2, "share: accepted", transfer = 9, offset = 150_000)
+        advanceTimeBy(300)
+        assertTrue(session.finished)
+        assertEquals(50_000, session.written.size())
+        assertTrue(payload.copyOfRange(150_000, 200_000).contentEquals(session.written.toByteArray()))
+        session.incoming += LinkEvent(5, 1, "share: offer", text = "doc.pdf", transfer = 3, size = 10)
+        advanceTimeBy(300)
+        assertEquals(listOf(3 to "/tmp/received"), session.accepted)
         job.cancel()
     }
 

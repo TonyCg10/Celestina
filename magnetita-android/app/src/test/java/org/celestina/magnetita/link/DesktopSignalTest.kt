@@ -16,6 +16,12 @@ class DesktopSignalTest {
         assertEquals(DesktopSignal.Other(2, 1), DesktopSignal.of(LinkEvent(2, 1, "clipboard: undecodable")))
         assertEquals(DesktopSignal.ClipboardRequested, DesktopSignal.of(LinkEvent(2, 2, "clipboard: requested")))
         assertEquals(DesktopSignal.Other(3, 1), DesktopSignal.of(LinkEvent(3, 1, "notification")))
+        assertEquals(DesktopSignal.ShareOffered(4, "a.jpg", 12), DesktopSignal.of(LinkEvent(5, 1, "share: offer", text = "a.jpg", transfer = 4, size = 12)))
+        assertEquals(DesktopSignal.ShareAccepted(4, 7), DesktopSignal.of(LinkEvent(5, 2, "share: accepted", transfer = 4, offset = 7)))
+        assertEquals(DesktopSignal.ShareEnded(4, false), DesktopSignal.of(LinkEvent(5, 3, "share: rejected", transfer = 4, complete = false)))
+        assertEquals(DesktopSignal.ShareEnded(4, true), DesktopSignal.of(LinkEvent(5, 4, "share: done", transfer = 4, complete = true)))
+        assertEquals(DesktopSignal.FileReceived(4, "/x/a.jpg", true), DesktopSignal.of(LinkEvent(5, 100, "share: received", transfer = 4, complete = true, path = "/x/a.jpg")))
+        assertEquals(DesktopSignal.ShareText("https://example.org"), DesktopSignal.of(LinkEvent(5, 5, "share: text", text = "https://example.org")))
     }
 
     @Test

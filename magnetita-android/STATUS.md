@@ -2,8 +2,8 @@
 
 - **Updated:** 2026-09-09
 - **Implementation:** `AND-2`, the daily set, is the active checkpoint
-  since 2026-09-09, paired with Magnetita's `MAG-P4`; the clipboard and
-  the notifications are done. `AND-1`, the foundation, has its four units done and waits for
+  since 2026-09-09, paired with Magnetita's `MAG-P4`; the clipboard, the
+  notifications and the file share are done. `AND-1`, the foundation, has its four units done and waits for
   `VAL-MAG-11`
 - **Author validation:** `VAL-MAG-11` in Magnetita's
   [VALIDATION.md](../magnetita/VALIDATION.md) covers the first pairing on
@@ -11,6 +11,9 @@
 
 ## Current checkout truth
 
+- Files shared to Magnetita from any app reach the desktop on their own
+  streams; files the desktop sends land in `Downloads/Magnetita` with a
+  notification (`AND-2-C`).
 - The phone's notifications reach the desktop through the notification
   listener, with their buttons and reply; the desktop's dismissals,
   presses and replies come back (`AND-2-B`). Notification access is
