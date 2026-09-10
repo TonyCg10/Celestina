@@ -101,6 +101,8 @@ impl MirrorPlayer for DesktopPlayer {
             "--hwdec=auto-safe",
             "--container-fps-override=60",
             "--input-default-bindings=no",
+            // The left button is the phone's finger, not the window's handle.
+            "--window-dragging=no",
             "--osc=no",
             "--osd-level=0",
             "--cursor-autohide=no",
