@@ -83,4 +83,9 @@
     <string name="action_whole_phone">Todo</string>
     <string name="action_folder">Carpeta</string>
     <string name="action_change">Cambiar</string>
+    <string name="tab_device">Móvil</string>
+    <string name="tab_control">Control</string>
+    <string name="tab_settings">Ajustes</string>
+    <string name="label_media_notifications">Notificaciones de reproducción</string>
+    <string name="detail_media_notifications">Muestra en el escritorio la notificación del reproductor del móvil; la tarjeta de medios ya la refleja</string>
 </resources>

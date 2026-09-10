@@ -49,7 +49,9 @@ class PhoneNotifications : NotificationListenerService() {
         val title = extras.text(Notification.EXTRA_TITLE)
         val body = extras.text(Notification.EXTRA_BIG_TEXT).ifBlank { extras.text(Notification.EXTRA_TEXT) }
         val groupSummary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0
-        if (!NotificationPolicy.mirrors(sbn.packageName, sbn.isOngoing, groupSummary, title.isNotBlank() || body.isNotBlank())) return
+        val media = isMedia(n)
+        val wanted = org.celestina.magnetita.settings.Preferences(this).mediaNotifications
+        if (!NotificationPolicy.mirrors(sbn.packageName, sbn.isOngoing, groupSummary, title.isNotBlank() || body.isNotBlank(), media, wanted)) return
         live[sbn.key] = sbn
         val actions = n.actions.orEmpty()
         val icon = if (iconsSent.add(sbn.packageName)) appIcon(sbn.packageName) else null
@@ -65,16 +67,24 @@ class PhoneNotifications : NotificationListenerService() {
                     replyable = actions.any { it.remoteInputs?.isNotEmpty() == true },
                     actions = actions.map { it.title?.toString() ?: "" },
                     icon = icon,
+                    media = media,
                 ),
             ),
         )
     }
 
-    /** The desktop dismissed it: dismiss it here too. */
+    /** The desktop dismissed it: dismiss it here too, unless it is a player's. */
     fun dismiss(key: String) {
+        val media = live[key]?.let { isMedia(it.notification) } ?: false
+        if (!NotificationPolicy.dismissable(media)) return
         live.remove(key)
         runCatching { cancelNotification(key) }
     }
+
+    /** A player's now-playing notification: a media session, or the transport category. */
+    private fun isMedia(n: Notification): Boolean =
+        n.extras.containsKey(Notification.EXTRA_MEDIA_SESSION) || n.category == Notification.CATEGORY_TRANSPORT ||
+            n.extras.getString(Notification.EXTRA_TEMPLATE)?.contains("MediaStyle") == true
 
     /** The desktop pressed button `index`. */
     fun press(key: String, index: Int) {

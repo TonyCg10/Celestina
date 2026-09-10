@@ -44,6 +44,7 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
                 replyable = note.replyable,
                 actions = note.actions,
                 icon = note.icon,
+                media = note.media,
             ),
         )
     }.isSuccess

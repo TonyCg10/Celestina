@@ -202,7 +202,6 @@ fun DeviceScreen(
                 Spacer(Modifier.height(16.dp))
             }
             if (desktop != null && link is LinkState.Connected) {
-                Button(onClick = onControl, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) { Text(stringResource(R.string.action_control)) }
                 Spacer(Modifier.height(16.dp))
             }
             if (desktop == null) {

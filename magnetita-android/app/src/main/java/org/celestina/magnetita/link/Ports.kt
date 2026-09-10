@@ -221,6 +221,8 @@ data class PhoneNotification(
     val replyable: Boolean,
     val actions: List<String>,
     val icon: ByteArray? = null,
+    /** A player's now-playing notification. */
+    val media: Boolean = false,
 )
 
 /** Something this phone wants to tell the desktop, in order. */

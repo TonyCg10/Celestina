@@ -14,4 +14,12 @@ class NotificationPolicyTest {
         assertFalse(NotificationPolicy.mirrors("com.whatsapp", ongoing = false, groupSummary = true, hasContent = true))
         assertFalse(NotificationPolicy.mirrors("com.whatsapp", ongoing = false, groupSummary = false, hasContent = false))
     }
+
+    @Test
+    fun aPlayersNotificationCrossesOnlyWhenAskedAndIsNeverDismissedFromTheDesktop() {
+        assertFalse(NotificationPolicy.mirrors("com.spotify", ongoing = false, groupSummary = false, hasContent = true, media = true))
+        assertTrue(NotificationPolicy.mirrors("com.spotify", ongoing = true, groupSummary = false, hasContent = true, media = true, mediaWanted = true))
+        assertFalse(NotificationPolicy.dismissable(media = true))
+        assertTrue(NotificationPolicy.dismissable(media = false))
+    }
 }

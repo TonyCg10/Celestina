@@ -8,6 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -31,6 +34,7 @@ import org.celestina.magnetita.ui.screens.DeviceScreen
 import org.celestina.magnetita.ui.screens.Remote
 import org.celestina.magnetita.ui.screens.DeviceShown
 import org.celestina.magnetita.ui.screens.ScanScreen
+import org.celestina.magnetita.ui.screens.SettingsScreen
 import org.celestina.magnetita.ui.theme.MagnetitaTheme
 import uniffi.magnetita_mobile.Identity
 import uniffi.magnetita_mobile.PinnedDesktop
@@ -83,14 +87,28 @@ class MainActivity : ComponentActivity() {
                 }
                 // Pins change on pair and forget; both show in the link state.
                 LaunchedEffect(link::class) { core = readCore() }
+                val preferences = remember { org.celestina.magnetita.settings.Preferences(this) }
+                var mediaNotifications by remember { mutableStateOf(preferences.mediaNotifications) }
                 BackHandler(enabled = scanning) { scanning = false }
                 if (scanning) {
                     ScanScreen(
                         onLink = { uri -> LinkService.pair(this, uri); scanning = false },
                         onBack = { scanning = false },
                     )
-                } else if (page == 1) {
-                    BackHandler { page = 0 }
+                } else {
+                    BackHandler(enabled = page != 0) { page = 0 }
+                    androidx.compose.material3.Scaffold(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        bottomBar = { org.celestina.magnetita.ui.components.BottomTabs(page) { page = it } },
+                        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+                    ) { inner ->
+                        androidx.compose.foundation.layout.Box(Modifier.padding(inner)) {
+                            if (page == 2) {
+                                SettingsScreen(mediaNotifications) { on ->
+                                    preferences.mediaNotifications = on
+                                    mediaNotifications = on
+                                }
+                            } else if (page == 1) {
                     val remote = remember {
                         object : Remote {
                             override fun move(dx: Int, dy: Int) = LinkService.input { it.pointerMove(dx, dy) }
@@ -102,21 +120,24 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     ControlScreen(remote, commands, commandNote, link is LinkState.Connected)
-                } else {
+                            } else {
                     val battery = readBattery()
                     DeviceScreen(
                         shown = DeviceShown(core.identity, core.pinned, core.failed, link, battery.first, battery.second, ringing, clipboardNote, notificationsEnabled(link), desktopMedia, phoneGranted, mirrorInput, storageShared, wholePhone),
                         onScan = { scanning = true },
-                        onForget = { id -> LinkService.forget(this, id) },
-                        onStopRinging = { LinkService.stopRinging(this) },
+                        onForget = { id -> LinkService.forget(this@MainActivity, id) },
+                        onStopRinging = { LinkService.stopRinging(this@MainActivity) },
                         onNotificationAccess = { startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
                         onPhoneAccess = { askPhone.launch(PhonePermissions.ALL) },
                         onMirrorInput = { startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                         onStorage = { pickTree.launch(null) },
-                        onWholePhone = { startActivity(org.celestina.magnetita.storage.PhoneStorage.allFilesIntent(this)) },
+                        onWholePhone = { startActivity(org.celestina.magnetita.storage.PhoneStorage.allFilesIntent(this@MainActivity)) },
                         onControl = { page = 1 },
-                        onMedia = { button -> desktopMedia?.let { LinkService.send(this, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
+                        onMedia = { button -> desktopMedia?.let { LinkService.send(this@MainActivity, Outbound.MediaControl(MediaCommand(it.player, button, null, null))) } },
                     )
+                            }
+                        }
+                    }
                 }
             }
         }
