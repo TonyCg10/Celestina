@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
@@ -60,7 +61,7 @@ fun BottomTabs(selected: Int, onSelect: (Int) -> Unit, haze: HazeState) {
         Surface(
             // Haze's classic look (its 0.7 defaults): 20 dp of blur, the
             // background tinted at 70 %, a grain of 0.15.
-            modifier = Modifier.hazeEffect(
+            modifier = Modifier.clip(CircleShape).hazeEffect(
                 state = haze,
                 style = HazeStyle(
                     backgroundColor = MaterialTheme.colorScheme.background,

@@ -93,8 +93,8 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
-    // The tab bar's icons: the core set ships the phone, the wrench and the cog.
-    implementation(libs.androidx.compose.material.icons.core)
+    // Every Material icon, in every style, as MilaHub carries them.
+    implementation(libs.androidx.compose.material.icons.extended)
     // The glass of the tab pill: what scrolls beneath it is blurred through it.
     implementation(libs.haze)
     implementation(libs.androidx.compose.ui)
