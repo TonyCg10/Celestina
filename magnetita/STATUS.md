@@ -3,7 +3,8 @@
 - **Updated:** 2026-09-09
 - **Implementation:** `MAG-P4`, the daily set on the own wire, is the
   active checkpoint since 2026-09-09, paired with `magnetita-android`'s
-  `AND-2`; its first unit, the clipboard both ways, is done. `MAG-P3`, the
+  `AND-2`; the clipboard both ways and the notifications with actions
+  and replies are done. `MAG-P3`, the
   Android application foundation, met its exit on 2026-09-09 and is
   archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
   `magnetita-link` carries `magnetita-proto` over QUIC with pinned
@@ -29,6 +30,10 @@
 
 ## Current checkout truth
 
+- The phone's notifications show on the desktop over the own wire with
+  their buttons; the desktop's presses, replies and dismissals go back,
+  also through `Devices1.NotificationAction`, `ReplyNotification` and
+  `DismissNotification` (`MAG-P4-B`).
 - The clipboard travels both ways on the own wire: the desktop's changes
   drain into the phone's session, the phone's text is written through the
   Wayland adapter, and the daemon asks for the phone's clipboard when a

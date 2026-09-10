@@ -172,6 +172,10 @@ impl Daemon {
                     remote_media.send_action(device, action)?;
                 }
                 Command::Media(_) => {}
+                // The stock client carries no notification replies on this wire.
+                Command::NotificationAction { .. }
+                | Command::NotificationReply { .. }
+                | Command::NotificationDismiss { .. } => {}
                 Command::SendFile(_) if !device.is_paired() || !settings.share => {}
                 Command::SendFile(path) => {
                     let name = path

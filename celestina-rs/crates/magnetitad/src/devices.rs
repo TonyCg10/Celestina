@@ -356,6 +356,12 @@ pub enum Command {
     /// Send a media transport verb ("PlayPause", "Next", "Previous") to the
     /// phone's active player.
     Media(MediaAction),
+    /// Press a button of one of the phone's notifications (own wire).
+    NotificationAction { key: String, action: u16 },
+    /// Answer one of the phone's notifications inline (own wire).
+    NotificationReply { key: String, text: String },
+    /// Dismiss one of the phone's notifications (own wire).
+    NotificationDismiss { key: String },
 }
 
 /// Why a URI handed to [`Devices::send_file_uri`] names no local file.
@@ -580,6 +586,31 @@ impl Devices {
     /// Ring the connected device (the app's "Sonar" — find-my-phone).
     fn ring(&self, device_id: String) -> zbus::fdo::Result<()> {
         self.forward(&device_id, Command::Ring)
+    }
+
+    /// Answer a phone notification inline, by the key the phone gave it.
+    fn reply_notification(
+        &self,
+        device_id: String,
+        key: String,
+        text: String,
+    ) -> zbus::fdo::Result<()> {
+        self.forward(&device_id, Command::NotificationReply { key, text })
+    }
+
+    /// Press button `action` of a phone notification.
+    fn notification_action(
+        &self,
+        device_id: String,
+        key: String,
+        action: u16,
+    ) -> zbus::fdo::Result<()> {
+        self.forward(&device_id, Command::NotificationAction { key, action })
+    }
+
+    /// Dismiss a phone notification on the phone.
+    fn dismiss_notification(&self, device_id: String, key: String) -> zbus::fdo::Result<()> {
+        self.forward(&device_id, Command::NotificationDismiss { key })
     }
 
     /// Send a local file to the connected device, named by a plain path.

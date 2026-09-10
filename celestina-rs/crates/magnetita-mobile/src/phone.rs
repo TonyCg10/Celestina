@@ -13,6 +13,9 @@ use magnetita_link::{
 };
 use magnetita_proto::daily::battery::BatteryStatus;
 use magnetita_proto::daily::clipboard::ClipboardText;
+use magnetita_proto::daily::notifications::{
+    NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
+};
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, Pinned, QrPairing, QrPayload};
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Envelope, Hello};
 
@@ -211,6 +214,33 @@ impl PhoneSession {
         Ok(())
     }
 
+    /// A notification appeared or changed on the phone.
+    pub async fn send_notification(&self, note: &NotificationPosted) -> Result<(), LinkError> {
+        self.session
+            .send_message(
+                capability::NOTIFICATIONS,
+                NotificationPosted::KIND,
+                note.encode(),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// A notification left the phone.
+    pub async fn send_notification_gone(&self, key: &str) -> Result<(), LinkError> {
+        self.session
+            .send_message(
+                capability::NOTIFICATIONS,
+                NotificationDismissed::KIND,
+                NotificationDismissed {
+                    key: key.to_owned(),
+                }
+                .encode(),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Waits for the next envelope, up to `timeout`; `None` on timeout.
     pub async fn next(&self, timeout: Duration) -> Result<Option<Envelope>, LinkError> {
         match tokio::time::timeout(timeout, self.session.recv()).await {
@@ -233,6 +263,30 @@ pub fn clipboard_text(env: &Envelope) -> Option<String> {
     }
 }
 
+/// What a notification envelope from the desktop names: the phone's key,
+/// the button index for an action, the text for a reply.
+pub fn notification_fields(env: &Envelope) -> (Option<String>, Option<u16>, Option<String>) {
+    if env.capability != capability::NOTIFICATIONS {
+        return (None, None, None);
+    }
+    match env.kind {
+        NotificationDismissed::KIND => (
+            NotificationDismissed::decode(&env.body).ok().map(|d| d.key),
+            None,
+            None,
+        ),
+        NotificationAction::KIND => match NotificationAction::decode(&env.body) {
+            Ok(a) => (Some(a.key), Some(a.action), None),
+            Err(_) => (None, None, None),
+        },
+        NotificationReply::KIND => match NotificationReply::decode(&env.body) {
+            Ok(r) => (Some(r.key), None, Some(r.text)),
+            Err(_) => (None, None, None),
+        },
+        _ => (None, None, None),
+    }
+}
+
 /// One line per envelope, for a shell or a log.
 pub fn describe(env: &Envelope) -> String {
     match (env.capability, env.kind) {
@@ -241,6 +295,9 @@ pub fn describe(env: &Envelope) -> String {
         (capability::BATTERY, 2) => "battery: requested".into(),
         (capability::CLIPBOARD, 1) => format!("clipboard: {} bytes", env.body.len()),
         (capability::CLIPBOARD, 2) => "clipboard: requested".into(),
+        (capability::NOTIFICATIONS, 2) => "notification: dismiss".into(),
+        (capability::NOTIFICATIONS, 3) => "notification: action".into(),
+        (capability::NOTIFICATIONS, 4) => "notification: reply".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
     }
 }

@@ -3,7 +3,7 @@
 //! ```text
 //! magnetita-peer identity                    who this peer is
 //! magnetita-peer pair 'magnetita://pair?…'   scan a QR by pasting it
-//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--hold SECONDS]
+//! magnetita-peer connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--hold SECONDS]
 //! magnetita-peer browse                      who Avahi sees
 //! ```
 //!
@@ -15,6 +15,7 @@ use std::time::Duration;
 use magnetita_link::trust::fingerprint_text;
 use magnetita_link::LinkError;
 use magnetita_peer::{browse, clipboard_text, describe, dir_default, Phone};
+use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 
 fn dir() -> PathBuf {
     std::env::var_os("MAGNETITA_PEER_DIR")
@@ -23,7 +24,7 @@ fn dir() -> PathBuf {
 }
 
 fn usage() -> std::process::ExitCode {
-    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--hold SECONDS] | browse");
+    eprintln!("usage: magnetita-peer identity | pair URI | connect IP:PORT [--battery N] [--clipboard TEXT] [--notify APP|TITLE|BODY] [--hold SECONDS] | browse");
     std::process::ExitCode::from(2)
 }
 
@@ -85,6 +86,26 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
             if let Some(text) = flag(args, "--clipboard") {
                 session.send_clipboard(text).await?;
                 println!("clipboard sent ({} bytes)", text.len());
+            }
+            if let Some(spec) = flag(args, "--notify") {
+                // APP|TITLE|BODY, one button, replyable: enough to see it land.
+                let mut parts = spec.splitn(3, '|');
+                let app = parts.next().unwrap_or("magnetita-peer");
+                let title = parts.next().unwrap_or("");
+                let body = parts.next().unwrap_or("");
+                session
+                    .send_notification(&NotificationPosted {
+                        key: "peer|1".into(),
+                        app_name: app.into(),
+                        title: title.into(),
+                        body: body.into(),
+                        timestamp_ms: 0,
+                        replyable: true,
+                        actions: vec![Action { label: "OK".into() }],
+                        icon: None,
+                    })
+                    .await?;
+                println!("notification sent");
             }
             let until = tokio::time::Instant::now() + Duration::from_secs(hold);
             while tokio::time::Instant::now() < until {

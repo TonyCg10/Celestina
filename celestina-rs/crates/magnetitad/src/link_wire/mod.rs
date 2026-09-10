@@ -31,12 +31,16 @@ use magnetita_link::{
 use magnetita_proto::daily::battery::BatteryStatus;
 use magnetita_proto::daily::clipboard::{ClipboardRequest, ClipboardText};
 use magnetita_proto::daily::find::FindRing;
+use magnetita_proto::daily::notifications::{
+    NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
+};
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing, QrPayload};
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
 use rand_core::{OsRng, RngCore};
 
 use crate::devices::{command_channel, Command, DeviceEntry};
 pub(crate) mod discovery;
+pub(crate) mod notifications;
 
 use crate::lock::LockOk;
 use crate::runtime::log;
@@ -137,6 +141,10 @@ fn hello(device_id: &str) -> Hello {
                 capability: capability::CLIPBOARD,
                 version: 1,
             },
+            CapabilityVersion {
+                capability: capability::NOTIFICATIONS,
+                version: 1,
+            },
         ],
     }
 }
@@ -144,6 +152,17 @@ fn hello(device_id: &str) -> Hello {
 /// Where a phone's clipboard text lands: the Wayland adapter in the daemon,
 /// a recorder in tests, so a test never writes the author's clipboard.
 pub(crate) type ClipboardSink = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
+/// Where the phone's notifications are shown; see `notifications`.
+pub(crate) type NotificationServer = Arc<dyn notifications::NotificationServer>;
+
+/// The desktop adapters a wire drives: injectable so the loopback tests
+/// record instead of touching the session.
+pub(crate) struct Adapters {
+    pub(crate) clipboard_sink: ClipboardSink,
+    pub(crate) notification_server: NotificationServer,
+    pub(crate) notifications: Arc<notifications::Bridge>,
+}
 
 /// The address a phone on this LAN would reach us at, for the QR. Best
 /// effort: the mDNS advertisement carries the rest.
@@ -190,6 +209,12 @@ pub(crate) fn install(
     device_id: String,
     pairing: PairingArm,
 ) -> Option<LinkWire> {
+    let server: NotificationServer = match &daemon.dbus {
+        Some(connection) => Arc::new(notifications::DbusServer(connection.clone())),
+        None => Arc::new(notifications::NoServer),
+    };
+    let bridge = Arc::new(notifications::Bridge::default());
+    notifications::spawn_signal_watch(Arc::clone(&bridge), Arc::clone(&daemon));
     match spawn(
         daemon,
         cert,
@@ -197,7 +222,11 @@ pub(crate) fn install(
         pairing,
         SocketAddr::from(([0, 0, 0, 0], magnetita_link::PORT)),
         true,
-        Arc::new(crate::clipboard::write),
+        Adapters {
+            clipboard_sink: Arc::new(crate::clipboard::write),
+            notification_server: server,
+            notifications: bridge,
+        },
     ) {
         Ok((wire, addr)) => {
             log("link", &format!("own wire listening on {addr}"));
@@ -219,7 +248,7 @@ pub(crate) fn spawn(
     pairing: PairingArm,
     bind: SocketAddr,
     advertise: bool,
-    clipboard_sink: ClipboardSink,
+    adapters: Adapters,
 ) -> Result<(LinkWire, SocketAddr), LinkError> {
     let stopping = Arc::new(AtomicBool::new(false));
     let stop = Arc::clone(&stopping);
@@ -271,7 +300,7 @@ pub(crate) fn spawn(
                 endpoint,
                 my_fingerprint,
                 pairing,
-                clipboard_sink,
+                adapters,
                 stop,
             });
             runtime.block_on(wire.run());
@@ -298,7 +327,7 @@ struct Wire {
     endpoint: Endpoint,
     my_fingerprint: Fingerprint,
     pairing: PairingArm,
-    clipboard_sink: ClipboardSink,
+    adapters: Adapters,
     stop: Arc<AtomicBool>,
 }
 
@@ -584,6 +613,7 @@ impl Wire {
             }
         }
         daemon.pending_clipboards.clear(&device_id);
+        self.adapters.notifications.forget_device(&device_id);
     }
 
     /// A phone that forgot this desktop while the desktop still pins it is
@@ -633,12 +663,40 @@ impl Wire {
                     Ok(clip) if magnetita_core::clipboard::is_syncable(&clip.text) => {
                         // Record before writing so the watcher does not echo it back.
                         *self.daemon.last_clipboard.lock_ok() = clip.text.clone();
-                        if (self.clipboard_sink)(&clip.text) {
+                        if (self.adapters.clipboard_sink)(&clip.text) {
                             ui_log(&self.daemon, name, "portapapeles recibido", false);
                         }
                     }
                     Ok(_) => log("link", &format!("{name}: clipboard: not syncable")),
                     Err(e) => log("link", &format!("{name}: clipboard: {e}")),
+                }
+            }
+            (capability::NOTIFICATIONS, NotificationPosted::KIND) => {
+                if !self.daemon.settings.lock_ok().notifications {
+                    return;
+                }
+                match NotificationPosted::decode(&env.body) {
+                    Ok(note) => {
+                        if let Some(line) = self.adapters.notifications.posted(
+                            self.adapters.notification_server.as_ref(),
+                            device_id,
+                            name,
+                            &note,
+                        ) {
+                            ui_log(&self.daemon, name, &line, false);
+                        }
+                    }
+                    Err(e) => log("link", &format!("{name}: notification: {e}")),
+                }
+            }
+            (capability::NOTIFICATIONS, NotificationDismissed::KIND) => {
+                match NotificationDismissed::decode(&env.body) {
+                    Ok(gone) => self.adapters.notifications.dismissed(
+                        self.adapters.notification_server.as_ref(),
+                        device_id,
+                        &gone.key,
+                    ),
+                    Err(e) => log("link", &format!("{name}: notification: {e}")),
                 }
             }
             (cap, kind) => log(
@@ -656,6 +714,33 @@ impl Wire {
                     .await?;
             }
             Command::RequestPair { .. } => {}
+            Command::NotificationAction { key, action } => {
+                session
+                    .send_message(
+                        capability::NOTIFICATIONS,
+                        NotificationAction::KIND,
+                        NotificationAction { key, action }.encode(),
+                    )
+                    .await?;
+            }
+            Command::NotificationReply { key, text } => {
+                session
+                    .send_message(
+                        capability::NOTIFICATIONS,
+                        NotificationReply::KIND,
+                        NotificationReply { key, text }.encode(),
+                    )
+                    .await?;
+            }
+            Command::NotificationDismiss { key } => {
+                session
+                    .send_message(
+                        capability::NOTIFICATIONS,
+                        NotificationDismissed::KIND,
+                        NotificationDismissed { key }.encode(),
+                    )
+                    .await?;
+            }
             Command::SendFile(_) | Command::Media(_) => {
                 log(
                     "link",
@@ -783,10 +868,14 @@ mod tests {
             arm.clone(),
             "127.0.0.1:0".parse().unwrap(),
             false,
-            Arc::new(move |text: &str| {
-                sink.lock_ok().push(text.to_owned());
-                true
-            }),
+            Adapters {
+                clipboard_sink: Arc::new(move |text: &str| {
+                    sink.lock_ok().push(text.to_owned());
+                    true
+                }),
+                notification_server: Arc::new(notifications::NoServer),
+                notifications: Arc::new(notifications::Bridge::default()),
+            },
         )
         .unwrap();
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
@@ -851,6 +940,134 @@ mod tests {
     }
 
     #[test]
+    fn a_notification_is_shown_replaced_answered_and_closed_over_the_own_wire() {
+        use magnetita_proto::daily::notifications::Action;
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let recorder = Arc::new(notifications::testing::Recorder::default());
+        let bridge = Arc::new(notifications::Bridge::default());
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: recorder.clone(),
+                notifications: Arc::clone(&bridge),
+            },
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone4") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+
+        let note = NotificationPosted {
+            key: "0|com.example|7".into(),
+            app_name: "Messages".into(),
+            title: "Ana".into(),
+            body: "are you there".into(),
+            timestamp_ms: 1,
+            replyable: true,
+            actions: vec![Action {
+                label: "Mark read".into(),
+            }],
+            icon: None,
+        };
+        rt.block_on(async {
+            session
+                .send_message(
+                    capability::NOTIFICATIONS,
+                    NotificationPosted::KIND,
+                    note.encode(),
+                )
+                .await
+                .unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while recorder.posted.lock_ok().is_empty() {
+            assert!(Instant::now() < deadline, "the notification never showed");
+            thread::sleep(Duration::from_millis(50));
+        }
+        let shown = recorder.posted.lock_ok()[0].clone();
+        assert_eq!(
+            (
+                shown.app.as_str(),
+                shown.summary.as_str(),
+                shown.body.as_str()
+            ),
+            ("Messages", "Ana", "are you there")
+        );
+        assert!(daemon
+            .log
+            .lock_ok()
+            .iter()
+            .any(|e| e.message.contains("Messages: Ana")));
+
+        // The server's signals become messages to the phone.
+        for signal in [
+            notifications::ServerSignal::Action(shown.id, "0".into()),
+            notifications::ServerSignal::Replied(shown.id, "on my way".into()),
+        ] {
+            let (device, command) = bridge.command_for(signal).unwrap();
+            daemon
+                .commands
+                .lock_ok()
+                .get(&device)
+                .unwrap()
+                .try_send(command)
+                .unwrap();
+        }
+        let mut got = Vec::new();
+        rt.block_on(async {
+            while got.len() < 2 {
+                let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                if env.capability == capability::NOTIFICATIONS {
+                    got.push((env.kind, env.body));
+                }
+            }
+        });
+        assert_eq!(got[0].0, NotificationAction::KIND);
+        assert_eq!(NotificationAction::decode(&got[0].1).unwrap().action, 0);
+        assert_eq!(got[1].0, NotificationReply::KIND);
+        assert_eq!(
+            NotificationReply::decode(&got[1].1).unwrap().text,
+            "on my way"
+        );
+
+        // The phone withdraws it: the desktop closes the same id.
+        rt.block_on(async {
+            session
+                .send_message(
+                    capability::NOTIFICATIONS,
+                    NotificationDismissed::KIND,
+                    NotificationDismissed {
+                        key: note.key.clone(),
+                    }
+                    .encode(),
+                )
+                .await
+                .unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while recorder.closed.lock_ok().is_empty() {
+            assert!(Instant::now() < deadline, "the desktop never closed it");
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(recorder.closed.lock_ok().as_slice(), [shown.id]);
+        session.close("done");
+        drop(wire);
+    }
+
+    #[test]
     fn a_phone_that_forgot_the_desktop_pairs_again_while_still_pinned() {
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -862,7 +1079,11 @@ mod tests {
             arm.clone(),
             "127.0.0.1:0".parse().unwrap(),
             false,
-            Arc::new(|_: &str| true),
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: Arc::new(notifications::NoServer),
+                notifications: Arc::new(notifications::Bridge::default()),
+            },
         )
         .unwrap();
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
@@ -931,7 +1152,11 @@ mod tests {
             arm.clone(),
             "127.0.0.1:0".parse().unwrap(),
             false,
-            Arc::new(|_: &str| true),
+            Adapters {
+                clipboard_sink: Arc::new(|_: &str| true),
+                notification_server: Arc::new(notifications::NoServer),
+                notifications: Arc::new(notifications::Bridge::default()),
+            },
         )
         .unwrap();
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);

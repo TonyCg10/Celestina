@@ -27,9 +27,33 @@ pub fn post(
     summary: &str,
     body: &str,
 ) -> Option<u32> {
+    post_with(connection, app_name, replaces_id, summary, body, &[], false)
+}
+
+/// [`post`] with buttons and, when the phone accepts one, an inline reply:
+/// `buttons[i]` is offered under the action key `i`, so `ActionInvoked` hands
+/// back the index the phone expects. The reply hint is KDE's extension; a
+/// server without it shows the buttons and no field.
+pub fn post_with(
+    connection: &Connection,
+    app_name: &str,
+    replaces_id: u32,
+    summary: &str,
+    body: &str,
+    buttons: &[String],
+    replyable: bool,
+) -> Option<u32> {
     let proxy = Proxy::new(connection, SERVICE, OBJECT, INTERFACE).ok()?;
-    let actions: Vec<&str> = Vec::new();
-    let hints: HashMap<&str, Value> = HashMap::new();
+    let keys: Vec<String> = (0..buttons.len()).map(|i| i.to_string()).collect();
+    let mut actions: Vec<&str> = Vec::new();
+    for (key, label) in keys.iter().zip(buttons) {
+        actions.push(key);
+        actions.push(label);
+    }
+    let mut hints: HashMap<&str, Value> = HashMap::new();
+    if replyable {
+        hints.insert("x-kde-reply-placeholder-text", Value::from("Responder"));
+    }
     // Notify(app_name, replaces_id, app_icon, summary, body, actions, hints,
     //        expire_timeout) -> id. -1 timeout leaves it to the server's default.
     let id: u32 = proxy
