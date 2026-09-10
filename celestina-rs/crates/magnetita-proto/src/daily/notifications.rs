@@ -27,13 +27,17 @@ pub struct NotificationPosted {
     pub actions: Vec<Action>,
     /// PNG bytes, at most [`MAX_ICON`]; absent when unchanged or none.
     pub icon: Option<Vec<u8>>,
+    /// A player's now-playing notification: dismissing it on the phone
+    /// stops the playback, so the desktop never asks that, and shows it
+    /// only when asked to. Absent means false.
+    pub media: bool,
 }
 
 impl NotificationPosted {
     pub const KIND: u16 = 1;
 
     pub fn encode(&self) -> Vec<u8> {
-        let mut m = Map::new(count(7, &[self.icon.is_some()]))
+        let mut m = Map::new(count(7, &[self.icon.is_some(), self.media]))
             .text(0, &self.key)
             .text(1, &self.app_name)
             .text(2, &self.title)
@@ -47,12 +51,16 @@ impl NotificationPosted {
         if let Some(icon) = &self.icon {
             m = m.bytes(7, icon);
         }
+        if self.media {
+            m = m.bool(8, true);
+        }
         m.finish()
     }
 
     pub fn decode(body: &[u8]) -> Result<Self, DecodeError> {
         let (mut key, mut app, mut title, mut text, mut ts, mut replyable, mut actions, mut icon) =
             (None, None, None, None, None, None, None, None);
+        let mut media = false;
         codec::read(body, "notification", |k, d| {
             match k {
                 0 => key = Some(bound::text(d, "key", MAX_IDENT)?),
@@ -77,6 +85,7 @@ impl NotificationPosted {
                     })?)
                 }
                 7 => icon = Some(bound::bytes(d, "icon", MAX_ICON)?),
+                8 => media = bound::bool(d, "media")?,
                 _ => return Ok(false),
             }
             Ok(true)
@@ -90,6 +99,7 @@ impl NotificationPosted {
             replyable: required(replyable, "replyable")?,
             actions: actions.unwrap_or_default(),
             icon,
+            media,
         })
     }
 }
@@ -200,6 +210,7 @@ mod tests {
                 },
             ],
             icon: Some(vec![0x89, 0x50, 0x4e, 0x47]),
+            media: false,
         }
     }
 
@@ -212,6 +223,14 @@ mod tests {
             NotificationPosted::decode(&unhex(VECTOR)).unwrap(),
             sample()
         );
+    }
+
+    #[test]
+    fn a_media_notification_says_so_and_the_flag_defaults_off() {
+        let mut note = sample();
+        assert!(!NotificationPosted::decode(&note.encode()).unwrap().media);
+        note.media = true;
+        assert!(NotificationPosted::decode(&note.encode()).unwrap().media);
     }
 
     #[test]

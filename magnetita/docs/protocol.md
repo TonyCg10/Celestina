@@ -66,7 +66,7 @@ Vector: `a4007030656232316232386165373464353463016a4573637269746f72696f020003828
 | 0 | hello | 0 hello |
 | 1 | battery | 1 status `{0 level u8, 1 charging, 2 low}`; 2 request `{}` |
 | 2 | clipboard | 1 text `{0 text ≤ 256 KiB}`; 2 request `{}` |
-| 3 | notifications | 1 posted `{0 key, 1 app_name, 2 title, 3 body, 4 timestamp_ms u64, 5 replyable, 6 actions [{0 label}], 7 icon bytes?}`; 2 dismissed `{0 key}`; 3 action `{0 key, 1 action u16}`; 4 reply `{0 key, 2 text}` |
+| 3 | notifications | 1 posted `{0 key, 1 app_name, 2 title, 3 body, 4 timestamp_ms u64, 5 replyable, 6 actions [{0 label}], 7 icon bytes?, 8 media?}`; 2 dismissed `{0 key}`; 3 action `{0 key, 1 action u16}`; 4 reply `{0 key, 2 text}` |
 | 4 | find | 1 ring `{}`; 2 stop `{}` |
 | 5 | share | 1 offer `{0 transfer u32, 1 name, 2 size u64, 3 mime}`; 2 accept `{0 transfer, 1 offset u64}`; 3 reject `{0 transfer}`; 4 done `{0 transfer, 2 complete}`; 5 text `{0 text}` |
 | 6 | media | 1 state `{0 player, 1 title, 2 artist, 3 album, 4 playing, 5 position_ms, 6 length_ms, 7 can_seek, 8 can_next, 9 can_previous, 10 volume u8}`; 2 command `{0 player, 1 button u8?, 2 seek_ms?, 3 volume?}` with at least one of the three; 3 request `{}` |

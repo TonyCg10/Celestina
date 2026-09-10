@@ -328,6 +328,7 @@ mod tests {
                 label: "Mark read".into(),
             }],
             icon: None,
+            media: false,
         }
     }
 

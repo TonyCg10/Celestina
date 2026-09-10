@@ -108,6 +108,7 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                         replyable: true,
                         actions: vec![Action { label: "OK".into() }],
                         icon: None,
+                        media: false,
                     })
                     .await?;
                 println!("notification sent");

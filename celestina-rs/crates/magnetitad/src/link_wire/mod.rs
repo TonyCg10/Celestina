@@ -1013,6 +1013,7 @@ impl Wire {
                                 replyable: true,
                                 actions: Vec::new(),
                                 icon: None,
+                                media: false,
                             };
                             if let Some(line) = self.adapters.notifications.posted(
                                 self.adapters.notification_server.as_ref(),
@@ -1084,6 +1085,7 @@ impl Wire {
                         })
                         .collect(),
                     icon: None,
+                    media: false,
                 };
                 if let Some(line) = self
                     .adapters
@@ -1156,6 +1158,8 @@ impl Wire {
                     return;
                 }
                 match NotificationPosted::decode(&env.body) {
+                    Ok(note)
+                        if note.media && !self.daemon.settings.lock_ok().media_notifications => {}
                     Ok(note) => {
                         if let Some(line) = self.adapters.notifications.posted(
                             self.adapters.notification_server.as_ref(),
@@ -1538,6 +1542,7 @@ mod tests {
                 label: "Mark read".into(),
             }],
             icon: None,
+            media: false,
         };
         rt.block_on(async {
             session

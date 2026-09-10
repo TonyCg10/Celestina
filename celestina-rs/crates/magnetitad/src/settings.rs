@@ -41,6 +41,10 @@ pub struct Settings {
     pub commands: bool,
     #[serde(default = "on")]
     pub input: bool,
+    /// A player's now-playing notification mirrored too: off by default,
+    /// it repeats what the media card already shows.
+    #[serde(default)]
+    pub media_notifications: bool,
 }
 
 fn on() -> bool {
@@ -61,6 +65,7 @@ impl Default for Settings {
             telephony: true,
             commands: true,
             input: true,
+            media_notifications: false,
         }
     }
 }
@@ -100,6 +105,7 @@ impl Settings {
             "telephony" => self.telephony = enabled,
             "commands" => self.commands = enabled,
             "input" => self.input = enabled,
+            "media_notifications" => self.media_notifications = enabled,
             _ => return false,
         }
         true
@@ -119,7 +125,7 @@ impl Settings {
     }
 
     /// The flags as `(name, enabled)` pairs, in a stable order for the UI.
-    pub fn entries(&self) -> [(&'static str, bool); 11] {
+    pub fn entries(&self) -> [(&'static str, bool); 12] {
         [
             ("battery", self.battery),
             ("notifications", self.notifications),
@@ -132,6 +138,7 @@ impl Settings {
             ("telephony", self.telephony),
             ("commands", self.commands),
             ("input", self.input),
+            ("media_notifications", self.media_notifications),
         ]
     }
 }
@@ -141,9 +148,12 @@ mod tests {
     use super::Settings;
 
     #[test]
-    fn defaults_are_all_on() {
+    fn defaults_are_all_on_but_the_media_notifications() {
         let settings = Settings::default();
-        assert!(settings.entries().iter().all(|(_, on)| *on));
+        assert!(settings
+            .entries()
+            .iter()
+            .all(|(name, on)| *on == (*name != "media_notifications")));
     }
 
     #[test]

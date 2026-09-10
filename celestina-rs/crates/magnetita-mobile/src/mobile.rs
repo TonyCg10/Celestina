@@ -367,6 +367,8 @@ pub struct MobileNotification {
     pub actions: Vec<String>,
     /// PNG bytes, absent when none or unchanged.
     pub icon: Option<Vec<u8>>,
+    /// A player's now-playing notification.
+    pub media: bool,
 }
 
 /// The phone, held by the application's service for its lifetime.
@@ -479,6 +481,7 @@ impl MobileSession {
                 .map(|label| Action { label })
                 .collect(),
             icon: note.icon,
+            media: note.media,
         };
         Ok(self
             .handle
