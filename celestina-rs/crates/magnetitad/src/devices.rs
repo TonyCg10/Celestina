@@ -329,6 +329,8 @@ pub enum Command {
     CallAction(magnetita_proto::phone::telephony::CallAction),
     /// The registered commands changed: publish the list again (own wire).
     CommandsChanged,
+    /// The same phone opened a newer session: close this one and leave.
+    Superseded,
 }
 
 /// Why a URI handed to [`Devices::send_file_uri`] names no local file.

@@ -70,6 +70,9 @@ const PAIRING_WINDOW: Duration = Duration::from_secs(120);
 const BROWSE_INTERVAL: Duration = Duration::from_secs(5);
 /// How often a session checks the revocation barrier and its command queue.
 const TICK: Duration = Duration::from_secs(1);
+/// How long a newer session of the same phone waits for the older one to
+/// leave: a tick to notice the order, and the cleanup after it.
+const SUPERSEDE_WAIT: Duration = Duration::from_secs(5);
 
 struct Armed {
     secret: [u8; 32],
@@ -594,6 +597,34 @@ impl Wire {
             DeviceKind::Desktop => "desktop",
         };
         let (sender, commands) = command_channel();
+        // The same phone again, its application restarted or reinstalled,
+        // while its old session waits out the idle timeout: the newer one
+        // is the live one. The old session is told to leave and this one
+        // waits for its slot; a phone that is truly connected twice loses
+        // the older connection, which the phone itself has dropped.
+        let superseded = daemon
+            .commands
+            .lock_ok()
+            .get(&device_id)
+            .map(|old| old.try_send(Command::Superseded).is_ok());
+        if superseded.is_some() {
+            log(
+                "link",
+                &format!("{name}: connected again; the earlier session yields"),
+            );
+            let deadline = Instant::now() + SUPERSEDE_WAIT;
+            while daemon.devices.lock_ok().contains_key(&device_id) {
+                if Instant::now() >= deadline {
+                    log(
+                        "link",
+                        &format!("{name}: the earlier session did not leave; dropping this one"),
+                    );
+                    session.close("duplicate");
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
         {
             let mut devices = daemon.devices.lock_ok();
             if devices.contains_key(&device_id) {
@@ -880,10 +911,20 @@ impl Wire {
                         log("link", &format!("{name}: forgotten; session closed"));
                         break;
                     }
+                    let mut superseded = false;
                     while let Ok(command) = commands.try_recv() {
+                        if matches!(command, Command::Superseded) {
+                            superseded = true;
+                            continue;
+                        }
                         if let Err(e) = self.command(&session, &shares, &media, &device_id, command).await {
                             log("link", &format!("{name}: command: {e}"));
                         }
+                    }
+                    if superseded {
+                        session.close("superseded");
+                        log("link", &format!("{name}: superseded by a newer session"));
+                        break;
                     }
                     if self.stop.load(Ordering::Relaxed) {
                         session.close("daemon stopping");
@@ -1200,6 +1241,7 @@ impl Wire {
         command: Command,
     ) -> Result<(), LinkError> {
         match command {
+            Command::Superseded => {}
             Command::CommandsChanged => {
                 let env = commands::store().published();
                 session
@@ -2579,6 +2621,78 @@ mod tests {
         );
         drop(wire);
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_phone_that_connects_again_replaces_its_earlier_session() {
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            test_adapters(),
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("phone12") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (first, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !daemon.devices.lock_ok().contains_key("phone12") {
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(20));
+        }
+        // The application restarts: the same phone dials again while the
+        // first session is still open on this side.
+        let second = rt.block_on(async {
+            let (session, _) = phone
+                .connect(addr, PeerExpect::Fingerprint(desktop_fp))
+                .await
+                .unwrap();
+            session
+        });
+        // The first session is closed by the desktop; the second lives.
+        let closed = rt.block_on(async {
+            let until = tokio::time::Instant::now() + Duration::from_secs(8);
+            loop {
+                match tokio::time::timeout_at(until, first.recv()).await {
+                    Ok(Ok(_greeting)) => continue,
+                    Ok(Err(_)) => break true,
+                    Err(_) => break false,
+                }
+            }
+        });
+        assert!(closed, "the earlier session was told to leave");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let alive = rt.block_on(async {
+                tokio::time::timeout(Duration::from_millis(200), second.recv())
+                    .await
+                    .map(|r| r.is_ok())
+                    .unwrap_or(true)
+            });
+            assert!(alive, "the newer session must stay open");
+            if daemon
+                .devices
+                .lock_ok()
+                .get("phone12")
+                .is_some_and(|d| d.connected)
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the newer session never published"
+            );
+        }
+        second.close("done");
+        drop(wire);
     }
 
     #[test]

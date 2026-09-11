@@ -1,6 +1,11 @@
 # Magnetita status
 
 - **Updated:** 2026-09-10
+- **Reconnection:** a phone that dials again while its earlier session
+  is still open on this side (its application restarted or reinstalled)
+  supersedes it since 2026-09-11: the older session is told to leave and
+  the newer one takes the slot, instead of being dropped as a duplicate
+  until the 30 s idle timeout.
 - **Mirror window:** the link mirror's `mpv` window controls the phone
   since 2026-09-10: left button and drag are touches, the wheel a swipe,
   right button Back, middle button Home, F1/F2/F3 Back/Home/Recents, the
