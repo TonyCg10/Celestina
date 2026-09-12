@@ -55,6 +55,7 @@ class MirrorInput : AccessibilityService() {
     /** `phase` 0 down, 1 move, 2 up, in screen pixels. Any thread. */
     fun touch(phase: Int, x: Float, y: Float, pointer: Int) {
         main.post {
+            android.util.Log.i(TAG, "touch phase=$phase x=${x.toInt()} y=${y.toInt()} fingers=${fingers.size}")
             when (phase) {
                 0 -> {
                     // A finger still down from a lost lift ends first, or the
@@ -158,7 +159,11 @@ class MirrorInput : AccessibilityService() {
 
     private fun dispatch(stroke: GestureDescription.StrokeDescription) {
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
+        android.util.Log.i(TAG, "dispatch continue=${stroke.willContinue()} ms=${stroke.duration}")
         val accepted = dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                android.util.Log.i(TAG, "gesture completed")
+            }
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 // The system or a hand on the screen ended the gesture: every
                 // finger of ours is gone with it, and a stale one would only

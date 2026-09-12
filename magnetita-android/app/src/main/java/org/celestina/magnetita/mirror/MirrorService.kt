@@ -148,9 +148,17 @@ class MirrorService : Service() {
 
         /** A touch from the desktop, in the picture's pixels, to the accessibility service. */
         fun touch(phase: Int, x: Int, y: Int, pointer: Int) {
-            val (picture, screen) = geometry ?: return
+            val (picture, screen) = geometry ?: run {
+                android.util.Log.w(TAG, "touch with no mirror geometry")
+                return
+            }
             val (sx, sy) = MirrorGeometry.toScreen(x, y, picture, screen)
-            MirrorInput.instance?.touch(phase, sx, sy, pointer)
+            val input = MirrorInput.instance
+            if (input == null) {
+                android.util.Log.w(TAG, "touch with no accessibility service")
+                return
+            }
+            input.touch(phase, sx, sy, pointer)
         }
     }
 }
