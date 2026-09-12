@@ -50,14 +50,20 @@ class ScreenMirror(
         private set
 
     private val displayManager by lazy { context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager }
+    /** The rotation the capture was started at; a change restarts it. */
+    private var rotation = -1
+
+    private fun currentRotation(): Int =
+        displayManager.getDisplay(android.view.Display.DEFAULT_DISPLAY)?.rotation ?: 0
+
     private val rotationListener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(displayId: Int) {}
         override fun onDisplayRemoved(displayId: Int) {}
         override fun onDisplayChanged(displayId: Int) {
             if (displayId != android.view.Display.DEFAULT_DISPLAY || !open) return
-            val bounds = (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).maximumWindowMetrics.bounds
-            val now = bounds.width() to bounds.height()
-            if (now != screen) restart()
+            val now = currentRotation()
+            android.util.Log.i("ScreenMirror", "display changed: rotation $rotation -> $now")
+            if (now != rotation) restart()
         }
     }
 
@@ -82,8 +88,11 @@ class ScreenMirror(
 
     private fun begin(): Boolean {
         val metrics = context.resources.displayMetrics
-        val bounds = (context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).maximumWindowMetrics.bounds
-        screen = bounds.width() to bounds.height()
+        rotation = currentRotation()
+        val physical = displayManager.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+        val size = android.graphics.Point().also { physical?.getRealSize(it) }
+        screen = size.x to size.y
+        android.util.Log.i("ScreenMirror", "capture at rotation $rotation, screen ${screen.first}x${screen.second}")
         picture = MirrorGeometry.fit(screen.first, screen.second, options.maxSize)
         val mime = if (options.codec == 1) MediaFormat.MIMETYPE_VIDEO_AVC else MediaFormat.MIMETYPE_VIDEO_HEVC
         val format = MediaFormat.createVideoFormat(mime, picture.first, picture.second).apply {
