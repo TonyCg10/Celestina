@@ -96,6 +96,9 @@ class ScreenMirror(
             setInteger(MediaFormat.KEY_LATENCY, 1)
             setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
             setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, REPEAT_FRAME_US)
+            // The parameter sets with every key frame, so a desktop reader
+            // that starts at a later key frame can decode from it.
+            setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1)
             setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, options.fps.coerceIn(10, 120).toFloat())
         }
         val delimiter = if (options.codec == 1) AUD_H264 else AUD_HEVC
