@@ -150,12 +150,24 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
         ("cache", "no".into()),
         ("demuxer", "lavf".into()),
         ("demuxer-lavf-format", codec.into()),
-        ("demuxer-lavf-o", "fflags=+nobuffer,flags=+low_delay".into()),
-        ("demuxer-lavf-analyzeduration", "1".into()),
+        // Never `fflags=+nobuffer` here: on a FIFO, which cannot be read
+        // twice, it makes lavf discard the packets it consumed while
+        // probing (a second of them, the key frame included), and the
+        // decoder then starts on a frame whose references it never saw.
+        // Measured offline: 68 missing-reference errors with it, none
+        // without. The probe is kept to the first unit instead.
+        ("demuxer-lavf-o", "flags=+low_delay".into()),
+        ("demuxer-lavf-analyzeduration", "0.02".into()),
+        ("demuxer-lavf-probesize", "32".into()),
         ("demuxer-readahead-secs", "0".into()),
         ("vd-lavc-threads", "1".into()),
         ("vd-lavc-o", "flags=+low_delay".into()),
+        // The stream carries no timestamps: timing by frame rate, as mpv
+        // itself advises for it, and every frame shown as soon as it is
+        // decoded rather than at a clock the stream cannot keep.
         ("container-fps-override", "60".into()),
+        ("correct-pts", "no".into()),
+        ("untimed", "yes".into()),
         ("keep-open", "yes".into()),
         // A still phone sends ten frames a second, not sixty: never pause to
         // fill a cache that a live stream cannot fill.
