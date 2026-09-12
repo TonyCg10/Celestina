@@ -157,6 +157,10 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
         ("vd-lavc-o", "flags=+low_delay".into()),
         ("container-fps-override", "60".into()),
         ("keep-open", "yes".into()),
+        // A still phone sends ten frames a second, not sixty: never pause to
+        // fill a cache that a live stream cannot fill.
+        ("cache-pause", "no".into()),
+        ("cache-pause-initial", "no".into()),
         // The picture fills the surface whatever its shape: the window is
         // the compositor's to size, and a band would only hide the phone.
         ("keepaspect", "no".into()),

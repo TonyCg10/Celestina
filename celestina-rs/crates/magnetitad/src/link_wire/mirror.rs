@@ -74,10 +74,16 @@ struct FifoSink {
     tx: Option<Sender<Vec<u8>>>,
     stopping: std::sync::Arc<std::sync::atomic::AtomicBool>,
     path: std::path::PathBuf,
+    /// The stream cut into access units, and what a new reader needs first.
+    units: std::sync::Arc<Mutex<super::mirror_stream::AccessUnits>>,
 }
 
 impl MirrorPlayer for FifoPlayer {
-    fn open(&self, _started: &MirrorStarted) -> Option<Box<dyn VideoSink>> {
+    fn open(&self, started: &MirrorStarted) -> Option<Box<dyn VideoSink>> {
+        let units = std::sync::Arc::new(Mutex::new(super::mirror_stream::AccessUnits::new(
+            started.codec,
+        )));
+        let reader_units = std::sync::Arc::clone(&units);
         let path = next_video_fifo();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -100,7 +106,6 @@ impl MirrorPlayer for FifoPlayer {
         std::thread::Builder::new()
             .name("magnetita-mirror-feed".into())
             .spawn(move || {
-                let mut held: Option<Vec<u8>> = None;
                 'readers: while !stop.load(std::sync::atomic::Ordering::Relaxed) {
                     // Opening for writing blocks until a reader opens the
                     // other end; the close path opens one to unblock this.
@@ -111,13 +116,17 @@ impl MirrorPlayer for FifoPlayer {
                     if stop.load(std::sync::atomic::Ordering::Relaxed) {
                         break;
                     }
+                    // A reader that opens mid-stream: drop what queued while
+                    // nobody read (it follows a key frame it never saw) and
+                    // start it at the last key frame.
+                    while rx.try_recv().is_ok() {}
+                    let snapshot = reader_units.lock_ok().snapshot();
+                    if !snapshot.is_empty() && fifo.write_all(&snapshot).is_err() {
+                        continue 'readers;
+                    }
                     loop {
-                        let chunk = match held.take() {
-                            Some(chunk) => chunk,
-                            None => match rx.recv() {
-                                Ok(chunk) => chunk,
-                                Err(_) => break 'readers,
-                            },
+                        let Ok(chunk) = rx.recv() else {
+                            break 'readers;
                         };
                         if fifo.write_all(&chunk).is_err() {
                             // The reader went away: wait for the next one.
@@ -132,14 +141,18 @@ impl MirrorPlayer for FifoPlayer {
             tx: Some(tx),
             stopping,
             path,
+            units,
         }))
     }
 }
 
 impl VideoSink for FifoSink {
     fn write(&mut self, bytes: &[u8]) {
+        let complete = self.units.lock_ok().push(bytes);
         if let Some(tx) = &self.tx {
-            let _ = tx.send(bytes.to_vec());
+            for unit in complete {
+                let _ = tx.send(unit);
+            }
         }
     }
 

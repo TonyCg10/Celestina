@@ -52,6 +52,7 @@ pub(crate) mod discovery;
 pub(crate) mod input;
 pub(crate) mod media;
 pub(crate) mod mirror;
+pub(crate) mod mirror_stream;
 pub(crate) mod notifications;
 pub(crate) mod phone;
 pub(crate) mod share;
