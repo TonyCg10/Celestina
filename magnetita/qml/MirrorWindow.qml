@@ -45,6 +45,8 @@ Window {
     // the width that fits, settled a moment after the last resize.
     onWidthChanged: fitTimer.restart()
     onHeightChanged: fitTimer.restart()
+    // A turned phone changes the picture, not the window: fit again.
+    onAspectChanged: fitTimer.restart()
     Timer {
         id: fitTimer
         interval: 120
