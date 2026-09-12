@@ -56,9 +56,13 @@ ApplicationWindow {
     MirrorView {
         id: mirrorView
         Component.onCompleted: start()
-        onStreamingChanged: {
-            if (window.mirrorOnly && !streaming && mirrorView.everStreamed)
+        // A mirror-only process ends when the mirror is over and the view
+        // has let its engine go; exiting earlier aborts under libmpv.
+        onDoneChanged: {
+            if (window.mirrorOnly && done && mirrorView.everStreamed)
                 Qt.quit()
+        }
+        onStreamingChanged: {
             if (streaming)
                 mirrorView.everStreamed = true
         }

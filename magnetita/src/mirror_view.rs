@@ -47,6 +47,10 @@ pub mod qobject {
         // pictureWidth/Height — the streamed picture, the pixels touches use
         // error        — why the picture cannot show, in the person's words
         #[qproperty(bool, streaming)]
+        /// The mirror ended and every engine is gone: a mirror-only process
+        /// may exit now, and not before, or libmpv aborts under a live render
+        /// context.
+        #[qproperty(bool, done)]
         #[qproperty(u64, render_handle)]
         #[qproperty(i32, picture_width)]
         #[qproperty(i32, picture_height)]
@@ -134,6 +138,7 @@ enum Outbound {
 #[derive(Default)]
 pub struct MirrorViewRust {
     streaming: bool,
+    done: bool,
     render_handle: u64,
     picture_width: i32,
     picture_height: i32,
@@ -156,6 +161,12 @@ pub struct MirrorViewRust {
 
 impl Drop for MirrorViewRust {
     fn drop(&mut self) {
+        // An engine still here at exit has a render context the render thread
+        // owns; destroying it now is the abort libmpv promises. A leak at
+        // exit costs nothing.
+        if let Some(engine) = self.engine.take() {
+            std::mem::forget(engine);
+        }
         self.owned.close();
         self.input.take();
         if let Some(worker) = self.input_worker.take() {
@@ -290,9 +301,10 @@ impl qobject::MirrorView {
                 let replaced = self.rust().current_video.as_deref() != Some(video.as_str());
                 if self.rust().engine.is_some() && replaced {
                     // The daemon started a new stream (a rotation, a second
-                    // start): let this engine go, then open the new FIFO.
+                    // start): let this engine go, then open the new FIFO. The
+                    // mirror itself goes on, so `streaming` stays true.
                     self.as_mut().rust_mut().get_mut().reopen = Some(video);
-                    self.as_mut().close();
+                    self.as_mut().release_engine();
                 } else if self.rust().engine.is_none() && !self.rust().closing {
                     self.as_mut().open(video);
                 }
@@ -364,6 +376,8 @@ impl qobject::MirrorView {
         };
         if let Some(video) = reopen {
             self.as_mut().open(video);
+        } else {
+            self.as_mut().settle();
         }
     }
 
@@ -422,6 +436,16 @@ impl qobject::MirrorView {
     fn close(mut self: Pin<&mut Self>) {
         self.as_mut().set_streaming(false);
         if self.rust().engine.is_none() {
+            self.as_mut().set_done(true);
+            return;
+        }
+        self.as_mut().release_engine();
+    }
+
+    /// Lets the engine go in the order the render seam needs: the handle
+    /// first, the instance once the surface says its context is gone.
+    fn release_engine(mut self: Pin<&mut Self>) {
+        if self.rust().engine.is_none() {
             return;
         }
         if *self.render_handle() != 0 {
@@ -431,6 +455,14 @@ impl qobject::MirrorView {
             let state = self.as_mut().rust_mut().get_mut();
             state.engine = None;
             state.current_video = None;
+            self.as_mut().settle();
+        }
+    }
+
+    /// No engine remains: if the mirror is over too, the view is done.
+    fn settle(mut self: Pin<&mut Self>) {
+        if self.rust().engine.is_none() && !*self.streaming() && self.rust().reopen.is_none() {
+            self.as_mut().set_done(true);
         }
     }
 
