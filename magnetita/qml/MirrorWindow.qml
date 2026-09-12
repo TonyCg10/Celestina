@@ -40,11 +40,30 @@ Window {
     readonly property real fitX: 0
     readonly property real fitY: 0
 
+    // Diagnostics for the daemon's journal while the window is being brought
+    // up: whether Qt paints this window at all, and whether the surface
+    // holds a render context.
+    property int swaps: 0
+    onFrameSwapped: swaps++
+    Timer {
+        interval: 5000
+        running: mirror.visible
+        repeat: true
+        onTriggered: {
+            console.warn("magnetita: mirror window: swaps=" + mirror.swaps
+                         + " live=" + video.rendererLive + " visible=" + video.visible
+                         + " handle=" + mirror.view.renderHandle
+                         + " size=" + mirror.width + "x" + mirror.height)
+            mirror.swaps = 0
+        }
+    }
+
     MpvVideo {
         id: video
         anchors.fill: parent
         visible: mirror.view.renderHandle !== 0
         handle: mirror.view.renderHandle
+        onContextFailed: console.warn("magnetita: mirror window: context failed")
 
         // The order matters both ways: the engine loads only once the context
         // exists, and the instance goes only once the context is gone.

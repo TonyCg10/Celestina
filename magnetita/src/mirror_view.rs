@@ -324,8 +324,12 @@ impl qobject::MirrorView {
                     let waiting = client.get_property::<bool>("paused-for-cache").unwrap_or(false);
                     let cache = client.get_property::<f64>("demuxer-cache-duration").unwrap_or(-1.0);
                     let dropped = client.get_property::<i64>("frame-drop-count").unwrap_or(-1);
+                    let paused = client.get_property::<bool>("pause").unwrap_or(false);
+                    let eof = client.get_property::<bool>("eof-reached").unwrap_or(false);
+                    let format = client.get_property::<String>("video-format").unwrap_or_default();
+                    let seeking = client.get_property::<bool>("seeking").unwrap_or(false);
                     eprintln!(
-                        "magnetita: mirror: time={time:.2} width={width} vo={configured} idle={idle} cache-wait={waiting} cache={cache:.2} dropped={dropped}"
+                        "magnetita: mirror: time={time:.2} width={width} vo={configured} idle={idle} cache-wait={waiting} cache={cache:.2} dropped={dropped} pause={paused} eof={eof} format={format} seeking={seeking}"
                     );
                 }
                 let message = match client.wait_event(0.25) {
