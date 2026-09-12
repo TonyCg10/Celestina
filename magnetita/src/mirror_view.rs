@@ -140,7 +140,10 @@ const WATCH_INTERVAL: Duration = Duration::from_millis(400);
 fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
     vec![
         ("vo", "libmpv".into()),
-        ("hwdec", "auto-safe".into()),
+        // Software decoding on purpose: the picture is a phone's, which the
+        // CPU decodes with time to spare, and a hardware surface the OpenGL
+        // render cannot show is a black window with no error.
+        ("hwdec", "no".into()),
         ("ao", "null".into()),
         ("untimed", "yes".into()),
         ("cache", "no".into()),
@@ -312,7 +315,16 @@ impl qobject::MirrorView {
         let qt = self.as_mut().qt_thread();
         self.rust().owned.spawn(move |guard: Guard| {
             use libmpv2::events::Event;
+            let mut last_report = std::time::Instant::now();
             while guard.open() {
+                if last_report.elapsed() > Duration::from_secs(5) {
+                    last_report = std::time::Instant::now();
+                    let frames = client
+                        .get_property::<i64>("estimated-frame-count")
+                        .unwrap_or(-1);
+                    let dropped = client.get_property::<i64>("frame-drop-count").unwrap_or(-1);
+                    eprintln!("magnetita: mirror: frames={frames} dropped={dropped}");
+                }
                 let message = match client.wait_event(0.25) {
                     Some(Ok(Event::FileLoaded)) => {
                         eprintln!("magnetita: mirror: stream loaded");
