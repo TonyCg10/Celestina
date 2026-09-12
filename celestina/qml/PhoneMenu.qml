@@ -153,10 +153,10 @@ SoftMenu {
 
             // Mirror the phone's screen, beside the phone it mirrors.
             //
-            // The mirror rides on Android's wireless debugging rather than on
-            // the KDE Connect identity this row carries, so it is not addressed
-            // by `id` the way ringing and unpairing are — the daemon finds the
-            // phone on the LAN by itself. It still belongs on the device row:
+            // The mirror rides on the phone's own link (or, on an older daemon,
+            // on Android's wireless debugging) rather than on the identity this
+            // row carries, so it is not addressed by `id` the way ringing and
+            // unpairing are. It still belongs on the device row:
             // that is the phone the author means, and an action parked on the
             // section label read as belonging to the list rather than to the
             // device.

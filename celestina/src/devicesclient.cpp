@@ -148,18 +148,33 @@ void DevicesClient::unpair(const QString &deviceId)
 
 void DevicesClient::mirror()
 {
-    // No device id: the mirror is not per-device. It rides on Android's own
-    // wireless debugging, which the daemon discovers on the LAN, and the phone
-    // that answers there is not necessarily the one this row was drawn from.
+    // No device id: the mirror is not per-device. Since MAG-P6 it rides on
+    // the phone's own link (`StartLink`); a daemon without that method is
+    // answered with the older `adb` path (`Start`), so the button keeps
+    // working across the two daemons the author may be running.
     //
     // Start only. The daemon ignores a request for a mirror that is already
     // running, so a second press cannot tear down a window the author is
-    // looking at, and stopping stays where the state to reason about lives —
-    // the Magnetita application, or the scrcpy window's own close button.
-    QDBusMessage call = QDBusMessage::createMethodCall(
+    // looking at, and stopping stays where the state to reason about lives:
+    // the Magnetita application, or the mirror window's own close.
+    QDBusMessage link = QDBusMessage::createMethodCall(
         QString::fromLatin1(service),
         QString::fromLatin1(mirrorPath),
         QString::fromLatin1(mirrorIface),
-        QStringLiteral("Start"));
-    QDBusConnection::sessionBus().asyncCall(call);
+        QStringLiteral("StartLink"));
+    auto *watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(link), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [](QDBusPendingCallWatcher *finished) {
+        const bool unknownMethod = finished->isError()
+            && finished->error().type() == QDBusError::UnknownMethod;
+        finished->deleteLater();
+        if (!unknownMethod) {
+            return;
+        }
+        QDBusMessage call = QDBusMessage::createMethodCall(
+            QString::fromLatin1(service),
+            QString::fromLatin1(mirrorPath),
+            QString::fromLatin1(mirrorIface),
+            QStringLiteral("Start"));
+        QDBusConnection::sessionBus().asyncCall(call);
+    });
 }
