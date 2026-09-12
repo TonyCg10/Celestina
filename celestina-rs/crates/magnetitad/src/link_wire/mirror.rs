@@ -76,6 +76,10 @@ struct FifoSink {
     path: std::path::PathBuf,
     /// The stream cut into access units, and what a new reader needs first.
     units: std::sync::Arc<Mutex<super::mirror_stream::AccessUnits>>,
+    units_in: u64,
+    keys_in: u64,
+    arrived: u64,
+    last_report: std::time::Instant,
 }
 
 impl MirrorPlayer for FifoPlayer {
@@ -118,7 +122,9 @@ impl MirrorPlayer for FifoPlayer {
                     // A reader that opens mid-stream: drop what queued while
                     // nobody read, ask the phone for a key frame, and start
                     // the reader at it, so it decodes from its next frame.
-                    while rx.try_recv().is_ok() {}
+                    while rx.try_recv().is_ok() {
+                        QUEUED.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                    }
                     own().queue_input(Envelope {
                         capability: capability::MIRROR,
                         kind: MirrorKeyframe::KIND,
@@ -126,15 +132,42 @@ impl MirrorPlayer for FifoPlayer {
                         body: MirrorKeyframe.encode(),
                     });
                     let mut started = false;
+                    let (mut units, mut bytes, mut keys, mut skipped) = (0u64, 0u64, 0u64, 0u64);
+                    let mut blocked = std::time::Duration::ZERO;
+                    let mut last_report = std::time::Instant::now();
+                    log("mirror", "feed: reader opened the fifo");
                     loop {
                         let Ok((chunk, key)) = rx.recv() else {
                             break 'readers;
                         };
+                        QUEUED.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
                         if !started && !key {
+                            skipped += 1;
                             continue;
                         }
+                        if !started {
+                            log("mirror", &format!("feed: first key unit after skipping {skipped}"));
+                        }
                         started = true;
-                        if fifo.write_all(&chunk).is_err() {
+                        units += 1;
+                        bytes += chunk.len() as u64;
+                        keys += u64::from(key);
+                        let began = std::time::Instant::now();
+                        let outcome = fifo.write_all(&chunk);
+                        blocked += began.elapsed();
+                        if last_report.elapsed() > std::time::Duration::from_secs(5) {
+                            log(
+                                "mirror",
+                                &format!(
+                                    "feed: {units} units, {bytes} bytes, {keys} keys, queued {}, {:.0} ms blocked in writes",
+                                    QUEUED.load(std::sync::atomic::Ordering::Relaxed),
+                                    blocked.as_secs_f64() * 1000.0
+                                ),
+                            );
+                            (units, bytes, keys, blocked) = (0, 0, 0, std::time::Duration::ZERO);
+                            last_report = std::time::Instant::now();
+                        }
+                        if outcome.is_err() {
                             // The reader went away: wait for the next one.
                             continue 'readers;
                         }
@@ -148,15 +181,39 @@ impl MirrorPlayer for FifoPlayer {
             stopping,
             path,
             units,
+            units_in: 0,
+            keys_in: 0,
+            arrived: 0,
+            last_report: std::time::Instant::now(),
         }))
     }
 }
 
+/// Units queued for the feed and not yet written, for the log.
+static QUEUED: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
 impl VideoSink for FifoSink {
     fn write(&mut self, bytes: &[u8]) {
         let complete = self.units.lock_ok().push(bytes);
+        self.arrived += bytes.len() as u64;
+        for unit in &complete {
+            self.units_in += 1;
+            self.keys_in += u64::from(unit.1);
+        }
+        if self.last_report.elapsed() > std::time::Duration::from_secs(5) {
+            log(
+                "mirror",
+                &format!(
+                    "link: {} units in, {} keys, {} bytes",
+                    self.units_in, self.keys_in, self.arrived
+                ),
+            );
+            (self.units_in, self.keys_in, self.arrived) = (0, 0, 0);
+            self.last_report = std::time::Instant::now();
+        }
         if let Some(tx) = &self.tx {
             for unit in complete {
+                QUEUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 let _ = tx.send(unit);
             }
         }

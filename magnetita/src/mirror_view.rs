@@ -164,6 +164,17 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
         // The picture fills the surface whatever its shape: the window is
         // the compositor's to size, and a band would only hide the phone.
         ("keepaspect", "no".into()),
+        // The engine's own log, complete, beside the FIFOs: the one place
+        // that says what the demuxer and the decoder did with each unit.
+        (
+            "log-file",
+            std::env::var_os("XDG_RUNTIME_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(std::env::temp_dir)
+                .join("magnetita/mirror-window.log")
+                .to_string_lossy()
+                .into_owned(),
+        ),
     ]
 }
 
@@ -332,8 +343,10 @@ impl qobject::MirrorView {
                     let eof = client.get_property::<bool>("eof-reached").unwrap_or(false);
                     let format = client.get_property::<String>("video-format").unwrap_or_default();
                     let seeking = client.get_property::<bool>("seeking").unwrap_or(false);
+                    let vf_fps = client.get_property::<f64>("estimated-vf-fps").unwrap_or(-1.0);
+                    let fps = client.get_property::<f64>("container-fps").unwrap_or(-1.0);
                     eprintln!(
-                        "magnetita: mirror: time={time:.2} width={width} vo={configured} idle={idle} cache-wait={waiting} cache={cache:.2} dropped={dropped} pause={paused} eof={eof} format={format} seeking={seeking}"
+                        "magnetita: mirror: time={time:.2} width={width} vo={configured} idle={idle} cache-wait={waiting} cache={cache:.2} dropped={dropped} pause={paused} eof={eof} format={format} seeking={seeking} vf-fps={vf_fps:.1} fps={fps:.1}"
                     );
                 }
                 let message = match client.wait_event(0.25) {
