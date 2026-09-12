@@ -7,8 +7,11 @@ ApplicationWindow {
     id: window
 
     required property bool reducedMotion
+    // Launched by the daemon for the mirror alone: no main window, and the
+    // process ends when the mirror does.
+    required property bool mirrorOnly
 
-    visible: true
+    visible: !mirrorOnly
     width: 520
     height: 740
     minimumWidth: 420
@@ -53,6 +56,13 @@ ApplicationWindow {
     MirrorView {
         id: mirrorView
         Component.onCompleted: start()
+        onStreamingChanged: {
+            if (window.mirrorOnly && !streaming && mirrorView.everStreamed)
+                Qt.quit()
+            if (streaming)
+                mirrorView.everStreamed = true
+        }
+        property bool everStreamed: false
     }
 
     MirrorWindow {

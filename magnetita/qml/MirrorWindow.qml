@@ -18,6 +18,9 @@ Window {
                                    ? view.pictureWidth / view.pictureHeight : 9 / 19.5
 
     visible: view.streaming
+    // Its own toplevel, not a dialog of the main window: a transient window
+    // is what a compositor floats, and this one belongs in the layout.
+    transientParent: null
     title: qsTr("Espejo")
     color: CelestinaTheme.canvas
     width: view.pictureWidth > 0 ? view.pictureWidth : 460

@@ -280,6 +280,7 @@ impl qobject::MirrorView {
     pub fn surface_ready(mut self: Pin<&mut Self>) {
         let video = self.as_mut().rust_mut().get_mut().pending_video.take();
         if let (Some(video), Some(engine)) = (video, self.rust().engine.as_ref()) {
+            eprintln!("magnetita: mirror: loading {video}");
             if let Err(error) = engine.command("loadfile", &[&video, "replace"]) {
                 eprintln!("magnetita: mirror load: {error}");
             }
@@ -313,7 +314,10 @@ impl qobject::MirrorView {
             use libmpv2::events::Event;
             while guard.open() {
                 let message = match client.wait_event(0.25) {
-                    Some(Ok(Event::FileLoaded)) => Some(String::new()),
+                    Some(Ok(Event::FileLoaded)) => {
+                        eprintln!("magnetita: mirror: stream loaded");
+                        Some(String::new())
+                    }
                     Some(Ok(Event::EndFile(reason))) => {
                         Some(format!("El v\u{ed}deo termin\u{f3}: {reason:?}"))
                     }

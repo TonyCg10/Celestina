@@ -35,6 +35,11 @@ fn main() {
         QQuickStyle::set_style(&QString::from("Basic"));
     }
 
+    // `--mirror`: the daemon launched this instance for the mirror window
+    // alone; the main window stays hidden and the process ends with the
+    // mirror.
+    let mirror_only = std::env::args().skip(1).any(|arg| arg == "--mirror");
+
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
         // The shared media surface, registered once before any window exists.
@@ -45,6 +50,7 @@ fn main() {
             QString::from("reducedMotion"),
             QVariant::from(&reduced_motion),
         );
+        initial_properties.insert(QString::from("mirrorOnly"), QVariant::from(&mirror_only));
         engine.as_mut().set_initial_properties(&initial_properties);
         engine.load(&QUrl::from(
             "qrc:/qt/qml/org/celestina/magnetita/qml/Main.qml",

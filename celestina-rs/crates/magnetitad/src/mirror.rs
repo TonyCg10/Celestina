@@ -609,6 +609,67 @@ pub(crate) fn session_display_env() -> Vec<(String, String)> {
         .collect()
 }
 
+/// Launches the Magnetita application in its mirror-only mode unless one is
+/// already running, which then shows the window itself. Best-effort: with
+/// no session display the mirror streams to a FIFO nobody reads.
+fn ensure_mirror_window() {
+    if application_running() {
+        return;
+    }
+    let display = session_display_env();
+    if display.is_empty() {
+        crate::runtime::log("mirror", "no display variables: the window cannot open");
+        return;
+    }
+    let candidates = [
+        std::env::var_os("HOME")
+            .map(|home| std::path::PathBuf::from(home).join(".local/bin/magnetita")),
+        Some(std::path::PathBuf::from("magnetita")),
+    ];
+    for binary in candidates.into_iter().flatten() {
+        let mut command = std::process::Command::new(&binary);
+        command
+            .arg("--mirror")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::inherit());
+        for (key, value) in &display {
+            command.env(key, value);
+        }
+        match command.spawn() {
+            Ok(mut child) => {
+                // Not waited for: the application outlives this call and
+                // reaps itself; a thread collects the exit so no zombie stays.
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+                crate::runtime::log("mirror", &format!("window: launched {}", binary.display()));
+                return;
+            }
+            Err(_) => continue,
+        }
+    }
+    crate::runtime::log("mirror", "window: the application is not installed");
+}
+
+/// Whether a `magnetita` application process exists on this host: its
+/// executable's name, read from `/proc`, is the only claim checked.
+fn application_running() -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        let name = entry.file_name();
+        if !name.to_string_lossy().bytes().all(|b| b.is_ascii_digit()) {
+            return false;
+        }
+        std::fs::read_link(entry.path().join("exe"))
+            .ok()
+            .and_then(|exe| exe.file_name().map(|n| n == "magnetita"))
+            .unwrap_or(false)
+    })
+}
+
 /// The systemd user manager's environment block, or empty if it cannot be
 /// read. Best-effort by design: an unreachable session bus just means the
 /// mirror stays windowless, not that the daemon should fail.
@@ -735,6 +796,9 @@ impl MirrorInterface {
         let options = self.mirror.snapshot().options.into_iter().collect();
         crate::link_wire::mirror::own()
             .request_start(crate::link_wire::mirror::start_from_options(&options));
+        // The window is the application's: a start from the shell's plugin,
+        // with no application running, launches it in its mirror-only mode.
+        ensure_mirror_window();
         Ok(())
     }
 
