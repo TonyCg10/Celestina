@@ -109,6 +109,14 @@ class ScreenMirror(
                 val buffer = runCatching { codec.getOutputBuffer(index) }.getOrNull()
                 if (buffer != null && info.size > 0 && open) {
                     val config = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
+                    outputs++
+                    outputBytes += info.size
+                    if (info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0) keyOutputs++
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (now - lastReport > 5000) {
+                        android.util.Log.i("ScreenMirror", "encoder: $outputs units, $keyOutputs keys, $outputBytes bytes in ${now - lastReport} ms")
+                        outputs = 0; keyOutputs = 0; outputBytes = 0; lastReport = now
+                    }
                     val bytes = ByteArray(info.size + if (config) 0 else delimiter.size)
                     buffer.position(info.offset)
                     buffer.get(bytes, 0, info.size)
@@ -144,8 +152,14 @@ class ScreenMirror(
         }.isSuccess
     }
 
+    private var outputs = 0
+    private var keyOutputs = 0
+    private var outputBytes = 0L
+    private var lastReport = 0L
+
     /** Asks the encoder for a key frame on its next output. */
     fun requestKeyframe() {
+        android.util.Log.i("ScreenMirror", "key frame requested by the desktop")
         val encoder = codec ?: return
         runCatching {
             encoder.setParameters(android.os.Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) })
