@@ -68,6 +68,9 @@ sealed interface DesktopSignal {
     /** The desktop wants to see this screen. */
     data class MirrorStart(val options: MirrorOptions) : DesktopSignal
     data object MirrorStop : DesktopSignal
+
+    /** The desktop wants a key frame now. */
+    data object MirrorKeyframe : DesktopSignal
     data class MirrorTouched(val touch: MirrorTouch) : DesktopSignal
     data class MirrorKey(val keycode: Int, val pressed: Boolean) : DesktopSignal
 
@@ -152,6 +155,7 @@ sealed interface DesktopSignal {
                 if (event.commandId != null && event.commandOk != null) CommandResult(event.commandId, event.commandOk) else Other(event.capability, event.kind)
             CAPABILITY_MIRROR to 1 -> event.mirrorStart?.let { MirrorStart(it) } ?: Other(event.capability, event.kind)
             CAPABILITY_MIRROR to 3 -> if (event.mirrorStop) MirrorStop else Other(event.capability, event.kind)
+            CAPABILITY_MIRROR to 7 -> if (event.mirrorKeyframe) MirrorKeyframe else Other(event.capability, event.kind)
             CAPABILITY_MIRROR to 4 -> event.mirrorTouch?.let { MirrorTouched(it) } ?: Other(event.capability, event.kind)
             CAPABILITY_MIRROR to 5 ->
                 if (event.mirrorKey != null && event.mirrorKeyPressed != null) MirrorKey(event.mirrorKey, event.mirrorKeyPressed) else Other(event.capability, event.kind)

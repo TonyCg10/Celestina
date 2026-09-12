@@ -55,12 +55,14 @@ class MirrorService : Service() {
         val started = ScreenMirror(applicationContext, projection, live, options) { reason ->
             _state.value = MirrorState.Idle
             mirror = null
+            current = null
             LinkService.input { it.sendMirrorStop() }
             stopSelf()
             android.util.Log.i(TAG, "mirror ended: $reason")
         }
         if (started.start()) {
             mirror = started
+            current = started
             _state.value = MirrorState.Streaming(started.picture.first, started.picture.second)
             geometry = started.picture to started.screen
         } else {
@@ -72,6 +74,7 @@ class MirrorService : Service() {
     private fun stopMirror(reason: String) {
         val m = mirror
         mirror = null
+        current = null
         geometry = null
         if (m != null) m.stop(reason) else { _state.value = MirrorState.Idle; stopSelf() }
     }
@@ -119,6 +122,7 @@ class MirrorService : Service() {
 
         /** The streaming mirror's picture and screen sizes, for touches. */
         @Volatile private var geometry: Pair<Pair<Int, Int>, Pair<Int, Int>>? = null
+        @Volatile private var current: ScreenMirror? = null
 
         fun putOptions(intent: Intent, options: MirrorOptions): Intent = intent
             .putExtra(EXTRA_MAX, options.maxSize).putExtra(EXTRA_FPS, options.fps)
@@ -139,6 +143,11 @@ class MirrorService : Service() {
             context.startForegroundService(
                 putOptions(Intent(context, MirrorService::class.java), options).putExtra(EXTRA_CONSENT, consent),
             )
+        }
+
+        /** The desktop's window opened mid-stream: the next frame is a key frame. */
+        fun keyframe() {
+            current?.requestKeyframe()
         }
 
         fun stop(context: Context) {

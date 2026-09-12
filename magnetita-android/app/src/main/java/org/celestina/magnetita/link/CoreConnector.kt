@@ -143,6 +143,7 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
             it.mirrorTouch?.let { t -> MirrorTouch(t.phase.toInt(), t.x.toInt(), t.y.toInt(), t.pointer.toInt()) },
             it.mirrorKey?.toInt(), it.mirrorKeyPressed, it.mirrorGlobal?.toInt(),
             it.storage?.let { s -> StorageRequest(s.kind.toInt(), s.request.toInt(), s.path, s.to, s.offset.toLong(), s.len.toInt(), s.bytes, s.truncate) },
+            it.mirrorKeyframe,
         ) }
     }
 

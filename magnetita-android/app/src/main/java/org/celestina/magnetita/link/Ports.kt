@@ -139,6 +139,7 @@ data class LinkEvent(
     val mirrorKeyPressed: Boolean? = null,
     val mirrorGlobal: Int? = null,
     val storage: StorageRequest? = null,
+    val mirrorKeyframe: Boolean = false,
 )
 
 /** One browse request from the desktop; `kind` is one of the constants. */

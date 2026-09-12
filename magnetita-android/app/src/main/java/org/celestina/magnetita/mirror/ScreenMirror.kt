@@ -144,6 +144,14 @@ class ScreenMirror(
         }.isSuccess
     }
 
+    /** Asks the encoder for a key frame on its next output. */
+    fun requestKeyframe() {
+        val encoder = codec ?: return
+        runCatching {
+            encoder.setParameters(android.os.Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) })
+        }
+    }
+
     /** Ends everything once; later calls do nothing. */
     fun stop(reason: String) {
         if (!open) return

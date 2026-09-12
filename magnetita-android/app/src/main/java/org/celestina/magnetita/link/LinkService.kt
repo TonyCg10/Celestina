@@ -106,6 +106,7 @@ class LinkService : LifecycleService() {
                         is DesktopSignal.ShareText -> receiveClipboard(signal.text)
                         is DesktopSignal.MirrorStart -> askMirror(signal.options)
                         DesktopSignal.MirrorStop -> org.celestina.magnetita.mirror.MirrorService.stop(this@LinkService)
+                        DesktopSignal.MirrorKeyframe -> org.celestina.magnetita.mirror.MirrorService.keyframe()
                         is DesktopSignal.MirrorTouched -> org.celestina.magnetita.mirror.MirrorService.touch(signal.touch.phase, signal.touch.x, signal.touch.y, signal.touch.pointer)
                         is DesktopSignal.MirrorGlobal -> org.celestina.magnetita.mirror.MirrorInput.instance?.global(signal.action)
                         is DesktopSignal.MirrorKey -> org.celestina.magnetita.mirror.MirrorInput.instance?.key(signal.keycode, signal.pressed)
