@@ -205,3 +205,88 @@ mod tests {
         assert!(mirror_is_active("mirroring"));
     }
 }
+
+/// The Android key code a Qt key stands for on the mirrored phone, or
+/// `None` for a key the phone has no use for. Letters and digits map by
+/// their run; the rest are the keys a person reaches for in a text field.
+pub fn android_keycode(qt_key: i32) -> Option<u16> {
+    // Qt::Key values (QtCore/qnamespace.h) that need no import.
+    const KEY_SPACE: i32 = 0x20;
+    const KEY_0: i32 = 0x30;
+    const KEY_A: i32 = 0x41;
+    const KEY_ESCAPE: i32 = 0x0100_0000;
+    const KEY_TAB: i32 = 0x0100_0001;
+    const KEY_BACKSPACE: i32 = 0x0100_0003;
+    const KEY_RETURN: i32 = 0x0100_0004;
+    const KEY_ENTER: i32 = 0x0100_0005;
+    const KEY_DELETE: i32 = 0x0100_0007;
+    const KEY_HOME: i32 = 0x0100_0010;
+    const KEY_END: i32 = 0x0100_0011;
+    const KEY_LEFT: i32 = 0x0100_0012;
+    const KEY_UP: i32 = 0x0100_0013;
+    const KEY_RIGHT: i32 = 0x0100_0014;
+    const KEY_DOWN: i32 = 0x0100_0015;
+    const KEY_PAGE_UP: i32 = 0x0100_0016;
+    const KEY_PAGE_DOWN: i32 = 0x0100_0017;
+    const KEY_VOLUME_DOWN: i32 = 0x0100_0070;
+    const KEY_VOLUME_MUTE: i32 = 0x0100_0071;
+    const KEY_VOLUME_UP: i32 = 0x0100_0072;
+    const KEY_MEDIA_PLAY: i32 = 0x0100_0080;
+    const KEY_MEDIA_STOP: i32 = 0x0100_0081;
+    const KEY_MEDIA_PREVIOUS: i32 = 0x0100_0082;
+    const KEY_MEDIA_NEXT: i32 = 0x0100_0083;
+    const KEY_MEDIA_TOGGLE: i32 = 0x0100_0086;
+    Some(match qt_key {
+        KEY_SPACE => 62,
+        k if (KEY_0..KEY_0 + 10).contains(&k) => (7 + (k - KEY_0)) as u16,
+        k if (KEY_A..KEY_A + 26).contains(&k) => (29 + (k - KEY_A)) as u16,
+        0x2C => 55,
+        0x2E => 56,
+        0x2D => 69,
+        0x3D => 70,
+        0x5B => 71,
+        0x5D => 72,
+        0x5C => 73,
+        0x3B => 74,
+        0x27 => 75,
+        0x2F => 76,
+        KEY_ESCAPE => 111,
+        KEY_TAB => 61,
+        KEY_BACKSPACE => 67,
+        KEY_RETURN | KEY_ENTER => 66,
+        KEY_DELETE => 112,
+        KEY_HOME => 122,
+        KEY_END => 123,
+        KEY_LEFT => 21,
+        KEY_UP => 19,
+        KEY_RIGHT => 22,
+        KEY_DOWN => 20,
+        KEY_PAGE_UP => 92,
+        KEY_PAGE_DOWN => 93,
+        KEY_VOLUME_DOWN => 25,
+        KEY_VOLUME_MUTE => 164,
+        KEY_VOLUME_UP => 24,
+        KEY_MEDIA_PLAY => 126,
+        KEY_MEDIA_STOP => 86,
+        KEY_MEDIA_PREVIOUS => 88,
+        KEY_MEDIA_NEXT => 87,
+        KEY_MEDIA_TOGGLE => 85,
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod keycode_tests {
+    use super::android_keycode;
+
+    #[test]
+    fn letters_digits_and_the_text_keys_map_and_the_rest_stay() {
+        assert_eq!(android_keycode(0x41), Some(29));
+        assert_eq!(android_keycode(0x5A), Some(54));
+        assert_eq!(android_keycode(0x30), Some(7));
+        assert_eq!(android_keycode(0x39), Some(16));
+        assert_eq!(android_keycode(0x0100_0004), Some(66));
+        assert_eq!(android_keycode(0x0100_0003), Some(67));
+        assert_eq!(android_keycode(0x0100_0030), None);
+    }
+}

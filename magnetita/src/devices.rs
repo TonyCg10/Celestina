@@ -513,6 +513,40 @@ pub fn mirror_pair(code: &str) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+/// The link mirror as one line, `state|video|width height`, so a watcher
+/// compares it whole; empty against a daemon without the link mirror.
+pub fn mirror_link() -> Result<String, String> {
+    let proxy = mirror_proxy()?;
+    let state: String = proxy
+        .get_property("LinkState")
+        .map_err(|error| error.to_string())?;
+    let video: String = proxy.get_property("LinkVideo").unwrap_or_default();
+    let picture: String = proxy.get_property("LinkPicture").unwrap_or_default();
+    Ok(format!("{state}|{video}|{picture}"))
+}
+
+/// A touch on the mirrored phone: `action` 0 down, 1 move, 2 up, in the
+/// streamed picture's pixels.
+pub fn mirror_link_touch(action: u8, x: u16, y: u16) -> Result<(), String> {
+    mirror_proxy()?
+        .call("LinkTouch", &(action, x, y, 0u8))
+        .map_err(|error| error.to_string())
+}
+
+/// An Android key on the mirrored phone.
+pub fn mirror_link_key(keycode: u16, pressed: bool) -> Result<(), String> {
+    mirror_proxy()?
+        .call("LinkKey", &(keycode, pressed))
+        .map_err(|error| error.to_string())
+}
+
+/// `Back`, `Home` or `Recents` on the mirrored phone.
+pub fn mirror_link_global(action: &str) -> Result<(), String> {
+    mirror_proxy()?
+        .call("LinkGlobal", &(action,))
+        .map_err(|error| error.to_string())
+}
+
 fn mirror_proxy() -> Result<Proxy<'static>, String> {
     let connection = Connection::session().map_err(|error| error.to_string())?;
     Proxy::new(&connection, SERVICE, MIRROR_OBJECT, MIRROR_INTERFACE)

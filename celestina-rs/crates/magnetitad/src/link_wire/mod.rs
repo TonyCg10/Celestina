@@ -52,7 +52,6 @@ pub(crate) mod discovery;
 pub(crate) mod input;
 pub(crate) mod media;
 pub(crate) mod mirror;
-pub(crate) mod mirror_window;
 pub(crate) mod notifications;
 pub(crate) mod phone;
 pub(crate) mod share;
@@ -291,9 +290,7 @@ pub(crate) fn install(
             download_dir: crate::incoming_file::download_dir(),
             shares: Arc::new(share::ShareStore::default()),
             input: Arc::new(input::LazyUinput::default()),
-            mirror_player: Arc::new(mirror::DesktopPlayer {
-                display_env: crate::mirror::session_display_env(),
-            }),
+            mirror_player: Arc::new(mirror::FifoPlayer),
         },
     ) {
         Ok((wire, addr)) => {

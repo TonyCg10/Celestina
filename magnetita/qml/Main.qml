@@ -48,6 +48,17 @@ ApplicationWindow {
         id: commandsModel
     }
 
+    // The phone's screen, in a window of its own that follows the daemon's
+    // link mirror: it opens when the phone streams and closes with it.
+    MirrorView {
+        id: mirrorView
+        Component.onCompleted: start()
+    }
+
+    MirrorWindow {
+        view: mirrorView
+    }
+
     Item {
         id: appSurface
         anchors.fill: parent

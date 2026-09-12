@@ -6,12 +6,17 @@
   supersedes it since 2026-09-11: the older session is told to leave and
   the newer one takes the slot, instead of being dropped as a duplicate
   until the 30 s idle timeout.
-- **Mirror window:** the link mirror's `mpv` window controls the phone
-  since 2026-09-10: left button and drag are touches, the wheel a swipe,
-  right button Back, middle button Home, F1/F2/F3 Back/Home/Recents, the
-  letters, digits, arrows, Enter, Backspace and the media keys forwarded
-  as Android keys; `mpv` reads the stream directly with its low-latency
-  demuxer options and no `ffmpeg` in between (`link_wire/mirror_window.rs`).
+- **Mirror window:** the link mirror is a window of the application
+  since 2026-09-12 (`src/mirror_view.rs`, `qml/MirrorWindow.qml`): the
+  daemon writes the phone's picture, raw HEVC or H.264, to a FIFO named by
+  `Mirror1.LinkVideo`, and the app decodes it with the suite's engine
+  (libmpv, the `MpvVideo` surface Fluorita and Siderita share) into a
+  window that keeps the phone's aspect through every resize; its pointer,
+  wheel and keys go back through `LinkTouch`, `LinkKey` and `LinkGlobal`
+  from a worker thread (left button and drag are touches, the wheel a
+  swipe, right button Back, middle Home, F1/F2/F3 Back/Home/Recents). The
+  daemon spawns no `mpv` and no `ffmpeg`; the window opens when the phone
+  streams and closes with it, and closing it stops the mirror.
 - **Implementation:** `MAG-M1`, the app's deterministic read/watch
   lifecycle, is the active checkpoint since 2026-09-10 and its three units
   are done: every thread the app spawns answers to one owner per model,

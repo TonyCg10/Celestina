@@ -11,7 +11,6 @@
 
 use std::collections::VecDeque;
 use std::io::Write;
-use std::process::{Child, Stdio};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 
@@ -39,141 +38,113 @@ pub(crate) trait VideoSink: Send {
     fn close(&mut self);
 }
 
-/// `mpv` on stdin, reading the raw HEVC or H.264 with the least delay its
-/// demuxer allows; its window is the mirror and its log carries the
-/// pointer, wheel and keys the window's script reports, which a thread of
-/// this side turns into the wire's touches and keys.
-pub(crate) struct DesktopPlayer {
-    pub(crate) display_env: Vec<(String, String)>,
+/// Where the application reads the picture: a FIFO under the runtime dir,
+/// raw HEVC or H.264 as the phone encodes it. The Magnetita window opens
+/// it in its own libmpv; `Mirror1`'s `LinkVideo` names it while the
+/// mirror streams.
+pub(crate) fn video_fifo() -> std::path::PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("magnetita")
+        .join("mirror.video")
 }
 
-struct Children {
-    mpv: Child,
-    tx: Sender<Vec<u8>>,
-    script: std::path::PathBuf,
+/// The picture as a FIFO the application's window reads. Bytes queue
+/// without bound until a reader opens the FIFO and while it decodes: a
+/// dropped chunk is a corrupt stream, a slow reader only costs memory. A
+/// reader that closes and reopens gets the stream again from wherever it
+/// is; the phone's next key frame (ten seconds apart at most) restores
+/// the picture.
+pub(crate) struct FifoPlayer;
+
+struct FifoSink {
+    tx: Option<Sender<Vec<u8>>>,
+    stopping: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    path: std::path::PathBuf,
 }
 
-impl MirrorPlayer for DesktopPlayer {
-    fn open(&self, started: &MirrorStarted) -> Option<Box<dyn VideoSink>> {
-        if self.display_env.is_empty() {
-            log(
-                "mirror",
-                "no display variables: the link mirror has no window",
-            );
-            return None;
-        }
-        let format = match started.codec {
-            Codec::Hevc => "hevc",
-            Codec::H264 => "h264",
-        };
-        let script = std::env::var_os("XDG_RUNTIME_DIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir)
-            .join("magnetita")
-            .join("touch.lua");
-        if let Some(dir) = script.parent() {
+impl MirrorPlayer for FifoPlayer {
+    fn open(&self, _started: &MirrorStarted) -> Option<Box<dyn VideoSink>> {
+        let path = video_fifo();
+        if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Err(e) = std::fs::write(&script, super::mirror_window::script()) {
-            log("mirror", &format!("window script: {e}"));
+        let _ = std::fs::remove_file(&path);
+        if let Err(e) = rustix::fs::mknodat(
+            rustix::fs::CWD,
+            &path,
+            rustix::fs::FileType::Fifo,
+            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+            0,
+        ) {
+            log("mirror", &format!("video fifo: {e}"));
             return None;
         }
-        let mut mpv = std::process::Command::new("mpv");
-        mpv.args([
-            "--profile=low-latency",
-            "--untimed",
-            "--no-cache",
-            "--demuxer=lavf",
-            &format!("--demuxer-lavf-format={format}"),
-            "--demuxer-lavf-o=fflags=+nobuffer,flags=+low_delay",
-            "--demuxer-lavf-analyzeduration=1",
-            "--demuxer-readahead-secs=0",
-            "--demuxer-thread=no",
-            "--vd-lavc-threads=1",
-            "--vd-lavc-o=flags=+low_delay",
-            "--video-latency-hacks=yes",
-            "--framedrop=vo",
-            "--wayland-disable-vsync=yes",
-            "--hwdec=auto-safe",
-            "--container-fps-override=60",
-            "--input-default-bindings=no",
-            // The left button is the phone's finger, not the window's handle.
-            "--window-dragging=no",
-            "--osc=no",
-            "--osd-level=0",
-            "--cursor-autohide=no",
-            "--terminal=yes",
-            "--no-input-terminal",
-            "--msg-level=all=no,touch=info",
-            // Its own app id, so the compositor can size the window to the
-            // phone's aspect (the author's niri rule) without touching the
-            // application's windows.
-            "--title=Magnetita",
-            "--wayland-app-id=org.celestina.Magnetita.mirror",
-        ])
-        .arg(format!("--script={}", script.display()))
-        .arg("-")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-        for (key, value) in &self.display_env {
-            mpv.env(key, value);
-        }
-        let mut mpv = match mpv.spawn() {
-            Ok(child) => child,
-            Err(e) => {
-                log("mirror", &format!("mpv: {e}"));
-                return None;
-            }
-        };
-        let mut stdin = mpv.stdin.take()?;
-        let reports = mpv.stdout.take()?;
-        let pid = mpv.id();
-        let window: super::mirror_window::WindowId = Default::default();
-        let remembered = std::sync::Arc::clone(&window);
-        std::thread::Builder::new()
-            .name("magnetita-mirror-fit".into())
-            .spawn(move || super::mirror_window::fit_window(pid, remembered))
-            .ok()?;
-        let translator = super::mirror_window::Translator::new(started.width, started.height);
-        std::thread::Builder::new()
-            .name("magnetita-mirror-input".into())
-            .spawn(move || {
-                super::mirror_window::pump(reports, translator, window, |env| {
-                    own().queue_input(env)
-                });
-            })
-            .ok()?;
-        // Unbounded on purpose: a dropped chunk is a corrupt picture and a
-        // decoder that gives up; a slow decoder costs memory, not bytes.
         let (tx, rx) = channel::<Vec<u8>>();
+        let stopping = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop = std::sync::Arc::clone(&stopping);
+        let feed_path = path.clone();
         std::thread::Builder::new()
             .name("magnetita-mirror-feed".into())
             .spawn(move || {
-                while let Ok(chunk) = rx.recv() {
-                    if stdin.write_all(&chunk).is_err() {
+                let mut held: Option<Vec<u8>> = None;
+                'readers: while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    // Opening for writing blocks until a reader opens the
+                    // other end; the close path opens one to unblock this.
+                    let Ok(mut fifo) = std::fs::OpenOptions::new().write(true).open(&feed_path)
+                    else {
                         break;
+                    };
+                    if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
+                    loop {
+                        let chunk = match held.take() {
+                            Some(chunk) => chunk,
+                            None => match rx.recv() {
+                                Ok(chunk) => chunk,
+                                Err(_) => break 'readers,
+                            },
+                        };
+                        if fifo.write_all(&chunk).is_err() {
+                            // The reader went away: wait for the next one.
+                            continue 'readers;
+                        }
                     }
                 }
             })
             .ok()?;
-        Some(Box::new(Children { mpv, tx, script }))
+        Some(Box::new(FifoSink {
+            tx: Some(tx),
+            stopping,
+            path,
+        }))
     }
 }
 
-impl VideoSink for Children {
+impl VideoSink for FifoSink {
     fn write(&mut self, bytes: &[u8]) {
-        let _ = self.tx.send(bytes.to_vec());
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(bytes.to_vec());
+        }
     }
 
     fn close(&mut self) {
-        let _ = self.mpv.kill();
-        let _ = self.mpv.wait();
-        let _ = std::fs::remove_file(&self.script);
+        self.stopping
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.tx.take();
+        // A feed thread blocked in its open needs a reader to appear once.
+        let _ = rustix::fs::open(
+            &self.path,
+            rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NONBLOCK,
+            rustix::fs::Mode::empty(),
+        );
+        let _ = std::fs::remove_file(&self.path);
     }
 }
 
-impl Drop for Children {
+impl Drop for FifoSink {
     fn drop(&mut self) {
         self.close();
     }

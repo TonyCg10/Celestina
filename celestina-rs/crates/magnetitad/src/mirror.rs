@@ -750,6 +750,33 @@ impl MirrorInterface {
         crate::link_wire::mirror::state_word(&crate::link_wire::mirror::own().state()).to_owned()
     }
 
+    /// The FIFO carrying the picture while the link mirror streams, raw
+    /// HEVC or H.264 as the phone encodes it; empty otherwise. The
+    /// application's window reads it.
+    #[zbus(property)]
+    fn link_video(&self) -> String {
+        match crate::link_wire::mirror::own().state() {
+            crate::link_wire::mirror::LinkState::Streaming { .. } => {
+                crate::link_wire::mirror::video_fifo()
+                    .to_string_lossy()
+                    .into_owned()
+            }
+            _ => String::new(),
+        }
+    }
+
+    /// The streamed picture's size, `width height`, empty while not
+    /// streaming; touches are in these pixels.
+    #[zbus(property)]
+    fn link_picture(&self) -> String {
+        match crate::link_wire::mirror::own().state() {
+            crate::link_wire::mirror::LinkState::Streaming { width, height } => {
+                format!("{width} {height}")
+            }
+            _ => String::new(),
+        }
+    }
+
     /// A touch on the mirrored phone: `action` 0 down, 1 move, 2 up, in the
     /// phone's native pixels, `pointer` the finger index.
     fn link_touch(&self, action: u8, x: u16, y: u16, pointer: u8) -> zbus::fdo::Result<()> {

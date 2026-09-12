@@ -38,6 +38,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/CommandRow.qml",
     "qml/components/MessageBubble.qml",
     "qml/pages/SettingsPage.qml",
+    "qml/MirrorWindow.qml",
     "qml/Main.qml",
 ];
 
@@ -72,13 +73,35 @@ fn main() {
         println!("cargo::rerun-if-changed={qml}");
     }
 
-    CxxQtBuilder::new_qml_module(module)
+    for source in fluorita_qt::rerun_paths() {
+        println!("cargo::rerun-if-changed={source}");
+    }
+
+    let builder = CxxQtBuilder::new_qml_module(module)
+        // The mirror's surface renders into a QOpenGLFramebufferObject, which
+        // lives in Qt's OpenGL module rather than QtGui.
+        .qt_module("OpenGL")
         // Shared icon/noise resources used by GlassSurface and future icon-only
         // controls; the qrc and directory are canonical style symlinks.
         .qrc("qml/icons.qrc")
         // Inter Variable, compiled in so the app renders in the suite's typeface
         // (the canonical fonts.qrc lives in ../celestina-style, symlinked into qml/).
         .qrc("qml/fonts.qrc")
-        .files(["src/commands.rs", "src/controller.rs", "src/messages.rs"])
-        .build();
+        // The shared media surface, compiled from the crate that owns it; the
+        // header carries Q_OBJECT, so it is moc'd as well as compiled.
+        .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
+        .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
+        .files([
+            "src/commands.rs",
+            "src/controller.rs",
+            "src/messages.rs",
+            "src/mirror_view.rs",
+        ]);
+    // SAFETY: only adds the render seam's include directory.
+    let builder = unsafe {
+        builder.cc_builder(|cc| {
+            cc.include(fluorita_qt::include_dir());
+        })
+    };
+    builder.build();
 }

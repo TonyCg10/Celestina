@@ -3,6 +3,7 @@ mod controller;
 mod devices;
 mod lifecycle;
 mod messages;
+mod mirror_view;
 mod pairing;
 mod projection;
 
@@ -36,6 +37,8 @@ fn main() {
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
+        // The shared media surface, registered once before any window exists.
+        mirror_view::qobject::register_video_item(engine.as_mut());
         let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
         let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
         initial_properties.insert(
