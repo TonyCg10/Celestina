@@ -158,7 +158,19 @@ class MirrorInput : AccessibilityService() {
 
     private fun dispatch(stroke: GestureDescription.StrokeDescription) {
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
-        dispatchGesture(gesture, null, null)
+        val accepted = dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                // The system or a hand on the screen ended the gesture: every
+                // finger of ours is gone with it, and a stale one would only
+                // refuse the next press.
+                android.util.Log.i(TAG, "gesture cancelled; fingers dropped")
+                fingers.clear()
+            }
+        }, null)
+        if (!accepted) {
+            android.util.Log.w(TAG, "gesture refused (continue=${stroke.willContinue()})")
+            fingers.clear()
+        }
     }
 
     /** An Android key code on the focused field, the way accessibility allows. */
@@ -195,6 +207,7 @@ class MirrorInput : AccessibilityService() {
     }
 
     companion object {
+        private const val TAG = "MirrorInput"
         /** A segment plays this long; the finger catches up in one. */
         private const val SEGMENT_MS = 16L
         /** The press before any move. */
