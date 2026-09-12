@@ -89,7 +89,8 @@ const KEYS: &[(&str, u16)] = &[
 /// tiling compositor letterboxes), `W <-1|1> x y vx vy vw vh`, `K <name>
 /// <1|0>` or `G <0|1|2>` at info level under the `touch` prefix, which is
 /// the only thing this side lets `mpv` print. A pointer that leaves the
-/// window while pressed lifts, so no finger stays down on the phone.
+/// window while pressed, or a window that loses focus while pressed,
+/// lifts, so no finger stays down on the phone.
 pub(crate) fn script() -> String {
     let mut lua = String::from(
         r#"local down = false
@@ -121,6 +122,13 @@ mp.observe_property("mouse-pos", "native", function(_, p)
     report("T", "U", p.x or 0, p.y or 0)
   else
     report("T", "M", p.x or 0, p.y or 0)
+  end
+end)
+mp.observe_property("focused", "bool", function(_, focused)
+  if focused == false and down then
+    down = false
+    local x, y = pos()
+    report("T", "U", x, y)
   end
 end)
 mp.add_forced_key_binding("MBTN_RIGHT", "magnetita_back", function() mp.msg.info("G 0") end)
