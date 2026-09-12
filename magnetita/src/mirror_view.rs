@@ -165,8 +165,12 @@ impl qobject::MirrorView {
         let worker = std::thread::spawn(move || {
             while let Ok(op) = rx.recv() {
                 let result = match op {
-                    Outbound::Touch { action, x, y } => crate::devices::mirror_link_touch(action, x, y),
-                    Outbound::Key { keycode, pressed } => crate::devices::mirror_link_key(keycode, pressed),
+                    Outbound::Touch { action, x, y } => {
+                        crate::devices::mirror_link_touch(action, x, y)
+                    }
+                    Outbound::Key { keycode, pressed } => {
+                        crate::devices::mirror_link_key(keycode, pressed)
+                    }
                     Outbound::Global(action) => crate::devices::mirror_link_global(&action),
                     Outbound::Stop => crate::devices::mirror_stop(),
                 };
@@ -204,7 +208,9 @@ impl qobject::MirrorView {
         let state = parts.next().unwrap_or("");
         let video = parts.next().unwrap_or("").to_owned();
         let picture = parts.next().unwrap_or("");
-        let mut dims = picture.split_whitespace().filter_map(|n| n.parse::<i32>().ok());
+        let mut dims = picture
+            .split_whitespace()
+            .filter_map(|n| n.parse::<i32>().ok());
         let (width, height) = (dims.next().unwrap_or(0), dims.next().unwrap_or(0));
         match state {
             "streaming" if !video.is_empty() => {
@@ -229,7 +235,11 @@ impl qobject::MirrorView {
 
     /// The engine over the FIFO; the load waits for the surface's context.
     fn open(mut self: Pin<&mut Self>, video: String) {
-        let codec = if video.ends_with(".h264") { "h264" } else { "hevc" };
+        let codec = if video.ends_with(".h264") {
+            "h264"
+        } else {
+            "hevc"
+        };
         let options = engine_options(codec);
         let borrowed: Vec<(&str, &str)> = options
             .iter()
@@ -325,7 +335,8 @@ impl qobject::MirrorView {
         let px = x.clamp(0, width - 1) as u16;
         let travel = i64::from(height) / 5;
         let dir = i64::from(direction.signum());
-        let at = |i: i64| (i64::from(y) - dir * travel * i / 6).clamp(0, i64::from(height) - 1) as u16;
+        let at =
+            |i: i64| (i64::from(y) - dir * travel * i / 6).clamp(0, i64::from(height) - 1) as u16;
         self.as_mut().send(Outbound::Touch {
             action: 0,
             x: px,
