@@ -22,13 +22,19 @@ import android.view.accessibility.AccessibilityEvent
  * action), and back, home and recents are the global actions.
  */
 class MirrorInput : AccessibilityService() {
-    private class Finger(var x: Float, var y: Float, var stroke: GestureDescription.StrokeDescription?) {
+    private class Finger(var x: Float, var y: Float) {
+        var stroke: GestureDescription.StrokeDescription? = null
+        /** The press is held back this long: a lift inside it is a tap. */
+        var deferred = true
+        val downX = x
+        val downY = y
         /** When the last segment was dispatched, in uptime millis. */
         var lastDispatch = 0L
         /** Where the finger should be next, and whether it lifts there. */
         var pending: Pair<Float, Float>? = null
         var lift = false
         var scheduled = false
+        var lastSeen = 0L
     }
 
     private val fingers = HashMap<Int, Finger>()
@@ -51,26 +57,74 @@ class MirrorInput : AccessibilityService() {
         main.post {
             when (phase) {
                 0 -> {
-                    val path = Path().apply { moveTo(x, y) }
-                    val stroke = GestureDescription.StrokeDescription(path, 0, DOWN_MS, true)
-                    val finger = Finger(x, y, stroke)
+                    // A finger still down from a lost lift ends first, or the
+                    // framework would refuse the new press.
+                    fingers[pointer]?.let { stale -> release(pointer, stale) }
+                    val finger = Finger(x, y)
                     fingers[pointer] = finger
-                    finger.lastDispatch = android.os.SystemClock.uptimeMillis()
-                    dispatch(stroke)
+                    main.postDelayed({ if (finger.deferred) press(pointer, finger) }, TAP_WINDOW_MS)
+                    watchdog(pointer, finger)
                 }
                 1 -> {
                     val finger = fingers[pointer] ?: return@post
                     finger.pending = x to y
-                    flush(pointer, finger)
+                    if (finger.deferred && moved(finger, x, y)) press(pointer, finger)
+                    if (!finger.deferred) flush(pointer, finger)
+                    watchdog(pointer, finger)
                 }
                 else -> {
                     val finger = fingers[pointer] ?: return@post
+                    if (finger.deferred && !moved(finger, x, y)) {
+                        // Down and up within the window, in place: one tap.
+                        fingers.remove(pointer)
+                        finger.deferred = false
+                        val path = Path().apply { moveTo(finger.downX, finger.downY) }
+                        dispatch(GestureDescription.StrokeDescription(path, 0, TAP_MS, false))
+                        return@post
+                    }
+                    if (finger.deferred) press(pointer, finger)
                     finger.pending = x to y
                     finger.lift = true
                     flush(pointer, finger)
                 }
             }
         }
+    }
+
+    private fun moved(finger: Finger, x: Float, y: Float): Boolean =
+        kotlin.math.abs(x - finger.downX) > SLOP_PX || kotlin.math.abs(y - finger.downY) > SLOP_PX
+
+    /** The held press goes down for real: a stroke that continues. */
+    private fun press(pointer: Int, finger: Finger) {
+        if (!finger.deferred || fingers[pointer] !== finger) return
+        finger.deferred = false
+        val path = Path().apply { moveTo(finger.downX, finger.downY) }
+        val stroke = GestureDescription.StrokeDescription(path, 0, DOWN_MS, true)
+        finger.stroke = stroke
+        finger.lastDispatch = android.os.SystemClock.uptimeMillis()
+        dispatch(stroke)
+        if (finger.pending != null) flush(pointer, finger)
+    }
+
+    /** A finger nobody lifted lifts by itself; the desktop's lift may have been lost. */
+    private fun watchdog(pointer: Int, finger: Finger) {
+        val stamp = android.os.SystemClock.uptimeMillis()
+        finger.lastSeen = stamp
+        main.postDelayed({
+            if (fingers[pointer] === finger && finger.lastSeen == stamp) release(pointer, finger)
+        }, HOLD_LIMIT_MS)
+    }
+
+    /** Ends a finger where it is, now. */
+    private fun release(pointer: Int, finger: Finger) {
+        fingers.remove(pointer)
+        if (finger.deferred) {
+            finger.deferred = false
+            return
+        }
+        val previous = finger.stroke ?: return
+        val path = Path().apply { moveTo(finger.x, finger.y); lineTo(finger.x, finger.y) }
+        dispatch(previous.continueStroke(path, 0, SEGMENT_MS, false))
     }
 
     /**
@@ -145,6 +199,14 @@ class MirrorInput : AccessibilityService() {
         private const val SEGMENT_MS = 16L
         /** The press before any move. */
         private const val DOWN_MS = 16L
+        /** A press held back this long becomes a tap if the lift comes in place. */
+        private const val TAP_WINDOW_MS = 60L
+        /** A tap's own length. */
+        private const val TAP_MS = 40L
+        /** Motion within this many pixels is still a tap. */
+        private const val SLOP_PX = 12f
+        /** A finger with no news for this long lifts by itself. */
+        private const val HOLD_LIMIT_MS = 1500L
         private const val KEYCODE_ENTER = 66
         private const val KEYCODE_DEL = 67
 
