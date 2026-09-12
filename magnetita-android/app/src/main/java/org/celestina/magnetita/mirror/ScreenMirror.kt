@@ -68,13 +68,20 @@ class ScreenMirror(
     }
 
     /** The screen turned: the capture starts again at the new size. */
+    /**
+     * The screen turned: the virtual display is kept (Android 14 refuses a
+     * second one on the same projection) and resized; the encoder is made
+     * anew at the new size and its surface swapped in.
+     */
     private fun restart() {
         if (!open) return
         open = false
-        runCatching { display?.release() }
+        runCatching { display?.setSurface(null) }
         runCatching { codec?.stop() }
         runCatching { codec?.release() }
         runCatching { surface?.release() }
+        codec = null
+        surface = null
         live.closeStream(MirrorStreams.VIDEO)
         if (!begin()) stop("could not restart after rotation")
     }
@@ -145,13 +152,22 @@ class ScreenMirror(
         return runCatching {
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             val input = encoder.createInputSurface()
-            projection.registerCallback(object : MediaProjection.Callback() {
-                override fun onStop() { stop("projection ended") }
-            }, handler)
-            val virtual = projection.createVirtualDisplay(
-                "magnetita-mirror", picture.first, picture.second, metrics.densityDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, input, null, handler,
-            ) ?: error("no virtual display")
+            if (display == null) {
+                projection.registerCallback(object : MediaProjection.Callback() {
+                    override fun onStop() { stop("projection ended") }
+                }, handler)
+            }
+            val existing = display
+            val virtual = if (existing != null) {
+                existing.resize(picture.first, picture.second, metrics.densityDpi)
+                existing.setSurface(input)
+                existing
+            } else {
+                projection.createVirtualDisplay(
+                    "magnetita-mirror", picture.first, picture.second, metrics.densityDpi,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, input, null, handler,
+                ) ?: error("no virtual display")
+            }
             if (!live.openStream(MirrorStreams.VIDEO)) error("no stream")
             open = true
             encoder.start()
@@ -159,7 +175,9 @@ class ScreenMirror(
             surface = input
             display = virtual
             live.sendMirrorStarted(picture.first, picture.second, options.codec, false)
+            android.util.Log.i("ScreenMirror", "streaming ${picture.first}x${picture.second}")
         }.onFailure {
+            android.util.Log.w("ScreenMirror", "could not start: ${it.message}")
             runCatching { encoder.release() }
         }.isSuccess
     }
