@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import org.celestina.magnetita 1.0
 import org.celestina.fluorita.render 1.0
 
 // The phone's screen as a window of this application: the picture the
@@ -18,7 +19,7 @@ Window {
 
     visible: view.streaming
     title: qsTr("Espejo")
-    color: "black"
+    color: CelestinaTheme.canvas
     width: 460
     height: Math.round(460 / aspect)
     minimumWidth: 160
@@ -71,8 +72,8 @@ Window {
         anchors.centerIn: parent
         visible: mirror.view.error.length > 0
         text: mirror.view.error
-        color: "white"
-        font.pixelSize: 16
+        color: CelestinaTheme.text
+        font.pixelSize: CelestinaTheme.fontRowTitle
     }
 
     // The finger. Picture pixels: the pointer through the fitted rectangle.
