@@ -562,14 +562,13 @@ impl qobject::MirrorView {
     /// column width and a window height, which `niri msg` grants. The
     /// picture's aspect decides: the width that fits the height, unless
     /// that overflows the output (a phone on its side), in which case the
-    /// width is the output's and the height follows it. Elsewhere this
-    /// does nothing.
+    /// window is the whole tile and the picture scales to it. Elsewhere
+    /// this does nothing.
     pub fn fit(self: Pin<&mut Self>, width: i32, height: i32, wanted: i32) {
         if (width - wanted).abs() <= 2 || wanted < 100 || height < 100 {
             return;
         }
         let pid = std::process::id();
-        let aspect = f64::from(wanted) / f64::from(height);
         self.rust().owned.spawn(move |guard: Guard| {
             let Ok(out) = std::process::Command::new("niri")
                 .args(["msg", "--json", "windows"])
@@ -599,9 +598,11 @@ impl qobject::MirrorView {
             if wanted <= output_width {
                 niri_action(&["set-window-width", "--id", &id, &wanted.to_string()]);
             } else {
-                let fitted_height = (f64::from(output_width) / aspect).round() as i32;
+                // A phone on its side is wider than the output at its own
+                // aspect: the window takes the whole tile, the output's
+                // width and the height the layout gives, and the picture
+                // scales to it.
                 niri_action(&["set-window-width", "--id", &id, &output_width.to_string()]);
-                niri_action(&["set-window-height", "--id", &id, &fitted_height.to_string()]);
             }
         });
     }
