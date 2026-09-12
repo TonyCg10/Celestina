@@ -12,7 +12,7 @@
 use std::collections::VecDeque;
 use std::io::Write;
 use std::process::{Child, Stdio};
-use std::sync::mpsc::{sync_channel, SyncSender, TrySendError};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::Mutex;
 
 use magnetita_link::RecvStream;
@@ -26,10 +26,6 @@ use crate::runtime::log;
 /// The transfer id the phone's video stream carries; audio is the next.
 pub(crate) const VIDEO_STREAM: u32 = 0xFFFF_0001;
 pub(crate) const AUDIO_STREAM: u32 = 0xFFFF_0002;
-
-/// How many chunks may wait for the decoder before the newest are dropped:
-/// a slow window must never stall the QUIC reader.
-const QUEUE_CHUNKS: usize = 256;
 
 /// Where the decoded picture goes.
 pub(crate) trait MirrorPlayer: Send + Sync {
@@ -53,7 +49,7 @@ pub(crate) struct DesktopPlayer {
 
 struct Children {
     mpv: Child,
-    tx: SyncSender<Vec<u8>>,
+    tx: Sender<Vec<u8>>,
     script: std::path::PathBuf,
 }
 
@@ -132,12 +128,12 @@ impl MirrorPlayer for DesktopPlayer {
         };
         let mut stdin = mpv.stdin.take()?;
         let reports = mpv.stdout.take()?;
-        let (pid, width, height) = (mpv.id(), started.width, started.height);
+        let pid = mpv.id();
         let window: super::mirror_window::WindowId = Default::default();
         let remembered = std::sync::Arc::clone(&window);
         std::thread::Builder::new()
             .name("magnetita-mirror-fit".into())
-            .spawn(move || super::mirror_window::fit_window(pid, width, height, remembered))
+            .spawn(move || super::mirror_window::fit_window(pid, remembered))
             .ok()?;
         let translator = super::mirror_window::Translator::new(started.width, started.height);
         std::thread::Builder::new()
@@ -148,7 +144,9 @@ impl MirrorPlayer for DesktopPlayer {
                 });
             })
             .ok()?;
-        let (tx, rx) = sync_channel::<Vec<u8>>(QUEUE_CHUNKS);
+        // Unbounded on purpose: a dropped chunk is a corrupt picture and a
+        // decoder that gives up; a slow decoder costs memory, not bytes.
+        let (tx, rx) = channel::<Vec<u8>>();
         std::thread::Builder::new()
             .name("magnetita-mirror-feed".into())
             .spawn(move || {
@@ -165,11 +163,7 @@ impl MirrorPlayer for DesktopPlayer {
 
 impl VideoSink for Children {
     fn write(&mut self, bytes: &[u8]) {
-        match self.tx.try_send(bytes.to_vec()) {
-            Ok(()) => {}
-            Err(TrySendError::Full(_)) => {}
-            Err(TrySendError::Disconnected(_)) => {}
-        }
+        let _ = self.tx.send(bytes.to_vec());
     }
 
     fn close(&mut self) {
