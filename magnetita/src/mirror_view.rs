@@ -156,6 +156,9 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
         ("framedrop", "vo".into()),
         ("container-fps-override", "60".into()),
         ("keep-open", "yes".into()),
+        // The picture fills the surface whatever its shape: the window is
+        // the compositor's to size, and a band would only hide the phone.
+        ("keepaspect", "no".into()),
     ]
 }
 

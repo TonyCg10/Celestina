@@ -5,10 +5,10 @@ import org.celestina.fluorita.render 1.0
 
 // The phone's screen as a window of this application: the picture the
 // daemon streams, decoded here, and the pointer, wheel and keys sent back
-// as the phone's touches, swipes and keys. The window keeps the picture's
-// aspect through every resize: whatever size the compositor hands it, the
-// window asks for the nearest size with no letterbox, so only the phone
-// is ever seen.
+// as the phone's touches, swipes and keys. The window opens at the
+// picture's own size and takes whatever size the compositor then gives
+// it, a tile included: the picture fills it edge to edge, scaled, never
+// letterboxed, and touches map through the whole window.
 Window {
     id: mirror
 
@@ -20,38 +20,22 @@ Window {
     visible: view.streaming
     title: qsTr("Espejo")
     color: CelestinaTheme.canvas
-    width: 460
-    height: Math.round(460 / aspect)
-    minimumWidth: 160
-    minimumHeight: Math.round(160 / aspect)
+    width: view.pictureWidth > 0 ? view.pictureWidth : 460
+    height: view.pictureHeight > 0 ? view.pictureHeight : 998
+    minimumWidth: 120
+    minimumHeight: 120
 
     onClosing: function(close) {
         close.accepted = true
         view.closeRequested()
     }
 
-    // The picture's rectangle inside the window, as the engine centres it:
-    // the fit that keeps the aspect. Touches map through it.
-    readonly property real fitWidth: Math.min(width, height * aspect)
-    readonly property real fitHeight: Math.min(height, width / aspect)
-    readonly property real fitX: (width - fitWidth) / 2
-    readonly property real fitY: (height - fitHeight) / 2
-
-    // A resize that left bands asks for the fitted size once it settles; a
-    // compositor that keeps the window floating honours it and the bands go.
-    Timer {
-        id: refit
-        interval: 120
-        onTriggered: {
-            if (Math.abs(mirror.width - mirror.fitWidth) > 2)
-                mirror.width = Math.round(mirror.fitWidth)
-            if (Math.abs(mirror.height - mirror.fitHeight) > 2)
-                mirror.height = Math.round(mirror.fitHeight)
-        }
-    }
-    onWidthChanged: refit.restart()
-    onHeightChanged: refit.restart()
-    onAspectChanged: refit.restart()
+    // The picture fills the window: the engine scales it to the item, so
+    // a touch maps over the whole window.
+    readonly property real fitWidth: width
+    readonly property real fitHeight: height
+    readonly property real fitX: 0
+    readonly property real fitY: 0
 
     MpvVideo {
         id: video
