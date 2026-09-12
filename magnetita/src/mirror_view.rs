@@ -135,8 +135,10 @@ impl Drop for MirrorViewRust {
 const WATCH_INTERVAL: Duration = Duration::from_millis(400);
 
 /// libmpv the way the mirror wants it: the raw stream from the FIFO, the
-/// least delay the demuxer and decoder allow, no audio, no timing of its
-/// own since every frame is late the moment it arrives.
+/// least delay the demuxer and decoder allow, no audio. The core keeps its
+/// own frame timing: the render surface presents on the host's schedule,
+/// and the untimed and latency-hack modes left the output unconfigured
+/// under it (the first frame never reached the surface).
 fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
     vec![
         ("vo", "libmpv".into()),
@@ -145,18 +147,14 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
         // render cannot show is a black window with no error.
         ("hwdec", "no".into()),
         ("ao", "null".into()),
-        ("untimed", "yes".into()),
         ("cache", "no".into()),
         ("demuxer", "lavf".into()),
         ("demuxer-lavf-format", codec.into()),
         ("demuxer-lavf-o", "fflags=+nobuffer,flags=+low_delay".into()),
         ("demuxer-lavf-analyzeduration", "1".into()),
         ("demuxer-readahead-secs", "0".into()),
-        ("demuxer-thread", "no".into()),
         ("vd-lavc-threads", "1".into()),
         ("vd-lavc-o", "flags=+low_delay".into()),
-        ("video-latency-hacks", "yes".into()),
-        ("framedrop", "vo".into()),
         ("container-fps-override", "60".into()),
         ("keep-open", "yes".into()),
         // The picture fills the surface whatever its shape: the window is
@@ -439,5 +437,63 @@ impl qobject::MirrorView {
         if matches!(action.as_str(), "Back" | "Home" | "Recents") {
             self.as_mut().send(Outbound::Global(action));
         }
+    }
+}
+
+#[cfg(test)]
+mod probe {
+    /// Feeds the synthetic sample through a FIFO into the engine with the
+    /// window's options but no picture (`vo=null`), and reads what the core
+    /// reports: the demuxer and decoder half of the window, without Qt.
+    #[test]
+    #[ignore]
+    fn the_engine_decodes_the_fifo_without_a_window() {
+        let sample = std::env::var("MIRROR_SAMPLE").expect("MIRROR_SAMPLE");
+        let fifo =
+            std::env::temp_dir().join(format!("magnetita-probe-{}.video", std::process::id()));
+        let _ = std::fs::remove_file(&fifo);
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap();
+        let feed = fifo.clone();
+        let sample_path = sample.clone();
+        std::thread::spawn(move || {
+            let bytes = std::fs::read(&sample_path).unwrap();
+            let mut out = std::fs::OpenOptions::new().write(true).open(&feed).unwrap();
+            use std::io::Write;
+            for chunk in bytes.chunks(4096) {
+                if out.write_all(chunk).is_err() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            // Keep the writer open so the stream looks live.
+            std::thread::sleep(std::time::Duration::from_secs(6));
+        });
+        let mut options = super::engine_options("hevc");
+        for (name, value) in options.iter_mut() {
+            if *name == "vo" {
+                *value = "null".into();
+            }
+        }
+        let borrowed: Vec<(&str, &str)> = options.iter().map(|(n, v)| (*n, v.as_str())).collect();
+        let engine = fluorita_engine::instance::Instance::new(&borrowed).unwrap();
+        let client = engine.client().unwrap();
+        engine
+            .command("loadfile", &[fifo.to_str().unwrap(), "replace"])
+            .unwrap();
+        for _ in 0..12 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let time = client.get_property::<f64>("time-pos").unwrap_or(-1.0);
+            let width = client.get_property::<i64>("video-params/w").unwrap_or(-1);
+            let vo = client
+                .get_property::<bool>("vo-configured")
+                .unwrap_or(false);
+            let idle = client.get_property::<bool>("core-idle").unwrap_or(false);
+            let paused = client.get_property::<bool>("pause").unwrap_or(false);
+            eprintln!("probe: time={time:.2} width={width} vo={vo} idle={idle} pause={paused}");
+        }
+        let _ = std::fs::remove_file(&fifo);
     }
 }
