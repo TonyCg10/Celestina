@@ -5,10 +5,15 @@
 
 use magnetita_proto::mirror::Codec;
 
-/// Cuts the stream at access unit delimiters.
+/// Cuts the stream at access unit delimiters and keeps the parameter
+/// sets, which the phone's encoder sends once at its start and a reader
+/// starting later cannot decode without.
 pub(crate) struct AccessUnits {
     codec: Codec,
     pending: Vec<u8>,
+    /// The parameter sets seen (VPS, SPS, PPS), in order, deduplicated by
+    /// their bytes; each with its start code.
+    params: Vec<Vec<u8>>,
 }
 
 impl AccessUnits {
@@ -16,7 +21,13 @@ impl AccessUnits {
         Self {
             codec,
             pending: Vec::new(),
+            params: Vec::new(),
         }
+    }
+
+    /// Every parameter set seen so far, in order, as one Annex B run.
+    pub(crate) fn params(&self) -> Vec<u8> {
+        self.params.concat()
     }
 
     /// Feeds bytes as they arrive; returns every access unit they complete
@@ -27,6 +38,7 @@ impl AccessUnits {
         while let Some(end) = self.delimiter_end() {
             let unit: Vec<u8> = self.pending.drain(..end).collect();
             let key = self.note(&unit);
+            self.remember_params(&unit);
             out.push((unit, key));
         }
         out
@@ -71,6 +83,34 @@ impl AccessUnits {
         match self.codec {
             Codec::Hevc => (nal[0] >> 1) & 0x3f,
             Codec::H264 => nal[0] & 0x1f,
+        }
+    }
+
+    /// Records the parameter set NALs the unit carries.
+    fn remember_params(&mut self, unit: &[u8]) {
+        let mut at = 0;
+        let mut starts = Vec::new();
+        while let Some(start) = find_start_code(unit, at) {
+            starts.push(start);
+            at = start + start_code_len(unit, start);
+        }
+        for (i, &start) in starts.iter().enumerate() {
+            let end = starts.get(i + 1).copied().unwrap_or(unit.len());
+            let header = start + start_code_len(unit, start);
+            if header >= end {
+                continue;
+            }
+            let kind = self.nal_type(&unit[header..]);
+            let is_param = match self.codec {
+                Codec::Hevc => (32..=34).contains(&kind),
+                Codec::H264 => kind == 7 || kind == 8,
+            };
+            if is_param {
+                let nal = unit[start..end].to_vec();
+                if !self.params.contains(&nal) {
+                    self.params.push(nal);
+                }
+            }
         }
     }
 

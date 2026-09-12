@@ -87,6 +87,7 @@ impl MirrorPlayer for FifoPlayer {
         let units = std::sync::Arc::new(Mutex::new(super::mirror_stream::AccessUnits::new(
             started.codec,
         )));
+        let feed_units = std::sync::Arc::clone(&units);
         let path = next_video_fifo();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -146,7 +147,19 @@ impl MirrorPlayer for FifoPlayer {
                             continue;
                         }
                         if !started {
-                            log("mirror", &format!("feed: first key unit after skipping {skipped}"));
+                            // The parameter sets go first: the encoder sent them
+                            // once, before any key frame this reader will see.
+                            let params = feed_units.lock_ok().params();
+                            log(
+                                "mirror",
+                                &format!(
+                                    "feed: first key unit after skipping {skipped}, {} bytes of parameter sets",
+                                    params.len()
+                                ),
+                            );
+                            if !params.is_empty() && fifo.write_all(&params).is_err() {
+                                continue 'readers;
+                            }
                         }
                         started = true;
                         units += 1;
