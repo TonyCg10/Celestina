@@ -141,6 +141,12 @@ scratch_module=$scratch/imports/$module_relative
 mkdir -p "$scratch_module"
 cp "$generated_module/qmldir" "$generated_module/plugin.qmltypes" "$scratch_module/"
 ln -s "$qml_root" "$scratch_module/qml"
+# The media surface is registered from C++ at run time, so the linter learns
+# it from the hand-kept description the render seam ships.
+render_lint=$(cd "$(dirname "$0")/.." && pwd)/celestina-rs/crates/fluorita-qt/lint
+if [ -d "$render_lint" ]; then
+    cp -R "$render_lint"/. "$scratch/imports/"
+fi
 log=$scratch/qmllint.log
 sources=$scratch/sources
 : > "$log"

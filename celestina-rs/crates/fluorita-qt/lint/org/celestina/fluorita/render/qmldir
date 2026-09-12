@@ -1,0 +1,3 @@
+module org.celestina.fluorita.render
+typeinfo plugin.qmltypes
+depends QtQuick auto

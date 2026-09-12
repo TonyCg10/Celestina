@@ -1,0 +1,21 @@
+import QtQuick.tooling 1.2
+
+// The render seam as the linter sees it. The item is registered from C++ at
+// run time, so no tool generates this: it mirrors cpp/fluorita/mpvvideoitem.h
+// by hand and must follow it.
+Module {
+    Component {
+        file: "fluorita/mpvvideoitem.h"
+        name: "MpvVideoItem"
+        prototype: "QQuickItem"
+        exports: ["org.celestina.fluorita.render/MpvVideo 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property { name: "handle"; type: "qulonglong"; read: "handle"; write: "setHandle"; notify: "handleChanged" }
+        Property { name: "rendererLive"; type: "bool"; read: "rendererLive"; notify: "rendererLiveChanged"; isReadonly: true }
+        Signal { name: "handleChanged" }
+        Signal { name: "rendererLiveChanged" }
+        Signal { name: "contextFailed" }
+        Signal { name: "contextCreated" }
+        Signal { name: "contextReleased" }
+    }
+}
