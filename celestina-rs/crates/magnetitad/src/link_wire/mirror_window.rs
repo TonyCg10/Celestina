@@ -84,18 +84,25 @@ const KEYS: &[(&str, u16)] = &[
     ("\\", 73),
 ];
 
-/// The script `mpv` runs: every report is one line `T <D|M|U> x y w h`,
-/// `W <-1|1> x y w h`, `K <name> <1|0>` or `G <0|1|2>` at info level under
-/// the `touch` prefix, which is the only thing this side lets `mpv` print.
+/// The script `mpv` runs: every report is one line `T <D|M|U> x y vx vy vw
+/// vh` (the pointer and the video's rectangle inside the window, which a
+/// tiling compositor letterboxes), `W <-1|1> x y vx vy vw vh`, `K <name>
+/// <1|0>` or `G <0|1|2>` at info level under the `touch` prefix, which is
+/// the only thing this side lets `mpv` print. A pointer that leaves the
+/// window while pressed lifts, so no finger stays down on the phone.
 pub(crate) fn script() -> String {
     let mut lua = String::from(
         r#"local down = false
-local function osd()
-  return mp.get_property_number("osd-width") or 0, mp.get_property_number("osd-height") or 0
+local function video()
+  local d = mp.get_property_native("osd-dimensions")
+  if d == nil then return 0, 0, 0, 0 end
+  local w = (d.w or 0) - (d.ml or 0) - (d.mr or 0)
+  local h = (d.h or 0) - (d.mt or 0) - (d.mb or 0)
+  return d.ml or 0, d.mt or 0, w, h
 end
 local function report(kind, what, x, y)
-  local w, h = osd()
-  mp.msg.info(string.format("%s %s %d %d %d %d", kind, what, x, y, w, h))
+  local vx, vy, vw, vh = video()
+  mp.msg.info(string.format("%s %s %d %d %d %d %d %d", kind, what, x, y, vx, vy, vw, vh))
 end
 local function pos()
   local p = mp.get_property_native("mouse-pos")
@@ -108,7 +115,13 @@ mp.add_forced_key_binding("MBTN_LEFT", "magnetita_touch", function(e)
   elseif e.event == "up" then down = false; report("T", "U", x, y) end
 end, {complex = true})
 mp.observe_property("mouse-pos", "native", function(_, p)
-  if down and p ~= nil then report("T", "M", p.x or 0, p.y or 0) end
+  if not down or p == nil then return end
+  if p.hover == false then
+    down = false
+    report("T", "U", p.x or 0, p.y or 0)
+  else
+    report("T", "M", p.x or 0, p.y or 0)
+  end
 end)
 mp.add_forced_key_binding("MBTN_RIGHT", "magnetita_back", function() mp.msg.info("G 0") end)
 mp.add_forced_key_binding("MBTN_MID", "magnetita_home", function() mp.msg.info("G 1") end)
@@ -149,14 +162,15 @@ impl Translator {
         Self { width, height }
     }
 
-    /// One window coordinate onto the phone: the window keeps the video's
-    /// aspect, so each axis scales alone.
-    fn scale(&self, x: i64, y: i64, w: i64, h: i64) -> (u16, u16) {
-        if w <= 0 || h <= 0 {
+    /// One window coordinate onto the phone, through the video's rectangle
+    /// inside the window; a point in the letterbox clamps to the edge.
+    fn scale(&self, x: i64, y: i64, rect: (i64, i64, i64, i64)) -> (u16, u16) {
+        let (vx, vy, vw, vh) = rect;
+        if vw <= 0 || vh <= 0 {
             return (0, 0);
         }
-        let px = (x.max(0) * i64::from(self.width) / w).min(i64::from(self.width) - 1);
-        let py = (y.max(0) * i64::from(self.height) / h).min(i64::from(self.height) - 1);
+        let px = ((x - vx).max(0) * i64::from(self.width) / vw).min(i64::from(self.width) - 1);
+        let py = ((y - vy).max(0) * i64::from(self.height) / vh).min(i64::from(self.height) - 1);
         (px.max(0) as u16, py.max(0) as u16)
     }
 
@@ -168,26 +182,28 @@ impl Translator {
         let parts: Vec<&str> = line.split_whitespace().collect();
         let num = |i: usize| parts.get(i).and_then(|s| s.parse::<i64>().ok());
         match parts.first().copied() {
-            Some("T") if parts.len() >= 6 => {
+            Some("T") if parts.len() >= 8 => {
                 let action = match parts[1] {
                     "D" => TouchAction::Down,
                     "M" => TouchAction::Move,
                     "U" => TouchAction::Up,
                     _ => return Vec::new(),
                 };
-                let (Some(x), Some(y), Some(w), Some(h)) = (num(2), num(3), num(4), num(5)) else {
-                    return Vec::new();
-                };
-                let (px, py) = self.scale(x, y, w, h);
-                vec![(touch(action, px, py), Duration::ZERO)]
-            }
-            Some("W") if parts.len() >= 6 => {
-                let (Some(dir), Some(x), Some(y), Some(w), Some(h)) =
-                    (num(1), num(2), num(3), num(4), num(5))
+                let (Some(x), Some(y), Some(vx), Some(vy), Some(vw), Some(vh)) =
+                    (num(2), num(3), num(4), num(5), num(6), num(7))
                 else {
                     return Vec::new();
                 };
-                let (px, py) = self.scale(x, y, w, h);
+                let (px, py) = self.scale(x, y, (vx, vy, vw, vh));
+                vec![(touch(action, px, py), Duration::ZERO)]
+            }
+            Some("W") if parts.len() >= 8 => {
+                let (Some(dir), Some(x), Some(y), Some(vx), Some(vy), Some(vw), Some(vh)) =
+                    (num(1), num(2), num(3), num(4), num(5), num(6), num(7))
+                else {
+                    return Vec::new();
+                };
+                let (px, py) = self.scale(x, y, (vx, vy, vw, vh));
                 // A wheel tick down scrolls the content up: the finger moves
                 // up a fifth of the screen in six steps.
                 let travel = i64::from(self.height) / 5;
@@ -300,7 +316,8 @@ mod tests {
     #[test]
     fn window_points_scale_to_the_phone_and_keys_map() {
         let t = Translator::new(1080, 2340);
-        let out = t.translate("[touch] T D 270 585 540 1170");
+        // A tiled window: the video sits 100 px in from the left.
+        let out = t.translate("[touch] T D 370 585 100 0 540 1170");
         assert_eq!(out.len(), 1);
         let touch = MirrorTouch::decode(&out[0].0.body).unwrap();
         assert_eq!(
@@ -321,14 +338,14 @@ mod tests {
     #[test]
     fn a_wheel_tick_is_a_swipe_that_stays_on_screen() {
         let t = Translator::new(1080, 2340);
-        let out = t.translate("W 1 270 100 540 1170");
+        let out = t.translate("W 1 270 100 0 0 540 1170");
         assert_eq!(out.len(), 8);
         let first = MirrorTouch::decode(&out[0].0.body).unwrap();
         let last = MirrorTouch::decode(&out[7].0.body).unwrap();
         assert_eq!(first.action, TouchAction::Down);
         assert_eq!(last.action, TouchAction::Up);
         assert!(last.y < first.y, "scrolling down moves the finger up");
-        let up = t.translate("W -1 270 2 540 1170");
+        let up = t.translate("W -1 270 2 0 0 540 1170");
         let end = MirrorTouch::decode(&up[7].0.body).unwrap();
         assert!(end.y > 400);
     }

@@ -109,8 +109,11 @@ impl MirrorPlayer for DesktopPlayer {
             "--terminal=yes",
             "--no-input-terminal",
             "--msg-level=all=no,touch=info",
+            // Its own app id, so the compositor can size the window to the
+            // phone's aspect (the author's niri rule) without touching the
+            // application's windows.
             "--title=Magnetita",
-            "--wayland-app-id=org.celestina.Magnetita",
+            "--wayland-app-id=org.celestina.Magnetita.mirror",
         ])
         .arg(format!("--script={}", script.display()))
         .arg("-")
