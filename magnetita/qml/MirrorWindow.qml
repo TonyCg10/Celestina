@@ -40,6 +40,17 @@ Window {
     readonly property real fitX: 0
     readonly property real fitY: 0
 
+    // The window keeps the picture's aspect: whatever height the compositor
+    // gives it (a tile on this output, another on the next), it asks for
+    // the width that fits, settled a moment after the last resize.
+    onWidthChanged: fitTimer.restart()
+    onHeightChanged: fitTimer.restart()
+    Timer {
+        id: fitTimer
+        interval: 120
+        onTriggered: mirror.view.fit(mirror.width, mirror.height, Math.round(mirror.height * mirror.aspect))
+    }
+
     // Diagnostics for the daemon's journal while the window is being brought
     // up: whether Qt paints this window at all, and whether the surface
     // holds a render context.

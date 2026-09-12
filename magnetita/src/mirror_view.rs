@@ -85,9 +85,42 @@ pub mod qobject {
         /// `Back`, `Home` or `Recents`.
         #[qinvokable]
         fn global(self: Pin<&mut MirrorView>, action: QString);
+
+        /// The window is `width` by `height` and the picture's aspect says
+        /// it should be `wanted` wide: asks the compositor for that width.
+        #[qinvokable]
+        fn fit(self: Pin<&mut MirrorView>, width: i32, height: i32, wanted: i32);
     }
 
     impl cxx_qt::Threading for MirrorView {}
+}
+
+/// The id of this process's window whose title starts with `title`, in
+/// `niri msg --json windows`; read without a JSON crate, the fields are
+/// flat and named.
+fn niri_window_id(json: &str, pid: u32, title: &str) -> Option<u64> {
+    let mut at = 0;
+    while let Some(rel) = json[at..].find("{\"id\":") {
+        let start = at + rel;
+        let end = json[start + 1..]
+            .find("{\"id\":")
+            .map(|r| start + 1 + r)
+            .unwrap_or(json.len());
+        let object = &json[start..end];
+        at = end;
+        let id: u64 = object
+            .trim_start_matches("{\"id\":")
+            .split(|c: char| !c.is_ascii_digit())
+            .next()?
+            .parse()
+            .ok()?;
+        let mine = object.contains(&format!("\"pid\":{pid}"))
+            && object.contains(&format!("\"title\":\"{title}"));
+        if mine {
+            return Some(id);
+        }
+    }
+    None
 }
 
 /// What the input worker sends the daemon, in order.
@@ -468,11 +501,61 @@ impl qobject::MirrorView {
         }
     }
 
+    /// On niri the layout owns the tile's size; the one thing a window can
+    /// ask is a column width, which `niri msg` grants. The height is the
+    /// layout's, so the width follows it and the picture fills the tile at
+    /// its own aspect on any output. Elsewhere this does nothing.
+    pub fn fit(self: Pin<&mut Self>, width: i32, height: i32, wanted: i32) {
+        if (width - wanted).abs() <= 2 || wanted < 100 || height < 100 {
+            return;
+        }
+        let pid = std::process::id();
+        self.rust().owned.spawn(move |guard: Guard| {
+            let Ok(out) = std::process::Command::new("niri")
+                .args(["msg", "--json", "windows"])
+                .stderr(std::process::Stdio::null())
+                .output()
+            else {
+                return;
+            };
+            let text = String::from_utf8_lossy(&out.stdout);
+            let Some(id) = niri_window_id(&text, pid, "Espejo") else {
+                return;
+            };
+            if !guard.open() {
+                return;
+            }
+            let _ = std::process::Command::new("niri")
+                .args([
+                    "msg",
+                    "action",
+                    "set-window-width",
+                    "--id",
+                    &id.to_string(),
+                    &wanted.to_string(),
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+        });
+    }
+
     pub fn global(mut self: Pin<&mut Self>, action: QString) {
         let action = action.to_string();
         if matches!(action.as_str(), "Back" | "Home" | "Recents") {
             self.as_mut().send(Outbound::Global(action));
         }
+    }
+}
+
+#[cfg(test)]
+mod niri {
+    #[test]
+    fn the_mirror_window_of_this_process_is_found_by_pid_and_title() {
+        let json = r#"[{"id":7,"title":"Magnetita","app_id":"org.celestina.Magnetita","pid":42,"layout":{"window_size":[500,900]}},{"id":9,"title":"Espejo \u2014 Magnetita","app_id":"org.celestina.Magnetita","pid":42,"layout":{"window_size":[942,1010]}}]"#;
+        assert_eq!(super::niri_window_id(json, 42, "Espejo"), Some(9));
+        assert_eq!(super::niri_window_id(json, 42, "Magnetita"), Some(7));
+        assert_eq!(super::niri_window_id(json, 43, "Espejo"), None);
     }
 }
 
