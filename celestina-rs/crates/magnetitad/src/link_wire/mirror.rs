@@ -16,7 +16,7 @@ use std::sync::Mutex;
 
 use magnetita_link::RecvStream;
 use magnetita_proto::capability;
-use magnetita_proto::mirror::{Codec, MirrorStart, MirrorStarted, MirrorStop};
+use magnetita_proto::mirror::{Codec, MirrorKeyframe, MirrorStart, MirrorStarted, MirrorStop};
 use magnetita_proto::Envelope;
 
 use crate::lock::LockOk;
@@ -71,7 +71,7 @@ fn next_video_fifo() -> std::path::PathBuf {
 pub(crate) struct FifoPlayer;
 
 struct FifoSink {
-    tx: Option<Sender<Vec<u8>>>,
+    tx: Option<Sender<(Vec<u8>, bool)>>,
     stopping: std::sync::Arc<std::sync::atomic::AtomicBool>,
     path: std::path::PathBuf,
     /// The stream cut into access units, and what a new reader needs first.
@@ -83,7 +83,6 @@ impl MirrorPlayer for FifoPlayer {
         let units = std::sync::Arc::new(Mutex::new(super::mirror_stream::AccessUnits::new(
             started.codec,
         )));
-        let reader_units = std::sync::Arc::clone(&units);
         let path = next_video_fifo();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -99,7 +98,7 @@ impl MirrorPlayer for FifoPlayer {
             log("mirror", &format!("video fifo: {e}"));
             return None;
         }
-        let (tx, rx) = channel::<Vec<u8>>();
+        let (tx, rx) = channel::<(Vec<u8>, bool)>();
         let stopping = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let stop = std::sync::Arc::clone(&stopping);
         let feed_path = path.clone();
@@ -117,17 +116,24 @@ impl MirrorPlayer for FifoPlayer {
                         break;
                     }
                     // A reader that opens mid-stream: drop what queued while
-                    // nobody read (it follows a key frame it never saw) and
-                    // start it at the last key frame.
+                    // nobody read, ask the phone for a key frame, and start
+                    // the reader at it, so it decodes from its next frame.
                     while rx.try_recv().is_ok() {}
-                    let snapshot = reader_units.lock_ok().snapshot();
-                    if !snapshot.is_empty() && fifo.write_all(&snapshot).is_err() {
-                        continue 'readers;
-                    }
+                    own().queue_input(Envelope {
+                        capability: capability::MIRROR,
+                        kind: MirrorKeyframe::KIND,
+                        id: 0,
+                        body: MirrorKeyframe.encode(),
+                    });
+                    let mut started = false;
                     loop {
-                        let Ok(chunk) = rx.recv() else {
+                        let Ok((chunk, key)) = rx.recv() else {
                             break 'readers;
                         };
+                        if !started && !key {
+                            continue;
+                        }
+                        started = true;
                         if fifo.write_all(&chunk).is_err() {
                             // The reader went away: wait for the next one.
                             continue 'readers;

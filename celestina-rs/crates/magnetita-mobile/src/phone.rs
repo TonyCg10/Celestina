@@ -24,8 +24,8 @@ use magnetita_proto::daily::notifications::{
 };
 use magnetita_proto::daily::share::{ShareAccept, ShareDone, ShareOffer, ShareReject, ShareText};
 use magnetita_proto::mirror::{
-    GlobalAction, MirrorGlobal, MirrorKey, MirrorStart, MirrorStarted, MirrorStop, MirrorTouch,
-    TouchAction,
+    GlobalAction, MirrorGlobal, MirrorKey, MirrorKeyframe, MirrorStart, MirrorStarted, MirrorStop,
+    MirrorTouch, TouchAction,
 };
 use magnetita_proto::pair::{kind as pair_kind, Fingerprint, Pinned, QrPairing, QrPayload};
 use magnetita_proto::phone::contacts::{ContactsRequest, ContactsSync};
@@ -837,6 +837,7 @@ pub fn button_from_index(index: u8) -> Option<MediaButton> {
 pub struct MirrorFields {
     pub start: Option<MirrorStart>,
     pub stop: bool,
+    pub keyframe: bool,
     pub touch: Option<MirrorTouch>,
     pub key: Option<MirrorKey>,
     pub global: Option<GlobalAction>,
@@ -853,6 +854,10 @@ pub fn mirror_fields(env: &Envelope) -> MirrorFields {
         },
         MirrorStop::KIND => MirrorFields {
             stop: true,
+            ..Default::default()
+        },
+        MirrorKeyframe::KIND => MirrorFields {
+            keyframe: MirrorKeyframe::decode(&env.body).is_ok(),
             ..Default::default()
         },
         MirrorTouch::KIND => MirrorFields {
@@ -1020,6 +1025,7 @@ pub fn describe(env: &Envelope) -> String {
         (capability::MIRROR, 4) => "mirror: touch".into(),
         (capability::MIRROR, 5) => "mirror: key".into(),
         (capability::MIRROR, 6) => "mirror: global".into(),
+        (capability::MIRROR, 7) => "mirror: keyframe".into(),
         (capability::STORAGE, 2) => "storage: list".into(),
         (capability::STORAGE, 4) => "storage: stat".into(),
         (capability::STORAGE, 6) => "storage: read".into(),

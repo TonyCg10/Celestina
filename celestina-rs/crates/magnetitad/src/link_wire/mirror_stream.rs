@@ -1,22 +1,14 @@
-//! The phone's raw stream cut into access units, and the least a new
-//! reader needs to start decoding at once: the parameter sets and the last
-//! key frame. The phone ends every access unit with a delimiter, which is
-//! where this cuts; a reader that opens mid-stream would otherwise wait for
-//! the next key frame, ten seconds apart at most, and show nothing until
-//! then.
+//! The phone's raw stream cut into access units, each marked as a key
+//! frame or not. The phone ends every access unit with a delimiter, which
+//! is where this cuts. A reader that opens mid-stream is started at a key
+//! frame the daemon asks the phone for, so it decodes from its next frame.
 
 use magnetita_proto::mirror::Codec;
 
-/// Cuts the stream at access unit delimiters and keeps what a new reader
-/// needs.
+/// Cuts the stream at access unit delimiters.
 pub(crate) struct AccessUnits {
     codec: Codec,
     pending: Vec<u8>,
-    /// The parameter sets seen (VPS, SPS, PPS), in order, deduplicated by
-    /// their bytes.
-    params: Vec<Vec<u8>>,
-    /// The last access unit that started with a key frame.
-    last_key: Option<Vec<u8>>,
 }
 
 impl AccessUnits {
@@ -24,34 +16,19 @@ impl AccessUnits {
         Self {
             codec,
             pending: Vec::new(),
-            params: Vec::new(),
-            last_key: None,
         }
     }
 
-    /// Feeds bytes as they arrive; returns every access unit they complete.
-    pub(crate) fn push(&mut self, bytes: &[u8]) -> Vec<Vec<u8>> {
+    /// Feeds bytes as they arrive; returns every access unit they complete
+    /// with whether it carries a key frame.
+    pub(crate) fn push(&mut self, bytes: &[u8]) -> Vec<(Vec<u8>, bool)> {
         self.pending.extend_from_slice(bytes);
         let mut out = Vec::new();
         while let Some(end) = self.delimiter_end() {
             let unit: Vec<u8> = self.pending.drain(..end).collect();
-            self.note(&unit);
-            out.push(unit);
+            let key = self.note(&unit);
+            out.push((unit, key));
         }
-        out
-    }
-
-    /// What a reader opening now must see first: the parameter sets, then
-    /// the last key frame, or nothing when no key frame has passed yet.
-    pub(crate) fn snapshot(&self) -> Vec<u8> {
-        let Some(key) = &self.last_key else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        for p in &self.params {
-            out.extend_from_slice(p);
-        }
-        out.extend_from_slice(key);
         out
     }
 
@@ -97,41 +74,26 @@ impl AccessUnits {
         }
     }
 
-    /// Records the unit's parameter sets and whether it is a key frame.
-    fn note(&mut self, unit: &[u8]) {
-        let mut key = false;
+    /// Whether the unit carries a key frame.
+    fn note(&self, unit: &[u8]) -> bool {
         let mut at = 0;
         let mut starts = Vec::new();
         while let Some(start) = find_start_code(unit, at) {
             starts.push(start);
             at = start + start_code_len(unit, start);
         }
-        for (i, &start) in starts.iter().enumerate() {
+        starts.iter().enumerate().any(|(i, &start)| {
             let end = starts.get(i + 1).copied().unwrap_or(unit.len());
             let header = start + start_code_len(unit, start);
             if header >= end {
-                continue;
+                return false;
             }
             let kind = self.nal_type(&unit[header..]);
-            let is_param = match self.codec {
-                Codec::Hevc => (32..=34).contains(&kind),
-                Codec::H264 => kind == 7 || kind == 8,
-            };
-            let is_key = match self.codec {
+            match self.codec {
                 Codec::Hevc => (16..=21).contains(&kind),
                 Codec::H264 => kind == 5,
-            };
-            if is_param {
-                let nal = unit[start..end].to_vec();
-                if !self.params.contains(&nal) {
-                    self.params.push(nal);
-                }
             }
-            key |= is_key;
-        }
-        if key {
-            self.last_key = Some(unit.to_vec());
-        }
+        })
     }
 }
 
@@ -190,21 +152,19 @@ mod tests {
             out.extend(units.push(chunk));
         }
         assert_eq!(out.len(), 2);
-        assert!(out[0].ends_with(&aud()));
-        assert!(out[1].starts_with(&nal(1, b"p-frame")));
-        // A reader opening now gets the parameter sets and the key unit.
-        let snapshot = units.snapshot();
-        assert!(snapshot.starts_with(&nal(32, b"vps")));
-        assert!(snapshot.ends_with(&aud()));
-        assert!(snapshot.windows(9).any(|w| w == b"idr-frame"));
-        assert!(!snapshot.windows(7).any(|w| w == b"p-frame"));
+        assert!(
+            out[0].0.ends_with(&aud()) && out[0].1,
+            "the first unit is the key frame"
+        );
+        assert!(out[1].0.starts_with(&nal(1, b"p-frame")) && !out[1].1);
     }
 
     #[test]
-    fn no_key_frame_yet_means_no_snapshot() {
+    fn a_unit_without_a_key_frame_is_not_one() {
         let mut units = AccessUnits::new(Codec::Hevc);
         units.push(&nal(1, b"p"));
-        units.push(&aud());
-        assert!(units.snapshot().is_empty());
+        let out = units.push(&aud());
+        assert_eq!(out.len(), 1);
+        assert!(!out[0].1);
     }
 }

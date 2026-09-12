@@ -116,6 +116,8 @@ pub struct Event {
     /// The desktop asks for the mirror with these options.
     pub mirror_start: Option<MobileMirrorStart>,
     pub mirror_stop: bool,
+    /// The desktop wants a key frame now.
+    pub mirror_keyframe: bool,
     /// A touch on the mirrored screen: phase 0 down, 1 move, 2 up.
     pub mirror_touch: Option<MobileTouch>,
     /// An Android key code, with `command_ok` unused; pressed in `mirror_key_pressed`.
@@ -835,6 +837,7 @@ impl MobileSession {
                         audio: m.audio,
                     }),
                     mirror_stop: mirror.stop,
+                    mirror_keyframe: mirror.keyframe,
                     mirror_touch: mirror.touch.map(|t| MobileTouch {
                         phase: touch_index(t.action),
                         x: t.x,
@@ -879,6 +882,7 @@ impl MobileSession {
                 command_ok: None,
                 mirror_start: None,
                 mirror_stop: false,
+                mirror_keyframe: false,
                 mirror_touch: None,
                 mirror_key: None,
                 mirror_key_pressed: None,

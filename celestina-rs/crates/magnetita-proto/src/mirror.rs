@@ -40,6 +40,11 @@ pub struct MirrorStarted {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct MirrorStop;
 
+/// Desktop → phone: send a key frame now, so a window that opens or
+/// reopens mid-stream decodes from its next frame. Kind 7, empty body.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct MirrorKeyframe;
+
 /// A touch phase.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TouchAction {
@@ -233,6 +238,19 @@ impl MirrorStop {
 
     pub fn decode(body: &[u8]) -> Result<Self, DecodeError> {
         codec::read(body, "mirror stop", |_, _| Ok(false))?;
+        Ok(Self)
+    }
+}
+
+impl MirrorKeyframe {
+    pub const KIND: u16 = 7;
+
+    pub fn encode(&self) -> Vec<u8> {
+        Map::new(0).finish()
+    }
+
+    pub fn decode(body: &[u8]) -> Result<Self, DecodeError> {
+        codec::read(body, "mirror keyframe", |_, _| Ok(false))?;
         Ok(Self)
     }
 }
