@@ -319,11 +319,16 @@ impl qobject::MirrorView {
             while guard.open() {
                 if last_report.elapsed() > Duration::from_secs(5) {
                     last_report = std::time::Instant::now();
-                    let frames = client
-                        .get_property::<i64>("estimated-frame-count")
-                        .unwrap_or(-1);
+                    let time = client.get_property::<f64>("time-pos").unwrap_or(-1.0);
+                    let width = client.get_property::<i64>("video-params/w").unwrap_or(-1);
+                    let configured = client.get_property::<bool>("vo-configured").unwrap_or(false);
+                    let idle = client.get_property::<bool>("core-idle").unwrap_or(false);
+                    let waiting = client.get_property::<bool>("paused-for-cache").unwrap_or(false);
+                    let cache = client.get_property::<f64>("demuxer-cache-duration").unwrap_or(-1.0);
                     let dropped = client.get_property::<i64>("frame-drop-count").unwrap_or(-1);
-                    eprintln!("magnetita: mirror: frames={frames} dropped={dropped}");
+                    eprintln!(
+                        "magnetita: mirror: time={time:.2} width={width} vo={configured} idle={idle} cache-wait={waiting} cache={cache:.2} dropped={dropped}"
+                    );
                 }
                 let message = match client.wait_event(0.25) {
                     Some(Ok(Event::FileLoaded)) => {
