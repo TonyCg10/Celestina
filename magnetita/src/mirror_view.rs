@@ -326,10 +326,16 @@ impl qobject::MirrorView {
                 let replaced = self.rust().current_video.as_deref() != Some(video.as_str());
                 if self.rust().engine.is_some() && replaced {
                     // The daemon started a new stream (a rotation, a second
-                    // start): let this engine go, then open the new FIFO. The
-                    // mirror itself goes on, so `streaming` stays true.
-                    self.as_mut().rust_mut().get_mut().reopen = Some(video);
-                    self.as_mut().release_engine();
+                    // start): the same engine loads the new FIFO in place of
+                    // the old, keeping its render context, so the picture
+                    // changes without a black window in between.
+                    eprintln!("magnetita: mirror: switching to {video}");
+                    if let Some(engine) = self.rust().engine.as_ref() {
+                        if let Err(error) = engine.command("loadfile", &[&video, "replace"]) {
+                            eprintln!("magnetita: mirror switch: {error}");
+                        }
+                    }
+                    self.as_mut().rust_mut().get_mut().current_video = Some(video);
                 } else if self.rust().engine.is_none() && !self.rust().closing {
                     self.as_mut().open(video);
                 }
