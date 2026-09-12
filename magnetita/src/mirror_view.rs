@@ -99,6 +99,31 @@ pub mod qobject {
     impl cxx_qt::Threading for MirrorView {}
 }
 
+/// The gap niri keeps around a tile, in logical pixels, as the author's
+/// configuration sets it.
+const NIRI_GAP: i32 = 12;
+
+fn niri_action(args: &[&str]) {
+    let _ = std::process::Command::new("niri")
+        .args(["msg", "action"])
+        .args(args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+/// The logical width of `niri msg --json focused-output`.
+fn niri_logical_width(json: &str) -> Option<i32> {
+    let at = json.find("\"logical\":")?;
+    let rest = &json[at..];
+    let w = rest.find("\"width\":")?;
+    rest[w + "\"width\":".len()..]
+        .split(|c: char| !c.is_ascii_digit())
+        .next()?
+        .parse()
+        .ok()
+}
+
 /// The id of this process's window whose title starts with `title`, in
 /// `niri msg --json windows`; read without a JSON crate, the fields are
 /// flat and named.
@@ -533,15 +558,18 @@ impl qobject::MirrorView {
         }
     }
 
-    /// On niri the layout owns the tile's size; the one thing a window can
-    /// ask is a column width, which `niri msg` grants. The height is the
-    /// layout's, so the width follows it and the picture fills the tile at
-    /// its own aspect on any output. Elsewhere this does nothing.
+    /// On niri the layout owns the tile's size; what a window can ask is a
+    /// column width and a window height, which `niri msg` grants. The
+    /// picture's aspect decides: the width that fits the height, unless
+    /// that overflows the output (a phone on its side), in which case the
+    /// width is the output's and the height follows it. Elsewhere this
+    /// does nothing.
     pub fn fit(self: Pin<&mut Self>, width: i32, height: i32, wanted: i32) {
         if (width - wanted).abs() <= 2 || wanted < 100 || height < 100 {
             return;
         }
         let pid = std::process::id();
+        let aspect = f64::from(wanted) / f64::from(height);
         self.rust().owned.spawn(move |guard: Guard| {
             let Ok(out) = std::process::Command::new("niri")
                 .args(["msg", "--json", "windows"])
@@ -554,21 +582,27 @@ impl qobject::MirrorView {
             let Some(id) = niri_window_id(&text, pid, "Espejo") else {
                 return;
             };
+            // The output this window sits on: the widest a tile can be,
+            // less niri's gaps either side.
+            let output_width = std::process::Command::new("niri")
+                .args(["msg", "--json", "focused-output"])
+                .stderr(std::process::Stdio::null())
+                .output()
+                .ok()
+                .and_then(|out| niri_logical_width(&String::from_utf8_lossy(&out.stdout)))
+                .map(|w| w - 2 * NIRI_GAP)
+                .unwrap_or(i32::MAX);
             if !guard.open() {
                 return;
             }
-            let _ = std::process::Command::new("niri")
-                .args([
-                    "msg",
-                    "action",
-                    "set-window-width",
-                    "--id",
-                    &id.to_string(),
-                    &wanted.to_string(),
-                ])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status();
+            let id = id.to_string();
+            if wanted <= output_width {
+                niri_action(&["set-window-width", "--id", &id, &wanted.to_string()]);
+            } else {
+                let fitted_height = (f64::from(output_width) / aspect).round() as i32;
+                niri_action(&["set-window-width", "--id", &id, &output_width.to_string()]);
+                niri_action(&["set-window-height", "--id", &id, &fitted_height.to_string()]);
+            }
         });
     }
 
@@ -588,6 +622,12 @@ mod niri {
         assert_eq!(super::niri_window_id(json, 42, "Espejo"), Some(9));
         assert_eq!(super::niri_window_id(json, 42, "Magnetita"), Some(7));
         assert_eq!(super::niri_window_id(json, 43, "Espejo"), None);
+    }
+
+    #[test]
+    fn the_focused_output_width_is_read() {
+        let json = r#"{"name":"HDMI-A-1","logical":{"x":1920,"y":0,"width":2560,"height":1440,"scale":1.5}}"#;
+        assert_eq!(super::niri_logical_width(json), Some(2560));
     }
 }
 
