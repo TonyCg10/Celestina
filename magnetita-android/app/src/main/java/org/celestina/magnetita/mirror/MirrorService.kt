@@ -51,7 +51,12 @@ class MirrorService : Service() {
             stopMirror("no projection")
             return START_NOT_STICKY
         }
-        mirror?.stop("replaced")
+        if (mirror != null) {
+            // A second start while one streams: the desktop is already fed.
+            android.util.Log.i(TAG, "start while streaming: kept")
+            runCatching { projection.stop() }
+            return START_NOT_STICKY
+        }
         val started = ScreenMirror(applicationContext, projection, live, options) { reason ->
             _state.value = MirrorState.Idle
             mirror = null

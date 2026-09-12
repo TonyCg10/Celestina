@@ -168,6 +168,11 @@ class LinkService : LifecycleService() {
      * service may not raise an activity from the background.
      */
     private fun askMirror(options: org.celestina.magnetita.link.MirrorOptions) {
+        if (org.celestina.magnetita.mirror.MirrorService.state.value is org.celestina.magnetita.mirror.MirrorService.MirrorState.Streaming) {
+            // Already streaming: the desktop is fed; no second consent.
+            android.util.Log.i(TAG, "mirror start while streaming: kept")
+            return
+        }
         val consent = org.celestina.magnetita.mirror.MirrorConsentActivity.intent(this, options)
         if (inFront) {
             runCatching { startActivity(consent) }.onSuccess { return }
