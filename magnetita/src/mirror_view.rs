@@ -110,6 +110,10 @@ pub struct MirrorViewRust {
     engine: Option<fluorita_engine::instance::Instance>,
     /// The FIFO to load once the surface has its context.
     pending_video: Option<String>,
+    /// The FIFO the engine is on, so a replaced one is noticed.
+    current_video: Option<String>,
+    /// A stream to open once the current engine has gone.
+    reopen: Option<String>,
     /// A close waits for the surface to let the context go.
     closing: bool,
     input: Option<Sender<Outbound>>,
@@ -216,7 +220,13 @@ impl qobject::MirrorView {
             "streaming" if !video.is_empty() => {
                 self.as_mut().set_picture_width(width);
                 self.as_mut().set_picture_height(height);
-                if self.rust().engine.is_none() && !self.rust().closing {
+                let replaced = self.rust().current_video.as_deref() != Some(video.as_str());
+                if self.rust().engine.is_some() && replaced {
+                    // The daemon started a new stream (a rotation, a second
+                    // start): let this engine go, then open the new FIFO.
+                    self.as_mut().rust_mut().get_mut().reopen = Some(video);
+                    self.as_mut().close();
+                } else if self.rust().engine.is_none() && !self.rust().closing {
                     self.as_mut().open(video);
                 }
                 self.as_mut().set_streaming(true);
@@ -248,9 +258,11 @@ impl qobject::MirrorView {
         match fluorita_engine::instance::Instance::new(&borrowed) {
             Ok(engine) => {
                 let handle = engine.render_handle().value();
+                self.as_mut().watch_engine(&engine);
                 let state = self.as_mut().rust_mut().get_mut();
                 state.engine = Some(engine);
-                state.pending_video = Some(video);
+                state.pending_video = Some(video.clone());
+                state.current_video = Some(video);
                 self.as_mut().set_error(QString::default());
                 self.as_mut().set_render_handle(handle);
             }
@@ -275,9 +287,43 @@ impl qobject::MirrorView {
         if !self.rust().closing {
             return;
         }
-        let state = self.as_mut().rust_mut().get_mut();
-        state.closing = false;
-        state.engine = None;
+        let reopen = {
+            let state = self.as_mut().rust_mut().get_mut();
+            state.closing = false;
+            state.engine = None;
+            state.current_video = None;
+            state.reopen.take()
+        };
+        if let Some(video) = reopen {
+            self.as_mut().open(video);
+        }
+    }
+
+    /// The engine's own events, so the window can say why there is no
+    /// picture: the stream ending, or failing to load.
+    fn watch_engine(mut self: Pin<&mut Self>, engine: &fluorita_engine::instance::Instance) {
+        let Ok(client) = engine.client() else {
+            return;
+        };
+        let qt = self.as_mut().qt_thread();
+        self.rust().owned.spawn(move |guard: Guard| {
+            use libmpv2::events::Event;
+            while guard.open() {
+                let message = match client.wait_event(0.25) {
+                    Some(Ok(Event::FileLoaded)) => Some(String::new()),
+                    Some(Ok(Event::EndFile(reason))) => {
+                        Some(format!("El v\u{ed}deo termin\u{f3}: {reason:?}"))
+                    }
+                    Some(Ok(Event::Shutdown)) | Some(Err(_)) => break,
+                    _ => None,
+                };
+                if let Some(message) = message {
+                    let _ = qt.queue(move |mut view: Pin<&mut qobject::MirrorView>| {
+                        view.as_mut().set_error(QString::from(&message));
+                    });
+                }
+            }
+        });
     }
 
     /// Lets the surface go first, then the engine: the render API frees its
@@ -291,7 +337,9 @@ impl qobject::MirrorView {
             self.as_mut().rust_mut().get_mut().closing = true;
             self.as_mut().set_render_handle(0);
         } else {
-            self.as_mut().rust_mut().get_mut().engine = None;
+            let state = self.as_mut().rust_mut().get_mut();
+            state.engine = None;
+            state.current_video = None;
         }
     }
 

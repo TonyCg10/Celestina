@@ -758,8 +758,8 @@ impl MirrorInterface {
         match crate::link_wire::mirror::own().state() {
             crate::link_wire::mirror::LinkState::Streaming { .. } => {
                 crate::link_wire::mirror::video_fifo()
-                    .to_string_lossy()
-                    .into_owned()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .unwrap_or_default()
             }
             _ => String::new(),
         }

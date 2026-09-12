@@ -26,6 +26,8 @@ magnetita-core = { path = "../celestina-rs/crates/magnetita-core" }
 # app never talks to libmpv, it opens an instance and hands the surface one
 # opaque handle.
 fluorita-engine = { path = "../celestina-rs/crates/fluorita-engine" }
+# The engine's event vocabulary, to say why the picture stopped.
+libmpv2 = "=6.0.0"
 qrcode = { version = "0.14.1", default-features = false }
 # The app is a thin client of the magnetitad service — it reads
 # org.celestina.Devices1 over the session bus, no transport of its own.

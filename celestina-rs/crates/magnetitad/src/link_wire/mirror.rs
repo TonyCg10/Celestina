@@ -42,12 +42,24 @@ pub(crate) trait VideoSink: Send {
 /// raw HEVC or H.264 as the phone encodes it. The Magnetita window opens
 /// it in its own libmpv; `Mirror1`'s `LinkVideo` names it while the
 /// mirror streams.
-pub(crate) fn video_fifo() -> std::path::PathBuf {
+/// A new name per stream: a window that watches the name learns a restart
+/// (a rotation, a second start) and reopens, instead of reading a FIFO the
+/// daemon has already replaced.
+static VIDEO_PATH: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
+static VIDEO_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// The FIFO the current stream writes, if any.
+pub(crate) fn video_fifo() -> Option<std::path::PathBuf> {
+    VIDEO_PATH.lock_ok().clone()
+}
+
+fn next_video_fifo() -> std::path::PathBuf {
+    let n = VIDEO_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
         .join("magnetita")
-        .join("mirror.video")
+        .join(format!("mirror-{n}.video"))
 }
 
 /// The picture as a FIFO the application's window reads. Bytes queue
@@ -66,7 +78,7 @@ struct FifoSink {
 
 impl MirrorPlayer for FifoPlayer {
     fn open(&self, _started: &MirrorStarted) -> Option<Box<dyn VideoSink>> {
-        let path = video_fifo();
+        let path = next_video_fifo();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
@@ -115,6 +127,7 @@ impl MirrorPlayer for FifoPlayer {
                 }
             })
             .ok()?;
+        *VIDEO_PATH.lock_ok() = Some(path.clone());
         Some(Box::new(FifoSink {
             tx: Some(tx),
             stopping,
@@ -141,6 +154,10 @@ impl VideoSink for FifoSink {
             rustix::fs::Mode::empty(),
         );
         let _ = std::fs::remove_file(&self.path);
+        let mut current = VIDEO_PATH.lock_ok();
+        if current.as_deref() == Some(self.path.as_path()) {
+            *current = None;
+        }
     }
 }
 
