@@ -171,7 +171,10 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
             std::env::var_os("XDG_RUNTIME_DIR")
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(std::env::temp_dir)
-                .join("magnetita/mirror-window.log")
+                .join(format!(
+                    "magnetita/mirror-window-{}.log",
+                    std::process::id()
+                ))
                 .to_string_lossy()
                 .into_owned(),
         ),

@@ -149,12 +149,18 @@ impl MirrorPlayer for FifoPlayer {
                         if !started {
                             // The parameter sets go first: the encoder sent them
                             // once, before any key frame this reader will see.
-                            let params = feed_units.lock_ok().params();
+                            let (params, param_types, unit_types) = {
+                                let units = feed_units.lock_ok();
+                                let params = units.params();
+                                let param_types = units.nal_types(&params);
+                                (params, param_types, units.nal_types(&chunk))
+                            };
                             log(
                                 "mirror",
                                 &format!(
-                                    "feed: first key unit after skipping {skipped}, {} bytes of parameter sets",
-                                    params.len()
+                                    "feed: first key unit after skipping {skipped}: parameter sets {param_types:?} ({} bytes), unit NAL types {unit_types:?} ({} bytes)",
+                                    params.len(),
+                                    chunk.len()
                                 ),
                             );
                             if !params.is_empty() && fifo.write_all(&params).is_err() {

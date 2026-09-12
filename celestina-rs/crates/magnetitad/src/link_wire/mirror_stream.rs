@@ -30,6 +30,20 @@ impl AccessUnits {
         self.params.concat()
     }
 
+    /// The NAL unit types a run of bytes carries, in order, for the log.
+    pub(crate) fn nal_types(&self, bytes: &[u8]) -> Vec<u8> {
+        let mut at = 0;
+        let mut out = Vec::new();
+        while let Some(start) = find_start_code(bytes, at) {
+            let header = start + start_code_len(bytes, start);
+            if header < bytes.len() {
+                out.push(self.nal_type(&bytes[header..]));
+            }
+            at = header;
+        }
+        out
+    }
+
     /// Feeds bytes as they arrive; returns every access unit they complete
     /// with whether it carries a key frame.
     pub(crate) fn push(&mut self, bytes: &[u8]) -> Vec<(Vec<u8>, bool)> {

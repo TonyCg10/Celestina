@@ -793,6 +793,23 @@ impl MirrorInterface {
     /// options mapped onto the wire. The window opens when the phone
     /// answers; `LinkState` says where it stands.
     fn start_link(&self) -> zbus::fdo::Result<()> {
+        let state = crate::link_wire::mirror::own().state();
+        crate::runtime::log(
+            "mirror",
+            &format!(
+                "StartLink while {}",
+                crate::link_wire::mirror::state_word(&state)
+            ),
+        );
+        if matches!(
+            state,
+            crate::link_wire::mirror::LinkState::Starting
+                | crate::link_wire::mirror::LinkState::Streaming { .. }
+        ) {
+            // Already on its way or up: a second press changes nothing and
+            // must not restart the phone's capture nor open a second window.
+            return Ok(());
+        }
         let options = self.mirror.snapshot().options.into_iter().collect();
         crate::link_wire::mirror::own()
             .request_start(crate::link_wire::mirror::start_from_options(&options));
