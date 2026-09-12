@@ -132,11 +132,20 @@ impl MirrorPlayer for DesktopPlayer {
         };
         let mut stdin = mpv.stdin.take()?;
         let reports = mpv.stdout.take()?;
+        let (pid, width, height) = (mpv.id(), started.width, started.height);
+        let window: super::mirror_window::WindowId = Default::default();
+        let remembered = std::sync::Arc::clone(&window);
+        std::thread::Builder::new()
+            .name("magnetita-mirror-fit".into())
+            .spawn(move || super::mirror_window::fit_window(pid, width, height, remembered))
+            .ok()?;
         let translator = super::mirror_window::Translator::new(started.width, started.height);
         std::thread::Builder::new()
             .name("magnetita-mirror-input".into())
             .spawn(move || {
-                super::mirror_window::pump(reports, translator, |env| own().queue_input(env));
+                super::mirror_window::pump(reports, translator, window, |env| {
+                    own().queue_input(env)
+                });
             })
             .ok()?;
         let (tx, rx) = sync_channel::<Vec<u8>>(QUEUE_CHUNKS);
