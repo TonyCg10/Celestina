@@ -296,6 +296,7 @@ impl Session {
             serial.as_str(),
             "--no-video",
             "--no-audio",
+            "--no-window",
             "--turn-screen-off",
         ];
         match subprocess::spawn_grouped("scrcpy", &args, Stdio::null()) {
