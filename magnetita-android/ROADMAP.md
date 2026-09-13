@@ -1,7 +1,7 @@
 # Magnetita Android implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** AND-5
+- **Active implementation checkpoint:** AND-6
 - **Related author validation:** `VAL-MAG-11` through `VAL-MAG-15` in
   Magnetita's [VALIDATION.md](../magnetita/VALIDATION.md); they do not
   block
@@ -10,6 +10,36 @@ This roadmap is the application half of Magnetita's own-protocol program;
 the Rust half and the desktop are in
 [Magnetita's roadmap](../magnetita/ROADMAP.md) (`MAG-P3` onwards). Each
 `AND-` checkpoint pairs with a `MAG-P` one.
+
+## AND-6 — The application's design
+
+## Hypothesis and tangible outcome
+
+With every capability of the link in the application and in daily use,
+what remains is how it looks and feels, against MilaHub's One UI reading
+of the suite's language. The tangible outcome is an application the
+author calls finished; it pairs with Magnetita's `MAG-D1`.
+
+## Scope
+
+- The screens, the tab pill, the collapsing header, the groups and the
+  icons; the author's refinements as they come.
+
+## Exclusions
+
+- The core, the link, the mirror's capture; no new capability.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| AND-6-A | done | none | The checkpoint opened; `AND-5` archived | documentation guard |
+| AND-6-B | planned | AND-6-A | The screens reviewed against MilaHub's language | JVM tests, lint |
+| AND-6-C | planned | AND-6-B | The author's refinements, as they come | JVM tests, lint |
+
+## Implementation exit
+
+Close `AND-6` when the author says the application looks finished.
 
 ## AND-5 — The phone's files over the link
 

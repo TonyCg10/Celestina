@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `AND-5-A` of
-  [`../plans/active/2026-09-10-storage.md`](../plans/active/2026-09-10-storage.md):
+  [`../plans/archive/2026-09-10-storage.md`](../plans/archive/2026-09-10-storage.md):
   `app/src/main/java/org/celestina/magnetita/storage/{PhoneStorage,DocumentPaths}.kt`,
   the storage ports and signals in `link/`, the service's storage thread
   and state, the device screen's row, strings, the tests; the plan and

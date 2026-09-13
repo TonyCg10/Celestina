@@ -1,0 +1,33 @@
+# AND-6-A exact change inventory
+
+Base revision	43f60c126650836bf7c954f356d4be22985ecaed
+Pathspec	magnetita-android/ROADMAP.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/docs/evidence/2026-09-10-link-restart.md
+Pathspec	magnetita-android/docs/evidence/2026-09-10-listing-pages.md
+Pathspec	magnetita-android/docs/evidence/2026-09-10-storage-tree.md
+Pathspec	magnetita-android/docs/evidence/2026-09-10-storage-whole-phone.md
+Pathspec	magnetita-android/docs/evidence/2026-09-13-checkpoint-opened.md
+Pathspec	magnetita-android/docs/inventories/2026-09-13-app-design/AND-6-A.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-10-storage.md
+Pathspec	magnetita-android/docs/plans/active/2026-09-13-app-design.md
+Pathspec	magnetita-android/docs/plans/active/README.md
+Pathspec	magnetita-android/docs/plans/archive/2026-09-10-storage.md
+Pathspec	magnetita-android/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+31	1	17d666c9d7aa77c3ef6ab0494e5f35bf3c7d2c3ae26a39c1b2f5994ab110aa7f	magnetita-android/ROADMAP.md
+7	5	1ad696ec2eb05ab9fafff97ebf27f6c73579ace5f06d22e68d993c0d5a66d802	magnetita-android/STATUS.md
+1	1	39fbfc62a4e03654bff34dc40df32914618f874b6b95a680f568fa712fd898ad	magnetita-android/docs/evidence/2026-09-10-link-restart.md
+1	1	db89cb4551a981c34d960288cbdb667763c1ae9d38906584af574cac20986ba9	magnetita-android/docs/evidence/2026-09-10-listing-pages.md
+1	1	b5a2cd2432a9a5755386428dcbb2f9eddec3916d71df73142d159b87864d19c9	magnetita-android/docs/evidence/2026-09-10-storage-tree.md
+1	1	6cd1be2354c2e3bb733b3c68bb3332e828f4838546517852902eb5fd125b64d1	magnetita-android/docs/evidence/2026-09-10-storage-whole-phone.md
+30	0	73ee2516ccbd56c9e6f6d3528cab573f882eed390b4c5825a81e960f1ea2d3ca	magnetita-android/docs/evidence/2026-09-13-checkpoint-opened.md
+33	0	self	magnetita-android/docs/inventories/2026-09-13-app-design/AND-6-A.numstat.tsv
+0	63	deleted	magnetita-android/docs/plans/active/2026-09-10-storage.md
+49	0	ef1300b17dbfc69c70b33e9a79fc4dfd5e7d4ed52da2a4584be6fdfabb40c687	magnetita-android/docs/plans/active/2026-09-13-app-design.md
+4	2	9f2ca75ea50c4b9f5802ccdec38810f3a7219023b4c0f258eb4ac3c5958b8970	magnetita-android/docs/plans/active/README.md
+66	0	e159e7c7e84881977488c2b4427384ea6e717b481399e221b6a0c45729ddc800	magnetita-android/docs/plans/archive/2026-09-10-storage.md
+1	0	ba4b66d679907819936fb69cc55020119a375b0f2dc6c75ee61eb84648c0fa4a	magnetita-android/docs/plans/archive/README.md

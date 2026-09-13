@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `AND-5-B` of
-  [`../plans/active/2026-09-10-storage.md`](../plans/active/2026-09-10-storage.md):
+  [`../plans/archive/2026-09-10-storage.md`](../plans/archive/2026-09-10-storage.md):
   `app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt`,
   the manifest's `MANAGE_EXTERNAL_STORAGE`, the device screen's row with
   its two actions, the link service's state on focus, strings, this

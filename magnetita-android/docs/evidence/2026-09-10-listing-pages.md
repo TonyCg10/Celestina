@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `AND-5-C` of
-  [`../plans/active/2026-09-10-storage.md`](../plans/active/2026-09-10-storage.md):
+  [`../plans/archive/2026-09-10-storage.md`](../plans/archive/2026-09-10-storage.md):
   `app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt`,
   this record
 - **Environment:** the author's browse of the S25U

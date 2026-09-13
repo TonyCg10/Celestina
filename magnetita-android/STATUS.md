@@ -1,9 +1,10 @@
 # Magnetita Android status
 
-- **Updated:** 2026-09-10
-- **Implementation:** `AND-5`, the phone's files over the link, is the
-  active checkpoint since 2026-09-10, paired with Magnetita's `MAG-P7`; its
-  two units are done and the browse is `VAL-MAG-15`. `AND-4`, the mirror over
+- **Updated:** 2026-09-13
+- **Implementation:** `AND-6`, the application's design, is the one open
+  checkpoint since 2026-09-13, paired with Magnetita's `MAG-D1`: the
+  author closed the own-protocol program with `VAL-MAG-15` passed. `AND-5`,
+  the phone's files over the link, is archived with its three units done. `AND-4`, the mirror over
   the link, is implemented and archived; `VAL-MAG-14` carries the author's
   observation. `AND-3`, remote control,
   met its exit the same day and is archived; `VAL-MAG-13` carries the
@@ -78,7 +79,8 @@ None. The SDK and NDK are the author's, outside the repository.
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan AND-5](docs/plans/active/2026-09-10-storage.md)
+- [Active plan AND-6](docs/plans/active/2026-09-13-app-design.md)
+- [Archived plan AND-5](docs/plans/archive/2026-09-10-storage.md)
 - [Archived plan AND-4](docs/plans/archive/2026-09-09-link-mirror.md)
 - [Archived plan AND-3](docs/plans/archive/2026-09-09-remote-control.md)
 - [Archived plan AND-2](docs/plans/archive/2026-09-09-daily-set.md)

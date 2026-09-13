@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `AND-5-D` of
-  [`../plans/active/2026-09-10-storage.md`](../plans/active/2026-09-10-storage.md):
+  [`../plans/archive/2026-09-10-storage.md`](../plans/archive/2026-09-10-storage.md):
   `app/src/main/java/org/celestina/magnetita/link/Restart.kt`, the
   manifest's receiver and `RECEIVE_BOOT_COMPLETED`, this record
 - **Environment:** the S25U over USB `adb`
