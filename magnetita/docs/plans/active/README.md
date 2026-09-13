@@ -1,9 +1,11 @@
 # Active Magnetita plans
 
 The active plan is
-[MAG-M1 deterministic app read/watch lifecycle](2026-09-10-app-lifecycle.md),
+[MAG-D1 the design of the two applications](2026-09-13-app-design.md),
 which the project roadmap names as its active implementation checkpoint.
-`MAG-P7` moved to
+`MAG-M1` moved to
+[the archive](../archive/2026-09-10-app-lifecycle.md) on 2026-09-13 with
+its exit met. `MAG-P7` moved to
 [the archive](../archive/2026-09-10-storage-and-retirement.md) on
 2026-09-10 with its exit met as far as the records allow (`MAG-P7-D` waits
 on `VAL-MAG-14`); the application's own units ran under the

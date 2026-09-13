@@ -9,3 +9,4 @@ root. A separate archive commit gets a new administrative unit and inventory.
 - [MAG-P5 — Commands, trackpad and keyboard](2026-09-09-remote-control.md)
 - [MAG-P6 — The mirror as a capability of the link](2026-09-09-link-mirror.md)
 - [MAG-P7 — Storage over the own wire and retiring the second path](2026-09-10-storage-and-retirement.md)
+- [MAG-M1 — Deterministic app read/watch lifecycle](2026-09-10-app-lifecycle.md)

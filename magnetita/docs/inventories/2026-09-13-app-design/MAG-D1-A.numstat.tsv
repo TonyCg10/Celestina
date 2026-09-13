@@ -1,0 +1,33 @@
+# MAG-D1-A exact change inventory
+
+Base revision	c6dc74617d1a687a45043993a1ff3d79c82ef487
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-09-10-app-lifecycle-exit.md
+Pathspec	magnetita/docs/evidence/2026-09-10-app-lifecycle.md
+Pathspec	magnetita/docs/evidence/2026-09-10-owned-models.md
+Pathspec	magnetita/docs/evidence/2026-09-13-program-closed.md
+Pathspec	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-A.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md
+Pathspec	magnetita/docs/plans/active/2026-09-13-app-design.md
+Pathspec	magnetita/docs/plans/active/README.md
+Pathspec	magnetita/docs/plans/archive/2026-09-10-app-lifecycle.md
+Pathspec	magnetita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	2	4f3fd1fa1a2da3ed9f2fa8ebab1e50d177bd9e0f2e0f62adcd70195b7d34d2e8	magnetita/ROADMAP.md
+8	6	0f007cfe3355590eade35ec5bf0ab0ddabf6274399bdb069ef3a2aa093d8fecc	magnetita/STATUS.md
+25	14	71ee50e234186918d55a5b998653d1231b14b66abd69cc5a18fffcfd4458524b	magnetita/VALIDATION.md
+1	1	caf13e1c2350c4092057cf5eee4fe724d3961ffd3cc56a3fd09224e8359f9ea7	magnetita/docs/evidence/2026-09-10-app-lifecycle-exit.md
+1	1	747515cb2a6f16aceb58c856d26e71466067786d08411f162aa5342b2dc3c8ba	magnetita/docs/evidence/2026-09-10-app-lifecycle.md
+1	1	5a4b8581c91fdb5926aed1153df7800f7398996ac6e0f9129043683bb0cb9078	magnetita/docs/evidence/2026-09-10-owned-models.md
+50	0	5259c4e4196a1b84e2236c8ead16e2dca68a1aae37f18e2cbed0a7f8dcb12a93	magnetita/docs/evidence/2026-09-13-program-closed.md
+33	0	self	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-A.numstat.tsv
+0	62	deleted	magnetita/docs/plans/active/2026-09-10-app-lifecycle.md
+48	0	01ac85de8c6da2cf12154b9940eb0f648f00c464af041ded21aaff808a77241b	magnetita/docs/plans/active/2026-09-13-app-design.md
+4	2	728ef5be8f4d5a4f7818e26fbf18232945be7f5fab12f7e5a958bd7bc7a50a03	magnetita/docs/plans/active/README.md
+64	0	a0b5a93ea01cd902beb7654c3e2655772ad91ce9b67e768919aca1cf123730ee	magnetita/docs/plans/archive/2026-09-10-app-lifecycle.md
+1	0	1eb96d51ec07d979623fde3acd531c7acba6296526aa4352ce8ea1d0c54741c6	magnetita/docs/plans/archive/README.md

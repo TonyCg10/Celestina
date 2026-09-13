@@ -5,7 +5,7 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
 ## VAL-MAG-15 — The phone's files in Siderita over the own wire
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** `MAG-P7` / `AND-5`
 - **Requires:** the deployed daemon, the release build on the S25U, a
   folder chosen in the application's "Archivos" row, the phone connected
@@ -15,12 +15,14 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 - **Pass condition:** the phone appears without `sshfs` or KDE Connect,
   the folders and files are the shared tree's, both copies arrive whole,
   and the rename and the deletion show on the phone
-- **Result:** not run
-- **Evidence:** the daemon's `storage` log lines and the files themselves
+- **Result:** the author browses the phone from Siderita daily since
+  2026-09-10 through the FUSE mount, whole-phone root; recorded on
+  2026-09-13 when the author closed the program
+- **Evidence:** [the closing record](docs/evidence/2026-09-13-program-closed.md); the daemon's `storage` log lines and the files themselves
 
 ## VAL-MAG-14 — The mirror over the link after a phone reboot
 
-- **Status:** pending
+- **Status:** passed
 - **Note:** the window controls the phone since 2026-09-10 (pointer,
   wheel, keys, right button Back, middle button Home, F1/F2/F3)
 - **Related implementation:** `MAG-P6` / `AND-4`
@@ -35,13 +37,17 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
   within a few seconds with no `adb` and no developer setting, the taps and
   drags land on the phone, Back navigates, and Stop closes the window and
   ends the capture on the phone
-- **Result:** not run
-- **Evidence:** the daemon's `mirror` log lines, the window, the phone's
+- **Result:** the author uses the link mirror since 2026-09-12: the
+  window opens from the shell's plugin with no `adb`, follows the phone's
+  turns, controls it and turns its screen off; declared working on
+  2026-09-13 ("listo ya funciona"), the reboot observed through the days
+  of use
+- **Evidence:** [the closing record](docs/evidence/2026-09-13-program-closed.md); the daemon's `mirror` log lines, the window, the phone's
   capture notification
 
 ## VAL-MAG-13 — The phone as trackpad, keyboard and command deck
 
-- **Status:** pending
+- **Status:** deferred
 - **Related implementation:** `MAG-P5` / `AND-3`
 - **Requires:** the deployed daemon, the release build on the S25U, the
   phone connected, a command registered in the desktop app's settings
@@ -51,12 +57,13 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 - **Pass condition:** the desktop's pointer follows the finger, clicks
   and scrolls land, the sentence appears where the desktop's focus is,
   and the command runs
-- **Result:** not run
+- **Result:** not exercised by the author; the program closed on
+  2026-09-13 with the mirror window as the control the author uses
 - **Evidence:** the daemon's log lines and the desktop itself
 
 ## VAL-MAG-12 — The daily set on the own wire
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** `MAG-P4` / `AND-2`
 - **Requires:** the deployed daemon, the release build of
   `magnetita-android` on the S25U, the phone paired over the own wire
@@ -67,12 +74,14 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 - **Pass condition:** each text arrives on the other side once, the tile
   and the share work without opening the application, and nothing is
   sent back and forth by itself
-- **Result:** not run
-- **Evidence:** the daemon's UI log lines and the phone's clipboard row
+- **Result:** the author's daily use since 2026-09-10 over the own wire:
+  clipboard, notifications, files, media, contacts, SMS and calls, with
+  the KDE Connect wire removed on the same day; recorded on 2026-09-13
+- **Evidence:** [the closing record](docs/evidence/2026-09-13-program-closed.md); the daemon's UI log lines and the phone's clipboard row
 
 ## VAL-MAG-11 — The own application pairs the S25U and holds a session
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** `MAG-P3` / `AND-1`
 - **Requires:** the deployed daemon with the own wire, the `magnetita-android`
   debug build installed on the S25U by hand
@@ -82,8 +91,10 @@ does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 - **Pass condition:** the phone appears in the desktop app as paired with its
   battery; the session survives screen off and the app switch, and returns
   after the Wi-Fi toggle without touching the phone
-- **Result:** not run
-- **Evidence:** the desktop app's device card and the daemon's log lines
+- **Result:** the S25U paired by scanning the desktop's QR on 2026-09-09
+  and has held its session since, reconnecting on its own; recorded on
+  2026-09-13
+- **Evidence:** [the closing record](docs/evidence/2026-09-13-program-closed.md); the desktop app's device card and the daemon's log lines
 
 ## VAL-MAG-10 — One highlight per row, glyphs for forget and pair
 

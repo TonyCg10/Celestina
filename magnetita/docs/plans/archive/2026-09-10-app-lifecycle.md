@@ -1,14 +1,16 @@
 # MAG-M1 — Deterministic app read/watch lifecycle
 
 - **Opened:** 2026-09-10
+- **Closed:** 2026-09-13
 - **Plan ID:** app-lifecycle
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author said "sigamos en lo que queda del roadmap"
   on 2026-09-10 with `MAG-P7` closed as far as `VAL-MAG-14` allows
 - **Scope:** magnetita
 - **Implementation checkpoint:** MAG-M1
 - **Author-validation checkpoint:** none; the roadmap closes `MAG-M1` on
   its own tests and the production exit
+- **Successor:** MAG-D1
 
 ## Hypothesis
 

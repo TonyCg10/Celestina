@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-M1-A` of
-  [`../plans/active/2026-09-10-app-lifecycle.md`](../plans/active/2026-09-10-app-lifecycle.md):
+  [`../plans/archive/2026-09-10-app-lifecycle.md`](../plans/archive/2026-09-10-app-lifecycle.md):
   `src/lifecycle.rs`, `src/main.rs`, this record
 - **Environment:** the workspace's tests
 - **Artifact:** none; the models adopt the owner in `MAG-M1-B`

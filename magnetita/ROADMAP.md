@@ -706,8 +706,9 @@ outcome is an application on each side the author calls finished.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| MAG-D1-A | planned | none | The desktop application's pages reviewed against the suite's language | `qmllint`, app tests |
-| MAG-D1-B | planned | MAG-D1-A | The author's refinements, as they come | `qmllint`, app tests |
+| MAG-D1-A | done | none | The checkpoint opened; `MAG-M1` archived; the validations recorded | documentation guard |
+| MAG-D1-B | planned | MAG-D1-A | The desktop application's pages reviewed against the suite's language | `qmllint`, app tests |
+| MAG-D1-C | planned | MAG-D1-B | The author's refinements, as they come | `qmllint`, app tests |
 
 ## Implementation exit
 

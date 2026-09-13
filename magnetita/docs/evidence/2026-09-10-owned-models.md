@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-M1-B` of
-  [`../plans/active/2026-09-10-app-lifecycle.md`](../plans/active/2026-09-10-app-lifecycle.md):
+  [`../plans/archive/2026-09-10-app-lifecycle.md`](../plans/archive/2026-09-10-app-lifecycle.md):
   `src/controller.rs`, `src/messages.rs`, `src/commands.rs`,
   `src/devices.rs`, the plan indexes and the archived `MAG-P7` plan, this
   record

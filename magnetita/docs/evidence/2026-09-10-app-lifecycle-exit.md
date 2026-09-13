@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-10
 - **Scope:** `MAG-M1-C` of
-  [`../plans/active/2026-09-10-app-lifecycle.md`](../plans/active/2026-09-10-app-lifecycle.md):
+  [`../plans/archive/2026-09-10-app-lifecycle.md`](../plans/archive/2026-09-10-app-lifecycle.md):
   `STATUS.md`, this record
 - **Environment:** the author's session
 - **Artifact:** `magnetita` and `magnetitad`, built, verified and installed

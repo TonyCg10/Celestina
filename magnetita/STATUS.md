@@ -1,6 +1,6 @@
 # Magnetita status
 
-- **Updated:** 2026-09-10
+- **Updated:** 2026-09-13
 - **Reconnection:** a phone that dials again while its earlier session
   is still open on this side (its application restarted or reinstalled)
   supersedes it since 2026-09-11: the older session is told to leave and
@@ -17,10 +17,11 @@
   swipe, right button Back, middle Home, F1/F2/F3 Back/Home/Recents). The
   daemon spawns no `mpv` and no `ffmpeg`; the window opens when the phone
   streams and closes with it, and closing it stops the mirror.
-- **Implementation:** `MAG-M1`, the app's deterministic read/watch
-  lifecycle, is the active checkpoint since 2026-09-10 and its three units
-  are done: every thread the app spawns answers to one owner per model,
-  joined on drop. `MAG-P7`, storage over the own wire and the retirement
+- **Implementation:** `MAG-D1`, the design of the two applications, is
+  the one open checkpoint since 2026-09-13: the author closed the
+  own-protocol program with `VAL-MAG-11`, `-12`, `-14` and `-15` passed
+  and `-13` deferred, and `MAG-P7-D` retired the adb mirror picture (the
+  adb worker keeps the screen off). `MAG-M1` is archived. `MAG-P7`, storage over the own wire and the retirement
   of the second path, is archived, paired with `magnetita-android`'s
   `AND-5`; the storage capability, the FUSE mount and the removal of the
   KDE Connect wire are done, and `MAG-P7-D` (the `adb` mirror path) waits
@@ -195,7 +196,8 @@ its refusals are proven, the delivery of a file to a phone is not. See the
 ## Records
 
 - [Implementation roadmap](ROADMAP.md)
-- [Active plan MAG-M1](docs/plans/active/2026-09-10-app-lifecycle.md)
+- [Active plan MAG-D1](docs/plans/active/2026-09-13-app-design.md)
+- [Archived plan MAG-M1](docs/plans/archive/2026-09-10-app-lifecycle.md)
 - [Archived plan MAG-P7](docs/plans/archive/2026-09-10-storage-and-retirement.md)
 - [Archived plan MAG-P6](docs/plans/archive/2026-09-09-link-mirror.md)
 - [Archived plan MAG-P5](docs/plans/archive/2026-09-09-remote-control.md)
