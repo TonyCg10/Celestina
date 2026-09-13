@@ -2330,6 +2330,7 @@ mod tests {
                 bitrate_kbps: 6000,
                 codec: Codec::Hevc,
                 audio: false,
+                screen_off: false,
             },
         );
         let start =

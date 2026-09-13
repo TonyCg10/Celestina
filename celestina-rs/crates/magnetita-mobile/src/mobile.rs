@@ -230,6 +230,7 @@ pub struct MobileMirrorStart {
     /// 0 HEVC, 1 H.264.
     pub codec: u8,
     pub audio: bool,
+    pub screen_off: bool,
 }
 
 #[derive(uniffi::Record, Clone)]
@@ -835,6 +836,7 @@ impl MobileSession {
                             Codec::H264 => 1,
                         },
                         audio: m.audio,
+                        screen_off: m.screen_off,
                     }),
                     mirror_stop: mirror.stop,
                     mirror_keyframe: mirror.keyframe,

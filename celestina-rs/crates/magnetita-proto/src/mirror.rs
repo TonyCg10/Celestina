@@ -23,6 +23,9 @@ pub struct MirrorStart {
     pub bitrate_kbps: u32,
     pub codec: Codec,
     pub audio: bool,
+    /// Dim the phone's screen while it streams (a normal app cannot turn
+    /// the panel off), restoring it after.
+    pub screen_off: bool,
 }
 
 /// Phone → desktop: streaming, with what the encoder actually produces.
@@ -143,17 +146,22 @@ impl MirrorStart {
     pub const KIND: u16 = 1;
 
     pub fn encode(&self) -> Vec<u8> {
-        Map::new(5)
+        let m = Map::new(count(5, &[self.screen_off]))
             .u16(0, self.max_size)
             .u8(1, self.fps)
             .u32(2, self.bitrate_kbps)
             .u8(3, self.codec.to_wire())
-            .bool(4, self.audio)
-            .finish()
+            .bool(4, self.audio);
+        if self.screen_off {
+            m.bool(5, true).finish()
+        } else {
+            m.finish()
+        }
     }
 
     pub fn decode(body: &[u8]) -> Result<Self, DecodeError> {
         let (mut size, mut fps, mut bitrate, mut codec, mut audio) = (None, None, None, None, None);
+        let mut screen_off = None;
         codec::read(body, "mirror start", |k, d| {
             match k {
                 0 => size = Some(bound::u16(d, "max_size")?),
@@ -161,6 +169,7 @@ impl MirrorStart {
                 2 => bitrate = Some(bound::u32(d, "bitrate_kbps")?),
                 3 => codec = Some(Codec::from_wire(bound::u8(d, "codec")?)?),
                 4 => audio = Some(bound::bool(d, "audio")?),
+                5 => screen_off = Some(bound::bool(d, "screen_off")?),
                 _ => return Ok(false),
             }
             Ok(true)
@@ -175,6 +184,7 @@ impl MirrorStart {
             bitrate_kbps: required(bitrate, "bitrate_kbps")?,
             codec: required(codec, "codec")?,
             audio: audio.unwrap_or(false),
+            screen_off: screen_off.unwrap_or(false),
         })
     }
 }
@@ -352,6 +362,7 @@ mod tests {
             bitrate_kbps: 12_000,
             codec: Codec::Hevc,
             audio: true,
+            screen_off: false,
         };
         assert_eq!(hex(&s.encode()), START);
         assert_eq!(MirrorStart::decode(&unhex(START)).unwrap(), s);
@@ -405,6 +416,7 @@ mod tests {
                 bitrate_kbps: 1,
                 codec: Codec::H264,
                 audio: false,
+                screen_off: false,
             }
         };
         assert_eq!(

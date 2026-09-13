@@ -568,6 +568,7 @@ pub(crate) fn start_from_options(
         },
         codec: Codec::Hevc,
         audio: get("audio") == "desktop",
+        screen_off: get("screenOff") == "true",
     }
 }
 
