@@ -23,12 +23,17 @@ Window {
     transientParent: null
     title: qsTr("Espejo")
     color: CelestinaTheme.canvas
-    // The tile's size fitted to the picture, computed before the first
-    // show; niri honours the requested width for this window.
-    width: view.initialWidth > 0 ? view.initialWidth : (view.pictureWidth > 0 ? view.pictureWidth : 460)
-    height: view.initialHeight > 0 ? view.initialHeight : (view.pictureHeight > 0 ? view.pictureHeight : 998)
-    minimumWidth: 120
-    minimumHeight: 120
+    // The fitted size, computed before the first show and on every turn,
+    // declared as the window's fixed size: the compositor maps it at that
+    // size and follows each change in one move.
+    readonly property int fixedWidth: view.initialWidth > 0 ? view.initialWidth : (view.pictureWidth > 0 ? view.pictureWidth : 460)
+    readonly property int fixedHeight: view.initialHeight > 0 ? view.initialHeight : (view.pictureHeight > 0 ? view.pictureHeight : 998)
+    width: fixedWidth
+    height: fixedHeight
+    minimumWidth: fixedWidth
+    minimumHeight: fixedHeight
+    maximumWidth: fixedWidth
+    maximumHeight: fixedHeight
 
     onClosing: function(close) {
         close.accepted = true

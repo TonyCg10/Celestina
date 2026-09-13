@@ -54,8 +54,9 @@ pub mod qobject {
         #[qproperty(u64, render_handle)]
         #[qproperty(i32, picture_width)]
         #[qproperty(i32, picture_height)]
-        /// The size the window opens at: the tile it will land in, fitted
-        /// to the picture before the window shows, so it never shrinks.
+        /// The window's fixed size: the tile it lands in, fitted to the
+        /// picture, computed before it shows and again when the picture
+        /// turns; the window declares it as its minimum and maximum.
         #[qproperty(i32, initial_width)]
         #[qproperty(i32, initial_height)]
         #[qproperty(QString, error)]
@@ -106,15 +107,6 @@ pub mod qobject {
 /// The gap niri keeps around a tile, in logical pixels, as the author's
 /// configuration sets it.
 const NIRI_GAP: i32 = 12;
-
-fn niri_action(args: &[&str]) {
-    let _ = std::process::Command::new("niri")
-        .args(["msg", "action"])
-        .args(args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
-}
 
 fn niri_json(what: &str) -> Option<serde_json::Value> {
     let out = std::process::Command::new("niri")
@@ -638,37 +630,31 @@ impl qobject::MirrorView {
         }
     }
 
-    /// On niri the layout owns the tile's size; what a window can ask is a
-    /// column width and a window height, which `niri msg` grants. Sized
-    /// from the output the window is on and the tiles beside it, at the
-    /// picture's aspect: a tall picture takes the tile's height, a wide one
-    /// the output's width. Elsewhere this does nothing.
-    pub fn fit(self: Pin<&mut Self>, width: i32, height: i32, wanted: i32) {
+    /// The window's size is its own to declare: fixed size hints the
+    /// compositor honours when it maps the window and whenever they
+    /// change. This computes them from the output the window is on and
+    /// the tiles beside it, at the picture's aspect: a tall picture takes
+    /// the tile's height, a wide one the output's width. Elsewhere than
+    /// niri the hints stay at the picture's size.
+    pub fn fit(mut self: Pin<&mut Self>, _width: i32, height: i32, wanted: i32) {
         if wanted < 100 || height < 100 {
             return;
         }
         let pid = std::process::id();
         let (picture_width, picture_height) = (*self.picture_width(), *self.picture_height());
+        let qt = self.as_mut().qt_thread();
         self.rust().owned.spawn(move |guard: Guard| {
             let Some(tile) = niri_tile(pid) else {
                 return;
             };
-            let Some(id) = tile.id else {
-                return;
-            };
             let (fit_width, fit_height) = fitted_size(&tile, picture_width, picture_height);
-            if !guard.open() || ((width - fit_width).abs() <= 2 && (height - fit_height).abs() <= 2)
-            {
+            if !guard.open() {
                 return;
             }
-            let id = id.to_string();
-            if fit_height >= tile.tile_height {
-                // The tile's own height: hand it back to the layout.
-                niri_action(&["reset-window-height", "--id", &id]);
-            } else {
-                niri_action(&["set-window-height", "--id", &id, &fit_height.to_string()]);
-            }
-            niri_action(&["set-window-width", "--id", &id, &fit_width.to_string()]);
+            let _ = qt.queue(move |mut view: Pin<&mut qobject::MirrorView>| {
+                view.as_mut().set_initial_width(fit_width);
+                view.as_mut().set_initial_height(fit_height);
+            });
         });
     }
 
