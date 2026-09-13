@@ -32,6 +32,9 @@ qrcode = { version = "0.14.1", default-features = false }
 # The app is a thin client of the magnetitad service — it reads
 # org.celestina.Devices1 over the session bus, no transport of its own.
 zbus = "5"
+# niri's IPC answers in JSON: the window, its workspace and output, so the
+# mirror window can size itself to the tile it lands in.
+serde_json = "1"
 
 [build-dependencies]
 # The render seam: the hand-written `QQuickFramebufferObject` that drives

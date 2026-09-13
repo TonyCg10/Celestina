@@ -54,6 +54,10 @@ pub mod qobject {
         #[qproperty(u64, render_handle)]
         #[qproperty(i32, picture_width)]
         #[qproperty(i32, picture_height)]
+        /// The size the window opens at: the tile it will land in, fitted
+        /// to the picture before the window shows, so it never shrinks.
+        #[qproperty(i32, initial_width)]
+        #[qproperty(i32, initial_height)]
         #[qproperty(QString, error)]
         type MirrorView = super::MirrorViewRust;
 
@@ -112,44 +116,90 @@ fn niri_action(args: &[&str]) {
         .status();
 }
 
-/// The logical width of `niri msg --json focused-output`.
-fn niri_logical_width(json: &str) -> Option<i32> {
-    let at = json.find("\"logical\":")?;
-    let rest = &json[at..];
-    let w = rest.find("\"width\":")?;
-    rest[w + "\"width\":".len()..]
-        .split(|c: char| !c.is_ascii_digit())
-        .next()?
-        .parse()
-        .ok()
+fn niri_json(what: &str) -> Option<serde_json::Value> {
+    let out = std::process::Command::new("niri")
+        .args(["msg", "--json", what])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    serde_json::from_slice(&out.stdout).ok()
 }
 
-/// The id of this process's window whose title starts with `title`, in
-/// `niri msg --json windows`; read without a JSON crate, the fields are
-/// flat and named.
-fn niri_window_id(json: &str, pid: u32, title: &str) -> Option<u64> {
-    let mut at = 0;
-    while let Some(rel) = json[at..].find("{\"id\":") {
-        let start = at + rel;
-        let end = json[start + 1..]
-            .find("{\"id\":")
-            .map(|r| start + 1 + r)
-            .unwrap_or(json.len());
-        let object = &json[start..end];
-        at = end;
-        let id: u64 = object
-            .trim_start_matches("{\"id\":")
-            .split(|c: char| !c.is_ascii_digit())
-            .next()?
-            .parse()
-            .ok()?;
-        let mine = object.contains(&format!("\"pid\":{pid}"))
-            && object.contains(&format!("\"title\":\"{title}"));
-        if mine {
-            return Some(id);
-        }
+/// Where a mirror window lives, or will: the output's logical size and the
+/// height of the tiles on its workspace, so a window can be sized to the
+/// tile before it shows and refitted when it turns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Tile {
+    /// The window's id, when it already exists.
+    id: Option<u64>,
+    output_width: i32,
+    output_height: i32,
+    /// The tallest tiled window on the workspace, the height a new tile
+    /// gets; the window's own height when it is alone.
+    tile_height: i32,
+}
+
+/// The tile of this process's mirror window (title `Espejo`) if it is
+/// mapped, else the tile a new window would get on the focused workspace.
+fn niri_tile(pid: u32) -> Option<Tile> {
+    let windows = niri_json("windows")?;
+    let workspaces = niri_json("workspaces")?;
+    let outputs = niri_json("outputs")?;
+    let list = windows.as_array()?;
+    let mine = list.iter().find(|w| {
+        w["pid"].as_u64() == Some(u64::from(pid))
+            && w["title"].as_str().is_some_and(|t| t.starts_with("Espejo"))
+    });
+    let workspace_id = match mine {
+        Some(w) => w["workspace_id"].as_u64()?,
+        None => workspaces
+            .as_array()?
+            .iter()
+            .find(|ws| ws["is_focused"].as_bool() == Some(true))?["id"]
+            .as_u64()?,
+    };
+    let output_name = workspaces
+        .as_array()?
+        .iter()
+        .find(|ws| ws["id"].as_u64() == Some(workspace_id))?["output"]
+        .as_str()?
+        .to_owned();
+    let logical = &outputs[&output_name]["logical"];
+    let output_width = logical["width"].as_i64()? as i32;
+    let output_height = logical["height"].as_i64()? as i32;
+    let tallest = list
+        .iter()
+        .filter(|w| {
+            w["workspace_id"].as_u64() == Some(workspace_id)
+                && w["is_floating"].as_bool() != Some(true)
+        })
+        .filter_map(|w| w["layout"]["window_size"][1].as_i64())
+        .max()
+        .map(|h| h as i32);
+    Some(Tile {
+        id: mine.and_then(|w| w["id"].as_u64()),
+        output_width,
+        output_height,
+        tile_height: tallest.unwrap_or(output_height - 2 * NIRI_GAP),
+    })
+}
+
+/// The window size that shows the whole picture at its aspect inside the
+/// tile: the tile's height with the width that follows, unless that is
+/// wider than the output, in which case the output's width with the
+/// height that follows.
+fn fitted_size(tile: &Tile, picture_width: i32, picture_height: i32) -> (i32, i32) {
+    if picture_width <= 0 || picture_height <= 0 {
+        return (tile.tile_height, tile.tile_height);
     }
-    None
+    let aspect = f64::from(picture_width) / f64::from(picture_height);
+    let max_width = tile.output_width - 2 * NIRI_GAP;
+    let width = (f64::from(tile.tile_height) * aspect).round() as i32;
+    if width <= max_width {
+        (width, tile.tile_height)
+    } else {
+        (max_width, (f64::from(max_width) / aspect).round() as i32)
+    }
 }
 
 /// What the input worker sends the daemon, in order.
@@ -164,6 +214,8 @@ enum Outbound {
 pub struct MirrorViewRust {
     streaming: bool,
     done: bool,
+    initial_width: i32,
+    initial_height: i32,
     render_handle: u64,
     picture_width: i32,
     picture_height: i32,
@@ -237,7 +289,8 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
         ("container-fps-override", "60".into()),
         ("correct-pts", "no".into()),
         ("untimed", "yes".into()),
-        ("keep-open", "yes".into()),
+        ("keep-open", "no".into()),
+        ("idle", "yes".into()),
         // A still phone sends ten frames a second, not sixty: never pause to
         // fill a cache that a live stream cannot fill.
         ("cache-pause", "no".into()),
@@ -334,12 +387,33 @@ impl qobject::MirrorView {
                         if let Err(error) = engine.command("loadfile", &[&video, "replace"]) {
                             eprintln!("magnetita: mirror switch: {error}");
                         }
+                        // The old stream's end left the core paused.
+                        let _ = engine.set("pause", "no");
                     }
                     self.as_mut().rust_mut().get_mut().current_video = Some(video);
+                    self.as_mut().set_streaming(true);
                 } else if self.rust().engine.is_none() && !self.rust().closing {
                     self.as_mut().open(video);
+                    // Size the window to the tile it will land in before it
+                    // shows, so it appears at its final size.
+                    let qt = self.as_mut().qt_thread();
+                    let pid = std::process::id();
+                    self.rust().owned.spawn(move |guard: Guard| {
+                        let size = niri_tile(pid).map(|tile| fitted_size(&tile, width, height));
+                        if !guard.open() {
+                            return;
+                        }
+                        let _ = qt.queue(move |mut view: Pin<&mut qobject::MirrorView>| {
+                            if let Some((w, h)) = size {
+                                view.as_mut().set_initial_width(w);
+                                view.as_mut().set_initial_height(h);
+                            }
+                            view.as_mut().set_streaming(true);
+                        });
+                    });
+                } else {
+                    self.as_mut().set_streaming(true);
                 }
-                self.as_mut().set_streaming(true);
             }
             "failed" => {
                 self.as_mut()
@@ -565,53 +639,36 @@ impl qobject::MirrorView {
     }
 
     /// On niri the layout owns the tile's size; what a window can ask is a
-    /// column width and a window height, which `niri msg` grants. The
-    /// picture's aspect decides: the width that fits the height, unless
-    /// that overflows the output (a phone on its side), in which case the
-    /// width is the output's and the height follows the aspect. Elsewhere
-    /// this does nothing.
+    /// column width and a window height, which `niri msg` grants. Sized
+    /// from the output the window is on and the tiles beside it, at the
+    /// picture's aspect: a tall picture takes the tile's height, a wide one
+    /// the output's width. Elsewhere this does nothing.
     pub fn fit(self: Pin<&mut Self>, width: i32, height: i32, wanted: i32) {
-        if (width - wanted).abs() <= 2 || wanted < 100 || height < 100 {
+        if wanted < 100 || height < 100 {
             return;
         }
         let pid = std::process::id();
-        let aspect = f64::from(wanted) / f64::from(height);
+        let (picture_width, picture_height) = (*self.picture_width(), *self.picture_height());
         self.rust().owned.spawn(move |guard: Guard| {
-            let Ok(out) = std::process::Command::new("niri")
-                .args(["msg", "--json", "windows"])
-                .stderr(std::process::Stdio::null())
-                .output()
-            else {
+            let Some(tile) = niri_tile(pid) else {
                 return;
             };
-            let text = String::from_utf8_lossy(&out.stdout);
-            let Some(id) = niri_window_id(&text, pid, "Espejo") else {
+            let Some(id) = tile.id else {
                 return;
             };
-            // The output this window sits on: the widest a tile can be,
-            // less niri's gaps either side.
-            let output_width = std::process::Command::new("niri")
-                .args(["msg", "--json", "focused-output"])
-                .stderr(std::process::Stdio::null())
-                .output()
-                .ok()
-                .and_then(|out| niri_logical_width(&String::from_utf8_lossy(&out.stdout)))
-                .map(|w| w - 2 * NIRI_GAP)
-                .unwrap_or(i32::MAX);
-            if !guard.open() {
+            let (fit_width, fit_height) = fitted_size(&tile, picture_width, picture_height);
+            if !guard.open() || ((width - fit_width).abs() <= 2 && (height - fit_height).abs() <= 2)
+            {
                 return;
             }
             let id = id.to_string();
-            if wanted <= output_width {
-                niri_action(&["set-window-width", "--id", &id, &wanted.to_string()]);
+            if fit_height >= tile.tile_height {
+                // The tile's own height: hand it back to the layout.
+                niri_action(&["reset-window-height", "--id", &id]);
             } else {
-                // A phone on its side is wider than the output at its own
-                // aspect: the width is the output's and the height follows
-                // the aspect, so the picture keeps its shape.
-                let fitted_height = (f64::from(output_width) / aspect).round() as i32;
-                niri_action(&["set-window-width", "--id", &id, &output_width.to_string()]);
-                niri_action(&["set-window-height", "--id", &id, &fitted_height.to_string()]);
+                niri_action(&["set-window-height", "--id", &id, &fit_height.to_string()]);
             }
+            niri_action(&["set-window-width", "--id", &id, &fit_width.to_string()]);
         });
     }
 
@@ -626,17 +683,15 @@ impl qobject::MirrorView {
 #[cfg(test)]
 mod niri {
     #[test]
-    fn the_mirror_window_of_this_process_is_found_by_pid_and_title() {
-        let json = r#"[{"id":7,"title":"Magnetita","app_id":"org.celestina.Magnetita","pid":42,"layout":{"window_size":[500,900]}},{"id":9,"title":"Espejo \u2014 Magnetita","app_id":"org.celestina.Magnetita","pid":42,"layout":{"window_size":[942,1010]}}]"#;
-        assert_eq!(super::niri_window_id(json, 42, "Espejo"), Some(9));
-        assert_eq!(super::niri_window_id(json, 42, "Magnetita"), Some(7));
-        assert_eq!(super::niri_window_id(json, 43, "Espejo"), None);
-    }
-
-    #[test]
-    fn the_focused_output_width_is_read() {
-        let json = r#"{"name":"HDMI-A-1","logical":{"x":1920,"y":0,"width":2560,"height":1440,"scale":1.5}}"#;
-        assert_eq!(super::niri_logical_width(json), Some(2560));
+    fn the_fit_takes_the_tile_height_or_the_output_width() {
+        let tile = super::Tile {
+            id: Some(1),
+            output_width: 1920,
+            output_height: 1080,
+            tile_height: 1010,
+        };
+        assert_eq!(super::fitted_size(&tile, 664, 1440), (466, 1010));
+        assert_eq!(super::fitted_size(&tile, 1440, 664), (1896, 874));
     }
 }
 

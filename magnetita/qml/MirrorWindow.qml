@@ -23,8 +23,10 @@ Window {
     transientParent: null
     title: qsTr("Espejo")
     color: CelestinaTheme.canvas
-    width: view.pictureWidth > 0 ? view.pictureWidth : 460
-    height: view.pictureHeight > 0 ? view.pictureHeight : 998
+    // The tile's size fitted to the picture, computed before the first
+    // show; niri honours the requested width for this window.
+    width: view.initialWidth > 0 ? view.initialWidth : (view.pictureWidth > 0 ? view.pictureWidth : 460)
+    height: view.initialHeight > 0 ? view.initialHeight : (view.pictureHeight > 0 ? view.pictureHeight : 998)
     minimumWidth: 120
     minimumHeight: 120
 
