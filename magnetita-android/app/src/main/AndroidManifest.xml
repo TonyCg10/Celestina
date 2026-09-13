@@ -12,6 +12,9 @@
     <!-- The phone's playback, captured for the desktop when the mirror's
          sound is set to play there. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- The screen dimmed while the desktop mirrors it; granted on the
+         system's page. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- The whole phone as the shared root; the tree picker cannot name the
          root, so the person grants this once in the system settings. -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"

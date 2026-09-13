@@ -36,6 +36,14 @@ class MirrorConsentActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val options = MirrorService.readOptions(intent)
+        // Dimming the screen needs the system-settings permission, granted
+        // once on the system's page; asked here, before the capture.
+        if (options?.screenOff == true && !android.provider.Settings.System.canWrite(this)) {
+            startActivity(
+                Intent(android.provider.Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:$packageName"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
         val wantsAudio = options?.audio == true
         val hasAudio = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (wantsAudio && !hasAudio) {

@@ -176,7 +176,7 @@ class StorageRequest(
 data class StorageEntry(val name: String, val dir: Boolean, val size: Long, val mtimeMs: Long)
 
 /** What the desktop asks the mirror to be; `codec` 0 HEVC, 1 H.264. */
-data class MirrorOptions(val maxSize: Int, val fps: Int, val bitrateKbps: Int, val codec: Int, val audio: Boolean)
+data class MirrorOptions(val maxSize: Int, val fps: Int, val bitrateKbps: Int, val codec: Int, val audio: Boolean, val screenOff: Boolean = false)
 
 /** A touch on the mirrored picture: `phase` 0 down, 1 move, 2 up. */
 data class MirrorTouch(val phase: Int, val x: Int, val y: Int, val pointer: Int)

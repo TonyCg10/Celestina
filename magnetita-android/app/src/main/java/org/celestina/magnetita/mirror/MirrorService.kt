@@ -121,6 +121,7 @@ class MirrorService : Service() {
         private const val EXTRA_BITRATE = "bitrate"
         private const val EXTRA_CODEC = "codec"
         private const val EXTRA_AUDIO = "audio"
+        private const val EXTRA_SCREEN_OFF = "screenOff"
 
         private val _state = MutableStateFlow<MirrorState>(MirrorState.Idle)
         val state: StateFlow<MirrorState> = _state.asStateFlow()
@@ -132,7 +133,7 @@ class MirrorService : Service() {
         fun putOptions(intent: Intent, options: MirrorOptions): Intent = intent
             .putExtra(EXTRA_MAX, options.maxSize).putExtra(EXTRA_FPS, options.fps)
             .putExtra(EXTRA_BITRATE, options.bitrateKbps).putExtra(EXTRA_CODEC, options.codec)
-            .putExtra(EXTRA_AUDIO, options.audio)
+            .putExtra(EXTRA_AUDIO, options.audio).putExtra(EXTRA_SCREEN_OFF, options.screenOff)
 
         fun readOptions(intent: Intent): MirrorOptions? {
             if (!intent.hasExtra(EXTRA_FPS)) return null
@@ -140,6 +141,7 @@ class MirrorService : Service() {
                 intent.getIntExtra(EXTRA_MAX, 1440), intent.getIntExtra(EXTRA_FPS, 60),
                 intent.getIntExtra(EXTRA_BITRATE, 6000), intent.getIntExtra(EXTRA_CODEC, 0),
                 intent.getBooleanExtra(EXTRA_AUDIO, false),
+                intent.getBooleanExtra(EXTRA_SCREEN_OFF, false),
             )
         }
 

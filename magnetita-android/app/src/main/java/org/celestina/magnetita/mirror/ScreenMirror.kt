@@ -38,6 +38,8 @@ class ScreenMirror(
     private var codec: MediaCodec? = null
     /** The phone's playback, captured for the desktop while the sound is set to play there. */
     private var audio: AudioCapture? = null
+    /** The screen dimmed while streaming, when asked; restored at stop. */
+    private var dimmer: ScreenDimmer? = null
     private var display: VirtualDisplay? = null
     private var surface: Surface? = null
     private val thread = HandlerThread("mirror-encoder").apply { start() }
@@ -179,6 +181,9 @@ class ScreenMirror(
             if (audio == null && options.audio) {
                 audio = AudioCapture(context, projection, live).takeIf { it.start() }
             }
+            if (dimmer == null && options.screenOff) {
+                dimmer = ScreenDimmer(context).takeIf { it.dim() }
+            }
             live.sendMirrorStarted(picture.first, picture.second, options.codec, audio != null)
             android.util.Log.i("ScreenMirror", "streaming ${picture.first}x${picture.second} audio=${audio != null}")
         }.onFailure {
@@ -212,6 +217,8 @@ class ScreenMirror(
         runCatching { surface?.release() }
         audio?.stop()
         audio = null
+        dimmer?.restore()
+        dimmer = null
         runCatching { projection.stop() }
         live.closeStream(MirrorStreams.VIDEO)
         thread.quitSafely()
