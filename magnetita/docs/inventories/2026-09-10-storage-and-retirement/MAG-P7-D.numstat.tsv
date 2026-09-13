@@ -1,0 +1,17 @@
+# MAG-P7-D exact change inventory
+
+Base revision	665910495ca7f512cbc416ba83fb4d960bc177bf
+Pathspec	celestina-rs/crates/magnetitad/src/mirror.rs
+Pathspec	magnetita/ROADMAP.md
+Pathspec	magnetita/docs/evidence/2026-09-13-adb-mirror-retired.md
+Pathspec	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-D.numstat.tsv
+Pathspec	magnetita/docs/plans/archive/2026-09-10-storage-and-retirement.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	92	54402d4fdc1ba451ee2226b193fee71003f0c00f30c674cee6fb281f676d28c9	celestina-rs/crates/magnetitad/src/mirror.rs
+48	7	c97513c08a25241513a61ae13141f60eb2f89917e08bf75ad9b5269433804514	magnetita/ROADMAP.md
+37	0	da1ffaf92bb90ec8f188284cd60b0c78ee231001da901b11b82a64496e312f02	magnetita/docs/evidence/2026-09-13-adb-mirror-retired.md
+17	0	self	magnetita/docs/inventories/2026-09-10-storage-and-retirement/MAG-P7-D.numstat.tsv
+4	3	fb0d7532e696b953e135c8c8818e1c8c7815a7c0c4ba1f64d7ce5663633d81f1	magnetita/docs/plans/archive/2026-09-10-storage-and-retirement.md

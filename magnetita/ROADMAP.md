@@ -1,16 +1,20 @@
 # Magnetita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** MAG-M1
+- **Active implementation checkpoint:** MAG-D1
 - **Related author validation:** `VAL-MAG-01` through `VAL-MAG-08` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`MAG-M1` is executing under
-[its plan](docs/plans/active/2026-09-10-app-lifecycle.md). `MAG-P7` is
-closed under
+`MAG-D1`, the design of the two applications, is executing under
+[its plan](docs/plans/active/2026-09-13-app-design.md), the one open
+checkpoint since the author closed the own-protocol program on 2026-09-13
+with `VAL-MAG-11`, `-12`, `-14` and `-15` passed and `-13` deferred.
+`MAG-M1` is closed under
+[its archived plan](docs/plans/archive/2026-09-10-app-lifecycle.md).
+`MAG-P7` is closed under
 [its archived plan](docs/plans/archive/2026-09-10-storage-and-retirement.md),
 paired with the `magnetita-android` project's own `AND-5`, its `MAG-P7-D`
-waiting on the author's `VAL-MAG-14`. `MAG-P6` is closed under
+run on 2026-09-13. `MAG-P6` is closed under
 [its archived plan](docs/plans/archive/2026-09-09-link-mirror.md), paired
 with `AND-4`, its last observation the author's `VAL-MAG-14`. `MAG-P5` is
 closed under
@@ -658,7 +662,7 @@ opens no KDE Connect port, as the concluded discussion directs.
 | MAG-P7-C | done | MAG-P7-B | The KDE Connect wire, pairing v8 and the mount removed | workspace tests, `scripts/complete-production.sh` |
 | MAG-P7-E | done | MAG-P7-B | The mount's listing, attribute and read-window caches | daemon mount test |
 | MAG-P7-F | done | MAG-P7-E | The range bound under the envelope's body limit | protocol tests |
-| MAG-P7-D | planned | VAL-MAG-14 | The `adb`/`scrcpy` mirror path removed; `Mirror1` keeps its methods | daemon tests, `scripts/complete-production.sh` |
+| MAG-P7-D | done | VAL-MAG-14 | The `adb`/`scrcpy` mirror picture removed; `Mirror1` keeps its methods; the adb worker keeps the screen off | daemon tests, `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -669,10 +673,47 @@ the daemon binds only the own protocol's port, spawns neither `sshfs` nor
 `MAG-P7-A` through `-C` implemented on 2026-09-10: the mount test browses
 the peer's tree through `std::fs`, the daemon binds only the own wire's
 port and spawns no `sshfs`, and the baselines record the shrunk daemon.
-`MAG-P7-D` waits on `VAL-MAG-14`.
+`MAG-P7-D` ran on 2026-09-13 once `VAL-MAG-14` passed.
 
 ## Closed evidence
 
 The released CP0-CP4 implementation and 2026-07-29 hardening record are
 preserved in the
 [roadmap history](docs/history/roadmap-through-2026-08-03.md).
+
+## MAG-D1 — The design of the two applications
+
+## Hypothesis and tangible outcome
+
+With the protocol, the daemon and both applications complete and in daily
+use, what remains is how they look and feel: the desktop application's
+pages and the Android application's screens, against the suite's visual
+language and MilaHub's, as the author judges them in use. The tangible
+outcome is an application on each side the author calls finished.
+
+## Scope
+
+- The desktop application's pages, components and motion.
+- The Android application's screens, the tab pill, the header and the
+  icons (`AND-6` on the Android project).
+- No new capability, no protocol change.
+
+## Exclusions
+
+- Anything the daemon does; the mirror's engine; the wire.
+
+## Build order
+
+| Unit | Status | Dependency | Implementation result | Agent evidence |
+|---|---|---|---|---|
+| MAG-D1-A | planned | none | The desktop application's pages reviewed against the suite's language | `qmllint`, app tests |
+| MAG-D1-B | planned | MAG-D1-A | The author's refinements, as they come | `qmllint`, app tests |
+
+## Implementation exit
+
+Close `MAG-D1` when the author says the applications look finished; there
+is no other measure.
+
+## Closed evidence
+
+- `MAG-P7-D`: [adb mirror retired](docs/evidence/2026-09-13-adb-mirror-retired.md)

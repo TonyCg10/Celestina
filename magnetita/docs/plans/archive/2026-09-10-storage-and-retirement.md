@@ -10,8 +10,8 @@
   magnetita-proto, magnetita-mobile, magnetita-peer
 - **Implementation checkpoint:** MAG-P7
 - **Author-validation checkpoint:** `VAL-MAG-15` in
-  [`../../../VALIDATION.md`](../../../VALIDATION.md); `MAG-P7-D` waits on
-  `VAL-MAG-14` and runs as a maintenance unit when the author records it
+  [`../../../VALIDATION.md`](../../../VALIDATION.md); `MAG-P7-D` ran on
+  2026-09-13 once `VAL-MAG-14` passed
 - **Successor:** MAG-M1
 
 ## Hypothesis
@@ -48,7 +48,7 @@ only what both ends share.
 - `MAG-P7-F` — the range bound: a read or write carries the envelope's
   megabyte less room for its own fields, so a full window never trips the
   link's body bound.
-- `MAG-P7-D` — not in this ledger: the `adb`/`scrcpy` mirror path removed once `VAL-MAG-14`
+- `MAG-P7-D` — the `adb`/`scrcpy` mirror picture removed once `VAL-MAG-14`
   has observed the own mirror after a reboot; `Mirror1` keeps its methods.
 
 ## Exclusions
@@ -77,4 +77,5 @@ the shrunk daemon.
 | MAG-P7-B | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-B.numstat.tsv) | 19 files, +1508/-126 | The daemon's storage client and FUSE mount; `MAG-P6` archived and `MAG-P7` opened | [record](../../evidence/2026-09-10-phone-mount.md) | `VAL-MAG-15` |
 | MAG-P7-C | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-C.numstat.tsv) | 45 files, +342/-8045 | The KDE Connect wire, pairing v8 and the `sshfs` mount removed | [record](../../evidence/2026-09-10-kde-wire-removed.md) | `VAL-MAG-15` |
 | MAG-P7-E | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-E.numstat.tsv) | 5 files, +178/-26 | The mount's listing, attribute and read-window caches | [record](../../evidence/2026-09-10-mount-caches.md) | `VAL-MAG-15` |
+| MAG-P7-D | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-D.numstat.tsv) | 5 files, +118/-102 | The `adb`/`scrcpy` mirror picture removed; `Mirror1`'s `Start`/`Stop` are the link's; the adb worker keeps the screen off | [record](../../evidence/2026-09-13-adb-mirror-retired.md) | `VAL-MAG-14` |
 | MAG-P7-F | `magnetita:` | done | [inventory](../../inventories/2026-09-10-storage-and-retirement/MAG-P7-F.numstat.tsv) | 7 files, +81/-8 | The range bound under the envelope's body limit | [record](../../evidence/2026-09-10-range-bound.md) | `VAL-MAG-15` |

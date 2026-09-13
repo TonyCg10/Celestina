@@ -55,10 +55,6 @@ const READY_TRIES: u32 = 8;
 /// What the app can ask of the mirror.
 #[derive(Clone, Debug)]
 pub(crate) enum MirrorCommand {
-    /// Mirror now, and keep mirroring across the phone's port changes.
-    Start,
-    /// Stop, and stop reconnecting.
-    Stop,
     /// Pair with this code, which the phone is showing right now.
     Pair(String),
     /// Change one mirror option, by its contract name.
@@ -177,8 +173,6 @@ struct Session {
     link: MirrorLink,
     published: Arc<Mutex<MirrorSnapshot>>,
     stopping: Arc<AtomicBool>,
-    /// The scrcpy this session started, and the only one it may ever kill.
-    mirror: Option<(Child, Pid)>,
     /// The control-only scrcpy keeping the phone's screen off for the own
     /// link's mirror; exits and restores the screen when killed.
     screen_off: Option<(Child, Pid)>,
@@ -189,8 +183,6 @@ struct Session {
     /// Where the last reached fixed-port endpoint persists, so a daemon
     /// restart does not lose the one way in that needs no discovery.
     endpoint_path: PathBuf,
-    /// The session's display variables, resolved fresh before each spawn.
-    display_env: Vec<(String, String)>,
 }
 
 impl Session {
@@ -208,14 +200,12 @@ impl Session {
             },
             published,
             stopping,
-            mirror: None,
             screen_off: None,
             seen_connect: None,
             seen_pairing: None,
             options,
             options_path,
             endpoint_path,
-            display_env: Vec::new(),
         }
     }
 
@@ -239,9 +229,7 @@ impl Session {
                 break;
             }
             self.poll_discovery();
-            self.poll_mirror_exit();
         }
-        self.kill_mirror();
         self.kill_screen_off();
     }
 
@@ -320,8 +308,6 @@ impl Session {
 
     fn command(&mut self, command: MirrorCommand) {
         let event = match command {
-            MirrorCommand::Start => MirrorEvent::MirrorRequested,
-            MirrorCommand::Stop => MirrorEvent::StopRequested,
             MirrorCommand::Pair(code) => MirrorEvent::CodeEntered { code },
             MirrorCommand::SetOption(key, value) => {
                 self.set_option(&key, &value);
@@ -385,32 +371,6 @@ impl Session {
     }
 
     /// Notices the author closing the scrcpy window, without blocking on it.
-    fn poll_mirror_exit(&mut self) {
-        let Some((child, _)) = self.mirror.as_mut() else {
-            return;
-        };
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                self.mirror = None;
-                let failed = !status.success();
-                log(
-                    "mirror",
-                    if failed {
-                        "scrcpy ended unexpectedly; the mirror will return when the phone does"
-                    } else {
-                        "scrcpy window closed"
-                    },
-                );
-                self.apply(MirrorEvent::MirrorExited { failed });
-            }
-            Ok(None) => {}
-            Err(_) => {
-                self.mirror = None;
-                self.apply(MirrorEvent::MirrorExited { failed: true });
-            }
-        }
-    }
-
     /// Advances the pure link and carries out what it asks for, following the
     /// chain until it asks for nothing — a successful pair leads straight into
     /// a connect, and a connect straight into the mirror, with no press between.
@@ -443,31 +403,14 @@ impl Session {
                 }
                 Some(MirrorEvent::ConnectFinished { endpoint: reached })
             }
-            MirrorAction::StartMirror { serial } => {
-                // Resolved here, not at boot: this daemon can start before the
-                // compositor publishes the session's display, and a scrcpy with
-                // nowhere to draw dies at once — which read as "the mirror
-                // failed", over and over, instead of "there is no session".
-                self.display_env = session_display_env();
-                if self.display_env.is_empty() {
-                    log("mirror", "no graphical session to open the mirror on");
-                    return Some(MirrorEvent::DisplayMissing);
-                }
-                match self.start_mirror(&serial) {
-                    Some(pid) => {
-                        log("mirror", &format!("scrcpy {pid} mirroring {serial}"));
-                        Some(MirrorEvent::MirrorStarted { pid })
-                    }
-                    None => {
-                        log("mirror", "scrcpy could not start");
-                        Some(MirrorEvent::MirrorExited { failed: true })
-                    }
-                }
+            MirrorAction::StartMirror { .. } => {
+                // The mirror is the own link's since MAG-P6 and the scrcpy
+                // picture retired in MAG-P7-D; the adb worker only turns the
+                // screen off now. A start that reaches here ends at once.
+                log("mirror", "the adb mirror is retired: Start is the link's");
+                Some(MirrorEvent::MirrorExited { failed: false })
             }
-            MirrorAction::StopMirror => {
-                self.kill_mirror();
-                None
-            }
+            MirrorAction::StopMirror => None,
         }
     }
 
@@ -555,27 +498,6 @@ impl Session {
 
     fn adb(&self, args: &[&str]) -> Option<Vec<u8>> {
         subprocess::command_output_from("adb", args, Instant::now() + ADB_BUDGET, &self.stopping)
-    }
-
-    /// Starts scrcpy and keeps its child. The arguments come from the author's
-    /// stored options, built by the one owner of that translation.
-    fn start_mirror(&mut self, serial: &str) -> Option<u32> {
-        self.kill_mirror();
-        let args = self.options.scrcpy_args(serial);
-        let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        let (child, group) =
-            subprocess::spawn_grouped_env("scrcpy", &args, Stdio::null(), &self.display_env)
-                .ok()?;
-        let pid = child.id();
-        self.mirror = Some((child, group));
-        Some(pid)
-    }
-
-    /// Kills only the scrcpy this session spawned.
-    fn kill_mirror(&mut self) {
-        if let Some((mut child, group)) = self.mirror.take() {
-            subprocess::terminate_group_and_reap(&mut child, group);
-        }
     }
 
     /// Persists a reached fixed-port endpoint. Only the fixed port is worth
@@ -838,17 +760,15 @@ impl MirrorInterface {
     /// Answers immediately: the work is the worker's, and the app reflects only
     /// what [`State`](Self::state) then confirms.
     fn start(&self) -> zbus::fdo::Result<()> {
-        self.mirror
-            .send(MirrorCommand::Start)
-            .map_err(|reason| zbus::fdo::Error::Failed(reason.to_owned()))
+        // Since MAG-P7-D the one mirror is the link's; the older name stays
+        // for the consumers that call it.
+        self.start_link()
     }
 
     /// Stop mirroring and stop reconnecting. Never touches a scrcpy this daemon
     /// did not start.
     fn stop(&self) -> zbus::fdo::Result<()> {
-        self.mirror
-            .send(MirrorCommand::Stop)
-            .map_err(|reason| zbus::fdo::Error::Failed(reason.to_owned()))
+        self.stop_link()
     }
 
     /// Pair with the code the phone is showing. Only meaningful while
@@ -1094,7 +1014,7 @@ mod tests {
         worker.stop();
         // The worker is joined; the channel may or may not have been dropped
         // yet, but neither outcome may panic.
-        let _ = mirror.send(MirrorCommand::Stop);
+        let _ = mirror.send(MirrorCommand::ScreenOff(false, None));
     }
 
     #[test]
