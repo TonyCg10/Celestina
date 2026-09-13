@@ -63,6 +63,10 @@ pub(crate) enum MirrorCommand {
     Pair(String),
     /// Change one mirror option, by its contract name.
     SetOption(String, String),
+    /// Turn the phone's screen off (true) or back on (false) while the own
+    /// link mirrors it: a control-only scrcpy over `adb`, the one path
+    /// that can power the panel down with the phone unlocked.
+    ScreenOff(bool),
 }
 
 /// What the app renders. A confirmed snapshot, never an optimistic one.
@@ -121,6 +125,16 @@ impl Drop for MirrorWorker {
     }
 }
 
+/// The worker's inbox, for the own link's mirror to ask for the screen.
+static COMMANDS: Mutex<Option<Sender<MirrorCommand>>> = Mutex::new(None);
+
+/// Asks the adb worker to turn the phone's screen off or back on.
+pub(crate) fn request_screen_off(on: bool) {
+    if let Some(commands) = COMMANDS.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        let _ = commands.send(MirrorCommand::ScreenOff(on));
+    }
+}
+
 /// Starts the mirror worker and returns the handle the D-Bus interface holds.
 ///
 /// `options_path` is the mirror's own settings file, a sibling of the plugin
@@ -128,6 +142,7 @@ impl Drop for MirrorWorker {
 /// contract the app and the shell already read, and the mirror is not a plugin.
 pub(crate) fn start(options_path: PathBuf, endpoint_path: PathBuf) -> (Mirror, MirrorWorker) {
     let (commands, inbox) = mpsc::channel();
+    *COMMANDS.lock().unwrap_or_else(|e| e.into_inner()) = Some(commands.clone());
     let options = load_options(&options_path);
     let snapshot = Arc::new(Mutex::new(snapshot_of(&MirrorLink::new(), &options)));
     let stopping = Arc::new(AtomicBool::new(false));
@@ -162,6 +177,9 @@ struct Session {
     stopping: Arc<AtomicBool>,
     /// The scrcpy this session started, and the only one it may ever kill.
     mirror: Option<(Child, Pid)>,
+    /// The control-only scrcpy keeping the phone's screen off for the own
+    /// link's mirror; exits and restores the screen when killed.
+    screen_off: Option<(Child, Pid)>,
     seen_connect: Option<Advertisement>,
     seen_pairing: Option<Advertisement>,
     options: MirrorOptions,
@@ -189,6 +207,7 @@ impl Session {
             published,
             stopping,
             mirror: None,
+            screen_off: None,
             seen_connect: None,
             seen_pairing: None,
             options,
@@ -221,6 +240,66 @@ impl Session {
             self.poll_mirror_exit();
         }
         self.kill_mirror();
+        self.kill_screen_off();
+    }
+
+    /// The phone's screen off while the own link mirrors it, through a
+    /// control-only scrcpy over `adb`: the remembered fixed-port endpoint,
+    /// else the advertised one, is dialled first. Back on: that scrcpy is
+    /// killed, and it restores the screen as it leaves.
+    fn screen_off(&mut self, on: bool) {
+        if !on {
+            self.kill_screen_off();
+            return;
+        }
+        if self.screen_off.is_some() {
+            return;
+        }
+        if !tool_available("scrcpy") || !tool_available("adb") {
+            log("mirror", "screen off: scrcpy or adb is not installed");
+            return;
+        }
+        let endpoint = self
+            .link
+            .remembered()
+            .or_else(|| self.seen_connect.as_ref().map(|seen| seen.endpoint));
+        let Some(endpoint) = endpoint else {
+            log(
+                "mirror",
+                "screen off: no adb endpoint is known for the phone",
+            );
+            return;
+        };
+        let Some(reached) = self.connect(endpoint) else {
+            log("mirror", "screen off: the phone's adb did not answer");
+            return;
+        };
+        self.remember(reached);
+        let serial = reached.serial();
+        let args = [
+            "-s",
+            serial.as_str(),
+            "--no-video",
+            "--no-audio",
+            "--turn-screen-off",
+        ];
+        match subprocess::spawn_grouped("scrcpy", &args, Stdio::null()) {
+            Ok((child, group)) => {
+                log(
+                    "mirror",
+                    &format!("screen off: scrcpy {} holds {serial} dark", child.id()),
+                );
+                self.screen_off = Some((child, group));
+            }
+            Err(error) => log("mirror", &format!("screen off: scrcpy: {error}")),
+        }
+    }
+
+    fn kill_screen_off(&mut self) {
+        if let Some((mut child, group)) = self.screen_off.take() {
+            subprocess::terminate_group_and_reap(&mut child, group);
+            log("mirror", "screen off: released");
+        }
     }
 
     fn command(&mut self, command: MirrorCommand) {
@@ -230,6 +309,10 @@ impl Session {
             MirrorCommand::Pair(code) => MirrorEvent::CodeEntered { code },
             MirrorCommand::SetOption(key, value) => {
                 self.set_option(&key, &value);
+                return;
+            }
+            MirrorCommand::ScreenOff(on) => {
+                self.screen_off(on);
                 return;
             }
         };

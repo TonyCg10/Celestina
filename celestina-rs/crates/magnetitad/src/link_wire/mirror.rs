@@ -450,6 +450,7 @@ impl OwnMirror {
             }
             (None, LinkState::Starting) | (None, LinkState::Streaming { .. }) => {
                 self.close_window();
+                crate::mirror::request_screen_off(false);
                 *self.state.lock_ok() = Some(LinkState::Idle);
                 out.push(Envelope {
                     capability: capability::MIRROR,
@@ -467,6 +468,10 @@ impl OwnMirror {
     /// The phone answered: open the window.
     pub(crate) fn started(&self, player: &dyn MirrorPlayer, started: &MirrorStarted) {
         self.close_window();
+        // The screen off is the adb worker's: the one path that can power
+        // the panel down while the phone stays unlocked.
+        let dark = self.wanted.lock_ok().is_some_and(|w| w.screen_off);
+        crate::mirror::request_screen_off(dark);
         match player.open(started) {
             Some(sink) => {
                 *self.sink.lock_ok() = Some(sink);
@@ -485,6 +490,7 @@ impl OwnMirror {
     /// The phone stopped, or the session ended.
     pub(crate) fn stopped(&self) {
         self.close_window();
+        crate::mirror::request_screen_off(false);
         *self.state.lock_ok() = Some(LinkState::Idle);
         *self.wanted.lock_ok() = None;
         *self.outbox.lock_ok() = None;
