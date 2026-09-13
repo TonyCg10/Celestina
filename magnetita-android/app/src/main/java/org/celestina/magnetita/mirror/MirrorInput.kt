@@ -49,7 +49,19 @@ class MirrorInput : AccessibilityService() {
         super.onDestroy()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    /**
+     * A press on a "Copy" item anywhere: the one moment the clipboard is
+     * worth reading. Android lets no background app read it, but an
+     * accessibility overlay with focus may, so [ClipboardGrab] opens one
+     * for an instant and hands the text to the link.
+     */
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED) return
+        val label = (event.text.joinToString(" ") + " " + (event.contentDescription ?: "")).trim().lowercase()
+        if (label.isEmpty() || label.length > 24) return
+        if (COPY_LABELS.none { label == it || label.startsWith("$it ") }) return
+        main.postDelayed({ ClipboardGrab.read(this) }, 250)
+    }
     override fun onInterrupt() {}
 
     /** `phase` 0 down, 1 move, 2 up, in screen pixels. Any thread. */
@@ -213,6 +225,8 @@ class MirrorInput : AccessibilityService() {
 
     companion object {
         private const val TAG = "MirrorInput"
+        /** The copy item as the system and the usual keyboards label it. */
+        private val COPY_LABELS = setOf("copiar", "copy", "copiar texto", "copy text")
         /** A segment plays this long; the finger catches up in one. */
         private const val SEGMENT_MS = 16L
         /** The press before any move. */
