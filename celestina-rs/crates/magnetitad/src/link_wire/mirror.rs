@@ -262,6 +262,73 @@ impl Drop for FifoSink {
     }
 }
 
+/// `pw-cat` playing raw PCM from its stdin: the phone's sound on this
+/// desktop, with no codec and no buffer beyond PipeWire's own.
+struct Speaker {
+    child: std::process::Child,
+    tx: Option<Sender<Vec<u8>>>,
+}
+
+impl Speaker {
+    fn open() -> Option<Self> {
+        let mut child = std::process::Command::new("pw-cat")
+            .args([
+                "--playback",
+                "--raw",
+                "--format",
+                "s16",
+                "--rate",
+                "48000",
+                "--channels",
+                "2",
+                "--latency",
+                "20ms",
+                "-",
+            ])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| log("mirror", &format!("sound: pw-cat: {e}")))
+            .ok()?;
+        let mut stdin = child.stdin.take()?;
+        let (tx, rx) = channel::<Vec<u8>>();
+        std::thread::Builder::new()
+            .name("magnetita-mirror-sound".into())
+            .spawn(move || {
+                while let Ok(chunk) = rx.recv() {
+                    if stdin.write_all(&chunk).is_err() {
+                        break;
+                    }
+                }
+            })
+            .ok()?;
+        log("mirror", "sound: playing the phone through pw-cat");
+        Some(Self {
+            child,
+            tx: Some(tx),
+        })
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(bytes.to_vec());
+        }
+    }
+
+    fn close(&mut self) {
+        self.tx.take();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+impl Drop for Speaker {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
 /// What the desktop wants and what it has.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum LinkState {
@@ -293,6 +360,9 @@ pub(crate) struct OwnMirror {
     outbox: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Envelope>>>,
     state: Mutex<Option<LinkState>>,
     sink: Mutex<Option<Box<dyn VideoSink>>>,
+    /// The phone's sound, played here while the phone streams it: a
+    /// `pw-cat` child fed raw PCM (16-bit, 48 kHz, stereo) on its stdin.
+    speaker: Mutex<Option<Speaker>>,
     /// Input for the phone, queued by `Mirror1` and drained by the session.
     input: Mutex<VecDeque<Envelope>>,
 }
@@ -425,6 +495,35 @@ impl OwnMirror {
         if let Some(mut sink) = self.sink.lock_ok().take() {
             sink.close();
         }
+        if let Some(mut speaker) = self.speaker.lock_ok().take() {
+            speaker.close();
+        }
+    }
+
+    /// The audio stream arrived: play it until it ends.
+    pub(crate) fn audio_stream(&'static self, mut stream: RecvStream) {
+        tokio::spawn(async move {
+            {
+                let mut slot = self.speaker.lock_ok();
+                if slot.is_none() {
+                    *slot = Speaker::open();
+                }
+                if slot.is_none() {
+                    return;
+                }
+            }
+            loop {
+                let chunk = match stream.read_chunk(16 * 1024, true).await {
+                    Ok(Some(chunk)) => chunk,
+                    Ok(None) | Err(_) => break,
+                };
+                let mut speaker = self.speaker.lock_ok();
+                match speaker.as_mut() {
+                    Some(speaker) => speaker.write(&chunk.bytes),
+                    None => break,
+                }
+            }
+        });
     }
 
     /// The video stream arrived: pump it into the window until it ends.

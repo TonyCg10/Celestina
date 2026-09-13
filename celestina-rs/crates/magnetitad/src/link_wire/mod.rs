@@ -780,7 +780,7 @@ impl Wire {
                         MirrorStarted::KIND => match MirrorStarted::decode(&env.body) {
                             Ok(started) => {
                                 mirror::own().started(self.adapters.mirror_player.as_ref(), &started);
-                                log("mirror", &format!("{name}: streaming {}x{}", started.width, started.height));
+                                log("mirror", &format!("{name}: streaming {}x{} audio={}", started.width, started.height, started.audio));
                             }
                             Err(e) => log("link", &format!("{name}: mirror: {e}")),
                         },
@@ -858,6 +858,7 @@ impl Wire {
                 },
                 Some((transfer, stream)) = streams_rx.recv() => match transfer {
                     mirror::VIDEO_STREAM if mirror::own().owned_by(&device_id) => mirror::own().video_stream(stream),
+                    mirror::AUDIO_STREAM if mirror::own().owned_by(&device_id) => mirror::own().audio_stream(stream),
                     mirror::VIDEO_STREAM | mirror::AUDIO_STREAM => {}
                     _ => shares.stream_arrived(transfer, stream),
                 },
