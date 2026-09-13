@@ -34,33 +34,9 @@ Item {
 
         CelestinaSectionLabel { text: qsTr("Espejo") }
 
-        MirrorChoiceRow {
-            width: parent.width
-            label: qsTr("Nitidez")
-            options: ["modest", "balanced", "sharp", "native"]
-            labels: ["1080", "1440", "1920", qsTr("Nativa")]
-            current: root.devices.mirrorResolution
-            onChosen: function(value) { root.devices.setMirrorOption("resolution", value) }
-        }
-
-        MirrorChoiceRow {
-            width: parent.width
-            label: qsTr("Fluidez")
-            options: ["calm", "smooth", "fluid"]
-            labels: ["30 fps", "60 fps", "120 fps"]
-            current: root.devices.mirrorRate
-            onChosen: function(value) { root.devices.setMirrorOption("rate", value) }
-        }
-
-        MirrorChoiceRow {
-            width: parent.width
-            label: qsTr("Calidad")
-            options: ["thrifty", "everyday", "generous"]
-            labels: ["4 Mb/s", "6 Mb/s", "16 Mb/s"]
-            current: root.devices.mirrorQuality
-            onChosen: function(value) { root.devices.setMirrorOption("quality", value) }
-        }
-
+        // One picture only: sharp and fluid (1440 wide, 60 fps, 6 Mb/s),
+        // the settings the author found right; what is left to choose is
+        // where the sound plays and whether the phone's screen goes dark.
         MirrorChoiceRow {
             width: parent.width
             label: qsTr("Sonido")
@@ -77,15 +53,6 @@ Item {
             onToggleRequested: root.devices.setMirrorOption(
                                    "screenOff",
                                    root.devices.mirrorScreenOff ? "false" : "true")
-        }
-
-        PluginRow {
-            width: parent.width
-            label: qsTr("Mantener el móvil despierto")
-            enabledFlag: root.devices.mirrorStayAwake
-            onToggleRequested: root.devices.setMirrorOption(
-                                   "stayAwake",
-                                   root.devices.mirrorStayAwake ? "false" : "true")
         }
 
         Text {
