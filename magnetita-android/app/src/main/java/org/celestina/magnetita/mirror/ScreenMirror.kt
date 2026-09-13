@@ -36,6 +36,8 @@ class ScreenMirror(
     private val onStopped: (reason: String) -> Unit,
 ) {
     private var codec: MediaCodec? = null
+    /** The phone's playback, captured for the desktop while the sound is set to play there. */
+    private var audio: AudioCapture? = null
     private var display: VirtualDisplay? = null
     private var surface: Surface? = null
     private val thread = HandlerThread("mirror-encoder").apply { start() }
@@ -174,8 +176,11 @@ class ScreenMirror(
             codec = encoder
             surface = input
             display = virtual
-            live.sendMirrorStarted(picture.first, picture.second, options.codec, false)
-            android.util.Log.i("ScreenMirror", "streaming ${picture.first}x${picture.second}")
+            if (audio == null && options.audio) {
+                audio = AudioCapture(context, projection, live).takeIf { it.start() }
+            }
+            live.sendMirrorStarted(picture.first, picture.second, options.codec, audio != null)
+            android.util.Log.i("ScreenMirror", "streaming ${picture.first}x${picture.second} audio=${audio != null}")
         }.onFailure {
             android.util.Log.w("ScreenMirror", "could not start: ${it.message}")
             runCatching { encoder.release() }
@@ -205,6 +210,8 @@ class ScreenMirror(
         runCatching { codec?.stop() }
         runCatching { codec?.release() }
         runCatching { surface?.release() }
+        audio?.stop()
+        audio = null
         runCatching { projection.stop() }
         live.closeStream(MirrorStreams.VIDEO)
         thread.quitSafely()

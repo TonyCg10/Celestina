@@ -27,8 +27,25 @@ class MirrorConsentActivity : ComponentActivity() {
         finish()
     }
 
+    private val askMicrophone = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        // Granted or not, the capture goes on; without the permission the
+        // sound simply stays on the phone.
+        askCapture()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val options = MirrorService.readOptions(intent)
+        val wantsAudio = options?.audio == true
+        val hasAudio = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (wantsAudio && !hasAudio) {
+            askMicrophone.launch(android.Manifest.permission.RECORD_AUDIO)
+        } else {
+            askCapture()
+        }
+    }
+
+    private fun askCapture() {
         val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         ask.launch(manager.createScreenCaptureIntent())
     }
