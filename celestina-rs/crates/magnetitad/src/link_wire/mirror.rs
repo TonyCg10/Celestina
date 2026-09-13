@@ -355,6 +355,8 @@ pub(crate) struct OwnMirror {
     /// The session the mirror runs on: the one named by the request, else
     /// the first session to tick after it. Other sessions leave it alone.
     owner: Mutex<Option<String>>,
+    /// The phone's address as the owning session sees it, for adb.
+    host: Mutex<Option<std::net::IpAddr>>,
     /// The owning session's outbox: input goes straight to the link, not
     /// through the tick.
     outbox: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Envelope>>>,
@@ -387,6 +389,11 @@ impl OwnMirror {
 
     pub(crate) fn request_stop(&self) {
         *self.wanted.lock_ok() = None;
+    }
+
+    /// The phone's address, from the session that holds the link.
+    pub(crate) fn set_host(&self, host: std::net::IpAddr) {
+        *self.host.lock_ok() = Some(host);
     }
 
     /// Whether this session is the one the mirror runs on.
@@ -450,7 +457,7 @@ impl OwnMirror {
             }
             (None, LinkState::Starting) | (None, LinkState::Streaming { .. }) => {
                 self.close_window();
-                crate::mirror::request_screen_off(false);
+                crate::mirror::request_screen_off(false, None);
                 *self.state.lock_ok() = Some(LinkState::Idle);
                 out.push(Envelope {
                     capability: capability::MIRROR,
@@ -471,7 +478,7 @@ impl OwnMirror {
         // The screen off is the adb worker's: the one path that can power
         // the panel down while the phone stays unlocked.
         let dark = self.wanted.lock_ok().is_some_and(|w| w.screen_off);
-        crate::mirror::request_screen_off(dark);
+        crate::mirror::request_screen_off(dark, *self.host.lock_ok());
         match player.open(started) {
             Some(sink) => {
                 *self.sink.lock_ok() = Some(sink);
@@ -490,7 +497,7 @@ impl OwnMirror {
     /// The phone stopped, or the session ended.
     pub(crate) fn stopped(&self) {
         self.close_window();
-        crate::mirror::request_screen_off(false);
+        crate::mirror::request_screen_off(false, None);
         *self.state.lock_ok() = Some(LinkState::Idle);
         *self.wanted.lock_ok() = None;
         *self.outbox.lock_ok() = None;

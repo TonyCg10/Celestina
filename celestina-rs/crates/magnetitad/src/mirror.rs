@@ -65,8 +65,9 @@ pub(crate) enum MirrorCommand {
     SetOption(String, String),
     /// Turn the phone's screen off (true) or back on (false) while the own
     /// link mirrors it: a control-only scrcpy over `adb`, the one path
-    /// that can power the panel down with the phone unlocked.
-    ScreenOff(bool),
+    /// that can power the panel down with the phone unlocked. Carries the
+    /// phone's address as the link sees it, the first place to dial.
+    ScreenOff(bool, Option<std::net::IpAddr>),
 }
 
 /// What the app renders. A confirmed snapshot, never an optimistic one.
@@ -128,10 +129,11 @@ impl Drop for MirrorWorker {
 /// The worker's inbox, for the own link's mirror to ask for the screen.
 static COMMANDS: Mutex<Option<Sender<MirrorCommand>>> = Mutex::new(None);
 
-/// Asks the adb worker to turn the phone's screen off or back on.
-pub(crate) fn request_screen_off(on: bool) {
+/// Asks the adb worker to turn the phone's screen off or back on; `host`
+/// is the phone's address as the link sees it.
+pub(crate) fn request_screen_off(on: bool, host: Option<std::net::IpAddr>) {
     if let Some(commands) = COMMANDS.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        let _ = commands.send(MirrorCommand::ScreenOff(on));
+        let _ = commands.send(MirrorCommand::ScreenOff(on, host));
     }
 }
 
@@ -247,7 +249,7 @@ impl Session {
     /// control-only scrcpy over `adb`: the remembered fixed-port endpoint,
     /// else the advertised one, is dialled first. Back on: that scrcpy is
     /// killed, and it restores the screen as it leaves.
-    fn screen_off(&mut self, on: bool) {
+    fn screen_off(&mut self, on: bool, host: Option<std::net::IpAddr>) {
         if !on {
             self.kill_screen_off();
             return;
@@ -259,19 +261,32 @@ impl Session {
             log("mirror", "screen off: scrcpy or adb is not installed");
             return;
         }
-        let endpoint = self
-            .link
-            .remembered()
-            .or_else(|| self.seen_connect.as_ref().map(|seen| seen.endpoint));
-        let Some(endpoint) = endpoint else {
+        // Where to dial, in order: the phone where the link sees it, at
+        // the fixed port; the remembered endpoint; the advertised one.
+        let mut candidates: Vec<MirrorEndpoint> = Vec::new();
+        if let Some(host) = host {
+            candidates.push(MirrorEndpoint {
+                host,
+                port: FIXED_PORT,
+            });
+        }
+        candidates.extend(self.link.remembered());
+        candidates.extend(self.seen_connect.as_ref().map(|seen| seen.endpoint));
+        if candidates.is_empty() {
             log(
                 "mirror",
                 "screen off: no adb endpoint is known for the phone",
             );
             return;
-        };
-        let Some(reached) = self.connect(endpoint) else {
-            log("mirror", "screen off: the phone's adb did not answer");
+        }
+        let Some(reached) = candidates
+            .into_iter()
+            .find_map(|endpoint| self.connect(endpoint))
+        else {
+            log(
+                "mirror",
+                "screen off: the phone's adb did not answer; is wireless debugging on?",
+            );
             return;
         };
         self.remember(reached);
@@ -311,8 +326,8 @@ impl Session {
                 self.set_option(&key, &value);
                 return;
             }
-            MirrorCommand::ScreenOff(on) => {
-                self.screen_off(on);
+            MirrorCommand::ScreenOff(on, host) => {
+                self.screen_off(on, host);
                 return;
             }
         };

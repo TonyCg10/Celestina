@@ -651,6 +651,7 @@ impl Wire {
             &format!("{name} at {} on the own wire", session.remote_address()),
         );
         ui_log(daemon, &name, "conectado y cifrado", false);
+        mirror::own().set_host(session.remote_address().ip());
         if daemon.settings.lock_ok().clipboard {
             // The phone answers only while its application is in front.
             if let Err(e) = session
