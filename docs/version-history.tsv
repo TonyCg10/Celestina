@@ -143,3 +143,4 @@ siderita	1.5.11	bug	FEEDBACK-7-SID	Fix the path editor whose sweep never selecte
 siderita	1.5.12	bug	FEEDBACK-8-SID	Fix the mouse side buttons that stopped navigating
 magnetita-android	0.1.0	baseline	AND-1-D	Adopt the Android application's Gradle version as the verified baseline
 magnetita	2.0.0	release	MAG-P7	Replace the KDE Connect wire with the own protocol
+magnetita-android	1.0.0	release	AND-5	Add the Android application of the own protocol
