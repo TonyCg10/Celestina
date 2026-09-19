@@ -1,0 +1,48 @@
+diff --git a/src/screencast/wlr_screencopy.c b/src/screencast/wlr_screencopy.c
+index 81beb9e..2ef58d0 100644
+--- a/src/screencast/wlr_screencopy.c
++++ b/src/screencast/wlr_screencopy.c
+@@ -139,6 +139,10 @@ static void wlr_frame_buffer_done(void *data,
+ 		logprint(WARN, "wlroots: no current buffer");
+ 		xdpw_pwr_enqueue_buffer(cast);
+ 		wlr_frame_finish(cast);
++		// We drive the PipeWire graph (PW_STREAM_FLAG_DRIVER): ask for the
++		// next cycle ourselves, else capture stalls after the first frame.
++		// Backport of upstream c0255d7b.
++		pw_stream_trigger_process(cast->stream);
+ 		return;
+ 	}
+ 
+@@ -147,6 +151,10 @@ static void wlr_frame_buffer_done(void *data,
+ 		pwr_update_stream_param(cast);
+ 		xdpw_pwr_enqueue_buffer(cast);
+ 		wlr_frame_finish(cast);
++		// We drive the PipeWire graph (PW_STREAM_FLAG_DRIVER): ask for the
++		// next cycle ourselves, else capture stalls after the first frame.
++		// Backport of upstream c0255d7b.
++		pw_stream_trigger_process(cast->stream);
+ 		return;
+ 	}
+ 
+@@ -201,6 +209,10 @@ static void wlr_frame_ready(void *data, struct zwlr_screencopy_frame_v1 *frame,
+ 
+ 	xdpw_pwr_enqueue_buffer(cast);
+ 	wlr_frame_finish(cast);
++	// We drive the PipeWire graph (PW_STREAM_FLAG_DRIVER): ask for the
++	// next cycle ourselves, else capture stalls after the first frame.
++	// Backport of upstream c0255d7b.
++	pw_stream_trigger_process(cast->stream);
+ }
+ 
+ static void wlr_frame_failed(void *data,
+@@ -214,6 +226,10 @@ static void wlr_frame_failed(void *data,
+ 
+ 	xdpw_pwr_enqueue_buffer(cast);
+ 	wlr_frame_finish(cast);
++	// We drive the PipeWire graph (PW_STREAM_FLAG_DRIVER): ask for the
++	// next cycle ourselves, else capture stalls after the first frame.
++	// Backport of upstream c0255d7b.
++	pw_stream_trigger_process(cast->stream);
+ }
+ 
+ static const struct zwlr_screencopy_frame_v1_listener wlr_frame_listener = {

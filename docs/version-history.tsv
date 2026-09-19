@@ -144,3 +144,4 @@ siderita	1.5.12	bug	FEEDBACK-8-SID	Fix the mouse side buttons that stopped navig
 magnetita-android	0.1.0	baseline	AND-1-D	Adopt the Android application's Gradle version as the verified baseline
 magnetita	2.0.0	release	MAG-P7	Replace the KDE Connect wire with the own protocol
 magnetita-android	1.0.0	release	AND-5	Add the Android application of the own protocol
+celestina	1.3.1	bug	MAG-P6-D	Update the phone menu's mirror to the link with the adb path as fallback
