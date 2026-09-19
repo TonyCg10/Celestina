@@ -109,12 +109,36 @@ pub mod qobject {
 const NIRI_GAP: i32 = 12;
 
 fn niri_json(what: &str) -> Option<serde_json::Value> {
-    let out = std::process::Command::new("niri")
+    let mut command = std::process::Command::new("niri");
+    command
         .args(["msg", "--json", what])
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    serde_json::from_slice(&out.stdout).ok()
+        .stderr(std::process::Stdio::null());
+    // A process the daemon launched may lack the socket variable; the
+    // socket sits in the runtime dir under the display's name.
+    if std::env::var_os("NIRI_SOCKET").is_none() {
+        if let Some(socket) = niri_socket() {
+            command.env("NIRI_SOCKET", socket);
+        }
+    }
+    let out = command.output().ok()?;
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    Some(value)
+}
+
+/// niri's IPC socket for this session's display, found in the runtime dir.
+fn niri_socket() -> Option<std::path::PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from)?;
+    let display = std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "wayland-1".into());
+    let prefix = format!("niri.{display}.");
+    std::fs::read_dir(runtime)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with(&prefix) && n.ends_with(".sock"))
+        })
 }
 
 /// Where a mirror window lives, or will: the output's logical size and the
@@ -392,6 +416,7 @@ impl qobject::MirrorView {
                     let pid = std::process::id();
                     self.rust().owned.spawn(move |guard: Guard| {
                         let size = niri_tile(pid).map(|tile| fitted_size(&tile, width, height));
+                        eprintln!("magnetita: mirror window: tile fit {size:?}");
                         if !guard.open() {
                             return;
                         }

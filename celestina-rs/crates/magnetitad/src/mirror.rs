@@ -614,7 +614,7 @@ fn state_label(state: MirrorState) -> &'static str {
 /// report rather than a failure to retry.
 pub(crate) fn session_display_env() -> Vec<(String, String)> {
     let mut resolved = Vec::new();
-    for key in ["WAYLAND_DISPLAY", "DISPLAY"] {
+    for key in ["WAYLAND_DISPLAY", "DISPLAY", "NIRI_SOCKET"] {
         if let Some(value) = std::env::var_os(key).and_then(|value| value.into_string().ok()) {
             if !value.is_empty() {
                 resolved.push((key.to_owned(), value));
@@ -626,7 +626,7 @@ pub(crate) fn session_display_env() -> Vec<(String, String)> {
     }
     systemd_user_environment()
         .into_iter()
-        .filter(|(key, _)| key == "WAYLAND_DISPLAY" || key == "DISPLAY")
+        .filter(|(key, _)| key == "WAYLAND_DISPLAY" || key == "DISPLAY" || key == "NIRI_SOCKET")
         .collect()
 }
 
