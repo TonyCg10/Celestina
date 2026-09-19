@@ -1,0 +1,29 @@
+# CAST-1 exact change inventory
+
+Base revision	713e648aa5d5a462a9d0ad413d46a9b923a977ad
+Pathspec	celestina/CMakeLists.txt
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/evidence/2026-09-19-screencast-first-frame-freeze.md
+Pathspec	celestina/docs/inventories/2026-09-19-screencast-first-frame-freeze/CAST-1.numstat.tsv
+Pathspec	celestina/docs/plans/archive/2026-09-19-screencast-first-frame-freeze.md
+Pathspec	celestina/docs/plans/archive/README.md
+Pathspec	celestina/packaging/xdg-desktop-portal-wlr/README.md
+Pathspec	celestina/scripts/build-patched-xdpw.sh
+Pathspec	docs/version-history.tsv
+
+added	deleted	content	path
+1	1	60bb5f83e2b4d9f284c497996da2ac625f3e991fe591f205af8b68c70028461f	celestina/CMakeLists.txt
+1	1	df64e0ca2a91d9520d396f0db0eec0342dd82b4dacf683adb9b67280fa356fe6	celestina/Cargo.lock
+1	1	51051c8893cb10c9190ff4362413821c064c2bced8b6f4a46f75d3924a8dc25c	celestina/Cargo.toml
+18	0	67da91bbd40eb952f92b30d935c59e962380492933421b468301a52f98dc0076	celestina/ROADMAP.md
+9	1	2a2e83c072a636f9488a1bfb5e53b46e712aa3ee9f2a35a8ae208087f4eb4910	celestina/STATUS.md
+109	0	14fd4f66c6938f2cf1d835134ca8c8086e92b365a47d1fc98a1c931daa536d30	celestina/docs/evidence/2026-09-19-screencast-first-frame-freeze.md
+87	0	8a434af238fb842d72d2dee413b08a2430beb68c59d630d987f93973a3aafe59	celestina/docs/plans/archive/2026-09-19-screencast-first-frame-freeze.md
+1	0	1e1c12006fe2a3e3b0210cf46bc43064dd3877d33127be78866b61b6e602b302	celestina/docs/plans/archive/README.md
+48	0	6c13d20b790e20616cdd48d8d73a4392fb5a40eae82b6b540c57a9c15a299207	celestina/packaging/xdg-desktop-portal-wlr/README.md
+147	0	baf84a099c667afab64ad15e1256b4ddc3655d1189036d3fc175db55edd251b7	celestina/scripts/build-patched-xdpw.sh
+1	0	7fa718f6dc1190a1d1d43d08622fd6eceba71b174cae8c325a4a90f51e5d329f	docs/version-history.tsv
+29	0	self	celestina/docs/inventories/2026-09-19-screencast-first-frame-freeze/CAST-1.numstat.tsv

@@ -726,6 +726,24 @@ flicker, that investigation is a new unit. Scope, order, exclusions and exit
 are in [the active SURF-1 plan](docs/plans/active/2026-08-20-persistent-carriers.md);
 the perceptual acceptance is `VAL-SURF-1`.
 
+## CAST-1 — The shared screen no longer freezes on its first frame (complete)
+
+**Outcome:** a screen shared from the live session keeps moving. The freeze
+was not the shell's: `xdg-desktop-portal-wlr` 0.8.x drives the PipeWire graph
+itself and only its ext-image-copy-capture path asks for the next cycle, so
+over niri's wlr-screencopy every share delivered one frame and stalled.
+Upstream fixed it in c0255d7b (2026-08-11) without a release. The shell now
+ships that backport the way it ships its compositor patch:
+`packaging/xdg-desktop-portal-wlr/` holds the patch and
+`scripts/build-patched-xdpw.sh` builds the installed release with it, installs
+it beside the distribution's binary and, on request, points the systemd user
+service at it. Scope, exclusions and the delivery are in
+[the archived CAST-1 plan](docs/plans/archive/2026-09-19-screencast-first-frame-freeze.md);
+delivery evidence is
+[here](docs/evidence/2026-09-19-screencast-first-frame-freeze.md). The author
+confirmed the moving share on the live session directly, so no `VAL-*`
+checkpoint was opened.
+
 ## REC-1 — Screen recording joins the toolbox, and three live defects close (complete)
 
 **Outcome:** the toolbox records a chosen screen into a `Recordings` folder inside the session's own videos directory

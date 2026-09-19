@@ -1,6 +1,14 @@
 # Celestina status
 
-- **Updated:** 2026-08-22
+- **Updated:** 2026-09-19
+- **CAST-1 (complete, 1.3.2):** the shared screen no longer freezes on its
+  first frame. The defect was upstream's (`xdg-desktop-portal-wlr` 0.8.x never
+  asks PipeWire for the next cycle on the wlr-screencopy path niri exposes;
+  fixed by c0255d7b, unreleased); the shell now carries the backport under
+  `packaging/xdg-desktop-portal-wlr/` with `scripts/build-patched-xdpw.sh`
+  to build it and run the session on it. See
+  [the archived plan](docs/plans/archive/2026-09-19-screencast-first-frame-freeze.md)
+  and its [delivery evidence](docs/evidence/2026-09-19-screencast-first-frame-freeze.md).
 - **REC-1 (complete, 1.2.0):** screen recording joins the toolbox
   (`gpu-screen-recorder`, output chosen through the session's existing
   screen chooser, saved into a `Recordings` folder inside the session's own videos directory); level rows (volume,
