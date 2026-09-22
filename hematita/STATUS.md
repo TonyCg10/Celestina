@@ -6,8 +6,9 @@
   verified and deployed to the author's prefix
 - **Author validation:** `VAL-H1` requested, not run
 - **Active phase:** H2 (every resource on the Performance page), opened
-  2026-09-22; `H2-A` and `H2-B` done — the crate parses disks, interfaces and
-  the GPU, and the page now lists every one of them
+  2026-09-22; `H2-A`, `H2-B` and `H2-C` done — the crate parses disks,
+  interfaces and the GPU, and the page lists every one of them in a stable
+  order
 
 ## Current checkout truth
 
@@ -49,7 +50,11 @@
   per-core grid behind an icon toggle. Histories cross to QML as a `QVariant`
   carrying a variant list: it is the one shape `qmllint` resolves, and this
   project suppresses no warnings. No row claims a number before its first
-  rate arrives.
+  rate arrives. As of `H2-C` the disks and the interfaces are ordered by
+  name whether or not a read failed, and the list's model is the row count
+  rather than the woven array, so a second that changes no resource leaves
+  the delegates, the scroll position and the selection exactly where they
+  were; only a resource appearing or disappearing rebuilds the list.
 - A second `hematita` raises the running window over the session bus and exits
   without building one; no session bus is never fatal.
 - Nobody has looked at the page on a real session yet: the evidence for H1-C

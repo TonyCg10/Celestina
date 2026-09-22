@@ -20,7 +20,10 @@ CelestinaSurface {
     // Why this resource cannot be read, or empty.
     required property string notice
 
-    property bool showCores: false
+    // The toggle owns its own checked state — `checkable: true` and nothing
+    // else, as the shared button's contract says — and this reads it, so
+    // nothing ever assigns into `checked` and no binding is destroyed.
+    readonly property bool showCores: coreToggle.checked
 
     role: CelestinaSurface.Grouped
     padding: CelestinaTheme.spaceXl
@@ -39,13 +42,12 @@ CelestinaSurface {
             }
             Item { Layout.fillWidth: true }
             CelestinaIconButton {
+                id: coreToggle
                 visible: detail.coreHistories.length > 0
-                iconName: detail.showCores ? "gauge" : "view-grid"
-                helpText: detail.showCores ? qsTr("Ver una gráfica") : qsTr("Ver por núcleo")
+                iconName: coreToggle.checked ? "gauge" : "view-grid"
+                helpText: coreToggle.checked ? qsTr("Ver una gráfica") : qsTr("Ver por núcleo")
                 role: CelestinaButton.Ghost
                 checkable: true
-                checked: detail.showCores
-                onToggled: detail.showCores = checked
             }
             Text {
                 text: detail.subtitle

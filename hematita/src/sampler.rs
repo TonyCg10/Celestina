@@ -322,27 +322,36 @@ const AMDGPU_FILES: [&str; 8] = [
 
 fn sample_gpu(device: Option<&Path>) -> Option<Section<GpuReading>> {
     let device = device?;
+    // An array rather than a vector, so the eight reads below are eight
+    // bindings and no index can be out of range by construction.
     let texts: Result<Vec<String>, Reason> = AMDGPU_FILES
         .iter()
         .map(|name| read(&device.join(name)))
         .collect();
-    let texts = match texts {
-        Ok(texts) => texts,
+    let texts = match texts.map(<[String; 8]>::try_from) {
+        Ok(Ok(texts)) => texts,
+        // The iterator ran over `AMDGPU_FILES`, so it yielded eight strings;
+        // an eight-element array is the only length it can have.
+        Ok(Err(_)) => return None,
         Err(reason) => return Some(Section::Unavailable(reason)),
     };
+    let [busy, mem_busy, vram_used, vram_total, gtt_used, gtt_total, sclk, mclk] = &texts;
     let files = AmdgpuFiles {
-        busy_percent: &texts[0],
-        memory_busy_percent: &texts[1],
-        vram_used: &texts[2],
-        vram_total: &texts[3],
-        gtt_used: &texts[4],
-        gtt_total: &texts[5],
-        sclk: &texts[6],
-        mclk: &texts[7],
+        busy_percent: busy,
+        memory_busy_percent: mem_busy,
+        vram_used,
+        vram_total,
+        gtt_used,
+        gtt_total,
+        sclk,
+        mclk,
     };
     Some(match gpu::parse_amdgpu(&files) {
         Ok(reading) => Section::Available(reading),
-        Err(_) => Section::Unavailable(malformed(&device.join(AMDGPU_FILES[0]))),
+        // Name the file that was not a number, not the first one read.
+        Err(gpu::GpuError::UnreadableNumber { file, .. }) => {
+            Section::Unavailable(malformed(&device.join(file)))
+        }
     })
 }
 
@@ -402,6 +411,10 @@ fn sample_disks(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<DiskS
                 .collect();
         }
     };
+    // By name, so the list keeps one order whether it came from
+    // `/proc/diskstats` or from the sysfs fallback a failure falls back to.
+    let mut readings = readings;
+    readings.sort_by(|(left, _), (right, _)| left.cmp(right));
     let rates = counters.sample(&readings, elapsed);
     readings
         .iter()
@@ -453,7 +466,7 @@ fn is_shown_interface(name: &str) -> bool {
 
 fn sample_interfaces(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<InterfaceSection> {
     let path = Path::new(NET_DEV_PATH);
-    let readings: Vec<(String, [u64; 2])> = match read(path)
+    let mut readings: Vec<(String, [u64; 2])> = match read(path)
         .and_then(|text| network::parse_net_dev(&text).map_err(|_| malformed(path)))
     {
         Ok(stats) => stats
@@ -474,6 +487,9 @@ fn sample_interfaces(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<
             }]);
         }
     };
+    // By name, for the same reason the disks are: the row order is the
+    // machine's inventory, not the order a kernel file happens to list.
+    readings.sort_by(|(left, _), (right, _)| left.cmp(right));
     let rates = counters.sample(&readings, elapsed);
     readings
         .iter()

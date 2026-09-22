@@ -41,7 +41,7 @@ a Spanish sentence composed in QML from a typed reason.
 
 ## Build order
 
-1. `H2-A`, then `H2-B`, then `H2-Z`.
+1. `H2-A`, then `H2-B`, then `H2-C`, then `H2-Z`.
 
 ## Implementation exit
 
@@ -55,4 +55,5 @@ graphs.
 |---|---|---|---|---|---|---|---|
 | H2-A | `hematita:` | done | [inventory](../../inventories/2026-09-22-h2-resources/H2-A.numstat.tsv) | 16 files, +1011/-26 | Named-counter rates, diskstats, net/dev and amdgpu parsers, sysfs helpers, ring fractions, captures; H2 opened in the documents | [core](../../evidence/2026-09-22-h2-core.md) | `VAL-H2` |
 | H2-B | `hematita:` | done | [inventory](../../inventories/2026-09-22-h2-resources/H2-B.numstat.tsv) | 16 files, +1399/-299 | Snapshot sections with typed reasons and topology; `publish.rs` tested; `HematitaResources` as lists with a revision; the page weaving rows, kind-driven detail, per-core grid, per-row failure state; the H1 follow-ups | [resources page](../../evidence/2026-09-22-h2-resources-page.md) | `VAL-H2` |
+| H2-C | `hematita:` | done | [inventory](../../inventories/2026-09-22-h2-resources/H2-C.numstat.tsv) | 8 files, +202/-31 | Sort disks and interfaces by name; keep the list model stable across revisions; the GPU row's reason names the failing file; toggle and subtitle fixes | [list stability](../../evidence/2026-09-22-h2-list-stability.md) | `VAL-H2` |
 | H2-Z | `hematita:` | planned | `hematita/`, `docs/version-history.tsv` | — | Implementation exit, 0.3.0, documents closed, plan archived | `scripts/complete-production.sh` | `VAL-H2` |

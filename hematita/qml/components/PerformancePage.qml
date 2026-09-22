@@ -21,6 +21,16 @@ Item {
     property var rows: []
     readonly property var selectedRow: page.rowFor(page.selectedKey)
     readonly property real listFraction: 0.32
+    // What a delegate reads while its index is momentarily out of the woven
+    // array: a row-shaped nothing, rather than an undefined every binding
+    // would have to guard.
+    readonly property var emptyRow: ({ key: "", kind: "", label: "", state: "waiting",
+                                       reasonKind: "", reasonPath: "", load: "normal",
+                                       numbers: [], history: [] })
+
+    function rowAt(index) {
+        return index >= 0 && index < page.rows.length ? page.rows[index] : page.emptyRow
+    }
 
     function rowFor(key) {
         for (let index = 0; index < page.rows.length; ++index)
@@ -77,7 +87,9 @@ Item {
     function subtitleFor(row) {
         switch (row.kind) {
         case "cpu": return row.label
-        case "gpu": return row.label.length > 0 ? "AMD " + row.label : ""
+        // The card's PCI identifier is a key, not something to read; the
+        // name already says which resource this is.
+        case "gpu": return ""
         case "disk": return row.key.substring(5)
         case "network": return row.numbers.length > 3 && row.numbers[3] === 1 ? qsTr("Inalámbrica") : qsTr("Cable")
         }
@@ -176,20 +188,27 @@ Item {
                 role: CelestinaSurface.Panel
                 padding: CelestinaTheme.spaceXs
 
+                // The model is the row COUNT, not the woven array: a new
+                // array every second would reset the view, its delegates and
+                // its scroll once a second. The bindings below re-evaluate
+                // when `page.rows` is reassigned, so only a machine that
+                // gained or lost a resource rebuilds anything.
                 contentItem: ListView {
                     id: list
                     clip: true
                     spacing: CelestinaTheme.spaceXs
-                    model: page.rows
+                    model: page.rows.length
                     delegate: ResourceRow {
-                        required property var modelData
+                        id: resourceRow
+                        required property int index
+                        readonly property var row: page.rowAt(resourceRow.index)
                         width: list.width
-                        name: page.nameFor(modelData)
-                        value: page.valueFor(modelData)
-                        series: modelData.history
-                        load: modelData.load
-                        selected: modelData.key === page.selectedKey
-                        onClicked: page.selectedKey = modelData.key
+                        name: page.nameFor(resourceRow.row)
+                        value: page.valueFor(resourceRow.row)
+                        series: resourceRow.row.history
+                        load: resourceRow.row.load
+                        selected: resourceRow.row.key === page.selectedKey
+                        onClicked: page.selectedKey = resourceRow.row.key
                     }
                 }
             }
