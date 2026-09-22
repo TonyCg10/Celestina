@@ -12,6 +12,8 @@ ApplicationWindow {
     required property bool reducedMotion
     // Set only by `scripts/smoke.sh`: see the shape gate below.
     required property bool smokeShape
+    // Set only by `scripts/smoke.sh`: see the section walk below.
+    required property bool smokeSections
     property bool shapePrinted: false
 
     width: 1000
@@ -112,6 +114,25 @@ ApplicationWindow {
     onCurrentSectionChanged: {
         processHub.grouped = window.currentSection === 2
         processHub.refresh()
+    }
+
+    // The smoke's section walk. A `StackLayout` builds only the page it is
+    // showing, so a page nobody selected is a page whose delegates were never
+    // constructed — and a headless run that never left Performance would pass
+    // while any of the other three failed to build. One second apart, this
+    // shows every section in turn and then stops; the gate is the absence of
+    // QML errors once all four have been up. It prints nothing of its own.
+    Timer {
+        running: window.smokeSections
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            if (window.currentSection + 1 >= window.sections.length) {
+                stop()
+                return
+            }
+            window.currentSection = window.currentSection + 1
+        }
     }
 
     Component.onCompleted: {

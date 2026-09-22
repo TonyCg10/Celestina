@@ -25,8 +25,11 @@ Item {
         case "ath12k_hwmon": base = qsTr("Wi-Fi"); break
         default: base = name
         }
+        // A machine with two of a driver (this one has two `nvme` chips) gets
+        // an ordinal on both branches: two cards with the same eyebrow are two
+        // cards nobody can tell apart.
         const suffix = ordinal > 1 ? " " + ordinal : ""
-        return name === base ? base : base + suffix + " · " + name
+        return name === base ? base + suffix : base + suffix + " · " + name
     }
 
     function kindWord(kind, index) {

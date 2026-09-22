@@ -17,8 +17,9 @@
   from the author's processor, GPU and board chips; the sampler reads the
   value files every tick, `HematitaSensors` publishes them with the
   session's extremes, and the Sensors page shows every chip as a card. The
-  six process-table items parked by `H3-E` are closed. Built and verified,
-  not yet deployed and not yet seen by the author (`VAL-H4`)
+  six process-table items parked by `H3-E` are closed, and `H4-C` answered
+  the review. Built and verified, not yet deployed and not yet seen by the
+  author (`VAL-H4`)
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
   run; `VAL-H3` requested, not run
 - **Active phase:** H4 (sensors), opened 2026-09-22
@@ -185,6 +186,21 @@
   `sampler::subscribe` registers inside the `handle` lock. Nobody has looked
   at the page: `VAL-H4`. See the
   [sensors page evidence](docs/evidence/2026-09-22-h4-sensors-page.md).
+- As of `H4-C` the sensor reading and its gate are honest. `hwmonN` is an
+  index, not an identity, so the cached labels and limits are re-validated
+  against the chip's own `name` every tick and the session's extremes are
+  keyed by that name too: a device given a freed index cannot inherit
+  another's `crit` — which is what colours a temperature — or its extremes.
+  A chip's rows are no longer torn down and rebuilt every second, so the
+  keyboard can hold one. The smoke now walks every section one second apart,
+  because a `StackLayout` builds only the page it shows and the three pages
+  nobody selected had never been constructed in any headless run; all four
+  now are, with no QML errors. `channelStates` is struck from the published
+  contract rather than added: `discover` skips an unreadable channel, so the
+  state it would carry is unreachable. Return applies the process search at
+  once, and an untranslated chip name gets its ordinal. Still nobody has
+  looked at the page: `VAL-H4`. See the
+  [sensor gates evidence](docs/evidence/2026-09-22-h4-sensor-gates.md).
 
 ## Blockers
 

@@ -15,6 +15,12 @@ set -u
 #     first row's contract once the third revision has landed. An empty or
 #     wrong line means the nested lists did not cross as the page expects,
 #     which no error message would have said.
+#  4) The section walk: with HEMATITA_SMOKE_SECTIONS set the window shows each
+#     section one second apart and then stops. A `StackLayout` builds only the
+#     page it shows, so without this a page that cannot construct at all is a
+#     page (2) never looked at. The walk prints nothing; the gate is that (2)
+#     still finds no errors once all four pages have been up, which the ten
+#     seconds leave time for.
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
 # real Wayland session.
@@ -63,6 +69,7 @@ DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
 QT_QPA_PLATFORM=offscreen \
 QT_ASSUME_STDERR_HAS_CONSOLE=1 \
 HEMATITA_SMOKE_SHAPE=1 \
+HEMATITA_SMOKE_SECTIONS=1 \
     timeout 10 "$bin" >"$log" 2>&1
 rc=$?
 if [ "$rc" -ne 124 ]; then
@@ -84,4 +91,4 @@ if [ -z "$shape" ]; then
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 10 s, the first row published the CPU contract, no QML errors, no auto-bindings"
+echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, no QML errors, no auto-bindings"

@@ -58,6 +58,13 @@ Item {
         { field: "write", title: qsTr("Escritura"), width: 110, numeric: true, shown: table.ratesShown }
     ]
 
+    // The one place the typed word reaches the hub, from the clock or from
+    // Return.
+    function applyFilter() {
+        table.processes.filterText = search.text
+        table.processes.refresh()
+    }
+
     function percentText(value) {
         return value.toLocaleString(Qt.locale(), "f", 1) + " %"
     }
@@ -277,17 +284,25 @@ Item {
                 Accessible.name: search.placeholderText
                 // The filter re-sorts every process, so a typed word does not
                 // do it once per letter: the last keystroke of a burst is what
-                // reaches the hub, a sixth of a second later.
+                // reaches the hub, a sixth of a second later. Return says the
+                // word is finished and does not wait for the clock.
                 onTextChanged: debounce.restart()
-
-                Timer {
-                    id: debounce
-                    interval: 150
-                    onTriggered: {
-                        table.processes.filterText = search.text
-                        table.processes.refresh()
-                    }
+                Keys.onReturnPressed: function(event) {
+                    debounce.stop()
+                    table.applyFilter()
+                    event.accepted = true
                 }
+                Keys.onEnterPressed: function(event) {
+                    debounce.stop()
+                    table.applyFilter()
+                    event.accepted = true
+                }
+            }
+
+            Timer {
+                id: debounce
+                interval: 150
+                onTriggered: table.applyFilter()
             }
 
             Text {

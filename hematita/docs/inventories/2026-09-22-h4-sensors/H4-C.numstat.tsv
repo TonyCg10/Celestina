@@ -1,0 +1,33 @@
+# H4-C exact change inventory
+
+Base revision	1ff81bc93b6758684f195534192e9cc39fc07c28
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-22-h4-sensor-gates.md
+Pathspec	hematita/docs/inventories/2026-09-22-h4-sensors/H4-C.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/qml/components/SensorChipCard.qml
+Pathspec	hematita/qml/components/SensorsPage.qml
+Pathspec	hematita/scripts/smoke.sh
+Pathspec	hematita/src/main.rs
+Pathspec	hematita/src/sampler.rs
+Pathspec	hematita/src/sensors.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+3	1	578a80756bbf37e409213355977e8e33a2a1a896e85c72c44e763bc5db007d83	hematita/ROADMAP.md
+18	2	93d4ad1acf278c89a30e62a876adae4e890ca7c57e9f0882cadec4e607d6b7c2	hematita/STATUS.md
+133	0	fb573aa5ff20cd849c349d46fe66b5128ea41914b9ae224b046360b40c5cb53b	hematita/docs/evidence/2026-09-22-h4-sensor-gates.md
+3	1	476ba7d9d90515298a0b6ee98166b777e6090f76bcc289fa53f50cd5c741f5c1	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+21	0	6edf2c590926ad6dd389220b2d498052e82dbe1cee045c28eae46d10a6f19492	hematita/qml/Main.qml
+24	9	43bf23b4761f46edb15345fc9769a7fcda93ac49bc6060f17d82bc0d3c39b267	hematita/qml/components/ProcessTable.qml
+19	7	cf91d54802e5d82f623e537255763994647c6185b73b0589d0623f9c24475e6c	hematita/qml/components/SensorChipCard.qml
+4	1	f032205c2d1b83d143850cb6d4b47fd3da69f6c98d09cee45bd22acd946c0123	hematita/qml/components/SensorsPage.qml
+8	1	49be59f328b9270710cfe0e08dddb8eb399efe721489bf99a58d8b44d24900e9	hematita/scripts/smoke.sh
+7	0	d77c1b5fce3202333268cb0b9a656e18e3be6f1e07a1a84b44f88365f5ab5e97	hematita/src/main.rs
+17	5	d875baa4af8a6304cebf8c10d152ebf2ac48fe2290c8d9acb5b420fcb05755ff	hematita/src/sampler.rs
+19	11	2e55f8bbf58b7405649574f96ca71ae0df9bdc005dc29c7d7643398e69de335b	hematita/src/sensors.rs
+33	0	self	hematita/docs/inventories/2026-09-22-h4-sensors/H4-C.numstat.tsv

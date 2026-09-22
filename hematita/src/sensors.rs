@@ -91,7 +91,7 @@ pub struct HematitaSensorsRust {
     start_failed: bool,
     started: bool,
     last_generation: u64,
-    /// `chipKey/kind/index` → (session min, session max).
+    /// `chipKey/chipName/kind/index` → (session min, session max).
     extremes: HashMap<String, (f64, f64)>,
 }
 
@@ -135,9 +135,12 @@ fn fold_extremes(previous: Option<(f64, f64)>, value: f64) -> (f64, f64) {
 
 /// The name a channel's extremes are remembered under. The `hwmonN` key is
 /// stable for the session, which is exactly as long as the extremes mean
-/// anything.
-fn extreme_key(chip_key: &str, kind: ChannelKind, index: u32) -> String {
-    format!("{chip_key}/{}/{index}", kind.as_str())
+/// anything — but only while it names the same device: the index of a device
+/// that goes away can be handed to the next one to bind. The chip's driver
+/// name is therefore part of the key, so a re-bound index starts fresh
+/// extremes instead of inheriting another device's minimum and maximum.
+fn extreme_key(chip_key: &str, chip_name: &str, kind: ChannelKind, index: u32) -> String {
+    format!("{chip_key}/{chip_name}/{}/{index}", kind.as_str())
 }
 
 impl qobject::HematitaSensors {
@@ -187,7 +190,7 @@ impl qobject::HematitaSensors {
             let mut seen = Vec::new();
             for chip in &snapshot.chips {
                 for channel in &chip.channels {
-                    let key = extreme_key(&chip.key, channel.kind, channel.index);
+                    let key = extreme_key(&chip.key, &chip.name, channel.kind, channel.index);
                     let folded = fold_extremes(state.extremes.get(&key).copied(), channel.value);
                     state.extremes.insert(key.clone(), folded);
                     seen.push(key);
@@ -215,7 +218,7 @@ impl qobject::HematitaSensors {
             chip_names.push(chip.name.clone());
             chip_counts.push(chip.channels.len() as f64);
             for channel in &chip.channels {
-                let key = extreme_key(&chip.key, channel.kind, channel.index);
+                let key = extreme_key(&chip.key, &chip.name, channel.kind, channel.index);
                 let (min, max) = self
                     .rust()
                     .extremes
@@ -276,14 +279,19 @@ mod tests {
     }
 
     #[test]
-    fn an_extreme_is_remembered_per_chip_kind_and_index() {
+    fn an_extreme_is_remembered_per_chip_name_kind_and_index() {
         assert_eq!(
-            extreme_key("hwmon6", ChannelKind::Temperature, 3),
-            "hwmon6/temperature/3"
+            extreme_key("hwmon6", "k10temp", ChannelKind::Temperature, 3),
+            "hwmon6/k10temp/temperature/3"
         );
         assert_ne!(
-            extreme_key("hwmon6", ChannelKind::Fan, 1),
-            extreme_key("hwmon7", ChannelKind::Fan, 1)
+            extreme_key("hwmon6", "it8696", ChannelKind::Fan, 1),
+            extreme_key("hwmon7", "it8696", ChannelKind::Fan, 1)
+        );
+        // The same index re-bound to another device is another channel.
+        assert_ne!(
+            extreme_key("hwmon6", "k10temp", ChannelKind::Temperature, 1),
+            extreme_key("hwmon6", "amdgpu", ChannelKind::Temperature, 1)
         );
     }
 }

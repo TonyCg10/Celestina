@@ -58,6 +58,13 @@ fn main() {
         // The smoke's shape gate, off in every other run.
         let smoke_shape = std::env::var_os("HEMATITA_SMOKE_SHAPE").is_some();
         initial_properties.insert(QString::from("smokeShape"), QVariant::from(&smoke_shape));
+        // The smoke's section walk: without it the pages nobody selected are
+        // never built, and a page that cannot construct would pass the gate.
+        let smoke_sections = std::env::var_os("HEMATITA_SMOKE_SECTIONS").is_some();
+        initial_properties.insert(
+            QString::from("smokeSections"),
+            QVariant::from(&smoke_sections),
+        );
         engine.as_mut().set_initial_properties(&initial_properties);
         engine.load(&QUrl::from(
             "qrc:/qt/qml/org/celestina/hematita/qml/Main.qml",

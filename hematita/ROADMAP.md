@@ -47,7 +47,8 @@ alone, without the machine noticing the monitor.
 | H3-E | done | H3-Z | the whole-branch review's fixes and 0.4.1 | `scripts/complete-production.sh` |
 | H4-A | done | H3-E | `hematita-core`: `sensors`, captures, the deferred cgroup regression test | `cargo test -p hematita-core` |
 | H4-B | done | H4-A | sampler sensors section, `HematitaSensors`, the Sensors page, the parked process-table items | `scripts/verify-production.sh` |
-| H4-Z | planned | H4-B | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
+| H4-C | done | H4-B | the review's corrections: the hwmon facts re-validated by chip name, stable sensor rows, a smoke that steps through every section | `scripts/verify-production.sh` |
+| H4-Z | planned | H4-C | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -74,6 +75,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H3-E: [table fixes](docs/evidence/2026-09-22-h3-table-fixes.md)
 - H4-A: [core](docs/evidence/2026-09-22-h4-core.md)
 - H4-B: [sensors page](docs/evidence/2026-09-22-h4-sensors-page.md)
+- H4-C: [sensor gates](docs/evidence/2026-09-22-h4-sensor-gates.md)
 
 ## H1 — closed 2026-09-21
 

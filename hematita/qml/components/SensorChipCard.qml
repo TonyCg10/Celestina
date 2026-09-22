@@ -17,20 +17,32 @@ ListSection {
     required property string chipTitle
     // { label, valueText, extremesText, limitText, load } per channel.
     required property var channels
+    // A channel-shaped nothing, so a row whose index is momentarily past the
+    // array reads fields rather than undefined.
+    readonly property var emptyChannel: ({ label: "", valueText: "", extremesText: "",
+                                           limitText: "", load: "normal" })
 
     title: card.chipTitle
 
+    // The model is the channel count, not the array: a chip publishes the same
+    // channels every tick, and a fresh array as the model would tear every row
+    // down and build it again each second — taking the keyboard focus with it.
+    // The rows read this tick's values by index instead, as the outer card
+    // repeater and the process tables do.
     Repeater {
-        model: card.channels
+        model: card.channels.length
 
         SensorRow {
-            required property var modelData
+            required property int index
+            readonly property var channel: index < card.channels.length
+                                           ? card.channels[index] : card.emptyChannel
+
             width: card.width
-            label: modelData.label
-            valueText: modelData.valueText
-            extremesText: modelData.extremesText
-            limitText: modelData.limitText
-            load: modelData.load
+            label: channel.label
+            valueText: channel.valueText
+            extremesText: channel.extremesText
+            limitText: channel.limitText
+            load: channel.load
         }
     }
 }

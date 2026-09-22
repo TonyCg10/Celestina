@@ -471,11 +471,16 @@ fn chip_facts(dir: &Path) -> Option<ChipFacts> {
     })
 }
 
-/// Every `hwmonN` directory as a chip. The names, labels and limits are read
-/// once per directory; the ~60 `_input`/`_average` files are read each tick,
-/// which is what a live reading is. A chip whose value file vanishes keeps its
-/// other channels; a chip directory that vanishes drops out of `facts` and the
-/// list.
+/// Every `hwmonN` directory as a chip. The labels and limits are read once per
+/// directory; the value files and the chip's `name` are read each tick, which
+/// is what a live reading is. A chip whose value file vanishes keeps its other
+/// channels; a chip directory that vanishes drops out of `facts` and the list.
+///
+/// The `hwmonN` index is not an identity: a device that goes away frees its
+/// index and the next device to bind can be given it. So the cache is keyed on
+/// the index but validated by the chip's own `name` every tick — one small
+/// read per chip — and a name that changed throws the cached labels and limits
+/// away rather than letting a new device inherit the old one's `crit`.
 fn sample_sensors(facts: &mut HashMap<String, ChipFacts>) -> Section<SensorSnapshot> {
     let root = Path::new(HWMON_ROOT);
     let entries = match std::fs::read_dir(root) {
@@ -502,6 +507,13 @@ fn sample_sensors(facts: &mut HashMap<String, ChipFacts>) -> Section<SensorSnaps
     facts.retain(|key, _| keys.iter().any(|(k, _)| k == key));
     let mut chips = Vec::new();
     for (key, dir) in keys {
+        // The one fact that says whether the cache is still about this device.
+        let name = read(&dir.join("name")).map(|text| text.trim().to_owned());
+        if let (Ok(name), Some(cached)) = (&name, facts.get(&key)) {
+            if &cached.name != name {
+                facts.remove(&key);
+            }
+        }
         let Some(chip_facts) = (match facts.get(&key) {
             Some(existing) => Some(existing),
             None => chip_facts(&dir).and_then(|f| {
