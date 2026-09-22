@@ -10,6 +10,7 @@
   sha256 0d731859f62d8632938569b02072972049325e45a02a6a47d8c103944bf0a327.
   The manifest records `git_revision = 623bde3f96d2baebac4d0e78d3fc451c45a43905`
   and `verified = true`
+- **Sealed manifest:** `hematita/target/production-artifact.toml`
 
 ## What this closes
 
