@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** H2
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -38,7 +38,7 @@ alone, without the machine noticing the monitor.
 | H2-A | done | H1-Z | `hematita-core`: rate, disk, network, gpu, ring fractions, captures | `cargo test -p hematita-core` |
 | H2-B | done | H2-A | sampler sections, `publish.rs`, list-publishing `HematitaResources`, page, per-core grid, failure path and H1 follow-ups | `scripts/verify-production.sh` |
 | H2-C | done | H2-B | resource order, a list model stable across revisions, the GPU reason file, toggle and subtitle fixes | `scripts/verify-production.sh` |
-| H2-Z | planned | H2-C | implementation exit and 0.3.0 | `scripts/complete-production.sh` |
+| H2-Z | done | H2-C | implementation exit and 0.3.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -56,6 +56,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H2-A: [core](docs/evidence/2026-09-22-h2-core.md)
 - H2-B: [resources page](docs/evidence/2026-09-22-h2-resources-page.md)
 - H2-C: [list stability](docs/evidence/2026-09-22-h2-list-stability.md)
+- H2-Z: [production completion](docs/evidence/2026-09-22-h2-production-completion.md)
 
 ## H1 — closed 2026-09-21
 
@@ -74,9 +75,23 @@ implementation exit ran on 2026-09-21: the
 `VAL-H1` stays pending in the author's lane and did not block this closure.
 The next checkpoint is `H2`, not yet opened.
 
-## H2 — opened 2026-09-22
+## H2 — closed 2026-09-22
 
-The follow-ups H1 booked as its first unit are delivered inside `H2-B`: every
-one of them needs the build the list rewrite needs, so they share it. The
-units and their exit are in the
-[active plan](docs/plans/active/2026-09-22-h2-resources.md).
+Its falsifiable problem was whether the side list could become a live
+inventory of the machine — every whole disk, every interface, the GPU — read
+from `/proc` and `/sys` once a second by the same thread, each with its own
+minute of history and its own honest absence, without the monitor's idle
+cost becoming visible. The delivered result is the release binary built,
+verified and deployed to the author's prefix at `0.3.0`, whose Performance
+page lists the processor (with a per-core grid behind an icon toggle),
+memory with swap, the AMD GPU, every whole disk and every network interface,
+each with live graphs.
+
+The follow-ups H1 booked as its first unit were delivered inside `H2-B`:
+every one of them needed the build the list rewrite needed, so they shared
+it. Units `H2-A` through `H2-Z` are in the archived
+[plan](docs/plans/archive/2026-09-22-h2-resources.md). The checkpoint's
+implementation exit ran on 2026-09-22: the
+[completion evidence](docs/evidence/2026-09-22-h2-production-completion.md).
+`VAL-H2` stays pending in the author's lane and did not block this closure.
+The next checkpoint is `H3` (processes and applications), not yet opened.

@@ -1,14 +1,14 @@
 # Hematita status
 
 - **Updated:** 2026-09-22
-- **Delivered as 0.2.0:** H1 — the window opens with the navigation strip and
-  a live Performance page reading CPU and memory once a second, built,
-  verified and deployed to the author's prefix
-- **Author validation:** `VAL-H1` requested, not run
-- **Active phase:** H2 (every resource on the Performance page), opened
-  2026-09-22; `H2-A`, `H2-B` and `H2-C` done — the crate parses disks,
-  interfaces and the GPU, and the page lists every one of them in a stable
-  order
+- **Delivered as 0.3.0:** H2 — the Performance page lists the processor (with
+  a per-core grid), memory with swap, the AMD GPU, every whole disk and every
+  network interface, each with live graphs, built, verified and deployed to
+  the author's prefix
+- **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
+  run
+- **Active phase:** none; `H3` (processes and applications) is planned, not
+  yet opened
 
 ## Current checkout truth
 
@@ -61,11 +61,10 @@
   and for H2-B is offscreen only, and appearance, keyboard and focus belong
   to `VAL-H1` and `VAL-H2`.
 - The release binary is built, verified and installed at
-  `~/.local/bin/hematita`, with its desktop entry and icon set registered
-  under `~/.local/share`. Since `H2-B` the checkout's
-  `hematita/target/release/hematita` is ahead of those installed bytes; the
-  deployment catches up at `H2-Z` with 0.3.0. See the
-  [production completion record](docs/evidence/2026-09-21-h1-production-completion.md).
+  `~/.local/bin/hematita` at `0.3.0`, with its desktop entry and icon set
+  registered under `~/.local/share`; the installed bytes match the checkout's
+  `hematita/target/release/hematita` byte for byte. See the
+  [production completion record](docs/evidence/2026-09-22-h2-production-completion.md).
 
 ## Blockers
 

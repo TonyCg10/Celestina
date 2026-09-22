@@ -1,8 +1,10 @@
 # H2 — Every resource on the Performance page
 
 - **Opened:** 2026-09-22
+- **Closed:** 2026-09-22
+- **Successor:** H3
 - **Plan ID:** h2-resources
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author asked to open the H2 plan on 2026-09-22
 - **Scope:** hematita
 - **Implementation checkpoint:** H2
@@ -56,4 +58,4 @@ graphs.
 | H2-A | `hematita:` | done | [inventory](../../inventories/2026-09-22-h2-resources/H2-A.numstat.tsv) | 16 files, +1011/-26 | Named-counter rates, diskstats, net/dev and amdgpu parsers, sysfs helpers, ring fractions, captures; H2 opened in the documents | [core](../../evidence/2026-09-22-h2-core.md) | `VAL-H2` |
 | H2-B | `hematita:` | done | [inventory](../../inventories/2026-09-22-h2-resources/H2-B.numstat.tsv) | 16 files, +1399/-299 | Snapshot sections with typed reasons and topology; `publish.rs` tested; `HematitaResources` as lists with a revision; the page weaving rows, kind-driven detail, per-core grid, per-row failure state; the H1 follow-ups | [resources page](../../evidence/2026-09-22-h2-resources-page.md) | `VAL-H2` |
 | H2-C | `hematita:` | done | [inventory](../../inventories/2026-09-22-h2-resources/H2-C.numstat.tsv) | 8 files, +202/-31 | Sort disks and interfaces by name; keep the list model stable across revisions; the GPU row's reason names the failing file; toggle and subtitle fixes | [list stability](../../evidence/2026-09-22-h2-list-stability.md) | `VAL-H2` |
-| H2-Z | `hematita:` | planned | `hematita/`, `docs/version-history.tsv` | — | Implementation exit, 0.3.0, documents closed, plan archived | `scripts/complete-production.sh` | `VAL-H2` |
+| H2-Z | `hematita:` | done | [inventory](../../inventories/2026-09-22-h2-resources/H2-Z.numstat.tsv) | 15 files, +225/-91 | Implementation exit, 0.3.0, documents closed, plan archived | [production completion](../../evidence/2026-09-22-h2-production-completion.md) | `VAL-H2` |

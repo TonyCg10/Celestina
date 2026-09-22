@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H2-B` of
-  [`../plans/active/2026-09-22-h2-resources.md`](../plans/active/2026-09-22-h2-resources.md):
+  [`../plans/archive/2026-09-22-h2-resources.md`](../plans/archive/2026-09-22-h2-resources.md):
   the sampler's sections and topology, `hematita/src/publish.rs`,
   `HematitaResources` as index-aligned lists with a `revision` ticket, the
   Performance page weaving rows, kind-driven detail, the per-core grid, the

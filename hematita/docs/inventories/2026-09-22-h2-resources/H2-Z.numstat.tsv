@@ -1,0 +1,37 @@
+# H2-Z exact change inventory
+
+Base revision	66ec11a4ef756d02a29e7af7f2f8939f7cb2f75c
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/AGENTS.md
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-22-h2-core.md
+Pathspec	hematita/docs/evidence/2026-09-22-h2-list-stability.md
+Pathspec	hematita/docs/evidence/2026-09-22-h2-production-completion.md
+Pathspec	hematita/docs/evidence/2026-09-22-h2-resources-page.md
+Pathspec	hematita/docs/inventories/2026-09-22-h2-resources/H2-Z.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h2-resources.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-22-h2-resources.md
+Pathspec	hematita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	78ce30aef52df44f62aa126093c6bb96f99415921926c5c8170828ac4c2585db	docs/version-history.tsv
+3	2	a4aedaf8261bf1bcc2f03bfa7d31e32190e63a15348b55bd7716a04da19237ca	hematita/AGENTS.md
+1	1	c812952c43023519901fb2124b6170d4157b6de62818ad00cec1bed544bc9330	hematita/Cargo.lock
+1	1	139a50cd35d63a21a8297b7b444a2009fc3f762d180fe24596c99e6a99dd51a9	hematita/Cargo.toml
+24	9	47388f891ebb6553318ccdccb4368ba2ebdbf4c823336da5c071c4c4b90a9141	hematita/ROADMAP.md
+12	13	ef2f9c55132731fd66f8ad12cfe9d222f9127f9b956bc7a6e7dd466800cf64f3	hematita/STATUS.md
+1	1	77c187f99792e46f3d52ac095b7b8832e5313b86d08e4d3e5a762149624a231d	hematita/docs/evidence/2026-09-22-h2-core.md
+1	1	9faacd2d22bf44b93dd3942a708660d26919be34a5cc39cc39b69d1be8717616	hematita/docs/evidence/2026-09-22-h2-list-stability.md
+79	0	8d244b4326d17664e3edab1d668f896a8827dcab1a8f788ec9d43dfd75743393	hematita/docs/evidence/2026-09-22-h2-production-completion.md
+1	1	0acbb6724d32d58fc66c491b57d78ab8746d3bc363895954481dee4730a4765c	hematita/docs/evidence/2026-09-22-h2-resources-page.md
+2	3	4d83c0cbfe77f55bfed49f6692c182c584d4de1723027ea2aadc8e955c548f3f	hematita/docs/plans/active/README.md
+61	0	c087864e599ec8b6035e4ba6a8c3d1ae8b93c63ee892a839c88ad386db746a20	hematita/docs/plans/archive/2026-09-22-h2-resources.md
+1	0	0e5087b7c05820e9154bce59fd5601cf54b5cf58acdf7b31346b4fe81a1f948f	hematita/docs/plans/archive/README.md
+0	59	deleted	hematita/docs/plans/active/2026-09-22-h2-resources.md
+37	0	self	hematita/docs/inventories/2026-09-22-h2-resources/H2-Z.numstat.tsv

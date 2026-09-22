@@ -6,3 +6,4 @@ units and links. Exact inventories remain immutable under
 root.
 
 - [H1 — Foundation and the Performance page](2026-09-21-h1-foundation.md)
+- [H2 — Every resource on the Performance page](2026-09-22-h2-resources.md)

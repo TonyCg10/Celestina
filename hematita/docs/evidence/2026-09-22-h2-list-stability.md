@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H2-C` of
-  [`../plans/active/2026-09-22-h2-resources.md`](../plans/active/2026-09-22-h2-resources.md):
+  [`../plans/archive/2026-09-22-h2-resources.md`](../plans/archive/2026-09-22-h2-resources.md):
   the six review findings against `H2-B` — disk and interface order, the
   `ListView` model, the GPU subtitle and its reason file, the per-core toggle,
   and total indexing in `sample_gpu`
