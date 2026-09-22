@@ -1,0 +1,39 @@
+//! The parsers against text captured from the author's machine (an AMD Ryzen
+//! 7 9800X3D, 2026-09-21). Inline fixtures prove arithmetic; these prove the
+//! real files have the shape the parsers expect.
+
+use hematita_core::cpu::{parse_model, parse_stat};
+use hematita_core::memory::parse_meminfo;
+
+const STAT: &str = include_str!("fixtures/proc-stat.txt");
+const MEMINFO: &str = include_str!("fixtures/proc-meminfo.txt");
+const CPUINFO: &str = include_str!("fixtures/proc-cpuinfo.txt");
+const CORES: usize = 8;
+const TOTAL_KIB: u64 = 65_403_392;
+
+#[test]
+fn the_captured_stat_has_the_aggregate_and_every_core() {
+    let stat = parse_stat(STAT).expect("the captured /proc/stat parses");
+    assert_eq!(stat.cores.len(), CORES);
+    assert!(stat.aggregate.total >= stat.aggregate.idle);
+    for core in &stat.cores {
+        assert!(core.total >= core.idle);
+        assert!(core.total <= stat.aggregate.total);
+    }
+}
+
+#[test]
+fn the_captured_meminfo_has_memory_and_swap() {
+    let memory = parse_meminfo(MEMINFO).expect("the captured /proc/meminfo parses");
+    assert_eq!(memory.total_kib, TOTAL_KIB);
+    assert!(memory.used_kib <= memory.total_kib);
+    assert!(memory.swap_used_kib <= memory.swap_total_kib);
+}
+
+#[test]
+fn the_captured_cpuinfo_names_the_processor() {
+    assert_eq!(
+        parse_model(CPUINFO).as_deref(),
+        Some("AMD Ryzen 7 9800X3D 8-Core Processor")
+    );
+}

@@ -5,4 +5,7 @@
 //! opens a file, spawns a thread or knows what a percentage should look like
 //! on screen; that is the application's business.
 
+pub mod cpu;
+pub mod history;
+pub mod memory;
 pub mod ratio;

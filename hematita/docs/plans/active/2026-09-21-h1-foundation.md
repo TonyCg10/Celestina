@@ -48,6 +48,6 @@ CPU and memory graphs.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | H1-A | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-A.numstat.tsv) | 42 files, +2260/-0 | Crate stub with the shared percentage, application skeleton opening the window with the pill navigation strip, production scripts, smoke, the document set | [skeleton](../../evidence/2026-09-21-h1-skeleton.md) | `VAL-H1` |
-| H1-B | `hematita:` | planned | `celestina-rs/crates/hematita-core/` | — | `/proc/stat`, `/proc/meminfo`, frequency and model parsers; samplers; the ring; captures | `cargo test -p hematita-core` | `VAL-H1` |
+| H1-B | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-B.numstat.tsv) | 13 files, +1049/-4 | `/proc/stat`, `/proc/meminfo`, frequency and model parsers; samplers; the ring; captures | [core](../../evidence/2026-09-21-h1-core.md) | `VAL-H1` |
 | H1-C | `hematita:` | planned | `hematita/src/`, `hematita/qml/`, `hematita/build.rs` | — | Sampler thread, snapshot, `HematitaResources`, activation, Performance page with graph | `scripts/verify-production.sh` | `VAL-H1` |
 | H1-Z | `hematita:` | planned | `hematita/`, `docs/version-history.tsv` | — | Implementation exit, 0.2.0, status and roadmap closed, plan archived | `scripts/complete-production.sh` | `VAL-H1` |
