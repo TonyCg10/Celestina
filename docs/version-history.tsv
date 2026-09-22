@@ -152,3 +152,4 @@ hematita	0.3.0	milestone	H2-Z	Add every resource to the Performance page with th
 hematita	0.4.0	milestone	H3-Z	Add the Processes and Applications pages
 hematita	0.4.1	bug	H3-E	Fix the process table cursor, the action outcome and the signal re-validation
 hematita	0.5.0	milestone	H4-Z	Add the Sensors page
+hematita	0.5.1	bug	H4-D	Fix the Sensors page keyboard model, its failure state and the smoke gate

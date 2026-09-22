@@ -18,9 +18,13 @@ set -u
 #  4) The section walk: with HEMATITA_SMOKE_SECTIONS set the window shows each
 #     section one second apart and then stops. A `StackLayout` builds only the
 #     page it shows, so without this a page that cannot construct at all is a
-#     page (2) never looked at. The walk prints nothing; the gate is that (2)
-#     still finds no errors once all four pages have been up, which the ten
-#     seconds leave time for.
+#     page (2) never looked at. The gate is that (2) still finds no errors once
+#     all four pages have been up, which the ten seconds leave time for.
+#  5) The sensors gate: once the walk reaches Sensores the window prints that
+#     page's two counts. A page that constructed without error but published no
+#     chip at all — the whole hwmon read having failed — is a working page
+#     showing nothing, which no error message would have said, so both counts
+#     must be above zero.
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
 # real Wayland session.
@@ -91,4 +95,10 @@ if [ -z "$shape" ]; then
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, no QML errors, no auto-bindings"
+sensors=$(grep -E 'hematita-sensors [1-9][0-9]* [1-9][0-9]*$' "$log" | head -1 || true)
+if [ -z "$sensors" ]; then
+    echo "smoke: the Sensors page published no chips (expected 'hematita-sensors <chips> <channels>' with both above zero); got: '$(grep -E 'hematita-sensors' "$log" | head -1)'" >&2
+    exit 1
+fi
+
+echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, no QML errors, no auto-bindings"

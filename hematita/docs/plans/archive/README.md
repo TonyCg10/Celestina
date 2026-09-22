@@ -10,3 +10,4 @@ root.
 - [H3 — Processes and applications](2026-09-22-h3-processes.md)
 - [H3-E — The process table's cursor, outcome and signal](2026-09-22-h3-table-fixes.md)
 - [H4 — Sensors](2026-09-22-h4-sensors.md)
+- [H4-D — The Sensors page's keyboard, its failure state and its gate](2026-09-22-h4-sensors-fixes.md)

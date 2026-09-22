@@ -23,6 +23,8 @@ ListSection {
                                            limitText: "", load: "normal" })
 
     title: card.chipTitle
+    // The page is the one Tab stop; a card is a place in it, not a stop.
+    activeFocusOnTab: false
 
     // The model is the channel count, not the array: a chip publishes the same
     // channels every tick, and a fresh array as the model would tear every row

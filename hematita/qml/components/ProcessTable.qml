@@ -287,15 +287,9 @@ Item {
                 // reaches the hub, a sixth of a second later. Return says the
                 // word is finished and does not wait for the clock.
                 onTextChanged: debounce.restart()
-                Keys.onReturnPressed: function(event) {
+                onAccepted: {
                     debounce.stop()
                     table.applyFilter()
-                    event.accepted = true
-                }
-                Keys.onEnterPressed: function(event) {
-                    debounce.stop()
-                    table.applyFilter()
-                    event.accepted = true
                 }
             }
 

@@ -20,6 +20,11 @@
   channel, coloured by a thermal load graded against the chip's own `crit`.
   The six process-table items parked by `H3-E` are closed; built, verified
   and deployed to the author's prefix
+- **Delivered as 0.5.1:** `H4-D` — the whole-branch review's correction: the
+  Sensors page is its own single Tab stop whose arrows scroll card by card
+  instead of forty-six rows each answering Tab, a tick that cannot read
+  `/sys/class/hwmon` shows only its reason rather than the last good values
+  beneath an error line, and the smoke fails unless the page publishes chips
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
   run; `VAL-H3` requested, not run; `VAL-H4` requested, not run
 - **Active phase:** none; the next phase is H5 (services and privileged
@@ -212,6 +217,20 @@
   looked at the page on a real session yet: `VAL-H1` through `VAL-H4` all
   stay pending. See the
   [production completion record](docs/evidence/2026-09-22-h4-production-completion.md).
+- As of `H4-D` the Sensors page is crossed the way the rest of the window is.
+  It is a `ListView` of chip cards: one Tab stop, arrows that move card by
+  card and scroll to what they reach, and a scroll bar reporting on it. The
+  cards and the rows take no focus — forty-six focusable rows inside a
+  surface with no current item were forty-six stops and a focus that could be
+  stranded below the fold with nothing able to scroll to it — and each row
+  still names its label, value, extremes and limit to a screen reader. A tick
+  that cannot read `/sys/class/hwmon` now publishes empty lists and bumps its
+  ticket, so the page shows only the reason; the session's extremes survive
+  it, ready for the next good tick. The smoke prints and asserts the page's
+  chip and channel counts, so a page that builds but publishes nothing fails
+  the gate. Deployed as `0.5.1`. Still nobody has pressed a key on it:
+  `VAL-H4`, which now asks for exactly that. See the
+  [sensors fixes evidence](docs/evidence/2026-09-22-h4-sensors-fixes.md).
 
 ## Blockers
 

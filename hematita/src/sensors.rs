@@ -6,7 +6,7 @@
 //! the page turns into Spanish through `qsTr()`, and a chip's driver name and
 //! a channel's label are the kernel's own data, shown raw.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
@@ -162,6 +162,24 @@ impl qobject::HematitaSensors {
         }
     }
 
+    /// Every published list back to empty. A failed tick shows its reason and
+    /// nothing else.
+    fn clear_lists(mut self: Pin<&mut Self>) {
+        self.as_mut().set_chip_keys(QStringList::default());
+        self.as_mut().set_chip_names(QStringList::default());
+        self.as_mut().set_chip_counts(doubles(&[]));
+        self.as_mut().set_channel_chips(doubles(&[]));
+        self.as_mut().set_channel_kinds(QStringList::default());
+        self.as_mut().set_channel_indices(doubles(&[]));
+        self.as_mut().set_channel_labels(QStringList::default());
+        self.as_mut().set_channel_values(doubles(&[]));
+        self.as_mut().set_channel_mins(doubles(&[]));
+        self.as_mut().set_channel_maxs(doubles(&[]));
+        self.as_mut().set_channel_limit_max(doubles(&[]));
+        self.as_mut().set_channel_limit_crit(doubles(&[]));
+        self.as_mut().set_channel_loads(QStringList::default());
+    }
+
     fn apply(mut self: Pin<&mut Self>, generation: u64, section: Section<SensorSnapshot>) {
         if !publish::accepts(generation, self.rust().last_generation) {
             return;
@@ -178,6 +196,15 @@ impl qobject::HematitaSensors {
                 self.as_mut().set_available(false);
                 self.as_mut().set_reason_kind(QString::from(kind.as_str()));
                 self.as_mut().set_reason_path(QString::from(path.as_str()));
+                // The last good chips are not this tick's reading, and a
+                // column of values frozen beside a line saying they could not
+                // be read is worse than no values: clear every list and bump
+                // the ticket, so the page shows only the reason. The extremes
+                // map is left alone — a tick that reads again resumes the
+                // session's minima and maxima instead of starting over.
+                self.as_mut().clear_lists();
+                let ticket = publish::ticket(generation);
+                self.as_mut().set_revision(ticket);
                 return;
             }
         };
@@ -187,13 +214,13 @@ impl qobject::HematitaSensors {
         // publishes takes its extremes with it.
         {
             let state = &mut *self.as_mut().rust_mut();
-            let mut seen = Vec::new();
+            let mut seen: HashSet<String> = HashSet::new();
             for chip in &snapshot.chips {
                 for channel in &chip.channels {
                     let key = extreme_key(&chip.key, &chip.name, channel.kind, channel.index);
                     let folded = fold_extremes(state.extremes.get(&key).copied(), channel.value);
                     state.extremes.insert(key.clone(), folded);
-                    seen.push(key);
+                    seen.insert(key);
                 }
             }
             state.extremes.retain(|key, _| seen.contains(key));

@@ -4,6 +4,13 @@ import org.celestina.hematita 1.0
 // One channel: the word for it, its value with the unit, the session's
 // extremes, and the kernel's limit when it has one. Content family: a row in
 // a grouped card, hover only, no selection — there is nothing to act on.
+//
+// It takes no focus of its own. Forty-six rows that each answered Tab would
+// be forty-six stops between the section strip and whatever follows, and a
+// row focused inside a scrolling surface that has no current item is a focus
+// nobody can scroll to. The page is the one stop and its arrows move by card;
+// each row still names itself to a screen reader, which is what AT reads as
+// it walks the list.
 Item {
     id: row
 
@@ -14,17 +21,11 @@ Item {
     required property string load
 
     implicitHeight: CelestinaTheme.rowHeight
-    activeFocusOnTab: true
+    activeFocusOnTab: false
 
     Accessible.role: Accessible.ListItem
-    Accessible.name: row.label + ", " + row.valueText
+    Accessible.name: row.label + ", " + row.valueText + ", " + row.extremesText
                      + (row.limitText.length > 0 ? ", " + row.limitText : "")
-
-    CelestinaFocusRing {
-        target: row
-        cornerRadius: CelestinaTheme.radiusSm
-        shown: row.activeFocus
-    }
 
     Row {
         anchors.fill: parent

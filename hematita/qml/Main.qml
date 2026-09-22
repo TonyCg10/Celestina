@@ -15,6 +15,7 @@ ApplicationWindow {
     // Set only by `scripts/smoke.sh`: see the section walk below.
     required property bool smokeSections
     property bool shapePrinted: false
+    property bool sensorShapePrinted: false
 
     width: 1000
     height: 680
@@ -72,6 +73,12 @@ ApplicationWindow {
 
         HematitaSensors {
             id: sensorHub
+
+            // The sensors' own shape gate, printed once the section walk has
+            // reached Sensores and a reading has landed. A page that built
+            // without error but published no chip is the failure no error
+            // message would have named, so the smoke reads the two counts.
+            onRevisionChanged: window.printSensorShape()
         }
 
         HematitaActivation {
@@ -116,6 +123,15 @@ ApplicationWindow {
         processHub.refresh()
     }
 
+    function printSensorShape() {
+        if (!window.smokeSections || window.sensorShapePrinted
+            || window.currentSection !== 3 || sensorHub.revision < 1)
+            return
+        window.sensorShapePrinted = true
+        console.info("hematita-sensors", sensorHub.chipKeys.length,
+                     sensorHub.channelKinds.length)
+    }
+
     // The smoke's section walk. A `StackLayout` builds only the page it is
     // showing, so a page nobody selected is a page whose delegates were never
     // constructed — and a headless run that never left Performance would pass
@@ -132,6 +148,9 @@ ApplicationWindow {
                 return
             }
             window.currentSection = window.currentSection + 1
+            // A reading usually landed long before the walk arrives, so the
+            // next `revisionChanged` is not what to wait for.
+            window.printSensorShape()
         }
     }
 

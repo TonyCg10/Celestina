@@ -49,6 +49,7 @@ alone, without the machine noticing the monitor.
 | H4-B | done | H4-A | sampler sensors section, `HematitaSensors`, the Sensors page, the parked process-table items | `scripts/verify-production.sh` |
 | H4-C | done | H4-B | the review's corrections: the hwmon facts re-validated by chip name, stable sensor rows, a smoke that steps through every section | `scripts/verify-production.sh` |
 | H4-Z | done | H4-C | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
+| H4-D | done | H4-Z | the whole-branch review's corrections: the Sensors page one Tab stop with arrows by card, a failed tick showing only its reason, a smoke gate on the page's chip count, and 0.5.1 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -77,6 +78,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H4-B: [sensors page](docs/evidence/2026-09-22-h4-sensors-page.md)
 - H4-C: [sensor gates](docs/evidence/2026-09-22-h4-sensor-gates.md)
 - H4-Z: [production completion](docs/evidence/2026-09-22-h4-production-completion.md)
+- H4-D: [sensors fixes](docs/evidence/2026-09-22-h4-sensors-fixes.md)
 
 ## H1 — closed 2026-09-21
 
@@ -196,6 +198,14 @@ Units `H4-A` through `H4-Z` are in the archived
 [plan](docs/plans/archive/2026-09-22-h4-sensors.md). The checkpoint's
 implementation exit ran on 2026-09-22: the
 [completion evidence](docs/evidence/2026-09-22-h4-production-completion.md).
+`H4-D` answered the whole-branch review: the Sensors page is a `ListView`
+that is its own single Tab stop with arrows that scroll card by card and rows
+that take no focus of their own, a tick that cannot read `/sys/class/hwmon`
+publishes empty lists so only its reason shows, and the smoke now fails unless
+the page publishes at least one chip and one channel — the
+[sensors fixes evidence](docs/evidence/2026-09-22-h4-sensors-fixes.md),
+deployed as `0.5.1`, in its own archived
+[plan](docs/plans/archive/2026-09-22-h4-sensors-fixes.md).
 `VAL-H4` stays pending in the author's lane and did not block this closure.
 
 The next checkpoint is `H5` (services and privileged actions), not yet

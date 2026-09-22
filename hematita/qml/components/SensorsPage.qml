@@ -3,9 +3,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.celestina.hematita 1.0
 
-// Sensores: every chip as a card, every channel as a row, in a scrolling
-// column. Every word is composed here from tokens; the kernel's labels are
-// shown as they are.
+// Sensores: every chip as a card, every channel as a row, in one list the
+// keyboard crosses by card. Every word is composed here from tokens; the
+// kernel's labels are shown as they are.
 Item {
     id: page
 
@@ -13,7 +13,11 @@ Item {
 
     property var cards: []
 
-    function chipTitle(name, ordinal) {
+    // `ordinal` is which chip of this driver name this is, `total` how many
+    // the machine has. A driver that appears once needs no number; one that
+    // appears twice numbers both, because "Disco NVMe" beside "Disco NVMe 2"
+    // reads as if the first were the only one.
+    function chipTitle(name, ordinal, total) {
         let base
         switch (name) {
         case "k10temp": base = qsTr("Procesador"); break
@@ -25,10 +29,7 @@ Item {
         case "ath12k_hwmon": base = qsTr("Wi-Fi"); break
         default: base = name
         }
-        // A machine with two of a driver (this one has two `nvme` chips) gets
-        // an ordinal on both branches: two cards with the same eyebrow are two
-        // cards nobody can tell apart.
-        const suffix = ordinal > 1 ? " " + ordinal : ""
+        const suffix = total > 1 ? " " + ordinal : ""
         return name === base ? base + suffix : base + suffix + " · " + name
     }
 
@@ -66,12 +67,22 @@ Item {
                                       s.channelLabels.length, s.channelValues.length, s.channelMins.length,
                                       s.channelMaxs.length, s.channelLimitMax.length, s.channelLimitCrit.length,
                                       s.channelLoads.length)
-        const ordinals = {}
+        // A plain object literal inherits `Object.prototype`, so a driver
+        // literally named `constructor` or `toString` would read as a count;
+        // a null-prototype object is a map and nothing else.
+        const totals = Object.create(null)
+        for (let c = 0; c < chipCount; ++c) {
+            const name = s.chipNames[c]
+            totals[name] = (totals[name] || 0) + 1
+        }
+        const ordinals = Object.create(null)
         const woven = []
         for (let c = 0; c < chipCount; ++c) {
             const name = s.chipNames[c]
             ordinals[name] = (ordinals[name] || 0) + 1
-            woven.push({ key: s.chipKeys[c], title: page.chipTitle(name, ordinals[name]), rows: [] })
+            woven.push({ key: s.chipKeys[c],
+                         title: page.chipTitle(name, ordinals[name], totals[name]),
+                         rows: [] })
         }
         for (let i = 0; i < channelCount; ++i) {
             const chip = s.channelChips[i]
@@ -102,48 +113,61 @@ Item {
     onVisibleChanged: if (page.visible) page.weave()
     Component.onCompleted: page.weave()
 
-    Flickable {
-        id: flick
+    // A card-shaped nothing, for a delegate whose index is momentarily past
+    // the woven array.
+    readonly property var emptyCard: ({ title: "", rows: [] })
+
+    Text {
+        id: note
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        visible: !page.sensors.available
+        text: qsTr("No se pudo leer %1").arg(page.sensors.reasonPath)
+        color: CelestinaTheme.danger
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontBody
+        wrapMode: Text.WordWrap
+    }
+
+    // A list, not a scrolling column of focusable rows: the page is one Tab
+    // stop and the arrows move it card by card, so every chip is reachable
+    // without forty-six stops and without a focus stranded off-screen where
+    // nothing can scroll to it. The delegates are the cards; the model is
+    // their count, so a tick that changes no chip leaves them where they are.
+    ListView {
+        id: list
+
         anchors.fill: parent
+        anchors.topMargin: note.visible ? note.implicitHeight + CelestinaTheme.spaceLg : 0
         anchors.rightMargin: CelestinaTheme.spaceLg
-        contentWidth: width
-        contentHeight: column.implicitHeight
         clip: true
+        spacing: CelestinaTheme.spaceLg
+        model: page.cards.length
+        activeFocusOnTab: true
+        keyNavigationEnabled: true
+        highlightFollowsCurrentItem: true
         Accessible.role: Accessible.List
         Accessible.name: qsTr("Sensores")
 
-        Column {
-            id: column
-            width: flick.width
-            spacing: CelestinaTheme.spaceLg
+        delegate: SensorChipCard {
+            required property int index
+            readonly property var card: index < page.cards.length
+                                        ? page.cards[index] : page.emptyCard
 
-            Repeater {
-                model: page.cards.length
-
-                SensorChipCard {
-                    required property int index
-                    readonly property var card: index < page.cards.length
-                                                ? page.cards[index] : { title: "", rows: [] }
-                    width: column.width
-                    chipTitle: card.title
-                    channels: card.rows
-                }
-            }
-
-            Text {
-                visible: !page.sensors.available
-                text: qsTr("No se pudo leer %1").arg(page.sensors.reasonPath)
-                color: CelestinaTheme.danger
-                font.family: CelestinaTheme.sansFamily
-                font.pixelSize: CelestinaTheme.fontBody
-            }
+            width: list.width
+            chipTitle: card.title
+            channels: card.rows
         }
     }
 
+    // Beside the list, not attached to it: a child of the list would scroll
+    // away with the cards.
     CelestinaScrollBar {
-        surface: flick
-        anchors.top: flick.top
-        anchors.bottom: flick.bottom
+        surface: list
+        anchors.top: list.top
+        anchors.bottom: list.bottom
         anchors.right: parent.right
     }
 }
