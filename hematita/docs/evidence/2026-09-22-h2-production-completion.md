@@ -72,6 +72,16 @@ on the live or nested session.
   not block this closure.
 - No Qt version is recorded: the toolchain probe reports `qt = "unavailable"`,
   as it has for every earlier release in this suite.
+- The manifest's recorded artifact digest,
+  `sha256:86d3d9704e578548240e07e068068ea4fc4f9839db8d8fa4948ebf0e928578f0`,
+  differs from a plain `sha256sum` of the binary because `artifact_digest` in
+  `scripts/production_artifact.py` feeds the artifact's logical path into the
+  digest through `feed_path`, alongside the bytes, so it is a keyed digest by
+  design and is never expected to equal `sha256sum`'s output. The
+  installed-bytes check above therefore rests on `status-production.sh`
+  reporting the same keyed digest `OK` for the installed copy, and on the
+  plain `sha256sum` equality of the release and installed copies recorded in
+  "Installed state".
 
 ## Follow-up
 
