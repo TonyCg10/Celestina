@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** H3
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -39,6 +39,10 @@ alone, without the machine noticing the monitor.
 | H2-B | done | H2-A | sampler sections, `publish.rs`, list-publishing `HematitaResources`, page, per-core grid, failure path and H1 follow-ups | `scripts/verify-production.sh` |
 | H2-C | done | H2-B | resource order, a list model stable across revisions, the GPU reason file, toggle and subtitle fixes | `scripts/verify-production.sh` |
 | H2-Z | done | H2-C | implementation exit and 0.3.0 | `scripts/complete-production.sh` |
+| H3-A | done | H2-Z | list operability, the smoke's shape gate and the H2 follow-ups | `scripts/verify-production.sh` |
+| H3-B | planned | H3-A | `hematita-core`: `process`, `passwd`, `process_view`, captures | `cargo test -p hematita-core` |
+| H3-C | planned | H3-B | sampler process section, `HematitaProcesses`, the table and both pages | `scripts/verify-production.sh` |
+| H3-Z | planned | H3-C | implementation exit and 0.4.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -57,6 +61,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H2-B: [resources page](docs/evidence/2026-09-22-h2-resources-page.md)
 - H2-C: [list stability](docs/evidence/2026-09-22-h2-list-stability.md)
 - H2-Z: [production completion](docs/evidence/2026-09-22-h2-production-completion.md)
+- H3-A: [list operability](docs/evidence/2026-09-22-h3-list-operability.md)
 
 ## H1 — closed 2026-09-21
 
@@ -94,26 +99,11 @@ it. Units `H2-A` through `H2-Z` are in the archived
 implementation exit ran on 2026-09-22: the
 [completion evidence](docs/evidence/2026-09-22-h2-production-completion.md).
 `VAL-H2` stays pending in the author's lane and did not block this closure.
-The next checkpoint is `H3` (processes and applications), not yet opened.
+The next checkpoint is `H3` (processes and applications), opened on
+2026-09-22.
 
-## H3 — planned first unit
+## H3 — opened 2026-09-22
 
-`H3-A` — List operability and gates. Planned work, not yet opened, no dates
-attached:
-
-- `PerformancePage.qml`'s `ListView` makes off-screen rows unreachable by
-  keyboard and invisible to AT: add `Accessible.role: Accessible.List`, give
-  the list `focus`, and bind `currentIndex` to `page.selectedKey`.
-- The smoke gate has no evidence the nested `QVariant` lists arrive with the
-  right shape: assert one row's shape (e.g. `rows[0].numbers.length`)
-  against the kind contract.
-- `subtitleFor` labels an unread network row "Cable"; return `""` unless the
-  row is `ready`.
-- Every non-hotplug `CpuSampler` error maps to the `no-rate` token; narrow
-  the mapping or reword the sentence.
-- The core count is read once at startup; derive it from the live reading
-  (also covers core hot-plug and an unreadable `/proc/stat` at startup).
-- Static sysfs facts (disk model/size, interface type/state/speed) are
-  re-read every tick; cache by name.
-- The capture test should assert the exact disk set.
-- The dead `return None` arm in `sample_gpu`.
+`H3-A` delivers the list operability and gates H2 booked; the process work
+follows in `H3-B` and `H3-C`. Units and exit are in the
+[active plan](docs/plans/active/2026-09-22-h3-processes.md).

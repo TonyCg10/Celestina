@@ -14,7 +14,6 @@ const DISKSTATS: &str = include_str!("fixtures/proc-diskstats.txt");
 const NET_DEV: &str = include_str!("fixtures/proc-net-dev.txt");
 const CORES: usize = 8;
 const TOTAL_KIB: u64 = 65_403_392;
-const DISKS: usize = 4;
 const INTERFACES: usize = 2;
 
 #[test]
@@ -47,11 +46,11 @@ fn the_captured_cpuinfo_names_the_processor() {
 #[test]
 fn the_captured_diskstats_lists_the_whole_disks_only() {
     let disks = parse_diskstats(DISKSTATS).expect("the captured /proc/diskstats parses");
-    assert_eq!(disks.len(), DISKS);
-    assert!(disks
-        .iter()
-        .all(|disk| !disk.name.contains('p') || disk.name.starts_with("sd")));
-    assert!(disks.iter().any(|disk| disk.name == "nvme0n1"));
+    // Sorted, as the sampler sorts them: the assertion is the exact set the
+    // capture holds, not the order `/proc/diskstats` happened to list.
+    let mut names: Vec<&str> = disks.iter().map(|disk| disk.name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(names, vec!["nvme0n1", "nvme1n1", "sda", "sdb"]);
 }
 
 #[test]

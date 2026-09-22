@@ -6,6 +6,7 @@
 //! second's memory. A source that cannot be read leaves its section
 //! [`Section::Unavailable`] with the reason while the others keep publishing.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -231,6 +232,12 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
     let mut cpu_sampler = CpuSampler::new();
     let mut disk_counters = NamedCounters::<2>::new();
     let mut interface_counters = NamedCounters::<2>::new();
+    // Facts that sysfs will not change while the name exists, read once per
+    // name instead of once per second. A name that leaves takes its entry.
+    let mut disk_facts: HashMap<String, DiskInfo> = HashMap::new();
+    // Per interface: whether its link type is shown, and whether it is
+    // wireless. `operstate` and `speed` do change, so they stay per tick.
+    let mut interface_facts: HashMap<String, (bool, bool)> = HashMap::new();
     let gpu_device = amdgpu_device();
     let mut generation = 0u64;
     let mut last = Instant::now();
@@ -245,8 +252,8 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
             cpu: sample_cpu(&mut cpu_sampler),
             memory: sample_memory(),
             gpu: sample_gpu(gpu_device.as_deref()),
-            disks: sample_disks(&mut disk_counters, elapsed),
-            interfaces: sample_interfaces(&mut interface_counters, elapsed),
+            disks: sample_disks(&mut disk_counters, &mut disk_facts, elapsed),
+            interfaces: sample_interfaces(&mut interface_counters, &mut interface_facts, elapsed),
             identity,
         });
         // Sleep in short slices so a close does not wait a whole interval.
@@ -279,12 +286,13 @@ fn sample_cpu(sampler: &mut CpuSampler) -> Section<Option<CpuReading>> {
         Ok(sample) => sample,
         // A hot-plugged core restarts the rate; the next second answers.
         Err(cpu::CpuError::CoreCountChanged { .. }) => None,
-        Err(_) => {
+        Err(cpu::CpuError::NoElapsedTime) => {
             return Section::Unavailable(Reason {
                 kind: ReasonKind::NoRate,
                 path: STAT_PATH.to_owned(),
             })
         }
+        Err(_) => return Section::Unavailable(malformed(path)),
     };
     // Frequency is optional: a VM or a locked governor has no such file.
     let frequency_mhz = read(Path::new(FREQUENCY_PATH))
@@ -328,12 +336,16 @@ fn sample_gpu(device: Option<&Path>) -> Option<Section<GpuReading>> {
         .iter()
         .map(|name| read(&device.join(name)))
         .collect();
-    let texts = match texts.map(<[String; 8]>::try_from) {
-        Ok(Ok(texts)) => texts,
-        // The iterator ran over `AMDGPU_FILES`, so it yielded eight strings;
-        // an eight-element array is the only length it can have.
-        Ok(Err(_)) => return None,
+    let texts = match texts {
+        Ok(texts) => texts,
         Err(reason) => return Some(Section::Unavailable(reason)),
+    };
+    // An eight-file read that did not yield eight strings is a malformed
+    // read, not an absent card: the section says so rather than vanishing.
+    let Ok(texts) = <[String; 8]>::try_from(texts) else {
+        return Some(Section::Unavailable(malformed(
+            &device.join(AMDGPU_FILES[0]),
+        )));
     };
     let [busy, mem_busy, vram_used, vram_total, gtt_used, gtt_total, sclk, mclk] = &texts;
     let files = AmdgpuFiles {
@@ -395,20 +407,30 @@ fn disk_info(name: &str) -> DiskInfo {
     }
 }
 
-fn sample_disks(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<DiskSection> {
+fn sample_disks(
+    counters: &mut NamedCounters<2>,
+    facts: &mut HashMap<String, DiskInfo>,
+    elapsed: Duration,
+) -> Vec<DiskSection> {
     let readings = match read_disks() {
         Ok(readings) => readings,
         Err(reason) => {
             counters.reset();
             // One unreadable file is every disk unreadable; the list keeps
             // the disks it can still name from sysfs so the rows do not vanish.
-            return enumerate_block_devices()
-                .into_iter()
+            let names = enumerate_block_devices();
+            let sections: Vec<DiskSection> = names
+                .iter()
                 .map(|name| DiskSection {
-                    info: disk_info(&name),
+                    info: facts
+                        .entry(name.clone())
+                        .or_insert_with(|| disk_info(name))
+                        .clone(),
                     rate: Section::Unavailable(reason.clone()),
                 })
                 .collect();
+            facts.retain(|name, _| names.iter().any(|known| known == name));
+            return sections;
         }
     };
     // By name, so the list keeps one order whether it came from
@@ -416,10 +438,13 @@ fn sample_disks(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<DiskS
     let mut readings = readings;
     readings.sort_by(|(left, _), (right, _)| left.cmp(right));
     let rates = counters.sample(&readings, elapsed);
-    readings
+    let sections: Vec<DiskSection> = readings
         .iter()
         .map(|(name, _)| DiskSection {
-            info: disk_info(name),
+            info: facts
+                .entry(name.clone())
+                .or_insert_with(|| disk_info(name))
+                .clone(),
             rate: Section::Available(
                 rates
                     .iter()
@@ -427,7 +452,9 @@ fn sample_disks(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<DiskS
                     .map(|(_, rate)| *rate),
             ),
         })
-        .collect()
+        .collect();
+    facts.retain(|name, _| readings.iter().any(|(known, _)| known == name));
+    sections
 }
 
 fn enumerate_block_devices() -> Vec<String> {
@@ -444,16 +471,28 @@ fn enumerate_block_devices() -> Vec<String> {
     names
 }
 
-fn interface_info(name: &str) -> InterfaceInfo {
+fn interface_info(name: &str, wireless: bool) -> InterfaceInfo {
     let root = Path::new(NET_ROOT).join(name);
     InterfaceInfo {
         name: name.to_owned(),
-        wireless: root.join("wireless").is_dir(),
+        wireless,
+        // Read every tick: a cable pulled out changes both of these.
         up: read(&root.join("operstate")).is_ok_and(|text| network::parse_operstate(&text)),
         speed_mbit: read(&root.join("speed"))
             .ok()
             .and_then(|text| network::parse_speed_mbit(&text)),
     }
+}
+
+/// `(shown, wireless)` for one interface: the two facts sysfs fixes when the
+/// interface appears, cached by name.
+fn interface_traits(name: &str, facts: &mut HashMap<String, (bool, bool)>) -> (bool, bool) {
+    *facts.entry(name.to_owned()).or_insert_with(|| {
+        (
+            is_shown_interface(name),
+            Path::new(NET_ROOT).join(name).join("wireless").is_dir(),
+        )
+    })
 }
 
 /// Interfaces whose link type is Ethernet (which Wi-Fi also reports).
@@ -464,16 +503,16 @@ fn is_shown_interface(name: &str) -> bool {
         .is_some_and(|kind| kind == network::ARPHRD_ETHER)
 }
 
-fn sample_interfaces(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<InterfaceSection> {
+fn sample_interfaces(
+    counters: &mut NamedCounters<2>,
+    facts: &mut HashMap<String, (bool, bool)>,
+    elapsed: Duration,
+) -> Vec<InterfaceSection> {
     let path = Path::new(NET_DEV_PATH);
-    let mut readings: Vec<(String, [u64; 2])> = match read(path)
+    let stats = match read(path)
         .and_then(|text| network::parse_net_dev(&text).map_err(|_| malformed(path)))
     {
-        Ok(stats) => stats
-            .into_iter()
-            .filter(|stat| is_shown_interface(&stat.name))
-            .map(|stat| (stat.name, [stat.rx_bytes, stat.tx_bytes]))
-            .collect(),
+        Ok(stats) => stats,
         Err(reason) => {
             counters.reset();
             return Vec::from([InterfaceSection {
@@ -487,14 +526,23 @@ fn sample_interfaces(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<
             }]);
         }
     };
+    // Every name the kernel listed keeps its cached verdict, shown or not:
+    // an interface that is not shown is one this list never asks sysfs about
+    // again while it exists.
+    facts.retain(|name, _| stats.iter().any(|stat| &stat.name == name));
+    let mut readings: Vec<(String, [u64; 2])> = stats
+        .into_iter()
+        .filter(|stat| interface_traits(&stat.name, facts).0)
+        .map(|stat| (stat.name, [stat.rx_bytes, stat.tx_bytes]))
+        .collect();
     // By name, for the same reason the disks are: the row order is the
     // machine's inventory, not the order a kernel file happens to list.
     readings.sort_by(|(left, _), (right, _)| left.cmp(right));
     let rates = counters.sample(&readings, elapsed);
-    readings
+    let sections: Vec<InterfaceSection> = readings
         .iter()
         .map(|(name, _)| InterfaceSection {
-            info: interface_info(name),
+            info: interface_info(name, interface_traits(name, facts).1),
             rate: Section::Available(
                 rates
                     .iter()
@@ -502,5 +550,6 @@ fn sample_interfaces(counters: &mut NamedCounters<2>, elapsed: Duration) -> Vec<
                     .map(|(_, rate)| *rate),
             ),
         })
-        .collect()
+        .collect();
+    sections
 }

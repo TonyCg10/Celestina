@@ -273,6 +273,15 @@ impl HematitaResourcesRust {
             Section::Available(Some(reading)) => {
                 let history =
                     self.push("cpu", publish::fraction(reading.aggregate_percent), advance);
+                // The count the page shows and the rings it draws come from
+                // this second's reading, so a hot-plugged core (or a
+                // `/proc/stat` unreadable at startup) is not frozen at
+                // whatever the identity read once.
+                let cores = reading.core_percents.len();
+                if self.core_rings.len() != cores {
+                    self.core_rings = (0..cores).map(|_| Ring::new()).collect();
+                    self.cpu_cores = cores;
+                }
                 for (ring, percent) in self.core_rings.iter_mut().zip(&reading.core_percents) {
                     if advance {
                         ring.push(publish::fraction(*percent));
@@ -285,7 +294,7 @@ impl HematitaResourcesRust {
                     state: "ready",
                     reason: None,
                     load: publish::load_name(reading.aggregate_percent),
-                    numbers: publish::cpu_numbers(reading, self.cpu_cores),
+                    numbers: publish::cpu_numbers(reading, cores),
                     history,
                 });
             }

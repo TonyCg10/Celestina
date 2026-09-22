@@ -41,3 +41,29 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   by the screen reader; no fact reads NaN
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-H3 — Processes and applications on the real session
+
+- **Status:** pending
+- **Related implementation:** H3
+- **Requires:** the deployed Hematita 0.4.0 on the real session; a process of
+  the author's to end (for example `sleep 600` in a terminal); one root
+  process visible
+- **Procedure:** open Procesos; type part of a name in the search and watch
+  the table narrow; click each column title and confirm the order flips;
+  select the `sleep` row and press Terminar; select another own process and
+  press Matar, then cancel in the dialog with Escape, then confirm; select a
+  root process and read the bar; walk the table by Tab and arrows and by
+  screen reader; open Aplicaciones, confirm the running desktop applications
+  appear with their icons and names, expand one and read its processes; leave
+  the table open for a minute and confirm the selection and scroll position
+  do not jump; check Hematita's own CPU while idle on Procesos
+- **Pass condition:** the search narrows live; every column sorts both ways;
+  Terminar ends `sleep` within a second; the dialog contains focus, Escape
+  cancels, the confirm kills; a root process shows the not-actionable words
+  and no dialog opens; every row and control is reachable by keyboard and
+  named by the screen reader; every running desktop application has an icon
+  (a missing icon is a `VAL` failure to record, not a crash); the table keeps
+  its place across ticks; Hematita idles under 2 % CPU on Procesos
+- **Result:** not run
+- **Evidence:** none

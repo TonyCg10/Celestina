@@ -32,6 +32,13 @@ Item {
         return index >= 0 && index < page.rows.length ? page.rows[index] : page.emptyRow
     }
 
+    function indexOf(key) {
+        for (let index = 0; index < page.rows.length; ++index)
+            if (page.rows[index].key === key)
+                return index
+        return -1
+    }
+
     function rowFor(key) {
         for (let index = 0; index < page.rows.length; ++index)
             if (page.rows[index].key === key)
@@ -91,7 +98,9 @@ Item {
         // name already says which resource this is.
         case "gpu": return ""
         case "disk": return row.key.substring(5)
-        case "network": return row.numbers.length > 3 && row.numbers[3] === 1 ? qsTr("Inalámbrica") : qsTr("Cable")
+        case "network": return row.state === "ready"
+                               ? (row.numbers[3] === 1 ? qsTr("Inalámbrica") : qsTr("Cable"))
+                               : ""
         }
         return ""
     }
@@ -198,6 +207,20 @@ Item {
                     clip: true
                     spacing: CelestinaTheme.spaceXs
                     model: page.rows.length
+                    // The view is the keyboard's way in: Tab lands here, arrows
+                    // move the selection, and the selection is the current
+                    // item, so the screen reader follows it. Off-screen rows
+                    // are reached by moving the current index, which scrolls.
+                    activeFocusOnTab: true
+                    keyNavigationEnabled: true
+                    currentIndex: page.indexOf(page.selectedKey)
+                    onCurrentIndexChanged: {
+                        if (currentIndex >= 0 && currentIndex < page.rows.length)
+                            page.selectedKey = page.rows[currentIndex].key
+                    }
+                    highlightFollowsCurrentItem: true
+                    Accessible.role: Accessible.List
+                    Accessible.name: qsTr("Recursos")
                     delegate: ResourceRow {
                         id: resourceRow
                         required property int index

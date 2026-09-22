@@ -1,0 +1,35 @@
+# H3-A exact change inventory
+
+Base revision	2752ed08e59eee7ff2f1f1b4e50b477b12ba418a
+Pathspec	celestina-rs/crates/hematita-core/tests/captures.rs
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-22-h3-list-operability.md
+Pathspec	hematita/docs/inventories/2026-09-22-h3-processes/H3-A.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h3-processes.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/PerformancePage.qml
+Pathspec	hematita/scripts/smoke.sh
+Pathspec	hematita/src/main.rs
+Pathspec	hematita/src/resources.rs
+Pathspec	hematita/src/sampler.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+5	6	ea53a7dab2bf92d41b0a348c26458fa75540f602804c9491e7646672e6864c26	celestina-rs/crates/hematita-core/tests/captures.rs
+15	25	7e35be0a047569ec900e7bafc483b855a6eabee8f94a32bde75cae7f0bdf590b	hematita/ROADMAP.md
+11	4	936fe271b990ba720639d423116b994b5542e287aa876bcc54bcc08cb95ef0f5	hematita/STATUS.md
+26	0	90e17770625ba433aa9b0c361cec8e0d872d5247e424a2d5cb0191e14d504bb9	hematita/VALIDATION.md
+106	0	684434000960463ccf126dfb98e9aef9dae4f8ba0125dc3e4dbc9490ab190efd	hematita/docs/evidence/2026-09-22-h3-list-operability.md
+56	0	27b90f7dab5206ee98174f3125e5f2b9927bc5ece75835a8f0ec0568c576bb3d	hematita/docs/plans/active/2026-09-22-h3-processes.md
+3	2	b842fde2d39833d53726ef9f35f09d6672dc56fa964b603c6938537869604a95	hematita/docs/plans/active/README.md
+17	0	8e275c55e166ed7e53c7e99d1acea74945f6336aa2847934719a8df0541e0278	hematita/qml/Main.qml
+24	1	d962ea57b71fc29491a96ee5fd4f29bc796d8082fc8f4f5ee7ee6bb5b07c6ce5	hematita/qml/components/PerformancePage.qml
+14	3	96886fd07a423ab5c1817c4117fb878fce658a3607838d158040e395014a09e0	hematita/scripts/smoke.sh
+3	0	4b06164f56ad3faf14fc096dfa772b6d5d27d0c22133b8b4d27c66f3e56077f1	hematita/src/main.rs
+10	1	495989d743a3957fab114d5f8532d5235cfa3bb19daf3ee8239206912c54f26c	hematita/src/resources.rs
+76	27	f367d5fd1eb2bd42db09b5e3aad6120c6fa07ab28332b59a32b8f4f4d2452ad7	hematita/src/sampler.rs
+35	0	self	hematita/docs/inventories/2026-09-22-h3-processes/H3-A.numstat.tsv

@@ -10,6 +10,9 @@ ApplicationWindow {
     id: window
 
     required property bool reducedMotion
+    // Set only by `scripts/smoke.sh`: see the shape gate below.
+    required property bool smokeShape
+    property bool shapePrinted: false
 
     width: 1000
     height: 680
@@ -45,6 +48,20 @@ ApplicationWindow {
 
         HematitaResources {
             id: machine
+
+            // The smoke's shape gate: with HEMATITA_SMOKE_SHAPE set, print one
+            // row's contract once, so a nested list that failed to convert is
+            // a visible failure rather than an empty graph nobody saw.
+            onRevisionChanged: {
+                if (!window.smokeShape || machine.revision < 3 || window.shapePrinted)
+                    return
+                window.shapePrinted = true
+                const numbers = machine.resourceNumbers
+                const histories = machine.resourceHistories
+                console.info("hematita-shape", machine.resourceKinds[0],
+                             numbers.length > 0 ? numbers[0].length : -1,
+                             histories.length > 0 ? histories[0].length : -1)
+            }
         }
 
         HematitaActivation {

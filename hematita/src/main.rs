@@ -52,6 +52,9 @@ fn main() {
             QString::from("reducedMotion"),
             QVariant::from(&reduced_motion),
         );
+        // The smoke's shape gate, off in every other run.
+        let smoke_shape = std::env::var_os("HEMATITA_SMOKE_SHAPE").is_some();
+        initial_properties.insert(QString::from("smokeShape"), QVariant::from(&smoke_shape));
         engine.as_mut().set_initial_properties(&initial_properties);
         engine.load(&QUrl::from(
             "qrc:/qt/qml/org/celestina/hematita/qml/Main.qml",

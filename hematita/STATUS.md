@@ -7,8 +7,7 @@
   the author's prefix
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
   run
-- **Active phase:** none; `H3` (processes and applications) is planned, not
-  yet opened
+- **Active phase:** H3 (processes and applications), opened 2026-09-22
 
 ## Current checkout truth
 
@@ -65,8 +64,16 @@
   registered under `~/.local/share`; the installed bytes match the checkout's
   `hematita/target/release/hematita` byte for byte. See the
   [production completion record](docs/evidence/2026-09-22-h2-production-completion.md).
-- The side list's off-screen rows are not yet keyboard-reachable; `H3-A`
-  books it.
+- As of `H3-A` the side list is a list for the keyboard and for AT: it takes
+  Tab, arrows move the current item, the selection and the current index are
+  one value, and the view carries `Accessible.List` with a name, so an
+  off-screen row is reachable without a pointer. The smoke now fails unless
+  the first row publishes the CPU contract (`hematita-shape cpu 3 60`), the
+  network subtitle waits for the row to be ready, `no-rate` is reserved for
+  the error that means it, the core count comes from each second's reading,
+  the static sysfs facts are read once per name, `sample_gpu` has no dead arm,
+  and the capture asserts the exact disk set. Nobody has walked the list on a
+  real session yet: that is `VAL-H2`.
 
 ## Blockers
 
