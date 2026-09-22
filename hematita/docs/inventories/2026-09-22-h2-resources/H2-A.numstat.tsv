@@ -1,0 +1,39 @@
+# H2-A exact change inventory
+
+Base revision	98fd5db451ae1bd39047b3c7c5408348a79a4b5c
+Pathspec	celestina-rs/crates/hematita-core/src/disk.rs
+Pathspec	celestina-rs/crates/hematita-core/src/gpu.rs
+Pathspec	celestina-rs/crates/hematita-core/src/history.rs
+Pathspec	celestina-rs/crates/hematita-core/src/lib.rs
+Pathspec	celestina-rs/crates/hematita-core/src/network.rs
+Pathspec	celestina-rs/crates/hematita-core/src/rate.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/captures.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/proc-diskstats.txt
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/proc-net-dev.txt
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-22-h2-core.md
+Pathspec	hematita/docs/inventories/2026-09-22-h2-resources/H2-A.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h2-resources.md
+Pathspec	hematita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+217	0	4b1ed1d462a427807685e94de52b68fc615b70c9208205c46b43520faf28b3fe	celestina-rs/crates/hematita-core/src/disk.rs
+179	0	983c165571eee4eb81ee99f6821f563d6c0a3196f18b18860850315d60bbdd9d	celestina-rs/crates/hematita-core/src/gpu.rs
+45	0	d490b4d1c074fa6ee3d6ddbdd90b6e68d4d5be906429a38a96c049a228ff5ab4	celestina-rs/crates/hematita-core/src/history.rs
+4	0	836ca330a354c9d969f230390b3897aab3c847f49eccb07d3220bf26c936effd	celestina-rs/crates/hematita-core/src/lib.rs
+160	0	10cfe1a2af66ee7c67cb83cc0ae9821937c736524bbb2a5d9b5b23124aa660c8	celestina-rs/crates/hematita-core/src/network.rs
+140	0	6879a075dab86324c4a2155a2e1d328c92a696bcead7e0263a4d2d7f311f3ff2	celestina-rs/crates/hematita-core/src/rate.rs
+23	0	ffbd9e27babd6cd48c25c08310e1983aae756eec0c89e16ae1410d1abf5b0495	celestina-rs/crates/hematita-core/tests/captures.rs
+12	0	e1c0e5aa70479ba4b0d6114aae46b65eef4006220e1502b4f5c90fb89f549d80	celestina-rs/crates/hematita-core/tests/fixtures/proc-diskstats.txt
+5	0	1bcb0a3a5ebc99f7d34c432889de4b990ebefe028ac0a4f4adc3e4db4cdbbd23	celestina-rs/crates/hematita-core/tests/fixtures/proc-net-dev.txt
+11	21	eeb1d7219ecb0a87f41accacfd01383f7918bb9855fa29a62275d6f1401f27e6	hematita/ROADMAP.md
+11	3	3649dfa0260d3c2f259e71351516ed83f5a9170956476d9ced65d9174fb97ea5	hematita/STATUS.md
+20	0	79ee91e68e789a1e8b86f2f19568506d00a1add983751be04811a26d455e6b12	hematita/VALIDATION.md
+84	0	760636293689a8c16576d92b2286450bc7895e5799e1c1f4f6c152b3db9d07e6	hematita/docs/evidence/2026-09-22-h2-core.md
+58	0	975a72be403d10369f2d3646c90f366c4b0fd5666c6181c0dd653c926f4c92a2	hematita/docs/plans/active/2026-09-22-h2-resources.md
+3	2	6d52f85bbad50bb9054745031bf75dd6bf22e066f071ac5bf7d5659d35ab7da8	hematita/docs/plans/active/README.md
+39	0	self	hematita/docs/inventories/2026-09-22-h2-resources/H2-A.numstat.tsv

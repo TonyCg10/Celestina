@@ -1,7 +1,8 @@
 # Active Hematita plans
 
-No plan is active. A dated plan is added here only when the project roadmap
-names the same active implementation checkpoint.
+The active plan is [H2 — every resource on the Performance
+page](2026-09-22-h2-resources.md), which the project roadmap names as its
+active implementation checkpoint.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

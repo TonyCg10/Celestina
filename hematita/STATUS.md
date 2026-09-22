@@ -5,8 +5,9 @@
   a live Performance page reading CPU and memory once a second, built,
   verified and deployed to the author's prefix
 - **Author validation:** `VAL-H1` requested, not run
-- **Next phase:** H2 (disks, network, GPU and swap; the per-core grid),
-  planned, not opened
+- **Active phase:** H2 (every resource on the Performance page), opened
+  2026-09-22; `H2-A` done — `hematita-core` now parses disks, interfaces and
+  the GPU
 
 ## Current checkout truth
 
@@ -16,7 +17,14 @@
 - `hematita-core` provides `ratio`, `cpu`, `memory` and `history`: `/proc/stat`
   and `/proc/meminfo` parsing, a CPU sampler that turns two readings into a
   rate, cpufreq and model parsing, and a sixty-sample ring, all covered by
-  unit tests and captures from the author's machine.
+  unit tests and captures from the author's machine. As of `H2-A`, the crate
+  also parses disks, interfaces and the GPU: `rate::NamedCounters` turns
+  cumulative byte counters into per-second rates, `disk` reads
+  `/proc/diskstats` and its `/sys/block` sysfs files for whole devices only,
+  `network` reads `/proc/net/dev` (dropping loopback) and its `/sys/class/net`
+  sysfs files, `gpu` reads the AMD `amdgpu` driver's sysfs files, and
+  `history::Ring` gained `max`/`fractions` to scale a graph by its own peak;
+  none of it is wired into the sampler or the page yet.
 - A sampling thread reads every source once a second off the Qt thread and
   publishes one whole snapshot; `HematitaResources` applies it as typed
   properties, owns the 80/90 load thresholds and the two history rings, and

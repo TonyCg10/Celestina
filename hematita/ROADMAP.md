@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** H2
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -35,6 +35,9 @@ alone, without the machine noticing the monitor.
 | H1-C | done | H1-B | sampler, `HematitaResources`, activation, Performance page | `scripts/verify-production.sh` |
 | H1-D | done | H1-C | history properties without lint suppressions, row fixes | `scripts/verify-production.sh` |
 | H1-Z | done | H1-D | implementation exit and 0.2.0 | `scripts/complete-production.sh` |
+| H2-A | done | H1-Z | `hematita-core`: rate, disk, network, gpu, ring fractions, captures | `cargo test -p hematita-core` |
+| H2-B | planned | H2-A | sampler sections, `publish.rs`, list-publishing `HematitaResources`, page, per-core grid, failure path and H1 follow-ups | `scripts/verify-production.sh` |
+| H2-Z | planned | H2-B | implementation exit and 0.3.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -67,22 +70,9 @@ implementation exit ran on 2026-09-21: the
 `VAL-H1` stays pending in the author's lane and did not block this closure.
 The next checkpoint is `H2`, not yet opened.
 
-## H2 — planned first unit
+## H2 — opened 2026-09-22
 
-`H2-A` — Failure path and adapter tests. Planned work, not yet opened, no
-dates attached:
-
-- Per-resource unavailable state with a typed reason composed in QML through
-  `qsTr()` — no raw OS text, no Spanish literal in Rust.
-- The failure banner placed in the page's column layout instead of over the
-  detail card.
-- The pure parts of `HematitaResources::apply` — the generation guard,
-  percent-to-fraction, reason composition, identity-once — extracted as
-  testable functions with tests.
-- `NavItem` drops `checkable`/`checked`/`autoExclusive`.
-- `HistoryGraph` stroke width from a theme token, and its enter motion under
-  `reducedMotion`.
-- The unused `generation` property either used or removed.
-- `NavStrip` gets an `Accessible.name`.
-- The environment variable set before any bus work in `main.rs`.
-- The CPU and memory rings aligned on the first sample.
+The follow-ups H1 booked as its first unit are delivered inside `H2-B`: every
+one of them needs the build the list rewrite needs, so they share it. The
+units and their exit are in the
+[active plan](docs/plans/active/2026-09-22-h2-resources.md).

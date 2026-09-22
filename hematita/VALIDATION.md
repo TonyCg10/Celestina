@@ -17,3 +17,23 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   checked state; Hematita idles under 1 % CPU
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-H2 — Every resource, live, on the real session
+
+- **Status:** pending
+- **Related implementation:** H2
+- **Requires:** the deployed Hematita 0.3.0 on the real session; a USB disk to
+  plug in; the Wi-Fi interface up
+- **Procedure:** launch `hematita`; read the side list; copy a large file
+  between two disks and watch both rows; download something and watch the
+  interface; run a GPU load and watch the GPU row; open the processor and
+  toggle the per-core grid; plug a USB disk in and out; make `/proc/diskstats`
+  unreadable is not possible, so instead unplug the Wi-Fi and confirm its row
+  says it is down rather than vanishing; watch Hematita's own CPU while idle
+- **Pass condition:** every whole disk and interface appears with its model or
+  name; rates match another tool within a few percent; the selected row stays
+  selected across a hot-plug; the grid shows one graph per core; an unreadable
+  or absent source is a Spanish sentence in its own row, not a frozen number;
+  Hematita idles under 1 % CPU
+- **Result:** not run
+- **Evidence:** none

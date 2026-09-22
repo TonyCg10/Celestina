@@ -6,6 +6,10 @@
 //! on screen; that is the application's business.
 
 pub mod cpu;
+pub mod disk;
+pub mod gpu;
 pub mod history;
 pub mod memory;
+pub mod network;
+pub mod rate;
 pub mod ratio;

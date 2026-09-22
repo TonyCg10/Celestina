@@ -52,6 +52,28 @@ impl Ring {
     pub fn latest(&self) -> Option<f32> {
         (self.filled > 0).then(|| self.samples[(self.next + HISTORY_SAMPLES - 1) % HISTORY_SAMPLES])
     }
+
+    /// The largest sample in the window, or 0 when empty.
+    #[must_use]
+    pub fn max(&self) -> f32 {
+        self.values().into_iter().fold(0.0_f32, f32::max)
+    }
+
+    /// The window scaled to its own peak: 1.0 is the busiest second shown. A
+    /// window with no positive sample answers zeros. This is how a throughput
+    /// graph gets a shape without a ceiling nobody knows in advance.
+    #[must_use]
+    pub fn fractions(&self) -> Vec<f32> {
+        let peak = self.max();
+        let values = self.values();
+        if peak <= 0.0 {
+            return vec![0.0; values.len()];
+        }
+        values
+            .into_iter()
+            .map(|value| (value / peak).clamp(0.0, 1.0))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -87,5 +109,28 @@ mod tests {
         let values = ring.values();
         assert_eq!(values[0], 1.0);
         assert_eq!(values[HISTORY_SAMPLES - 1], HISTORY_SAMPLES as f32);
+    }
+
+    #[test]
+    fn fractions_scale_a_series_by_its_own_peak() {
+        let mut ring = Ring::new();
+        ring.push(50.0);
+        ring.push(200.0);
+        let fractions = ring.fractions();
+        assert_eq!(fractions.len(), HISTORY_SAMPLES);
+        assert_eq!(ring.max(), 200.0);
+        assert_eq!(fractions[HISTORY_SAMPLES - 2], 0.25);
+        assert_eq!(fractions[HISTORY_SAMPLES - 1], 1.0);
+        assert_eq!(fractions[0], 0.0);
+    }
+
+    #[test]
+    fn a_flat_or_empty_series_has_no_peak_to_scale_by() {
+        let mut ring = Ring::new();
+        assert_eq!(ring.max(), 0.0);
+        assert_eq!(ring.fractions(), vec![0.0; HISTORY_SAMPLES]);
+        ring.push(0.0);
+        ring.push(0.0);
+        assert_eq!(ring.fractions(), vec![0.0; HISTORY_SAMPLES]);
     }
 }
