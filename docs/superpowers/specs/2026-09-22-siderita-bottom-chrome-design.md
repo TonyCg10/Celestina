@@ -37,6 +37,13 @@ Two defects found while reading the code, both fixed by this design:
   Unmounting a disk therefore has no indicator of its own at all; the legacy
   line was its only feedback.
 
+**The screenshots are older than the checkout.** They show `"Ocultos"` and
+`"Tamaño"` as text labels, but commit `1c86dd55` (2026-09-03) already made both
+icon-only, and the installed binary (revision `95b0fa84`, built 2026-09-09)
+carries that change. Only the sort field's `"Nombre"` is still text at `HEAD`.
+This shrinks two items of the work to nothing and is recorded so that a later
+reader does not go looking for labels that no longer exist.
+
 And one duplication that removes work rather than adding it: the folder heading
 already renders `12 VISIBLES DE 340 ELEMENTOS · 8 CARPETAS · …`
 (`FolderHeading.qml`). The `N de M` hint in the status pill has nowhere to move
@@ -59,8 +66,9 @@ Decisions taken during brainstorming, recorded here:
 
 - The standing states leave the bottom bar (`N de M` is deleted as duplicate;
   `watchDegraded` moves beside the folder title).
-- `Ocultos` stops being a wide text pill and becomes an eye icon — one press,
-  state still visible, consistent with the suite's icon-first rule.
+- `Ocultos` stays a one-press eye icon — it already is one at `HEAD`
+  (`HiddenTogglePill` is an icon-only `FloatingButton`); it only moves inside
+  the capsule.
 - Approach **B**: two surfaces separated by tense, in one stack, and the danger
   banners join it.
 
@@ -135,8 +143,10 @@ row.
 
 One glass capsule holding three icons, replacing four separate pills
 (`HiddenTogglePill`, the sort group, the view group, and the `BusyIndicator`)
-plus the `FloatingButton` at the far right. Roughly 360 px of chrome becomes
-roughly 115 px.
+plus the `FloatingButton` at the far right. Roughly 330 px of chrome becomes
+roughly 115 px. The eye and the magnifier are already icons; what the capsule
+adds is that they share one surface, and what it removes is the two text-and-
+icon groups between them.
 
 | icon | action |
 | --- | --- |
