@@ -1,0 +1,35 @@
+# H3-B exact change inventory
+
+Base revision	10e19a3089d979f82a449e322e3d9c8e4a4e4bd5
+Pathspec	celestina-rs/crates/hematita-core/src/lib.rs
+Pathspec	celestina-rs/crates/hematita-core/src/passwd.rs
+Pathspec	celestina-rs/crates/hematita-core/src/process.rs
+Pathspec	celestina-rs/crates/hematita-core/src/process_view.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/captures.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/etc-passwd.txt
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/proc-pid-cgroup.txt
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/proc-pid-stat.txt
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/proc-pid-status.txt
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-22-h3-core.md
+Pathspec	hematita/docs/inventories/2026-09-22-h3-processes/H3-B.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h3-processes.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+3	0	4852259a6e5a08abf27d69bbb8d65b7aded9a1ea409c0aa81111c2655dfa64ad	celestina-rs/crates/hematita-core/src/lib.rs
+31	0	4eeb9f22f057f0beade4dd0841e09de2b8d15c5b4aac3be9543a169d8f98a7d1	celestina-rs/crates/hematita-core/src/passwd.rs
+458	0	aed348d91f28206e149363a5d14b24d3fbb1a41c078d7c3fce0bd935a161f6ae	celestina-rs/crates/hematita-core/src/process.rs
+223	0	b6f3dbfb643049b7a52b10a8cd6efc6837c8b7ae76f2209806855d80f8a903eb	celestina-rs/crates/hematita-core/src/process_view.rs
+32	0	0a32f8650156f1be38b59dea0ad01bd012e1e9c4d2cda2e952e1bcda58c58b5e	celestina-rs/crates/hematita-core/tests/captures.rs
+2	0	18ec86e025e03c61fa3b801984ff6f27c3ca8d943a082be77dd7a60c15b6b636	celestina-rs/crates/hematita-core/tests/fixtures/etc-passwd.txt
+1	0	ec6d469ed0c49ce36eab821f90576297b22d87e023991c948ee892d38d53b972	celestina-rs/crates/hematita-core/tests/fixtures/proc-pid-cgroup.txt
+1	0	8e38a4e5875c9fdef158fd5d30aa59fddebaf11e3d6c5a2f67f2ed2aa24c99e2	celestina-rs/crates/hematita-core/tests/fixtures/proc-pid-stat.txt
+61	0	2574fdc121b8d020771035356765d7898ea9b3a7ef999bc8fc56d903b92c104b	celestina-rs/crates/hematita-core/tests/fixtures/proc-pid-status.txt
+6	1	bc04461a0a1ca45b3576ac1bb2bc30eabb58125754f1b6b8e20a47ac49d73096	hematita/ROADMAP.md
+15	0	a4f58eaf715dd3bd881b9b5fadc7cc50b5d1cd118ab3c4033c7119234b780da5	hematita/STATUS.md
+110	0	17aec4675586f763e9f04f5fa1aa4635c73b5dc939291b66d8a6aacb2cf9740f	hematita/docs/evidence/2026-09-22-h3-core.md
+1	1	f2f07b908ed9d8f5eff1ad135047988ce139e687cd695f6705943c6da5f11b44	hematita/docs/plans/active/2026-09-22-h3-processes.md
+35	0	self	hematita/docs/inventories/2026-09-22-h3-processes/H3-B.numstat.tsv

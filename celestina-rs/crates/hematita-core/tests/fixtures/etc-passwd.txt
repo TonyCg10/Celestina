@@ -1,0 +1,2 @@
+root:x:0:0::/root:/usr/bin/bash
+toni:x:1000:1000:Toni:/home/toni:/usr/bin/zsh

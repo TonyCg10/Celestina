@@ -6,6 +6,10 @@ use hematita_core::cpu::{parse_model, parse_stat};
 use hematita_core::disk::parse_diskstats;
 use hematita_core::memory::parse_meminfo;
 use hematita_core::network::parse_net_dev;
+use hematita_core::passwd;
+use hematita_core::process::{
+    parse_cgroup, parse_stat as parse_process_stat, parse_status as parse_process_status,
+};
 
 const STAT: &str = include_str!("fixtures/proc-stat.txt");
 const MEMINFO: &str = include_str!("fixtures/proc-meminfo.txt");
@@ -15,6 +19,10 @@ const NET_DEV: &str = include_str!("fixtures/proc-net-dev.txt");
 const CORES: usize = 8;
 const TOTAL_KIB: u64 = 65_403_392;
 const INTERFACES: usize = 2;
+const PID_STAT: &str = include_str!("fixtures/proc-pid-stat.txt");
+const PID_STATUS: &str = include_str!("fixtures/proc-pid-status.txt");
+const PID_CGROUP: &str = include_str!("fixtures/proc-pid-cgroup.txt");
+const PASSWD: &str = include_str!("fixtures/etc-passwd.txt");
 
 #[test]
 fn the_captured_stat_has_the_aggregate_and_every_core() {
@@ -58,4 +66,28 @@ fn the_captured_net_dev_lists_the_real_interfaces_without_loopback() {
     let interfaces = parse_net_dev(NET_DEV).expect("the captured /proc/net/dev parses");
     assert_eq!(interfaces.len(), INTERFACES);
     assert!(interfaces.iter().all(|interface| interface.name != "lo"));
+}
+
+#[test]
+fn the_captured_process_files_parse_and_agree_on_the_pid() {
+    let stat = parse_process_stat(PID_STAT).expect("the captured stat parses");
+    let status = parse_process_status(PID_STATUS).expect("the captured status parses");
+    assert!(stat.pid > 1);
+    assert_eq!(status.uid, 1000);
+    assert!(status.threads >= 1);
+    assert!(status.rss_kib.is_some());
+}
+
+#[test]
+fn the_captured_cgroup_names_a_desktop_application() {
+    let scope = parse_cgroup(PID_CGROUP).expect("the shell ran under an app scope");
+    assert!(!scope.desktop_id.is_empty());
+    assert!(scope.unit.starts_with("app-"));
+}
+
+#[test]
+fn the_captured_passwd_names_root_and_the_author() {
+    let users = passwd::parse(PASSWD);
+    assert_eq!(users.get(&0).map(String::as_str), Some("root"));
+    assert_eq!(users.get(&1000).map(String::as_str), Some("toni"));
 }

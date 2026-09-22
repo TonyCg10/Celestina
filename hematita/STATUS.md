@@ -74,6 +74,21 @@
   the static sysfs facts are read once per name, `sample_gpu` has no dead arm,
   and the capture asserts the exact disk set. Nobody has walked the list on a
   real session yet: that is `VAL-H2`.
+- As of `H3-B` the crate also parses one process: `process` reads
+  `/proc/PID/stat`, `/proc/PID/status`, `/proc/PID/cmdline` and
+  `/proc/PID/io`, decodes the desktop application behind a systemd scope from
+  `/proc/PID/cgroup` (`app-<launcher->id-<n>.scope` and
+  `app-id[@instance].service`, including `dbus-:1.3-id@0`), and
+  `ProcessSampler` turns successive per-PID tick readings into a percentage
+  of the whole machine keyed on `(pid, start_ticks)` so a reused pid does not
+  inherit another process's ticks. `passwd` maps uid to login name from
+  `/etc/passwd`, skipping malformed lines rather than refusing the file.
+  `process_view` decides the table's shape without Qt: a case-insensitive
+  filter over name/pid/application, six sortable fields with ties broken by
+  pid, and grouping filtered rows under their application in first-appearance
+  order. All of it is under unit test and captured from the author's own
+  session; none of it is wired into the sampler thread or any page yet — that
+  is `H3-C`.
 
 ## Blockers
 

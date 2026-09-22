@@ -11,5 +11,8 @@ pub mod gpu;
 pub mod history;
 pub mod memory;
 pub mod network;
+pub mod passwd;
+pub mod process;
+pub mod process_view;
 pub mod rate;
 pub mod ratio;

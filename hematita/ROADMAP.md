@@ -62,6 +62,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H2-C: [list stability](docs/evidence/2026-09-22-h2-list-stability.md)
 - H2-Z: [production completion](docs/evidence/2026-09-22-h2-production-completion.md)
 - H3-A: [list operability](docs/evidence/2026-09-22-h3-list-operability.md)
+- H3-B: [core](docs/evidence/2026-09-22-h3-core.md)
 
 ## H1 — closed 2026-09-21
 
@@ -106,4 +107,8 @@ The next checkpoint is `H3` (processes and applications), opened on
 
 `H3-A` delivers the list operability and gates H2 booked; the process work
 follows in `H3-B` and `H3-C`. Units and exit are in the
-[active plan](docs/plans/active/2026-09-22-h3-processes.md).
+[active plan](docs/plans/active/2026-09-22-h3-processes.md). `H3-B` delivers
+`hematita-core`'s process parsers, application scope decoding, per-PID CPU
+sampler, passwd and the filter/sort/group projection, all under unit test and
+captured from the author's machine — the
+[core evidence](docs/evidence/2026-09-22-h3-core.md).
