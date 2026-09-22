@@ -357,9 +357,7 @@ status_script = "hematita/scripts/status-production.sh"
 artifact_manifest = "hematita/target/production-artifact.toml"
 artifact_paths = ["hematita/target/release/hematita"]
 production_inputs = ["hematita/Cargo.toml", "hematita/Cargo.lock", "hematita/build.rs", "hematita/src", "hematita/qml", "hematita/org.celestina.Hematita.desktop", "celestina-style/icons/apps/org.celestina.Hematita.svg", "celestina-rs/crates/hematita-core"]
-# hematita-core has no tests/ directory yet in H1-A (its one test is inline
-# in src/ratio.rs); H1-B adds integration tests and this list gains that path.
-verification_inputs = ["hematita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+verification_inputs = ["hematita/scripts/smoke.sh", "celestina-rs/crates/hematita-core/tests", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "hematita-core", roots = ["celestina-rs/crates/hematita-core/"], include_workspace_manifests = true },
 ]
