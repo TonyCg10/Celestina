@@ -333,9 +333,10 @@ name = "Hematita"
 path = "hematita"
 kind = "cxx-qt-application"
 commit_prefix = "hematita"
-# Registered unversioned first so the registry commit carries no history row;
-# the baseline commit that follows the skeleton declares the Cargo source.
-versioned = false
+version_source = { kind = "cargo-package", path = "hematita/Cargo.toml", package = "hematita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "hematita/Cargo.lock", package = "hematita" },
+]
 agents = "hematita/AGENTS.md"
 readme = "hematita/README.md"
 status = "hematita/STATUS.md"
