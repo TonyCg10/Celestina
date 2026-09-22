@@ -13,12 +13,13 @@ use std::collections::HashMap;
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QList, QString, QStringList, QVariant};
+use cxx_qt_lib::{QString, QStringList, QVariant};
 
 use hematita_core::history::Ring;
 
+use crate::lists::{nested, strings, widen};
 use crate::publish::{self, Kind};
-use crate::sampler::{Reason, Sampler, Section, Snapshot};
+use crate::sampler::{self, Reason, Section, Snapshot};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -63,6 +64,12 @@ pub mod qobject {
         /// Starts the sampler, once. The window calls it when it is up.
         #[qinvokable]
         fn start(self: Pin<&mut HematitaResources>);
+
+        /// Stops the shared sampler thread and waits for it. The window calls
+        /// it when it goes away, so the thread does not outlive the objects
+        /// its snapshots are queued to.
+        #[qinvokable]
+        fn shutdown(self: Pin<&mut HematitaResources>);
     }
 
     impl cxx_qt::Threading for HematitaResources {}
@@ -116,7 +123,7 @@ pub struct HematitaResourcesRust {
     cpu_cores: usize,
     gpu_id: String,
     last_generation: u64,
-    sampler: Option<Sampler>,
+    started: bool,
 }
 
 impl Default for HematitaResourcesRust {
@@ -140,53 +147,31 @@ impl Default for HematitaResourcesRust {
             cpu_cores: 0,
             gpu_id: String::new(),
             last_generation: 0,
-            sampler: None,
+            started: false,
         }
     }
-}
-
-fn strings(values: impl IntoIterator<Item = String>) -> QStringList {
-    let mut list = QStringList::default();
-    for value in values {
-        list.append(QString::from(value.as_str()));
-    }
-    list
-}
-
-fn doubles(values: &[f64]) -> QVariant {
-    let mut list = QList::<QVariant>::default();
-    for value in values {
-        list.append(QVariant::from(value));
-    }
-    QVariant::from(&list)
-}
-
-fn nested(rows: &[Vec<f64>]) -> QVariant {
-    let mut list = QList::<QVariant>::default();
-    for row in rows {
-        list.append(doubles(row));
-    }
-    QVariant::from(&list)
-}
-
-fn widen(values: &[f32]) -> Vec<f64> {
-    values.iter().map(|value| f64::from(*value)).collect()
 }
 
 impl qobject::HematitaResources {
     pub fn start(mut self: Pin<&mut Self>) {
-        if self.rust().sampler.is_some() {
+        if self.rust().started {
             return;
         }
+        self.as_mut().rust_mut().started = true;
         let qt = self.qt_thread();
-        match Sampler::spawn(move |snapshot| {
+        let outcome = sampler::subscribe(move |snapshot: &Snapshot| {
+            let snapshot = snapshot.clone();
             let _ = qt.queue(move |resources: Pin<&mut qobject::HematitaResources>| {
                 resources.apply(snapshot);
             });
-        }) {
-            Ok(sampler) => self.as_mut().rust_mut().sampler = Some(sampler),
-            Err(_) => self.as_mut().set_start_failed(true),
+        });
+        if outcome.is_err() {
+            self.as_mut().set_start_failed(true);
         }
+    }
+
+    pub fn shutdown(self: Pin<&mut Self>) {
+        sampler::stop();
     }
 
     fn apply(mut self: Pin<&mut Self>, snapshot: Snapshot) {

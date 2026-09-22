@@ -89,6 +89,21 @@
   order. All of it is under unit test and captured from the author's own
   session; none of it is wired into the sampler thread or any page yet — that
   is `H3-C`.
+- As of `H3-C` it is wired. The sampler reads every process on every second
+  tick (`PROCESS_TICKS`), caching per PID what does not change while it
+  lives, and one process-global thread now publishes to both hub objects
+  rather than one thread per object; the window joins it from
+  `Component.onDestruction`. `HematitaProcesses` publishes the rows, the
+  groups, the counts, the availability and the outcome of the last action as
+  index-aligned lists plus a `revision`, and owns the only signal path:
+  `terminate` and `kill` refuse any PID the latest snapshot does not show as
+  the user's own, and refuse `0`, `1` and this process besides.
+  `ProcessTable` serves both the Processes page and the Applications page,
+  which differ only in `grouped` — the window sets it, because the two pages
+  share one hub. Killing is asked first, in `KillDialog`. Every check is
+  offscreen: no row was looked at, no signal was sent, and the application
+  icons were never seen resolving. That is `VAL-H3`. See the
+  [processes page evidence](docs/evidence/2026-09-22-h3-processes-page.md).
 
 ## Blockers
 

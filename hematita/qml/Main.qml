@@ -64,6 +64,10 @@ ApplicationWindow {
             }
         }
 
+        HematitaProcesses {
+            id: processHub
+        }
+
         HematitaActivation {
             id: activation
             onRaiseRequested: {
@@ -82,27 +86,46 @@ ApplicationWindow {
                 metrics: machine
             }
 
-            // Processes, applications and sensors arrive in H3 and H4.
-            Repeater {
-                model: window.sections.length - 1
+            ProcessPage {
+                processes: processHub
+                backdrop: window.contentItem
+            }
 
-                Item {
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("Esta sección llega en una fase posterior")
-                        color: CelestinaTheme.textMuted
-                        font.family: CelestinaTheme.sansFamily
-                        font.pixelSize: CelestinaTheme.fontRowTitle
-                    }
+            ApplicationsPage {
+                processes: processHub
+                backdrop: window.contentItem
+            }
+
+            // Sensors arrives in H4.
+            Item {
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("Esta sección llega en una fase posterior")
+                    color: CelestinaTheme.textMuted
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontRowTitle
                 }
             }
         }
+    }
+
+    // The two process pages share one hub, so the grouping is the window's to
+    // set: whichever page is showing decides it, and the other is rebuilt
+    // when it comes back.
+    onCurrentSectionChanged: {
+        processHub.grouped = window.currentSection === 2
+        processHub.refresh()
     }
 
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = window.reducedMotion
         navStrip.forceActiveFocus()
         machine.start()
+        processHub.start()
         activation.start()
     }
+
+    // The sampler thread outlives no window: it is asked to stop and joined
+    // before the objects its snapshots are queued to go away.
+    Component.onDestruction: machine.shutdown()
 }

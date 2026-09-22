@@ -12,6 +12,14 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaCapsule.qml",
     "qml/CelestinaSurface.qml",
     "qml/CelestinaSectionLabel.qml",
+    "qml/CelestinaTextField.qml",
+    "qml/CelestinaRowHighlight.qml",
+    "qml/CelestinaScrollBar.qml",
+    "qml/CelestinaModalLayer.qml",
+    "qml/CelestinaInputShield.qml",
+    "qml/CelestinaShadow.qml",
+    "qml/GlassSurface.qml",
+    "qml/GlassCard.qml",
     // Hematita's own composition: Main owns the window, the components own
     // one region each.
     "qml/components/NavItem.qml",
@@ -21,6 +29,13 @@ const QML_FILES: &[&str] = &[
     "qml/components/ResourceDetail.qml",
     "qml/components/CoreGrid.qml",
     "qml/components/PerformancePage.qml",
+    "qml/components/ProcessHeader.qml",
+    "qml/components/ProcessRow.qml",
+    "qml/components/ApplicationRow.qml",
+    "qml/components/ProcessTable.qml",
+    "qml/components/KillDialog.qml",
+    "qml/components/ProcessPage.qml",
+    "qml/components/ApplicationsPage.qml",
     "qml/Main.qml",
 ];
 
@@ -55,6 +70,7 @@ fn main() {
     }
     // The bridge files are watched by cxx-qt-build; the plain Rust modules
     // it does not know about are named here.
+    println!("cargo::rerun-if-changed=src/lists.rs");
     println!("cargo::rerun-if-changed=src/publish.rs");
     println!("cargo::rerun-if-changed=src/sampler.rs");
 
@@ -62,6 +78,6 @@ fn main() {
         // Shared icon resources and Inter Variable, compiled in.
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
-        .files(["src/activation.rs", "src/resources.rs"])
+        .files(["src/activation.rs", "src/resources.rs", "src/processes.rs"])
         .build();
 }

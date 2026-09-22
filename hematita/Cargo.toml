@@ -21,6 +21,13 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # Everything the kernel reports, parsed and tested without Qt. This binary
 # adds a window, a sampling thread and nothing else.
 hematita-core = { path = "../celestina-rs/crates/hematita-core" }
+# The .desktop parser the suite already shares; Hematita reads an
+# application's name and icon from it.
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
+# Sending SIGTERM/SIGKILL and reading the clock tick rate without `unsafe`:
+# rustix wraps the syscalls in safe Rust and is already pinned in the
+# workspace by magnetitad at this exact version.
+rustix = { version = "1.1.4", features = ["process", "param"] }
 # Single-instance activation: a second `hematita` raises the running window
 # instead of mapping another one. The session bus is how the suite talks
 # between processes, so this earns zbus rather than a socket protocol.

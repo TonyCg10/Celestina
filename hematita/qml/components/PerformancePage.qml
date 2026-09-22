@@ -77,6 +77,11 @@ Item {
         function onRevisionChanged() { page.weave() }
     }
 
+    // A click writes `selectedKey`, and the arrow keys write `currentIndex`,
+    // which replaces the binding that kept them the same. Writing it back
+    // here is what lets a click re-take the current item afterwards.
+    onSelectedKeyChanged: list.currentIndex = page.indexOf(page.selectedKey)
+
     Component.onCompleted: page.weave()
 
     // ── Words ──────────────────────────────────────────────────────────
