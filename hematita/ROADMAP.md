@@ -66,3 +66,23 @@ implementation exit ran on 2026-09-21: the
 [delivery record](docs/evidence/2026-09-21-h1-production-completion.md).
 `VAL-H1` stays pending in the author's lane and did not block this closure.
 The next checkpoint is `H2`, not yet opened.
+
+## H2 — planned first unit
+
+`H2-A` — Failure path and adapter tests. Planned work, not yet opened, no
+dates attached:
+
+- Per-resource unavailable state with a typed reason composed in QML through
+  `qsTr()` — no raw OS text, no Spanish literal in Rust.
+- The failure banner placed in the page's column layout instead of over the
+  detail card.
+- The pure parts of `HematitaResources::apply` — the generation guard,
+  percent-to-fraction, reason composition, identity-once — extracted as
+  testable functions with tests.
+- `NavItem` drops `checkable`/`checked`/`autoExclusive`.
+- `HistoryGraph` stroke width from a theme token, and its enter motion under
+  `reducedMotion`.
+- The unused `generation` property either used or removed.
+- `NavStrip` gets an `Accessible.name`.
+- The environment variable set before any bus work in `main.rs`.
+- The CPU and memory rings aligned on the first sample.

@@ -26,7 +26,8 @@ Hematita constraints; it cannot relax the root or grant authority.
 - The Celestina shell is in standby by the author's order: never read, reuse
   or reference `celestina/` or `celestina-shell-core`, however similar.
 - Absence is a state: a source that cannot be read leaves its section of the
-  snapshot unavailable with a reason while the others keep publishing.
+  snapshot unavailable with a reason while the others keep publishing. H1
+  publishes one page-level reason; H2-A makes it per resource.
 - Per-process network throughput is out of scope for every phase (the kernel
   does not expose it without root or eBPF); per-process disk IO exists only
   for the user's own processes.

@@ -1,5 +1,7 @@
 # The sampler, the resources object and the Performance page — H1-C
 
+> Superseded on the history-property point by [H1-D](2026-09-21-h1-history-type.md): the histories ship as QVariant lists with no lint suppressions.
+
 - **Date:** 2026-09-21
 - **Scope:** `H1-C` of
   [`../plans/archive/2026-09-21-h1-foundation.md`](../plans/archive/2026-09-21-h1-foundation.md):

@@ -1,6 +1,6 @@
 # Hematita status
 
-- **Updated:** 2026-09-21
+- **Updated:** 2026-09-22
 - **Delivered as 0.2.0:** H1 — the window opens with the navigation strip and
   a live Performance page reading CPU and memory once a second, built,
   verified and deployed to the author's prefix
@@ -20,8 +20,11 @@
 - A sampling thread reads every source once a second off the Qt thread and
   publishes one whole snapshot; `HematitaResources` applies it as typed
   properties, owns the 80/90 load thresholds and the two history rings, and
-  drops a snapshot older than the one it already applied. A source that cannot
-  be read names itself in the page instead of freezing its number.
+  drops a snapshot older than the one it already applied. In 0.2.0, a source
+  that cannot be read leaves its last number on screen and a red line at the
+  bottom of the page names the reason; the reason is page-level, not
+  per-resource, and per-resource unavailable state with a typed reason is
+  planned as H2-A.
 - The Performance page shows the processor and memory in a side list with
   sparklines and the selected one large, with its minute graph and its facts.
   Both histories cross to QML as a `QVariant` carrying a variant list: it is
