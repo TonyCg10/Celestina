@@ -12,6 +12,7 @@ members = [
     "crates/fluorita-engine",
     "crates/fluorita-qt",
     "crates/grafita-core",
+    "crates/hematita-core",
     "crates/magnetita-core",
     "crates/magnetita-net",
     "crates/magnetita-proto",

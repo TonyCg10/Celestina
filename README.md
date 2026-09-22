@@ -21,6 +21,7 @@ direction is [docs/VISION.md](docs/VISION.md); current work is
 | [magnetita](magnetita/) | Phone link over its own protocol, daemon and client | Rust · CXX-Qt · QML |
 | [grafita](grafita/) | Text editor, standalone and embedded in Siderita | Rust · CXX-Qt · QML |
 | [fluorita](fluorita/) | Local media library/player, standalone and embedded in Siderita | Rust · C++ · CXX-Qt · QML |
+| [hematita](hematita/) | Resource monitor: performance, processes, sensors | Rust · CXX-Qt · QML |
 
 Each project owns a concise README, current STATUS, implementation-only ROADMAP,
 author VALIDATION queue and local AGENTS delta. The machine-readable inventory

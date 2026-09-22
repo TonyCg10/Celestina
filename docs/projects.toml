@@ -326,3 +326,39 @@ component_commit_scopes = [
   { prefix = "fluorita-engine", roots = ["celestina-rs/crates/fluorita-engine/"], include_workspace_manifests = true },
   { prefix = "fluorita-qt", roots = ["celestina-rs/crates/fluorita-qt/"], include_workspace_manifests = true },
 ]
+
+[[projects]]
+id = "hematita"
+name = "Hematita"
+path = "hematita"
+kind = "cxx-qt-application"
+commit_prefix = "hematita"
+# Registered unversioned first so the registry commit carries no history row;
+# the baseline commit that follows the skeleton declares the Cargo source.
+versioned = false
+agents = "hematita/AGENTS.md"
+readme = "hematita/README.md"
+status = "hematita/STATUS.md"
+roadmap = "hematita/ROADMAP.md"
+validation = "hematita/VALIDATION.md"
+active_plans = "hematita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md", "docs/superpowers/specs/2026-09-21-hematita-design.md"]
+source_roots = ["hematita/src", "hematita/qml", "celestina-rs/crates/hematita-core"]
+commit_roots = ["hematita/", "celestina-rs/crates/hematita-core/"]
+include_workspace_manifests = true
+production_role = "desktop-application"
+deployable = true
+build_script = "hematita/scripts/build-production.sh"
+complete_script = "hematita/scripts/complete-production.sh"
+verify_script = "hematita/scripts/verify-production.sh"
+deploy_script = "hematita/scripts/deploy-production.sh"
+status_script = "hematita/scripts/status-production.sh"
+artifact_manifest = "hematita/target/production-artifact.toml"
+artifact_paths = ["hematita/target/release/hematita"]
+production_inputs = ["hematita/Cargo.toml", "hematita/Cargo.lock", "hematita/build.rs", "hematita/src", "hematita/qml", "hematita/org.celestina.Hematita.desktop", "celestina-style/icons/apps/org.celestina.Hematita.svg", "celestina-rs/crates/hematita-core"]
+# hematita-core has no tests/ directory yet in H1-A (its one test is inline
+# in src/ratio.rs); H1-B adds integration tests and this list gains that path.
+verification_inputs = ["hematita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "hematita-core", roots = ["celestina-rs/crates/hematita-core/"], include_workspace_manifests = true },
+]
