@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import org.celestina.hematita 1.0
 
@@ -42,16 +44,17 @@ FocusScope {
             model: strip.model
 
             NavItem {
+                id: item
                 required property int index
                 required property var modelData
 
-                iconName: modelData.icon
-                label: modelData.label
-                current: index === strip.currentIndex
+                iconName: item.modelData.icon
+                label: item.modelData.label
+                current: item.index === strip.currentIndex
                 // Only the current item is in the Tab order; arrows walk
                 // the rest, so Tab lands on the strip once and leaves once.
-                focus: current
-                onClicked: strip.activated(index)
+                focus: item.current
+                onClicked: strip.activated(item.index)
             }
         }
     }

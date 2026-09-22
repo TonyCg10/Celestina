@@ -1,3 +1,7 @@
+mod activation;
+mod resources;
+mod sampler;
+
 use cxx_qt_lib::{
     QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,
     QUrl, QVariant,
@@ -9,6 +13,12 @@ use cxx_qt_lib::{
 const APP_ID: &str = "org.celestina.Hematita";
 
 fn main() {
+    // A Hematita already running takes this launch: it raises itself and
+    // this process leaves without building a window.
+    if activation::hand_off() {
+        return;
+    }
+
     // Without a platform theme Qt has nobody to ask for dialogs and draws its
     // own outside this session's portal route. An explicit choice still wins.
     if std::env::var_os("QT_QPA_PLATFORMTHEME").is_none() {

@@ -1,0 +1,87 @@
+import QtQuick
+import QtQuick.Shapes
+import org.celestina.hematita 1.0
+
+// The one graph in Hematita: a minute of a fraction, oldest at the left. A
+// GPU-backed Shape draws a filled area and the trace over it from a series the
+// adapter already normalised, so the page never does arithmetic on samples.
+//
+// Colour follows the load state through theme tokens; the fill is the same
+// colour at the suite's soft opacity.
+Item {
+    id: graph
+
+    // Fractions 0..=1, oldest first. Any length; an empty series draws nothing.
+    required property var series
+    // "normal", "elevated" or "critical".
+    required property string load
+
+    readonly property color trace: graph.load === "critical"
+                                   ? CelestinaTheme.danger
+                                   : graph.load === "elevated"
+                                     ? CelestinaTheme.warning
+                                     : CelestinaTheme.accent
+
+    implicitHeight: CelestinaTheme.rowHeightLg * 2
+
+    function pointX(index) {
+        const count = graph.series.length
+        return count <= 1 ? 0 : index * graph.width / (count - 1)
+    }
+
+    function pointY(value) {
+        const clamped = Math.max(0, Math.min(1, value))
+        return graph.height - clamped * graph.height
+    }
+
+    // Both paths are rebuilt from the series once per sample. A PathPolyline
+    // takes the points in one assignment, which is the cheap way to redraw.
+    readonly property var tracePoints: {
+        const points = []
+        for (let index = 0; index < graph.series.length; ++index)
+            points.push(Qt.point(graph.pointX(index), graph.pointY(graph.series[index])))
+        return points
+    }
+
+    readonly property var areaPoints: {
+        if (graph.series.length === 0)
+            return []
+        const points = [Qt.point(0, graph.height)]
+        for (let index = 0; index < graph.series.length; ++index)
+            points.push(Qt.point(graph.pointX(index), graph.pointY(graph.series[index])))
+        points.push(Qt.point(graph.width, graph.height))
+        return points
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: CelestinaTheme.radiusSm
+        color: CelestinaTheme.inputFill
+    }
+
+    Shape {
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        visible: graph.series.length > 1
+
+        ShapePath {
+            strokeWidth: 0
+            strokeColor: CelestinaTheme.clear
+            fillColor: Qt.rgba(graph.trace.r, graph.trace.g, graph.trace.b,
+                               CelestinaTheme.accentSoftOpacity)
+            PathPolyline { path: graph.areaPoints }
+        }
+
+        ShapePath {
+            strokeWidth: 2
+            strokeColor: graph.trace
+            fillColor: CelestinaTheme.clear
+            capStyle: ShapePath.RoundCap
+            joinStyle: ShapePath.RoundJoin
+            PathPolyline { path: graph.tracePoints }
+        }
+    }
+
+    Accessible.role: Accessible.Graphic
+    Accessible.name: qsTr("Historial del último minuto")
+}

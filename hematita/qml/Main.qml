@@ -43,17 +43,33 @@ ApplicationWindow {
             onActivated: function(index) { window.currentSection = index }
         }
 
+        HematitaResources {
+            id: machine
+        }
+
+        HematitaActivation {
+            id: activation
+            onRaiseRequested: {
+                window.show()
+                window.raise()
+                window.requestActivate()
+            }
+        }
+
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             currentIndex: window.currentSection
 
-            // Performance lands here in Task 8. Placeholder pages say in the
-            // product's words that the section is not built yet.
+            PerformancePage {
+                metrics: machine
+            }
+
+            // Processes, applications and sensors arrive in H3 and H4.
             Repeater {
-                model: window.sections.length
+                model: window.sections.length - 1
+
                 Item {
-                    required property int index
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("Esta sección llega en una fase posterior")
@@ -69,5 +85,7 @@ ApplicationWindow {
     Component.onCompleted: {
         CelestinaTheme.reducedMotion = window.reducedMotion
         navStrip.forceActiveFocus()
+        machine.start()
+        activation.start()
     }
 }

@@ -16,6 +16,10 @@ const QML_FILES: &[&str] = &[
     // one region each.
     "qml/components/NavItem.qml",
     "qml/components/NavStrip.qml",
+    "qml/components/HistoryGraph.qml",
+    "qml/components/ResourceRow.qml",
+    "qml/components/ResourceDetail.qml",
+    "qml/components/PerformancePage.qml",
     "qml/Main.qml",
 ];
 
@@ -53,5 +57,6 @@ fn main() {
         // Shared icon resources and Inter Variable, compiled in.
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
+        .files(["src/activation.rs", "src/resources.rs"])
         .build();
 }
