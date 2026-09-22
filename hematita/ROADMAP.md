@@ -44,6 +44,7 @@ alone, without the machine noticing the monitor.
 | H3-C | done | H3-B | sampler process section, `HematitaProcesses`, the table and both pages | `scripts/verify-production.sh` |
 | H3-D | done | H3-C | the table's keyboard path and the four smaller H3-C review findings | `scripts/verify-production.sh` |
 | H3-Z | done | H3-D | implementation exit and 0.4.0 | `scripts/complete-production.sh` |
+| H3-E | done | H3-Z | the whole-branch review's fixes and 0.4.1 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -67,6 +68,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H3-C: [processes page](docs/evidence/2026-09-22-h3-processes-page.md)
 - H3-D: [keyboard table](docs/evidence/2026-09-22-h3-keyboard-table.md)
 - H3-Z: [production completion](docs/evidence/2026-09-22-h3-production-completion.md)
+- H3-E: [table fixes](docs/evidence/2026-09-22-h3-table-fixes.md)
 
 ## H1 — closed 2026-09-21
 
@@ -141,4 +143,18 @@ Units `H3-A` through `H3-Z` are in the archived
 implementation exit ran on 2026-09-22: the
 [completion evidence](docs/evidence/2026-09-22-h3-production-completion.md).
 `VAL-H3` stays pending in the author's lane and did not block this closure.
+
+`H3-E`, on 2026-09-22, is the whole-branch review's correction, delivered as
+0.4.1 under its own archived
+[plan](docs/plans/archive/2026-09-22-h3-table-fixes.md): the cursor is
+re-anchored wherever the entries are rebuilt and a selection that left the
+list is let go, the action outcome is cleared only by a new selection or a
+new action, the signal path re-reads `/proc` and refuses a PID whose start
+time or owner changed, the list is the table's one Tab stop, an application
+folds from the keyboard, the user column sorts, the columns fit the minimum
+window, the sampler hub can start again after a stop, the application row
+reports itself checkable, and an unreadable `/proc` is announced before any
+note about a row — the
+[table fixes evidence](docs/evidence/2026-09-22-h3-table-fixes.md).
+
 The next checkpoint is `H4` (sensors), not yet opened.

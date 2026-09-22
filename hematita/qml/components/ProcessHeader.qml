@@ -33,14 +33,22 @@ Item {
 
                 required property var modelData
                 readonly property bool active: header.sortField === cell.modelData.field
+                // A screen reader hears which column orders the table and
+                // which way; the arrow glyph says it only to a pair of eyes.
+                readonly property string directionWord: header.sortAscending
+                                                        ? qsTr("ascendente")
+                                                        : qsTr("descendente")
 
-                width: cell.modelData.width
+                visible: cell.modelData.shown
+                width: cell.modelData.shown ? cell.modelData.width : 0
                 height: header.height
                 hoverEnabled: true
                 focusPolicy: Qt.TabFocus
 
                 Accessible.role: Accessible.Button
-                Accessible.name: cell.modelData.title
+                Accessible.name: cell.active
+                                 ? cell.modelData.title + ", " + cell.directionWord
+                                 : cell.modelData.title
 
                 onClicked: header.sortRequested(cell.modelData.field)
 

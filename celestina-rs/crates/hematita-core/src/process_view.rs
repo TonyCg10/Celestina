@@ -24,6 +24,9 @@ pub enum SortField {
     Pid,
     Read,
     Write,
+    /// By uid, not by login name: the name is a label the uid carries, and
+    /// two uids that share a name would still be two users.
+    User,
 }
 
 impl SortField {
@@ -36,6 +39,7 @@ impl SortField {
             "pid" => Some(Self::Pid),
             "read" => Some(Self::Read),
             "write" => Some(Self::Write),
+            "user" => Some(Self::User),
             _ => None,
         }
     }
@@ -49,6 +53,7 @@ impl SortField {
             Self::Pid => "pid",
             Self::Read => "read",
             Self::Write => "write",
+            Self::User => "user",
         }
     }
 }
@@ -91,6 +96,7 @@ pub fn project(rows: &[ProcessRow], filter: &str, field: SortField, ascending: b
                 .write_rate
                 .partial_cmp(&right.write_rate)
                 .unwrap_or(Ordering::Equal),
+            SortField::User => left.uid.cmp(&right.uid),
         };
         let primary = if ascending {
             primary
@@ -145,7 +151,9 @@ mod tests {
         ProcessRow {
             pid,
             name: name.to_owned(),
-            uid: 1000,
+            // The fixture's uids follow the pid so the user sort has
+            // something to order by: 10 and 30 are root, 20 and 40 are not.
+            uid: if pid % 20 == 10 { 0 } else { 1000 },
             cpu_percent: cpu,
             memory_kib: memory,
             read_rate: 0.0,
@@ -194,6 +202,14 @@ mod tests {
     }
 
     #[test]
+    fn sorting_by_user_orders_by_uid_and_breaks_ties_by_pid() {
+        let rows = rows();
+        // uids: pid 10 -> 0, 20 -> 1000, 30 -> 0, 40 -> 1000.
+        assert_eq!(project(&rows, "", SortField::User, true), vec![0, 2, 1, 3]);
+        assert_eq!(project(&rows, "", SortField::User, false), vec![1, 3, 0, 2]);
+    }
+
+    #[test]
     fn groups_follow_first_appearance_and_sum_their_members() {
         let rows = rows();
         let order = project(&rows, "", SortField::Cpu, false);
@@ -215,6 +231,7 @@ mod tests {
             SortField::Pid,
             SortField::Read,
             SortField::Write,
+            SortField::User,
         ] {
             assert_eq!(SortField::from_token(field.as_str()), Some(field));
         }

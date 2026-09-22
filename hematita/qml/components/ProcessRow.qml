@@ -24,7 +24,9 @@ AbstractButton {
 
     implicitHeight: CelestinaTheme.controlHeightSm
     hoverEnabled: true
-    focusPolicy: Qt.TabFocus
+    // The list is the one Tab stop. A focusable row would put a thousand
+    // stops between the table and whatever follows it.
+    focusPolicy: Qt.NoFocus
 
     Accessible.role: Accessible.ListItem
     Accessible.name: row.name + ", " + row.pid + ", " + row.cpu + ", " + row.memory
@@ -55,8 +57,12 @@ AbstractButton {
 
                     required property var modelData
 
-                    width: cell.modelData.width
-                           - (row.nested && cell.modelData.field === "name" ? CelestinaTheme.space2xl : 0)
+                    visible: cell.modelData.shown
+                    width: cell.modelData.shown
+                           ? cell.modelData.width
+                             - (row.nested && cell.modelData.field === "name"
+                                ? CelestinaTheme.space2xl : 0)
+                           : 0
                     height: row.height
                     leftPadding: CelestinaTheme.spaceSm
                     rightPadding: CelestinaTheme.spaceSm

@@ -34,14 +34,24 @@ Item {
                                        actionable: false })
     readonly property var emptyGroup: ({ id: "", name: "", icon: "", cpu: 0, memory: 0, count: 0 })
 
+    // Below this the rates do not fit beside everything else, so they are the
+    // columns that go: the name, the owner, the PID, the CPU and the memory
+    // are what the table is for.
+    readonly property int ratesWidth: 760
+    readonly property bool ratesShown: table.width >= table.ratesWidth
+    // Every column but the name has a width of its own; the name takes what
+    // is left, and never less than its floor, so the sum can exceed the
+    // window only when the window is narrower than the floor plus the rest.
+    readonly property int fixedTotal: 90 + 80 + 80 + 110 + (table.ratesShown ? 220 : 0)
+
     readonly property var columns: [
-        { field: "name", title: qsTr("Nombre"), width: Math.max(160, table.width * 0.34), numeric: false },
-        { field: "user", title: qsTr("Usuario"), width: 90, numeric: false },
-        { field: "pid", title: qsTr("PID"), width: 80, numeric: true },
-        { field: "cpu", title: qsTr("CPU"), width: 80, numeric: true },
-        { field: "memory", title: qsTr("Memoria"), width: 110, numeric: true },
-        { field: "read", title: qsTr("Lectura"), width: 110, numeric: true },
-        { field: "write", title: qsTr("Escritura"), width: 110, numeric: true }
+        { field: "name", title: qsTr("Nombre"), width: Math.max(160, table.width - table.fixedTotal), numeric: false, shown: true },
+        { field: "user", title: qsTr("Usuario"), width: 90, numeric: false, shown: true },
+        { field: "pid", title: qsTr("PID"), width: 80, numeric: true, shown: true },
+        { field: "cpu", title: qsTr("CPU"), width: 80, numeric: true, shown: true },
+        { field: "memory", title: qsTr("Memoria"), width: 110, numeric: true, shown: true },
+        { field: "read", title: qsTr("Lectura"), width: 110, numeric: true, shown: table.ratesShown },
+        { field: "write", title: qsTr("Escritura"), width: 110, numeric: true, shown: table.ratesShown }
     ]
 
     function percentText(value) {
@@ -88,6 +98,7 @@ Item {
         table.rows = woven
         table.groups = wovenGroups
         table.entries = table.layout()
+        table.anchorCursor()
     }
 
     function layout() {
@@ -108,6 +119,23 @@ Item {
         return out
     }
 
+    // The entries are rebuilt on every revision and on every fold, and a
+    // rebuilt list keeps whatever index it had — which is a different row.
+    // This is the one place that puts the cursor back on the selection, and
+    // the one place that lets go of a selection that is no longer there.
+    property bool anchoring: false
+    function anchorCursor() {
+        if (table.anchoring)
+            return
+        table.anchoring = true
+        const index = table.entryOfPid(table.selectedPid)
+        if (index >= 0)
+            list.currentIndex = index
+        else if (table.selectedPid >= 0)
+            table.selectedPid = -1
+        table.anchoring = false
+    }
+
     function toggleGroup(id) {
         const next = Object.assign({}, table.collapsed)
         if (next[id])
@@ -116,6 +144,7 @@ Item {
             next[id] = true
         table.collapsed = next
         table.entries = table.layout()
+        table.anchorCursor()
     }
 
     // The entry index showing `pid`, or -1. The selection is a pid and the
@@ -139,6 +168,28 @@ Item {
         if (entry.kind !== "process" || entry.index < 0 || entry.index >= table.rows.length)
             return -1
         return table.rows[entry.index].pid
+    }
+
+    // Folds the application under the cursor: `direction` is -1 to collapse,
+    // 1 to expand and 0 to toggle. Answers whether it acted, so a key over a
+    // process row is left to the list.
+    function foldCurrent(direction) {
+        if (!table.grouped)
+            return false
+        const index = list.currentIndex
+        if (index < 0 || index >= table.entries.length)
+            return false
+        const entry = table.entries[index]
+        if (entry.kind !== "group" || entry.index < 0 || entry.index >= table.groups.length)
+            return false
+        const id = table.groups[entry.index].id
+        const collapsed = table.collapsed[id] === true
+        if (direction < 0 && collapsed)
+            return true
+        if (direction > 0 && !collapsed)
+            return true
+        table.toggleGroup(id)
+        return true
     }
 
     function selectedRow() {
@@ -170,9 +221,11 @@ Item {
     // each writes the other back, so the cursor and the selection are one
     // thing however they were moved.
     onSelectedPidChanged: {
-        const index = table.entryOfPid(table.selectedPid)
-        if (index >= 0)
-            list.currentIndex = index
+        if (!table.anchoring) {
+            const index = table.entryOfPid(table.selectedPid)
+            if (index >= 0)
+                list.currentIndex = index
+        }
         // A new selection is a new question; the last action's answer is not
         // about this row.
         table.processes.clearAction()
@@ -245,13 +298,15 @@ Item {
 
             Layout.fillWidth: true
             visible: note.text.length > 0
+            // A table that could not be read says so before it says anything
+            // about a row in it: the rows are the stale ones.
             text: {
+                if (!table.processes.available)
+                    return qsTr("No se pudo leer %1").arg(table.processes.reasonPath)
                 const row = table.selectedRow()
                 if (row !== null && !row.actionable)
                     return qsTr("El proceso %1 pertenece a %2; terminarlo o matarlo llega con la fase de servicios")
                              .arg(row.pid).arg(row.user)
-                if (!table.processes.available)
-                    return qsTr("No se pudo leer %1").arg(table.processes.reasonPath)
                 return table.outcomeText()
             }
             color: table.processes.available && table.processes.actionOutcome !== "failed"
@@ -268,14 +323,14 @@ Item {
             sortField: table.processes.sortField
             sortAscending: table.processes.sortAscending
             onSortRequested: function(field) {
-                // The user column names its rows; it does not order them.
-                if (field === "user")
-                    return
                 if (table.processes.sortField === field) {
                     table.processes.sortAscending = !table.processes.sortAscending
                 } else {
                     table.processes.sortField = field
-                    table.processes.sortAscending = field === "name" || field === "pid"
+                    // Text and identifiers read from the top; rates and
+                    // sizes are asked largest-first.
+                    table.processes.sortAscending =
+                        field === "name" || field === "pid" || field === "user"
                 }
                 table.processes.refresh()
             }
@@ -304,10 +359,22 @@ Item {
                     // nothing: it is a place in the list, and Space on the row
                     // itself is what opens it.
                     onCurrentIndexChanged: {
+                        if (table.anchoring)
+                            return
                         const pid = table.pidOfEntry(list.currentIndex)
                         if (pid >= 0)
                             table.selectedPid = pid
                     }
+
+                    // ── finding: a group folds from the keyboard too ──
+                    // Space and Return toggle the application under the
+                    // cursor; Left and Right say which way, so a fold is
+                    // reachable without knowing its current state.
+                    Keys.onSpacePressed: function(event) { event.accepted = table.foldCurrent(0) }
+                    Keys.onReturnPressed: function(event) { event.accepted = table.foldCurrent(0) }
+                    Keys.onEnterPressed: function(event) { event.accepted = table.foldCurrent(0) }
+                    Keys.onLeftPressed: function(event) { event.accepted = table.foldCurrent(-1) }
+                    Keys.onRightPressed: function(event) { event.accepted = table.foldCurrent(1) }
 
                     // Both row shapes are built and one of them is shown. A
                     // `Loader` with its components declared beside it cannot see

@@ -10,6 +10,7 @@
 //! of an action are tokens the page turns into Spanish through `qsTr()`.
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -17,6 +18,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList, QVariant};
 
 use celestina_core::desktop_entry;
+use hematita_core::process;
 use hematita_core::process_view::{self, ProcessRow, SortField};
 
 use crate::lists::{doubles, strings};
@@ -96,7 +98,9 @@ pub mod qobject {
 
         /// Forgets the last action's outcome. The page calls it when the
         /// selection moves, because an answer about one process is not an
-        /// answer about the next.
+        /// answer about the next. Nothing else clears it — a reading of the
+        /// machine two seconds later is not a reason to stop saying that a
+        /// signal was refused.
         #[qinvokable]
         fn clear_action(self: Pin<&mut HematitaProcesses>);
     }
@@ -222,9 +226,6 @@ impl qobject::HematitaProcesses {
                 let own_uid = snapshot.own_uid;
                 self.as_mut().rust_mut().latest = Some(Arc::new(snapshot));
                 self.as_mut().rust_mut().own_uid = own_uid;
-                // The outcome describes one moment, not a state of the table:
-                // a fresh reading of the machine is that moment ending.
-                self.as_mut().clear_action();
                 self.as_mut().set_available(true);
                 self.as_mut().set_reason_kind(QString::default());
                 self.as_mut().set_reason_path(QString::default());
@@ -403,20 +404,32 @@ impl qobject::HematitaProcesses {
     }
 
     /// The one signal path. A PID the latest snapshot does not show as ours
-    /// is refused here, before any syscall.
+    /// is refused here, before any syscall — and then `/proc` is asked again,
+    /// because the snapshot is up to two seconds old and a PID that died in
+    /// that gap may already belong to somebody else's new process. Only a PID
+    /// whose start time and owner still match the ones the table showed is
+    /// signalled; anything else is `refused`.
     fn send_signal(
         mut self: Pin<&mut Self>,
         pid: i32,
         signal: rustix::process::Signal,
         kind: &str,
     ) {
-        let outcome = match self.rust().owned_pid(pid) {
-            None => "refused",
-            Some(target) => match rustix::process::kill_process(target, signal) {
-                Ok(()) => "done",
-                Err(_) => "failed",
-            },
+        let expected = self.rust().expected_identity(pid);
+        let target = self.rust().owned_pid(pid);
+        let outcome = match (target, expected) {
+            (Some(target), Some(expected))
+                if still_the_same(&expected, &read_identity_now(pid)) =>
+            {
+                match rustix::process::kill_process(target, signal) {
+                    Ok(()) => "done",
+                    Err(_) => "failed",
+                }
+            }
+            _ => "refused",
         };
+        // The three properties are written together, so the page never reads
+        // this action's outcome beside the last one's pid.
         self.as_mut().set_action_pid(pid);
         self.as_mut().set_action_kind(QString::from(kind));
         self.as_mut().set_action_outcome(QString::from(outcome));
@@ -437,6 +450,21 @@ impl HematitaProcessesRust {
             .iter()
             .find(|reading| reading.pid == pid_u32)?;
         (reading.uid == self.own_uid).then(|| rustix::process::Pid::from_raw(pid))?
+    }
+
+    /// What the latest snapshot says this PID is, for the signal path to
+    /// check `/proc` against.
+    fn expected_identity(&self, pid: i32) -> Option<ProcessIdentity> {
+        let pid_u32 = u32::try_from(pid).ok()?;
+        let latest = self.latest.as_ref()?;
+        latest
+            .readings
+            .iter()
+            .find(|reading| reading.pid == pid_u32)
+            .map(|reading| ProcessIdentity {
+                start_ticks: reading.start_ticks,
+                uid: reading.uid,
+            })
     }
 
     /// The application's name and icon from its `.desktop` file, resolved
@@ -467,6 +495,43 @@ impl HematitaProcessesRust {
 
 /// Kibibytes as the `double` QML reads. A `double` is exact to 2^53, which
 /// is more kibibytes than any machine has.
+/// Who a PID is: when it started, and whose it is. A PID number alone is not
+/// an identity, because the kernel reuses numbers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ProcessIdentity {
+    start_ticks: u64,
+    uid: u32,
+}
+
+/// Whether the PID `/proc` describes now is the one the snapshot described.
+/// `None` on the right means `/proc` could not answer — the process is gone,
+/// or unreadable — which is never the same process.
+fn still_the_same(expected: &ProcessIdentity, current: &Option<ProcessIdentity>) -> bool {
+    current.as_ref() == Some(expected)
+}
+
+/// Reads one PID's start time and owner from `/proc`, now.
+///
+/// This is blocking IO on the Qt thread: two small files, once per signal a
+/// person asked for. It is the only way to close the gap between a snapshot
+/// up to two seconds old and the syscall, and it is accepted for the same
+/// reason the `.desktop` read is — it happens on a human action, not on a
+/// tick.
+fn read_identity_now(pid: i32) -> Option<ProcessIdentity> {
+    let pid_u32 = u32::try_from(pid).ok()?;
+    let directory = Path::new("/proc").join(pid_u32.to_string());
+    let stat_text = std::fs::read_to_string(directory.join("stat")).ok()?;
+    let stat = process::parse_stat(&stat_text).ok()?;
+    let status_text = std::fs::read_to_string(directory.join("status")).ok()?;
+    let status = process::parse_status(&status_text).ok()?;
+    // `/proc/<pid>/stat` names the pid it describes; if it does not name the
+    // one that was asked for, this is not the file it was meant to be.
+    (stat.pid == pid_u32).then_some(ProcessIdentity {
+        start_ticks: stat.start_ticks,
+        uid: status.uid,
+    })
+}
+
 fn kib_as_f64(kib: u64) -> f64 {
     kib as f64
 }
@@ -491,7 +556,7 @@ fn row_of(reading: &ProcessReading, own_uid: u32) -> ProcessRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{row_of, HematitaProcessesRust};
+    use super::{row_of, still_the_same, HematitaProcessesRust, ProcessIdentity};
     use crate::sampler::{ProcessReading, ProcessSnapshot};
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -499,6 +564,7 @@ mod tests {
     fn reading(pid: u32, uid: u32) -> ProcessReading {
         ProcessReading {
             pid,
+            start_ticks: 67_467_262,
             name: "zsh".to_owned(),
             uid,
             cpu_percent: Some(1.5),
@@ -563,6 +629,35 @@ mod tests {
         // A PID no snapshot lists is refused.
         assert!(state.owned_pid(9_999_999).is_none());
         assert!(state.owned_pid(4243).is_some());
+    }
+
+    #[test]
+    fn a_pid_is_the_same_process_only_with_the_same_start_time_and_owner() {
+        let expected = ProcessIdentity {
+            start_ticks: 67_467_262,
+            uid: 1000,
+        };
+        assert!(still_the_same(&expected, &Some(expected)));
+        // The PID was recycled between the snapshot and the signal.
+        assert!(!still_the_same(
+            &expected,
+            &Some(ProcessIdentity {
+                start_ticks: 99_000_000,
+                uid: 1000,
+            })
+        ));
+        // The same start time but another owner cannot happen through reuse;
+        // it is refused anyway, because it is not what the table showed.
+        assert!(!still_the_same(
+            &expected,
+            &Some(ProcessIdentity {
+                start_ticks: 67_467_262,
+                uid: 0,
+            })
+        ));
+        // `/proc` had no answer: the process is gone, which is never the
+        // same process.
+        assert!(!still_the_same(&expected, &None));
     }
 
     #[test]

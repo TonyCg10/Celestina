@@ -150,3 +150,4 @@ hematita	0.1.0	baseline	H1-A	Adopt the Hematita Cargo version as the verified ba
 hematita	0.2.0	milestone	H1-Z	Add the foundation and the Performance page with CPU and memory
 hematita	0.3.0	milestone	H2-Z	Add every resource to the Performance page with the per-core grid
 hematita	0.4.0	milestone	H3-Z	Add the Processes and Applications pages
+hematita	0.4.1	bug	H3-E	Fix the process table cursor, the action outcome and the signal re-validation

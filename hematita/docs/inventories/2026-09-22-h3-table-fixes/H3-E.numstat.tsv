@@ -1,0 +1,41 @@
+# H3-E exact change inventory
+
+Base revision	305fa1f57c12f441c92c39dc4504caec800694c1
+Pathspec	celestina-rs/crates/hematita-core/src/process_view.rs
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-22-h3-table-fixes.md
+Pathspec	hematita/docs/inventories/2026-09-22-h3-table-fixes/H3-E.numstat.tsv
+Pathspec	hematita/docs/plans/archive/2026-09-22-h3-table-fixes.md
+Pathspec	hematita/docs/plans/archive/README.md
+Pathspec	hematita/qml/components/ApplicationRow.qml
+Pathspec	hematita/qml/components/ProcessHeader.qml
+Pathspec	hematita/qml/components/ProcessRow.qml
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/src/processes.rs
+Pathspec	hematita/src/sampler.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+18	1	2f042d9a113f565c4767f8684e6a7b241d01cd48a8f771f1d366ca1fbc2a7b28	celestina-rs/crates/hematita-core/src/process_view.rs
+1	0	5adcf99b4271e3ba7c490efe8e2770d57e51177533d40177078b365203ec55b5	docs/version-history.tsv
+1	1	7a810c7464e0cd698f5d8599583415ddce42d278fa626446228b198a1b63f160	hematita/Cargo.lock
+1	1	32b66ef592f5b78d321697b44ab3c9235b08dac71bf8e553ca75759c8e651772	hematita/Cargo.toml
+16	0	a4bfa0f004a47dff72ee8c96f0a453eef3c47108126baa5a7820bd7765437094	hematita/ROADMAP.md
+23	0	bfe77c44864055c43eecd374fdd5cc3cc40cd28786a690eebfca621bdefe9031	hematita/STATUS.md
+8	5	623a662f82b8b6892854febae74418ab80999eb5c1a25ab7b8a0593e380938e5	hematita/VALIDATION.md
+151	0	154c6d4ab23d22ef0194a820ccde37aa1a4b41ba75933b60bb6c5bee1e6afd79	hematita/docs/evidence/2026-09-22-h3-table-fixes.md
+52	0	07ef0089a84a10e6ed52be2120521220c9851f41ca5b962df3a5f458912aed62	hematita/docs/plans/archive/2026-09-22-h3-table-fixes.md
+1	0	083411dd5fa609cb553543b0334a6844b6337435efa5a070e1e68faf37fd33ca	hematita/docs/plans/archive/README.md
+3	1	2504f080b6c2f94c125f63ebd4e3b0a320bb9587f673e8f9fe155c7929f625e7	hematita/qml/components/ApplicationRow.qml
+11	3	d2af340a7a1d7723de3ca030ccf465c6f6aa853772627e82f2ae230ff4e30ce2	hematita/qml/components/ProcessHeader.qml
+9	3	ae224fc73ceab8f4970bae683eb6941b516c08179450c64312a66102da58bb2f	hematita/qml/components/ProcessRow.qml
+83	16	26d65d4ab727b6f342e663692c5504a0db3213b3d706c09ecf84bc07ed7afda2	hematita/qml/components/ProcessTable.qml
+107	12	87c722859cf341cbfa16bc7c2fec2d6ca4274a3894aa0d5cc121dbf14c6e7784	hematita/src/processes.rs
+20	3	8fddd4a5f4191b64088738fa5221179f63da3f5211f0ca5fbc06d76eda8641d8	hematita/src/sampler.rs
+41	0	self	hematita/docs/inventories/2026-09-22-h3-table-fixes/H3-E.numstat.tsv

@@ -7,6 +7,11 @@
   under their application's icon; both the Performance list and the process
   table are reachable by keyboard; built, verified and deployed to the
   author's prefix
+- **Delivered as 0.4.1:** `H3-E` — the whole-branch review's correction: the
+  cursor follows the selection across every rebuild, the last action's
+  outcome outlives the next reading, the signal path re-reads `/proc` before
+  it acts, and the table is one Tab stop with keyboard folds and columns that
+  fit the minimum window
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
   run; `VAL-H3` requested, not run
 - **Active phase:** H4 (sensors), planned, not yet opened
@@ -123,6 +128,24 @@
   table, or asked the kill dialog to act on a real process: `VAL-H1`,
   `VAL-H2` and `VAL-H3` all stay pending. See the
   [production completion record](docs/evidence/2026-09-22-h3-production-completion.md).
+- As of `H3-E` the table's cursor is re-anchored wherever `entries` is
+  rebuilt — every revision and every fold — so the selection no longer drifts
+  a row per tick, and a selected process that died or was filtered out is let
+  go rather than pointed at. `apply` no longer clears the action outcome, so
+  a refusal or a failure stays readable until the selection moves or another
+  action answers; `send_signal` re-reads `/proc/<pid>/stat` and
+  `/proc/<pid>/status` immediately before the syscall and refuses unless the
+  start time and the owner still match the snapshot's, which closes the gap a
+  two-second-old snapshot leaves. The rows are `Qt.NoFocus` so the list is the
+  table's one Tab stop, Space, Return, Left and Right fold an application
+  under the cursor, the user column sorts by uid, the active column says its
+  direction to a screen reader, the name column takes what the other columns
+  leave and the two rate columns go below 760 logical pixels, `sampler::stop`
+  drains its subscribers and lowers its flag so the hub can start again, the
+  application row reports `Accessible.checkable`, and an unreadable `/proc` is
+  announced before any note about a selected row. Deployed as `0.4.1`. Still
+  nobody has pressed a key or sent a signal: `VAL-H3`. See the
+  [table fixes evidence](docs/evidence/2026-09-22-h3-table-fixes.md).
 
 ## Blockers
 

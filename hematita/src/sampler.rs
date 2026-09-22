@@ -116,6 +116,10 @@ pub struct InterfaceSection {
 #[derive(Clone, Debug)]
 pub struct ProcessReading {
     pub pid: u32,
+    /// Ticks after boot when the process started. With the PID this is the
+    /// process's identity across PID reuse, and it is what the signal path
+    /// re-checks before it acts.
+    pub start_ticks: u64,
     pub name: String,
     pub uid: u32,
     /// `None` until the second reading of this PID.
@@ -317,19 +321,31 @@ pub fn subscribe(callback: impl Fn(&Snapshot) + Send + 'static) -> std::io::Resu
     Ok(())
 }
 
-/// Asks the thread to stop and waits for it. Called once, when the window
-/// goes away; a second call is a no-op.
+/// Asks the thread to stop, waits for it, and leaves the hub able to start
+/// again: the subscribers of the run that just ended are dropped, and the
+/// flag is lowered so a later [`subscribe`] spawns a thread that lives.
 ///
 /// The thread checks the flag every hundred milliseconds, so this waits that
 /// long at worst; a join that returns an error means it panicked, and there is
-/// nothing left to do about that during shutdown.
+/// nothing left to do about that during shutdown. A second call is a no-op.
 pub fn stop() {
     let shared = hub();
     shared.stop.store(true, Ordering::Relaxed);
+    // The `handle` lock is held across the whole sequence, so a `subscribe`
+    // racing this either registers before the flag is read or waits and finds
+    // a hub that is stopped, drained and armed again — never one that is
+    // half-way between.
     if let Ok(mut handle) = shared.handle.lock() {
         if let Some(handle) = handle.take() {
             let _ = handle.join();
         }
+        // The thread is gone, so nothing will call these again; keeping them
+        // would hold every closure's captured `CxxQtThread` for the life of
+        // the process.
+        if let Ok(mut subscribers) = shared.subscribers.lock() {
+            subscribers.clear();
+        }
+        shared.stop.store(false, Ordering::Relaxed);
     }
 }
 
@@ -490,6 +506,7 @@ fn sample_processes(
         .into_iter()
         .map(|(pid, start_ticks, facts, memory_kib)| ProcessReading {
             pid,
+            start_ticks,
             name: facts.name,
             uid: facts.uid,
             cpu_percent: cpu.get(&pid).copied(),

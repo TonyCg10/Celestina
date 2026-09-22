@@ -46,7 +46,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 - **Status:** pending
 - **Related implementation:** H3
-- **Requires:** the deployed Hematita 0.4.0 on the real session; a process of
+- **Requires:** the deployed Hematita 0.4.1 on the real session; a process of
   the author's to end (for example `sleep 600` in a terminal); one root
   process visible
 - **Procedure:** open Procesos; type part of a name in the search and watch
@@ -54,10 +54,13 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   select the `sleep` row and press Terminar; select another own process and
   press Matar, then cancel in the dialog with Escape, then confirm; select a
   root process and read the bar; walk the table by Tab and arrows and by
-  screen reader; open Aplicaciones, confirm the running desktop applications
-  appear with their icons and names, expand one and read its processes; leave
-  the table open for a minute and confirm the selection and scroll position
-  do not jump; check Hematita's own CPU while idle on Procesos
+  screen reader; tab into the table once, arrow down, wait ten seconds, arrow
+  down again and confirm the selection moved one row; open Aplicaciones,
+  confirm the running desktop applications appear with their icons and names,
+  expand one and read its processes, then fold and unfold one from the
+  keyboard with Left and Right; leave the table open for a minute and confirm
+  the selection and scroll position do not jump; check Hematita's own CPU
+  while idle on Procesos
 - **Pass condition:** the search narrows live; every column sorts both ways;
   Terminar ends `sleep` within a second; the dialog contains focus, Escape
   cancels, the confirm kills; a root process shows the not-actionable words
