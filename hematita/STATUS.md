@@ -65,6 +65,8 @@
   registered under `~/.local/share`; the installed bytes match the checkout's
   `hematita/target/release/hematita` byte for byte. See the
   [production completion record](docs/evidence/2026-09-22-h2-production-completion.md).
+- The side list's off-screen rows are not yet keyboard-reachable; `H3-A`
+  books it.
 
 ## Blockers
 

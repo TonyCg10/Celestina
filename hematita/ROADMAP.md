@@ -95,3 +95,25 @@ implementation exit ran on 2026-09-22: the
 [completion evidence](docs/evidence/2026-09-22-h2-production-completion.md).
 `VAL-H2` stays pending in the author's lane and did not block this closure.
 The next checkpoint is `H3` (processes and applications), not yet opened.
+
+## H3 — planned first unit
+
+`H3-A` — List operability and gates. Planned work, not yet opened, no dates
+attached:
+
+- `PerformancePage.qml`'s `ListView` makes off-screen rows unreachable by
+  keyboard and invisible to AT: add `Accessible.role: Accessible.List`, give
+  the list `focus`, and bind `currentIndex` to `page.selectedKey`.
+- The smoke gate has no evidence the nested `QVariant` lists arrive with the
+  right shape: assert one row's shape (e.g. `rows[0].numbers.length`)
+  against the kind contract.
+- `subtitleFor` labels an unread network row "Cable"; return `""` unless the
+  row is `ready`.
+- Every non-hotplug `CpuSampler` error maps to the `no-rate` token; narrow
+  the mapping or reword the sentence.
+- The core count is read once at startup; derive it from the live reading
+  (also covers core hot-plug and an unreadable `/proc/stat` at startup).
+- Static sysfs facts (disk model/size, interface type/state/speed) are
+  re-read every tick; cache by name.
+- The capture test should assert the exact disk set.
+- The dead `return None` arm in `sample_gpu`.

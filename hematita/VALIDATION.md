@@ -29,11 +29,15 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   interface; run a GPU load and watch the GPU row; open the processor and
   toggle the per-core grid; plug a USB disk in and out; make `/proc/diskstats`
   unreadable is not possible, so instead unplug the Wi-Fi and confirm its row
-  says it is down rather than vanishing; watch Hematita's own CPU while idle
+  says it is down rather than vanishing; watch Hematita's own CPU while idle;
+  walk the resource list by Tab and by screen reader from the strip down to
+  the last interface; read a disk's Capacidad and a Wi-Fi row's Velocidad
+  and Estado and confirm they are plausible numbers, not "NaN" or blanks
 - **Pass condition:** every whole disk and interface appears with its model or
   name; rates match another tool within a few percent; the selected row stays
   selected across a hot-plug; the grid shows one graph per core; an unreadable
   or absent source is a Spanish sentence in its own row, not a frozen number;
-  Hematita idles under 1 % CPU
+  Hematita idles under 1 % CPU; every row is reachable by keyboard and named
+  by the screen reader; no fact reads NaN
 - **Result:** not run
 - **Evidence:** none
