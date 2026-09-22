@@ -34,6 +34,9 @@ Hematita constraints; it cannot relax the root or grant authority.
   for the user's own processes.
 - Signals leave `processes.rs` only, through `rustix`, only to a PID the
   latest snapshot shows as the user's own, never to PID 1 or ourselves.
+- Sensor values and limits come from hwmon files alone; the chip's own
+  `crit` decides the thermal load through the thresholds in `publish.rs`;
+  no alert, no fan control.
 
 ## Local verification
 

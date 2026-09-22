@@ -12,17 +12,18 @@
   outcome outlives the next reading, the signal path re-reads `/proc` before
   it acts, and the table is one Tab stop with keyboard folds and columns that
   fit the minimum window
-- **In progress:** `H4-A`/`H4-B` — `hematita-core` reads every hwmon chip
-  and channel into a typed value with its unit and kernel limits, captured
-  from the author's processor, GPU and board chips; the sampler reads the
-  value files every tick, `HematitaSensors` publishes them with the
-  session's extremes, and the Sensors page shows every chip as a card. The
-  six process-table items parked by `H3-E` are closed, and `H4-C` answered
-  the review. Built and verified, not yet deployed and not yet seen by the
-  author (`VAL-H4`)
+- **Delivered as 0.5.0:** H4 — `hematita-core` reads every hwmon chip and
+  channel into a typed value with its unit and kernel limits, captured from
+  the author's processor, GPU and board chips; the sampler reads the value
+  files every tick, `HematitaSensors` publishes them with the session's
+  extremes, and the Sensors page shows every chip as a card, one row per
+  channel, coloured by a thermal load graded against the chip's own `crit`.
+  The six process-table items parked by `H3-E` are closed; built, verified
+  and deployed to the author's prefix
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
-  run; `VAL-H3` requested, not run
-- **Active phase:** H4 (sensors), opened 2026-09-22
+  run; `VAL-H3` requested, not run; `VAL-H4` requested, not run
+- **Active phase:** none; the next phase is H5 (services and privileged
+  actions), not yet opened
 
 ## Current checkout truth
 
@@ -201,6 +202,16 @@
   once, and an untranslated chip name gets its ordinal. Still nobody has
   looked at the page: `VAL-H4`. See the
   [sensor gates evidence](docs/evidence/2026-09-22-h4-sensor-gates.md).
+- `H4-Z` closed the checkpoint at `0.5.0`: the release binary is built,
+  verified and deployed to the author's prefix. The Sensors page reads every
+  hwmon chip the machine exposes and shows it as a card, one row per
+  channel, with the value, the session's minimum and maximum, the kernel's
+  own limit, and a thermal load graded against the chip's own `crit`; the
+  headless smoke steps through Performance, Processes, Applications and
+  Sensors one second apart and finds no QML error on any of them. Nobody has
+  looked at the page on a real session yet: `VAL-H1` through `VAL-H4` all
+  stay pending. See the
+  [production completion record](docs/evidence/2026-09-22-h4-production-completion.md).
 
 ## Blockers
 

@@ -151,3 +151,4 @@ hematita	0.2.0	milestone	H1-Z	Add the foundation and the Performance page with C
 hematita	0.3.0	milestone	H2-Z	Add every resource to the Performance page with the per-core grid
 hematita	0.4.0	milestone	H3-Z	Add the Processes and Applications pages
 hematita	0.4.1	bug	H3-E	Fix the process table cursor, the action outcome and the signal re-validation
+hematita	0.5.0	milestone	H4-Z	Add the Sensors page

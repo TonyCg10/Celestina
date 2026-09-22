@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** H4
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -48,7 +48,7 @@ alone, without the machine noticing the monitor.
 | H4-A | done | H3-E | `hematita-core`: `sensors`, captures, the deferred cgroup regression test | `cargo test -p hematita-core` |
 | H4-B | done | H4-A | sampler sensors section, `HematitaSensors`, the Sensors page, the parked process-table items | `scripts/verify-production.sh` |
 | H4-C | done | H4-B | the review's corrections: the hwmon facts re-validated by chip name, stable sensor rows, a smoke that steps through every section | `scripts/verify-production.sh` |
-| H4-Z | planned | H4-C | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
+| H4-Z | done | H4-C | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -76,6 +76,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H4-A: [core](docs/evidence/2026-09-22-h4-core.md)
 - H4-B: [sensors page](docs/evidence/2026-09-22-h4-sensors-page.md)
 - H4-C: [sensor gates](docs/evidence/2026-09-22-h4-sensor-gates.md)
+- H4-Z: [production completion](docs/evidence/2026-09-22-h4-production-completion.md)
 
 ## H1 — closed 2026-09-21
 
@@ -164,9 +165,41 @@ reports itself checkable, and an unreadable `/proc` is announced before any
 note about a row — the
 [table fixes evidence](docs/evidence/2026-09-22-h3-table-fixes.md).
 
-## H4 — opened 2026-09-22
+## H4 — closed 2026-09-22
 
-`H4-A` delivers `hematita-core`'s hwmon discovery; `H4-B` wires it into the
-sampler and the window as the Sensors page, and closes the process-table
-items parked by `H3-E`. Units and exit are in the
-[active plan](docs/plans/active/2026-09-22-h4-sensors.md).
+Its falsifiable problem was whether every channel hwmon exposes could be
+read as a typed value with its unit, its kernel limits and the session's
+extremes, from files alone, and shown per chip without the monitor's idle
+cost growing. The delivered result is the release binary built, verified and
+deployed to the author's prefix at `0.5.0`, whose Sensors page lists every
+hwmon chip as a card, one row per channel, with the value, the session's
+minimum and maximum, the kernel's own limit and a thermal load coloured by
+the chip's own `crit`.
+
+`H4-A` delivered `hematita-core`'s hwmon discovery: `ChannelKind`, `Channel`,
+`Chip`, `parse_channel_file`, `convert` and `discover`, captured from the
+author's processor, GPU and board chips, plus the cgroup regression test
+`H3-B` deferred — the [core evidence](docs/evidence/2026-09-22-h4-core.md).
+`H4-B` wired it into the sampler and the window: the sensors section is read
+every tick, `publish::thermal_load` grades a temperature by the chip's own
+`crit`, `HematitaSensors` publishes chips and channels with the session's
+extremes, the Sensors page shows each chip as a `ListSection` card, and the
+six process-table items parked by `H3-E` are closed — the
+[sensors page evidence](docs/evidence/2026-09-22-h4-sensors-page.md). `H4-C`
+answered its review: the hwmon facts and the session's extremes are
+re-validated and keyed by the chip's own name rather than its `hwmonN`
+index, the sensor rows are stable across ticks so the keyboard can hold one,
+the smoke steps through every section so no page goes unconstructed, and the
+unreachable `channelStates` field is struck from the published contract —
+the [sensor gates evidence](docs/evidence/2026-09-22-h4-sensor-gates.md).
+Units `H4-A` through `H4-Z` are in the archived
+[plan](docs/plans/archive/2026-09-22-h4-sensors.md). The checkpoint's
+implementation exit ran on 2026-09-22: the
+[completion evidence](docs/evidence/2026-09-22-h4-production-completion.md).
+`VAL-H4` stays pending in the author's lane and did not block this closure.
+
+The next checkpoint is `H5` (services and privileged actions), not yet
+opened. Its first step is the author's written privilege decision: a
+foreign process is signalled through `pkexec`, and a service is started,
+stopped or restarted over the system bus through systemd rather than a
+setuid helper of its own.

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H4-B` of
-  [`../plans/active/2026-09-22-h4-sensors.md`](../plans/active/2026-09-22-h4-sensors.md):
+  [`../plans/archive/2026-09-22-h4-sensors.md`](../plans/archive/2026-09-22-h4-sensors.md):
   the sampler's sensors section, `publish::thermal_load`, the
   `HematitaSensors` hub, the Sensors page and its two components, and the
   six process-table items parked by `H3-E`

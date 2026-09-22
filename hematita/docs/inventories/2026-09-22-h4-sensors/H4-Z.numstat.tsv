@@ -1,0 +1,37 @@
+# H4-Z exact change inventory
+
+Base revision	92c452bd6d8e6bb969df960583a8d20fee750077
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/AGENTS.md
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-22-h4-core.md
+Pathspec	hematita/docs/evidence/2026-09-22-h4-production-completion.md
+Pathspec	hematita/docs/evidence/2026-09-22-h4-sensor-gates.md
+Pathspec	hematita/docs/evidence/2026-09-22-h4-sensors-page.md
+Pathspec	hematita/docs/inventories/2026-09-22-h4-sensors/H4-Z.numstat.tsv
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+Pathspec	hematita/docs/plans/archive/2026-09-22-h4-sensors.md
+Pathspec	hematita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	fed90a17eca3630135d5895c28fc12a566f9b31f86c12900bad9f9bd7d0c3896	docs/version-history.tsv
+3	0	27afd34e509ddc396afb77c1ccfe1f9ec054bf7d3c87a3d6d3b83d4aceafde08	hematita/AGENTS.md
+1	1	6e7d53ca1b3fff81bfe4bd4bd0e0d5012477df93dcd7430064221888578feedd	hematita/Cargo.lock
+1	1	68b172e9f87fea2bb70ad89d04fe496352a32e85c6fcf0462c8408a27bb883ff	hematita/Cargo.toml
+42	9	92e830c6e919c12e6dbc60e627a3481325c896acf8d22d039ea2df76301937be	hematita/ROADMAP.md
+21	10	2d5b076c9dd62a1b1a8062cfefc0425b8245c131e8c145b0e0d668ffd5f4de9d	hematita/STATUS.md
+1	1	74cc8f8cbb9f7c893fa59d8cfc7254d98dc9efd98ce2f37d4ab6fa7c71d6bafb	hematita/docs/evidence/2026-09-22-h4-core.md
+89	0	1c248d86b1f7c4f99883d1e7d51b62e5f18ec2e5bab9c09b05a8c1b89244060a	hematita/docs/evidence/2026-09-22-h4-production-completion.md
+1	1	ebcd466971f02f049278907ea7afd9462393b60c3e800a7df4bbd6e8c46c3a10	hematita/docs/evidence/2026-09-22-h4-sensor-gates.md
+1	1	c722a09c00e606c01837956bf24a833a4ca99c2c46f7aa2bac937c233869da2a	hematita/docs/evidence/2026-09-22-h4-sensors-page.md
+2	2	df850c81f3b41e284187d984bd930840bc397f1217239669683493baa468b987	hematita/docs/plans/active/README.md
+0	53	deleted	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+55	0	53f892dc7212a32bc6083ec9608d0a85e54f3c671d8c701bda54a59c43782a91	hematita/docs/plans/archive/2026-09-22-h4-sensors.md
+1	0	fcf78174b11ad852af6c73604325ac8d8a161d6290dc3e43fdf8e4c7b91f3090	hematita/docs/plans/archive/README.md
+37	0	self	hematita/docs/inventories/2026-09-22-h4-sensors/H4-Z.numstat.tsv

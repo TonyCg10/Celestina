@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H4-C` of
-  [`../plans/active/2026-09-22-h4-sensors.md`](../plans/active/2026-09-22-h4-sensors.md):
+  [`../plans/archive/2026-09-22-h4-sensors.md`](../plans/archive/2026-09-22-h4-sensors.md):
   the review findings on `H4-B` — the `hwmon` cache validated by chip name,
   sensor rows that survive a tick, a smoke that shows every section, the
   contract note on `channelStates`, and two smaller fixes
