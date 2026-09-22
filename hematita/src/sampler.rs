@@ -284,12 +284,16 @@ fn hub() -> &'static Hub {
 ///
 /// # Errors
 ///
-/// The OS refused to create the thread, or the hub's lock was poisoned.
+/// The OS refused to create the thread, or one of the hub's locks was
+/// poisoned — in which case the subscriber is not registered and the caller
+/// is told, rather than being left listening to nothing.
 pub fn subscribe(callback: impl Fn(&Snapshot) + Send + 'static) -> std::io::Result<()> {
     let shared = hub();
-    if let Ok(mut subscribers) = shared.subscribers.lock() {
-        subscribers.push(Box::new(callback));
-    }
+    shared
+        .subscribers
+        .lock()
+        .map_err(|_| std::io::Error::other("sampler subscribers lock poisoned"))?
+        .push(Box::new(callback));
     let mut handle = shared
         .handle
         .lock()
@@ -464,13 +468,16 @@ fn sample_processes(
                 .ok()
                 .and_then(|text| process::parse_io(&text).ok())
             {
-                io_readings.push((pid.to_string(), [io.read_bytes, io.write_bytes]));
+                io_readings.push((
+                    io_key(pid, stat.start_ticks),
+                    [io.read_bytes, io.write_bytes],
+                ));
             }
         }
         ticks.push((pid, stat.start_ticks, stat.cpu_ticks));
-        partial.push((pid, facts, memory_kib));
+        partial.push((pid, stat.start_ticks, facts, memory_kib));
     }
-    let live: HashSet<u32> = partial.iter().map(|(pid, _, _)| *pid).collect();
+    let live: HashSet<u32> = partial.iter().map(|(pid, _, _, _)| *pid).collect();
     state.facts.retain(|pid, _| live.contains(pid));
     let cpu: HashMap<u32, f32> = state
         .sampler
@@ -481,13 +488,13 @@ fn sample_processes(
         state.io.sample(&io_readings, elapsed).into_iter().collect();
     let readings = partial
         .into_iter()
-        .map(|(pid, facts, memory_kib)| ProcessReading {
+        .map(|(pid, start_ticks, facts, memory_kib)| ProcessReading {
             pid,
             name: facts.name,
             uid: facts.uid,
             cpu_percent: cpu.get(&pid).copied(),
             memory_kib,
-            io_rate: io.get(&pid.to_string()).copied(),
+            io_rate: io.get(&io_key(pid, start_ticks)).copied(),
             application: facts.application,
         })
         .collect();
@@ -496,6 +503,14 @@ fn sample_processes(
         readings,
         users: Arc::clone(&state.users),
     })
+}
+
+/// The name an IO counter is remembered under. A PID alone is not an
+/// identity — the kernel reuses them — so the process's start time is part of
+/// the key and a recycled PID starts its rates over instead of inheriting the
+/// counters of whatever held that number before it.
+fn io_key(pid: u32, start_ticks: u64) -> String {
+    format!("{pid}:{start_ticks}")
 }
 
 /// The name shown for a process: the first word of its command line when it

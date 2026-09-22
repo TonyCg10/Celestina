@@ -28,6 +28,8 @@ reachable by keyboard and screen reader.
 - `H3-B` — `hematita-core`: `process`, `passwd`, `process_view`, captures.
 - `H3-C` — sampler process section, `HematitaProcesses`, the table, rows,
   dialog and both pages.
+- `H3-D` — the table's keyboard path and the four smaller `H3-C` review
+  findings.
 - `H3-Z` — implementation exit and 0.4.0.
 
 ## Exclusions
@@ -38,7 +40,7 @@ reachable by keyboard and screen reader.
 
 ## Build order
 
-1. `H3-A`, then `H3-B`, `H3-C`, `H3-Z`.
+1. `H3-A`, then `H3-B`, `H3-C`, `H3-D`, `H3-Z`.
 
 ## Implementation exit
 
@@ -53,4 +55,5 @@ by application, and terminates one of the user's own processes on request.
 | H3-A | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-A.numstat.tsv) | 14 files, +401/-69 | Performance list reachable by keyboard and AT with the selection bound to `currentIndex`; smoke asserting a row's numbers against the kind contract; network subtitle only when ready; `no-rate` mapping narrowed; live core count; static sysfs facts cached by name; capture test asserting the disk set; dead arm removed; H3 opened | [list operability](../../evidence/2026-09-22-h3-list-operability.md) | `VAL-H2` |
 | H3-B | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-B.numstat.tsv) | 14 files, +979/-2 | `/proc/PID` parsers, application scope decoding, per-PID CPU sampler, passwd, the filter/sort/group projection, captures | [core](../../evidence/2026-09-22-h3-core.md) | `VAL-H3` |
 | H3-C | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-C.numstat.tsv) | 30 files, +1976/-84 | Process section in the snapshot with per-PID caches and a shared sampler hub; `HematitaProcesses` lists, state and the only signal path; `lists.rs`; `ProcessTable`, both row shapes, `KillDialog`; Processes and Applications pages; style symlinks; the `H3-A` list carry-over | [processes page](../../evidence/2026-09-22-h3-processes-page.md) | `VAL-H3` |
+| H3-D | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-D.numstat.tsv) | 10 files, +313/-48 | Sort header and table rows operable by keyboard; action outcome cleared; io counters keyed by start time; subscriber lock failure reported; group row without a broken checked binding | [keyboard table](../../evidence/2026-09-22-h3-keyboard-table.md) | `VAL-H3` |
 | H3-Z | `hematita:` | planned | `hematita/`, `docs/version-history.tsv` | — | Implementation exit, 0.4.0, documents closed, plan archived | `scripts/complete-production.sh` | `VAL-H3` |

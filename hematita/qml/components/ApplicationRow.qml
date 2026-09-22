@@ -27,8 +27,10 @@ AbstractButton {
     implicitHeight: CelestinaTheme.rowHeight
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
-    checkable: true
-    checked: row.expanded
+    // Not `checkable`: a checkable button writes its own `checked` on click,
+    // which would replace the binding to `expanded` and leave the chevron
+    // telling a different story from the rows below it. The fold lives in the
+    // table; this row only reports it.
 
     Accessible.role: Accessible.ListItem
     Accessible.name: row.appName + ", " + row.countText + ", " + row.cpu

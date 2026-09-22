@@ -64,6 +64,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H3-A: [list operability](docs/evidence/2026-09-22-h3-list-operability.md)
 - H3-B: [core](docs/evidence/2026-09-22-h3-core.md)
 - H3-C: [processes page](docs/evidence/2026-09-22-h3-processes-page.md)
+- H3-D: [keyboard table](docs/evidence/2026-09-22-h3-keyboard-table.md)
 
 ## H1 — closed 2026-09-21
 
@@ -118,4 +119,10 @@ hub objects from one thread, `HematitaProcesses` holds the table's state and
 owns the only signal path, and the Processes and Applications pages are up
 behind the strip — the
 [processes page evidence](docs/evidence/2026-09-22-h3-processes-page.md).
+`H3-D` depends on `H3-C` and answers its review: the sort header and the row
+cursor are reachable from the keyboard, the last action's outcome is
+forgotten when it stops being true, the IO counters are keyed by the
+process's start time, a poisoned subscriber lock is reported, and the group
+row no longer overwrites its own `checked` binding — the
+[keyboard table evidence](docs/evidence/2026-09-22-h3-keyboard-table.md).
 `H3-Z` closes the checkpoint.

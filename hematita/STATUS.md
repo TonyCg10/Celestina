@@ -104,6 +104,17 @@
   offscreen: no row was looked at, no signal was sent, and the application
   icons were never seen resolving. That is `VAL-H3`. See the
   [processes page evidence](docs/evidence/2026-09-22-h3-processes-page.md).
+- As of `H3-D` the table answers the keyboard. Every column title is a button
+  that Tab reaches and Space sorts by, with the shared focus ring; the list's
+  current item and the selected pid write each other, so an arrow key moves
+  the selection instead of an invisible cursor, and landing on an application
+  row selects nothing. The last action's outcome is cleared when a new
+  reading lands and when the selection moves, the IO counters are keyed by
+  `(pid, start_ticks)` so a recycled PID cannot inherit them, a poisoned
+  subscriber lock is now an error instead of a silent drop, and the
+  application row no longer declares itself `checkable` against its own
+  `expanded` binding. Still nobody has pressed a key: that is `VAL-H3`. See
+  the [keyboard table evidence](docs/evidence/2026-09-22-h3-keyboard-table.md).
 
 ## Blockers
 

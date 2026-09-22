@@ -118,6 +118,29 @@ Item {
         table.entries = table.layout()
     }
 
+    // The entry index showing `pid`, or -1. The selection is a pid and the
+    // list's cursor is an index into `entries`, so each has to be able to
+    // name the other.
+    function entryOfPid(pid) {
+        for (let index = 0; index < table.entries.length; ++index) {
+            const entry = table.entries[index]
+            if (entry.kind === "process" && entry.index < table.rows.length
+                && table.rows[entry.index].pid === pid)
+                return index
+        }
+        return -1
+    }
+
+    // The pid an entry shows, or -1 for an application row.
+    function pidOfEntry(index) {
+        if (index < 0 || index >= table.entries.length)
+            return -1
+        const entry = table.entries[index]
+        if (entry.kind !== "process" || entry.index < 0 || entry.index >= table.rows.length)
+            return -1
+        return table.rows[entry.index].pid
+    }
+
     function selectedRow() {
         for (let index = 0; index < table.rows.length; ++index)
             if (table.rows[index].pid === table.selectedPid)
@@ -141,6 +164,18 @@ Item {
                      .arg(verb).arg(published.actionPid)
         }
         return ""
+    }
+
+    // A click writes `selectedPid` and the arrow keys write `currentIndex`;
+    // each writes the other back, so the cursor and the selection are one
+    // thing however they were moved.
+    onSelectedPidChanged: {
+        const index = table.entryOfPid(table.selectedPid)
+        if (index >= 0)
+            list.currentIndex = index
+        // A new selection is a new question; the last action's answer is not
+        // about this row.
+        table.processes.clearAction()
     }
 
     Connections {
@@ -264,6 +299,15 @@ Item {
                     keyNavigationEnabled: true
                     Accessible.role: Accessible.List
                     Accessible.name: table.grouped ? qsTr("Aplicaciones") : qsTr("Procesos")
+
+                    // Landing on an application row selects nothing and folds
+                    // nothing: it is a place in the list, and Space on the row
+                    // itself is what opens it.
+                    onCurrentIndexChanged: {
+                        const pid = table.pidOfEntry(list.currentIndex)
+                        if (pid >= 0)
+                            table.selectedPid = pid
+                    }
 
                     // Both row shapes are built and one of them is shown. A
                     // `Loader` with its components declared beside it cannot see

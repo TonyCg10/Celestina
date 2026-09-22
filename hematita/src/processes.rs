@@ -93,6 +93,12 @@ pub mod qobject {
         /// SIGKILL to one of the user's own processes.
         #[qinvokable]
         fn kill(self: Pin<&mut HematitaProcesses>, pid: i32);
+
+        /// Forgets the last action's outcome. The page calls it when the
+        /// selection moves, because an answer about one process is not an
+        /// answer about the next.
+        #[qinvokable]
+        fn clear_action(self: Pin<&mut HematitaProcesses>);
     }
 
     impl cxx_qt::Threading for HematitaProcesses {}
@@ -216,6 +222,9 @@ impl qobject::HematitaProcesses {
                 let own_uid = snapshot.own_uid;
                 self.as_mut().rust_mut().latest = Some(Arc::new(snapshot));
                 self.as_mut().rust_mut().own_uid = own_uid;
+                // The outcome describes one moment, not a state of the table:
+                // a fresh reading of the machine is that moment ending.
+                self.as_mut().clear_action();
                 self.as_mut().set_available(true);
                 self.as_mut().set_reason_kind(QString::default());
                 self.as_mut().set_reason_path(QString::default());
@@ -377,6 +386,12 @@ impl qobject::HematitaProcesses {
         // Last, so the page rebuilds once, with every list in place.
         let next = self.rust().revision.wrapping_add(1).max(1);
         self.as_mut().set_revision(next);
+    }
+
+    pub fn clear_action(mut self: Pin<&mut Self>) {
+        self.as_mut().set_action_outcome(QString::default());
+        self.as_mut().set_action_kind(QString::default());
+        self.as_mut().set_action_pid(0);
     }
 
     pub fn terminate(self: Pin<&mut Self>, pid: i32) {

@@ -1,0 +1,27 @@
+# H3-D exact change inventory
+
+Base revision	fe98944532deba1920f8d5804b19aafb28b7c478
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-22-h3-keyboard-table.md
+Pathspec	hematita/docs/inventories/2026-09-22-h3-processes/H3-D.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h3-processes.md
+Pathspec	hematita/qml/components/ApplicationRow.qml
+Pathspec	hematita/qml/components/ProcessHeader.qml
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/src/processes.rs
+Pathspec	hematita/src/sampler.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+7	0	03841edfce02330708ec4557b01c6f7c6db8e51330da1837bbc54093658d9506	hematita/ROADMAP.md
+11	0	1e45ebd49fb641f5b83ede393466b6733e00f8ef3e9a3c4aa9a636a516cd2d90	hematita/STATUS.md
+125	0	3c389b027d4cfe4eb8982da8510684395225455be41eb06378f39350aecead8c	hematita/docs/evidence/2026-09-22-h3-keyboard-table.md
+4	1	6da4da9da892962ac340945c8c2fca298c5d200fdffbdbafa67271600375bca7	hematita/docs/plans/active/2026-09-22-h3-processes.md
+4	2	6b4d5793bfebe253b0b1b9e274971153ffb60f6c7201ff51640b2ad0e21681e2	hematita/qml/components/ApplicationRow.qml
+52	36	18983fccb420ef71dfc9bb417c71ed31753cd25503c70e2b3ac19e32c8d15e9a	hematita/qml/components/ProcessHeader.qml
+44	0	363886a38d12e4c13c01fa1b71ded0021ef69437029d710523def8e8a84074e4	hematita/qml/components/ProcessTable.qml
+15	0	1eca0241fadecb2c8aeb095713d67701385d18b18a7389e7a5db25cabb9a7b43	hematita/src/processes.rs
+24	9	0b235bbdbafefff7be70e52930087c271c10bc39bd07df8acd2e6eae2f1ccce0	hematita/src/sampler.rs
+27	0	self	hematita/docs/inventories/2026-09-22-h3-processes/H3-D.numstat.tsv
