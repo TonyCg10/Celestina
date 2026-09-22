@@ -1,7 +1,7 @@
 # Active Hematita plans
 
-No plan is active. A dated plan is added here only when the project roadmap
-names the same active implementation checkpoint.
+The active plan is [H4 — sensors](2026-09-22-h4-sensors.md), which the
+project roadmap names as its active implementation checkpoint.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

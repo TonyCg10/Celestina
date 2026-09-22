@@ -70,3 +70,27 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   its place across ticks; Hematita idles under 2 % CPU on Procesos
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-H4 — Sensors on the real session
+
+- **Status:** pending
+- **Related implementation:** H4
+- **Requires:** the deployed Hematita 0.5.0 on the real session; a GPU load
+  and a compile to heat things up
+- **Procedure:** open Sensores; count the chip cards against
+  `ls /sys/class/hwmon/*/name`; read the processor's Tctl, the GPU's edge and
+  junction, the NVMe composites, the six board fans and the three labelled
+  board voltages; run a GPU load for a minute and watch the GPU temperature,
+  fan and power rows move and their session maximum rise; hover nothing (no
+  tooltips exist); walk the cards by keyboard and screen reader; on Procesos,
+  terminate a `sleep` and confirm the confirmation sentence stays until you
+  select another row; type a name quickly and confirm the table does not
+  stutter; check Hematita's idle CPU on Sensores
+- **Pass condition:** every chip in `/sys/class/hwmon` has a card and every
+  `_input` channel a row with a plausible value and unit; labelled channels
+  show the kernel's label, unlabelled ones a numbered word; limits appear
+  where the kernel has them; session minimum and maximum move; the GPU rows
+  change under load; every row is reachable and named; the terminate
+  sentence persists; typing is smooth; idle CPU under 2 %
+- **Result:** not run
+- **Evidence:** none

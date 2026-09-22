@@ -12,9 +12,13 @@
   outcome outlives the next reading, the signal path re-reads `/proc` before
   it acts, and the table is one Tab stop with keyboard folds and columns that
   fit the minimum window
+- **In progress:** `H4-A` — `hematita-core` reads every hwmon chip and
+  channel into a typed value with its unit and kernel limits, captured from
+  the author's processor, GPU and board chips; not yet wired into the
+  sampler or a page
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
   run; `VAL-H3` requested, not run
-- **Active phase:** H4 (sensors), planned, not yet opened
+- **Active phase:** H4 (sensors), opened 2026-09-22
 
 ## Current checkout truth
 
@@ -146,6 +150,19 @@
   announced before any note about a selected row. Deployed as `0.4.1`. Still
   nobody has pressed a key or sent a signal: `VAL-H3`. See the
   [table fixes evidence](docs/evidence/2026-09-22-h3-table-fixes.md).
+- As of `H4-A` the crate also parses sensors: `sensors` reads one `hwmonN`
+  directory's files into a `Chip` of `Channel`s, one per readable
+  `<kind><n>_input` (a power channel prefers `_average`), each typed by
+  `ChannelKind` (temperature, fan, voltage, power, current) with its own unit
+  and kernel integer conversion, its label when the chip has one and its
+  `max`/`crit` limits (a power channel's `cap` is its max), sorted by kind
+  then index; a channel whose value file does not parse is skipped without
+  disturbing the chip's other channels. All of it is under unit test and
+  captured from the author's processor (`k10temp`), GPU (`amdgpu`) and board
+  (`it8696`) chips; none of it is wired into the sampler thread or a page
+  yet — that is `H4-B`. The deferred cgroup regression test from `H3-B`
+  (a reverse-DNS application scope without an instance number) is in place
+  too. See the [core evidence](docs/evidence/2026-09-22-h4-core.md).
 
 ## Blockers
 

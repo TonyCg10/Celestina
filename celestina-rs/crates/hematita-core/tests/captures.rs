@@ -10,6 +10,7 @@ use hematita_core::passwd;
 use hematita_core::process::{
     parse_cgroup, parse_stat as parse_process_stat, parse_status as parse_process_status,
 };
+use hematita_core::sensors::{discover, ChannelKind, ChipListing};
 
 const STAT: &str = include_str!("fixtures/proc-stat.txt");
 const MEMINFO: &str = include_str!("fixtures/proc-meminfo.txt");
@@ -90,4 +91,96 @@ fn the_captured_passwd_names_root_and_the_author() {
     let users = passwd::parse(PASSWD);
     assert_eq!(users.get(&0).map(String::as_str), Some("root"));
     assert_eq!(users.get(&1000).map(String::as_str), Some("toni"));
+}
+
+fn chip_listing(key: &str, text: &str) -> ChipListing {
+    let mut name = String::new();
+    let mut files = Vec::new();
+    for line in text.lines() {
+        let Some((file, contents)) = line.split_once('\t') else {
+            continue;
+        };
+        if file == "name" {
+            name = contents.to_owned();
+        }
+        files.push((file.to_owned(), contents.to_owned()));
+    }
+    ChipListing {
+        key: key.to_owned(),
+        name,
+        files,
+    }
+}
+
+#[test]
+fn the_captured_processor_chip_has_tctl_and_tccd() {
+    let chip = discover(&chip_listing(
+        "hwmon6",
+        include_str!("fixtures/hwmon-k10temp.txt"),
+    ));
+    assert_eq!(chip.name, "k10temp");
+    let labels: Vec<&str> = chip.channels.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(labels, vec!["Tctl", "Tccd1"]);
+    assert!(chip
+        .channels
+        .iter()
+        .all(|c| c.kind == ChannelKind::Temperature && c.value > 0.0 && c.value < 120.0));
+}
+
+#[test]
+fn the_captured_gpu_chip_reads_temperatures_fan_voltage_and_power() {
+    let chip = discover(&chip_listing(
+        "hwmon3",
+        include_str!("fixtures/hwmon-amdgpu.txt"),
+    ));
+    assert_eq!(chip.channels.len(), 6);
+    let power = chip
+        .channels
+        .iter()
+        .find(|c| c.kind == ChannelKind::Power)
+        .expect("a power channel");
+    assert_eq!(power.label, "PPT");
+    assert!(power.limit_max.is_some(), "the power cap is the max");
+    let junction = chip
+        .channels
+        .iter()
+        .find(|c| c.label == "junction")
+        .expect("junction");
+    assert!(junction.limit_crit.is_some());
+}
+
+#[test]
+fn the_captured_board_chip_has_six_fans_and_ten_voltages() {
+    let chip = discover(&chip_listing(
+        "hwmon4",
+        include_str!("fixtures/hwmon-it8696.txt"),
+    ));
+    assert_eq!(
+        chip.channels
+            .iter()
+            .filter(|c| c.kind == ChannelKind::Fan)
+            .count(),
+        6
+    );
+    assert_eq!(
+        chip.channels
+            .iter()
+            .filter(|c| c.kind == ChannelKind::Voltage)
+            .count(),
+        10
+    );
+    assert_eq!(
+        chip.channels
+            .iter()
+            .filter(|c| c.kind == ChannelKind::Temperature)
+            .count(),
+        6
+    );
+    let labelled: Vec<&str> = chip
+        .channels
+        .iter()
+        .filter(|c| !c.label.is_empty())
+        .map(|c| c.label.as_str())
+        .collect();
+    assert_eq!(labelled, vec!["3VSB", "Vbat", "+3.3V"]);
 }

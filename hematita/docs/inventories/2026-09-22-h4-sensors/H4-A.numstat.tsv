@@ -1,0 +1,35 @@
+# H4-A exact change inventory
+
+Base revision	6b48a9d663fec3491e84074aa80421a601fd3873
+Pathspec	celestina-rs/crates/hematita-core/src/lib.rs
+Pathspec	celestina-rs/crates/hematita-core/src/process.rs
+Pathspec	celestina-rs/crates/hematita-core/src/sensors.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/captures.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/hwmon-amdgpu.txt
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/hwmon-it8696.txt
+Pathspec	celestina-rs/crates/hematita-core/tests/fixtures/hwmon-k10temp.txt
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-22-h4-core.md
+Pathspec	hematita/docs/inventories/2026-09-22-h4-sensors/H4-A.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+Pathspec	hematita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	9a34ae6222ff53ebaf30ed4ed651e94e5de1b90bd03989c483532f4b87b0843c	celestina-rs/crates/hematita-core/src/lib.rs
+14	0	288275ba84e6a28a5fe5ca7e879a82c035884a0e5333913a3f099f37ccb4cf14	celestina-rs/crates/hematita-core/src/process.rs
+282	0	e43cea442833642f0ae6861c05a3ffad2309308d161ca73b241e4df2cf3c1bd1	celestina-rs/crates/hematita-core/src/sensors.rs
+93	0	ef506c283bf8621f72ecebfc4db9d82a453d6931a15a0cd534c200dd5caeddf6	celestina-rs/crates/hematita-core/tests/captures.rs
+28	0	d07809a1a245be908d0c12615bb9f67bd170218a5fca5b7750e08031528afef8	celestina-rs/crates/hematita-core/tests/fixtures/hwmon-amdgpu.txt
+107	0	61a9168e7d7131d20109ccb09120bae08c873dfdd5eb6d953324df3f44db70f2	celestina-rs/crates/hematita-core/tests/fixtures/hwmon-it8696.txt
+5	0	54a22cf1395ee5760de970ba36cdf5fc0916291dc1494d49b6ead5cb51434c60	celestina-rs/crates/hematita-core/tests/fixtures/hwmon-k10temp.txt
+11	3	a18c1d156791add495731594a75281658687f8bbbfa5a812bc0fcb72d0339852	hematita/ROADMAP.md
+18	1	b32dc879ef9a864a8725d22f4760cc8383dab3be01ebe280910aa0dab5bd6089	hematita/STATUS.md
+24	0	63cda2880356ba27bdff65447529f709093f921031542eccf0983865f4c058f1	hematita/VALIDATION.md
+131	0	3b971eab73ece24817761c8c9034caff8ab744d2b3e76811a00e694b9827ad88	hematita/docs/evidence/2026-09-22-h4-core.md
+51	0	2051ecf942f11d1a073c4ba0fd5594e94965d188421c621b9b1145f48c7c4a32	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+2	2	7463edaea4474e96af3533c6709523bcba1f28a9ad1f84ee65fd1c10cf993280	hematita/docs/plans/active/README.md
+35	0	self	hematita/docs/inventories/2026-09-22-h4-sensors/H4-A.numstat.tsv

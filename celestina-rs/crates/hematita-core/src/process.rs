@@ -418,6 +418,20 @@ mod tests {
     }
 
     #[test]
+    fn a_reverse_dns_scope_without_an_instance_number_keeps_its_whole_id() {
+        let prefix = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/";
+        assert_eq!(
+            parse_cgroup(&format!("{prefix}app-org.example.Tool.scope\n")).map(|s| s.desktop_id),
+            Some("org.example.Tool".to_owned())
+        );
+        assert_eq!(
+            parse_cgroup(&format!("{prefix}app-gnome-org.example.Tool-77.scope\n"))
+                .map(|s| s.desktop_id),
+            Some("org.example.Tool".to_owned())
+        );
+    }
+
+    #[test]
     fn cpu_percent_is_the_share_of_the_whole_machine_between_two_readings() {
         let mut sampler = ProcessSampler::new();
         assert!(sampler

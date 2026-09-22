@@ -1,0 +1,5 @@
+name	k10temp
+temp1_input	49000
+temp1_label	Tctl
+temp3_input	36875
+temp3_label	Tccd1
