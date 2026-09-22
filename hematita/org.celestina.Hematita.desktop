@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Hematita
+GenericName=Monitor de recursos
+Comment=Muestra el uso del equipo y permite actuar sobre los procesos
+Exec=hematita
+Icon=org.celestina.Hematita
+Terminal=false
+Categories=System;Monitor;
+Keywords=recursos;monitor;procesos;cpu;memoria;hematita;celestina;
+StartupNotify=true
+StartupWMClass=org.celestina.Hematita

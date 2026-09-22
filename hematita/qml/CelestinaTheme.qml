@@ -1,0 +1,1 @@
+../../celestina-style/CelestinaTheme.qml

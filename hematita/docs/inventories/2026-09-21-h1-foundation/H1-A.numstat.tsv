@@ -1,0 +1,91 @@
+# H1-A exact change inventory
+
+Base revision	28d1b2630dd0045e5b4b3825973423a87b25ee13
+Pathspec	celestina-rs/crates/hematita-core/Cargo.toml
+Pathspec	celestina-rs/crates/hematita-core/src/lib.rs
+Pathspec	celestina-rs/crates/hematita-core/src/ratio.rs
+Pathspec	hematita/AGENTS.md
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/README.md
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-09-21-h1-skeleton.md
+Pathspec	hematita/docs/evidence/README.md
+Pathspec	hematita/docs/inventories/2026-09-21-h1-foundation/H1-A.numstat.tsv
+Pathspec	hematita/docs/inventories/README.md
+Pathspec	hematita/docs/plans/active/2026-09-21-h1-foundation.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/README.md
+Pathspec	hematita/org.celestina.Hematita.desktop
+Pathspec	hematita/qml/CelestinaButton.qml
+Pathspec	hematita/qml/CelestinaCapsule.qml
+Pathspec	hematita/qml/CelestinaFocusRing.qml
+Pathspec	hematita/qml/CelestinaIcon.qml
+Pathspec	hematita/qml/CelestinaIconButton.qml
+Pathspec	hematita/qml/CelestinaIcons.qml
+Pathspec	hematita/qml/CelestinaSectionLabel.qml
+Pathspec	hematita/qml/CelestinaSurface.qml
+Pathspec	hematita/qml/CelestinaTheme.qml
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/NavItem.qml
+Pathspec	hematita/qml/components/NavStrip.qml
+Pathspec	hematita/qml/fonts
+Pathspec	hematita/qml/fonts.qrc
+Pathspec	hematita/qml/icons
+Pathspec	hematita/qml/icons.qrc
+Pathspec	hematita/scripts/build-production.sh
+Pathspec	hematita/scripts/complete-production.sh
+Pathspec	hematita/scripts/deploy-production.sh
+Pathspec	hematita/scripts/smoke.sh
+Pathspec	hematita/scripts/status-production.sh
+Pathspec	hematita/scripts/verify-production.sh
+Pathspec	hematita/src/main.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+14	0	39280a966f55414e2ff9dcb2379da8624af9cb27afe46fe7ab3d371d77311f40	celestina-rs/crates/hematita-core/Cargo.toml
+8	0	0a147f0845cdf8dcb2ca1e1d27368c23d0abbb75677c169533bff25b4a3d019b	celestina-rs/crates/hematita-core/src/lib.rs
+31	0	d62c916dbaa676fa3f07b3564e7dcf589442c39a8e2a195dd34966de590baf68	celestina-rs/crates/hematita-core/src/ratio.rs
+43	0	5ef1a5b02fbf1a4e081bde3eb207b3ae77593f7db5556f34866e80738c413950	hematita/AGENTS.md
+1251	0	c64cf071f4d4b34f342b6f1f0d3b1f8b317807415d3970e773aee6c27d0b285c	hematita/Cargo.lock
+37	0	8c6cb1091f35a7187131d1c14f8382a1d6f31c28ed9c783f078d69c38c3fd040	hematita/Cargo.toml
+45	0	0f8d0b2a47e200a8d2f02160113056c4df50dc9ed9571baea32012262e8f8d4b	hematita/README.md
+46	0	3965482e87a636114135bcbb6d92457bc7a9cd24a3b0c0729568ffcf3eb18ddb	hematita/ROADMAP.md
+16	0	fe6c6f58d49d44415d6aab51a7e465ba1b783e0e9bdc7458f65f9f6126ea837e	hematita/STATUS.md
+19	0	4e32a4fca9b3d178b4713f6ea8c09a04549de52d7209b37e5b1710596114c45d	hematita/VALIDATION.md
+57	0	c15e69d360513f38c42935090c9b599d1fec63d9804f3dc65e50ee59d5a33f16	hematita/build.rs
+79	0	b20d4a9238a8aed2076f1e45fd2f1dcb51b701d623b3e5b51a00b11be45f4328	hematita/docs/evidence/2026-09-21-h1-skeleton.md
+7	0	730553980e85f8f7b801f8eb9204efa1be3f369effb0a0cca85d602f2a07c33e	hematita/docs/evidence/README.md
+4	0	9bace4fe4edfdacc1e9931187b58ff686776eff30905c11f02c24b5a69064913	hematita/docs/inventories/README.md
+53	0	a7a196576f91e57c5ef34a84cd0a0adbb40030947f99323704796916e90fb01b	hematita/docs/plans/active/2026-09-21-h1-foundation.md
+8	0	6043c4956840ad1a7d2d6f21c2a21e40bd3a023b52ac7bacc758375b941709e9	hematita/docs/plans/active/README.md
+6	0	17962f135cb9f239f2b0dfa2e2627968cb1e6327a4536fb6a77159034255c108	hematita/docs/plans/archive/README.md
+12	0	0118ecdbcbe5d77b4b8ffa1592a1a96364bf92ca7c683652e47f6a33e43c3e0e	hematita/org.celestina.Hematita.desktop
+1	0	1eb2ab4f2e6b72ca86b14135f7a7c1cc416d8e59063405bda1b7ea0dcd4609c8	hematita/qml/CelestinaButton.qml
+1	0	1ca1f10ff3232a481597a16d1c38a1582196cd7c5236a71ea92a67018f0361c2	hematita/qml/CelestinaCapsule.qml
+1	0	bbee65a98530774646e49e6f1843a8bba6f04813f607f1c9d778cd61241f8394	hematita/qml/CelestinaFocusRing.qml
+1	0	83ba381a1abf9efee47d489672f96cbfe8f0b63166aed127f8b59921f290bf8f	hematita/qml/CelestinaIcon.qml
+1	0	9110c437c48d946ce99191c578f43a449e577cc33b4c7980dea06cd2f3b289f0	hematita/qml/CelestinaIconButton.qml
+1	0	43e5ca4ff6b7953f80f4b0dd6f8cd958364af738ade2ae6cbb265b87287629fd	hematita/qml/CelestinaIcons.qml
+1	0	3649a49f14f26d0487ccebf5c29c90587846916fe87c74a5d577dcbfa5a272b5	hematita/qml/CelestinaSectionLabel.qml
+1	0	c680a487129fb18f9c9b9f3f9c1ddff8db11447f31befc22984c95f756a4c3dc	hematita/qml/CelestinaSurface.qml
+1	0	9061c0c6f525a87b6229ecb2e749f8b4b816ca8a9542fea3de36f512e4d7cdd9	hematita/qml/CelestinaTheme.qml
+73	0	0e9dec0c9a7528661988e3450e2b2c67bfa7ffda223120fc16092afab5b5a6d3	hematita/qml/Main.qml
+75	0	19fda793c8a49c7169a2228773ebec08abdf45622b18a95df21e98615dd594b6	hematita/qml/components/NavItem.qml
+58	0	6850f72339725eea09884caea5d8312e84d3d3418ebfc7b353ebb9c52c16458f	hematita/qml/components/NavStrip.qml
+1	0	3935470cff944efe2bf871e800c11739a676a7526598dca055c54708021b30e6	hematita/qml/fonts
+1	0	1dc967e41bbecd7115614140d758961b9575e7c22d45a13aca0fe86f72a14e33	hematita/qml/fonts.qrc
+1	0	ae5df8f850da89509da04c06c31b851345d0a2e1455f2ce41e1a880d834b46dd	hematita/qml/icons
+1	0	124fd26e585793a6f0cb00a4dfa3076cddc7e50680709f84a98b05c3bda2091b	hematita/qml/icons.qrc
+19	0	1d24bed68797f362d1b13173782edfa2a8af50575489d330e7d9d39c1bf27a63	hematita/scripts/build-production.sh
+4	0	991faab13611d05128c5a3274832088c7093abcbe39667045c27a501d280435e	hematita/scripts/complete-production.sh
+18	0	021c637d90283a3d15799a2dff4d25815823146895a0935549e3aa86ca201f41	hematita/scripts/deploy-production.sh
+76	0	8602d362b858c28584ea966fa7988fc054649a35a36a0dfea1236b1aa690fdc3	hematita/scripts/smoke.sh
+12	0	dd95b2c91ec1d881f1b1dde31ef3d908773006f65da0d7aa0c3af892532dc467	hematita/scripts/status-production.sh
+32	0	91d1262bebbf546dc536a4cb4886ba33aad0be8fcc733d09cf4ad66897bfe20d	hematita/scripts/verify-production.sh
+53	0	130e0e310696a974c8e8837612271392e7a4a5678538a17db8ab509ae50f596d	hematita/src/main.rs
+91	0	self	hematita/docs/inventories/2026-09-21-h1-foundation/H1-A.numstat.tsv
