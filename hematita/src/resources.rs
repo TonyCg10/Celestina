@@ -1,83 +1,63 @@
-// language-contract: product-copy
 //! The Performance page's state, as Qt properties.
 //!
-//! This object owns the only policy numbers in Hematita — what counts as
-//! elevated and critical — and the two history rings. It receives whole
-//! snapshots from the sampler on the Qt thread and republishes them as typed
-//! properties; nothing here reads a file.
+//! Rows travel as index-aligned lists plus a `revision` ticket rather than a
+//! native model: CXX-Qt 0.9 cannot override `QAbstractListModel`'s virtuals
+//! from Rust, and the suite already publishes list data this way. The page
+//! rebuilds its rows when `revision` changes and never binds to a single list,
+//! so it never sees one column from this second beside another from the last.
+//!
+//! Nothing here is prose a person reads: kinds, states and reasons are tokens
+//! the page turns into Spanish through `qsTr()`.
 
+use std::collections::HashMap;
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QList, QString, QVariant};
+use cxx_qt_lib::{QList, QString, QStringList, QVariant};
 
 use hematita_core::history::Ring;
 
-use crate::sampler::{Sampler, Section, Snapshot};
-
-/// Above this a value is worth noticing; above [`CRITICAL_PERCENT`] it is
-/// worth interrupting for. The page maps these to appearance; the numbers are
-/// policy and live here, not in the theme.
-pub const ELEVATED_PERCENT: u8 = 80;
-pub const CRITICAL_PERCENT: u8 = 90;
-
-/// The state name the theme colours by.
-#[must_use]
-pub fn load_name(percent: u8) -> &'static str {
-    if percent >= CRITICAL_PERCENT {
-        "critical"
-    } else if percent >= ELEVATED_PERCENT {
-        "elevated"
-    } else {
-        "normal"
-    }
-}
+use crate::publish::{self, Kind};
+use crate::sampler::{Reason, Sampler, Section, Snapshot};
 
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qvariant.h");
-        // The histories are minute-long sequences of fractions. `QList<f64>`
-        // is what they are, and the engine hands it to JavaScript as an array
-        // — but its cxx-qt alias, `QList_f64`, is a name qmllint cannot
-        // resolve, so every binding that read a history was an
-        // `unresolved-type` warning and this project suppresses none. A
-        // `QVariant` carrying a variant list is the one shape both the linter
-        // and the engine understand; the boxing is the price of a truthful
-        // lint.
+        // Lists of lists of doubles cross as a `QVariant`: it is the one shape
+        // both qmllint and the engine resolve (see H1-D), and the page reads
+        // them by row index.
         type QVariant = cxx_qt_lib::QVariant;
     }
 
     #[auto_cxx_name]
     extern "RustQt" {
-        // available / unavailableReason — the last snapshot had CPU and
-        //   memory, or why it did not
-        // generation — bumped per applied snapshot so QML can animate
-        //   "a new sample arrived" on one signal
-        // cpu* — aggregate percent (-1 before the first rate), load name,
-        //   model, MHz (0 when unknown), core count, one minute of history
-        //   as fractions 0..=1 oldest first
-        // memory* / swap* — kibibytes as doubles (QML has no 64-bit int)
+        // revision — bumped once, after every list is in place
+        // resource* — index-aligned rows: key, kind token, data label, state
+        //   token, reason token and path, load token, kind-contract numbers,
+        //   minute of history as fractions
+        // cpuCoreHistories — one minute per core, fractions
+        // cpuModel — the processor's name, for the CPU detail
+        // startFailed — the sampling thread could not be created
         #[qobject]
         #[qml_element]
-        #[qproperty(bool, available)]
-        #[qproperty(QString, unavailable_reason)]
-        #[qproperty(i32, generation)]
-        #[qproperty(i32, cpu_percent)]
-        #[qproperty(QString, cpu_load)]
+        #[qproperty(i32, revision)]
+        #[qproperty(QStringList, resource_keys)]
+        #[qproperty(QStringList, resource_kinds)]
+        #[qproperty(QStringList, resource_labels)]
+        #[qproperty(QStringList, resource_states)]
+        #[qproperty(QStringList, resource_reason_kinds)]
+        #[qproperty(QStringList, resource_reason_paths)]
+        #[qproperty(QStringList, resource_loads)]
+        #[qproperty(QVariant, resource_numbers)]
+        #[qproperty(QVariant, resource_histories)]
+        #[qproperty(QVariant, cpu_core_histories)]
         #[qproperty(QString, cpu_model)]
-        #[qproperty(i32, cpu_frequency_mhz)]
-        #[qproperty(i32, cpu_cores)]
-        #[qproperty(QVariant, cpu_history)]
-        #[qproperty(i32, memory_percent)]
-        #[qproperty(QString, memory_load)]
-        #[qproperty(f64, memory_used_kib)]
-        #[qproperty(f64, memory_total_kib)]
-        #[qproperty(QVariant, memory_history)]
-        #[qproperty(f64, swap_used_kib)]
-        #[qproperty(f64, swap_total_kib)]
+        #[qproperty(bool, start_failed)]
         type HematitaResources = super::HematitaResourcesRust;
 
         /// Starts the sampler, once. The window calls it when it is up.
@@ -88,65 +68,109 @@ pub mod qobject {
     impl cxx_qt::Threading for HematitaResources {}
 }
 
+/// One published row before it is split into columns.
+struct Row {
+    key: String,
+    kind: Kind,
+    label: String,
+    state: &'static str,
+    reason: Option<Reason>,
+    load: &'static str,
+    numbers: Vec<f64>,
+    history: Vec<f32>,
+}
+
+impl Row {
+    fn unavailable(key: String, kind: Kind, label: String, reason: Reason) -> Self {
+        Self {
+            key,
+            kind,
+            label,
+            state: "unavailable",
+            reason: Some(reason),
+            load: "normal",
+            numbers: Vec::new(),
+            history: Vec::new(),
+        }
+    }
+}
+
 pub struct HematitaResourcesRust {
-    available: bool,
-    unavailable_reason: QString,
-    generation: i32,
-    cpu_percent: i32,
-    cpu_load: QString,
+    revision: i32,
+    resource_keys: QStringList,
+    resource_kinds: QStringList,
+    resource_labels: QStringList,
+    resource_states: QStringList,
+    resource_reason_kinds: QStringList,
+    resource_reason_paths: QStringList,
+    resource_loads: QStringList,
+    resource_numbers: QVariant,
+    resource_histories: QVariant,
+    cpu_core_histories: QVariant,
     cpu_model: QString,
-    cpu_frequency_mhz: i32,
-    cpu_cores: i32,
-    cpu_history: QVariant,
-    memory_percent: i32,
-    memory_load: QString,
-    memory_used_kib: f64,
-    memory_total_kib: f64,
-    memory_history: QVariant,
-    swap_used_kib: f64,
-    swap_total_kib: f64,
-    cpu_ring: Ring,
-    memory_ring: Ring,
+    start_failed: bool,
+    /// One ring per row key; a key that leaves the machine takes its ring
+    /// with it, a key that returns starts a fresh minute.
+    rings: HashMap<String, Ring>,
+    core_rings: Vec<Ring>,
+    cpu_cores: usize,
+    gpu_id: String,
     last_generation: u64,
     sampler: Option<Sampler>,
 }
 
 impl Default for HematitaResourcesRust {
     fn default() -> Self {
-        // The CPU identity is read from `/proc` like every other fact, so it
-        // arrives with the first snapshot rather than being read here: this
-        // constructor runs on the Qt thread.
         Self {
-            available: false,
-            unavailable_reason: QString::default(),
-            generation: 0,
-            cpu_percent: -1,
-            cpu_load: QString::from("normal"),
+            revision: 0,
+            resource_keys: QStringList::default(),
+            resource_kinds: QStringList::default(),
+            resource_labels: QStringList::default(),
+            resource_states: QStringList::default(),
+            resource_reason_kinds: QStringList::default(),
+            resource_reason_paths: QStringList::default(),
+            resource_loads: QStringList::default(),
+            resource_numbers: nested(&[]),
+            resource_histories: nested(&[]),
+            cpu_core_histories: nested(&[]),
             cpu_model: QString::default(),
-            cpu_frequency_mhz: 0,
+            start_failed: false,
+            rings: HashMap::new(),
+            core_rings: Vec::new(),
             cpu_cores: 0,
-            cpu_history: ring_list(&Ring::new()),
-            memory_percent: 0,
-            memory_load: QString::from("normal"),
-            memory_used_kib: 0.0,
-            memory_total_kib: 0.0,
-            memory_history: ring_list(&Ring::new()),
-            swap_used_kib: 0.0,
-            swap_total_kib: 0.0,
-            cpu_ring: Ring::new(),
-            memory_ring: Ring::new(),
+            gpu_id: String::new(),
             last_generation: 0,
             sampler: None,
         }
     }
 }
 
-fn ring_list(ring: &Ring) -> QVariant {
+fn strings(values: impl IntoIterator<Item = String>) -> QStringList {
+    let mut list = QStringList::default();
+    for value in values {
+        list.append(QString::from(value.as_str()));
+    }
+    list
+}
+
+fn doubles(values: &[f64]) -> QVariant {
     let mut list = QList::<QVariant>::default();
-    for value in ring.values() {
-        list.append(QVariant::from(&f64::from(value)));
+    for value in values {
+        list.append(QVariant::from(value));
     }
     QVariant::from(&list)
+}
+
+fn nested(rows: &[Vec<f64>]) -> QVariant {
+    let mut list = QList::<QVariant>::default();
+    for row in rows {
+        list.append(doubles(row));
+    }
+    QVariant::from(&list)
+}
+
+fn widen(values: &[f32]) -> Vec<f64> {
+    values.iter().map(|value| f64::from(*value)).collect()
 }
 
 impl qobject::HematitaResources {
@@ -161,96 +185,272 @@ impl qobject::HematitaResources {
             });
         }) {
             Ok(sampler) => self.as_mut().rust_mut().sampler = Some(sampler),
-            Err(error) => {
-                self.as_mut().set_available(false);
-                self.as_mut().set_unavailable_reason(QString::from(
-                    format!("No se pudo iniciar la lectura: {error}").as_str(),
-                ));
-            }
+            Err(_) => self.as_mut().set_start_failed(true),
         }
     }
 
-    /// Applies one whole snapshot. A snapshot older than the last applied one
-    /// is dropped: the thread publishes in order, but the queue does not
-    /// promise to.
     fn apply(mut self: Pin<&mut Self>, snapshot: Snapshot) {
-        if snapshot.generation <= self.rust().last_generation {
+        if !publish::accepts(snapshot.generation, self.rust().last_generation) {
             return;
         }
         self.as_mut().rust_mut().last_generation = snapshot.generation;
 
         if let Some(identity) = &snapshot.identity {
             let model = QString::from(identity.cpu_model.as_str());
-            let cores = i32::try_from(identity.cpu_cores).unwrap_or(i32::MAX);
             self.as_mut().set_cpu_model(model);
-            self.as_mut().set_cpu_cores(cores);
+            let mut state = self.as_mut().rust_mut();
+            state.cpu_cores = identity.cpu_cores;
+            state.gpu_id = identity.gpu_id.clone();
+            state.core_rings = (0..identity.cpu_cores).map(|_| Ring::new()).collect();
         }
 
-        let mut reasons = Vec::new();
-        match &snapshot.cpu {
-            Section::Available(Some(reading)) => {
-                let percent = reading.aggregate_percent;
-                self.as_mut()
-                    .rust_mut()
-                    .cpu_ring
-                    .push(f32::from(percent) / 100.0);
-                let history = ring_list(&self.rust().cpu_ring);
-                self.as_mut().set_cpu_percent(i32::from(percent));
-                self.as_mut()
-                    .set_cpu_load(QString::from(load_name(percent)));
-                let mhz = reading
-                    .frequency_mhz
-                    .map_or(0, |mhz| i32::try_from(mhz).unwrap_or(i32::MAX));
-                self.as_mut().set_cpu_frequency_mhz(mhz);
-                self.as_mut().set_cpu_history(history);
-            }
-            Section::Available(None) => {}
-            Section::Unavailable(reason) => reasons.push(reason.clone()),
-        }
-        match &snapshot.memory {
-            Section::Available(memory) => {
-                let percent = memory.used_percent();
-                self.as_mut()
-                    .rust_mut()
-                    .memory_ring
-                    .push(f32::from(percent) / 100.0);
-                let history = ring_list(&self.rust().memory_ring);
-                self.as_mut().set_memory_percent(i32::from(percent));
-                self.as_mut()
-                    .set_memory_load(QString::from(load_name(percent)));
-                // Kibibytes never reach 2^53, so the double is exact.
-                self.as_mut().set_memory_used_kib(memory.used_kib as f64);
-                self.as_mut().set_memory_total_kib(memory.total_kib as f64);
-                self.as_mut().set_swap_used_kib(memory.swap_used_kib as f64);
-                self.as_mut()
-                    .set_swap_total_kib(memory.swap_total_kib as f64);
-                self.as_mut().set_memory_history(history);
-            }
-            Section::Unavailable(reason) => reasons.push(reason.clone()),
-        }
+        let rows = self.as_mut().rust_mut().rows_from(&snapshot);
 
-        let available = reasons.is_empty();
-        self.as_mut().set_available(available);
-        self.as_mut()
-            .set_unavailable_reason(QString::from(reasons.join("; ").as_str()));
-        // Wrapped into the positive half of an i32: QML has no 64-bit integer,
-        // and the property is a change ticket, not a count anybody adds to.
-        let generation = i32::try_from(snapshot.generation % u64::from(u32::MAX / 2)).unwrap_or(0);
-        self.as_mut().set_generation(generation);
+        let keys = strings(rows.iter().map(|row| row.key.clone()));
+        let kinds = strings(rows.iter().map(|row| row.kind.as_str().to_owned()));
+        let labels = strings(rows.iter().map(|row| row.label.clone()));
+        let states = strings(rows.iter().map(|row| row.state.to_owned()));
+        let reason_kinds = strings(rows.iter().map(|row| {
+            row.reason
+                .as_ref()
+                .map_or(String::new(), |reason| reason.kind.as_str().to_owned())
+        }));
+        let reason_paths = strings(rows.iter().map(|row| {
+            row.reason
+                .as_ref()
+                .map_or(String::new(), |reason| reason.path.clone())
+        }));
+        let loads = strings(rows.iter().map(|row| row.load.to_owned()));
+        let numbers = nested(
+            &rows
+                .iter()
+                .map(|row| row.numbers.clone())
+                .collect::<Vec<_>>(),
+        );
+        let histories = nested(
+            &rows
+                .iter()
+                .map(|row| widen(&row.history))
+                .collect::<Vec<_>>(),
+        );
+        let cores = nested(
+            &self
+                .rust()
+                .core_rings
+                .iter()
+                .map(|ring| widen(&ring.values()))
+                .collect::<Vec<_>>(),
+        );
+
+        self.as_mut().set_resource_keys(keys);
+        self.as_mut().set_resource_kinds(kinds);
+        self.as_mut().set_resource_labels(labels);
+        self.as_mut().set_resource_states(states);
+        self.as_mut().set_resource_reason_kinds(reason_kinds);
+        self.as_mut().set_resource_reason_paths(reason_paths);
+        self.as_mut().set_resource_loads(loads);
+        self.as_mut().set_resource_numbers(numbers);
+        self.as_mut().set_resource_histories(histories);
+        self.as_mut().set_cpu_core_histories(cores);
+        // Last, so the page rebuilds once, with every column in place.
+        let ticket = publish::ticket(snapshot.generation);
+        self.as_mut().set_revision(ticket);
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl HematitaResourcesRust {
+    /// Builds the rows for one snapshot and advances the rings. Rings whose
+    /// key is absent from this snapshot are dropped.
+    fn rows_from(&mut self, snapshot: &Snapshot) -> Vec<Row> {
+        let mut rows = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        // Rings advance only from the second snapshot on, so CPU (which has
+        // no rate on the first) and everything else stay aligned.
+        let advance = snapshot.generation >= 2;
 
-    #[test]
-    fn load_names_the_state_the_page_paints() {
-        assert_eq!(load_name(0), "normal");
-        assert_eq!(load_name(79), "normal");
-        assert_eq!(load_name(ELEVATED_PERCENT), "elevated");
-        assert_eq!(load_name(89), "elevated");
-        assert_eq!(load_name(CRITICAL_PERCENT), "critical");
-        assert_eq!(load_name(100), "critical");
+        // CPU
+        match &snapshot.cpu {
+            Section::Available(Some(reading)) => {
+                let history =
+                    self.push("cpu", publish::fraction(reading.aggregate_percent), advance);
+                for (ring, percent) in self.core_rings.iter_mut().zip(&reading.core_percents) {
+                    if advance {
+                        ring.push(publish::fraction(*percent));
+                    }
+                }
+                rows.push(Row {
+                    key: "cpu".to_owned(),
+                    kind: Kind::Cpu,
+                    label: self.cpu_model_string(),
+                    state: "ready",
+                    reason: None,
+                    load: publish::load_name(reading.aggregate_percent),
+                    numbers: publish::cpu_numbers(reading, self.cpu_cores),
+                    history,
+                });
+            }
+            Section::Available(None) => rows.push(Row {
+                key: "cpu".to_owned(),
+                kind: Kind::Cpu,
+                label: self.cpu_model_string(),
+                state: "waiting",
+                reason: None,
+                load: "normal",
+                numbers: Vec::new(),
+                history: self.peek("cpu"),
+            }),
+            Section::Unavailable(reason) => rows.push(Row::unavailable(
+                "cpu".to_owned(),
+                Kind::Cpu,
+                self.cpu_model_string(),
+                reason.clone(),
+            )),
+        }
+        seen.push("cpu".to_owned());
+
+        // Memory
+        match &snapshot.memory {
+            Section::Available(memory) => {
+                let percent = memory.used_percent();
+                let history = self.push("memory", publish::fraction(percent), advance);
+                rows.push(Row {
+                    key: "memory".to_owned(),
+                    kind: Kind::Memory,
+                    label: String::new(),
+                    state: "ready",
+                    reason: None,
+                    load: publish::load_name(percent),
+                    numbers: publish::memory_numbers(memory),
+                    history,
+                });
+            }
+            Section::Unavailable(reason) => rows.push(Row::unavailable(
+                "memory".to_owned(),
+                Kind::Memory,
+                String::new(),
+                reason.clone(),
+            )),
+        }
+        seen.push("memory".to_owned());
+
+        // GPU (absent is not a row)
+        if let Some(section) = &snapshot.gpu {
+            match section {
+                Section::Available(reading) => {
+                    let history =
+                        self.push("gpu", publish::fraction(reading.busy_percent), advance);
+                    rows.push(Row {
+                        key: "gpu".to_owned(),
+                        kind: Kind::Gpu,
+                        label: self.gpu_id.clone(),
+                        state: "ready",
+                        reason: None,
+                        load: publish::load_name(reading.busy_percent),
+                        numbers: publish::gpu_numbers(reading),
+                        history,
+                    });
+                }
+                Section::Unavailable(reason) => rows.push(Row::unavailable(
+                    "gpu".to_owned(),
+                    Kind::Gpu,
+                    self.gpu_id.clone(),
+                    reason.clone(),
+                )),
+            }
+            seen.push("gpu".to_owned());
+        }
+
+        // Disks
+        for disk in &snapshot.disks {
+            let key = format!("disk:{}", disk.info.name);
+            let label = if disk.info.model.is_empty() {
+                disk.info.name.clone()
+            } else {
+                disk.info.model.clone()
+            };
+            match &disk.rate {
+                Section::Available(rate) => {
+                    let history = self.push_throughput(&key, *rate, advance);
+                    rows.push(Row {
+                        key: key.clone(),
+                        kind: Kind::Disk,
+                        label,
+                        state: if rate.is_some() { "ready" } else { "waiting" },
+                        reason: None,
+                        load: "normal",
+                        numbers: publish::disk_numbers(&disk.info, *rate),
+                        history,
+                    });
+                }
+                Section::Unavailable(reason) => {
+                    rows.push(Row::unavailable(
+                        key.clone(),
+                        Kind::Disk,
+                        label,
+                        reason.clone(),
+                    ));
+                }
+            }
+            seen.push(key);
+        }
+
+        // Interfaces
+        for interface in &snapshot.interfaces {
+            let key = format!("net:{}", interface.info.name);
+            match &interface.rate {
+                Section::Available(rate) => {
+                    let history = self.push_throughput(&key, *rate, advance);
+                    rows.push(Row {
+                        key: key.clone(),
+                        kind: Kind::Network,
+                        label: interface.info.name.clone(),
+                        state: if rate.is_some() { "ready" } else { "waiting" },
+                        reason: None,
+                        load: "normal",
+                        numbers: publish::network_numbers(&interface.info, *rate),
+                        history,
+                    });
+                }
+                Section::Unavailable(reason) => rows.push(Row::unavailable(
+                    key.clone(),
+                    Kind::Network,
+                    interface.info.name.clone(),
+                    reason.clone(),
+                )),
+            }
+            seen.push(key);
+        }
+
+        self.rings.retain(|key, _| seen.contains(key));
+        rows
+    }
+
+    fn cpu_model_string(&self) -> String {
+        self.cpu_model.to_string()
+    }
+
+    /// Pushes a fraction into a row's ring and answers its values.
+    fn push(&mut self, key: &str, value: f32, advance: bool) -> Vec<f32> {
+        let ring = self.rings.entry(key.to_owned()).or_default();
+        if advance {
+            ring.push(value);
+        }
+        ring.values()
+    }
+
+    /// Pushes a throughput into a row's ring and answers it scaled by its
+    /// own peak, which is the only sensible ceiling for bytes per second.
+    fn push_throughput(&mut self, key: &str, rate: Option<[f64; 2]>, advance: bool) -> Vec<f32> {
+        let ring = self.rings.entry(key.to_owned()).or_default();
+        if advance && rate.is_some() {
+            ring.push(publish::throughput(rate));
+        }
+        ring.fractions()
+    }
+
+    fn peek(&self, key: &str) -> Vec<f32> {
+        self.rings
+            .get(key)
+            .map_or_else(|| Ring::new().values(), Ring::values)
     }
 }

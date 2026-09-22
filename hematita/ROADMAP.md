@@ -36,7 +36,7 @@ alone, without the machine noticing the monitor.
 | H1-D | done | H1-C | history properties without lint suppressions, row fixes | `scripts/verify-production.sh` |
 | H1-Z | done | H1-D | implementation exit and 0.2.0 | `scripts/complete-production.sh` |
 | H2-A | done | H1-Z | `hematita-core`: rate, disk, network, gpu, ring fractions, captures | `cargo test -p hematita-core` |
-| H2-B | planned | H2-A | sampler sections, `publish.rs`, list-publishing `HematitaResources`, page, per-core grid, failure path and H1 follow-ups | `scripts/verify-production.sh` |
+| H2-B | done | H2-A | sampler sections, `publish.rs`, list-publishing `HematitaResources`, page, per-core grid, failure path and H1 follow-ups | `scripts/verify-production.sh` |
 | H2-Z | planned | H2-B | implementation exit and 0.3.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -52,6 +52,8 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H1-C: [performance page](docs/evidence/2026-09-21-h1-performance-page.md)
 - H1-D: [history type](docs/evidence/2026-09-21-h1-history-type.md)
 - H1-Z: [production completion](docs/evidence/2026-09-21-h1-production-completion.md)
+- H2-A: [core](docs/evidence/2026-09-22-h2-core.md)
+- H2-B: [resources page](docs/evidence/2026-09-22-h2-resources-page.md)
 
 ## H1 — closed 2026-09-21
 

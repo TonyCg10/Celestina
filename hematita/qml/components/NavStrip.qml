@@ -23,6 +23,7 @@ FocusScope {
     implicitHeight: capsule.implicitHeight
 
     Accessible.role: Accessible.PageTabList
+    Accessible.name: qsTr("Secciones")
 
     function move(delta) {
         const count = strip.model.length

@@ -15,6 +15,12 @@ CelestinaSurface {
     required property string load
     // Flat list of alternating label, value strings.
     required property var facts
+    // One minute per core when the CPU is shown; empty otherwise.
+    required property var coreHistories
+    // Why this resource cannot be read, or empty.
+    required property string notice
+
+    property bool showCores: false
 
     role: CelestinaSurface.Grouped
     padding: CelestinaTheme.spaceXl
@@ -32,6 +38,15 @@ CelestinaSurface {
                 font.weight: CelestinaTheme.weightDemiBold
             }
             Item { Layout.fillWidth: true }
+            CelestinaIconButton {
+                visible: detail.coreHistories.length > 0
+                iconName: detail.showCores ? "gauge" : "view-grid"
+                helpText: detail.showCores ? qsTr("Ver una gráfica") : qsTr("Ver por núcleo")
+                role: CelestinaButton.Ghost
+                checkable: true
+                checked: detail.showCores
+                onToggled: detail.showCores = checked
+            }
             Text {
                 text: detail.subtitle
                 color: CelestinaTheme.textMuted
@@ -42,11 +57,30 @@ CelestinaSurface {
             }
         }
 
-        HistoryGraph {
+        StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            series: detail.series
-            load: detail.load
+            currentIndex: detail.showCores && detail.coreHistories.length > 0 ? 1 : 0
+
+            HistoryGraph {
+                series: detail.series
+                load: detail.load
+            }
+
+            CoreGrid {
+                histories: detail.coreHistories
+                load: detail.load
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: detail.notice.length > 0
+            text: detail.notice
+            wrapMode: Text.Wrap
+            color: CelestinaTheme.danger
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontBody
         }
 
         GridLayout {

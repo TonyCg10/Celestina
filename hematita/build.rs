@@ -19,6 +19,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/HistoryGraph.qml",
     "qml/components/ResourceRow.qml",
     "qml/components/ResourceDetail.qml",
+    "qml/components/CoreGrid.qml",
     "qml/components/PerformancePage.qml",
     "qml/Main.qml",
 ];
@@ -52,6 +53,10 @@ fn main() {
     ]) {
         println!("cargo::rerun-if-changed={qml}");
     }
+    // The bridge files are watched by cxx-qt-build; the plain Rust modules
+    // it does not know about are named here.
+    println!("cargo::rerun-if-changed=src/publish.rs");
+    println!("cargo::rerun-if-changed=src/sampler.rs");
 
     CxxQtBuilder::new_qml_module(module)
         // Shared icon resources and Inter Variable, compiled in.

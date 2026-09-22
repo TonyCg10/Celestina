@@ -1,0 +1,39 @@
+# H2-B exact change inventory
+
+Base revision	96b900d0be64d8d14599027948f5bd52f469765a
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-09-22-h2-resources-page.md
+Pathspec	hematita/docs/inventories/2026-09-22-h2-resources/H2-B.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h2-resources.md
+Pathspec	hematita/qml/components/CoreGrid.qml
+Pathspec	hematita/qml/components/HistoryGraph.qml
+Pathspec	hematita/qml/components/NavItem.qml
+Pathspec	hematita/qml/components/NavStrip.qml
+Pathspec	hematita/qml/components/PerformancePage.qml
+Pathspec	hematita/qml/components/ResourceDetail.qml
+Pathspec	hematita/src/main.rs
+Pathspec	hematita/src/publish.rs
+Pathspec	hematita/src/resources.rs
+Pathspec	hematita/src/sampler.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+3	1	8f9514c919ac3ee7845716518bfe5fb8733cb0ab2f7ead3dd87ba8858e77a3ab	hematita/ROADMAP.md
+34	20	36f5bf774fcdc767bc352d30a6fa0d8da93302e7083088c4c6bc1661c938d75f	hematita/STATUS.md
+5	0	44edf32435e99c69594debb9833ea289f17f3fa1163c43bf6081c7d8290297fd	hematita/build.rs
+104	0	7a899087add12388382e3bcfa30cab40abc35334ad6d37ee849d387ac69ae63a	hematita/docs/evidence/2026-09-22-h2-resources-page.md
+1	1	0b2c358e7cd5fceb6e0f338632a4c33a0a7dc368c44887d4f55fa04639b6385a	hematita/docs/plans/active/2026-09-22-h2-resources.md
+41	0	44accd4c832109e135978ebad3fe8c0fa3052d9a4cfafae3908be7cf505f4efe	hematita/qml/components/CoreGrid.qml
+9	2	987e32f3b2c4284e939481d4fd00de6618a0d4fedb0ba05fc4911810c5d7d999	hematita/qml/components/HistoryGraph.qml
+0	3	02412d656951e29316d0ec42e05e148dfd9d5128a0331358bd4177e59376f767	hematita/qml/components/NavItem.qml
+1	0	2ba1535dc4704172fba87ba84663c85cae2c09c8d580d8f02ba3fb2869bc2224	hematita/qml/components/NavStrip.qml
+195	71	b25a105037b9e5f7830bf3fab62e985306a5dbf09dba5bcc5ed11bb28f089d65	hematita/qml/components/PerformancePage.qml
+37	3	7b7aba354d08cd6c1dbfb772c47157dcb524cb3fadd67d63160736d34c465430	hematita/qml/components/ResourceDetail.qml
+7	6	60ea255e465ed7cac7921edd9a3de961397739aaa88176f0ce9862222d32b358	hematita/src/main.rs
+223	0	bca5e9006b512b08f914f1a7fed71b305864660f81f3f3ac06fd23eff9c0e26f	hematita/src/publish.rs
+361	161	a21d14bef6c96008e3d44a33e3a8cbdfef8e14771cc606753fe544250129d733	hematita/src/resources.rs
+339	31	cfb1df5583a92e9c48f4be6e18f7494647ab8d516fa7e16391ac52d8d9b019f8	hematita/src/sampler.rs
+39	0	self	hematita/docs/inventories/2026-09-22-h2-resources/H2-B.numstat.tsv

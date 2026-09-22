@@ -16,9 +16,6 @@ AbstractButton {
     implicitWidth: Math.max(CelestinaTheme.controlHeightXl * 2, column.implicitWidth + CelestinaTheme.spaceXl * 2)
     implicitHeight: CelestinaTheme.controlHeightXl + CelestinaTheme.spaceSm
 
-    checkable: true
-    checked: item.current
-    autoExclusive: true
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
 

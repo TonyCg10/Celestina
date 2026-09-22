@@ -62,7 +62,14 @@ Item {
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
-        visible: graph.series.length > 1
+        opacity: graph.series.length > 1 ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
+                easing.type: CelestinaTheme.easeStandard
+            }
+        }
 
         ShapePath {
             strokeWidth: 0
@@ -73,7 +80,7 @@ Item {
         }
 
         ShapePath {
-            strokeWidth: 2
+            strokeWidth: CelestinaTheme.borderHairline * 2
             strokeColor: graph.trace
             fillColor: CelestinaTheme.clear
             capStyle: ShapePath.RoundCap
