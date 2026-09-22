@@ -1,8 +1,10 @@
 # H3 — Processes and applications
 
 - **Opened:** 2026-09-22
+- **Closed:** 2026-09-22
+- **Successor:** H4
 - **Plan ID:** h3-processes
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author asked to open the H3 plan on 2026-09-22
 - **Scope:** hematita
 - **Implementation checkpoint:** H3
@@ -56,4 +58,4 @@ by application, and terminates one of the user's own processes on request.
 | H3-B | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-B.numstat.tsv) | 14 files, +979/-2 | `/proc/PID` parsers, application scope decoding, per-PID CPU sampler, passwd, the filter/sort/group projection, captures | [core](../../evidence/2026-09-22-h3-core.md) | `VAL-H3` |
 | H3-C | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-C.numstat.tsv) | 30 files, +1976/-84 | Process section in the snapshot with per-PID caches and a shared sampler hub; `HematitaProcesses` lists, state and the only signal path; `lists.rs`; `ProcessTable`, both row shapes, `KillDialog`; Processes and Applications pages; style symlinks; the `H3-A` list carry-over | [processes page](../../evidence/2026-09-22-h3-processes-page.md) | `VAL-H3` |
 | H3-D | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-D.numstat.tsv) | 10 files, +313/-48 | Sort header and table rows operable by keyboard; action outcome cleared; io counters keyed by start time; subscriber lock failure reported; group row without a broken checked binding | [keyboard table](../../evidence/2026-09-22-h3-keyboard-table.md) | `VAL-H3` |
-| H3-Z | `hematita:` | planned | `hematita/`, `docs/version-history.tsv` | — | Implementation exit, 0.4.0, documents closed, plan archived | `scripts/complete-production.sh` | `VAL-H3` |
+| H3-Z | `hematita:` | done | [inventory](../../inventories/2026-09-22-h3-processes/H3-Z.numstat.tsv) | 16 files, +247/-92 | Implementation exit, 0.4.0, documents closed, plan archived | [production completion](../../evidence/2026-09-22-h3-production-completion.md) | `VAL-H3` |

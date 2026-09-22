@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H3-D` of
-  [`../plans/active/2026-09-22-h3-processes.md`](../plans/active/2026-09-22-h3-processes.md):
+  [`../plans/archive/2026-09-22-h3-processes.md`](../plans/archive/2026-09-22-h3-processes.md):
   the five findings the `H3-C` review left open — the sort header and the row
   cursor for the keyboard, the action outcome that never cleared, the IO
   counters keyed by PID alone, the subscriber lock failure that reported

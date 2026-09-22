@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** H3
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -40,9 +40,10 @@ alone, without the machine noticing the monitor.
 | H2-C | done | H2-B | resource order, a list model stable across revisions, the GPU reason file, toggle and subtitle fixes | `scripts/verify-production.sh` |
 | H2-Z | done | H2-C | implementation exit and 0.3.0 | `scripts/complete-production.sh` |
 | H3-A | done | H2-Z | list operability, the smoke's shape gate and the H2 follow-ups | `scripts/verify-production.sh` |
-| H3-B | planned | H3-A | `hematita-core`: `process`, `passwd`, `process_view`, captures | `cargo test -p hematita-core` |
-| H3-C | planned | H3-B | sampler process section, `HematitaProcesses`, the table and both pages | `scripts/verify-production.sh` |
-| H3-Z | planned | H3-C | implementation exit and 0.4.0 | `scripts/complete-production.sh` |
+| H3-B | done | H3-A | `hematita-core`: `process`, `passwd`, `process_view`, captures | `cargo test -p hematita-core` |
+| H3-C | done | H3-B | sampler process section, `HematitaProcesses`, the table and both pages | `scripts/verify-production.sh` |
+| H3-D | done | H3-C | the table's keyboard path and the four smaller H3-C review findings | `scripts/verify-production.sh` |
+| H3-Z | done | H3-D | implementation exit and 0.4.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -65,6 +66,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H3-B: [core](docs/evidence/2026-09-22-h3-core.md)
 - H3-C: [processes page](docs/evidence/2026-09-22-h3-processes-page.md)
 - H3-D: [keyboard table](docs/evidence/2026-09-22-h3-keyboard-table.md)
+- H3-Z: [production completion](docs/evidence/2026-09-22-h3-production-completion.md)
 
 ## H1 — closed 2026-09-21
 
@@ -105,24 +107,38 @@ implementation exit ran on 2026-09-22: the
 The next checkpoint is `H3` (processes and applications), opened on
 2026-09-22.
 
-## H3 — opened 2026-09-22
+## H3 — closed 2026-09-22
 
-`H3-A` delivers the list operability and gates H2 booked; the process work
-follows in `H3-B` and `H3-C`. Units and exit are in the
-[active plan](docs/plans/active/2026-09-22-h3-processes.md). `H3-B` delivers
+Its falsifiable problem was whether every process the kernel lists could be
+read, rated and grouped by the application that launched it from `/proc`
+alone, on the sampler thread, so a person could search, sort, terminate and
+kill their own processes from one table that keeps its place while the
+numbers move. The delivered result is the release binary built, verified and
+deployed to the author's prefix at `0.4.0`, whose Processes page lists every
+process with live CPU, memory and IO, sortable columns, search, terminate and
+kill behind a confirming dialog, whose Applications page groups the same rows
+under their application's icon, and whose Performance list and process table
+are both reachable by keyboard.
+
+`H3-A` delivered the list operability and gates H2 booked. `H3-B` delivered
 `hematita-core`'s process parsers, application scope decoding, per-PID CPU
 sampler, passwd and the filter/sort/group projection, all under unit test and
 captured from the author's machine — the
-[core evidence](docs/evidence/2026-09-22-h3-core.md). `H3-C` wires it into the
+[core evidence](docs/evidence/2026-09-22-h3-core.md). `H3-C` wired it into the
 binary: the sampler reads processes every second tick and publishes to both
 hub objects from one thread, `HematitaProcesses` holds the table's state and
 owns the only signal path, and the Processes and Applications pages are up
 behind the strip — the
 [processes page evidence](docs/evidence/2026-09-22-h3-processes-page.md).
-`H3-D` depends on `H3-C` and answers its review: the sort header and the row
-cursor are reachable from the keyboard, the last action's outcome is
-forgotten when it stops being true, the IO counters are keyed by the
-process's start time, a poisoned subscriber lock is reported, and the group
-row no longer overwrites its own `checked` binding — the
+`H3-D` answered its review: the sort header and the row cursor are reachable
+from the keyboard, the last action's outcome is forgotten when it stops
+being true, the IO counters are keyed by the process's start time, a
+poisoned subscriber lock is reported, and the group row no longer overwrites
+its own `checked` binding — the
 [keyboard table evidence](docs/evidence/2026-09-22-h3-keyboard-table.md).
-`H3-Z` closes the checkpoint.
+Units `H3-A` through `H3-Z` are in the archived
+[plan](docs/plans/archive/2026-09-22-h3-processes.md). The checkpoint's
+implementation exit ran on 2026-09-22: the
+[completion evidence](docs/evidence/2026-09-22-h3-production-completion.md).
+`VAL-H3` stays pending in the author's lane and did not block this closure.
+The next checkpoint is `H4` (sensors), not yet opened.

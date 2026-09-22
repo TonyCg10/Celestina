@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H3-C` of
-  [`../plans/active/2026-09-22-h3-processes.md`](../plans/active/2026-09-22-h3-processes.md):
+  [`../plans/archive/2026-09-22-h3-processes.md`](../plans/archive/2026-09-22-h3-processes.md):
   the sampler's process section, `HematitaProcesses`, the shared list helpers,
   the table, its two row shapes, the kill dialog, both pages and the style
   symlinks; plus the `H3-A` review carry-over on the Performance list

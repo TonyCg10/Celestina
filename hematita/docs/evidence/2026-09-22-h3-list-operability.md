@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H3-A` of
-  [`../plans/active/2026-09-22-h3-processes.md`](../plans/active/2026-09-22-h3-processes.md):
+  [`../plans/archive/2026-09-22-h3-processes.md`](../plans/archive/2026-09-22-h3-processes.md):
   the list's keyboard and accessibility path, the smoke's shape gate, and the
   six follow-ups H2 booked; H3 opened in the documents
 - **Environment:** Rust 1.97.1 (pinned), Qt 6 with CXX-Qt 0.9.1, the author's

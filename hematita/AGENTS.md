@@ -32,6 +32,8 @@ Hematita constraints; it cannot relax the root or grant authority.
 - Per-process network throughput is out of scope for every phase (the kernel
   does not expose it without root or eBPF); per-process disk IO exists only
   for the user's own processes.
+- Signals leave `processes.rs` only, through `rustix`, only to a PID the
+  latest snapshot shows as the user's own, never to PID 1 or ourselves.
 
 ## Local verification
 

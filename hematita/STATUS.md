@@ -1,13 +1,15 @@
 # Hematita status
 
 - **Updated:** 2026-09-22
-- **Delivered as 0.3.0:** H2 — the Performance page lists the processor (with
-  a per-core grid), memory with swap, the AMD GPU, every whole disk and every
-  network interface, each with live graphs, built, verified and deployed to
-  the author's prefix
+- **Delivered as 0.4.0:** H3 — the Processes page lists every process with
+  live CPU, memory and IO, sortable columns, search, terminate and kill
+  behind a confirming dialog; the Applications page groups the same rows
+  under their application's icon; both the Performance list and the process
+  table are reachable by keyboard; built, verified and deployed to the
+  author's prefix
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
-  run
-- **Active phase:** H3 (processes and applications), opened 2026-09-22
+  run; `VAL-H3` requested, not run
+- **Active phase:** H4 (sensors), planned, not yet opened
 
 ## Current checkout truth
 
@@ -60,10 +62,10 @@
   and for H2-B is offscreen only, and appearance, keyboard and focus belong
   to `VAL-H1` and `VAL-H2`.
 - The release binary is built, verified and installed at
-  `~/.local/bin/hematita` at `0.3.0`, with its desktop entry and icon set
+  `~/.local/bin/hematita` at `0.4.0`, with its desktop entry and icon set
   registered under `~/.local/share`; the installed bytes match the checkout's
   `hematita/target/release/hematita` byte for byte. See the
-  [production completion record](docs/evidence/2026-09-22-h2-production-completion.md).
+  [production completion record](docs/evidence/2026-09-22-h3-production-completion.md).
 - As of `H3-A` the side list is a list for the keyboard and for AT: it takes
   Tab, arrows move the current item, the selection and the current index are
   one value, and the view carries `Accessible.List` with a name, so an
@@ -115,6 +117,12 @@
   application row no longer declares itself `checkable` against its own
   `expanded` binding. Still nobody has pressed a key: that is `VAL-H3`. See
   the [keyboard table evidence](docs/evidence/2026-09-22-h3-keyboard-table.md).
+- `H3-Z` closed the checkpoint at `0.4.0`: the release binary is built,
+  verified and deployed to the author's prefix. Nobody has looked at the
+  Processes or Applications page on a real session yet, pressed a key on the
+  table, or asked the kill dialog to act on a real process: `VAL-H1`,
+  `VAL-H2` and `VAL-H3` all stay pending. See the
+  [production completion record](docs/evidence/2026-09-22-h3-production-completion.md).
 
 ## Blockers
 
