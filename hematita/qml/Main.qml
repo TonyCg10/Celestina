@@ -22,9 +22,9 @@ ApplicationWindow {
     color: CelestinaTheme.canvas
     title: "Hematita"
 
-    // The sections, in the order the strip shows them. Only Performance has a
-    // page in H1; the others are named so the strip is the final one and the
-    // pages arrive under it in H3 and H4.
+    // The sections, in the order the strip shows them, each with the page
+    // under it: Performance, the two process pages that share one hub, and
+    // Sensors.
     readonly property var sections: [
         { key: "performance", icon: "gauge", label: qsTr("Rendimiento") },
         { key: "processes", icon: "view-list", label: qsTr("Procesos") },
@@ -68,6 +68,10 @@ ApplicationWindow {
             id: processHub
         }
 
+        HematitaSensors {
+            id: sensorHub
+        }
+
         HematitaActivation {
             id: activation
             onRaiseRequested: {
@@ -96,15 +100,8 @@ ApplicationWindow {
                 backdrop: window.contentItem
             }
 
-            // Sensors arrives in H4.
-            Item {
-                Text {
-                    anchors.centerIn: parent
-                    text: qsTr("Esta sección llega en una fase posterior")
-                    color: CelestinaTheme.textMuted
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontRowTitle
-                }
+            SensorsPage {
+                sensors: sensorHub
             }
         }
     }
@@ -122,6 +119,7 @@ ApplicationWindow {
         navStrip.forceActiveFocus()
         machine.start()
         processHub.start()
+        sensorHub.start()
         activation.start()
     }
 

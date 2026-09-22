@@ -1,0 +1,39 @@
+# H4-B exact change inventory
+
+Base revision	0c6a2a30f420126469591a3bdd28760bccad912b
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-09-22-h4-sensors-page.md
+Pathspec	hematita/docs/inventories/2026-09-22-h4-sensors/H4-B.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+Pathspec	hematita/qml/ListSection.qml
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/qml/components/SensorChipCard.qml
+Pathspec	hematita/qml/components/SensorRow.qml
+Pathspec	hematita/qml/components/SensorsPage.qml
+Pathspec	hematita/src/main.rs
+Pathspec	hematita/src/publish.rs
+Pathspec	hematita/src/sampler.rs
+Pathspec	hematita/src/sensors.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+5	3	0aa87be1704beeda238b6da1c8a4ba63a9cd4a386fa5f14a743aa20fdb6f889c	hematita/ROADMAP.md
+28	6	54f314880db05173be924eda952a5947a66a569716dfd75e305454abeb70789c	hematita/STATUS.md
+10	1	b1c01fc86f59cf781f097acf3ae87da7e3477cb562dd13af493ff1bb158b8a80	hematita/build.rs
+210	0	de04c4dc0a6a5cb4e2c5751fa117b8fa26734d3d0f65affde0a60da3c36fc0cb	hematita/docs/evidence/2026-09-22-h4-sensors-page.md
+1	1	d4e5a2ff18a95fc4f7e5775af1b26631dceeda013600c63c88994b37c9565f6a	hematita/docs/plans/active/2026-09-22-h4-sensors.md
+1	0	353a50fd35236ccc7e74e87a2e714762d6fdddd2f4a7c6e38eb64ca38a7f8e29	hematita/qml/ListSection.qml
+10	12	d36a8ea4cf58d02beae2d77fc46fb58d912be76df0dfc128bf571fc0ade710cf	hematita/qml/Main.qml
+46	14	97f2c78a11278b5191627c5bfc58195ca2fa8c7abd6017fa278a91b44beb8689	hematita/qml/components/ProcessTable.qml
+36	0	738e66fe546ea9b0a3f2c8ed9267deb57492135fb51a472ae9d6de57babc353a	hematita/qml/components/SensorChipCard.qml
+70	0	4abe942e0adbedc75999fc344df3d17611c14f25c7e0b1a241514fec1d67c591	hematita/qml/components/SensorRow.qml
+146	0	ba7286756432dea8cb0f133a83dd4043964716fb468ca937aa4550b04b26791f	hematita/qml/components/SensorsPage.qml
+1	0	98ac7a6789b486fa8749f296499c5e1fc489c2a4b8fc73883bbe782748bb788e	hematita/src/main.rs
+20	0	c606c93f4ab9ab0a2314e119dd0ae8b79de57bd1f29e27e728946dda5b0416cc	hematita/src/publish.rs
+121	4	11c5da7bda6b8273d713297c2275c7b32c803ee519c29f690263dcc9c6071977	hematita/src/sampler.rs
+289	0	6d3eb13736a02fd145b73d1c3dc64225e6e8675aee622988ba3bf9206c2910c3	hematita/src/sensors.rs
+39	0	self	hematita/docs/inventories/2026-09-22-h4-sensors/H4-B.numstat.tsv

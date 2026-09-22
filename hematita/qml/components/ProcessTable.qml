@@ -42,7 +42,11 @@ Item {
     // Every column but the name has a width of its own; the name takes what
     // is left, and never less than its floor, so the sum can exceed the
     // window only when the window is narrower than the floor plus the rest.
+    // The rows sit inside the surface's padding; the header is given the same
+    // inset below, so the name column's share has to give that padding back on
+    // both sides or the titles would sit one inset off their values.
     readonly property int fixedTotal: 90 + 80 + 80 + 110 + (table.ratesShown ? 220 : 0)
+                                      + 2 * CelestinaTheme.spaceXs
 
     readonly property var columns: [
         { field: "name", title: qsTr("Nombre"), width: Math.max(160, table.width - table.fixedTotal), numeric: false, shown: true },
@@ -108,13 +112,24 @@ Item {
                 out.push({ kind: "process", index: index })
             return out
         }
+        // One pass over the rows into per-application buckets, then one pass
+        // over the applications: a nested scan would read every row once per
+        // application, which on two thousand processes is the whole table
+        // squared for nothing.
+        const buckets = []
+        for (let group = 0; group < table.groups.length; ++group)
+            buckets.push([])
+        for (let index = 0; index < table.rows.length; ++index) {
+            const group = table.rows[index].group
+            if (group >= 0 && group < buckets.length)
+                buckets[group].push(index)
+        }
         for (let group = 0; group < table.groups.length; ++group) {
             out.push({ kind: "group", index: group })
             if (table.collapsed[table.groups[group].id])
                 continue
-            for (let index = 0; index < table.rows.length; ++index)
-                if (table.rows[index].group === group)
-                    out.push({ kind: "process", index: index })
+            for (const index of buckets[group])
+                out.push({ kind: "process", index: index })
         }
         return out
     }
@@ -221,20 +236,26 @@ Item {
     // each writes the other back, so the cursor and the selection are one
     // thing however they were moved.
     onSelectedPidChanged: {
-        if (!table.anchoring) {
-            const index = table.entryOfPid(table.selectedPid)
-            if (index >= 0)
-                list.currentIndex = index
-        }
-        // A new selection is a new question; the last action's answer is not
-        // about this row.
+        // A selection released by the re-anchor is not the person moving on:
+        // the row simply left the rebuilt list. Only a selection the person
+        // made is a new question, so only that one clears the last action's
+        // answer — a terminate keeps its sentence until another row is picked.
+        if (table.anchoring)
+            return
+        const index = table.entryOfPid(table.selectedPid)
+        if (index >= 0)
+            list.currentIndex = index
         table.processes.clearAction()
     }
 
+    // A hidden page costs nothing per tick: the other page of the pair is
+    // showing, and this one is rebuilt whole the moment it comes back.
     Connections {
         target: table.processes
-        function onRevisionChanged() { table.weave() }
+        function onRevisionChanged() { if (table.visible) table.weave() }
     }
+
+    onVisibleChanged: if (table.visible) table.weave()
 
     Component.onCompleted: table.weave()
 
@@ -254,9 +275,18 @@ Item {
                 shape: CelestinaTextField.Search
                 placeholderText: qsTr("Buscar por nombre, PID o aplicación")
                 Accessible.name: search.placeholderText
-                onTextChanged: {
-                    table.processes.filterText = search.text
-                    table.processes.refresh()
+                // The filter re-sorts every process, so a typed word does not
+                // do it once per letter: the last keystroke of a burst is what
+                // reaches the hub, a sixth of a second later.
+                onTextChanged: debounce.restart()
+
+                Timer {
+                    id: debounce
+                    interval: 150
+                    onTriggered: {
+                        table.processes.filterText = search.text
+                        table.processes.refresh()
+                    }
                 }
             }
 
@@ -319,6 +349,8 @@ Item {
         // ── Header ─────────────────────────────────────────────────────
         ProcessHeader {
             Layout.fillWidth: true
+            Layout.leftMargin: CelestinaTheme.spaceXs
+            Layout.rightMargin: CelestinaTheme.spaceXs
             columns: table.columns
             sortField: table.processes.sortField
             sortAscending: table.processes.sortAscending

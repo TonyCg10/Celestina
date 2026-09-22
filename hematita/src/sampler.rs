@@ -22,6 +22,7 @@ use hematita_core::network;
 use hematita_core::passwd;
 use hematita_core::process::{self, ProcessSampler};
 use hematita_core::rate::NamedCounters;
+use hematita_core::sensors::{self, Chip, ChipListing};
 
 /// A number nobody stares at, and rare enough that the monitor is not a reason
 /// the machine is busy. The one place the cadence lives.
@@ -43,6 +44,7 @@ const NET_ROOT: &str = "/sys/class/net";
 const DRM_ROOT: &str = "/sys/class/drm";
 const PROC_ROOT: &str = "/proc";
 const PASSWD_PATH: &str = "/etc/passwd";
+const HWMON_ROOT: &str = "/sys/class/hwmon";
 
 /// Why a section could not be read. The window composes the sentence; this
 /// is data, not prose.
@@ -175,6 +177,22 @@ impl ProcessState {
 }
 
 #[derive(Clone, Debug)]
+pub struct SensorSnapshot {
+    pub chips: Vec<Chip>,
+}
+
+/// What a chip directory holds that does not change: its name, which files
+/// exist, its labels and limits. Read once per directory; only the `_input`
+/// and `_average` files are read again each tick.
+struct ChipFacts {
+    name: String,
+    /// Every recognised channel file except the value files.
+    statics: Vec<(String, String)>,
+    /// The value files, read each tick.
+    value_files: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Snapshot {
     pub generation: u64,
     pub cpu: Section<Option<CpuReading>>,
@@ -185,6 +203,7 @@ pub struct Snapshot {
     pub interfaces: Vec<InterfaceSection>,
     /// `None` on the ticks that did not read processes.
     pub processes: Option<Section<ProcessSnapshot>>,
+    pub sensors: Section<SensorSnapshot>,
     /// Carried by the first snapshot only.
     pub identity: Option<Identity>,
 }
@@ -293,15 +312,21 @@ fn hub() -> &'static Hub {
 /// is told, rather than being left listening to nothing.
 pub fn subscribe(callback: impl Fn(&Snapshot) + Send + 'static) -> std::io::Result<()> {
     let shared = hub();
+    // The `handle` lock is taken first and held across the registration, so a
+    // `subscribe` racing a [`stop`] either registers before that `stop` drains
+    // the list — and is dropped with it — or waits and registers on a hub that
+    // is already stopped and armed again. Registering outside this lock could
+    // have put a subscriber into a list `stop` was about to clear while the
+    // caller believed it was listening.
+    let mut handle = shared
+        .handle
+        .lock()
+        .map_err(|_| std::io::Error::other("sampler lock poisoned"))?;
     shared
         .subscribers
         .lock()
         .map_err(|_| std::io::Error::other("sampler subscribers lock poisoned"))?
         .push(Box::new(callback));
-    let mut handle = shared
-        .handle
-        .lock()
-        .map_err(|_| std::io::Error::other("sampler lock poisoned"))?;
     if handle.is_none() {
         let stop = Arc::clone(&shared.stop);
         *handle = Some(
@@ -328,6 +353,12 @@ pub fn subscribe(callback: impl Fn(&Snapshot) + Send + 'static) -> std::io::Resu
 /// The thread checks the flag every hundred milliseconds, so this waits that
 /// long at worst; a join that returns an error means it panicked, and there is
 /// nothing left to do about that during shutdown. A second call is a no-op.
+///
+/// Because [`subscribe`] now registers inside the `handle` lock this holds,
+/// the guarantee is total: no subscriber can be registered between the drain
+/// below and the lowering of the flag, so the hub a later `subscribe` finds is
+/// either running or stopped-and-empty, never a drained hub holding a
+/// subscriber that will never be called.
 pub fn stop() {
     let shared = hub();
     shared.stop.store(true, Ordering::Relaxed);
@@ -367,6 +398,7 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
     // The divisor of a process's CPU share: this second's core count, which
     // the CPU reading answers. One core until it has.
     let mut core_count = 1usize;
+    let mut sensor_facts: HashMap<String, ChipFacts> = HashMap::new();
     let mut generation = 0u64;
     let mut last = Instant::now();
     while !stop.load(Ordering::Relaxed) {
@@ -397,6 +429,7 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
             disks: sample_disks(&mut disk_counters, &mut disk_facts, elapsed),
             interfaces: sample_interfaces(&mut interface_counters, &mut interface_facts, elapsed),
             processes: process_section,
+            sensors: sample_sensors(&mut sensor_facts),
             identity,
         });
         // Sleep in short slices so a close does not wait a whole interval.
@@ -407,6 +440,90 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
             slept += slice;
         }
     }
+}
+
+fn chip_facts(dir: &Path) -> Option<ChipFacts> {
+    let name = read(&dir.join("name")).ok()?.trim().to_owned();
+    let mut statics = Vec::new();
+    let mut value_files = Vec::new();
+    for entry in std::fs::read_dir(dir).ok()?.filter_map(Result::ok) {
+        let Ok(file) = entry.file_name().into_string() else {
+            continue;
+        };
+        let Some((_, _, attribute)) = sensors::parse_channel_file(&file) else {
+            continue;
+        };
+        match attribute {
+            "input" | "average" => value_files.push(file),
+            "label" | "max" | "crit" | "cap" => {
+                if let Ok(contents) = read(&entry.path()) {
+                    statics.push((file, contents));
+                }
+            }
+            _ => {}
+        }
+    }
+    value_files.sort();
+    Some(ChipFacts {
+        name,
+        statics,
+        value_files,
+    })
+}
+
+/// Every `hwmonN` directory as a chip. The names, labels and limits are read
+/// once per directory; the ~60 `_input`/`_average` files are read each tick,
+/// which is what a live reading is. A chip whose value file vanishes keeps its
+/// other channels; a chip directory that vanishes drops out of `facts` and the
+/// list.
+fn sample_sensors(facts: &mut HashMap<String, ChipFacts>) -> Section<SensorSnapshot> {
+    let root = Path::new(HWMON_ROOT);
+    let entries = match std::fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(_) => {
+            return Section::Unavailable(Reason {
+                kind: ReasonKind::Unreadable,
+                path: HWMON_ROOT.to_owned(),
+            })
+        }
+    };
+    let mut keys: Vec<(String, PathBuf)> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            entry
+                .file_name()
+                .into_string()
+                .ok()
+                .map(|key| (key, entry.path()))
+        })
+        .filter(|(key, _)| key.starts_with("hwmon"))
+        .collect();
+    keys.sort();
+    facts.retain(|key, _| keys.iter().any(|(k, _)| k == key));
+    let mut chips = Vec::new();
+    for (key, dir) in keys {
+        let Some(chip_facts) = (match facts.get(&key) {
+            Some(existing) => Some(existing),
+            None => chip_facts(&dir).and_then(|f| {
+                facts.insert(key.clone(), f);
+                facts.get(&key)
+            }),
+        }) else {
+            continue;
+        };
+        let mut files = chip_facts.statics.clone();
+        for value_file in &chip_facts.value_files {
+            if let Ok(contents) = read(&dir.join(value_file)) {
+                files.push((value_file.clone(), contents));
+            }
+        }
+        chips.push(sensors::discover(&ChipListing {
+            key: key.clone(),
+            name: chip_facts.name.clone(),
+            files,
+        }));
+    }
+    Section::Available(SensorSnapshot { chips })
 }
 
 /// Every process the kernel lists, with its CPU share of the whole machine,

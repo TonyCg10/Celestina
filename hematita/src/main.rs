@@ -4,6 +4,7 @@ mod processes;
 mod publish;
 mod resources;
 mod sampler;
+mod sensors;
 
 use cxx_qt_lib::{
     QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,

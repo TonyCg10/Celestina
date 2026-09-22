@@ -18,6 +18,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaModalLayer.qml",
     "qml/CelestinaInputShield.qml",
     "qml/CelestinaShadow.qml",
+    "qml/ListSection.qml",
     "qml/GlassSurface.qml",
     "qml/GlassCard.qml",
     // Hematita's own composition: Main owns the window, the components own
@@ -36,6 +37,9 @@ const QML_FILES: &[&str] = &[
     "qml/components/KillDialog.qml",
     "qml/components/ProcessPage.qml",
     "qml/components/ApplicationsPage.qml",
+    "qml/components/SensorRow.qml",
+    "qml/components/SensorChipCard.qml",
+    "qml/components/SensorsPage.qml",
     "qml/Main.qml",
 ];
 
@@ -78,6 +82,11 @@ fn main() {
         // Shared icon resources and Inter Variable, compiled in.
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
-        .files(["src/activation.rs", "src/resources.rs", "src/processes.rs"])
+        .files([
+            "src/activation.rs",
+            "src/resources.rs",
+            "src/processes.rs",
+            "src/sensors.rs",
+        ])
         .build();
 }

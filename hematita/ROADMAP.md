@@ -46,7 +46,7 @@ alone, without the machine noticing the monitor.
 | H3-Z | done | H3-D | implementation exit and 0.4.0 | `scripts/complete-production.sh` |
 | H3-E | done | H3-Z | the whole-branch review's fixes and 0.4.1 | `scripts/complete-production.sh` |
 | H4-A | done | H3-E | `hematita-core`: `sensors`, captures, the deferred cgroup regression test | `cargo test -p hematita-core` |
-| H4-B | planned | H4-A | sampler sensors section, `HematitaSensors`, the Sensors page | `scripts/verify-production.sh` |
+| H4-B | done | H4-A | sampler sensors section, `HematitaSensors`, the Sensors page, the parked process-table items | `scripts/verify-production.sh` |
 | H4-Z | planned | H4-B | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -73,6 +73,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H3-Z: [production completion](docs/evidence/2026-09-22-h3-production-completion.md)
 - H3-E: [table fixes](docs/evidence/2026-09-22-h3-table-fixes.md)
 - H4-A: [core](docs/evidence/2026-09-22-h4-core.md)
+- H4-B: [sensors page](docs/evidence/2026-09-22-h4-sensors-page.md)
 
 ## H1 — closed 2026-09-21
 
@@ -163,6 +164,7 @@ note about a row — the
 
 ## H4 — opened 2026-09-22
 
-`H4-A` delivers `hematita-core`'s hwmon discovery: the sensors work follows
-in `H4-B`. Units and exit are in the
+`H4-A` delivers `hematita-core`'s hwmon discovery; `H4-B` wires it into the
+sampler and the window as the Sensors page, and closes the process-table
+items parked by `H3-E`. Units and exit are in the
 [active plan](docs/plans/active/2026-09-22-h4-sensors.md).

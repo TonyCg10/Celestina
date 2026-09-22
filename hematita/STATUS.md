@@ -12,10 +12,13 @@
   outcome outlives the next reading, the signal path re-reads `/proc` before
   it acts, and the table is one Tab stop with keyboard folds and columns that
   fit the minimum window
-- **In progress:** `H4-A` — `hematita-core` reads every hwmon chip and
-  channel into a typed value with its unit and kernel limits, captured from
-  the author's processor, GPU and board chips; not yet wired into the
-  sampler or a page
+- **In progress:** `H4-A`/`H4-B` — `hematita-core` reads every hwmon chip
+  and channel into a typed value with its unit and kernel limits, captured
+  from the author's processor, GPU and board chips; the sampler reads the
+  value files every tick, `HematitaSensors` publishes them with the
+  session's extremes, and the Sensors page shows every chip as a card. The
+  six process-table items parked by `H3-E` are closed. Built and verified,
+  not yet deployed and not yet seen by the author (`VAL-H4`)
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
   run; `VAL-H3` requested, not run
 - **Active phase:** H4 (sensors), opened 2026-09-22
@@ -23,8 +26,8 @@
 ## Current checkout truth
 
 - The project is registered and builds a release binary. The window shows the
-  pill strip with four sections; only Performance has a page, and the other
-  three say so.
+  pill strip with four sections, and all four now have a page: Performance,
+  Processes, Applications and Sensors.
 - `hematita-core` provides `ratio`, `cpu`, `memory` and `history`: `/proc/stat`
   and `/proc/meminfo` parsing, a CPU sampler that turns two readings into a
   rate, cpufreq and model parsing, and a sixty-sample ring, all covered by
@@ -163,6 +166,25 @@
   yet — that is `H4-B`. The deferred cgroup regression test from `H3-B`
   (a reverse-DNS application scope without an instance number) is in place
   too. See the [core evidence](docs/evidence/2026-09-22-h4-core.md).
+- As of `H4-B` it is wired and the window is complete. The sampler reads
+  `/sys/class/hwmon` on every tick — the labels and limits once per
+  directory, the 46 `_input`/`_average` files of this machine's nine chips
+  each second — and publishes a `sensors` section; an unreadable
+  `/sys/class/hwmon` marks only that section. `publish::thermal_load` gives
+  a temperature the same 80/90 thresholds as a fraction of the chip's own
+  `crit`, and nothing else is ever other than `normal`. `HematitaSensors`
+  publishes chips and channels as index-aligned lists with `revision` last,
+  and is the only thing that remembers the session's extremes per channel.
+  The Sensors page shows each chip as a `ListSection` card with one row per
+  channel — label, value coloured by its load, the session's extremes and
+  the kernel's limit — composing every word from tokens and showing the
+  kernel's labels raw. The six process-table items parked by `H3-E` are
+  closed: a successful action keeps its sentence through a rebuild, the
+  header and the rows share one inset, a hidden table weaves nothing, the
+  search is debounced by 150 ms, `layout()` is one pass, and
+  `sampler::subscribe` registers inside the `handle` lock. Nobody has looked
+  at the page: `VAL-H4`. See the
+  [sensors page evidence](docs/evidence/2026-09-22-h4-sensors-page.md).
 
 ## Blockers
 

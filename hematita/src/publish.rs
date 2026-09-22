@@ -29,6 +29,17 @@ pub fn load_name(percent: u8) -> &'static str {
     }
 }
 
+/// The load a temperature paints, from the chip's own critical limit: the
+/// same two thresholds as a percentage, applied to the fraction of `crit`.
+#[must_use]
+pub fn thermal_load(value: f64, crit: Option<f64>) -> &'static str {
+    let Some(crit) = crit.filter(|c| *c > 0.0) else {
+        return "normal";
+    };
+    let percent = (value / crit * 100.0).clamp(0.0, 255.0) as u8;
+    load_name(percent)
+}
+
 /// A snapshot is applied only if it is newer than the last applied one: the
 /// thread publishes in order, but the queue does not promise to.
 #[must_use]
@@ -148,6 +159,15 @@ mod tests {
         assert_eq!(load_name(89), "elevated");
         assert_eq!(load_name(CRITICAL_PERCENT), "critical");
         assert_eq!(load_name(100), "critical");
+    }
+
+    #[test]
+    fn a_temperature_loads_against_its_own_critical_limit() {
+        assert_eq!(thermal_load(50.0, Some(100.0)), "normal");
+        assert_eq!(thermal_load(85.0, Some(100.0)), "elevated");
+        assert_eq!(thermal_load(100.0, Some(100.0)), "critical");
+        assert_eq!(thermal_load(200.0, None), "normal");
+        assert_eq!(thermal_load(1.0, Some(0.0)), "normal");
     }
 
     #[test]
