@@ -107,9 +107,10 @@ impl Drop for Sampler {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
         if let Some(handle) = self.handle.take() {
-            // The thread checks the flag once per interval; a join that
-            // returns an error means it panicked, and there is nothing left to
-            // do about that during shutdown.
+            // The thread checks the flag every hundred milliseconds, so this
+            // waits that long at worst; a join that returns an error means it
+            // panicked, and there is nothing left to do about that during
+            // shutdown.
             let _ = handle.join();
         }
     }

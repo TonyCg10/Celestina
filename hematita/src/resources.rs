@@ -39,12 +39,15 @@ pub mod qobject {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qvariant.h");
+        // The histories are minute-long sequences of fractions. `QList<f64>`
+        // is what they are, and the engine hands it to JavaScript as an array
+        // — but its cxx-qt alias, `QList_f64`, is a name qmllint cannot
+        // resolve, so every binding that read a history was an
+        // `unresolved-type` warning and this project suppresses none. A
+        // `QVariant` carrying a variant list is the one shape both the linter
+        // and the engine understand; the boxing is the price of a truthful
+        // lint.
         type QVariant = cxx_qt_lib::QVariant;
-        include!("cxx-qt-lib/qlist.h");
-        // A list of variants rather than of doubles: `QVariantList` is the one
-        // sequence QML is guaranteed to hand JavaScript as an array, whatever
-        // Qt version the suite is built against.
-        type QList_QVariant = cxx_qt_lib::QList<QVariant>;
     }
 
     #[auto_cxx_name]
@@ -67,12 +70,12 @@ pub mod qobject {
         #[qproperty(QString, cpu_model)]
         #[qproperty(i32, cpu_frequency_mhz)]
         #[qproperty(i32, cpu_cores)]
-        #[qproperty(QList_QVariant, cpu_history)]
+        #[qproperty(QVariant, cpu_history)]
         #[qproperty(i32, memory_percent)]
         #[qproperty(QString, memory_load)]
         #[qproperty(f64, memory_used_kib)]
         #[qproperty(f64, memory_total_kib)]
-        #[qproperty(QList_QVariant, memory_history)]
+        #[qproperty(QVariant, memory_history)]
         #[qproperty(f64, swap_used_kib)]
         #[qproperty(f64, swap_total_kib)]
         type HematitaResources = super::HematitaResourcesRust;
@@ -94,12 +97,12 @@ pub struct HematitaResourcesRust {
     cpu_model: QString,
     cpu_frequency_mhz: i32,
     cpu_cores: i32,
-    cpu_history: QList<QVariant>,
+    cpu_history: QVariant,
     memory_percent: i32,
     memory_load: QString,
     memory_used_kib: f64,
     memory_total_kib: f64,
-    memory_history: QList<QVariant>,
+    memory_history: QVariant,
     swap_used_kib: f64,
     swap_total_kib: f64,
     cpu_ring: Ring,
@@ -138,12 +141,12 @@ impl Default for HematitaResourcesRust {
     }
 }
 
-fn ring_list(ring: &Ring) -> QList<QVariant> {
+fn ring_list(ring: &Ring) -> QVariant {
     let mut list = QList::<QVariant>::default();
     for value in ring.values() {
         list.append(QVariant::from(&f64::from(value)));
     }
-    list
+    QVariant::from(&list)
 }
 
 impl qobject::HematitaResources {

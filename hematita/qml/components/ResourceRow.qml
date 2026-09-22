@@ -17,9 +17,6 @@ AbstractButton {
     implicitHeight: CelestinaTheme.rowHeightLg
     hoverEnabled: true
     focusPolicy: Qt.TabFocus
-    checkable: true
-    checked: row.selected
-    autoExclusive: true
 
     Accessible.role: Accessible.ListItem
     Accessible.name: row.name + ", " + row.value

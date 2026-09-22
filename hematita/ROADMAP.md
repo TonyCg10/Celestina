@@ -33,7 +33,8 @@ alone, without the machine noticing the monitor.
 | H1-A | done | none | crate stub, application skeleton, strip, scripts, documents | `scripts/smoke.sh`, guards |
 | H1-B | done | H1-A | `hematita-core`: ratio, cpu, memory, history with captures | `cargo test -p hematita-core` |
 | H1-C | done | H1-B | sampler, `HematitaResources`, activation, Performance page | `scripts/verify-production.sh` |
-| H1-Z | planned | H1-C | implementation exit and 0.2.0 | `scripts/complete-production.sh` |
+| H1-D | done | H1-C | history properties without lint suppressions, row fixes | `scripts/verify-production.sh` |
+| H1-Z | planned | H1-D | implementation exit and 0.2.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -46,3 +47,4 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H1-A: [skeleton](docs/evidence/2026-09-21-h1-skeleton.md)
 - H1-B: [core](docs/evidence/2026-09-21-h1-core.md)
 - H1-C: [performance page](docs/evidence/2026-09-21-h1-performance-page.md)
+- H1-D: [history type](docs/evidence/2026-09-21-h1-history-type.md)

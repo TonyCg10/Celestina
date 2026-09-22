@@ -26,6 +26,7 @@ pill navigation strip naming the later sections.
 - `H1-A` — the skeleton: crate stub, application, strip, scripts, documents.
 - `H1-B` — `hematita-core`: `ratio`, `cpu`, `memory`, `history`, captures.
 - `H1-C` — sampler thread, `HematitaResources`, activation, Performance page.
+- `H1-D` — the review fixes: the history property type without suppressions.
 - `H1-Z` — implementation exit and 0.2.0.
 
 ## Exclusions
@@ -50,4 +51,5 @@ CPU and memory graphs.
 | H1-A | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-A.numstat.tsv) | 42 files, +2260/-0 | Crate stub with the shared percentage, application skeleton opening the window with the pill navigation strip, production scripts, smoke, the document set | [skeleton](../../evidence/2026-09-21-h1-skeleton.md) | `VAL-H1` |
 | H1-B | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-B.numstat.tsv) | 13 files, +1049/-4 | `/proc/stat`, `/proc/meminfo`, frequency and model parsers; samplers; the ring; captures | [core](../../evidence/2026-09-21-h1-core.md) | `VAL-H1` |
 | H1-C | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-C.numstat.tsv) | 17 files, +1093/-18 | Sampler thread, snapshot, `HematitaResources`, activation, Performance page with graph | [performance page](../../evidence/2026-09-21-h1-performance-page.md) | `VAL-H1` |
+| H1-D | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-D.numstat.tsv) | 9 files, +147/-28 | Revert the history properties to `QList<f64>` without lint suppressions; drop the decorative checked state; guard memory before the first sample | [history type](../../evidence/2026-09-21-h1-history-type.md) | `VAL-H1` |
 | H1-Z | `hematita:` | planned | `hematita/`, `docs/version-history.tsv` | — | Implementation exit, 0.2.0, status and roadmap closed, plan archived | `scripts/complete-production.sh` | `VAL-H1` |

@@ -24,8 +24,12 @@ Item {
     }
 
     readonly property string cpuValue: page.percent(page.metrics.cpuPercent)
-    readonly property string memoryValue: page.gib(page.metrics.memoryUsedKib)
-                                          + " / " + page.gib(page.metrics.memoryTotalKib)
+    // Before the first snapshot the totals are zero, and "0.0 GiB / 0.0 GiB"
+    // is a reading nobody took. Say nothing instead, as `percent` does.
+    readonly property string memoryValue: page.metrics.memoryTotalKib <= 0
+                                          ? "—"
+                                          : page.gib(page.metrics.memoryUsedKib)
+                                            + " / " + page.gib(page.metrics.memoryTotalKib)
 
     RowLayout {
         anchors.fill: parent
@@ -45,9 +49,7 @@ Item {
                     width: list.width
                     name: qsTr("Procesador")
                     value: page.cpuValue
-                    // qmllint disable unresolved-type
                     series: page.metrics.cpuHistory
-                    // qmllint enable unresolved-type
                     load: page.metrics.cpuLoad
                     selected: page.selected === 0
                     onClicked: page.selected = 0
@@ -56,9 +58,7 @@ Item {
                     width: list.width
                     name: qsTr("Memoria")
                     value: page.memoryValue
-                    // qmllint disable unresolved-type
                     series: page.metrics.memoryHistory
-                    // qmllint enable unresolved-type
                     load: page.metrics.memoryLoad
                     selected: page.selected === 1
                     onClicked: page.selected = 1
@@ -71,11 +71,7 @@ Item {
             Layout.fillHeight: true
             title: page.selected === 0 ? qsTr("Procesador") : qsTr("Memoria")
             subtitle: page.selected === 0 ? page.metrics.cpuModel : ""
-            // The bridge exposes the histories as QList_QVariant; the linter
-            // cannot resolve a cxx-qt sequence alias, and the engine can.
-            // qmllint disable unresolved-type
             series: page.selected === 0 ? page.metrics.cpuHistory : page.metrics.memoryHistory
-            // qmllint enable unresolved-type
             load: page.selected === 0 ? page.metrics.cpuLoad : page.metrics.memoryLoad
             facts: page.selected === 0
                    ? [qsTr("Uso"), page.cpuValue,

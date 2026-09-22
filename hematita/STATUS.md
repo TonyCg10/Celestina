@@ -21,6 +21,9 @@
   be read names itself in the page instead of freezing its number.
 - The Performance page shows the processor and memory in a side list with
   sparklines and the selected one large, with its minute graph and its facts.
+  Both histories cross to QML as a `QVariant` carrying a variant list: it is
+  the one shape `qmllint` resolves, and this project suppresses no warnings.
+  Neither reading claims a number before its first sample arrives.
 - A second `hematita` raises the running window over the session bus and exits
   without building one; no session bus is never fatal.
 - Nobody has looked at the page on a real session yet: the evidence for H1-C is

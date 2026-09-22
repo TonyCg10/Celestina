@@ -1,0 +1,25 @@
+# H1-D exact change inventory
+
+Base revision	7b1b868b54a919ae16913f48c07bda59585e347f
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-21-h1-history-type.md
+Pathspec	hematita/docs/inventories/2026-09-21-h1-foundation/H1-D.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-21-h1-foundation.md
+Pathspec	hematita/qml/components/PerformancePage.qml
+Pathspec	hematita/qml/components/ResourceRow.qml
+Pathspec	hematita/src/resources.rs
+Pathspec	hematita/src/sampler.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+3	1	aad6304d8363abff8e9fce2a0c230a775e5f9f54b30ac00ec135989b60339749	hematita/ROADMAP.md
+3	0	76717df8c10817aaeeb6c5d90682eaefbdadb49be86d42ea07043bb29b657b41	hematita/STATUS.md
+90	0	e774e180db4ca7e246c7b985257e1f0829c4a271cb2e762861615038f71481fc	hematita/docs/evidence/2026-09-21-h1-history-type.md
+2	0	279d8ebf80f616769a06502e89f422c9fa789fdec2ff614f7794ccea9dece6ba	hematita/docs/plans/active/2026-09-21-h1-foundation.md
+6	10	50d196f521bb5c0cf3222a9443940d7971f28a947c32cafe4020ad4552698f2a	hematita/qml/components/PerformancePage.qml
+0	3	54753f9c18d87c09ee225662ce9da90dafb72adcb2b0cf7c8cc8438c5241fedf	hematita/qml/components/ResourceRow.qml
+14	11	52062e71ef13eeb6ac1acc94c4574663e2528af32605613e2c0eb77da71b9ed1	hematita/src/resources.rs
+4	3	a8890bd8f8194c3422945eb3d3625ec0187773dda3ae5b3b59588538ec7f9d10	hematita/src/sampler.rs
+25	0	self	hematita/docs/inventories/2026-09-21-h1-foundation/H1-D.numstat.tsv
