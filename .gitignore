@@ -27,3 +27,6 @@ qmldir.qmltypes
 .DS_Store
 *.swp
 *~
+
+# Brainstorming mockups served by the visual companion; never source.
+.superpowers/
