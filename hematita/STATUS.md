@@ -1,9 +1,12 @@
 # Hematita status
 
 - **Updated:** 2026-09-21
-- **Implementation:** H1 is active; the window opens with the navigation strip
-  and a live Performance page reading CPU and memory once a second
+- **Delivered as 0.2.0:** H1 — the window opens with the navigation strip and
+  a live Performance page reading CPU and memory once a second, built,
+  verified and deployed to the author's prefix
 - **Author validation:** `VAL-H1` requested, not run
+- **Next phase:** H2 (disks, network, GPU and swap; the per-core grid),
+  planned, not opened
 
 ## Current checkout truth
 
@@ -28,6 +31,11 @@
   without building one; no session bus is never fatal.
 - Nobody has looked at the page on a real session yet: the evidence for H1-C is
   offscreen only, and appearance, keyboard and focus belong to `VAL-H1`.
+- The release binary is built, verified and installed at
+  `~/.local/bin/hematita`, with its desktop entry and icon set registered
+  under `~/.local/share`; the installed bytes match
+  `hematita/target/release/hematita` by `sha256sum`. See the
+  [production completion record](docs/evidence/2026-09-21-h1-production-completion.md).
 
 ## Blockers
 

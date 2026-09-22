@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-21
 - **Scope:** `H1-C` of
-  [`../plans/active/2026-09-21-h1-foundation.md`](../plans/active/2026-09-21-h1-foundation.md):
+  [`../plans/archive/2026-09-21-h1-foundation.md`](../plans/archive/2026-09-21-h1-foundation.md):
   the one-second sampling thread, `HematitaResources`, single-instance
   activation over the session bus, and the Performance page
 - **Environment:** Rust 1.97.1 (pinned), Qt 6, the author's checkout, no

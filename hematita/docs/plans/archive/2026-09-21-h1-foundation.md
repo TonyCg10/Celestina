@@ -1,8 +1,10 @@
 # H1 — Foundation and the Performance page
 
 - **Opened:** 2026-09-21
+- **Closed:** 2026-09-21
+- **Successor:** H2
 - **Plan ID:** h1-foundation
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author approved the design and asked for the H1 plan
   on 2026-09-21
 - **Scope:** hematita
@@ -52,4 +54,4 @@ CPU and memory graphs.
 | H1-B | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-B.numstat.tsv) | 13 files, +1049/-4 | `/proc/stat`, `/proc/meminfo`, frequency and model parsers; samplers; the ring; captures | [core](../../evidence/2026-09-21-h1-core.md) | `VAL-H1` |
 | H1-C | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-C.numstat.tsv) | 17 files, +1093/-18 | Sampler thread, snapshot, `HematitaResources`, activation, Performance page with graph | [performance page](../../evidence/2026-09-21-h1-performance-page.md) | `VAL-H1` |
 | H1-D | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-D.numstat.tsv) | 9 files, +147/-28 | Revert the history properties to `QList<f64>` without lint suppressions; drop the decorative checked state; guard memory before the first sample | [history type](../../evidence/2026-09-21-h1-history-type.md) | `VAL-H1` |
-| H1-Z | `hematita:` | planned | `hematita/`, `docs/version-history.tsv` | — | Implementation exit, 0.2.0, status and roadmap closed, plan archived | `scripts/complete-production.sh` | `VAL-H1` |
+| H1-Z | `hematita:` | done | [inventory](../../inventories/2026-09-21-h1-foundation/H1-Z.numstat.tsv) | 15 files, +215/-68 | Implementation exit, 0.2.0, status and roadmap closed, plan archived | [production completion](../../evidence/2026-09-21-h1-production-completion.md) | `VAL-H1` |

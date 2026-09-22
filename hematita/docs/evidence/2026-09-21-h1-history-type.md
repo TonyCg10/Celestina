@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-21
 - **Scope:** `H1-D` of
-  [`../plans/active/2026-09-21-h1-foundation.md`](../plans/active/2026-09-21-h1-foundation.md):
+  [`../plans/archive/2026-09-21-h1-foundation.md`](../plans/archive/2026-09-21-h1-foundation.md):
   the review fixes on top of `H1-C` — the history property type, the removal
   of every `qmllint` suppression, the decorative checked state on the resource
   row, and the memory reading before the first snapshot

@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** H1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -34,7 +34,7 @@ alone, without the machine noticing the monitor.
 | H1-B | done | H1-A | `hematita-core`: ratio, cpu, memory, history with captures | `cargo test -p hematita-core` |
 | H1-C | done | H1-B | sampler, `HematitaResources`, activation, Performance page | `scripts/verify-production.sh` |
 | H1-D | done | H1-C | history properties without lint suppressions, row fixes | `scripts/verify-production.sh` |
-| H1-Z | planned | H1-D | implementation exit and 0.2.0 | `scripts/complete-production.sh` |
+| H1-Z | done | H1-D | implementation exit and 0.2.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -48,3 +48,21 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H1-B: [core](docs/evidence/2026-09-21-h1-core.md)
 - H1-C: [performance page](docs/evidence/2026-09-21-h1-performance-page.md)
 - H1-D: [history type](docs/evidence/2026-09-21-h1-history-type.md)
+- H1-Z: [production completion](docs/evidence/2026-09-21-h1-production-completion.md)
+
+## H1 — closed 2026-09-21
+
+Its falsifiable problem was whether a window that samples `/proc` once a
+second on its own thread could show CPU and memory with sixty seconds of
+history through parsers tested on text alone. The delivered result is the
+registered project, the release binary built, verified and deployed to the
+author's prefix at `0.2.0`, whose Performance page shows live CPU and memory
+with a one-minute graph and a pill navigation strip naming the later
+sections.
+
+Units `H1-A` through `H1-Z` are in the archived
+[plan](docs/plans/archive/2026-09-21-h1-foundation.md). The checkpoint's
+implementation exit ran on 2026-09-21: the
+[delivery record](docs/evidence/2026-09-21-h1-production-completion.md).
+`VAL-H1` stays pending in the author's lane and did not block this closure.
+The next checkpoint is `H2`, not yet opened.
