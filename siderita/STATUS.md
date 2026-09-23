@@ -2,13 +2,28 @@
 
 - **Updated:** 2026-09-22
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; `SID-A4` (what the window costs, and what it shows) is closed and
-  archived, `SID-B1` (the bottom bar stops repeating the ring) is the active
-  checkpoint, and the portal-parenting one remains planned
+  present; `SID-A4` and `SID-B1` are closed and archived, no checkpoint is
+  active, and the portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.6.0`: `SID-B1`. The bottom strip that repeated what the
+  operation ring already said is gone, and with it the property that made it
+  undeletable — `status_text` carried a running job, an activity with no
+  knowable end, an outcome and two standing facts at once. Everything
+  transient now lives in one column anchored bottom right (rings, notices, and
+  the two error banners that used to band across the rows), the bottom bar is
+  one capsule of three icons, and the heading follows the scroll as one travel
+  instead of three states with a detent each. Unmounting a disk announces
+  itself and stops; it never could before. The heading took four rounds of the
+  author testing it: see
+  [the bottom chrome](docs/evidence/2026-09-22-bottom-chrome-and-notices.md),
+  [the heading's scroll](docs/evidence/2026-09-22-heading-scroll.md) and
+  [what testing it found](docs/evidence/2026-09-22-heading-corrections.md).
+  One thing is known and unfixed: as the heading folds, the content frame
+  rises and the rows slide with it.
 
 - Delivered as `1.5.12`: `FEEDBACK-8-SID`, the mouse's Back and Forward
   buttons, which `FEEDBACK-6` had broken by sinking the window-wide history

@@ -1,8 +1,10 @@
 # Bottom chrome and the notice stack
 
 - **Opened:** 2026-09-22
+- **Closed:** 2026-09-23
 - **Plan ID:** bottom-chrome-and-notices
-- **Status:** active
+- **Status:** done
+- **Successor:** none
 - **Authorization:** the author asked for the redesign on 2026-09-22 and
   approved the design in brainstorming
 - **Scope:** siderita
@@ -69,7 +71,7 @@ bottom bar is one capsule.
 |---|---|---|---|---|---|---|---|
 | SID-B1-A | `siderita:` | done | [inventory](../../inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-A.numstat.tsv) | 54 files, +3180/-1193 | The transient column, the notice and its threshold, the three-icon capsule, the merged menu, the dock's overflow, the notice queue replacing `status_text`, the watch warning moved to the heading, and the heading's three detents replaced by one continuous travel | [bottom chrome](../../evidence/2026-09-22-bottom-chrome-and-notices.md), [heading scroll](../../evidence/2026-09-22-heading-scroll.md) | `VAL-SID-15` |
 | SID-B1-C | `siderita:` | done | [inventory](../../inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-C.numstat.tsv) | 8 files, +372/-55 | The author's four findings on the delivered heading: the transitions were hard because the travel was not tweened, the detailed phase was shorter than one wheel notch, the title returned after a single notch from deep inside a folder, and the gesture died every frame while the heading animated | [heading corrections](../../evidence/2026-09-22-heading-corrections.md) | `VAL-SID-15` |
-| SID-B1-Z | `siderita:` | planned | `siderita/`, `docs/version-history.tsv` | — | Implementation exit, `1.6.0`, documents closed, plan archived | `scripts/complete-production.sh` | `VAL-SID-15` |
+| SID-B1-Z | `siderita:` | done | [inventory](../../inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-Z.numstat.tsv) | 13 files, +143/-90 | Implementation exit, `1.6.0`, documents closed, plan archived | [bottom chrome](../../evidence/2026-09-22-bottom-chrome-and-notices.md) | `VAL-SID-15` |
 
 Like every plan in this repository, this one records intent and grants no
 authority.

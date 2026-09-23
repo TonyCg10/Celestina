@@ -1,7 +1,7 @@
 # Siderita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** SID-B1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07`,
   `VAL-SID-11` and `VAL-SID-15` in [VALIDATION.md](VALIDATION.md); none of them
   blocks implementation
@@ -132,7 +132,9 @@ that crossed it, so the listing needed a second scroll to catch up. The heading
 becomes one continuous travel that the same gesture moves along.
 
 The plan is
-[Bottom chrome and the notice stack](docs/plans/active/2026-09-22-bottom-chrome-and-notices.md).
+[Bottom chrome and the notice stack](docs/plans/archive/2026-09-22-bottom-chrome-and-notices.md),
+delivered as `1.6.0` after four rounds of the author testing the heading on the
+real session.
 It excludes the portal picker's own chrome, and the author's own pass, which is
 `VAL-SID-15`.
 

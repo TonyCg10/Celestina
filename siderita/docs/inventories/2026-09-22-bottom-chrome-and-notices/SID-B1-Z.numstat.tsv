@@ -1,0 +1,33 @@
+# SID-B1-Z exact change inventory
+
+Base revision	c16f6f5a20968e4dea11bbe5ddb120ebf82568de
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/docs/evidence/2026-09-22-bottom-chrome-and-notices.md
+Pathspec	siderita/docs/evidence/2026-09-22-heading-corrections.md
+Pathspec	siderita/docs/evidence/2026-09-22-heading-scroll.md
+Pathspec	siderita/docs/inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-Z.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-22-bottom-chrome-and-notices.md
+Pathspec	siderita/docs/plans/active/README.md
+Pathspec	siderita/docs/plans/archive/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/plans/archive/2026-09-22-bottom-chrome-and-notices.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	e7aad50bfbbe187c01f085f4b31d204ab8d5c141ac2ec1fa7b8721917e06a567	docs/version-history.tsv
+1	1	763462bee0f0a996e3d65de5336ab972b11b4e1b8e28de53fa82dcc470813efa	siderita/Cargo.lock
+1	1	8f9b1697d937fec75998bfc7b36018887c30d9639e44f80ee166cee31dec699c	siderita/Cargo.toml
+5	3	397b8ec4cad32a0182d7f1f86f3d5d74f9167d23b8daf7ef2670b49c7782da50	siderita/ROADMAP.md
+18	3	2d5155b9df71d81de3ea60386bc3af01db498fc7b0d5c5658f48f82f47fd9283	siderita/STATUS.md
+1	1	442724518cd7c75bb8757bc972e465d87633db7d8b6e8d055747ab4a8f7d9cfc	siderita/docs/evidence/2026-09-22-bottom-chrome-and-notices.md
+1	1	29c1b45fc25a0bdce8f76435be392a1faf98c7f404bd64d992fa4e19f001d851	siderita/docs/evidence/2026-09-22-heading-corrections.md
+1	1	9706de0a250b0bfd7a499ba2c6d2ea6767443cb93a928bc3d4891447a7e2b090	siderita/docs/evidence/2026-09-22-heading-scroll.md
+0	75	deleted	siderita/docs/plans/active/2026-09-22-bottom-chrome-and-notices.md
+3	3	37abbd3c844158d28af619552db39719ad6d84995a3fd9e3dc0ccff992f007fb	siderita/docs/plans/active/README.md
+1	1	d0af46d4c0dbc57082f08a2574d319390310baf301b7a1329b308a4a86895e8b	siderita/docs/plans/archive/2026-08-20-what-the-window-costs-and-shows.md
+77	0	d987d6a13be77167aa27e05fc1b3ca2378e3050c36aaeaf405aa4f69819fb95b	siderita/docs/plans/archive/2026-09-22-bottom-chrome-and-notices.md
+33	0	self	siderita/docs/inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-Z.numstat.tsv

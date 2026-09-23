@@ -3,7 +3,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `SID-B1-A`; plan
-  [bottom-chrome-and-notices](../plans/active/2026-09-22-bottom-chrome-and-notices.md)
+  [bottom-chrome-and-notices](../plans/archive/2026-09-22-bottom-chrome-and-notices.md)
 - **Environment:** Arch-derived Linux, Qt 6.9, `cargo` stable, release profile.
   QML interaction under `qmltestrunner` (Qt6) on the `offscreen` platform; no
   window was opened on the author's session.

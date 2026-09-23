@@ -3,7 +3,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `SID-B1-C`; plan
-  [bottom-chrome-and-notices](../plans/active/2026-09-22-bottom-chrome-and-notices.md)
+  [bottom-chrome-and-notices](../plans/archive/2026-09-22-bottom-chrome-and-notices.md)
 - **Environment:** Arch-derived Linux, Qt 6.9, `cargo` stable, release profile.
   The author tested the deployed binary on their own session and recorded it;
   the frames quoted below come from those recordings.
