@@ -14,6 +14,7 @@ authority or replace operational rules.
 | [0007](0007-spanish-product-copy.md) | accepted | Product copy is Spanish; development truth stays English |
 | [0008](0008-byte-exact-paths-across-the-qt-seam.md) | accepted | A path crossing the Qt seam is percent-encoded; display text is separate |
 | [0009](0009-editing-without-an-encoder.md) | accepted | Fluorita edits the media it indexes, and adds no encoder |
+| [0010](0010-one-shot-privilege-through-polkit.md) | accepted | Hematita acts with privilege one call at a time, through polkit, and never holds it |
 
 An accepted decision is superseded by another ADR, never rewritten to hide its
 historical verdict. Every ADR retains at least Context, Decision, Consequences,
