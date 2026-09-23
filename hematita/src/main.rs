@@ -1,5 +1,6 @@
 mod activation;
 mod analysis;
+mod analysis_view;
 mod browse;
 mod lists;
 mod locations;
@@ -10,6 +11,7 @@ mod resources;
 mod sampler;
 mod sensors;
 mod services;
+mod usage_worker;
 
 use cxx_qt_lib::{
     QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,

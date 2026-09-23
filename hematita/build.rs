@@ -45,6 +45,11 @@ const QML_FILES: &[&str] = &[
     "qml/components/PathCrumbs.qml",
     "qml/components/LocationList.qml",
     "qml/components/FolderList.qml",
+    "qml/components/ScanProgress.qml",
+    "qml/components/UsageList.qml",
+    "qml/components/Treemap.qml",
+    "qml/components/DuplicateList.qml",
+    "qml/components/DetailsCard.qml",
     "qml/components/StoragePage.qml",
     "qml/Main.qml",
 ];
@@ -80,12 +85,14 @@ fn main() {
     }
     // The bridge files are watched by cxx-qt-build; the plain Rust modules
     // it does not know about are named here.
+    println!("cargo::rerun-if-changed=src/analysis_view.rs");
     println!("cargo::rerun-if-changed=src/browse.rs");
     println!("cargo::rerun-if-changed=src/lists.rs");
     println!("cargo::rerun-if-changed=src/locations.rs");
     println!("cargo::rerun-if-changed=src/privilege.rs");
     println!("cargo::rerun-if-changed=src/publish.rs");
     println!("cargo::rerun-if-changed=src/sampler.rs");
+    println!("cargo::rerun-if-changed=src/usage_worker.rs");
 
     CxxQtBuilder::new_qml_module(module)
         // Shared icon resources and Inter Variable, compiled in.

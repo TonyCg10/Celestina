@@ -60,18 +60,37 @@ pub fn disk_of_source(source: &str) -> Option<String> {
     if name.is_empty() || name.contains('/') {
         return None;
     }
-    let stem = name.trim_end_matches(|c: char| c.is_ascii_digit());
-    // A disk whose own name ends in a digit (`nvme0n1`, `mmcblk0`) numbers
-    // its partitions after a `p`; one whose name is letters (`sda`, `vda`)
-    // numbers them straight after.
-    let disk = match stem.strip_suffix('p') {
-        Some(base) if stem.len() < name.len() && base.ends_with(|c: char| c.is_ascii_digit()) => {
-            base
+    Some(whole_device(name).to_owned())
+}
+
+/// The whole device a kernel block name belongs to. A partition suffix is
+/// stripped only where the stem still names a device: `nvme…n<N>p<M>` and
+/// `mmcblk<N>p<M>` lose `p<M>`; `sd`, `vd`, `hd` and `xvd` followed by letters
+/// lose their trailing digits. Every other name — `dm-<N>`, `md<N>`,
+/// `loop<N>`, `zram<N>`, a bare `nvme…n<N>` or `mmcblk<N>` — is a whole device
+/// whose digits are part of its name.
+fn whole_device(name: &str) -> &str {
+    if name.starts_with("nvme") || name.starts_with("mmcblk") {
+        let stem = name.trim_end_matches(|c: char| c.is_ascii_digit());
+        if stem.len() < name.len() {
+            if let Some(base) = stem.strip_suffix('p') {
+                if base.ends_with(|c: char| c.is_ascii_digit()) {
+                    return base;
+                }
+            }
         }
-        _ if !stem.is_empty() && !stem.contains(|c: char| c.is_ascii_digit()) => stem,
-        _ => name,
-    };
-    Some(disk.to_owned())
+        return name;
+    }
+    for prefix in ["xvd", "sd", "vd", "hd"] {
+        if let Some(rest) = name.strip_prefix(prefix) {
+            let letters = rest.trim_end_matches(|c: char| c.is_ascii_digit());
+            if !letters.is_empty() && letters.chars().all(|c| c.is_ascii_lowercase()) {
+                return &name[..prefix.len() + letters.len()];
+            }
+            return name;
+        }
+    }
+    name
 }
 
 /// A disk's shown name: the device's model when it has one, otherwise the
@@ -180,6 +199,12 @@ mod tests {
         assert_eq!(disk_of_source("/dev/sda1").as_deref(), Some("sda"));
         assert_eq!(disk_of_source("/dev/sdb").as_deref(), Some("sdb"));
         assert_eq!(disk_of_source("/dev/nvme0n1").as_deref(), Some("nvme0n1"));
+        assert_eq!(disk_of_source("/dev/dm-0").as_deref(), Some("dm-0"));
+        assert_eq!(disk_of_source("/dev/mmcblk0").as_deref(), Some("mmcblk0"));
+        assert_eq!(disk_of_source("/dev/md127").as_deref(), Some("md127"));
+        assert_eq!(disk_of_source("/dev/loop3").as_deref(), Some("loop3"));
+        assert_eq!(disk_of_source("/dev/zram0").as_deref(), Some("zram0"));
+        assert_eq!(disk_of_source("/dev/vda2").as_deref(), Some("vda"));
         assert_eq!(disk_of_source("/dev/mapper/root"), None);
         assert_eq!(disk_of_source("tmpfs"), None);
     }
