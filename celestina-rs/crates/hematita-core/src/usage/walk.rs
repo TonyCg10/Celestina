@@ -122,6 +122,8 @@ pub fn scan(
         others_below: 0,
         unreadable: false,
         other_device: false,
+        dev: meta.dev(),
+        ino: meta.ino(),
         children: Vec::new(),
     }];
     let mut seen_inodes: HashSet<(u64, u64)> = HashSet::new();
@@ -187,6 +189,8 @@ pub fn scan(
                 others_below: u64::from(kind == Kind::Other),
                 unreadable: false,
                 other_device,
+                dev: meta.dev(),
+                ino: meta.ino(),
                 children: Vec::new(),
             });
             if let Some(dir) = nodes.get_mut(dir_id.0 as usize) {

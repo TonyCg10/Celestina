@@ -95,7 +95,10 @@ pub mod qobject {
         // hiddenGroupCount — candidate groups beyond the listed cap
         // groupUnreadable — a copy of the group could not be read
         // entryCopies — the unverified candidate group size of the entry
-        // selectedBytes — allocated bytes the selection would free
+        // selectedBytes, selectedCount — what an action on the selection
+        // would free and touch (entries inside a selected folder count once)
+        // actionRunning — a trash or deletion is in flight; cancelAction stops it
+        // actionOutcome — "" | done | partial | failed | refused | cancelled
         // action* — the last action's typed outcome and bytes removed
         // startFailed — a worker thread could not be created
         #[qobject]
@@ -137,6 +140,8 @@ pub mod qobject {
         #[qproperty(i32, hidden_group_count)]
         #[qproperty(QVariant, entry_copies)]
         #[qproperty(f64, selected_bytes)]
+        #[qproperty(i32, selected_count)]
+        #[qproperty(bool, action_running)]
         #[qproperty(f64, action_bytes)]
         #[qproperty(QVariant, member_groups)]
         #[qproperty(QVariant, member_ids)]
@@ -218,6 +223,11 @@ pub mod qobject {
         /// Deletes the selection permanently; the page has asked first.
         #[qinvokable]
         fn delete_selected(self: Pin<&mut HematitaAnalysis>);
+
+        /// Stops a running trash or deletion; what it already removed is
+        /// still reported and pruned.
+        #[qinvokable]
+        fn cancel_action(self: Pin<&mut HematitaAnalysis>);
     }
 
     impl cxx_qt::Threading for HematitaAnalysis {}
@@ -261,6 +271,8 @@ pub struct HematitaAnalysisRust {
     hidden_group_count: i32,
     entry_copies: QVariant,
     selected_bytes: f64,
+    selected_count: i32,
+    action_running: bool,
     action_bytes: f64,
     member_groups: QVariant,
     member_ids: QVariant,
@@ -353,6 +365,8 @@ impl Default for HematitaAnalysisRust {
             hidden_group_count: 0,
             entry_copies: doubles(&[]),
             selected_bytes: 0.0,
+            selected_count: 0,
+            action_running: false,
             action_bytes: 0.0,
             member_groups: doubles(&[]),
             member_ids: doubles(&[]),
@@ -520,18 +534,21 @@ impl HematitaAnalysisRust {
                     id,
                     path: tree.path_of(id),
                     allocated: node.allocated,
+                    dev: node.dev,
+                    ino: node.ino,
                 })
             })
             .collect()
     }
 
-    fn selected_bytes(&self) -> f64 {
-        bytes(
-            self.action_items()
-                .iter()
-                .map(|item| item.allocated)
-                .fold(0_u64, u64::saturating_add),
-        )
+    /// The outermost selection's count and allocated bytes.
+    fn selected_totals(&self) -> (i32, f64) {
+        let items = self.action_items();
+        let total = items
+            .iter()
+            .map(|item| item.allocated)
+            .fold(0_u64, u64::saturating_add);
+        (i32::try_from(items.len()).unwrap_or(i32::MAX), bytes(total))
     }
 
     /// Prunes the entries an action removed and brings every id-keyed cache
@@ -962,8 +979,8 @@ impl qobject::HematitaAnalysis {
         let apparent: Vec<f64> = rust.entries.iter().map(|e| bytes(e.apparent)).collect();
         let view = rust.analysed();
         let selected: Vec<f64> = rust.selection.iter().map(|id| f64::from(id.0)).collect();
-        let selected_bytes = rust.selected_bytes();
-        let hidden = i32::try_from(rust.findings.hidden_groups).unwrap_or(i32::MAX);
+        let (selected_count, selected_bytes) = rust.selected_totals();
+        let hidden = i32::try_from(rust.findings.hidden.len()).unwrap_or(i32::MAX);
 
         self.as_mut().set_crumb_names(crumb_names);
         self.as_mut().set_crumb_paths(crumb_paths);
@@ -1007,6 +1024,9 @@ impl qobject::HematitaAnalysis {
         self.as_mut().set_entry_copies(doubles(&view.copies));
         self.as_mut().set_selected_ids(doubles(&selected));
         self.as_mut().set_selected_bytes(selected_bytes);
+        self.as_mut().set_selected_count(selected_count);
+        let running = self.rust().action.is_some();
+        self.as_mut().set_action_running(running);
         self.as_mut().set_mode(mode);
         // Last, so the page rebuilds once, with every list in place.
         let next = self.rust().revision.wrapping_add(1).max(1);
@@ -1015,7 +1035,9 @@ impl qobject::HematitaAnalysis {
 
     /// Busy while a content check or an action runs.
     fn refresh_busy(mut self: Pin<&mut Self>) {
-        let busy = self.rust().confirm.is_some() || self.rust().action.is_some();
+        let running = self.rust().action.is_some();
+        let busy = self.rust().confirm.is_some() || running;
+        self.as_mut().set_action_running(running);
         self.as_mut().set_busy(busy);
     }
 
@@ -1268,14 +1290,22 @@ impl qobject::HematitaAnalysis {
             .map(|id| f64::from(id.0))
             .collect();
         self.as_mut().set_selected_ids(doubles(&selected));
-        let selected_bytes = self.rust().selected_bytes();
+        let (selected_count, selected_bytes) = self.rust().selected_totals();
         self.as_mut().set_selected_bytes(selected_bytes);
+        self.as_mut().set_selected_count(selected_count);
     }
 
     /// Whether an action may start: the analysis is shown and no other
     /// action is running.
     fn may_act(&self) -> bool {
         self.rust().state == Mode::Analysed && self.rust().action.is_none()
+    }
+
+    /// The counts a starting trash or deletion reports progress against.
+    fn start_counts(mut self: Pin<&mut Self>, total: usize) {
+        self.as_mut().set_action_done(0);
+        self.as_mut()
+            .set_action_total(i32::try_from(total).unwrap_or(i32::MAX));
     }
 
     /// Clears the last outcome and takes the next action epoch.
@@ -1309,6 +1339,7 @@ impl qobject::HematitaAnalysis {
         if items.is_empty() {
             return;
         }
+        self.as_mut().start_counts(items.len());
         let epoch = self.as_mut().begin_action();
         let generation = self.rust().generation;
         let qt = self.qt_thread();
@@ -1332,6 +1363,7 @@ impl qobject::HematitaAnalysis {
         if items.is_empty() {
             return;
         }
+        self.as_mut().start_counts(items.len());
         let epoch = self.as_mut().begin_action();
         let generation = self.rust().generation;
         let qt = self.qt_thread();
@@ -1342,6 +1374,31 @@ impl qobject::HematitaAnalysis {
             }
             Err(_) => self.as_mut().set_start_failed(true),
         }
+    }
+
+    /// Cancels the running trash or deletion without moving the action
+    /// epoch: the handle stays until the worker reports, so the entries it
+    /// removed before stopping are still pruned.
+    pub fn cancel_action(self: Pin<&mut Self>) {
+        if let Some(action) = self.rust().action.as_ref() {
+            action.cancel();
+        }
+    }
+
+    /// One more item of the running action finished.
+    pub(crate) fn apply_action_progress(
+        mut self: Pin<&mut Self>,
+        generation: u64,
+        epoch: u64,
+        done: usize,
+    ) {
+        if !publish::still_current(generation, self.rust().generation)
+            || epoch != self.rust().action_epoch
+        {
+            return;
+        }
+        self.as_mut()
+            .set_action_done(i32::try_from(done).unwrap_or(i32::MAX));
     }
 
     /// An action's report: its outcome, then — for what it removed — the

@@ -77,6 +77,8 @@ mod tests {
             others_below: 0,
             unreadable: false,
             other_device: false,
+            dev: 0,
+            ino: 0,
             children: children.iter().copied().map(NodeId).collect(),
         }
     }

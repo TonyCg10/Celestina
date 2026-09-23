@@ -53,6 +53,12 @@ impl WorkerHandle {
         let token = cancel.clone();
         (Self { cancel }, token)
     }
+
+    /// Asks the worker to stop while the handle is kept, so its report of
+    /// what it already did still lands.
+    pub fn cancel(&self) {
+        self.cancel.cancel();
+    }
 }
 
 impl Drop for WorkerHandle {

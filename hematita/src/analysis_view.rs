@@ -24,8 +24,9 @@ pub const SHOWN_GROUPS: usize = 500;
 #[derive(Clone, Debug, Default)]
 pub struct Findings {
     pub candidates: Vec<Group>,
-    /// Candidate groups beyond [`SHOWN_GROUPS`], neither listed nor checked.
-    pub hidden_groups: usize,
+    /// Candidate groups beyond [`SHOWN_GROUPS`], neither listed nor checked;
+    /// kept so a pruning can count them again.
+    pub hidden: Vec<Group>,
     pub empty: Vec<NodeId>,
     pub unreadable: Vec<u32>,
 }
@@ -33,11 +34,10 @@ pub struct Findings {
 #[must_use]
 pub fn findings(tree: &Tree) -> Findings {
     let mut candidates = duplicates::candidates(tree);
-    let hidden_groups = candidates.len().saturating_sub(SHOWN_GROUPS);
-    candidates.truncate(SHOWN_GROUPS);
+    let hidden = candidates.split_off(SHOWN_GROUPS.min(candidates.len()));
     Findings {
         candidates,
-        hidden_groups,
+        hidden,
         empty: empty_folders(tree),
         unreadable: unreadable_below(tree),
     }
@@ -245,6 +245,10 @@ pub fn forget_removed(tree: &Tree, removed: &[NodeId], kept: Kept<'_>) {
         kept.unreadable_groups
             .push(flags.get(index).copied().unwrap_or(false));
     }
+    kept.findings.hidden.retain_mut(|group| {
+        group.nodes.retain(alive);
+        group.nodes.len() >= 2
+    });
     kept.findings.empty.retain(alive);
     kept.selection.retain(alive);
 }
@@ -286,6 +290,8 @@ mod tests {
             others_below: 0,
             unreadable: false,
             other_device: false,
+            dev: 0,
+            ino: 0,
             children: Vec::new(),
         }
     }
@@ -477,6 +483,10 @@ mod tests {
             }],
             ..Findings::default()
         };
+        findings.hidden = vec![Group {
+            size: 1,
+            nodes: vec![NodeId(3), NodeId(5)],
+        }];
         let mut verdicts = vec![None];
         let mut flags = vec![true];
         let mut selection = Vec::new();
@@ -494,5 +504,9 @@ mod tests {
         assert_eq!(findings.candidates[0].nodes, vec![NodeId(4), NodeId(5)]);
         assert_eq!(verdicts, vec![None]);
         assert_eq!(flags, vec![true]);
+        assert!(
+            findings.hidden.is_empty(),
+            "a hidden group left with one copy goes"
+        );
     }
 }

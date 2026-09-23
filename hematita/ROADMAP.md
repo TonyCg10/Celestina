@@ -64,6 +64,7 @@ alone, without the machine noticing the monitor.
 | S1-B | done | S1-A2 | locations, browsing, the storage section and its smoke line | `scripts/verify-production.sh` |
 | S1-C | done | S1-B | the scan with progress and cancel, size list and treemap, filters, duplicate confirmation | `scripts/verify-production.sh` |
 | S1-D | done | S1-C | actions: open in Siderita, batch trash, guarded permanent deletion, selection | `scripts/verify-production.sh` |
+| S1-E | done | S1-D | the review's corrections: actions cancellable keeping their partial successes, entries re-validated by device and inode, mount roots refused for trash too | `scripts/verify-production.sh` |
 | S1-Z | planned | S1-D | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -107,6 +108,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - S1-B: [locations](docs/evidence/2026-09-23-s1-locations.md)
 - S1-C: [analysis](docs/evidence/2026-09-23-s1-analysis.md)
 - S1-D: [actions](docs/evidence/2026-09-23-s1-actions.md)
+- S1-E: [actions fixes](docs/evidence/2026-09-23-s1-actions-fixes.md)
 
 ## H1 — closed 2026-09-21
 

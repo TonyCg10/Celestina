@@ -55,6 +55,9 @@ Item {
             return qsTr("%1: no se pudo").arg(verb)
         case "refused":
             return qsTr("%1: rechazado").arg(verb)
+        case "cancelled":
+            return qsTr("%1: cancelado tras %2 de %3").arg(verb).arg(page.analysis.actionDone)
+                                                      .arg(page.analysis.actionTotal)
         }
         return ""
     }
@@ -249,7 +252,7 @@ Item {
     function requestTrash() {
         if (!page.canAct)
             return
-        const count = page.analysis.selectedIds.length
+        const count = page.analysis.selectedCount
         if (count > 1)
             confirm.ask(qsTr("¿Enviar %1 elementos (%2) a la papelera?")
                             .arg(count).arg(page.bytesText(page.analysis.selectedBytes)),
@@ -262,7 +265,7 @@ Item {
         if (!page.canAct)
             return
         confirm.ask(qsTr("¿Borrar definitivamente %1 elementos (%2)? No se podrán recuperar.")
-                        .arg(page.analysis.selectedIds.length)
+                        .arg(page.analysis.selectedCount)
                         .arg(page.bytesText(page.analysis.selectedBytes)),
                     qsTr("Borrar"), { kind: "delete" })
     }
@@ -361,6 +364,16 @@ Item {
                     role: CelestinaButton.Ghost
                     enabled: page.canAct
                     onClicked: page.requestDelete()
+                }
+
+                // Stops a running trash or deletion; what it already removed stays
+                // removed and leaves the lists.
+                CelestinaIconButton {
+                    visible: page.analysis.actionRunning
+                    iconName: "x"
+                    helpText: qsTr("Cancelar")
+                    role: CelestinaButton.Ghost
+                    onClicked: page.analysis.cancelAction()
                 }
 
                 CelestinaIconButton {

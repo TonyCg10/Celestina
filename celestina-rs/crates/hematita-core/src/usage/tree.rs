@@ -38,6 +38,10 @@ pub struct Node {
     /// A directory on another device than the scanned root: listed as a leaf
     /// with no size, because a mount is analysed from its own root.
     pub other_device: bool,
+    /// The device and inode `symlink_metadata` gave the entry when it was
+    /// scanned, so an action can tell the same entry from a replacement.
+    pub dev: u64,
+    pub ino: u64,
     pub children: Vec<NodeId>,
 }
 
@@ -146,6 +150,8 @@ mod tests {
             others_below: 0,
             unreadable: false,
             other_device: false,
+            dev: 0,
+            ino: 0,
             children: Vec::new(),
         }
     }

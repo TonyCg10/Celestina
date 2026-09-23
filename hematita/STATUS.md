@@ -30,7 +30,12 @@
   permanently through the guarded deletion (always asked first), on a
   worker thread with a typed outcome; the tree is pruned of exactly what
   was removed, and the content check can no longer land on an older tree
-  ([actions](docs/evidence/2026-09-23-s1-actions.md)); `S1-Z` is next
+  ([actions](docs/evidence/2026-09-23-s1-actions.md)); `S1-E` corrected
+  it after review: a running trash or deletion can be cancelled and still
+  prunes what it removed, each entry is checked again by device and inode
+  before it is removed, and a mount root is refused for trash as for
+  deletion ([actions fixes](docs/evidence/2026-09-23-s1-actions-fixes.md));
+  `S1-Z` is next
 - **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
   real session (the process table kept its scroll position across
   refreshes, applications opened folded, no flicker) and asked to close

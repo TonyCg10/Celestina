@@ -41,6 +41,9 @@ pub enum Refusal {
     Symlink {
         at: PathBuf,
     },
+    /// Something else now sits at the path: its device and inode are not
+    /// the ones the scan recorded.
+    Changed,
 }
 
 #[derive(Debug)]
@@ -63,6 +66,7 @@ impl fmt::Display for RemoveError {
                     Refusal::Symlink { .. } => {
                         "a folder on its way is a link or no longer a folder"
                     }
+                    Refusal::Changed => "another entry replaced the one that was scanned",
                 };
                 write!(f, "refused to delete {}: {why}", path.display())
             }
@@ -79,6 +83,28 @@ impl std::error::Error for RemoveError {
             Self::Io { source, .. } => Some(source),
             _ => None,
         }
+    }
+}
+
+/// Refuses `path` unless it is still the entry the scan saw there: the same
+/// device and inode, read without following a link. It narrows the window in
+/// which a replaced entry would be acted on to the time between this check
+/// and the removal's own syscalls; it cannot close it.
+///
+/// # Errors
+///
+/// [`RemoveError::Refused`] with [`Refusal::Missing`] when nothing is there,
+/// [`Refusal::Changed`] when something else is.
+pub fn check_identity(path: &Path, dev: u64, ino: u64) -> Result<(), RemoveError> {
+    let refuse = |reason| RemoveError::Refused {
+        path: path.to_path_buf(),
+        reason,
+    };
+    let meta = fs::symlink_metadata(path).map_err(|_| refuse(Refusal::Missing))?;
+    if (meta.dev(), meta.ino()) == (dev, ino) {
+        Ok(())
+    } else {
+        Err(refuse(Refusal::Changed))
     }
 }
 

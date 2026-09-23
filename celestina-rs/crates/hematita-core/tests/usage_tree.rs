@@ -18,7 +18,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use celestina_core::CancellationToken;
 use hematita_core::usage::duplicates::{candidates, confirm, ConfirmError, Group};
 use hematita_core::usage::empty::empty_folders;
-use hematita_core::usage::remove::{delete_tree, Refusal, RemoveError};
+use hematita_core::usage::remove::{check_identity, delete_tree, Refusal, RemoveError};
 use hematita_core::usage::tree::{Kind, NodeId, Tree};
 use hematita_core::usage::walk::{scan, Progress, ScanError};
 
@@ -338,6 +338,42 @@ fn confirm_stops_on_cancel_and_names_an_unreadable_file() {
             .expect("one file")
             .is_empty()
     );
+}
+
+#[test]
+fn a_scanned_node_carries_its_device_and_inode_and_a_replacement_is_refused() {
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let big = child(&tree, tree.root, "big.bin");
+    let path = tree.path_of(big);
+    let meta = fs::symlink_metadata(&path).expect("metadata");
+    let node = tree.node(big).expect("node");
+    assert_eq!((node.dev, node.ino), (meta.dev(), meta.ino()));
+    let root = tree.node(tree.root).expect("root");
+    let root_meta = fs::symlink_metadata(&fx.root).expect("root metadata");
+    assert_eq!((root.dev, root.ino), (root_meta.dev(), root_meta.ino()));
+    assert!(check_identity(&path, node.dev, node.ino).is_ok());
+
+    // Replace the file with another of the same name.
+    let spare = fx.root.join("spare.bin");
+    fs::write(&spare, b"other").expect("spare");
+    fs::rename(&spare, &path).expect("replace");
+    assert_eq!(
+        refused(check_identity(&path, node.dev, node.ino).map(|()| unreachable_removed())),
+        Refusal::Changed
+    );
+    fs::remove_file(&path).expect("remove");
+    assert_eq!(
+        refused(check_identity(&path, node.dev, node.ino).map(|()| unreachable_removed())),
+        Refusal::Missing
+    );
+}
+
+fn unreachable_removed() -> hematita_core::usage::remove::Removed {
+    hematita_core::usage::remove::Removed {
+        entries: 0,
+        bytes: 0,
+    }
 }
 
 fn refused(result: Result<hematita_core::usage::remove::Removed, RemoveError>) -> Refusal {

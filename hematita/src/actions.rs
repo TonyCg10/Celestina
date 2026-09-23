@@ -13,19 +13,24 @@
 //! one implementation, so what is trashed here can be restored from
 //! Siderita. Deletion is bounded by the scanned root and by the mount table
 //! read on this thread; a refusal from `delete_tree` counts as not done.
+//! Before either removal, an item that is a mount root, or whose device and
+//! inode are no longer the ones the scan recorded, is refused. A cancelled
+//! worker still reports what it removed before it stopped (`cancelled`).
 //!
 //! The threads are detached like the scan's: a detached thread owns its
 //! paths and a `CxxQtThread` whose `queue` drops the report once the hub is
 //! gone. The Siderita thread waits for the child it started, so the process
 //! is reaped and never lingers as a zombie; the report is queued first.
 
+use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::process::Command;
 
+use celestina_core::CancellationToken;
 use cxx_qt::CxxQtThread;
-use hematita_core::usage::remove::{delete_tree, RemoveError};
+use hematita_core::usage::remove::{check_identity, delete_tree, RemoveError};
 use hematita_core::usage::tree::NodeId;
 use siderita_ops::OpError;
 
@@ -58,6 +63,9 @@ pub struct Item {
     pub id: NodeId,
     pub path: PathBuf,
     pub allocated: u64,
+    /// The device and inode the scan recorded, checked again before acting.
+    pub dev: u64,
+    pub ino: u64,
 }
 
 /// What an action did. `removed` lists only the entries that are gone, each
@@ -72,10 +80,13 @@ pub struct ActionReport {
 }
 
 /// The typed outcome of `done` of `total` items, where `refused_all` says
-/// every item was refused before anything was touched.
+/// every item was refused before anything was touched and `cancelled` that
+/// the person stopped it (what was done before still counts).
 #[must_use]
-pub fn outcome_of(done: usize, total: usize, refused_all: bool) -> &'static str {
-    if refused_all && total > 0 {
+pub fn outcome_of(done: usize, total: usize, refused_all: bool, cancelled: bool) -> &'static str {
+    if cancelled {
+        "cancelled"
+    } else if refused_all && total > 0 {
         "refused"
     } else if total > 0 && done == total {
         "done"
@@ -117,7 +128,7 @@ pub fn spawn_open(
                     kind: ActionKind::Open,
                     done,
                     total: 1,
-                    outcome: outcome_of(done, 1, false),
+                    outcome: outcome_of(done, 1, false, false),
                     removed: Vec::new(),
                 },
             );
@@ -128,8 +139,98 @@ pub fn spawn_open(
     Ok(())
 }
 
-/// Moves each item to the trash through `siderita_ops::trash`, stopping at a
-/// cancellation.
+/// How one item ended.
+enum Step {
+    Removed,
+    Refused,
+    Failed,
+    Cancelled,
+}
+
+/// Whether `item` may still be acted on: not a mount root, and still the
+/// entry the scan saw (same device and inode). Between this check and the
+/// operation's own syscalls a replacement can still slip in; the window is
+/// that short, not closed.
+fn admissible(item: &Item, boundaries: &HashSet<PathBuf>) -> Result<(), Step> {
+    if boundaries.contains(&item.path) {
+        return Err(Step::Refused);
+    }
+    match check_identity(&item.path, item.dev, item.ino) {
+        Ok(()) => Ok(()),
+        Err(RemoveError::Refused { .. }) => Err(Step::Refused),
+        Err(_) => Err(Step::Failed),
+    }
+}
+
+/// Runs `act` over `items` in order, reporting each finished item's count
+/// and, at the end or at a cancellation, what is gone.
+fn run(
+    kind: ActionKind,
+    items: &[Item],
+    token: &CancellationToken,
+    target: &Target,
+    boundaries: &HashSet<PathBuf>,
+    mut act: impl FnMut(&Item) -> Step,
+) {
+    let total = items.len();
+    let mut removed = Vec::new();
+    let mut refused = 0;
+    let mut cancelled = false;
+    for item in items {
+        if token.is_cancelled() {
+            cancelled = true;
+            break;
+        }
+        let step = match admissible(item, boundaries) {
+            Ok(()) => act(item),
+            Err(step) => step,
+        };
+        match step {
+            Step::Removed => removed.push((item.id, item.allocated)),
+            Step::Refused => refused += 1,
+            Step::Failed => {}
+            Step::Cancelled => {
+                cancelled = true;
+                break;
+            }
+        }
+        target.progress(removed.len());
+    }
+    let done = removed.len();
+    target.report(ActionReport {
+        kind,
+        done,
+        total,
+        outcome: outcome_of(done, total, refused == total, cancelled),
+        removed,
+    });
+}
+
+/// Where a worker's progress and report go.
+struct Target {
+    qt: CxxQtThread<HematitaAnalysis>,
+    generation: u64,
+    epoch: u64,
+}
+
+impl Target {
+    fn progress(&self, done: usize) {
+        let (generation, epoch) = (self.generation, self.epoch);
+        let _ = self.qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
+            hub.apply_action_progress(generation, epoch, done);
+        });
+    }
+
+    fn report(&self, report: ActionReport) {
+        let (generation, epoch) = (self.generation, self.epoch);
+        let _ = self.qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
+            hub.apply_action(generation, epoch, report);
+        });
+    }
+}
+
+/// Moves each item to the trash through `siderita_ops::trash`, after the
+/// mount-root and identity checks, stopping at a cancellation.
 ///
 /// # Errors
 ///
@@ -141,29 +242,25 @@ pub fn spawn_trash(
     qt: CxxQtThread<HematitaAnalysis>,
 ) -> Result<WorkerHandle, io::Error> {
     let (handle, token) = WorkerHandle::pair();
+    let target = Target {
+        qt,
+        generation,
+        epoch,
+    };
     std::thread::Builder::new()
         .name("hematita-actions".to_owned())
         .spawn(move || {
-            let total = items.len();
-            let mut removed = Vec::new();
-            for item in &items {
-                match siderita_ops::trash(&item.path, &token, &mut |_| {}) {
-                    Ok(_) => removed.push((item.id, item.allocated)),
-                    Err(OpError::Cancelled) => break,
-                    Err(_) => {}
-                }
-            }
-            let done = removed.len();
-            report(
-                &qt,
-                generation,
-                epoch,
-                ActionReport {
-                    kind: ActionKind::Trash,
-                    done,
-                    total,
-                    outcome: outcome_of(done, total, false),
-                    removed,
+            let boundaries = mount_boundaries();
+            run(
+                ActionKind::Trash,
+                &items,
+                &token,
+                &target,
+                &boundaries,
+                |item| match siderita_ops::trash(&item.path, &token, &mut |_| {}) {
+                    Ok(_) => Step::Removed,
+                    Err(OpError::Cancelled) => Step::Cancelled,
+                    Err(_) => Step::Failed,
                 },
             );
         })?;
@@ -171,7 +268,7 @@ pub fn spawn_trash(
 }
 
 /// Deletes each item permanently with `delete_tree`, bounded by `within` (the
-/// scanned root) and the mount table read here.
+/// scanned root) and the mount table read here, after the identity check.
 ///
 /// # Errors
 ///
@@ -184,32 +281,26 @@ pub fn spawn_delete(
     qt: CxxQtThread<HematitaAnalysis>,
 ) -> Result<WorkerHandle, io::Error> {
     let (handle, token) = WorkerHandle::pair();
+    let target = Target {
+        qt,
+        generation,
+        epoch,
+    };
     std::thread::Builder::new()
         .name("hematita-actions".to_owned())
         .spawn(move || {
             let boundaries = mount_boundaries();
-            let total = items.len();
-            let mut removed = Vec::new();
-            let mut refused = 0;
-            for item in &items {
-                match delete_tree(&item.path, &within, &boundaries, &token) {
-                    Ok(_) => removed.push((item.id, item.allocated)),
-                    Err(RemoveError::Refused { .. }) => refused += 1,
-                    Err(RemoveError::Cancelled) => break,
-                    Err(RemoveError::Io { .. }) => {}
-                }
-            }
-            let done = removed.len();
-            report(
-                &qt,
-                generation,
-                epoch,
-                ActionReport {
-                    kind: ActionKind::Delete,
-                    done,
-                    total,
-                    outcome: outcome_of(done, total, refused == total),
-                    removed,
+            run(
+                ActionKind::Delete,
+                &items,
+                &token,
+                &target,
+                &boundaries,
+                |item| match delete_tree(&item.path, &within, &boundaries, &token) {
+                    Ok(_) => Step::Removed,
+                    Err(RemoveError::Refused { .. }) => Step::Refused,
+                    Err(RemoveError::Cancelled) => Step::Cancelled,
+                    Err(RemoveError::Io { .. }) => Step::Failed,
                 },
             );
         })?;
@@ -222,11 +313,12 @@ mod tests {
 
     #[test]
     fn the_outcome_follows_the_counts() {
-        assert_eq!(outcome_of(3, 3, false), "done");
-        assert_eq!(outcome_of(1, 3, false), "partial");
-        assert_eq!(outcome_of(0, 3, false), "failed");
-        assert_eq!(outcome_of(0, 3, true), "refused");
-        assert_eq!(outcome_of(0, 0, true), "failed");
+        assert_eq!(outcome_of(3, 3, false, false), "done");
+        assert_eq!(outcome_of(1, 3, false, false), "partial");
+        assert_eq!(outcome_of(0, 3, false, false), "failed");
+        assert_eq!(outcome_of(0, 3, true, false), "refused");
+        assert_eq!(outcome_of(0, 0, true, false), "failed");
+        assert_eq!(outcome_of(1, 3, false, true), "cancelled");
     }
 
     #[test]
