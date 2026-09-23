@@ -54,6 +54,7 @@ alone, without the machine noticing the monitor.
 | H5-B | done | H5-A | sampler services section, `HematitaServices`, the Services page, the privileged actions | `scripts/verify-production.sh` |
 | H5-C | done | H5-B | the review's correction: the foreign-process path reachable, the outcome races, the dead bus connection, the pending wording | `scripts/verify-production.sh` |
 | H5-Z | done | H5-C | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
+| H5-D | done | H5-Z | the whole-branch review's corrections: the polkit interaction flag, the action and listing timeouts, the outcome mapping, and 0.6.1 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -86,6 +87,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H5-A: [core](docs/evidence/2026-09-22-h5-core.md)
 - H5-B: [services page](docs/evidence/2026-09-22-h5-services-page.md)
 - H5-C: [privilege fixes](docs/evidence/2026-09-22-h5-privilege-fixes.md)
+- H5-D: [privilege fixes 2](docs/evidence/2026-09-22-h5-privilege-fixes-2.md)
 - H5-Z: [production completion](docs/evidence/2026-09-22-h5-production-completion.md)
 
 ## H1 — closed 2026-09-21
@@ -279,6 +281,23 @@ Units `H5-A` through `H5-Z` are in the archived
 implementation exit ran on 2026-09-22: the [completion
 evidence](docs/evidence/2026-09-22-h5-production-completion.md). `VAL-H5`
 stays pending in the author's lane and did not block this closure.
+
+`H5-D` answered the whole-branch review, and its critical finding is one no
+run on this session could have caught: a unit action was sent without the
+D-Bus `ALLOW_INTERACTIVE_AUTHORIZATION` flag, which systemd passes to polkit
+as `AllowUserInteraction`, so polkit would never have consulted an agent and
+would have refused every system-unit action with
+`InteractiveAuthorizationRequired` — the very name the outcome mapping reads
+as "no agent", which on a session that has none is indistinguishable from
+the truth. The flag is now set, `NotAuthorized` reads as `denied` instead,
+the action waits five minutes on its own connection and the listing two, the
+hub refuses a unit its latest listing does not carry and publishes the acted
+manager, and `AGENTS.md`, `VAL-H5` and the foreign kill question were
+corrected — the [privilege fixes 2
+evidence](docs/evidence/2026-09-22-h5-privilege-fixes-2.md), deployed as
+`0.6.1`, in its own archived
+[plan](docs/plans/archive/2026-09-22-h5-privilege-fixes.md). ADR 0010's
+Consequences gained the sentence naming the flag.
 
 The five phases of the design are delivered; further work opens with a new
 checkpoint and the author's word.

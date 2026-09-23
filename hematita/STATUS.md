@@ -1,6 +1,15 @@
 # Hematita status
 
 - **Updated:** 2026-09-22
+- **Delivered as 0.6.1:** `H5-D` — the whole-branch review's correction: a
+  unit action now carries the D-Bus `AllowInteractiveAuth` flag, without
+  which polkit never consults an agent and every system-unit action is
+  refused before anybody is asked; the action waits five minutes for the
+  person and the listing two seconds for the bus, each on its own connection;
+  polkit's `NotAuthorized` reads as `denied` rather than as a missing agent;
+  the hub is the authority on which unit exists and publishes the acted
+  manager; and `AGENTS.md`, `VAL-H5` and the foreign kill question say what
+  the code does
 - **Delivered as 0.6.0:** H5 — the Services page lists every user and
   system unit read from both buses; the person starts, stops and restarts
   their own units without authorisation, and reaches a system unit or a
@@ -297,6 +306,16 @@
   their rows under `anchoring`. The PID-recycling window while a polkit prompt
   stands open is named as a limit, not closed. See the
   [privilege fixes evidence](docs/evidence/2026-09-22-h5-privilege-fixes.md).
+- As of `H5-D`, a unit action carries `AllowInteractiveAuth`, so polkit is
+  actually asked instead of refusing before anyone is; the action's
+  connection waits five minutes and the listing's two, so a human answer is
+  not a timeout and a stuck bus is not a frozen sampler; `NotAuthorized`
+  reads as `denied`; the hub refuses a unit its latest listing of that
+  manager does not carry and publishes the acted scope for the page to word
+  by; `Refusal::Foreign` carries no payload; and `AGENTS.md`, `VAL-H5`, the
+  process page's `no-agent` sentence and the foreign kill question say what
+  the code does. Deployed as `0.6.1`. See the
+  [privilege fixes 2 evidence](docs/evidence/2026-09-22-h5-privilege-fixes-2.md).
 - `H5-Z` closed the checkpoint at `0.6.0`: the release binary is built,
   verified and deployed to the author's prefix. The Services page lists
   every user and system unit from both buses, manages the person's own

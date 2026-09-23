@@ -32,8 +32,13 @@ Hematita constraints; it cannot relax the root or grant authority.
 - Per-process network throughput is out of scope for every phase (the kernel
   does not expose it without root or eBPF); per-process disk IO exists only
   for the user's own processes.
-- Signals leave `processes.rs` only, through `rustix`, only to a PID the
-  latest snapshot shows as the user's own, never to PID 1 or ourselves.
+- A signal is asked for in `processes.rs` and nowhere else, by one of two
+  paths: the user's own process is signalled directly through `rustix`;
+  somebody else's is asked for by `privilege.rs`, which runs
+  `pkexec /usr/bin/kill` with a fixed argument shape on a worker thread.
+  Both cross the same gate first — the PID must be one the latest snapshot
+  lists, and `/proc` must still show the start time and owner it showed
+  then — and neither ever touches PID 1 or this process.
 - Sensor values and limits come from hwmon files alone; the chip's own
   `crit` decides the thermal load through the thresholds in `publish.rs`;
   no alert, no fan control.

@@ -101,17 +101,6 @@ Item {
         return ""
     }
 
-    // The manager the action was asked of: the acted unit's row if it is still
-    // listed, otherwise the selection's. A unit of the person's own manager
-    // needs no authorisation, so "waiting" there is not a prompt.
-    function actionScope() {
-        for (let index = 0; index < page.rows.length; ++index)
-            if (page.rows[index].name === page.services.actionUnit)
-                return page.rows[index].scope
-        const row = page.selectedRow()
-        return row !== null ? row.scope : ""
-    }
-
     function outcomeText() {
         const published = page.services
         if (published.actionOutcome === "")
@@ -121,7 +110,7 @@ Item {
         case "done":
             return qsTr("%1: hecho").arg(verb)
         case "pending":
-            return page.actionScope() === "system"
+            return page.services.actionScope === "system"
                    ? qsTr("%1: esperando la autorización").arg(verb)
                    : qsTr("%1: en curso").arg(verb)
         case "no-agent":
@@ -137,13 +126,27 @@ Item {
         return ""
     }
 
-    // A bus that could not be read is said before anything about a row in it.
+    // Whether the manager the last action was asked of is answering. A bus
+    // that is not there is the first thing the page says — unless there is an
+    // answer about an action on a bus that *is* there, which is what the
+    // person is waiting to read.
+    function actionBusAvailable() {
+        if (page.services.actionScope === "system")
+            return page.services.systemAvailable
+        if (page.services.actionScope === "user")
+            return page.services.userAvailable
+        return false
+    }
+
     function noteText() {
+        const outcome = page.outcomeText()
+        if (outcome.length > 0 && page.actionBusAvailable())
+            return outcome
         if (!page.services.systemAvailable)
             return qsTr("No se pudo leer el bus del sistema")
         if (!page.services.userAvailable)
             return qsTr("No se pudo leer el bus de sesión")
-        return page.outcomeText()
+        return outcome
     }
 
     function act(kind) {

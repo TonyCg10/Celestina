@@ -101,7 +101,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 - **Status:** pending
 - **Related implementation:** H5
-- **Requires:** the deployed Hematita 0.6.0; a session with or without an
+- **Requires:** the deployed Hematita 0.6.1; a session with or without an
   authentication agent (state which)
 - **Procedure:** open Servicios; compare the count of user services with
   `systemctl --user list-units --type=service`; stop and start a harmless
@@ -113,8 +113,9 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   screen reader; confirm Escape cancels the confirming dialog
 - **Pass condition:** counts match; the user service's state follows the
   action within a second; the filter and toggles narrow live; a system
-  action without an agent says so in Spanish; with an agent, the prompt
-  appears and the action follows the answer; the same for the root process;
+  action without an agent says so in Spanish; with an agent, the polkit
+  dialog actually appears — for a system unit and for a foreign process —
+  and the action follows the answer;
   every row and control reachable and named; idle CPU under 2 % on Servicios
 - **Result:** not run
 - **Evidence:** none

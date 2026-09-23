@@ -154,3 +154,4 @@ hematita	0.4.1	bug	H3-E	Fix the process table cursor, the action outcome and the
 hematita	0.5.0	milestone	H4-Z	Add the Sensors page
 hematita	0.5.1	bug	H4-D	Fix the Sensors page keyboard model, its failure state and the smoke gate
 hematita	0.6.0	milestone	H5-Z	Add the Services page and polkit-mediated actions
+hematita	0.6.1	bug	H5-D	Fix the polkit interaction flag, the action timeouts and the outcome mapping

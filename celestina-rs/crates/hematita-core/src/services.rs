@@ -162,12 +162,19 @@ impl Outcome {
 /// told. An unrecognised or empty name is `Failed`: it is not this
 /// function's business to guess what a systemd- or polkit-shaped error it
 /// has never seen means.
+///
+/// `InteractiveAuthorizationRequired` is the one name that means no agent
+/// answered: the caller asked for interaction and the bus still could not
+/// get an answer. `NotAuthorized` is polkit having asked and been told no —
+/// or having refused outright — which is the person's answer, not a missing
+/// agent, so it reads as `Denied` (ADR 0010: "the person cancelled or was
+/// not authorised").
 #[must_use]
 pub fn outcome_of_dbus_error(name: &str) -> Outcome {
     match name {
-        "org.freedesktop.DBus.Error.InteractiveAuthorizationRequired"
-        | "org.freedesktop.PolicyKit1.Error.NotAuthorized" => Outcome::NoAgent,
-        "org.freedesktop.DBus.Error.AccessDenied" => Outcome::Denied,
+        "org.freedesktop.DBus.Error.InteractiveAuthorizationRequired" => Outcome::NoAgent,
+        "org.freedesktop.DBus.Error.AccessDenied"
+        | "org.freedesktop.PolicyKit1.Error.NotAuthorized" => Outcome::Denied,
         _ => Outcome::Failed,
     }
 }
@@ -328,9 +335,11 @@ mod tests {
             outcome_of_dbus_error("org.freedesktop.DBus.Error.InteractiveAuthorizationRequired"),
             Outcome::NoAgent
         );
+        // polkit answered — the person said no, or was not allowed to say
+        // yes. That is an answer, not a missing agent.
         assert_eq!(
             outcome_of_dbus_error("org.freedesktop.PolicyKit1.Error.NotAuthorized"),
-            Outcome::NoAgent
+            Outcome::Denied
         );
         assert_eq!(
             outcome_of_dbus_error("org.freedesktop.DBus.Error.AccessDenied"),

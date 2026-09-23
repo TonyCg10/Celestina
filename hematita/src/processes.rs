@@ -461,7 +461,7 @@ impl qobject::HematitaProcesses {
                 Ok(()) => Outcome::Done.as_str(),
                 Err(_) => Outcome::Failed.as_str(),
             },
-            Err(Refusal::Foreign { .. }) if validated => {
+            Err(Refusal::Foreign) if validated => {
                 let qt = self.as_mut().qt_thread();
                 let asked = u32::try_from(pid).ok().is_some_and(|pid| {
                     privilege::signal_as_root(pid, as_root, move |outcome| {
@@ -497,7 +497,7 @@ impl qobject::HematitaProcesses {
 enum Refusal {
     /// It is a listed process of another user: the kernel refuses the signal,
     /// and `pkexec kill` is the sanctioned way to ask for it.
-    Foreign { start_ticks: u64 },
+    Foreign,
     /// `init`, this very process, a PID no snapshot listed, or a number that
     /// is not a PID at all. Hematita does not ask for any of these.
     NotAllowed,
@@ -526,9 +526,7 @@ impl HematitaProcessesRust {
             return Err(Refusal::NotAllowed);
         };
         if reading.uid != self.own_uid {
-            return Err(Refusal::Foreign {
-                start_ticks: reading.start_ticks,
-            });
+            return Err(Refusal::Foreign);
         }
         rustix::process::Pid::from_raw(pid).ok_or(Refusal::NotAllowed)
     }
@@ -709,14 +707,8 @@ mod tests {
         // A number that is not a PID, and a PID no snapshot listed.
         assert_eq!(state.owned_pid(-7), Err(Refusal::NotAllowed));
         assert_eq!(state.owned_pid(9_999_999), Err(Refusal::NotAllowed));
-        // Another user's listed process is the one refusal polkit can answer,
-        // and it carries the identity the signal path re-checks.
-        assert_eq!(
-            state.owned_pid(4242),
-            Err(Refusal::Foreign {
-                start_ticks: 67_467_262
-            })
-        );
+        // Another user's listed process is the one refusal polkit can answer.
+        assert_eq!(state.owned_pid(4242), Err(Refusal::Foreign));
         assert!(state.owned_pid(4243).is_ok());
     }
 

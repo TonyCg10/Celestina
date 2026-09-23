@@ -1,7 +1,8 @@
 # Active Hematita plans
 
 No plan is active. `H5` (services and privileged actions) closed 2026-09-22
-at `0.6.0`; the design's five phases are delivered. The next checkpoint
+at `0.6.0`, and its whole-branch review's correction `H5-D` closed the same
+day at `0.6.1`; the design's five phases are delivered. The next checkpoint
 opens with a new plan and the author's word.
 
 Unit inventories live under

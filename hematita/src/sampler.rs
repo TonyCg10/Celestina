@@ -62,6 +62,13 @@ const SYSTEMD_MANAGER: &str = "org.freedesktop.systemd1.Manager";
 /// could not be read.
 const SYSTEM_BUS: &str = "system bus";
 const SESSION_BUS: &str = "session bus";
+/// How long the listing waits for a manager's reply. The sampler is one
+/// thread for the whole window, so a bus that stops answering must not be
+/// able to stop the clock: two seconds is far longer than `ListUnits` takes
+/// on a machine with a thousand units and far shorter than a tick nobody
+/// would notice missing. A listing that times out drops its connection and
+/// the next service tick opens a new one.
+const LISTING_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Why a section could not be read. The window composes the sentence; this
 /// is data, not prose.
@@ -579,7 +586,8 @@ fn list_units(
             })
             .collect()),
         // The manager replied, and what it replied was not what this asked
-        // for: the bus is alive and the connection stays.
+        // for: the bus is alive and the connection stays. Every other error,
+        // a timeout included, leaves the connection unfit to reuse.
         Err(zbus::Error::MethodError(..)) => Err(ListFailure {
             reason: Reason {
                 kind: ReasonKind::Malformed,
@@ -596,15 +604,19 @@ fn list_units(
 
 /// One bus's section, opening the connection if there is none and dropping it
 /// if this listing proved it dead — so a bus that goes away is reopened on the
-/// next service tick instead of failing for the rest of the session.
+/// next service tick instead of failing for the rest of the session. The
+/// connection carries [`LISTING_TIMEOUT`], so a manager that stops answering
+/// costs one tick's listing rather than the sampler thread.
 fn section_of_bus(
     slot: &mut Option<zbus::blocking::Connection>,
-    open: fn() -> zbus::Result<zbus::blocking::Connection>,
+    open: fn() -> zbus::Result<zbus::blocking::connection::Builder<'static>>,
     scope: Scope,
     bus_label: &str,
 ) -> Section<Vec<Unit>> {
     if slot.is_none() {
-        *slot = open().ok();
+        *slot = open()
+            .and_then(|builder| builder.method_timeout(LISTING_TIMEOUT).build())
+            .ok();
     }
     let Some(connection) = slot.as_ref() else {
         return Section::Unavailable(bus_unavailable(bus_label));
@@ -629,13 +641,13 @@ fn sample_services(
     ServiceSnapshot {
         system: section_of_bus(
             system,
-            zbus::blocking::Connection::system,
+            zbus::blocking::connection::Builder::system,
             Scope::System,
             SYSTEM_BUS,
         ),
         user: section_of_bus(
             user,
-            zbus::blocking::Connection::session,
+            zbus::blocking::connection::Builder::session,
             Scope::User,
             SESSION_BUS,
         ),

@@ -28,6 +28,14 @@ const SYSTEMD_MANAGER: &str = "org.freedesktop.systemd1.Manager";
 /// `systemctl` itself asks for.
 const REPLACE: &str = "replace";
 
+/// How long an action's connection waits for systemd's reply. The default 25
+/// seconds is a bus timeout, not a human one: a system unit's call does not
+/// return until polkit has asked the person and the person has answered,
+/// which is a dialog somebody may reach for a password manager to answer.
+/// Five minutes is longer than any prompt anyone should be left with, and it
+/// is still bounded — a call that never answers is not a thread left forever.
+const ACTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -74,6 +82,7 @@ pub mod qobject {
         #[qproperty(QString, action_outcome)]
         #[qproperty(QString, action_unit)]
         #[qproperty(QString, action_kind)]
+        #[qproperty(QString, action_scope)]
         #[qproperty(bool, start_failed)]
         type HematitaServices = super::HematitaServicesRust;
 
@@ -133,6 +142,7 @@ pub struct HematitaServicesRust {
     action_outcome: QString,
     action_unit: QString,
     action_kind: QString,
+    action_scope: QString,
     start_failed: bool,
     started: bool,
     last_generation: u64,
@@ -173,6 +183,7 @@ impl Default for HematitaServicesRust {
             action_outcome: QString::default(),
             action_unit: QString::default(),
             action_kind: QString::default(),
+            action_scope: QString::default(),
             start_failed: false,
             started: false,
             last_generation: 0,
@@ -204,15 +215,36 @@ fn outcome_of_call(result: Result<(), zbus::Error>) -> Outcome {
     }
 }
 
-/// One unit action, start to finish, on this worker thread. The returned
-/// object path is the job systemd queued; the page reports the call, not the
-/// job, so it is dropped.
+/// What one call answered, including the reply that is not a reply: a `None`
+/// body is a call that was sent but whose answer never arrived as one, which
+/// is a failure like any other rather than a silent success.
+fn outcome_of_reply(
+    result: Result<Option<zbus::zvariant::OwnedObjectPath>, zbus::Error>,
+) -> Outcome {
+    match result {
+        Ok(Some(_job)) => Outcome::Done,
+        Ok(None) => Outcome::Failed,
+        Err(error) => outcome_of_call(Err(error)),
+    }
+}
+
+/// One unit action, start to finish, on this worker thread.
+///
+/// The connection is this call's own and is built with [`ACTION_TIMEOUT`],
+/// because the reply does not come back until the person has answered polkit.
+/// The call carries `AllowInteractiveAuth`: systemd passes that message flag
+/// to polkit as `AllowUserInteraction`, and without it polkit never consults
+/// an authentication agent — it refuses with
+/// `InteractiveAuthorizationRequired` even on a session that has one (see
+/// ADR 0010). The returned object path is the job systemd queued; the page
+/// reports the call, not the job, so it is dropped.
 fn call_unit(scope: Scope, name: &str, method: &str) -> Outcome {
-    let connection = match scope {
-        Scope::System => zbus::blocking::Connection::system(),
-        Scope::User => zbus::blocking::Connection::session(),
+    let builder = match scope {
+        Scope::System => zbus::blocking::connection::Builder::system(),
+        Scope::User => zbus::blocking::connection::Builder::session(),
     };
-    let Ok(connection) = connection else {
+    let Ok(connection) = builder.and_then(|builder| builder.method_timeout(ACTION_TIMEOUT).build())
+    else {
         return Outcome::Failed;
     };
     let Ok(proxy) = zbus::blocking::Proxy::new(
@@ -223,10 +255,12 @@ fn call_unit(scope: Scope, name: &str, method: &str) -> Outcome {
     ) else {
         return Outcome::Failed;
     };
-    outcome_of_call(
-        proxy
-            .call::<_, _, zbus::zvariant::OwnedObjectPath>(method, &(name, REPLACE))
-            .map(|_job| ()),
+    outcome_of_reply(
+        proxy.call_with_flags::<_, _, zbus::zvariant::OwnedObjectPath>(
+            method,
+            zbus::proxy::MethodFlags::AllowInteractiveAuth.into(),
+            &(name, REPLACE),
+        ),
     )
 }
 
@@ -353,6 +387,7 @@ impl qobject::HematitaServices {
         self.as_mut().set_action_outcome(QString::default());
         self.as_mut().set_action_unit(QString::default());
         self.as_mut().set_action_kind(QString::default());
+        self.as_mut().set_action_scope(QString::default());
     }
 
     pub fn start_unit(self: Pin<&mut Self>, name: QString, scope: QString) {
@@ -380,11 +415,16 @@ impl qobject::HematitaServices {
     ) {
         let unit = name.to_string();
         let scope = scope_of_token(&scope.to_string());
-        // The three properties are written together, so the page never reads
+        // The four properties are written together, so the page never reads
         // this action's outcome beside the last one's unit.
         self.as_mut().set_action_unit(QString::from(unit.as_str()));
         self.as_mut().set_action_kind(QString::from(kind));
-        if !is_actionable(UnitKind::of_name(&unit)) {
+        self.as_mut()
+            .set_action_scope(QString::from(scope.as_str()));
+        // The hub is the authority on what exists: a name the latest listing
+        // of that manager does not carry is refused here, rather than sent to
+        // systemd to be answered with `NoSuchUnit`.
+        if !self.rust().lists(&unit, scope) || !is_actionable(UnitKind::of_name(&unit)) {
             let token = self.rust().action_token.wrapping_add(1);
             self.as_mut().rust_mut().action_token = token;
             self.as_mut()
@@ -417,6 +457,15 @@ impl qobject::HematitaServices {
 }
 
 impl HematitaServicesRust {
+    /// Whether the latest listing of that manager carries this unit.
+    fn lists(&self, name: &str, scope: Scope) -> bool {
+        let units = match scope {
+            Scope::System => &self.system_units,
+            Scope::User => &self.user_units,
+        };
+        units.iter().any(|unit| unit.name == name)
+    }
+
     /// Both buses' units in one list, user first, for `project` to order.
     fn all_units(&self) -> Vec<Unit> {
         let mut units = Vec::with_capacity(self.user_units.len() + self.system_units.len());
@@ -429,6 +478,16 @@ impl HematitaServicesRust {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn unit(name: &str, scope: Scope) -> Unit {
+        Unit {
+            name: name.to_owned(),
+            description: "a unit".to_owned(),
+            scope,
+            active: "active".to_owned(),
+            sub: "running".to_owned(),
+        }
+    }
 
     fn method_error(name: &str) -> zbus::Error {
         let message = zbus::message::Message::method_call("/org/freedesktop/systemd1", "StopUnit")
@@ -475,6 +534,34 @@ mod tests {
     }
 
     #[test]
+    fn a_reply_without_a_job_path_is_a_failure_not_a_success() {
+        let job = zbus::zvariant::OwnedObjectPath::try_from("/org/freedesktop/systemd1/job/7")
+            .expect("a well-formed object path");
+        assert_eq!(outcome_of_reply(Ok(Some(job))), Outcome::Done);
+        assert_eq!(outcome_of_reply(Ok(None)), Outcome::Failed);
+        assert_eq!(
+            outcome_of_reply(Err(method_error(
+                "org.freedesktop.DBus.Error.InteractiveAuthorizationRequired"
+            ))),
+            Outcome::NoAgent
+        );
+    }
+
+    #[test]
+    fn a_unit_the_latest_listing_does_not_carry_is_not_asked_for() {
+        let state = HematitaServicesRust {
+            system_units: vec![unit("sshd.service", Scope::System)],
+            user_units: vec![unit("at-spi-dbus-bus.service", Scope::User)],
+            ..HematitaServicesRust::default()
+        };
+        assert!(state.lists("sshd.service", Scope::System));
+        assert!(state.lists("at-spi-dbus-bus.service", Scope::User));
+        // The right name on the wrong manager is not this unit.
+        assert!(!state.lists("sshd.service", Scope::User));
+        assert!(!state.lists("nothing.service", Scope::System));
+    }
+
+    #[test]
     fn only_a_service_or_a_socket_is_ever_asked_of_the_bus() {
         // The refusal `act` applies before it spawns anything, expressed over
         // the same predicate it calls.
@@ -489,20 +576,8 @@ mod tests {
     #[test]
     fn both_buses_units_are_projected_together_with_the_user_first() {
         let state = HematitaServicesRust {
-            system_units: vec![Unit {
-                name: "sshd.service".to_owned(),
-                description: "OpenSSH".to_owned(),
-                scope: Scope::System,
-                active: "active".to_owned(),
-                sub: "running".to_owned(),
-            }],
-            user_units: vec![Unit {
-                name: "at-spi-dbus-bus.service".to_owned(),
-                description: "Accessibility".to_owned(),
-                scope: Scope::User,
-                active: "active".to_owned(),
-                sub: "running".to_owned(),
-            }],
+            system_units: vec![unit("sshd.service", Scope::System)],
+            user_units: vec![unit("at-spi-dbus-bus.service", Scope::User)],
             ..HematitaServicesRust::default()
         };
         let units = state.all_units();

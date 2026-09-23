@@ -235,7 +235,7 @@ Item {
         if (row === null)
             return ""
         if (!row.actionable)
-            return qsTr("¿Matar «%1» (%2)? Pertenece a %3 y pedirá autorización.")
+            return qsTr("¿Matar «%1» (%2)? Pertenece a %3 y pedirá autorización; si el proceso termina mientras esperas, la señal podría alcanzar a otro con el mismo PID.")
                      .arg(row.name).arg(row.pid).arg(row.user)
         return qsTr("¿Matar «%1» (%2)? El proceso no podrá guardar nada.")
                  .arg(row.name).arg(row.pid)
@@ -252,7 +252,7 @@ Item {
         case "pending":
             return qsTr("%1: esperando la autorización").arg(verb)
         case "no-agent":
-            return qsTr("%1: esta sesión no tiene agente de autenticación; la acción sobre unidades del sistema necesita uno")
+            return qsTr("%1: esta sesión no tiene agente de autenticación; actuar sobre un proceso ajeno necesita uno")
                      .arg(verb)
         case "denied":
             return qsTr("%1: autorización denegada o cancelada").arg(verb)
