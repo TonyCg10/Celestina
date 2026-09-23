@@ -37,6 +37,10 @@ Hematita constraints; it cannot relax the root or grant authority.
 - Sensor values and limits come from hwmon files alone; the chip's own
   `crit` decides the thermal load through the thresholds in `publish.rs`;
   no alert, no fan control.
+- Privilege follows [ADR
+  0010](../docs/decisions/0010-one-shot-privilege-through-polkit.md):
+  one-shot, polkit-mediated, `pkexec` spelled only in `privilege.rs`, every
+  outcome typed; no agent is Hematita's to provide.
 
 ## Local verification
 

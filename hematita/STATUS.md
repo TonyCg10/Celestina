@@ -1,6 +1,12 @@
 # Hematita status
 
 - **Updated:** 2026-09-22
+- **Delivered as 0.6.0:** H5 — the Services page lists every user and
+  system unit read from both buses; the person starts, stops and restarts
+  their own units without authorisation, and reaches a system unit or a
+  foreign process only through polkit, with every privileged outcome typed
+  and read as a sentence, including a missing authentication agent; built,
+  verified and deployed to the author's prefix
 - **Delivered as 0.4.0:** H3 — the Processes page lists every process with
   live CPU, memory and IO, sortable columns, search, terminate and kill
   behind a confirming dialog; the Applications page groups the same rows
@@ -26,14 +32,29 @@
   `/sys/class/hwmon` shows only its reason rather than the last good values
   beneath an error line, and the smoke fails unless the page publishes chips
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
-  run; `VAL-H3` requested, not run; `VAL-H4` requested, not run
-- **Active phase:** H5 (services and privileged actions), opened 2026-09-22
+  run; `VAL-H3` requested, not run; `VAL-H4` requested, not run; `VAL-H5`
+  requested, not run
+- **Active phase:** none — H5 closed 2026-09-22, the design's five phases
+  delivered; no next phase is open
 
 ## Current checkout truth
 
-- The project is registered and builds a release binary. The window shows the
-  pill strip with five sections, and all five now have a page: Performance,
-  Processes, Applications, Sensors and Services.
+- The project is registered and builds a release binary at `0.6.0`. The
+  window shows the pill strip with five sections, and all five now have a
+  page: Performance, Processes, Applications, Sensors and Services. The
+  Services page lists units from both the session and the system bus; the
+  person's own user units start, stop and restart without authorisation,
+  while a system unit and a foreign process go through polkit — a `pkexec`
+  prompt for the process case, a system-bus call for the unit case — and
+  every privileged outcome is one of five typed words (`done`, `no-agent`,
+  `denied`, `failed`, `refused`) read as a sentence. The headless smoke
+  steps through all five sections one second apart and asserts three shape
+  lines: the CPU contract on the first row, the Sensors page publishing at
+  least one chip and one channel, and the Services page listing at least
+  one system unit. Nobody has looked at any page on a real session yet
+  (`VAL-H1` through `VAL-H5` all pending), and the session running this
+  suite has no authentication agent registered on either bus today, so the
+  privileged paths this checkout can exercise answer only `no-agent`.
 - `hematita-core` provides `ratio`, `cpu`, `memory` and `history`: `/proc/stat`
   and `/proc/meminfo` parsing, a CPU sampler that turns two readings into a
   rate, cpufreq and model parsing, and a sixty-sample ring, all covered by
@@ -276,6 +297,17 @@
   their rows under `anchoring`. The PID-recycling window while a polkit prompt
   stands open is named as a limit, not closed. See the
   [privilege fixes evidence](docs/evidence/2026-09-22-h5-privilege-fixes.md).
+- `H5-Z` closed the checkpoint at `0.6.0`: the release binary is built,
+  verified and deployed to the author's prefix. The Services page lists
+  every user and system unit from both buses, manages the person's own
+  freely and a system unit or a foreign process through polkit, and reports
+  every privileged outcome truthfully. This session still has no
+  authentication agent, so those paths could only be verified as
+  `no-agent`. Nobody has looked at the page on a real session yet: `VAL-H1`
+  through `VAL-H5` all stay pending. See the
+  [production completion record](docs/evidence/2026-09-22-h5-production-completion.md).
+  The design's five phases (`H1` through `H5`) are delivered; no next phase
+  is open.
 
 ## Blockers
 

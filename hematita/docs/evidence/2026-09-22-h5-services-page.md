@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H5-B` of
-  [`../plans/active/2026-09-22-h5-services.md`](../plans/active/2026-09-22-h5-services.md):
+  [`../plans/archive/2026-09-22-h5-services.md`](../plans/archive/2026-09-22-h5-services.md):
   the sampler's service section over both buses, `HematitaServices`,
   `privilege.rs`, the foreign-process path in `HematitaProcesses`, the shared
   `ConfirmDialog`, `ServicesPage`/`ServiceRow`, the fifth section, and the

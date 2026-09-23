@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-22
 - **Scope:** `H5-C` of
-  [`../plans/active/2026-09-22-h5-services.md`](../plans/active/2026-09-22-h5-services.md):
+  [`../plans/archive/2026-09-22-h5-services.md`](../plans/archive/2026-09-22-h5-services.md):
   the whole-unit review's correction of `H5-B` — foreign-process actions
   reachable, outcome precedence over the ownership note, an action token
   against two actions racing on one outcome, a dead bus connection reopened,

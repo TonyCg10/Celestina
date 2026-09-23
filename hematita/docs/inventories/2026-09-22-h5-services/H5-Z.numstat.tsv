@@ -1,0 +1,37 @@
+# H5-Z exact change inventory
+
+Base revision	8df8367b6c1b3735bf8eab65305b7c5d6bd9d39e
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/AGENTS.md
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-22-h5-core.md
+Pathspec	hematita/docs/evidence/2026-09-22-h5-privilege-fixes.md
+Pathspec	hematita/docs/evidence/2026-09-22-h5-production-completion.md
+Pathspec	hematita/docs/evidence/2026-09-22-h5-services-page.md
+Pathspec	hematita/docs/inventories/2026-09-22-h5-services/H5-Z.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h5-services.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-22-h5-services.md
+Pathspec	hematita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	5594d50272e684611230ea308fa00a6a2c5750ede6b13a9f84cc946d53988f67	docs/version-history.tsv
+4	0	af3d83bb80a0bb48593fcf58b7ce7218a805239888e30bbc0e41351b6140cfe5	hematita/AGENTS.md
+1	1	ed8ddf357402257908e6db94d884066e29e9c95b3ff8127b6b32bb49adca850b	hematita/Cargo.lock
+1	1	856817f33a9e5c0baf3683a35f3fa12206628f5dff7948beab8d71598b35a24d	hematita/Cargo.toml
+31	5	4e6ad48c1cf31054fb7c058cb1bff1ccbd7c8c2a560fbd2dcdb706b9e56bcbbd	hematita/ROADMAP.md
+37	5	b91b17c7240e0366e64e54434641372d460acae529cd781a57244f9b3463b2b1	hematita/STATUS.md
+2	2	bbaae883f4ccef0be9b190d9bc565eacdff52421bebed2e13af9bb04c058fde7	hematita/docs/evidence/2026-09-22-h5-core.md
+1	1	5a3c2c01f57f5a85e683df84f0eaa36b8bd40ab473d255f8e7f693c73b8daaa0	hematita/docs/evidence/2026-09-22-h5-privilege-fixes.md
+92	0	c262ef64aeaf3548c3cb7b7a4f1615e4bbbc5780308009e8052a08ce8f936fa5	hematita/docs/evidence/2026-09-22-h5-production-completion.md
+1	1	348074fdf135af54087ab0eec976377bcc63b40403fa2ac9352d6bfa002e0be9	hematita/docs/evidence/2026-09-22-h5-services-page.md
+0	61	deleted	hematita/docs/plans/active/2026-09-22-h5-services.md
+3	2	4e3a5710088d7c5120ab4202f1c0e00d97b5db30b925eca48d86d11e4502233a	hematita/docs/plans/active/README.md
+61	0	fe12acc17b4f6e2865c5471e00f181d9e3261cbb5d55edccccc540e05b57eb17	hematita/docs/plans/archive/2026-09-22-h5-services.md
+1	0	6d350319acdb1d7488e233a752e57137a9712e31287b8f09f78449606f2aac28	hematita/docs/plans/archive/README.md
+37	0	self	hematita/docs/inventories/2026-09-22-h5-services/H5-Z.numstat.tsv

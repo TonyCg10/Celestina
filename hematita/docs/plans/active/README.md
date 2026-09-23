@@ -1,7 +1,8 @@
 # Active Hematita plans
 
-[`2026-09-22-h5-services.md`](2026-09-22-h5-services.md) is active: `H5`
-(services and privileged actions), opened 2026-09-22.
+No plan is active. `H5` (services and privileged actions) closed 2026-09-22
+at `0.6.0`; the design's five phases are delivered. The next checkpoint
+opens with a new plan and the author's word.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

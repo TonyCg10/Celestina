@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** H5
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -53,7 +53,7 @@ alone, without the machine noticing the monitor.
 | H5-A | done | H4-D | `hematita-core`: `services`, the unit projection, the privileged-action outcome mapping | `cargo test -p hematita-core` |
 | H5-B | done | H5-A | sampler services section, `HematitaServices`, the Services page, the privileged actions | `scripts/verify-production.sh` |
 | H5-C | done | H5-B | the review's correction: the foreign-process path reachable, the outcome races, the dead bus connection, the pending wording | `scripts/verify-production.sh` |
-| H5-Z | pending | H5-C | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
+| H5-Z | done | H5-C | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -86,6 +86,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H5-A: [core](docs/evidence/2026-09-22-h5-core.md)
 - H5-B: [services page](docs/evidence/2026-09-22-h5-services-page.md)
 - H5-C: [privilege fixes](docs/evidence/2026-09-22-h5-privilege-fixes.md)
+- H5-Z: [production completion](docs/evidence/2026-09-22-h5-production-completion.md)
 
 ## H1 — closed 2026-09-21
 
@@ -215,9 +216,17 @@ deployed as `0.5.1`, in its own archived
 [plan](docs/plans/archive/2026-09-22-h4-sensors-fixes.md).
 `VAL-H4` stays pending in the author's lane and did not block this closure.
 
-## H5 — opened 2026-09-22
+## H5 — closed 2026-09-22
 
-Its falsifiable problem is whether every systemd unit of the session and the
+The delivered result is the release binary built, verified and deployed to
+the author's prefix at `0.6.0`, whose Services page lists every user and
+system unit from both buses, lets the person start, stop and restart their
+own units freely, reaches a system unit or a foreign process only through
+polkit, and reads the outcome of every privileged action as a typed
+sentence, including a missing authentication agent, per [ADR
+0010](../docs/decisions/0010-one-shot-privilege-through-polkit.md).
+
+Its falsifiable problem was whether every systemd unit of the session and the
 system can be listed on the sampler thread from both buses, the user's own
 units started and stopped without authorisation, and every privileged
 action reported truthfully, including the absence of an agent. The
@@ -256,3 +265,20 @@ evidence](docs/evidence/2026-09-22-h5-services-page.md). The three items
 `H4-D` deferred closed with it: the sensor facts are re-enumerated every
 thirtieth tick, a channel keeps its session extremes while its chip is
 listed, and a power reading is graded against the chip's own cap.
+
+`H5-C` answered its review: both process actions are offered on any
+selected row — a foreign one asks for authorisation instead of being
+disabled — an answer about the selected row outranks the note about who
+owns it, each hub drops the outcome of an action superseded while its
+prompt stood open, a bus connection that proves dead is reopened on the
+next service tick, `pending` reads as an authorisation wait only for a
+system unit, and both pages assign their rows under `anchoring` — the
+[privilege fixes evidence](docs/evidence/2026-09-22-h5-privilege-fixes.md).
+Units `H5-A` through `H5-Z` are in the archived
+[plan](docs/plans/archive/2026-09-22-h5-services.md). The checkpoint's
+implementation exit ran on 2026-09-22: the [completion
+evidence](docs/evidence/2026-09-22-h5-production-completion.md). `VAL-H5`
+stays pending in the author's lane and did not block this closure.
+
+The five phases of the design are delivered; further work opens with a new
+checkpoint and the author's word.
