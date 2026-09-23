@@ -17,6 +17,7 @@ ApplicationWindow {
     property bool shapePrinted: false
     property bool sensorShapePrinted: false
     property bool serviceShapePrinted: false
+    property bool storageShapePrinted: false
 
     width: 1000
     height: 680
@@ -28,13 +29,14 @@ ApplicationWindow {
 
     // The sections, in the order the strip shows them, each with the page
     // under it: Performance, the two process pages that share one hub,
-    // Sensors, and Services.
+    // Sensors, Services and Storage.
     readonly property var sections: [
         { key: "performance", icon: "gauge", label: qsTr("Rendimiento") },
         { key: "processes", icon: "view-list", label: qsTr("Procesos") },
         { key: "applications", icon: "app-window", label: qsTr("Aplicaciones") },
         { key: "sensors", icon: "zap", label: qsTr("Sensores") },
-        { key: "services", icon: "toolbox", label: qsTr("Servicios") }
+        { key: "services", icon: "toolbox", label: qsTr("Servicios") },
+        { key: "storage", icon: "hard-drive", label: qsTr("Almacenamiento") }
     ]
     property int currentSection: 0
 
@@ -93,6 +95,16 @@ ApplicationWindow {
             onRevisionChanged: window.printServiceShape()
         }
 
+        HematitaAnalysis {
+            id: analysisHub
+
+            // The storage section's own shape gate, printed once the walk has
+            // reached Almacenamiento and the locations have landed. A page
+            // that built without error but found no mount is the failure no
+            // error message would have named.
+            onRevisionChanged: window.printStorageShape()
+        }
+
         HematitaActivation {
             id: activation
             onRaiseRequested: {
@@ -129,6 +141,11 @@ ApplicationWindow {
                 services: serviceHub
                 backdrop: window.contentItem
             }
+
+            StoragePage {
+                analysis: analysisHub
+                backdrop: window.contentItem
+            }
         }
     }
 
@@ -138,6 +155,11 @@ ApplicationWindow {
     onCurrentSectionChanged: {
         processHub.grouped = window.currentSection === 2
         processHub.refresh()
+        // The storage section reads the mounts again each time it is shown:
+        // a disk plugged in since is there, and nothing is read while the
+        // section is not up.
+        if (window.currentSection === 5)
+            analysisHub.open()
     }
 
     function printSensorShape() {
@@ -158,12 +180,21 @@ ApplicationWindow {
                      serviceHub.systemAvailable, serviceHub.userAvailable)
     }
 
+    function printStorageShape() {
+        if (!window.smokeSections || window.storageShapePrinted
+            || window.currentSection !== 5 || analysisHub.mode !== "locations"
+            || analysisHub.revision < 1 || analysisHub.busy)
+            return
+        window.storageShapePrinted = true
+        console.info("hematita-storage", analysisHub.locationNames.length)
+    }
+
     // The smoke's section walk. A `StackLayout` builds only the page it is
     // showing, so a page nobody selected is a page whose delegates were never
     // constructed — and a headless run that never left Performance would pass
-    // while any of the other four failed to build. One second apart, this
+    // while any of the others failed to build. One second apart, this
     // shows every section in turn and then stops; the gate is the absence of
-    // QML errors once all five have been up. It prints nothing of its own.
+    // QML errors once all six have been up. It prints nothing of its own.
     Timer {
         running: window.smokeSections
         interval: 1000
@@ -178,6 +209,7 @@ ApplicationWindow {
             // next `revisionChanged` is not what to wait for.
             window.printSensorShape()
             window.printServiceShape()
+            window.printStorageShape()
         }
     }
 

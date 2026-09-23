@@ -982,6 +982,14 @@ fn read_disks() -> Result<Vec<(String, [u64; 2])>, Reason> {
         .collect())
 }
 
+/// The model of the block device `name` (`nvme0n1`, `sda`), read the way the
+/// disk section reads it, or `None` when the device reports none. The storage
+/// section names a mounted disk with it.
+pub fn disk_model_of(name: &str) -> Option<String> {
+    let model = disk_info(name).model;
+    (!model.is_empty()).then_some(model)
+}
+
 fn disk_info(name: &str) -> DiskInfo {
     let root = Path::new(BLOCK_ROOT).join(name);
     let model = read(&root.join("device/model"))

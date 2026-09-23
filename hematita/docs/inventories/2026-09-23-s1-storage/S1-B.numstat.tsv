@@ -1,0 +1,43 @@
+# S1-B exact change inventory
+
+Base revision	07d4be249b863e1451e811c31d5d2a3c6d44fcd0
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-09-23-s1-locations.md
+Pathspec	hematita/docs/inventories/2026-09-23-s1-storage/S1-B.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-23-s1-storage.md
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/FolderList.qml
+Pathspec	hematita/qml/components/LocationList.qml
+Pathspec	hematita/qml/components/PathCrumbs.qml
+Pathspec	hematita/qml/components/StoragePage.qml
+Pathspec	hematita/scripts/smoke.sh
+Pathspec	hematita/src/analysis.rs
+Pathspec	hematita/src/browse.rs
+Pathspec	hematita/src/locations.rs
+Pathspec	hematita/src/main.rs
+Pathspec	hematita/src/sampler.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+5	4	974d638db50b529721707854da81c5c009728ea06ebcb03656c0c6d5776f952e	hematita/Cargo.toml
+2	1	b9a103c9c14ac2fdb20e70fd7e46b1307042dd8f236cd6468c78d096c10bac43	hematita/ROADMAP.md
+6	1	474c02a301e53a9cd8f97374e6a679b0f218593fffae2bd4bd891e2970c36e31	hematita/STATUS.md
+7	0	1379a5ed17ffc94f2c2aeec582de585c60f31906605f1275867c8ec942608259	hematita/build.rs
+111	0	328903a7e89bbc228ceb055a01274dba2132189af6146dd3344a6bc72824982d	hematita/docs/evidence/2026-09-23-s1-locations.md
+1	1	ed5fdd8d07afcb5048020d1456e7646d2f7bbc3fd5f2a340ba92d7a773e490a9	hematita/docs/plans/active/2026-09-23-s1-storage.md
+36	4	71260f6a38fdfa6da916ce305530cc319a1340e4474b0e0d80377ff40f43964e	hematita/qml/Main.qml
+185	0	4990b72f95562c62deb52a6f1eaf6a7f39ce9779088d64877874ea4ca44e803d	hematita/qml/components/FolderList.qml
+196	0	2524b14ed178b2140a48ea0a19858056cc40e6d3257e7da41bea4ad77904844c	hematita/qml/components/LocationList.qml
+66	0	7698ca651c94017065fd89fba2fa5307e21ab629b638c25047ec0c59ca584eae	hematita/qml/components/PathCrumbs.qml
+232	0	c52976338d89b06b1870689d9138bd310cbb58641e7ebc96fe6f0cfe6358221f	hematita/qml/components/StoragePage.qml
+13	2	ef45780240824d1787e66f7a479236302d5d85120f2dee7f9fda388b8753c331	hematita/scripts/smoke.sh
+644	0	eb6547b3fd5744d34cd4b8c2f339fae339f50211e19f440a671d611d767ec729	hematita/src/analysis.rs
+138	0	8294c1cd5ac2f3489b5a38c053bb77fc98b2d853797851a47ffa18c85763bbd2	hematita/src/browse.rs
+232	0	304e86ca76774720bcebebbe28c5c1a38d468a80085050da32e52b9dbba25bf5	hematita/src/locations.rs
+3	0	5e13087828b0633e075b757a3718a184deb6101b8508a7390fe4329d9b7bdcd1	hematita/src/main.rs
+8	0	71d628daef0ac4df055ab7f87e9f6e091005abb45752623ea8b693faf554f6f5	hematita/src/sampler.rs
+43	0	self	hematita/docs/inventories/2026-09-23-s1-storage/S1-B.numstat.tsv

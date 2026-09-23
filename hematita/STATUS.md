@@ -13,7 +13,12 @@
   became links, a folder holding only a link is no longer "empty", and
   mount points read from `mountinfo` bound the walk and the deletion even
   where a bind mount or subvolume shares the device
-  ([core fixes](docs/evidence/2026-09-23-s1-core-fixes.md)); `S1-B` is next
+  ([core fixes](docs/evidence/2026-09-23-s1-core-fixes.md)); `S1-B` done:
+  the Almacenamiento section lists the mount points with their occupation
+  and browses any readable one folder by folder, on worker threads, with
+  the hub's whole contract declared and the scan and action invokables
+  answering `refused` until `S1-C`/`S1-D`
+  ([locations](docs/evidence/2026-09-23-s1-locations.md)); `S1-C` is next
 - **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
   real session (the process table kept its scroll position across
   refreshes, applications opened folded, no flicker) and asked to close

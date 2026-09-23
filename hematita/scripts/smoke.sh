@@ -19,7 +19,7 @@ set -u
 #     section one second apart and then stops. A `StackLayout` builds only the
 #     page it shows, so without this a page that cannot construct at all is a
 #     page (2) never looked at. The gate is that (2) still finds no errors once
-#     all five pages have been up, which the ten seconds leave time for.
+#     all six pages have been up, which the ten seconds leave time for.
 #  5) The sensors gate: once the walk reaches Sensores the window prints that
 #     page's two counts. A page that constructed without error but published no
 #     chip at all — the whole hwmon read having failed — is a working page
@@ -30,6 +30,11 @@ set -u
 #     there in this run and must have answered with units; the session bus
 #     deliberately points nowhere, so `false` for the user side is the expected
 #     state the page has to render without error.
+#  7) The storage gate: once the walk reaches Almacenamiento the window prints
+#     how many mount locations it lists. `/` is readable in any session, so a
+#     page that listed none means the mount table or the worker thread failed.
+#     The run never scans: only the mount table, `statvfs` and one `read_dir`
+#     per location are touched.
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
 # real Wayland session.
@@ -112,4 +117,10 @@ if [ -z "$services" ]; then
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, the Services page listed system units, no QML errors, no auto-bindings"
+storage=$(grep -E 'hematita-storage [1-9][0-9]*$' "$log" | head -1 || true)
+if [ -z "$storage" ]; then
+    echo "smoke: the Storage page listed no locations (expected 'hematita-storage <locations>' above zero); got: '$(grep -E 'hematita-storage' "$log" | head -1)'" >&2
+    exit 1
+fi
+
+echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, the Services page listed system units, the Storage page listed locations, no QML errors, no auto-bindings"

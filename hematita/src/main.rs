@@ -1,5 +1,8 @@
 mod activation;
+mod analysis;
+mod browse;
 mod lists;
+mod locations;
 mod privilege;
 mod processes;
 mod publish;
