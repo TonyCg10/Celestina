@@ -316,6 +316,14 @@
   process page's `no-agent` sentence and the foreign kill question say what
   the code does. Deployed as `0.6.1`. See the
   [privilege fixes 2 evidence](docs/evidence/2026-09-22-h5-privilege-fixes-2.md).
+- Known open item, recorded 2026-09-22: the unit action's `ACTION_TIMEOUT` is
+  inert, because `zbus::Proxy::call_with_flags` does not consult the
+  connection's `method_timeout`, so an unanswered prompt parks one worker
+  thread and its connection until the bus replies or the process exits; the
+  listing's two-second timeout is effective. A watchdog on the worker, and
+  the correction of the overstating comment in `src/services.rs`, are booked
+  for the next checkpoint — see the addendum in the
+  [privilege fixes 2 evidence](docs/evidence/2026-09-22-h5-privilege-fixes-2.md).
 - `H5-Z` closed the checkpoint at `0.6.0`: the release binary is built,
   verified and deployed to the author's prefix. The Services page lists
   every user and system unit from both buses, manages the person's own

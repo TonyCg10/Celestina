@@ -150,6 +150,35 @@ HEMATITA_SMOKE_SHAPE=1 HEMATITA_SMOKE_SECTIONS=1 \
 - Keyboard, focus, hover, the row colours and every Spanish sentence in front
   of a person remain `VAL-H5`.
 
+### Addendum, 2026-09-22 — the unit action's timeout is not in effect
+
+The re-review of this unit found the bullet above wrong, and it is. In zbus
+5.19.0 `Proxy::call_with_flags` reaches the bus through
+`Connection::call_method_raw`, which does not consult the connection
+builder's `method_timeout`; only `Connection::call_method` does. So
+`ACTION_TIMEOUT` is inert: setting it on the action's connection changes
+nothing about how long the call waits, and no bullet of this evidence should
+have claimed a five-minute bound.
+
+What actually bounds a unit action today is the bus's own pending-reply
+limit, which is not Hematita's to set and not the five minutes named above.
+A prompt that is never answered therefore leaves that `hematita-systemd`
+worker thread, and the connection it opened, parked until a reply finally
+arrives or the process exits — one thread and one connection per such
+action, which is bounded in practice only by how many actions a person asks
+for and abandons.
+
+The listing's `LISTING_TIMEOUT` **is** effective: the sampler's connections
+call through `Proxy::call`, which does go through `Connection::call_method`,
+so a stuck manager still costs one tick's listing rather than the sampler
+thread.
+
+The source comment on `ACTION_TIMEOUT` in `hematita/src/services.rs`
+overstates what the constant does. It is left as it stands here rather than
+edited alone, which would stale this version's production seal for a comment;
+a real bound needs a watchdog on the worker thread, and the comment will be
+corrected together with it in the next checkpoint.
+
 ## Follow-up
 
 `VAL-H5` is recorded pending in `VALIDATION.md` against 0.6.1 and does not
