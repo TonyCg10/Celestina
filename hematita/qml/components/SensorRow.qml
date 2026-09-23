@@ -19,6 +19,23 @@ Item {
     required property string extremesText
     required property string limitText
     required property string load
+    // "temperature", "fan", "voltage", "power" or "current".
+    required property string kind
+
+    // Each kind reads in its own colour, and a thermal load overrides it.
+    readonly property color kindColor: {
+        switch (row.kind) {
+        case "temperature": return CelestinaTheme.glyphAccentCoral
+        case "fan": return CelestinaTheme.glyphAccentCyan
+        case "voltage": return CelestinaTheme.glyphAccentViolet
+        case "power": return CelestinaTheme.glyphAccentGreen
+        case "current": return CelestinaTheme.glyphAccentAmber
+        }
+        return CelestinaTheme.text
+    }
+    readonly property color valueColor: row.load === "critical" ? CelestinaTheme.danger
+                                      : row.load === "elevated" ? CelestinaTheme.warning
+                                      : row.kindColor
 
     implicitHeight: CelestinaTheme.rowHeight
     activeFocusOnTab: false
@@ -33,9 +50,18 @@ Item {
         anchors.rightMargin: CelestinaTheme.spaceLg
         spacing: CelestinaTheme.spaceMd
 
+        Rectangle {
+            id: dot
+            anchors.verticalCenter: parent.verticalCenter
+            width: CelestinaTheme.compStatusIndicatorSize
+            height: width
+            radius: width / 2
+            color: row.valueColor
+        }
+
         Column {
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - value.width - parent.spacing
+            width: parent.width - dot.width - value.width - parent.spacing * 2
             Text {
                 text: row.label
                 color: CelestinaTheme.text
@@ -45,7 +71,7 @@ Item {
                 width: parent.width
             }
             Text {
-                text: row.extremesText + (row.limitText.length > 0 ? "   " + row.limitText : "")
+                text: row.extremesText + (row.limitText.length > 0 ? " · " + row.limitText : "")
                 color: CelestinaTheme.textMuted
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontRowSecondary
@@ -59,9 +85,7 @@ Item {
             id: value
             anchors.verticalCenter: parent.verticalCenter
             text: row.valueText
-            color: row.load === "critical" ? CelestinaTheme.danger
-                 : row.load === "elevated" ? CelestinaTheme.warning
-                 : CelestinaTheme.text
+            color: row.valueColor
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontRowTitle
             font.weight: CelestinaTheme.weightDemiBold

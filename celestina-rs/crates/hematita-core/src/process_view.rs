@@ -16,6 +16,29 @@ pub struct ProcessRow {
     pub actionable: bool,
 }
 
+/// The part of a process name a person can read. A name that is a path — a
+/// Windows executable under a compatibility layer (`Z:\games\x.exe`) or
+/// a POSIX binary (`/usr/lib/x`) — is shown by its last segment, split on both
+/// separators; a trailing separator is ignored, and a plain name is returned
+/// untouched. Only a name that starts with `/` or carries a `\` is a path:
+/// kernel threads are named `kworker/0:1` or `ksoftirqd/3`, and the part
+/// after their slash is not their name. A name made only of separators is
+/// returned whole rather than emptied.
+pub fn display_name(name: &str) -> &str {
+    if !name.starts_with('/') && !name.contains('\\') {
+        return name;
+    }
+    let is_separator = |c: char| c == '/' || c == '\\';
+    let trimmed = name.trim_end_matches(is_separator);
+    if trimmed.is_empty() {
+        return name;
+    }
+    match trimmed.rfind(is_separator) {
+        Some(at) => &trimmed[at + 1..],
+        None => trimmed,
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SortField {
     Cpu,
@@ -236,5 +259,36 @@ mod tests {
             assert_eq!(SortField::from_token(field.as_str()), Some(field));
         }
         assert_eq!(SortField::from_token("bogus"), None);
+    }
+
+    #[test]
+    fn a_windows_path_shows_its_last_segment() {
+        assert_eq!(
+            display_name("Z:\\mnt\\games\\binaries\\game.exe"),
+            "game.exe"
+        );
+    }
+
+    #[test]
+    fn a_posix_path_shows_its_last_segment() {
+        assert_eq!(
+            display_name("/usr/lib/xdg-desktop-portal"),
+            "xdg-desktop-portal"
+        );
+    }
+
+    #[test]
+    fn mixed_separators_and_a_trailing_one_are_handled() {
+        assert_eq!(display_name("C:/wine\\bin\\app.exe"), "app.exe");
+        assert_eq!(display_name("/opt/tool/"), "tool");
+        assert_eq!(display_name("dir\\"), "dir");
+    }
+
+    #[test]
+    fn a_plain_name_is_untouched() {
+        assert_eq!(display_name("firefox"), "firefox");
+        assert_eq!(display_name("kworker/u64:2"), "kworker/u64:2");
+        assert_eq!(display_name(""), "");
+        assert_eq!(display_name("/"), "/");
     }
 }

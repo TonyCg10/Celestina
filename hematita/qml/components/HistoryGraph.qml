@@ -6,8 +6,10 @@ import org.celestina.hematita 1.0
 // GPU-backed Shape draws a filled area and the trace over it from a series the
 // adapter already normalised, so the page never does arithmetic on samples.
 //
-// Colour follows the load state through theme tokens; the fill is the same
-// colour at the suite's soft opacity.
+// Colour follows the resource's kind through theme tokens, and the load state
+// overrides it; the fill is the same colour at the suite's soft opacity. The
+// shape is drawn inside an inset, clipped plot so the fill never reaches the
+// background's rounded corners.
 Item {
     id: graph
 
@@ -15,23 +17,38 @@ Item {
     required property var series
     // "normal", "elevated" or "critical".
     required property string load
+    // "cpu", "memory", "gpu", "disk" or "network".
+    required property string kind
 
+    readonly property color kindColor: {
+        switch (graph.kind) {
+        case "memory": return CelestinaTheme.glyphAccentViolet
+        case "gpu": return CelestinaTheme.glyphAccentCoral
+        case "disk": return CelestinaTheme.glyphAccentAmber
+        case "network": return CelestinaTheme.glyphAccentGreen
+        }
+        return CelestinaTheme.glyphAccentBlue
+    }
     readonly property color trace: graph.load === "critical"
                                    ? CelestinaTheme.danger
                                    : graph.load === "elevated"
                                      ? CelestinaTheme.warning
-                                     : CelestinaTheme.accent
+                                     : graph.kindColor
 
     implicitHeight: CelestinaTheme.rowHeightLg * 2
 
+    // The plot's own size: the graph less its inset on every side.
+    readonly property real plotWidth: Math.max(0, graph.width - CelestinaTheme.spaceXs * 2)
+    readonly property real plotHeight: Math.max(0, graph.height - CelestinaTheme.spaceXs * 2)
+
     function pointX(index) {
         const count = graph.series.length
-        return count <= 1 ? 0 : index * graph.width / (count - 1)
+        return count <= 1 ? 0 : index * graph.plotWidth / (count - 1)
     }
 
     function pointY(value) {
         const clamped = Math.max(0, Math.min(1, value))
-        return graph.height - clamped * graph.height
+        return graph.plotHeight - clamped * graph.plotHeight
     }
 
     // Both paths are rebuilt from the series once per sample. A PathPolyline
@@ -46,10 +63,10 @@ Item {
     readonly property var areaPoints: {
         if (graph.series.length === 0)
             return []
-        const points = [Qt.point(0, graph.height)]
+        const points = [Qt.point(0, graph.plotHeight)]
         for (let index = 0; index < graph.series.length; ++index)
             points.push(Qt.point(graph.pointX(index), graph.pointY(graph.series[index])))
-        points.push(Qt.point(graph.width, graph.height))
+        points.push(Qt.point(graph.plotWidth, graph.plotHeight))
         return points
     }
 
@@ -59,33 +76,39 @@ Item {
         color: CelestinaTheme.inputFill
     }
 
-    Shape {
+    Item {
         anchors.fill: parent
-        preferredRendererType: Shape.CurveRenderer
-        opacity: graph.series.length > 1 ? 1 : 0
+        anchors.margins: CelestinaTheme.spaceXs
+        clip: true
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
-                easing.type: CelestinaTheme.easeStandard
+        Shape {
+            anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
+            opacity: graph.series.length > 1 ? 1 : 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
+                    easing.type: CelestinaTheme.easeStandard
+                }
             }
-        }
 
-        ShapePath {
-            strokeWidth: 0
-            strokeColor: CelestinaTheme.clear
-            fillColor: Qt.rgba(graph.trace.r, graph.trace.g, graph.trace.b,
-                               CelestinaTheme.accentSoftOpacity)
-            PathPolyline { path: graph.areaPoints }
-        }
+            ShapePath {
+                strokeWidth: 0
+                strokeColor: CelestinaTheme.clear
+                fillColor: Qt.rgba(graph.trace.r, graph.trace.g, graph.trace.b,
+                                   CelestinaTheme.accentSoftOpacity)
+                PathPolyline { path: graph.areaPoints }
+            }
 
-        ShapePath {
-            strokeWidth: CelestinaTheme.borderHairline * 2
-            strokeColor: graph.trace
-            fillColor: CelestinaTheme.clear
-            capStyle: ShapePath.RoundCap
-            joinStyle: ShapePath.RoundJoin
-            PathPolyline { path: graph.tracePoints }
+            ShapePath {
+                strokeWidth: CelestinaTheme.borderHairline * 2
+                strokeColor: graph.trace
+                fillColor: CelestinaTheme.clear
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                PathPolyline { path: graph.tracePoints }
+            }
         }
     }
 

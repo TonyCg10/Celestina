@@ -1,6 +1,12 @@
 # Hematita status
 
-- **Updated:** 2026-09-22
+- **Updated:** 2026-09-23
+- **Delivered as 0.6.2:** `VIS-1` — the correction of the author's first
+  real-session look: the strip's items centred, sparklines inside their
+  corners, a colour per resource and sensor kind, the process and service
+  tables as one inset card under a bar on the canvas, readable process,
+  unit and sensor names, the kernel's sentinel limits dropped, and a
+  measured idle disk rate told from an unreadable one
 - **Delivered as 0.6.1:** `H5-D` — the whole-branch review's correction: a
   unit action now carries the D-Bus `AllowInteractiveAuth` flag, without
   which polkit never consults an agent and every system-unit action is
@@ -40,9 +46,10 @@
   instead of forty-six rows each answering Tab, a tick that cannot read
   `/sys/class/hwmon` shows only its reason rather than the last good values
   beneath an error line, and the smoke fails unless the page publishes chips
-- **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
-  run; `VAL-H3` requested, not run; `VAL-H4` requested, not run; `VAL-H5`
-  requested, not run
+- **Author validation:** `VAL-H1` failed 2026-09-23 (remedied by `VIS-1`);
+  `VAL-H2` requested, not run; `VAL-H3` failed 2026-09-23 (remedied by
+  `VIS-1`); `VAL-H4` failed 2026-09-23 (remedied by `VIS-1`); `VAL-H5`
+  requested, not run; `VAL-VIS-1` requested, not run
 - **Active phase:** none — H5 closed 2026-09-22, the design's five phases
   delivered; no next phase is open
 
@@ -316,6 +323,34 @@
   process page's `no-agent` sentence and the foreign kill question say what
   the code does. Deployed as `0.6.1`. See the
   [privilege fixes 2 evidence](docs/evidence/2026-09-22-h5-privilege-fixes-2.md).
+- As of `VIS-1` (2026-09-23) the author has looked at the window. What they
+  saw: the strip's glyph and word sat at the top of each pill because a
+  `Control` overrides a `contentItem`'s own anchors; the sparklines' fill
+  reached past the background's rounded corners; every graph was the
+  accent blue; the Processes page's search, capsule and table read as one
+  flat surface with the capsule's glyphs crowded and the rows running into
+  the card's corners; a Windows executable read as `Z:\mnt\...\x.exe`, a unit
+  as its file name, a sensor as `Tctl` or `vddgfx`, an NVMe drive's limit as
+  65 261.8 °C and a fan's with a thousands separator; every one of the
+  author's own processes read "—" for its disk rates; and two `hematita`
+  processes were running at once. What changed: the item centres its column
+  inside an `Item`; the graph draws inside a clipped inset; the trace takes
+  the resource kind's glyph accent (processor blue, memory violet, GPU
+  coral, disk amber, network green) and a sensor value the channel kind's,
+  the load still overriding to warning and danger; both tables are one
+  Panel card with a section-label header, a hairline and inset rows, under a
+  bar on the canvas whose capsules are spaced; `process_view::display_name`
+  shows a path's last segment (the full name stays the row's accessible
+  name), a unit leads with its description, and the page words the known
+  hwmon labels; `sensors::plausible_limit` drops a limit no sensor of its
+  kind can mean, the kernel's maximum is worded as a limit and readings carry no
+  thousands separator; and the disk-rate pipeline, which was sound, now
+  publishes `-1` rather than `0` for a rate it cannot read, so a measured
+  idle process reads "0 B/s" and only a foreign or not-yet-read one reads
+  "—". The second window is the activation hand-off failing without a
+  session bus; that failure is now said once on stderr. Deployed as
+  `0.6.2`. See the
+  [visual feedback evidence](docs/evidence/2026-09-23-visual-feedback.md).
 - Known open item, recorded 2026-09-22: the unit action's `ACTION_TIMEOUT` is
   inert, because `zbus::Proxy::call_with_flags` does not consult the
   connection's `method_timeout`, so an unanswered prompt parks one worker

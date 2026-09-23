@@ -35,6 +35,7 @@ Item {
                 Layout.fillHeight: true
                 series: grid.histories[index]
                 load: grid.load
+                kind: "cpu"
             }
         }
     }

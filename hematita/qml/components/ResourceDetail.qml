@@ -13,6 +13,8 @@ CelestinaSurface {
     required property string subtitle
     required property var series
     required property string load
+    // The resource's kind, which picks the graph's colour.
+    required property string kind
     // Flat list of alternating label, value strings.
     required property var facts
     // One minute per core when the CPU is shown; empty otherwise.
@@ -67,6 +69,7 @@ CelestinaSurface {
             HistoryGraph {
                 series: detail.series
                 load: detail.load
+                kind: detail.kind
             }
 
             CoreGrid {

@@ -4,8 +4,8 @@ import QtQuick
 import org.celestina.hematita 1.0
 
 // Sensores: every chip as a card, every channel as a row, in one list the
-// keyboard crosses by card. Every word is composed here from tokens; the
-// kernel's labels are shown as they are.
+// keyboard crosses by card. Every word is composed here from tokens; a
+// kernel label this page knows is put into words, any other is shown as it is.
 Item {
     id: page
 
@@ -44,6 +44,27 @@ Item {
         return kind + " " + index
     }
 
+    // The hwmon labels this machine's drivers publish, in words. A label not
+    // listed here is shown raw: it is the driver's own name for the channel.
+    function labelWord(label) {
+        switch (label) {
+        case "Tctl": return qsTr("CPU (control)")
+        case "Tccd1": return qsTr("CPU chiplet 1")
+        case "Composite": return qsTr("Compuesta")
+        case "Sensor 1": return qsTr("Sensor 1")
+        case "Sensor 2": return qsTr("Sensor 2")
+        case "edge": return qsTr("Borde")
+        case "junction": return qsTr("Unión")
+        case "mem": return qsTr("Memoria")
+        case "vddgfx": return qsTr("Tensión del núcleo")
+        case "PPT": return qsTr("Potencia total")
+        case "3VSB": return qsTr("3,3 V en espera")
+        case "Vbat": return qsTr("Pila")
+        case "+3.3V": return qsTr("3,3 V")
+        }
+        return label
+    }
+
     function unit(kind) {
         switch (kind) {
         case "temperature": return "°C"
@@ -55,9 +76,13 @@ Item {
         return ""
     }
 
+    // A reading in the locale's decimal mark and without a thousands
+    // separator: "3,650 rpm" reads as three and a bit in a comma-decimal
+    // locale. `toLocaleString` always groups, so the digits are fixed here and
+    // only the decimal mark is the locale's.
     function number(kind, value) {
         const digits = kind === "fan" ? 0 : kind === "voltage" ? 3 : 1
-        return value.toLocaleString(Qt.locale(), "f", digits)
+        return value.toFixed(digits).replace(".", Qt.locale().decimalPoint)
     }
 
     function weave() {
@@ -93,14 +118,16 @@ Item {
             const limit = s.channelLimitCrit[i] > 0
                           ? qsTr("crítico %1 %2").arg(page.number(kind, s.channelLimitCrit[i])).arg(u)
                           : s.channelLimitMax[i] > 0
-                            ? qsTr("máx. %1 %2").arg(page.number(kind, s.channelLimitMax[i])).arg(u)
+                            ? qsTr("límite %1 %2").arg(page.number(kind, s.channelLimitMax[i])).arg(u)
                             : ""
             woven[chip].rows.push({
-                label: s.channelLabels[i].length > 0 ? s.channelLabels[i] : page.kindWord(kind, s.channelIndices[i]),
+                label: s.channelLabels[i].length > 0 ? page.labelWord(s.channelLabels[i])
+                                                     : page.kindWord(kind, s.channelIndices[i]),
                 valueText: page.number(kind, s.channelValues[i]) + " " + u,
                 extremesText: qsTr("mín. %1 · máx. %2").arg(page.number(kind, s.channelMins[i])).arg(page.number(kind, s.channelMaxs[i])),
                 limitText: limit,
-                load: s.channelLoads[i]
+                load: s.channelLoads[i],
+                kind: kind
             })
         }
         page.cards = woven

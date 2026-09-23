@@ -235,6 +235,7 @@ Item {
                         value: page.valueFor(resourceRow.row)
                         series: resourceRow.row.history
                         load: resourceRow.row.load
+                        kind: resourceRow.row.kind
                         selected: resourceRow.row.key === page.selectedKey
                         onClicked: page.selectedKey = resourceRow.row.key
                     }
@@ -248,6 +249,7 @@ Item {
                 subtitle: page.selectedRow ? page.subtitleFor(page.selectedRow) : ""
                 series: page.selectedRow ? page.selectedRow.history : []
                 load: page.selectedRow ? page.selectedRow.load : "normal"
+                kind: page.selectedRow ? page.selectedRow.kind : "cpu"
                 facts: page.factsFor(page.selectedRow)
                 coreHistories: page.selectedRow && page.selectedRow.kind === "cpu"
                                ? page.metrics.cpuCoreHistories : []

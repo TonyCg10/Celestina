@@ -4,7 +4,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 ## VAL-H1 — Live CPU and memory on the real session
 
-- **Status:** pending
+- **Status:** failed
 - **Related implementation:** H1
 - **Requires:** the deployed Hematita on the real session
 - **Procedure:** launch `hematita`; watch the CPU graph for a minute while
@@ -15,8 +15,9 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   values match another monitor within a few percent; the strip is reachable by
   Tab and walkable by arrows; the screen reader names each section and its
   checked state; Hematita idles under 1 % CPU
-- **Result:** not run
-- **Evidence:** none
+- **Result:** failed on 2026-09-23 — the strip's glyph and word sat at the top of each pill with empty space below; the sparklines' fill ran past the rounded corners of their background; every graph and value was the same colour whatever the resource. The rest of the procedure was not reported
+- **Evidence:** author's screenshots, 2026-09-23, recorded in [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
+- **Remediation:** `VIS-1` in [plan](docs/plans/archive/2026-09-23-visual-feedback.md)
 
 ## VAL-H2 — Every resource, live, on the real session
 
@@ -44,7 +45,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 ## VAL-H3 — Processes and applications on the real session
 
-- **Status:** pending
+- **Status:** failed
 - **Related implementation:** H3
 - **Requires:** the deployed Hematita 0.4.1 on the real session; a process of
   the author's to end (for example `sleep 600` in a terminal); one root
@@ -68,12 +69,13 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   named by the screen reader; every running desktop application has an icon
   (a missing icon is a `VAL` failure to record, not a crash); the table keeps
   its place across ticks; Hematita idles under 2 % CPU on Procesos
-- **Result:** not run
-- **Evidence:** none
+- **Result:** failed on 2026-09-23 — the search field, the action capsule and the table read as one flat surface; the rows ran into the card's rounded corners; path-named processes (`Z:\mnt\...\x.exe`, `/usr/lib/...`) were unreadable; the capsule's glyphs sat too close together; every one of the author's own processes read "—" for its disk rates; two `hematita` processes were running. The rest of the procedure was not reported
+- **Evidence:** author's screenshots, 2026-09-23, recorded in [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
+- **Remediation:** `VIS-1` in [plan](docs/plans/archive/2026-09-23-visual-feedback.md)
 
 ## VAL-H4 — Sensors on the real session
 
-- **Status:** pending
+- **Status:** failed
 - **Related implementation:** H4
 - **Requires:** the deployed Hematita 0.5.1 on the real session; a GPU load
   and a compile to heat things up
@@ -94,8 +96,9 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   where the kernel has them; session minimum and maximum move; the GPU rows
   change under load; every row is reachable and named; the terminate
   sentence persists; typing is smooth; idle CPU under 2 %
-- **Result:** not run
-- **Evidence:** none
+- **Result:** failed on 2026-09-23 — channels read as the kernel's abbreviations (`Tctl`, `vddgfx`, `PPT`); every value was the same colour whatever its kind; the NVMe rows showed a maximum of 65 261.8 °C, the kernel's sentinel, and a fan's line showed two maxima side by side and a thousands separator that reads as a decimal mark. The rest of the procedure was not reported
+- **Evidence:** author's screenshots, 2026-09-23, recorded in [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
+- **Remediation:** `VIS-1` in [plan](docs/plans/archive/2026-09-23-visual-feedback.md)
 
 ## VAL-H5 — Services and foreign processes on the real session
 
@@ -117,5 +120,33 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   dialog actually appears — for a system unit and for a foreign process —
   and the action follows the answer;
   every row and control reachable and named; idle CPU under 2 % on Servicios
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-VIS-1 — The corrected screens on the real session
+
+- **Status:** pending
+- **Related implementation:** VIS-1
+- **Requires:** the deployed Hematita 0.6.2 on the real session; one Windows
+  executable or `/usr/lib` binary running as the author
+- **Procedure:** launch `hematita`; look at the strip; look at the
+  Performance list and each detail (processor, memory, GPU, a disk, an
+  interface) and the per-core grid; open Procesos and read the bar, the
+  card, the column titles and a path-named process; copy a large file and
+  watch a process of the author's own gain a read or write rate; read a
+  foreign process's rates; open Servicios and read a unit's two lines; open
+  Sensores and read the processor, GPU, NVMe and board rows; launch
+  `hematita` a second time from a terminal
+- **Pass condition:** each strip item's glyph and word sit centred in its
+  pill; no sparkline or core graph reaches its rounded corners; the
+  processor, memory, GPU, disk and network each have their own colour and a
+  high load still turns amber or red; the bar sits on the canvas with a
+  spaced capsule, and the table is one card whose titles, hairline and rows
+  stay inside its corners; a path-named process reads its file name and the
+  screen reader still reads its full path; an own idle process reads
+  "0 B/s" and a busy one a rate, a foreign one "—"; a unit leads with its
+  description; known sensor labels read as words, each kind has its dot and
+  colour, no limit is absurd, and no reading has a thousands separator; the
+  second launch raises the first window, or says on stderr why it could not
 - **Result:** not run
 - **Evidence:** none

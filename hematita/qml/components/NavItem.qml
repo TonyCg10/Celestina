@@ -47,26 +47,34 @@ AbstractButton {
         shown: item.visualFocus
     }
 
-    contentItem: Column {
-        id: column
-        spacing: CelestinaTheme.spaceXs
-        anchors.centerIn: parent
+    // A Control sizes and places its contentItem itself, so an anchor on the
+    // column would be overridden and it would sit at the top. The Item takes
+    // the control's rectangle and centres the column inside it.
+    contentItem: Item {
+        implicitWidth: column.implicitWidth
+        implicitHeight: column.implicitHeight
 
-        CelestinaIcon {
-            anchors.horizontalCenter: parent.horizontalCenter
-            name: item.iconName
-            width: CelestinaTheme.iconMd
-            height: width
-            tone: item.current ? CelestinaIcon.Primary : CelestinaIcon.Secondary
-        }
+        Column {
+            id: column
+            spacing: CelestinaTheme.spaceXs
+            anchors.centerIn: parent
 
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: item.label
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontBody
-            font.weight: item.current ? CelestinaTheme.weightDemiBold : CelestinaTheme.weightRegular
-            color: item.current ? CelestinaTheme.text : CelestinaTheme.textMuted
+            CelestinaIcon {
+                anchors.horizontalCenter: parent.horizontalCenter
+                name: item.iconName
+                width: CelestinaTheme.iconMd
+                height: width
+                tone: item.current ? CelestinaIcon.Primary : CelestinaIcon.Secondary
+            }
+
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: item.label
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontBody
+                font.weight: item.current ? CelestinaTheme.weightDemiBold : CelestinaTheme.weightRegular
+                color: item.current ? CelestinaTheme.text : CelestinaTheme.textMuted
+            }
         }
     }
 }

@@ -20,7 +20,7 @@ ListSection {
     // A channel-shaped nothing, so a row whose index is momentarily past the
     // array reads fields rather than undefined.
     readonly property var emptyChannel: ({ label: "", valueText: "", extremesText: "",
-                                           limitText: "", load: "normal" })
+                                           limitText: "", load: "normal", kind: "" })
 
     title: card.chipTitle
     // The page is the one Tab stop; a card is a place in it, not a stop.
@@ -45,6 +45,7 @@ ListSection {
             extremesText: channel.extremesText
             limitText: channel.limitText
             load: channel.load
+            kind: channel.kind
         }
     }
 }

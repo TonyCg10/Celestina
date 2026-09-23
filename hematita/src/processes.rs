@@ -56,6 +56,7 @@ pub mod qobject {
         #[qproperty(bool, grouped)]
         #[qproperty(QVariant, process_pids)]
         #[qproperty(QStringList, process_names)]
+        #[qproperty(QStringList, process_display_names)]
         #[qproperty(QStringList, process_users)]
         #[qproperty(QVariant, process_cpu_percents)]
         #[qproperty(QVariant, process_memory_kib)]
@@ -121,6 +122,8 @@ pub struct HematitaProcessesRust {
     grouped: bool,
     process_pids: QVariant,
     process_names: QStringList,
+    /// The readable part of each name: a path's last segment.
+    process_display_names: QStringList,
     process_users: QStringList,
     process_cpu_percents: QVariant,
     process_memory_kib: QVariant,
@@ -168,6 +171,7 @@ impl Default for HematitaProcessesRust {
             grouped: false,
             process_pids: doubles(&[]),
             process_names: QStringList::default(),
+            process_display_names: QStringList::default(),
             process_users: QStringList::default(),
             process_cpu_percents: doubles(&[]),
             process_memory_kib: doubles(&[]),
@@ -339,6 +343,11 @@ impl qobject::HematitaProcesses {
                 .collect::<Vec<_>>(),
         );
         let names = strings(shown.iter().map(|&index| rows[index].name.clone()));
+        let display_names = strings(
+            shown
+                .iter()
+                .map(|&index| process_view::display_name(&rows[index].name).to_owned()),
+        );
         let users = strings(shown.iter().map(|&index| user_name(rows[index].uid)));
         let applications = strings(
             shown
@@ -348,6 +357,7 @@ impl qobject::HematitaProcesses {
 
         self.as_mut().set_process_pids(pids);
         self.as_mut().set_process_names(names);
+        self.as_mut().set_process_display_names(display_names);
         self.as_mut().set_process_users(users);
         self.as_mut().set_process_cpu_percents(cpu_percents);
         self.as_mut().set_process_memory_kib(memory);
@@ -619,6 +629,13 @@ fn count_as_f64(count: usize) -> f64 {
     count as f64
 }
 
+/// The rate published for a process whose disk IO cannot be read — somebody
+/// else's, or one of the person's own before its second reading. A measured
+/// zero is a real answer and the page shows it as one; before this sentinel
+/// both read as a dash, so an idle process of the person's own looked
+/// unreadable.
+const NO_RATE: f64 = -1.0;
+
 fn row_of(reading: &ProcessReading, own_uid: u32) -> ProcessRow {
     ProcessRow {
         pid: reading.pid,
@@ -626,8 +643,8 @@ fn row_of(reading: &ProcessReading, own_uid: u32) -> ProcessRow {
         uid: reading.uid,
         cpu_percent: reading.cpu_percent.unwrap_or(0.0),
         memory_kib: reading.memory_kib,
-        read_rate: reading.io_rate.map_or(0.0, |[read, _]| read),
-        write_rate: reading.io_rate.map_or(0.0, |[_, write]| write),
+        read_rate: reading.io_rate.map_or(NO_RATE, |[read, _]| read),
+        write_rate: reading.io_rate.map_or(NO_RATE, |[_, write]| write),
         application: reading.application.clone(),
         actionable: reading.uid == own_uid,
     }
@@ -635,7 +652,7 @@ fn row_of(reading: &ProcessReading, own_uid: u32) -> ProcessRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{row_of, still_the_same, HematitaProcessesRust, ProcessIdentity, Refusal};
+    use super::{row_of, still_the_same, HematitaProcessesRust, ProcessIdentity, Refusal, NO_RATE};
     use crate::sampler::{ProcessReading, ProcessSnapshot};
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -676,12 +693,21 @@ mod tests {
     }
 
     #[test]
-    fn a_reading_without_rates_yet_reads_as_zero() {
+    fn a_reading_without_rates_yet_reads_as_no_rate_not_zero() {
         let mut waiting = reading(42, 1000);
         waiting.cpu_percent = None;
         waiting.io_rate = None;
         let row = row_of(&waiting, 1000);
         assert_eq!(row.cpu_percent, 0.0);
+        assert_eq!(row.read_rate, NO_RATE);
+        assert_eq!(row.write_rate, NO_RATE);
+    }
+
+    #[test]
+    fn a_measured_idle_rate_stays_zero() {
+        let mut idle = reading(42, 1000);
+        idle.io_rate = Some([0.0, 0.0]);
+        let row = row_of(&idle, 1000);
         assert_eq!(row.read_rate, 0.0);
         assert_eq!(row.write_rate, 0.0);
     }

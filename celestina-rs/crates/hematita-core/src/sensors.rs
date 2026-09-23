@@ -105,6 +105,36 @@ pub fn convert(kind: ChannelKind, raw: i64) -> f64 {
     }
 }
 
+/// The highest temperature limit taken as real, in °C. Drivers publish an
+/// all-ones sentinel for "no limit" (an NVMe `temp_max` reads 65 261.85 °C),
+/// and a limit nobody can reach is not a limit.
+pub const TEMPERATURE_LIMIT_CEILING: f64 = 200.0;
+/// The lowest temperature limit taken as real, in °C.
+pub const TEMPERATURE_LIMIT_FLOOR: f64 = -100.0;
+/// The highest fan limit taken as real, in rpm.
+pub const FAN_LIMIT_CEILING: f64 = 100_000.0;
+/// The highest voltage limit taken as real, in V.
+pub const VOLTAGE_LIMIT_CEILING: f64 = 1_000.0;
+/// The highest power limit taken as real, in W.
+pub const POWER_LIMIT_CEILING: f64 = 100_000.0;
+
+/// A converted limit, or `None` when it lies outside what the kind can
+/// physically mean — a driver's sentinel rather than a limit. A current limit
+/// has no known sentinel and is kept as read.
+#[must_use]
+pub fn plausible_limit(kind: ChannelKind, value: f64) -> Option<f64> {
+    let plausible = match kind {
+        ChannelKind::Temperature => {
+            (TEMPERATURE_LIMIT_FLOOR..=TEMPERATURE_LIMIT_CEILING).contains(&value)
+        }
+        ChannelKind::Fan => value <= FAN_LIMIT_CEILING,
+        ChannelKind::Voltage => value <= VOLTAGE_LIMIT_CEILING,
+        ChannelKind::Power => value <= POWER_LIMIT_CEILING,
+        ChannelKind::Current => true,
+    };
+    plausible.then_some(value)
+}
+
 /// One channel per readable `<kind><n>_input` (a power channel prefers
 /// `_average`), with its label and limits when the chip has them, sorted by
 /// kind then index. A value that is not an integer skips its channel: a chip
@@ -140,8 +170,9 @@ pub fn discover(listing: &ChipListing) -> Chip {
             }
             _ => number(attributes.get("max")),
         }
-        .map(|raw| convert(kind, raw));
-        let limit_crit = number(attributes.get("crit")).map(|raw| convert(kind, raw));
+        .and_then(|raw| plausible_limit(kind, convert(kind, raw)));
+        let limit_crit = number(attributes.get("crit"))
+            .and_then(|raw| plausible_limit(kind, convert(kind, raw)));
         channels.push(Channel {
             kind,
             index,
@@ -278,5 +309,39 @@ mod tests {
     fn a_chip_with_no_channels_is_a_chip_with_no_channels() {
         let chip = discover(&listing(&[("name", "gigabyte_wmi\n")]));
         assert!(chip.channels.is_empty());
+    }
+
+    #[test]
+    fn sentinel_limits_are_dropped_by_kind() {
+        use ChannelKind::{Current, Fan, Power, Temperature, Voltage};
+        assert_eq!(plausible_limit(Temperature, 65_261.85), None);
+        assert_eq!(plausible_limit(Temperature, -273.15), None);
+        assert_eq!(plausible_limit(Temperature, 200.0), Some(200.0));
+        assert_eq!(plausible_limit(Temperature, -100.0), Some(-100.0));
+        assert_eq!(plausible_limit(Fan, 3650.0), Some(3650.0));
+        assert_eq!(plausible_limit(Fan, 100_001.0), None);
+        assert_eq!(plausible_limit(Voltage, 1.2), Some(1.2));
+        assert_eq!(plausible_limit(Voltage, 1_000.5), None);
+        assert_eq!(plausible_limit(Power, 250.0), Some(250.0));
+        assert_eq!(plausible_limit(Power, 100_000.5), None);
+        assert_eq!(plausible_limit(Current, 1e9), Some(1e9));
+    }
+
+    #[test]
+    fn discovery_drops_the_nvme_temp_max_sentinel_and_keeps_crit() {
+        let listing = ChipListing {
+            key: "hwmon1".to_owned(),
+            name: "nvme".to_owned(),
+            files: vec![
+                ("temp1_input".to_owned(), "38850\n".to_owned()),
+                ("temp1_max".to_owned(), "65261850\n".to_owned()),
+                ("temp1_crit".to_owned(), "84850\n".to_owned()),
+                ("temp1_min".to_owned(), "-273150\n".to_owned()),
+            ],
+        };
+        let chip = discover(&listing);
+        assert_eq!(chip.channels.len(), 1);
+        assert_eq!(chip.channels[0].limit_max, None);
+        assert_eq!(chip.channels[0].limit_crit, Some(84.85));
     }
 }

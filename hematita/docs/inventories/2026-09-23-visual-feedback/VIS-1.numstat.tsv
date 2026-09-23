@@ -1,0 +1,65 @@
+# VIS-1 exact change inventory
+
+Base revision	0b893053f8a063da056905b89efdb27946a59ce7
+Pathspec	celestina-rs/crates/hematita-core/src/process_view.rs
+Pathspec	celestina-rs/crates/hematita-core/src/sensors.rs
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-23-visual-feedback.md
+Pathspec	hematita/docs/inventories/2026-09-23-visual-feedback/VIS-1.numstat.tsv
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-23-visual-feedback.md
+Pathspec	hematita/docs/plans/archive/README.md
+Pathspec	hematita/qml/components/CoreGrid.qml
+Pathspec	hematita/qml/components/HistoryGraph.qml
+Pathspec	hematita/qml/components/NavItem.qml
+Pathspec	hematita/qml/components/PerformancePage.qml
+Pathspec	hematita/qml/components/ProcessHeader.qml
+Pathspec	hematita/qml/components/ProcessRow.qml
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/qml/components/ResourceDetail.qml
+Pathspec	hematita/qml/components/ResourceRow.qml
+Pathspec	hematita/qml/components/SensorChipCard.qml
+Pathspec	hematita/qml/components/SensorRow.qml
+Pathspec	hematita/qml/components/SensorsPage.qml
+Pathspec	hematita/qml/components/ServiceRow.qml
+Pathspec	hematita/qml/components/ServicesPage.qml
+Pathspec	hematita/src/activation.rs
+Pathspec	hematita/src/processes.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+54	0	04ea27b0db38f40159e41fdbd7bab596ba865cfb50e45542bdf8f9176fb4b618	celestina-rs/crates/hematita-core/src/process_view.rs
+67	2	789cd3fdda13c248d0402025dba920d3f205133910888e30de442b37741d0146	celestina-rs/crates/hematita-core/src/sensors.rs
+1	0	002682d2acc7fca7a79df64fbf1dad7403eb7618e49bb407fae31ba7edebb90e	docs/version-history.tsv
+1	1	c6df3e10848a7c7a1215cf162c729e887237c8df267a3e228474103c00767e9d	hematita/Cargo.lock
+1	1	4e55b1672ad6e85e34e9e6212048029dadde895ae87ffe4ec6707d44e70c65af	hematita/Cargo.toml
+17	0	76df48115d8bf15e9dac055a100c38d3a6cf3738e2e28124c531d2975f731076	hematita/ROADMAP.md
+39	4	3fc78ffbc09aacd070735798ab6dfd38a10d4449e374fb2eb43d132a5df8d3d8	hematita/STATUS.md
+40	9	fe2e59b800c7a24b370dee6530178ac2794011bcf4e12519e04dad79c6770c24	hematita/VALIDATION.md
+147	0	5c7df8a1ddad6e98aac26ed99652aa907602c5da7491517e9afea8b4eed2b27e	hematita/docs/evidence/2026-09-23-visual-feedback.md
+3	2	054a8b3d780ea69d863e9902cf63b59731ad1617119c01832ee0b282fc0dd9df	hematita/docs/plans/active/README.md
+52	0	aef72588ec0f423683db4616420a777621eff463707e2fa67d06fbd94ccb42e2	hematita/docs/plans/archive/2026-09-23-visual-feedback.md
+1	0	403036e4a2c0ff60b2e559b9d9926d80acd923f92d93db7bcc46c69bdbb437a4	hematita/docs/plans/archive/README.md
+1	0	2ec450b5b226d782ecbca1dd8dec9a833e7ed3e81fb01cc48c9d28032f2578fe	hematita/qml/components/CoreGrid.qml
+52	29	7c2b6ae18b29a98c09be5ec9deeb165541466c2de407a83b3b141cb13489c653	hematita/qml/components/HistoryGraph.qml
+26	18	984ca1bcca4bb090ecc88de1b2a731b684a8d1667d75bc6f16e0a3abc3ed0e21	hematita/qml/components/NavItem.qml
+2	0	77bb95833b71d5ea16718e99034da1ed57a94ed33ae2295873e7931f232c4b78	hematita/qml/components/PerformancePage.qml
+2	1	3d06468af4265d60230dc310a77706c1403a08df44a21f8458b0c8cd1e47062b	hematita/qml/components/ProcessHeader.qml
+4	1	4db72fa28c0a0d917fd2d9f2e95a97e6ede751e05bcd06d0386ad35796f9b091	hematita/qml/components/ProcessRow.qml
+60	34	656a1037ee8af8d088502a3783d8bec5c1e9974ce04c46951a8172dcc254a8c7	hematita/qml/components/ProcessTable.qml
+3	0	0f8b7c636b79de0def28caec2984f1f7fb5395652870f7b6c791d440fa80250b	hematita/qml/components/ResourceDetail.qml
+3	1	8e105e1cf2a9f84a023319b9aa396ab943efd4ab30598fe10dae923114392b21	hematita/qml/components/ResourceRow.qml
+2	1	161f0086d132fca36556cc056eb51ce3aba0e1b392417348b81b2751cdec65a1	hematita/qml/components/SensorChipCard.qml
+29	5	35579b365d4030e9555c5ed65b89cc6b7476a2d3403d93a23fb02f68fa7c8c8c	hematita/qml/components/SensorRow.qml
+33	6	a3a7cac12bd0f85f131aa6ac26372405f69c189727bf84b7804455f23cbeb03b	hematita/qml/components/SensorsPage.qml
+12	3	38f6b20a0c383409db8c5903f7404057c426a3bb72406f94f005ba386dfa63b4	hematita/qml/components/ServiceRow.qml
+62	4	a3a918a174eec1c59076c68ed32608493e1121f0642cc867d9a86db612bd869c	hematita/qml/components/ServicesPage.qml
+41	6	2f694f88b174902b95c1dc059d7718182d09cd7acac3ba1c355ef7956eab5c50	hematita/src/activation.rs
+30	4	df84b71335f3c26a90155b9b13fe870231483f0a50a43013aae0410b3df03570	hematita/src/processes.rs
+65	0	self	hematita/docs/inventories/2026-09-23-visual-feedback/VIS-1.numstat.tsv

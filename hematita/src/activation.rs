@@ -84,14 +84,49 @@ fn serve(qt: cxx_qt::CxxQtThread<qobject::HematitaActivation>) -> zbus::Result<(
 /// Asks a running Hematita to raise itself. `true` means it did and this
 /// launch should exit; any failure answers `false` and the launch opens its
 /// own window.
+///
+/// The hand-off needs the session bus: without one, a second launch cannot
+/// find the first and opens a second window. That is never fatal, but it is
+/// said once on stderr, so two running Hematitas have a reason on record. No
+/// instance owning the name is the ordinary first launch and says nothing.
 #[must_use]
 pub fn hand_off() -> bool {
-    let Ok(connection) = zbus::blocking::Connection::session() else {
-        return false;
+    let connection = match zbus::blocking::Connection::session() {
+        Ok(connection) => connection,
+        Err(error) => {
+            eprintln!("hematita: no session bus, cannot hand off to a running window: {error}");
+            return false;
+        }
     };
-    let Ok(proxy) = zbus::blocking::Proxy::<'_>::new(&connection, SERVICE, OBJECT, INTERFACE)
-    else {
-        return false;
+    let proxy = match zbus::blocking::Proxy::<'_>::new(&connection, SERVICE, OBJECT, INTERFACE) {
+        Ok(proxy) => proxy,
+        Err(error) => {
+            eprintln!("hematita: cannot hand off to a running window: {error}");
+            return false;
+        }
     };
-    proxy.call::<_, _, ()>("Activate", &()).is_ok()
+    match proxy.call::<_, _, ()>("Activate", &()) {
+        Ok(()) => true,
+        Err(error) => {
+            if !nobody_owns_the_name(&error) {
+                eprintln!("hematita: cannot hand off to a running window: {error}");
+            }
+            false
+        }
+    }
+}
+
+/// Whether a failed `Activate` only means no Hematita is running.
+fn nobody_owns_the_name(error: &zbus::Error) -> bool {
+    match error {
+        zbus::Error::MethodError(name, _, _) => {
+            name.as_str() == "org.freedesktop.DBus.Error.ServiceUnknown"
+                || name.as_str() == "org.freedesktop.DBus.Error.NameHasNoOwner"
+        }
+        zbus::Error::FDO(fdo) => matches!(
+            **fdo,
+            zbus::fdo::Error::ServiceUnknown(_) | zbus::fdo::Error::NameHasNoOwner(_)
+        ),
+        _ => false,
+    }
 }

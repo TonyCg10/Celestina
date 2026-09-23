@@ -29,8 +29,8 @@ Item {
     // Row-shaped and group-shaped nothings, so a delegate whose index is
     // momentarily out of the woven arrays reads fields rather than undefined.
     readonly property var emptyEntry: ({ kind: "process", index: -1 })
-    readonly property var emptyRow: ({ pid: -1, name: "", user: "", cpu: 0, memory: 0,
-                                       read: 0, write: 0, application: "", group: -1,
+    readonly property var emptyRow: ({ pid: -1, name: "", displayName: "", user: "", cpu: 0, memory: 0,
+                                       read: -1, write: -1, application: "", group: -1,
                                        actionable: false })
     readonly property var emptyGroup: ({ id: "", name: "", icon: "", cpu: 0, memory: 0, count: 0 })
 
@@ -42,11 +42,11 @@ Item {
     // Every column but the name has a width of its own; the name takes what
     // is left, and never less than its floor, so the sum can exceed the
     // window only when the window is narrower than the floor plus the rest.
-    // The rows sit inside the surface's padding; the header is given the same
-    // inset below, so the name column's share has to give that padding back on
-    // both sides or the titles would sit one inset off their values.
+    // The header and the rows sit inside the card's inset on both sides, so
+    // the name column's share gives that inset back or the last column would
+    // run past the card's edge.
     readonly property int fixedTotal: 90 + 80 + 80 + 110 + (table.ratesShown ? 220 : 0)
-                                      + 2 * CelestinaTheme.spaceXs
+                                      + 2 * CelestinaTheme.spaceSm
 
     readonly property var columns: [
         { field: "name", title: qsTr("Nombre"), width: Math.max(160, table.width - table.fixedTotal), numeric: false, shown: true },
@@ -76,8 +76,10 @@ Item {
         return Math.round(bytes) + " B"
     }
 
+    // A negative rate is the hub's word for "cannot be read" — somebody
+    // else's process, or one not yet read twice; a zero is a measured idle.
     function rateText(value) {
-        return value > 0 ? table.bytesText(value) + "/s" : "—"
+        return value < 0 ? "—" : table.bytesText(value) + "/s"
     }
 
     function weave() {
@@ -85,6 +87,7 @@ Item {
         // Defensive: a short column would mean a publication error, and fewer
         // rows are better than rows with undefined fields.
         const count = Math.min(published.processPids.length, published.processNames.length,
+                               published.processDisplayNames.length,
                                published.processUsers.length, published.processCpuPercents.length,
                                published.processMemoryKib.length, published.processReadRates.length,
                                published.processWriteRates.length, published.processApplications.length,
@@ -92,6 +95,7 @@ Item {
         const woven = []
         for (let index = 0; index < count; ++index)
             woven.push({ pid: published.processPids[index], name: published.processNames[index],
+                         displayName: published.processDisplayNames[index],
                          user: published.processUsers[index], cpu: published.processCpuPercents[index],
                          memory: published.processMemoryKib[index], read: published.processReadRates[index],
                          write: published.processWriteRates[index],
@@ -330,7 +334,7 @@ Item {
                       ? qsTr("%1 procesos").arg(table.processes.totalCount)
                       : qsTr("%1 de %2 procesos").arg(table.processes.shownCount)
                                                  .arg(table.processes.totalCount)
-                color: CelestinaTheme.textMuted
+                color: CelestinaTheme.textFaint
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontCaption
                 font.features: CelestinaTheme.fontFeaturesTabular
@@ -339,6 +343,8 @@ Item {
             Item { Layout.fillWidth: true }
 
             CelestinaCapsule {
+                spacing: CelestinaTheme.spaceXs
+                inset: CelestinaTheme.spaceXs
                 // Both actions are offered for any selected row, the
                 // person's own or somebody else's: `actionable` only words the
                 // bar, and the hub is what decides whether a signal goes
@@ -396,40 +402,59 @@ Item {
             elide: Text.ElideRight
         }
 
-        // ── Header ─────────────────────────────────────────────────────
-        ProcessHeader {
-            Layout.fillWidth: true
-            Layout.leftMargin: CelestinaTheme.spaceXs
-            Layout.rightMargin: CelestinaTheme.spaceXs
-            columns: table.columns
-            sortField: table.processes.sortField
-            sortAscending: table.processes.sortAscending
-            onSortRequested: function(field) {
-                if (table.processes.sortField === field) {
-                    table.processes.sortAscending = !table.processes.sortAscending
-                } else {
-                    table.processes.sortField = field
-                    // Text and identifiers read from the top; rates and
-                    // sizes are asked largest-first.
-                    table.processes.sortAscending =
-                        field === "name" || field === "pid" || field === "user"
-                }
-                table.processes.refresh()
-            }
-        }
-
-        // ── Rows ───────────────────────────────────────────────────────
+        // ── The table: one card holding its titles and its rows ────────
+        // The rows are inset from the card on every side and clipped, so a
+        // highlighted row never reaches the card's rounded corners.
         CelestinaSurface {
             Layout.fillWidth: true
             Layout.fillHeight: true
             role: CelestinaSurface.Panel
-            padding: CelestinaTheme.spaceXs
+            padding: 0
 
             contentItem: Item {
+                // ── Header ─────────────────────────────────────────────
+                ProcessHeader {
+                    id: header
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.topMargin: CelestinaTheme.spaceSm
+                    anchors.leftMargin: CelestinaTheme.spaceSm
+                    anchors.rightMargin: CelestinaTheme.spaceSm
+                    columns: table.columns
+                    sortField: table.processes.sortField
+                    sortAscending: table.processes.sortAscending
+                    onSortRequested: function(field) {
+                        if (table.processes.sortField === field) {
+                            table.processes.sortAscending = !table.processes.sortAscending
+                        } else {
+                            table.processes.sortField = field
+                            // Text and identifiers read from the top; rates
+                            // and sizes are asked largest-first.
+                            table.processes.sortAscending =
+                                field === "name" || field === "pid" || field === "user"
+                        }
+                        table.processes.refresh()
+                    }
+                }
+
+                Rectangle {
+                    id: headerRule
+                    anchors.top: header.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: CelestinaTheme.borderHairline
+                    color: CelestinaTheme.divider
+                }
+
                 ListView {
                     id: list
 
-                    anchors.fill: parent
+                    anchors.top: headerRule.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: CelestinaTheme.spaceSm
                     clip: true
                     model: table.entries.length
                     activeFocusOnTab: true
@@ -482,7 +507,8 @@ Item {
                             visible: !slot.isGroup
                             enabled: !slot.isGroup
                             columns: table.columns
-                            name: slot.processData.name
+                            name: slot.processData.displayName
+                            fullName: slot.processData.name
                             user: slot.processData.user
                             pid: String(slot.processData.pid)
                             cpu: table.percentText(slot.processData.cpu)

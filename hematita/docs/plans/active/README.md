@@ -2,8 +2,9 @@
 
 No plan is active. `H5` (services and privileged actions) closed 2026-09-22
 at `0.6.0`, and its whole-branch review's correction `H5-D` closed the same
-day at `0.6.1`; the design's five phases are delivered. The next checkpoint
-opens with a new plan and the author's word.
+day at `0.6.1`; the design's five phases are delivered. `VIS-1`, the
+correction of the author's first real-session look, closed 2026-09-23 at
+`0.6.2`. The next checkpoint opens with a new plan and the author's word.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

@@ -10,7 +10,10 @@ AbstractButton {
     id: row
 
     required property var columns
+    // What the row shows: a path's last segment.
     required property string name
+    // The name as the kernel gives it, for the screen reader.
+    required property string fullName
     required property string user
     required property string pid
     required property string cpu
@@ -29,7 +32,7 @@ AbstractButton {
     focusPolicy: Qt.NoFocus
 
     Accessible.role: Accessible.ListItem
-    Accessible.name: row.name + ", " + row.pid + ", " + row.cpu + ", " + row.memory
+    Accessible.name: row.fullName + ", " + row.pid + ", " + row.cpu + ", " + row.memory
     Accessible.selected: row.selected
 
     background: CelestinaRowHighlight {

@@ -85,9 +85,10 @@ Item {
 
                         Text {
                             text: cell.modelData.title
-                            color: cell.active ? CelestinaTheme.text : CelestinaTheme.textMuted
+                            color: cell.active ? CelestinaTheme.text : CelestinaTheme.textFaint
                             font.family: CelestinaTheme.sansFamily
                             font.pixelSize: CelestinaTheme.fontCaption
+                            font.letterSpacing: CelestinaTheme.sectionLetterSpacing
                             font.weight: CelestinaTheme.weightDemiBold
                         }
 

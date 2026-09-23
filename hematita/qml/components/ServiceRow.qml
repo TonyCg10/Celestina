@@ -30,6 +30,13 @@ AbstractButton {
         }
         return row.active
     }
+    // systemd's description reads better than a unit's file name, so it leads
+    // when it says something the name does not; the name is then the second
+    // line, and otherwise the only one.
+    readonly property bool descriptionLeads: row.unitDescription.length > 0
+                                             && row.unitDescription !== row.unitName
+    readonly property string primaryText: row.descriptionLeads ? row.unitDescription : row.unitName
+    readonly property string secondaryText: row.descriptionLeads ? row.unitName : ""
 
     implicitHeight: CelestinaTheme.rowHeight
     hoverEnabled: true
@@ -37,7 +44,8 @@ AbstractButton {
     focusPolicy: Qt.NoFocus
 
     Accessible.role: Accessible.ListItem
-    Accessible.name: row.unitName + ", " + row.scopeWord + ", " + row.stateWord
+    Accessible.name: (row.descriptionLeads ? row.unitDescription + ", " : "")
+                     + row.unitName + ", " + row.scopeWord + ", " + row.stateWord
     Accessible.selected: row.selected
 
     background: CelestinaRowHighlight {
@@ -73,7 +81,7 @@ AbstractButton {
                        - parent.spacing * 3
 
                 Text {
-                    text: row.unitName
+                    text: row.primaryText
                     color: CelestinaTheme.text
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontRowTitle
@@ -82,7 +90,8 @@ AbstractButton {
                 }
 
                 Text {
-                    text: row.unitDescription
+                    visible: row.secondaryText.length > 0
+                    text: row.secondaryText
                     color: CelestinaTheme.textMuted
                     font.family: CelestinaTheme.sansFamily
                     font.pixelSize: CelestinaTheme.fontRowSecondary

@@ -55,6 +55,7 @@ alone, without the machine noticing the monitor.
 | H5-C | done | H5-B | the review's correction: the foreign-process path reachable, the outcome races, the dead bus connection, the pending wording | `scripts/verify-production.sh` |
 | H5-Z | done | H5-C | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
 | H5-D | done | H5-Z | the whole-branch review's corrections: the polkit interaction flag, the action and listing timeouts, the outcome mapping, and 0.6.1 | `scripts/complete-production.sh` |
+| VIS-1 | done | H5-D | the author's first real-session look: strip alignment, sparkline inset, colour per kind, the table card hierarchy, readable names, sentinel limits, the disk-rate dash, and 0.6.2 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -89,6 +90,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H5-C: [privilege fixes](docs/evidence/2026-09-22-h5-privilege-fixes.md)
 - H5-D: [privilege fixes 2](docs/evidence/2026-09-22-h5-privilege-fixes-2.md)
 - H5-Z: [production completion](docs/evidence/2026-09-22-h5-production-completion.md)
+- VIS-1: [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
 
 ## H1 — closed 2026-09-21
 
@@ -301,3 +303,18 @@ Consequences gained the sentence naming the flag.
 
 The five phases of the design are delivered; further work opens with a new
 checkpoint and the author's word.
+
+## VIS-1 — closed 2026-09-23
+
+The author looked at 0.6.1 on the real session for the first time and
+recorded `VAL-H1`, `VAL-H3` and `VAL-H4` as failed: the strip's items sat at
+the top of their pills, the sparklines ran past their rounded corners, every
+graph was the same colour, the Processes bar, actions and table read as one
+flat surface with rows past the card's corners, path-named processes and
+unit file names were unreadable, sensor labels were the kernel's
+abbreviations with an NVMe limit of 65 261.8 °C, and every own process's
+disk rate read "—". `VIS-1` corrected all of it without changing a contract
+beyond the additive `processDisplayNames` list — the [visual feedback
+evidence](docs/evidence/2026-09-23-visual-feedback.md), deployed as `0.6.2`,
+in its own archived [plan](docs/plans/archive/2026-09-23-visual-feedback.md).
+`VAL-VIS-1` asks the author to look at the same screens again.

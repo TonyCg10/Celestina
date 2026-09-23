@@ -229,7 +229,7 @@ Item {
                       ? qsTr("%1 unidades").arg(page.services.totalCount)
                       : qsTr("%1 de %2 unidades").arg(page.services.shownCount)
                                                  .arg(page.services.totalCount)
-                color: CelestinaTheme.textMuted
+                color: CelestinaTheme.textFaint
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontCaption
                 font.features: CelestinaTheme.fontFeaturesTabular
@@ -243,6 +243,9 @@ Item {
             // standing binding would be replaced on the first press and leave
             // the glyph telling a different story from the list.
             CelestinaCapsule {
+                spacing: CelestinaTheme.spaceXs
+                inset: CelestinaTheme.spaceXs
+
                 CelestinaIconButton {
                     id: systemToggle
 
@@ -284,6 +287,9 @@ Item {
             }
 
             CelestinaCapsule {
+                spacing: CelestinaTheme.spaceXs
+                inset: CelestinaTheme.spaceXs
+
                 CelestinaIconButton {
                     iconName: "media-play"
                     helpText: qsTr("Iniciar")
@@ -326,14 +332,62 @@ Item {
             wrapMode: Text.WordWrap
         }
 
-        // ── Rows ───────────────────────────────────────────────────────
+        // ── The list: one card holding its titles and its rows ─────────
+        // The rows are inset from the card on every side and clipped, so a
+        // highlighted row never reaches the card's rounded corners.
         CelestinaSurface {
             Layout.fillWidth: true
             Layout.fillHeight: true
             role: CelestinaSurface.Panel
-            padding: CelestinaTheme.spaceXs
+            padding: 0
 
             contentItem: Item {
+                // The titles are labels, not controls: the list is not
+                // sortable, so they only say what each side of a row is.
+                Item {
+                    id: header
+
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.topMargin: CelestinaTheme.spaceSm
+                    anchors.leftMargin: CelestinaTheme.spaceSm + CelestinaTheme.spaceMd
+                    anchors.rightMargin: CelestinaTheme.spaceSm + CelestinaTheme.spaceMd
+                    height: CelestinaTheme.controlHeightSm
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("Unidad")
+                        color: CelestinaTheme.textFaint
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
+                        font.letterSpacing: CelestinaTheme.sectionLetterSpacing
+                        font.weight: CelestinaTheme.weightDemiBold
+                    }
+
+                    Text {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("Ámbito")
+                        color: CelestinaTheme.textFaint
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontCaption
+                        font.letterSpacing: CelestinaTheme.sectionLetterSpacing
+                        font.weight: CelestinaTheme.weightDemiBold
+                    }
+                }
+
+                Rectangle {
+                    id: headerRule
+
+                    anchors.top: header.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: CelestinaTheme.borderHairline
+                    color: CelestinaTheme.divider
+                }
+
                 // A list, not a column of focusable rows: the page is one Tab
                 // stop and the arrows move it unit by unit. The model is the
                 // count, so a tick that changes no unit leaves the rows where
@@ -341,7 +395,11 @@ Item {
                 ListView {
                     id: list
 
-                    anchors.fill: parent
+                    anchors.top: headerRule.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: CelestinaTheme.spaceSm
                     clip: true
                     model: page.rows.length
                     activeFocusOnTab: true

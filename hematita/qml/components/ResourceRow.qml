@@ -12,6 +12,7 @@ AbstractButton {
     required property string value
     required property var series
     required property string load
+    required property string kind
     required property bool selected
 
     implicitHeight: CelestinaTheme.rowHeightLg
@@ -64,7 +65,7 @@ AbstractButton {
             }
             Text {
                 text: row.value
-                color: CelestinaTheme.textMuted
+                color: CelestinaTheme.withAlpha(sparkline.trace, CelestinaTheme.mutedContentOpacity)
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontRowSecondary
                 font.features: CelestinaTheme.fontFeaturesTabular
@@ -82,6 +83,7 @@ AbstractButton {
             anchors.verticalCenter: content.verticalCenter
             series: row.series
             load: row.load
+            kind: row.kind
         }
     }
 }
