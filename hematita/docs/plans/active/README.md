@@ -1,8 +1,7 @@
 # Active Hematita plans
 
-No plan is active. `H4-D`, the correction wave of the `H4` whole-branch
-review, closed on 2026-09-22 and is archived beside its checkpoint; the
-project roadmap names `H5` as the next checkpoint, not yet opened.
+[`2026-09-22-h5-services.md`](2026-09-22-h5-services.md) is active: `H5`
+(services and privileged actions), opened 2026-09-22.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

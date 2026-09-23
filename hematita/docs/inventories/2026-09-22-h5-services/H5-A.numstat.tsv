@@ -1,0 +1,25 @@
+# H5-A exact change inventory
+
+Base revision	32285db92ee34b8dc482cc943c72fa50e1f72531
+Pathspec	celestina-rs/crates/hematita-core/src/lib.rs
+Pathspec	celestina-rs/crates/hematita-core/src/services.rs
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-22-h5-core.md
+Pathspec	hematita/docs/inventories/2026-09-22-h5-services/H5-A.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h5-services.md
+Pathspec	hematita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	3532e4701023393197a1a5e48e989cd4f6c7d6c367f122f39a70e2e2394ce915	celestina-rs/crates/hematita-core/src/lib.rs
+354	0	394aa2633a1462f4fd5d3aef14b44ee6760bab2cff967f5070c74a1325fe7fe2	celestina-rs/crates/hematita-core/src/services.rs
+25	4	bac2ae2dd75da7bf8ff9eeeaa802bd3fda4ec31c2019e887f013f121a3f74f66	hematita/ROADMAP.md
+17	2	09abee86c0faad72c2e40e7c3f6154e19aa1da9bc8544137e679f19dde820047	hematita/STATUS.md
+22	0	7ceb109ad423bfd14109f7db61e46f564265d317146d76a6abfc60dbb3ab7334	hematita/VALIDATION.md
+113	0	820c4e51bb55c1b148b04c8f97dce3ec1b30834f5307d7afc044a61377157d1f	hematita/docs/evidence/2026-09-22-h5-core.md
+59	0	1380e12f3d3581fcd2e76cdb4ef0f626805d268751fdf4e733adf930323ec37c	hematita/docs/plans/active/2026-09-22-h5-services.md
+2	3	a59718d4f4661a80229b7b1471e3898dbaa0a95b2a9172cecdaa40c6904d3cdc	hematita/docs/plans/active/README.md
+25	0	self	hematita/docs/inventories/2026-09-22-h5-services/H5-A.numstat.tsv

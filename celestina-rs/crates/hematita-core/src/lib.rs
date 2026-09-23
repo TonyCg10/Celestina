@@ -17,3 +17,4 @@ pub mod process_view;
 pub mod rate;
 pub mod ratio;
 pub mod sensors;
+pub mod services;

@@ -27,8 +27,7 @@
   beneath an error line, and the smoke fails unless the page publishes chips
 - **Author validation:** `VAL-H1` requested, not run; `VAL-H2` requested, not
   run; `VAL-H3` requested, not run; `VAL-H4` requested, not run
-- **Active phase:** none; the next phase is H5 (services and privileged
-  actions), not yet opened
+- **Active phase:** H5 (services and privileged actions), opened 2026-09-22
 
 ## Current checkout truth
 
@@ -231,6 +230,22 @@
   the gate. Deployed as `0.5.1`. Still nobody has pressed a key on it:
   `VAL-H4`, which now asks for exactly that. See the
   [sensors fixes evidence](docs/evidence/2026-09-22-h4-sensors-fixes.md).
+
+- As of `H5-A` the crate also decides the Services page's shape and a
+  privileged action's outcome: `services` reads a unit's kind from its
+  name's suffix (`UnitKind::of_name`), says only a service or a socket is
+  ever actionable, and `project` narrows `Unit`s by the scope toggles, the
+  `services_only` kind filter and a case-insensitive name/description
+  search, sorted by scope (user before system), then active state (`failed`
+  before `active` before anything else), then name — the same shape as
+  `process_view::project`, ported to units. `Outcome` names the five words a
+  privileged action can end in (`done`, `no-agent`, `denied`, `failed`,
+  `refused`), and `outcome_of_dbus_error`/`outcome_of_pkexec` read a
+  system-bus error name or a `pkexec` exit status into one, per [ADR
+  0010](../docs/decisions/0010-one-shot-privilege-through-polkit.md). All of
+  it is under unit test; none of it is wired into the sampler thread or a
+  page yet — that is `H5-B`. See the
+  [core evidence](docs/evidence/2026-09-22-h5-core.md).
 
 ## Blockers
 

@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** H5
 - **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -50,6 +50,9 @@ alone, without the machine noticing the monitor.
 | H4-C | done | H4-B | the review's corrections: the hwmon facts re-validated by chip name, stable sensor rows, a smoke that steps through every section | `scripts/verify-production.sh` |
 | H4-Z | done | H4-C | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
 | H4-D | done | H4-Z | the whole-branch review's corrections: the Sensors page one Tab stop with arrows by card, a failed tick showing only its reason, a smoke gate on the page's chip count, and 0.5.1 | `scripts/complete-production.sh` |
+| H5-A | done | H4-D | `hematita-core`: `services`, the unit projection, the privileged-action outcome mapping | `cargo test -p hematita-core` |
+| H5-B | pending | H5-A | sampler services section, `HematitaServices`, the Services page, the privileged actions | `scripts/verify-production.sh` |
+| H5-Z | pending | H5-B | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -79,6 +82,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H4-C: [sensor gates](docs/evidence/2026-09-22-h4-sensor-gates.md)
 - H4-Z: [production completion](docs/evidence/2026-09-22-h4-production-completion.md)
 - H4-D: [sensors fixes](docs/evidence/2026-09-22-h4-sensors-fixes.md)
+- H5-A: [core](docs/evidence/2026-09-22-h5-core.md)
 
 ## H1 — closed 2026-09-21
 
@@ -208,8 +212,25 @@ deployed as `0.5.1`, in its own archived
 [plan](docs/plans/archive/2026-09-22-h4-sensors-fixes.md).
 `VAL-H4` stays pending in the author's lane and did not block this closure.
 
-The next checkpoint is `H5` (services and privileged actions), not yet
-opened. Its first step is the author's written privilege decision: a
+## H5 — opened 2026-09-22
+
+Its falsifiable problem is whether every systemd unit of the session and the
+system can be listed on the sampler thread from both buses, the user's own
+units started and stopped without authorisation, and every privileged
+action reported truthfully, including the absence of an agent. The
+author's written privilege decision is [ADR
+0010](../docs/decisions/0010-one-shot-privilege-through-polkit.md): a
 foreign process is signalled through `pkexec`, and a service is started,
 stopped or restarted over the system bus through systemd rather than a
 setuid helper of its own.
+
+`H5-A` delivered `hematita-core`'s unit projection and outcome mapping:
+`Scope`, `UnitKind` (read from a unit name's suffix), `Unit`, `is_actionable`
+(a service or a socket only), `project` (the scope toggles, the
+`services_only` kind filter and a name/description search, sorted by scope
+then active state then name — `process_view`'s shape ported to units), and
+`Outcome` with `outcome_of_dbus_error` and `outcome_of_pkexec`, which turn a
+system-bus error name or a `pkexec` exit status into the typed result ADR
+0010 asks every privileged action to report — the [core
+evidence](docs/evidence/2026-09-22-h5-core.md). None of it is wired into the
+sampler thread or a page yet — that is `H5-B`.

@@ -96,3 +96,25 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   sentence persists; typing is smooth; idle CPU under 2 %
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-H5 — Services and foreign processes on the real session
+
+- **Status:** pending
+- **Related implementation:** H5
+- **Requires:** the deployed Hematita 0.6.0; a session with or without an
+  authentication agent (state which)
+- **Procedure:** open Servicios; compare the count of user services with
+  `systemctl --user list-units --type=service`; stop and start a harmless
+  user service (`at-spi-dbus-bus.service` restarts on demand) and watch its
+  state change; filter by name; toggle Sistema and Usuario; try to restart a
+  system service and read the outcome sentence (with no agent it must name
+  the missing agent, not fail silently); on Procesos, select a root process
+  and press Terminar, then read the sentence; walk the list by keyboard and
+  screen reader; confirm Escape cancels the confirming dialog
+- **Pass condition:** counts match; the user service's state follows the
+  action within a second; the filter and toggles narrow live; a system
+  action without an agent says so in Spanish; with an agent, the prompt
+  appears and the action follows the answer; the same for the root process;
+  every row and control reachable and named; idle CPU under 2 % on Servicios
+- **Result:** not run
+- **Evidence:** none
