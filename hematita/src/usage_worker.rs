@@ -14,8 +14,11 @@
 //! the generation it was asked under; the hub drops one that is no longer
 //! current, so a cancelled worker finishing late changes nothing.
 //!
-//! Blocking IO, `/proc/self/mountinfo` included, happens only here.
+//! Blocking IO, `/proc/self/mountinfo` included, happens only on these
+//! threads and on the actions thread, which reads the mount table through
+//! [`mount_boundaries`].
 
+use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -42,10 +45,29 @@ pub struct WorkerHandle {
     cancel: CancellationToken,
 }
 
+impl WorkerHandle {
+    /// A handle and the token the worker it guards checks.
+    #[must_use]
+    pub fn pair() -> (Self, CancellationToken) {
+        let cancel = CancellationToken::new();
+        let token = cancel.clone();
+        (Self { cancel }, token)
+    }
+}
+
 impl Drop for WorkerHandle {
     fn drop(&mut self) {
         self.cancel.cancel();
     }
+}
+
+/// The mount targets the walk and the deletion stop at. Without the table
+/// both still stop at other devices; only same-device mounts (bind mounts,
+/// subvolumes) would go unrecognised.
+pub fn mount_boundaries() -> HashSet<PathBuf> {
+    std::fs::read_to_string(MOUNTINFO)
+        .map(|text| mount_targets(&parse_mountinfo(&text)))
+        .unwrap_or_default()
 }
 
 /// Whether a progress report is due, `interval` after the last one sent.
@@ -70,11 +92,7 @@ pub fn spawn_scan(
     std::thread::Builder::new()
         .name("hematita-scan".to_owned())
         .spawn(move || {
-            // Without the table the walk still stops at other devices; only
-            // same-device mounts (bind mounts, subvolumes) would be walked.
-            let boundaries = std::fs::read_to_string(MOUNTINFO)
-                .map(|text| mount_targets(&parse_mountinfo(&text)))
-                .unwrap_or_default();
+            let boundaries = mount_boundaries();
             let mut last: Option<Instant> = None;
             let mut report = |progress: Progress| {
                 let now = Instant::now();
@@ -101,7 +119,11 @@ pub fn spawn_scan(
 /// Checks `groups` — each with its index among the hub's candidates — by
 /// content on the `hematita-confirm` thread, one group at a time, so the page
 /// fills as each verdict lands; then says it is done.
-/// A group with a file that cannot be read keeps its unverified row.
+/// A group with a file that cannot be read keeps its unverified row and is
+/// reported as unreadable. Every result carries `epoch`, the hub's confirm
+/// epoch when the check started: a cancel, a restart or a pruning moves it,
+/// so a verdict about an older tree, or a finish from a cancelled check,
+/// never lands.
 ///
 /// # Errors
 ///
@@ -110,6 +132,7 @@ pub fn spawn_confirm(
     tree: Arc<Tree>,
     groups: Vec<(usize, Group)>,
     generation: u64,
+    epoch: u64,
     qt: CxxQtThread<HematitaAnalysis>,
 ) -> Result<WorkerHandle, io::Error> {
     let cancel = CancellationToken::new();
@@ -122,15 +145,19 @@ pub fn spawn_confirm(
                 match duplicates::confirm(&tree, group, &token, &mut |_| {}) {
                     Ok(verified) => {
                         let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
-                            hub.apply_verified(generation, index, verified);
+                            hub.apply_verified(generation, epoch, index, verified);
                         });
                     }
                     Err(ConfirmError::Cancelled) => return,
-                    Err(ConfirmError::Read { .. }) => {}
+                    Err(ConfirmError::Read { .. }) => {
+                        let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
+                            hub.apply_unreadable(generation, epoch, index);
+                        });
+                    }
                 }
             }
             let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
-                hub.confirm_finished(generation);
+                hub.confirm_finished(generation, epoch);
             });
         })?;
     Ok(WorkerHandle { cancel })

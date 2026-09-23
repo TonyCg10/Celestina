@@ -8,23 +8,30 @@ import org.celestina.hematita 1.0
 // size is a candidate until its content is checked; then it says so and
 // offers to select every copy but one. One Tab stop: the arrows move, Space
 // selects a copy, Enter on a header checks the content or, once verified,
-// selects all copies but one. Copies are named by node id.
+// selects all copies but one. A set with a copy that could not be read says
+// so and is never offered for "all but one"; the sets beyond the listed cap
+// are counted at the foot. Delete asks to trash the selection. Copies are
+// named by node id.
 CelestinaSurface {
     id: card
 
-    // Each row: { header, group, count, size, verified } for a set, or
+    // Each row: { header, group, count, size, verified, unreadable } for a set, or
     // { header: false, id, name, path } for a copy.
     required property var duplicateRows
     required property var selectedIds
     // Whether the content check is running.
     required property bool checking
+    // Candidate sets beyond the listed ones.
+    required property int hiddenGroups
 
     signal confirmRequested()
     signal allButOneRequested(int group)
     signal toggled(int id)
+    signal trashRequested()
 
     readonly property var emptyRow: ({ header: false, group: -1, count: 0, size: "",
-                                       verified: false, id: -1, name: "", path: "" })
+                                       verified: false, unreadable: false, id: -1, name: "",
+                                       path: "" })
 
     function keepViewport(apply) {
         const offset = list.contentY
@@ -46,7 +53,7 @@ CelestinaSurface {
         const row = card.duplicateRows[index]
         if (!row.header)
             card.toggled(row.id)
-        else if (row.verified)
+        else if (row.verified && !row.unreadable)
             card.allButOneRequested(row.group)
         else if (!card.checking)
             card.confirmRequested()
@@ -59,7 +66,10 @@ CelestinaSurface {
         ListView {
             id: list
 
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: hiddenNote.visible ? hiddenNote.top : parent.bottom
             anchors.margins: CelestinaTheme.spaceSm
             clip: true
             model: card.duplicateRows.length
@@ -86,6 +96,10 @@ CelestinaSurface {
                 event.accepted = list.currentIndex >= 0
                 card.activate(list.currentIndex)
             }
+            Keys.onDeletePressed: function(event) {
+                event.accepted = true
+                card.trashRequested()
+            }
 
             delegate: AbstractButton {
                 id: row
@@ -106,6 +120,7 @@ CelestinaSurface {
                 Accessible.name: row.rowData.header
                                  ? qsTr("%1 copias · %2").arg(row.rowData.count).arg(row.rowData.size)
                                    + (row.rowData.verified ? ", " + qsTr("verificado") : "")
+                                   + (row.rowData.unreadable ? ", " + qsTr("no se pudo leer") : "")
                                  : row.rowData.name + ", " + row.rowData.path
                 Accessible.selected: row.marked
 
@@ -175,6 +190,15 @@ CelestinaSurface {
 
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
+                                visible: row.rowData.unreadable
+                                text: qsTr("no se pudo leer")
+                                color: CelestinaTheme.textMuted
+                                font.family: CelestinaTheme.sansFamily
+                                font.pixelSize: CelestinaTheme.fontCaption
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
                                 visible: row.rowData.verified
                                 text: qsTr("verificado")
                                 color: CelestinaTheme.textMuted
@@ -195,7 +219,7 @@ CelestinaSurface {
 
                             CelestinaIconButton {
                                 anchors.verticalCenter: parent.verticalCenter
-                                visible: row.rowData.verified
+                                visible: row.rowData.verified && !row.rowData.unreadable
                                 iconName: "files"
                                 helpText: qsTr("Seleccionar todas menos una")
                                 role: CelestinaButton.Ghost
@@ -206,6 +230,21 @@ CelestinaSurface {
                     }
                 }
             }
+        }
+
+        Text {
+            id: hiddenNote
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: CelestinaTheme.spaceSm
+            visible: card.hiddenGroups > 0
+            text: qsTr("%1 grupos más no se muestran").arg(card.hiddenGroups)
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontCaption
+            elide: Text.ElideRight
         }
 
         Text {

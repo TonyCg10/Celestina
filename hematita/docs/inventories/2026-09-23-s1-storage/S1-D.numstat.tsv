@@ -1,0 +1,39 @@
+# S1-D exact change inventory
+
+Base revision	ea704e706502e90878a73dbc0860f855337cad90
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-actions.md
+Pathspec	hematita/docs/inventories/2026-09-23-s1-storage/S1-D.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-23-s1-storage.md
+Pathspec	hematita/qml/components/DuplicateList.qml
+Pathspec	hematita/qml/components/StoragePage.qml
+Pathspec	hematita/qml/components/Treemap.qml
+Pathspec	hematita/qml/components/UsageList.qml
+Pathspec	hematita/src/actions.rs
+Pathspec	hematita/src/analysis.rs
+Pathspec	hematita/src/analysis_view.rs
+Pathspec	hematita/src/main.rs
+Pathspec	hematita/src/usage_worker.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+8	0	a8903674a64ce7b8d9f6ac84d666bd17bdf995d7b07f31034a0e0e07f4445bd9	hematita/Cargo.lock
+3	0	93dce51fb61922610aa429b07738b3366ce4714bbe18db111e9139f348bc4c86	hematita/Cargo.toml
+2	1	b93901c70b011455cb3402d6345001a6bcca006be5a768dabb120f930e6c8754	hematita/ROADMAP.md
+7	1	cc2865a71a3d68ba2587873a4e5e8ac7fbdf6f0e475de9cbfb940eab590d0fe4	hematita/STATUS.md
+130	0	f335b8bf7dc9c1d7cbe95b1f80ca4f0dbee5f876dad517b5c375425e8f436904	hematita/docs/evidence/2026-09-23-s1-actions.md
+1	1	d3fd8f7dcd12a1003c2816fcea5b77a9e49ec998e3c5eb076a5f566b84d70a81	hematita/docs/plans/active/2026-09-23-s1-storage.md
+45	6	5a56848f530535c0a1427661b9cd2f783e2fb0d57ab389e8295e6720dd174482	hematita/qml/components/DuplicateList.qml
+87	8	11fdc4652c31c864a800a3fdbaa7a982485b2ad5b8624926ad222f054132bb93	hematita/qml/components/StoragePage.qml
+4	0	f995bf937684edad04fc17a445c940c73ff62de84d79ea2a477b35527b8d03c6	hematita/qml/components/Treemap.qml
+14	5	a5e86c36c9d2c5a6d68266920bd4c8897dd78f2fe5d86e045e7230a4949b6f6d	hematita/qml/components/UsageList.qml
+238	0	a1696674e6f5c6279b5c627ad48642531a0a5c899e18d480053ee0f1262fe7d4	hematita/src/actions.rs
+334	41	f80c2b2c79ea6160e5a0c5917440aeec57ddae15573d98238087fd8e18ee448e	hematita/src/analysis.rs
+191	3	e6044af1e7cd994298b233def519d7ea65fd280a219751de821af85841150879	hematita/src/analysis_view.rs
+1	0	2dd1137852267324bd6d0ecf7208d0a156d194aa17dacadccf1cb473ce0ef5e8	hematita/src/main.rs
+37	10	a746aad55f86f68581d1922e6355d9d46f3a90bb206c05fc8b4f04ebbe512891	hematita/src/usage_worker.rs
+39	0	self	hematita/docs/inventories/2026-09-23-s1-storage/S1-D.numstat.tsv

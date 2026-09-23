@@ -33,6 +33,9 @@ rustix = { version = "1.1.4", features = ["process", "param", "fs"] }
 # instead of mapping another one. The session bus is how the suite talks
 # between processes, so this earns zbus rather than a socket protocol.
 zbus = "5"
+# The suite's one trash implementation; the analyzer's trash verb goes through
+# it, reversible from Siderita, instead of growing a second.
+siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 
 [build-dependencies]
 cxx-qt-build = "=0.9.1"

@@ -24,7 +24,13 @@
   filters duplicates and empty folders, verifies duplicates by content on
   demand and keeps a real selection, while the actions still answer
   `refused` until `S1-D`
-  ([analysis](docs/evidence/2026-09-23-s1-analysis.md)); `S1-D` is next
+  ([analysis](docs/evidence/2026-09-23-s1-analysis.md)); `S1-D` done:
+  the selection opens in Siderita, goes to the trash through
+  `siderita-ops` (asked first for more than one entry) or is deleted
+  permanently through the guarded deletion (always asked first), on a
+  worker thread with a typed outcome; the tree is pruned of exactly what
+  was removed, and the content check can no longer land on an older tree
+  ([actions](docs/evidence/2026-09-23-s1-actions.md)); `S1-Z` is next
 - **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
   real session (the process table kept its scroll position across
   refreshes, applications opened folded, no flicker) and asked to close

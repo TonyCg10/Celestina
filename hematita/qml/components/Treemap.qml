@@ -24,6 +24,7 @@ CelestinaSurface {
     signal toggled(int id)
     signal chosen(int id)
     signal upRequested()
+    signal trashRequested()
 
     // Tile indexes in reading order: top to bottom, then left to right.
     readonly property var order: {
@@ -72,6 +73,9 @@ CelestinaSurface {
             case Qt.Key_Space:
                 if (map.currentId >= 0)
                     map.toggled(map.currentId)
+                break
+            case Qt.Key_Delete:
+                map.trashRequested()
                 break
             case Qt.Key_Return:
             case Qt.Key_Enter:

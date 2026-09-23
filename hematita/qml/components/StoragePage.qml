@@ -8,8 +8,9 @@ import org.celestina.hematita 1.0
 // Almacenamiento: the mounted locations with how full each is, the folder
 // being browsed inside one of them, and — once scanned — what fills it, as a
 // size list beside a treemap, with the duplicate and empty-folder filters.
-// The bar carries where the person is, the filters and the actions, which
-// stay disabled until the actions land. Every word is composed here from
+// The bar carries where the person is, the filters and the actions on the
+// selection: open in Siderita, trash (asked first for more than one entry),
+// delete permanently (always asked first), details. Every word is composed here from
 // tokens; names and paths are the filesystem's own, shown raw. QML names
 // browsed rows by index and analysed ones by node id, and never hands a path
 // back.
@@ -17,7 +18,7 @@ Item {
     id: page
 
     required property HematitaAnalysis analysis
-    // What a confirmation will blur beneath itself once the actions land.
+    // What a confirmation blurs beneath itself.
     required property Item backdrop
 
     property var locationRows: []
@@ -39,6 +40,24 @@ Item {
     readonly property bool scanning: page.analysis.mode === "scanning"
     readonly property bool analysed: page.analysis.mode === "analysed"
     readonly property bool filtered: page.analysis.showDuplicates || page.analysis.showEmpty
+    readonly property bool canAct: page.analysed && page.analysis.selectedIds.length > 0
+                                   && !page.analysis.busy
+    readonly property string outcomeText: {
+        const verbs = { open: qsTr("Abrir"), trash: qsTr("Papelera"), delete: qsTr("Borrar") }
+        const verb = verbs[page.analysis.actionKind] || ""
+        switch (page.analysis.actionOutcome) {
+        case "done":
+            return qsTr("%1: hecho (%2)").arg(verb).arg(page.bytesText(page.analysis.actionBytes))
+        case "partial":
+            return qsTr("%1: %2 de %3").arg(verb).arg(page.analysis.actionDone)
+                                       .arg(page.analysis.actionTotal)
+        case "failed":
+            return qsTr("%1: no se pudo").arg(verb)
+        case "refused":
+            return qsTr("%1: rechazado").arg(verb)
+        }
+        return ""
+    }
     // The colour each kind of entry paints, in the list's bars and the map.
     readonly property var toneColors: ({
         dir: CelestinaTheme.glyphAccentBlue,
@@ -102,6 +121,8 @@ Item {
                           size: page.bytesText(published.entryAllocated[index]),
                           percent: qsTr("%1 %").arg((share * 100).toLocaleString(Qt.locale(), "f", 1)),
                           apparent: page.bytesText(published.entryApparent[index]),
+                          copies: index < published.entryCopies.length
+                                  ? published.entryCopies[index] : 0,
                           files: published.entryFilesBelow[index].toLocaleString(Qt.locale(), "f", 0) }
             rows.push(row)
             byId[row.id] = row
@@ -120,7 +141,8 @@ Item {
         page.tiles = tiles
 
         const groups = Math.min(published.groupSizes.length, published.groupCounts.length,
-                                published.groupVerified.length)
+                                published.groupVerified.length,
+                                published.groupUnreadable.length)
         const members = Math.min(published.memberGroups.length, published.memberIds.length,
                                  published.memberNames.length, published.memberPaths.length)
         const duplicates = []
@@ -129,10 +151,12 @@ Item {
             duplicates.push({ header: true, group: group, count: published.groupCounts[group],
                               size: page.bytesText(published.groupSizes[group]),
                               verified: published.groupVerified[group] === 1,
+                              unreadable: published.groupUnreadable[group] === 1,
                               id: -1, name: "", path: "" })
             while (member < members && published.memberGroups[member] === group) {
                 duplicates.push({ header: false, group: group, count: 0, size: "",
-                                  verified: false, id: published.memberIds[member],
+                                  verified: false, unreadable: false,
+                                  id: published.memberIds[member],
                                   name: published.memberNames[member],
                                   path: published.memberPaths[member] })
                 ++member
@@ -221,6 +245,28 @@ Item {
             locationList.takeFocus()
     }
 
+    // Delete and the trash button: one entry goes at once, more are asked.
+    function requestTrash() {
+        if (!page.canAct)
+            return
+        const count = page.analysis.selectedIds.length
+        if (count > 1)
+            confirm.ask(qsTr("¿Enviar %1 elementos (%2) a la papelera?")
+                            .arg(count).arg(page.bytesText(page.analysis.selectedBytes)),
+                        qsTr("Papelera"), { kind: "trash" })
+        else
+            page.analysis.trashSelected()
+    }
+
+    function requestDelete() {
+        if (!page.canAct)
+            return
+        confirm.ask(qsTr("¿Borrar definitivamente %1 elementos (%2)? No se podrán recuperar.")
+                        .arg(page.analysis.selectedIds.length)
+                        .arg(page.bytesText(page.analysis.selectedBytes)),
+                    qsTr("Borrar"), { kind: "delete" })
+    }
+
     Connections {
         target: page.analysis
         function onRevisionChanged() { if (page.visible) page.weave() }
@@ -297,21 +343,24 @@ Item {
                     iconName: "folder-open"
                     helpText: qsTr("Abrir en Siderita")
                     role: CelestinaButton.Ghost
-                    enabled: false
+                    enabled: page.canAct
+                    onClicked: page.analysis.openSelected()
                 }
 
                 CelestinaIconButton {
                     iconName: "user-trash"
                     helpText: qsTr("Papelera")
                     role: CelestinaButton.Ghost
-                    enabled: false
+                    enabled: page.canAct
+                    onClicked: page.requestTrash()
                 }
 
                 CelestinaIconButton {
                     iconName: "x"
                     helpText: qsTr("Borrar definitivamente")
                     role: CelestinaButton.Ghost
-                    enabled: false
+                    enabled: page.canAct
+                    onClicked: page.requestDelete()
                 }
 
                 CelestinaIconButton {
@@ -350,6 +399,17 @@ Item {
             visible: page.browsing && page.analysis.actionOutcome === "failed"
             text: qsTr("No se pudo analizar esta carpeta")
             color: CelestinaTheme.danger
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontCaption
+            wrapMode: Text.WordWrap
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: page.analysed && page.outcomeText.length > 0
+            text: page.outcomeText
+            color: page.analysis.actionOutcome === "done" ? CelestinaTheme.textMuted
+                                                          : CelestinaTheme.danger
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
             wrapMode: Text.WordWrap
@@ -430,6 +490,7 @@ Item {
                                 page.analysis.up()
                                 page.focusBody()
                             }
+                            onTrashRequested: page.requestTrash()
                         }
 
                         DuplicateList {
@@ -438,11 +499,13 @@ Item {
                             duplicateRows: page.duplicateRows
                             selectedIds: page.analysis.selectedIds
                             checking: page.analysis.busy
+                            hiddenGroups: page.analysis.hiddenGroupCount
                             onConfirmRequested: page.analysis.confirmDuplicates()
                             onAllButOneRequested: function(group) {
                                 page.analysis.selectAllButOne(group)
                             }
                             onToggled: function(id) { page.analysis.toggleSelected(id) }
+                            onTrashRequested: page.requestTrash()
                         }
                     }
 
@@ -482,9 +545,25 @@ Item {
                         onToggled: function(id) { page.analysis.toggleSelected(id) }
                         onEntered: function(id) { page.analysis.enterId(id) }
                         onUpRequested: page.analysis.up()
+                        onTrashRequested: page.requestTrash()
                     }
                 }
             }
+        }
+    }
+
+    ConfirmDialog {
+        id: confirm
+
+        anchors.fill: parent
+        backdrop: page.backdrop
+        onConfirmed: function(payload) {
+            if (payload === null)
+                return
+            if (payload.kind === "trash")
+                page.analysis.trashSelected()
+            else if (payload.kind === "delete")
+                page.analysis.deleteSelected()
         }
     }
 }

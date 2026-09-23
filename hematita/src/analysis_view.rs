@@ -4,6 +4,8 @@
 //! keeps, which rows a verified group becomes, and how the treemap crosses to
 //! QML, without a QObject — so each rule is tested on a hand-built tree.
 
+use std::collections::HashSet;
+
 use hematita_core::usage::duplicates::{self, Group, Verified};
 use hematita_core::usage::empty::empty_folders;
 use hematita_core::usage::layout::Tile;
@@ -22,6 +24,8 @@ pub const SHOWN_GROUPS: usize = 500;
 #[derive(Clone, Debug, Default)]
 pub struct Findings {
     pub candidates: Vec<Group>,
+    /// Candidate groups beyond [`SHOWN_GROUPS`], neither listed nor checked.
+    pub hidden_groups: usize,
     pub empty: Vec<NodeId>,
     pub unreadable: Vec<u32>,
 }
@@ -29,9 +33,11 @@ pub struct Findings {
 #[must_use]
 pub fn findings(tree: &Tree) -> Findings {
     let mut candidates = duplicates::candidates(tree);
+    let hidden_groups = candidates.len().saturating_sub(SHOWN_GROUPS);
     candidates.truncate(SHOWN_GROUPS);
     Findings {
         candidates,
+        hidden_groups,
         empty: empty_folders(tree),
         unreadable: unreadable_below(tree),
     }
@@ -115,12 +121,19 @@ pub struct GroupRow {
     pub size: u64,
     pub nodes: Vec<NodeId>,
     pub verified: bool,
+    /// A copy could not be read, so the content check could not decide.
+    pub unreadable: bool,
 }
 
 /// The rows the page lists: each candidate as it is, or, once checked, the
-/// sets it split into (none when no two files matched).
+/// sets it split into (none when no two files matched). `unreadable` flags,
+/// per candidate, a check that could not read a copy.
 #[must_use]
-pub fn group_rows(candidates: &[Group], verdicts: &[Option<Vec<Verified>>]) -> Vec<GroupRow> {
+pub fn group_rows(
+    candidates: &[Group],
+    verdicts: &[Option<Vec<Verified>>],
+    unreadable: &[bool],
+) -> Vec<GroupRow> {
     let mut rows = Vec::new();
     for (index, group) in candidates.iter().enumerate() {
         match verdicts.get(index).and_then(Option::as_ref) {
@@ -128,15 +141,112 @@ pub fn group_rows(candidates: &[Group], verdicts: &[Option<Vec<Verified>>]) -> V
                 size: set.size,
                 nodes: set.nodes.clone(),
                 verified: true,
+                unreadable: false,
             })),
             None => rows.push(GroupRow {
                 size: group.size,
                 nodes: group.nodes.clone(),
                 verified: false,
+                unreadable: unreadable.get(index).copied().unwrap_or(false),
             }),
         }
     }
     rows
+}
+
+/// Whether `id` is one of `removed` or lies below one, climbing its parents.
+#[must_use]
+pub fn gone(tree: &Tree, id: NodeId, removed: &HashSet<NodeId>) -> bool {
+    let mut cursor = Some(id);
+    while let Some(current) = cursor {
+        if removed.contains(&current) {
+            return true;
+        }
+        cursor = tree.node(current).and_then(|n| n.parent);
+    }
+    false
+}
+
+/// The selected ids without those lying below another selected one: acting
+/// on a folder already acts on everything inside it. The root never counts.
+#[must_use]
+pub fn outermost(tree: &Tree, selection: &[NodeId]) -> Vec<NodeId> {
+    let chosen: HashSet<NodeId> = selection.iter().copied().collect();
+    selection
+        .iter()
+        .copied()
+        .filter(|id| *id != tree.root && tree.node(*id).is_some())
+        .filter(|id| {
+            let parent = tree.node(*id).and_then(|n| n.parent);
+            parent.is_none_or(|parent| !gone(tree, parent, &chosen))
+        })
+        .collect()
+}
+
+/// What the hub keeps about a tree that names nodes by id.
+pub struct Kept<'a> {
+    pub findings: &'a mut Findings,
+    pub verdicts: &'a mut Vec<Option<Vec<Verified>>>,
+    pub unreadable_groups: &'a mut Vec<bool>,
+    pub selection: &'a mut Vec<NodeId>,
+}
+
+/// Brings `kept` in line with a tree `removed` was pruned from: a candidate keeps its surviving members (a group left
+/// with fewer than two is dropped with its verdict and unreadable flag); a
+/// verified set likewise; the empty folders and the selection lose the gone
+/// ids; the unreadable counts of the ancestors lose what was below.
+///
+/// Call it after `Tree::prune`, which leaves the pruned nodes in the arena
+/// with their parent links, so `gone` still climbs from them.
+pub fn forget_removed(tree: &Tree, removed: &[NodeId], kept: Kept<'_>) {
+    let removed_set: HashSet<NodeId> = removed.iter().copied().collect();
+    let alive = |id: &NodeId| !gone(tree, *id, &removed_set);
+
+    for id in removed {
+        let below = kept
+            .findings
+            .unreadable
+            .get(id.0 as usize)
+            .copied()
+            .unwrap_or(0);
+        if below == 0 {
+            continue;
+        }
+        let mut cursor = tree.node(*id).and_then(|n| n.parent);
+        while let Some(ancestor) = cursor {
+            if let Some(count) = kept.findings.unreadable.get_mut(ancestor.0 as usize) {
+                *count = count.saturating_sub(below);
+            }
+            cursor = tree.node(ancestor).and_then(|n| n.parent);
+        }
+        if let Some(count) = kept.findings.unreadable.get_mut(id.0 as usize) {
+            *count = 0;
+        }
+    }
+
+    let candidates = std::mem::take(&mut kept.findings.candidates);
+    let verdicts = std::mem::take(kept.verdicts);
+    let flags = std::mem::take(kept.unreadable_groups);
+    for (index, mut group) in candidates.into_iter().enumerate() {
+        group.nodes.retain(alive);
+        if group.nodes.len() < 2 {
+            continue;
+        }
+        let verdict = verdicts.get(index).cloned().flatten().map(|sets| {
+            sets.into_iter()
+                .filter_map(|mut set| {
+                    set.nodes.retain(alive);
+                    (set.nodes.len() >= 2).then_some(set)
+                })
+                .collect::<Vec<_>>()
+        });
+        kept.findings.candidates.push(group);
+        kept.verdicts.push(verdict);
+        kept.unreadable_groups
+            .push(flags.get(index).copied().unwrap_or(false));
+    }
+    kept.findings.empty.retain(alive);
+    kept.selection.retain(alive);
 }
 
 /// The treemap as QML reads it: `[id, x, y, w, h]` per tile, the remainder
@@ -273,7 +383,8 @@ mod tests {
             Some(Vec::new()),
             None,
         ];
-        let rows = group_rows(&candidates, &verdicts);
+        let rows = group_rows(&candidates, &verdicts, &[false, false, true]);
+        assert!(rows[2].unreadable && !rows[0].unreadable);
         assert_eq!(rows.len(), 3);
         assert!(rows[0].verified && rows[1].verified && !rows[2].verified);
         assert_eq!(rows[1].nodes, vec![NodeId(2), NodeId(4)]);
@@ -306,5 +417,82 @@ mod tests {
         assert!(flat.chunks(5).any(|c| c[0] == REMAINDER_ID));
         let area: f64 = flat.chunks(5).map(|c| c[3] * c[4]).sum();
         assert!((area - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn pruning_keeps_ids_and_the_shares_still_fit_the_folder() {
+        let mut tree = tree();
+        let mut findings = findings(&tree);
+        findings.candidates = vec![Group {
+            size: 15,
+            nodes: vec![NodeId(3), NodeId(4)],
+        }];
+        let mut verdicts = vec![Some(vec![Verified {
+            size: 15,
+            nodes: vec![NodeId(3), NodeId(4)],
+        }])];
+        let mut flags = vec![false];
+        let mut selection = vec![NodeId(3), NodeId(6), NodeId(1)];
+        assert_eq!(outermost(&tree, &selection), vec![NodeId(6), NodeId(1)]);
+
+        let removed = [NodeId(3), NodeId(2)];
+        for id in removed {
+            tree.prune(id);
+        }
+        forget_removed(
+            &tree,
+            &removed,
+            Kept {
+                findings: &mut findings,
+                verdicts: &mut verdicts,
+                unreadable_groups: &mut flags,
+                selection: &mut selection,
+            },
+        );
+        assert!(findings.candidates.is_empty() && verdicts.is_empty() && flags.is_empty());
+        assert!(!findings.empty.contains(&NodeId(5)), "c(5) went with b(2)");
+        assert_eq!(selection, vec![NodeId(1)], "locked(6) went with b(2)");
+        assert_eq!(findings.unreadable[0], 0);
+
+        let root = tree.root;
+        let children = tree.children_by_size(root);
+        assert_eq!(children, vec![NodeId(1)], "ids are not renumbered");
+        assert_eq!(tree.children_by_size(NodeId(1)), vec![NodeId(4)]);
+        let total = tree.node(root).map_or(0, |n| n.allocated);
+        let shares: f64 = children
+            .iter()
+            .filter_map(|id| tree.node(*id))
+            .map(|n| n.allocated as f64 / total as f64)
+            .sum();
+        assert!(shares <= 1.0 + 1e-9);
+    }
+
+    #[test]
+    fn a_group_that_loses_a_copy_but_keeps_two_stays() {
+        let mut tree = tree();
+        let mut findings = Findings {
+            candidates: vec![Group {
+                size: 15,
+                nodes: vec![NodeId(3), NodeId(4), NodeId(5)],
+            }],
+            ..Findings::default()
+        };
+        let mut verdicts = vec![None];
+        let mut flags = vec![true];
+        let mut selection = Vec::new();
+        tree.prune(NodeId(3));
+        forget_removed(
+            &tree,
+            &[NodeId(3)],
+            Kept {
+                findings: &mut findings,
+                verdicts: &mut verdicts,
+                unreadable_groups: &mut flags,
+                selection: &mut selection,
+            },
+        );
+        assert_eq!(findings.candidates[0].nodes, vec![NodeId(4), NodeId(5)]);
+        assert_eq!(verdicts, vec![None]);
+        assert_eq!(flags, vec![true]);
     }
 }

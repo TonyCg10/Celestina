@@ -63,7 +63,7 @@ alone, without the machine noticing the monitor.
 | S1-A2 | done | S1-A | the review's corrections: the deletion refuses a symlinked component, empty means no non-directory below, mount points from `mountinfo` bound the walk and the deletion | `cargo test -p hematita-core` |
 | S1-B | done | S1-A2 | locations, browsing, the storage section and its smoke line | `scripts/verify-production.sh` |
 | S1-C | done | S1-B | the scan with progress and cancel, size list and treemap, filters, duplicate confirmation | `scripts/verify-production.sh` |
-| S1-D | planned | S1-C | actions: open in Siderita, batch trash, guarded permanent deletion, selection | `scripts/verify-production.sh` |
+| S1-D | done | S1-C | actions: open in Siderita, batch trash, guarded permanent deletion, selection | `scripts/verify-production.sh` |
 | S1-Z | planned | S1-D | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -106,6 +106,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - S1-A2: [core fixes](docs/evidence/2026-09-23-s1-core-fixes.md)
 - S1-B: [locations](docs/evidence/2026-09-23-s1-locations.md)
 - S1-C: [analysis](docs/evidence/2026-09-23-s1-analysis.md)
+- S1-D: [actions](docs/evidence/2026-09-23-s1-actions.md)
 
 ## H1 — closed 2026-09-21
 

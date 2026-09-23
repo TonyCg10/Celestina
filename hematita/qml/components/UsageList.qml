@@ -6,12 +6,14 @@ import org.celestina.hematita 1.0
 
 // The analysed folder's children, biggest first: name, a bar of the share of
 // the folder in the entry's kind colour, size and percentage, and a mark when
-// the entry is selected. One Tab stop; the arrows move, Space selects, Enter
-// enters a folder, Backspace goes up. Rows are named by node id.
+// the entry is selected; an unverified duplicate candidate carries its
+// group's count. One Tab stop; the arrows move, Space selects, Enter enters a
+// folder, Backspace goes up, Delete asks to trash the selection. Rows are
+// named by node id.
 CelestinaSurface {
     id: card
 
-    // Each row: { id, name, kind, tone, share (0..1), size, percent }.
+    // Each row: { id, name, kind, tone, share (0..1), size, percent, copies }.
     required property var usageRows
     required property var selectedIds
     // The colour each tone paints (dir|file|duplicate|empty|unreadable|other).
@@ -23,9 +25,10 @@ CelestinaSurface {
     signal toggled(int id)
     signal chosen(int id)
     signal upRequested()
+    signal trashRequested()
 
     readonly property var emptyRow: ({ id: -1, name: "", kind: "", tone: "", share: 0,
-                                       size: "", percent: "" })
+                                       size: "", percent: "", copies: 0 })
 
     function reset(apply) {
         apply()
@@ -104,6 +107,9 @@ CelestinaSurface {
                 if (event.key === Qt.Key_Backspace) {
                     event.accepted = true
                     card.upRequested()
+                } else if (event.key === Qt.Key_Delete) {
+                    event.accepted = true
+                    card.trashRequested()
                 }
             }
 
@@ -199,7 +205,10 @@ CelestinaSurface {
 
                             Text {
                                 anchors.right: parent.right
-                                text: row.rowData.percent
+                                text: row.rowData.copies > 0
+                                      ? qsTr("%1 · %2 copias").arg(row.rowData.percent)
+                                                              .arg(row.rowData.copies)
+                                      : row.rowData.percent
                                 color: CelestinaTheme.textMuted
                                 font.family: CelestinaTheme.sansFamily
                                 font.pixelSize: CelestinaTheme.fontCaption
