@@ -120,7 +120,8 @@
   the user's own, and refuse `0`, `1` and this process besides.
   `ProcessTable` serves both the Processes page and the Applications page,
   which differ only in `grouped` — the window sets it, because the two pages
-  share one hub. Killing is asked first, in `KillDialog`. Every check is
+  share one hub. Killing is asked first, in `ConfirmDialog` (`KillDialog`
+  until `H5-B` generalised it). Every check is
   offscreen: no row was looked at, no signal was sent, and the application
   icons were never seen resolving. That is `VAL-H3`. See the
   [processes page evidence](docs/evidence/2026-09-22-h3-processes-page.md).
@@ -265,6 +266,16 @@
   extremes while its chip is listed, and a power reading is graded against
   the chip's own cap. See the
   [services page evidence](docs/evidence/2026-09-22-h5-services-page.md).
+- As of `H5-C`, the review's correction: both process actions are offered on
+  any selected row — a foreign one asks for authorisation instead of being
+  disabled, which is what made the privileged path reachable at all — an
+  answer about the selected row outranks the note about who owns it, each hub
+  drops the outcome of an action superseded while its prompt stood open, a bus
+  connection that proves dead is reopened on the next service tick, `pending`
+  reads as an authorisation wait only for a system unit, and both pages assign
+  their rows under `anchoring`. The PID-recycling window while a polkit prompt
+  stands open is named as a limit, not closed. See the
+  [privilege fixes evidence](docs/evidence/2026-09-22-h5-privilege-fixes.md).
 
 ## Blockers
 

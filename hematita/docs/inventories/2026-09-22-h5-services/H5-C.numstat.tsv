@@ -1,0 +1,29 @@
+# H5-C exact change inventory
+
+Base revision	fade022c39d0ed67e7a95d6fecc86285ac922f97
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-22-h5-privilege-fixes.md
+Pathspec	hematita/docs/inventories/2026-09-22-h5-services/H5-C.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h5-services.md
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/qml/components/ServicesPage.qml
+Pathspec	hematita/src/processes.rs
+Pathspec	hematita/src/publish.rs
+Pathspec	hematita/src/sampler.rs
+Pathspec	hematita/src/services.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+3	1	a85c8b14f9fbadd116bfe32865a6852a6162a750570a1f31fd9b1dd7cb0c7ac5	hematita/ROADMAP.md
+12	1	6fa5aca59dffeefd96c265f352662f4d67d54f7342382961dfacde6216fc1215	hematita/STATUS.md
+128	0	aa7ef6fd9a3198ce36a80d8aa29733862c60f2509e6892b5595d3381795b65c1	hematita/docs/evidence/2026-09-22-h5-privilege-fixes.md
+3	1	c8cb2d8dbbdd9ae3ff60f3baeb7140565965e86a6fc695d996fda77a33ff75de	hematita/docs/plans/active/2026-09-22-h5-services.md
+37	5	98633abab76352f515ddca76f8927c97ea0cd49f183d38cfde3aa1ecc7c36ad2	hematita/qml/components/ProcessTable.qml
+41	13	cb70c01ace4ae7dfec67be5e0ebd1fc8c6f1da5393c31176c1696782b7743345	hematita/qml/components/ServicesPage.qml
+23	4	bb9f2663577ee817b6079a5646195b89dd4349484a1ea73c44fa08ac30e2bca5	hematita/src/processes.rs
+25	0	4fd8cb0e530fac12b73ae70d87f4c82f922d05f13f6270097203971a7fab506b	hematita/src/publish.rs
+78	31	2ca2e983c3bf69bccddddf0af9962d007e3d3781fce2d1cd6e3db1d4140d9949	hematita/src/sampler.rs
+19	7	8cf0ee6eb676839e2911cdd72ed784dcbdc2ca7b64f9cc2083464859324136a2	hematita/src/services.rs
+29	0	self	hematita/docs/inventories/2026-09-22-h5-services/H5-C.numstat.tsv

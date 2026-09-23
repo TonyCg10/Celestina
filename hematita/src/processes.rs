@@ -24,8 +24,8 @@ use hematita_core::services::Outcome;
 
 use crate::lists::{doubles, strings};
 use crate::privilege;
+use crate::publish::{self, PENDING};
 use crate::sampler::{self, ProcessReading, ProcessSnapshot, Reason, Section, Snapshot};
-use crate::services::PENDING;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -146,6 +146,9 @@ pub struct HematitaProcessesRust {
     start_failed: bool,
     started: bool,
     last_generation: u64,
+    /// The token of the action being waited for. Every action takes the next
+    /// one, so an outcome that comes back under an older token is dropped.
+    action_token: u64,
     latest: Option<Arc<ProcessSnapshot>>,
     own_uid: u32,
     /// Desktop id to its name and icon, resolved once per id from the XDG
@@ -190,6 +193,7 @@ impl Default for HematitaProcessesRust {
             start_failed: false,
             started: false,
             last_generation: 0,
+            action_token: 0,
             latest: None,
             own_uid: 0,
             entries: HashMap::new(),
@@ -395,6 +399,10 @@ impl qobject::HematitaProcesses {
     }
 
     pub fn clear_action(mut self: Pin<&mut Self>) {
+        // Forgetting the question also retires its token: an answer that
+        // arrives after the person moved on is not written back.
+        let token = self.rust().action_token.wrapping_add(1);
+        self.as_mut().rust_mut().action_token = token;
         self.as_mut().set_action_outcome(QString::default());
         self.as_mut().set_action_kind(QString::default());
         self.as_mut().set_action_pid(0);
@@ -446,6 +454,8 @@ impl qobject::HematitaProcesses {
         // this action's outcome beside the last one's pid.
         self.as_mut().set_action_pid(pid);
         self.as_mut().set_action_kind(QString::from(kind));
+        let token = self.rust().action_token.wrapping_add(1);
+        self.as_mut().rust_mut().action_token = token;
         let outcome = match target {
             Ok(target) if validated => match rustix::process::kill_process(target, signal) {
                 Ok(()) => Outcome::Done.as_str(),
@@ -455,9 +465,18 @@ impl qobject::HematitaProcesses {
                 let qt = self.as_mut().qt_thread();
                 let asked = u32::try_from(pid).ok().is_some_and(|pid| {
                     privilege::signal_as_root(pid, as_root, move |outcome| {
-                        let _ = qt.queue(move |processes: Pin<&mut qobject::HematitaProcesses>| {
-                            processes.set_action_outcome(QString::from(outcome.as_str()));
-                        });
+                        let _ =
+                            qt.queue(move |mut processes: Pin<&mut qobject::HematitaProcesses>| {
+                                // A prompt can stand for minutes; by the time
+                                // it is answered the person may have asked for
+                                // something else, and that newer question is
+                                // the one the page is showing.
+                                if publish::still_current(token, processes.rust().action_token) {
+                                    processes
+                                        .as_mut()
+                                        .set_action_outcome(QString::from(outcome.as_str()));
+                                }
+                            });
                     })
                     .is_ok()
                 });

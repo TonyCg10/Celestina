@@ -53,6 +53,22 @@ pub fn power_load(value: f64, cap: Option<f64>) -> &'static str {
     load_name(percent)
 }
 
+/// The outcome a privileged action wears while it has been asked for and
+/// nothing has answered yet. It is not one of
+/// `hematita_core::services::Outcome`'s words because no bus and no `pkexec`
+/// ever reports it: Hematita alone knows that it is waiting.
+pub const PENDING: &str = "pending";
+
+/// Whether an outcome that has just come back from a worker thread is still
+/// the answer to the question the hub is asking. Each action takes the next
+/// token; a worker whose token is no longer the hub's was superseded while it
+/// waited, and its answer is dropped rather than shown for the newer action.
+/// The same discipline as [`accepts`], on human actions instead of ticks.
+#[must_use]
+pub fn still_current(token: u64, current: u64) -> bool {
+    token == current
+}
+
 /// A snapshot is applied only if it is newer than the last applied one: the
 /// thread publishes in order, but the queue does not promise to.
 #[must_use]
@@ -193,6 +209,15 @@ mod tests {
         assert_eq!(power_load(200.0, None), "normal");
         assert_eq!(power_load(1.0, Some(0.0)), "normal");
         assert_eq!(power_load(0.0, Some(100.0)), "normal");
+    }
+
+    #[test]
+    fn only_the_latest_actions_outcome_is_applied() {
+        assert!(still_current(1, 1));
+        assert!(still_current(0, 0));
+        // A second action took the next token while the first was waiting.
+        assert!(!still_current(1, 2));
+        assert!(!still_current(2, 1));
     }
 
     #[test]

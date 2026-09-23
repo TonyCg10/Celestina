@@ -52,7 +52,13 @@ Item {
                          kind: published.unitKinds[index],
                          actionable: published.unitActionable[index] === 1,
                          key: page.keyOf(published.unitNames[index], published.unitScopes[index]) })
+        // The assignment is made under `anchoring`, so the list's own
+        // `currentIndexChanged` — which a shorter model fires before the
+        // re-anchor runs — cannot be read as the person moving the selection
+        // and clear an answer they have not seen yet.
+        page.anchoring = true
         page.rows = woven
+        page.anchoring = false
         page.anchorCursor()
     }
 
@@ -95,6 +101,17 @@ Item {
         return ""
     }
 
+    // The manager the action was asked of: the acted unit's row if it is still
+    // listed, otherwise the selection's. A unit of the person's own manager
+    // needs no authorisation, so "waiting" there is not a prompt.
+    function actionScope() {
+        for (let index = 0; index < page.rows.length; ++index)
+            if (page.rows[index].name === page.services.actionUnit)
+                return page.rows[index].scope
+        const row = page.selectedRow()
+        return row !== null ? row.scope : ""
+    }
+
     function outcomeText() {
         const published = page.services
         if (published.actionOutcome === "")
@@ -104,7 +121,9 @@ Item {
         case "done":
             return qsTr("%1: hecho").arg(verb)
         case "pending":
-            return qsTr("%1: esperando la autorización").arg(verb)
+            return page.actionScope() === "system"
+                   ? qsTr("%1: esperando la autorización").arg(verb)
+                   : qsTr("%1: en curso").arg(verb)
         case "no-agent":
             return qsTr("%1: esta sesión no tiene agente de autenticación; la acción sobre unidades del sistema necesita uno")
                      .arg(verb)
@@ -162,7 +181,13 @@ Item {
 
     onVisibleChanged: if (page.visible) page.weave()
 
-    Component.onCompleted: page.weave()
+    Component.onCompleted: {
+        // The hub owns the defaults; the glyphs are set from it once here.
+        systemToggle.checked = page.services.showSystem
+        userToggle.checked = page.services.showUser
+        servicesToggle.checked = page.services.servicesOnly
+        page.weave()
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -209,44 +234,47 @@ Item {
 
             Item { Layout.fillWidth: true }
 
-            // The three filters. `checked` starts at the hub's own default and
-            // the toggle writes the hub, rather than binding to it: a checkable
-            // button writes its own `checked` on the click, which would replace
-            // a binding and leave the glyph telling a different story from the
-            // list.
+            // The three filters. The glyph is written from the hub once, when
+            // the page is built, and the toggle writes the hub back: a
+            // checkable button writes its own `checked` on the click, so a
+            // standing binding would be replaced on the first press and leave
+            // the glyph telling a different story from the list.
             CelestinaCapsule {
                 CelestinaIconButton {
+                    id: systemToggle
+
                     iconName: "monitor"
                     helpText: qsTr("Servicios del sistema")
                     role: CelestinaButton.Ghost
                     checkable: true
-                    checked: true
                     onToggled: {
-                        page.services.showSystem = checked
+                        page.services.showSystem = systemToggle.checked
                         page.services.refresh()
                     }
                 }
 
                 CelestinaIconButton {
+                    id: userToggle
+
                     iconName: "app-window"
                     helpText: qsTr("Servicios de usuario")
                     role: CelestinaButton.Ghost
                     checkable: true
-                    checked: true
                     onToggled: {
-                        page.services.showUser = checked
+                        page.services.showUser = userToggle.checked
                         page.services.refresh()
                     }
                 }
 
                 CelestinaIconButton {
+                    id: servicesToggle
+
                     iconName: "view-list"
                     helpText: qsTr("Solo servicios")
                     role: CelestinaButton.Ghost
                     checkable: true
-                    checked: true
                     onToggled: {
-                        page.services.servicesOnly = checked
+                        page.services.servicesOnly = servicesToggle.checked
                         page.services.refresh()
                     }
                 }

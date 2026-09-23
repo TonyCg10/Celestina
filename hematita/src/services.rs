@@ -136,6 +136,9 @@ pub struct HematitaServicesRust {
     start_failed: bool,
     started: bool,
     last_generation: u64,
+    /// The token of the action being waited for. Every action takes the next
+    /// one, so an outcome that comes back under an older token is dropped.
+    action_token: u64,
     /// The last listing of each bus, kept so a toggle re-projects without
     /// waiting for the next service tick.
     system_units: Vec<Unit>,
@@ -173,6 +176,7 @@ impl Default for HematitaServicesRust {
             start_failed: false,
             started: false,
             last_generation: 0,
+            action_token: 0,
             system_units: Vec::new(),
             user_units: Vec::new(),
         }
@@ -342,6 +346,10 @@ impl qobject::HematitaServices {
     }
 
     pub fn clear_action(mut self: Pin<&mut Self>) {
+        // Forgetting the question also retires its token: an answer that
+        // arrives after the person moved on is not written back.
+        let token = self.rust().action_token.wrapping_add(1);
+        self.as_mut().rust_mut().action_token = token;
         self.as_mut().set_action_outcome(QString::default());
         self.as_mut().set_action_unit(QString::default());
         self.as_mut().set_action_kind(QString::default());
@@ -377,20 +385,28 @@ impl qobject::HematitaServices {
         self.as_mut().set_action_unit(QString::from(unit.as_str()));
         self.as_mut().set_action_kind(QString::from(kind));
         if !is_actionable(UnitKind::of_name(&unit)) {
+            let token = self.rust().action_token.wrapping_add(1);
+            self.as_mut().rust_mut().action_token = token;
             self.as_mut()
                 .set_action_outcome(QString::from(Outcome::Refused.as_str()));
             return;
         }
         // "asked, waiting": the prompt may be up, and a page saying nothing
         // while polkit waits would read as a click that did not land.
-        self.as_mut().set_action_outcome(QString::from(PENDING));
+        self.as_mut()
+            .set_action_outcome(QString::from(publish::PENDING));
+        let token = self.rust().action_token.wrapping_add(1);
+        self.as_mut().rust_mut().action_token = token;
         let qt = self.qt_thread();
         let spawned = std::thread::Builder::new()
             .name("hematita-systemd".to_owned())
             .spawn(move || {
                 let outcome = call_unit(scope, &unit, method);
-                let _ = qt.queue(move |hub: Pin<&mut qobject::HematitaServices>| {
-                    hub.set_action_outcome(QString::from(outcome.as_str()));
+                let _ = qt.queue(move |mut hub: Pin<&mut qobject::HematitaServices>| {
+                    if publish::still_current(token, hub.rust().action_token) {
+                        hub.as_mut()
+                            .set_action_outcome(QString::from(outcome.as_str()));
+                    }
                 });
             });
         if spawned.is_err() {
@@ -399,10 +415,6 @@ impl qobject::HematitaServices {
         }
     }
 }
-
-/// The outcome that is not `hematita_core::services::Outcome`'s to name: the
-/// action was asked for and nothing has answered yet.
-pub const PENDING: &str = "pending";
 
 impl HematitaServicesRust {
     /// Both buses' units in one list, user first, for `project` to order.

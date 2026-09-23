@@ -535,14 +535,24 @@ fn bus_unavailable(label: &str) -> Reason {
     }
 }
 
-/// Every unit one manager has loaded. A bus that answers something other than
-/// the declared shape is `Malformed`, which is a different sentence from a bus
-/// that is not there.
+/// A listing that did not happen: why, and whether the connection it was
+/// asked over is worth keeping. A manager that answered with an error is a
+/// live bus; anything else — a socket that went away, a reply that could not
+/// be read at all — means this connection is finished and the next service
+/// tick has to open a new one.
+struct ListFailure {
+    reason: Reason,
+    keep_connection: bool,
+}
+
+/// Every unit one manager has loaded. A manager that answers something other
+/// than the declared shape is `Malformed`, which is a different sentence from
+/// a bus that is not there.
 fn list_units(
     connection: &zbus::blocking::Connection,
     scope: Scope,
     bus_label: &str,
-) -> Section<Vec<Unit>> {
+) -> Result<Vec<Unit>, ListFailure> {
     let proxy = match zbus::blocking::Proxy::new(
         connection,
         SYSTEMD_SERVICE,
@@ -550,24 +560,63 @@ fn list_units(
         SYSTEMD_MANAGER,
     ) {
         Ok(proxy) => proxy,
-        Err(_) => return Section::Unavailable(bus_unavailable(bus_label)),
+        Err(_) => {
+            return Err(ListFailure {
+                reason: bus_unavailable(bus_label),
+                keep_connection: false,
+            })
+        }
     };
     match proxy.call::<_, _, Vec<UnitRow>>("ListUnits", &()) {
-        Ok(rows) => Section::Available(
-            rows.into_iter()
-                .map(|(name, description, _load, active, sub, ..)| Unit {
-                    name,
-                    description,
-                    scope,
-                    active,
-                    sub,
-                })
-                .collect(),
-        ),
-        Err(_) => Section::Unavailable(Reason {
-            kind: ReasonKind::Malformed,
-            path: bus_label.to_owned(),
+        Ok(rows) => Ok(rows
+            .into_iter()
+            .map(|(name, description, _load, active, sub, ..)| Unit {
+                name,
+                description,
+                scope,
+                active,
+                sub,
+            })
+            .collect()),
+        // The manager replied, and what it replied was not what this asked
+        // for: the bus is alive and the connection stays.
+        Err(zbus::Error::MethodError(..)) => Err(ListFailure {
+            reason: Reason {
+                kind: ReasonKind::Malformed,
+                path: bus_label.to_owned(),
+            },
+            keep_connection: true,
         }),
+        Err(_) => Err(ListFailure {
+            reason: bus_unavailable(bus_label),
+            keep_connection: false,
+        }),
+    }
+}
+
+/// One bus's section, opening the connection if there is none and dropping it
+/// if this listing proved it dead — so a bus that goes away is reopened on the
+/// next service tick instead of failing for the rest of the session.
+fn section_of_bus(
+    slot: &mut Option<zbus::blocking::Connection>,
+    open: fn() -> zbus::Result<zbus::blocking::Connection>,
+    scope: Scope,
+    bus_label: &str,
+) -> Section<Vec<Unit>> {
+    if slot.is_none() {
+        *slot = open().ok();
+    }
+    let Some(connection) = slot.as_ref() else {
+        return Section::Unavailable(bus_unavailable(bus_label));
+    };
+    match list_units(connection, scope, bus_label) {
+        Ok(units) => Section::Available(units),
+        Err(failure) => {
+            if !failure.keep_connection {
+                *slot = None;
+            }
+            Section::Unavailable(failure.reason)
+        }
     }
 }
 
@@ -577,20 +626,18 @@ fn sample_services(
     system: &mut Option<zbus::blocking::Connection>,
     user: &mut Option<zbus::blocking::Connection>,
 ) -> ServiceSnapshot {
-    if system.is_none() {
-        *system = zbus::blocking::Connection::system().ok();
-    }
-    if user.is_none() {
-        *user = zbus::blocking::Connection::session().ok();
-    }
     ServiceSnapshot {
-        system: system.as_ref().map_or_else(
-            || Section::Unavailable(bus_unavailable(SYSTEM_BUS)),
-            |connection| list_units(connection, Scope::System, SYSTEM_BUS),
+        system: section_of_bus(
+            system,
+            zbus::blocking::Connection::system,
+            Scope::System,
+            SYSTEM_BUS,
         ),
-        user: user.as_ref().map_or_else(
-            || Section::Unavailable(bus_unavailable(SESSION_BUS)),
-            |connection| list_units(connection, Scope::User, SESSION_BUS),
+        user: section_of_bus(
+            user,
+            zbus::blocking::Connection::session,
+            Scope::User,
+            SESSION_BUS,
         ),
     }
 }

@@ -52,7 +52,8 @@ alone, without the machine noticing the monitor.
 | H4-D | done | H4-Z | the whole-branch review's corrections: the Sensors page one Tab stop with arrows by card, a failed tick showing only its reason, a smoke gate on the page's chip count, and 0.5.1 | `scripts/complete-production.sh` |
 | H5-A | done | H4-D | `hematita-core`: `services`, the unit projection, the privileged-action outcome mapping | `cargo test -p hematita-core` |
 | H5-B | done | H5-A | sampler services section, `HematitaServices`, the Services page, the privileged actions | `scripts/verify-production.sh` |
-| H5-Z | pending | H5-B | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
+| H5-C | done | H5-B | the review's correction: the foreign-process path reachable, the outcome races, the dead bus connection, the pending wording | `scripts/verify-production.sh` |
+| H5-Z | pending | H5-C | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -84,6 +85,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H4-D: [sensors fixes](docs/evidence/2026-09-22-h4-sensors-fixes.md)
 - H5-A: [core](docs/evidence/2026-09-22-h5-core.md)
 - H5-B: [services page](docs/evidence/2026-09-22-h5-services-page.md)
+- H5-C: [privilege fixes](docs/evidence/2026-09-22-h5-privilege-fixes.md)
 
 ## H1 — closed 2026-09-21
 
