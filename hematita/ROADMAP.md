@@ -60,7 +60,8 @@ alone, without the machine noticing the monitor.
 | VIS-2 | done | VIS-1 | the lists keep their viewport across a refresh, only the person's cursor scrolls them, applications open folded, and 0.6.3 | `scripts/complete-production.sh` |
 | REL-1 | done | VIS-2 | record `VAL-VIS-2`, release 1.0.0, no code change | `scripts/complete-production.sh` |
 | S1-A | done | REL-1 | `hematita-core::usage`: the walk, the tree, empty folders, duplicates, the treemap layout, the guarded deletion, mounts | `cargo test -p hematita-core` |
-| S1-B | planned | S1-A | locations, browsing, the storage section and its smoke line | `scripts/verify-production.sh` |
+| S1-A2 | done | S1-A | the review's corrections: the deletion refuses a symlinked component, empty means no non-directory below, mount points from `mountinfo` bound the walk and the deletion | `cargo test -p hematita-core` |
+| S1-B | planned | S1-A2 | locations, browsing, the storage section and its smoke line | `scripts/verify-production.sh` |
 | S1-C | planned | S1-B | the scan with progress and cancel, size list and treemap, filters, duplicate confirmation | `scripts/verify-production.sh` |
 | S1-D | planned | S1-C | actions: open in Siderita, batch trash, guarded permanent deletion, selection | `scripts/verify-production.sh` |
 | S1-Z | planned | S1-D | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
@@ -102,6 +103,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - VIS-2: [scroll and folds](docs/evidence/2026-09-23-scroll-and-folds.md)
 - REL-1: [release](docs/evidence/2026-09-23-release-1.md)
 - S1-A: [core](docs/evidence/2026-09-23-s1-core.md)
+- S1-A2: [core fixes](docs/evidence/2026-09-23-s1-core-fixes.md)
 
 ## H1 — closed 2026-09-21
 

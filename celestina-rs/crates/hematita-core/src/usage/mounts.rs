@@ -4,6 +4,7 @@
 //! Only filesystems that hold a person's files are kept, and of those only the
 //! ones mounted where a person looks for disks.
 
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
@@ -81,9 +82,58 @@ pub fn is_shown_location(mount: &Mount) -> bool {
             .any(|base| target.starts_with(base))
 }
 
+/// One line of `/proc/self/mountinfo`: unlike `/proc/self/mounts`, it names
+/// every mount point including bind mounts and btrfs subvolumes mounted from
+/// the same device, which share an `st_dev` with their parent and so cannot be
+/// told apart by the device number alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MountPoint {
+    pub id: u32,
+    pub parent: u32,
+    pub target: PathBuf,
+    pub fstype: String,
+    pub source: String,
+}
+
+/// Parses `/proc/self/mountinfo` text (`id parent major:minor root target
+/// options [optional...] - fstype source superoptions`), decoding the octal
+/// escapes; malformed lines are skipped. Every filesystem type is kept: a
+/// boundary is a boundary whatever is mounted there.
+#[must_use]
+pub fn parse_mountinfo(text: &str) -> Vec<MountPoint> {
+    text.lines()
+        .filter_map(|line| {
+            let (head, tail) = line.split_once(" - ")?;
+            let mut head = head.split_whitespace();
+            let id = head.next()?.parse().ok()?;
+            let parent = head.next()?.parse().ok()?;
+            let _device = head.next()?;
+            let _root = head.next()?;
+            let target = head.next()?;
+            let mut tail = tail.split_whitespace();
+            let fstype = tail.next()?;
+            let source = tail.next()?;
+            Some(MountPoint {
+                id,
+                parent,
+                target: PathBuf::from(OsString::from_vec(unescape(target))),
+                fstype: fstype.to_owned(),
+                source: String::from_utf8_lossy(&unescape(source)).into_owned(),
+            })
+        })
+        .collect()
+}
+
+/// The set of mount targets, for [`crate::usage::walk::scan`] and
+/// [`crate::usage::remove::delete_tree`] to treat as boundaries.
+#[must_use]
+pub fn mount_targets(mounts: &[MountPoint]) -> HashSet<PathBuf> {
+    mounts.iter().map(|m| m.target.clone()).collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{is_shown_location, parse_mounts, Mount};
+    use super::{is_shown_location, mount_targets, parse_mountinfo, parse_mounts, Mount};
     use std::path::Path;
 
     /// The first lines of the author's `/proc/self/mounts` (2026-09-23), plus
@@ -159,5 +209,36 @@ broken-line-without-fields
             fstype: "ext4".into(),
         };
         assert!(!is_shown_location(&lookalike));
+    }
+
+    /// Lines of the author's `/proc/self/mountinfo` shape: `/home` is the
+    /// same device as `/` (a btrfs subvolume), a bind mount repeats a
+    /// device, and a USB label carries a space.
+    const MOUNTINFO: &str = "\
+25 1 0:25 /@ / rw,noatime shared:1 - btrfs /dev/nvme1n1p2 rw,compress=zstd:1
+26 25 0:5 / /dev rw,nosuid shared:2 - devtmpfs devtmpfs rw
+60 25 0:25 /@home /home rw,noatime shared:30 - btrfs /dev/nvme1n1p2 rw,compress=zstd:1
+61 60 0:25 /@home/toni/data /srv/data rw,noatime - btrfs /dev/nvme1n1p2 rw
+90 25 8:33 / /run/media/toni/My\\040Disk rw,relatime shared:50 master:3 - exfat /dev/sdc1 rw
+garbage line
+27 25 0:6 / /broken rw - onlytype
+";
+
+    #[test]
+    fn mountinfo_names_every_mount_point() {
+        let mounts = parse_mountinfo(MOUNTINFO);
+        assert_eq!(mounts.len(), 5);
+        assert_eq!(mounts[0].id, 25);
+        assert_eq!(mounts[0].parent, 1);
+        assert_eq!(mounts[0].fstype, "btrfs");
+        assert_eq!(mounts[0].source, "/dev/nvme1n1p2");
+        assert_eq!(mounts[2].target, Path::new("/home"));
+        assert_eq!(mounts[3].parent, 60);
+        assert_eq!(mounts[4].target, Path::new("/run/media/toni/My Disk"));
+        assert_eq!(mounts[4].fstype, "exfat");
+        let targets = mount_targets(&mounts);
+        assert!(targets.contains(Path::new("/srv/data")));
+        assert!(targets.contains(Path::new("/dev")));
+        assert_eq!(targets.len(), 5);
     }
 }

@@ -1,4 +1,5 @@
-//! Empty folders: directories with no file at any depth.
+//! Empty folders: directories with nothing but directories at any depth — no
+//! file, and no symbolic link, socket, FIFO or device either.
 //!
 //! A folder whose only content is empty folders is itself empty, so the list
 //! is deepest first: trashing in that order never leaves a parent behind. A
@@ -35,6 +36,7 @@ pub fn empty_folders(tree: &Tree) -> Vec<NodeId> {
         .filter(|(index, node)| {
             node.kind == Kind::Dir
                 && node.files_below == 0
+                && node.others_below == 0
                 && !unseen[*index]
                 && node.parent.is_some()
                 && *index != tree.root.0 as usize
@@ -72,6 +74,7 @@ mod tests {
             allocated: 0,
             apparent: 0,
             files_below: 0,
+            others_below: 0,
             unreadable: false,
             other_device: false,
             children: children.iter().copied().map(NodeId).collect(),

@@ -80,6 +80,10 @@ impl std::error::Error for ScanError {
 /// Walks `root` on its own device into a [`Tree`] whose sizes are
 /// aggregates of each subtree.
 ///
+/// `boundaries` are mount targets read from `/proc/self/mountinfo`; a
+/// directory at one of them (other than `root`) is a leaf like one on
+/// another device.
+///
 /// `progress` is called every [`PROGRESS_EVERY`] entries with the running
 /// totals; `cancel` is asked before every directory and at the same cadence
 /// inside one, so a cancellation lands within a few hundred entries.
@@ -91,6 +95,7 @@ impl std::error::Error for ScanError {
 /// [`ScanError::Cancelled`] when `cancel` fires; nothing else stops the walk.
 pub fn scan(
     root: &Path,
+    boundaries: &HashSet<PathBuf>,
     cancel: &CancellationToken,
     progress: &mut dyn FnMut(Progress),
 ) -> Result<Tree, ScanError> {
@@ -114,6 +119,7 @@ pub fn scan(
         allocated: 0,
         apparent: 0,
         files_below: 0,
+        others_below: 0,
         unreadable: false,
         other_device: false,
         children: Vec::new(),
@@ -160,7 +166,11 @@ pub fn scan(
                 0
             };
             let apparent = if sized { meta.len() } else { 0 };
-            let other_device = kind == Kind::Dir && meta.dev() != device;
+            // A mount is a boundary by its device number, or by its place in
+            // the mount table when a bind mount or a btrfs subvolume shares
+            // the device with its parent.
+            let other_device =
+                kind == Kind::Dir && (meta.dev() != device || boundaries.contains(&path));
             let id =
                 u32::try_from(nodes.len())
                     .map(NodeId)
@@ -174,6 +184,7 @@ pub fn scan(
                 allocated,
                 apparent,
                 files_below: u64::from(counted),
+                others_below: u64::from(kind == Kind::Other),
                 unreadable: false,
                 other_device,
                 children: Vec::new(),
@@ -216,14 +227,21 @@ pub fn scan(
 /// visits every child before the parent it contributes to.
 fn aggregate(nodes: &mut [Node]) {
     for index in (1..nodes.len()).rev() {
-        let (allocated, apparent, files, parent) = {
+        let (allocated, apparent, files, others, parent) = {
             let node = &nodes[index];
-            (node.allocated, node.apparent, node.files_below, node.parent)
+            (
+                node.allocated,
+                node.apparent,
+                node.files_below,
+                node.others_below,
+                node.parent,
+            )
         };
         if let Some(parent) = parent.and_then(|p| nodes.get_mut(p.0 as usize)) {
             parent.allocated = parent.allocated.saturating_add(allocated);
             parent.apparent = parent.apparent.saturating_add(apparent);
             parent.files_below = parent.files_below.saturating_add(files);
+            parent.others_below = parent.others_below.saturating_add(others);
         }
     }
 }

@@ -1,0 +1,31 @@
+# S1-A2 exact change inventory
+
+Base revision	a667a0bf57f4b1c3dbed014d898486022a2f7103
+Pathspec	celestina-rs/crates/hematita-core/src/usage/empty.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/mounts.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/remove.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/tree.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/walk.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/usage_tree.rs
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-core-fixes.md
+Pathspec	hematita/docs/inventories/2026-09-23-s1-storage/S1-A2.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-23-s1-storage.md
+Pathspec	hematita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+4	1	318076e93e0c4f8e560ab374b14b9268915d0395448de4ffe43094684963e345	celestina-rs/crates/hematita-core/src/usage/empty.rs
+82	1	6702956a74992f17f7520175d50f0895da18a1203fc8eebe5975b7497d9492c5	celestina-rs/crates/hematita-core/src/usage/mounts.rs
+52	4	1bd9faab666720d9081e9dd389747ac441f28d8a350406938a4ecca2da09c843	celestina-rs/crates/hematita-core/src/usage/remove.rs
+13	1	b0867dc6959b2facbcd0e271e7085f3f0207d0dca6ca1397102e791b4b7528e3	celestina-rs/crates/hematita-core/src/usage/tree.rs
+21	3	9ae2209051879fd3f040cf05b43de65fa49e6562b2cb88826f918ea4f4c48241	celestina-rs/crates/hematita-core/src/usage/walk.rs
+167	19	849af931d99579cb95106319ed21f4e1f17c7add079a4041c78efdf9d0d21e25	celestina-rs/crates/hematita-core/tests/usage_tree.rs
+3	1	62f7b2b611e0cc4b122d8acabf388ac95a74e03b32f98654fb275781b65c0132	hematita/ROADMAP.md
+6	1	c83b9e1c2b54f6cd84ed273560aedc08ca0bab99cacf7ea87e7a66a9de107165	hematita/STATUS.md
+86	0	686dd57b03536fd043536a06c2b8e7f8f1f53b2ce34b9dd843cbb3fc84987b1c	hematita/docs/evidence/2026-09-23-s1-core-fixes.md
+4	1	bccae53de05ae0ad070d12c5abb9367efa61211f54aa1aba61986087d533d4ad	hematita/docs/plans/active/2026-09-23-s1-storage.md
+1	1	2289b446cceb8f648bed41ffa7264e36b41a6e1efa4ade3a4c84a2820ddd5bf2	hematita/docs/plans/active/README.md
+31	0	self	hematita/docs/inventories/2026-09-23-s1-storage/S1-A2.numstat.tsv

@@ -9,6 +9,7 @@
 //! parents, asking `cancel` before every entry; a symbolic link is removed as
 //! itself and its target is never visited.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -18,18 +19,28 @@ use std::path::{Component, Path, PathBuf};
 use celestina_core::CancellationToken;
 
 /// What a completed deletion removed.
+///
+/// `bytes` counts a hard-linked inode once however many of its names were
+/// inside the subtree — and counts it even when another name outside the
+/// subtree keeps it alive, so the space actually freed can be smaller.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Removed {
     pub entries: u64,
     pub bytes: u64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
     IsRoot,
     Outside,
     MountRoot,
     Missing,
+    /// A component between the analysed folder and the target is not a real
+    /// directory (a symbolic link, or no longer a folder), so the lexical
+    /// "inside" would not be where the kernel goes.
+    Symlink {
+        at: PathBuf,
+    },
 }
 
 #[derive(Debug)]
@@ -49,6 +60,9 @@ impl fmt::Display for RemoveError {
                     Refusal::Outside => "it is outside the analysed folder",
                     Refusal::MountRoot => "it is where another filesystem is mounted",
                     Refusal::Missing => "it no longer exists",
+                    Refusal::Symlink { .. } => {
+                        "a folder on its way is a link or no longer a folder"
+                    }
                 };
                 write!(f, "refused to delete {}: {why}", path.display())
             }
@@ -80,6 +94,7 @@ impl std::error::Error for RemoveError {
 pub fn delete_tree(
     path: &Path,
     within: &Path,
+    boundaries: &HashSet<PathBuf>,
     cancel: &CancellationToken,
 ) -> Result<Removed, RemoveError> {
     let refuse = |reason| RemoveError::Refused {
@@ -94,9 +109,19 @@ pub fn delete_tree(
     if !target.starts_with(&root) {
         return Err(refuse(Refusal::Outside));
     }
+    // The check above is lexical; the kernel resolves every intermediate
+    // component. Each one from the analysed folder down to the target's
+    // parent must still be a real directory, or "inside" is not where the
+    // removal would go.
+    if let Some(at) = first_non_directory(&root, &target) {
+        return Err(refuse(Refusal::Symlink { at }));
+    }
     let Ok(meta) = fs::symlink_metadata(&target) else {
         return Err(refuse(Refusal::Missing));
     };
+    if boundaries.contains(&target) {
+        return Err(refuse(Refusal::MountRoot));
+    }
     let parent = target.parent().ok_or_else(|| refuse(Refusal::IsRoot))?;
     let parent_meta = fs::symlink_metadata(parent).map_err(|source| RemoveError::Io {
         path: parent.to_path_buf(),
@@ -106,7 +131,7 @@ pub fn delete_tree(
         return Err(refuse(Refusal::MountRoot));
     }
 
-    let plan = list_post_order(&target, meta, cancel)?;
+    let plan = list_post_order(&target, meta, boundaries, cancel)?;
 
     let mut removed = Removed {
         entries: 0,
@@ -148,10 +173,11 @@ struct Plan {
 fn list_post_order(
     top: &Path,
     top_meta: fs::Metadata,
+    boundaries: &HashSet<PathBuf>,
     cancel: &CancellationToken,
 ) -> Result<Plan, RemoveError> {
     let device = top_meta.dev();
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashSet::new();
     let mut entries = Vec::new();
     // (path, metadata, children already pushed)
     let mut stack = vec![(top.to_path_buf(), top_meta, false)];
@@ -175,7 +201,7 @@ fn list_post_order(
             });
             continue;
         }
-        if meta.dev() != device {
+        if meta.dev() != device || boundaries.contains(&path) {
             return Err(RemoveError::Refused {
                 path,
                 reason: Refusal::MountRoot,
@@ -200,6 +226,28 @@ fn list_post_order(
         }
     }
     Ok(Plan { entries })
+}
+
+/// The first path from `root` (included) down to `target`'s parent that is
+/// not a real directory by `lstat`, or `None` when all are.
+fn first_non_directory(root: &Path, target: &Path) -> Option<PathBuf> {
+    let parent = target.parent()?;
+    let relative = parent.strip_prefix(root).ok()?;
+    let mut current = root.to_path_buf();
+    let check = |path: &Path| match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_dir() => None,
+        _ => Some(path.to_path_buf()),
+    };
+    if let Some(at) = check(&current) {
+        return Some(at);
+    }
+    for component in relative.components() {
+        current.push(component);
+        if let Some(at) = check(&current) {
+            return Some(at);
+        }
+    }
+    None
 }
 
 /// Resolves `.` and `..` without touching the filesystem, so the last

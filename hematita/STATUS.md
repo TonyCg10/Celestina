@@ -8,7 +8,12 @@
   squarified treemap, reads the mount table, and holds the suite's only
   permanent deletion, which refuses the scanned root, anything outside it
   and any mount root; crate-only, no build, see the
-  [core evidence](docs/evidence/2026-09-23-s1-core.md); `S1-B` is next
+  [core evidence](docs/evidence/2026-09-23-s1-core.md); `S1-A2` corrected
+  it after review: the deletion refuses a path whose folders on the way
+  became links, a folder holding only a link is no longer "empty", and
+  mount points read from `mountinfo` bound the walk and the deletion even
+  where a bind mount or subvolume shares the device
+  ([core fixes](docs/evidence/2026-09-23-s1-core-fixes.md)); `S1-B` is next
 - **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
   real session (the process table kept its scroll position across
   refreshes, applications opened folded, no flicker) and asked to close

@@ -8,6 +8,7 @@
 //! are read back with `symlink_metadata` rather than hard-coded, because block
 //! counts differ between filesystems.
 
+use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -120,8 +121,12 @@ fn allocated(path: &Path) -> u64 {
     fs::symlink_metadata(path).expect("metadata").blocks() * 512
 }
 
+fn no_bounds() -> HashSet<PathBuf> {
+    HashSet::new()
+}
+
 fn scan_ok(root: &Path) -> Tree {
-    scan(root, &CancellationToken::new(), &mut |_| {}).expect("scan")
+    scan(root, &no_bounds(), &CancellationToken::new(), &mut |_| {}).expect("scan")
 }
 
 fn child(tree: &Tree, parent: NodeId, name: &str) -> NodeId {
@@ -192,9 +197,12 @@ fn an_unreadable_directory_is_marked_and_the_walk_goes_on() {
 fn progress_is_reported_on_a_large_folder() {
     let fx = fixture(true);
     let mut reports: Vec<Progress> = Vec::new();
-    let tree = scan(&fx.root, &CancellationToken::new(), &mut |p| {
-        reports.push(p)
-    })
+    let tree = scan(
+        &fx.root,
+        &no_bounds(),
+        &CancellationToken::new(),
+        &mut |p| reports.push(p),
+    )
     .expect("scan");
     assert!(!reports.is_empty());
     assert!(reports.windows(2).all(|w| w[0].files <= w[1].files));
@@ -207,7 +215,7 @@ fn a_cancelled_token_stops_the_walk() {
     let cancel = CancellationToken::new();
     cancel.cancel();
     assert!(matches!(
-        scan(&fx.root, &cancel, &mut |_| {}),
+        scan(&fx.root, &no_bounds(), &cancel, &mut |_| {}),
         Err(ScanError::Cancelled)
     ));
 }
@@ -215,11 +223,26 @@ fn a_cancelled_token_stops_the_walk() {
 #[test]
 fn a_root_that_is_not_a_folder_is_refused() {
     let fx = fixture(false);
-    let result = scan(&fx.path("big.bin"), &CancellationToken::new(), &mut |_| {});
+    let result = scan(
+        &fx.path("big.bin"),
+        &no_bounds(),
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
     assert!(matches!(result, Err(ScanError::NotADirectory { path }) if path == fx.path("big.bin")));
-    let missing = scan(&fx.path("nope"), &CancellationToken::new(), &mut |_| {});
+    let missing = scan(
+        &fx.path("nope"),
+        &no_bounds(),
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
     assert!(matches!(missing, Err(ScanError::Root { .. })));
-    let link = scan(&fx.path("out.lnk"), &CancellationToken::new(), &mut |_| {});
+    let link = scan(
+        &fx.path("out.lnk"),
+        &no_bounds(),
+        &CancellationToken::new(),
+        &mut |_| {},
+    );
     assert!(matches!(link, Err(ScanError::NotADirectory { .. })));
 }
 
@@ -329,28 +352,48 @@ fn delete_tree_refuses_the_root_the_outside_and_the_missing() {
     let fx = fixture(false);
     let token = CancellationToken::new();
     assert_eq!(
-        refused(delete_tree(&fx.root, &fx.root, &token)),
+        refused(delete_tree(&fx.root, &fx.root, &no_bounds(), &token)),
         Refusal::IsRoot
     );
     assert_eq!(
-        refused(delete_tree(&fx.root.join("docs/.."), &fx.root, &token)),
+        refused(delete_tree(
+            &fx.root.join("docs/.."),
+            &fx.root,
+            &no_bounds(),
+            &token
+        )),
         Refusal::IsRoot
     );
     let sibling = fx.root.join("../sibling");
     assert_eq!(
-        refused(delete_tree(&sibling, &fx.root, &token)),
+        refused(delete_tree(&sibling, &fx.root, &no_bounds(), &token)),
         Refusal::Outside
     );
     assert_eq!(
-        refused(delete_tree(&fx.path("docs/../../x"), &fx.root, &token)),
+        refused(delete_tree(
+            &fx.path("docs/../../x"),
+            &fx.root,
+            &no_bounds(),
+            &token
+        )),
         Refusal::Outside
     );
     assert_eq!(
-        refused(delete_tree(Path::new("/tmp"), &fx.root, &token)),
+        refused(delete_tree(
+            Path::new("/tmp"),
+            &fx.root,
+            &no_bounds(),
+            &token
+        )),
         Refusal::Outside
     );
     assert_eq!(
-        refused(delete_tree(&fx.path("nope"), &fx.root, &token)),
+        refused(delete_tree(
+            &fx.path("nope"),
+            &fx.root,
+            &no_bounds(),
+            &token
+        )),
         Refusal::Missing
     );
     assert!(fx.path("docs/a.txt").exists());
@@ -362,7 +405,12 @@ fn delete_tree_refuses_a_mount_root() {
     // refusal, which happens before anything is touched.
     let token = CancellationToken::new();
     assert_eq!(
-        refused(delete_tree(Path::new("/proc"), Path::new("/"), &token)),
+        refused(delete_tree(
+            Path::new("/proc"),
+            Path::new("/"),
+            &no_bounds(),
+            &token
+        )),
         Refusal::MountRoot
     );
 }
@@ -381,6 +429,7 @@ fn delete_tree_removes_a_link_and_never_its_target() {
     let removed = delete_tree(
         &fx.path("docs/outside.lnk"),
         &fx.root,
+        &no_bounds(),
         &CancellationToken::new(),
     )
     .expect("delete link");
@@ -390,7 +439,13 @@ fn delete_tree_removes_a_link_and_never_its_target() {
 
     // A folder holding a link to the outside: the link goes, the target stays.
     std::os::unix::fs::symlink(&target, fx.path("empty/deeper/out.lnk")).expect("link");
-    delete_tree(&fx.path("empty"), &fx.root, &CancellationToken::new()).expect("delete empty");
+    delete_tree(
+        &fx.path("empty"),
+        &fx.root,
+        &no_bounds(),
+        &CancellationToken::new(),
+    )
+    .expect("delete empty");
     assert!(target.join("keep.txt").exists());
     drop(guard);
 }
@@ -401,8 +456,13 @@ fn delete_tree_removes_a_nested_tree_and_reports_it() {
     let expected_bytes = allocated(&fx.path("docs/a.txt"))
         + allocated(&fx.path("docs/b.txt"))
         + allocated(&fx.path("docs"));
-    let removed =
-        delete_tree(&fx.path("docs"), &fx.root, &CancellationToken::new()).expect("delete docs");
+    let removed = delete_tree(
+        &fx.path("docs"),
+        &fx.root,
+        &no_bounds(),
+        &CancellationToken::new(),
+    )
+    .expect("delete docs");
     // docs/, a.txt, b.txt, link-to-a.txt; the hard link's blocks count once.
     assert_eq!(removed.entries, 4);
     assert_eq!(removed.bytes, expected_bytes);
@@ -416,9 +476,97 @@ fn delete_tree_touches_nothing_once_cancelled() {
     let cancel = CancellationToken::new();
     cancel.cancel();
     assert!(matches!(
-        delete_tree(&fx.path("docs"), &fx.root, &cancel),
+        delete_tree(&fx.path("docs"), &fx.root, &no_bounds(), &cancel),
         Err(RemoveError::Cancelled)
     ));
     assert!(fx.path("docs/a.txt").exists());
     assert!(fx.path("docs/b.txt").exists());
+}
+
+#[test]
+fn a_folder_holding_only_a_link_is_not_empty() {
+    let fx = fixture(false);
+    fs::create_dir_all(fx.path("linkonly")).expect("linkonly");
+    std::os::unix::fs::symlink("/tmp", fx.path("linkonly/pointer")).expect("link");
+    let tree = scan_ok(&fx.root);
+    let linkonly = child(&tree, tree.root, "linkonly");
+    assert_eq!(tree.node(linkonly).expect("linkonly").others_below, 1);
+    assert!(!empty_folders(&tree).contains(&linkonly));
+    // out.lnk and pointer
+    assert_eq!(tree.node(tree.root).expect("root").others_below, 2);
+}
+
+#[test]
+fn a_mount_boundary_is_a_leaf_even_on_the_same_device() {
+    let fx = fixture(false);
+    let bounds: HashSet<PathBuf> = [fx.path("docs")].into_iter().collect();
+    let tree = scan(&fx.root, &bounds, &CancellationToken::new(), &mut |_| {}).expect("scan");
+    let docs = tree.node(child(&tree, tree.root, "docs")).expect("docs");
+    assert!(docs.other_device);
+    assert!(docs.children.is_empty());
+    assert_eq!(tree.node(tree.root).expect("root").files_below, 3);
+    // The scanned root itself being a mount target is no boundary.
+    let own: HashSet<PathBuf> = [fx.root.clone()].into_iter().collect();
+    let whole = scan(&fx.root, &own, &CancellationToken::new(), &mut |_| {}).expect("scan");
+    assert_eq!(whole.node(whole.root).expect("root").files_below, 5);
+}
+
+#[test]
+fn delete_tree_refuses_a_listed_mount_at_or_below_the_target() {
+    let fx = fixture(false);
+    let token = CancellationToken::new();
+    let bounds: HashSet<PathBuf> = [fx.path("empty/deeper")].into_iter().collect();
+    assert_eq!(
+        refused(delete_tree(
+            &fx.path("empty/deeper"),
+            &fx.root,
+            &bounds,
+            &token
+        )),
+        Refusal::MountRoot
+    );
+    assert_eq!(
+        refused(delete_tree(&fx.path("empty"), &fx.root, &bounds, &token)),
+        Refusal::MountRoot
+    );
+    assert!(fx.path("empty/deeper").is_dir());
+}
+
+#[test]
+fn delete_tree_refuses_a_folder_swapped_for_a_link_after_the_scan() {
+    let fx = fixture(false);
+    let _tree = scan_ok(&fx.root);
+    let outside = unique_dir();
+    fs::create_dir_all(outside.join("sub")).expect("outside");
+    fs::write(outside.join("sub/keep.txt"), b"keep").expect("keep");
+    let guard = Fixture {
+        root: outside.clone(),
+    };
+    // docs/ becomes a link to the outside between the scan and the deletion.
+    fs::rename(fx.path("docs"), fx.path("docs-moved")).expect("move docs");
+    std::os::unix::fs::symlink(&outside, fx.path("docs")).expect("swap");
+
+    let result = delete_tree(
+        &fx.path("docs/sub"),
+        &fx.root,
+        &no_bounds(),
+        &CancellationToken::new(),
+    );
+    assert_eq!(
+        refused(result),
+        Refusal::Symlink {
+            at: fx.path("docs")
+        }
+    );
+    assert!(outside.join("sub/keep.txt").exists());
+    // The link itself, as the target, is still removable as a link.
+    delete_tree(
+        &fx.path("docs"),
+        &fx.root,
+        &no_bounds(),
+        &CancellationToken::new(),
+    )
+    .expect("link");
+    assert!(outside.join("sub/keep.txt").exists());
+    drop(guard);
 }

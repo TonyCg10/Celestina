@@ -29,6 +29,10 @@ pub struct Node {
     pub apparent: u64,
     /// Regular files counted at or below this node (a hard link once).
     pub files_below: u64,
+    /// Entries that are neither a file nor a directory (symbolic links,
+    /// sockets, FIFOs, devices) at or below this node. A folder holding one
+    /// is not empty, even with no file below it.
+    pub others_below: u64,
     /// The directory could not be listed; what it holds is not in the tree.
     pub unreadable: bool,
     /// A directory on another device than the scanned root: listed as a leaf
@@ -99,11 +103,17 @@ impl Tree {
             return None;
         }
         let node = self.nodes.get_mut(id.0 as usize)?;
-        let (allocated, apparent, files) = (node.allocated, node.apparent, node.files_below);
+        let (allocated, apparent, files, others) = (
+            node.allocated,
+            node.apparent,
+            node.files_below,
+            node.others_below,
+        );
         let parent = node.parent;
         node.allocated = 0;
         node.apparent = 0;
         node.files_below = 0;
+        node.others_below = 0;
         node.children.clear();
         if let Some(parent) = parent.and_then(|p| self.nodes.get_mut(p.0 as usize)) {
             parent.children.retain(|child| *child != id);
@@ -113,6 +123,7 @@ impl Tree {
             ancestor.allocated = ancestor.allocated.saturating_sub(allocated);
             ancestor.apparent = ancestor.apparent.saturating_sub(apparent);
             ancestor.files_below = ancestor.files_below.saturating_sub(files);
+            ancestor.others_below = ancestor.others_below.saturating_sub(others);
             cursor = ancestor.parent;
         }
         Some(allocated)
@@ -132,6 +143,7 @@ mod tests {
             allocated,
             apparent: allocated / 2,
             files_below: files,
+            others_below: 0,
             unreadable: false,
             other_device: false,
             children: Vec::new(),
