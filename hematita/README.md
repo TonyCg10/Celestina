@@ -12,6 +12,8 @@ on it. It replaces Mission Center.
 - Hematita reads `/proc` and `/sys` directly; it needs no daemon and no
   privilege to observe. Acting on other users' processes and on services
   arrives with polkit in H5.
+- Version 1.0 replaces Mission Center for the author: performance, processes,
+  applications, sensors and services.
 
 ## Architecture
 

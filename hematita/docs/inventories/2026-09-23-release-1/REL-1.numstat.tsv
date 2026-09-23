@@ -1,0 +1,31 @@
+# REL-1 exact change inventory
+
+Base revision	d5097023d934506a9a423aa12bab18cb461623d6
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/README.md
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-23-release-1.md
+Pathspec	hematita/docs/inventories/2026-09-23-release-1/REL-1.numstat.tsv
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-23-release-1.md
+Pathspec	hematita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	293bdb59baf98ca0bb4fb19c376d186ae2dfec20ab58f0c23aa7630bf27e350f	docs/version-history.tsv
+1	1	9870996da6b6f85b2ebe3cac4e0ee3e592c27ba541416790b7dd6894f351d806	hematita/Cargo.lock
+1	1	008b51721c6c017d70e62176b71ac4c867976954818ac32b942c547e8eb7539c	hematita/Cargo.toml
+2	0	2115afaac45065649b8aa534ae596014bce7dfccba67ec16cc1535019529b671	hematita/README.md
+17	0	e972d8a36517c47df5a887e38347659afc042ddf72393ff53f538f35ffc542fc	hematita/ROADMAP.md
+28	6	125b9cfe982f32963ceae752e02d6c63bb4f47f2559dd3d7b73ba4dfeb7d6f13	hematita/STATUS.md
+9	5	c946939dde3cee9ce788049863f46daed3c865295e1f7e5a119412287edd6f30	hematita/VALIDATION.md
+90	0	b324f2a2a70644762ae0d1c39b3cba21899cc582ae979dd350e8710eefbcfbaa	hematita/docs/evidence/2026-09-23-release-1.md
+4	1	e56989bbefa10a302d50dcfba986b532c7d9669f85d171ce4e145af289e4b256	hematita/docs/plans/active/README.md
+48	0	731b793c79c55635c5c866b6606ff6b8c4ac9fa65eebf0ccb636db2334922c9b	hematita/docs/plans/archive/2026-09-23-release-1.md
+1	0	77e4ee7214fc0bc40ee1b363240a43bd84283fa47b3fd71cd16eb556287f4a0f	hematita/docs/plans/archive/README.md
+31	0	self	hematita/docs/inventories/2026-09-23-release-1/REL-1.numstat.tsv

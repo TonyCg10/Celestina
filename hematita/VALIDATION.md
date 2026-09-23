@@ -4,7 +4,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 ## VAL-H1 — Live CPU and memory on the real session
 
-- **Status:** failed
+- **Status:** passed
 - **Related implementation:** H1
 - **Requires:** the deployed Hematita on the real session
 - **Procedure:** launch `hematita`; watch the CPU graph for a minute while
@@ -15,9 +15,10 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   values match another monitor within a few percent; the strip is reachable by
   Tab and walkable by arrows; the screen reader names each section and its
   checked state; Hematita idles under 1 % CPU
-- **Result:** failed on 2026-09-23 — the strip's glyph and word sat at the top of each pill with empty space below; the sparklines' fill ran past the rounded corners of their background; every graph and value was the same colour whatever the resource. The rest of the procedure was not reported
+- **Result:** passed — the remediation VIS-2 was validated through VAL-VIS-2
 - **Evidence:** author's screenshots, 2026-09-23, recorded in [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
 - **Remediation:** `VIS-1` in [plan](docs/plans/archive/2026-09-23-visual-feedback.md)
+- **Remediation validated:** VAL-VIS-2
 
 ## VAL-H2 — Every resource, live, on the real session
 
@@ -72,6 +73,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Result:** failed on 2026-09-23 — the search field, the action capsule and the table read as one flat surface; the rows ran into the card's rounded corners; path-named processes (`Z:\mnt\...\x.exe`, `/usr/lib/...`) were unreadable; the capsule's glyphs sat too close together; every one of the author's own processes read "—" for its disk rates; two `hematita` processes were running. The rest of the procedure was not reported
 - **Evidence:** author's screenshots, 2026-09-23, recorded in [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
 - **Remediation:** `VIS-1` in [plan](docs/plans/archive/2026-09-23-visual-feedback.md)
+- **Remediation validated:** VAL-VIS-2
 
 ## VAL-H4 — Sensors on the real session
 
@@ -99,6 +101,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Result:** failed on 2026-09-23 — channels read as the kernel's abbreviations (`Tctl`, `vddgfx`, `PPT`); every value was the same colour whatever its kind; the NVMe rows showed a maximum of 65 261.8 °C, the kernel's sentinel, and a fan's line showed two maxima side by side and a thousands separator that reads as a decimal mark. The rest of the procedure was not reported
 - **Evidence:** author's screenshots, 2026-09-23, recorded in [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
 - **Remediation:** `VIS-1` in [plan](docs/plans/archive/2026-09-23-visual-feedback.md)
+- **Remediation validated:** VAL-VIS-2
 
 ## VAL-H5 — Services and foreign processes on the real session
 
@@ -154,7 +157,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 ## VAL-VIS-2 — The lists keep their place and applications open folded
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** VIS-2
 - **Requires:** the deployed Hematita 0.6.3 on the real session
 - **Procedure:** launch `hematita`; open Procesos, scroll the table well
@@ -166,5 +169,6 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   refresh; every application is folded when the page opens; the arrows
   still bring the cursor into view; Right unfolds the application under the
   cursor and Left folds it; Servicios and Sensores also keep their place
-- **Result:** not run
-- **Evidence:** none
+- **Result:** the author scrolled the process table, waited, and it stayed;
+  applications opened folded; no flicker on refresh (2026-09-23)
+- **Evidence:** author's report, 2026-09-23, recorded in [release evidence](docs/evidence/2026-09-23-release-1.md)

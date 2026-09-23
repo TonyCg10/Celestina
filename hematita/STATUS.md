@@ -1,6 +1,11 @@
 # Hematita status
 
 - **Updated:** 2026-09-23
+- **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
+  real session (the process table kept its scroll position across
+  refreshes, applications opened folded, no flicker) and asked to close
+  version 1; `VAL-VIS-2` and the remediated `VAL-H1`, `VAL-H3` and `VAL-H4`
+  are recorded passed; no code changed
 - **Delivered as 0.6.3:** `VIS-2` — a refresh no longer throws the
   process, service or sensor list back to its top, the view moves only when
   the person moves the cursor, and every application opens folded
@@ -49,13 +54,17 @@
   instead of forty-six rows each answering Tab, a tick that cannot read
   `/sys/class/hwmon` shows only its reason rather than the last good values
   beneath an error line, and the smoke fails unless the page publishes chips
-- **Author validation:** `VAL-H1` failed 2026-09-23 (remedied by `VIS-1`);
-  `VAL-H2` requested, not run; `VAL-H3` failed 2026-09-23 (remedied by
-  `VIS-1`); `VAL-H4` failed 2026-09-23 (remedied by `VIS-1`); `VAL-H5`
-  requested, not run; `VAL-VIS-1` failed 2026-09-23 (remedied by `VIS-2`); `VAL-VIS-2`
-  requested, not run
+- **Author validation:** `VAL-H1` passed 2026-09-23 (remediation `VIS-1`
+  validated through `VAL-VIS-2`); `VAL-H2` requested, not run; `VAL-H3` failed
+  2026-09-23, remediation `VIS-1` validated through `VAL-VIS-2`; `VAL-H4`
+  failed 2026-09-23, remediation `VIS-1` validated through `VAL-VIS-2`;
+  `VAL-H5` requested, not run; `VAL-VIS-1` failed 2026-09-23 (remedied by
+  `VIS-2`); `VAL-VIS-2` passed 2026-09-23 — the process table kept its scroll
+  position across refreshes, applications opened folded, no flicker on
+  refresh
 - **Active phase:** none — H5 closed 2026-09-22, the design's five phases
-  delivered; no next phase is open
+  delivered; `REL-1` released version 1 as `1.0.0` on 2026-09-23; no next
+  phase is open
 
 ## Current checkout truth
 
@@ -374,6 +383,19 @@
   [production completion record](docs/evidence/2026-09-22-h5-production-completion.md).
   The design's five phases (`H1` through `H5`) are delivered; no next phase
   is open.
+- As of `REL-1` (2026-09-23), version 1 is released as `1.0.0`. Version 1 is
+  the five design phases (Performance with every resource, Processes and
+  Applications, Sensors, and Services with polkit-mediated privileged
+  actions) plus the two visual correction units `VIS-1` and `VIS-2`, all
+  validated by the author on the real session through `VAL-VIS-2` ("no
+  flicker, works well"). What stays pending: `VAL-H2` (every resource, live,
+  with a USB disk and Wi-Fi) and `VAL-H5` (the with-agent half — a system
+  unit or a foreign process actually asked through polkit); the
+  `ACTION_TIMEOUT` watchdog on the unit-action worker thread, known inert
+  because `zbus::Proxy::call_with_flags` does not consult the connection's
+  timeout; and PID recycling during an open polkit prompt, a named limit
+  rather than a closed one. See the
+  [release evidence](docs/evidence/2026-09-23-release-1.md).
 
 ## Blockers
 

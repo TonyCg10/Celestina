@@ -57,6 +57,7 @@ alone, without the machine noticing the monitor.
 | H5-D | done | H5-Z | the whole-branch review's corrections: the polkit interaction flag, the action and listing timeouts, the outcome mapping, and 0.6.1 | `scripts/complete-production.sh` |
 | VIS-1 | done | H5-D | the author's first real-session look: strip alignment, sparkline inset, colour per kind, the table card hierarchy, readable names, sentinel limits, the disk-rate dash, and 0.6.2 | `scripts/complete-production.sh` |
 | VIS-2 | done | VIS-1 | the lists keep their viewport across a refresh, only the person's cursor scrolls them, applications open folded, and 0.6.3 | `scripts/complete-production.sh` |
+| REL-1 | done | VIS-2 | record `VAL-VIS-2`, release 1.0.0, no code change | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -93,6 +94,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H5-Z: [production completion](docs/evidence/2026-09-22-h5-production-completion.md)
 - VIS-1: [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
 - VIS-2: [scroll and folds](docs/evidence/2026-09-23-scroll-and-folds.md)
+- REL-1: [release](docs/evidence/2026-09-23-release-1.md)
 
 ## H1 — closed 2026-09-21
 
@@ -332,3 +334,18 @@ and folds evidence](docs/evidence/2026-09-23-scroll-and-folds.md), deployed as
 `0.6.3`, in its own archived
 [plan](docs/plans/archive/2026-09-23-scroll-and-folds.md). `VAL-VIS-2` asks the
 author to check both.
+
+## Version 1 — released 2026-09-23
+
+The author ran `VAL-VIS-2` on the deployed `0.6.3` and reported that the
+process table kept its scroll position across refreshes, applications opened
+folded, and there was no flicker. On that validation the author asked to
+close version 1. `REL-1` recorded `VAL-VIS-2` as passed, recorded `VAL-H1`,
+`VAL-H3` and `VAL-H4` as passed through the same remediation, and released
+`1.0.0`: the five design phases `H1` through `H5` (Performance with every
+resource, Processes and Applications, Sensors, and Services with
+polkit-mediated privileged actions) plus the two visual correction units
+`VIS-1` and `VIS-2` are what the author accepts as version 1, per the
+[release evidence](docs/evidence/2026-09-23-release-1.md), in its own archived
+[plan](docs/plans/archive/2026-09-23-release-1.md). Further work opens with a
+new checkpoint.
