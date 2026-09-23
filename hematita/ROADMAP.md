@@ -56,6 +56,7 @@ alone, without the machine noticing the monitor.
 | H5-Z | done | H5-C | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
 | H5-D | done | H5-Z | the whole-branch review's corrections: the polkit interaction flag, the action and listing timeouts, the outcome mapping, and 0.6.1 | `scripts/complete-production.sh` |
 | VIS-1 | done | H5-D | the author's first real-session look: strip alignment, sparkline inset, colour per kind, the table card hierarchy, readable names, sentinel limits, the disk-rate dash, and 0.6.2 | `scripts/complete-production.sh` |
+| VIS-2 | done | VIS-1 | the lists keep their viewport across a refresh, only the person's cursor scrolls them, applications open folded, and 0.6.3 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -91,6 +92,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H5-D: [privilege fixes 2](docs/evidence/2026-09-22-h5-privilege-fixes-2.md)
 - H5-Z: [production completion](docs/evidence/2026-09-22-h5-production-completion.md)
 - VIS-1: [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
+- VIS-2: [scroll and folds](docs/evidence/2026-09-23-scroll-and-folds.md)
 
 ## H1 — closed 2026-09-21
 
@@ -318,3 +320,15 @@ beyond the additive `processDisplayNames` list — the [visual feedback
 evidence](docs/evidence/2026-09-23-visual-feedback.md), deployed as `0.6.2`,
 in its own archived [plan](docs/plans/archive/2026-09-23-visual-feedback.md).
 `VAL-VIS-1` asks the author to look at the same screens again.
+
+## VIS-2 — closed 2026-09-23
+
+Running `VAL-VIS-1` on 0.6.2, the author found that every refresh threw the
+process table back to its top, and that the Aplicaciones page opened with
+every application unfolded. `VIS-2` restores each list's viewport after its
+integer model is reset, lets only the person's cursor move the view, and
+inverts the fold map so an application is folded until opened — the [scroll
+and folds evidence](docs/evidence/2026-09-23-scroll-and-folds.md), deployed as
+`0.6.3`, in its own archived
+[plan](docs/plans/archive/2026-09-23-scroll-and-folds.md). `VAL-VIS-2` asks the
+author to check both.

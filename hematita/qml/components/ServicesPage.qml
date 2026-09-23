@@ -56,8 +56,15 @@ Item {
         // `currentIndexChanged` — which a shorter model fires before the
         // re-anchor runs — cannot be read as the person moving the selection
         // and clear an answer they have not seen yet.
+        // The model is the row count, so the assignment is a reset that puts
+        // the view back at the top; the offset read before it is put back,
+        // clamped to the new length, so a tick never takes the person's place.
         page.anchoring = true
+        const offset = list.contentY
         page.rows = woven
+        list.forceLayout()
+        const reach = Math.max(0, list.contentHeight - list.height)
+        list.contentY = list.originY + Math.min(Math.max(0, offset - list.originY), reach)
         page.anchoring = false
         page.anchorCursor()
     }
@@ -406,10 +413,15 @@ Item {
                     keyNavigationEnabled: true
                     Accessible.role: Accessible.List
                     Accessible.name: qsTr("Servicios")
+                    // Only the person's own cursor moves the view; the
+                    // re-anchor after a rebuild must not drag it.
+                    highlightFollowsCurrentItem: false
 
                     onCurrentIndexChanged: {
                         if (page.anchoring)
                             return
+                        if (list.currentIndex >= 0)
+                            list.positionViewAtIndex(list.currentIndex, ListView.Contain)
                         if (list.currentIndex >= 0 && list.currentIndex < page.rows.length)
                             page.selectedKey = page.rows[list.currentIndex].key
                     }

@@ -130,8 +130,20 @@ Item {
                 kind: kind
             })
         }
+        // The model is the card count, so a hot-plug is a reset that puts
+        // the view back at the top; the offset read before it is put back,
+        // clamped to the new length. The reset also rewrites the cursor, and
+        // `rebuilding` keeps that from scrolling as if the person had moved.
+        page.rebuilding = true
+        const offset = list.contentY
         page.cards = woven
+        list.forceLayout()
+        const reach = Math.max(0, list.contentHeight - list.height)
+        list.contentY = list.originY + Math.min(Math.max(0, offset - list.originY), reach)
+        page.rebuilding = false
     }
+
+    property bool rebuilding: false
 
     Connections {
         target: page.sensors
@@ -174,9 +186,15 @@ Item {
         model: page.cards.length
         activeFocusOnTab: true
         keyNavigationEnabled: true
-        highlightFollowsCurrentItem: true
+        // Only the person's arrows move the view, never a rebuild.
+        highlightFollowsCurrentItem: false
         Accessible.role: Accessible.List
         Accessible.name: qsTr("Sensores")
+
+        onCurrentIndexChanged: {
+            if (!page.rebuilding && list.currentIndex >= 0)
+                list.positionViewAtIndex(list.currentIndex, ListView.Contain)
+        }
 
         delegate: SensorChipCard {
             required property int index

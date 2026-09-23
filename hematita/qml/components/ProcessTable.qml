@@ -19,8 +19,9 @@ Item {
     property int selectedPid: -1
     property var rows: []
     property var groups: []
-    // Application ids folded shut.
-    property var collapsed: ({})
+    // Application ids opened by the person. Absent means folded: an
+    // application opens with its processes hidden until it is asked for.
+    property var expanded: ({})
     // The visible sequence: in the flat layout every row; grouped, each
     // application followed by its rows unless folded. Each entry is
     // { kind: "group"|"process", index }.
@@ -114,12 +115,40 @@ Item {
         // `currentIndexChanged` — which a shorter model fires before the
         // re-anchor runs — cannot be read as the person moving the selection
         // and clear an answer they have not seen yet.
+        // An application that left the table takes its fold with it, so a
+        // later one with the same id opens folded like any other.
+        const present = {}
+        for (const group of wovenGroups)
+            present[group.id] = true
+        let pruned = null
+        for (const id in table.expanded) {
+            if (present[id])
+                continue
+            if (pruned === null)
+                pruned = Object.assign({}, table.expanded)
+            delete pruned[id]
+        }
+        if (pruned !== null)
+            table.expanded = pruned
         table.anchoring = true
+        const offset = list.contentY
         table.rows = woven
         table.groups = wovenGroups
         table.entries = table.layout()
+        table.restoreViewport(offset)
         table.anchoring = false
         table.anchorCursor()
+    }
+
+    // The model is the entry count, so every rebuild is a reset and a reset
+    // puts the view back at the top. The offset read before the assignment is
+    // put back after it, once the list has laid out its new length, clamped
+    // to what that length can show: the person's place in the table is theirs
+    // and a tick does not take it.
+    function restoreViewport(offset) {
+        list.forceLayout()
+        const reach = Math.max(0, list.contentHeight - list.height)
+        list.contentY = list.originY + Math.min(Math.max(0, offset - list.originY), reach)
     }
 
     function layout() {
@@ -143,7 +172,7 @@ Item {
         }
         for (let group = 0; group < table.groups.length; ++group) {
             out.push({ kind: "group", index: group })
-            if (table.collapsed[table.groups[group].id])
+            if (!table.expanded[table.groups[group].id])
                 continue
             for (const index of buckets[group])
                 out.push({ kind: "process", index: index })
@@ -169,14 +198,16 @@ Item {
     }
 
     function toggleGroup(id) {
-        const next = Object.assign({}, table.collapsed)
+        const next = Object.assign({}, table.expanded)
         if (next[id])
             delete next[id]
         else
             next[id] = true
-        table.collapsed = next
+        table.expanded = next
         table.anchoring = true
+        const offset = list.contentY
         table.entries = table.layout()
+        table.restoreViewport(offset)
         table.anchoring = false
         table.anchorCursor()
     }
@@ -217,10 +248,10 @@ Item {
         if (entry.kind !== "group" || entry.index < 0 || entry.index >= table.groups.length)
             return false
         const id = table.groups[entry.index].id
-        const collapsed = table.collapsed[id] === true
-        if (direction < 0 && collapsed)
+        const open = table.expanded[id] === true
+        if (direction < 0 && !open)
             return true
-        if (direction > 0 && !collapsed)
+        if (direction > 0 && open)
             return true
         table.toggleGroup(id)
         return true
@@ -461,6 +492,11 @@ Item {
                     keyNavigationEnabled: true
                     Accessible.role: Accessible.List
                     Accessible.name: table.grouped ? qsTr("Aplicaciones") : qsTr("Procesos")
+                    // The view moves only when the person moves the cursor:
+                    // the re-anchor after a rebuild writes the index too, and
+                    // following it would drag the view to the selection on
+                    // every tick.
+                    highlightFollowsCurrentItem: false
 
                     // Landing on an application row selects nothing and folds
                     // nothing: it is a place in the list, and Space on the row
@@ -468,6 +504,8 @@ Item {
                     onCurrentIndexChanged: {
                         if (table.anchoring)
                             return
+                        if (list.currentIndex >= 0)
+                            list.positionViewAtIndex(list.currentIndex, ListView.Contain)
                         const pid = table.pidOfEntry(list.currentIndex)
                         if (pid >= 0)
                             table.selectedPid = pid
@@ -531,7 +569,7 @@ Item {
                             count: slot.groupData.count
                             cpu: table.percentText(slot.groupData.cpu)
                             memory: table.bytesText(slot.groupData.memory * 1024)
-                            expanded: !table.collapsed[slot.groupData.id]
+                            expanded: !!table.expanded[slot.groupData.id]
                             onClicked: table.toggleGroup(slot.groupData.id)
                         }
                     }

@@ -1,6 +1,9 @@
 # Hematita status
 
 - **Updated:** 2026-09-23
+- **Delivered as 0.6.3:** `VIS-2` — a refresh no longer throws the
+  process, service or sensor list back to its top, the view moves only when
+  the person moves the cursor, and every application opens folded
 - **Delivered as 0.6.2:** `VIS-1` — the correction of the author's first
   real-session look: the strip's items centred, sparklines inside their
   corners, a colour per resource and sensor kind, the process and service
@@ -49,7 +52,8 @@
 - **Author validation:** `VAL-H1` failed 2026-09-23 (remedied by `VIS-1`);
   `VAL-H2` requested, not run; `VAL-H3` failed 2026-09-23 (remedied by
   `VIS-1`); `VAL-H4` failed 2026-09-23 (remedied by `VIS-1`); `VAL-H5`
-  requested, not run; `VAL-VIS-1` requested, not run
+  requested, not run; `VAL-VIS-1` failed 2026-09-23 (remedied by `VIS-2`); `VAL-VIS-2`
+  requested, not run
 - **Active phase:** none — H5 closed 2026-09-22, the design's five phases
   delivered; no next phase is open
 

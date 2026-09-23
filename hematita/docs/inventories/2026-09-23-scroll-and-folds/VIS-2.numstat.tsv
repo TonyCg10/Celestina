@@ -1,0 +1,35 @@
+# VIS-2 exact change inventory
+
+Base revision	a41936a37374cae6b231bc2988bfca83bf6226ba
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-23-scroll-and-folds.md
+Pathspec	hematita/docs/inventories/2026-09-23-scroll-and-folds/VIS-2.numstat.tsv
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-23-scroll-and-folds.md
+Pathspec	hematita/docs/plans/archive/README.md
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/qml/components/SensorsPage.qml
+Pathspec	hematita/qml/components/ServicesPage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	213e439e7b8eea8777e13247da9693c394a803df1e715ab61d846d94bd1cf785	docs/version-history.tsv
+1	1	a83f7bc3944f4c7018f6efba69a51fbc8e8f4903d43c0b48db791168e41c5e47	hematita/Cargo.lock
+1	1	41fe1bd0de74f7c019904f423c63e591622ff39fe864f9aebfe12f8a14ce4946	hematita/Cargo.toml
+14	0	f6422d6854af3db02bab5e7d276e383414f99ebd4394f83ee491b3460e1067a8	hematita/ROADMAP.md
+5	1	ecd2616f105a3b27c104523d75fb1fd182954c10d6231ec0ee7e1fc27b25f879	hematita/STATUS.md
+19	1	cc9c2b23556cb8f4c625840f1bd25d06d353a2394a528024dc4335338e38efe1	hematita/VALIDATION.md
+80	0	6e64330528e75d35d8797193424357ccb0ab7bd73e14f96f6118c86c058c43ad	hematita/docs/evidence/2026-09-23-scroll-and-folds.md
+2	1	cbb15db9e2a57e3f78b7f7032c6a9ccdeca4da4b7e19f557faeecb0896b4d4d8	hematita/docs/plans/active/README.md
+48	0	18b95bd6d1d5b6bb2b4829f5be27cfb15bb6832ab760a784b72e4adbf64157ad	hematita/docs/plans/archive/2026-09-23-scroll-and-folds.md
+1	0	110179ea50d585399766a6810b80c537d123b221d91a3ddc8c1eebd05b0655fe	hematita/docs/plans/archive/README.md
+47	9	783287a2af3ab0645edd51aca7edb1a723c0fbc75317301748cdc4658701ba87	hematita/qml/components/ProcessTable.qml
+19	1	1007f58eefdbcffbec0c5c289ef2ba163f8c34f51335c0a4c67b56d6a70cf815	hematita/qml/components/SensorsPage.qml
+12	0	468db98409cb629b171a3c3db2f7490723bbda6f9927b5b1e1b96e0dc6376e3f	hematita/qml/components/ServicesPage.qml
+35	0	self	hematita/docs/inventories/2026-09-23-scroll-and-folds/VIS-2.numstat.tsv

@@ -157,3 +157,4 @@ hematita	0.6.0	milestone	H5-Z	Add the Services page and polkit-mediated actions
 hematita	0.6.1	bug	H5-D	Fix the polkit interaction flag, the action timeouts and the outcome mapping
 siderita	1.6.0	milestone	SID-B1-Z	Add the transient notice column and simplify the bottom chrome
 hematita	0.6.2	bug	VIS-1	Fix the first real-session visual and naming defects
+hematita	0.6.3	bug	VIS-2	Fix the table scrolling back on refresh and open applications folded

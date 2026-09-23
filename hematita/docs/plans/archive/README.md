@@ -14,3 +14,4 @@ root.
 - [H5 — Services and privileged actions](2026-09-22-h5-services.md)
 - [H5-D — The polkit interaction flag, the action timeouts and the outcome mapping](2026-09-22-h5-privilege-fixes.md)
 - [VIS-1 — The first real-session visual and naming defects](2026-09-23-visual-feedback.md)
+- [VIS-2 — The table scrolling back on refresh, and applications opening folded](2026-09-23-scroll-and-folds.md)

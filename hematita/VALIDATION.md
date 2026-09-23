@@ -125,7 +125,7 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 ## VAL-VIS-1 — The corrected screens on the real session
 
-- **Status:** pending
+- **Status:** failed
 - **Related implementation:** VIS-1
 - **Requires:** the deployed Hematita 0.6.2 on the real session; one Windows
   executable or `/usr/lib` binary running as the author
@@ -148,5 +148,23 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   description; known sensor labels read as words, each kind has its dot and
   colour, no limit is absurd, and no reading has a thousands separator; the
   second launch raises the first window, or says on stderr why it could not
+- **Result:** failed on 2026-09-23 — every data refresh scrolled the process table back to its top, and the Aplicaciones page opened with every application unfolded. The rest of the procedure was not reported
+- **Evidence:** author's report, 2026-09-23, recorded in [scroll and folds](docs/evidence/2026-09-23-scroll-and-folds.md)
+- **Remediation:** `VIS-2` in [plan](docs/plans/archive/2026-09-23-scroll-and-folds.md)
+
+## VAL-VIS-2 — The lists keep their place and applications open folded
+
+- **Status:** pending
+- **Related implementation:** VIS-2
+- **Requires:** the deployed Hematita 0.6.3 on the real session
+- **Procedure:** launch `hematita`; open Procesos, scroll the table well
+  down and wait ten seconds without touching it; open Aplicaciones and look
+  at every group; move the cursor with the arrows past the bottom and top of
+  the view; on an application row press Right, then Left; repeat the scroll
+  and wait on Servicios and Sensores
+- **Pass condition:** the scrolled table stays where it was across every
+  refresh; every application is folded when the page opens; the arrows
+  still bring the cursor into view; Right unfolds the application under the
+  cursor and Left folds it; Servicios and Sensores also keep their place
 - **Result:** not run
 - **Evidence:** none
