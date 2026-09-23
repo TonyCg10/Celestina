@@ -1,8 +1,8 @@
 # Hematita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
-- **Related author validation:** `VAL-H1` in [VALIDATION.md](VALIDATION.md)
+- **Status:** active
+- **Active implementation checkpoint:** S1
+- **Related author validation:** `VAL-S1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
 ## Hypothesis and tangible outcome
@@ -20,6 +20,7 @@ alone, without the machine noticing the monitor.
 | H3 | Processes and applications |
 | H4 | Sensors (all of hwmon) |
 | H5 | Services and privileged actions |
+| S1 | Storage: mount points, browsing, a device-bounded scan, size list and treemap, duplicates and empty folders, trash and guarded deletion |
 
 ## Exclusions
 
@@ -58,6 +59,11 @@ alone, without the machine noticing the monitor.
 | VIS-1 | done | H5-D | the author's first real-session look: strip alignment, sparkline inset, colour per kind, the table card hierarchy, readable names, sentinel limits, the disk-rate dash, and 0.6.2 | `scripts/complete-production.sh` |
 | VIS-2 | done | VIS-1 | the lists keep their viewport across a refresh, only the person's cursor scrolls them, applications open folded, and 0.6.3 | `scripts/complete-production.sh` |
 | REL-1 | done | VIS-2 | record `VAL-VIS-2`, release 1.0.0, no code change | `scripts/complete-production.sh` |
+| S1-A | done | REL-1 | `hematita-core::usage`: the walk, the tree, empty folders, duplicates, the treemap layout, the guarded deletion, mounts | `cargo test -p hematita-core` |
+| S1-B | planned | S1-A | locations, browsing, the storage section and its smoke line | `scripts/verify-production.sh` |
+| S1-C | planned | S1-B | the scan with progress and cancel, size list and treemap, filters, duplicate confirmation | `scripts/verify-production.sh` |
+| S1-D | planned | S1-C | actions: open in Siderita, batch trash, guarded permanent deletion, selection | `scripts/verify-production.sh` |
+| S1-Z | planned | S1-D | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -95,6 +101,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - VIS-1: [visual feedback](docs/evidence/2026-09-23-visual-feedback.md)
 - VIS-2: [scroll and folds](docs/evidence/2026-09-23-scroll-and-folds.md)
 - REL-1: [release](docs/evidence/2026-09-23-release-1.md)
+- S1-A: [core](docs/evidence/2026-09-23-s1-core.md)
 
 ## H1 — closed 2026-09-21
 
@@ -347,5 +354,16 @@ resource, Processes and Applications, Sensors, and Services with
 polkit-mediated privileged actions) plus the two visual correction units
 `VIS-1` and `VIS-2` are what the author accepts as version 1, per the
 [release evidence](docs/evidence/2026-09-23-release-1.md), in its own archived
-[plan](docs/plans/archive/2026-09-23-release-1.md). Further work opens with a
-new checkpoint.
+[plan](docs/plans/archive/2026-09-23-release-1.md).
+
+## S1 — opened 2026-09-23
+
+The author asked for a storage analyzer inside Hematita: Baobab's result is
+unclear and leaves little to do with what it finds. Its falsifiable problem
+is whether a device-bounded walk with progress can analyse the author's
+430 GiB home while the window stays live, and whether a size list beside a
+treemap, with verified duplicates and empty folders, lets the author act on
+what is found without leaving Hematita. The
+[plan](docs/plans/active/2026-09-23-s1-storage.md) orders `S1-A` (the pure
+`hematita-core::usage` domain, [core evidence](docs/evidence/2026-09-23-s1-core.md))
+through `S1-Z` (1.1.0); `VAL-S1` is the author's check on the real session.

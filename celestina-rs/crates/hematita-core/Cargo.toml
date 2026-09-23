@@ -5,10 +5,14 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
-# Deliberately empty. Everything this crate does is parse text the caller
-# read from /proc and /sys into typed values; the standard library is the
-# whole toolbox and a library would still leave hwmon and amdgpu to us.
+# Everything else this crate does is parse text the caller read from /proc and
+# /sys into typed values; the standard library is the whole toolbox and a
+# library would still leave hwmon and amdgpu to us.
 [dependencies]
+# CancellationToken and Generation are the suite's shared cancellation and
+# staleness types; the storage walk, the duplicate check and the deletion stop
+# on the same token the application already hands every worker.
+celestina-core.workspace = true
 
 [lints]
 workspace = true

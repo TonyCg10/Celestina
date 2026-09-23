@@ -172,3 +172,13 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Result:** the author scrolled the process table, waited, and it stayed;
   applications opened folded; no flicker on refresh (2026-09-23)
 - **Evidence:** author's report, 2026-09-23, recorded in [release evidence](docs/evidence/2026-09-23-release-1.md)
+
+## VAL-S1 — The storage analyzer on the real session
+
+- **Status:** pending
+- **Related implementation:** S1
+- **Requires:** the deployed Hematita 1.1.0; a USB disk with something disposable on it
+- **Procedure:** open the storage section; read the locations and their occupation against `df -h`; enter the home location, browse two levels, scan there and watch the progress; cancel a scan of the whole home halfway, then scan it fully; compare the biggest folder's size with `du -sh`; enter a `/mnt` disk and scan it; enable the duplicates filter, verify one group, select all but one and trash them, then find them in Siderita's trash; enable the empty-folders filter and trash three of them; on the USB disk delete one file permanently through the dialog; walk lists and treemap by keyboard; watch Hematita's CPU a minute after a scan
+- **Pass condition:** occupation matches `df` within rounding; the scan advances visibly and cancels within a second; the folder size matches `du` within 1 %; verified duplicates are byte-identical (`cmp` on one pair); trashed entries appear in the trash and the tree updates without a rescan; the permanent deletion asks, names the count and size, and removes only what was selected; every list and the treemap reachable by keyboard; idle CPU under 2 % after a scan
+- **Result:** not run
+- **Evidence:** none

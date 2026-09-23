@@ -2,8 +2,11 @@
 //!
 //! Every function here takes the text a caller read from `/proc` or `/sys`
 //! and answers a value or an error naming what was unreadable. Nothing here
-//! opens a file, spawns a thread or knows what a percentage should look like
-//! on screen; that is the application's business.
+//! spawns a thread or knows what a percentage should look like on screen;
+//! that is the application's business. The one exception to "reads no file"
+//! is `usage`: the storage analyzer's walk, content check and deletion are
+//! filesystem operations by nature, kept here because they are pure of Qt and
+//! testable on a temporary directory.
 
 pub mod cpu;
 pub mod disk;
@@ -18,3 +21,4 @@ pub mod rate;
 pub mod ratio;
 pub mod sensors;
 pub mod services;
+pub mod usage;

@@ -1,0 +1,424 @@
+//! The storage domain against a real directory tree.
+//!
+//! Every test builds its own fixture under the system temporary directory
+//! with a unique name, so the tests run in parallel without sharing state.
+//! The fixture's `locked/` directory is made unreadable (mode `000`); the
+//! [`Fixture`] guard restores `755` before removing everything, so a failing
+//! test never leaves a directory `cargo test` cannot delete. Expected sizes
+//! are read back with `symlink_metadata` rather than hard-coded, because block
+//! counts differ between filesystems.
+
+use std::fs;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use celestina_core::CancellationToken;
+use hematita_core::usage::duplicates::{candidates, confirm, ConfirmError, Group};
+use hematita_core::usage::empty::empty_folders;
+use hematita_core::usage::remove::{delete_tree, Refusal, RemoveError};
+use hematita_core::usage::tree::{Kind, NodeId, Tree};
+use hematita_core::usage::walk::{scan, Progress, ScanError};
+
+const MIB: usize = 1024 * 1024;
+
+struct Fixture {
+    root: PathBuf,
+}
+
+impl Fixture {
+    fn path(&self, relative: &str) -> PathBuf {
+        self.root.join(relative)
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = fs::set_permissions(self.root.join("locked"), fs::Permissions::from_mode(0o755));
+        remove_all(&self.root);
+    }
+}
+
+/// Test-only recursive removal that never follows a symbolic link.
+fn remove_all(path: &Path) {
+    let Ok(meta) = fs::symlink_metadata(path) else {
+        return;
+    };
+    if meta.is_dir() {
+        if let Ok(read) = fs::read_dir(path) {
+            for entry in read.flatten() {
+                remove_all(&entry.path());
+            }
+        }
+        let _ = fs::remove_dir(path);
+    } else {
+        let _ = fs::remove_file(path);
+    }
+}
+
+fn unique_dir() -> PathBuf {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    std::env::temp_dir().join(format!(
+        "hematita-usage-{}-{}-{}",
+        std::process::id(),
+        nanos,
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+/// ```text
+/// root/
+///   big.bin          4 MiB of 0xAB
+///   copy-of-big.bin  identical bytes
+///   same-size.bin    4 MiB of 0xCD
+///   docs/a.txt       3 KiB
+///   docs/b.txt       3 KiB, identical to a.txt
+///   docs/link-to-a.txt  hard link to a.txt
+///   empty/deeper/    nothing at any depth
+///   out.lnk -> /tmp  symbolic link
+///   locked/secret.txt  locked/ is mode 000
+///   many/0..599      only when `padded`
+/// ```
+fn fixture(padded: bool) -> Fixture {
+    let root = unique_dir();
+    let fixture = Fixture { root: root.clone() };
+    fs::create_dir_all(root.join("docs")).expect("docs");
+    fs::create_dir_all(root.join("empty/deeper")).expect("empty");
+    fs::create_dir_all(root.join("locked")).expect("locked");
+    fs::write(root.join("big.bin"), vec![0xAB; 4 * MIB]).expect("big");
+    fs::write(root.join("copy-of-big.bin"), vec![0xAB; 4 * MIB]).expect("copy");
+    fs::write(root.join("same-size.bin"), vec![0xCD; 4 * MIB]).expect("same size");
+    fs::write(root.join("docs/a.txt"), vec![b'a'; 3 * 1024]).expect("a");
+    fs::write(root.join("docs/b.txt"), vec![b'a'; 3 * 1024]).expect("b");
+    fs::hard_link(root.join("docs/a.txt"), root.join("docs/link-to-a.txt")).expect("hard link");
+    std::os::unix::fs::symlink("/tmp", root.join("out.lnk")).expect("symlink");
+    fs::write(root.join("locked/secret.txt"), b"secret").expect("secret");
+    if padded {
+        fs::create_dir_all(root.join("many")).expect("many");
+        for i in 0..600 {
+            fs::write(root.join(format!("many/{i}")), b"x").expect("small file");
+        }
+    }
+    fs::set_permissions(root.join("locked"), fs::Permissions::from_mode(0o000)).expect("chmod");
+    fixture
+}
+
+/// Root reads through a mode-000 directory, so the unreadable assertions only
+/// hold for an ordinary user.
+fn running_as_root() -> bool {
+    fs::metadata("/proc/self")
+        .map(|m| m.uid() == 0)
+        .unwrap_or(false)
+}
+
+fn allocated(path: &Path) -> u64 {
+    fs::symlink_metadata(path).expect("metadata").blocks() * 512
+}
+
+fn scan_ok(root: &Path) -> Tree {
+    scan(root, &CancellationToken::new(), &mut |_| {}).expect("scan")
+}
+
+fn child(tree: &Tree, parent: NodeId, name: &str) -> NodeId {
+    tree.node(parent)
+        .expect("parent")
+        .children
+        .iter()
+        .copied()
+        .find(|id| tree.node(*id).is_some_and(|n| n.name == name))
+        .unwrap_or_else(|| panic!("no child {name}"))
+}
+
+#[test]
+fn the_walk_counts_files_once_and_follows_no_link() {
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let root = tree.node(tree.root).expect("root");
+
+    // big, copy, same-size, a/link (one inode), b; secret is behind locked/.
+    assert_eq!(root.files_below, 5);
+    let expected = allocated(&fx.path("big.bin"))
+        + allocated(&fx.path("copy-of-big.bin"))
+        + allocated(&fx.path("same-size.bin"))
+        + allocated(&fx.path("docs/a.txt"))
+        + allocated(&fx.path("docs/b.txt"))
+        + allocated(&fx.path("out.lnk"));
+    assert_eq!(root.allocated, expected);
+
+    let docs = tree.node(child(&tree, tree.root, "docs")).expect("docs");
+    assert_eq!(docs.files_below, 2);
+    assert_eq!(
+        docs.allocated,
+        allocated(&fx.path("docs/a.txt")) + allocated(&fx.path("docs/b.txt"))
+    );
+
+    let link = tree.node(child(&tree, tree.root, "out.lnk")).expect("link");
+    assert_eq!(link.kind, Kind::Other);
+    assert_eq!(link.apparent, "/tmp".len() as u64);
+    assert!(link.children.is_empty());
+
+    let empty = child(&tree, tree.root, "empty");
+    let deeper = tree.node(child(&tree, empty, "deeper")).expect("deeper");
+    assert_eq!((deeper.files_below, deeper.allocated), (0, 0));
+    assert_eq!(
+        tree.path_of(child(&tree, empty, "deeper")),
+        fx.path("empty/deeper")
+    );
+}
+
+#[test]
+fn an_unreadable_directory_is_marked_and_the_walk_goes_on() {
+    if running_as_root() {
+        eprintln!("skipped: root reads through a mode-000 directory");
+        return;
+    }
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let locked = tree
+        .node(child(&tree, tree.root, "locked"))
+        .expect("locked");
+    assert!(locked.unreadable);
+    assert!(locked.children.is_empty());
+    assert_eq!(tree.unreadable_dirs, 1);
+    assert_eq!(tree.node(tree.root).expect("root").files_below, 5);
+}
+
+#[test]
+fn progress_is_reported_on_a_large_folder() {
+    let fx = fixture(true);
+    let mut reports: Vec<Progress> = Vec::new();
+    let tree = scan(&fx.root, &CancellationToken::new(), &mut |p| {
+        reports.push(p)
+    })
+    .expect("scan");
+    assert!(!reports.is_empty());
+    assert!(reports.windows(2).all(|w| w[0].files <= w[1].files));
+    assert_eq!(tree.node(tree.root).expect("root").files_below, 605);
+}
+
+#[test]
+fn a_cancelled_token_stops_the_walk() {
+    let fx = fixture(false);
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    assert!(matches!(
+        scan(&fx.root, &cancel, &mut |_| {}),
+        Err(ScanError::Cancelled)
+    ));
+}
+
+#[test]
+fn a_root_that_is_not_a_folder_is_refused() {
+    let fx = fixture(false);
+    let result = scan(&fx.path("big.bin"), &CancellationToken::new(), &mut |_| {});
+    assert!(matches!(result, Err(ScanError::NotADirectory { path }) if path == fx.path("big.bin")));
+    let missing = scan(&fx.path("nope"), &CancellationToken::new(), &mut |_| {});
+    assert!(matches!(missing, Err(ScanError::Root { .. })));
+    let link = scan(&fx.path("out.lnk"), &CancellationToken::new(), &mut |_| {});
+    assert!(matches!(link, Err(ScanError::NotADirectory { .. })));
+}
+
+fn name(tree: &Tree, id: NodeId) -> String {
+    tree.node(id)
+        .expect("node")
+        .name
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn names(tree: &Tree, ids: &[NodeId]) -> Vec<String> {
+    ids.iter().map(|id| name(tree, *id)).collect()
+}
+
+#[test]
+fn empty_folders_are_listed_deepest_first() {
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let empty = child(&tree, tree.root, "empty");
+    let deeper = child(&tree, empty, "deeper");
+    // locked/ holds nothing the walk could see, but it is unreadable, so it
+    // is not called empty.
+    assert_eq!(empty_folders(&tree), vec![deeper, empty]);
+}
+
+#[test]
+fn candidates_group_files_of_equal_allocation() {
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let groups = candidates(&tree);
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0].size, allocated(&fx.path("big.bin")));
+    let mut trio = names(&tree, &groups[0].nodes);
+    trio.sort();
+    assert_eq!(trio, ["big.bin", "copy-of-big.bin", "same-size.bin"]);
+    assert!(groups[0].nodes.windows(2).all(|w| w[0].0 < w[1].0));
+    // The hard link is one file: whichever name the walk met first carries
+    // the size, and b.txt pairs with it.
+    let pair = names(&tree, &groups[1].nodes);
+    assert_eq!(pair.len(), 2);
+    assert!(pair.contains(&"b.txt".to_string()));
+    assert!(pair.contains(&"a.txt".to_string()) || pair.contains(&"link-to-a.txt".to_string()));
+}
+
+#[test]
+fn confirm_keeps_only_identical_content_together() {
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let groups = candidates(&tree);
+    let mut read = 0;
+    let trio = confirm(&tree, &groups[0], &CancellationToken::new(), &mut |b| {
+        read = b
+    })
+    .expect("confirm trio");
+    assert_eq!(trio.len(), 1);
+    let mut verified = names(&tree, &trio[0].nodes);
+    verified.sort();
+    assert_eq!(verified, ["big.bin", "copy-of-big.bin"]);
+    assert_eq!(trio[0].size, groups[0].size);
+    assert!(read > 0);
+
+    let pair =
+        confirm(&tree, &groups[1], &CancellationToken::new(), &mut |_| {}).expect("confirm pair");
+    assert_eq!(pair.len(), 1);
+    assert_eq!(pair[0].nodes, groups[1].nodes);
+}
+
+#[test]
+fn confirm_stops_on_cancel_and_names_an_unreadable_file() {
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let groups = candidates(&tree);
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    assert!(matches!(
+        confirm(&tree, &groups[0], &cancel, &mut |_| {}),
+        Err(ConfirmError::Cancelled)
+    ));
+
+    fs::remove_file(fx.path("copy-of-big.bin")).expect("remove copy");
+    let result = confirm(&tree, &groups[0], &CancellationToken::new(), &mut |_| {});
+    assert!(
+        matches!(&result, Err(ConfirmError::Read { path, .. }) if *path == fx.path("copy-of-big.bin")),
+        "{result:?}"
+    );
+    let lone = Group {
+        size: 1,
+        nodes: vec![groups[0].nodes[0]],
+    };
+    assert!(
+        confirm(&tree, &lone, &CancellationToken::new(), &mut |_| {})
+            .expect("one file")
+            .is_empty()
+    );
+}
+
+fn refused(result: Result<hematita_core::usage::remove::Removed, RemoveError>) -> Refusal {
+    match result {
+        Err(RemoveError::Refused { reason, .. }) => reason,
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
+#[test]
+fn delete_tree_refuses_the_root_the_outside_and_the_missing() {
+    let fx = fixture(false);
+    let token = CancellationToken::new();
+    assert_eq!(
+        refused(delete_tree(&fx.root, &fx.root, &token)),
+        Refusal::IsRoot
+    );
+    assert_eq!(
+        refused(delete_tree(&fx.root.join("docs/.."), &fx.root, &token)),
+        Refusal::IsRoot
+    );
+    let sibling = fx.root.join("../sibling");
+    assert_eq!(
+        refused(delete_tree(&sibling, &fx.root, &token)),
+        Refusal::Outside
+    );
+    assert_eq!(
+        refused(delete_tree(&fx.path("docs/../../x"), &fx.root, &token)),
+        Refusal::Outside
+    );
+    assert_eq!(
+        refused(delete_tree(Path::new("/tmp"), &fx.root, &token)),
+        Refusal::Outside
+    );
+    assert_eq!(
+        refused(delete_tree(&fx.path("nope"), &fx.root, &token)),
+        Refusal::Missing
+    );
+    assert!(fx.path("docs/a.txt").exists());
+}
+
+#[test]
+fn delete_tree_refuses_a_mount_root() {
+    // /proc is its own filesystem; / is the scanned "root" here only for the
+    // refusal, which happens before anything is touched.
+    let token = CancellationToken::new();
+    assert_eq!(
+        refused(delete_tree(Path::new("/proc"), Path::new("/"), &token)),
+        Refusal::MountRoot
+    );
+}
+
+#[test]
+fn delete_tree_removes_a_link_and_never_its_target() {
+    let fx = fixture(false);
+    let target = unique_dir();
+    fs::create_dir_all(&target).expect("target");
+    fs::write(target.join("keep.txt"), b"keep").expect("keep");
+    let guard = Fixture {
+        root: target.clone(),
+    };
+    std::os::unix::fs::symlink(&target, fx.path("docs/outside.lnk")).expect("link");
+
+    let removed = delete_tree(
+        &fx.path("docs/outside.lnk"),
+        &fx.root,
+        &CancellationToken::new(),
+    )
+    .expect("delete link");
+    assert_eq!(removed.entries, 1);
+    assert!(fs::symlink_metadata(fx.path("docs/outside.lnk")).is_err());
+    assert!(target.join("keep.txt").exists());
+
+    // A folder holding a link to the outside: the link goes, the target stays.
+    std::os::unix::fs::symlink(&target, fx.path("empty/deeper/out.lnk")).expect("link");
+    delete_tree(&fx.path("empty"), &fx.root, &CancellationToken::new()).expect("delete empty");
+    assert!(target.join("keep.txt").exists());
+    drop(guard);
+}
+
+#[test]
+fn delete_tree_removes_a_nested_tree_and_reports_it() {
+    let fx = fixture(false);
+    let expected_bytes = allocated(&fx.path("docs/a.txt"))
+        + allocated(&fx.path("docs/b.txt"))
+        + allocated(&fx.path("docs"));
+    let removed =
+        delete_tree(&fx.path("docs"), &fx.root, &CancellationToken::new()).expect("delete docs");
+    // docs/, a.txt, b.txt, link-to-a.txt; the hard link's blocks count once.
+    assert_eq!(removed.entries, 4);
+    assert_eq!(removed.bytes, expected_bytes);
+    assert!(!fx.path("docs").exists());
+    assert!(fx.path("big.bin").exists());
+}
+
+#[test]
+fn delete_tree_touches_nothing_once_cancelled() {
+    let fx = fixture(false);
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    assert!(matches!(
+        delete_tree(&fx.path("docs"), &fx.root, &cancel),
+        Err(RemoveError::Cancelled)
+    ));
+    assert!(fx.path("docs/a.txt").exists());
+    assert!(fx.path("docs/b.txt").exists());
+}

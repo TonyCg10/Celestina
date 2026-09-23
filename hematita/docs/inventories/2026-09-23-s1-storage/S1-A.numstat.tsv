@@ -1,0 +1,47 @@
+# S1-A exact change inventory
+
+Base revision	eab92d87f22441a71d3b5dbd926d8959544d38ff
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/hematita-core/Cargo.toml
+Pathspec	celestina-rs/crates/hematita-core/src/lib.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/duplicates.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/empty.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/layout.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/mod.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/mounts.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/remove.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/tree.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/walk.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/usage_tree.rs
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-core.md
+Pathspec	hematita/docs/inventories/2026-09-23-s1-storage/S1-A.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-23-s1-storage.md
+Pathspec	hematita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+3	0	8a817ed5c4e7a221896e4d18f069c6f3bb645d74030e8a4d542fe5c917a1a24b	celestina-rs/Cargo.lock
+7	3	b614803f4fb074012fa0c772b788fa62e7f58a7013f5c3ff19572021f9657e68	celestina-rs/crates/hematita-core/Cargo.toml
+6	2	c380bed84c66ff67ac1c9a79faab43d221b5c26269484c665a7822cda8ea6c27	celestina-rs/crates/hematita-core/src/lib.rs
+273	0	98cbc1357a821ce3c5025359b0dd8fbd56c24bced0748b3c64ed1a5319418dbd	celestina-rs/crates/hematita-core/src/usage/duplicates.rs
+106	0	647c5c3e21eb95dac084356b8d8e19544bf28928ac95d0ada6c4813606bb7d58	celestina-rs/crates/hematita-core/src/usage/empty.rs
+270	0	3374335445e0845bfd11b26f4833fedae27b90db27d6510c7de1c25229ca7743	celestina-rs/crates/hematita-core/src/usage/layout.rs
+16	0	f610e3d7f3389746c516e8f0beb05994acda380e07eb4df9e82c5644b7678bab	celestina-rs/crates/hematita-core/src/usage/mod.rs
+163	0	411cb725a77828096b2a8abc846609c295c7b5fc331620752d01d682fba213ea	celestina-rs/crates/hematita-core/src/usage/mounts.rs
+221	0	34934bb38ceaf6f40ccafdae613184df45bb75086bd4c566b17f9773f84b7c31	celestina-rs/crates/hematita-core/src/usage/remove.rs
+205	0	c711be7dde70f3d557590c7f341b303d5830594eef81e58236aebe0592fdc86d	celestina-rs/crates/hematita-core/src/usage/tree.rs
+229	0	a6c57d264a2e0c754c63c05d4217cf9b8b9c4dd5b912667f8a82d29e294201a9	celestina-rs/crates/hematita-core/src/usage/walk.rs
+424	0	6b73ad963de6ff9b4bf66fc12e94d168210b3dda5740b95f02d650ee921cee39	celestina-rs/crates/hematita-core/tests/usage_tree.rs
+3	0	c01cebfe14b48fa21fe970b4d93e76fe3e1cad5b4cecf0e3f46b7da87bfe7388	hematita/Cargo.lock
+23	5	bb6b8e56f432bcfc59dce78abb3963fe38036ea36c28ff3a39397dc9ce1f3d0e	hematita/ROADMAP.md
+10	3	3a4277fe05ac188df733de950e138ca130a094ff9a965752bb4da18114b8a354	hematita/STATUS.md
+10	0	57b17ef0aaa66cb7c9c5d3fd2ff834a8a37a72813df1e0668447f82e068e58c3	hematita/VALIDATION.md
+128	0	b44567cac5c45b1a91f8b76b3904a927f6bc66535cec812e759383956579c2cc	hematita/docs/evidence/2026-09-23-s1-core.md
+69	0	846f10c8a6847df0519b707f040ff35af97d677a8762d50edf2ab2266be99099	hematita/docs/plans/active/2026-09-23-s1-storage.md
+4	9	4072429cbfb8076dd6d3152cf970d5855f193d3120f0c35b8ac346960cab93b3	hematita/docs/plans/active/README.md
+47	0	self	hematita/docs/inventories/2026-09-23-s1-storage/S1-A.numstat.tsv

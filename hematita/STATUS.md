@@ -1,6 +1,14 @@
 # Hematita status
 
 - **Updated:** 2026-09-23
+- **In progress:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
+  walks one device under a folder into an indexed tree (hard links once,
+  symbolic links never followed, unreadable folders marked), finds empty
+  folders and duplicate candidates verified by content, lays out a
+  squarified treemap, reads the mount table, and holds the suite's only
+  permanent deletion, which refuses the scanned root, anything outside it
+  and any mount root; crate-only, no build, see the
+  [core evidence](docs/evidence/2026-09-23-s1-core.md); `S1-B` is next
 - **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
   real session (the process table kept its scroll position across
   refreshes, applications opened folded, no flicker) and asked to close
@@ -62,9 +70,8 @@
   `VIS-2`); `VAL-VIS-2` passed 2026-09-23 — the process table kept its scroll
   position across refreshes, applications opened folded, no flicker on
   refresh
-- **Active phase:** none — H5 closed 2026-09-22, the design's five phases
-  delivered; `REL-1` released version 1 as `1.0.0` on 2026-09-23; no next
-  phase is open
+- **Active phase:** `S1` (storage), opened 2026-09-23 in its
+  [plan](docs/plans/active/2026-09-23-s1-storage.md); `VAL-S1` pending
 
 ## Current checkout truth
 
