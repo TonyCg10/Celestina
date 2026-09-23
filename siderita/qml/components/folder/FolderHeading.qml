@@ -127,8 +127,6 @@ Item {
     readonly property real expandedHeight:
             secondaryMetadata.length > 0 ? 116 : 98
     readonly property real compactHeight: 60
-    // What the scroll travel may spend growing this heading.
-    readonly property real expandedExtra: expandedHeight - compactHeight
     height: Math.round((expandedHeight
                         + (compactHeight - expandedHeight) * compactProgress)
                        * (1 - retiredProgress))

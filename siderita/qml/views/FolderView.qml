@@ -44,13 +44,8 @@ Item {
     // Nombre distinto evita el auto-binding sombreado `x: x`.
     property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
-    // Folds the metadata block away without bringing a retired title back:
-    // changing mode or location should not undo a heading a person scrolled
-    // out of the way, only stop showing the block they opened for somewhere
-    // else.
-    function foldHeading() {
-        headingScroll.travel = Math.max(0, headingScroll.travel)
-    }
+    // Changing mode or location puts the metadata block away; see fold().
+    function foldHeading() { headingScroll.fold() }
     onActiveChanged: if (!active) foldHeading()
     SideritaController {
         id: controller
@@ -58,10 +53,13 @@ Item {
 
     HeadingScroll {
         id: headingScroll
-        expandedExtra: folderHeading.expandedExtra
-        // The distance that used to be a threshold, kept so the *how far* does
-        // not change — only the fact that it is now a ramp rather than a step.
+        // Scroll distances, not the heading's own pixels. Two and a half
+        // notches to open the metadata block, a notch and a half to fade the
+        // title, and two more the travel keeps once it is gone — so coming
+        // back up is asked for rather than stumbled into.
+        expandSpan: CelestinaTheme.compWheelStep * 2.5
         retireSpan: CelestinaTheme.compWheelStep * 1.5
+        returnDelay: CelestinaTheme.compWheelStep * 2
     }
     // RouteReveal se arma antes de que este modelo publique la ruta nueva.
     // Native role model shared by list and grid.
@@ -97,7 +95,7 @@ Item {
             if (samePlace)
                 view.contentY = savedY
             else
-                headingScroll.travel = 0   // a new folder shows its compact title
+                headingScroll.moveTo(0, false)   // a new folder shows its compact title
 
             routeReveal.revealPreparedRoute()
         }
@@ -526,7 +524,8 @@ Item {
             overlayParent: root.overlayParent
             contentTopMargin: mainPanel.contentTopInset
                               + (folderListView.detailsMode
-                                 ? folderChrome.detailsHeader.height + 12 : 8)
+                                 ? folderChrome.detailsHeader.height + 12
+                                 : CelestinaTheme.spaceLg)
             contentBottomInset: mainPanel.contentBottomInset
             heading: headingScroll
             onQuickLookRequested: folderActions.requestPreview()
@@ -556,7 +555,8 @@ Item {
             hostWindow: root.hostWindow
             ghost: root.ghost
             overlayParent: root.overlayParent
-            contentTopMargin: mainPanel.contentTopInset + 8
+            contentTopMargin: mainPanel.contentTopInset
+                              + CelestinaTheme.spaceLg
             contentBottomInset: mainPanel.contentBottomInset
             heading: headingScroll
             onQuickLookRequested: folderActions.requestPreview()

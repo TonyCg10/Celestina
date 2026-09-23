@@ -1,0 +1,23 @@
+# SID-B1-C exact change inventory
+
+Base revision	5dfa034102c4292d1d6f2493199133bc165fc0fb
+Pathspec	siderita/docs/evidence/2026-09-22-heading-corrections.md
+Pathspec	siderita/docs/inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-C.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-22-bottom-chrome-and-notices.md
+Pathspec	siderita/qml/components/folder/FolderHeading.qml
+Pathspec	siderita/qml/components/folder/FolderWheelHandler.qml
+Pathspec	siderita/qml/components/folder/HeadingScroll.qml
+Pathspec	siderita/qml/views/FolderView.qml
+Pathspec	siderita/tests/qml/tst_heading_scroll.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+125	0	4cbabf453a7fd5604c25c6f934bfa898d4e2cad66febaa1de808588452324652	siderita/docs/evidence/2026-09-22-heading-corrections.md
+2	0	a08142af5ac7e5f30c50a7f572f24d510f44cff5f126fe2efd219de7f5316c87	siderita/docs/plans/active/2026-09-22-bottom-chrome-and-notices.md
+0	2	02c3164fb7b0a2239a090d19dfb531d5c02a0c19f36f233d3aceab2a580b7a2c	siderita/qml/components/folder/FolderHeading.qml
+35	6	d1f110ee6032684ab67cc6a47283e13579ceeed4af5ecaf3a61fc85704f3fb3e	siderita/qml/components/folder/FolderWheelHandler.qml
+72	15	89fe84aea228b6dde2f83480ad6961dd784289f2edbdb67b063b5c44ae69539a	siderita/qml/components/folder/HeadingScroll.qml
+13	13	092eaa4d8b12e7d85db0b166facedda6356f4e42568fd103fbd186f96c8416b9	siderita/qml/views/FolderView.qml
+102	19	7de78419b4fe73c02c3bd105db262f1389b7473fa7f40df4a1842420c8bf6b24	siderita/tests/qml/tst_heading_scroll.qml
+23	0	self	siderita/docs/inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-C.numstat.tsv
