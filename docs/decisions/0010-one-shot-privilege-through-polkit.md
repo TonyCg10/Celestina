@@ -61,6 +61,10 @@ must name, not hide, and not work around.
   entry; the security surface is polkit's and systemd's, not Hematita's.
 - `pkexec` sets the target's environment; only `kill` runs, so nothing of
   Hematita's inherits root.
+- The mechanism by which systemd asks the person is the D-Bus
+  `ALLOW_INTERACTIVE_AUTHORIZATION` message flag on the call; a call without
+  it is refused with `InteractiveAuthorizationRequired` even when an agent is
+  present.
 
 ## Revisit when
 
