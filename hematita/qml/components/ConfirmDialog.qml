@@ -1,20 +1,26 @@
 import QtQuick
 import org.celestina.hematita 1.0
 
-// Killing is not undoable, so it is asked. The question owns the focus while
-// it is up; Escape and a click outside both mean "no".
+// The one question the suite asks before something that cannot be undone:
+// killing a process, stopping or restarting a unit. The caller writes the
+// question and the word on the button and gets its own payload back, so one
+// dialog serves every page. It owns the focus while it is up; Escape and a
+// click outside both mean "no".
 CelestinaModalLayer {
     id: layer
 
     required property Item backdrop
-    property int pid: 0
-    property string processName: ""
+    property string question: ""
+    property string confirmText: ""
+    // Whatever the caller needs back to act: a pid, a unit name, an object.
+    property var payload: null
 
-    signal confirmed(int pid)
+    signal confirmed(var payload)
 
-    function ask(pid, name) {
-        layer.pid = pid
-        layer.processName = name
+    function ask(question, confirmText, payload) {
+        layer.question = question
+        layer.confirmText = confirmText
+        layer.payload = payload
         layer.shown = true
     }
 
@@ -31,7 +37,7 @@ CelestinaModalLayer {
         backdropSource: layer.backdrop
 
         Accessible.role: Accessible.Dialog
-        Accessible.name: qsTr("Matar proceso")
+        Accessible.name: layer.question
 
         // A click on the card is not a click outside it.
         MouseArea { anchors.fill: parent }
@@ -45,8 +51,7 @@ CelestinaModalLayer {
             anchors.margins: CelestinaTheme.spaceLg
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
-            text: qsTr("¿Matar «%1» (%2)? El proceso no podrá guardar nada.")
-                    .arg(layer.processName).arg(layer.pid)
+            text: layer.question
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontBody
@@ -70,10 +75,10 @@ CelestinaModalLayer {
             }
 
             CelestinaButton {
-                text: qsTr("Matar")
+                text: layer.confirmText
                 role: CelestinaButton.Destructive
                 onClicked: {
-                    layer.confirmed(layer.pid)
+                    layer.confirmed(layer.payload)
                     layer.shown = false
                 }
             }

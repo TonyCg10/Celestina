@@ -16,6 +16,7 @@ ApplicationWindow {
     required property bool smokeSections
     property bool shapePrinted: false
     property bool sensorShapePrinted: false
+    property bool serviceShapePrinted: false
 
     width: 1000
     height: 680
@@ -26,13 +27,14 @@ ApplicationWindow {
     title: "Hematita"
 
     // The sections, in the order the strip shows them, each with the page
-    // under it: Performance, the two process pages that share one hub, and
-    // Sensors.
+    // under it: Performance, the two process pages that share one hub,
+    // Sensors, and Services.
     readonly property var sections: [
         { key: "performance", icon: "gauge", label: qsTr("Rendimiento") },
         { key: "processes", icon: "view-list", label: qsTr("Procesos") },
         { key: "applications", icon: "app-window", label: qsTr("Aplicaciones") },
-        { key: "sensors", icon: "zap", label: qsTr("Sensores") }
+        { key: "sensors", icon: "zap", label: qsTr("Sensores") },
+        { key: "services", icon: "toolbox", label: qsTr("Servicios") }
     ]
     property int currentSection: 0
 
@@ -81,6 +83,16 @@ ApplicationWindow {
             onRevisionChanged: window.printSensorShape()
         }
 
+        HematitaServices {
+            id: serviceHub
+
+            // The services' own shape gate, printed once the walk has reached
+            // Servicios and a listing has landed. A page that built without
+            // error but listed no unit is the failure no error message would
+            // have named.
+            onRevisionChanged: window.printServiceShape()
+        }
+
         HematitaActivation {
             id: activation
             onRaiseRequested: {
@@ -112,6 +124,11 @@ ApplicationWindow {
             SensorsPage {
                 sensors: sensorHub
             }
+
+            ServicesPage {
+                services: serviceHub
+                backdrop: window.contentItem
+            }
         }
     }
 
@@ -132,12 +149,21 @@ ApplicationWindow {
                      sensorHub.channelKinds.length)
     }
 
+    function printServiceShape() {
+        if (!window.smokeSections || window.serviceShapePrinted
+            || window.currentSection !== 4 || serviceHub.revision < 1)
+            return
+        window.serviceShapePrinted = true
+        console.info("hematita-services", serviceHub.shownCount,
+                     serviceHub.systemAvailable, serviceHub.userAvailable)
+    }
+
     // The smoke's section walk. A `StackLayout` builds only the page it is
     // showing, so a page nobody selected is a page whose delegates were never
     // constructed — and a headless run that never left Performance would pass
-    // while any of the other three failed to build. One second apart, this
+    // while any of the other four failed to build. One second apart, this
     // shows every section in turn and then stops; the gate is the absence of
-    // QML errors once all four have been up. It prints nothing of its own.
+    // QML errors once all five have been up. It prints nothing of its own.
     Timer {
         running: window.smokeSections
         interval: 1000
@@ -151,6 +177,7 @@ ApplicationWindow {
             // A reading usually landed long before the walk arrives, so the
             // next `revisionChanged` is not what to wait for.
             window.printSensorShape()
+            window.printServiceShape()
         }
     }
 
@@ -160,6 +187,7 @@ ApplicationWindow {
         machine.start()
         processHub.start()
         sensorHub.start()
+        serviceHub.start()
         activation.start()
     }
 

@@ -19,12 +19,17 @@ set -u
 #     section one second apart and then stops. A `StackLayout` builds only the
 #     page it shows, so without this a page that cannot construct at all is a
 #     page (2) never looked at. The gate is that (2) still finds no errors once
-#     all four pages have been up, which the ten seconds leave time for.
+#     all five pages have been up, which the ten seconds leave time for.
 #  5) The sensors gate: once the walk reaches Sensores the window prints that
 #     page's two counts. A page that constructed without error but published no
 #     chip at all — the whole hwmon read having failed — is a working page
 #     showing nothing, which no error message would have said, so both counts
 #     must be above zero.
+#  6) The services gate: once the walk reaches Servicios the window prints how
+#     many units it shows and whether each bus answered. The system bus is
+#     there in this run and must have answered with units; the session bus
+#     deliberately points nowhere, so `false` for the user side is the expected
+#     state the page has to render without error.
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
 # real Wayland session.
@@ -101,4 +106,10 @@ if [ -z "$sensors" ]; then
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, no QML errors, no auto-bindings"
+services=$(grep -E 'hematita-services [1-9][0-9]* true (true|false)$' "$log" | head -1 || true)
+if [ -z "$services" ]; then
+    echo "smoke: the Services page listed no system units (expected 'hematita-services <shown> true <true|false>'); got: '$(grep -E 'hematita-services' "$log" | head -1)'" >&2
+    exit 1
+fi
+
+echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, the Services page listed system units, no QML errors, no auto-bindings"

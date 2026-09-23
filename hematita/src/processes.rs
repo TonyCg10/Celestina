@@ -20,9 +20,12 @@ use cxx_qt_lib::{QString, QStringList, QVariant};
 use celestina_core::desktop_entry;
 use hematita_core::process;
 use hematita_core::process_view::{self, ProcessRow, SortField};
+use hematita_core::services::Outcome;
 
 use crate::lists::{doubles, strings};
+use crate::privilege;
 use crate::sampler::{self, ProcessReading, ProcessSnapshot, Reason, Section, Snapshot};
+use crate::services::PENDING;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -88,11 +91,13 @@ pub mod qobject {
         #[qinvokable]
         fn refresh(self: Pin<&mut HematitaProcesses>);
 
-        /// SIGTERM to one of the user's own processes.
+        /// SIGTERM: directly to one of the user's own processes, or through
+        /// `pkexec kill` to somebody else's.
         #[qinvokable]
         fn terminate(self: Pin<&mut HematitaProcesses>, pid: i32);
 
-        /// SIGKILL to one of the user's own processes.
+        /// SIGKILL: directly to one of the user's own processes, or through
+        /// `pkexec kill` to somebody else's.
         #[qinvokable]
         fn kill(self: Pin<&mut HematitaProcesses>, pid: i32);
 
@@ -396,60 +401,117 @@ impl qobject::HematitaProcesses {
     }
 
     pub fn terminate(self: Pin<&mut Self>, pid: i32) {
-        self.send_signal(pid, rustix::process::Signal::TERM, "terminate");
+        self.send_signal(
+            pid,
+            rustix::process::Signal::TERM,
+            privilege::Signal::Terminate,
+            "terminate",
+        );
     }
 
     pub fn kill(self: Pin<&mut Self>, pid: i32) {
-        self.send_signal(pid, rustix::process::Signal::KILL, "kill");
+        self.send_signal(
+            pid,
+            rustix::process::Signal::KILL,
+            privilege::Signal::Kill,
+            "kill",
+        );
     }
 
-    /// The one signal path. A PID the latest snapshot does not show as ours
-    /// is refused here, before any syscall — and then `/proc` is asked again,
-    /// because the snapshot is up to two seconds old and a PID that died in
-    /// that gap may already belong to somebody else's new process. Only a PID
-    /// whose start time and owner still match the ones the table showed is
-    /// signalled; anything else is `refused`.
+    /// The one signal path. A PID that is neither a process the table showed
+    /// nor a process at all is refused here, before any syscall — and then
+    /// `/proc` is asked again, because the snapshot is up to two seconds old
+    /// and a PID that died in that gap may already belong to somebody else's
+    /// new process. Only a PID whose start time and owner still match the ones
+    /// the table showed is signalled.
+    ///
+    /// The user's own process is signalled directly. Somebody else's is asked
+    /// for through `pkexec kill` on a worker thread, which is the whole of
+    /// Hematita's privilege (ADR 0010): the outcome is `pending` until polkit
+    /// and the person have answered, and whatever they answer is queued back
+    /// here. `init`, this process and a PID the table never showed stay
+    /// `refused`.
     fn send_signal(
         mut self: Pin<&mut Self>,
         pid: i32,
         signal: rustix::process::Signal,
+        as_root: privilege::Signal,
         kind: &str,
     ) {
         let expected = self.rust().expected_identity(pid);
         let target = self.rust().owned_pid(pid);
-        let outcome = match (target, expected) {
-            (Some(target), Some(expected))
-                if still_the_same(&expected, &read_identity_now(pid)) =>
-            {
-                match rustix::process::kill_process(target, signal) {
-                    Ok(()) => "done",
-                    Err(_) => "failed",
-                }
-            }
-            _ => "refused",
-        };
+        let validated =
+            expected.is_some_and(|expected| still_the_same(&expected, &read_identity_now(pid)));
         // The three properties are written together, so the page never reads
         // this action's outcome beside the last one's pid.
         self.as_mut().set_action_pid(pid);
         self.as_mut().set_action_kind(QString::from(kind));
+        let outcome = match target {
+            Ok(target) if validated => match rustix::process::kill_process(target, signal) {
+                Ok(()) => Outcome::Done.as_str(),
+                Err(_) => Outcome::Failed.as_str(),
+            },
+            Err(Refusal::Foreign { .. }) if validated => {
+                let qt = self.as_mut().qt_thread();
+                let asked = u32::try_from(pid).ok().is_some_and(|pid| {
+                    privilege::signal_as_root(pid, as_root, move |outcome| {
+                        let _ = qt.queue(move |processes: Pin<&mut qobject::HematitaProcesses>| {
+                            processes.set_action_outcome(QString::from(outcome.as_str()));
+                        });
+                    })
+                    .is_ok()
+                });
+                if asked {
+                    PENDING
+                } else {
+                    Outcome::Failed.as_str()
+                }
+            }
+            _ => Outcome::Refused.as_str(),
+        };
         self.as_mut().set_action_outcome(QString::from(outcome));
     }
 }
 
+/// Why a PID is not a direct target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Refusal {
+    /// It is a listed process of another user: the kernel refuses the signal,
+    /// and `pkexec kill` is the sanctioned way to ask for it.
+    Foreign { start_ticks: u64 },
+    /// `init`, this very process, a PID no snapshot listed, or a number that
+    /// is not a PID at all. Hematita does not ask for any of these.
+    NotAllowed,
+}
+
 impl HematitaProcessesRust {
-    /// The PID as a target, only if the latest snapshot shows it as ours and
-    /// it is neither init nor this process.
-    fn owned_pid(&self, pid: i32) -> Option<rustix::process::Pid> {
-        let pid_u32 = u32::try_from(pid).ok()?;
+    /// The PID as a direct target, or why it is not one: another user's
+    /// process is `Foreign` and can still be asked for through polkit, while
+    /// `init`, this process and a PID the table never showed are refused
+    /// outright.
+    fn owned_pid(&self, pid: i32) -> Result<rustix::process::Pid, Refusal> {
+        let Ok(pid_u32) = u32::try_from(pid) else {
+            return Err(Refusal::NotAllowed);
+        };
         if pid_u32 <= 1 || pid_u32 == std::process::id() {
-            return None;
+            return Err(Refusal::NotAllowed);
         }
-        let latest = self.latest.as_ref()?;
-        let reading = latest
+        let Some(latest) = self.latest.as_ref() else {
+            return Err(Refusal::NotAllowed);
+        };
+        let Some(reading) = latest
             .readings
             .iter()
-            .find(|reading| reading.pid == pid_u32)?;
-        (reading.uid == self.own_uid).then(|| rustix::process::Pid::from_raw(pid))?
+            .find(|reading| reading.pid == pid_u32)
+        else {
+            return Err(Refusal::NotAllowed);
+        };
+        if reading.uid != self.own_uid {
+            return Err(Refusal::Foreign {
+                start_ticks: reading.start_ticks,
+            });
+        }
+        rustix::process::Pid::from_raw(pid).ok_or(Refusal::NotAllowed)
     }
 
     /// What the latest snapshot says this PID is, for the signal path to
@@ -556,7 +618,7 @@ fn row_of(reading: &ProcessReading, own_uid: u32) -> ProcessRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{row_of, still_the_same, HematitaProcessesRust, ProcessIdentity};
+    use super::{row_of, still_the_same, HematitaProcessesRust, ProcessIdentity, Refusal};
     use crate::sampler::{ProcessReading, ProcessSnapshot};
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -608,7 +670,7 @@ mod tests {
     }
 
     #[test]
-    fn init_this_process_and_another_users_process_are_never_targets() {
+    fn a_pid_is_classified_as_a_target_a_foreign_process_or_not_allowed() {
         let own = std::process::id();
         let readings = vec![
             reading(0, 1000),
@@ -618,17 +680,25 @@ mod tests {
             reading(4243, 1000),
         ];
         let state = state(1000, readings);
-        assert!(state.owned_pid(0).is_none());
-        assert!(state.owned_pid(1).is_none());
-        assert!(state
-            .owned_pid(i32::try_from(own).expect("a pid fits an i32"))
-            .is_none());
-        assert!(state.owned_pid(-7).is_none());
-        // Another user's process is refused even though it is listed.
-        assert!(state.owned_pid(4242).is_none());
-        // A PID no snapshot lists is refused.
-        assert!(state.owned_pid(9_999_999).is_none());
-        assert!(state.owned_pid(4243).is_some());
+        // `init`, the kernel's pid 0 and Hematita itself are never asked for.
+        assert_eq!(state.owned_pid(0), Err(Refusal::NotAllowed));
+        assert_eq!(state.owned_pid(1), Err(Refusal::NotAllowed));
+        assert_eq!(
+            state.owned_pid(i32::try_from(own).expect("a pid fits an i32")),
+            Err(Refusal::NotAllowed)
+        );
+        // A number that is not a PID, and a PID no snapshot listed.
+        assert_eq!(state.owned_pid(-7), Err(Refusal::NotAllowed));
+        assert_eq!(state.owned_pid(9_999_999), Err(Refusal::NotAllowed));
+        // Another user's listed process is the one refusal polkit can answer,
+        // and it carries the identity the signal path re-checks.
+        assert_eq!(
+            state.owned_pid(4242),
+            Err(Refusal::Foreign {
+                start_ticks: 67_467_262
+            })
+        );
+        assert!(state.owned_pid(4243).is_ok());
     }
 
     #[test]
@@ -663,6 +733,6 @@ mod tests {
     #[test]
     fn without_a_snapshot_nothing_is_a_target() {
         let empty = HematitaProcessesRust::default();
-        assert!(empty.owned_pid(4243).is_none());
+        assert_eq!(empty.owned_pid(4243), Err(Refusal::NotAllowed));
     }
 }

@@ -34,12 +34,14 @@ const QML_FILES: &[&str] = &[
     "qml/components/ProcessRow.qml",
     "qml/components/ApplicationRow.qml",
     "qml/components/ProcessTable.qml",
-    "qml/components/KillDialog.qml",
+    "qml/components/ConfirmDialog.qml",
     "qml/components/ProcessPage.qml",
     "qml/components/ApplicationsPage.qml",
     "qml/components/SensorRow.qml",
     "qml/components/SensorChipCard.qml",
     "qml/components/SensorsPage.qml",
+    "qml/components/ServiceRow.qml",
+    "qml/components/ServicesPage.qml",
     "qml/Main.qml",
 ];
 
@@ -75,6 +77,7 @@ fn main() {
     // The bridge files are watched by cxx-qt-build; the plain Rust modules
     // it does not know about are named here.
     println!("cargo::rerun-if-changed=src/lists.rs");
+    println!("cargo::rerun-if-changed=src/privilege.rs");
     println!("cargo::rerun-if-changed=src/publish.rs");
     println!("cargo::rerun-if-changed=src/sampler.rs");
 
@@ -87,6 +90,7 @@ fn main() {
             "src/resources.rs",
             "src/processes.rs",
             "src/sensors.rs",
+            "src/services.rs",
         ])
         .build();
 }

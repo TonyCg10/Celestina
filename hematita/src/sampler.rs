@@ -23,6 +23,7 @@ use hematita_core::passwd;
 use hematita_core::process::{self, ProcessSampler};
 use hematita_core::rate::NamedCounters;
 use hematita_core::sensors::{self, Chip, ChipListing};
+use hematita_core::services::{Scope, Unit};
 
 /// A number nobody stares at, and rare enough that the monitor is not a reason
 /// the machine is busy. The one place the cadence lives.
@@ -32,6 +33,15 @@ pub const INTERVAL: Duration = Duration::from_secs(1);
 /// directories, and a table nobody reads at a glance does not need the
 /// cadence a graph does.
 pub const PROCESS_TICKS: u64 = 2;
+
+/// Units change rarely; every fifth tick is live enough for a page and cheap
+/// enough for two bus round-trips carrying a few hundred rows.
+pub const SERVICE_TICKS: u64 = 5;
+
+/// A chip's labels and limits are read once and then re-read every thirtieth
+/// tick: a driver that gains a channel while the window is up — a card that
+/// binds, a module that loads — is shown within half a minute instead of never.
+pub const SENSOR_FACTS_TICKS: u64 = 30;
 
 const STAT_PATH: &str = "/proc/stat";
 const MEMINFO_PATH: &str = "/proc/meminfo";
@@ -45,6 +55,13 @@ const DRM_ROOT: &str = "/sys/class/drm";
 const PROC_ROOT: &str = "/proc";
 const PASSWD_PATH: &str = "/etc/passwd";
 const HWMON_ROOT: &str = "/sys/class/hwmon";
+const SYSTEMD_SERVICE: &str = "org.freedesktop.systemd1";
+const SYSTEMD_OBJECT: &str = "/org/freedesktop/systemd1";
+const SYSTEMD_MANAGER: &str = "org.freedesktop.systemd1.Manager";
+/// Not a path: what the page names when a bus, rather than a file, is what
+/// could not be read.
+const SYSTEM_BUS: &str = "system bus";
+const SESSION_BUS: &str = "session bus";
 
 /// Why a section could not be read. The window composes the sentence; this
 /// is data, not prose.
@@ -176,6 +193,15 @@ impl ProcessState {
     }
 }
 
+/// The two buses' unit lists. Each bus is its own section: the system bus
+/// answering while the session bus does not is a page with half its rows and
+/// one sentence, not a failure.
+#[derive(Clone, Debug)]
+pub struct ServiceSnapshot {
+    pub system: Section<Vec<Unit>>,
+    pub user: Section<Vec<Unit>>,
+}
+
 #[derive(Clone, Debug)]
 pub struct SensorSnapshot {
     pub chips: Vec<Chip>,
@@ -204,6 +230,8 @@ pub struct Snapshot {
     /// `None` on the ticks that did not read processes.
     pub processes: Option<Section<ProcessSnapshot>>,
     pub sensors: Section<SensorSnapshot>,
+    /// `None` on the ticks that did not ask the buses.
+    pub services: Option<ServiceSnapshot>,
     /// Carried by the first snapshot only.
     pub identity: Option<Identity>,
 }
@@ -399,6 +427,11 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
     // the CPU reading answers. One core until it has.
     let mut core_count = 1usize;
     let mut sensor_facts: HashMap<String, ChipFacts> = HashMap::new();
+    // The two bus connections, opened on the first service tick and kept: a
+    // bus that could not be opened is retried on the next service tick, and a
+    // connection that lives is not re-established every five seconds.
+    let mut system_bus: Option<zbus::blocking::Connection> = None;
+    let mut session_bus: Option<zbus::blocking::Connection> = None;
     let mut generation = 0u64;
     let mut last = Instant::now();
     while !stop.load(Ordering::Relaxed) {
@@ -421,6 +454,13 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
         } else {
             None
         };
+        // The first tick asks too, so the page fills at once instead of after
+        // five seconds of nothing.
+        let service_section = if generation == 1 || generation % SERVICE_TICKS == 0 {
+            Some(sample_services(&mut system_bus, &mut session_bus))
+        } else {
+            None
+        };
         publish(Snapshot {
             generation,
             cpu,
@@ -429,7 +469,8 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
             disks: sample_disks(&mut disk_counters, &mut disk_facts, elapsed),
             interfaces: sample_interfaces(&mut interface_counters, &mut interface_facts, elapsed),
             processes: process_section,
-            sensors: sample_sensors(&mut sensor_facts),
+            sensors: sample_sensors(&mut sensor_facts, generation),
+            services: service_section,
             identity,
         });
         // Sleep in short slices so a close does not wait a whole interval.
@@ -471,6 +512,89 @@ fn chip_facts(dir: &Path) -> Option<ChipFacts> {
     })
 }
 
+/// One `ListUnits` row: name, description, load state, active state, sub
+/// state, the unit it follows, its object path, and the job triple. Ten
+/// fields, `a(ssssssouso)`, exactly as systemd declares them.
+type UnitRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    zbus::zvariant::OwnedObjectPath,
+    u32,
+    String,
+    zbus::zvariant::OwnedObjectPath,
+);
+
+fn bus_unavailable(label: &str) -> Reason {
+    Reason {
+        kind: ReasonKind::Unreadable,
+        path: label.to_owned(),
+    }
+}
+
+/// Every unit one manager has loaded. A bus that answers something other than
+/// the declared shape is `Malformed`, which is a different sentence from a bus
+/// that is not there.
+fn list_units(
+    connection: &zbus::blocking::Connection,
+    scope: Scope,
+    bus_label: &str,
+) -> Section<Vec<Unit>> {
+    let proxy = match zbus::blocking::Proxy::new(
+        connection,
+        SYSTEMD_SERVICE,
+        SYSTEMD_OBJECT,
+        SYSTEMD_MANAGER,
+    ) {
+        Ok(proxy) => proxy,
+        Err(_) => return Section::Unavailable(bus_unavailable(bus_label)),
+    };
+    match proxy.call::<_, _, Vec<UnitRow>>("ListUnits", &()) {
+        Ok(rows) => Section::Available(
+            rows.into_iter()
+                .map(|(name, description, _load, active, sub, ..)| Unit {
+                    name,
+                    description,
+                    scope,
+                    active,
+                    sub,
+                })
+                .collect(),
+        ),
+        Err(_) => Section::Unavailable(Reason {
+            kind: ReasonKind::Malformed,
+            path: bus_label.to_owned(),
+        }),
+    }
+}
+
+/// Both managers' unit lists, on this thread. This is the only place the
+/// sampler talks to a bus, and it does it every [`SERVICE_TICKS`] ticks.
+fn sample_services(
+    system: &mut Option<zbus::blocking::Connection>,
+    user: &mut Option<zbus::blocking::Connection>,
+) -> ServiceSnapshot {
+    if system.is_none() {
+        *system = zbus::blocking::Connection::system().ok();
+    }
+    if user.is_none() {
+        *user = zbus::blocking::Connection::session().ok();
+    }
+    ServiceSnapshot {
+        system: system.as_ref().map_or_else(
+            || Section::Unavailable(bus_unavailable(SYSTEM_BUS)),
+            |connection| list_units(connection, Scope::System, SYSTEM_BUS),
+        ),
+        user: user.as_ref().map_or_else(
+            || Section::Unavailable(bus_unavailable(SESSION_BUS)),
+            |connection| list_units(connection, Scope::User, SESSION_BUS),
+        ),
+    }
+}
+
 /// Every `hwmonN` directory as a chip. The labels and limits are read once per
 /// directory; the value files and the chip's `name` are read each tick, which
 /// is what a live reading is. A chip whose value file vanishes keeps its other
@@ -481,7 +605,14 @@ fn chip_facts(dir: &Path) -> Option<ChipFacts> {
 /// the index but validated by the chip's own `name` every tick — one small
 /// read per chip — and a name that changed throws the cached labels and limits
 /// away rather than letting a new device inherit the old one's `crit`.
-fn sample_sensors(facts: &mut HashMap<String, ChipFacts>) -> Section<SensorSnapshot> {
+fn sample_sensors(
+    facts: &mut HashMap<String, ChipFacts>,
+    generation: u64,
+) -> Section<SensorSnapshot> {
+    // Every thirtieth tick the cached labels and limits are thrown away and
+    // read again, so a chip that gained a channel is enumerated rather than
+    // frozen at whatever it published when the window opened.
+    let re_enumerate = generation % SENSOR_FACTS_TICKS == 0;
     let root = Path::new(HWMON_ROOT);
     let entries = match std::fs::read_dir(root) {
         Ok(entries) => entries,
@@ -513,6 +644,9 @@ fn sample_sensors(facts: &mut HashMap<String, ChipFacts>) -> Section<SensorSnaps
             if &cached.name != name {
                 facts.remove(&key);
             }
+        }
+        if re_enumerate {
+            facts.remove(&key);
         }
         let Some(chip_facts) = (match facts.get(&key) {
             Some(existing) => Some(existing),

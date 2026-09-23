@@ -1,0 +1,47 @@
+# H5-B exact change inventory
+
+Base revision	1e9d64d1d6654efcfadb2154cb624683ab24a358
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-09-22-h5-services-page.md
+Pathspec	hematita/docs/inventories/2026-09-22-h5-services/H5-B.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-22-h5-services.md
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/ConfirmDialog.qml
+Pathspec	hematita/qml/components/KillDialog.qml
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/qml/components/ServiceRow.qml
+Pathspec	hematita/qml/components/ServicesPage.qml
+Pathspec	hematita/scripts/smoke.sh
+Pathspec	hematita/src/main.rs
+Pathspec	hematita/src/privilege.rs
+Pathspec	hematita/src/processes.rs
+Pathspec	hematita/src/publish.rs
+Pathspec	hematita/src/sampler.rs
+Pathspec	hematita/src/sensors.rs
+Pathspec	hematita/src/services.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+21	1	a7279cd7fcecc677170029b843e5fea8937ae14b2ae1d7aa2cf12f14d7043a41	hematita/ROADMAP.md
+21	2	2fb2d95803b46ab5428fef10e9fb5c6359a4c3d6e71f475a55929e81685dbe58	hematita/STATUS.md
+5	1	6d9f6721e3089d943584dd66ebb56b51e73ab2ed056155b49357374d6709dd45	hematita/build.rs
+160	0	255c238023778c0c56a734b4a6c5938b5a34f8af1a1e4c5793b01a5969677e96	hematita/docs/evidence/2026-09-22-h5-services-page.md
+1	1	2ed0dc367e08ed94d25b54f07c7784e8c67dbe780d570f20947961b063107635	hematita/docs/plans/active/2026-09-22-h5-services.md
+33	5	7e9679ac5f94f14a79a43301fe47dd58deb1d8b25acf0a67ebe84c638950d497	hematita/qml/Main.qml
+87	0	6eb071c6e8aa4fe29059aae2bbdefa3e82c311cac135db49a507ee37d66775b7	hematita/qml/components/ConfirmDialog.qml
+15	6	d051717c1f0038f07007813b9ef194ecda5e582e42c9adc1dd5132cc4b740db0	hematita/qml/components/ProcessTable.qml
+115	0	bb55b75cad17a36c995354d88c4df7e78006a68184d3f8c52428b5f0c5613e0c	hematita/qml/components/ServiceRow.qml
+374	0	d285344bd628c4a90f78b2798ee9f9de2411b9e0f177adc69b1e9c3d8dd1ef4b	hematita/qml/components/ServicesPage.qml
+13	2	264d3a5be88b5255ae378b639d2712bac923af46f22999619b5242e2d443e4ea	hematita/scripts/smoke.sh
+2	0	ec9981f5c69cc4d5bd7f747a4c6aaab8fd42632aa92cc6af4829672c6fb9f3ae	hematita/src/main.rs
+64	0	60638e202fa642abe54830cdd6122ba2ff53dcd61686203f1d0281d27095c33c	hematita/src/privilege.rs
+114	44	bef5b5e5d4729aa3ef51607c0bc04cee70ed2f5669f3e8255bb5bb6cf93a5588	hematita/src/processes.rs
+25	0	b7cafb960adadb9ef591b3b691ded4f56137595d972f58f498b838c8525c1a6a	hematita/src/publish.rs
+136	2	63990f5b1b044232b95e9a718317d56c783ddd43336eb04a92cd8380250c93e8	hematita/src/sampler.rs
+37	8	56e29b1578be2c239bd1ec249a897f8fbab3550904fd8f5cfc394f4ce8dcbd27	hematita/src/sensors.rs
+506	0	6d6cf75f6f0683df176e322b7d17714b9182800605946aa0e92b2e14e6b1c3d7	hematita/src/services.rs
+0	82	deleted	hematita/qml/components/KillDialog.qml
+47	0	self	hematita/docs/inventories/2026-09-22-h5-services/H5-B.numstat.tsv

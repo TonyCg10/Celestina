@@ -6,7 +6,7 @@
 //! the page turns into Spanish through `qsTr()`, and a chip's driver name and
 //! a channel's label are the kernel's own data, shown raw.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
@@ -140,7 +140,17 @@ fn fold_extremes(previous: Option<(f64, f64)>, value: f64) -> (f64, f64) {
 /// name is therefore part of the key, so a re-bound index starts fresh
 /// extremes instead of inheriting another device's minimum and maximum.
 fn extreme_key(chip_key: &str, chip_name: &str, kind: ChannelKind, index: u32) -> String {
-    format!("{chip_key}/{chip_name}/{}/{index}", kind.as_str())
+    format!(
+        "{}{}/{index}",
+        chip_prefix(chip_key, chip_name),
+        kind.as_str()
+    )
+}
+
+/// What every key of one chip starts with. A chip that is still listed keeps
+/// every extreme it ever published, however this tick's reads went.
+fn chip_prefix(chip_key: &str, chip_name: &str) -> String {
+    format!("{chip_key}/{chip_name}/")
 }
 
 impl qobject::HematitaSensors {
@@ -210,20 +220,25 @@ impl qobject::HematitaSensors {
         };
 
         // First pass: the extremes, which are the only thing this object
-        // remembers between snapshots. A channel the machine no longer
-        // publishes takes its extremes with it.
+        // remembers between snapshots. A chip that is no longer listed takes
+        // its extremes with it; a channel of a chip that is still listed keeps
+        // them even on a tick that could not read its value file, because a
+        // single unreadable read is not the channel going away and the
+        // session's minimum is not a thing to lose to it.
         {
             let state = &mut *self.as_mut().rust_mut();
-            let mut seen: HashSet<String> = HashSet::new();
+            let mut prefixes: Vec<String> = Vec::with_capacity(snapshot.chips.len());
             for chip in &snapshot.chips {
+                prefixes.push(chip_prefix(&chip.key, &chip.name));
                 for channel in &chip.channels {
                     let key = extreme_key(&chip.key, &chip.name, channel.kind, channel.index);
                     let folded = fold_extremes(state.extremes.get(&key).copied(), channel.value);
-                    state.extremes.insert(key.clone(), folded);
-                    seen.insert(key);
+                    state.extremes.insert(key, folded);
                 }
             }
-            state.extremes.retain(|key, _| seen.contains(key));
+            state
+                .extremes
+                .retain(|key, _| prefixes.iter().any(|prefix| key.starts_with(prefix)));
         }
 
         // Second pass: the lists, reading the extremes back.
@@ -266,6 +281,9 @@ impl qobject::HematitaSensors {
                         ChannelKind::Temperature => {
                             publish::thermal_load(channel.value, channel.limit_crit)
                         }
+                        // A power channel's cap is its `max`, which is what
+                        // `hematita_core::sensors` puts there.
+                        ChannelKind::Power => publish::power_load(channel.value, channel.limit_max),
                         _ => "normal",
                     }
                     .to_owned(),
@@ -303,6 +321,17 @@ mod tests {
         assert_eq!(fold_extremes(Some((42.0, 42.0)), 50.0), (42.0, 50.0));
         assert_eq!(fold_extremes(Some((42.0, 50.0)), 30.0), (30.0, 50.0));
         assert_eq!(fold_extremes(Some((30.0, 50.0)), 40.0), (30.0, 50.0));
+    }
+
+    #[test]
+    fn every_key_of_a_chip_starts_with_that_chips_prefix() {
+        let prefix = chip_prefix("hwmon6", "k10temp");
+        assert_eq!(prefix, "hwmon6/k10temp/");
+        assert!(extreme_key("hwmon6", "k10temp", ChannelKind::Temperature, 3).starts_with(&prefix));
+        assert!(extreme_key("hwmon6", "k10temp", ChannelKind::Fan, 1).starts_with(&prefix));
+        // A re-bound index is another chip, and its keys do not share the
+        // prefix that keeps the old device's extremes alive.
+        assert!(!extreme_key("hwmon6", "amdgpu", ChannelKind::Temperature, 1).starts_with(&prefix));
     }
 
     #[test]

@@ -51,7 +51,7 @@ alone, without the machine noticing the monitor.
 | H4-Z | done | H4-C | implementation exit and 0.5.0 | `scripts/complete-production.sh` |
 | H4-D | done | H4-Z | the whole-branch review's corrections: the Sensors page one Tab stop with arrows by card, a failed tick showing only its reason, a smoke gate on the page's chip count, and 0.5.1 | `scripts/complete-production.sh` |
 | H5-A | done | H4-D | `hematita-core`: `services`, the unit projection, the privileged-action outcome mapping | `cargo test -p hematita-core` |
-| H5-B | pending | H5-A | sampler services section, `HematitaServices`, the Services page, the privileged actions | `scripts/verify-production.sh` |
+| H5-B | done | H5-A | sampler services section, `HematitaServices`, the Services page, the privileged actions | `scripts/verify-production.sh` |
 | H5-Z | pending | H5-B | implementation exit and 0.6.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -83,6 +83,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - H4-Z: [production completion](docs/evidence/2026-09-22-h4-production-completion.md)
 - H4-D: [sensors fixes](docs/evidence/2026-09-22-h4-sensors-fixes.md)
 - H5-A: [core](docs/evidence/2026-09-22-h5-core.md)
+- H5-B: [services page](docs/evidence/2026-09-22-h5-services-page.md)
 
 ## H1 — closed 2026-09-21
 
@@ -234,3 +235,22 @@ system-bus error name or a `pkexec` exit status into the typed result ADR
 0010 asks every privileged action to report — the [core
 evidence](docs/evidence/2026-09-22-h5-core.md). None of it is wired into the
 sampler thread or a page yet — that is `H5-B`.
+
+`H5-B` wired it to the machine: the sampler asks both managers for
+`ListUnits` every fifth tick (and on the first, so the page fills at once),
+each bus its own section, so the system bus answering while the session bus
+does not is a page with half its rows and one sentence rather than a failure;
+`HematitaServices` publishes the projection and is the only place a unit is
+started, stopped or restarted, each action one call on a named worker thread
+whose typed outcome is queued back to Qt; `privilege.rs` is the one place
+`pkexec` runs, around `/usr/bin/kill` with a fixed argument shape, which is
+how a process that is not the person's own is ended; and the Services page
+lists every unit in one Tab stop with the search, the scope toggles and the
+three actions, saying `pending`, `no-agent`, `denied`, `failed` or `refused`
+in words. This session has no authentication agent, so the privileged paths
+can only answer `no-agent` today and no action was performed during
+verification — the [services page
+evidence](docs/evidence/2026-09-22-h5-services-page.md). The three items
+`H4-D` deferred closed with it: the sensor facts are re-enumerated every
+thirtieth tick, a channel keeps its session extremes while its chip is
+listed, and a power reading is graded against the chip's own cap.

@@ -32,8 +32,8 @@
 ## Current checkout truth
 
 - The project is registered and builds a release binary. The window shows the
-  pill strip with four sections, and all four now have a page: Performance,
-  Processes, Applications and Sensors.
+  pill strip with five sections, and all five now have a page: Performance,
+  Processes, Applications, Sensors and Services.
 - `hematita-core` provides `ratio`, `cpu`, `memory` and `history`: `/proc/stat`
   and `/proc/meminfo` parsing, a CPU sampler that turns two readings into a
   rate, cpufreq and model parsing, and a sixty-sample ring, all covered by
@@ -246,6 +246,25 @@
   it is under unit test; none of it is wired into the sampler thread or a
   page yet — that is `H5-B`. See the
   [core evidence](docs/evidence/2026-09-22-h5-core.md).
+- As of `H5-B`, that projection is on the machine. The sampler asks both
+  systemd managers for `ListUnits` every fifth tick and on the first, each
+  bus its own section; `HematitaServices` publishes the rows, the counts and
+  the per-bus availability, and is the only place a unit is started, stopped
+  or restarted — one call per action on a named worker thread, whose typed
+  outcome is queued back to Qt. `privilege.rs` is the one place `pkexec`
+  runs, around `/usr/bin/kill` with a fixed argument shape, which is how a
+  process that is not the person's own is ended; `HematitaProcesses` now
+  distinguishes a foreign PID from one it will not touch and reports
+  `pending` while polkit waits. The Services page lists every unit in one
+  Tab stop with the search, the scope toggles, the three actions and a
+  sentence for every outcome, and a shared `ConfirmDialog` replaced
+  `KillDialog`. This session has no authentication agent, so the privileged
+  paths can only answer `no-agent` today, and no action was performed during
+  verification. The three items `H4-D` deferred closed with it: the sensor
+  facts are re-enumerated every thirtieth tick, a channel keeps its session
+  extremes while its chip is listed, and a power reading is graded against
+  the chip's own cap. See the
+  [services page evidence](docs/evidence/2026-09-22-h5-services-page.md).
 
 ## Blockers
 

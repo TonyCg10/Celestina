@@ -40,6 +40,19 @@ pub fn thermal_load(value: f64, crit: Option<f64>) -> &'static str {
     load_name(percent)
 }
 
+/// The load a power reading paints, from the chip's own cap: the same two
+/// thresholds as a percentage, applied to the fraction of the cap. A chip
+/// that declares no cap says nothing about how hard it is working, so its
+/// reading is `normal` rather than guessed against a number from elsewhere.
+#[must_use]
+pub fn power_load(value: f64, cap: Option<f64>) -> &'static str {
+    let Some(cap) = cap.filter(|c| *c > 0.0) else {
+        return "normal";
+    };
+    let percent = (value / cap * 100.0).clamp(0.0, 255.0) as u8;
+    load_name(percent)
+}
+
 /// A snapshot is applied only if it is newer than the last applied one: the
 /// thread publishes in order, but the queue does not promise to.
 #[must_use]
@@ -168,6 +181,18 @@ mod tests {
         assert_eq!(thermal_load(100.0, Some(100.0)), "critical");
         assert_eq!(thermal_load(200.0, None), "normal");
         assert_eq!(thermal_load(1.0, Some(0.0)), "normal");
+    }
+
+    #[test]
+    fn a_power_reading_loads_against_its_own_cap() {
+        assert_eq!(power_load(50.0, Some(100.0)), "normal");
+        assert_eq!(power_load(80.0, Some(100.0)), "elevated");
+        assert_eq!(power_load(95.0, Some(100.0)), "critical");
+        assert_eq!(power_load(120.0, Some(100.0)), "critical");
+        // No cap and a nonsense cap are both "nothing is known".
+        assert_eq!(power_load(200.0, None), "normal");
+        assert_eq!(power_load(1.0, Some(0.0)), "normal");
+        assert_eq!(power_load(0.0, Some(100.0)), "normal");
     }
 
     #[test]

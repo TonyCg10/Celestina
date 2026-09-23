@@ -229,9 +229,15 @@ Item {
         switch (published.actionOutcome) {
         case "done":
             return qsTr("%1: señal enviada al proceso %2").arg(verb).arg(published.actionPid)
+        case "pending":
+            return qsTr("%1: esperando la autorización").arg(verb)
+        case "no-agent":
+            return qsTr("%1: esta sesión no tiene agente de autenticación; la acción sobre unidades del sistema necesita uno")
+                     .arg(verb)
+        case "denied":
+            return qsTr("%1: autorización denegada o cancelada").arg(verb)
         case "refused":
-            return qsTr("%1: el proceso %2 no es tuyo; actuar sobre él llega con la fase de servicios")
-                     .arg(verb).arg(published.actionPid)
+            return qsTr("%1: el proceso %2 no admite esta acción").arg(verb).arg(published.actionPid)
         case "failed":
             return qsTr("%1: el sistema rechazó la señal para el proceso %2")
                      .arg(verb).arg(published.actionPid)
@@ -326,7 +332,9 @@ Item {
                     helpText: qsTr("Matar el proceso seleccionado")
                     role: CelestinaButton.Ghost
                     enabled: table.selectedRow() !== null && table.selectedRow().actionable
-                    onClicked: killDialog.ask(table.selectedPid, table.selectedRow().name)
+                    onClicked: confirm.ask(qsTr("¿Matar «%1» (%2)? El proceso no podrá guardar nada.")
+                                             .arg(table.selectedRow().name).arg(table.selectedPid),
+                                           qsTr("Matar"), table.selectedPid)
                 }
             }
         }
@@ -344,11 +352,12 @@ Item {
                     return qsTr("No se pudo leer %1").arg(table.processes.reasonPath)
                 const row = table.selectedRow()
                 if (row !== null && !row.actionable)
-                    return qsTr("El proceso %1 pertenece a %2; terminarlo o matarlo llega con la fase de servicios")
+                    return qsTr("El proceso %1 pertenece a %2; terminarlo o matarlo pedirá autorización")
                              .arg(row.pid).arg(row.user)
                 return table.outcomeText()
             }
             color: table.processes.available && table.processes.actionOutcome !== "failed"
+                   && table.processes.actionOutcome !== "denied"
                    ? CelestinaTheme.textMuted : CelestinaTheme.danger
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
@@ -483,8 +492,8 @@ Item {
         }
     }
 
-    KillDialog {
-        id: killDialog
+    ConfirmDialog {
+        id: confirm
         anchors.fill: parent
         backdrop: table.backdrop
         onConfirmed: function(pid) { table.processes.kill(pid) }
