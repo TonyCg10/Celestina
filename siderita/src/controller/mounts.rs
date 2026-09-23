@@ -268,7 +268,12 @@ impl qobject::SideritaController {
             return;
         };
         self.as_mut().set_volume_busy(true);
-        self.as_mut().set_status_text(QString::from("Montando…"));
+        let notice = self.as_mut().push_notice(
+            "Montando…",
+            "hard-drive",
+            super::notices::NoticeTone::Info,
+            true,
+        );
 
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -276,10 +281,19 @@ impl qobject::SideritaController {
             let _ = qt.queue(move |mut controller| {
                 controller.as_mut().set_volume_busy(false);
                 match result {
-                    Ok(_) => controller.as_mut().load_volumes(),
-                    Err(error) => controller
-                        .as_mut()
-                        .set_op_error(QString::from(error.as_str())),
+                    Ok(_) => {
+                        controller.as_mut().settle_notice(notice, "Disco montado");
+                        controller.as_mut().load_volumes();
+                    }
+                    // The failure already speaks through `op_error`, which the
+                    // column renders above this notice; repeating it here would
+                    // say the same thing twice.
+                    Err(error) => {
+                        controller.as_mut().drop_notice(notice);
+                        controller
+                            .as_mut()
+                            .set_op_error(QString::from(error.as_str()));
+                    }
                 }
             });
         });
@@ -295,7 +309,15 @@ impl qobject::SideritaController {
             return;
         };
         self.as_mut().set_volume_busy(true);
-        self.as_mut().set_status_text(QString::from("Desmontando…"));
+        // The notice this pushes is the one the old status line never cleared:
+        // nothing in the completion below used to touch it, so the window said
+        // the disk was being unmounted until something else overwrote the line.
+        let notice = self.as_mut().push_notice(
+            "Desmontando…",
+            "unplug",
+            super::notices::NoticeTone::Info,
+            true,
+        );
 
         let qt = self.qt_thread();
         std::thread::spawn(move || {
@@ -303,10 +325,18 @@ impl qobject::SideritaController {
             let _ = qt.queue(move |mut controller| {
                 controller.as_mut().set_volume_busy(false);
                 match result {
-                    Ok(()) => controller.as_mut().load_volumes(),
-                    Err(error) => controller
-                        .as_mut()
-                        .set_op_error(QString::from(error.as_str())),
+                    Ok(()) => {
+                        controller
+                            .as_mut()
+                            .settle_notice(notice, "Disco desmontado");
+                        controller.as_mut().load_volumes();
+                    }
+                    Err(error) => {
+                        controller.as_mut().drop_notice(notice);
+                        controller
+                            .as_mut()
+                            .set_op_error(QString::from(error.as_str()));
+                    }
                 }
             });
         });
@@ -335,13 +365,22 @@ impl qobject::SideritaController {
         }
 
         self.as_mut().set_volume_busy(true);
-        self.as_mut().set_status_text(QString::from("Montando…"));
+        let notice = self.as_mut().push_notice(
+            "Montando…",
+            "hard-drive",
+            super::notices::NoticeTone::Info,
+            true,
+        );
 
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let result = crate::volumes::mount(&path);
             let _ = qt.queue(move |mut controller| {
                 controller.as_mut().set_volume_busy(false);
+                // Dropped rather than settled in both arms: opening the volume
+                // ends with its folder on screen, which says the mount worked
+                // better than a word would, and a failure says so in `op_error`.
+                controller.as_mut().drop_notice(notice);
                 match result {
                     Ok(mount_point) => {
                         controller.as_mut().load_volumes();

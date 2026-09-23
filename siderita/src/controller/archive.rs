@@ -308,8 +308,6 @@ impl qobject::SideritaController {
             .set_password_archive(QString::from(name.as_str()));
         self.as_mut().set_password_retry(retry);
         self.as_mut().set_password_pending(true);
-        self.as_mut()
-            .set_status_text(QString::from("Esperando la contraseña…"));
     }
 
     /// Retries the parked extraction with the password a person typed.
@@ -318,7 +316,6 @@ impl qobject::SideritaController {
             return;
         };
         self.as_mut().clear_password_question();
-        self.as_mut().set_status_text(QString::from("Extrayendo…"));
         self.spawn_extract(waiting, Some(password.to_string()));
     }
 
@@ -422,8 +419,12 @@ impl qobject::SideritaController {
         let total = total.max(reported.len());
         self.as_mut().finish_batch(total, &reported);
         if reported.is_empty() && cancelled {
-            self.as_mut()
-                .set_status_text(QString::from("Operación cancelada"));
+            self.as_mut().push_notice(
+                "Operación cancelada",
+                "circle-stop",
+                super::notices::NoticeTone::Info,
+                false,
+            );
         }
     }
 }

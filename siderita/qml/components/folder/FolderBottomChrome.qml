@@ -13,7 +13,7 @@ Item {
     required property Item bottomView
     required property bool bottomFloating
     required property Item overlayParent
-    required property var sortMenuItem
+    required property var viewSortMenuItem
 
     Item {
         id: bottomBarItem
@@ -35,19 +35,17 @@ Item {
         bottomView: root.bottomView
         bottomFloating: root.bottomFloating
         overlayParent: root.overlayParent
-        sortMenu: root.sortMenuItem
-        textScale: root.hostWindow.interfaceTextScale
+        viewSortMenu: root.viewSortMenuItem
+        hostWindow: root.hostWindow
     }
 
     FolderBottomStatus {
         anchors.fill: parent
         controller: root.controller
-        hostWindow: root.hostWindow
         panel: root.panel
         bottomControls: bottomControlsItem
         contentFrame: root.contentSurface
         bottomBar: bottomBarItem
         bottomView: root.bottomView
-        bottomFloating: root.bottomFloating
     }
 }

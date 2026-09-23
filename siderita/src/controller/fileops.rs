@@ -216,8 +216,12 @@ impl qobject::SideritaController {
         }
         self.as_mut().finish_batch(total, &failures);
         if failures.is_empty() && cancelled {
-            self.as_mut()
-                .set_status_text(QString::from("Operación cancelada"));
+            self.as_mut().push_notice(
+                "Operación cancelada",
+                "circle-stop",
+                super::notices::NoticeTone::Info,
+                false,
+            );
         }
     }
 
@@ -449,10 +453,12 @@ impl qobject::SideritaController {
             qobject::system_clipboard_clear();
         }
         self.as_mut().clear_clipboard();
-        self.as_mut()
-            .set_status_text(QString::from(super::display::same_folder_cut_status(
-                cuts.len(),
-            )));
+        self.as_mut().push_notice(
+            super::display::same_folder_cut_status(cuts.len()),
+            "info",
+            super::notices::NoticeTone::Info,
+            false,
+        );
     }
 
     /// Shows the collision now being asked about — its name and how many are
@@ -532,8 +538,12 @@ impl qobject::SideritaController {
     pub fn cancel_conflicts(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().get_mut().pending_paste = None;
         self.as_mut().set_conflict_pending(false);
-        self.as_mut()
-            .set_status_text(QString::from("Pegado cancelado"));
+        self.as_mut().push_notice(
+            "Pegado cancelado",
+            "circle-stop",
+            super::notices::NoticeTone::Info,
+            false,
+        );
     }
 
     /// Starts the paste worker with a decided conflict `strategy`. Copies and
@@ -624,8 +634,9 @@ impl qobject::SideritaController {
     /// next check and finalises through `finish_paste`, so a cancelled cross-
     /// device move still leaves every source intact.
     pub fn cancel_op(mut self: Pin<&mut Self>) {
+        // No notice: the ring being cancelled is still on screen and its
+        // callout is where a person asked for this.
         self.as_mut().cancel_all_jobs();
-        self.as_mut().set_status_text(QString::from("Cancelando…"));
     }
 
     /// Finalises a pasted batch back on the Qt thread: restores the idle state,
@@ -671,12 +682,20 @@ impl qobject::SideritaController {
         self.as_mut().finish_batch(outcome.total, &outcome.failures);
         if outcome.failures.is_empty() {
             if outcome.cancelled {
-                self.as_mut()
-                    .set_status_text(QString::from("Operación cancelada"));
+                self.as_mut().push_notice(
+                    "Operación cancelada",
+                    "circle-stop",
+                    super::notices::NoticeTone::Info,
+                    false,
+                );
             } else if outcome.skipped > 0 {
                 let message = format!("{} omitidos", outcome.skipped);
-                self.as_mut()
-                    .set_status_text(QString::from(message.as_str()));
+                self.as_mut().push_notice(
+                    message.as_str(),
+                    "info",
+                    super::notices::NoticeTone::Info,
+                    false,
+                );
             }
         }
     }

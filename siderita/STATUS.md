@@ -1,9 +1,10 @@
 # Siderita status
 
-- **Updated:** 2026-09-07
+- **Updated:** 2026-09-22
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; `SID-A4` (what the window costs, and what it shows) is the active
-  checkpoint and the portal-parenting one remains planned
+  present; `SID-A4` (what the window costs, and what it shows) is closed and
+  archived, `SID-B1` (the bottom bar stops repeating the ring) is the active
+  checkpoint, and the portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 

@@ -44,19 +44,24 @@ Item {
     // Nombre distinto evita el auto-binding sombreado `x: x`.
     property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
-    function collapseHeading() { heading.collapse() }
-    function restoreHeading() { heading.restore() }
-    function retireHeading() { heading.retire() }
-    function revealHeading() { heading.reveal() }
-    onActiveChanged: if (!active) collapseHeading()
+    // Folds the metadata block away without bringing a retired title back:
+    // changing mode or location should not undo a heading a person scrolled
+    // out of the way, only stop showing the block they opened for somewhere
+    // else.
+    function foldHeading() {
+        headingScroll.travel = Math.max(0, headingScroll.travel)
+    }
+    onActiveChanged: if (!active) foldHeading()
     SideritaController {
         id: controller
     }
 
-    HeadingState {
-        id: heading
-        canReveal: root.active && !controller.loading && root.bottomView
-                   && !controller.errorText.length && root.bottomView.atYBeginning
+    HeadingScroll {
+        id: headingScroll
+        expandedExtra: folderHeading.expandedExtra
+        // The distance that used to be a threshold, kept so the *how far* does
+        // not change — only the fact that it is now a ramp rather than a step.
+        retireSpan: CelestinaTheme.compWheelStep * 1.5
     }
     // RouteReveal se arma antes de que este modelo publique la ruta nueva.
     // Native role model shared by list and grid.
@@ -91,6 +96,8 @@ Item {
             // navegar no se toca: ir al top es lo correcto para una carpeta nueva.
             if (samePlace)
                 view.contentY = savedY
+            else
+                headingScroll.travel = 0   // a new folder shows its compact title
 
             routeReveal.revealPreparedRoute()
         }
@@ -176,7 +183,7 @@ Item {
         id: mainPanel
 
         property string viewMode: "list"   // "list" | "grid"
-        onViewModeChanged: root.collapseHeading()
+        onViewModeChanged: root.foldHeading()
 
         // Restore the last-used view mode on open and persist a change
         // (list⇄grid). The size scales are window-level and independent.
@@ -402,7 +409,7 @@ Item {
         Connections {
             target: controller
             function onCurrentPathChanged() {
-                root.collapseHeading()
+                root.foldHeading()
                 mainPanel.clearSelection()
                 // Salir de la búsqueda sólo si había una. clearSearch reproyecta
                 // el snapshot actual, y en plena navegación ese snapshot es aún
@@ -416,15 +423,15 @@ Item {
             // Entering or leaving search swaps the whole row set (folder ↔
             // hits, index-keyed vs token-keyed), so drop the old selection.
             function onSearchActiveChanged() {
-                root.collapseHeading()
+                root.foldHeading()
                 mainPanel.clearSelection()
             }
-            function onSearchQueryChanged() { root.collapseHeading() }
-            function onTrashActiveChanged() { root.collapseHeading() }
-            function onRecentActiveChanged() { root.collapseHeading() }
+            function onSearchQueryChanged() { root.foldHeading() }
+            function onTrashActiveChanged() { root.foldHeading() }
+            function onRecentActiveChanged() { root.foldHeading() }
             function onLoadingChanged() {
                 if (controller.loading)
-                    root.collapseHeading()
+                    root.foldHeading()
             }
         }
 
@@ -521,11 +528,7 @@ Item {
                               + (folderListView.detailsMode
                                  ? folderChrome.detailsHeader.height + 12 : 8)
             contentBottomInset: mainPanel.contentBottomInset
-            headingState: heading
-            onRevealHeadingRequested: root.revealHeading()
-            onRestoreHeadingRequested: root.restoreHeading()
-            onCollapseHeadingRequested: root.collapseHeading()
-            onRetireHeadingRequested: root.retireHeading()
+            heading: headingScroll
             onQuickLookRequested: folderActions.requestPreview()
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
@@ -555,11 +558,7 @@ Item {
             overlayParent: root.overlayParent
             contentTopMargin: mainPanel.contentTopInset + 8
             contentBottomInset: mainPanel.contentBottomInset
-            headingState: heading
-            onRevealHeadingRequested: root.revealHeading()
-            onRestoreHeadingRequested: root.restoreHeading()
-            onCollapseHeadingRequested: root.collapseHeading()
-            onRetireHeadingRequested: root.retireHeading()
+            heading: headingScroll
             onQuickLookRequested: folderActions.requestPreview()
             onNewTabRequested: function(path, foreground) {
                 root.requestNewTab(path, foreground)
@@ -654,7 +653,7 @@ Item {
             bottomView: root.bottomView
             bottomFloating: root.bottomFloating
             overlayParent: root.overlayParent
-            sortMenuItem: folderActions.sortMenu
+            viewSortMenuItem: folderActions.viewSortMenu
         }
     }
 
@@ -665,8 +664,8 @@ Item {
         y: x * (1 - retiredProgress)
         width: root.width - 2 * x
         opacity: routeReveal.progress; scale: routeReveal.revealScale
-        compact: !heading.expanded
-        retired: heading.retired
+        compactProgress: headingScroll.compactProgress
+        retiredProgress: headingScroll.retiredProgress
         controller: tabController
         hostWindow: root.hostWindow
         shortcutActive: root.active && !root.navigationBlocked

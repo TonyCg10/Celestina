@@ -30,6 +30,25 @@ Item {
     // moving, which an index does not.
     property string openId: ""
 
+    // How much width the column can give the rings. Zero means "no limit",
+    // which is what the tests and any consumer that does not measure pass.
+    property real availableWidth: 0
+    // Beyond three, a row of rings is a row of anonymous circles: the list says
+    // which is which. A frame too narrow collapses it at any count.
+    readonly property int rowLimit: 3
+    readonly property real rowWidth: dock.jobIds.length * dock.ringSize
+                                     + Math.max(0, dock.jobIds.length - 1) * dock.gap
+                                     + 2 * dock.padding
+    readonly property bool collapsed: dock.jobIds.length > dock.rowLimit
+                                      || (dock.availableWidth > 0
+                                          && dock.rowWidth > dock.availableWidth)
+    property bool expanded: false
+
+    readonly property alias countCircle: counted
+    // The Repeater, not the Column: the tests read `count` and `itemAt`, which
+    // are the Repeater's own.
+    readonly property alias jobList: jobRepeater
+
     function at(list, index) {
         return list !== undefined && index >= 0 && index < list.length ? list[index] : ""
     }
@@ -47,8 +66,12 @@ Item {
     // dock's width, and QML answers a cycle like that by laying nothing out —
     // which is how the previous surface ended up drawing its rows on top of one
     // another.
-    implicitWidth: rings.width + 2 * dock.padding
-    implicitHeight: dock.ringSize + 2 * dock.padding
+    implicitWidth: (dock.collapsed
+                    ? (dock.expanded ? jobRows.implicitWidth : dock.ringSize)
+                    : rings.width) + 2 * dock.padding
+    implicitHeight: (dock.collapsed && dock.expanded
+                     ? jobRows.implicitHeight
+                     : dock.ringSize) + 2 * dock.padding
     visible: dock.controller.opRunning
 
     // Pressing anywhere else closes the callout. The catcher lives in the
@@ -65,28 +88,41 @@ Item {
         parent: dock.parent
         anchors.fill: parent
         z: dock.z - 1
-        visible: dock.openId.length > 0
+        visible: dock.openId.length > 0 || dock.expanded
 
         MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             hoverEnabled: true
             preventStealing: true
-            onPressed: dock.openId = ""
+            onPressed: {
+                dock.openId = ""
+                dock.expanded = false
+            }
         }
     }
 
     // Escape closes it too, for a hand that never left the keyboard.
     Shortcut {
         sequence: "Escape"
-        enabled: dock.openId.length > 0
-        onActivated: dock.openId = ""
+        enabled: dock.openId.length > 0 || dock.expanded
+        onActivated: {
+            dock.openId = ""
+            dock.expanded = false
+        }
     }
 
-    // A job that ends while its callout is open takes the callout with it.
+    // A job that ends while its callout is open takes the callout with it, and
+    // so does a collapse: the callout points at a ring that is no longer drawn.
     onJobIdsChanged: {
         if (dock.openId.length > 0 && dock.indexOfJob(dock.openId) < 0)
             dock.openId = ""
+    }
+    onCollapsedChanged: {
+        if (dock.collapsed)
+            dock.openId = ""
+        else
+            dock.expanded = false
     }
 
     GlassPill {
@@ -98,6 +134,7 @@ Item {
 
     Row {
         id: rings
+        visible: !dock.collapsed
         x: dock.padding
         y: dock.padding
         spacing: dock.gap
@@ -128,6 +165,85 @@ Item {
                 Accessible.role: Accessible.Button
                 Accessible.name: dock.at(dock.controller.opLabels, jobRing.index)
                 onClicked: dock.openId = dock.active(jobRing.jobId) ? "" : jobRing.jobId
+            }
+        }
+    }
+
+    // The collapsed shape: one circle with the count inside and the average of
+    // every measurable job on its arc. It is a button, and what it opens is the
+    // list below.
+    OperationRing {
+        id: counted
+        objectName: "operationCount"
+        visible: dock.collapsed && !dock.expanded
+        x: dock.padding
+        y: dock.padding
+        width: dock.ringSize
+        height: dock.ringSize
+        readonly property int count: dock.jobIds.length
+        // The count replaces the glyph: with four jobs there is no single
+        // action to draw, and how many there are is the one thing the circle
+        // can say truthfully.
+        iconName: ""
+        countLabel: counted.count
+        percent: {
+            let total = 0
+            let measured = 0
+            for (let index = 0; index < dock.jobIds.length; index++) {
+                const raw = parseInt(dock.at(dock.controller.opPercents, index), 10)
+                if (!isNaN(raw) && raw >= 0) {
+                    total += raw
+                    measured++
+                }
+            }
+            return measured > 0 ? Math.round(total / measured) : -1
+        }
+        steps: {
+            let sum = 0
+            for (let index = 0; index < dock.jobIds.length; index++) {
+                const raw = parseInt(dock.at(dock.controller.opSteps, index), 10)
+                sum += isNaN(raw) ? 0 : raw
+            }
+            return sum
+        }
+        active: dock.expanded
+        Accessible.role: Accessible.Button
+        Accessible.name: qsTr("%1 operaciones en curso").arg(counted.count)
+        onClicked: dock.expanded = !dock.expanded
+    }
+
+    // The expanded shape: the same jobs, named.
+    Column {
+        id: jobRows
+        visible: dock.collapsed && dock.expanded
+        x: dock.padding
+        y: dock.padding
+        spacing: 2
+
+        Repeater {
+            id: jobRepeater
+            model: dock.jobIds.length
+
+            OperationsListRow {
+                id: jobRow
+                required property int index
+                width: 260
+                jobId: dock.at(dock.jobIds, jobRow.index)
+                label: dock.at(dock.controller.opLabels, jobRow.index)
+                iconName: dock.at(dock.controller.opIcons, jobRow.index)
+                percent: {
+                    const raw = parseInt(
+                        dock.at(dock.controller.opPercents, jobRow.index), 10)
+                    return isNaN(raw) ? -1 : raw
+                }
+                steps: {
+                    const raw = parseInt(
+                        dock.at(dock.controller.opSteps, jobRow.index), 10)
+                    return isNaN(raw) ? 0 : raw
+                }
+                paused: dock.at(dock.controller.opPaused, jobRow.index) === "1"
+                onPauseRequested: id => dock.controller.toggleJobPaused(id)
+                onCancelRequested: id => dock.controller.cancelJob(id)
             }
         }
     }

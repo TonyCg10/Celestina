@@ -9,14 +9,14 @@ Item {
     required property var controller
     required property var hostWindow
     required property bool shortcutActive
-    property bool compact: false
-    // Retired is a third state, past compact: the heading is not there at all
-    // and the listing takes its band. Compact remains what a folder shows by
-    // default — the mistake this replaces made "compact" mean "gone", which
-    // left the window with no title at all and the rows sliding under the bars.
-    property bool retired: false
-    property real compactProgress: compact ? 1 : 0
-    property real retiredProgress: retired ? 1 : 0
+    // How far the heading has folded, and how far it has gone, 0…1 each. They
+    // arrive already interpolated from the scroll travel (`HeadingScroll`);
+    // this component only draws them. Compact — `compactProgress` at 1 with
+    // nothing retired — is what a folder shows at rest: the mistake that
+    // preceded all this made "compact" mean "gone", which left the window with
+    // no title at all and the rows sliding under the bars.
+    required property real compactProgress
+    required property real retiredProgress
     signal phoneMediaRequested(int index)
 
     readonly property int phoneIndex: {
@@ -40,19 +40,8 @@ Item {
     readonly property bool phoneConnected:
             phoneInfo.length > 3 && phoneInfo[3] === "1"
 
-    Behavior on compactProgress {
-        NumberAnimation {
-            duration: CelestinaTheme.motionNormal
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
-
-    Behavior on retiredProgress {
-        NumberAnimation {
-            duration: CelestinaTheme.motionNormal
-            easing.type: CelestinaTheme.easeStandard
-        }
-    }
+    // No Behavior on either: the gesture is the clock. An animation between
+    // two scroll-driven values would only run behind the finger.
 
     readonly property string locationName: {
         if (controller.trashActive)
@@ -138,6 +127,8 @@ Item {
     readonly property real expandedHeight:
             secondaryMetadata.length > 0 ? 116 : 98
     readonly property real compactHeight: 60
+    // What the scroll travel may spend growing this heading.
+    readonly property real expandedExtra: expandedHeight - compactHeight
     height: Math.round((expandedHeight
                         + (compactHeight - expandedHeight) * compactProgress)
                        * (1 - retiredProgress))
@@ -180,6 +171,40 @@ Item {
             elide: Text.ElideMiddle
             horizontalAlignment: root.phoneLocation
                                  ? Text.AlignLeft : Text.AlignHCenter
+        }
+
+        // A lost watch is not an event: it stays true of this folder for as
+        // long as it lasts, so it lives where the folder describes itself and
+        // not in a column that retires by itself. It used to sit in the bottom
+        // strip, which carried it alongside four kinds of transient message.
+        Row {
+            id: watchWarning
+            height: visible ? implicitHeight : 0
+            visible: root.controller.watchDegraded
+            spacing: CelestinaTheme.spaceSm
+            // Centred like the rest of the heading, except on a phone, where
+            // the heading aligns left. Placed by x rather than by an anchor:
+            // anchors are not how a positioner's children are arranged.
+            x: root.phoneLocation ? 0 : (parent.width - width) / 2
+
+            CelestinaIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.round(CelestinaTheme.iconSm
+                                  * root.hostWindow.interfaceIconScale)
+                height: width
+                name: "circle-alert"
+                fallbackName: "circle-alert"
+                tone: CelestinaIcon.Danger
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("Vigilancia perdida · instantánea")
+                color: CelestinaTheme.dangerFillInk
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: Math.round(CelestinaTheme.fontCaption
+                                           * root.hostWindow.interfaceTextScale)
+            }
         }
 
         Text {

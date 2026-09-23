@@ -120,8 +120,12 @@ impl qobject::SideritaController {
         if input.is_empty() {
             self.as_mut()
                 .set_error_text(QString::from("Escribe una ruta local"));
-            self.as_mut()
-                .set_status_text(QString::from("La ubicación está vacía"));
+            self.as_mut().push_notice(
+                "La ubicación está vacía",
+                "info",
+                super::notices::NoticeTone::Info,
+                false,
+            );
             return;
         }
 

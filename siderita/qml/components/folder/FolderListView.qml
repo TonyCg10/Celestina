@@ -16,14 +16,10 @@ ListView {
     required property real contentBottomInset
 
     signal quickLookRequested
-    // The heading's own state object, read rather than mirrored: two booleans
-    // copied down two levels is two more places for them to disagree.
-    required property var headingState
+    // The heading's travel, passed through rather than mirrored: one owner for
+    // the number, and the wheel handler moves it directly.
+    required property var heading
 
-    signal revealHeadingRequested
-    signal restoreHeadingRequested
-    signal collapseHeadingRequested
-    signal retireHeadingRequested
     signal newTabRequested(string path, bool foreground)
     signal contextMenuRequested(string token, string name, bool isDirectory,
                                 string path, real popupX, real popupY)
@@ -38,12 +34,7 @@ ListView {
 
     FolderWheelHandler {
         view: root
-        headingExpanded: root.headingState.expanded
-        headingRetired: root.headingState.retired
-        onRevealRequested: root.revealHeadingRequested()
-        onRestoreRequested: root.restoreHeadingRequested()
-        onCollapseRequested: root.collapseHeadingRequested()
-        onRetireRequested: root.retireHeadingRequested()
+        heading: root.heading
     }
 
     footer: Item { width: 1; height: root.contentBottomInset }

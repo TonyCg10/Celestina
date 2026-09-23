@@ -140,7 +140,7 @@ impl qobject::SideritaController {
         }
         self.as_mut().set_loading(true);
         self.as_mut()
-            .set_status_text(QString::from("Leyendo la papelera…"));
+            .begin_read_notice("Leyendo la papelera…", "user-trash");
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let listed = gather_trash();
@@ -162,7 +162,7 @@ impl qobject::SideritaController {
             return;
         }
         self.as_mut().set_loading(false);
-        self.as_mut().set_status_text(QString::default());
+        self.as_mut().end_read_notice();
         let (entries, rows) = match listed {
             Ok(listed) => listed,
             Err(error) => {
@@ -210,7 +210,7 @@ impl qobject::SideritaController {
         }
         self.as_mut().set_loading(true);
         self.as_mut()
-            .set_status_text(QString::from("Leyendo Recientes…"));
+            .begin_read_notice("Leyendo Recientes…", "clock-arrow-up");
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let rows = gather_recent();
@@ -227,7 +227,7 @@ impl qobject::SideritaController {
             return;
         }
         self.as_mut().set_loading(false);
-        self.as_mut().set_status_text(QString::default());
+        self.as_mut().end_read_notice();
         let count = rows.len().min(i32::MAX as usize) as i32;
         self.as_mut().set_recent_count(count);
         self.as_mut().publish_listing(&rows);
@@ -338,7 +338,7 @@ impl qobject::SideritaController {
     /// that follows raises `loading` again for its own scan.
     fn clear_listing_state(mut self: Pin<&mut Self>) {
         self.as_mut().set_loading(false);
-        self.as_mut().set_status_text(QString::default());
+        self.as_mut().end_read_notice();
     }
 
     /// The `.trashinfo` record of the trashed entry whose body the key

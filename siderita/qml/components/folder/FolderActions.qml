@@ -8,7 +8,7 @@ Item {
     required property Item owner
     required property Item panel
 
-    property alias sortMenu: folderSortMenu
+    property alias viewSortMenu: viewSortMenuItem
     property alias entryMenu: entryContextMenu
     property alias pathMenu: breadcrumbMenu
     property alias folderMenu: folderContextMenu
@@ -25,7 +25,7 @@ Item {
             || grafitaEditorDialog.shown || grafitaEditorDialog.visible
             || phoneMediaDialog.shown || phoneMediaDialog.visible
     readonly property bool navigationBlocked:
-            folderSortMenu.visible || entryContextMenu.visible
+            viewSortMenuItem.visible || entryContextMenu.visible
             || breadcrumbMenu.visible || folderContextMenu.visible
             || modalBlocked
 
@@ -53,10 +53,11 @@ Item {
         grafitaEditorState.requestPreview(path)
     }
 
-    FolderSortMenu {
-        id: folderSortMenu
+    ViewSortMenu {
+        id: viewSortMenuItem
         backdropSource: root.owner
         controller: root.controller
+        panel: root.panel
     }
 
     EntryContextMenu {

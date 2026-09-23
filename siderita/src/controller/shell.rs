@@ -24,8 +24,12 @@ impl qobject::SideritaController {
         match open_with_default(path) {
             Ok(()) => {
                 let message = format!("Abriendo {name}…");
-                self.as_mut()
-                    .set_status_text(QString::from(message.as_str()));
+                self.as_mut().push_notice(
+                    message.as_str(),
+                    "share-2",
+                    super::notices::NoticeTone::Info,
+                    false,
+                );
             }
             Err(error) => self.as_mut().set_op_error(QString::from(error.as_str())),
         }
@@ -102,8 +106,12 @@ impl qobject::SideritaController {
         match crate::apps::launch_with(&id, &path) {
             Ok(()) => {
                 let message = format!("Abriendo {}…", display_name(&path));
-                self.as_mut()
-                    .set_status_text(QString::from(message.as_str()));
+                self.as_mut().push_notice(
+                    message.as_str(),
+                    "share-2",
+                    super::notices::NoticeTone::Info,
+                    false,
+                );
             }
             Err(error) => self.as_mut().set_op_error(QString::from(error.as_str())),
         }

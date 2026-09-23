@@ -29,6 +29,10 @@ Item {
     // job is not read as a finished one.
     property bool paused: false
     property bool active: false
+    // When several jobs share one ring there is no single action to draw, so
+    // the ring wears how many there are instead of a glyph. Below zero means
+    // "draw the icon", which is every other ring in the application.
+    property int countLabel: -1
     property alias hovered: hover.hovered
 
     readonly property bool indeterminate: ring.percent < 0
@@ -124,11 +128,24 @@ Item {
         anchors.centerIn: parent
         width: Math.round(parent.width * 0.45)
         height: width
-        visible: !ring.paused
+        visible: !ring.paused && ring.countLabel < 0
         name: ring.iconName
         fallbackName: "file"
         tone: ring.active || ring.hovered ? CelestinaIcon.Accent
                                           : CelestinaIcon.Primary
+    }
+
+    // The count's face. Tabular figures so the circle does not twitch as the
+    // number changes width.
+    Text {
+        anchors.centerIn: parent
+        visible: !ring.paused && ring.countLabel >= 0
+        text: ring.countLabel
+        color: ring.active || ring.hovered ? CelestinaTheme.accent
+                                           : CelestinaTheme.text
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontCaption
+        font.features: ({ "tnum": 1 })
     }
 
     // The held mark: two bars, drawn rather than fetched, because the catalogue

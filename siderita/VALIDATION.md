@@ -4,6 +4,35 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-15 — The bottom bar, and what a running action says
+
+- **Status:** pending
+- **Related implementation:** `SID-B1` (1.6.0), designed in
+  [the spec](../docs/superpowers/specs/2026-09-22-siderita-bottom-chrome-design.md)
+- **Requires:** the deployed Siderita on the real session, a removable disk,
+  a folder large enough for a copy to last several seconds, and a folder the
+  user cannot read
+- **Procedure:** copy the large folder and watch the bottom of the window;
+  unmount the disk from the sidebar; unmount a disk that answers instantly;
+  open the unreadable folder; press the middle icon of the bottom capsule and
+  change both the view mode and the sort field from it; press the magnifier and
+  adjust a size; start four writes at once and press the counted circle; scroll
+  a long folder down slowly and back up, with the wheel and with the touchpad
+- **Pass condition:** the copy is announced once, by its ring, and nothing
+  spans the bottom bar; the unmount shows a notice that changes to its finished
+  wording and retires by itself; the instant unmount shows nothing at all; the
+  permission failure is a readable pill in the corner that a press dismisses,
+  never a band across the rows; the capsule's middle glyph is the current view
+  mode and its menu carries both view and sort; the sizes popup opens from the
+  left and stays inside the window; four writes collapse to one circle carrying
+  the count, which expands upward into a named list; scrolling never needs a
+  second gesture to catch up — the heading and the listing move together
+  throughout, and a push up at the top grows the metadata block and parks it
+- **Result:** not run by hand
+- **Evidence:** whether the 500 ms threshold feels right against a fast
+  unmount, whether two lines is enough for a real permission error on a long
+  path, and whether losing the permanent sort arrow is acceptable in daily use
+
 ## VAL-SID-13 — One password opens the archives that share it
 
 - **Status:** pending

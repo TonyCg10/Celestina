@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-24
 - **Scope:** `SID-A4-B`; plan
-  [what-the-window-costs-and-shows](../plans/active/2026-08-20-what-the-window-costs-and-shows.md)
+  [what-the-window-costs-and-shows](../plans/archive/2026-08-20-what-the-window-costs-and-shows.md)
 - **Environment:** Arch-derived Linux, Qt 6.11.1, `cargo` stable. The machine
   had 40 mount points, among them one `fuse.sshfs` (a phone through Magnetita),
   `fuse.gvfsd-fuse` and `fuse.portal`, and a 37 KB `recently-used.xbel` with 59

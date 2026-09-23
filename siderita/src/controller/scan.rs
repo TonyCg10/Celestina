@@ -114,6 +114,7 @@ impl qobject::SideritaController {
                 self.as_mut().rust_mut().get_mut().pending_nav = None;
                 if !quiet {
                     self.as_mut().set_loading(false);
+                    self.as_mut().end_read_notice();
                     self.as_mut()
                         .set_error_text(QString::from(error.to_string().as_str()));
                 }
@@ -128,7 +129,7 @@ impl qobject::SideritaController {
             self.as_mut().set_op_error(QString::default());
             self.as_mut().set_loading(true);
             self.as_mut()
-                .set_status_text(QString::from("Leyendo carpeta…"));
+                .begin_read_notice("Leyendo carpeta…", "folder-open");
             self.as_mut().update_navigation_state();
         }
 
@@ -147,6 +148,7 @@ impl qobject::SideritaController {
             self.as_mut().rollback_pending_nav();
             if !quiet {
                 self.as_mut().set_loading(false);
+                self.as_mut().end_read_notice();
                 self.as_mut().set_error_text(QString::from(message));
             }
         }
@@ -191,6 +193,7 @@ impl qobject::SideritaController {
                 self.as_mut().rust_mut().get_mut().snapshot = Some(snapshot);
                 self.as_mut().publish_location(&location);
                 self.as_mut().set_loading(false);
+                self.as_mut().end_read_notice();
                 self.as_mut().set_error_text(QString::default());
                 self.as_mut().update_navigation_state();
                 self.as_mut().update_watch(&location);
@@ -222,10 +225,15 @@ impl qobject::SideritaController {
                     return;
                 }
                 self.as_mut().set_loading(false);
+                self.as_mut().end_read_notice();
                 self.as_mut()
                     .set_error_text(QString::from(message.as_str()));
-                self.as_mut()
-                    .set_status_text(QString::from("No se pudo leer la carpeta"));
+                self.as_mut().push_notice(
+                    "No se pudo leer la carpeta",
+                    "circle-alert",
+                    super::notices::NoticeTone::Danger,
+                    false,
+                );
             }
         }
     }
@@ -369,16 +377,9 @@ impl qobject::SideritaController {
             self.as_mut().set_selected_token(QString::default());
         }
 
-        // The item count and per-item detail live in the sidebar info box now;
-        // the bottom status line only carries transient state. Keep a filtered
-        // "N de M" hint there, but stay blank when nothing is filtered out.
-        let status = if visible == metadata.total {
-            String::new()
-        } else {
-            format!("{visible} de {}", metadata.total)
-        };
-        self.as_mut()
-            .set_status_text(QString::from(status.as_str()));
+        // Nothing is published about how many of how many are visible: the
+        // folder heading already renders "N VISIBLES DE M ELEMENTOS" from the
+        // counts below, and the strip that repeated it is gone.
 
         // Stable folder metadata comes from the unfiltered snapshot, while the
         // visible count follows the current projection. This keeps the heading

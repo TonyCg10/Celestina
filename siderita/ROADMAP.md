@@ -1,10 +1,10 @@
 # Siderita implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** SID-A4
-- **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07` and
-  `VAL-SID-11` in [VALIDATION.md](VALIDATION.md); none of them blocks
-  implementation
+- **Active implementation checkpoint:** SID-B1
+- **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07`,
+  `VAL-SID-11` and `VAL-SID-15` in [VALIDATION.md](VALIDATION.md); none of them
+  blocks implementation
 
 `SID-M1` remains the next settled checkpoint after `SID-G7` and `SID-A1`, and
 has no active execution plan.
@@ -105,9 +105,36 @@ two, and the content box agreed with neither the sidebar nor the info box about
 where the window's edge is.
 
 The plan is
-[What the window costs, and what it shows](docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md).
+[What the window costs, and what it shows](docs/plans/archive/2026-08-20-what-the-window-costs-and-shows.md).
 It excludes publishing row patches from Rust, and the author's own pass, which
 is `VAL-SID-10`.
+
+## SID-B1 — The bottom bar stops repeating the ring
+
+The author showed a copy and an extraction: each is announced twice, once by
+its ring and once by a strip across the bottom bar that looks like a search
+field. Reading the code found why the strip could not simply be deleted —
+`status_text` carries a running job, an activity with no knowable end, an
+outcome that has already happened, and two standing facts about the folder, all
+through one property. It also found that the unmount line is never cleared and
+that `volume_busy` is published and read by nothing, so unmounting a disk has
+no indicator of its own at all.
+
+This checkpoint separates them by what they are: rings keep the jobs, a
+self-retiring notice takes the rest, and the heading keeps what is simply true
+of the folder — which it already renders. The bar those four pills took becomes
+one capsule of three icons on the left, and the whole width to its right
+belongs to a single transient column.
+
+The author then named a second one in the same area: scrolling had a detent to
+show the big heading and another to take it away, and each consumed the gesture
+that crossed it, so the listing needed a second scroll to catch up. The heading
+becomes one continuous travel that the same gesture moves along.
+
+The plan is
+[Bottom chrome and the notice stack](docs/plans/active/2026-09-22-bottom-chrome-and-notices.md).
+It excludes the portal picker's own chrome, and the author's own pass, which is
+`VAL-SID-15`.
 
 ## SID-M1 — Parent portal pickers on Wayland
 

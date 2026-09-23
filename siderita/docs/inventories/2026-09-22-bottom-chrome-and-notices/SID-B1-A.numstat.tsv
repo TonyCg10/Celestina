@@ -1,0 +1,115 @@
+# SID-B1-A exact change inventory
+
+Base revision	c32a9c03f495c158ce5222bdb7b436a01d37c0c3
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/docs/evidence/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/evidence/2026-08-24-listed-locations-off-the-qt-thread.md
+Pathspec	siderita/docs/evidence/2026-09-22-bottom-chrome-and-notices.md
+Pathspec	siderita/docs/evidence/2026-09-22-heading-scroll.md
+Pathspec	siderita/docs/inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-A.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/docs/plans/active/2026-09-22-bottom-chrome-and-notices.md
+Pathspec	siderita/docs/plans/active/README.md
+Pathspec	siderita/docs/plans/archive/2026-08-19-pause-and-global-scope.md
+Pathspec	siderita/docs/plans/archive/2026-08-20-what-the-window-costs-and-shows.md
+Pathspec	siderita/qml/components/chrome/BottomControls.qml
+Pathspec	siderita/qml/components/chrome/HiddenToggleDefs.qml
+Pathspec	siderita/qml/components/chrome/HiddenTogglePill.qml
+Pathspec	siderita/qml/components/folder/ActivityNotice.qml
+Pathspec	siderita/qml/components/folder/ActivityStack.qml
+Pathspec	siderita/qml/components/folder/FolderActions.qml
+Pathspec	siderita/qml/components/folder/FolderBottomChrome.qml
+Pathspec	siderita/qml/components/folder/FolderBottomStatus.qml
+Pathspec	siderita/qml/components/folder/FolderGridView.qml
+Pathspec	siderita/qml/components/folder/FolderHeading.qml
+Pathspec	siderita/qml/components/folder/FolderListView.qml
+Pathspec	siderita/qml/components/folder/FolderWheelHandler.qml
+Pathspec	siderita/qml/components/folder/HeadingScroll.qml
+Pathspec	siderita/qml/components/folder/HeadingState.qml
+Pathspec	siderita/qml/components/folder/OperationRing.qml
+Pathspec	siderita/qml/components/folder/OperationsDock.qml
+Pathspec	siderita/qml/components/folder/OperationsListRow.qml
+Pathspec	siderita/qml/menus/FolderSortMenu.qml
+Pathspec	siderita/qml/menus/ViewSortMenu.qml
+Pathspec	siderita/qml/views/FolderView.qml
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/controller/archive.rs
+Pathspec	siderita/src/controller/fileops.rs
+Pathspec	siderita/src/controller/jobs.rs
+Pathspec	siderita/src/controller/mounts.rs
+Pathspec	siderita/src/controller/navigation.rs
+Pathspec	siderita/src/controller/notices.rs
+Pathspec	siderita/src/controller/scan.rs
+Pathspec	siderita/src/controller/shell.rs
+Pathspec	siderita/src/controller/state.rs
+Pathspec	siderita/src/controller/trash.rs
+Pathspec	siderita/tests/qml/tst_activity_notice.qml
+Pathspec	siderita/tests/qml/tst_activity_stack.qml
+Pathspec	siderita/tests/qml/tst_bottom_capsule.qml
+Pathspec	siderita/tests/qml/tst_heading_retire.qml
+Pathspec	siderita/tests/qml/tst_heading_scroll.qml
+Pathspec	siderita/tests/qml/tst_operations_dock.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+2	3	b0a3cd8ad1c321ec68907d10d0557ee2fa9e43389687aaf5646d16f9c82fb4ac	scripts/architecture-baseline.tsv
+0	3	768d1e413a0923f22aa5c3374c78b67dcad79c9199fe9b4b166915fbfae126e4	scripts/language-baseline.tsv
+1	1	2856f7bb51495a8b0689cd571f12ce21cac4c7bb71e54607a3f21d01bbe0fac5	scripts/qmllint-baseline.tsv
+32	5	fb86b3d1162167333ca1ebc2e7aaae5a5712d4e685b760d4304addb2a3aa0f89	siderita/ROADMAP.md
+4	3	2b191443937414024ebde320a540af145f11a42d9af74765bf4a804998d2273e	siderita/STATUS.md
+29	0	9fb68913451750096ed8325c908ecd8a76784ba7e9c9ec0c69a5474de86505a7	siderita/VALIDATION.md
+11	2	96414460857f65be4e0f3f6611537933c75e53e50f867279e0eb3db26ac3364f	siderita/build.rs
+1	1	cdba69cb7cf964a76d162c0174c27287bad5d9702466d4e750a7455ec0f3aec2	siderita/docs/evidence/2026-08-20-what-the-window-costs-and-shows.md
+1	1	6c5bfb5ad2d0ba9df3a1d3a68023222a6dd9dabe14e5bd103ce7c6957685d1f8	siderita/docs/evidence/2026-08-24-listed-locations-off-the-qt-thread.md
+231	0	30a44074a740d81a75d7971c1d8bf7721b18b03b9846012268fb83ee4b018ca9	siderita/docs/evidence/2026-09-22-bottom-chrome-and-notices.md
+138	0	0ce2605d136a23cd7d868d468a31a153d2023d1191f0adf4cd6bd8eff2c82f5f	siderita/docs/evidence/2026-09-22-heading-scroll.md
+0	112	deleted	siderita/docs/plans/active/2026-08-20-what-the-window-costs-and-shows.md
+73	0	a9cf5e71617552b9c2da1bfbcfa1e1555342301319eefe664acf74f3bbf9422f	siderita/docs/plans/active/2026-09-22-bottom-chrome-and-notices.md
+2	2	d884119352771745d9fe4c44a8094b3cc371b95dc63949cf1fb591967f22b0f7	siderita/docs/plans/active/README.md
+1	1	5b2425cf4895bf3143d8c98b269d2eb740184ace36be6f9e1a474b2a7a39302b	siderita/docs/plans/archive/2026-08-19-pause-and-global-scope.md
+114	0	a5054183f212514f2ebf06a66d06aee0e98fe57a4bbca08717d2a5577c245e08	siderita/docs/plans/archive/2026-08-20-what-the-window-costs-and-shows.md
+97	112	2aefa42b7e1c7094080f3b41bcc49b305835b59547e80b417baa19116d5abc67	siderita/qml/components/chrome/BottomControls.qml
+18	0	3827364189dfe8c43e5477f3ce6db62d32f0c7ed00344d14b1efde6f441e8a60	siderita/qml/components/chrome/HiddenToggleDefs.qml
+6	8	947c7a0183060184e3dbdab1987941aac5b3524bf1800984151f700f113a8355	siderita/qml/components/chrome/HiddenTogglePill.qml
+224	0	8ad780a6c16ee3be89b10a98c5adb0e64ee3c3e7a045985709dff80dca684911	siderita/qml/components/folder/ActivityNotice.qml
+171	0	babeda38dd73676794f14337ca1d82727da2f403a869334fa17319a41feb0227	siderita/qml/components/folder/ActivityStack.qml
+5	4	48ad6b3976e0182096ac4b9defdc43bf066222eba2f62fa59bf38b6adbc8c8e8	siderita/qml/components/folder/FolderActions.qml
+3	5	368c457f3877e3e69becdf8fdbdbc97e14e8ec03aaa75a038e035f9272f373c9	siderita/qml/components/folder/FolderBottomChrome.qml
+18	155	e7b4e212a431dfe4c52c9f87e1a55f5aea85052350e14d0ee284a58af934c711	siderita/qml/components/folder/FolderBottomStatus.qml
+4	13	29b2882e9b7b130a5d6a94a6f0586d6518409085a34a12fe3c7a807d6ffa262f	siderita/qml/components/folder/FolderGridView.qml
+46	21	98af69f8160e55c20d215903378f145ec5d877c6ca51b6e461467aec1f1e761c	siderita/qml/components/folder/FolderHeading.qml
+5	14	6ec7457c3c5702679b453e3cbd378a116eca3b3583943fbc3d829a536f520a44	siderita/qml/components/folder/FolderListView.qml
+20	87	f78d08d975c66540600852dd249bb8822b6d630e30b1e71c143736980db555a7	siderita/qml/components/folder/FolderWheelHandler.qml
+50	0	44f2a3c3a10a1d1f760ea872495ca806e0de078ca7ae640d770c571cd9fc9cf2	siderita/qml/components/folder/HeadingScroll.qml
+0	46	deleted	siderita/qml/components/folder/HeadingState.qml
+18	1	ac1184de079ef3ee51e4772939a3803b3ad9922e11999d5917740abf02e3efdc	siderita/qml/components/folder/OperationRing.qml
+123	7	e3e7d6837ce01fb45623ec7fec1d9a8b98de2ad05c08046126e4f11360a8fdd4	siderita/qml/components/folder/OperationsDock.qml
+86	0	747686d7b0c963f54df2ba8122d6f2b5a74e5f3c94194824e973b8f5d4839515	siderita/qml/components/folder/OperationsListRow.qml
+0	51	deleted	siderita/qml/menus/FolderSortMenu.qml
+112	0	1aa2de8876422982bd8a14901cc86eb61d97a028ded5590aaa5c775d5115d8ed	siderita/qml/menus/ViewSortMenu.qml
+28	29	ca713ac063445b864b17d4207bb1d3ce22fd33e8a8488f1ab02bc10d918ebef1	siderita/qml/views/FolderView.qml
+12	330	0bd1f2b22cb72d41acb895000c8c23ceec9ce4bee60296420359c6980be91fb4	siderita/src/controller.rs
+6	5	9ff114bc096aa08ba39a37b54a2ca1d3f0de8752bc4b1914a6f8a385a669a952	siderita/src/controller/archive.rs
+32	13	2c0c7c58ed86bed14961f463c0652487d7350bd0b5066f14346aab224a94301e	siderita/src/controller/fileops.rs
+3	2	acb0e53a4974649adaf66652c9d1fc8335848034a2a37c010bd2080f394b0475	siderita/src/controller/jobs.rs
+50	11	bdd061465cb59a8b057a59bd0da91a689c16a2eb95121f65a347f05d804a2c99	siderita/src/controller/mounts.rs
+6	2	51ac7abc76ac9ae981c457e3927eae9088815b23b955224d5afb805f8c7a833c	siderita/src/controller/navigation.rs
+331	0	b0fb945c3b93c146250bf55a203616cf6a26fd033a6d116999deddee93c42c5e	siderita/src/controller/notices.rs
+14	13	2569723dc0a9ed791da4a3a9e297c4abd3d44a7c77536d397a90cec12933f3d0	siderita/src/controller/scan.rs
+12	4	01866d2d563fa3d747bde2ee9ce91056a7a286afe35e0b577e6e250bc81f49b0	siderita/src/controller/shell.rs
+346	0	b7eddae8a37e06ba02776baf633580adbef8892f2ee63cf3b1ba515cb1a99eac	siderita/src/controller/state.rs
+5	5	55130970fc19a329be6d36e6ca22e36ef00cdd2f7f43776eb62c12f0539a52e8	siderita/src/controller/trash.rs
+120	0	d05823d3e57f939114b6697a95474925e306567a9362ced05dafe9ef52e296b2	siderita/tests/qml/tst_activity_notice.qml
+146	0	f44f6ed715b7443d03f8c2bb2d34c8da0eb97b617a8e8388c2d401bdb42f9033	siderita/tests/qml/tst_activity_stack.qml
+120	0	a69674ba2d5d19131c64511dbd22a77beaf7bf19c6123bd1b83455f64e1763db	siderita/tests/qml/tst_bottom_capsule.qml
+0	121	deleted	siderita/tests/qml/tst_heading_retire.qml
+113	0	2e4c30bb5de4807d44152d67173c8bb4374269b5cc867a8ca9a6ef868d99a36d	siderita/tests/qml/tst_heading_scroll.qml
+75	0	587f1af429ece78d2370f35c7d4da22920e1b902e5b2f2948a94bdefaf3562d2	siderita/tests/qml/tst_operations_dock.qml
+115	0	self	siderita/docs/inventories/2026-09-22-bottom-chrome-and-notices/SID-B1-A.numstat.tsv

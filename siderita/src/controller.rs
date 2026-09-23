@@ -79,7 +79,6 @@ pub mod qobject {
         /// click navigates to.
         #[qproperty(QStringList, path_crumbs)]
         #[qproperty(QStringList, collapsed_sections)]
-        #[qproperty(QString, status_text)]
         #[qproperty(QString, error_text)]
         #[qproperty(QStringList, entry_names)]
         #[qproperty(QString, selected_token)]
@@ -110,6 +109,10 @@ pub mod qobject {
         #[qproperty(QStringList, op_icons)]
         #[qproperty(QStringList, op_steps)]
         #[qproperty(QStringList, op_paused)]
+        /// The transient announcements, `id\ticon\ttone\trunning\ttext` per
+        /// entry, cut at the first four tabs because a name may contain one
+        /// (`controller/notices.rs`).
+        #[qproperty(QStringList, notice_rows)]
         /// An extraction parked on a password: which, and whether it was wrong.
         #[qproperty(bool, password_pending)]
         #[qproperty(QString, password_archive)]
@@ -464,6 +467,11 @@ pub mod qobject {
         #[qinvokable]
         fn cancel_all_jobs(self: Pin<&mut SideritaController>);
 
+        /// Drops one announcement; `"error"` and `"op-error"` instead clear the
+        /// two error properties, which other surfaces also read.
+        #[qinvokable]
+        fn dismiss_notice(self: Pin<&mut SideritaController>, id: &QString);
+
         /// Holds one operation where it is, or lets it carry on.
         #[qinvokable]
         fn toggle_job_paused(self: Pin<&mut SideritaController>, id: f64);
@@ -716,6 +724,7 @@ mod keys;
 mod marks;
 mod mounts;
 mod navigation;
+mod notices;
 mod paste;
 mod pendingnav;
 mod scan;
@@ -723,6 +732,7 @@ mod selection;
 mod session;
 pub(crate) mod shell;
 mod sorting;
+mod state;
 mod trash;
 mod view_options;
 mod watchreg;
@@ -733,335 +743,7 @@ pub(crate) use marks::{favorite_entry_list, icon_override_entries};
 pub(crate) use paste::{PasteOutcome, PendingPaste};
 pub(crate) use pendingnav::PendingNav;
 pub(crate) use sorting::{sort_field_from_index, RECENT_LIMIT};
-
-pub struct SideritaControllerRust {
-    current_path: QString,
-    current_path_key: QString,
-    marked_key: QString,
-    path_crumbs: QStringList,
-    collapsed_sections: QStringList,
-    status_text: QString,
-    error_text: QString,
-    entry_names: QStringList,
-    selected_token: QString,
-    query: QString,
-    loading: bool,
-    can_go_back: bool,
-    can_go_forward: bool,
-    can_go_up: bool,
-    show_hidden: bool,
-    sort_field: i32,
-    sort_ascending: bool,
-    coordinator: ScanCoordinator,
-    executor: Option<ScanExecutor>,
-    history: NavigationHistory,
-    adapter: SnapshotAdapter,
-    options: ViewOptions,
-    snapshot: Option<DirectorySnapshot>,
-    // Where the window says it is: what was published, and for what folder.
-    published_digest: Option<u64>,
-    published_location: Option<PathBuf>,
-    view: Option<ViewSnapshot>,
-    pending_nav: Option<PendingNav>,
-    /// Whether the scan generation now in flight is a background watcher
-    /// refresh. A quiet scan owns no banner: it must never write `error_text`
-    /// or the status line, because the folder it is re-reading is being changed
-    /// underneath it and the user did not ask for anything.
-    quiet_scan: bool,
-    watch: Option<WatchState>,
-    watched: Option<PathBuf>,
-    watch_degraded: bool,
-    folder_visible_count: i32,
-    folder_total_count: i32,
-    folder_directory_count: i32,
-    folder_file_count: i32,
-    folder_hidden_count: i32,
-    folder_size: QString,
-    folder_modified: QString,
-    folder_accessed: QString,
-    folder_created: QString,
-    selection_count: i32,
-    properties_pending: bool,
-    prop_name: QString,
-    prop_path: QString,
-    prop_kind: QString,
-    prop_mime: QString,
-    prop_size: QString,
-    prop_permissions: QString,
-    prop_owner: QString,
-    prop_modified: QString,
-    prop_accessed: QString,
-    prop_symlink: QString,
-    prop_is_dir: bool,
-    prop_size_cancel: Option<CancellationToken>,
-    search_active: bool,
-    trash_active: bool,
-    recent_active: bool,
-    recent_count: i32,
-    custom_icon_entries: QStringList,
-    custom_icons: std::collections::HashMap<String, crate::icons::IconAppearance>,
-    favorite_entries: QStringList,
-    favorites: std::collections::BTreeSet<String>,
-    search_running: bool,
-    search_query: QString,
-    search_summary: QString,
-    search_names: QStringList,
-    search_paths: QStringList,
-    search_kinds: QStringList,
-    search_hits: Vec<crate::search::SearchHit>,
-    search_cancel: Option<CancellationToken>,
-    pending_select_path: Option<PathBuf>,
-    bookmark_names: QStringList,
-    bookmark_paths: QStringList,
-    op_error: QString,
-    can_paste: bool,
-    cut_paths: QStringList,
-    can_undo: bool,
-    undo_label: QString,
-    op_running: bool,
-    op_ids: QStringList,
-    op_labels: QStringList,
-    op_currents: QStringList,
-    op_details: QStringList,
-    op_percents: QStringList,
-    op_icons: QStringList,
-    op_steps: QStringList,
-    op_paused: QStringList,
-    pending_password: Option<crate::controller::archive::Pending>,
-    conflict_pending: bool,
-    conflict_count: i32,
-    conflict_name: QString,
-    password_pending: bool,
-    password_archive: QString,
-    password_retry: bool,
-    pending_paste: Option<PendingPaste>,
-    trash_names: QStringList,
-    trash_origins: QStringList,
-    trash_dates: QStringList,
-    trash_entries: Vec<TrashEntry>,
-    open_with_pending: bool,
-    open_with_target: QString,
-    open_with_apps: QStringList,
-    open_with_default_index: i32,
-    open_with_path: PathBuf,
-    open_with_mime: String,
-    open_with_ids: Vec<String>,
-    volume_names: QStringList,
-    volume_devices: QStringList,
-    volume_mounts: QStringList,
-    volume_busy: bool,
-    // Set once the UDisks2 hotplug watch thread is running for this controller.
-    volume_watch_started: bool,
-    hidden_device_count: i32,
-    phone_names: QStringList,
-    phone_types: QStringList,
-    phone_mounts: QStringList,
-    phone_revision: i32,
-    phone_watch_started: bool,
-    phones: Vec<crate::devices::Device>,
-    place_keys: QStringList,
-    hidden_place_count: i32,
-    folder_view_mode: QString,
-    folder_view_pinned: bool,
-    folder_views: Vec<crate::folder_views::FolderView>,
-    volumes: Vec<crate::volumes::Volume>,
-    settings: crate::settings::Settings,
-    clipboard: Vec<PathBuf>,
-    clipboard_cut: bool,
-    last_undo: Option<UndoAction>,
-    bookmarks: Vec<crate::bookmarks::Bookmark>,
-    places: std::collections::HashMap<String, String>,
-}
-
-impl Default for SideritaControllerRust {
-    fn default() -> Self {
-        // Restore the persisted sort / hidden config so a new tab opens the way
-        // the user left it.
-        let settings = crate::settings::load();
-        let options = ViewOptions {
-            sort_field: sort_field_from_index(settings.sort_field).unwrap_or(SortField::Name),
-            sort_direction: if settings.sort_ascending {
-                SortDirection::Ascending
-            } else {
-                SortDirection::Descending
-            },
-            show_hidden: settings.show_hidden,
-            ..ViewOptions::default()
-        };
-        let custom_icons = crate::icons::load();
-        let custom_icon_entries = icon_override_entries(&custom_icons);
-        let favorites = crate::favorites::load();
-        let favorite_entries = favorite_entry_list(&favorites);
-        Self {
-            current_path: QString::default(),
-            current_path_key: QString::default(),
-            marked_key: QString::default(),
-            path_crumbs: QStringList::default(),
-            // Read at construction so a folded section is already folded when
-            // the sidebar first draws.
-            collapsed_sections: marks::folded_list(&settings.collapsed_sections),
-            status_text: QString::from("Preparando Siderita…"),
-            error_text: QString::default(),
-            entry_names: QStringList::default(),
-            custom_icons,
-            custom_icon_entries,
-            favorites,
-            favorite_entries,
-            selected_token: QString::default(),
-            query: QString::default(),
-            loading: false,
-            can_go_back: false,
-            can_go_forward: false,
-            can_go_up: false,
-            show_hidden: settings.show_hidden,
-            sort_field: settings.sort_field,
-            sort_ascending: settings.sort_ascending,
-            coordinator: ScanCoordinator::new(),
-            executor: None,
-            history: NavigationHistory::default(),
-            adapter: SnapshotAdapter::new(),
-            options,
-            snapshot: None,
-            published_digest: None,
-            published_location: None,
-            view: None,
-            pending_nav: None,
-            quiet_scan: false,
-            watch: None,
-            watched: None,
-            watch_degraded: false,
-            folder_visible_count: 0,
-            folder_total_count: 0,
-            folder_directory_count: 0,
-            folder_file_count: 0,
-            folder_hidden_count: 0,
-            folder_size: QString::default(),
-            folder_modified: QString::default(),
-            folder_accessed: QString::default(),
-            folder_created: QString::default(),
-            selection_count: 0,
-            properties_pending: false,
-            prop_name: QString::default(),
-            prop_path: QString::default(),
-            prop_kind: QString::default(),
-            prop_mime: QString::default(),
-            prop_size: QString::default(),
-            prop_permissions: QString::default(),
-            prop_owner: QString::default(),
-            prop_modified: QString::default(),
-            prop_accessed: QString::default(),
-            prop_symlink: QString::default(),
-            prop_is_dir: false,
-            prop_size_cancel: None,
-            search_active: false,
-            trash_active: false,
-            recent_active: false,
-            recent_count: 0,
-            search_running: false,
-            search_query: QString::default(),
-            search_summary: QString::default(),
-            search_names: QStringList::default(),
-            search_paths: QStringList::default(),
-            search_kinds: QStringList::default(),
-            search_hits: Vec::new(),
-            search_cancel: None,
-            pending_select_path: None,
-            bookmark_names: QStringList::default(),
-            bookmark_paths: QStringList::default(),
-            op_error: QString::default(),
-            can_paste: false,
-            cut_paths: QStringList::default(),
-            can_undo: false,
-            undo_label: QString::default(),
-            op_running: false,
-            op_ids: QStringList::default(),
-            op_labels: QStringList::default(),
-            op_currents: QStringList::default(),
-            op_details: QStringList::default(),
-            op_percents: QStringList::default(),
-            op_icons: QStringList::default(),
-            op_steps: QStringList::default(),
-            op_paused: QStringList::default(),
-            pending_password: None,
-            conflict_pending: false,
-            conflict_count: 0,
-            conflict_name: QString::default(),
-            password_pending: false,
-            password_archive: QString::default(),
-            password_retry: false,
-            pending_paste: None,
-            trash_names: QStringList::default(),
-            trash_origins: QStringList::default(),
-            trash_dates: QStringList::default(),
-            trash_entries: Vec::new(),
-            open_with_pending: false,
-            open_with_target: QString::default(),
-            open_with_apps: QStringList::default(),
-            open_with_default_index: -1,
-            open_with_path: PathBuf::new(),
-            open_with_mime: String::new(),
-            open_with_ids: Vec::new(),
-            volume_names: QStringList::default(),
-            volume_devices: QStringList::default(),
-            volume_mounts: QStringList::default(),
-            volume_busy: false,
-            volume_watch_started: false,
-            hidden_device_count: 0,
-            phone_names: QStringList::default(),
-            phone_types: QStringList::default(),
-            phone_mounts: QStringList::default(),
-            phone_revision: 0,
-            phone_watch_started: false,
-            phones: Vec::new(),
-            place_keys: QStringList::default(),
-            hidden_place_count: 0,
-            folder_view_mode: QString::default(),
-            folder_view_pinned: false,
-            folder_views: crate::folder_views::load(),
-            volumes: Vec::new(),
-            settings,
-            clipboard: Vec::new(),
-            clipboard_cut: false,
-            last_undo: None,
-            bookmarks: Vec::new(),
-            // Published as path keys, like every other path this bridge hands
-            // out, so the sidebar can navigate to one without ever spelling it.
-            places: crate::places::resolve()
-                .into_iter()
-                .map(|(name, path)| (name, crate::pathkey::encode(&path)))
-                .collect(),
-        }
-    }
-}
-
-impl SideritaControllerRust {
-    fn row(&self, index: i32) -> Option<&EntryRow> {
-        let index = usize::try_from(index).ok()?;
-        self.view.as_ref()?.row(index)
-    }
-
-    fn row_by_token(&self, token: &QString) -> Option<&EntryRow> {
-        let token = token.to_string().parse::<u64>().ok()?;
-        self.view
-            .as_ref()?
-            .rows()
-            .iter()
-            .find(|row| row.token().value() == token)
-    }
-
-    /// Whether the rows on screen are a *location's* rows rather than a
-    /// folder's: search hits, the Trash, or Recientes. All three ride the same
-    /// `search_hits` list, so every row lookup takes the same path.
-    fn virtual_rows(&self) -> bool {
-        self.search_active || self.trash_active || self.recent_active
-    }
-
-    /// A search hit by its token (the hit's index in the results).
-    fn search_hit(&self, token: &QString) -> Option<&crate::search::SearchHit> {
-        let index = token.to_string().parse::<usize>().ok()?;
-        self.search_hits.get(index)
-    }
-}
+pub use state::SideritaControllerRust;
 
 /// The first non-flag argument: the location to open. Flags (`--portal`) are
 /// how the process is told *why* it started, not *where*.

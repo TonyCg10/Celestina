@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-20
 - **Scope:** `SID-A4-A`; plan
-  [what-the-window-costs-and-shows](../plans/active/2026-08-20-what-the-window-costs-and-shows.md)
+  [what-the-window-costs-and-shows](../plans/archive/2026-08-20-what-the-window-costs-and-shows.md)
 - **Environment:** Arch-derived Linux, Qt 6.11.1, `cargo` stable. Timings from
   the release binary under `offscreen` with the software renderer, which paints
   more expensively than the GPU does — so they are upper bounds

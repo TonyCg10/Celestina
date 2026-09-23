@@ -4,7 +4,7 @@
 - **Closed:** 2026-08-19
 - **Plan ID:** pause-and-global-scope
 - **Status:** done
-- **Successor:** [What the window costs, and what it shows](../active/2026-08-20-what-the-window-costs-and-shows.md)
+- **Successor:** [What the window costs, and what it shows](2026-08-20-what-the-window-costs-and-shows.md)
 - **Scope:** siderita
 - **Implementation checkpoint:** SID-A3
 - **Author-validation checkpoint:** `VAL-SID-09` in

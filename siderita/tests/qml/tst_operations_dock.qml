@@ -75,6 +75,8 @@ TestCase {
         controllerStub.opSteps = []
         controllerStub.opRunning = false
         dock.openId = ""
+        dock.expanded = false
+        dock.availableWidth = 0
         testCase.contentPresses = 0
         mouseMove(testCase, 590, 390)
     }
@@ -262,4 +264,77 @@ TestCase {
         load([copying("7")])
         compare(dock.openId, "")
     }
+
+    function fourJobs() {
+        controllerStub.opIds = ["1", "2", "3", "4"]
+        controllerStub.opLabels = ["Copiando…", "Extrayendo…", "Moviendo…",
+                                   "Desmontando…"]
+        controllerStub.opIcons = ["copy", "file-archive", "arrow-right", "unplug"]
+        controllerStub.opCurrents = ["", "", "", ""]
+        controllerStub.opDetails = ["", "", "", ""]
+        controllerStub.opPercents = ["60", "-1", "80", "-1"]
+        controllerStub.opSteps = ["3", "7", "2", "5"]
+        controllerStub.opPaused = ["0", "0", "0", "0"]
+        controllerStub.opRunning = true
+    }
+
+    function threeJobs() {
+        controllerStub.opIds = ["1", "2", "3"]
+        controllerStub.opLabels = ["Copiando…", "Extrayendo…", "Moviendo…"]
+        controllerStub.opIcons = ["copy", "file-archive", "arrow-right"]
+        controllerStub.opCurrents = ["", "", ""]
+        controllerStub.opDetails = ["", "", ""]
+        controllerStub.opPercents = ["60", "-1", "80"]
+        controllerStub.opSteps = ["3", "7", "2"]
+        controllerStub.opPaused = ["0", "0", "0"]
+        controllerStub.opRunning = true
+    }
+
+    function test_z1_three_jobs_stay_a_row_of_rings() {
+        threeJobs()
+        compare(dock.collapsed, false, "three rings still fit in a row")
+    }
+
+    function test_z2_a_fourth_job_collapses_the_dock_to_a_counted_circle() {
+        fourJobs()
+        compare(dock.collapsed, true)
+        compare(dock.countCircle.count, 4,
+                "the circle carries how many are running")
+        verify(dock.implicitWidth < 80,
+               "a collapsed dock is one circle wide, not four rings wide: "
+               + dock.implicitWidth)
+    }
+
+    function test_z3_a_narrow_frame_collapses_the_dock_whatever_the_count() {
+        threeJobs()
+        compare(dock.collapsed, false)
+        dock.availableWidth = 60
+        compare(dock.collapsed, true,
+                "three rings do not fit in 60px, so the circle takes over")
+        dock.availableWidth = 0
+        compare(dock.collapsed, false, "and the row comes back with the room")
+    }
+
+    function test_z4_the_circle_expands_into_a_labelled_list_and_closes_again() {
+        fourJobs()
+        mouseClick(dock.countCircle)
+        compare(dock.expanded, true)
+        compare(dock.jobList.count, 4, "one row per job, each with its name")
+        compare(dock.jobList.itemAt(0).label, "Copiando…")
+        // The catcher that closes the callout closes this too.
+        mouseClick(testCase, 20, 20)
+        compare(dock.expanded, false)
+        compare(testCase.contentPresses, 0,
+                "and that closing press never reached the folder")
+    }
+
+    function test_z5_a_row_cancels_the_job_it_names() {
+        fourJobs()
+        mouseClick(dock.countCircle)
+        const row = dock.jobList.itemAt(1)
+        row.cancelRequested(row.jobId)
+        compare(testCase.cancelled, ["2"],
+                "cancel names the job's own id, not the row's position")
+    }
+
 }

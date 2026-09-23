@@ -1,8 +1,10 @@
 # What the window costs, and what it shows
 
 - **Opened:** 2026-08-20
+- **Closed:** 2026-09-22
 - **Plan ID:** what-the-window-costs-and-shows
-- **Status:** active
+- **Status:** done
+- **Successor:** [Bottom chrome and the notice stack](../active/2026-09-22-bottom-chrome-and-notices.md)
 - **Scope:** siderita
 - **Implementation checkpoint:** SID-A4
 - **Author-validation checkpoint:** `VAL-SID-10` in

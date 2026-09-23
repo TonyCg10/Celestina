@@ -160,7 +160,7 @@ impl qobject::SideritaController {
     /// (`siderita_ops`' no-replace rename), so the loser of a race is told the
     /// name is taken instead of overwriting the winner.
     pub(crate) fn start_job(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         label: &str,
         kind: JobKind,
         total: usize,
@@ -187,7 +187,8 @@ impl qobject::SideritaController {
             });
             id
         };
-        self.as_mut().set_status_text(QString::from(label));
+        // No notice here: the ring the dock draws already carries this label,
+        // and saying it twice is what this checkpoint removes.
         wake_listeners();
         (id, token)
     }

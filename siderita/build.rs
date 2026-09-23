@@ -59,6 +59,8 @@ const QML_FILES: &[&str] = &[
     "qml/components/entry/DragScrollEdge.qml",
     "qml/components/entry/FolderRowDelegate.qml",
     "qml/components/entry/FolderCellDelegate.qml",
+    "qml/components/folder/ActivityNotice.qml",
+    "qml/components/folder/ActivityStack.qml",
     "qml/components/folder/FolderListView.qml",
     "qml/components/folder/FolderGridView.qml",
     "qml/components/folder/FolderWheelHandler.qml",
@@ -69,10 +71,11 @@ const QML_FILES: &[&str] = &[
     "qml/components/folder/OperationsDock.qml",
     "qml/components/folder/OperationRing.qml",
     "qml/components/folder/OperationCallout.qml",
+    "qml/components/folder/OperationsListRow.qml",
     "qml/components/folder/FolderHeading.qml",
     "qml/components/folder/PhoneMediaButton.qml",
     "qml/components/folder/PhoneMediaUnderBar.qml",
-    "qml/components/folder/HeadingState.qml",
+    "qml/components/folder/HeadingScroll.qml",
     "qml/components/folder/FolderContentChrome.qml",
     "qml/components/folder/FolderContentFrame.qml",
     "qml/components/folder/FolderEmptyState.qml",
@@ -101,7 +104,7 @@ const QML_FILES: &[&str] = &[
     "qml/dialogs/GrafitaEditorDialog.qml",
     "qml/dialogs/PhoneMediaDialog.qml",
     // Menús y popups.
-    "qml/menus/FolderSortMenu.qml",
+    "qml/menus/ViewSortMenu.qml",
     "qml/menus/PathMenu.qml",
     "qml/menus/FolderMenu.qml",
     "qml/menus/EntryContextMenu.qml",
@@ -147,6 +150,11 @@ fn main() {
                 .version(1, 0)
                 .singleton(true),
         )
+        .qml_file(
+            QmlFile::from("qml/components/chrome/HiddenToggleDefs.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
         .qml_files(QML_FILES);
 
     // Los QML también, y explícitamente: en cuanto este script imprime un solo
@@ -160,6 +168,7 @@ fn main() {
         "qml/CelestinaIconShapes.qml",
         "qml/CelestinaPlaceDefs.qml",
         "qml/CelestinaFolderTypeIcons.qml",
+        "qml/components/chrome/HiddenToggleDefs.qml",
         "qml/icons.qrc",
         "qml/fonts.qrc",
     ]) {

@@ -10,16 +10,14 @@ FloatingButton {
 
     signal toggleRequested
 
-    // Icon-only: the eye says it, the tooltip spells it out.
-    iconName: toggleChecked ? "eye" : "eye-off"
-    helpText: toggleChecked
-              ? "Ocultar elementos ocultos"
-              : "Mostrar elementos ocultos"
+    // Icon-only: the eye says it, and HiddenToggleDefs says what a screen
+    // reader hears. The capsule in the folder view draws the same toggle as a
+    // ghost icon, so the glyph and the name have one owner rather than two.
+    iconName: HiddenToggleDefs.glyph(control.toggleChecked)
+    helpText: HiddenToggleDefs.name(control.toggleChecked)
     active: toggleChecked
     font.pixelSize: Math.round(CelestinaTheme.fontMini * textScale)
-    Accessible.name: toggleChecked
-                     ? "Ocultar elementos ocultos"
-                     : "Mostrar elementos ocultos"
+    Accessible.name: HiddenToggleDefs.name(control.toggleChecked)
     Accessible.checkable: true
     Accessible.checked: toggleChecked
     onClicked: toggleRequested()
