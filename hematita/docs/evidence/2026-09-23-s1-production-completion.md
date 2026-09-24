@@ -83,6 +83,14 @@ window on the live or nested session.
 - No scan, no folder action and no permanent deletion were run against this
   session's real files during verification: the smoke's Storage assertion is
   headless and touches only the locations list.
+- `delete_tree` lists a subtree, re-validates its root by device and inode,
+  and then removes by path; a folder swapped for a symbolic link between the
+  listing and its removal would be followed by the kernel. Acceptable on a
+  single-user desktop and recorded here; `S2-A` names the `openat`-based fix.
+- A `delete_tree` that fails or is cancelled midway does not report what it
+  removed, so the tree keeps the old size until a rescan.
+- Memory: about 200 MB resident for a scan of one million entries,
+  unmeasured on this machine.
 
 ## Follow-up
 

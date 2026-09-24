@@ -385,5 +385,24 @@ Units `S1-A` through `S1-Z` are in the archived
 [plan](docs/plans/archive/2026-09-23-s1-storage.md). The checkpoint's
 implementation exit ran on 2026-09-23: the
 [completion evidence](docs/evidence/2026-09-23-s1-production-completion.md).
+The design spec is
+[here](../docs/superpowers/specs/2026-09-23-hematita-storage-design.md).
 `VAL-S1` stays pending in the author's lane and did not block this closure.
 Further work opens with a new checkpoint and the author's word.
+
+## S2 — planned first unit
+
+`S2-A` — Partial removals, openat-based deletion, hub split:
+
+- A `delete_tree` that fails or is cancelled midway must report what it
+  removed so the hub prunes or rescans that subtree (today the tree keeps
+  the old size until a rescan).
+- Replace the path-based `remove_file`/`remove_dir` plan with
+  `openat(O_NOFOLLOW)` + `unlinkat` to close the listing-to-removal window
+  (needs a `rustix` `fs` justification).
+- Gate `seen_inodes` on `nlink > 1`.
+- Drop the confirm worker's `Arc<Tree>` before `Arc::make_mut` in `prune`.
+- Reject pruned ids in `node_id`.
+- Bind the confirmed count in the dialog.
+- Split `analysis.rs` (selection+actions controller, confirm state beside
+  `analysis_view.rs`).

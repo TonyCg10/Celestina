@@ -456,6 +456,16 @@
   real session yet, scanned a real folder or run a trash or deletion from
   it: `VAL-S1` stays pending, alongside `VAL-H2` and `VAL-H5`. See the
   [production completion record](docs/evidence/2026-09-23-s1-production-completion.md).
+- `delete_tree` lists a subtree, re-validates its root by device and inode,
+  and then removes by path; a folder swapped for a symbolic link between the
+  listing and its removal would be followed by the kernel. Acceptable on a
+  single-user desktop and recorded here; `S2-A` names the `openat`-based
+  fix.
+- `hematita/src/analysis.rs` is 1533 lines and coordinates five concerns
+  (navigation, scan, confirmation, selection and actions, publication of
+  about 25 lists); the pure projection already lives in `analysis_view.rs`;
+  `S2-A` names the split.
+- A cancelled or failed deletion may leave a stale size until a rescan.
 
 ## Blockers
 
