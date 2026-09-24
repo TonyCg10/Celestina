@@ -21,8 +21,11 @@
   item reports it as partial and the hub grafts a fresh scan of what is
   left; the content check holds the tree weakly; ids of pruned or replaced
   subtrees are refused; the confirmation's count is checked by the hub
-  ([hub evidence](docs/evidence/2026-09-23-s2-hub.md)). Built and verified,
-  not deployed; `S2-Z` (1.1.1) is next; the deployed 1.1.0 is unaffected
+  ([hub evidence](docs/evidence/2026-09-23-s2-hub.md)); `S2-B2` corrected
+  it after review: a cancel inside the last item reads as cancelled, and
+  the confirmation is bound to a selection revision instead of its count
+  ([hub fixes](docs/evidence/2026-09-23-s2-hub-fixes.md)). Built and
+  verified, not deployed; `S2-Z` (1.1.1) is next; the deployed 1.1.0 is unaffected
 - **Delivered as 1.1.0:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
   walks one device under a folder into an indexed tree (hard links once,
   symbolic links never followed, unreadable folders marked), finds empty

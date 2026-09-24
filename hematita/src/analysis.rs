@@ -97,6 +97,8 @@ pub mod qobject {
         // entryCopies — the unverified candidate group size of the entry
         // selectedBytes, selectedCount — what an action on the selection
         // would free and touch (entries inside a selected folder count once)
+        // selectionRevision — moved by every change of the selected set; a
+        // confirmation hands back the one it was asked under
         // actionRunning — a trash or deletion is in flight; cancelAction stops it
         // actionOutcome — "" | done | partial | failed | refused | cancelled
         // action* — the last action's typed outcome and bytes removed
@@ -141,6 +143,7 @@ pub mod qobject {
         #[qproperty(QVariant, entry_copies)]
         #[qproperty(f64, selected_bytes)]
         #[qproperty(i32, selected_count)]
+        #[qproperty(i32, selection_revision)]
         #[qproperty(bool, action_running)]
         #[qproperty(f64, action_bytes)]
         #[qproperty(QVariant, member_groups)]
@@ -217,16 +220,16 @@ pub mod qobject {
         fn open_selected(self: Pin<&mut HematitaAnalysis>);
 
         /// Moves the selection to the trash; the page has asked first
-        /// about `expected` entries, and a selection of another count is
-        /// refused.
+        /// under `selectionRevision` `asked`, and a selection changed since
+        /// is refused.
         #[qinvokable]
-        fn trash_selected(self: Pin<&mut HematitaAnalysis>, expected: i32);
+        fn trash_selected(self: Pin<&mut HematitaAnalysis>, asked: i32);
 
         /// Deletes the selection permanently; the page has asked first
-        /// about `expected` entries, and a selection of another count is
-        /// refused.
+        /// under `selectionRevision` `asked`, and a selection changed since
+        /// is refused.
         #[qinvokable]
-        fn delete_selected(self: Pin<&mut HematitaAnalysis>, expected: i32);
+        fn delete_selected(self: Pin<&mut HematitaAnalysis>, asked: i32);
 
         /// Stops a running trash or deletion; what it already removed is
         /// still reported and pruned.
@@ -276,6 +279,7 @@ pub struct HematitaAnalysisRust {
     entry_copies: QVariant,
     selected_bytes: f64,
     selected_count: i32,
+    selection_revision: i32,
     action_running: bool,
     action_bytes: f64,
     member_groups: QVariant,
@@ -350,6 +354,7 @@ impl Default for HematitaAnalysisRust {
             entry_copies: doubles(&[]),
             selected_bytes: 0.0,
             selected_count: 0,
+            selection_revision: 0,
             action_running: false,
             action_bytes: 0.0,
             member_groups: doubles(&[]),

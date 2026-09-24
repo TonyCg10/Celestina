@@ -21,6 +21,8 @@
 //! A deletion that stopped inside an item after removing part of it reports
 //! that item as `partial`, with the bytes it freed; the hub scans what is
 //! left of it again and grafts the result in place of the stale subtree.
+//! When that stop was a cancellation the worker ends there and the outcome
+//! is `cancelled`, the item still listed as partial.
 //!
 //! The threads are detached like the scan's: a detached thread owns its
 //! paths and a `CxxQtThread` whose `queue` drops the report once the hub is
@@ -161,8 +163,12 @@ pub fn spawn_open(
 /// How one item ended.
 enum Step {
     Removed,
-    /// The deletion stopped inside the item after removing part of it.
-    Partial(Removed),
+    /// The deletion stopped inside the item after removing part of it;
+    /// `cancelled` when the stop was the person's.
+    Partial {
+        gone: Removed,
+        cancelled: bool,
+    },
     Refused,
     Failed,
     Cancelled,
@@ -184,11 +190,14 @@ fn admissible(item: &Item, boundaries: &HashSet<PathBuf>) -> Result<(), Step> {
 }
 
 /// How a deletion that stopped ended: in part when it had removed something
-/// (its cancellation is still seen by the loop, which checks the token
-/// before the next item), otherwise by its typed error.
+/// (keeping whether a cancellation stopped it, so the loop ends there even
+/// on the last item), otherwise by its typed error.
 fn stopped(failure: Failure) -> Step {
     if failure.removed.entries > 0 {
-        return Step::Partial(failure.removed);
+        return Step::Partial {
+            cancelled: matches!(failure.error, RemoveError::Cancelled),
+            gone: failure.removed,
+        };
     }
     match failure.error {
         RemoveError::Refused { .. } => Step::Refused,
@@ -197,16 +206,16 @@ fn stopped(failure: Failure) -> Step {
     }
 }
 
-/// Runs `act` over `items` in order, reporting each finished item's count
-/// and, at the end or at a cancellation, what is gone.
+/// Runs `act` over `items` in order, handing each finished item's count to
+/// `progress`, and answers, at the end or at a cancellation, what is gone.
 fn run(
     kind: ActionKind,
     items: &[Item],
     token: &CancellationToken,
-    target: &Target,
     boundaries: &HashSet<PathBuf>,
+    mut progress: impl FnMut(usize),
     mut act: impl FnMut(&Item) -> Step,
-) {
+) -> ActionReport {
     let total = items.len();
     let mut removed = Vec::new();
     let mut partial = Vec::new();
@@ -224,9 +233,17 @@ fn run(
         };
         match step {
             Step::Removed => removed.push((item.id, item.allocated)),
-            Step::Partial(gone) => {
+            Step::Partial {
+                gone,
+                cancelled: stop,
+            } => {
                 partial.push(item.id);
                 partial_bytes = partial_bytes.saturating_add(gone.bytes);
+                if stop {
+                    cancelled = true;
+                    progress(removed.len());
+                    break;
+                }
             }
             Step::Refused => refused += 1,
             Step::Failed => {}
@@ -235,10 +252,10 @@ fn run(
                 break;
             }
         }
-        target.progress(removed.len());
+        progress(removed.len());
     }
     let done = removed.len();
-    target.report(ActionReport {
+    ActionReport {
         kind,
         done,
         total,
@@ -246,7 +263,7 @@ fn run(
         removed,
         partial,
         partial_bytes,
-    });
+    }
 }
 
 /// Where a worker's progress and report go.
@@ -294,18 +311,19 @@ pub fn spawn_trash(
         .name("hematita-actions".to_owned())
         .spawn(move || {
             let boundaries = mount_boundaries();
-            run(
+            let report = run(
                 ActionKind::Trash,
                 &items,
                 &token,
-                &target,
                 &boundaries,
+                |done| target.progress(done),
                 |item| match siderita_ops::trash(&item.path, &token, &mut |_| {}) {
                     Ok(_) => Step::Removed,
                     Err(OpError::Cancelled) => Step::Cancelled,
                     Err(_) => Step::Failed,
                 },
             );
+            target.report(report);
         })?;
     Ok(handle)
 }
@@ -333,12 +351,12 @@ pub fn spawn_delete(
         .name("hematita-actions".to_owned())
         .spawn(move || {
             let boundaries = mount_boundaries();
-            run(
+            let report = run(
                 ActionKind::Delete,
                 &items,
                 &token,
-                &target,
                 &boundaries,
+                |done| target.progress(done),
                 |item| {
                     let expected = Some((item.dev, item.ino));
                     match delete_tree(&item.path, &within, &boundaries, expected, &token) {
@@ -347,6 +365,7 @@ pub fn spawn_delete(
                     }
                 },
             );
+            target.report(report);
         })?;
     Ok(handle)
 }
@@ -384,11 +403,17 @@ mod tests {
         };
         assert!(matches!(
             stopped(failure(io(), 2)),
-            Step::Partial(Removed { entries: 2, .. })
+            Step::Partial {
+                gone: Removed { entries: 2, .. },
+                cancelled: false
+            }
         ));
         assert!(matches!(
             stopped(failure(RemoveError::Cancelled, 1)),
-            Step::Partial(_)
+            Step::Partial {
+                cancelled: true,
+                ..
+            }
         ));
         assert!(matches!(stopped(failure(io(), 0)), Step::Failed));
         assert!(matches!(
@@ -400,6 +425,54 @@ mod tests {
             reason: hematita_core::usage::remove::Refusal::MountRoot,
         };
         assert!(matches!(stopped(failure(refused, 0)), Step::Refused));
+    }
+
+    /// A real folder as an admissible item: its recorded identity holds.
+    fn real_item(id: u32, path: &std::path::Path) -> Item {
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::symlink_metadata(path);
+        let (dev, ino) = meta.map_or((0, 0), |m| (m.dev(), m.ino()));
+        Item {
+            id: NodeId(id),
+            path: path.to_path_buf(),
+            allocated: 4096,
+            dev,
+            ino,
+        }
+    }
+
+    fn run_one(mut step: impl FnMut() -> Step) -> ActionReport {
+        let dir = std::env::temp_dir();
+        let items = [real_item(7, &dir)];
+        let token = CancellationToken::new();
+        run(
+            ActionKind::Delete,
+            &items,
+            &token,
+            &HashSet::new(),
+            |_| {},
+            |_| step(),
+        )
+    }
+
+    #[test]
+    fn a_cancel_inside_the_only_item_is_cancelled_and_partial() {
+        let report = run_one(|| stopped(failure(RemoveError::Cancelled, 3)));
+        assert_eq!(report.outcome, "cancelled");
+        assert_eq!(report.partial, vec![NodeId(7)]);
+        assert_eq!(report.partial_bytes, 3 * 4096);
+        assert!(report.removed.is_empty());
+    }
+
+    #[test]
+    fn a_partial_stop_without_a_cancel_stays_partial() {
+        let io = || RemoveError::Io {
+            path: PathBuf::from("/x/a"),
+            source: io::Error::from(io::ErrorKind::PermissionDenied),
+        };
+        let report = run_one(move || stopped(failure(io(), 2)));
+        assert_eq!(report.outcome, "partial");
+        assert_eq!(report.partial, vec![NodeId(7)]);
     }
 
     #[test]

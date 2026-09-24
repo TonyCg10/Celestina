@@ -136,7 +136,7 @@ impl qobject::HematitaAnalysis {
         let qt = self.qt_thread();
         match usage_worker::spawn_confirm(tree, pending, generation, epoch, qt) {
             Ok(handle) => {
-                self.as_mut().rust_mut().session.confirm = Some(handle);
+                self.as_mut().rust_mut().session.set_confirm(handle);
                 self.as_mut().refresh_busy();
             }
             Err(_) => self.as_mut().set_start_failed(true),
@@ -184,7 +184,7 @@ impl qobject::HematitaAnalysis {
         if !self.rust().confirm_current(generation, epoch) {
             return;
         }
-        self.as_mut().rust_mut().session.confirm = None;
+        self.as_mut().rust_mut().session.confirm_done();
         self.refresh_busy();
     }
 
@@ -197,7 +197,7 @@ impl qobject::HematitaAnalysis {
     }
 
     pub fn clear_selection(mut self: Pin<&mut Self>) {
-        self.as_mut().rust_mut().session.selection.clear();
+        self.as_mut().rust_mut().session.clear_selection();
         self.publish_selection();
     }
 
@@ -213,11 +213,17 @@ impl qobject::HematitaAnalysis {
     /// The selection alone changes; rows read it without being rebuilt.
     pub(super) fn publish_selection(mut self: Pin<&mut Self>) {
         let session = &self.rust().session;
-        let selected: Vec<f64> = session.selection.iter().map(|id| f64::from(id.0)).collect();
+        let selected: Vec<f64> = session
+            .selection()
+            .iter()
+            .map(|id| f64::from(id.0))
+            .collect();
         let (selected_count, selected_bytes) = session.selected_totals();
+        let selection_revision = session.selection_revision();
         self.as_mut().set_selected_ids(doubles(&selected));
         self.as_mut().set_selected_bytes(selected_bytes);
         self.as_mut().set_selected_count(selected_count);
+        self.as_mut().set_selection_revision(selection_revision);
     }
 
     /// Whether an action may start: the analysis is shown and nothing else
@@ -233,9 +239,7 @@ impl qobject::HematitaAnalysis {
         self.as_mut().set_action_done(0);
         self.as_mut()
             .set_action_total(i32::try_from(total).unwrap_or(i32::MAX));
-        let session = &mut self.as_mut().rust_mut().get_mut().session;
-        session.action_epoch = session.action_epoch.wrapping_add(1);
-        session.action_epoch
+        self.as_mut().rust_mut().session.next_action_epoch()
     }
 
     pub fn open_selected(mut self: Pin<&mut Self>) {
@@ -254,26 +258,28 @@ impl qobject::HematitaAnalysis {
     }
 
     /// The items a confirmed trash or deletion acts on, or none: the page
-    /// asked about `expected` entries, and a selection that no longer holds
-    /// that many is refused with a typed outcome.
-    fn confirmed_items(mut self: Pin<&mut Self>, kind: ActionKind, expected: i32) -> Vec<Item> {
+    /// asked under selection revision `asked`, and a selection changed since
+    /// (even to another set of the same count) is refused with a typed
+    /// outcome that names the live count.
+    fn confirmed_items(mut self: Pin<&mut Self>, kind: ActionKind, asked: i32) -> Vec<Item> {
         if !self.may_act() {
             return Vec::new();
         }
-        let items = self.rust().session.action_items();
-        if i32::try_from(items.len()).ok() != Some(expected) {
+        let session = &self.rust().session;
+        if session.selection_revision() != asked {
+            let (live, _) = session.selected_totals();
             self.as_mut().set_action_kind(QString::from(kind.as_str()));
             self.as_mut().set_action_done(0);
-            self.as_mut().set_action_total(expected.max(0));
+            self.as_mut().set_action_total(live);
             self.as_mut().set_action_bytes(0.0);
             self.as_mut().set_action_outcome(QString::from(REFUSED));
             return Vec::new();
         }
-        items
+        session.action_items()
     }
 
-    pub fn trash_selected(mut self: Pin<&mut Self>, expected: i32) {
-        let items = self.as_mut().confirmed_items(ActionKind::Trash, expected);
+    pub fn trash_selected(mut self: Pin<&mut Self>, asked: i32) {
+        let items = self.as_mut().confirmed_items(ActionKind::Trash, asked);
         if items.is_empty() {
             return;
         }
@@ -286,8 +292,8 @@ impl qobject::HematitaAnalysis {
         }
     }
 
-    pub fn delete_selected(mut self: Pin<&mut Self>, expected: i32) {
-        let items = self.as_mut().confirmed_items(ActionKind::Delete, expected);
+    pub fn delete_selected(mut self: Pin<&mut Self>, asked: i32) {
+        let items = self.as_mut().confirmed_items(ActionKind::Delete, asked);
         let within = self.rust().session.tree.as_ref().map(|t| t.path.clone());
         let Some(within) = within.filter(|_| !items.is_empty()) else {
             return;
@@ -302,7 +308,7 @@ impl qobject::HematitaAnalysis {
     }
 
     fn started(mut self: Pin<&mut Self>, handle: WorkerHandle) {
-        self.as_mut().rust_mut().session.action = Some(handle);
+        self.as_mut().rust_mut().session.set_action(handle);
         self.refresh_busy();
     }
 
@@ -345,7 +351,7 @@ impl qobject::HematitaAnalysis {
         if !self.action_current(generation, epoch) {
             return;
         }
-        self.as_mut().rust_mut().session.action = None;
+        self.as_mut().rust_mut().session.action_done();
         let freed = report
             .removed
             .iter()
@@ -388,7 +394,7 @@ impl qobject::HematitaAnalysis {
         let generation = self.rust().generation;
         let qt = self.qt_thread();
         match usage_worker::spawn_graft(path, id, generation, qt) {
-            Ok(handle) => self.as_mut().rust_mut().session.grafts.push((id, handle)),
+            Ok(handle) => self.as_mut().rust_mut().session.start_graft(id, handle),
             Err(_) => self.as_mut().set_start_failed(true),
         }
     }
@@ -405,11 +411,10 @@ impl qobject::HematitaAnalysis {
         if !publish::still_current(generation, self.rust().generation) {
             return;
         }
-        let grafts = &mut self.as_mut().rust_mut().get_mut().session.grafts;
-        let Some(at) = grafts.iter().position(|(pending, _)| *pending == id) else {
+        let session = &mut self.as_mut().rust_mut().get_mut().session;
+        if session.take_graft(id).is_none() {
             return;
-        };
-        grafts.remove(at);
+        }
         let session = &mut self.as_mut().rust_mut().get_mut().session;
         match scanned {
             Ok((fresh, found)) => {

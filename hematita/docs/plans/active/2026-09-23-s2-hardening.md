@@ -38,6 +38,11 @@ owner; and the confirmation dialog names exactly what will be acted on.
 - `S2-B` — the hub split (`analysis_session.rs`), partial removals grafted
   from a fresh sub-scan, the confirm worker's `Arc` dropped before
   `make_mut`, dead ids rejected, the dialog's confirmed count bound.
+- `S2-B2` — the review's corrections of `S2-B`: a cancel inside the last
+  item reads as cancelled, the confirmation bound to a selection revision
+  instead of its count, the refusal naming the live count, the graft's
+  unreadable counts aligned before extending, and the workers going
+  through session methods.
 - `S2-Z` — implementation exit and 1.1.1.
 
 ## Exclusions
@@ -47,7 +52,7 @@ owner; and the confirmation dialog names exactly what will be acted on.
 
 ## Build order
 
-1. `S2-A`, `S2-A2`, then `S2-B`, then `S2-Z`.
+1. `S2-A`, `S2-A2`, then `S2-B`, `S2-B2`, then `S2-Z`.
 
 ## Implementation exit
 
@@ -62,4 +67,5 @@ deletion left, and its confirmation dialog's count equals what is acted on.
 | S2-A | `hematita:` | done | [inventory](../../inventories/2026-09-23-s2-hardening/S2-A.numstat.tsv) | 14 files, +1054/-161 | `usage::remove` on directory descriptors with `Failure { error, removed }` and the scanned identity checked in `delete_tree`; `walk` hard-link set gated on `nlink > 1`, `hard_link_names`, `scan_subtree`; `Tree::graft`, `Tree::is_live`; S2 opened | [core](../../evidence/2026-09-23-s2-core.md) | `VAL-S2` |
 | S2-A2 | `hematita:` | done | [inventory](../../inventories/2026-09-23-s2-hardening/S2-A2.numstat.tsv) | 10 files, +350/-38 | Deletion refuses an inner mount before touching anything again; opened folders re-checked by fstat; honest depth cap; missing components reported as missing | [core fixes](../../evidence/2026-09-23-s2-core-fixes.md) | `VAL-S2` |
 | S2-B | `hematita:` | done | [inventory](../../inventories/2026-09-23-s2-hardening/S2-B.numstat.tsv) | 16 files, +1528/-863 | hub split into `analysis_session.rs` (session state and rules) and `analysis_workers.rs` (worker glue) under `analysis.rs` (bridge, navigation, publication); partial removals grafted from a fresh sub-scan; the confirm worker holds a `Weak<Tree>`; live-id check; bound confirmation count | [hub](../../evidence/2026-09-23-s2-hub.md) | `VAL-S2` |
+| S2-B2 | `hematita:` | done | [inventory](../../inventories/2026-09-23-s2-hardening/S2-B2.numstat.tsv) | 11 files, +373/-68 | a cancel inside the last item is `cancelled` (`Step::Partial { gone, cancelled }`); confirmation bound to `selectionRevision`; refusal names the live count; `graft` resizes `unreadable` first; workers call session methods | [hub fixes](../../evidence/2026-09-23-s2-hub-fixes.md) | `VAL-S2` |
 | S2-Z | `hematita:` | planned | documents, version | — | implementation exit and 1.1.1 | `scripts/complete-production.sh` | `VAL-S2` |

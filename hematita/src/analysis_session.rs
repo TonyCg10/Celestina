@@ -108,7 +108,12 @@ pub struct Session {
     pub empty_below: Vec<bool>,
     /// The analysed folder.
     pub current: NodeId,
-    pub selection: Vec<NodeId>,
+    /// Changed only through the methods below, each of which moves
+    /// `selection_revision`.
+    selection: Vec<NodeId>,
+    /// Moved by every change of the selected set; a confirmation carries
+    /// the revision it was asked under, so a swap of equal count is caught.
+    selection_revision: i32,
 }
 
 impl Default for Session {
@@ -130,6 +135,7 @@ impl Default for Session {
             empty_below: Vec::new(),
             current: NodeId(0),
             selection: Vec::new(),
+            selection_revision: 0,
         }
     }
 }
@@ -150,7 +156,7 @@ impl Session {
         self.duplicate_below.clear();
         self.empty_exact.clear();
         self.empty_below.clear();
-        self.selection.clear();
+        self.clear_selection();
     }
 
     /// Takes a finished scan and its findings as the analysis.
@@ -160,7 +166,7 @@ impl Session {
         self.current = tree.root;
         self.findings = findings;
         self.tree = Some(Arc::new(tree));
-        self.selection.clear();
+        self.clear_selection();
         self.mark_empty();
         self.mark_duplicates();
     }
@@ -219,6 +225,64 @@ impl Session {
         self.duplicate_below =
             analysis_view::marks_below(tree, rows.into_iter().flat_map(|row| row.nodes));
         self.candidate_copies = copies;
+    }
+
+    /// Keeps the running content check's handle.
+    pub fn set_confirm(&mut self, handle: WorkerHandle) {
+        self.confirm = Some(handle);
+    }
+
+    /// The content check finished; its handle is dropped.
+    pub fn confirm_done(&mut self) {
+        self.confirm = None;
+    }
+
+    /// Moves the action epoch for an action about to start and answers it.
+    pub fn next_action_epoch(&mut self) -> u64 {
+        self.action_epoch = self.action_epoch.wrapping_add(1);
+        self.action_epoch
+    }
+
+    /// Keeps the running trash or deletion's handle.
+    pub fn set_action(&mut self, handle: WorkerHandle) {
+        self.action = Some(handle);
+    }
+
+    /// The action reported; its handle is dropped.
+    pub fn action_done(&mut self) {
+        self.action = None;
+    }
+
+    /// Keeps the handle of the graft scan of `id`.
+    pub fn start_graft(&mut self, id: NodeId, handle: WorkerHandle) {
+        self.grafts.push((id, handle));
+    }
+
+    /// Takes the graft scan of `id` off the running list; none when no
+    /// graft of `id` is awaited.
+    pub fn take_graft(&mut self, id: NodeId) -> Option<WorkerHandle> {
+        let at = self.grafts.iter().position(|(pending, _)| *pending == id)?;
+        Some(self.grafts.remove(at).1)
+    }
+
+    /// The selected ids, in the order they were chosen.
+    pub fn selection(&self) -> &[NodeId] {
+        &self.selection
+    }
+
+    /// The revision of the selected set, as the page carries it.
+    pub fn selection_revision(&self) -> i32 {
+        self.selection_revision
+    }
+
+    fn selection_changed(&mut self) {
+        self.selection_revision = self.selection_revision.wrapping_add(1);
+    }
+
+    /// Empties the selection.
+    pub fn clear_selection(&mut self) {
+        self.selection.clear();
+        self.selection_changed();
     }
 
     /// Cancels a running content check and moves the epoch, so nothing it
@@ -306,6 +370,7 @@ impl Session {
             }
             None => self.selection.push(id),
         }
+        self.selection_changed();
     }
 
     /// Selects every copy of the verified row `group` but one; false when
@@ -322,6 +387,7 @@ impl Session {
                 self.selection.push(id);
             }
         }
+        self.selection_changed();
         true
     }
 
@@ -362,6 +428,7 @@ impl Session {
         let new_id = NodeId(offset + fresh_root.0);
         self.forget(&[id]);
         let unreadable = &mut self.findings.unreadable;
+        unreadable.resize(offset as usize, 0);
         unreadable.extend(found.unreadable.iter().copied());
         if let Some(tree) = self.tree.as_ref() {
             unreadable.resize(tree.nodes.len(), 0);
@@ -414,6 +481,7 @@ impl Session {
         if analysis_view::gone(tree, *current, &removed_set) {
             *current = tree.root;
         }
+        self.selection_changed();
         self.mark_empty();
         self.mark_duplicates();
     }
@@ -697,9 +765,35 @@ mod tests {
         let mut session = loaded();
         assert!(session.idle_for_action() && !session.busy());
         let (handle, token) = WorkerHandle::pair();
-        session.grafts.push((NodeId(1), handle));
+        session.start_graft(NodeId(1), handle);
         assert!(!session.idle_for_action() && session.busy());
         session.reset();
         assert!(token.is_cancelled(), "a reset cancels the graft scan");
+    }
+
+    #[test]
+    fn a_swap_of_equal_count_moves_the_selection_revision() {
+        let mut session = loaded();
+        session.toggle(NodeId(2));
+        let asked = session.selection_revision();
+        assert_eq!(session.selected_totals().0, 1);
+        session.toggle(NodeId(2));
+        session.toggle(NodeId(3));
+        assert_eq!(session.selected_totals().0, 1, "the same count");
+        assert_ne!(session.selection_revision(), asked);
+        let before = session.selection_revision();
+        session.prune(&[NodeId(4)]);
+        assert_ne!(session.selection_revision(), before, "a pruning moves it");
+    }
+
+    #[test]
+    fn a_taken_graft_is_no_longer_awaited() {
+        let mut session = loaded();
+        let (handle, _token) = WorkerHandle::pair();
+        session.start_graft(NodeId(1), handle);
+        assert!(session.take_graft(NodeId(4)).is_none());
+        assert!(session.take_graft(NodeId(1)).is_some());
+        assert!(session.take_graft(NodeId(1)).is_none());
+        assert!(session.idle_for_action());
     }
 }

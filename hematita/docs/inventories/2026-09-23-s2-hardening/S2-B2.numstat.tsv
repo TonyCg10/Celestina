@@ -1,0 +1,29 @@
+# S2-B2 exact change inventory
+
+Base revision	4f681384063baac046cc997b6a0601abc5200ef1
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-23-s2-hub-fixes.md
+Pathspec	hematita/docs/inventories/2026-09-23-s2-hardening/S2-B2.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-23-s2-hardening.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/qml/components/StoragePage.qml
+Pathspec	hematita/src/actions.rs
+Pathspec	hematita/src/analysis.rs
+Pathspec	hematita/src/analysis_session.rs
+Pathspec	hematita/src/analysis_workers.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+5	2	e38bd08908188f3a998a1acd951fd2782cddfc30bdc2da9731ca0639504751cc	hematita/STATUS.md
+2	2	cf1ca8edd3b1085f7a41830b3bddbb4b8f93f1e4ef73212bad7395f9bafa941d	hematita/VALIDATION.md
+87	0	9d12d548830491f0187e67585bbe375709c9da240e5718c4f0eaa172a19410ac	hematita/docs/evidence/2026-09-23-s2-hub-fixes.md
+7	1	f93b40edf50790d41ab283276b6808a3bac4c5a706ec6b26829da571f36282fc	hematita/docs/plans/active/2026-09-23-s2-hardening.md
+2	2	39613fb13b20829a8029308f25ea7604186b0746cc9a6b8d9625b7b76ac15abe	hematita/docs/plans/active/README.md
+10	7	87543c89ba683904c143194a2a3f3a6989f490f2d0d5811bc75c62828c742fc8	hematita/qml/components/StoragePage.qml
+92	19	ff390fca2e9d3e475137780571c66e4402fd0a33f1067ce30bffd612d5c03ef1	hematita/src/actions.rs
+11	6	c521d2897e19dc4e866da8508f4797266e6d8172ca9e897d7ab323256981a3d7	hematita/src/analysis.rs
+98	4	dc21b3467fd6b4449a56bfe723a2f8f9f7277216a89fdf1e8dae100cd9c6655c	hematita/src/analysis_session.rs
+30	25	6cb3e88e921d7ebfd4504e120c773f3ec39b4f1da1a492449c07093b51c4f338	hematita/src/analysis_workers.rs
+29	0	self	hematita/docs/inventories/2026-09-23-s2-hardening/S2-B2.numstat.tsv

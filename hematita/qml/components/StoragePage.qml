@@ -256,9 +256,10 @@ Item {
         if (count > 1)
             confirm.ask(qsTr("¿Enviar %1 elementos (%2) a la papelera?")
                             .arg(count).arg(page.bytesText(page.analysis.selectedBytes)),
-                        qsTr("Papelera"), { kind: "trash", count: count })
+                        qsTr("Papelera"),
+                        { kind: "trash", revision: page.analysis.selectionRevision })
         else
-            page.analysis.trashSelected(count)
+            page.analysis.trashSelected(page.analysis.selectionRevision)
     }
 
     function requestDelete() {
@@ -267,7 +268,8 @@ Item {
         confirm.ask(qsTr("¿Borrar definitivamente %1 elementos (%2)? No se podrán recuperar.")
                         .arg(page.analysis.selectedCount)
                         .arg(page.bytesText(page.analysis.selectedBytes)),
-                    qsTr("Borrar"), { kind: "delete", count: page.analysis.selectedCount })
+                    qsTr("Borrar"),
+                    { kind: "delete", revision: page.analysis.selectionRevision })
     }
 
     Connections {
@@ -573,12 +575,13 @@ Item {
         onConfirmed: function(payload) {
             if (payload === null)
                 return
-            // The count the person was asked about; the hub refuses the
-            // action when the selection no longer holds that many entries.
+            // The selection revision the person was asked under; the hub
+            // refuses the action when the selection changed since, even to
+            // another set of the same count.
             if (payload.kind === "trash")
-                page.analysis.trashSelected(payload.count)
+                page.analysis.trashSelected(payload.revision)
             else if (payload.kind === "delete")
-                page.analysis.deleteSelected(payload.count)
+                page.analysis.deleteSelected(payload.revision)
         }
     }
 }
