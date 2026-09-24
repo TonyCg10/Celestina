@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** S2
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-S2` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -70,7 +70,8 @@ alone, without the machine noticing the monitor.
 | S2-A | done | S1-Z | `hematita-core::usage`: the deletion on directory descriptors with partial results, the hard-link set gated on `nlink > 1`, `scan_subtree`, `Tree::graft` and `Tree::is_live` | `cargo test -p hematita-core` |
 | S2-A2 | done | S2-A | the review's corrections: the deletion refuses an inner mount before touching anything again, opened folders re-checked by `fstat`, an honest depth cap, missing components reported as missing | `cargo test -p hematita-core` |
 | S2-B | done | S2-A2 | the hub split, partial removals grafted, the `Arc` dropped before `make_mut`, dead ids rejected, the bound confirmation count | `scripts/verify-production.sh` |
-| S2-Z | planned | S2-B | implementation exit and 1.1.1 | `scripts/complete-production.sh` |
+| S2-B2 | done | S2-B | the review's corrections: a cancel inside the last item reads as cancelled, the confirmation bound to a selection revision, the refusal naming the live count, the graft's unreadable counts aligned, the workers going through session methods | `scripts/verify-production.sh` |
+| S2-Z | done | S2-B2 | implementation exit and 1.1.1 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -118,6 +119,8 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - S2-A: [core](docs/evidence/2026-09-23-s2-core.md)
 - S2-A2: [core fixes](docs/evidence/2026-09-23-s2-core-fixes.md)
 - S2-B: [hub](docs/evidence/2026-09-23-s2-hub.md)
+- S2-B2: [hub fixes](docs/evidence/2026-09-23-s2-hub-fixes.md)
+- S2-Z: [production completion](docs/evidence/2026-09-23-s2-production-completion.md)
 
 ## H1 — closed 2026-09-21
 
@@ -398,18 +401,47 @@ The design spec is
 `VAL-S1` stays pending in the author's lane and did not block this closure.
 Further work opens with a new checkpoint and the author's word.
 
-## S2 — opened 2026-09-23
+## S2 — closed 2026-09-23
 
 The S1 reviews left three things open: the permanent deletion re-resolved
 paths between its listing and its removals, so a folder swapped for a link
 in that window could redirect it; a deletion that failed or was cancelled
 midway left the tree showing sizes that were no longer true; and the
 analysis hub had grown past what one file should own. Its falsifiable
-problem is whether a deletion that walks descriptors cannot be redirected,
+problem was whether a deletion that walks descriptors cannot be redirected,
 and whether a tree that grafts what a stopped deletion left behind never
-shows a size that is no longer true. The
-[plan](docs/plans/active/2026-09-23-s2-hardening.md) orders `S2-A` (the
-descriptor-based deletion and the graft in `hematita-core::usage`,
-[core evidence](docs/evidence/2026-09-23-s2-core.md)), `S2-B` (the hub split
-and the grafting in the application) and `S2-Z` (1.1.1); `VAL-S2` is the
-author's check on the real session.
+shows a size that is no longer true. The delivered result is the release
+binary built, verified and deployed to the author's prefix at `1.1.1`:
+
+- `S2-A` rewrote `hematita-core::usage::remove` on directory descriptors
+  (`openat` with `O_NOFOLLOW`, `statat`, `unlinkat`), returning what it
+  removed when it stops midway; gated the walk's hard-link set on
+  `nlink > 1`; and added `scan_subtree`, `Tree::graft` and `Tree::is_live`.
+- `S2-A2` restored S1's guarantee that an inner mount is refused before
+  anything is removed, through a read-only descriptor pre-pass; re-checks
+  every opened folder by `fstat`; caps the depth at 256; and reports a
+  missing component as missing.
+- `S2-B` split the analysis hub into `analysis.rs` (bridge, navigation,
+  publication, 1533 to 779 lines), `analysis_session.rs` (session state and
+  rules) and `analysis_workers.rs` (worker glue); grafts a fresh sub-scan
+  where a stopped deletion left entries behind; lets the confirm worker hold
+  a `Weak<Tree>` so `make_mut` no longer copies; rejects dead ids; and binds
+  the dialog's confirmed count.
+- `S2-B2` reports a cancel inside the last item as cancelled, binds the
+  confirmation to a selection revision instead of its count, names the live
+  count in the refusal, aligns the graft's unreadable counts before
+  extending, and makes the workers go through session methods.
+
+Residuals, recorded in [STATUS.md](STATUS.md): a rename of the analysed root
+while a deletion runs; a mount created between the read-only pass and the
+removal pass; the `Weak` upgrade may still copy once when a comparison is
+mid-flight; any prune or graft bumps the selection revision, so a graft
+landing under an open dialog refuses harmlessly; grafted duplicates need a
+rescan.
+
+Units `S2-A` through `S2-Z` are in the archived
+[plan](docs/plans/archive/2026-09-23-s2-hardening.md). The checkpoint's
+implementation exit ran on 2026-09-23: the
+[completion evidence](docs/evidence/2026-09-23-s2-production-completion.md).
+`VAL-S2` stays pending in the author's lane and did not block this closure.
+Further work opens with a new checkpoint and the author's word.

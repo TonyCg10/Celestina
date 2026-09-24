@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-23
 - **Scope:** `S2-A2` of
-  [`../plans/active/2026-09-23-s2-hardening.md`](../plans/active/2026-09-23-s2-hardening.md):
+  [`../plans/archive/2026-09-23-s2-hardening.md`](../plans/archive/2026-09-23-s2-hardening.md):
   the review findings on `S2-A`'s `hematita-core::usage::remove`
 - **Environment:** the author's checkout; fixture under the system
   temporary directory (tmpfs)

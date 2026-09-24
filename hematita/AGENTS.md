@@ -24,7 +24,8 @@ Hematita constraints; it cannot relax the root or grant authority.
 - Permanent deletion exists only in `hematita-core::usage::remove` and is
   called only from `actions.rs`; it refuses the scanned root, anything
   outside it, any mount root and any symlinked component, re-validates
-  device and inode, and follows no symlink.
+  device and inode, walks descriptors with `O_NOFOLLOW` and removes with
+  `unlinkat`, refusing an inner mount before anything is removed.
 - `src/` owns the sampling thread, the snapshot it publishes, the load
   thresholds and every Qt object; `qml/` presents. QML never reads a file,
   spawns a process or decides what "high" means.

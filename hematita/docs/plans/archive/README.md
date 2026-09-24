@@ -17,3 +17,4 @@ root.
 - [VIS-2 — The table scrolling back on refresh, and applications opening folded](2026-09-23-scroll-and-folds.md)
 - [REL-1 — Release Hematita 1.0](2026-09-23-release-1.md)
 - [S1 — Storage](2026-09-23-s1-storage.md)
+- [S2 — Hardening the storage analyzer](2026-09-23-s2-hardening.md)

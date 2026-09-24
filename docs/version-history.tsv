@@ -160,3 +160,4 @@ hematita	0.6.2	bug	VIS-1	Fix the first real-session visual and naming defects
 hematita	0.6.3	bug	VIS-2	Fix the table scrolling back on refresh and open applications folded
 hematita	1.0.0	release	REL-1	Publish Hematita 1.0
 hematita	1.1.0	milestone	S1-Z	Add the storage analyzer
+hematita	1.1.1	bug	S2-Z	Fix the deletion window, the stale sizes after a stopped deletion and the analysis hub size

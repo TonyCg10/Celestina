@@ -1,7 +1,7 @@
 # Hematita status
 
 - **Updated:** 2026-09-23
-- **In progress:** `S2` (storage hardening) — `S2-A` done:
+- **Delivered as 1.1.1:** `S2` (storage hardening) — `S2-A` done:
   `hematita-core::usage` deletes permanently through directory descriptors
   (the analysed folder and every folder down to the target opened without
   following a link, every entry removed relative to the folder that holds
@@ -24,8 +24,12 @@
   ([hub evidence](docs/evidence/2026-09-23-s2-hub.md)); `S2-B2` corrected
   it after review: a cancel inside the last item reads as cancelled, and
   the confirmation is bound to a selection revision instead of its count
-  ([hub fixes](docs/evidence/2026-09-23-s2-hub-fixes.md)). Built and
-  verified, not deployed; `S2-Z` (1.1.1) is next; the deployed 1.1.0 is unaffected
+  ([hub fixes](docs/evidence/2026-09-23-s2-hub-fixes.md)); `S2-Z` closed
+  the checkpoint at `1.1.1`: the release binary is built, verified and
+  deployed to the author's prefix. Nobody has run a deletion, a cancel or a
+  graft from it on a real session yet: `VAL-S2` stays pending, alongside
+  `VAL-S1`, `VAL-H2` and `VAL-H5`. See the
+  [production completion record](docs/evidence/2026-09-23-s2-production-completion.md)
 - **Delivered as 1.1.0:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
   walks one device under a folder into an indexed tree (hard links once,
   symbolic links never followed, unreadable folders marked), finds empty
@@ -129,8 +133,9 @@
   refresh
 - **Closed phase:** `S1` (storage), closed 2026-09-23; the archived
   [plan](docs/plans/archive/2026-09-23-s1-storage.md); `VAL-S1` pending
-- **Active phase:** `S2` (storage hardening), opened 2026-09-23 in its
-  [plan](docs/plans/active/2026-09-23-s2-hardening.md); `VAL-S2` pending
+- **Closed phase:** `S2` (storage hardening), closed 2026-09-23; the
+  archived [plan](docs/plans/archive/2026-09-23-s2-hardening.md); `VAL-S2`
+  pending
 
 ## Current checkout truth
 
@@ -483,18 +488,27 @@
   real session yet, scanned a real folder or run a trash or deletion from
   it: `VAL-S1` stays pending, alongside `VAL-H2` and `VAL-H5`. See the
   [production completion record](docs/evidence/2026-09-23-s1-production-completion.md).
-- `delete_tree` lists a subtree, re-validates its root by device and inode,
-  and then removes by path; a folder swapped for a symbolic link between the
-  listing and its removal would be followed by the kernel. Acceptable on a
-  single-user desktop and recorded here; `S2-A` names the `openat`-based
-  fix.
-- `hematita/src/analysis.rs` was 1533 lines coordinating five concerns;
-  `S2-B` split it (779 lines of bridge, navigation and publication; the
-  session in `analysis_session.rs`, the worker glue in
-  `analysis_workers.rs`).
-- A stopped deletion's item is grafted from a fresh sub-scan (`S2-B`);
-  duplicate candidates inside the grafted folder are not offered again
-  until a full rescan.
+- As of `S2-Z` (2026-09-23), the storage hardening is delivered as
+  `1.1.1`: the release binary is built, verified and deployed to the
+  author's prefix. `delete_tree` walks directory descriptors opened with
+  `O_NOFOLLOW` and removes each entry with `unlinkat` relative to the folder
+  that holds it, so a folder swapped for a symbolic link while it runs
+  cannot redirect it; a read-only pass refuses an inner mount before
+  anything is removed; a deletion that stops midway reports what it removed
+  and the hub grafts a fresh sub-scan in its place. `hematita/src/analysis.rs`
+  went from 1533 to 779 lines (bridge, navigation, publication), with the
+  session in `analysis_session.rs` and the worker glue in
+  `analysis_workers.rs`; the confirmation is bound to a selection revision.
+  See the
+  [production completion record](docs/evidence/2026-09-23-s2-production-completion.md).
+- Residuals of `S2`: a rename of the analysed root while a deletion runs is
+  not detected by the descriptor walk; a mount created between the
+  read-only pass and the removal pass is caught only by the in-walk check,
+  after siblings may have gone; the confirm worker's `Weak<Tree>` still
+  lets `make_mut` copy once when a comparison is mid-flight; any prune or
+  graft bumps the selection revision, so a graft landing under an open
+  dialog refuses harmlessly; duplicate candidates inside a grafted folder
+  are not offered again until a full rescan.
 
 ## Blockers
 
