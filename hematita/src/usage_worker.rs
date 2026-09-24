@@ -1,15 +1,17 @@
-//! The storage section's two long readers: the scan and the content check of
-//! duplicate candidates.
+//! The storage section's long readers: the scan, the content check of
+//! duplicate candidates and the graft scan of what a stopped deletion left.
 //!
-//! Each runs on its own named thread (`hematita-scan`, `hematita-confirm`)
+//! Each runs on its own named thread (`hematita-scan`, `hematita-confirm`,
+//! `hematita-graft`)
 //! and holds a `CancellationToken` whose other half lives in the handle the
 //! hub keeps. Dropping the handle cancels: a new scan replaces the old handle
 //! and so stops the old walk within a few hundred entries.
 //!
 //! The threads are detached by design, not joined. Joining would block the
 //! Qt thread for as long as the walk takes to reach its next cancellation
-//! check. A detached thread holds nothing the hub owns: the walk owns its
-//! root path, the check an `Arc<Tree>` snapshot, and both a `CxxQtThread`
+//! check. A detached thread holds nothing the hub owns: the walks own their
+//! root path, the check a `Weak<Tree>` it upgrades one group at a time, and
+//! each a `CxxQtThread`
 //! whose `queue` drops a result once the hub is gone. Every result carries
 //! the generation it was asked under; the hub drops one that is no longer
 //! current, so a cancelled worker finishing late changes nothing.
@@ -22,18 +24,18 @@ use std::collections::HashSet;
 use std::io;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::Weak;
 use std::time::{Duration, Instant};
 
 use celestina_core::CancellationToken;
 use cxx_qt::CxxQtThread;
 use hematita_core::usage::duplicates::{self, ConfirmError, Group};
 use hematita_core::usage::mounts::{mount_targets, parse_mountinfo};
-use hematita_core::usage::tree::Tree;
+use hematita_core::usage::tree::{NodeId, Tree};
 use hematita_core::usage::walk::{self, Progress};
 
 use crate::analysis::qobject::HematitaAnalysis;
-use crate::analysis_view::findings;
+use crate::analysis_view::{findings, Findings};
 
 /// The least time between two progress publications of one scan.
 pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
@@ -122,6 +124,36 @@ pub fn spawn_scan(
     Ok(WorkerHandle { cancel })
 }
 
+/// Scans `root` again on the `hematita-graft` thread, for the folder `id` a
+/// deletion stopped inside, bounded by the mount table read here, and queues the fresh subtree with its findings
+/// (or why there is none); the hub grafts it in place of the stale one.
+///
+/// # Errors
+///
+/// The thread could not be created.
+pub fn spawn_graft(
+    root: PathBuf,
+    id: NodeId,
+    generation: u64,
+    qt: CxxQtThread<HematitaAnalysis>,
+) -> Result<WorkerHandle, io::Error> {
+    let (handle, token) = WorkerHandle::pair();
+    std::thread::Builder::new()
+        .name("hematita-graft".to_owned())
+        .spawn(move || {
+            let boundaries = mount_boundaries();
+            let scanned: Result<(Tree, Findings), _> =
+                walk::scan_subtree(&root, &boundaries, &token).map(|tree| {
+                    let found = findings(&tree);
+                    (tree, found)
+                });
+            let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
+                hub.apply_graft(generation, id, scanned);
+            });
+        })?;
+    Ok(handle)
+}
+
 /// Checks `groups` — each with its index among the hub's candidates — by
 /// content on the `hematita-confirm` thread, one group at a time, so the page
 /// fills as each verdict lands; then says it is done.
@@ -131,11 +163,17 @@ pub fn spawn_scan(
 /// so a verdict about an older tree, or a finish from a cancelled check,
 /// never lands.
 ///
+/// The check holds the tree weakly and upgrades it once per group, so a
+/// pruning or a graft on the Qt thread finds the hub's `Arc` unshared and
+/// changes it in place; when the upgrade fails (the analysis is gone) the
+/// check stops. A group being compared at the moment of a pruning still
+/// holds its strong reference, so that one pruning copies the tree once.
+///
 /// # Errors
 ///
 /// The thread could not be created.
 pub fn spawn_confirm(
-    tree: Arc<Tree>,
+    tree: Weak<Tree>,
     groups: Vec<(usize, Group)>,
     generation: u64,
     epoch: u64,
@@ -148,7 +186,12 @@ pub fn spawn_confirm(
         .spawn(move || {
             for (index, group) in &groups {
                 let index = *index;
-                match duplicates::confirm(&tree, group, &token, &mut |_| {}) {
+                let Some(strong) = tree.upgrade() else {
+                    return;
+                };
+                let checked = duplicates::confirm(&strong, group, &token, &mut |_| {});
+                drop(strong);
+                match checked {
                     Ok(verified) => {
                         let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
                             hub.apply_verified(generation, epoch, index, verified);

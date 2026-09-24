@@ -4,7 +4,7 @@
 //!
 //! Every disk read happens on a named worker thread (`hematita-locations`,
 //! `hematita-browse`, `hematita-scan`, `hematita-confirm`,
-//! `hematita-actions`); each request takes
+//! `hematita-actions`, `hematita-graft`); each request takes
 //! the next generation and a result that comes back under an older one is
 //! dropped, so a person clicking faster than the disk answers only ever sees
 //! the folder they are in. A new scan, a cancellation or leaving the analysis
@@ -13,9 +13,12 @@
 //! The scanned tree lives here as an `Arc<Tree>`; navigating it answers from
 //! memory. QML names a node by the id it was published with, never by path.
 //! An action that removed entries prunes exactly the ids its worker reported
-//! gone and re-aggregates the ancestors instead of scanning again; ids never
-//! change. The content check carries a confirm epoch that every start,
-//! cancel and pruning moves, so no verdict about an older tree lands.
+//! gone and re-aggregates the ancestors instead of scanning again; a
+//! deletion that stopped inside an item has that folder scanned again on a
+//! `hematita-graft` thread and the fresh subtree grafted in place of the
+//! stale one. The session state and every rule about ids live in
+//! [`crate::analysis_session`]; this file is the bridge, the locations and
+//! browsing state, the workers' spawning and the publication.
 //!
 //! The path being browsed is a stack of byte-exact `PathBuf`s owned here.
 //! QML never hands a path back: it names a row by index and the hub resolves
@@ -23,29 +26,26 @@
 //! only. Nothing here is prose a person reads: modes, kinds and outcomes are
 //! tokens.
 
-use std::ffi::OsString;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::Arc;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList, QVariant};
 
-use hematita_core::usage::duplicates::{Group, Verified};
-use hematita_core::usage::layout::{squarify, Rect};
-use hematita_core::usage::tree::{Kind, NodeId, Tree};
-use hematita_core::usage::walk::{Progress, ScanError};
-
-use crate::actions::{self, ActionReport, Item};
-use crate::analysis_view::{self, Findings, Kept};
+use crate::analysis_session::{bytes, flag, lossy, Analysed, Session};
 use crate::browse::{self, Entry, EntryKind};
 use crate::lists::{doubles, strings};
 use crate::locations::{self, Location};
 use crate::publish;
-use crate::usage_worker::{self, WorkerHandle};
+use crate::usage_worker::WorkerHandle;
+
+#[path = "analysis_workers.rs"]
+mod workers;
 
 /// A scan that could not start or could not read its root.
 const FAILED: &str = "failed";
+/// A confirmed action whose selection no longer matches what was asked.
+const REFUSED: &str = "refused";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mode {
@@ -91,7 +91,7 @@ pub mod qobject {
         // group*, member* — duplicate sets (while the filter is on)
         // selectedIds — node ids; showDuplicates, showEmpty — the filters
         // revision — bumped once, after every list is in place
-        // busy — a locations, browse or content-check read is in flight
+        // busy — a locations, browse, content-check or graft read is in flight
         // hiddenGroupCount — candidate groups beyond the listed cap
         // groupUnreadable — a copy of the group could not be read
         // entryCopies — the unverified candidate group size of the entry
@@ -216,13 +216,17 @@ pub mod qobject {
         #[qinvokable]
         fn open_selected(self: Pin<&mut HematitaAnalysis>);
 
-        /// Moves the selection to the trash; the page has asked first.
+        /// Moves the selection to the trash; the page has asked first
+        /// about `expected` entries, and a selection of another count is
+        /// refused.
         #[qinvokable]
-        fn trash_selected(self: Pin<&mut HematitaAnalysis>);
+        fn trash_selected(self: Pin<&mut HematitaAnalysis>, expected: i32);
 
-        /// Deletes the selection permanently; the page has asked first.
+        /// Deletes the selection permanently; the page has asked first
+        /// about `expected` entries, and a selection of another count is
+        /// refused.
         #[qinvokable]
-        fn delete_selected(self: Pin<&mut HematitaAnalysis>);
+        fn delete_selected(self: Pin<&mut HematitaAnalysis>, expected: i32);
 
         /// Stops a running trash or deletion; what it already removed is
         /// still reported and pruned.
@@ -299,30 +303,10 @@ pub struct HematitaAnalysisRust {
     /// The folder `entries` lists, so a refresh of the same folder keeps its
     /// rows until the new listing lands.
     listed: Option<PathBuf>,
-    /// The scanned tree; its root is the last path of `stack`.
-    tree: Option<Arc<Tree>>,
-    findings: Findings,
-    /// Per candidate group: its content verdict, once checked.
-    verdicts: Vec<Option<Vec<Verified>>>,
-    /// Per candidate group: a copy could not be read by the content check.
-    unreadable_groups: Vec<bool>,
-    /// Per node: the member count of the unverified candidate row it is in.
-    candidate_copies: Vec<u32>,
-    /// Moved by every start, cancel and pruning of the content check.
-    confirm_epoch: u64,
-    /// Moved by every action started; a report under another is dropped.
-    action_epoch: u64,
-    action: Option<WorkerHandle>,
-    /// Per node: a duplicate or empty folder exactly, and one at or below.
-    duplicate_exact: Vec<bool>,
-    duplicate_below: Vec<bool>,
-    empty_exact: Vec<bool>,
-    empty_below: Vec<bool>,
-    /// The analysed folder.
-    current: NodeId,
-    selection: Vec<NodeId>,
+    /// The running scan; dropping it cancels the walk.
     scan: Option<WorkerHandle>,
-    confirm: Option<WorkerHandle>,
+    /// The analysed tree and everything keyed by its ids.
+    session: Session,
 }
 
 impl Default for HematitaAnalysisRust {
@@ -387,41 +371,10 @@ impl Default for HematitaAnalysisRust {
             stack: Vec::new(),
             entries: Vec::new(),
             listed: None,
-            tree: None,
-            findings: Findings::default(),
-            verdicts: Vec::new(),
-            unreadable_groups: Vec::new(),
-            candidate_copies: Vec::new(),
-            confirm_epoch: 0,
-            action_epoch: 0,
-            action: None,
-            duplicate_exact: Vec::new(),
-            duplicate_below: Vec::new(),
-            empty_exact: Vec::new(),
-            empty_below: Vec::new(),
-            current: NodeId(0),
-            selection: Vec::new(),
             scan: None,
-            confirm: None,
+            session: Session::default(),
         }
     }
-}
-
-fn lossy(name: &OsString) -> String {
-    name.to_string_lossy().into_owned()
-}
-
-fn flag(value: bool) -> f64 {
-    if value {
-        1.0
-    } else {
-        0.0
-    }
-}
-
-/// Bytes as the doubles QML reads; exact up to 2^53, which no disk reaches.
-fn bytes(value: u64) -> f64 {
-    value as f64
 }
 
 /// What `enter(index)` means against the list being shown.
@@ -454,300 +407,15 @@ impl HematitaAnalysisRust {
         }
     }
 
-    /// Forgets the analysis and cancels its workers.
-    fn stop_analysis(&mut self) {
-        self.scan = None;
-        self.stop_confirm();
-        self.action = None;
-        self.action_epoch = self.action_epoch.wrapping_add(1);
-        self.tree = None;
-        self.findings = Findings::default();
-        self.verdicts.clear();
-        self.unreadable_groups.clear();
-        self.candidate_copies.clear();
-        self.duplicate_exact.clear();
-        self.duplicate_below.clear();
-        self.empty_exact.clear();
-        self.empty_below.clear();
-        self.selection.clear();
-    }
-
-    /// The duplicate rows as the page lists them.
-    fn group_rows(&self) -> Vec<analysis_view::GroupRow> {
-        analysis_view::group_rows(
-            &self.findings.candidates,
-            &self.verdicts,
-            &self.unreadable_groups,
-        )
-    }
-
-    /// Marks the members of the listed duplicate rows, after a verdict: the
-    /// filter keeps every listed member; only a verified copy is painted as
-    /// a duplicate, and an unverified candidate carries its group's count.
-    fn mark_duplicates(&mut self) {
-        let Some(tree) = self.tree.as_ref() else {
-            return;
-        };
-        let rows = self.group_rows();
-        let verified: Vec<NodeId> = rows
-            .iter()
-            .filter(|row| row.verified)
-            .flat_map(|row| row.nodes.iter().copied())
-            .collect();
-        let mut copies = vec![0_u32; tree.nodes.len()];
-        for row in rows.iter().filter(|row| !row.verified) {
-            let count = u32::try_from(row.nodes.len()).unwrap_or(u32::MAX);
-            for id in &row.nodes {
-                if let Some(slot) = copies.get_mut(id.0 as usize) {
-                    *slot = count;
-                }
-            }
-        }
-        self.duplicate_exact = analysis_view::marks_exact(tree.nodes.len(), verified);
-        self.duplicate_below =
-            analysis_view::marks_below(tree, rows.into_iter().flat_map(|row| row.nodes));
-        self.candidate_copies = copies;
-    }
-
-    /// Cancels a running content check and moves the epoch, so nothing it
-    /// queued lands.
-    fn stop_confirm(&mut self) {
-        self.confirm = None;
-        self.confirm_epoch = self.confirm_epoch.wrapping_add(1);
-    }
-
     /// Whether a content-check result asked under `generation` and `epoch`
     /// still describes the tree being shown.
     fn confirm_current(&self, generation: u64, epoch: u64) -> bool {
-        publish::still_current(generation, self.generation) && epoch == self.confirm_epoch
-    }
-
-    /// The outermost selected entries as the action workers take them.
-    fn action_items(&self) -> Vec<Item> {
-        let Some(tree) = self.tree.as_ref() else {
-            return Vec::new();
-        };
-        analysis_view::outermost(tree, &self.selection)
-            .into_iter()
-            .filter_map(|id| {
-                tree.node(id).map(|node| Item {
-                    id,
-                    path: tree.path_of(id),
-                    allocated: node.allocated,
-                    dev: node.dev,
-                    ino: node.ino,
-                })
-            })
-            .collect()
-    }
-
-    /// The outermost selection's count and allocated bytes.
-    fn selected_totals(&self) -> (i32, f64) {
-        let items = self.action_items();
-        let total = items
-            .iter()
-            .map(|item| item.allocated)
-            .fold(0_u64, u64::saturating_add);
-        (i32::try_from(items.len()).unwrap_or(i32::MAX), bytes(total))
-    }
-
-    /// Prunes the entries an action removed and brings every id-keyed cache
-    /// in line; a running content check is cancelled first.
-    fn prune(&mut self, removed: &[NodeId]) {
-        self.stop_confirm();
-        let Self {
-            tree,
-            findings,
-            verdicts,
-            unreadable_groups,
-            selection,
-            current,
-            ..
-        } = self;
-        let Some(tree) = tree.as_mut() else {
-            return;
-        };
-        let tree = Arc::make_mut(tree);
-        for id in removed {
-            tree.prune(*id);
-        }
-        analysis_view::forget_removed(
-            tree,
-            removed,
-            Kept {
-                findings,
-                verdicts,
-                unreadable_groups,
-                selection,
-            },
-        );
-        let removed_set = removed.iter().copied().collect();
-        if analysis_view::gone(tree, *current, &removed_set) {
-            *current = tree.root;
-        }
-        let len = tree.nodes.len();
-        self.empty_exact = analysis_view::marks_exact(len, self.findings.empty.iter().copied());
-        if let Some(tree) = self.tree.as_ref() {
-            self.empty_below =
-                analysis_view::marks_below(tree, self.findings.empty.iter().copied());
-        }
-        self.mark_duplicates();
-    }
-
-    /// The analysed folder's ancestors below the scanned root, root excluded,
-    /// outermost first.
-    fn chain(&self) -> Vec<NodeId> {
-        let Some(tree) = self.tree.as_ref() else {
-            return Vec::new();
-        };
-        let mut chain = Vec::new();
-        let mut cursor = Some(self.current);
-        while let Some(id) = cursor {
-            if id == tree.root {
-                break;
-            }
-            chain.push(id);
-            cursor = tree.node(id).and_then(|n| n.parent);
-        }
-        chain.reverse();
-        chain
-    }
-
-    /// A node id QML sent, if it names a node of the tree.
-    fn node_id(&self, id: i32) -> Option<NodeId> {
-        let tree = self.tree.as_ref()?;
-        let id = NodeId(u32::try_from(id).ok()?);
-        tree.node(id).map(|_| id)
+        publish::still_current(generation, self.generation) && self.session.confirm_current(epoch)
     }
 
     fn next_generation(&mut self) -> u64 {
         self.generation = self.generation.wrapping_add(1);
         self.generation
-    }
-}
-
-/// The analysed lists, computed from the owned tree before any property is
-/// written.
-#[derive(Default)]
-struct Analysed {
-    ids: Vec<f64>,
-    names: Vec<String>,
-    kinds: Vec<String>,
-    allocated: Vec<f64>,
-    apparent: Vec<f64>,
-    shares: Vec<f64>,
-    files_below: Vec<f64>,
-    empty: Vec<f64>,
-    duplicate: Vec<f64>,
-    unreadable: Vec<f64>,
-    rects: Vec<f64>,
-    current_allocated: f64,
-    current_unreadable: i32,
-    group_sizes: Vec<f64>,
-    group_counts: Vec<f64>,
-    group_verified: Vec<f64>,
-    group_unreadable: Vec<f64>,
-    copies: Vec<f64>,
-    member_groups: Vec<f64>,
-    member_ids: Vec<f64>,
-    member_names: Vec<String>,
-    member_paths: Vec<String>,
-}
-
-fn kind_token(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Dir => "dir",
-        Kind::File => "file",
-        Kind::Other => "other",
-    }
-}
-
-fn mark(marks: &[bool], id: NodeId) -> f64 {
-    flag(marks.get(id.0 as usize).copied().unwrap_or(false))
-}
-
-impl HematitaAnalysisRust {
-    fn analysed(&self) -> Analysed {
-        let mut view = Analysed::default();
-        let Some(tree) = self.tree.as_ref() else {
-            return view;
-        };
-        if self.state != Mode::Analysed {
-            return view;
-        }
-        let Some(current) = tree.node(self.current) else {
-            return view;
-        };
-        view.current_allocated = bytes(current.allocated);
-        view.current_unreadable = self
-            .findings
-            .unreadable
-            .get(self.current.0 as usize)
-            .map_or(0, |count| i32::try_from(*count).unwrap_or(i32::MAX));
-
-        let children = tree.children_by_size(self.current);
-        let sizes: Vec<u64> = children
-            .iter()
-            .map(|id| tree.node(*id).map_or(0, |n| n.allocated))
-            .collect();
-        let unit = Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 1.0,
-            h: 1.0,
-        };
-        view.rects = analysis_view::flat_rects(&children, &squarify(&sizes, unit));
-
-        let mut filters: Vec<&[bool]> = Vec::new();
-        if self.show_duplicates {
-            filters.push(&self.duplicate_below);
-        }
-        if self.show_empty {
-            filters.push(&self.empty_below);
-        }
-        for id in analysis_view::project(&children, &filters) {
-            let Some(node) = tree.node(id) else {
-                continue;
-            };
-            view.ids.push(f64::from(id.0));
-            view.names.push(lossy(&node.name));
-            view.kinds.push(kind_token(node.kind).to_owned());
-            view.allocated.push(bytes(node.allocated));
-            view.apparent.push(bytes(node.apparent));
-            view.shares.push(if current.allocated > 0 {
-                bytes(node.allocated) / bytes(current.allocated)
-            } else {
-                0.0
-            });
-            view.files_below.push(bytes(node.files_below));
-            view.empty.push(mark(&self.empty_exact, id));
-            view.duplicate.push(mark(&self.duplicate_exact, id));
-            view.unreadable.push(flag(node.unreadable));
-            view.copies.push(f64::from(
-                self.candidate_copies
-                    .get(id.0 as usize)
-                    .copied()
-                    .unwrap_or(0),
-            ));
-        }
-
-        if self.show_duplicates {
-            for (row, group) in self.group_rows().into_iter().enumerate() {
-                view.group_sizes.push(bytes(group.size));
-                view.group_counts.push(group.nodes.len() as f64);
-                view.group_verified.push(flag(group.verified));
-                view.group_unreadable.push(flag(group.unreadable));
-                for id in group.nodes {
-                    view.member_groups.push(row as f64);
-                    view.member_ids.push(f64::from(id.0));
-                    view.member_names
-                        .push(tree.node(id).map(|n| lossy(&n.name)).unwrap_or_default());
-                    view.member_paths
-                        .push(tree.path_of(id).to_string_lossy().into_owned());
-                }
-            }
-        }
-        view
     }
 
     /// The crumbs: the browsed path down to the scanned root, then the
@@ -768,8 +436,8 @@ impl HematitaAnalysisRust {
                 (name, path.to_string_lossy().into_owned())
             })
             .collect();
-        if let (Mode::Analysed, Some(tree)) = (self.state, self.tree.as_ref()) {
-            for id in self.chain() {
+        if let (Mode::Analysed, Some(tree)) = (self.state, self.session.tree.as_ref()) {
+            for id in self.session.chain() {
                 let name = tree.node(id).map(|n| lossy(&n.name)).unwrap_or_default();
                 crumbs.push((name, tree.path_of(id).to_string_lossy().into_owned()));
             }
@@ -780,7 +448,7 @@ impl HematitaAnalysisRust {
 
 impl qobject::HematitaAnalysis {
     pub fn open(mut self: Pin<&mut Self>) {
-        self.as_mut().rust_mut().stop_analysis();
+        self.as_mut().rust_mut().session.reset();
         self.as_mut().set_busy(false);
         self.as_mut().rust_mut().state = Mode::Locations;
         self.as_mut().rust_mut().stack.clear();
@@ -835,13 +503,14 @@ impl qobject::HematitaAnalysis {
         let depth = self.rust().stack.len();
         if self.rust().state == Mode::Analysed && depth > 0 && index + 1 >= depth {
             let below = index + 1 - depth;
+            let session = &self.rust().session;
             let target = if below == 0 {
-                self.rust().tree.as_ref().map(|tree| tree.root)
+                session.tree.as_ref().map(|tree| tree.root)
             } else {
-                self.rust().chain().get(below - 1).copied()
+                session.chain().get(below - 1).copied()
             };
             if let Some(target) = target {
-                self.as_mut().rust_mut().current = target;
+                self.as_mut().rust_mut().session.current = target;
                 self.publish();
             }
             return;
@@ -856,17 +525,11 @@ impl qobject::HematitaAnalysis {
         if self.rust().state != Mode::Analysed {
             return;
         }
-        let Some(id) = self.rust().node_id(id) else {
+        let Some(id) = self.rust().session.node_id(id) else {
             return;
         };
-        let enterable = self
-            .rust()
-            .tree
-            .as_ref()
-            .and_then(|t| t.node(id))
-            .is_some_and(|n| n.kind == Kind::Dir && !n.children.is_empty());
-        if enterable {
-            self.as_mut().rust_mut().current = id;
+        if self.rust().session.enterable(id) {
+            self.as_mut().rust_mut().session.current = id;
             self.publish();
         }
     }
@@ -875,23 +538,14 @@ impl qobject::HematitaAnalysis {
         match self.rust().state {
             Mode::Locations => {}
             Mode::Scanning => self.cancel(),
-            Mode::Analysed => {
-                let parent = self.rust().tree.as_ref().and_then(|tree| {
-                    if self.rust().current == tree.root {
-                        None
-                    } else {
-                        tree.node(self.rust().current).and_then(|n| n.parent)
-                    }
-                });
-                match parent {
-                    Some(parent) => {
-                        self.as_mut().rust_mut().current = parent;
-                        self.publish();
-                    }
-                    // At the scanned root: back to browsing that folder.
-                    None => self.browse(),
+            Mode::Analysed => match self.rust().session.parent() {
+                Some(parent) => {
+                    self.as_mut().rust_mut().session.current = parent;
+                    self.publish();
                 }
-            }
+                // At the scanned root: back to browsing that folder.
+                None => self.browse(),
+            },
             Mode::Browsing => {
                 if self.rust().stack.len() > 1 {
                     self.as_mut().rust_mut().stack.pop();
@@ -922,7 +576,7 @@ impl qobject::HematitaAnalysis {
             self.open();
             return;
         };
-        self.as_mut().rust_mut().stop_analysis();
+        self.as_mut().rust_mut().session.reset();
         self.as_mut().rust_mut().state = Mode::Browsing;
         if self.rust().listed.as_ref() != Some(&folder) {
             self.as_mut().rust_mut().entries.clear();
@@ -977,10 +631,12 @@ impl qobject::HematitaAnalysis {
         let browse_names = strings(rust.entries.iter().map(|e| lossy(&e.name)));
         let browse_kinds = strings(rust.entries.iter().map(|e| e.kind.as_str().to_owned()));
         let apparent: Vec<f64> = rust.entries.iter().map(|e| bytes(e.apparent)).collect();
-        let view = rust.analysed();
-        let selected: Vec<f64> = rust.selection.iter().map(|id| f64::from(id.0)).collect();
-        let (selected_count, selected_bytes) = rust.selected_totals();
-        let hidden = i32::try_from(rust.findings.hidden.len()).unwrap_or(i32::MAX);
+        let view = if rust.state == Mode::Analysed {
+            rust.session.view(rust.show_duplicates, rust.show_empty)
+        } else {
+            Analysed::default()
+        };
+        let hidden = i32::try_from(rust.session.findings.hidden.len()).unwrap_or(i32::MAX);
 
         self.as_mut().set_crumb_names(crumb_names);
         self.as_mut().set_crumb_paths(crumb_paths);
@@ -1022,425 +678,30 @@ impl qobject::HematitaAnalysis {
             .set_group_unreadable(doubles(&view.group_unreadable));
         self.as_mut().set_hidden_group_count(hidden);
         self.as_mut().set_entry_copies(doubles(&view.copies));
-        self.as_mut().set_selected_ids(doubles(&selected));
-        self.as_mut().set_selected_bytes(selected_bytes);
-        self.as_mut().set_selected_count(selected_count);
-        let running = self.rust().action.is_some();
-        self.as_mut().set_action_running(running);
+        self.as_mut().publish_selection();
+        self.as_mut().refresh_busy();
         self.as_mut().set_mode(mode);
         // Last, so the page rebuilds once, with every list in place.
         let next = self.rust().revision.wrapping_add(1).max(1);
         self.as_mut().set_revision(next);
     }
 
-    /// Busy while a content check or an action runs.
+    /// Busy while a content check, an action or a graft runs; the locations
+    /// and browse reads set it themselves.
     fn refresh_busy(mut self: Pin<&mut Self>) {
-        let running = self.rust().action.is_some();
-        let busy = self.rust().confirm.is_some() || running;
+        let running = self.rust().session.action.is_some();
+        let busy = self.rust().session.busy();
         self.as_mut().set_action_running(running);
-        self.as_mut().set_busy(busy);
-    }
-
-    /// A scan that did not produce a tree; the section goes back to browsing.
-    fn scan_failed(mut self: Pin<&mut Self>) {
-        self.as_mut().set_action_kind(QString::default());
-        self.as_mut().set_action_done(0);
-        self.as_mut().set_action_total(0);
-        self.as_mut().set_action_outcome(QString::from(FAILED));
-    }
-
-    pub fn scan_here(mut self: Pin<&mut Self>) {
-        if !matches!(self.rust().state, Mode::Browsing | Mode::Analysed) {
-            return;
-        }
-        let Some(root) = self.rust().stack.last().cloned() else {
-            return;
-        };
-        self.as_mut().rust_mut().stop_analysis();
-        self.as_mut().set_busy(false);
-        let generation = self.as_mut().rust_mut().next_generation();
-        self.as_mut().rust_mut().state = Mode::Scanning;
-        self.as_mut().set_progress_files(0.0);
-        self.as_mut().set_progress_bytes(0.0);
-        self.as_mut()
-            .set_progress_path(QString::from(root.to_string_lossy().as_ref()));
-        self.as_mut().set_action_outcome(QString::default());
-        self.as_mut().publish();
-        let qt = self.qt_thread();
-        match usage_worker::spawn_scan(root, generation, qt) {
-            Ok(handle) => self.as_mut().rust_mut().scan = Some(handle),
-            Err(_) => {
-                self.as_mut().set_start_failed(true);
-                self.browse();
-            }
-        }
-    }
-
-    pub(crate) fn apply_progress(mut self: Pin<&mut Self>, generation: u64, progress: &Progress) {
-        if !publish::still_current(generation, self.rust().generation)
-            || self.rust().state != Mode::Scanning
-        {
-            return;
-        }
-        self.as_mut().set_progress_files(bytes(progress.files));
-        self.as_mut().set_progress_bytes(bytes(progress.bytes));
-        self.as_mut()
-            .set_progress_path(QString::from(progress.current.to_string_lossy().as_ref()));
-    }
-
-    pub(crate) fn apply_tree(
-        mut self: Pin<&mut Self>,
-        generation: u64,
-        scanned: Result<(Tree, Findings), ScanError>,
-    ) {
-        if !publish::still_current(generation, self.rust().generation)
-            || self.rust().state != Mode::Scanning
-        {
-            return;
-        }
-        self.as_mut().rust_mut().scan = None;
-        match scanned {
-            Ok((tree, findings)) => {
-                let rust = self.as_mut().rust_mut();
-                let rust = rust.get_mut();
-                rust.empty_exact =
-                    analysis_view::marks_exact(tree.nodes.len(), findings.empty.iter().copied());
-                rust.empty_below =
-                    analysis_view::marks_below(&tree, findings.empty.iter().copied());
-                rust.verdicts = vec![None; findings.candidates.len()];
-                rust.unreadable_groups = vec![false; findings.candidates.len()];
-                rust.current = tree.root;
-                rust.findings = findings;
-                rust.tree = Some(Arc::new(tree));
-                rust.selection.clear();
-                rust.mark_duplicates();
-                rust.state = Mode::Analysed;
-                self.publish();
-            }
-            Err(ScanError::Cancelled) => self.browse(),
-            Err(_) => {
-                self.as_mut().scan_failed();
-                self.browse();
-            }
-        }
-    }
-
-    pub fn cancel(mut self: Pin<&mut Self>) {
-        match self.rust().state {
-            Mode::Scanning => {
-                self.as_mut().rust_mut().next_generation();
-                self.browse();
-            }
-            Mode::Analysed if self.rust().confirm.is_some() => {
-                self.as_mut().rust_mut().stop_confirm();
-                self.refresh_busy();
-            }
-            _ => {}
-        }
-    }
-
-    pub fn set_filters(mut self: Pin<&mut Self>, duplicates: bool, empty: bool) {
-        self.as_mut().set_show_duplicates(duplicates);
-        self.as_mut().set_show_empty(empty);
-        if self.rust().state == Mode::Analysed {
-            self.publish();
-        }
-    }
-
-    pub fn confirm_duplicates(mut self: Pin<&mut Self>) {
-        if self.rust().state != Mode::Analysed || self.rust().confirm.is_some() {
-            return;
-        }
-        let Some(tree) = self.rust().tree.clone() else {
-            return;
-        };
-        let pending: Vec<(usize, Group)> = self
-            .rust()
-            .findings
-            .candidates
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| {
-                self.rust()
-                    .verdicts
-                    .get(*index)
-                    .is_some_and(Option::is_none)
-            })
-            .map(|(index, group)| (index, group.clone()))
-            .collect();
-        if pending.is_empty() {
-            return;
-        }
-        let generation = self.rust().generation;
-        self.as_mut().rust_mut().stop_confirm();
-        let epoch = self.rust().confirm_epoch;
-        let qt = self.qt_thread();
-        match usage_worker::spawn_confirm(tree, pending, generation, epoch, qt) {
-            Ok(handle) => {
-                self.as_mut().rust_mut().confirm = Some(handle);
-                self.as_mut().refresh_busy();
-            }
-            Err(_) => self.as_mut().set_start_failed(true),
-        }
-    }
-
-    pub(crate) fn apply_verified(
-        mut self: Pin<&mut Self>,
-        generation: u64,
-        epoch: u64,
-        index: usize,
-        verified: Vec<Verified>,
-    ) {
-        if !self.rust().confirm_current(generation, epoch) || self.rust().confirm.is_none() {
-            return;
-        }
-        let rust = self.as_mut().rust_mut();
-        let rust = rust.get_mut();
-        let Some(slot) = rust.verdicts.get_mut(index) else {
-            return;
-        };
-        *slot = Some(verified);
-        rust.mark_duplicates();
-        self.publish();
-    }
-
-    /// A copy of candidate `index` could not be read; its row says so.
-    pub(crate) fn apply_unreadable(
-        mut self: Pin<&mut Self>,
-        generation: u64,
-        epoch: u64,
-        index: usize,
-    ) {
-        if !self.rust().confirm_current(generation, epoch) || self.rust().confirm.is_none() {
-            return;
-        }
-        let Some(slot) = self
-            .as_mut()
-            .rust_mut()
-            .get_mut()
-            .unreadable_groups
-            .get_mut(index)
-        else {
-            return;
-        };
-        *slot = true;
-        self.publish();
-    }
-
-    pub(crate) fn confirm_finished(mut self: Pin<&mut Self>, generation: u64, epoch: u64) {
-        if !self.rust().confirm_current(generation, epoch) {
-            return;
-        }
-        self.as_mut().rust_mut().confirm = None;
-        self.refresh_busy();
-    }
-
-    pub fn toggle_selected(mut self: Pin<&mut Self>, id: i32) {
-        let Some(id) = self.rust().node_id(id) else {
-            return;
-        };
-        if self
-            .rust()
-            .tree
-            .as_ref()
-            .is_some_and(|tree| tree.root == id)
-        {
-            return;
-        }
-        let selection = &mut self.as_mut().rust_mut().get_mut().selection;
-        match selection.iter().position(|chosen| *chosen == id) {
-            Some(at) => {
-                selection.remove(at);
-            }
-            None => selection.push(id),
-        }
-        self.publish_selection();
-    }
-
-    pub fn clear_selection(mut self: Pin<&mut Self>) {
-        self.as_mut().rust_mut().selection.clear();
-        self.publish_selection();
-    }
-
-    pub fn select_all_but_one(mut self: Pin<&mut Self>, group: i32) {
-        let Ok(group) = usize::try_from(group) else {
-            return;
-        };
-        let Some(row) = self.rust().group_rows().into_iter().nth(group) else {
-            return;
-        };
-        if !row.verified || row.unreadable {
-            return;
-        }
-        let selection = &mut self.as_mut().rust_mut().get_mut().selection;
-        for id in analysis_view::all_but_one(&row.nodes) {
-            if !selection.contains(&id) {
-                selection.push(id);
-            }
-        }
-        self.publish_selection();
-    }
-
-    /// The selection alone changes; rows read it without being rebuilt.
-    fn publish_selection(mut self: Pin<&mut Self>) {
-        let selected: Vec<f64> = self
-            .rust()
-            .selection
-            .iter()
-            .map(|id| f64::from(id.0))
-            .collect();
-        self.as_mut().set_selected_ids(doubles(&selected));
-        let (selected_count, selected_bytes) = self.rust().selected_totals();
-        self.as_mut().set_selected_bytes(selected_bytes);
-        self.as_mut().set_selected_count(selected_count);
-    }
-
-    /// Whether an action may start: the analysis is shown and no other
-    /// action is running.
-    fn may_act(&self) -> bool {
-        self.rust().state == Mode::Analysed && self.rust().action.is_none()
-    }
-
-    /// The counts a starting trash or deletion reports progress against.
-    fn start_counts(mut self: Pin<&mut Self>, total: usize) {
-        self.as_mut().set_action_done(0);
-        self.as_mut()
-            .set_action_total(i32::try_from(total).unwrap_or(i32::MAX));
-    }
-
-    /// Clears the last outcome and takes the next action epoch.
-    fn begin_action(mut self: Pin<&mut Self>) -> u64 {
-        self.as_mut().set_action_outcome(QString::default());
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.action_epoch = rust.action_epoch.wrapping_add(1);
-        rust.action_epoch
-    }
-
-    pub fn open_selected(mut self: Pin<&mut Self>) {
-        if !self.may_act() {
-            return;
-        }
-        let Some(item) = self.rust().action_items().into_iter().next() else {
-            return;
-        };
-        let epoch = self.as_mut().begin_action();
-        let generation = self.rust().generation;
-        let qt = self.qt_thread();
-        if actions::spawn_open(item.path, generation, epoch, qt).is_err() {
-            self.as_mut().set_start_failed(true);
-        }
-    }
-
-    pub fn trash_selected(mut self: Pin<&mut Self>) {
-        if !self.may_act() {
-            return;
-        }
-        let items = self.rust().action_items();
-        if items.is_empty() {
-            return;
-        }
-        self.as_mut().start_counts(items.len());
-        let epoch = self.as_mut().begin_action();
-        let generation = self.rust().generation;
-        let qt = self.qt_thread();
-        match actions::spawn_trash(items, generation, epoch, qt) {
-            Ok(handle) => {
-                self.as_mut().rust_mut().action = Some(handle);
-                self.refresh_busy();
-            }
-            Err(_) => self.as_mut().set_start_failed(true),
-        }
-    }
-
-    pub fn delete_selected(mut self: Pin<&mut Self>) {
-        if !self.may_act() {
-            return;
-        }
-        let items = self.rust().action_items();
-        let Some(within) = self.rust().tree.as_ref().map(|tree| tree.path.clone()) else {
-            return;
-        };
-        if items.is_empty() {
-            return;
-        }
-        self.as_mut().start_counts(items.len());
-        let epoch = self.as_mut().begin_action();
-        let generation = self.rust().generation;
-        let qt = self.qt_thread();
-        match actions::spawn_delete(items, within, generation, epoch, qt) {
-            Ok(handle) => {
-                self.as_mut().rust_mut().action = Some(handle);
-                self.refresh_busy();
-            }
-            Err(_) => self.as_mut().set_start_failed(true),
-        }
-    }
-
-    /// Cancels the running trash or deletion without moving the action
-    /// epoch: the handle stays until the worker reports, so the entries it
-    /// removed before stopping are still pruned.
-    pub fn cancel_action(self: Pin<&mut Self>) {
-        if let Some(action) = self.rust().action.as_ref() {
-            action.cancel();
-        }
-    }
-
-    /// One more item of the running action finished.
-    pub(crate) fn apply_action_progress(
-        mut self: Pin<&mut Self>,
-        generation: u64,
-        epoch: u64,
-        done: usize,
-    ) {
-        if !publish::still_current(generation, self.rust().generation)
-            || epoch != self.rust().action_epoch
-        {
-            return;
-        }
-        self.as_mut()
-            .set_action_done(i32::try_from(done).unwrap_or(i32::MAX));
-    }
-
-    /// An action's report: its outcome, then — for what it removed — the
-    /// pruned tree, republished.
-    pub(crate) fn apply_action(
-        mut self: Pin<&mut Self>,
-        generation: u64,
-        epoch: u64,
-        report: ActionReport,
-    ) {
-        if !publish::still_current(generation, self.rust().generation)
-            || epoch != self.rust().action_epoch
-        {
-            return;
-        }
-        self.as_mut().rust_mut().action = None;
-        let freed = report
-            .removed
-            .iter()
-            .map(|(_, allocated)| *allocated)
-            .fold(0_u64, u64::saturating_add);
-        let count = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
-        self.as_mut()
-            .set_action_kind(QString::from(report.kind.as_str()));
-        self.as_mut().set_action_done(count(report.done));
-        self.as_mut().set_action_total(count(report.total));
-        self.as_mut().set_action_bytes(bytes(freed));
-        self.as_mut()
-            .set_action_outcome(QString::from(report.outcome));
-        if !report.removed.is_empty() && self.rust().state == Mode::Analysed {
-            let removed: Vec<NodeId> = report.removed.iter().map(|(id, _)| *id).collect();
-            self.as_mut().rust_mut().get_mut().prune(&removed);
-            self.as_mut().refresh_busy();
-            self.publish();
-        } else {
-            self.refresh_busy();
+        if self.rust().state == Mode::Analysed || busy {
+            self.as_mut().set_busy(busy);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::OsString;
+
     use super::*;
     use crate::locations::LocationKind;
 
@@ -1514,20 +775,5 @@ mod tests {
         let second = state.next_generation();
         assert!(!publish::still_current(first, state.generation));
         assert!(publish::still_current(second, state.generation));
-    }
-
-    #[test]
-    fn a_verdict_from_an_older_confirm_epoch_is_dropped() {
-        let mut state = HematitaAnalysisRust::default();
-        let generation = state.next_generation();
-        state.stop_confirm();
-        let first = state.confirm_epoch;
-        assert!(state.confirm_current(generation, first));
-        // A cancel, a restart or a pruning moves the epoch.
-        state.stop_confirm();
-        assert!(!state.confirm_current(generation, first));
-        assert!(state.confirm_current(generation, state.confirm_epoch));
-        state.next_generation();
-        assert!(!state.confirm_current(generation, state.confirm_epoch));
     }
 }

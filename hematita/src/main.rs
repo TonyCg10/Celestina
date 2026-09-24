@@ -1,6 +1,7 @@
 mod actions;
 mod activation;
 mod analysis;
+mod analysis_session;
 mod analysis_view;
 mod browse;
 mod lists;

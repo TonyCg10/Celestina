@@ -317,6 +317,7 @@ mod tests {
             device: 1,
             nodes,
             unreadable_dirs: 1,
+            hard_link_names: 0,
         }
     }
 

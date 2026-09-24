@@ -85,7 +85,9 @@ fn main() {
     }
     // The bridge files are watched by cxx-qt-build; the plain Rust modules
     // it does not know about are named here.
+    println!("cargo::rerun-if-changed=src/analysis_session.rs");
     println!("cargo::rerun-if-changed=src/analysis_view.rs");
+    println!("cargo::rerun-if-changed=src/analysis_workers.rs");
     println!("cargo::rerun-if-changed=src/browse.rs");
     println!("cargo::rerun-if-changed=src/lists.rs");
     println!("cargo::rerun-if-changed=src/locations.rs");

@@ -14,8 +14,13 @@
 //! Siderita. Deletion is bounded by the scanned root and by the mount table
 //! read on this thread; a refusal from `delete_tree` counts as not done.
 //! Before either removal, an item that is a mount root, or whose device and
-//! inode are no longer the ones the scan recorded, is refused. A cancelled
+//! inode are no longer the ones the scan recorded, is refused; the deletion
+//! hands that same pair to `delete_tree`, which checks it again on the
+//! descriptor it opens. A cancelled
 //! worker still reports what it removed before it stopped (`cancelled`).
+//! A deletion that stopped inside an item after removing part of it reports
+//! that item as `partial`, with the bytes it freed; the hub scans what is
+//! left of it again and grafts the result in place of the stale subtree.
 //!
 //! The threads are detached like the scan's: a detached thread owns its
 //! paths and a `CxxQtThread` whose `queue` drops the report once the hub is
@@ -30,7 +35,7 @@ use std::process::Command;
 
 use celestina_core::CancellationToken;
 use cxx_qt::CxxQtThread;
-use hematita_core::usage::remove::{check_identity, delete_tree, RemoveError};
+use hematita_core::usage::remove::{check_identity, delete_tree, Failure, RemoveError, Removed};
 use hematita_core::usage::tree::NodeId;
 use siderita_ops::OpError;
 
@@ -69,7 +74,10 @@ pub struct Item {
 }
 
 /// What an action did. `removed` lists only the entries that are gone, each
-/// with its allocated bytes; the hub prunes exactly these.
+/// with its allocated bytes; the hub prunes exactly these. `partial` lists
+/// the items a deletion stopped inside after removing part of them, and
+/// `partial_bytes` what those removals freed; the hub grafts a fresh scan of
+/// each in place of its stale subtree.
 #[derive(Clone, Debug)]
 pub struct ActionReport {
     pub kind: ActionKind,
@@ -77,20 +85,29 @@ pub struct ActionReport {
     pub total: usize,
     pub outcome: &'static str,
     pub removed: Vec<(NodeId, u64)>,
+    pub partial: Vec<NodeId>,
+    pub partial_bytes: u64,
 }
 
-/// The typed outcome of `done` of `total` items, where `refused_all` says
-/// every item was refused before anything was touched and `cancelled` that
-/// the person stopped it (what was done before still counts).
+/// The typed outcome of `done` of `total` items, `partial` more removed in
+/// part, where `refused_all` says every item was refused before anything
+/// was touched and `cancelled` that the person stopped it (what was done
+/// before still counts).
 #[must_use]
-pub fn outcome_of(done: usize, total: usize, refused_all: bool, cancelled: bool) -> &'static str {
+pub fn outcome_of(
+    done: usize,
+    partial: usize,
+    total: usize,
+    refused_all: bool,
+    cancelled: bool,
+) -> &'static str {
     if cancelled {
         "cancelled"
     } else if refused_all && total > 0 {
         "refused"
     } else if total > 0 && done == total {
         "done"
-    } else if done > 0 {
+    } else if done + partial > 0 {
         "partial"
     } else {
         "failed"
@@ -128,8 +145,10 @@ pub fn spawn_open(
                     kind: ActionKind::Open,
                     done,
                     total: 1,
-                    outcome: outcome_of(done, 1, false, false),
+                    outcome: outcome_of(done, 0, 1, false, false),
                     removed: Vec::new(),
+                    partial: Vec::new(),
+                    partial_bytes: 0,
                 },
             );
             if let Ok(mut child) = child {
@@ -142,6 +161,8 @@ pub fn spawn_open(
 /// How one item ended.
 enum Step {
     Removed,
+    /// The deletion stopped inside the item after removing part of it.
+    Partial(Removed),
     Refused,
     Failed,
     Cancelled,
@@ -162,6 +183,20 @@ fn admissible(item: &Item, boundaries: &HashSet<PathBuf>) -> Result<(), Step> {
     }
 }
 
+/// How a deletion that stopped ended: in part when it had removed something
+/// (its cancellation is still seen by the loop, which checks the token
+/// before the next item), otherwise by its typed error.
+fn stopped(failure: Failure) -> Step {
+    if failure.removed.entries > 0 {
+        return Step::Partial(failure.removed);
+    }
+    match failure.error {
+        RemoveError::Refused { .. } => Step::Refused,
+        RemoveError::Cancelled => Step::Cancelled,
+        RemoveError::Io { .. } => Step::Failed,
+    }
+}
+
 /// Runs `act` over `items` in order, reporting each finished item's count
 /// and, at the end or at a cancellation, what is gone.
 fn run(
@@ -174,6 +209,8 @@ fn run(
 ) {
     let total = items.len();
     let mut removed = Vec::new();
+    let mut partial = Vec::new();
+    let mut partial_bytes = 0_u64;
     let mut refused = 0;
     let mut cancelled = false;
     for item in items {
@@ -187,6 +224,10 @@ fn run(
         };
         match step {
             Step::Removed => removed.push((item.id, item.allocated)),
+            Step::Partial(gone) => {
+                partial.push(item.id);
+                partial_bytes = partial_bytes.saturating_add(gone.bytes);
+            }
             Step::Refused => refused += 1,
             Step::Failed => {}
             Step::Cancelled => {
@@ -201,8 +242,10 @@ fn run(
         kind,
         done,
         total,
-        outcome: outcome_of(done, total, refused == total, cancelled),
+        outcome: outcome_of(done, partial.len(), total, refused == total, cancelled),
         removed,
+        partial,
+        partial_bytes,
     });
 }
 
@@ -296,11 +339,12 @@ pub fn spawn_delete(
                 &token,
                 &target,
                 &boundaries,
-                |item| match delete_tree(&item.path, &within, &boundaries, &token) {
-                    Ok(_) => Step::Removed,
-                    Err(RemoveError::Refused { .. }) => Step::Refused,
-                    Err(RemoveError::Cancelled) => Step::Cancelled,
-                    Err(RemoveError::Io { .. }) => Step::Failed,
+                |item| {
+                    let expected = Some((item.dev, item.ino));
+                    match delete_tree(&item.path, &within, &boundaries, expected, &token) {
+                        Ok(_) => Step::Removed,
+                        Err(failure) => stopped(failure),
+                    }
                 },
             );
         })?;
@@ -313,12 +357,49 @@ mod tests {
 
     #[test]
     fn the_outcome_follows_the_counts() {
-        assert_eq!(outcome_of(3, 3, false, false), "done");
-        assert_eq!(outcome_of(1, 3, false, false), "partial");
-        assert_eq!(outcome_of(0, 3, false, false), "failed");
-        assert_eq!(outcome_of(0, 3, true, false), "refused");
-        assert_eq!(outcome_of(0, 0, true, false), "failed");
-        assert_eq!(outcome_of(1, 3, false, true), "cancelled");
+        assert_eq!(outcome_of(3, 0, 3, false, false), "done");
+        assert_eq!(outcome_of(1, 0, 3, false, false), "partial");
+        assert_eq!(outcome_of(0, 1, 3, false, false), "partial");
+        assert_eq!(outcome_of(0, 0, 3, false, false), "failed");
+        assert_eq!(outcome_of(0, 0, 3, true, false), "refused");
+        assert_eq!(outcome_of(0, 0, 0, true, false), "failed");
+        assert_eq!(outcome_of(1, 0, 3, false, true), "cancelled");
+    }
+
+    fn failure(error: RemoveError, entries: u64) -> Failure {
+        Failure {
+            error,
+            removed: Removed {
+                entries,
+                bytes: entries * 4096,
+            },
+        }
+    }
+
+    #[test]
+    fn a_deletion_that_removed_something_before_stopping_is_partial() {
+        let io = || RemoveError::Io {
+            path: PathBuf::from("/x/a"),
+            source: io::Error::from(io::ErrorKind::PermissionDenied),
+        };
+        assert!(matches!(
+            stopped(failure(io(), 2)),
+            Step::Partial(Removed { entries: 2, .. })
+        ));
+        assert!(matches!(
+            stopped(failure(RemoveError::Cancelled, 1)),
+            Step::Partial(_)
+        ));
+        assert!(matches!(stopped(failure(io(), 0)), Step::Failed));
+        assert!(matches!(
+            stopped(failure(RemoveError::Cancelled, 0)),
+            Step::Cancelled
+        ));
+        let refused = RemoveError::Refused {
+            path: PathBuf::from("/x/a"),
+            reason: hematita_core::usage::remove::Refusal::MountRoot,
+        };
+        assert!(matches!(stopped(failure(refused, 0)), Step::Refused));
     }
 
     #[test]

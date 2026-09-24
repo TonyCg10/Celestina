@@ -14,9 +14,15 @@
   subtree refuses an inner mount, an unlistable folder or a tree deeper
   than 256 folders before anything is removed, every opened folder is
   checked again by device and inode, and a folder gone on the way reads as
-  missing ([core fixes](docs/evidence/2026-09-23-s2-core-fixes.md)). The
-  application does not compile against the new `delete_tree` and `Tree`
-  until `S2-B`, which is next; the deployed 1.1.0 is unaffected
+  missing ([core fixes](docs/evidence/2026-09-23-s2-core-fixes.md));
+  `S2-B` done: the hub is split into `analysis_session.rs` (the session
+  state and its rules, unit-tested) and `analysis_workers.rs` (worker
+  glue) under a 779-line `analysis.rs`; a deletion that stopped inside an
+  item reports it as partial and the hub grafts a fresh scan of what is
+  left; the content check holds the tree weakly; ids of pruned or replaced
+  subtrees are refused; the confirmation's count is checked by the hub
+  ([hub evidence](docs/evidence/2026-09-23-s2-hub.md)). Built and verified,
+  not deployed; `S2-Z` (1.1.1) is next; the deployed 1.1.0 is unaffected
 - **Delivered as 1.1.0:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
   walks one device under a folder into an indexed tree (hard links once,
   symbolic links never followed, unreadable folders marked), finds empty
@@ -479,11 +485,13 @@
   listing and its removal would be followed by the kernel. Acceptable on a
   single-user desktop and recorded here; `S2-A` names the `openat`-based
   fix.
-- `hematita/src/analysis.rs` is 1533 lines and coordinates five concerns
-  (navigation, scan, confirmation, selection and actions, publication of
-  about 25 lists); the pure projection already lives in `analysis_view.rs`;
-  `S2-A` names the split.
-- A cancelled or failed deletion may leave a stale size until a rescan.
+- `hematita/src/analysis.rs` was 1533 lines coordinating five concerns;
+  `S2-B` split it (779 lines of bridge, navigation and publication; the
+  session in `analysis_session.rs`, the worker glue in
+  `analysis_workers.rs`).
+- A stopped deletion's item is grafted from a fresh sub-scan (`S2-B`);
+  duplicate candidates inside the grafted folder are not offered again
+  until a full rescan.
 
 ## Blockers
 
