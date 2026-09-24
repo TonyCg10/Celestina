@@ -1,0 +1,45 @@
+# S1-Z exact change inventory
+
+Base revision	fe56832ef01388c1ff611e22209edc342e6cbbc1
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/AGENTS.md
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/README.md
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-actions-fixes.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-actions.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-analysis.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-core-fixes.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-core.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-locations.md
+Pathspec	hematita/docs/evidence/2026-09-23-s1-production-completion.md
+Pathspec	hematita/docs/inventories/2026-09-23-s1-storage/S1-Z.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-23-s1-storage.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-23-s1-storage.md
+Pathspec	hematita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	11e2f5df97b8133b18a205e0bf5c7c2c4eb4dd74c3bdc03a3fbfc529e475ac9c	docs/version-history.tsv
+7	2	9834bede741a0cf659991e65c48f0c4c30754f7c101e8e65b724b71ce885f969	hematita/AGENTS.md
+1	1	b6ffa1e1729498b79f5d1641771ffdcde0a8bcd4180cb42275f59fa7e17acddf	hematita/Cargo.lock
+1	1	736fb3c3431266de18840ac0e2a45ebf0f101947717b0f6db6014d629d080392	hematita/Cargo.toml
+3	0	6a6b0e7b4be7e03be211c37d5aa60a923b9737426aa04b30b0f0a3c4a6915e0a	hematita/README.md
+22	9	582121c51d7a8740af192c6e335a339616896eaf3c0bfaa0d929c4a7780673e8	hematita/ROADMAP.md
+30	4	b014cedbe59a1e20b45852e6ba408fdae21ba75780d50e9ab3464dbf00daf6ff	hematita/STATUS.md
+1	1	23e50b8a8dfc4e56de4fd564b9f732cf2f27105c61a8f175b52c53ab1810b1b9	hematita/docs/evidence/2026-09-23-s1-actions-fixes.md
+1	1	efb571c072e14bf0b479a98f9c25b1484e007788bc0033700e5e38dd39ad32ac	hematita/docs/evidence/2026-09-23-s1-actions.md
+1	1	28fb5abc1f2e499cdabef55de96fd0e67b8d1b722f2d016807bf638a6f690b6e	hematita/docs/evidence/2026-09-23-s1-analysis.md
+1	1	c244cee7a5c43c48b8d1ebd82218c28f91fa9df056316255e02dff7d7a017508	hematita/docs/evidence/2026-09-23-s1-core-fixes.md
+1	1	e56d5a0e20dca0cb33c8495b1460f96501513819722f6498975ac89bb7cb37ca	hematita/docs/evidence/2026-09-23-s1-core.md
+1	1	080257232451ff8553809ac4c9a3396027e4419eb46a6f7a28ed69bcbbbd28f3	hematita/docs/evidence/2026-09-23-s1-locations.md
+92	0	92bf67591384f856a0e15145e87315792ead0ac4833d50554f7520886b5f2ac6	hematita/docs/evidence/2026-09-23-s1-production-completion.md
+0	73	deleted	hematita/docs/plans/active/2026-09-23-s1-storage.md
+2	4	a020a1d6ce83c774b5ae15e9478607781af0b08761b49ec3f8d53dc6958a36c7	hematita/docs/plans/active/README.md
+75	0	6d5630fe77ad8e9e836a20742725b347a19c485d3841f2a730daccfcaa389a6c	hematita/docs/plans/archive/2026-09-23-s1-storage.md
+1	0	86f67425562210e38721b001bc54f7fe1420d6ce078beeb072ea7a5955484612	hematita/docs/plans/archive/README.md
+45	0	self	hematita/docs/inventories/2026-09-23-s1-storage/S1-Z.numstat.tsv

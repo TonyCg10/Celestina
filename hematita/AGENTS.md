@@ -18,8 +18,13 @@ Hematita constraints; it cannot relax the root or grant authority.
 
 - `celestina-rs/crates/hematita-core` is the only owner of `/proc` and `/sys`
   parsing, rate computation between samples and the history ring. It takes
-  text and answers typed values or typed errors; it opens no file and holds
-  no policy.
+  text and answers typed values or typed errors; it opens files only in
+  `usage` (the walk, the duplicate confirmation and the guarded deletion),
+  never from the Qt thread.
+- Permanent deletion exists only in `hematita-core::usage::remove` and is
+  called only from `actions.rs`; it refuses the scanned root, anything
+  outside it, any mount root and any symlinked component, re-validates
+  device and inode, and follows no symlink.
 - `src/` owns the sampling thread, the snapshot it publishes, the load
   thresholds and every Qt object; `qml/` presents. QML never reads a file,
   spawns a process or decides what "high" means.

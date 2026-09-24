@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-23
 - **Scope:** `S1-B` of
-  [`../plans/active/2026-09-23-s1-storage.md`](../plans/active/2026-09-23-s1-storage.md):
+  [`../plans/archive/2026-09-23-s1-storage.md`](../plans/archive/2026-09-23-s1-storage.md):
   the mount locations, folder browsing, the `HematitaAnalysis` hub with
   its whole contract declared, the Almacenamiento section and its smoke line
 - **Environment:** the author's checkout; offscreen Qt only, no window on

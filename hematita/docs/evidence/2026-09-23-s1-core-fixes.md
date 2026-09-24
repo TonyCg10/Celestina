@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-23
 - **Scope:** `S1-A2` of
-  [`../plans/active/2026-09-23-s1-storage.md`](../plans/active/2026-09-23-s1-storage.md):
+  [`../plans/archive/2026-09-23-s1-storage.md`](../plans/archive/2026-09-23-s1-storage.md):
   the review findings on `S1-A`'s `hematita-core::usage`
 - **Environment:** the author's checkout; fixture under the system
   temporary directory (tmpfs)

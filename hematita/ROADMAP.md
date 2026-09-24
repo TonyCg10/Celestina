@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** S1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-S1` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -65,7 +65,7 @@ alone, without the machine noticing the monitor.
 | S1-C | done | S1-B | the scan with progress and cancel, size list and treemap, filters, duplicate confirmation | `scripts/verify-production.sh` |
 | S1-D | done | S1-C | actions: open in Siderita, batch trash, guarded permanent deletion, selection | `scripts/verify-production.sh` |
 | S1-E | done | S1-D | the review's corrections: actions cancellable keeping their partial successes, entries re-validated by device and inode, mount roots refused for trash too | `scripts/verify-production.sh` |
-| S1-Z | planned | S1-D | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
+| S1-Z | done | S1-E | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -109,6 +109,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - S1-C: [analysis](docs/evidence/2026-09-23-s1-analysis.md)
 - S1-D: [actions](docs/evidence/2026-09-23-s1-actions.md)
 - S1-E: [actions fixes](docs/evidence/2026-09-23-s1-actions-fixes.md)
+- S1-Z: [production completion](docs/evidence/2026-09-23-s1-production-completion.md)
 
 ## H1 — closed 2026-09-21
 
@@ -363,14 +364,26 @@ polkit-mediated privileged actions) plus the two visual correction units
 [release evidence](docs/evidence/2026-09-23-release-1.md), in its own archived
 [plan](docs/plans/archive/2026-09-23-release-1.md).
 
-## S1 — opened 2026-09-23
+## S1 — closed 2026-09-23
 
 The author asked for a storage analyzer inside Hematita: Baobab's result is
 unclear and leaves little to do with what it finds. Its falsifiable problem
-is whether a device-bounded walk with progress can analyse the author's
+was whether a device-bounded walk with progress can analyse the author's
 430 GiB home while the window stays live, and whether a size list beside a
 treemap, with verified duplicates and empty folders, lets the author act on
-what is found without leaving Hematita. The
-[plan](docs/plans/active/2026-09-23-s1-storage.md) orders `S1-A` (the pure
-`hematita-core::usage` domain, [core evidence](docs/evidence/2026-09-23-s1-core.md))
-through `S1-Z` (1.1.0); `VAL-S1` is the author's check on the real session.
+what is found without leaving Hematita. The delivered result is the release
+binary built, verified and deployed to the author's prefix at `1.1.0`, whose
+Almacenamiento section lists the mount points with their occupation, browses
+any of them, scans the folder one is in with visible progress and
+cancellation, shows the result as a size list beside a treemap, finds
+duplicates verified by content and empty folders, and acts on a selection
+through Siderita's trash or a confirmed permanent deletion, refusing the
+scanned root, anything outside it, any mount root and any symlinked
+component.
+
+Units `S1-A` through `S1-Z` are in the archived
+[plan](docs/plans/archive/2026-09-23-s1-storage.md). The checkpoint's
+implementation exit ran on 2026-09-23: the
+[completion evidence](docs/evidence/2026-09-23-s1-production-completion.md).
+`VAL-S1` stays pending in the author's lane and did not block this closure.
+Further work opens with a new checkpoint and the author's word.

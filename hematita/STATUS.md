@@ -1,7 +1,7 @@
 # Hematita status
 
 - **Updated:** 2026-09-23
-- **In progress:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
+- **Delivered as 1.1.0:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
   walks one device under a folder into an indexed tree (hard links once,
   symbolic links never followed, unreadable folders marked), finds empty
   folders and duplicate candidates verified by content, lays out a
@@ -35,7 +35,12 @@
   prunes what it removed, each entry is checked again by device and inode
   before it is removed, and a mount root is refused for trash as for
   deletion ([actions fixes](docs/evidence/2026-09-23-s1-actions-fixes.md));
-  `S1-Z` is next
+  `S1-Z` closed the checkpoint at `1.1.0`: the release binary is built,
+  verified and deployed to the author's prefix. Nobody has looked at the
+  Storage page on a real session yet, scanned a real folder or run an
+  action from it: `VAL-S1` stays pending, alongside `VAL-H2` and `VAL-H5`.
+  See the
+  [production completion record](docs/evidence/2026-09-23-s1-production-completion.md)
 - **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
   real session (the process table kept its scroll position across
   refreshes, applications opened folded, no flicker) and asked to close
@@ -97,8 +102,8 @@
   `VIS-2`); `VAL-VIS-2` passed 2026-09-23 — the process table kept its scroll
   position across refreshes, applications opened folded, no flicker on
   refresh
-- **Active phase:** `S1` (storage), opened 2026-09-23 in its
-  [plan](docs/plans/active/2026-09-23-s1-storage.md); `VAL-S1` pending
+- **Closed phase:** `S1` (storage), closed 2026-09-23; the archived
+  [plan](docs/plans/archive/2026-09-23-s1-storage.md); `VAL-S1` pending
 
 ## Current checkout truth
 
@@ -430,6 +435,27 @@
   timeout; and PID recycling during an open polkit prompt, a named limit
   rather than a closed one. See the
   [release evidence](docs/evidence/2026-09-23-release-1.md).
+- As of `S1-Z` (2026-09-23), storage is delivered as `1.1.0`: the release
+  binary is built, verified and deployed to the author's prefix. The
+  Almacenamiento section lists the mount points and their occupation,
+  browses any readable one, scans the folder one is in on a worker thread
+  with visible progress and cancellation, shows the result as a size list
+  beside a squarified treemap, verifies duplicates by content and finds
+  empty folders, and acts on a selection through Siderita's trash or a
+  confirmed permanent deletion, refusing the scanned root, anything outside
+  it, any mount root and any symlinked component. The headless smoke now
+  walks six sections and asserts four shape lines: the CPU contract on the
+  first row, the Sensors page publishing at least one chip, the Services
+  page listing at least one system unit, and the Storage page listing at
+  least one location. Known limits: a btrfs subvolume is its own mount
+  boundary rather than part of the filesystem it lives on, there is a
+  residual window between a scan and an action where the scanned entry
+  could be replaced (narrowed, not closed, by the device-and-inode
+  re-validation in `S1-E`), and a duplicate group beyond the five-hundredth
+  is not listed, only counted. Nobody has looked at the Storage page on a
+  real session yet, scanned a real folder or run a trash or deletion from
+  it: `VAL-S1` stays pending, alongside `VAL-H2` and `VAL-H5`. See the
+  [production completion record](docs/evidence/2026-09-23-s1-production-completion.md).
 
 ## Blockers
 

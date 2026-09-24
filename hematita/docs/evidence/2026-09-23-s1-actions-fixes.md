@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-23
 - **Scope:** `S1-E` of
-  [`../plans/active/2026-09-23-s1-storage.md`](../plans/active/2026-09-23-s1-storage.md):
+  [`../plans/archive/2026-09-23-s1-storage.md`](../plans/archive/2026-09-23-s1-storage.md):
   the four findings and three minor points of the S1-D review
 - **Environment:** the author's checkout; offscreen Qt only, no window on
   the live or nested session; no scan, selection or action ran during

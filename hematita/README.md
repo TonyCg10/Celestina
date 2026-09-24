@@ -14,6 +14,9 @@ on it. It replaces Mission Center.
   arrives with polkit in H5.
 - Version 1.0 replaces Mission Center for the author: performance, processes,
   applications, sensors and services.
+- Almacenamiento: mount points, browsing, a scan where you are, size list and
+  treemap, duplicates verified by content, empty folders, and actions through
+  Siderita's trash or a confirmed permanent deletion.
 
 ## Architecture
 
