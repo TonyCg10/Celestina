@@ -496,7 +496,7 @@
   cannot redirect it; a read-only pass refuses an inner mount before
   anything is removed; a deletion that stops midway reports what it removed
   and the hub grafts a fresh sub-scan in its place. `hematita/src/analysis.rs`
-  went from 1533 to 779 lines (bridge, navigation, publication), with the
+  went from 1533 to 784 lines after S2-B2 (bridge, navigation, publication), with the
   session in `analysis_session.rs` and the worker glue in
   `analysis_workers.rs`; the confirmation is bound to a selection revision.
   See the
