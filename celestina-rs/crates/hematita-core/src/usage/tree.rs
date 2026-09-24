@@ -164,8 +164,9 @@ impl Tree {
     }
 
     /// Replaces the subtree at `id` with `fresh` (a scan of the same path):
-    /// the old nodes are unlinked and emptied like [`Tree::prune`]'s, the
-    /// fresh ones appended with new ids, the fresh root taking `id`'s name
+    /// the old root is unlinked from its parent and zeroed like
+    /// [`Tree::prune`]'s, the nodes below it stay in the arena unreachable
+    /// (and [`Tree::is_live`] false), the fresh ones are appended with new ids, the fresh root taking `id`'s name
     /// and place among its siblings, and every ancestor's totals moved by
     /// the difference. Ids outside the subtree keep their meaning.
     ///

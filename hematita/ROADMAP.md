@@ -68,7 +68,8 @@ alone, without the machine noticing the monitor.
 | S1-E | done | S1-D | the review's corrections: actions cancellable keeping their partial successes, entries re-validated by device and inode, mount roots refused for trash too | `scripts/verify-production.sh` |
 | S1-Z | done | S1-E | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
 | S2-A | done | S1-Z | `hematita-core::usage`: the deletion on directory descriptors with partial results, the hard-link set gated on `nlink > 1`, `scan_subtree`, `Tree::graft` and `Tree::is_live` | `cargo test -p hematita-core` |
-| S2-B | planned | S2-A | the hub split, partial removals grafted, the `Arc` dropped before `make_mut`, dead ids rejected, the bound confirmation count | `scripts/verify-production.sh` |
+| S2-A2 | done | S2-A | the review's corrections: the deletion refuses an inner mount before touching anything again, opened folders re-checked by `fstat`, an honest depth cap, missing components reported as missing | `cargo test -p hematita-core` |
+| S2-B | planned | S2-A2 | the hub split, partial removals grafted, the `Arc` dropped before `make_mut`, dead ids rejected, the bound confirmation count | `scripts/verify-production.sh` |
 | S2-Z | planned | S2-B | implementation exit and 1.1.1 | `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -115,6 +116,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - S1-E: [actions fixes](docs/evidence/2026-09-23-s1-actions-fixes.md)
 - S1-Z: [production completion](docs/evidence/2026-09-23-s1-production-completion.md)
 - S2-A: [core](docs/evidence/2026-09-23-s2-core.md)
+- S2-A2: [core fixes](docs/evidence/2026-09-23-s2-core-fixes.md)
 
 ## H1 — closed 2026-09-21
 

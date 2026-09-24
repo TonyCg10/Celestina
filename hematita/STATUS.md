@@ -9,7 +9,12 @@
   removed when it stops midway; the walk remembers only files with more
   than one name; `scan_subtree`, `Tree::graft` and `Tree::is_live` let the
   hub put a fresh sub-scan in place of a stale subtree; crate-only, no
-  build, see the [core evidence](docs/evidence/2026-09-23-s2-core.md). The
+  build, see the [core evidence](docs/evidence/2026-09-23-s2-core.md);
+  `S2-A2` corrected it after review: a read-only pass over the whole
+  subtree refuses an inner mount, an unlistable folder or a tree deeper
+  than 256 folders before anything is removed, every opened folder is
+  checked again by device and inode, and a folder gone on the way reads as
+  missing ([core fixes](docs/evidence/2026-09-23-s2-core-fixes.md)). The
   application does not compile against the new `delete_tree` and `Tree`
   until `S2-B`, which is next; the deployed 1.1.0 is unaffected
 - **Delivered as 1.1.0:** `S1` (storage) — `S1-A` done: `hematita-core::usage`

@@ -31,6 +31,10 @@ owner; and the confirmation dialog names exactly what will be acted on.
   returning what it removed when it stops midway, the walk's hard-link set
   gated on `nlink > 1`, `scan_subtree`, `Tree::graft` and `Tree::is_live`;
   S2 opened in the documents.
+- `S2-A2` — the review's corrections of `S2-A`: a read-only pre-pass that
+  refuses an inner mount before anything is removed, every opened folder
+  re-checked by `fstat`, the depth cap at 256, a missing folder on the way
+  reported as missing.
 - `S2-B` — the hub split (`analysis_session.rs`), partial removals grafted
   from a fresh sub-scan, the confirm worker's `Arc` dropped before
   `make_mut`, dead ids rejected, the dialog's confirmed count bound.
@@ -43,7 +47,7 @@ owner; and the confirmation dialog names exactly what will be acted on.
 
 ## Build order
 
-1. `S2-A`, then `S2-B`, then `S2-Z`.
+1. `S2-A`, `S2-A2`, then `S2-B`, then `S2-Z`.
 
 ## Implementation exit
 
@@ -56,5 +60,6 @@ deletion left, and its confirmation dialog's count equals what is acted on.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | S2-A | `hematita:` | done | [inventory](../../inventories/2026-09-23-s2-hardening/S2-A.numstat.tsv) | 14 files, +1054/-161 | `usage::remove` on directory descriptors with `Failure { error, removed }` and the scanned identity checked in `delete_tree`; `walk` hard-link set gated on `nlink > 1`, `hard_link_names`, `scan_subtree`; `Tree::graft`, `Tree::is_live`; S2 opened | [core](../../evidence/2026-09-23-s2-core.md) | `VAL-S2` |
+| S2-A2 | `hematita:` | done | [inventory](../../inventories/2026-09-23-s2-hardening/S2-A2.numstat.tsv) | 10 files, +350/-38 | Deletion refuses an inner mount before touching anything again; opened folders re-checked by fstat; honest depth cap; missing components reported as missing | [core fixes](../../evidence/2026-09-23-s2-core-fixes.md) | `VAL-S2` |
 | S2-B | `hematita:` | planned | `hematita/src/`, `hematita/qml/` | — | hub split into `analysis_session.rs`; partial removals grafted; `Arc` dropped before `make_mut`; live-id check; bound confirmation count | `scripts/verify-production.sh` | `VAL-S2` |
 | S2-Z | `hematita:` | planned | documents, version | — | implementation exit and 1.1.1 | `scripts/complete-production.sh` | `VAL-S2` |

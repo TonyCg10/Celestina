@@ -16,19 +16,26 @@
 //! itself being renamed while the deletion runs: the removal then continues
 //! inside the folder it opened, wherever that now lives.
 //!
+//! Before removing anything it walks the whole subtree read-only, the same
+//! descent the removal will take, and refuses if any folder in it is another
+//! device's mount or listed as a mount boundary, or if the tree is deeper
+//! than [`MAX_DEPTH`]: nothing is touched if any inner folder is a mount.
+//! The removal pass repeats every check as the defence against a change
+//! between the two passes. Every folder is checked again after it is opened:
+//! the descriptor's device and inode must be the ones listed.
+//!
 //! Removal is depth-first, a folder's files before its subfolders and every
 //! folder after its content, asking `cancel` before every entry; a symbolic
-//! link is removed as itself and its target is never visited. A folder that
-//! is another device's mount, or listed as a mount boundary, stops the
-//! deletion there. A deletion that stops midway — cancelled, refused or
-//! failed — reports what it had already removed in [`Failure`].
+//! link is removed as itself and its target is never visited. A deletion
+//! that stops midway — cancelled, refused or failed — reports what it had
+//! already removed in [`Failure`].
 
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs;
 use std::io;
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
@@ -47,8 +54,10 @@ const DIR_FLAGS: OFlags = OFlags::RDONLY
 
 /// Folders open at once below the target: one descriptor per level is what
 /// makes the walk safe, so the depth is bounded rather than the descriptors
-/// shared. A deeper tree fails with [`RemoveError::Io`] at that level.
-pub const MAX_DEPTH: usize = 4096;
+/// shared. A deeper tree fails closed with [`RemoveError::Io`] in the
+/// read-only pass, before anything is removed and well before the default
+/// limit of 1024 open descriptors could be reached.
+pub const MAX_DEPTH: usize = 256;
 
 /// What a deletion removed, completed or not.
 ///
@@ -226,14 +235,21 @@ pub fn delete_tree(
         return Err(refuse(Refusal::MountRoot).into());
     }
 
-    let mut walk = Removal {
+    let mut check = Removal {
         device: stat.st_dev,
         boundaries,
         cancel,
+        dry: true,
         seen: HashSet::new(),
         removed: Removed::default(),
     };
-    match walk.run(parent_fd, name, &target, &stat) {
+    check.run(&parent_fd, name.clone(), &target, &stat)?;
+    let mut walk = Removal {
+        dry: false,
+        ..check
+    };
+    walk.removed = Removed::default();
+    match walk.run(&parent_fd, name, &target, &stat) {
         Ok(()) => Ok(walk.removed),
         Err(error) => Err(Failure {
             error,
@@ -256,6 +272,8 @@ struct Removal<'a> {
     device: u64,
     boundaries: &'a HashSet<PathBuf>,
     cancel: &'a CancellationToken,
+    /// The read-only pass: the same descent and checks, nothing removed.
+    dry: bool,
     /// (device, inode) of hard-linked files already counted.
     seen: HashSet<(u64, u64)>,
     removed: Removed,
@@ -266,17 +284,17 @@ impl Removal<'_> {
     /// or link at once, a folder after everything below it.
     fn run(
         &mut self,
-        parent: OwnedFd,
+        parent: &OwnedFd,
         name: OsString,
         path: &Path,
         stat: &Stat,
     ) -> Result<(), RemoveError> {
         self.check_cancel()?;
         if !is_dir(stat) {
-            return self.unlink_leaf(&parent, &name, path, stat);
+            return self.unlink_leaf(parent, &name, path, stat);
         }
         let mut stack: Vec<Frame> = Vec::new();
-        let top = self.open_folder(&parent, name, path.to_path_buf(), stat)?;
+        let top = self.open_folder(parent, name, path.to_path_buf(), stat)?;
         stack.push(top);
         loop {
             let depth = stack.len();
@@ -285,11 +303,13 @@ impl Removal<'_> {
                 // Everything below is gone: the folder itself, relative to
                 // the descriptor of the folder that holds it.
                 let Some(done) = stack.pop() else { break };
-                let holder = stack.last().map_or(&parent, |above| &above.fd);
+                let holder = stack.last().map_or(parent, |above| &above.fd);
                 self.check_cancel()?;
-                unlinkat(holder, done.name.as_os_str(), AtFlags::REMOVEDIR)
-                    .map_err(|errno| io_error(&done.path, errno))?;
-                self.count(done.bytes);
+                if !self.dry {
+                    unlinkat(holder, done.name.as_os_str(), AtFlags::REMOVEDIR)
+                        .map_err(|errno| io_error(&done.path, errno))?;
+                    self.count(done.bytes);
+                }
                 continue;
             };
             let child_path = frame.path.join(&child);
@@ -329,8 +349,7 @@ impl Removal<'_> {
                 reason: Refusal::MountRoot,
             });
         }
-        let fd = openat(parent, name.as_os_str(), DIR_FLAGS, Mode::empty())
-            .map_err(|errno| io_error(&path, errno))?;
+        let fd = open_checked(parent, name.as_os_str(), &path, (stat.st_dev, stat.st_ino))?;
         let mut names = Vec::new();
         for entry in Dir::read_from(&fd).map_err(|errno| io_error(&path, errno))? {
             let entry = entry.map_err(|errno| io_error(&path, errno))?;
@@ -370,6 +389,9 @@ impl Removal<'_> {
         path: &Path,
         stat: &Stat,
     ) -> Result<(), RemoveError> {
+        if self.dry {
+            return Ok(());
+        }
         unlinkat(parent, name, AtFlags::empty()).map_err(|errno| io_error(path, errno))?;
         let bytes = leaf_bytes(stat, &mut self.seen);
         self.count(bytes);
@@ -425,6 +447,29 @@ fn leaf_bytes(stat: &Stat, seen: &mut HashSet<(u64, u64)>) -> u64 {
     blocks(stat)
 }
 
+/// Opens the folder `name` in `parent` without following a link and refuses
+/// it as [`Refusal::Changed`] unless the opened descriptor is the folder
+/// `identity` (device, inode) was listed with: the check `statat` made
+/// before the open cannot see a swap between the two calls.
+fn open_checked<Fd: AsFd>(
+    parent: Fd,
+    name: &OsStr,
+    path: &Path,
+    identity: (u64, u64),
+) -> Result<OwnedFd, RemoveError> {
+    let fd =
+        openat(parent, name, DIR_FLAGS, Mode::empty()).map_err(|errno| io_error(path, errno))?;
+    let opened = fstat(&fd).map_err(|errno| io_error(path, errno))?;
+    if (opened.st_dev, opened.st_ino) == identity {
+        Ok(fd)
+    } else {
+        Err(RemoveError::Refused {
+            path: path.to_path_buf(),
+            reason: Refusal::Changed,
+        })
+    }
+}
+
 fn io_error(path: &Path, errno: Errno) -> RemoveError {
     RemoveError::Io {
         path: path.to_path_buf(),
@@ -436,9 +481,9 @@ fn io_error(path: &Path, errno: Errno) -> RemoveError {
 /// from the previous descriptor without following a link, and answers the
 /// parent's descriptor with `target`'s name in it.
 ///
-/// A folder on the way that is a link, no longer a folder, or gone is a
+/// A folder on the way that is a link or no longer a folder is a
 /// [`Refusal::Symlink`] naming it: the lexical "inside" would not be where
-/// the kernel goes.
+/// the kernel goes. One that is gone is [`Refusal::Missing`].
 fn open_parent(root: &Path, target: &Path) -> Result<(OwnedFd, OsString), RemoveError> {
     let refuse = |reason| RemoveError::Refused {
         path: target.to_path_buf(),
@@ -463,10 +508,17 @@ fn open_parent(root: &Path, target: &Path) -> Result<(OwnedFd, OsString), Remove
     Ok((fd, name.to_os_string()))
 }
 
-/// A folder on the way to `target` that did not open: a refusal when it is
-/// a link, not a folder or gone, an IO error naming it otherwise.
+/// A folder on the way to `target` that did not open: [`Refusal::Missing`]
+/// when it is gone, [`Refusal::Symlink`] when it is a link or not a folder,
+/// an IO error naming it otherwise.
 fn on_the_way(target: &Path, at: &Path, errno: Errno) -> RemoveError {
-    if matches!(errno, Errno::LOOP | Errno::NOTDIR | Errno::NOENT) {
+    if errno == Errno::NOENT {
+        return RemoveError::Refused {
+            path: target.to_path_buf(),
+            reason: Refusal::Missing,
+        };
+    }
+    if matches!(errno, Errno::LOOP | Errno::NOTDIR) {
         RemoveError::Refused {
             path: target.to_path_buf(),
             reason: Refusal::Symlink {
@@ -494,4 +546,33 @@ fn normalise(path: &Path) -> PathBuf {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{open_checked, Refusal, RemoveError, CWD};
+    use rustix::fs::{fstat, AtFlags};
+    use std::path::Path;
+
+    #[test]
+    fn an_opened_folder_is_checked_against_the_identity_it_was_listed_with() {
+        let dir = std::env::temp_dir();
+        let stat = rustix::fs::statat(CWD, &dir, AtFlags::empty()).expect("stat");
+        let fd = open_checked(CWD, dir.as_os_str(), &dir, (stat.st_dev, stat.st_ino))
+            .expect("same identity");
+        assert_eq!(fstat(&fd).expect("fstat").st_ino, stat.st_ino);
+        let other = open_checked(
+            CWD,
+            dir.as_os_str(),
+            Path::new("/x"),
+            (stat.st_dev, stat.st_ino.wrapping_add(1)),
+        );
+        assert!(matches!(
+            other,
+            Err(RemoveError::Refused {
+                reason: Refusal::Changed,
+                ..
+            })
+        ));
+    }
 }

@@ -681,9 +681,9 @@ impl Drop for ModeGuard {
 }
 
 #[test]
-fn a_deletion_stopped_by_an_unreadable_folder_reports_what_it_removed() {
+fn a_deletion_stopped_by_an_unwritable_folder_reports_what_it_removed() {
     if running_as_root() {
-        eprintln!("skipped: root reads through a mode-000 directory");
+        eprintln!("skipped: root writes through a read-only directory");
         return;
     }
     let fx = fixture(false);
@@ -693,7 +693,9 @@ fn a_deletion_stopped_by_an_unreadable_folder_reports_what_it_removed() {
     let guard = ModeGuard {
         path: inner.clone(),
     };
-    fs::set_permissions(&inner, fs::Permissions::from_mode(0o000)).expect("chmod");
+    // Readable, so the read-only pass lists it; not writable, so its file
+    // cannot be removed.
+    fs::set_permissions(&inner, fs::Permissions::from_mode(0o555)).expect("chmod");
     let files = allocated(&fx.path("docs/a.txt")) + allocated(&fx.path("docs/b.txt"));
 
     let result = delete_tree(
@@ -704,22 +706,55 @@ fn a_deletion_stopped_by_an_unreadable_folder_reports_what_it_removed() {
         &CancellationToken::new(),
     );
     // A directory's files go before its subdirectories: a.txt, b.txt and the
-    // hard link are gone when inner/ refuses to open.
+    // hard link are gone when inner/kept.txt refuses to go.
     match result {
         Err(Failure {
             error: RemoveError::Io { path, .. },
             removed,
         }) => {
-            assert_eq!(path, inner);
+            assert_eq!(path, inner.join("kept.txt"));
             assert_eq!(removed.entries, 3);
             assert_eq!(removed.bytes, files);
         }
         other => panic!("expected an IO failure with a partial result, got {other:?}"),
     }
     assert!(!fx.path("docs/a.txt").exists());
-    assert!(fs::symlink_metadata(&inner).is_ok());
     drop(guard);
     assert!(inner.join("kept.txt").exists());
+}
+
+#[test]
+fn an_unreadable_inner_folder_fails_closed_before_anything_is_removed() {
+    if running_as_root() {
+        eprintln!("skipped: root reads through a mode-000 directory");
+        return;
+    }
+    let fx = fixture(false);
+    let inner = fx.path("docs/inner");
+    fs::create_dir_all(&inner).expect("inner");
+    let guard = ModeGuard {
+        path: inner.clone(),
+    };
+    fs::set_permissions(&inner, fs::Permissions::from_mode(0o000)).expect("chmod");
+    // What cannot be listed cannot be checked for a mount: nothing goes.
+    match delete_tree(
+        &fx.path("docs"),
+        &fx.root,
+        &no_bounds(),
+        None,
+        &CancellationToken::new(),
+    ) {
+        Err(Failure {
+            error: RemoveError::Io { path, .. },
+            removed,
+        }) => {
+            assert_eq!(path, inner);
+            assert_eq!(removed, Removed::default());
+        }
+        other => panic!("expected an IO failure, got {other:?}"),
+    }
+    assert!(fx.path("docs/a.txt").exists());
+    drop(guard);
 }
 
 #[test]
@@ -843,4 +878,75 @@ fn a_graft_replaces_a_subtree_and_updates_its_ancestors() {
     assert!(!tree.graft(NodeId(99), empty()));
     assert!(!tree.is_live(NodeId(99)));
     assert_eq!(tree.node(NodeId(0)).expect("root").allocated, 50);
+}
+
+#[test]
+fn an_inner_mount_two_levels_down_is_refused_before_anything_is_removed() {
+    let fx = fixture(false);
+    fs::create_dir_all(fx.path("docs/sub/inner")).expect("inner");
+    fs::write(fx.path("docs/sub/inner/x.txt"), b"x").expect("x");
+    let bounds: HashSet<PathBuf> = [fx.path("docs/sub/inner")].into_iter().collect();
+    let result = delete_tree(
+        &fx.path("docs"),
+        &fx.root,
+        &bounds,
+        None,
+        &CancellationToken::new(),
+    );
+    match result {
+        Err(Failure {
+            error: RemoveError::Refused { path, reason },
+            removed,
+        }) => {
+            assert_eq!(reason, Refusal::MountRoot);
+            assert_eq!(path, fx.path("docs/sub/inner"));
+            assert_eq!(removed.entries, 0);
+        }
+        other => panic!("expected a mount refusal, got {other:?}"),
+    }
+    assert!(fx.path("docs/a.txt").exists());
+    assert!(fx.path("docs/sub/inner/x.txt").exists());
+}
+
+#[test]
+fn a_missing_folder_on_the_way_is_reported_as_missing() {
+    let fx = fixture(false);
+    assert_eq!(
+        refused(delete_tree(
+            &fx.path("nope/x"),
+            &fx.root,
+            &no_bounds(),
+            None,
+            &CancellationToken::new()
+        )),
+        Refusal::Missing
+    );
+}
+
+#[test]
+fn a_tree_deeper_than_the_cap_fails_closed_before_anything_is_removed() {
+    use hematita_core::usage::remove::MAX_DEPTH;
+    assert_eq!(MAX_DEPTH, 256);
+    let fx = fixture(false);
+    let mut deep = fx.path("deep");
+    for _ in 0..=MAX_DEPTH {
+        deep.push("d");
+    }
+    fs::create_dir_all(&deep).expect("deep");
+    fs::write(fx.path("deep/top.txt"), b"t").expect("top");
+    let result = delete_tree(
+        &fx.path("deep"),
+        &fx.root,
+        &no_bounds(),
+        None,
+        &CancellationToken::new(),
+    );
+    match result {
+        Err(Failure {
+            error: RemoveError::Io { .. },
+            removed,
+        }) => assert_eq!(removed.entries, 0),
+        other => panic!("expected a depth failure, got {other:?}"),
+    }
+    assert!(fx.path("deep/top.txt").exists());
 }

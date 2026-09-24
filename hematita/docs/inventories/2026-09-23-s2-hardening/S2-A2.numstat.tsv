@@ -1,0 +1,27 @@
+# S2-A2 exact change inventory
+
+Base revision	39e1b94433102d258567dcc937c5976c9299265b
+Pathspec	celestina-rs/crates/hematita-core/src/usage/remove.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/tree.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/walk.rs
+Pathspec	celestina-rs/crates/hematita-core/tests/usage_tree.rs
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-23-s2-core-fixes.md
+Pathspec	hematita/docs/inventories/2026-09-23-s2-hardening/S2-A2.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-23-s2-hardening.md
+Pathspec	hematita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+104	23	dc79bfff4798412afea1183abf559800e14eb83277762088d47b81bcfe17e0ba	celestina-rs/crates/hematita-core/src/usage/remove.rs
+3	2	16d0f307bba058d275459ea0ff4c5c315720ad9a4ca757388736fb457e0bc730	celestina-rs/crates/hematita-core/src/usage/tree.rs
+3	3	7ad50c41693c694f48da3a0836bddaa81411630b49687fc02bb8f46c00d24b8e	celestina-rs/crates/hematita-core/src/usage/walk.rs
+112	6	e931ac47b353bf321863b930d9532fffde23d01295c8eb11dec6db7cd97b3bae	celestina-rs/crates/hematita-core/tests/usage_tree.rs
+3	1	37814415862e3b6f81e5d58ec10be814b894b61ed6f27c97c26cf8b4989fd1f0	hematita/ROADMAP.md
+6	1	0b77555217e718f40798829bcc9df1fcbb55c378367e6cc419851a62e70d56e4	hematita/STATUS.md
+84	0	7749eb44b13aafc3980d8885879cb3a5df502da5c6d38e88efee71f5c26a183e	hematita/docs/evidence/2026-09-23-s2-core-fixes.md
+6	1	cc65fee36f2a47ceb53b9de8193910c64a05817da16a890072c2c7c01e8a8de6	hematita/docs/plans/active/2026-09-23-s2-hardening.md
+2	1	89c00afbef8323eaa81e815bdb8239c08fc3d855e0b9ed1ba9ee22f38ed16c34	hematita/docs/plans/active/README.md
+27	0	self	hematita/docs/inventories/2026-09-23-s2-hardening/S2-A2.numstat.tsv

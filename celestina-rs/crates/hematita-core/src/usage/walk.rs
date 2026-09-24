@@ -6,9 +6,9 @@
 //! bigger disk cannot inflate the result. A directory on another device is
 //! listed as a leaf with no size: mounts are analysed from their own root.
 //! A hard link counts once per scan; only a file with more than one name is
-//! remembered for that, so the set stays as small as the links it tracks. An unreadable directory is marked and
-//! the walk goes on: the person gets a partial truth with the count of what
-//! was refused, never a silent hole.
+//! remembered for that, so the set stays as small as the links it tracks.
+//! An unreadable directory is marked and the walk goes on: the person gets a
+//! partial truth with the count of what was refused, never a silent hole.
 
 use std::collections::HashSet;
 use std::ffi::OsString;
