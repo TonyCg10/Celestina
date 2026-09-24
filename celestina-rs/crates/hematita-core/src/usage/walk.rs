@@ -5,7 +5,8 @@
 //! with its own small size and is never followed, so a loop or a link to a
 //! bigger disk cannot inflate the result. A directory on another device is
 //! listed as a leaf with no size: mounts are analysed from their own root.
-//! A hard link counts once per scan. An unreadable directory is marked and
+//! A hard link counts once per scan; only a file with more than one name is
+//! remembered for that, so the set stays as small as the links it tracks. An unreadable directory is marked and
 //! the walk goes on: the person gets a partial truth with the count of what
 //! was refused, never a silent hole.
 
@@ -127,6 +128,7 @@ pub fn scan(
         children: Vec::new(),
     }];
     let mut seen_inodes: HashSet<(u64, u64)> = HashSet::new();
+    let mut hard_link_names = 0u64;
     let mut stack: Vec<(NodeId, PathBuf)> = vec![(root_id, root.to_path_buf())];
     let mut unreadable_dirs = 0u32;
     let mut entries_seen = 0u64;
@@ -160,7 +162,11 @@ pub fn scan(
             } else {
                 Kind::Other
             };
-            let counted = kind == Kind::File && seen_inodes.insert((meta.dev(), meta.ino()));
+            let counted = kind == Kind::File
+                && (meta.nlink() < 2 || seen_inodes.insert((meta.dev(), meta.ino())));
+            if kind == Kind::File && !counted {
+                hard_link_names += 1;
+            }
             let sized = counted || kind == Kind::Other;
             let allocated = if sized {
                 meta.blocks().saturating_mul(BLOCK_BYTES)
@@ -222,7 +228,22 @@ pub fn scan(
         device,
         nodes,
         unreadable_dirs,
+        hard_link_names,
     })
+}
+
+/// [`scan`] without progress: the fresh subtree a graft puts in place of
+/// one a stopped deletion left stale.
+///
+/// # Errors
+///
+/// As [`scan`].
+pub fn scan_subtree(
+    root: &Path,
+    boundaries: &HashSet<PathBuf>,
+    cancel: &CancellationToken,
+) -> Result<Tree, ScanError> {
+    scan(root, boundaries, cancel, &mut |_| {})
 }
 
 /// Adds every node's sizes into its parent's, bottom-up.

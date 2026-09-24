@@ -13,6 +13,12 @@ license.workspace = true
 # staleness types; the storage walk, the duplicate check and the deletion stop
 # on the same token the application already hands every worker.
 celestina-core.workspace = true
+# `rustix` for the `*at` syscalls (`openat`, `unlinkat`, `statat`, `fstat`,
+# `Dir`): a permanent deletion that opens each directory once and removes
+# children relative to that descriptor cannot be redirected by a component
+# swapped for a symbolic link while it runs; `std` exposes no `unlinkat`.
+# Safe Rust, `fs` feature only.
+rustix = { version = "1.1.4", default-features = false, features = ["std", "fs"] }
 
 [lints]
 workspace = true

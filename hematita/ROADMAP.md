@@ -1,8 +1,8 @@
 # Hematita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
-- **Related author validation:** `VAL-S1` in [VALIDATION.md](VALIDATION.md)
+- **Status:** active
+- **Active implementation checkpoint:** S2
+- **Related author validation:** `VAL-S2` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
 ## Hypothesis and tangible outcome
@@ -21,6 +21,7 @@ alone, without the machine noticing the monitor.
 | H4 | Sensors (all of hwmon) |
 | H5 | Services and privileged actions |
 | S1 | Storage: mount points, browsing, a device-bounded scan, size list and treemap, duplicates and empty folders, trash and guarded deletion |
+| S2 | Storage hardening: a descriptor-based deletion with partial results, grafted sub-scans, the hub split |
 
 ## Exclusions
 
@@ -66,6 +67,9 @@ alone, without the machine noticing the monitor.
 | S1-D | done | S1-C | actions: open in Siderita, batch trash, guarded permanent deletion, selection | `scripts/verify-production.sh` |
 | S1-E | done | S1-D | the review's corrections: actions cancellable keeping their partial successes, entries re-validated by device and inode, mount roots refused for trash too | `scripts/verify-production.sh` |
 | S1-Z | done | S1-E | implementation exit and 1.1.0 | `scripts/complete-production.sh` |
+| S2-A | done | S1-Z | `hematita-core::usage`: the deletion on directory descriptors with partial results, the hard-link set gated on `nlink > 1`, `scan_subtree`, `Tree::graft` and `Tree::is_live` | `cargo test -p hematita-core` |
+| S2-B | planned | S2-A | the hub split, partial removals grafted, the `Arc` dropped before `make_mut`, dead ids rejected, the bound confirmation count | `scripts/verify-production.sh` |
+| S2-Z | planned | S2-B | implementation exit and 1.1.1 | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -110,6 +114,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - S1-D: [actions](docs/evidence/2026-09-23-s1-actions.md)
 - S1-E: [actions fixes](docs/evidence/2026-09-23-s1-actions-fixes.md)
 - S1-Z: [production completion](docs/evidence/2026-09-23-s1-production-completion.md)
+- S2-A: [core](docs/evidence/2026-09-23-s2-core.md)
 
 ## H1 — closed 2026-09-21
 
@@ -390,19 +395,18 @@ The design spec is
 `VAL-S1` stays pending in the author's lane and did not block this closure.
 Further work opens with a new checkpoint and the author's word.
 
-## S2 — planned first unit
+## S2 — opened 2026-09-23
 
-`S2-A` — Partial removals, openat-based deletion, hub split:
-
-- A `delete_tree` that fails or is cancelled midway must report what it
-  removed so the hub prunes or rescans that subtree (today the tree keeps
-  the old size until a rescan).
-- Replace the path-based `remove_file`/`remove_dir` plan with
-  `openat(O_NOFOLLOW)` + `unlinkat` to close the listing-to-removal window
-  (needs a `rustix` `fs` justification).
-- Gate `seen_inodes` on `nlink > 1`.
-- Drop the confirm worker's `Arc<Tree>` before `Arc::make_mut` in `prune`.
-- Reject pruned ids in `node_id`.
-- Bind the confirmed count in the dialog.
-- Split `analysis.rs` (selection+actions controller, confirm state beside
-  `analysis_view.rs`).
+The S1 reviews left three things open: the permanent deletion re-resolved
+paths between its listing and its removals, so a folder swapped for a link
+in that window could redirect it; a deletion that failed or was cancelled
+midway left the tree showing sizes that were no longer true; and the
+analysis hub had grown past what one file should own. Its falsifiable
+problem is whether a deletion that walks descriptors cannot be redirected,
+and whether a tree that grafts what a stopped deletion left behind never
+shows a size that is no longer true. The
+[plan](docs/plans/active/2026-09-23-s2-hardening.md) orders `S2-A` (the
+descriptor-based deletion and the graft in `hematita-core::usage`,
+[core evidence](docs/evidence/2026-09-23-s2-core.md)), `S2-B` (the hub split
+and the grafting in the application) and `S2-Z` (1.1.1); `VAL-S2` is the
+author's check on the real session.

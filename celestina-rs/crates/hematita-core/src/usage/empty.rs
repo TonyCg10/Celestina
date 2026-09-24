@@ -105,6 +105,7 @@ mod tests {
             device: 1,
             nodes,
             unreadable_dirs: 1,
+            hard_link_names: 0,
         };
         assert_eq!(empty_folders(&tree), vec![NodeId(6), NodeId(5)]);
     }

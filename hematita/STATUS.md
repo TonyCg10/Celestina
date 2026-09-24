@@ -1,6 +1,17 @@
 # Hematita status
 
 - **Updated:** 2026-09-23
+- **In progress:** `S2` (storage hardening) — `S2-A` done:
+  `hematita-core::usage` deletes permanently through directory descriptors
+  (the analysed folder and every folder down to the target opened without
+  following a link, every entry removed relative to the folder that holds
+  it), checks the scanned device and inode itself, and reports what it had
+  removed when it stops midway; the walk remembers only files with more
+  than one name; `scan_subtree`, `Tree::graft` and `Tree::is_live` let the
+  hub put a fresh sub-scan in place of a stale subtree; crate-only, no
+  build, see the [core evidence](docs/evidence/2026-09-23-s2-core.md). The
+  application does not compile against the new `delete_tree` and `Tree`
+  until `S2-B`, which is next; the deployed 1.1.0 is unaffected
 - **Delivered as 1.1.0:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
   walks one device under a folder into an indexed tree (hard links once,
   symbolic links never followed, unreadable folders marked), finds empty
@@ -104,6 +115,8 @@
   refresh
 - **Closed phase:** `S1` (storage), closed 2026-09-23; the archived
   [plan](docs/plans/archive/2026-09-23-s1-storage.md); `VAL-S1` pending
+- **Active phase:** `S2` (storage hardening), opened 2026-09-23 in its
+  [plan](docs/plans/active/2026-09-23-s2-hardening.md); `VAL-S2` pending
 
 ## Current checkout truth
 

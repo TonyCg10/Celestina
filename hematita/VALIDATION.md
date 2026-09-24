@@ -182,3 +182,13 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Pass condition:** occupation matches `df` within rounding; the scan advances visibly and cancels within a second; the folder size matches `du` within 1 %; verified duplicates are byte-identical (`cmp` on one pair); trashed entries appear in the trash and the tree updates without a rescan; the permanent deletion asks, names the count and size, and removes only what was selected; every list and the treemap reachable by keyboard; idle CPU under 2 % after a scan; a cancelled permanent deletion's sentence names exactly what it removed before stopping; a bind mount and a disk's own root are both refused for trash and for permanent deletion; a file replaced after the scan is refused rather than removed; deleting a symbolic link to a folder removes only the link; trashing one entry alone asks no confirmation
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-S2 — Hardened deletion on the real session
+
+- **Status:** pending
+- **Related implementation:** S2
+- **Requires:** the deployed Hematita 1.1.1; a USB disk with disposable folders
+- **Procedure:** on the USB disk, scan, select a large folder and delete it, cancel halfway: the row shows the new size within a second and matches `du`; make a folder unwritable inside a selected tree (`chmod 000`), delete the selection: the outcome names the count, the failed entry keeps its true size; replace a selected folder by a symbolic link to another folder after the scan and delete: refused, the link's target untouched; select a folder and its child and read the dialog's count (one); keyboard as in VAL-S1
+- **Pass condition:** no size on screen disagrees with `du` after any stopped deletion; the symbolic-link case is refused; the dialog count equals what is acted on; the section still idles under 2 % CPU
+- **Result:** not run
+- **Evidence:** none

@@ -3,7 +3,10 @@
 //!
 //! Nodes live in one `Vec` addressed by [`NodeId`], so an id handed to the
 //! interface stays valid for the life of the scan, including after
-//! [`Tree::prune`] (a pruned node is emptied and unlinked, never moved).
+//! [`Tree::prune`] (a pruned node is emptied and unlinked, never moved) and
+//! [`Tree::graft`] (a replaced subtree is unlinked and the fresh one
+//! appended). [`Tree::is_live`] tells an id still in the tree from one of a
+//! subtree that was pruned or replaced.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -52,6 +55,9 @@ pub struct Tree {
     pub device: u64,
     pub nodes: Vec<Node>,
     pub unreadable_dirs: u32,
+    /// Second and later names of a hard-linked file met by the walk that
+    /// built the tree; a graft does not change it.
+    pub hard_link_names: u64,
 }
 
 impl Tree {
@@ -132,6 +138,149 @@ impl Tree {
         }
         Some(allocated)
     }
+
+    /// Whether `id` is reachable from the root through `children`: false
+    /// for an unknown id and for every node of a pruned or replaced subtree.
+    #[must_use]
+    pub fn is_live(&self, id: NodeId) -> bool {
+        let mut cursor = id;
+        // A parent chain longer than the arena would be a cycle.
+        for _ in 0..=self.nodes.len() {
+            if cursor == self.root {
+                return self.node(cursor).is_some();
+            }
+            let Some(parent) = self.node(cursor).and_then(|node| node.parent) else {
+                return false;
+            };
+            let Some(holder) = self.node(parent) else {
+                return false;
+            };
+            if !holder.children.contains(&cursor) {
+                return false;
+            }
+            cursor = parent;
+        }
+        false
+    }
+
+    /// Replaces the subtree at `id` with `fresh` (a scan of the same path):
+    /// the old nodes are unlinked and emptied like [`Tree::prune`]'s, the
+    /// fresh ones appended with new ids, the fresh root taking `id`'s name
+    /// and place among its siblings, and every ancestor's totals moved by
+    /// the difference. Ids outside the subtree keep their meaning.
+    ///
+    /// A hard-linked file is counted once inside `fresh`, as the sub-scan
+    /// saw it; a name of it elsewhere in the tree is not known there.
+    ///
+    /// Answers false, changing nothing, for the root, an id that is not
+    /// live, an empty `fresh`, or one the arena could not address.
+    pub fn graft(&mut self, id: NodeId, fresh: Tree) -> bool {
+        if id == self.root || !self.is_live(id) {
+            return false;
+        }
+        let Some(parent) = self.node(id).and_then(|node| node.parent) else {
+            return false;
+        };
+        let Ok(offset) = u32::try_from(self.nodes.len()) else {
+            return false;
+        };
+        let fresh_count = fresh.nodes.len();
+        if fresh.node(fresh.root).is_none()
+            || u32::try_from(self.nodes.len().saturating_add(fresh_count)).is_err()
+        {
+            return false;
+        }
+        let new_id = NodeId(offset + fresh.root.0);
+        let old_unreadable = self.unreadable_below(id);
+
+        let Some(old) = self.nodes.get_mut(id.0 as usize) else {
+            return false;
+        };
+        let name = old.name.clone();
+        let before = (
+            old.allocated,
+            old.apparent,
+            old.files_below,
+            old.others_below,
+        );
+        old.allocated = 0;
+        old.apparent = 0;
+        old.files_below = 0;
+        old.others_below = 0;
+        old.children.clear();
+
+        let fresh_root = fresh.root;
+        let mut after = (0, 0, 0, 0);
+        for (index, mut node) in fresh.nodes.into_iter().enumerate() {
+            let is_root = index == fresh_root.0 as usize;
+            node.parent = if is_root {
+                Some(parent)
+            } else {
+                node.parent.map(|p| NodeId(p.0 + offset))
+            };
+            for child in &mut node.children {
+                child.0 += offset;
+            }
+            if is_root {
+                node.name = name.clone();
+                after = (
+                    node.allocated,
+                    node.apparent,
+                    node.files_below,
+                    node.others_below,
+                );
+            }
+            self.nodes.push(node);
+        }
+        if let Some(holder) = self.nodes.get_mut(parent.0 as usize) {
+            for child in &mut holder.children {
+                if *child == id {
+                    *child = new_id;
+                }
+            }
+        }
+        let mut cursor = Some(parent);
+        while let Some(ancestor) = cursor.and_then(|a| self.nodes.get_mut(a.0 as usize)) {
+            ancestor.allocated = ancestor
+                .allocated
+                .saturating_sub(before.0)
+                .saturating_add(after.0);
+            ancestor.apparent = ancestor
+                .apparent
+                .saturating_sub(before.1)
+                .saturating_add(after.1);
+            ancestor.files_below = ancestor
+                .files_below
+                .saturating_sub(before.2)
+                .saturating_add(after.2);
+            ancestor.others_below = ancestor
+                .others_below
+                .saturating_sub(before.3)
+                .saturating_add(after.3);
+            cursor = ancestor.parent;
+        }
+        self.unreadable_dirs = self
+            .unreadable_dirs
+            .saturating_sub(old_unreadable)
+            .saturating_add(fresh.unreadable_dirs);
+        true
+    }
+
+    /// Unreadable folders at or below `id`.
+    fn unreadable_below(&self, id: NodeId) -> u32 {
+        let mut count = 0u32;
+        let mut stack = vec![id];
+        while let Some(current) = stack.pop() {
+            let Some(node) = self.node(current) else {
+                continue;
+            };
+            if node.unreadable {
+                count = count.saturating_add(1);
+            }
+            stack.extend(node.children.iter().copied());
+        }
+        count
+    }
 }
 
 #[cfg(test)]
@@ -173,6 +322,7 @@ mod tests {
             device: 1,
             nodes,
             unreadable_dirs: 0,
+            hard_link_names: 0,
         }
     }
 
