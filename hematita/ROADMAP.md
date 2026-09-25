@@ -1,7 +1,7 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** S3
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-S3` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
@@ -74,7 +74,7 @@ alone, without the machine noticing the monitor.
 | S2-B2 | done | S2-B | the review's corrections: a cancel inside the last item reads as cancelled, the confirmation bound to a selection revision, the refusal naming the live count, the graft's unreadable counts aligned, the workers going through session methods | `scripts/verify-production.sh` |
 | S2-Z | done | S2-B2 | implementation exit and 1.1.1 | `scripts/complete-production.sh` |
 | S3-A | done | S2-Z | `hematita-core::usage::view` (rows, flat treemap, unreadable counts), `CelestinaTreemap` and `CelestinaUsageList` consumed, the folder argument (command line, D-Bus `Open`, `%f`) | `scripts/verify-production.sh` |
-| S3-Z | planned | S3-A | implementation exit | `scripts/complete-production.sh` |
+| S3-Z | done | S3-A | implementation exit | `scripts/complete-production.sh` |
 
 ## Implementation exit
 
@@ -125,6 +125,7 @@ author's prefix; the installed binary shows live CPU and memory graphs.
 - S2-B2: [hub fixes](docs/evidence/2026-09-23-s2-hub-fixes.md)
 - S2-Z: [production completion](docs/evidence/2026-09-23-s2-production-completion.md)
 - S3-A: [shared usage](docs/evidence/2026-09-25-s3-shared-usage.md)
+- S3-Z: [production completion](docs/evidence/2026-09-25-s3-production-completion.md)
 
 ## H1 — closed 2026-09-21
 
@@ -450,23 +451,35 @@ implementation exit ran on 2026-09-23: the
 `VAL-S2` stays pending in the author's lane and did not block this closure.
 Further work opens with a new checkpoint and the author's word.
 
-## S3 — Shared usage view and the folder argument
+## S3 — closed 2026-09-25
 
 Siderita is to show a folder's usage with the same projection and the same
-two controls Hematita draws, so the projection moves into
+two controls Hematita draws, so the projection moved into
 `hematita-core::usage::view` and the treemap and size list into
-`celestina-style`. Its falsifiable hypothesis: a second consumer proves the
-projection and the two controls are shared anatomy, and a folder handed on
-the command line lands in the storage section.
+`celestina-style`. Its falsifiable hypothesis was that a second consumer
+proves the projection and the two controls are shared anatomy, and that a
+folder handed on the command line lands in the storage section. The
+delivered result is the release binary built, verified and deployed to the
+author's prefix at `1.2.0`:
 
-- `S3-A` moves `unreadable_below` and `flat_rects` into
+- `S3-A` moved `unreadable_below` and `flat_rects` into
   `hematita-core::usage::view` beside `children_rows` (biggest first, a
-  merged remainder past a limit), makes the Storage page draw
-  `CelestinaTreemap` and `CelestinaUsageList` instead of its own copies,
-  and accepts a folder on the command line, through D-Bus `Open` and from
-  the desktop entry's `%f`.
-- `S3-Z` is the implementation exit.
+  merged remainder past a limit) and removed the application's copies; the
+  Storage page draws `CelestinaTreemap` and `CelestinaUsageList` instead of
+  its own `Treemap.qml` and `UsageList.qml`, with Space and Delete handled
+  by the page; a folder is accepted on the command line, through D-Bus
+  `Open(s)` and from the desktop entry's `%f`, and the smoke checks that a
+  folder argument lands in the storage section.
 
-Units are in the active
-[plan](docs/plans/active/2026-09-25-s3-shared-usage.md). `VAL-S3` is in the
-author's lane and does not block.
+Residuals, recorded in [STATUS.md](STATUS.md): Space, Delete and the D-Bus
+hand-off have not been tried on a real session (`VAL-S3`); the desktop
+entry declares no `MimeType=inode/directory`, so file managers do not offer
+Hematita for a folder; an `Open` that arrives during a scan drops the
+analysis in progress.
+
+Units `S3-A` and `S3-Z` are in the archived
+[plan](docs/plans/archive/2026-09-25-s3-shared-usage.md). The checkpoint's
+implementation exit ran on 2026-09-25: the
+[completion evidence](docs/evidence/2026-09-25-s3-production-completion.md).
+`VAL-S3` stays pending in the author's lane and did not block this closure.
+Further work opens with a new checkpoint and the author's word.

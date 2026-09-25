@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-25
 - **Scope:** `S3-A` of
-  [`../plans/active/2026-09-25-s3-shared-usage.md`](../plans/active/2026-09-25-s3-shared-usage.md):
+  [`../plans/archive/2026-09-25-s3-shared-usage.md`](../plans/archive/2026-09-25-s3-shared-usage.md):
   `hematita-core::usage::view`, the Storage page's list and map, the folder
   argument
 - **Environment:** the author's checkout; offscreen Qt platform, no session

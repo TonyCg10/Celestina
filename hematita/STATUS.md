@@ -1,13 +1,16 @@
 # Hematita status
 
 - **Updated:** 2026-09-25
-- **Focus:** `S3` (shared usage view) — `S3-A` done: the usage projection
+- **Delivered as 1.2.0:** `S3` (shared usage view) — `S3-A` done: the usage projection
   lives in `hematita-core::usage::view`, the Storage page draws the shared
   `CelestinaTreemap` and `CelestinaUsageList`, and a folder handed on the
   command line, through D-Bus `Open` or the desktop entry's `%f` opens the
   storage section browsing it; built and verified, not deployed
-  ([evidence](docs/evidence/2026-09-25-s3-shared-usage.md)). `S3-Z` next;
-  `VAL-S3` pending
+  ([evidence](docs/evidence/2026-09-25-s3-shared-usage.md)); `S3-Z` closed
+  the checkpoint at `1.2.0`: the release binary is built, verified and
+  deployed to the author's prefix. Nobody has tried Space, Delete or the
+  D-Bus hand-off on a real session yet: `VAL-S3` stays pending. See the
+  [production completion record](docs/evidence/2026-09-25-s3-production-completion.md)
 - **Delivered as 1.1.1:** `S2` (storage hardening) — `S2-A` done:
   `hematita-core::usage` deletes permanently through directory descriptors
   (the analysed folder and every folder down to the target opened without
@@ -143,6 +146,9 @@
 - **Closed phase:** `S2` (storage hardening), closed 2026-09-23; the
   archived [plan](docs/plans/archive/2026-09-23-s2-hardening.md); `VAL-S2`
   pending
+- **Closed phase:** `S3` (shared usage view), closed 2026-09-25; the
+  archived [plan](docs/plans/archive/2026-09-25-s3-shared-usage.md);
+  `VAL-S3` pending
 
 ## Current checkout truth
 
@@ -516,6 +522,18 @@
   graft bumps the selection revision, so a graft landing under an open
   dialog refuses harmlessly; duplicate candidates inside a grafted folder
   are not offered again until a full rescan.
+- As of `S3-Z` (2026-09-25), the shared usage view is delivered as `1.2.0`:
+  the release binary is built, verified and deployed to the author's
+  prefix. The Storage page draws `CelestinaTreemap` and
+  `CelestinaUsageList` from `celestina-style` over rows and rectangles from
+  `hematita-core::usage::view`, and `hematita FOLDER`, D-Bus `Open(s)` or
+  the desktop entry's `%f` open the storage section browsing that folder.
+  See the
+  [production completion record](docs/evidence/2026-09-25-s3-production-completion.md).
+- Residuals of `S3`: Space, Delete and the D-Bus hand-off are untried on a
+  real session (`VAL-S3`); the desktop entry declares no
+  `MimeType=inode/directory`; an `Open` that arrives during a scan drops
+  the analysis in progress.
 
 ## Blockers
 

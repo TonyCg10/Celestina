@@ -1,0 +1,31 @@
+# S3-Z exact change inventory
+
+Base revision	869ba6242be5e262403ed90f6b113daa56923f7a
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-25-s3-production-completion.md
+Pathspec	hematita/docs/evidence/2026-09-25-s3-shared-usage.md
+Pathspec	hematita/docs/inventories/2026-09-25-s3-shared-usage/S3-Z.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-25-s3-shared-usage.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-25-s3-shared-usage.md
+Pathspec	hematita/docs/plans/archive/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	5e12bcadb1f747cf65adc8adbf7c80b56699c9f16afb8da8a8d1281bd2430dcf	docs/version-history.tsv
+1	1	350d4c66a31726d601d13dae085fa727df7b3ddeb36f67047ad454cd4cace760	hematita/Cargo.lock
+1	1	9dbc6bed7e4df86e44bae62ca085a4173ceaf8df514a9544f33e5cb26966e4fb	hematita/Cargo.toml
+31	18	cc269dfc663b0871978a31e713b164d4c6df0cb0dc7d6e678d0bec6f2c58ac37	hematita/ROADMAP.md
+21	3	9b032fe58aa1311b9974fb71980d871778b2aecc90b0c8818047fa22505f1d06	hematita/STATUS.md
+76	0	b06015a4e25dddb76934dc207ba3433cd8dbef1b4b8d0cdd34b0e18db3cf5f6b	hematita/docs/evidence/2026-09-25-s3-production-completion.md
+1	1	0e336669fc88891a499282fa235ca53c8bcfd7d645c915c004664687052d44d2	hematita/docs/evidence/2026-09-25-s3-shared-usage.md
+0	57	deleted	hematita/docs/plans/active/2026-09-25-s3-shared-usage.md
+2	2	77138db2ee0cce3b0ee3fc49738f3c3ad1ed4ed842fd51e198630fd9c69822ad	hematita/docs/plans/active/README.md
+59	0	595c6507611611c447acea361235311061f75823a85f1673e35d082cf4e95db9	hematita/docs/plans/archive/2026-09-25-s3-shared-usage.md
+1	0	31f0f1e21de06e50c29fcb24a8602992cddd26eea6b20abfb1a010eb261a7dc5	hematita/docs/plans/archive/README.md
+31	0	self	hematita/docs/inventories/2026-09-25-s3-shared-usage/S3-Z.numstat.tsv

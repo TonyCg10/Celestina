@@ -18,3 +18,4 @@ root.
 - [REL-1 — Release Hematita 1.0](2026-09-23-release-1.md)
 - [S1 — Storage](2026-09-23-s1-storage.md)
 - [S2 — Hardening the storage analyzer](2026-09-23-s2-hardening.md)
+- [S3 — Shared usage view and the folder argument](2026-09-25-s3-shared-usage.md)

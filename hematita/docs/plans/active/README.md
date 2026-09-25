@@ -1,7 +1,7 @@
 # Active Hematita plans
 
-- [S3 — Shared usage view and the folder argument](2026-09-25-s3-shared-usage.md)
-  (`s3-shared-usage`), opened 2026-09-25.
+None. `S3` (shared usage view) closed on 2026-09-25 at `1.2.0`; further
+work opens with a new checkpoint and the author's word.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

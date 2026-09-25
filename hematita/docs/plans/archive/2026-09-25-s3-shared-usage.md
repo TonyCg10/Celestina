@@ -1,8 +1,10 @@
 # S3 — Shared usage view and the folder argument
 
 - **Opened:** 2026-09-25
+- **Closed:** 2026-09-25
+- **Successor:** none
 - **Plan ID:** s3-shared-usage
-- **Status:** active
+- **Status:** done
 - **Authorization:** the author asked on 2026-09-25 for Siderita to show a
   folder's usage with Hematita's projection and controls, planned in
   [the folder usage plan](../../../../docs/superpowers/plans/2026-09-25-siderita-folder-usage.md)
@@ -54,4 +56,4 @@ shared controls and opens a folder handed on the command line.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | S3-A | `hematita:` | done | [inventory](../../inventories/2026-09-25-s3-shared-usage/S3-A.numstat.tsv) | 23 files, +780/-518 | `hematita-core::usage::view` with the app's copies removed; `CelestinaTreemap` and `CelestinaUsageList` symlinked and consumed, the own `Treemap.qml` and `UsageList.qml` deleted, Space and Delete on the page; `openPath`, D-Bus `Open(s)`, `startPath`, `Exec=hematita %f`; the smoke's start gate | [shared usage](../../evidence/2026-09-25-s3-shared-usage.md) | `VAL-S3` |
-| S3-Z | `hematita:` | planned | pending | pending | implementation exit | pending | `VAL-S3` |
+| S3-Z | `hematita:` | done | [inventory](../../inventories/2026-09-25-s3-shared-usage/S3-Z.numstat.tsv) | 12 files, +225/-83 | implementation exit and 1.2.0 | [production completion](../../evidence/2026-09-25-s3-production-completion.md) | `VAL-S3` |
