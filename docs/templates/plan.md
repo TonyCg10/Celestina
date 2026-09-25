@@ -59,14 +59,16 @@ At closure classify the atomic batch as `bug`, `milestone`, `release` or
 and append-only history row before its production build; see
 [the version contract](../contracts/versioning.md).
 
-Before setting a unit to `done`, calculate tracked paths with
-`git diff --numstat --no-renames` and each new path against `/dev/null`; preserve
-the exact path inventory and record the sum as `N files, +X/-Y`. Replace
+Before setting a unit to `done`, run its exit and request the landing;
+`scripts/land-unit.py` calculates tracked paths with
+`git diff --numstat --no-renames` and each new path against `/dev/null`, preserves
+the exact path inventory and records the sum as `N files, +X/-Y`. It replaces
 `Files / areas` with one relative Markdown link to that unit's
-stable owner-local `docs/inventories/<plan-slug>/<unit>.numstat.tsv`, and replace
+stable owner-local `docs/inventories/<plan-slug>/<unit>.numstat.tsv`, and
 `Automated evidence` with a resolvable link to its dated record under
-`evidence/`. `plan-slug` is this plan's exact basename without `.md`; `unit`
-matches the ledger id exactly. The inventory starts with
+`evidence/`, which the session writes and links before the landing; see
+[the landing contract](../contracts/landing.md). `plan-slug` is this plan's
+exact basename without `.md`; `unit` matches the ledger id exactly. The inventory starts with
 `Base revision<TAB><40 hex>`, uses the header
 `added<TAB>deleted<TAB>content<TAB>path`, and includes every changed path plus
 the plan, evidence record and one row for itself whose content is `self`.

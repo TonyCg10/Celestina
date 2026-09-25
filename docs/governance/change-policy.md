@@ -139,6 +139,8 @@ The inventory includes its plan, evidence, and itself. Before commit, its union
 must match staged paths, numstat, and SHA-256 exactly. The base is the `HEAD`
 immediately before the unit. Once tracked, the commit that introduced the
 inventory must use that base as direct parent and contain the whole unit.
+`scripts/land-unit.py` writes the inventory on top of the current `main` when
+the author requests the landing; see [the landing contract](../contracts/landing.md).
 
 Tracked inventories are immutable. Never edit, move, rename, recalculate, or
 reuse one. A correction or later delivery gets a new unit and inventory.

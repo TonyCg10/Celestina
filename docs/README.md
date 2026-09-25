@@ -18,6 +18,7 @@ vendor-neutral: every agent follows the same repository contract.
 | Which questions are still being argued? | root or project-local `docs/discussions/`, indexed from [discussions/](discussions/) |
 | What settled work is being implemented? | root/project `ROADMAP.md` and [plans/](plans/) |
 | Which exact paths formed each delivery commit? | [inventories/](inventories/) or the owner-local `docs/inventories/` |
+| How does a finished unit reach `main`? | [contracts/landing.md](contracts/landing.md) |
 | What version does each product declare and how did it advance? | registered sources in [projects.toml](projects.toml) and [version-history.tsv](version-history.tsv) |
 | What must the author test manually? | root/project `VALIDATION.md` |
 | What was actually verified? | [evidence/](evidence/) or registered project-local `docs/evidence/` |

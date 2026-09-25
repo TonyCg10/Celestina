@@ -1,0 +1,31 @@
+# LND-1-C exact change inventory
+
+Base revision	21620806fd2b7aca983b57746879ab2212e64a60
+Pathspec	AGENTS.md
+Pathspec	CONTRIBUTING.md
+Pathspec	docs/README.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/decisions/0011-seal-at-landing.md
+Pathspec	docs/decisions/README.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-documents.md
+Pathspec	docs/governance/change-policy.md
+Pathspec	docs/inventories/2026-09-25-seal-at-landing/LND-1-C.numstat.tsv
+Pathspec	docs/plans/active/2026-09-25-seal-at-landing.md
+Pathspec	docs/projects.toml
+Pathspec	docs/templates/plan.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+9	7	47c4c60de189a9bac99abbb1e8b631233b4b0bb0da6ff96458d60c1d719a471e	AGENTS.md
+14	9	608fc338f7593086c783a6e6be5388b2e64b6331274f3aef76af9e9f5bc819d3	CONTRIBUTING.md
+1	0	41b9dcf962d814e4620e68c1397f261157739415c5b24fc0557aff0ac20d8afc	docs/README.md
+310	0	a330aac07e07bf55303fc1d3c181683533c6dddf0a28fc10e0be475dfab24072	docs/contracts/landing.md
+70	0	026becc80b26ba428927963fa03f9fdf5a51aba51a9b8e0db8125ba18930c8be	docs/decisions/0011-seal-at-landing.md
+1	0	ca2e731a50c0657aa631e84626fa82bba5a3d7126c9613e6fdf0035cb43349a1	docs/decisions/README.md
+72	0	385a5ed508c2dda0aac2ec375fd6ce94b6c730f7e0fc61c235dde9cef1735a66	docs/evidence/2026-09-25-seal-at-landing-documents.md
+2	0	33d84ed435565ad7dea4d645cd2cf08d4d61c95364dcfb51bc660302c28bf710	docs/governance/change-policy.md
+31	0	self	docs/inventories/2026-09-25-seal-at-landing/LND-1-C.numstat.tsv
+1	1	02eb0b515349f31f395f2a5cdce8b89a2ba1dfdd6c07fe40272b35064e6c7b23	docs/plans/active/2026-09-25-seal-at-landing.md
+1	0	2008e9510dcd6f279cf5286b8893346874a5c64b0049b24a0083b5f6bf7ee269	docs/projects.toml
+8	6	79bcdca0760c83081b0209a48bd0b8baa75c35b16a4c40258ad3ba1290d86271	docs/templates/plan.md

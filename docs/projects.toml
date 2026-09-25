@@ -25,6 +25,7 @@ shared_rules = [
   "docs/standards/verification.md",
   "docs/standards/language.md",
   "docs/contracts/versioning.md",
+  "docs/contracts/landing.md",
 ]
 
 [commit_policy]

@@ -37,7 +37,8 @@ Before acting:
    Documentation may be stale.
 4. Search first with `rg` or `rg --files`; reuse existing contracts instead of
    creating a parallel recipe.
-5. Declare or update the ledger unit before editing planned milestone work.
+5. Declare or update the ledger unit before editing planned milestone work, in
+   a session worktree opened with `scripts/worktree.sh`.
 
 Canonical sources are mapped in [docs/README.md](docs/README.md), the workflow
 is in [CONTRIBUTING.md](CONTRIBUTING.md), and executable project metadata is in
@@ -201,8 +202,10 @@ one or more narrow `Pathspec` boundaries, the plan, evidence, and their own
 compares exhaustive paths, numstat, and SHA-256 inside those boundaries while
 leaving external changes untouched. The base is the `HEAD` immediately before
 the unit and later must be the direct parent of the single commit containing
-change, plan, evidence, and inventory. Binary rows use `-/-`; mode-only rows use
-`0/0`.
+change, plan, evidence, and inventory. `scripts/land-unit.py` computes the
+inventory, the ledger closure, the version transition and the production run
+on the current `main`; see [docs/contracts/landing.md](docs/contracts/landing.md).
+Binary rows use `-/-`; mode-only rows use `0/0`.
 
 The main project prefix covers its tree, associated crates, and exact registered
 manifests. A component prefix covers only component code and those manifests,
@@ -295,10 +298,9 @@ author requests a commit:
    `<prefix>-<bug|milestone|release|maintenance>: <action>`;
 5. for a product bug, milestone or release, apply the exact PATCH, MINOR or
    MAJOR transition and append the matching `docs/version-history.tsv` row;
-6. run `python3 scripts/version_tool.py check` and
-   `python3 scripts/check-staged-units.py INVENTORY...`, then include code,
-   version declarations, history, plan, inventories, and evidence in the same
-   commit.
+6. run `python3 scripts/land-unit.py <branch> --kind <kind>` from the
+   canonical checkout, which runs the version, staged-inventory and
+   commit-scope guards itself.
 
 `.githooks/pre-commit` and `.githooks/commit-msg` verify the staged batch,
 format, base scope, change kind, version transition, and the single

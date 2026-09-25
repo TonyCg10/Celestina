@@ -79,16 +79,19 @@ plans use `suite:`.
 
 ## Closing a unit
 
-Before setting a unit to `done`:
+Work on a unit in a session worktree opened with `scripts/worktree.sh`; declare
+and keep its ledger row current there. Before a unit becomes `done`:
 
 1. Run its complete agent-executable exit.
-2. Calculate tracked paths with `git diff --numstat --no-renames` and each new
-   path against `/dev/null`.
-3. Record exact `N files, +X/-Y`.
-4. Replace `Files / areas` with one link to
-   `<owner>/docs/inventories/<plan-slug>/<unit>.numstat.tsv`, or root `docs/`
-   for suite work.
-5. Link the dated evidence record under the owner's `docs/evidence/`.
+2. Link the dated evidence record under the owner's `docs/evidence/` from the
+   row's `Automated evidence`.
+3. Request the landing; `scripts/land-unit.py` computes the inventory, the
+   diffstat and the links.
+
+The landing sets the row to `done`, links
+`<owner>/docs/inventories/<plan-slug>/<unit>.numstat.tsv`, or root `docs/` for
+suite work, from `Files / areas`, and records the exact `N files, +X/-Y`; see
+[the landing contract](docs/contracts/landing.md).
 
 The inventory contains:
 
@@ -151,7 +154,9 @@ Do not commit or push without an explicit request. When requested:
    `<prefix>-<bug|milestone|release|maintenance>: <English imperative>`;
 5. apply the exact SemVer transition and append the version-history row for a
    product bug, milestone or release; maintenance changes leave both untouched;
-6. run the version, staged-inventory and commit-scope guards;
+6. request the landing: `python3 scripts/land-unit.py <branch> --kind <kind>`
+   from the canonical checkout runs the version, staged-inventory and
+   commit-scope guards itself;
 7. include code, version declarations, history, plan, inventory and evidence
    in the same commit.
 

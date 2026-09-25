@@ -82,7 +82,7 @@ product behaviour.
 |---|---|---|---|---|---|---|---|
 | LND-1-A | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-A.numstat.tsv) | 7 files, +510/-0 | Add the session worktree entry with its shared Cargo cache and refuse production runs inside a session worktree | [evidence](../../evidence/2026-09-25-seal-at-landing.md) | None |
 | LND-1-B | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-B.numstat.tsv) | 9 files, +3102/-4 | Add the landing tool that rebases, merges the hot files, bumps, builds only when the artifact is stale, seals, guards, commits and pushes one unit | [evidence](../../evidence/2026-09-25-seal-at-landing-tool.md) | None |
-| LND-1-C | `suite:` | planned | `docs/decisions/0011-seal-at-landing.md`, `docs/contracts/landing.md`, `docs/projects.toml`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/governance/change-policy.md`, `docs/templates/plan.md`, `docs/README.md`, `docs/decisions/README.md` | — | Record the decision and move closure from hand-computed inventories to the landing | `sh scripts/check-documentation-contract.sh && python3 scripts/agent-context.py scripts` | None |
+| LND-1-C | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-C.numstat.tsv) | 12 files, +520/-23 | Record the decision and move closure from hand-computed inventories to the landing | [evidence](../../evidence/2026-09-25-seal-at-landing-documents.md) | None |
 
 ## Paired suite transition
 
