@@ -36,7 +36,10 @@ import org.celestina.magnetita.notifications.PhoneNotifications
 class LinkService : LifecycleService() {
     private var loop: Job? = null
     private var controller: LinkController? = null
-    private val ringer by lazy { Ringer(applicationContext) }
+    // The timeout inside Ringer may stop it on its own; this keeps the
+    // published `ringing` state (the app's indicator and stop button)
+    // truthful either way, instead of two places deciding it independently.
+    private val ringer by lazy { Ringer(applicationContext) { _ringing.value = false } }
     private val clipboardPolicy = ClipboardPolicy()
     private val media by lazy { org.celestina.magnetita.media.PhoneMedia(applicationContext) }
     private val book by lazy { org.celestina.magnetita.phone.PhoneBook(applicationContext) }
@@ -86,7 +89,7 @@ class LinkService : LifecycleService() {
                 c.signals.collect { signal ->
                     when (signal) {
                         DesktopSignal.Ring -> { ringer.start(); _ringing.value = true }
-                        DesktopSignal.StopRinging -> { ringer.stop(); _ringing.value = false }
+                        DesktopSignal.StopRinging -> ringer.stop()
                         is DesktopSignal.ClipboardText -> receiveClipboard(signal.text)
                         DesktopSignal.ClipboardRequested -> offerClipboard()
                         is DesktopSignal.NotificationDismiss -> PhoneNotifications.instance?.dismiss(signal.key)
@@ -126,7 +129,7 @@ class LinkService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         intent?.getStringExtra(EXTRA_PAIR_URI)?.let { controller?.pair(it) }
         when (intent?.action) {
-            ACTION_STOP_RINGING -> { ringer.stop(); _ringing.value = false }
+            ACTION_STOP_RINGING -> ringer.stop()
             ACTION_SEND_CLIPBOARD -> offerClipboard(intent.getStringExtra(EXTRA_TEXT))
             ACTION_OUTBOUND -> { while (true) { val op = pending.pollFirst() ?: break; controller?.send(op) } }
             ACTION_CALL_ENDED -> calls.restoreRinger()
@@ -155,7 +158,6 @@ class LinkService : LifecycleService() {
         runCatching { clipboard.removePrimaryClipChangedListener(clipListener) }
         media.stop()
         ringer.stop()
-        _ringing.value = false
         runCatching { unregisterReceiver(batteryReceiver) }
         _state.value = LinkState.NeedsPairing
         super.onDestroy()
