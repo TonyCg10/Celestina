@@ -1,0 +1,31 @@
+# SID-U1-B exact change inventory
+
+Base revision	74e981cbf43f3389fd818988154c2b93dcd12aa2
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/docs/evidence/2026-09-25-folder-usage-fixes.md
+Pathspec	siderita/docs/inventories/2026-09-25-folder-usage-fixes/SID-U1-B.numstat.tsv
+Pathspec	siderita/docs/plans/archive/2026-09-25-folder-usage-fixes.md
+Pathspec	siderita/qml/dialogs/FolderUsage.qml
+Pathspec	siderita/qml/dialogs/QuickLookView.qml
+Pathspec	siderita/tests/qml/tst_folder_usage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	898abde13d919d16a09011f95da4b91cd246541039f8cc27c7651a75b19b2892	docs/version-history.tsv
+1	1	760e2938b88d600c44b62028a0cc6e9f9493bbd73bbbac076681f65940bd0942	siderita/Cargo.lock
+1	1	a8736831d0aaab64c6aca887afeef009c271f2adfa68dc08e18a8fc6ecf5ea54	siderita/Cargo.toml
+18	0	0fe7a6c29050a268dae6bc8d9a927f2c951ea43e325331ebf39bec0abc1c0f8a	siderita/ROADMAP.md
+10	1	604a74e9775615f6b33bd1dc5ceeac4c5b91efe69811ab15ab161ef37794eb1d	siderita/STATUS.md
+7	3	5a44bd2015d33f9c3161f3b65a648b377b3e1525a3fb547de29f0f48a3e64575	siderita/VALIDATION.md
+85	0	40ad4e8fef232cc4c5fc5884526aa8f8c1313d84ebe66fc9dc8668897d59446f	siderita/docs/evidence/2026-09-25-folder-usage-fixes.md
+51	0	2e4d28c9fa7673891863db7deaee5208ee8e99257728cd140b5b68cc7c4768ce	siderita/docs/plans/archive/2026-09-25-folder-usage-fixes.md
+19	8	2d77496a752e1d3e0d69009557a81b3a73f243798d5c2ce2960fbcfaf16d9bb1	siderita/qml/dialogs/FolderUsage.qml
+12	1	acde7f2c502853137de5300736d010d1d0d08057842f9584612e9866af7c1439	siderita/qml/dialogs/QuickLookView.qml
+34	0	7291a9db23ace137dae7e674c92ae146279200c71b39c3b38683e457289628f6	siderita/tests/qml/tst_folder_usage.qml
+31	0	self	siderita/docs/inventories/2026-09-25-folder-usage-fixes/SID-U1-B.numstat.tsv

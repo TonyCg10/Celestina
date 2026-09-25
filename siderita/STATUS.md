@@ -2,12 +2,21 @@
 
 - **Updated:** 2026-09-25
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; `SID-A4`, `SID-B1` and `SID-U1` are closed and archived, no
+  present; `SID-A4`, `SID-B1`, `SID-U1` and `SID-U1-B` are closed and archived, no
   checkpoint is active, and the portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.7.1`: `SID-U1-B`. «Abrir en Hematita» hands over the
+  scanned folder while it is still being analysed; Up on the first row, Down
+  on the last and Enter on an empty list stay inside the occupation section
+  instead of stepping or closing the quick look; a failed analysis shows its
+  cause and no buttons; and the quick look analyses its folder again as soon
+  as the properties dialog lets the hub go. This retires the 1.7.0 residual
+  about the glyph after a takeover. See
+  [the evidence](docs/evidence/2026-09-25-folder-usage-fixes.md).
 
 - Delivered as `1.7.0`: `SID-U1`. A folder's properties and its quick look
   scan it on a `siderita-usage` thread with Hematita's walk and show crumbs,

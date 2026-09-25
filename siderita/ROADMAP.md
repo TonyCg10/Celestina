@@ -176,6 +176,24 @@ implementation exit is
 `VAL-SID-U1` stays pending in the author's lane and did not block this
 closure.
 
+## SID-U1-B — closed 2026-09-25
+
+The final review of the folder-usage work, run on the deployed 1.7.0, found
+four defects: «Abrir en Hematita» sent the hub's current path, which stays
+empty until the tree lands, so it always failed while a folder was being
+analysed; Up on the first row, Down on the last and Enter on an empty list
+escaped the section and stepped or closed the quick look; after a properties
+takeover the quick look kept the glyph until its entry changed; and the
+non-folder hint of the quick look was a bare literal. `SID-U1-B` hands over
+the scanned root until the tree lands, hides the footer while an analysis
+has failed, stops every arrow and Enter the list and the map leave
+unaccepted inside the section, takes the hub back in the quick look when it
+becomes free, and wraps the hint in `qsTr()` — the [folder usage fixes
+evidence](docs/evidence/2026-09-25-folder-usage-fixes.md), deployed as
+`1.7.1`, in its own archived
+[plan](docs/plans/archive/2026-09-25-folder-usage-fixes.md). `VAL-SID-U1`
+gains the steps that check it.
+
 ## SID-M1 — Parent portal pickers on Wayland
 
 ## Hypothesis and tangible outcome

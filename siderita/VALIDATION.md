@@ -8,7 +8,8 @@ corrective implementation unit.
 
 - **Status:** pending
 - **Related implementation:** `SID-U1-A`, recorded in
-  [the evidence](docs/evidence/2026-09-25-folder-usage.md)
+  [the evidence](docs/evidence/2026-09-25-folder-usage.md), and `SID-U1-B`,
+  recorded in [its corrections](docs/evidence/2026-09-25-folder-usage-fixes.md)
 - **Requires:** the deployed Siderita and Hematita on the real session, a
   large folder (the home), a folder holding a hard-linked file, a folder with
   a mount inside it, and a screen reader
@@ -18,8 +19,11 @@ corrective implementation unit.
   dialog mid-scan, then confirm with `top -H` that no `siderita-usage` thread
   keeps reading; in the quick look, press ↑ ↓ while a folder is scanning; walk
   the section by keyboard — Tab into the list, the arrows, Enter to drill,
-  Backspace up, Tab to the map, Ctrl+Enter, Space and Escape; press «Abrir en
-  Hematita»; point a screen reader at a row and at a tile; open a folder with
+  Backspace up, Tab to the map, Ctrl+Enter, Space and Escape; press Up on
+  the first row and Down on the last: the peek does not change entry; press
+  «Abrir en Hematita»; open Hematita from a folder while it is still being
+  analysed; open the properties of the folder shown in the quick look, close
+  them, and see the quick look analyse it again; point a screen reader at a row and at a tile; open a folder with
   a mount inside
 - **Pass condition:** the total matches `du -sh` (hard links counted once) and
   Hematita; closing mid-scan leaves no thread reading; stepping entries

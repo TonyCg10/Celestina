@@ -100,6 +100,8 @@ TestCase {
         testCase.hostKeys = []
         usageStub.mode = "analysed"
         usageStub.failure = ""
+        usageStub.currentPath = "/home/a"
+        usageStub.rowIds = [10, 11, -1]
         usageStub.revision++
     }
 
@@ -197,5 +199,37 @@ TestCase {
         compare(testCase.upToCalls.length, 1)
         compare(testCase.upToCalls[0], 0)
         compare(testCase.upCalls, 0)
+    }
+
+    function test_l_arrows_and_enter_at_the_list_edges_stay_in_the_section() {
+        const list = findChild(section, "usageList")
+        list.takeFocus()
+        keyClick(Qt.Key_Up)
+        compare(testCase.hostKeys.length, 0,
+                "Up on the first row would step the quick look to another entry")
+        usageStub.rowIds = []
+        usageStub.revision++
+        compare(section.usageRows.length, 0)
+        list.takeFocus()
+        keyClick(Qt.Key_Enter)
+        keyClick(Qt.Key_Return)
+        compare(testCase.hostKeys.length, 0,
+                "Enter on an empty list would close the quick look and navigate")
+        compare(testCase.enterCalls.length, 0)
+    }
+
+    function test_m_hematita_during_a_scan_gets_the_scanned_root() {
+        usageStub.mode = "scanning"
+        usageStub.currentPath = ""
+        mouseClick(findChild(section, "hematitaButton"))
+        compare(testCase.hematitaCalls.length, 1)
+        compare(testCase.hematitaCalls[0], "/home")
+    }
+
+    function test_n_a_failed_analysis_shows_no_controls() {
+        usageStub.mode = "failed"
+        usageStub.failure = "root"
+        verify(!findChild(section, "hematitaButton").visible)
+        verify(!findChild(section, "goToFolderButton").visible)
     }
 }

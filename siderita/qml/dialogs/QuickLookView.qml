@@ -88,6 +88,17 @@ CelestinaModalLayer {
             quickLookView.usage.close(quickLookView.usageOwner)
     }
 
+    // When the properties dialog takes the hub over and then closes, the hub
+    // is free again: take it back while a folder is still shown here.
+    Connections {
+        target: quickLookView.usage
+        function onOwnerChanged() {
+            if (quickLookView.usage.owner === "" && quickLookView.shown
+                    && quickLookView.qlKind === "directory")
+                quickLookView.syncUsage()
+        }
+    }
+
     function syncPlayer() {
         if (!quickLookView.player)
             return
@@ -327,7 +338,7 @@ CelestinaModalLayer {
             horizontalAlignment: Text.AlignHCenter
             text: quickLookView.qlKind === "directory"
                   ? qsTr("Espacio o Esc para cerrar · ↑ ↓ para navegar · Tab, flechas y Retroceso dentro del mapa · Ctrl+Intro para ir")
-                  : "Espacio o Esc para cerrar   ·   ↑ ↓ para navegar"
+                  : qsTr("Espacio o Esc para cerrar   ·   ↑ ↓ para navegar")
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption

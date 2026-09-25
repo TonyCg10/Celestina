@@ -9,8 +9,9 @@ import org.celestina.siderita 1.0
 // Presents `usage` (a SideritaUsage); decides nothing.
 //
 // Keys: the crumbs, the list and the map take Tab stops; the list and the
-// map own the arrows (Left and Right are stopped inside the section), Enter
-// (drill) and Backspace (up). Space and Escape are left unaccepted by both,
+// map own the arrows, Enter (drill) and Backspace (up). Whatever arrow or
+// Enter they leave unaccepted (Up on the first row, Down on the last, Enter
+// on an empty list) is stopped inside the section. Space and Escape are left unaccepted by both,
 // so they reach the modal that hosts this section. Ctrl+Enter, while
 // focus is inside the section, goes to the current entry in Siderita.
 FocusScope {
@@ -110,8 +111,11 @@ FocusScope {
         section.navigated()
     }
 
+    // Until the tree lands the hub has no current path; the scanned root is
+    // the folder the person asked about.
     function openInHematita() {
-        const path = section.usage.currentPath
+        const path = section.usage.currentPath.length > 0 ? section.usage.currentPath
+                                                          : section.usage.root
         section.handoffFailed = !section.usage.openInHematita(path)
         if (!section.handoffFailed)
             section.hematitaRequested(path)
@@ -218,11 +222,16 @@ FocusScope {
             spacing: CelestinaTheme.spaceSm
             visible: !section.failed
 
-            // Left and Right are the map's; in the list they would bubble to
-            // the host modal, which steps to another entry and drops the
-            // drill. Inside the section they stop here.
-            Keys.onLeftPressed: function(event) { event.accepted = true }
-            Keys.onRightPressed: function(event) { event.accepted = true }
+            // The list and the map handle their keys first; an arrow or Enter
+            // they leave unaccepted would bubble to the host modal, which
+            // steps to another entry or closes and navigates. Inside the
+            // section it stops here.
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Left || event.key === Qt.Key_Right
+                        || event.key === Qt.Key_Up || event.key === Qt.Key_Down
+                        || event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                    event.accepted = true
+            }
 
             CelestinaUsageList {
                 id: usageList
@@ -259,9 +268,11 @@ FocusScope {
             }
         }
 
+        // A failed analysis shows its cause and no controls.
         RowLayout {
             Layout.fillWidth: true
             spacing: CelestinaTheme.spaceSm
+            visible: !section.failed
 
             Text {
                 Layout.fillWidth: true
