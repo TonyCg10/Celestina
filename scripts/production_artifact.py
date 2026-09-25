@@ -39,6 +39,8 @@ IGNORED_DIRECTORY_NAMES = {
     "target",
 }
 IGNORED_FILE_SUFFIXES = {".pyc", ".pyo"}
+# Written by scripts/worktree.sh at the root of every session worktree.
+WORKTREE_MARKER = ".celestina-worktree"
 
 
 class ContractError(RuntimeError):
@@ -113,6 +115,12 @@ def project_contract(
         known = ", ".join(sorted(projects))
         raise ContractError(f"unknown project {project_id!r}; valid projects: {known}") from error
     return root, registry, project
+
+
+def session_worktree_marker(root: Path) -> Path | None:
+    """Return the session-worktree marker at `root`, or None in a canonical checkout."""
+    marker = root / WORKTREE_MARKER
+    return marker if marker.is_file() else None
 
 
 def lexical_repo_path(root: Path, relative: str) -> Path:
@@ -647,6 +655,15 @@ def main() -> int:
     args = parser().parse_args()
     try:
         root, registry, project = project_contract(args.registry, args.project)
+        # `check` stays available in a session worktree because the guards call it.
+        if (
+            args.command in {"run-build", "run-verification", "status"}
+            and session_worktree_marker(root) is not None
+        ):
+            raise ContractError(
+                "this is a session worktree; production runs happen at landing "
+                "(scripts/land-unit.py)"
+            )
         if args.command == "run-build":
             path = run_build(root, registry, project)
             print(f"manifest: {path.relative_to(root)} (pending verification)")

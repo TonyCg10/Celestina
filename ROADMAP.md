@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** PRD-1
+- **Active implementation checkpoint:** LND-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -112,7 +112,7 @@ can be reported on.
       suite checkpoint is active.
 
 The build order, exclusions and results live in
-[the active PRD-1 plan](docs/plans/active/2026-08-05-desktop-entry-registration.md).
+[the archived PRD-1 plan](docs/plans/archive/2026-08-05-desktop-entry-registration.md).
 
 ## LNG-1 — Spanish product copy
 
@@ -135,6 +135,26 @@ causes.
 
 The build order, exclusions and ledger are in the
 [active plan](docs/plans/archive/2026-08-04-spanish-product-copy.md).
+
+## LND-1 — Seal at landing
+
+**Hypothesis:** the closure of a unit is a function of the commit that will be
+its parent, so producing it at landing time removes every reason a second
+session has to wait for the first.
+
+**Tangible outcome:** sessions work in their own worktrees and never build
+production there; `scripts/land-unit.py` lands one unit from the canonical
+checkout with one build at most, and none when the product's inputs did not
+move; no guard changes.
+
+- [ ] Add the session worktree entry with a shared Cargo cache and refuse
+      production runs inside a session worktree.
+- [ ] Add the landing tool with its fixture tests and CI step.
+- [ ] Record the decision and move closure from hand-computed inventories to
+      the landing.
+
+The build order, exclusions and ledger are in
+[the active plan](docs/plans/active/2026-09-25-seal-at-landing.md).
 
 ## Project implementation fronts
 

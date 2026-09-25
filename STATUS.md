@@ -1,9 +1,9 @@
 # Suite status
 
-- **Updated:** 2026-08-04
-- **Current focus:** LNG-1, splitting development truth from product copy in
-  the language contract; all other project work follows each local roadmap
-- **Implementation checkpoint:** LNG-1
+- **Updated:** 2026-09-25
+- **Current focus:** LND-1, landing units prepared in parallel sessions; all
+  other project work follows each local roadmap
+- **Implementation checkpoint:** LND-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -35,14 +35,20 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
+LND-1 moves the closure of a unit (inventory, ledger closure, version bump and
+production build) from the session to a landing step that runs on the current
+`main`, so sessions prepared in parallel worktrees no longer wait for each other
+or reseal by hand. The build order, exclusions and ledger are in
+[the active plan](docs/plans/active/2026-09-25-seal-at-landing.md).
+
+## Completed cross-project work
+
 LNG-1 makes product copy Spanish and leaves development truth English. The
 standard listed "canonical UI copy" among the things English governs, and that
 was enforced, so a Spanish desktop acquired an English media library. The
 reasoning is in
 [ADR 0007](docs/decisions/0007-spanish-product-copy.md); the unit is in the
-[active plan](docs/plans/archive/2026-08-04-spanish-product-copy.md).
-
-## Completed cross-project work
+[archived plan](docs/plans/archive/2026-08-04-spanish-product-copy.md).
 
 ACT-1 amends the one activation-contract bullet that named Gallery and Music as
 fixed standalone surfaces. The author specified the standalone library as a

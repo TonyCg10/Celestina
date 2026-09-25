@@ -529,6 +529,29 @@ esac
         result = self.run_tool("check", "demo", expect=1)
         self.assertIn("production inputs changed", result.stderr)
 
+    def test_session_worktree_refuses_build_verify_and_status(self) -> None:
+        (self.root / ".celestina-worktree").write_text(
+            'project = "demo"\n', encoding="utf-8"
+        )
+        for command in ("run-build", "run-verification", "status"):
+            with self.subTest(command=command):
+                process = self.run_tool(command, "demo", expect=1)
+                self.assertIn(
+                    "production-artifact: this is a session worktree; production "
+                    "runs happen at landing (scripts/land-unit.py)",
+                    process.stderr,
+                )
+        self.assertFalse((self.root / ".fixture-demo-build-ran").exists())
+        self.assertFalse((self.root / ".fixture-demo-verify-ran").exists())
+
+    def test_session_worktree_still_answers_check(self) -> None:
+        self.run_build()
+        (self.root / ".celestina-worktree").write_text(
+            'project = "demo"\n', encoding="utf-8"
+        )
+        process = self.run_tool("check", "demo")
+        self.assertIn("artifact: demo current", process.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

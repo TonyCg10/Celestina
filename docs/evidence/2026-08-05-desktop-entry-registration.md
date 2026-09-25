@@ -1,7 +1,7 @@
 # Evidence: the shell's desktop entry becomes a registered artifact
 
 - **Date:** 2026-08-05
-- **Scope:** `PRD-1-A` of [the desktop entry registration plan](../plans/active/2026-08-05-desktop-entry-registration.md)
+- **Scope:** `PRD-1-A` of [the desktop entry registration plan](../plans/archive/2026-08-05-desktop-entry-registration.md)
 - **Environment:** Arch Linux checkout; CMake 4.4.2, Qt 6.11.1
 - **Artifact:** none of its own; this unit changes which files the `celestina` manifest seals
 

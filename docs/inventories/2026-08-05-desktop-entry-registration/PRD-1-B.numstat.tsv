@@ -1,0 +1,23 @@
+# PRD-1-B exact change inventory
+
+Base revision	a4430189c8aa971df0a07cb2a68cc95e97fb21e8
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-08-05-desktop-entry-registration.md
+Pathspec	docs/evidence/2026-09-25-desktop-entry-registration-archive.md
+Pathspec	docs/inventories/2026-08-05-desktop-entry-registration/PRD-1-B.numstat.tsv
+Pathspec	docs/plans/active/2026-08-05-desktop-entry-registration.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-08-05-desktop-entry-registration.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+22	2	4fd0b82a9a3e6065db06632a34dce842df2494936488f6df4b0ad2f6c7ef3941	ROADMAP.md
+13	7	65728116f4a90c5940e3e18c3b60353dd4d26993e8b0c27f8771e17a0420b355	STATUS.md
+1	1	cc2d0634484c407a84753e935016e21f1616720eacbe3ed52a9940f4224a7527	docs/evidence/2026-08-05-desktop-entry-registration.md
+36	0	c0ade55ebf34e06c1e280f1bab51742fd6c5f842870490caa592dd10fbd4643f	docs/evidence/2026-09-25-desktop-entry-registration-archive.md
+23	0	self	docs/inventories/2026-08-05-desktop-entry-registration/PRD-1-B.numstat.tsv
+0	72	deleted	docs/plans/active/2026-08-05-desktop-entry-registration.md
+3	2	cb25799c93d5ef84d740e1ef3515010d56f5f569115258da694183d600da1b55	docs/plans/active/README.md
+75	0	ffd0f73b71503ec25a0c6215b3379e48dd9ec665d1dfb548481d225e4ea36cf9	docs/plans/archive/2026-08-05-desktop-entry-registration.md

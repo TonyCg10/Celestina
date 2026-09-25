@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-08-05
 - **Plan ID:** desktop-entry-registration
-- **Status:** active
+- **Closed:** 2026-09-25
+- **Successor:** LND-1, which archived this plan; its unit landed in `79cb124`
+- **Status:** done
 - **Scope:** suite
 - **Implementation checkpoint:** PRD-1
 - **Author-validation checkpoint:** `VAL-SHELL-03` in
@@ -55,6 +57,7 @@ No product version moves: registering a file ships no product behaviour.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| PRD-1-B | `suite:` | done | [inventory](../../inventories/2026-08-05-desktop-entry-registration/PRD-1-B.numstat.tsv) | 8 files, +173/-84 | Archive the delivered desktop-entry plan through its own administrative unit and reconcile the suite roadmap, status and plan indexes | [evidence](../../evidence/2026-09-25-desktop-entry-registration-archive.md) | None |
 | PRD-1-A | `suite:` | done | [inventory](../../inventories/2026-08-05-desktop-entry-registration/PRD-1-A.numstat.tsv) | 4 files, +141/-2 | Register the shell's desktop entry as a production input and sealed artifact after `LNG-1-B` closes the preceding suite checkpoint | [evidence](../../evidence/2026-08-05-desktop-entry-registration.md) | `VAL-SHELL-03` |
 
 ## Paired suite transition

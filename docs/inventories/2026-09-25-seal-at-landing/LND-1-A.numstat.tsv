@@ -1,0 +1,21 @@
+# LND-1-A exact change inventory
+
+Base revision	a4430189c8aa971df0a07cb2a68cc95e97fb21e8
+Pathspec	docs/evidence/2026-09-25-seal-at-landing.md
+Pathspec	docs/inventories/2026-09-25-seal-at-landing/LND-1-A.numstat.tsv
+Pathspec	docs/plans/active/2026-09-25-seal-at-landing.md
+Pathspec	scripts/production_artifact.py
+Pathspec	scripts/test-production-artifacts.py
+Pathspec	scripts/test-worktree.sh
+Pathspec	scripts/worktree.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+69	0	b23c7f5ce76147acede152ca535c615e73861e55b59244cad3275a4c37311f16	docs/evidence/2026-09-25-seal-at-landing.md
+21	0	self	docs/inventories/2026-09-25-seal-at-landing/LND-1-A.numstat.tsv
+93	0	64b555b1e882b106a16138dc419ae3a22732f56831be4a412015700012acfcdf	docs/plans/active/2026-09-25-seal-at-landing.md
+17	0	f225a32b9d044830094a28a70c0d1899e0905ec5c1f81203ffbbbadb614b5b13	scripts/production_artifact.py
+23	0	a396903da7afbda012b007ee6d24a645eb2fbfeeec3a13f04e842bbca0fb39ac	scripts/test-production-artifacts.py
+142	0	544b3e7747c8126943fdc3802b1b46c5d4cfaec4d2a580977b53ce5f63cb04a8	scripts/test-worktree.sh
+145	0	d0febbf5701efa40df27fc536b93023a40dafa518efa8dd7a8f774194c9e2fdd	scripts/worktree.sh
