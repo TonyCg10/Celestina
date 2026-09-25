@@ -54,7 +54,10 @@ CelestinaSurface {
         map.chosen(map.tiles[map.order[next]].id)
     }
 
+    // Concentric corners: the tiles keep `radiusSm` and sit `spaceSm` inside
+    // the panel, so the panel takes `radiusMd` (12 + 8 = 20).
     role: CelestinaSurface.Panel
+    radiusOverride: CelestinaTheme.radiusMd
     padding: CelestinaTheme.spaceSm
 
     contentItem: Item {
@@ -101,10 +104,15 @@ CelestinaSurface {
                 readonly property bool marked: map.markedIds.indexOf(tile.tileData.id) >= 0
                 readonly property bool current: !tile.remainder && tile.tileData.id === map.currentId
 
-                x: tile.tileData.x * field.width + CelestinaTheme.spaceXs / 2
-                y: tile.tileData.y * field.height + CelestinaTheme.spaceXs / 2
-                width: Math.max(0, tile.tileData.w * field.width - CelestinaTheme.spaceXs)
-                height: Math.max(0, tile.tileData.h * field.height - CelestinaTheme.spaceXs)
+                // The layout spans the field plus one gap, and every tile gives
+                // that gap back on its right and bottom, so outer tiles meet the
+                // field's edges exactly and inner ones stand `spaceSm` apart.
+                x: tile.tileData.x * (field.width + CelestinaTheme.spaceSm)
+                y: tile.tileData.y * (field.height + CelestinaTheme.spaceSm)
+                width: Math.max(0, tile.tileData.w * (field.width + CelestinaTheme.spaceSm)
+                                   - CelestinaTheme.spaceSm)
+                height: Math.max(0, tile.tileData.h * (field.height + CelestinaTheme.spaceSm)
+                                    - CelestinaTheme.spaceSm)
                 hoverEnabled: true
                 focusPolicy: Qt.NoFocus
                 enabled: !tile.remainder
@@ -138,10 +146,10 @@ CelestinaSurface {
                 }
 
                 contentItem: Text {
-                    leftPadding: CelestinaTheme.spaceXs
-                    rightPadding: CelestinaTheme.spaceXs
-                    visible: tile.width > CelestinaTheme.fontCaption * 3
-                             && tile.height > CelestinaTheme.fontCaption * 1.5
+                    leftPadding: CelestinaTheme.spaceSm
+                    rightPadding: CelestinaTheme.spaceSm
+                    visible: tile.width > CelestinaTheme.fontCaption * 4
+                             && tile.height > CelestinaTheme.fontCaption * 2
                     text: tile.remainder ? qsTr("otros") : tile.tileData.name
                     textFormat: Text.PlainText
                     color: CelestinaTheme.text

@@ -1,0 +1,31 @@
+# STYLE-G7-H exact change inventory
+
+Base revision	c7e85c235fa5a11a24cbf4466a34689f73bc4216
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/CelestinaTreemap.qml
+Pathspec	celestina-style/CelestinaUsageList.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/docs/evidence/2026-09-25-usage-controls-corners.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-H.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/tests/tst_treemap.qml
+Pathspec	celestina-style/tests/tst_usagelist.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	1	f1bbf9ebfb0357dcac1abac20502972b8f97e621d084851a323e2af020bc0ee8	celestina-style/CMakeLists.txt
+8	0	6386042fc0eae1056e21b60eaa65829e990e9cea822d304301a0d24cc0f45e38	celestina-style/CelestinaTheme.qml
+16	8	97e36970bd9e696241030504f41e212e9c0869072a3a194d97f61b996c9e50a3	celestina-style/CelestinaTreemap.qml
+23	3	9643bed8c24164b0e7f1358ce9070112db7c1db662564933521b0db52d67e0b3	celestina-style/CelestinaUsageList.qml
+10	3	140f3676101df440926d98c298662b53867ba9e4ab2de25e8ce31940ebb15e7f	celestina-style/DESIGN.md
+10	1	c39dcace978569d0e8ae93136c99095ce4a1b66a32740b3ba4ff92b58deb02ab	celestina-style/STATUS.md
+73	0	203fe7abe039ebc231c73fc1a7c1a0a6fa9c1f11ce8f3765b7afe4974413f876	celestina-style/docs/evidence/2026-09-25-usage-controls-corners.md
+1	0	9c9fe9d45a480d31a3c908fbe5d2549e9bc626089a5c25e022384fae13f82bc5	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+25	0	896cfe1b84deafb08b7d9da9043dc14ce21bf305989dfef88f346dc14558b4c3	celestina-style/tests/tst_treemap.qml
+21	0	78aec7b39b0363c05db2546d7bb113e7d488c6ffe88db66ac734b100197f3a20	celestina-style/tests/tst_usagelist.qml
+1	0	3e1506a0bfdb1111cf5d106f41fa19573f8e3d272024b86deee169b2472b13d7	docs/version-history.tsv
+31	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-H.numstat.tsv

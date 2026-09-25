@@ -99,4 +99,25 @@ TestCase {
         compare(focused.Accessible.role, Accessible.ListItem)
         verify(focused.Accessible.name.indexOf("b") === 0, focused.Accessible.name)
     }
+
+    function test_list_is_inset_by_space_sm() {
+        const view = list.contentItem.children[0]
+        const origin = view.mapToItem(list, 0, 0)
+        verify(origin.x >= CelestinaTheme.spaceSm, "list x " + origin.x)
+        verify(origin.y >= CelestinaTheme.spaceSm, "list y " + origin.y)
+        compare(list.radius, CelestinaTheme.radiusMd)
+    }
+
+    function test_a_separated_size_is_shown_whole() {
+        list.usageRows = [{ id: 20, name: "big", kind: "dir", tone: "dir", share: 1,
+                            size: "1.234,5 GiB", percent: "100 %", detail: "" }]
+        list.reset(function() {})
+        wait(0)
+        const view = list.contentItem.children[0]
+        const size = findChild(view.itemAtIndex(0), "sizeText")
+        verify(size !== null, "no size text")
+        compare(size.text, "1.234,5 GiB")
+        verify(!size.truncated, "the size is cut")
+        verify(size.contentWidth <= size.width, "the size overflows its column")
+    }
 }

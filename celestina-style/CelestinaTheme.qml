@@ -615,6 +615,14 @@ QtObject {
     readonly property color clear: "#00000000"
     readonly property color opaqueMask: "#ffffffff"
 
+    // The rank palette for share visualizations (treemap tiles, usage bars):
+    // the entry at rank i paints usagePalette[i % 6]. Order is part of the
+    // contract so neighbours never share a hue.
+    readonly property var usagePalette: [
+        glyphAccentBlue, glyphAccentViolet, glyphAccentCyan,
+        glyphAccentGreen, glyphAccentAmber, glyphAccentCoral
+    ]
+
     // Stable keys are persisted by Siderita; colours remain tokens so a later
     // palette retune updates every customized item without rewriting config.
     readonly property var iconAccentKeys: [

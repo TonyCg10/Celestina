@@ -64,10 +64,24 @@ CelestinaSurface {
                ? card.usageRows[list.currentIndex].id : -1
     }
 
+    // Concentric corners: rows keep `radiusSm` and the list sits `spaceSm`
+    // inside the panel, so the panel takes `radiusMd` (12 + 8 = 20).
     role: CelestinaSurface.Panel
+    radiusOverride: CelestinaTheme.radiusMd
     padding: 0
 
     contentItem: Item {
+        // The widest size a row is expected to print; every row's numbers
+        // column takes this width so the names and bars line up.
+        TextMetrics {
+            id: numbersProbe
+
+            text: "8.888,8 GiB"
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontRowSecondary
+            font.features: CelestinaTheme.fontFeaturesTabular
+        }
+
         ListView {
             id: list
 
@@ -178,7 +192,7 @@ CelestinaSurface {
                                     color: CelestinaTheme.text
                                     font.family: CelestinaTheme.sansFamily
                                     font.pixelSize: CelestinaTheme.fontRowTitle
-                                    elide: Text.ElideMiddle
+                                    elide: Text.ElideRight
                                 }
 
                                 Rectangle {
@@ -200,9 +214,13 @@ CelestinaSurface {
                                 id: numbers
 
                                 anchors.verticalCenter: parent.verticalCenter
+                                width: Math.ceil(numbersProbe.advanceWidth)
 
                                 Text {
-                                    anchors.right: parent.right
+                                    objectName: "sizeText"
+                                    width: parent.width
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideNone
                                     text: row.rowData.size
                                     color: CelestinaTheme.text
                                     font.family: CelestinaTheme.sansFamily
@@ -211,7 +229,9 @@ CelestinaSurface {
                                 }
 
                                 Text {
-                                    anchors.right: parent.right
+                                    width: parent.width
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideRight
                                     text: row.rowData.detail.length > 0
                                           ? row.rowData.percent + " · " + row.rowData.detail
                                           : row.rowData.percent

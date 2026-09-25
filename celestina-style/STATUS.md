@@ -1,7 +1,7 @@
 # CelestinaStyle status
 
 - **Updated:** 2026-09-25
-- **Implementation:** the shared source contract is at 1.9.0, with the
+- **Implementation:** the shared source contract is at 1.9.1, with the
   reading controls, the shared treemap and usage list, the glass material
   roles and the vendored icon catalogue published; `STYLE-G7-J` and
   `STYLE-G7-K` remain `active`, `STYLE-G7` stays active and `STYLE-M1`
@@ -10,6 +10,15 @@
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.9.1`: `STYLE-G7-H`. `CelestinaTreemap` and
+  `CelestinaUsageList` take a `radiusMd` panel with their content inset
+  `spaceSm`, concentric with the `radiusSm` tiles and rows, so nothing pokes
+  through the corners; tiles stand `spaceSm` apart with padded labels only
+  where they fit, row names elide right beside a numbers column of one probed
+  width, and `CelestinaTheme.usagePalette` gives consumers a six-hue rank
+  palette for share visualizations. See
+  [the record](docs/evidence/2026-09-25-usage-controls-corners.md).
 
 - Delivered as `1.9.0`: `STYLE-G7-G`. `CelestinaTreemap` and
   `CelestinaUsageList` are published, extracted from Hematita's local treemap

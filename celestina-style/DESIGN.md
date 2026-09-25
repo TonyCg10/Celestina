@@ -151,7 +151,10 @@ Accent is the only interactive hue seed. Link, hover, pressed, focus and accent
 washes derive inside `CelestinaTheme`, never in a consumer. `favorite` is the
 one warm product exception. A closed semantic ink palette may distinguish
 informational content glyphs, but it never colours surfaces, labels, thumbnails
-or selection state.
+or selection state. The same six glyph accents, in the order of
+`usagePalette` (blue, violet, cyan, green, amber, coral), are the rank palette
+for share visualizations: position i uses entry i mod 6. That is the one place
+they fill an area, and they do so at `accentSoftOpacity` under the ink.
 
 Schemes are data, not comment-swapped blocks. Only the dark scheme currently
 ships. A future light scheme requires a complete token set, consumer evidence
@@ -163,6 +166,10 @@ and its own accepted checkpoint.
 
 `radiusLg 26` · `radiusMd 20` · `radiusButton 18` · `radiusInput 22` ·
 `radiusSm 12` · `radiusPill 9999`. Radius scales down with element size.
+Nested corners are concentric: an outer radius equals the inner radius plus
+the inset between them, so a panel holding `radiusSm` rows or tiles `spaceSm`
+inside its edge takes `radiusMd` (12 + 8 = 20). Content stays out of that
+inset; only a focus ring may enter it, and nothing crosses the panel edge.
 
 ### 5.2 Elevation and surfaces
 
@@ -301,8 +308,8 @@ compatibility policy changes that contract.
 | `CelestinaRowHighlight` | The one hover/press/selected/drag fill behind list rows, grid cells and column titles; the host reports states, it paints them and holds no pointer |
 | `CelestinaIcon` | One name/fallback/tone API for Lucide-style UI glyphs |
 | `CelestinaSectionLabel` | Semantic section heading with shared type/spacing, not product navigation state |
-| `CelestinaTreemap` | A folder's children as rectangles laid out by the consumer (0..1 of the field); anatomy from `radiusSm`, `spaceXs`, `accentSoftOpacity`, `surfaceSelected`, `contentHover` and `unavailableContentOpacity`; one Tab stop whose arrows walk tiles in reading order, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host; tone colours, current, marked and dimmed ids come from the consumer; no selection or action semantics of its own |
-| `CelestinaUsageList` | A folder's children as rows with a share bar, size, percentage and optional detail; anatomy from `rowHeight`, `badgeFill`, `CelestinaRowHighlight` and the type tokens; one Tab stop whose Up/Down move, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host (the focused row is a plain slot, not the button, so no click steals Space); tone colours and marked ids come from the consumer; no selection or action semantics of its own |
+| `CelestinaTreemap` | A folder's children as rectangles laid out by the consumer (0..1 of the field); a `radiusMd` panel whose field is inset `spaceSm` (concentric with `radiusSm` tiles); outer tiles meet the field edges and neighbours stand `spaceSm` apart; a label, padded `spaceSm`, only on tiles wider than 4 and taller than 2 caption sizes; anatomy from `accentSoftOpacity`, `surfaceSelected`, `contentHover` and `unavailableContentOpacity`; one Tab stop whose arrows walk tiles in reading order, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host; tone colours, current, marked and dimmed ids come from the consumer; no selection or action semantics of its own |
+| `CelestinaUsageList` | A folder's children as rows with a share bar, size, percentage and optional detail; a `radiusMd` panel whose list is inset `spaceSm` (concentric with `radiusSm` rows); names elide right and the numbers column has one probed width ("8.888,8 GiB", tabular; the size never elides) so every name column matches; anatomy from `rowHeight`, `badgeFill`, `CelestinaRowHighlight` and the type tokens; one Tab stop whose Up/Down move, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host (the focused row is a plain slot, not the button, so no click steals Space); tone colours and marked ids come from the consumer; no selection or action semantics of its own |
 | `CelestinaFocusRing` | Reusable 2 px exterior ring shown for `visualFocus`, never merely for pointer focus |
 | `CelestinaTextField` | Radius-22 search/input anatomy, clear focus/error/disabled states and accessible naming |
 | `CelestinaSlider` | Shared track/fill/thumb/focus/keyboard/wheel anatomy with hover and pressed states, plus a separate requested-but-unconfirmed mark |

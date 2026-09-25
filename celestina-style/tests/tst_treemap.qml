@@ -110,4 +110,29 @@ TestCase {
         compare(testCase.chosenIds, [10, 10])
         map.currentId = 10
     }
+
+    function test_field_is_inset_by_space_sm() {
+        verify(map.contentItem.x >= CelestinaTheme.spaceSm, "field x " + map.contentItem.x)
+        verify(map.contentItem.y >= CelestinaTheme.spaceSm, "field y " + map.contentItem.y)
+        compare(map.radius, CelestinaTheme.radiusMd)
+    }
+
+    function test_outer_tiles_meet_the_field_edges() {
+        const left = tileWithId(10)
+        compare(left.x, 0)
+        compare(left.y, 0)
+        compare(left.height, map.contentItem.height)
+        const right = tileWithId(11)
+        compare(right.x + right.width, map.contentItem.width)
+        compare(right.x - (left.x + left.width), CelestinaTheme.spaceSm)
+    }
+
+    function test_usage_palette_has_six_entries() {
+        compare(CelestinaTheme.usagePalette.length, 6)
+        const expected = [CelestinaTheme.glyphAccentBlue, CelestinaTheme.glyphAccentViolet,
+                          CelestinaTheme.glyphAccentCyan, CelestinaTheme.glyphAccentGreen,
+                          CelestinaTheme.glyphAccentAmber, CelestinaTheme.glyphAccentCoral]
+        for (let index = 0; index < 6; ++index)
+            compare(CelestinaTheme.usagePalette[index], expected[index], "entry " + index)
+    }
 }

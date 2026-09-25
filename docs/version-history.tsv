@@ -167,3 +167,4 @@ celestina-style	1.9.0	milestone	STYLE-G7-G	Publish the shared treemap and usage 
 hematita	1.2.0	milestone	S3-Z	Add the shared usage view and the folder argument
 siderita	1.7.0	milestone	SID-U1-Z	Add the folder occupation to the properties dialog and the quick look
 siderita	1.7.1	bug	SID-U1-B	Fix the Hematita hand-off during a scan and the keys that leaked out of the occupation section
+celestina-style	1.9.1	bug	STYLE-G7-H	Fix the corner geometry of the shared usage controls and add the rank palette
