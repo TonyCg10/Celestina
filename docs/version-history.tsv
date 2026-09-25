@@ -169,3 +169,4 @@ siderita	1.7.0	milestone	SID-U1-Z	Add the folder occupation to the properties di
 siderita	1.7.1	bug	SID-U1-B	Fix the Hematita hand-off during a scan and the keys that leaked out of the occupation section
 celestina-style	1.9.1	bug	STYLE-G7-H	Fix the corner geometry of the shared usage controls and add the rank palette
 hematita	1.2.1	bug	S3-B	Fix the storage tiles all sharing one colour
+siderita	1.7.2	bug	SID-U1-C	Fix the occupation tiles all sharing one colour

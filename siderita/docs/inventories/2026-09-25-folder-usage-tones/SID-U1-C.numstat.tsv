@@ -1,0 +1,29 @@
+# SID-U1-C exact change inventory
+
+Base revision	fa6fe5649a082b7b739d8f8ec2ec59d981988107
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/docs/evidence/2026-09-25-folder-usage-tones.md
+Pathspec	siderita/docs/inventories/2026-09-25-folder-usage-tones/SID-U1-C.numstat.tsv
+Pathspec	siderita/docs/plans/archive/2026-09-25-folder-usage-tones.md
+Pathspec	siderita/qml/dialogs/FolderUsage.qml
+Pathspec	siderita/tests/qml/tst_folder_usage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	e0573c40e24277d851bb0461cc6b66fff2344d299d939d671bfbaf9023e8ce26	docs/version-history.tsv
+1	1	6f4dc14f0dfe904c81840624660da5f72f7b12a02031a7bd6f9bdaf3d8b7c4d9	siderita/Cargo.lock
+1	1	6e9e47cf8029a264115fca0630b3e15602411317274a963c45a279c280b8d0e9	siderita/Cargo.toml
+13	0	fb6a9c6a6ed16c9b481936ba8016d0411c78268dcd77e57265a43a3ae5d73aa4	siderita/ROADMAP.md
+7	1	ca7dcd66602bd777976e1fe9fd0ab7111bf3d5597f5b648d3630872cbb188c69	siderita/STATUS.md
+6	2	b1073770946f302c4cfe60dbe349e3f68742bd8ac8540ff60aa5747087d09bc3	siderita/VALIDATION.md
+56	0	c9ec571d5972394cac07795e278bab34cdbed0661a24d971e5065fc7e60f6cb6	siderita/docs/evidence/2026-09-25-folder-usage-tones.md
+50	0	b0a523382fa0f2530205a3eb55377c5663738634b3471a500c6bd387b68f3135	siderita/docs/plans/archive/2026-09-25-folder-usage-tones.md
+9	3	223c488c3763032d77f7b24b527b5f664eb243137876e8cf8a55ed1a6651242a	siderita/qml/dialogs/FolderUsage.qml
+21	0	8f5a101c5e08273c05141583e64c7eea6c146cca3f347cb120910a684a3b672f	siderita/tests/qml/tst_folder_usage.qml
+29	0	self	siderita/docs/inventories/2026-09-25-folder-usage-tones/SID-U1-C.numstat.tsv

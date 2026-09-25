@@ -194,6 +194,19 @@ evidence](docs/evidence/2026-09-25-folder-usage-fixes.md), deployed as
 [plan](docs/plans/archive/2026-09-25-folder-usage-fixes.md). `VAL-SID-U1`
 gains the steps that check it.
 
+## SID-U1-C — closed 2026-09-25
+
+The author saw the occupation section on 1.7.1 and asked for a distinct
+colour per entry and clean corners. `celestina-style` 1.9.1 fixed the corner
+geometry of the shared list and map and added `CelestinaTheme.usagePalette`;
+`SID-U1-C` maps each row to `p0`..`p5` by size rank, so a row and its tile
+share one tone, keeping the faint tone for rows with unreadable folders and
+for the merged remainder — the [folder usage tones
+evidence](docs/evidence/2026-09-25-folder-usage-tones.md), deployed as
+`1.7.2`, in its own archived
+[plan](docs/plans/archive/2026-09-25-folder-usage-tones.md). `VAL-SID-U1`
+gains the step that checks it.
+
 ## SID-M1 — Parent portal pickers on Wayland
 
 ## Hypothesis and tangible outcome

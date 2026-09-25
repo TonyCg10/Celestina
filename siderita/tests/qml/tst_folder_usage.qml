@@ -102,6 +102,8 @@ TestCase {
         usageStub.failure = ""
         usageStub.currentPath = "/home/a"
         usageStub.rowIds = [10, 11, -1]
+        usageStub.rowUnreadable = [0, 0, 0]
+        usageStub.rowMerged = [0, 0, 2]
         usageStub.revision++
     }
 
@@ -231,5 +233,24 @@ TestCase {
         usageStub.failure = "root"
         verify(!findChild(section, "hematitaButton").visible)
         verify(!findChild(section, "goToFolderButton").visible)
+    }
+
+    function test_o_each_row_and_its_tile_share_a_rank_tone() {
+        usageStub.rowMerged = [0, 0, 0]
+        usageStub.revision++
+        compare(section.usageRows[0].tone, "p0")
+        compare(section.usageRows[1].tone, "p1")
+        compare(section.usageRows[2].tone, "p2")
+        compare(section.tiles[0].id, 10)
+        compare(section.tiles[0].tone, "p0")
+        compare(section.toneColors.p0, CelestinaTheme.usagePalette[0])
+    }
+
+    function test_p_a_row_with_unreadable_folders_keeps_its_tone() {
+        usageStub.rowUnreadable = [0, 2, 0]
+        usageStub.revision++
+        compare(section.usageRows[0].tone, "p0")
+        compare(section.usageRows[1].tone, "unreadable")
+        compare(section.usageRows[2].tone, "other")
     }
 }

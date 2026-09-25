@@ -33,8 +33,12 @@ FocusScope {
     property var tiles: []
     property bool handoffFailed: false
     readonly property var toneColors: ({
-        dir: CelestinaTheme.glyphAccentBlue,
-        file: CelestinaTheme.glyphAccentViolet,
+        p0: CelestinaTheme.usagePalette[0],
+        p1: CelestinaTheme.usagePalette[1],
+        p2: CelestinaTheme.usagePalette[2],
+        p3: CelestinaTheme.usagePalette[3],
+        p4: CelestinaTheme.usagePalette[4],
+        p5: CelestinaTheme.usagePalette[5],
         unreadable: CelestinaTheme.textFaint,
         other: CelestinaTheme.textFaint
     })
@@ -74,8 +78,10 @@ FocusScope {
             const row = { id: published.rowIds[index],
                           name: merged > 0 ? qsTr("otros (%1)").arg(merged) : published.rowNames[index],
                           kind: kind,
+                          // Rows arrive biggest first, so the index is the
+                          // size rank; the merged remainder stays neutral.
                           tone: unreadable > 0 ? "unreadable"
-                                               : (kind === "dir" || kind === "file" ? kind : "other"),
+                                               : (merged > 0 ? "other" : "p" + (index % 6)),
                           share: share,
                           size: section.bytesText(published.rowAllocated[index]),
                           percent: qsTr("%1 %").arg((share * 100).toLocaleString(Qt.locale(), "f", 1)),

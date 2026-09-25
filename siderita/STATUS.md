@@ -2,13 +2,19 @@
 
 - **Updated:** 2026-09-25
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; `SID-A4`, `SID-B1`, `SID-U1` and `SID-U1-B` are closed and archived, no
+  present; `SID-A4`, `SID-B1`, `SID-U1`, `SID-U1-B` and `SID-U1-C` are closed and archived, no
   checkpoint is active, and the portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
+- Delivered as `1.7.2`: `SID-U1-C`. Each row of the occupation section and
+  its tile in the map now share one of the six `CelestinaTheme.usagePalette`
+  tones, rotating by size rank; a row with unreadable folders below stays
+  faint and the merged remainder stays neutral. The corner geometry of the
+  list and the map comes from `celestina-style` 1.9.1. See
+  [the evidence](docs/evidence/2026-09-25-folder-usage-tones.md).
 - Delivered as `1.7.1`: `SID-U1-B`. «Abrir en Hematita» hands over the
   scanned folder while it is still being analysed; Up on the first row, Down
   on the last and Enter on an empty list stay inside the occupation section

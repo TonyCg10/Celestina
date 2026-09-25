@@ -9,7 +9,9 @@ corrective implementation unit.
 - **Status:** pending
 - **Related implementation:** `SID-U1-A`, recorded in
   [the evidence](docs/evidence/2026-09-25-folder-usage.md), and `SID-U1-B`,
-  recorded in [its corrections](docs/evidence/2026-09-25-folder-usage-fixes.md)
+  recorded in [its corrections](docs/evidence/2026-09-25-folder-usage-fixes.md),
+  and `SID-U1-C`, recorded in
+  [the rank tones](docs/evidence/2026-09-25-folder-usage-tones.md)
 - **Requires:** the deployed Siderita and Hematita on the real session, a
   large folder (the home), a folder holding a hard-linked file, a folder with
   a mount inside it, and a screen reader
@@ -34,7 +36,9 @@ corrective implementation unit.
   as its press); Hematita
   opens browsing that folder; the row and the tile are announced with name,
   size, kind and share; the mount is counted as another device and not
-  crossed
+  crossed; each row's bar and its tile share one colour, six tones rotate by
+  size rank; the list and map corners are concentric with the panel and no
+  text touches the edge
 - **Result:** not run by hand
 - **Evidence:** the totals beside `du`, what the thread list showed, and what
   the screen reader said
