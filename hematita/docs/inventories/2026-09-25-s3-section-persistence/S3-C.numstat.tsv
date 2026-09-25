@@ -1,0 +1,33 @@
+# S3-C exact change inventory
+
+Base revision	55d57985f58cf076092c5c0d0b5d66099fef1645
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-25-s3-section-persistence.md
+Pathspec	hematita/docs/inventories/2026-09-25-s3-section-persistence/S3-C.numstat.tsv
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-25-s3-section-persistence.md
+Pathspec	hematita/docs/plans/archive/README.md
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/StoragePage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	ddeeb04d7d322c28d6cf291765271450d81d571095367e43e15eadce30380c61	docs/version-history.tsv
+1	1	1c9770660e8ffd31e285bcc1057ad0656ce2f918fabadaa584e1a215d231294c	hematita/Cargo.lock
+1	1	161971892d2d0f8cf2c954c4126dd6da17172f4424c52e59e096004a4e14c675	hematita/Cargo.toml
+13	0	2e0305b88d6b760b89255f4626ee933feb265f5ef78f3e9000fbc78b777e9683	hematita/ROADMAP.md
+6	0	5a7d9b992d3f5339aeb4213fbe746b25fbecbd9b0e747e4c415803612c11be08	hematita/STATUS.md
+3	3	a99733721cc499f27a656e6770412f2355c75fb0eb85d8c74ba01d7df1c07313	hematita/VALIDATION.md
+45	0	61dfbf2a9f3d26795f0b0ea7b033aa86a5c5a7514ad2e14409ce37d205d08eab	hematita/docs/evidence/2026-09-25-s3-section-persistence.md
+2	1	4769465a3570710d14396644a86e3d476ba1d87610aa39563c03acbef7e446c8	hematita/docs/plans/active/README.md
+52	0	06d6e395ba6163fedbb86433681f6e7c8fd28387b6ea726b98bc6afdb56a9421	hematita/docs/plans/archive/2026-09-25-s3-section-persistence.md
+1	0	031f50ab121a7481655e59ba80868509a0c3329aebce1547026ea6680196aa77	hematita/docs/plans/archive/README.md
+5	4	0ad61fe7bf8db6e84d5f78afee50ae1b4a512eb18351375f35c83f395da94708	hematita/qml/Main.qml
+1	1	e9394c8dc2f26b01d5eca54f6f45ca301a7e13e1fa451ff1df33ddc7eb88bb79	hematita/qml/components/StoragePage.qml
+33	0	self	hematita/docs/inventories/2026-09-25-s3-section-persistence/S3-C.numstat.tsv

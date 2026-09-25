@@ -169,10 +169,11 @@ ApplicationWindow {
     onCurrentSectionChanged: {
         processHub.grouped = window.currentSection === 2
         processHub.refresh()
-        // The storage section reads the mounts again each time it is shown:
-        // a disk plugged in since is there, and nothing is read while the
-        // section is not up.
-        if (window.currentSection === 5)
+        // The storage section reads the mounts again when it is shown on the
+        // locations zone, so a disk plugged in since is there; a folder being
+        // browsed, scanned or analysed is left as it was, with its filters,
+        // selection and cursor, because `open()` would drop all of them.
+        if (window.currentSection === 5 && analysisHub.mode === "locations")
             analysisHub.open()
     }
 

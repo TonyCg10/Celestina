@@ -1,6 +1,12 @@
 # Hematita status
 
 - **Updated:** 2026-09-25
+- **Delivered as 1.2.2:** `S3-C` — a section change no longer resets the
+  storage analysis: `open()` runs only when the section is shown on the
+  locations zone, so the folder, scan, filters, selection and cursor survive;
+  the details card starts shown; built, verified and deployed. `VAL-S3`
+  covers the round trip
+  ([evidence](docs/evidence/2026-09-25-s3-section-persistence.md))
 - **Delivered as 1.2.1:** `S3-B` — each storage entry paints its list bar
   and its tile in one of the six `CelestinaTheme.usagePalette` tones by size
   rank; duplicate, empty and unreadable keep their colours; the shared

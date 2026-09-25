@@ -36,7 +36,7 @@ Item {
     property string usageKey: ""
     // The analysed entry under the cursor, shared by the list and the map.
     property int currentId: -1
-    property bool detailsShown: false
+    property bool detailsShown: true
 
     readonly property bool browsing: page.analysis.mode === "browsing"
     readonly property bool scanning: page.analysis.mode === "scanning"

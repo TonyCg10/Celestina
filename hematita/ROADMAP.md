@@ -496,3 +496,16 @@ neutral — the [rank tones evidence](docs/evidence/2026-09-25-s3-rank-tones.md)
 deployed as `1.2.1`, in its own archived
 [plan](docs/plans/archive/2026-09-25-s3-rank-tones.md). `VAL-S3` gains the
 colour and corner checks.
+
+## S3-C — closed 2026-09-25
+
+The author found that leaving the storage section and coming back lost the
+analysis: the window called `open()` every time the section was shown, which
+drops the session, the stack and the mode. `S3-C` reads the mounts again only
+when the section comes back on the locations zone, so a folder being browsed,
+scanned or analysed keeps its filters, selection and cursor, and the details
+card is on by default — the
+[section persistence evidence](docs/evidence/2026-09-25-s3-section-persistence.md),
+deployed as `1.2.2`, in its own archived
+[plan](docs/plans/archive/2026-09-25-s3-section-persistence.md). `VAL-S3`
+gains the section round trip.
