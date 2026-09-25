@@ -1,0 +1,25 @@
+# LND-1-B exact change inventory
+
+Base revision	9f15c6fab4184bfe3788e16346a2d16b3fc0b659
+Pathspec	.github/workflows/contracts.yml
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-tool.md
+Pathspec	docs/inventories/2026-09-25-seal-at-landing/LND-1-B.numstat.tsv
+Pathspec	docs/plans/active/2026-09-25-seal-at-landing.md
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/production_artifact.py
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-land-unit.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	0	6105e6747a4704d5127b1ead10b64206658d473055c639ee28e61536f474d04f	.github/workflows/contracts.yml
+144	0	6ff57dc48b76473d0d421ba90b9c779e00d807d4c2825f7c06fbd63e1af2d4c0	docs/evidence/2026-09-25-seal-at-landing-tool.md
+25	0	self	docs/inventories/2026-09-25-seal-at-landing/LND-1-B.numstat.tsv
+1	1	64f3873af36acd3b1b09d47ba4124b6b74a65b7347f0da3ef3ef94ea909babb1	docs/plans/active/2026-09-25-seal-at-landing.md
+886	0	4e6e6f853541a81aa036aa10685c504ffeb2a2183ed441f03fca687fd5984978	scripts/land-unit.py
+598	0	c20d96346d4338085c1a61649e868f9da20438383f863cb0f0e167daa7c6930b	scripts/landing.py
+9	3	9fc6d2a6516692f82d4871ad5a48e0f50bd72681d72dc75023d48f89328b6ccc	scripts/production_artifact.py
+1432	0	24e99527c7676e75a295225693818a055c04f5001fa9d21211bf8e84f8237684	scripts/test-land-unit.py
+5	0	73176c3592c5f5d974a7cedf10db3f0a8468e3491ea55dd1e33eb9b2ecc93017	scripts/test-land-unit.sh

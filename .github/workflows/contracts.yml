@@ -46,3 +46,5 @@ jobs:
         run: |
           bash scripts/test-commit-scope.sh
           bash scripts/test-staged-units.sh
+          bash scripts/test-worktree.sh
+          bash scripts/test-land-unit.sh

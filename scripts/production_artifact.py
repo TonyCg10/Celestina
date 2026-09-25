@@ -244,20 +244,26 @@ def digest_paths(
     return f"sha256:{hasher.hexdigest()}"
 
 
-def production_fingerprint(root: Path, registry: dict[str, Any], project: dict[str, Any]) -> str:
+def production_input_patterns(registry: dict[str, Any], project: dict[str, Any]) -> list[str]:
+    """The declared inputs whose bytes decide whether `project`'s artifact is current."""
     inputs = list(project.get("production_inputs", []))
     build_script = project.get("build_script")
     if build_script:
         inputs.append(build_script)
     if project.get("include_workspace_manifests"):
         inputs.extend(registry.get("commit_policy", {}).get("workspace_manifests", []))
+    return sorted(set(inputs))
+
+
+def production_fingerprint(root: Path, registry: dict[str, Any], project: dict[str, Any]) -> str:
+    inputs = production_input_patterns(registry, project)
     contract = {
         "project": project["id"],
         "profile": "release",
         "artifacts": project.get("artifact_paths", []),
-        "inputs": sorted(set(inputs)),
+        "inputs": inputs,
     }
-    return digest_paths(root, sorted(set(inputs)), contract_data=contract)
+    return digest_paths(root, inputs, contract_data=contract)
 
 
 def registered_script(project: dict[str, Any], key: str, *, required: bool) -> str | None:
