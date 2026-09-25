@@ -4,6 +4,35 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-U1 — A folder's occupation in the properties dialog and the quick look
+
+- **Status:** pending
+- **Related implementation:** `SID-U1-A`, recorded in
+  [the evidence](docs/evidence/2026-09-25-folder-usage.md)
+- **Requires:** the deployed Siderita and Hematita on the real session, a
+  large folder (the home), a folder holding a hard-linked file, a folder with
+  a mount inside it, and a screen reader
+- **Procedure:** open the properties of the home and let the scan finish;
+  compare the total with `du -sh ~`, `du -sh --apparent-size ~` and Hematita
+  on the same folder; open the properties of a large folder and close the
+  dialog mid-scan, then confirm with `top -H` that no `siderita-usage` thread
+  keeps reading; in the quick look, press ↑ ↓ while a folder is scanning; walk
+  the section by keyboard — Tab into the list, the arrows, Enter to drill,
+  Backspace up, Tab to the map, Ctrl+Enter, Space and Escape; press «Abrir en
+  Hematita»; point a screen reader at a row and at a tile; open a folder with
+  a mount inside
+- **Pass condition:** the total matches `du -sh` (hard links counted once) and
+  Hematita; closing mid-scan leaves no thread reading; stepping entries
+  cancels the old scan and shows the new folder; drilling and going up need no
+  rescan; Ctrl+Enter goes to the entry in Siderita and closes the modal;
+  Space and Escape close the quick look from the list and the map; Hematita
+  opens browsing that folder; the row and the tile are announced with name,
+  size, kind and share; the mount is counted as another device and not
+  crossed
+- **Result:** not run by hand
+- **Evidence:** the totals beside `du`, what the thread list showed, and what
+  the screen reader said
+
 ## VAL-SID-15 — The bottom bar, and what a running action says
 
 - **Status:** passed

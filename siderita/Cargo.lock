@@ -1010,6 +1010,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
+name = "hematita-core"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
+ "rustix",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2113,6 +2121,7 @@ dependencies = [
  "fluorita-engine",
  "fluorita-qt",
  "grafita-core",
+ "hematita-core",
  "libc",
  "notify-debouncer-full",
  "qt-build-utils",

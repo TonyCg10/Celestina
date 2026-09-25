@@ -128,6 +128,7 @@ Item {
         owner: root.owner
         backdrop: root.panel
         panel: root.panel
+        usage: folderUsage
     }
 
     CompressDialog {
@@ -166,6 +167,7 @@ Item {
         panel: root.panel
         player: mediaPlayerState
         reading: readingPreferences
+        usage: folderUsage
     }
 
     // El reproductor incrustado detrás del modal de `Espacio`. Como el editor,
@@ -173,6 +175,12 @@ Item {
     // un rechazo, y no construye nada hasta que se lo piden.
     SideritaPlayer {
         id: mediaPlayerState
+    }
+
+    // A folder's occupation, shared by the properties dialog and the peek:
+    // one scan at a time, and only while one of them shows a folder.
+    SideritaUsage {
+        id: folderUsage
     }
 
     // The document state behind the embedded editor. It holds no folder

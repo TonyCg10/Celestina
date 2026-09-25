@@ -29,6 +29,9 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaShadow.qml",
     "qml/CelestinaCapsule.qml",
     "qml/CelestinaRowHighlight.qml",
+    // The occupation of a folder, shared with Hematita's storage section.
+    "qml/CelestinaTreemap.qml",
+    "qml/CelestinaUsageList.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
     // Componentes de presentación de Siderita.
@@ -101,6 +104,7 @@ const QML_FILES: &[&str] = &[
     "qml/dialogs/PasswordDialog.qml",
     "qml/dialogs/MediaPreview.qml",
     "qml/dialogs/QuickLookView.qml",
+    "qml/dialogs/FolderUsage.qml",
     "qml/dialogs/GrafitaEditorDialog.qml",
     "qml/dialogs/PhoneMediaDialog.qml",
     // Menús y popups.
@@ -240,6 +244,7 @@ fn main() {
             // Binds one C++ helper so a test can pin the thumbnail cache key to
             // its Rust owner; it declares no QObject.
             "src/thumbnails.rs",
+            "src/usage.rs",
         ]);
     // The generated protocol joins the same compilation as the shim that uses
     // it, and only when it could be generated: without it the shim compiles to

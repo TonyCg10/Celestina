@@ -61,7 +61,6 @@ pub mod qobject {
 
         #[rust_name = "register_thumbnail_provider"]
         fn register_siderita_thumbnail_provider(engine: Pin<&mut QQmlApplicationEngine>);
-
     }
 
     #[auto_cxx_name]
@@ -179,6 +178,7 @@ pub mod qobject {
         #[qproperty(bool, properties_pending)]
         #[qproperty(QString, prop_name)]
         #[qproperty(QString, prop_path)]
+        #[qproperty(QString, prop_key)]
         #[qproperty(QString, prop_kind)]
         #[qproperty(QString, prop_mime)]
         #[qproperty(QString, prop_size)]

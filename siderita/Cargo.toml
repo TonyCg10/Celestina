@@ -39,6 +39,11 @@ grafita-core = { path = "../celestina-rs/crates/grafita-core" }
 # until `Space` asks for one, which is what keeps browsing free of a decoder.
 fluorita-core = { path = "../celestina-rs/crates/fluorita-core" }
 fluorita-engine = { path = "../celestina-rs/crates/fluorita-engine" }
+# The folder occupation the properties dialog and the quick look show: the
+# scan, tree and treemap layout live in Hematita's domain crate; this app only
+# runs the scan on its own thread and marshals the projection to Qt. Never
+# `usage::remove` — Siderita's own trash and delete stay its only removals.
+hematita-core = { path = "../celestina-rs/crates/hematita-core" }
 # System-bus integration: org.freedesktop.FileManager1 and udisks2 volumes.
 zbus = "5"
 # Already in the closure (zbus pulls it in); declared here so the portal backend

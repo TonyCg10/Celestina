@@ -1,16 +1,14 @@
 //! Get-Info for a single entry: the metadata a properties panel shows —
-//! permissions, owner, MIME type, timestamps, symlink target — plus a bounded,
-//! cancellable recursive folder size.
+//! permissions, owner, MIME type, timestamps, symlink target. A folder's
+//! occupation is scanned by `SideritaUsage`, not here.
 //!
 //! The pure formatting (mode → `rwxr-xr-x`, uid/gid → names, epoch → local
-//! `YYYY-MM-DD HH:MM`) is unit-tested; the metadata read and the directory walk
-//! touch the filesystem.
+//! `YYYY-MM-DD HH:MM`) is unit-tested; the metadata read touches the
+//! filesystem.
 
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
-
-use celestina_core::CancellationToken;
 
 /// Everything the properties panel needs about one entry, already formatted.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -19,7 +17,7 @@ pub struct Properties {
     pub path: String,
     pub kind: String,
     pub mime: String,
-    /// A file's size in bytes; `None` for a directory (computed separately).
+    /// A file's size in bytes; `None` for a directory (its occupation is scanned).
     pub size: Option<u64>,
     pub permissions: String,
     pub owner: String,
@@ -31,7 +29,7 @@ pub struct Properties {
 
 /// Reads the metadata of `path` (the link itself, not its target) and formats it
 /// for display. The recursive size of a directory is deliberately not computed
-/// here — see [`directory_size`].
+/// here: the properties dialog's occupation section scans it (`SideritaUsage`).
 pub fn gather(path: &Path) -> Properties {
     let name = path
         .file_name()
@@ -81,43 +79,6 @@ pub fn gather(path: &Path) -> Properties {
     props.modified = format_time(meta.mtime());
     props.accessed = format_time(meta.atime());
     props
-}
-
-/// Sums the sizes of every regular file under `dir`, recursively, without
-/// following symlinks (so a symlink loop can't run away or double-count).
-/// Honours `cancellation`; a directory it cannot read is skipped rather than
-/// aborting the whole total.
-pub fn directory_size(dir: &Path, cancellation: &CancellationToken) -> u64 {
-    let mut total = 0u64;
-    let mut stack = vec![dir.to_path_buf()];
-
-    while let Some(current) = stack.pop() {
-        if cancellation.is_cancelled() {
-            break;
-        }
-        let Ok(entries) = fs::read_dir(&current) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            if cancellation.is_cancelled() {
-                break;
-            }
-            let Ok(meta) = entry.metadata() else {
-                continue;
-            };
-            let file_type = meta.file_type();
-            if file_type.is_symlink() {
-                continue;
-            }
-            if file_type.is_dir() {
-                stack.push(entry.path());
-            } else {
-                total = total.saturating_add(meta.len());
-            }
-        }
-    }
-
-    total
 }
 
 /// Formats the low 9 permission bits as `rwxr-xr-x`.

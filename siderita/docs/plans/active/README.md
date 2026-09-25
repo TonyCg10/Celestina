@@ -1,8 +1,7 @@
 # Active Siderita plans
 
-No plan is active: the project roadmap names no active implementation
-checkpoint. A dated plan is added here only when the roadmap names the same
-active implementation checkpoint.
+- [SID-U1 — Folder usage](2026-09-25-folder-usage.md) (`folder-usage`),
+  opened 2026-09-25.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

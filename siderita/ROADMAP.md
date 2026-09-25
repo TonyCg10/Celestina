@@ -1,10 +1,10 @@
 # Siderita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** SID-U1
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07`,
-  `VAL-SID-11` and `VAL-SID-15` in [VALIDATION.md](VALIDATION.md); none of them
-  blocks implementation
+  `VAL-SID-11`, `VAL-SID-15` and `VAL-SID-U1` in [VALIDATION.md](VALIDATION.md);
+  none of them blocks implementation
 
 `SID-M1` remains the next settled checkpoint after `SID-G7` and `SID-A1`, and
 has no active execution plan.
@@ -137,6 +137,27 @@ delivered as `1.6.0` after four rounds of the author testing the heading on the
 real session.
 It excludes the portal picker's own chrome, and the author's own pass, which is
 `VAL-SID-15`.
+
+## SID-U1 — The folder's occupation in the properties dialog and the quick look
+
+The falsifiable problem: the properties dialog showed a folder's size as one
+number from a hand-rolled sum that counted every name of a hard-linked file,
+and the quick look showed a folder as an icon and a word. Hematita already
+answers the better question — what fills this folder — with a scanned tree,
+a size-ordered list and a treemap.
+
+The boundary is `hematita-core::usage` for the walk, the tree, the mount
+boundaries and the projection, the shared `CelestinaTreemap` and
+`CelestinaUsageList` for the anatomy, and Siderita's own hub
+(`SideritaUsage`), session and composition (`FolderUsage.qml`) for the rest.
+`usage::remove` is never linked. The tangible outcome is a folder whose
+occupation both modals show, navigable without a second scan, with a way to
+the folder in Siderita and a hand-off to Hematita.
+
+The plan is
+[Folder usage](docs/plans/active/2026-09-25-folder-usage.md). It excludes
+deleting or moving from the section, duplicates and empty folders, and the
+author's own pass, which is `VAL-SID-U1`.
 
 ## SID-M1 — Parent portal pickers on Wayland
 

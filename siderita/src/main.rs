@@ -27,6 +27,8 @@ mod settings;
 // than a comment in two languages.
 #[cfg(test)]
 mod thumbnails;
+mod usage;
+mod usage_session;
 mod volumes;
 
 use cxx_qt_lib::{

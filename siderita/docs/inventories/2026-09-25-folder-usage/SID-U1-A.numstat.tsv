@@ -1,0 +1,57 @@
+# SID-U1-A exact change inventory
+
+Base revision	d48f20414bae88c67d8b5cde804a6d8386b15ecc
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/docs/evidence/2026-09-25-folder-usage.md
+Pathspec	siderita/docs/inventories/2026-09-25-folder-usage/SID-U1-A.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-25-folder-usage.md
+Pathspec	siderita/docs/plans/active/README.md
+Pathspec	siderita/qml/CelestinaTreemap.qml
+Pathspec	siderita/qml/CelestinaUsageList.qml
+Pathspec	siderita/qml/components/folder/FolderActions.qml
+Pathspec	siderita/qml/dialogs/FolderUsage.qml
+Pathspec	siderita/qml/dialogs/PropertiesDialog.qml
+Pathspec	siderita/qml/dialogs/QuickLookView.qml
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/controller/selection.rs
+Pathspec	siderita/src/controller/state.rs
+Pathspec	siderita/src/main.rs
+Pathspec	siderita/src/properties.rs
+Pathspec	siderita/src/usage.rs
+Pathspec	siderita/src/usage_session.rs
+Pathspec	siderita/tests/qml/tst_folder_usage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	1	a33584e75d4b1399d19231f693e97838f0bca29c7be25757b9ebca2ccab7954e	scripts/qmllint-baseline.tsv
+9	0	8c5b4c68d4485dee24b9f350bb3ff46d33947b4f8a0e7303529666a8424afb7f	siderita/Cargo.lock
+5	0	310be74b28a1feae254ab0322408d5489703df52150a7df7772e3aa97b0993b7	siderita/Cargo.toml
+25	4	bf5474c484bdade71edc9416f9f2db4e8edb6db7c7f76dde8e2a003cb9022cde	siderita/ROADMAP.md
+15	2	85395115af445b00725414cc12e90a8310cb41202d780c8a7528ac48f2c8ed6d	siderita/STATUS.md
+29	0	c78dd13e7e4596adb1df3014b7501aebd993028d929688801175133692b59695	siderita/VALIDATION.md
+5	0	48aa37f789aadaba10a3fbea00f460ca27924d93f669254fe5a08b58ee4cc667	siderita/build.rs
+153	0	896c3f52cf7d8c9e2e2d6ee941c330eb289ee6f7cbf20aa1d2d11a8e587cfd10	siderita/docs/evidence/2026-09-25-folder-usage.md
+68	0	5e210705fedac722e660474d6105620036b757447fd5dc182df309baefd1d2fa	siderita/docs/plans/active/2026-09-25-folder-usage.md
+2	3	189f840ce2fdccfbd3c4b379bba55424b2fd5d39ac7a1251c2d411644a22f17a	siderita/docs/plans/active/README.md
+1	0	51b9e1f4409a9981a01d662c5bf351b80f9326d3610e173ce43ff20b08462411	siderita/qml/CelestinaTreemap.qml
+1	0	e8d18ddec56151a9b6de074f40723454e90280dcd62e689904ceee531b1133ac	siderita/qml/CelestinaUsageList.qml
+8	0	4e05c56e87ebd29455b36d55efc3b532a1e325b0c94aa86fc13d6e30c923040b	siderita/qml/components/folder/FolderActions.qml
+301	0	66e9d023932a67940c8bdc4daf4e8f24b04ad9853e82b235f7244cc47cc7f98e	siderita/qml/dialogs/FolderUsage.qml
+57	4	db670a0b2759b3639cb6b71cb03f1239851adafa44ed82ee01e86b51d33e0e8a	siderita/qml/dialogs/PropertiesDialog.qml
+51	5	2b4a81224b756f266a76ed20fa4c7137c3985360803faad587e375fb7eb47447	siderita/qml/dialogs/QuickLookView.qml
+1	1	63b0437d8b439730f787715e240f74f253decb11f674b31479af4ba73cdb6e47	siderita/src/controller.rs
+16	48	5afce50ffc831b6d39ace0ee7c3f2c6f0ba649a8b366a8d5e6736533f7bf099b	siderita/src/controller/selection.rs
+2	2	e434b3d8795a51a63de9f4e343bacb05bc646d3db1399771f709b3fdb83f16e3	siderita/src/controller/state.rs
+2	0	1736cd950851c43bdaf2238d964d3c9d8d7aace4aa22b3d3a985d9829874a797	siderita/src/main.rs
+6	45	1e0bcbb2b73b873b05939dad946469d84dba7a8dd46fe5820fbd9f9263ce15f5	siderita/src/properties.rs
+446	0	088bc01821dea1344d11ec556e66c14c52d3f4841789edfb1d00c6545b101507	siderita/src/usage.rs
+530	0	7c04d1b07f40bc12d399dac3e5e94eb30b16fa9e85f49fdfe7d4ab815d2e8575	siderita/src/usage_session.rs
+201	0	31ea040284077e06b4bf6391ba57f8270ae695d309090a609adc91951763c5df	siderita/tests/qml/tst_folder_usage.qml
+57	0	self	siderita/docs/inventories/2026-09-25-folder-usage/SID-U1-A.numstat.tsv

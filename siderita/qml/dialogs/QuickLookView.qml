@@ -17,6 +17,8 @@ CelestinaModalLayer {
     // own window through the file it stores. Read only here — a peek offers no
     // way to change it, and its own key map already owns Space and the arrows.
     property var reading
+    // SideritaUsage: a folder's occupation, scanned while a folder is peeked.
+    property var usage
     anchors.fill: parent
     z: 70
     shown: owner.quickLookOpen
@@ -47,11 +49,43 @@ CelestinaModalLayer {
     // shown read-only.
     // Una sesión a la vez: cada paso de selección cierra la anterior antes de
     // abrir nada, y cerrar el modal no deja ningún decodificador vivo.
-    onQlPathChanged: quickLookView.syncPlayer()
+    onQlPathChanged: quickLookView.sync()
     onShownChanged: {
-        quickLookView.syncPlayer()
-        if (quickLookView.shown)
+        quickLookView.sync()
+        if (quickLookView.shown) {
             quickLookView.reading.reload()
+            // The layer hands focus to the first focusable item it holds; for
+            // a folder that would be the occupation list, and ↑ ↓ would stop
+            // stepping entries. The surface keeps it until Tab moves in.
+            if (quickLookView.qlKind === "directory")
+                Qt.callLater(function() {
+                    if (quickLookView.shown)
+                        quickLookView.forceActiveFocus(Qt.PopupFocusReason)
+                })
+        }
+    }
+
+    function sync() {
+        quickLookView.syncPlayer()
+        quickLookView.syncUsage()
+    }
+
+    // A folder's occupation is scanned only while it is the entry shown;
+    // stepping away or closing cancels the scan. Nothing runs for a file.
+    // The hub is shared with the properties dialog: whoever opened it last
+    // owns it, a close from the other is ignored, and the section only
+    // presents the hub while this view owns it.
+    readonly property string usageOwner: "quicklook"
+    readonly property bool ownsUsage: !!quickLookView.usage
+                                      && quickLookView.usage.owner === quickLookView.usageOwner
+    function syncUsage() {
+        if (!quickLookView.usage)
+            return
+        if (quickLookView.shown && quickLookView.qlKind === "directory"
+                && quickLookView.qlPath.length > 0)
+            quickLookView.usage.open(quickLookView.qlPath, quickLookView.usageOwner)
+        else
+            quickLookView.usage.close(quickLookView.usageOwner)
     }
 
     function syncPlayer() {
@@ -245,12 +279,22 @@ CelestinaModalLayer {
                 }
             }
 
-            // (4) No renderable preview — a centred glyph + reason.
+            // (4) A folder — its occupation, over the whole body.
+            FolderUsage {
+                anchors.fill: parent
+                visible: quickLookView.qlKind === "directory" && quickLookView.ownsUsage
+                usage: quickLookView.usage
+                controller: quickLookView.controller
+                onNavigated: quickLookView.owner.quickLookOpen = false
+            }
+
+            // (5) No renderable preview — a centred glyph + reason.
             Column {
                 anchors.centerIn: parent
                 spacing: 12
                 visible: !quickLookView.qlIsImage && !quickLookView.qlIsPlayable
                          && !quickLookView.qlHasText
+                         && !(quickLookView.qlKind === "directory" && quickLookView.ownsUsage)
                 CelestinaIcon {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 56
@@ -281,7 +325,9 @@ CelestinaModalLayer {
             anchors.bottom: parent.bottom
             anchors.margins: 14
             horizontalAlignment: Text.AlignHCenter
-            text: "Espacio o Esc para cerrar   ·   ↑ ↓ para navegar"
+            text: quickLookView.qlKind === "directory"
+                  ? qsTr("Espacio o Esc para cerrar · ↑ ↓ para navegar · Tab, flechas y Retroceso dentro del mapa · Ctrl+Intro para ir")
+                  : "Espacio o Esc para cerrar   ·   ↑ ↓ para navegar"
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption

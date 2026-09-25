@@ -1,15 +1,14 @@
 //! Acting on the current entry: single-click selection, double-click activation
 //! (navigate into a folder, open a file, reveal a starred file), the read-only
 //! accessors the QML calls per row (token / detail / path / kind / index) and a
-//! text preview, plus the properties panel (metadata inline, a folder's
-//! recursive size computed on a worker thread). Search hits and trashed entries
+//! text preview, plus the properties panel (metadata inline; a folder's
+//! occupation is `SideritaUsage`'s). Search hits and trashed entries
 //! are read from their own lists so every row lookup takes the same path.
 
 use core::pin::Pin;
 use std::path::Path;
 
-use celestina_core::CancellationToken;
-use cxx_qt::{CxxQtType, Threading};
+use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QStringList};
 use siderita_qt::RowKind;
 
@@ -341,24 +340,20 @@ impl qobject::SideritaController {
         QString::from(String::from_utf8_lossy(&buf).as_ref())
     }
 
-    /// Opens the properties panel for `path`: the metadata is gathered inline
-    /// (fast), and a folder's recursive size is computed on a worker thread so a
-    /// deep tree never blocks the UI.
+    /// Opens the properties panel for `key`: the metadata is gathered inline
+    /// (fast). A folder's size is not computed here: the panel's occupation
+    /// section scans it on its own thread (`SideritaUsage`) from `prop_key`.
     pub fn open_properties(mut self: Pin<&mut Self>, key: &QString) {
         let Some(path) = self.as_mut().accept_key(key) else {
             return;
         };
-
-        // Cancel any directory-size walk still running from a previous open.
-        if let Some(token) = self.as_mut().rust_mut().get_mut().prop_size_cancel.take() {
-            token.cancel();
-        }
 
         let props = crate::properties::gather(&path);
         self.as_mut()
             .set_prop_name(QString::from(props.name.as_str()));
         self.as_mut()
             .set_prop_path(QString::from(props.path.as_str()));
+        self.as_mut().set_prop_key(pathkey::publish(&path));
         self.as_mut()
             .set_prop_kind(QString::from(props.kind.as_str()));
         self.as_mut()
@@ -375,46 +370,19 @@ impl qobject::SideritaController {
             props.symlink_target.unwrap_or_default().as_str(),
         ));
         self.as_mut().set_prop_is_dir(props.is_dir);
-
-        match props.size {
-            Some(size) => self
-                .as_mut()
-                .set_prop_size(QString::from(crate::format::size_full(size).as_str())),
-            None => {
-                self.as_mut().set_prop_size(QString::from("Calculando…"));
-                let token = CancellationToken::new();
-                self.as_mut().rust_mut().get_mut().prop_size_cancel = Some(token.clone());
-                let qt = self.qt_thread();
-                let dir = path.clone();
-                let dir_key = props.path.clone();
-                std::thread::spawn(move || {
-                    let size = crate::properties::directory_size(&dir, &token);
-                    if token.is_cancelled() {
-                        return;
-                    }
-                    let text = crate::format::size_full(size);
-                    let _ = qt.queue(
-                        move |mut controller: Pin<&mut qobject::SideritaController>| {
-                            // Ignore if the panel has since moved to another entry.
-                            if controller.rust().prop_path.to_string() == dir_key {
-                                controller
-                                    .as_mut()
-                                    .set_prop_size(QString::from(text.as_str()));
-                            }
-                        },
-                    );
-                });
-            }
-        }
+        self.as_mut().set_prop_size(QString::from(
+            props
+                .size
+                .map(crate::format::size_full)
+                .unwrap_or_default()
+                .as_str(),
+        ));
 
         self.as_mut().set_properties_pending(true);
     }
 
-    pub fn close_properties(mut self: Pin<&mut Self>) {
-        if let Some(token) = self.as_mut().rust_mut().get_mut().prop_size_cancel.take() {
-            token.cancel();
-        }
-        self.as_mut().set_properties_pending(false);
+    pub fn close_properties(self: Pin<&mut Self>) {
+        self.set_properties_pending(false);
     }
 }
 
