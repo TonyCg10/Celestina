@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-25
 - **Scope:** `SID-U1-A` of
-  [`../plans/active/2026-09-25-folder-usage.md`](../plans/active/2026-09-25-folder-usage.md)
+  [`../plans/archive/2026-09-25-folder-usage.md`](../plans/archive/2026-09-25-folder-usage.md)
 - **Environment:** the author's checkout; offscreen Qt platform
 - **Artifact:** `siderita/target/release/siderita` built by
   `siderita/scripts/build-production.sh` and verified by

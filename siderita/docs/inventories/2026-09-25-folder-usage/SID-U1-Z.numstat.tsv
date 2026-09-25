@@ -1,0 +1,31 @@
+# SID-U1-Z exact change inventory
+
+Base revision	a1eb9fb0e3ef31af639bf7cf34efc773db7c762b
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/docs/evidence/2026-09-25-folder-usage-production-completion.md
+Pathspec	siderita/docs/evidence/2026-09-25-folder-usage.md
+Pathspec	siderita/docs/inventories/2026-09-25-folder-usage/SID-U1-Z.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-25-folder-usage.md
+Pathspec	siderita/docs/plans/active/README.md
+Pathspec	siderita/docs/plans/archive/2026-09-25-folder-usage.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	88190a5ee3a7017afe357b4e46052513c13eccb47f2fcdc52a0d978a2961c32d	docs/version-history.tsv
+1	1	fdada4b4a845517075740202ad5d9abe29e34ac11f0eb3f7c20013b25ab4e529	siderita/Cargo.lock
+1	1	b2dd96393322d19d6f051f453f65a54caab1b751d386b4346c618c18d6d6f28b	siderita/Cargo.toml
+35	18	d3d45934acc6075d5f807117be0691b9ca991a2f59cae4a40096c3746467981f	siderita/ROADMAP.md
+15	14	95260bbc86955a2d1bb75f1cf2f11652a57d5c269e80f5eacb10bd3e60dd15da	siderita/STATUS.md
+3	1	3ba9ff2a84bcdde3d82716525dd0e125f77208683cccfe774a71276cfaab91f0	siderita/VALIDATION.md
+78	0	be154121e0b2e3959670fc9b24c3527ae5f222185ab61dc9bab96a01eab43473	siderita/docs/evidence/2026-09-25-folder-usage-production-completion.md
+1	1	64d09a35b7186f4557c98f4708c16610da952d06758b16c9ff8e3472d0d29ddf	siderita/docs/evidence/2026-09-25-folder-usage.md
+0	68	deleted	siderita/docs/plans/active/2026-09-25-folder-usage.md
+3	2	37abbd3c844158d28af619552db39719ad6d84995a3fd9e3dc0ccff992f007fb	siderita/docs/plans/active/README.md
+70	0	8fd846ce128eb42b162cf627db81c89043133a3613852c42bee1ad0ea74ae21a	siderita/docs/plans/archive/2026-09-25-folder-usage.md
+31	0	self	siderita/docs/inventories/2026-09-25-folder-usage/SID-U1-Z.numstat.tsv

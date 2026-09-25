@@ -25,7 +25,9 @@ corrective implementation unit.
   Hematita; closing mid-scan leaves no thread reading; stepping entries
   cancels the old scan and shows the new folder; drilling and going up need no
   rescan; Ctrl+Enter goes to the entry in Siderita and closes the modal;
-  Space and Escape close the quick look from the list and the map; Hematita
+  Space and Escape close the quick look from the list and the map (Space
+  closes from the surface, the list and the map; a focused button takes Space
+  as its press); Hematita
   opens browsing that folder; the row and the tile are announced with name,
   size, kind and share; the mount is counted as another device and not
   crossed

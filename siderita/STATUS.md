@@ -2,25 +2,26 @@
 
 - **Updated:** 2026-09-25
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
-  present; `SID-A4` and `SID-B1` are closed and archived, `SID-U1` is active,
-  and the portal-parenting one remains planned
-- **Focus:** `SID-U1` (a folder's occupation) — `SID-U1-A` done in the
-  checkout: the properties dialog and the space-bar quick look show a folder's
-  occupation through `hematita-core::usage` and the shared treemap and usage
-  list; the old recursive sum is gone. `SID-U1-Z` (1.7.0, deploy) is planned
+  present; `SID-A4`, `SID-B1` and `SID-U1` are closed and archived, no
+  checkpoint is active, and the portal-parenting one remains planned
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
-- Uncommitted in the checkout: `SID-U1-A`. A folder's properties and its
-  quick look scan it on a `siderita-usage` thread with Hematita's walk and
-  show crumbs, totals, a size-ordered list and a treemap, drill in memory,
-  go to a folder in Siderita (Ctrl+Enter or «Ir a la carpeta») and hand the
-  folder to Hematita. A folder's size now counts a hard link once, as `du`
-  does, where the removed sum counted every name. Nothing tried by hand:
-  that is `VAL-SID-U1`. See
-  [the evidence](docs/evidence/2026-09-25-folder-usage.md).
+- Delivered as `1.7.0`: `SID-U1`. A folder's properties and its quick look
+  scan it on a `siderita-usage` thread with Hematita's walk and show crumbs,
+  totals, a size-ordered list and a treemap, drill in memory, go to a folder
+  in Siderita (Ctrl+Enter or «Ir a la carpeta») and hand the folder to
+  Hematita. A folder's size now counts a hard link once, as `du` does, where
+  the removed sum counted every name. Known and unfixed: `bytesText` is a
+  third copy of the byte formatter, pending a shared one; `gtk-launch` fails
+  asynchronously, so a missing Hematita is not detected; after a properties
+  takeover the quick look shows the glyph until its entry changes; and Space
+  on a focused crumb or footer button presses it instead of closing, by
+  design. Nothing tried by hand: that is `VAL-SID-U1`. See
+  [the evidence](docs/evidence/2026-09-25-folder-usage.md) and
+  [its delivery](docs/evidence/2026-09-25-folder-usage-production-completion.md).
 
 - Delivered as `1.6.1`: the rows sliding while the heading folded, an
   accepted limitation from `1.6.0`. The content frame only moves while the

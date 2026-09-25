@@ -1,8 +1,10 @@
 # SID-U1 — Folder usage
 
 - **Opened:** 2026-09-25
+- **Closed:** 2026-09-25
 - **Plan ID:** folder-usage
-- **Status:** active
+- **Status:** done
+- **Successor:** none
 - **Authorization:** the author asked on 2026-09-25 for Siderita to show a
   folder's usage with Hematita's projection and controls, planned in
   [the folder usage plan](../../../../docs/superpowers/plans/2026-09-25-siderita-folder-usage.md)
@@ -62,7 +64,7 @@ folder's occupation in both modals.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | SID-U1-A | `siderita:` | done | [inventory](../../inventories/2026-09-25-folder-usage/SID-U1-A.numstat.tsv) | 25 files, +1992/-115 | `SideritaUsage` and `UsageSession` over `hematita-core::usage`; `FolderUsage.qml` over the shared treemap and usage list in the properties dialog and the quick look; `directory_size` and `prop_size_cancel` removed, `prop_key` published | [folder usage](../../evidence/2026-09-25-folder-usage.md) | `VAL-SID-U1` |
-| SID-U1-Z | `siderita:` | planned | pending | pending | Implementation exit, `1.7.0`, documents closed, plan archived | pending | `VAL-SID-U1` |
+| SID-U1-Z | `siderita:` | done | [inventory](../../inventories/2026-09-25-folder-usage/SID-U1-Z.numstat.tsv) | 12 files, +239/-106 | Implementation exit, `1.7.0`, documents closed, plan archived | [production completion](../../evidence/2026-09-25-folder-usage-production-completion.md) | `VAL-SID-U1` |
 
 Like every plan in this repository, this one records intent and grants no
 authority.
