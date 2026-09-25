@@ -6,7 +6,7 @@ corrective implementation unit.
 
 ## VAL-SID-15 — The bottom bar, and what a running action says
 
-- **Status:** pending
+- **Status:** passed
 - **Related implementation:** `SID-B1` (1.6.0), designed in
   [the spec](../docs/superpowers/specs/2026-09-22-siderita-bottom-chrome-design.md)
 - **Requires:** the deployed Siderita on the real session, a removable disk,
@@ -28,10 +28,10 @@ corrective implementation unit.
   the count, which expands upward into a named list; scrolling never needs a
   second gesture to catch up — the heading and the listing move together
   throughout, and a push up at the top grows the metadata block and parks it
-- **Result:** not run by hand
-- **Evidence:** whether the 500 ms threshold feels right against a fast
-  unmount, whether two lines is enough for a real permission error on a long
-  path, and whether losing the permanent sort arrow is acceptable in daily use
+- **Result:** the author ran the full procedure on the deployed 1.6.0 and
+  confirmed it; the heading's scroll took four corrective rounds against the
+  author's own recordings first, each addressed before this pass (2026-09-25)
+- **Evidence:** author's report, 2026-09-25, recorded in [the heading corrections](docs/evidence/2026-09-22-heading-corrections.md). Known and accepted there: the rows slide while the heading folds, because the content frame rising during that fold is not compensated
 
 ## VAL-SID-13 — One password opens the archives that share it
 
