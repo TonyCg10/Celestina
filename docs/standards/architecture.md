@@ -15,7 +15,13 @@
 Dependencies point from presentation and adapters toward pure contracts, never
 in reverse. One application does not import another application's UI.
 Integrated consumers share narrow domain and seams while retaining their own Qt
-state and QML composition. [ADR 0005](../decisions/0005-bounded-qt-bridge-crates.md)
+state and QML composition.
+
+Siderita is such a consumer of `grafita-core`, `fluorita-core` and
+`hematita-core::usage` (the folder scan, tree and layout only; never
+`usage::remove`, `hematita/src` or Hematita's QML).
+
+[ADR 0005](../decisions/0005-bounded-qt-bridge-crates.md)
 bounds the real Qt exception: it exists only for a stable shared host seam or a
 CXX-Qt gap and never turns `celestina-rs` into presentation. The historical
 name `siderita-qt` is not such an exception; it is safe Rust with opaque view

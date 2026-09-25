@@ -229,9 +229,11 @@ through the desktop entry.
 
 ## 9. Delivery
 
-A `suite:` plan with units per project, in order: `hematita-core` view
-(crate only), `celestina-style` controls, Hematita consuming them plus the
-argument (one build), Siderita hub and modals (one build), closing units with
-version bumps (`siderita` milestone 1.7.0, `hematita` milestone 1.2.0,
-`celestina-style` per contract) and `complete-production.sh` for Siderita and
-Hematita. Builds only where a batch changes a deployable app.
+Three local plans, in order: `celestina-style` extends its active `STYLE-G7`
+plan with the two controls (`STYLE-G7-G`, milestone 1.9.0); Hematita opens
+`S3` (crate view, consumption of the shared controls, the folder argument;
+`S3-A`, then `S3-Z` at 1.2.0); Siderita opens `SID-U1` (hub, session,
+modals; `SID-U1-A`, then `SID-U1-Z` at 1.7.0). One `suite-maintenance`
+commit carries the architecture standard's sentence and the registry input.
+The root roadmap keeps `PRD-1` as its one active checkpoint, so no suite plan
+is opened. Builds only where a unit changes a deployable app.
