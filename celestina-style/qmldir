@@ -24,6 +24,8 @@ CelestinaTextField 1.0 CelestinaTextField.qml
 CelestinaSlider 1.0 CelestinaSlider.qml
 CelestinaScrollBar 1.0 CelestinaScrollBar.qml
 CelestinaLineGutter 1.0 CelestinaLineGutter.qml
+CelestinaTreemap 1.0 CelestinaTreemap.qml
+CelestinaUsageList 1.0 CelestinaUsageList.qml
 CelestinaSwitch 1.0 CelestinaSwitch.qml
 ListSection 1.0 ListSection.qml
 CelestinaInputShield 1.0 CelestinaInputShield.qml

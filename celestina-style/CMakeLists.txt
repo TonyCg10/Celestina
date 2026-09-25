@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.8.7 LANGUAGES CXX)
+project(celestina-style VERSION 1.9.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -46,6 +46,8 @@ qt_add_qml_module(celestina-style
         CelestinaSlider.qml
         CelestinaScrollBar.qml
         CelestinaLineGutter.qml
+        CelestinaTreemap.qml
+        CelestinaUsageList.qml
         CelestinaSwitch.qml
         ListSection.qml
         CelestinaInputShield.qml

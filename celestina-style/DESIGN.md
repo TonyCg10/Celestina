@@ -301,6 +301,8 @@ compatibility policy changes that contract.
 | `CelestinaRowHighlight` | The one hover/press/selected/drag fill behind list rows, grid cells and column titles; the host reports states, it paints them and holds no pointer |
 | `CelestinaIcon` | One name/fallback/tone API for Lucide-style UI glyphs |
 | `CelestinaSectionLabel` | Semantic section heading with shared type/spacing, not product navigation state |
+| `CelestinaTreemap` | A folder's children as rectangles laid out by the consumer (0..1 of the field); anatomy from `radiusSm`, `spaceXs`, `accentSoftOpacity`, `surfaceSelected`, `contentHover` and `unavailableContentOpacity`; one Tab stop whose arrows walk tiles in reading order, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host; tone colours, current, marked and dimmed ids come from the consumer; no selection or action semantics of its own |
+| `CelestinaUsageList` | A folder's children as rows with a share bar, size, percentage and optional detail; anatomy from `rowHeight`, `badgeFill`, `CelestinaRowHighlight` and the type tokens; one Tab stop whose Up/Down move, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host (the focused row is a plain slot, not the button, so no click steals Space); tone colours and marked ids come from the consumer; no selection or action semantics of its own |
 | `CelestinaFocusRing` | Reusable 2 px exterior ring shown for `visualFocus`, never merely for pointer focus |
 | `CelestinaTextField` | Radius-22 search/input anatomy, clear focus/error/disabled states and accessible naming |
 | `CelestinaSlider` | Shared track/fill/thumb/focus/keyboard/wheel anatomy with hover and pressed states, plus a separate requested-but-unconfirmed mark |

@@ -1,17 +1,22 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-09-07
-- **Implementation:** the shared source contract has a 1.5.0 milestone
-  prototype with the two reading controls, demonstrated shell glyphs, additive
-  `GlassSurface.ExternalBackdrop` mode, compatible opt-in `ContentSurface` and
-  `ContextualVeil` roles, and one opt-in vector silhouette for an
-  external-backdrop material; `STYLE-G7-J` remains `active` until its immutable
-  delivery record and commit exist, `STYLE-G7` stays active and
-  `STYLE-M1` remains planned with no execution plan
+- **Updated:** 2026-09-25
+- **Implementation:** the shared source contract is at 1.9.0, with the
+  reading controls, the shared treemap and usage list, the glass material
+  roles and the vendored icon catalogue published; `STYLE-G7-J` and
+  `STYLE-G7-K` remain `active`, `STYLE-G7` stays active and `STYLE-M1`
+  remains planned with no execution plan
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.9.0`: `STYLE-G7-G`. `CelestinaTreemap` and
+  `CelestinaUsageList` are published, extracted from Hematita's local treemap
+  and usage list so Siderita can become their second consumer. They carry
+  navigation only: marking, dimming and tone colours come from the host, and
+  Space and Delete bubble to it. See
+  [the record](docs/evidence/2026-09-25-usage-controls.md).
 
 - Delivered as `1.8.7`: `FEEDBACK-5-STY`. The Tonal and Ghost button roles
   press in `pressedWash` like the row plate, instead of the darker grey that
