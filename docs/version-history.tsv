@@ -162,3 +162,4 @@ hematita	1.0.0	release	REL-1	Publish Hematita 1.0
 hematita	1.1.0	milestone	S1-Z	Add the storage analyzer
 hematita	1.1.1	bug	S2-Z	Fix the deletion window, the stale sizes after a stopped deletion and the analysis hub size
 magnetita-android	1.0.1	bug	AND-1-C	Fix the find ring that could run forever if the stop command never arrived
+siderita	1.6.1	bug	SID-B1-D	Fix the rows sliding while the heading folds

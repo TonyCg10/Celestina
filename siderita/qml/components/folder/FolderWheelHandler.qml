@@ -88,7 +88,19 @@ WheelHandler {
 
         function onContentHeightChanged() { root.rebound() }
         function onHeightChanged() { root.rebound() }
-        function onTopMarginChanged() { root.rebound() }
+        // The frame the rows sit in only moves while the heading is expanding
+        // or collapsing back (`travel < 0`), which is the only time this
+        // fires from the heading at all — retiring never touches the margin.
+        // While it fires for that reason, the listing is pinned to the origin
+        // it is already tracking rather than left to `rebound()`'s more
+        // conservative "only touch it if it became illegal", which is what
+        // let the rows visibly slide at the frame's own, much slower rate.
+        function onTopMarginChanged() {
+            if (root.heading.travel < 0)
+                root.view.contentY = root.view.originY
+            else
+                root.rebound()
+        }
     }
 
     property NumberAnimation wheelAnimation: NumberAnimation {
@@ -112,7 +124,27 @@ WheelHandler {
         // gesture must not also grow the metadata block. That still takes a
         // second push — the one rule the old state machine had that is worth
         // keeping — but the gesture that arrives is no longer swallowed.
+        const wasExpanding = root.heading.destination < 0
         root.heading.advance(-delta, atContentTop(), !pixelBased)
+        const stillExpanding = root.heading.destination < 0
+
+        // There is nothing above row 0 to reveal while the heading is growing
+        // or shrinking back, so the whole notch goes to the heading and the
+        // listing is left exactly where it is — pinned to the origin by the
+        // Connections above, which keeps following it for as long as the
+        // glide keeps moving the frame, not just for this one event.
+        //
+        // Scrolling it here too, at the wheel's own rate, is the mismatch
+        // that read as the rows sliding: the frame moves at the much slower
+        // rate the heading's own span sets, not the wheel's. A notch that
+        // starts or ends in this territory spends its whole delta on the
+        // heading; only one that begins and ends already compact reaches the
+        // listing, which costs at most the one notch that crosses back — a
+        // small, self-correcting rounding rather than a visible slide.
+        if (wasExpanding || stillExpanding) {
+            event.accepted = true
+            return
+        }
 
         if (pixelBased) {
             // Touchpads already deliver a smooth stream of pixel deltas. A

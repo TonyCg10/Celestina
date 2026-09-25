@@ -1,6 +1,6 @@
 # Siderita status
 
-- **Updated:** 2026-09-22
+- **Updated:** 2026-09-25
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4` and `SID-B1` are closed and archived, no checkpoint is
   active, and the portal-parenting one remains planned
@@ -8,6 +8,16 @@
   [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- Delivered as `1.6.1`: the rows sliding while the heading folded, an
+  accepted limitation from `1.6.0`. The content frame only moves while the
+  heading is actively expanding or collapsing, and away from the exact
+  resting point the margin trick that compensates for it does not — the wheel
+  scrolled the listing at its own raw rate while the frame moved at the much
+  slower rate the heading's own span sets. Fixed by pinning the listing to
+  `originY` for the span where the frame moves, following the heading's own
+  clock rather than adding a second one. See
+  [the rows that slid](docs/evidence/2026-09-25-the-rows-that-slid-while-folding.md).
 
 - Delivered as `1.6.0`: `SID-B1`. The bottom strip that repeated what the
   operation ring already said is gone, and with it the property that made it

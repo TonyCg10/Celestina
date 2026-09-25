@@ -179,6 +179,96 @@ TestCase {
         handler.resetTarget()
     }
 
+    // ── The row-slide fix: expanding pins the listing, it does not scroll it ──
+    //
+    // The frame the rows sit in only moves while the heading is expanding or
+    // collapsing back (`travel < 0`); the rest of the time it is static. It
+    // used to move at the wheel's raw rate on `contentY` while the frame
+    // itself moved at the much slower rate the heading's own span sets — two
+    // different speeds on the same pixels, which is what the author saw as
+    // the rows sliding.
+
+    // There is nothing above row 0 to reveal while the heading grows, so the
+    // whole notch goes to the heading and the listing does not move at all.
+    function test_p_expanding_does_not_move_the_listing() {
+        // The resting margin already carries the room the metadata block
+        // grows into — production sets it before any gesture starts, so the
+        // fixture must too, or `boundedY` alone would hide the bug by
+        // clamping the notch back to origin for an unrelated reason.
+        view.topMargin = 60
+        handler.resetTarget()
+        mouseWheel(view, 200, 160, 0, 120)      // upward, at rest and at top
+        tryVerify(function() { return heading.travel < 0 }, 2000,
+                  "the heading did not start expanding")
+        compare(view.contentY, view.originY,
+                "the listing moved while there was nothing above it to reveal")
+        mouseWheel(view, 200, 160, 0, 120)      // a second notch, still expanding
+        tryVerify(function() { return heading.travel <= -1 }, 2000)
+        compare(view.contentY, view.originY,
+                "a second notch also should not have moved the listing")
+        view.topMargin = 0
+    }
+
+    // Collapsing back is the same trade the other way: the notch that folds
+    // the heading does not also scroll, or the two would fight over the same
+    // pixels — exactly the mismatch that produced the slide.
+    function test_q_collapsing_back_does_not_scroll_either() {
+        heading.moveTo(-56, false)              // fully expanded, at rest
+        mouseWheel(view, 200, 160, 0, -20)       // downward, collapsing it a little
+        tryVerify(function() { return heading.travel > -56 }, 2000,
+                  "the heading did not start collapsing")
+        verify(heading.travel < 0, "one small notch should not finish collapsing it")
+        compare(view.contentY, view.originY,
+                "the listing scrolled while the heading was still collapsing")
+    }
+
+    // The frame keeps moving for the whole span of the glide, long after the
+    // wheel event that started it has returned. Simulated here as the real
+    // chain would drive it: pinned to the origin on every step, not just the
+    // one the wheel touched.
+    function test_r_the_listing_tracks_a_moving_origin_while_expanding() {
+        view.topMargin = 60
+        handler.resetTarget()
+        mouseWheel(view, 200, 160, 0, 120)         // start expanding
+        tryVerify(function() { return heading.travel < 0 }, 2000)
+        view.topMargin = 20      // the frame rose, as it does in the real chain
+        compare(view.contentY, view.originY,
+                "the listing did not follow the origin the frame's own rise moved")
+        view.topMargin = 45
+        compare(view.contentY, view.originY,
+                "nor on the next frame of that same rise")
+        view.topMargin = 0
+    }
+
+    // Once it is back to fully compact, scrolling resumes exactly where the
+    // pin left it — no jump, because the target the wheel accumulates into is
+    // re-read from the actual position the first time it is needed again.
+    function test_s_scrolling_resumes_with_no_jump_once_compact_again() {
+        // A little collapsing left to do, with the margin already where the
+        // real chain would have put it for that amount of travel — the pin
+        // handler above holds the listing there, the same way it would mid-
+        // glide in production.
+        heading.moveTo(-10, false)
+        view.topMargin = 50
+        handler.resetTarget()
+        compare(view.contentY, view.originY,
+                "the pin did not hold right before the collapsing notch")
+        const pinnedAt = view.contentY
+
+        mouseWheel(view, 200, 160, 0, -60)   // enough to finish collapsing
+        tryVerify(function() { return heading.travel >= 0 }, 2000,
+                  "it never finished collapsing")
+        // The instant it lands there is nothing above row 0 left to reveal
+        // yet — the notch that crosses back is still spent on the heading —
+        // so the listing must still be exactly where the pin left it.
+        verify(Math.abs(view.contentY - pinnedAt) < 2,
+               "the listing jumped the moment the heading finished collapsing")
+
+        mouseWheel(view, 200, 160, 0, -120)   // an ordinary scroll now
+        tryVerify(function() { return view.contentY > pinnedAt + 5 }, 2000,
+                  "scrolling did not resume after the handoff")
+    }
+
     function test_g_coming_back_up_restores_then_expands() {
         heading.moveTo(120, false)
         view.contentY = 600
