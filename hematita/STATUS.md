@@ -1,6 +1,12 @@
 # Hematita status
 
 - **Updated:** 2026-09-25
+- **Delivered as 1.2.1:** `S3-B` — each storage entry paints its list bar
+  and its tile in one of the six `CelestinaTheme.usagePalette` tones by size
+  rank; duplicate, empty and unreadable keep their colours; the shared
+  controls' corner fix from `celestina-style` 1.9.1 arrives through the
+  symlinks; built, verified and deployed. `VAL-S3` covers the look
+  ([evidence](docs/evidence/2026-09-25-s3-rank-tones.md))
 - **Delivered as 1.2.0:** `S3` (shared usage view) — `S3-A` done: the usage projection
   lives in `hematita-core::usage::view`, the Storage page draws the shared
   `CelestinaTreemap` and `CelestinaUsageList`, and a folder handed on the

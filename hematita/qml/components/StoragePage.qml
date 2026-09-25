@@ -63,10 +63,15 @@ Item {
         }
         return ""
     }
-    // The colour each kind of entry paints, in the list's bars and the map.
+    // The colour each entry paints, in the list's bars and the map: the size
+    // rank picks one of the six palette tones; the filters keep their own.
     readonly property var toneColors: ({
-        dir: CelestinaTheme.glyphAccentBlue,
-        file: CelestinaTheme.glyphAccentViolet,
+        p0: CelestinaTheme.usagePalette[0],
+        p1: CelestinaTheme.usagePalette[1],
+        p2: CelestinaTheme.usagePalette[2],
+        p3: CelestinaTheme.usagePalette[3],
+        p4: CelestinaTheme.usagePalette[4],
+        p5: CelestinaTheme.usagePalette[5],
         duplicate: CelestinaTheme.glyphAccentCoral,
         empty: CelestinaTheme.glyphAccentAmber,
         unreadable: CelestinaTheme.textFaint,
@@ -95,12 +100,12 @@ Item {
         return qsTr("%1 B").arg(bytes)
     }
 
-    function toneOf(kind, duplicate, empty, unreadable) {
+    // The published order is biggest first, so the index is the size rank.
+    function toneOf(rank, duplicate, empty, unreadable) {
         if (unreadable === 1) return "unreadable"
         if (duplicate === 1) return "duplicate"
         if (empty === 1) return "empty"
-        if (kind === "dir" || kind === "file") return kind
-        return "other"
+        return "p" + (rank % 6)
     }
 
     function weaveAnalysed() {
@@ -118,7 +123,7 @@ Item {
             const row = { id: published.entryIds[index],
                           name: published.entryNames[index],
                           kind: published.entryKinds[index],
-                          tone: page.toneOf(published.entryKinds[index],
+                          tone: page.toneOf(index,
                                             published.entryDuplicate[index],
                                             published.entryEmpty[index],
                                             published.entryUnreadable[index]),

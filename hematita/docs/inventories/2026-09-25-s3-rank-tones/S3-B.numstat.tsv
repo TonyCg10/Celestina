@@ -1,0 +1,31 @@
+# S3-B exact change inventory
+
+Base revision	c3be51e3a414c176ca35513776a34a56943b64d7
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/docs/evidence/2026-09-25-s3-rank-tones.md
+Pathspec	hematita/docs/inventories/2026-09-25-s3-rank-tones/S3-B.numstat.tsv
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-25-s3-rank-tones.md
+Pathspec	hematita/docs/plans/archive/README.md
+Pathspec	hematita/qml/components/StoragePage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+1	0	449e8a8b4c3cee2b711d4f1bba1ad1f8f199639e50cde97acbb3ed9a0ef61b8a	docs/version-history.tsv
+1	1	e9b9421ebeafcc5274932ffb100f1e251f22c003b609d84d83405a9278a217b7	hematita/Cargo.lock
+1	1	bc68ceb85edbff9f0c80a09fb67ba98a9e14a36c5b164923cee935bb21e3a62b	hematita/Cargo.toml
+13	0	64056382e81bca31378952f300372eb269a7661645e82350b2c533829d39be03	hematita/ROADMAP.md
+6	0	82f130c4e92c351340524d832513f4ec84b9917d15a523cfa24a1c3d10dac181	hematita/STATUS.md
+3	3	30175684cdd4fc62a4317319e4c96da6e0760362efe590a484c8031d4b391ceb	hematita/VALIDATION.md
+41	0	26660730cdc0ed055d6240d0b4ed73c64816e133c9ab559aa1f2f89d1de916ad	hematita/docs/evidence/2026-09-25-s3-rank-tones.md
+2	1	de461b9920d96a5391b3e2b0454bb4c4ea972361df3de7147f6b7e338c54d133	hematita/docs/plans/active/README.md
+48	0	e4f4c8033b365679801c513613bbce35837860e5a8e6e4a6d61829183af1025f	hematita/docs/plans/archive/2026-09-25-s3-rank-tones.md
+1	0	f6aa338e53e379ed07e36a9b1877b2b82f8c8881bfc9f0ba41ca13efc12f7b1a	hematita/docs/plans/archive/README.md
+12	7	65e5a5889f2441c9078c3ee4e7ec01041e3dd1420667afabaeb20ffd200970ce	hematita/qml/components/StoragePage.qml
+31	0	self	hematita/docs/inventories/2026-09-25-s3-rank-tones/S3-B.numstat.tsv

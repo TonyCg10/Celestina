@@ -483,3 +483,16 @@ implementation exit ran on 2026-09-25: the
 [completion evidence](docs/evidence/2026-09-25-s3-production-completion.md).
 `VAL-S3` stays pending in the author's lane and did not block this closure.
 Further work opens with a new checkpoint and the author's word.
+
+## S3-B — closed 2026-09-25
+
+After `S3` the author found every folder in the storage map and list
+painted the same blue, and asked for a distinct colour per entry. `S3-B`
+maps each entry's size rank to one of the six tones of
+`CelestinaTheme.usagePalette` (from `celestina-style` 1.9.1, which also made
+the shared controls' corners concentric with their panel); duplicate, empty
+and unreadable entries keep their own colours and the remainder stays
+neutral — the [rank tones evidence](docs/evidence/2026-09-25-s3-rank-tones.md),
+deployed as `1.2.1`, in its own archived
+[plan](docs/plans/archive/2026-09-25-s3-rank-tones.md). `VAL-S3` gains the
+colour and corner checks.
