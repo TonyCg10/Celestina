@@ -16,7 +16,10 @@
   and usage list so Siderita can become their second consumer. They carry
   navigation only: marking, dimming and tone colours come from the host, and
   Space and Delete bubble to it. See
-  [the record](docs/evidence/2026-09-25-usage-controls.md).
+  [the record](docs/evidence/2026-09-25-usage-controls.md). The byte formatter
+  `bytesText` now exists in three QML copies (Siderita's `FolderUsage.qml`,
+  Hematita's `StoragePage.qml` and `PerformancePage.qml`) and awaits a shared
+  formatter unit.
 
 - Delivered as `1.8.7`: `FEEDBACK-5-STY`. The Tonal and Ghost button roles
   press in `pressedWash` like the row plate, instead of the darker grey that

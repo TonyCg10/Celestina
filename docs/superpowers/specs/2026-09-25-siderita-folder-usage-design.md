@@ -237,3 +237,14 @@ modals; `SID-U1-A`, then `SID-U1-Z` at 1.7.0). One `suite-maintenance`
 commit carries the architecture standard's sentence and the registry input.
 The root roadmap keeps `PRD-1` as its one active checkpoint, so no suite plan
 is opened. Builds only where a unit changes a deployable app.
+
+## 10. Amendments after implementation (2026-09-25)
+
+Deviations from this design accepted at the final review of 1.7.0 and
+recorded with `SID-U1-B`:
+
+- Esc closes the quick look directly instead of first returning focus to the surface.
+- There is no occupation heading nor indeterminate bar while scanning; the totals line says «Calculando…».
+- Scan failures are shown as a line in the section, not as a toast.
+- `gtk-launch` fails asynchronously, so a missing Hematita is not detected.
+- Space on a focused crumb or footer button presses it instead of closing the modal.

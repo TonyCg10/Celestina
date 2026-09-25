@@ -150,6 +150,11 @@ perception, input devices or assistive-technology stack. It does not block
   text without competing with it, the bar is visible at rest and reaches at
   least 3:1 against the surface behind it, and both look and move identically
   in all three surfaces
+  The shared treemap and usage list (`STYLE-G7-G`) are walked in their
+  consumers' own passes: Hematita's storage section in `VAL-S3` and Siderita's
+  occupation section in `VAL-SID-U1` — Tab into the list and the map, the
+  arrows, Enter and Backspace, and a screen reader pointed at a row and a tile,
+  which must announce name, size, kind and share
 - **Result:** pending
 - **Evidence:** dated captures naming the output scale and colour scheme
 
