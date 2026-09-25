@@ -1,7 +1,7 @@
 # Active Hematita plans
 
-None. `S2` (storage hardening) closed on 2026-09-23 at `1.1.1`; further
-work opens with a new checkpoint and the author's word.
+- [S3 — Shared usage view and the folder argument](2026-09-25-s3-shared-usage.md)
+  (`s3-shared-usage`), opened 2026-09-25.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

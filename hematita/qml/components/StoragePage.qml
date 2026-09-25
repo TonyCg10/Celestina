@@ -29,6 +29,8 @@ Item {
 
     property var usageRows: []
     property var tiles: []
+    // Tile ids the treemap draws at the unavailable opacity.
+    property var dimmedIds: []
     property var duplicateRows: []
     // The analysed folder and filters the rows were last woven for.
     property string usageKey: ""
@@ -124,8 +126,9 @@ Item {
                           size: page.bytesText(published.entryAllocated[index]),
                           percent: qsTr("%1 %").arg((share * 100).toLocaleString(Qt.locale(), "f", 1)),
                           apparent: page.bytesText(published.entryApparent[index]),
-                          copies: index < published.entryCopies.length
-                                  ? published.entryCopies[index] : 0,
+                          detail: index < published.entryCopies.length
+                                  && published.entryCopies[index] > 0
+                                  ? qsTr("%1 copias").arg(published.entryCopies[index]) : "",
                           files: published.entryFilesBelow[index].toLocaleString(Qt.locale(), "f", 0) }
             rows.push(row)
             byId[row.id] = row
@@ -133,14 +136,22 @@ Item {
 
         const rects = published.treemapRects
         const tiles = []
+        const dimmed = []
         for (let at = 0; at + 4 < rects.length; at += 5) {
             const id = rects[at]
             const row = byId[id]
             tiles.push({ id: id, x: rects[at + 1], y: rects[at + 2], w: rects[at + 3],
                          h: rects[at + 4], name: row ? row.name : "",
-                         tone: row ? row.tone : "other",
-                         matches: id < 0 ? !page.filtered : row !== undefined })
+                         kind: row ? row.kind : "other",
+                         tone: row ? row.tone : "other" })
+            // A tile the filter left out of the list is dimmed; the remainder
+            // is dimmed whenever a filter is on.
+            if (id >= 0 && row === undefined)
+                dimmed.push(id)
         }
+        if (page.filtered)
+            dimmed.push(-1)
+        page.dimmedIds = dimmed
         page.tiles = tiles
 
         const groups = Math.min(published.groupSizes.length, published.groupCounts.length,
@@ -467,6 +478,22 @@ Item {
             RowLayout {
                 spacing: CelestinaTheme.spaceSm
 
+                // The shared list and map leave Space and Delete unaccepted,
+                // so they arrive here from whichever holds the focus: Space
+                // marks the entry under the cursor, Delete asks to trash the
+                // selection. The duplicate list accepts its own.
+                Keys.onSpacePressed: function(event) {
+                    event.accepted = page.analysed && page.currentId >= 0
+                    if (event.accepted)
+                        page.analysis.toggleSelected(page.currentId)
+                }
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Delete && page.canAct) {
+                        page.requestTrash()
+                        event.accepted = true
+                    }
+                }
+
                 // The list takes 0.42 of the width through stretch factors: a
                 // width read from the parent would make the layout arrange
                 // itself again from inside its own arrangement.
@@ -491,21 +518,20 @@ Item {
                             }
                         }
 
-                        UsageList {
+                        CelestinaUsageList {
                             id: usageList
 
                             usageRows: page.usageRows
-                            selectedIds: page.analysis.selectedIds
+                            markedIds: page.analysis.selectedIds
                             toneColors: page.toneColors
-                            filtered: page.filtered
+                            emptyText: page.filtered ? qsTr("Nada coincide con el filtro")
+                                                     : qsTr("Carpeta vacía")
                             onChosen: function(id) { page.currentId = id }
-                            onToggled: function(id) { page.analysis.toggleSelected(id) }
                             onEntered: function(id) { page.analysis.enterId(id) }
                             onUpRequested: {
                                 page.analysis.up()
                                 page.focusBody()
                             }
-                            onTrashRequested: page.requestTrash()
                         }
 
                         DuplicateList {
@@ -547,9 +573,10 @@ Item {
                         }
                     }
 
-                    Treemap {
+                    CelestinaTreemap {
                         tiles: page.tiles
-                        selectedIds: page.analysis.selectedIds
+                        markedIds: page.analysis.selectedIds
+                        dimmedIds: page.dimmedIds
                         toneColors: page.toneColors
                         currentId: page.currentId
                         currentName: page.currentFolderName
@@ -557,10 +584,8 @@ Item {
                             page.currentId = id
                             usageList.follow(id)
                         }
-                        onToggled: function(id) { page.analysis.toggleSelected(id) }
                         onEntered: function(id) { page.analysis.enterId(id) }
                         onUpRequested: page.analysis.up()
-                        onTrashRequested: page.requestTrash()
                     }
                 }
             }

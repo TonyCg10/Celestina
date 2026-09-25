@@ -1,13 +1,15 @@
 //! One Hematita.
 //!
-//! The first instance takes a bus name and serves `Activate`; every later
-//! launch finds the name owned, asks the running window to raise itself and
-//! exits without building one. Failing to reach the bus is never fatal: the
+//! The first instance takes a bus name and serves `Activate` and `Open`;
+//! every later launch finds the name owned, asks the running window to raise
+//! itself (and to browse the folder it was handed, if any) and exits without
+//! building one. Failing to reach the bus is never fatal: the
 //! launch carries on and opens its own window.
 
 use std::pin::Pin;
 
 use cxx_qt::{CxxQtType, Threading};
+use cxx_qt_lib::QString;
 
 const SERVICE: &str = "org.celestina.Hematita";
 const OBJECT: &str = "/org/celestina/Hematita";
@@ -15,6 +17,11 @@ const INTERFACE: &str = "org.celestina.Hematita";
 
 #[cxx_qt::bridge]
 pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+    }
+
     #[auto_cxx_name]
     extern "RustQt" {
         #[qobject]
@@ -24,6 +31,10 @@ pub mod qobject {
         /// Another launch asked this window to come to the front.
         #[qsignal]
         fn raise_requested(self: Pin<&mut HematitaActivation>);
+
+        /// Another launch handed this window a folder to browse.
+        #[qsignal]
+        fn open_requested(self: Pin<&mut HematitaActivation>, path: QString);
 
         /// Starts serving the activation name, once. Best-effort.
         #[qinvokable]
@@ -66,6 +77,14 @@ impl Activation {
                 activation.raise_requested();
             });
     }
+
+    fn open(&self, path: String) {
+        let _ = self
+            .qt
+            .queue(move |activation: Pin<&mut qobject::HematitaActivation>| {
+                activation.open_requested(QString::from(path.as_str()));
+            });
+    }
 }
 
 fn serve(qt: cxx_qt::CxxQtThread<qobject::HematitaActivation>) -> zbus::Result<()> {
@@ -81,8 +100,9 @@ fn serve(qt: cxx_qt::CxxQtThread<qobject::HematitaActivation>) -> zbus::Result<(
     }
 }
 
-/// Asks a running Hematita to raise itself. `true` means it did and this
-/// launch should exit; any failure answers `false` and the launch opens its
+/// Asks a running Hematita to raise itself, and with `path` to browse that
+/// folder (`Open`) instead of only raising (`Activate`). `true` means it did
+/// and this launch should exit; any failure answers `false` and the launch opens its
 /// own window.
 ///
 /// The hand-off needs the session bus: without one, a second launch cannot
@@ -90,7 +110,7 @@ fn serve(qt: cxx_qt::CxxQtThread<qobject::HematitaActivation>) -> zbus::Result<(
 /// said once on stderr, so two running Hematitas have a reason on record. No
 /// instance owning the name is the ordinary first launch and says nothing.
 #[must_use]
-pub fn hand_off() -> bool {
+pub fn hand_off(path: Option<&str>) -> bool {
     let connection = match zbus::blocking::Connection::session() {
         Ok(connection) => connection,
         Err(error) => {
@@ -105,7 +125,16 @@ pub fn hand_off() -> bool {
             return false;
         }
     };
-    match proxy.call::<_, _, ()>("Activate", &()) {
+    let answer = match path {
+        // An older running instance has no `Open`: raising it still beats
+        // opening a second window.
+        Some(path) => match proxy.call::<_, _, ()>("Open", &(path,)) {
+            Err(error) if method_unknown(&error) => proxy.call::<_, _, ()>("Activate", &()),
+            other => other,
+        },
+        None => proxy.call::<_, _, ()>("Activate", &()),
+    };
+    match answer {
         Ok(()) => true,
         Err(error) => {
             if !nobody_owns_the_name(&error) {
@@ -116,7 +145,18 @@ pub fn hand_off() -> bool {
     }
 }
 
-/// Whether a failed `Activate` only means no Hematita is running.
+/// Whether a failed `Open` means the running instance predates it.
+fn method_unknown(error: &zbus::Error) -> bool {
+    match error {
+        zbus::Error::MethodError(name, _, _) => {
+            name.as_str() == "org.freedesktop.DBus.Error.UnknownMethod"
+        }
+        zbus::Error::FDO(fdo) => matches!(**fdo, zbus::fdo::Error::UnknownMethod(_)),
+        _ => false,
+    }
+}
+
+/// Whether a failed `Activate` or `Open` only means no Hematita is running.
 fn nobody_owns_the_name(error: &zbus::Error) -> bool {
     match error {
         zbus::Error::MethodError(name, _, _) => {

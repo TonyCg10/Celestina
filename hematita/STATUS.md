@@ -1,6 +1,13 @@
 # Hematita status
 
-- **Updated:** 2026-09-23
+- **Updated:** 2026-09-25
+- **Focus:** `S3` (shared usage view) — `S3-A` done: the usage projection
+  lives in `hematita-core::usage::view`, the Storage page draws the shared
+  `CelestinaTreemap` and `CelestinaUsageList`, and a folder handed on the
+  command line, through D-Bus `Open` or the desktop entry's `%f` opens the
+  storage section browsing it; built and verified, not deployed
+  ([evidence](docs/evidence/2026-09-25-s3-shared-usage.md)). `S3-Z` next;
+  `VAL-S3` pending
 - **Delivered as 1.1.1:** `S2` (storage hardening) — `S2-A` done:
   `hematita-core::usage` deletes permanently through directory descriptors
   (the analysed folder and every folder down to the target opened without

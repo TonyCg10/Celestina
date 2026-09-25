@@ -4,7 +4,9 @@
 //! `walk` builds a [`tree::Tree`] of one device under one folder; `empty` and
 //! `duplicates` find what may go; `layout` places a folder's children in a
 //! treemap; `remove` is the suite's only permanent deletion; `mounts` reads
-//! which filesystems are worth offering as a starting point. Nothing here
+//! which filesystems are worth offering as a starting point; `view` projects
+//! a scanned folder into the rows and treemap tiles a page shows, shared by
+//! every consumer of the tree. Nothing here
 //! knows Qt; every error names the path it concerns.
 
 pub mod duplicates;
@@ -13,4 +15,5 @@ pub mod layout;
 pub mod mounts;
 pub mod remove;
 pub mod tree;
+pub mod view;
 pub mod walk;

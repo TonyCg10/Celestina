@@ -1,0 +1,53 @@
+# S3-A exact change inventory
+
+Base revision	2a009e9d5380870517c7976e8aa1ad1009521811
+Pathspec	celestina-rs/crates/hematita-core/src/usage/mod.rs
+Pathspec	celestina-rs/crates/hematita-core/src/usage/view.rs
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/VALIDATION.md
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-09-25-s3-shared-usage.md
+Pathspec	hematita/docs/inventories/2026-09-25-s3-shared-usage/S3-A.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-25-s3-shared-usage.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/org.celestina.Hematita.desktop
+Pathspec	hematita/qml/CelestinaTreemap.qml
+Pathspec	hematita/qml/CelestinaUsageList.qml
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/qml/components/StoragePage.qml
+Pathspec	hematita/qml/components/Treemap.qml
+Pathspec	hematita/qml/components/UsageList.qml
+Pathspec	hematita/scripts/smoke.sh
+Pathspec	hematita/src/activation.rs
+Pathspec	hematita/src/analysis.rs
+Pathspec	hematita/src/analysis_session.rs
+Pathspec	hematita/src/analysis_view.rs
+Pathspec	hematita/src/main.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes; symlinks hash link-target bytes
+
+added	deleted	content	path
+4	1	f8b4a04e8a067eb3588cda20ef3e0916298f052c8dc0b9ab5432837fb1fbd22b	celestina-rs/crates/hematita-core/src/usage/mod.rs
+293	0	1011c097334433e822f98e3042d33ed635aea20d5bb3314e30696eee4a75e8f9	celestina-rs/crates/hematita-core/src/usage/view.rs
+28	3	18c9aa5452ce68d74594a26b927c3299bf38d304aedfce9fbada96586fdd4275	hematita/ROADMAP.md
+8	1	3cd3283140cf15d91c6aab74a2763f0e3fbf4038e6fe9c62ae0b16adc71bad8b	hematita/STATUS.md
+11	0	0deb84029b8f5223577c4fdd06888ce278110a53219745d03d85ab74fbbf675a	hematita/VALIDATION.md
+2	2	a17ee083a00c996768f2759dfd9f06098b79aeffb6949c45ac6092df6401367c	hematita/build.rs
+117	0	6e8a1289199fbf2f3beeec266ff9d5d9daa6ccbba1986755de40d752473e700d	hematita/docs/evidence/2026-09-25-s3-shared-usage.md
+57	0	50c7c40b15712dd8f1e7e7dee20a91540a900748d62ed0ba7620a3d99dd1f087	hematita/docs/plans/active/2026-09-25-s3-shared-usage.md
+2	2	02f4cc6e005fc085bb8cec74ecefdc749a28c02032a419f1ee6651897f48ae65	hematita/docs/plans/active/README.md
+1	1	d097f1ae3113473340fee8d4c841870e8cbec9112a49ba34b715cb44a997fdda	hematita/org.celestina.Hematita.desktop
+1	0	51b9e1f4409a9981a01d662c5bf351b80f9326d3610e173ce43ff20b08462411	hematita/qml/CelestinaTreemap.qml
+1	0	e8d18ddec56151a9b6de074f40723454e90280dcd62e689904ceee531b1133ac	hematita/qml/CelestinaUsageList.qml
+32	1	0e5df0fe38fb9781c3ebed7938122e226fa6ed11b78407d63c66afec8679e0e9	hematita/qml/Main.qml
+38	13	f2b85c99735575d8dd0406ecdcb0cdda0393e70218261c3cbe0d857ec338719f	hematita/qml/components/StoragePage.qml
+0	163	deleted	hematita/qml/components/Treemap.qml
+0	239	deleted	hematita/qml/components/UsageList.qml
+35	1	c7a94f323efc6c2c185f9de0eaa7f00c26ee5e855409219f344625a1103e63dd	hematita/scripts/smoke.sh
+48	8	051b7e4887c59e4c16ae12f6cedf0cc2fe3d5db37e3f5ec09e9a4f62617c95fd	hematita/src/activation.rs
+19	0	bdd258eecaf13678ed6498e7cb7b60c5d5082f075cdf76bb22a8913241378980	hematita/src/analysis.rs
+2	1	3677f969fa3a8b74d607d49ad649a834177e0667176dd243e602a7d399a7e142	hematita/src/analysis_session.rs
+4	79	6d6ae305d2d6728379753318bcee1eb02f48cf824d7840da3f1fe082a337803e	hematita/src/analysis_view.rs
+24	3	6498856370a4a7bf013fed6e34dccb3a609daaad03b395b210a74f7e57528897	hematita/src/main.rs
+53	0	self	hematita/docs/inventories/2026-09-25-s3-shared-usage/S3-A.numstat.tsv

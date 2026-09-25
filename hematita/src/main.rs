@@ -32,9 +32,25 @@ fn main() {
         std::env::set_var("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
     }
 
-    // A Hematita already running takes this launch: it raises itself and
-    // this process leaves without building a window.
-    if activation::hand_off() {
+    // The folder to browse on arrival, if one was handed (`Exec=hematita %f`).
+    // Read as OS text so a non-UTF-8 argument cannot panic; such a path
+    // becomes lossy and the hub ignores it as not a folder.
+    // Made absolute here, against this launch's working directory, before it
+    // crosses to a running instance over D-Bus or onto the browse stack; a
+    // path `absolute` cannot handle stays as given and `open_path` reports it.
+    let start_path = std::env::args_os()
+        .nth(1)
+        .map(|arg| {
+            std::path::absolute(&arg)
+                .map_or(arg, std::path::PathBuf::into_os_string)
+                .to_string_lossy()
+                .into_owned()
+        })
+        .unwrap_or_default();
+
+    // A Hematita already running takes this launch: it raises itself (and
+    // browses the folder) and this process leaves without building a window.
+    if activation::hand_off(Some(start_path.as_str()).filter(|p| !p.is_empty())) {
         return;
     }
 
@@ -73,6 +89,11 @@ fn main() {
         initial_properties.insert(
             QString::from("smokeSections"),
             QVariant::from(&smoke_sections),
+        );
+        // The folder the storage section browses on arrival; empty for none.
+        initial_properties.insert(
+            QString::from("startPath"),
+            QVariant::from(&QString::from(start_path.as_str())),
         );
         engine.as_mut().set_initial_properties(&initial_properties);
         engine.load(&QUrl::from(

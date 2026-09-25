@@ -35,6 +35,11 @@ set -u
 #     page that listed none means the mount table or the worker thread failed.
 #     The run never scans: only the mount table, `statvfs` and one `read_dir`
 #     per location are touched.
+#  8) The start gate: a second, shorter run, started inside the scratch
+#     folder, hands the relative argument `data`, without the walk; the
+#     launch must make it absolute before browsing it. The window must land in
+#     the storage section browsing that one folder ('hematita-start browsing
+#     1'), and the hub must not have called it "not a folder".
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
 # real Wayland session.
@@ -123,4 +128,33 @@ if [ -z "$storage" ]; then
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, the Services page listed system units, the Storage page listed locations, no QML errors, no auto-bindings"
+start_log=$scratch/start.log
+XDG_CONFIG_HOME=$scratch/config \
+XDG_DATA_HOME=$scratch/data \
+XDG_CACHE_HOME=$scratch/cache \
+XDG_STATE_HOME=$scratch/state \
+XDG_RUNTIME_DIR=$scratch/run \
+DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+QT_QPA_PLATFORM=offscreen \
+QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+HEMATITA_SMOKE_SHAPE=1 \
+    sh -c 'cd "$1" && shift && exec "$@"' start "$scratch" timeout 5 "$bin" data >"$start_log" 2>&1
+rc=$?
+if [ "$rc" -ne 124 ]; then
+    echo "smoke: the binary handed a folder exited on its own (rc=$rc); last lines:" >&2
+    tail -20 "$start_log" >&2
+    exit 1
+fi
+errors=$(grep -E 'TypeError|ReferenceError|SyntaxError|Cannot create delegate|Cannot set properties on|Cannot assign|Unable to assign|Type [A-Za-z_][A-Za-z0-9_]* unavailable|is not a type|Binding loop detected|not a folder, ignored' "$start_log" || true)
+if [ -n "$errors" ]; then
+    echo "smoke: errors with a folder argument:" >&2
+    echo "$errors" | sort | uniq -c | sort -rn >&2
+    exit 1
+fi
+start=$(grep -E 'hematita-start browsing 1$' "$start_log" | head -1 || true)
+if [ -z "$start" ]; then
+    echo "smoke: the folder argument did not land in the storage section (expected 'hematita-start browsing 1'); got: '$(grep -E 'hematita-start' "$start_log" | head -1)'" >&2
+    exit 1
+fi
+
+echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, the Services page listed system units, the Storage page listed locations, a folder argument landed in the storage section, no QML errors, no auto-bindings"

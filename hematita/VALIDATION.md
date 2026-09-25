@@ -192,3 +192,14 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Pass condition:** no size on screen disagrees with `du` after any stopped deletion; the symbolic-link case is refused; the dialog count equals what is acted on; a selection changed while the dialog is open is refused; the section still idles under 2 % CPU
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-S3 — Shared usage controls and the folder argument
+
+- **Status:** pending
+- **Related implementation:** S3
+- **Requires:** the deployed Hematita carrying `S3-A`; `~/Descargas`
+- **Procedure:** with no Hematita running, launch `hematita ~/Descargas`: the window opens on Almacenamiento browsing that folder; with it running, launch `hematita ~/Documentos`: no second window, the running one raises and browses the new folder; launch `hematita <relative path>` from a terminal in another folder: the section browses the folder relative to that terminal; launch `hematita /etc/hostname`: the window opens as usual and stderr says the path is not a folder; an `Open` that arrives during a scan drops the analysis, as crumb navigation does; scan a folder and repeat the storage steps of `VAL-S1` with the shared list and map: the arrows walk both, Enter enters, Backspace goes up, Space in the list or the map marks the entry under the cursor, Delete asks to trash the selection; with a filter on, tiles outside it and the remainder are dimmed and an empty list reads "Nada coincide con el filtro"
+- **Pass condition:** both launches land on the folder; Space toggles and Delete asks from either control; the list and map look and read as in `VAL-S1`; Orca announces each list row as it gets the cursor
+- **Result:** not run
+- **Evidence:** none
+

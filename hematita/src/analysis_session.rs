@@ -557,7 +557,8 @@ impl Session {
             w: 1.0,
             h: 1.0,
         };
-        view.rects = analysis_view::flat_rects(&children, &squarify(&sizes, unit));
+        let ids: Vec<Option<NodeId>> = children.iter().map(|id| Some(*id)).collect();
+        view.rects = hematita_core::usage::view::flat_rects(&ids, &squarify(&sizes, unit));
 
         let mut filters: Vec<&[bool]> = Vec::new();
         if show_duplicates {

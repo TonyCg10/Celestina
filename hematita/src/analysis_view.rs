@@ -1,18 +1,16 @@
 //! What the analysed mode shows of a scanned tree, as plain values.
 //!
 //! The hub owns the tree; these functions decide which children a filter
-//! keeps, which rows a verified group becomes, and how the treemap crosses to
-//! QML, without a QObject — so each rule is tested on a hand-built tree.
+//! keeps and which rows a verified group becomes, without a QObject — so
+//! each rule is tested on a hand-built tree. The treemap's crossing to QML
+//! and the unreadable counts live in `hematita_core::usage::view`.
 
 use std::collections::HashSet;
 
 use hematita_core::usage::duplicates::{self, Group, Verified};
 use hematita_core::usage::empty::empty_folders;
-use hematita_core::usage::layout::Tile;
 use hematita_core::usage::tree::{NodeId, Tree};
-
-/// The id the treemap's merged remainder carries.
-pub const REMAINDER_ID: f64 = -1.0;
+use hematita_core::usage::view::unreadable_below;
 
 /// The duplicate candidates a scan offers, biggest size first. A home folder
 /// holds tens of thousands of equal-sized files; the page lists, and the
@@ -72,23 +70,6 @@ pub fn marks_exact(len: usize, set: impl IntoIterator<Item = NodeId>) -> Vec<boo
         }
     }
     marks
-}
-
-/// Per node: how many unreadable directories sit at or below it.
-#[must_use]
-pub fn unreadable_below(tree: &Tree) -> Vec<u32> {
-    let mut counts: Vec<u32> = tree.nodes.iter().map(|n| u32::from(n.unreadable)).collect();
-    for index in (0..tree.nodes.len()).rev() {
-        let count = counts[index];
-        if count > 0 {
-            if let Some(parent) = tree.nodes[index].parent {
-                if let Some(total) = counts.get_mut(parent.0 as usize) {
-                    *total = total.saturating_add(count);
-                }
-            }
-        }
-    }
-    counts
 }
 
 /// The children a filter keeps: all of them when no filter is on, otherwise
@@ -253,29 +234,9 @@ pub fn forget_removed(tree: &Tree, removed: &[NodeId], kept: Kept<'_>) {
     kept.selection.retain(alive);
 }
 
-/// The treemap as QML reads it: `[id, x, y, w, h]` per tile, the remainder
-/// with [`REMAINDER_ID`]. `children` are the ids whose sizes were laid out,
-/// in the same order.
-#[must_use]
-pub fn flat_rects(children: &[NodeId], tiles: &[Tile]) -> Vec<f64> {
-    let mut flat = Vec::with_capacity(tiles.len() * 5);
-    for tile in tiles {
-        let id = match tile.index {
-            Some(index) => match children.get(index) {
-                Some(id) => f64::from(id.0),
-                None => continue,
-            },
-            None => REMAINDER_ID,
-        };
-        flat.extend([id, tile.rect.x, tile.rect.y, tile.rect.w, tile.rect.h]);
-    }
-    flat
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hematita_core::usage::layout::{squarify, Rect};
     use hematita_core::usage::tree::{Kind, Node};
     use std::path::PathBuf;
 
@@ -344,14 +305,6 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_folders_are_counted_up_to_the_root() {
-        let counts = unreadable_below(&tree());
-        assert_eq!(counts[0], 1);
-        assert_eq!(counts[2], 1);
-        assert_eq!(counts[1], 0);
-    }
-
-    #[test]
     fn all_but_one_keeps_the_lowest_id() {
         assert_eq!(
             all_but_one(&[NodeId(9), NodeId(4), NodeId(7)]),
@@ -396,34 +349,6 @@ mod tests {
         assert!(rows[0].verified && rows[1].verified && !rows[2].verified);
         assert_eq!(rows[1].nodes, vec![NodeId(2), NodeId(4)]);
         assert_eq!(rows[2].nodes, vec![NodeId(7), NodeId(8)]);
-    }
-
-    #[test]
-    fn the_flat_rects_round_trip_to_ids_and_tiles() {
-        let children = vec![NodeId(11), NodeId(12), NodeId(13), NodeId(14)];
-        let sizes = [600, 399, 1, 0];
-        let unit = Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 1.0,
-            h: 1.0,
-        };
-        let tiles = squarify(&sizes, unit);
-        let flat = flat_rects(&children, &tiles);
-        assert_eq!(flat.len(), tiles.len() * 5);
-        for (chunk, tile) in flat.chunks(5).zip(&tiles) {
-            let expected = tile
-                .index
-                .map_or(REMAINDER_ID, |i| f64::from(children[i].0));
-            assert_eq!(chunk[0], expected);
-            assert_eq!(
-                (chunk[1], chunk[2], chunk[3], chunk[4]),
-                (tile.rect.x, tile.rect.y, tile.rect.w, tile.rect.h)
-            );
-        }
-        assert!(flat.chunks(5).any(|c| c[0] == REMAINDER_ID));
-        let area: f64 = flat.chunks(5).map(|c| c[3] * c[4]).sum();
-        assert!((area - 1.0).abs() < 1e-9);
     }
 
     #[test]

@@ -14,10 +14,13 @@ ApplicationWindow {
     required property bool smokeShape
     // Set only by `scripts/smoke.sh`: see the section walk below.
     required property bool smokeSections
+    // The folder handed on the command line; empty for none.
+    required property string startPath
     property bool shapePrinted: false
     property bool sensorShapePrinted: false
     property bool serviceShapePrinted: false
     property bool storageShapePrinted: false
+    property bool startShapePrinted: false
 
     width: 1000
     height: 680
@@ -102,12 +105,23 @@ ApplicationWindow {
             // reached Almacenamiento and the locations have landed. A page
             // that built without error but found no mount is the failure no
             // error message would have named.
-            onRevisionChanged: window.printStorageShape()
+            onRevisionChanged: {
+                window.printStorageShape()
+                window.printStartShape()
+            }
         }
 
         HematitaActivation {
             id: activation
             onRaiseRequested: {
+                window.show()
+                window.raise()
+                window.requestActivate()
+            }
+            // Another launch handed a folder: the storage section browses it.
+            onOpenRequested: function(path) {
+                window.currentSection = 5
+                analysisHub.openPath(path)
                 window.show()
                 window.raise()
                 window.requestActivate()
@@ -189,6 +203,16 @@ ApplicationWindow {
         console.info("hematita-storage", analysisHub.locationNames.length)
     }
 
+    // The smoke's start gate: with a folder handed on the command line, the
+    // storage section must be browsing it once its listing has landed.
+    function printStartShape() {
+        if (!window.smokeShape || window.startShapePrinted || window.startPath.length === 0
+            || analysisHub.revision < 1 || analysisHub.busy)
+            return
+        window.startShapePrinted = true
+        console.info("hematita-start", analysisHub.mode, analysisHub.crumbPaths.length)
+    }
+
     // The smoke's section walk. A `StackLayout` builds only the page it is
     // showing, so a page nobody selected is a page whose delegates were never
     // constructed — and a headless run that never left Performance would pass
@@ -221,6 +245,13 @@ ApplicationWindow {
         sensorHub.start()
         serviceHub.start()
         activation.start()
+        // A folder handed on the command line opens the storage section on
+        // it; setting the section first lets its own `open()` run before the
+        // browse replaces it.
+        if (window.startPath.length > 0) {
+            window.currentSection = 5
+            analysisHub.openPath(window.startPath)
+        }
     }
 
     // The sampler thread outlives no window: it is asked to stop and joined

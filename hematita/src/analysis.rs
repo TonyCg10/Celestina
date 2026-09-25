@@ -171,6 +171,11 @@ pub mod qobject {
         #[qinvokable]
         fn enter(self: Pin<&mut HematitaAnalysis>, index: i32);
 
+        /// Browses `path` as a new stack of one folder, as if the person had
+        /// entered it; ignored with a diagnostic when it is not a folder.
+        #[qinvokable]
+        fn open_path(self: Pin<&mut HematitaAnalysis>, path: &QString);
+
         /// Goes back to the crumb at `index`; below zero, to the locations.
         #[qinvokable]
         fn enter_crumb(self: Pin<&mut HematitaAnalysis>, index: i32);
@@ -496,6 +501,20 @@ impl qobject::HematitaAnalysis {
             }
             Step::Nothing => {}
         }
+    }
+
+    /// The folder handed on the command line or through D-Bus `Open`. The
+    /// one `is_dir` check is a single `stat` on the Qt thread, once per
+    /// request, the same cost `browse` pays to name its folder; the listing
+    /// itself runs on the browse thread.
+    pub fn open_path(mut self: Pin<&mut Self>, path: &QString) {
+        let path = PathBuf::from(path.to_string());
+        if !path.is_dir() {
+            eprintln!("hematita: not a folder, ignored: {}", path.display());
+            return;
+        }
+        self.as_mut().rust_mut().stack = vec![path];
+        self.browse();
     }
 
     /// Within the analysis, a crumb at or below the scanned root moves inside
