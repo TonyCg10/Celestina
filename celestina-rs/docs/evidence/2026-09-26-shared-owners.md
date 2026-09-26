@@ -39,8 +39,9 @@ restored with `git checkout`. The script is not part of the unit.
 
 ## Result
 
-- **Exit:** every command above exited 0. `celestina-core` went from 34 to 78
-  passing tests (45 new; the environment-dependent
+- **Exit:** every command above exited 0. `celestina-core` went from 34 to 82
+  passing tests (49 new, 4 of them from the review corrections below; the
+  environment-dependent
   `the_user_directory_comes_before_the_system_ones` became the hermetic
   `the_legacy_directory_list_keeps_its_order_and_its_gaps`). Workspace clippy
   reported nothing. `cargo doc` for `celestina-shell-core` fails with two
@@ -69,7 +70,8 @@ The `fs::read` mutation run did not finish on its own: the unbounded read of a
 FIFO blocked the test until a writer was attached by hand after about ten
 minutes, which is the hazard RS-4 and RS-6 describe.
 
-- **GREEN:** with every owner restored, 78 passed, 0 failed.
+- **GREEN:** with every owner restored, 78 passed, 0 failed; after the review
+  corrections, 82 passed, 0 failed.
 
 ## Observed facts
 
@@ -94,17 +96,23 @@ Canonical owners, equivalent recipes searched, and what each consumer needs:
   `magnetita-net`'s `write_private` and the clipboard history move to.
   `land_media` and its two-step form `stage_media`/`StagedMedia::publish` take
   the source's permission bits (set-id and sticky bits cleared) and, best
-  effort, its group, and publish by `hard_link` plus unlink, which the kernel
-  refuses atomically on an existing name; without hard links (FAT, exFAT, some
-  FUSE) an exclusive create reserves the name first. The two-step form serves
+  effort, its group (dropping the group bits when the group cannot be
+  copied), sync the sibling and its directory before returning, and publish
+  through the public `publish_without_replacing`: `hard_link` plus unlink,
+  which the kernel refuses atomically on an existing name; on any other link
+  error (FAT, exFAT, some FUSE) an exclusive create reserves the name first,
+  which a third party can still replace and which a crash leaves as an empty
+  file. The two-step form serves
   FLU-1's "stage, trash the original, then publish" order in P-7. `replace`
   keeps its behaviour and its doc now states its two gaps.
 - **RS-3 — `xdg::runtime_dir` and `xdg::ensure_private_dir`.** No `/tmp`
   fallback: a typed `PrivateDirError` when the variable is unset or empty,
-  relative, missing, not a directory, owned by another uid, or granting group
-  or other access. `ensure_private_dir` creates missing components `0700`,
+  relative, missing, a symlink or not a directory, owned by another uid,
+  granting group or other access, or lacking owner `rwx` (permission bits
+  must be exactly `0700`; sticky and set-id bits are not examined). `ensure_private_dir` creates missing components `0700`,
   refuses a symlink or another user's directory, and tightens this user's own
-  wider directory to `0700`. The effective uid comes from `/proc/self/status`.
+  wider directory to `0700`. The effective uid comes from `/proc/self/status`,
+  read as bytes, through the public `xdg::effective_uid`.
   Copies read: `magnetitad/src/{mount.rs, link_wire/mirror.rs, artwork.rs}`,
   `magnetita/src/mirror_view.rs`,
   `celestina/src/provider_adapter/{brightness.rs, melibea.rs}`, and the style
@@ -157,6 +165,38 @@ No existing function changed behaviour (R-A3): `replace`, `parse`,
 `application_dirs`, `is_cancelled` and `pause` are byte-for-byte the same
 logic; `replace`'s temporary creation gained an optional mode that it passes as
 `None`. No consumer calls a new owner, so no product version changes.
+
+## Review corrections
+
+The controller's review of `b11ad15` found three Important and six Minor
+points; all were corrected in one further commit, every earlier assertion kept.
+
+| Point | Correction | RED (mutation back to the reviewed code) |
+|---|---|---|
+| I-1 `effective_uid` failed on a non-UTF-8 `Name:` line | reads bytes and parses the `Uid:` line alone | `a_name_that_is_not_utf8_does_not_hide_the_uid` failed |
+| I-2 a symlink was accepted as the runtime directory | `symlink_metadata`; a symlink is `NotADirectory` | `the_runtime_dir_must_be_a_private_directory_of_this_user` failed |
+| I-3 existing copies of the new recipes | recorded below and in the `xdg` and `atomic_file` Adoption sections; `effective_uid` and `publish_without_replacing` made public so the copies can delegate | not applicable |
+| M-1 `0500` accepted | permission bits must be exactly `0700`: new `NotOwnerAccessible`; `01700` still accepted | same runtime-dir test failed |
+| M-2 group bits landed on the caller's group when the group copy failed | `media_mode` drops `0o070` then | `group_bits_survive_only_with_the_group` failed |
+| M-3 fallback over-promised | `publish_without_replacing` documents the third-party replace, the empty file after a crash, and that every non-`AlreadyExists` link error takes it | not applicable |
+| M-4 "durable" staged media | `stage_media` syncs the sibling's directory; docs say what is synced | not applicable (no failure injection for this sync) |
+| M-5 `file_uri` edge cases | documents `%2F` as a separator (Qt; GLib refuses) and the `file:/x` refusal; tests `..`, control bytes, `\`, `file:///C:/x`, `file:////host/share` | not applicable (characterization) |
+| M-6 ledger wording | the row names `desktop_entry::{read, scan, find}` and `application_search_dirs` | not applicable |
+
+Existing copies of the new recipes, and who adopts them:
+
+- `siderita-ops/src/volume.rs` `uid()` reads the owner of `/proc/self`
+  (root for a non-dumpable process) with `unwrap_or(0)`: adopts
+  `xdg::effective_uid` in `SID-H1-B` (P-8), which already carries "get the uid
+  safely".
+- `siderita-ops/src/reserve.rs` `rename_without_replacing` moves an existing
+  file or directory and must return `EXDEV` for the copy fallback; a directory
+  cannot be hard-linked, so it is a different operation. `SID-H1-B` (P-8)
+  decides whether its file case delegates to `publish_without_replacing`.
+- `magnetitad/src/incoming_file.rs` `publish` is the same hard-link-then-unlink
+  primitive inside a free-name loop, without a no-hard-link fallback: its link
+  step adopts `publish_without_replacing` in `MAG-D1-D` (P-11); the name loop
+  stays Magnetita's.
 
 ## Limits
 

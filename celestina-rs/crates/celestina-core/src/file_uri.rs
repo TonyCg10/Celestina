@@ -17,8 +17,24 @@
 //!   has, so the URI is refused instead of silently truncated or misread;
 //! - a decoded NUL is refused, because every syscall would truncate there.
 //!
-//! The path is not normalized: `..` stays `..`, exactly as the sender wrote it.
-//! A consumer that needs a canonical path canonicalizes on its own worker.
+//! Only the `file://` form with an authority marker is read. RFC 8089 also
+//! allows `file:/path` with no authority; no sender in the suite writes it, and
+//! it is refused as [`FileUriError::Malformed`] rather than guessed at.
+//!
+//! What is *not* refused, and why:
+//!
+//! - `%2F` decodes to `/` and acts as a separator, as in Qt, because a file
+//!   name cannot contain a `/` byte and the decoded path is what names the
+//!   file; GLib's `g_filename_from_uri` refuses it instead. A consumer that
+//!   must match GLib checks the encoded form itself.
+//! - The path is not normalized: `..` stays `..`, exactly as the sender wrote
+//!   it. A consumer that needs a canonical path canonicalizes on its own worker.
+//! - Control bytes (`%0A`, `%09`, and raw ones) and a backslash are ordinary
+//!   name bytes on Linux and decode as themselves; a consumer that displays the
+//!   path sanitizes it for display.
+//! - `file:///C:/x` is the local path `/C:/x`, not a drive letter, and
+//!   `file:////host/share` is the local path `//host/share`, not a UNC share:
+//!   this is a Linux suite and those spellings name nothing else here.
 //!
 //! [`from_path`] is the inverse for an absolute path: the suite's canonical
 //! encoding, which every encoder in the suite already spells this way and which
@@ -233,6 +249,25 @@ mod tests {
             assert!(uri.starts_with("file:///"), "{uri}");
             assert_eq!(to_path(&uri).as_deref(), Ok(path), "{uri}");
         }
+    }
+
+    #[test]
+    fn what_is_not_refused_decodes_as_written() {
+        assert_eq!(
+            to_path("file:///a/../etc/x"),
+            Ok(PathBuf::from("/a/../etc/x"))
+        );
+        assert_eq!(to_path("file:///a%2Fb"), Ok(PathBuf::from("/a/b")));
+        assert_eq!(
+            to_path("file:///a%0Ab%09c\u{7}"),
+            Ok(PathBuf::from("/a\nb\tc\u{7}"))
+        );
+        assert_eq!(to_path(r"file:///a\b"), Ok(PathBuf::from(r"/a\b")));
+        assert_eq!(to_path("file:///C:/x"), Ok(PathBuf::from("/C:/x")));
+        assert_eq!(
+            to_path("file:////host/share"),
+            Ok(PathBuf::from("//host/share"))
+        );
     }
 
     #[test]

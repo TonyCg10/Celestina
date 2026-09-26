@@ -43,6 +43,19 @@
 //! [`stage_media`] and [`land_media`] (`FLU-H1-A`, P-7); the shell's settings
 //! reader adopts [`read_bounded`] (`SURF-1-F`, P-17), and the other unbounded
 //! state readers follow in their owners' units.
+//!
+//! Two existing no-replace recipes were compared with
+//! [`publish_without_replacing`]:
+//!
+//! - magnetitad's `incoming_file::publish` is the same primitive (hard link,
+//!   then unlink the partial) inside a loop that picks the next free name, with
+//!   no fallback for a filesystem without hard links. Its link step moves here
+//!   in `MAG-D1-D` (P-11); the name loop stays Magnetita's.
+//! - `siderita-ops`' `reserve::rename_without_replacing` moves an existing
+//!   entry, file *or directory*, and must hand `EXDEV` back so a move across
+//!   filesystems can fall back to copying. A directory cannot be hard-linked,
+//!   so its reservation recipe is a different operation, not a copy of this
+//!   one; `SID-H1-B` (P-8) decides whether its file case delegates here.
 
 use std::error::Error;
 use std::fmt;
@@ -118,7 +131,8 @@ pub enum WriteStep {
     Write,
     /// Setting the sibling's mode.
     SetMode,
-    /// Syncing the sibling's bytes.
+    /// Syncing the sibling's bytes, or (for staged media) the directory that
+    /// holds the sibling.
     Sync,
     /// Moving the sibling to the destination name.
     Publish,
@@ -256,18 +270,20 @@ pub fn land_media(
 }
 
 /// Writes and syncs the complete new file for `destination` under a hidden
-/// sibling name, without publishing it yet.
+/// sibling name, and syncs the directory holding it, without publishing it yet.
 ///
 /// Two steps exist for the edit that replaces its original: the caller stages
 /// the new bytes, moves the original out of the way (to the Trash) only once
-/// they are durable, and then publishes into the name the original left. At no
-/// point is the person left with neither file. Dropping the [`StagedMedia`]
-/// without publishing removes the sibling.
+/// they and the sibling's name are durable, and then publishes into the name
+/// the original left. At no point is the person left with neither file.
+/// Dropping the [`StagedMedia`] without publishing removes the sibling.
 ///
 /// The sibling is private (`0600`) while it is written and takes the source's
 /// permission bits, with set-id and sticky bits cleared, just before it is
-/// synced. Owner and extended attributes (ACLs, labels) are not copied; the
-/// group is copied when the filesystem and the caller's groups allow it.
+/// synced. Owner and extended attributes (ACLs, labels) are not copied. The
+/// group is copied when the filesystem and the caller's groups allow it; when
+/// they do not, the group permission bits are dropped too, so access meant for
+/// the source's group is never granted to the caller's own group instead.
 /// Missing parent directories are not created: media lands beside its source.
 ///
 /// # Errors
@@ -284,10 +300,23 @@ pub fn stage_media(
         .map_err(|error| WriteError::io(WriteStep::ReadSourceMode, destination, error))?;
     let permissions = fs::Permissions::from_mode(source.permissions().mode() & 0o777);
     let staged = Staged::write(destination, bytes, permissions, Some(source.gid()))?;
+    sync_directory(parent_of(destination))
+        .map_err(|error| WriteError::io(WriteStep::Sync, destination, error))?;
     Ok(StagedMedia { staged })
 }
 
-/// Media bytes that are durable under a hidden sibling name and not published.
+/// The permission bits a media sibling ends with: the source's, without the
+/// group bits when the source's group could not be given to the new file.
+fn media_mode(source_mode: u32, group_kept: bool) -> u32 {
+    if group_kept {
+        source_mode
+    } else {
+        source_mode & !0o070
+    }
+}
+
+/// Media bytes whose content and hidden sibling name are synced, not yet
+/// published.
 #[derive(Debug)]
 pub struct StagedMedia {
     staged: Staged,
@@ -301,13 +330,9 @@ impl StagedMedia {
     }
 
     /// Moves the staged file to its destination name, refusing to replace
-    /// anything that holds that name by then.
-    ///
-    /// The move is a hard link followed by removing the sibling name; the
-    /// kernel refuses the link atomically when the name exists. A filesystem
-    /// without hard links (FAT, exFAT, some FUSE mounts) gets an exclusive
-    /// create of the destination as a reservation, and the rename then replaces
-    /// only that empty reservation.
+    /// anything that holds that name by then, through
+    /// [`publish_without_replacing`] (whose documentation states the limits of
+    /// its fallback).
     ///
     /// # Errors
     ///
@@ -320,7 +345,30 @@ impl StagedMedia {
     }
 }
 
-fn publish_without_replacing(temporary: &Path, destination: &Path) -> io::Result<()> {
+/// Gives the file at `temporary`, which the caller created (a staged sibling, a
+/// received partial), the name `destination`, refusing to replace anything that
+/// holds that name. The two paths must be on one filesystem.
+///
+/// The primary path is a hard link followed by removing `temporary`: the kernel
+/// refuses the link atomically when `destination` exists, which is reported as
+/// `ErrorKind::AlreadyExists`. If the link succeeds and removing `temporary`
+/// then fails, both names hold the file; the publish has happened and the
+/// hidden name is left behind.
+///
+/// Any other link failure takes a weaker fallback, meant for filesystems
+/// without hard links (FAT, exFAT, some FUSE mounts), and taken on every other
+/// link error too (a failure the fallback then usually repeats): the
+/// destination is created empty and exclusively as a reservation, and
+/// `temporary` is renamed over it. Two limits follow. Another process that
+/// deletes and recreates `destination` between the reservation and the rename
+/// has its file replaced; and a crash in that window leaves an empty file at
+/// `destination`. A failed rename removes the reservation.
+///
+/// # Errors
+///
+/// `AlreadyExists` when `destination` is taken, or the error of the failed
+/// link, reservation or rename.
+pub fn publish_without_replacing(temporary: &Path, destination: &Path) -> io::Result<()> {
     match fs::hard_link(temporary, destination) {
         Ok(()) => {
             // Both names hold the file now and the publish has happened; a
@@ -366,11 +414,17 @@ impl Staged {
         };
         file.write_all(bytes)
             .map_err(|error| WriteError::io(WriteStep::Write, destination, error))?;
-        if let Some(group) = group {
+        let permissions = match group {
             // Best effort by design: a person may edit a file whose group they
-            // are not a member of, and then the new file keeps their own group.
-            let _ = std::os::unix::fs::fchown(&file, None, Some(group));
-        }
+            // are not a member of, and then the new file keeps their own group
+            // and loses the group bits meant for the source's.
+            Some(group) => {
+                use std::os::unix::fs::PermissionsExt;
+                let kept = std::os::unix::fs::fchown(&file, None, Some(group)).is_ok();
+                fs::Permissions::from_mode(media_mode(permissions.mode(), kept))
+            }
+            None => permissions,
+        };
         // After the ownership change, which may clear set-id bits, and before
         // the sync, so the synced inode already carries its final mode.
         file.set_permissions(permissions)
@@ -592,8 +646,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        land_media, open_nonblocking, read_bounded, read_open_file, replace, replace_private,
-        replace_private_with, stage_media, Published, ReadError, WriteError, WriteStep,
+        land_media, media_mode, open_nonblocking, publish_without_replacing, read_bounded,
+        read_open_file, replace, replace_private, replace_private_with, stage_media, Published,
+        ReadError, WriteError, WriteStep,
     };
     use crate::scratch::Scratch;
 
@@ -787,6 +842,31 @@ mod tests {
         assert!(matches!(error, WriteError::TargetExists { .. }));
         assert_eq!(fs::read(&source).expect("source"), b"original");
         assert_eq!(names_in(scratch.path()), ["photo.jpg"]);
+    }
+
+    #[test]
+    fn group_bits_survive_only_with_the_group() {
+        assert_eq!(media_mode(0o664, true), 0o664);
+        assert_eq!(media_mode(0o664, false), 0o604);
+        assert_eq!(media_mode(0o750, false), 0o700);
+    }
+
+    #[test]
+    fn a_partial_is_published_only_onto_a_free_name() {
+        let scratch = Scratch::new("publish-partial");
+        let partial = scratch.path().join(".receive.part");
+        let taken = scratch.path().join("photo.jpg");
+        fs::write(&partial, b"received").expect("partial");
+        fs::write(&taken, b"existing").expect("taken");
+
+        let error = publish_without_replacing(&partial, &taken).expect_err("taken");
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read(&taken).expect("taken"), b"existing");
+
+        let free = scratch.path().join("photo (1).jpg");
+        publish_without_replacing(&partial, &free).expect("free");
+        assert_eq!(fs::read(&free).expect("free"), b"received");
+        assert_eq!(names_in(scratch.path()), ["photo (1).jpg", "photo.jpg"]);
     }
 
     #[test]

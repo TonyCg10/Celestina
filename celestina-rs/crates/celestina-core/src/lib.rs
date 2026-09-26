@@ -24,7 +24,8 @@
 //! switching any caller (ruling R-A3): [`file_uri`], [`xdg::runtime_dir`],
 //! [`xdg::ensure_private_dir`], [`atomic_file::replace_private`],
 //! [`atomic_file::land_media`] with [`atomic_file::stage_media`],
-//! [`atomic_file::read_bounded`], [`atomic_file::Published`],
+//! [`atomic_file::publish_without_replacing`], [`atomic_file::read_bounded`],
+//! [`atomic_file::Published`], [`xdg::effective_uid`],
 //! [`desktop_entry::read`], [`desktop_entry::scan`], [`desktop_entry::find`]
 //! and [`CancellationToken::is_cancel_requested`]. Each module's "Adoption"
 //! section names the product unit that moves its copies here; until then the

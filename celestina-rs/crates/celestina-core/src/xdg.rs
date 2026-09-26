@@ -12,8 +12,9 @@
 //! pre-create a predictable name (a symlink, or a directory it owns) and
 //! capture a mount point, a FIFO or a lock. It therefore answers an error, never
 //! a substitute, and it checks what the spec requires of the directory: absolute,
-//! a directory, owned by this user, and closed to everyone else. A caller that
-//! gets an error degrades the feature that needed the directory.
+//! a directory itself rather than a symlink, owned by this user, and mode
+//! `0700`. A caller that gets an error degrades the feature that needed the
+//! directory.
 //!
 //! [`ensure_private_dir`] creates or checks a directory the suite owns under one
 //! of these bases (`$XDG_RUNTIME_DIR/magnetita`, the shell's style import root,
@@ -29,6 +30,12 @@
 //! mounts, mirror FIFOs and artwork cache and the Magnetita app's mirror view
 //! (`MAG-D1-D`, P-11), and the shell's DDC lock, Melibea socket and style
 //! import root (`SURF-1-E`, P-10).
+//!
+//! [`effective_uid`] has one existing copy with a different answer:
+//! `siderita-ops/src/volume.rs` reads the owner of `/proc/self`, which is root
+//! for a process that is not dumpable, and falls back to uid 0 when it cannot
+//! read it, so a volume's `.Trash-$uid` could become `.Trash-0`. It moves here
+//! in `SID-H1-B` (P-8), whose findings already cover getting the uid safely.
 
 use std::error::Error;
 use std::ffi::OsString;
@@ -96,8 +103,8 @@ pub enum PrivateDirError {
         path: PathBuf,
         source: io::Error,
     },
-    /// The path is not a directory, or (for [`ensure_private_dir`]) is a
-    /// symlink to one.
+    /// The path is not a directory, or is a symlink (even to a directory):
+    /// a private directory is checked where it is, not where a link points.
     NotADirectory { path: PathBuf },
     /// The directory belongs to another user.
     NotOwned {
@@ -107,6 +114,9 @@ pub enum PrivateDirError {
     },
     /// The runtime directory grants its group or other users some access.
     Shared { path: PathBuf, mode: u32 },
+    /// The runtime directory lacks read, write or search for its owner, so it
+    /// is not the `0700` directory the spec requires.
+    NotOwnerAccessible { path: PathBuf, mode: u32 },
     /// This process's effective user id could not be read.
     UnknownUser { source: io::Error },
 }
@@ -136,6 +146,11 @@ impl fmt::Display for PrivateDirError {
                 "{} has mode {mode:04o}; a private directory is 0700",
                 path.display()
             ),
+            Self::NotOwnerAccessible { path, mode } => write!(
+                formatter,
+                "{} has mode {mode:04o}; the runtime directory is 0700",
+                path.display()
+            ),
             Self::UnknownUser { source } => {
                 write!(formatter, "cannot read the effective user id: {source}")
             }
@@ -153,8 +168,13 @@ impl Error for PrivateDirError {
 }
 
 /// `$XDG_RUNTIME_DIR`, only when it is what the spec says it must be: an
-/// absolute path to a directory owned by this user with no access for anyone
-/// else. There is no fallback.
+/// absolute path to a directory owned by this user whose permission bits are
+/// exactly `0700`. There is no fallback.
+///
+/// The final component must be the directory itself, not a symlink to one: a
+/// link is only as private as the directory holding it, which this check does
+/// not see. The sticky and set-id bits are not part of that rule and are not
+/// examined.
 ///
 /// The check reads the directory's metadata, so it belongs on a worker or in
 /// start-up code, not in a Qt-thread invokable.
@@ -178,7 +198,7 @@ fn checked_runtime_dir(value: Option<OsString>, user: u32) -> Result<PathBuf, Pr
     if !path.is_absolute() {
         return Err(PrivateDirError::NotAbsolute { path });
     }
-    let metadata = match std::fs::metadata(&path) {
+    let metadata = match std::fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,
         Err(source) => {
             return Err(PrivateDirError::Io {
@@ -188,7 +208,7 @@ fn checked_runtime_dir(value: Option<OsString>, user: u32) -> Result<PathBuf, Pr
             })
         }
     };
-    if !metadata.is_dir() {
+    if !metadata.file_type().is_dir() {
         return Err(PrivateDirError::NotADirectory { path });
     }
     if metadata.uid() != user {
@@ -201,6 +221,9 @@ fn checked_runtime_dir(value: Option<OsString>, user: u32) -> Result<PathBuf, Pr
     let mode = metadata.permissions().mode() & 0o7777;
     if mode & 0o077 != 0 {
         return Err(PrivateDirError::Shared { path, mode });
+    }
+    if mode & 0o700 != 0o700 {
+        return Err(PrivateDirError::NotOwnerAccessible { path, mode });
     }
     Ok(path)
 }
@@ -285,13 +308,24 @@ const MAX_STATUS_BYTES: u64 = 64 * 1024;
 ///
 /// `std` exposes no `geteuid`, and this crate takes no dependency and no
 /// `unsafe` to call it; the status file states the same four ids the kernel
-/// keeps, in a documented, stable format.
-pub(crate) fn effective_uid() -> io::Result<u32> {
-    let mut text = String::new();
+/// keeps, in a documented, stable format. It is public so the other readers of
+/// the user id (`siderita-ops`'s Trash, which reads the owner of `/proc/self`
+/// and falls back to root) can use this one instead.
+///
+/// The file is read as bytes: its `Name:` line is the kernel's copy of the
+/// executable name, which need not be UTF-8 (a Latin-1 file name, or a cut at
+/// fifteen bytes inside a multi-byte character).
+///
+/// # Errors
+///
+/// The error of opening or reading the file, or `InvalidData` when it has no
+/// parseable `Uid:` line (a procfs that is not Linux's).
+pub fn effective_uid() -> io::Result<u32> {
+    let mut status = Vec::new();
     std::fs::File::open("/proc/self/status")?
         .take(MAX_STATUS_BYTES)
-        .read_to_string(&mut text)?;
-    effective_uid_in(&text).ok_or_else(|| {
+        .read_to_end(&mut status)?;
+    effective_uid_in(&status).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             "/proc/self/status has no readable Uid line",
@@ -300,12 +334,12 @@ pub(crate) fn effective_uid() -> io::Result<u32> {
 }
 
 /// The second field of the `Uid:` line: real, effective, saved, filesystem.
-fn effective_uid_in(status: &str) -> Option<u32> {
-    status
-        .lines()
-        .find_map(|line| line.strip_prefix("Uid:"))
-        .and_then(|ids| ids.split_whitespace().nth(1))
-        .and_then(|id| id.parse().ok())
+fn effective_uid_in(status: &[u8]) -> Option<u32> {
+    let ids = status
+        .split(|&byte| byte == b'\n')
+        .find_map(|line| line.strip_prefix(b"Uid:"))?;
+    let ids = std::str::from_utf8(ids).ok()?;
+    ids.split_whitespace().nth(1)?.parse().ok()
 }
 
 #[cfg(test)]
@@ -334,9 +368,19 @@ mod tests {
     #[test]
     fn the_effective_uid_is_the_second_id_of_the_uid_line() {
         let status = "Name:\tcat\nUmask:\t0022\nUid:\t1000\t1001\t1002\t1003\nGid:\t5\t5\t5\t5\n";
-        assert_eq!(effective_uid_in(status), Some(1001));
-        assert_eq!(effective_uid_in("Name:\tcat\n"), None);
-        assert_eq!(effective_uid_in("Uid:\t1000\n"), None);
+        assert_eq!(effective_uid_in(status.as_bytes()), Some(1001));
+        assert_eq!(effective_uid_in(b"Name:\tcat\n"), None);
+        assert_eq!(effective_uid_in(b"Uid:\t1000\n"), None);
+    }
+
+    #[test]
+    fn a_name_that_is_not_utf8_does_not_hide_the_uid() {
+        // A Latin-1 executable name, and a UTF-8 name cut inside a character
+        // at the kernel's fifteen-byte limit.
+        let latin1 = b"Name:\tcaf\xe9\nUid:\t1000\t1001\t1002\t1003\n";
+        let cut = b"Name:\tabcdefghijklmn\xc3\nUid:\t7\t8\t9\t10\n";
+        assert_eq!(effective_uid_in(latin1), Some(1001));
+        assert_eq!(effective_uid_in(cut), Some(8));
     }
 
     #[test]
@@ -395,6 +439,27 @@ mod tests {
         std::fs::write(&file, b"").expect("file");
         assert!(matches!(
             checked_runtime_dir(Some(file.into()), user),
+            Err(PrivateDirError::NotADirectory { .. })
+        ));
+
+        // Owner-only but not the spec's 0700: refused. Sticky 01700 is 0700.
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o500)).expect("chmod");
+        assert!(matches!(
+            checked_runtime_dir(Some(runtime.clone().into()), user),
+            Err(PrivateDirError::NotOwnerAccessible { mode: 0o500, .. })
+        ));
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o1700)).expect("chmod");
+        assert_eq!(
+            checked_runtime_dir(Some(runtime.clone().into()), user).expect("sticky 0700"),
+            runtime
+        );
+
+        // A symlink to a private directory is not the private directory.
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700)).expect("chmod");
+        let link = scratch.path().join("link");
+        std::os::unix::fs::symlink(&runtime, &link).expect("symlink");
+        assert!(matches!(
+            checked_runtime_dir(Some(link.into()), user),
             Err(PrivateDirError::NotADirectory { .. })
         ));
         assert!(matches!(

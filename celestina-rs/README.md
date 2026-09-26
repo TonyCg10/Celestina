@@ -35,8 +35,9 @@ the deliberately contained Magnetita transport/daemon and Fluorita render seam.
 | `crates/dotfiles-core` | Conflict-aware planning only; it does not apply system changes and has no consumer yet |
 
 `celestina-core` also holds owners that no application calls yet: the strict
-`file_uri` parser, `xdg::runtime_dir` and `xdg::ensure_private_dir`,
-`atomic_file::{replace_private, land_media, stage_media, read_bounded}`,
+`file_uri` parser, `xdg::{runtime_dir, ensure_private_dir, effective_uid}`,
+`atomic_file::{replace_private, land_media, stage_media,
+publish_without_replacing, read_bounded}`,
 `desktop_entry::{read, scan, find}` and
 `CancellationToken::is_cancel_requested`. Each module's documentation names the
 product unit that moves that product's own copy onto it.

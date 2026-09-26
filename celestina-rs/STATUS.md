@@ -21,8 +21,9 @@
   network ownership remain in this workspace.
 - `celestina-core` carries dormant owners that no application calls yet: the
   strict `file_uri` parser, `xdg::runtime_dir` (no `/tmp` fallback) and
-  `xdg::ensure_private_dir`, `atomic_file::replace_private`, `land_media`,
-  `stage_media` and `read_bounded` with the `Published` outcome,
+  `xdg::ensure_private_dir` and `xdg::effective_uid`,
+  `atomic_file::replace_private`, `land_media`, `stage_media`,
+  `publish_without_replacing` and `read_bounded` with the `Published` outcome,
   `desktop_entry::{read, scan, find}` and
   `CancellationToken::is_cancel_requested`. Until each product's own unit
   adopts them, that product's copies keep their current behaviour, including
