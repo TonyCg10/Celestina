@@ -54,25 +54,12 @@ TestCase {
         }
     }
 
-    // The ring is the one child of the track that frames it.
     function ring() {
-        const track = control.indicator
-        for (let i = 0; i < track.children.length; ++i) {
-            if (track.children[i].target === track)
-                return track.children[i]
-        }
-        return null
+        return findChild(control, "switchFocusRing")
     }
 
     function thumb() {
-        const track = control.indicator
-        for (let i = 0; i < track.children.length; ++i) {
-            const child = track.children[i]
-            if (child.target === undefined
-                    && child.width === CelestinaTheme.compSwitchThumbSize)
-                return child
-        }
-        return null
+        return findChild(control, "switchThumb")
     }
 
     function thumbEnd() {
@@ -152,18 +139,20 @@ TestCase {
         compare(knob.x, CelestinaTheme.compSwitchThumbInset)
 
         control.toggle()
-        verify(Qt.colorEqual(control.indicator.color, CelestinaTheme.accent))
-        compare(knob.x, thumbEnd())
+        tryCompare(knob, "x", thumbEnd())
+        tryVerify(() => Qt.colorEqual(control.indicator.color, CelestinaTheme.accent))
         compare(control.indicator.width, CelestinaTheme.compSwitchTrackWidth)
         compare(control.indicator.height, CelestinaTheme.compSwitchTrackHeight)
     }
 
-    // A zero-length animation completes when it starts, so under reduced
-    // motion the thumb is already home on the line after the toggle. Without
-    // reduced motion the same read finds it still at its start.
+    // Under reduced motion the thumb's animation has no length, so it is home
+    // after one pass of the event loop. Without reduced motion it is still
+    // travelling at that point; the next case shows the difference.
     function test_reduced_motion_lands_the_thumb_at_once() {
         const knob = thumb()
+        verify(knob, "the switch lost its thumb")
         control.toggle()
+        wait(0)
         compare(knob.x, thumbEnd())
     }
 

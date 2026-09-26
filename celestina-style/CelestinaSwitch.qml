@@ -27,6 +27,7 @@ Switch {
         opacity: control.enabled ? 1 : CelestinaTheme.disabledOpacity
 
         CelestinaFocusRing {
+            objectName: "switchFocusRing"
             target: parent
             cornerRadius: parent.radius
             shown: control.visualFocus
@@ -41,6 +42,7 @@ Switch {
 
         Rectangle {
             id: thumb
+            objectName: "switchThumb"
             width: CelestinaTheme.compSwitchThumbSize
             height: CelestinaTheme.compSwitchThumbSize
             radius: height / 2

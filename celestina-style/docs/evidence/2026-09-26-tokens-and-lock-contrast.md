@@ -41,7 +41,7 @@ The changes, per finding:
   literal the rule found, `0.4` in `tst_icongradient.qml`'s
   `test_alpha_survives`, now uses `unavailableContentOpacity`, which is the
   same 0.4, and that test's comment is translated to English.
-- **STY-3.** `tests/tst_switch.qml` (8 cases) and `tests/tst_textfield.qml`
+- **STY-3.** `tests/tst_switch.qml` (9 cases) and `tests/tst_textfield.qml`
   (10 cases) join the directory that `QUICK_TEST_SOURCE_DIR` scans, which is
   how every existing test is registered: `celestina-style-modal-test` runs
   each `tst_*.qml` there under CTest `celestina-style-modal-focus`. The switch
@@ -54,7 +54,12 @@ The changes, per finding:
   reachability, the ring and lifted `inputFillFocus` for Tab, Backtab and
   Shortcut, none for a pointer or `Qt.OtherFocusReason`, the ring leaving
   with focus, typing and Backspace, the Standard and Search radii, and a
-  disabled field that Tab skips. The Qt behaviour these cases assume was read
+  disabled field that Tab skips. The tests find the focus ring and thumb with
+  `findChild`, the suite's idiom. For that, `CelestinaSwitch` names its
+  indicator's children `switchFocusRing` and `switchThumb`, and
+  `CelestinaTextField` names its ring `textFieldFocusRing`. A thumb position
+  read after a toggle is synchronised: `tryCompare`, or `wait(0)` under
+  reduced motion. The Qt behaviour these cases assume was read
   in the Qt 6.9 sources (`qtdeclarative` 6.9 branch): `ButtonPressKeys`
   defaults to Space and Select, a checkable `QQuickAbstractButton` reports
   the CheckBox role, `QQuickItemPrivate::focusNextPrev` gives the Tab and

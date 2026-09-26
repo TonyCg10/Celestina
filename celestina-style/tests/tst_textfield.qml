@@ -61,14 +61,8 @@ TestCase {
         }
     }
 
-    // The ring is the one child of the background that frames it.
     function ring(control) {
-        const plate = control.background
-        for (let i = 0; i < plate.children.length; ++i) {
-            if (plate.children[i].target === plate)
-                return plate.children[i]
-        }
-        return null
+        return findChild(control, "textFieldFocusRing")
     }
 
     function assertKeyboardFocusVisible() {
