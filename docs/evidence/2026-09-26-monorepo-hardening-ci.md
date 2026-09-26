@@ -27,7 +27,8 @@ mutation reverted before commit: restore the hand-listed style guard from
 `<root>/zzzfixture/qml/` and run them again.
 
 Run every command of `.github/workflows/contracts.yml`, in its order, on the
-committed tree (`18f5f22`):
+committed tree. The first run was on `18f5f22`. The run below is on `63eb7a2`,
+after the review fixes listed at the end of Observed facts:
 
 ```sh
 export GIT_CONFIG_GLOBAL=/dev/null
@@ -46,10 +47,13 @@ bash scripts/test-land-unit.sh
 bash scripts/test-qmllint-target.sh
 python3 scripts/test-language-contract.py
 sh scripts/test-production-artifacts.sh
-sh scripts/test-production-common.sh
 ```
 
-The last three lines are the ones this unit adds to the workflow.
+The last two lines are the new "Hermetic fixtures" step. They cover the
+three scripts TOOL-13 names: `test-production-artifacts.sh` ends by
+`exec`ing `test-production-common.sh`, so a separate line for it would run
+those fixtures twice. The first run listed that script as a third command.
+That double-counted it; none of the three had ever run in CI.
 
 ## Result
 
@@ -77,30 +81,31 @@ The last three lines are the ones this unit adds to the workflow.
   application). With an unregistered `zzzfixture/qml/` they exit 1:
   `zzzfixture/qml exists but no registered project owns it, so no guard
   inspects it`.
-- **Exit (workflow, every step in order):**
+- **Exit (workflow on `63eb7a2`, every step in order):**
 
   | Step | Command | Exit | Time |
   |---|---|---|---|
   | Architecture and style | `test-architecture-scanners.sh` | 0 | 10 s |
   | Architecture and style | `check-architecture-contract.sh` | 0 | 5 s |
-  | Documentation, language, versions | `test-documentation-contract.sh` | 0 | 13 s |
+  | Documentation, language, versions | `test-documentation-contract.sh` | 0 | 12 s |
   | Documentation, language, versions | `check-documentation-contract.sh` | 0 | 39 s |
-  | Documentation, language, versions | `check-language-contract.py` | 0 | 1 s |
-  | Documentation, language, versions | `test-version-contract.py` | 0 | 1 s |
+  | Documentation, language, versions | `check-language-contract.py` | 0 | 2 s |
+  | Documentation, language, versions | `test-version-contract.py` | 0 | 0 s |
   | Documentation, language, versions | `version_tool.py check` | 0 | 0 s |
-  | Documentation, language, versions | `audit-version-commits.py` | 0 | 70 s |
-  | Commit scope | `test-commit-scope.sh` | 0 | 49 s |
+  | Documentation, language, versions | `audit-version-commits.py` | 0 | 69 s |
+  | Commit scope | `test-commit-scope.sh` | 0 | 51 s |
   | Commit scope | `test-staged-units.sh` | 0 | 4 s |
   | Commit scope | `test-worktree.sh` | 0 | 1 s |
-  | Commit scope | `test-land-unit.sh` | 0 | 56 s |
+  | Commit scope | `test-land-unit.sh` | 0 | 46 s |
   | Commit scope | `test-qmllint-target.sh` | 0 | 0 s |
-  | Commit scope | `test-language-contract.py` (added) | 0 | 1 s |
-  | Commit scope | `test-production-artifacts.sh` (added) | 0 | 9 s |
-  | Commit scope | `test-production-common.sh` (added) | 0 | 1 s |
+  | Hermetic fixtures (new) | `test-language-contract.py` | 0 | 1 s |
+  | Hermetic fixtures (new) | `test-production-artifacts.sh`, which also runs `test-production-common.sh` | 0 | 9 s |
 
-  `audit-version-commits.py` reported 444 non-merge commits after adoption;
-  `version_tool.py check` reported 8 owners; `test-land-unit.sh` ran 56
-  tests.
+  The earlier run on `18f5f22`, with the old step layout, also exited 0
+  everywhere. `audit-version-commits.py` covered 444 non-merge commits on
+  that run; `version_tool.py check` reported 8 owners; `test-land-unit.sh`
+  ran 56 tests. The production-artifact log contains
+  `production-common fixtures: OK` exactly once.
 
 ### Observed facts
 
@@ -137,12 +142,27 @@ The last three lines are the ones this unit adds to the workflow.
   a top-level `<dir>/qml/` exists that no registered project owns. The
   end-to-end `sextita` registry fixture now also runs the style guard,
   which must fail and name `sextita/qml`.
-- **TOOL-13, the CI half.** `.github/workflows/contracts.yml` runs
-  `test-language-contract.py`, `test-production-artifacts.sh` and
-  `test-production-common.sh` at the end of the "Commit scope" step, where
-  the finding puts them. `.github/workflows/README.md` says so. The three
-  are hermetic: none needs Cargo, Qt or a personal Git identity, and the
-  language fixtures set their own.
+- **TOOL-13, the CI half.** `.github/workflows/contracts.yml` has a new
+  "Hermetic fixtures" step that runs `test-language-contract.py` and
+  `test-production-artifacts.sh`. The second ends by `exec`ing
+  `test-production-common.sh`, so the three scripts the finding names all
+  run, each once. They are hermetic: none needs Cargo, Qt or a personal Git
+  identity, and the language fixtures set their own. Every step after the
+  first carries `if: ${{ !cancelled() }}`, so a failing step no longer
+  skips the ones after it; the job still fails. That skipping is the
+  mechanism that let TOOL-1 hide every later check.
+  `.github/workflows/README.md` describes the new step and the condition.
+- **Review fixes (`63eb7a2`):**
+  - The three tests left the `bash -e` chain of the "Commit scope" step for
+    their own step, and the steps after the first no longer depend on the
+    earlier ones succeeding.
+  - The duplicate `test-production-common.sh` line is gone.
+  - The style guard refuses a registry that registers more than one
+    `qml-module` project, instead of keeping the last one as the theme
+    owner. A new fixture in `test-architecture-scanners.sh` adds a second
+    shared style to a copy of the registry and requires the refusal
+    message. With the previous guard restored, that fixture exits 1 with
+    `the style guard failed on a second shared style without saying so`.
 
 ## Limits
 
@@ -178,9 +198,10 @@ The last three lines are the ones this unit adds to the workflow.
 
 ## Follow-up
 
-- The two open fix bullets above need a ledger row: `AUD-1-F` (P-20), which
-  already owns `scripts/land-unit.py` and `.github/workflows/contracts.yml`,
-  or a new suite row. Branch protection is the author's decision.
+- The two open fix bullets above (TOOL-1 bullet 3, TOOL-13 bullet 2) go to
+  the row of `AUD-1-F` (P-20), which already owns `scripts/land-unit.py` and
+  `.github/workflows/contracts.yml`. That row is edited on `main`, not on
+  this branch. Branch protection is the author's decision.
 - `STYLE-G7-N` (P-16) plans a pattern for a literal alpha passed to
   `withAlpha`. The Hematita call passes a token, so that pattern will not
   flag it. That unit edits the same guard file, so it rebases onto this one.
