@@ -57,8 +57,15 @@ second round's scripts made them pass (GREEN).
   and the four cross-plan fixtures failed at `preflight` with
   `the branch must change exactly one active plan; found 2` (one dependency)
   or `found 3` (two dependencies) and no dependency named.
-- **GREEN:** `bash scripts/test-land-unit.sh` ran 70 tests, OK (56 before this
-  unit, 14 new); `sh scripts/test-worktree.sh` printed 9 `ok` lines (8 before,
+- **RED, second review round:** the two new pure tests failed (the missing
+  `merge_other_evidence`; `LIB-B` returned instead of `FX-B`), and
+  `test_stacked_branch_editing_dependency_evidence_stops` failed because the
+  landing kept main's copy and landed.
+- **RED, main's own open rows:** with `FX-P` and `FX-Q` active on main and
+  unchanged on the branch, the landing stopped at `preflight` with
+  `found 3: FX-P, FX-Q, FX-A; origin/main has not closed FX-P, FX-Q`.
+- **GREEN:** `bash scripts/test-land-unit.sh` ran 74 tests, OK (56 before this
+  unit, 18 new); `sh scripts/test-worktree.sh` printed 9 `ok` lines (8 before,
   1 new).
 
 ## Observed facts
@@ -83,8 +90,25 @@ second round's scripts made them pass (GREEN).
   `found 2: FX-A, FX-B; origin/main has not closed FX-A: a stacked branch lands after the unit it is stacked on, so land FX-A first`,
   creates no landing worktree and builds nothing.
 - **Stacked session edited the dependency's evidence**
-  (`test_stacked_branch_keeps_mains_dependency_evidence`). The landing keeps
-  main's copy, warns, and lands; the record is absent from the sealed diff.
+  (`test_stacked_branch_editing_dependency_evidence_stops`). A second review
+  round made this a stop: the landing stops at `rebase` with
+  `<record>: the branch edited another unit's evidence record`, and main
+  keeps its bytes. It takes main's copy only when the branch's copy equals
+  main's without the trailing landing section the seal appended
+  (`test_merge_other_evidence_accepts_only_the_landing_section`, and every
+  stacked landing above).
+- **Main's own open rows** (`test_open_rows_unchanged_from_main_are_not_the_unit`,
+  `test_branch_editing_an_open_row_of_main_stops`). Two `active` rows that
+  main already has and the branch leaves unchanged are not the unit: `FX-A`
+  lands and both rows stay `active`. When the branch also rewords `FX-Q`, the
+  landing stops at `preflight` with `found 2: FX-Q, FX-A; the branch changed
+  FX-Q, which is open on origin/main as well and belongs to its own unit`.
+- **Branch name** (`test_discover_unit_checks_the_branch_name`). A branch
+  `unit/app/FX-B` whose `FX-B` row main closed resolves to `FX-B`, so
+  preflight refuses it as landed, even beside another plan's open `LIB-B`
+  row; a branch named for `FX-C` whose one open row is `FX-B` stops; and a
+  dependency plan that main no longer has under `active/` is named as such,
+  not as an unclosed row.
 - **Foreign plan edit** (`test_stacked_branch_editing_another_row_stops`, and
   the unchanged `test_plan_edited_beyond_own_row_stops`). A stacked branch that
   rewords `FX-C`'s row stops at `rebase` with
@@ -137,9 +161,11 @@ second round's scripts made them pass (GREEN).
   canonical checkout and a push to `origin/main`, which a session does not do.
 - A file of a dependency under another prefix that a later unit changed on
   main differs from main on the stacked branch, so the preflight scope check
-  still refuses it; the author resolves such a stack by hand.
+  still refuses it; the author merges `origin/main` into the stacked branch,
+  as the contract says, and lands again.
 - A dependency whose plan was archived on main after it landed leaves the
-  stacked branch with a plan main lacks, which is not set aside and stops.
+  stacked branch with a plan main lacks, which is not set aside; the
+  preflight stop says the plan is no longer under `active/`.
 
 ## Follow-up
 

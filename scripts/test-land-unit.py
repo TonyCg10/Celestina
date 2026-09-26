@@ -452,6 +452,77 @@ class LandingFunctions(unittest.TestCase):
             )
         self.assertIn("(ledger row X-A)", str(raised.exception))
 
+    def test_merge_other_evidence_accepts_only_the_landing_section(self) -> None:
+        record = "app/docs/evidence/2026-09-25-fx-a.md"
+        session = "# Evidence: FX-A\n\n## Result\n\nThe unit works.\n"
+        section = landing.landing_section("a" * 40, "artifact: app current", None)
+        # The seal's own bytes: the record without trailing newlines, a blank
+        # line, then the section.
+        landed = session.rstrip("\n") + "\n\n" + section
+        self.assertEqual(landing.merge_other_evidence(landed, session, record), landed)
+        self.assertEqual(landing.merge_other_evidence(landed, session + "\n\n", record), landed)
+        for branch in (session + "\nA note of another session.\n", session.replace("works", "worked")):
+            with self.subTest(branch=branch):
+                with self.assertRaises(landing.LandingStop) as raised:
+                    landing.merge_other_evidence(landed, branch, record)
+                self.assertEqual((raised.exception.step, raised.exception.path), ("rebase", record))
+                self.assertIn(
+                    f"{record}: the branch edited another unit's evidence record", str(raised.exception)
+                )
+        # A record main holds without a landing section differs from the branch's.
+        with self.assertRaises(landing.LandingStop):
+            landing.merge_other_evidence(session + "More.\n", session, record)
+
+    def test_discover_unit_checks_the_branch_name(self) -> None:
+        library_plan = "lib/docs/plans/active/2026-09-25-lib.md"
+        own = ledger_row("FX-B", "active", evidence="[evidence](../../evidence/2026-09-25-fx-b.md)")
+        own_landed = ledger_row(
+            "FX-B",
+            "done",
+            files="[inventory](../../inventories/2026-09-25-fixture/FX-B.numstat.tsv)",
+            evidence="[evidence](../../evidence/2026-09-25-fx-b.md)",
+        )
+        library_active = ledger_row(
+            "LIB-B", "active", prefix="`lib:`", evidence="[evidence](../../evidence/lib-b.md)"
+        )
+        library_planned = ledger_row("LIB-B", "planned", prefix="`lib:`")
+        branch = {PLAN: plan_text(own), library_plan: plan_text(library_active)}
+        base = {PLAN: plan_text(ledger_row("FX-B", "planned")), library_plan: plan_text(library_planned)}
+        main = {PLAN: plan_text(own_landed), library_plan: plan_text(library_planned)}
+        changed = {PLAN, library_plan}
+
+        # FX-B closed on main in its plan is the unit even beside an open plan
+        # of another unit, so preflight refuses it as landed.
+        unit = landing.discover_unit(
+            REGISTRY, changed, branch.get, main.get, "FX-B", read_base_plan=base.get
+        )
+        self.assertEqual((unit.unit, unit.plan_path), ("FX-B", PLAN))
+
+        # A branch named for another unit than its one open row stops.
+        with self.assertRaises(landing.LandingStop) as raised:
+            landing.discover_unit(REGISTRY, {PLAN}, {PLAN: plan_text(own)}.get, None, "FX-C")
+        self.assertEqual(raised.exception.step, "preflight")
+        self.assertIn(
+            f"{PLAN}: the branch is named for FX-C, but its open row is FX-B", str(raised.exception)
+        )
+
+        # A dependency plan main archived is named as such, not as unclosed.
+        archived = dict(main, **{PLAN: plan_text(ledger_row("FX-B", "planned"))})
+        del archived[library_plan]
+        with self.assertRaises(landing.LandingStop) as raised:
+            landing.discover_unit(
+                REGISTRY,
+                changed,
+                dict(branch, **{PLAN: plan_text(own)}).get,
+                archived.get,
+                "FX-B",
+                read_base_plan=base.get,
+                stacked_on=lambda _unit: True,
+            )
+        message = str(raised.exception)
+        self.assertIn(f"{library_plan} is no longer under active/ on origin/main", message)
+        self.assertNotIn("has not closed LIB-B", message)
+
     def test_merge_settled_plan_takes_main_or_stops(self) -> None:
         path = "lib/docs/plans/active/2026-09-25-lib.md"
         planned = ledger_row("LIB-A", "planned", prefix="`lib:`")
@@ -2115,6 +2186,50 @@ class LandUnitFixture(unittest.TestCase):
         self.assert_landed(result, before)
         self.assertEqual(len(self.records_of(".builds-ran")), 1)
 
+    def open_rows_already_on_main(self) -> None:
+        """Put two `active` rows of in-flight work of the author on main's plan."""
+
+        def activate(clone: Path) -> None:
+            text = (clone / PLAN).read_text(encoding="utf-8")
+            planned = ledger_row("FX-A", "planned")
+            others = ledger_row("FX-P", "active") + ledger_row("FX-Q", "active")
+            self.write(clone, PLAN, text.replace(planned, others + planned))
+
+        self.advance_main(activate, "app-maintenance: Record the author's in-flight rows")
+
+    def test_open_rows_unchanged_from_main_are_not_the_unit(self) -> None:
+        self.open_rows_already_on_main()
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        plan = self.show_main(PLAN)
+        self.assertIn(ledger_row("FX-P", "active"), plan)
+        self.assertIn(ledger_row("FX-Q", "active"), plan)
+        self.assertIn("| FX-A | `app:` | done | [inventory](", plan)
+
+    def test_branch_editing_an_open_row_of_main_stops(self) -> None:
+        self.open_rows_already_on_main()
+        worktree = self.open_branch("FX-A")
+        plan = (worktree / PLAN).read_text(encoding="utf-8")
+        self.write(worktree, PLAN, plan.replace("Change FX-Q", "Change FX-Q differently"))
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_not_landed(result, before)
+        self.assertIn(
+            f"stopped at preflight: {PLAN} must have exactly one ledger row that is "
+            "`active`, or `done` without an inventory link; found 2: FX-Q, FX-A",
+            result.stderr,
+        )
+        self.assertIn("the branch changed FX-Q, which is open on origin/main", result.stderr)
+        self.assertFalse(self.landing_dir.exists())
+
     def test_plan_edited_beyond_own_row_stops(self) -> None:
         worktree = self.open_branch("FX-A")
         self.write_unit(worktree, "FX-A")
@@ -2230,7 +2345,7 @@ class LandUnitFixture(unittest.TestCase):
         self.assertFalse(self.landing_dir.exists())
         self.assertEqual(self.records_of(".builds-ran"), [])
 
-    def test_stacked_branch_keeps_mains_dependency_evidence(self) -> None:
+    def test_stacked_branch_editing_dependency_evidence_stops(self) -> None:
         stacked = self.stack_units()
         with (stacked / EVIDENCE).open("a", encoding="utf-8") as record:
             record.write("\nA note FX-B's session added.\n")
@@ -2239,15 +2354,14 @@ class LandUnitFixture(unittest.TestCase):
 
         result = self.land("unit/app/FX-B", "--kind", "maintenance")
 
-        head = self.assert_landed(result, before)
+        self.assert_not_landed(result, before)
+        self.assertIn(
+            f"stopped at rebase: {EVIDENCE}: the branch edited another unit's evidence record",
+            result.stderr,
+        )
+        self.assertTrue((self.landing_dir / ".land-state.toml").is_file())
         self.assertEqual(
             self.show_main(EVIDENCE), self.git(self.origin, "show", f"{before}:{EVIDENCE}")
-        )
-        self.assertNotIn(EVIDENCE, self.git(self.origin, "diff", "--name-only", before, head))
-        self.assertIn(
-            f"warning: {EVIDENCE} is another unit's evidence record; the landing keeps "
-            "origin/main's copy",
-            result.stderr,
         )
 
     def test_stacked_branch_editing_another_row_stops(self) -> None:

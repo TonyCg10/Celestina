@@ -107,8 +107,13 @@ For the landing to accept the branch, its diff against `origin/main` must
 change exactly one active plan (a Markdown file other than `README.md` directly
 in an owner's registered `active_plans` directory), and that plan must have
 exactly one ledger row that is `active`, or `done` without an inventory link.
-What a unit that already landed left on the branch does not count, which is
-what lets a [stacked branch](#stacked-branches) land:
+A row whose text equals `origin/main`'s row does not count: it is open on
+`origin/main` as well, such as the author's own in-flight work, and the branch
+did not change it. So the unit's row is the one open row the branch changed
+or added. When the branch also changed a row that is open on `origin/main`,
+`preflight` stops and says that row belongs to its own unit. What a unit that
+already landed left on the branch does not count either, which is what lets
+a [stacked branch](#stacked-branches) land:
 
 - a changed active plan whose text on the branch equals `origin/main`'s or
   the fork point's once the rows `origin/main` settles are masked (see
@@ -118,12 +123,15 @@ what lets a [stacked branch](#stacked-branches) land:
   (`done` with an inventory link) is set aside while another open row
   remains.
 
-The row of the unit the branch is named after (`unit/<project>/<unit>`) is
-never set aside: when `origin/main` closed it, it is the unit, and
-`preflight` then refuses it as landed. When more than one plan or row
-remains, the stop lists them and names the open rows `origin/main` has not
-closed; for each one whose branch `unit/*/<unit>` exists and is an ancestor
-of the landing's branch, it says to land that unit first.
+The row of the unit a branch `unit/<project>/<unit>` is named after is never
+set aside: when `origin/main` closed it, in any changed plan, it is the unit,
+and `preflight` then refuses it as landed. The unit found must be the one
+the branch is named after, or `preflight` stops naming both. When more than
+one plan or row remains, the stop lists them and names the open rows
+`origin/main` has not closed; for each one whose branch `unit/*/<unit>`
+exists and is an ancestor of the landing's branch, it says to land that unit
+first. A remaining plan that the fork point had and `origin/main` no longer
+has under `active/` is named as such instead.
 
 That row's `Commit prefix` must be the plan owner's registered prefix, its
 `Intended change` is the subject's imperative text unless `--summary` replaces
@@ -370,16 +378,20 @@ function in `scripts/landing.py`:
   conflict, a Markdown file directly in an owner's `docs/evidence/` other than
   its `README.md` and other than this unit's evidence record, and an
   inventory at `<owner docs>/inventories/<plan-slug>/` other than this
-  unit's, take `main`'s copy, and the tool warns:
+  unit's, are another unit's records; `other_unit_record` decides which
+  paths these are. An inventory takes `main`'s copy. An evidence record takes
+  `main`'s copy only when `merge_other_evidence` finds that the branch's copy,
+  without trailing newlines, equals `main`'s without its trailing
+  `\n\n## Landing` section, which is exactly what the seal appended; any
+  other difference means the branch edited another unit's evidence, and the
+  landing stops at `rebase` naming the file. The tool says:
 
   ```text
-  land-unit: warning: <path> is another unit's evidence record; the landing keeps origin/main's copy
+  land-unit: <path> is another unit's evidence record; the landing keeps origin/main's copy, which adds only its landing section
   land-unit: warning: <path> is another unit's inventory; the landing keeps origin/main's copy
   ```
 
-  `other_unit_record` decides which paths these are. The branch's edits to
-  such a file are dropped, since `main`'s copy is the landed record. A
-  modify/modify conflict on another unit's record, which the fork point
+  A modify/modify conflict on another unit's record, which the fork point
   already had, is an edit of an older record and stops like any other file.
 
 A hot file deleted on one side stops the landing, and so does another unit's
@@ -417,8 +429,9 @@ unit.
 Units land in dependency order. While a dependency has not landed, the
 stacked branch carries its open row: in the unit's plan, that plan has two
 open rows; in another plan, the branch changes two plans that are not set
-aside. Either way `preflight` stops, names the dependency's row and says to
-land it first. The dependency lands as one sealed commit, and its branch is
+aside. Either way `preflight` stops and names the dependency's row; it says
+to land that unit first only when a branch `unit/<project>/<dependency>`
+exists and is an ancestor of the stacked branch. The dependency lands as one sealed commit, and its branch is
 never rewritten, so the stacked branch keeps its commits. The stacked unit
 then lands with the ordinary command, and the tool accepts what the
 dependency's landing left on both sides:
@@ -428,7 +441,9 @@ dependency's landing left on both sides:
   another plan, that plan is set aside, the scope check leaves it out, and
   `merge_settled_plan` keeps `main`'s copy;
 - the dependency's evidence record exists on both sides, and `main`'s copy,
-  with its `## Landing` section, is kept; the scope check leaves it out;
+  with its `## Landing` section, is kept when the branch's copy is the one
+  the dependency's session left; an edit the stacked session made to it
+  stops the landing; the scope check leaves the record out;
 - the dependency's change exists on both sides, and Git's three-way merge
   resolves every hunk that is identical on both sides; a path whose bytes
   equal `main`'s is left out of the scope check;
@@ -443,7 +458,8 @@ a line the dependency changed conflicts as an ordinary file and stops the
 landing for the author to resolve. A file of the dependency that another
 unit changed on `main` after the dependency landed differs from `main` on
 the branch, so under another prefix it stops the scope check at
-`preflight`.
+`preflight`; merge `origin/main` into the stacked branch in its session
+worktree, keeping `main`'s side of the dependency's files, then land again.
 
 ## Stops and resumption
 

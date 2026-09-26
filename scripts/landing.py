@@ -268,10 +268,12 @@ def discover_unit(
     which revisions are read. A changed plan that `plan_settled` finds holds
     nothing main lacks belongs to units that already landed, such as the
     dependencies of a stacked branch, and is set aside while another plan
-    remains. In the unit's plan, a row open on the branch that main closed is
-    set aside the same way, except the row of `branch_unit`, the unit the
-    branch is named after: when main closed it, it is the unit, which
-    preflight then refuses as landed. A stop that lists open rows main has not
+    remains. In the unit's plan, a row whose line equals main's is not the
+    branch's (main's own open rows, such as the author's in-flight work), and
+    a row open on the branch that main closed is set aside the same way, except the row of `branch_unit`, the unit the
+    branch is named after: when main closed it, in any plan, it is the unit,
+    which preflight then refuses as landed, and the unit found must be it.
+    A stop that lists open rows main has not
     closed names them; `stacked_on(unit)` says whether the branch is stacked on
     that unit's branch, which words the stop as a landing order.
     """
@@ -289,34 +291,52 @@ def discover_unit(
         if text is None:
             raise LandingStop("preflight", f"the branch deletes its plan {path}", path)
         texts[path] = text
+    own_plans = [
+        (path, owner)
+        for path, owner in plans
+        if branch_unit is not None
+        and branch_unit in open_units(texts[path], path, read_main(path))
+    ]
+    # The unit's own row closed on main: preflight refuses it as landed, even
+    # beside another plan that is open.
+    landed_own = [
+        (path, owner)
+        for path, owner in own_plans
+        if branch_unit in closed_units(read_main(path), path)
+    ]
     unsettled = [
         (path, owner)
         for path, owner in plans
         if not plan_settled(read_base(path), read_main(path), texts[path])
     ]
-    own_plans = [
-        (path, owner)
-        for path, owner in plans
-        if branch_unit is not None and branch_unit in open_units(texts[path], path)
-    ]
-    chosen = unsettled or own_plans or plans
+    chosen = landed_own or unsettled or own_plans or plans
     if len(chosen) != 1:
         listed = ", ".join(path for path, _owner in chosen) or "none"
+        # A plan main lacks while the fork point had it was archived on main.
+        archived = [
+            path
+            for path, _owner in chosen
+            if read_main(path) is None and read_base(path) is not None
+        ]
         pending = [
             unit
             for path, _owner in chosen
-            for unit in open_units(texts[path], path) - closed_units(read_main(path), path)
+            if path not in archived
+            for unit in open_units(texts[path], path, read_main(path))
+            - closed_units(read_main(path), path)
             if unit != branch_unit
         ]
         raise LandingStop(
             "preflight",
             f"the branch must change exactly one active plan; found {len(chosen)}: {listed}"
+            + "".join(f"; {path} is no longer under active/ on origin/main" for path in archived)
             + dependency_hint(sorted(pending), stacked_on),
         )
     plan_path, owner = chosen[0]
     table = ledger_table(texts[plan_path], plan_path, "preflight")
-    open_rows = [cells for cells in map(table.cells, table.rows) if is_open_row(cells)]
-    landed = closed_units(read_main(plan_path), plan_path)
+    main_text = read_main(plan_path)
+    open_rows = changed_open_rows(table, main_text, plan_path)
+    landed = closed_units(main_text, plan_path)
     own = [cells for cells in open_rows if row_unit(cells) == branch_unit]
     if own and branch_unit in landed:
         candidates = own
@@ -324,17 +344,36 @@ def discover_unit(
         candidates = [cells for cells in open_rows if row_unit(cells) not in landed] or open_rows
     if len(candidates) != 1:
         units = [row_unit(cells) for cells in candidates]
-        pending = [unit for unit in units if unit != branch_unit and unit not in landed]
+        # A row open on main as well is another unit's in-flight row, which
+        # the branch changed; it is no dependency waiting to land.
+        main_open = set() if main_text is None else open_units(main_text, plan_path)
+        edited = [unit for unit in units if unit != branch_unit and unit in main_open]
+        pending = [
+            unit
+            for unit in units
+            if unit != branch_unit and unit not in landed and unit not in edited
+        ]
         raise LandingStop(
             "preflight",
             f"{plan_path} must have exactly one ledger row that is {OPEN_ROW_RULE}; "
             f"found {len(units)}"
             + (f": {', '.join(units)}" if units else "")
+            + "".join(
+                f"; the branch changed {unit}, which is open on origin/main as well and "
+                "belongs to its own unit"
+                for unit in edited
+            )
             + dependency_hint(pending, stacked_on),
             plan_path,
         )
     cells = candidates[0]
     unit = row_unit(cells)
+    if branch_unit is not None and unit != branch_unit:
+        raise LandingStop(
+            "preflight",
+            f"{plan_path}: the branch is named for {branch_unit}, but its open row is {unit}",
+            plan_path,
+        )
     raw_prefix = cells["commit prefix"].strip().strip("`").strip()
     prefix = raw_prefix[:-1] if raw_prefix.endswith(":") else ""
     if prefix not in build_commit_scopes(dict(registry)):
@@ -368,10 +407,28 @@ def discover_unit(
     )
 
 
-def open_units(text: str, label: str) -> set[str]:
-    """The units whose ledger row in `text` is open."""
+def changed_open_rows(table: LedgerTable, main_text: str | None, label: str) -> list[dict[str, str]]:
+    """The open rows of `table` that the branch changed or added.
+
+    A row whose line equals origin/main's (`main_text`) is open there as well,
+    such as the author's in-flight work, and is not the branch's.
+    """
+    main_lines: set[str] = set()
+    if main_text is not None:
+        main = ledger_table(main_text, f"origin/main's {label}", "preflight")
+        main_lines = {main.lines[index].rstrip("\r\n") for index in main.rows}
+    return [
+        table.cells(index)
+        for index in table.rows
+        if is_open_row(table.cells(index))
+        and table.lines[index].rstrip("\r\n") not in main_lines
+    ]
+
+
+def open_units(text: str, label: str, main_text: str | None = None) -> set[str]:
+    """The units whose ledger row in `text` is open, less those equal to `main_text`'s."""
     table = ledger_table(text, label, "preflight")
-    return {row_unit(cells) for cells in map(table.cells, table.rows) if is_open_row(cells)}
+    return {row_unit(cells) for cells in changed_open_rows(table, main_text, label)}
 
 
 def closed_units(text: str | None, label: str) -> set[str]:
@@ -648,6 +705,28 @@ def plan_settled(base_text: str | None, main_text: str | None, branch_text: str)
     mine = masked_texts(branch, settled)
     return mine == masked_texts(main, settled) or (
         base is not None and mine == masked_texts(base, settled)
+    )
+
+
+def merge_other_evidence(main_text: str, branch_text: str, path: str) -> str:
+    """Main's copy of another unit's evidence record, when the branch's adds nothing to it.
+
+    The seal writes a record as its text without trailing newlines, a blank
+    line, then the `## Landing` section, so the branch's copy adds nothing
+    when it equals main's without that section. Any other difference is an
+    edit of another unit's record, which the landing does not drop.
+    """
+    marker = "\n\n## Landing\n"
+    cut = main_text.rfind(marker)
+    if cut >= 0 and branch_text.rstrip("\n") == main_text[:cut]:
+        return main_text
+    raise LandingStop(
+        "rebase",
+        f"{path}: the branch edited another unit's evidence record beyond what origin/main "
+        f"has, so the landing cannot merge it: drop the edit on the branch, or resolve {path} "
+        "in the landing worktree, `git add` it, run `git rebase --continue` there, then "
+        "land-unit.py --continue",
+        path,
     )
 
 

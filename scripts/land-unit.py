@@ -48,6 +48,7 @@ from landing import (
     lockfile_upgrades,
     is_active_plan,
     merge_plan,
+    merge_other_evidence,
     merge_ratchet,
     merge_settled_plan,
     numstat_rows,
@@ -298,14 +299,16 @@ def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
 
         return read_plan
 
-    # worktree.sh names a unit's branch unit/<project>/<unit>; the name only
-    # tells the unit from its dependencies in the stop that lists both.
+    # worktree.sh names a unit's branch unit/<project>/<unit>; such a branch
+    # must carry that unit, which tells it from the dependencies it carries.
+    parts = branch.split("/")
+    branch_unit = parts[2] if len(parts) == 3 and parts[0] == "unit" else None
     return discover_unit(
         ctx.registry,
         changed,
         reader(branch),
         reader(main),
-        posixpath.basename(branch),
+        branch_unit,
         read_base_plan=reader(fork),
         stacked_on=lambda unit: stacked_on(ctx, unit),
     )
@@ -525,9 +528,16 @@ def hot_merge(ctx: LandContext, path: str) -> bytes | None:
     base, main, branch = stage(1), stage(2), stage(3)
     own = {unit.evidence_path or "", unit_inventory(ctx)}
     record = other_unit_record(ctx.registry, path, own, base is None)
-    if record is not None and main is not None and branch is not None:
+    if record == "evidence record" and main is not None and branch is not None:
         # A branch stacked on a landed unit carries that unit's record as its
-        # session left it; main's copy is the landed one.
+        # session left it; main's copy adds only the landing section.
+        merged = merge_other_evidence(text_of(main, path), text_of(branch, path), path)
+        say(
+            f"{path} is another unit's evidence record; the landing keeps origin/main's "
+            "copy, which adds only its landing section"
+        )
+        return merged.encode()
+    if record is not None and main is not None and branch is not None:
         say(f"warning: {path} is another unit's {record}; the landing keeps origin/main's copy")
         return main
     ratchets = ctx.registry.get("commit_policy", {}).get("shared_ratchet_files", [])

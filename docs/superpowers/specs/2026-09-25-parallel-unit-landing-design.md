@@ -409,7 +409,10 @@ The review of the whole implementation changed four rules above, and on
   the row is the unit's own; the plan merge masks a row equal to `main`'s and
   an open row `main` closed with the session's cells unchanged; another
   active plan holding only settled rows takes `main`'s text; and the
-  preflight scope check leaves out paths whose bytes equal `main`'s. In an
-  add/add conflict, another unit's evidence record or inventory takes
-  `main`'s copy. A dependency that has not landed stops the preflight, which
-  names it.
+  preflight scope check leaves out three kinds of path: those whose bytes
+  equal `main`'s, the plans set aside as settled, and another unit's
+  evidence record or inventory that the fork point lacks and `main` has. In
+  an add/add conflict, another unit's inventory takes `main`'s copy, and
+  another unit's evidence record takes it only when the branch's copy equals
+  `main`'s without its landing section; otherwise the landing stops. A
+  dependency that has not landed stops the preflight, which names it.
