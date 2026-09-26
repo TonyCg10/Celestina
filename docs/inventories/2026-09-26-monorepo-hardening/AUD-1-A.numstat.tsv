@@ -1,0 +1,33 @@
+# AUD-1-A exact change inventory
+
+Base revision	9d022dd5d2f4935550194d10a5131b91ef184889
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-fluorita.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-magnetita.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-shared-crates.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-shell-style.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-siderita.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-tooling.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-A.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+32	2	f5431df3adada39a26ce494682e6ddb719d736f3d9970ccc5e3bea60173a2502	ROADMAP.md
+18	6	835eec2ffa3ddfd3abff3680e8c1aacf3001793e48d0c1aee7b65784d3754530	STATUS.md
+395	0	dfca9efbb1ec7bf3ca521a3127c715a3f42782cea8b40265c8bb7c7c93ad1e11	docs/evidence/2026-09-26-monorepo-audit-fluorita.md
+448	0	fb283ad309392b5c1d27df72ae945dcd0e067018cf242ab4886ecdc283d4f681	docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md
+529	0	19917fb6a26e306cb4c83ffd98c83608c257ed1901c2d2177a9765d6c3230af7	docs/evidence/2026-09-26-monorepo-audit-magnetita.md
+336	0	915bb7c9014a430da1508eca5a1db053cd8c2c596f6cbb26d93b5ed5524e3c29	docs/evidence/2026-09-26-monorepo-audit-shared-crates.md
+503	0	e4b5346108c49adfb8543a5d55985eeb900a727965debc1130873a4b9733f58c	docs/evidence/2026-09-26-monorepo-audit-shell-style.md
+535	0	98fc4db9a3b810189e1b962fd351b08f88424cff28bd1165b9acef50ed172489	docs/evidence/2026-09-26-monorepo-audit-siderita.md
+611	0	b7698a3c3baa7acabe86ac5d17b61bfb7ee160c5636394db1d257d436d4c2cbc	docs/evidence/2026-09-26-monorepo-audit-tooling.md
+348	0	1d292a1d022295361324a0aac953be04b804cffef0cdf8f16e75082c33a54d4a	docs/evidence/2026-09-26-monorepo-audit.md
+33	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-A.numstat.tsv
+125	0	abe01e9af8430cc4c51677e130668f184f5be2319a47d2dc7fa5de42e3c17f87	docs/plans/active/2026-09-26-monorepo-hardening.md
+2	1	2dcc7df2d5c660c71112ca82970e482d3c480b0e653ef882e506aee3efa14a25	docs/plans/active/README.md

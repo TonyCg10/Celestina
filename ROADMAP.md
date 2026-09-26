@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** AUD-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -155,6 +155,36 @@ move; no guard changes.
 
 The build order, exclusions and ledger are in
 [the archived plan](docs/plans/archive/2026-09-25-seal-at-landing.md).
+
+## AUD-1 — Monorepo hardening
+
+**Hypothesis:** restoring the pipeline's enforcement first (green CI,
+fingerprints that cover every crate an app links, and a landing that accepts
+stacked branches) lets each of the 2026-09-26 audit's delivery units land as
+one single-prefix commit with a trustworthy guard chain, and no project needs
+a second active checkpoint to carry its share.
+
+**Tangible outcome:** the audit's 184 findings are durable evidence, and every
+scheduled finding has a ledger row in exactly one plan. When the suite rows
+close, GitHub `contracts` is green on `main`, a fix to any linked crate stales
+and rebuilds every app that links it, the Magnetita protocol has one owner on
+both ends, and the hooks judge the index with committed rules.
+
+- [ ] Record the audit as evidence and open the hardening plans (`AUD-1-A`).
+- [ ] Restore green CI and cover Hematita with the style guard (`AUD-1-B`,
+      P-1).
+- [ ] Let the landing accept a stacked branch (`AUD-1-C`, P-0b).
+- [ ] Derive production inputs from Cargo and declare Magnetita Android's
+      inputs (`AUD-1-D`, P-2).
+- [ ] Give the Magnetita protocol rules one owner and negotiate capabilities
+      on both ends (`AUD-1-E`, P-13).
+- [ ] Make the hooks and the landing trustworthy and fast, and correct the
+      governance documents (`AUD-1-F`, P-20).
+
+The project units of the same program are rows of each project's own plan;
+the build order, exclusions and ledger are in
+[the active plan](docs/plans/active/2026-09-26-monorepo-hardening.md), and the
+findings in [the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md).
 
 ## Project implementation fronts
 

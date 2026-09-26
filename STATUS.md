@@ -1,9 +1,10 @@
 # Suite status
 
 - **Updated:** 2026-09-26
-- **Current focus:** no suite checkpoint is active; the next suite work starts
-  from an accepted decision, and all project work follows each local roadmap
-- **Implementation checkpoint:** none
+- **Current focus:** AUD-1, the monorepo hardening program that follows the
+  2026-09-26 audit; project units of the same program follow each local
+  roadmap
+- **Implementation checkpoint:** AUD-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -35,9 +36,20 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
-No suite checkpoint is active. New cross-project work starts only when an
-accepted decision promotes it, as the root roadmap's later suite-level section
-requires.
+AUD-1 carries the program of the 2026-09-26 monorepo audit: 184 findings
+after de-duplication, 6 Critical, 78 Important and 100 Minor. The pure Rust
+layer is strong; the problems sit at the edges: hostile input from files and
+the network, the "never lose the source" promise, blocking IO on the Qt
+thread, and a delivery pipeline whose CI has been red since 2026-09-25. The
+suite plan carries the pipeline and cross-suite rows (`AUD-1-A` to
+`AUD-1-F`); each affected project carries its own rows, in a new hardening
+plan (Siderita, Hematita, Grafita, Fluorita, the Rust workspace) or as new
+rows of its active plan (Celestina, CelestinaStyle, Magnetita, Magnetita
+Android). Only documentation-only suite units land from a container without
+Qt, libmpv or the Android SDK; every other unit is prepared on its own branch
+and landed by the author in program order. The findings and rulings are in
+[the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md) and the
+ledger in [the active plan](docs/plans/active/2026-09-26-monorepo-hardening.md).
 
 ## Completed cross-project work
 

@@ -1,7 +1,8 @@
 # Active suite plans
 
 Suite-level plans appear here only while the root roadmap names the same active
-implementation checkpoint. No suite plan is active: LND-1 closed on
+implementation checkpoint. The active suite plan is
+[AUD-1 — Monorepo hardening](2026-09-26-monorepo-hardening.md). LND-1 closed on
 2026-09-26, PRD-1 on 2026-09-25 and LNG-1 on 2026-08-05, and all three moved
 to [`../archive/`](../archive/).
 
