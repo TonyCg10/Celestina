@@ -6,6 +6,38 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/../.." && pwd)
 cd "$repo_root"
 
+# The QML roots come from docs/projects.toml, never from a list written here:
+# a hand-written list cannot notice a newly registered application, and a guard
+# that inspects nothing prints OK. The architecture guard reads the same
+# registry through the same scanner, and honours the same override.
+readonly registry_file="${ARCHITECTURE_REGISTRY_FILE:-$repo_root/docs/projects.toml}"
+readonly scanner=scripts/architecture_scanners.py
+qml_roots=()
+style_root=''
+
+if ! registry_rows=$(python3 "$scanner" registry-qml-projects "$registry_file"); then
+    echo "Could not derive the QML roots from $registry_file." >&2
+    exit 1
+fi
+while IFS=$'\t' read -r role _identifier _path qml_root; do
+    case $role in
+        application | shell) qml_roots+=("$qml_root") ;;
+        style) style_root=$qml_root ;;
+    esac
+done <<< "$registry_rows"
+
+if ((${#qml_roots[@]} == 0)) || [[ -z $style_root ]]; then
+    echo "$registry_file declares no QML application or no shared style." >&2
+    exit 1
+fi
+for root in "${qml_roots[@]}" "$style_root"; do
+    if [[ ! -d $root ]]; then
+        echo "The registered QML root $root does not exist." >&2
+        exit 1
+    fi
+done
+readonly theme_file="$style_root/CelestinaTheme.qml"
+
 contract_manifest=''
 if ! contract_manifest=$(mktemp); then
     echo "Could not create the temporary QML contract manifest." >&2
@@ -13,10 +45,10 @@ if ! contract_manifest=$(mktemp); then
 fi
 trap 'rm -f -- "$contract_manifest"' EXIT
 
-if ! find siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style \
+if ! find "${qml_roots[@]}" "$style_root" \
     -path '*/build' -prune -o \
     -type f -name '*.qml' \
-    ! -path 'celestina-style/CelestinaTheme.qml' \
+    ! -path "$theme_file" \
     -print0 > "$contract_manifest"; then
     echo "Could not enumerate the complete QML tree." >&2
     exit 1
@@ -34,9 +66,8 @@ fi
 
 failures=0
 
-if structural_hits=$(python3 scripts/architecture_scanners.py qml-style-contract \
-    celestina-style/CelestinaTheme.qml \
-    siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml celestina-style); then
+if structural_hits=$(python3 "$scanner" qml-style-contract \
+    "$theme_file" "${qml_roots[@]}" "$style_root"); then
     if [[ -n $structural_hits ]]; then
         printf '%s\n' "$structural_hits"
         printf 'ERROR: the structural scanner found direct visual values.\n\n' >&2
@@ -47,8 +78,8 @@ else
     failures=1
 fi
 
-if copy_hits=$(python3 scripts/architecture_scanners.py style-copies \
-    celestina-style siderita/qml magnetita/qml grafita/qml fluorita/qml celestina/qml); then
+if copy_hits=$(python3 "$scanner" style-copies \
+    "$style_root" "${qml_roots[@]}"); then
     if [[ -n $copy_hits ]]; then
         printf '%s\n' "$copy_hits"
         printf 'ERROR: a renamed copy bypasses the celestina-style links.\n\n' >&2

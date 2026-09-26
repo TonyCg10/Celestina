@@ -184,10 +184,10 @@ elif [[ $output != *"gtk4"* || $output != *"iced"* || $output != *"slint"* \
     fail "a UI/compositor family was not detected"
 fi
 
-# Guard coverage: both guards enumerate projects by name, so a new QML project
-# could be omitted from one list and still "pass" without ever being inspected.
-# This does not test a scanner; it tests that scanners receive everything that
-# exists.
+# Guard coverage: both guards derive their QML roots from docs/projects.toml,
+# because a project omitted from a hand-written list "passes" without ever being
+# inspected. This does not test a scanner; it tests that scanners receive every
+# registered project.
 repo_root=$(cd -- "$script_dir/.." && pwd)
 architecture_guard="$script_dir/check-architecture-contract.sh"
 style_guard="$repo_root/celestina-style/scripts/check-style-contract.sh"
@@ -318,31 +318,30 @@ elif [[ $output != *"baseline row removed without a changed source and canonical
     fail "the removed baseline row failed without the source-presence diagnostic"
 fi
 
-# The style guard still enumerates QML roots by hand, so keep checking that its
-# lists mention every project that has one. `siderita/qml` appears in each of
-# its input lists and therefore serves as the template.
-for candidate in "$repo_root"/*/; do
-    project=$(basename -- "$candidate")
-    [[ $project == celestina-style ]] && continue
-    [[ -d $candidate/qml ]] || continue
-
-    while IFS= read -r line; do
-        if [[ $line != *"$project/qml"* ]]; then
-            fail "$(basename -- "$style_guard"): an input list omits $project/qml -> $line"
-        fi
-    done < <(grep -F 'siderita/qml' "$style_guard")
-done
-
-# The architecture guard must not enumerate projects by hand at all: a
-# hand-written list is exactly how a registered project gets skipped in
-# silence.
+# Neither guard may enumerate projects by hand: a hand-written list is exactly
+# how a registered project gets skipped in silence. The style guard once did,
+# and Hematita's QML went uninspected until the list was noticed.
 while IFS= read -r registered_id; do
-    if grep -qE "(for app in|--style-root|scanners?\.py [a-z-]+ ).*\b$registered_id\b" \
-        "$architecture_guard"; then
-        fail "architecture guard: hard-codes the registered project '$registered_id'"
-    fi
+    for guard in "$architecture_guard" "$style_guard"; do
+        if grep -qE "(for app in|--style-root|scanners?\.py [a-z-]+ |find ).*\b$registered_id\b" \
+            "$guard"; then
+            fail "$(basename -- "$guard"): hard-codes the registered project '$registered_id'"
+        fi
+    done
 done < <(python3 "$scanner" registry-qml-projects "$repo_root/docs/projects.toml" \
     | cut -f2)
+
+# Every QML root that exists on disk belongs to a registered project, so the
+# registry, not the directory listing, is the complete input of both guards.
+registered_qml_roots=$(python3 "$scanner" registry-qml-projects \
+    "$repo_root/docs/projects.toml" | cut -f4)
+for candidate in "$repo_root"/*/qml/; do
+    [[ -d $candidate ]] || continue
+    project=$(basename -- "$(dirname -- "$candidate")")
+    if ! grep -qxF "$project/qml" <<< "$registered_qml_roots"; then
+        fail "$project/qml exists but no registered project owns it, so no guard inspects it"
+    fi
+done
 
 # The derived list must contain every registered project that owns QML, read
 # independently from the registry rather than from the scanner's own answer.
@@ -421,6 +420,15 @@ if output=$(ARCHITECTURE_REGISTRY_FILE="$registry_fixture" \
     fail "a registered application that does not exist on disk was not inspected"
 elif [[ $output != *"sextita"* ]]; then
     fail "the guard failed without naming the unregistered-on-disk project"
+fi
+
+# The style guard reads the same registry and must fail closed on the same
+# project instead of scanning the roots it already knew.
+if output=$(ARCHITECTURE_REGISTRY_FILE="$registry_fixture" \
+    bash "$style_guard" 2>&1); then
+    fail "the style guard did not inspect a registered application"
+elif [[ $output != *"sextita/qml"* ]]; then
+    fail "the style guard failed without naming the registered QML root it lacks"
 fi
 
 if ((failures)); then

@@ -49,3 +49,6 @@ jobs:
           bash scripts/test-worktree.sh
           bash scripts/test-land-unit.sh
           bash scripts/test-qmllint-target.sh
+          python3 scripts/test-language-contract.py
+          sh scripts/test-production-artifacts.sh
+          sh scripts/test-production-common.sh

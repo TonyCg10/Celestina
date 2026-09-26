@@ -58,7 +58,7 @@ Row {
                 font.family: CelestinaTheme.sansFamily
                 font.pixelSize: CelestinaTheme.fontRowSecondary
                 font.weight: crumb.index === crumbs.names.length - 1
-                             ? CelestinaTheme.weightDemiBold : Font.Normal
+                             ? CelestinaTheme.weightDemiBold : CelestinaTheme.weightRegular
                 onClicked: crumbs.chosen(crumb.index)
             }
         }

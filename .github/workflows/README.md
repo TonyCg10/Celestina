@@ -28,6 +28,8 @@ legacy language debt from growing.
 
 Commit-scope tests validate prefixes and staged-unit inventory unions. Local
 hooks are repeated in CI because `core.hooksPath` does not travel with Git.
+The same step runs the hermetic fixtures of the language guard and of the
+shared production-artifact helpers, which no hook runs.
 The version contract checks registered Cargo/CMake declarations, mirrors,
 append-only history fixtures and exact typed-commit SemVer transitions.
 
