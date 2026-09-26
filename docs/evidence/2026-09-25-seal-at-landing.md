@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-25
 - **Scope:** `LND-1-A` of the
-  [seal-at-landing plan](../plans/active/2026-09-25-seal-at-landing.md):
+  [seal-at-landing plan](../plans/archive/2026-09-25-seal-at-landing.md):
   `scripts/worktree.sh`, `scripts/test-worktree.sh`, the session-worktree
   refusal in `scripts/production_artifact.py` (`WORKTREE_MARKER`,
   `session_worktree_marker`, `main`) and its tests in

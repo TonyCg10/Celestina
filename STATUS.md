@@ -1,9 +1,9 @@
 # Suite status
 
-- **Updated:** 2026-09-25
-- **Current focus:** LND-1, landing units prepared in parallel sessions; all
-  other project work follows each local roadmap
-- **Implementation checkpoint:** LND-1
+- **Updated:** 2026-09-26
+- **Current focus:** no suite checkpoint is active; the next suite work starts
+  from an accepted decision, and all project work follows each local roadmap
+- **Implementation checkpoint:** none
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -35,13 +35,17 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
+No suite checkpoint is active. New cross-project work starts only when an
+accepted decision promotes it, as the root roadmap's later suite-level section
+requires.
+
+## Completed cross-project work
+
 LND-1 moves the closure of a unit (inventory, ledger closure, version bump and
 production build) from the session to a landing step that runs on the current
 `main`, so sessions prepared in parallel worktrees no longer wait for each other
 or reseal by hand. The build order, exclusions and ledger are in
-[the active plan](docs/plans/active/2026-09-25-seal-at-landing.md).
-
-## Completed cross-project work
+[the archived plan](docs/plans/archive/2026-09-25-seal-at-landing.md).
 
 LNG-1 makes product copy Spanish and leaves development truth English. The
 standard listed "canonical UI copy" among the things English governs, and that

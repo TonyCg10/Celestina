@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-09-25
 - **Plan ID:** seal-at-landing
-- **Status:** active
+- **Closed:** 2026-09-26
+- **Successor:** none; the author named no next suite checkpoint. Units LND-1-A..E landed in 9f15c6f, 2162080, 52050c0, eced4f9 and a6e89ac
+- **Status:** done
 - **Scope:** suite
 - **Implementation checkpoint:** LND-1
 - **Author-validation checkpoint:** none
@@ -80,6 +82,7 @@ product behaviour.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| LND-1-F | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-F.numstat.tsv) | 12 files, +196/-117 | Archive the delivered seal-at-landing plan through its own administrative unit and reconcile the suite roadmap, status and plan indexes | [evidence](../../evidence/2026-09-26-seal-at-landing-archive.md) | None |
 | LND-1-A | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-A.numstat.tsv) | 7 files, +510/-0 | Add the session worktree entry with its shared Cargo cache and refuse production runs inside a session worktree | [evidence](../../evidence/2026-09-25-seal-at-landing.md) | None |
 | LND-1-B | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-B.numstat.tsv) | 9 files, +3102/-4 | Add the landing tool that rebases, merges the hot files, bumps, builds only when the artifact is stale, seals, guards, commits and pushes one unit | [evidence](../../evidence/2026-09-25-seal-at-landing-tool.md) | None |
 | LND-1-C | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-C.numstat.tsv) | 12 files, +520/-23 | Record the decision and move closure from hand-computed inventories to the landing | [evidence](../../evidence/2026-09-25-seal-at-landing-documents.md) | None |

@@ -1,0 +1,31 @@
+# LND-1-F exact change inventory
+
+Base revision	a6e89ac605ef1777dcf8f5d2275c07f61475fc8f
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-documents.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-parked.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-review.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-tool.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing.md
+Pathspec	docs/evidence/2026-09-26-seal-at-landing-archive.md
+Pathspec	docs/inventories/2026-09-25-seal-at-landing/LND-1-F.numstat.tsv
+Pathspec	docs/plans/active/2026-09-25-seal-at-landing.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-09-25-seal-at-landing.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	6	ba36716f6feacb4243059d6eb2a51d5080f91e5ea51493d297d389337f18f267	ROADMAP.md
+11	7	a6771155d72cec7f64fdabab869913e5e280d0ce5b16875caf146948c53c4301	STATUS.md
+1	1	f362245c40ee35de4d755e0b9fa17b0efa5ec3ee2550c2be2f627e8818201131	docs/evidence/2026-09-25-seal-at-landing-documents.md
+1	1	a732ebe50d738e34c755cc8d364ed934f2b72892e97174cc123c73a9a8e54c11	docs/evidence/2026-09-25-seal-at-landing-parked.md
+1	1	a2cc42cd7431d3444fda736e68c65cf1d97c08889ee29df5cec8da3e567dddee	docs/evidence/2026-09-25-seal-at-landing-review.md
+1	1	2dad368211189c588ad70e61297a65a7b9d2454f9b6e94d4759e72351f9d9dcc	docs/evidence/2026-09-25-seal-at-landing-tool.md
+1	1	2419c6ebccf52b10e2c342fbd09e6aea5803051fe34027f1aee2aa122f4aa9d6	docs/evidence/2026-09-25-seal-at-landing.md
+42	0	f862d9502b4bb9bfe6c9e1a4abdfe509a1140ffe380eed9f8303c699d4a9348d	docs/evidence/2026-09-26-seal-at-landing-archive.md
+31	0	self	docs/inventories/2026-09-25-seal-at-landing/LND-1-F.numstat.tsv
+0	95	deleted	docs/plans/active/2026-09-25-seal-at-landing.md
+3	4	d4e139037ab58fcc8dc6c3e7f22db8dda111c54d47b4d7b97ae8ab63ad443e82	docs/plans/active/README.md
+98	0	003c07cc9acd30731554e344f8a2cbfb7b76c9a295d2b43c7c85ea1c47ed319a	docs/plans/archive/2026-09-25-seal-at-landing.md

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-25
 - **Scope:** `LND-1-B` of the
-  [seal-at-landing plan](../plans/active/2026-09-25-seal-at-landing.md):
+  [seal-at-landing plan](../plans/archive/2026-09-25-seal-at-landing.md):
   `scripts/landing.py`, `scripts/land-unit.py`, `scripts/test-land-unit.py`,
   `scripts/test-land-unit.sh`, the `Commit scope` step of
   `.github/workflows/contracts.yml`, and

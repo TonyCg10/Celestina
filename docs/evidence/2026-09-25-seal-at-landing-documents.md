@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-25
 - **Scope:** `LND-1-C` of the
-  [seal-at-landing plan](../plans/active/2026-09-25-seal-at-landing.md):
+  [seal-at-landing plan](../plans/archive/2026-09-25-seal-at-landing.md):
   [ADR 0011](../decisions/0011-seal-at-landing.md) and its index row,
   [the landing contract](../contracts/landing.md) and its entry in
   `suite.shared_rules` of `docs/projects.toml`, and the amendments to

@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** LND-1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -147,14 +147,14 @@ production there; `scripts/land-unit.py` lands one unit from the canonical
 checkout with one build at most, and none when the product's inputs did not
 move; no guard changes.
 
-- [ ] Add the session worktree entry with a shared Cargo cache and refuse
+- [x] Add the session worktree entry with a shared Cargo cache and refuse
       production runs inside a session worktree.
-- [ ] Add the landing tool with its fixture tests and CI step.
-- [ ] Record the decision and move closure from hand-computed inventories to
+- [x] Add the landing tool with its fixture tests and CI step.
+- [x] Record the decision and move closure from hand-computed inventories to
       the landing.
 
 The build order, exclusions and ledger are in
-[the active plan](docs/plans/active/2026-09-25-seal-at-landing.md).
+[the archived plan](docs/plans/archive/2026-09-25-seal-at-landing.md).
 
 ## Project implementation fronts
 

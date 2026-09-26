@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `LND-1-D` of the
-  [seal-at-landing plan](../plans/active/2026-09-25-seal-at-landing.md):
+  [seal-at-landing plan](../plans/archive/2026-09-25-seal-at-landing.md):
   `scripts/landing.py`, `scripts/land-unit.py`, `scripts/test-land-unit.py`,
   `scripts/worktree.sh`, `scripts/test-worktree.sh`, one comment in
   `scripts/production_artifact.py`, the
