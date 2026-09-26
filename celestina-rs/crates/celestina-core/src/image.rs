@@ -1,10 +1,12 @@
 //! What counts as an image the suite is willing to open.
 //!
-//! Cover art reaches this desktop two ways — over KDE Connect from a phone, and
-//! from whatever the session's media player wrote to disk — and neither source
-//! is trusted. Both answer the same two questions before anything decodes a
-//! byte: is it small enough to be a cover rather than a file, and does it start
-//! like an image at all.
+//! Cover art reaches the shell's panel from whatever file a media player names
+//! in its MPRIS metadata, and that file is not trusted: any process on the
+//! session bus can publish a player and point at any path. The shell's media
+//! provider (`celestina/src/provider_adapter/media.rs`) is the one caller today,
+//! and it asks the same two questions before anything decodes a byte: is it
+//! small enough to be a cover rather than a file, and does it start like an
+//! image at all.
 //!
 //! Neither check makes a file safe to decode on its own; they make it *bounded*
 //! and *plausible*, which is what keeps a renamed archive or a file-sized

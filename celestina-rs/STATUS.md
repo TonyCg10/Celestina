@@ -4,7 +4,8 @@
 - **Implementation:** the registered workspace crates are present;
   `dotfiles-core` has no consumer (see the RS-H1 plan's exclusions); `RS-H1`,
   the shared owners that follow the 2026-09-26 monorepo audit, is the active
-  checkpoint with its unit planned
+  checkpoint, and its unit `RS-H1-A` adds those owners to `celestina-core`
+  without switching any consumer
   ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Author validation:** routed to the owning applications; see
   [VALIDATION.md](VALIDATION.md)
@@ -18,6 +19,14 @@
   Grafita and Fluorita consume the same cores through separate adapters.
 - Magnetita's Qt app is a client of the `magnetitad` D-Bus service; protocol and
   network ownership remain in this workspace.
+- `celestina-core` carries dormant owners that no application calls yet: the
+  strict `file_uri` parser, `xdg::runtime_dir` (no `/tmp` fallback) and
+  `xdg::ensure_private_dir`, `atomic_file::replace_private`, `land_media`,
+  `stage_media` and `read_bounded` with the `Published` outcome,
+  `desktop_entry::{read, scan, find}` and
+  `CancellationToken::is_cancel_requested`. Until each product's own unit
+  adopts them, that product's copies keep their current behaviour, including
+  the `/tmp` fallbacks and the unbounded `.desktop` reads the audit found.
 - Development manifests use sibling `path` dependencies. A compatibility and
   release-versioning promise has not been accepted yet, so old claims that a
   release already consumes pinned crate versions are not current truth.

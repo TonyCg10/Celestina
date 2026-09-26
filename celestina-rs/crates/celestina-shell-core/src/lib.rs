@@ -60,12 +60,22 @@
 //!   keeps a displaced observation from overwriting the answer.
 //! - [`workspace_map`] — what a workspace holds, folded into the columns and
 //!   rows it really has, as shares rather than pixels.
-//! - [`runtime`] — the aggregate those three add up to: which providers a
-//!   helper carries, what they last said, and when the host is told.
+//! - [`media`] — which of the session's MPRIS players the panel shows.
+//! - [`melibea`] — Melibea's versioned protocol and its ordered projection of
+//!   minimized windows.
+//! - [`diagnostics`] — the shell's structured diagnostic events: vocabulary,
+//!   bounds, redaction, line format and rotation arithmetic.
+//! - [`journal`] — the sink that writes those events to disk.
+//! - [`runtime`] — the aggregate the provider modules add up to: which
+//!   providers a helper carries, what they last said, and when the host is
+//!   told.
 //!
-//! Nothing here knows Qt, QML or any particular provider. Time arrives as a
-//! millisecond stamp and IO as a `Write`, so every rule above is testable
-//! without a process, a socket or a clock.
+//! Nothing here knows Qt, QML or any particular provider. Outside [`journal`],
+//! time arrives as a millisecond stamp and IO as a `Write`, so every rule above
+//! is testable without a process, a socket or a clock. [`journal`] is the one
+//! module that does its own IO: it owns files, their permissions, a writer
+//! thread and a deadline, reads its directory from the environment, and is
+//! tested against temporary directories and injected failures.
 
 pub mod appearance;
 pub mod audio;
