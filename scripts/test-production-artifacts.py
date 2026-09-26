@@ -394,6 +394,46 @@ esac
         stale = self.run_tool("check", "demo", "--require-verified", expect=1)
         self.assertIn("run verify-production.sh again", stale.stderr)
 
+    def test_verification_inputs_are_the_fingerprinted_set(self) -> None:
+        sys.path.insert(0, str(TOOL.parent))
+        import production_artifact
+
+        _root, _registry, projects = production_artifact.load_registry(self.registry)
+        demo = projects["demo"]
+        # Every declared, required and shared path that exists in the fixture,
+        # in the order and form the fingerprint has always hashed.
+        expected = [
+            "demo/scripts/activate-production.sh",
+            "demo/scripts/complete-production.sh",
+            "demo/scripts/deploy-production.sh",
+            "demo/scripts/status-production.sh",
+            "demo/scripts/verify-production.sh",
+            "demo/tests/*.txt",
+            "docs/projects.toml",
+            "scripts/complete-production.py",
+            "scripts/production-common.sh",
+            "scripts/production_artifact.py",
+        ]
+        self.assertEqual(
+            production_artifact.verification_input_patterns(self.root, demo), expected
+        )
+        contract = {
+            "project": "demo",
+            "verify_script": "demo/scripts/verify-production.sh",
+            "status_script": "demo/scripts/status-production.sh",
+            "complete_script": "demo/scripts/complete-production.sh",
+            "deploy_script": "demo/scripts/deploy-production.sh",
+            "activate_script": "demo/scripts/activate-production.sh",
+            "inputs": expected,
+        }
+        self.assertEqual(
+            production_artifact.verification_fingerprint(self.root, demo),
+            production_artifact.digest_paths(self.root, expected, contract_data=contract),
+        )
+        library = production_artifact.verification_input_patterns(self.root, projects["library"])
+        self.assertNotIn("scripts/complete-production.py", library)
+        self.assertIn("scripts/production-common.sh", library)
+
     def test_project_deploy_change_requires_only_reverification(self) -> None:
         self.run_build()
         self.run_verification()

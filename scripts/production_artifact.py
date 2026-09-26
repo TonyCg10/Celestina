@@ -41,6 +41,13 @@ IGNORED_DIRECTORY_NAMES = {
 IGNORED_FILE_SUFFIXES = {".pyc", ".pyo"}
 # Written by scripts/worktree.sh at the root of every session worktree.
 WORKTREE_MARKER = ".celestina-worktree"
+# Every error goes to stderr on one line after this prefix, joined with "; ".
+ERROR_PREFIX = "production-artifact: "
+# The check errors that a verification alone clears; scripts/landing.py
+# reads them to verify without rebuilding.
+UNVERIFIED_ERROR = "artifact is not verified yet; run verify-production.sh"
+VERIFICATION_CHANGED_ERROR = "tests or rules changed; run verify-production.sh again"
+VERIFICATION_ERRORS = (UNVERIFIED_ERROR, VERIFICATION_CHANGED_ERROR)
 
 
 class ContractError(RuntimeError):
@@ -277,7 +284,13 @@ def registered_script(project: dict[str, Any], key: str, *, required: bool) -> s
     return value
 
 
-def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
+def verification_input_patterns(root: Path, project: dict[str, Any]) -> list[str]:
+    """The declared inputs whose bytes decide whether `project`'s verification is current.
+
+    They are the project's verification_inputs, its registered verify, status,
+    activate, complete and deploy entries, and the shared paths below that
+    exist at `root`; scripts/landing.py reads the same set.
+    """
     inputs = list(project.get("verification_inputs", []))
     verify_script = registered_script(project, "verify_script", required=True)
     status_script = registered_script(project, "status_script", required=True)
@@ -286,8 +299,6 @@ def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
     if activate_script is not None:
         inputs.append(activate_script)
 
-    complete_script: str | None = None
-    deploy_script: str | None = None
     if project.get("deployable", False):
         complete_script = registered_script(project, "complete_script", required=True)
         deploy_script = registered_script(project, "deploy_script", required=True)
@@ -314,16 +325,26 @@ def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
     ):
         if path and os.path.lexists(root / path):
             inputs.append(path)
+    return sorted(set(inputs))
+
+
+def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
+    inputs = verification_input_patterns(root, project)
+    deployable = project.get("deployable", False)
     contract = {
         "project": project["id"],
-        "verify_script": verify_script,
-        "status_script": status_script,
-        "complete_script": complete_script,
-        "deploy_script": deploy_script,
-        "activate_script": activate_script,
-        "inputs": sorted(set(inputs)),
+        "verify_script": registered_script(project, "verify_script", required=True),
+        "status_script": registered_script(project, "status_script", required=True),
+        "complete_script": (
+            registered_script(project, "complete_script", required=True) if deployable else None
+        ),
+        "deploy_script": (
+            registered_script(project, "deploy_script", required=True) if deployable else None
+        ),
+        "activate_script": registered_script(project, "activate_script", required=False),
+        "inputs": inputs,
     }
-    return digest_paths(root, sorted(set(inputs)), contract_data=contract)
+    return digest_paths(root, inputs, contract_data=contract)
 
 
 def artifact_digest(path: Path, logical: str) -> tuple[str, int, str]:
@@ -457,10 +478,10 @@ def validate_manifest(
 
     if require_verified:
         if not manifest.get("verified", False):
-            errors.append("artifact is not verified yet; run verify-production.sh")
+            errors.append(UNVERIFIED_ERROR)
         current_verification = verification_fingerprint(root, project)
         if manifest.get("verification_fingerprint") != current_verification:
-            errors.append("tests or rules changed; run verify-production.sh again")
+            errors.append(VERIFICATION_CHANGED_ERROR)
 
     if errors:
         raise ContractError("; ".join(dict.fromkeys(errors)))
@@ -696,7 +717,7 @@ def main() -> int:
         else:
             raise AssertionError(args.command)
     except ContractError as error:
-        print(f"production-artifact: {error}", file=sys.stderr)
+        print(f"{ERROR_PREFIX}{error}", file=sys.stderr)
         return 1
     return 0
 

@@ -147,8 +147,11 @@ completion updates its bundle but activation remains separate. See
 
 Do not commit or push without an explicit request. When requested:
 
-1. choose one unit or the atomic batch of uncommitted `done` units in its plan;
-2. compare inventory paths with the index and exclude unrelated work;
+1. choose the one unit its session branch carries; a landing lands one unit
+   per commit;
+2. keep unrelated work off that branch, because the landing commits the
+   branch's whole diff against `origin/main` and compares its inventory with
+   the index itself;
 3. separate projects unless the unit is genuinely cross-suite;
 4. keep the single ledger base prefix and use
    `<prefix>-<bug|milestone|release|maintenance>: <English imperative>`;

@@ -84,6 +84,7 @@ product behaviour.
 | LND-1-B | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-B.numstat.tsv) | 9 files, +3102/-4 | Add the landing tool that rebases, merges the hot files, bumps, builds only when the artifact is stale, seals, guards, commits and pushes one unit | [evidence](../../evidence/2026-09-25-seal-at-landing-tool.md) | None |
 | LND-1-C | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-C.numstat.tsv) | 12 files, +520/-23 | Record the decision and move closure from hand-computed inventories to the landing | [evidence](../../evidence/2026-09-25-seal-at-landing-documents.md) | None |
 | LND-1-D | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-D.numstat.tsv) | 15 files, +709/-133 | Fix what the final review found before the first landing: keep session plan edits, build affected consumers, close after a landing, guard before building, refuse a landed unit, and align the mandatory documents | [evidence](../../evidence/2026-09-25-seal-at-landing-review.md) | None |
+| LND-1-E | `suite:` | done | [inventory](../../inventories/2026-09-25-seal-at-landing/LND-1-E.numstat.tsv) | 16 files, +1750/-251 | Fix the findings parked by the landing reviews: scope close to the owner, verify without rebuilding, merge lockfiles and ratchet comments soundly, refuse early, recover on every interruption, and align the remaining documents | [evidence](../../evidence/2026-09-25-seal-at-landing-parked.md) | None |
 
 ## Paired suite transition
 

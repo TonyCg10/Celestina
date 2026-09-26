@@ -1,0 +1,39 @@
+# LND-1-E exact change inventory
+
+Base revision	eced4f932a85719b4d68edb3f7ac7767a9611260
+Pathspec	.github/workflows/contracts.yml
+Pathspec	CONTRIBUTING.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-parked.md
+Pathspec	docs/inventories/2026-09-25-seal-at-landing/LND-1-E.numstat.tsv
+Pathspec	docs/plans/active/2026-09-25-seal-at-landing.md
+Pathspec	docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/production_artifact.py
+Pathspec	scripts/qmllint-cxxqt.sh
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-production-artifacts.py
+Pathspec	scripts/test-qmllint-target.sh
+Pathspec	scripts/test-worktree.sh
+Pathspec	scripts/worktree.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	5607f61307e10f83dd3ee5046e83a7d0626e4ed0fb10c89ab3327621d5444205	.github/workflows/contracts.yml
+5	2	a9af69b1e6e47745c267589b47eec34d6fdd8aa1d0caf79114355aa862158f38	CONTRIBUTING.md
+119	38	04463bbf83f64392228b465a1e48d5b39ea02117766111d2a4cd34022ce8f63e	docs/contracts/landing.md
+186	0	9767e24cafdc3f2018bac5012c606f65e93021bb14fc212f47a7e0d36e0956b0	docs/evidence/2026-09-25-seal-at-landing-parked.md
+39	0	self	docs/inventories/2026-09-25-seal-at-landing/LND-1-E.numstat.tsv
+1	0	725f54ba64b7dfc74bb3b639f4ff35d0a4b4b37f70a042ef2e792619899ffa8c	docs/plans/active/2026-09-25-seal-at-landing.md
+3	3	d9f561b66454fcae0a63f5fa8cd645247d723536a640869d702bc00c7aed5020	docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
+215	98	33cbe9bba7c1c6a63992213693b911c19db0e41e2c06c1464c3c9b98a4e41744	scripts/land-unit.py
+257	47	1390f960de5deea968a8879e3359d91ebd923225363bc28ece264b51b9e09e81	scripts/landing.py
+34	13	75cb17601fd9f7e34b0c151ce236be47ce8b9c225d67236b9e91fcb99d3bd381	scripts/production_artifact.py
+27	1	9cdfde574b0a4f940eed3f709d347567cbbead735e0cec523be628e634a68e9e	scripts/qmllint-cxxqt.sh
+703	35	f0939712893a26706705ebe4e9f256b9685f23f713fad8bc4d4a9f60c25b8c73	scripts/test-land-unit.py
+40	0	da159030c0f8b1316f128108e9d2a9e6558b7868e7137bff39a6702792f73e92	scripts/test-production-artifacts.py
+74	0	e987f6e31d8b58a14aacc0d5f09b1c152f2d6e16fa8b0c5cf97d6d84b2157b66	scripts/test-qmllint-target.sh
+17	0	3b4788eefb0d37883eecc6de89a6aa055f315084638599f994e7ee0457e3ae35	scripts/test-worktree.sh
+29	14	a4b59ab70b0cb76108b09dcb03461913dfaf58628517bb99b8b1007669858cfe	scripts/worktree.sh

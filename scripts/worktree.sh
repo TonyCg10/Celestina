@@ -14,7 +14,9 @@ set -eu
 #   worktree.sh close PROJECT UNIT
 #       Refuse while the worktree holds uncommitted changes, or while the
 #       branch has commits that are not on origin/main and origin/main tracks
-#       no inventory <UNIT>.numstat.tsv (the landing publishes a squashed
+#       no inventory <root>/<plan-slug>/<UNIT>.numstat.tsv, where <root> is
+#       docs/inventories for the suite and <path>/docs/inventories for a
+#       project registered with that path (the landing publishes a squashed
 #       commit, so after a landing only its inventory proves the unit landed);
 #       then remove the worktree and delete the branch.
 #
@@ -56,7 +58,8 @@ marker_name=.celestina-worktree
 
 registry=$repo_root/docs/projects.toml
 registry_status=0
-python3 - "$registry" "$project" <<'EOF' || registry_status=$?
+# Prints the owner's inventory root; exit 1 names an unregistered project.
+inventory_root=$(python3 - "$registry" "$project" <<'EOF'
 import sys
 import tomllib
 
@@ -71,14 +74,20 @@ projects = registry.get("projects", [])
 if not isinstance(projects, list):
     print(f"worktree: {registry_path} has no [[projects]] list", file=sys.stderr)
     sys.exit(2)
-known = {"suite"}
-known.update(
-    entry["id"]
-    for entry in projects
-    if isinstance(entry, dict) and isinstance(entry.get("id"), str)
-)
-sys.exit(0 if project in known else 1)
+if project == "suite":
+    print("docs/inventories")
+    sys.exit(0)
+for entry in projects:
+    if isinstance(entry, dict) and entry.get("id") == project:
+        path = entry.get("path")
+        if not isinstance(path, str) or not path:
+            print(f"worktree: {project} registers no path in {registry_path}", file=sys.stderr)
+            sys.exit(2)
+        print(f"{path.rstrip('/')}/docs/inventories")
+        sys.exit(0)
+sys.exit(1)
 EOF
+) || registry_status=$?
 case $registry_status in
     0) ;;
     1) refuse "unregistered project: $project" ;;
@@ -91,6 +100,8 @@ worktrees=$repo_parent/$repo_name.worktrees
 unit_dir=$worktrees/$project-$unit
 branch=unit/$project/$unit
 
+# open starts from the newest origin/main, and close must see a landing made
+# from any clone.
 git -C "$repo_root" fetch --quiet origin main \
     || refuse "cannot fetch main from origin"
 
@@ -108,6 +119,7 @@ if [ "$command" = open ]; then
         --git-common-dir) || refuse "cannot locate the common Git directory"
     exclude_file=$common_dir/info/exclude
     mkdir -p -- "$common_dir/info"
+    # A last byte other than a newline would glue the next pattern onto it.
     if [ -s "$exclude_file" ] && [ -n "$(tail -c 1 -- "$exclude_file")" ]; then
         printf '\n' >> "$exclude_file"
     fi
@@ -131,12 +143,15 @@ git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch" \
 pending=$(git -C "$repo_root" rev-list origin/main.."$branch") \
     || refuse "cannot compare $branch with origin/main"
 if [ -n "$pending" ]; then
-    tracked=$(git -C "$repo_root" ls-tree -r --name-only origin/main) \
-        || refuse "cannot list the files of origin/main"
+    # Only the owner's own inventory root counts: another project's unit or a
+    # tracked fixture may carry the same unit id.
+    tracked=$(git -C "$repo_root" ls-tree -r --name-only origin/main -- \
+        "$inventory_root/") || refuse "cannot list the files of origin/main"
     landed=
     while IFS= read -r path; do
-        case /$path in
-            */inventories/"$unit.numstat.tsv" | */inventories/*/"$unit.numstat.tsv")
+        case ${path#"$inventory_root"/} in
+            */*/*) ;;
+            */"$unit.numstat.tsv")
                 landed=$path
                 break
                 ;;
@@ -145,7 +160,7 @@ if [ -n "$pending" ]; then
 $tracked
 EOF
     [ -n "$landed" ] || refuse "$branch has commits that are not on origin/main" \
-        "and origin/main has no inventory $unit.numstat.tsv"
+        "and origin/main has no inventory $inventory_root/<plan>/$unit.numstat.tsv"
 fi
 if [ -d "$unit_dir" ]; then
     # Only the two files this entry wrote may be left behind; anything else

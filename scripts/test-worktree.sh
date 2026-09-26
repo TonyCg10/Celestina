@@ -159,6 +159,23 @@ git -C "$lander" config user.name "Worktree Fixture"
 git -C "$lander" config user.email "fixture@example.invalid"
 git -C "$lander" config commit.gpgsign false
 git -C "$lander" config push.negotiate false
+# Fixture only: an inventory of the same unit id outside app's own inventory
+# root, as another project's unit or a tracked fixture would have, proves
+# nothing about app's unit.
+mkdir -p "$lander/other/docs/inventories/x" "$lander/docs/inventories/x"
+printf '# APP-1 exact change inventory\n' \
+    > "$lander/other/docs/inventories/x/APP-1.numstat.tsv"
+printf '# APP-1 exact change inventory\n' > "$lander/docs/inventories/x/APP-1.numstat.tsv"
+git -C "$lander" add other/docs/inventories/x/APP-1.numstat.tsv \
+    docs/inventories/x/APP-1.numstat.tsv
+git -C "$lander" commit -qm "fixture: inventories of another APP-1"
+git -C "$lander" push -q origin HEAD:main
+run_entry close app APP-1
+expect_status 1 "close app APP-1 with another owner's inventory"
+expect_stderr "has no inventory app/docs/inventories/<plan>/APP-1.numstat.tsv" \
+    "close app APP-1 with another owner's inventory"
+[ -d "$unit_dir" ] || fail "close app APP-1: removed an unlanded worktree"
+printf 'ok %s\n' "close ignores an inventory outside the owner's inventory root"
 mkdir -p "$lander/app/docs/inventories/x"
 printf 'landed change\n' > "$lander/change.txt"
 printf '# APP-1 exact change inventory\n' \

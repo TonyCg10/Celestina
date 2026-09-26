@@ -31,34 +31,46 @@ import sys
 import tomllib
 
 from landing import (
-    InventoryRow,
+    PLACEHOLDER_DIFFSTAT,
+    VERSIONED_KINDS,
     LandingError,
     LandingStop,
     LandState,
     UnitRef,
     affected_projects,
     close_ledger_row,
-    diffstat,
     discover_unit,
+    inventory_path,
+    kind_refusal,
     landing_section,
+    lockfile_blockers,
     lockfile_upgrades,
     merge_plan,
     merge_ratchet,
     numstat_rows,
+    owner_docs_root,
     owner_tables,
     render_inventory,
     scope_violations,
+    sealed_diffstat,
+    subject,
     unbumped_files,
+    verification_only,
 )
 from production_artifact import session_worktree_marker
 
 
 KINDS = ("bug", "milestone", "release", "maintenance")
-VERSIONED_KINDS = ("bug", "milestone", "release")
 STATE_FILE = ".land-state.toml"
 MAX_RETRIES = 3
-PLACEHOLDER_DIFFSTAT = "0 files, +0/-0"
 EDITOR_ENVIRONMENT = {"GIT_EDITOR": "true"}
+# After the seal, the staged unit is what the guards and hooks judge, and
+# --continue judges the same bytes again.
+SEALED_REMEDY = (
+    "the unit is sealed, so --continue only repeats this step on the same bytes, which "
+    "helps only when the cause lies outside the unit, such as a missing tool; otherwise "
+    "run land-unit.py --abort, fix the branch in its session worktree, and land it again"
+)
 
 
 @dataclass
@@ -163,6 +175,38 @@ def say(message: str) -> None:
     print(f"land-unit: {message}", file=sys.stderr)
 
 
+# Files.
+
+
+def write_file(path: Path, data: bytes | str) -> None:
+    try:
+        path.write_bytes(data.encode("utf-8") if isinstance(data, str) else data)
+    except OSError as error:
+        raise LandingError(f"cannot write {path}: {error}") from error
+
+
+def read_file(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        raise LandingError(f"cannot read {path}: {error}") from error
+
+
+def remove_file(path: Path) -> None:
+    """Remove `path`; a missing file is already removed."""
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as error:
+        raise LandingError(f"cannot remove {path}: {error}") from error
+
+
+def make_directory(path: Path) -> None:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise LandingError(f"cannot create {path}: {error}") from error
+
+
 # State and registry.
 
 
@@ -200,23 +244,24 @@ def owner_table(ctx: LandContext) -> dict:
     raise LandingError(f"the registry has no owner {project_id}")
 
 
-def owner_docs_root(ctx: LandContext) -> str:
-    active = owner_table(ctx).get("active_plans")
-    if not isinstance(active, str):
-        raise LandingError(f"{unit_of(ctx).project_id} registers no active_plans")
-    return posixpath.dirname(posixpath.dirname(active))
+def unit_inventory(ctx: LandContext) -> str:
+    return inventory_path(owner_table(ctx), unit_of(ctx))
 
 
-def inventory_path(ctx: LandContext) -> str:
-    unit = unit_of(ctx)
-    plan_slug = posixpath.splitext(posixpath.basename(unit.plan_path))[0]
-    return posixpath.join(
-        owner_docs_root(ctx), "inventories", plan_slug, f"{unit.unit}.numstat.tsv"
-    )
+def unit_subject(ctx: LandContext) -> str:
+    return subject(unit_of(ctx).prefix, ctx.state.kind, ctx.state.summary)
 
 
-def subject(ctx: LandContext) -> str:
-    return f"{unit_of(ctx).prefix}-{ctx.state.kind}: {ctx.state.summary}"
+def refuse_landed(ctx: LandContext, rev: str, step: str, remedy: str | None = None) -> None:
+    """Stop when `rev`, which is origin/main, already tracks the unit's inventory."""
+    inventory = unit_inventory(ctx)
+    if blob(ctx, f"{rev}:{inventory}") is not None:
+        raise LandingStop(
+            step,
+            f"{unit_of(ctx).unit} already landed: origin/main tracks {inventory}",
+            inventory,
+            remedy=remedy,
+        )
 
 
 def changed_on_branch(ctx: LandContext) -> set[str]:
@@ -234,7 +279,7 @@ def resolve_unit(ctx: LandContext, changed: set[str]) -> UnitRef:
         raw = blob(ctx, f"{branch}:{path}")
         return None if raw is None else text_of(raw, f"{branch}:{path}")
 
-    return discover_unit(ctx.root, ctx.registry, changed, read_plan)
+    return discover_unit(ctx.registry, changed, read_plan)
 
 
 def rebase_in_progress(ctx: LandContext) -> bool:
@@ -277,13 +322,7 @@ def preflight(ctx: LandContext) -> None:
         raise LandingStop("preflight", f"{state.branch} has no changes against origin/main")
     unit = resolve_unit(ctx, changed)
     ctx.unit = unit
-    inventory = inventory_path(ctx)
-    if blob(ctx, f"origin/main:{inventory}") is not None:
-        raise LandingStop(
-            "preflight",
-            f"{unit.unit} already landed: origin/main tracks {inventory}",
-            inventory,
-        )
+    refuse_landed(ctx, "origin/main", "preflight")
     violations = scope_violations(unit.prefix, ctx.registry, changed)
     if violations:
         raise LandingStop(
@@ -303,7 +342,7 @@ def preflight(ctx: LandContext) -> None:
             + ", ".join(tracked_inventories),
             tracked_inventories[0],
         )
-    evidence_root = posixpath.join(owner_docs_root(ctx), "evidence") + "/"
+    evidence_root = posixpath.join(owner_docs_root(owner_table(ctx)), "evidence") + "/"
     if unit.evidence_path is None:
         raise LandingStop(
             "preflight",
@@ -323,11 +362,9 @@ def preflight(ctx: LandContext) -> None:
             f"the evidence record {unit.evidence_path} does not exist on {state.branch}",
             unit.evidence_path,
         )
-    if unit.project_id == "suite" and state.kind in VERSIONED_KINDS:
-        raise LandingStop(
-            "preflight",
-            f"suite-{state.kind} bumps products, which the author records by hand",
-        )
+    refusal = kind_refusal(ctx.registry, unit.project_id, state.kind)
+    if refusal is not None:
+        raise LandingStop("preflight", refusal)
     state.summary = state.summary or unit.summary
     if not state.summary:
         raise LandingStop("preflight", f"row {unit.unit} has no Intended change")
@@ -340,6 +377,15 @@ def preflight(ctx: LandContext) -> None:
 def unbump(ctx: LandContext) -> None:
     """Start the landing tree from the branch as one commit without version changes."""
     state = ctx.state
+    # A retry or a --continue lands on origin/main again; a local main that
+    # holds other commits would reject the fast-forward only after a rebuild.
+    if not succeeds(ctx, "merge-base", "--is-ancestor", "refs/heads/main", "origin/main"):
+        raise LandingStop(
+            "unbump",
+            "local main has commits that are not on origin/main; keep them on another "
+            "branch (`git branch <name> main`) and run `git reset --hard origin/main` "
+            "on main before the landing rebuilds anything",
+        )
     state.base = ""
     state.tip = ""
     state.sealed = ""
@@ -353,10 +399,7 @@ def unbump(ctx: LandContext) -> None:
         lambda path: blob(ctx, f"{state.branch}:{path}"),
     )
     for path, raw in rewrites.items():
-        try:
-            (landing / path).write_bytes(raw)
-        except OSError as error:
-            raise LandingError(f"cannot write {landing / path}: {error}") from error
+        write_file(landing / path, raw)
     if rewrites:
         run(ctx, "add", "--", *sorted(rewrites), cwd=landing)
         say(
@@ -380,7 +423,11 @@ def unbump(ctx: LandContext) -> None:
 
 def merged_lockfile(ctx: LandContext, path: str, main_raw: bytes) -> bytes:
     target = ctx.landing_dir / path
-    target.write_bytes(main_raw)
+    write_file(target, main_raw)
+    remedy = (
+        f"merge {path} by hand (Cargo with the network can), `git add` {path} in "
+        f"{ctx.landing_dir}, then run land-unit.py --continue, or --abort to give up"
+    )
     cargo = program("LAND_UNIT_CARGO", "cargo")
     result = run_process(
         [cargo, "metadata", "--offline", "--format-version", "1"], target.parent, check=False
@@ -391,8 +438,9 @@ def merged_lockfile(ctx: LandContext, path: str, main_raw: bytes) -> bytes:
             f"{path}: `cargo metadata --offline` failed, so merging the lockfile "
             f"needs the network: {result.stderr.strip()}",
             path,
+            remedy=remedy,
         )
-    merged = target.read_bytes()
+    merged = read_file(target)
     upgrades = lockfile_upgrades(text_of(main_raw, path), text_of(merged, path))
     if upgrades:
         raise LandingStop(
@@ -400,6 +448,7 @@ def merged_lockfile(ctx: LandContext, path: str, main_raw: bytes) -> bytes:
             f"{path}: the merged lockfile moves packages main already locks: "
             + ", ".join(upgrades),
             path,
+            remedy=remedy,
         )
     return merged
 
@@ -438,13 +487,26 @@ def resolve_conflicts(ctx: LandContext) -> None:
     conflicted = sorted(
         paths_of(run(ctx, "diff", "--name-only", "--diff-filter=U", "-z", cwd=landing).stdout)
     )
+    # Cargo rewrites a lockfile from its workspace's manifests, so every other
+    # path is resolved first and each lockfile last.
+    lockfiles = [path for path in conflicted if posixpath.basename(path) == "Cargo.lock"]
     unresolved = []
-    for path in conflicted:
+    for path in [path for path in conflicted if path not in lockfiles] + lockfiles:
+        blockers = lockfile_blockers(path, unresolved) if path in lockfiles else []
+        if blockers:
+            raise LandingStop(
+                "rebase",
+                f"conflict in {', '.join(unresolved)}; {path} is merged once "
+                f"{', '.join(blockers)} {'is' if len(blockers) == 1 else 'are'} resolved: "
+                f"resolve each in {landing} and `git add` it, then run land-unit.py "
+                f"--continue, which merges {path} and continues the rebase",
+                blockers[0],
+            )
         merged = hot_merge(ctx, path)
         if merged is None:
             unresolved.append(path)
             continue
-        (landing / path).write_bytes(merged)
+        write_file(landing / path, merged)
         run(ctx, "add", "--", path, cwd=landing)
     if unresolved:
         raise LandingStop(
@@ -467,6 +529,10 @@ def rebase(ctx: LandContext) -> None:
             return
         state.base = revision(ctx, "origin/main")
         save_state(ctx)
+        # A retry rebases on a newer origin/main, which may carry this unit.
+        refuse_landed(
+            ctx, state.base, "rebase", "the unit is on main already: run land-unit.py --abort"
+        )
         fork = run(ctx, "merge-base", state.base, state.branch).stdout.strip()
         if blob(ctx, f"{fork}:{plan}") is not None and blob(ctx, f"{state.base}:{plan}") is None:
             raise LandingStop(
@@ -498,8 +564,8 @@ def rebase(ctx: LandContext) -> None:
             environment=EDITOR_ENVIRONMENT,
         )
         if continued.returncode != 0:
-            pending = run(ctx, "diff", "--name-only", "--diff-filter=U", cwd=landing).stdout
-            if not rebase_in_progress(ctx) or not pending.strip():
+            pending = run(ctx, "diff", "--name-only", "--diff-filter=U", "-z", cwd=landing)
+            if not rebase_in_progress(ctx) or not paths_of(pending.stdout):
                 raise LandingError(f"git rebase --continue failed: {continued.stderr.strip()}")
 
 
@@ -554,7 +620,7 @@ def landed_paths(ctx: LandContext) -> set[str]:
     )
 
 
-def run_guard_chain(ctx: LandContext, guards: tuple) -> None:
+def run_guard_chain(ctx: LandContext, guards: tuple, remedy: str | None = None) -> None:
     """Run each guard of `(name, interpreter, arguments, stdin)`; the first failure stops."""
     root = ctx.root
     for name, interpreter, arguments, stdin in guards:
@@ -563,7 +629,10 @@ def run_guard_chain(ctx: LandContext, guards: tuple) -> None:
         if result.returncode != 0:
             output = (result.stdout + result.stderr).strip()
             raise LandingStop(
-                "guard", f"{name} failed with exit {result.returncode}:\n{output}", name
+                "guard",
+                f"{name} failed with exit {result.returncode}:\n{output}",
+                name,
+                remedy=remedy,
             )
 
 
@@ -574,7 +643,7 @@ def pre_guards(ctx: LandContext) -> None:
     run_guard_chain(
         ctx,
         (
-            ("commit_scope.py", python, ["--check", subject(ctx)], changed),
+            ("commit_scope.py", python, ["--check", unit_subject(ctx)], changed),
             ("version_tool.py", python, ["check"], None),
             ("check-language-contract.py", python, [], None),
             ("check-architecture-contract.sh", "bash", [], None),
@@ -583,10 +652,14 @@ def pre_guards(ctx: LandContext) -> None:
 
 
 def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None]:
-    """Ask the artifact tool whether `project` is current; build only when it is not.
+    """Ask the artifact tool whether `project` is current; build only when it must.
 
-    A deployable project runs its complete_script; one that is not runs its
-    build_script, then its verify_script.
+    When the check fails only because the artifact is not verified for the
+    current tests and rules, the verification runs alone: the verify_script,
+    then for a deployable project the deploy_script and status_script, the rest
+    of what its complete_script runs. Otherwise a deployable project runs its
+    complete_script, and one that is not runs its build_script, then its
+    verify_script.
     """
     project_id = str(project.get("id"))
     python = program("LAND_UNIT_PYTHON", sys.executable)
@@ -601,7 +674,15 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None]:
     )
     if checked.returncode == 0:
         return check, None
-    keys = ("complete_script",) if project.get("deployable") else ("build_script", "verify_script")
+    deployable = bool(project.get("deployable"))
+    if verification_only(checked.stderr):
+        label = "verify"
+        keys: tuple[str, ...] = (
+            ("verify_script", "deploy_script", "status_script") if deployable else ("verify_script",)
+        )
+    else:
+        label = "build"
+        keys = ("complete_script",) if deployable else ("build_script", "verify_script")
     entries = []
     for key in keys:
         entry = project.get(key)
@@ -615,28 +696,38 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None]:
                 "build_if_stale", f"{entry} failed with exit {built.returncode}", entry
             )
     manifest_path = ctx.root / str(project.get("artifact_manifest", ""))
+    raw = read_file(manifest_path)
     try:
-        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as error:
+        manifest = tomllib.loads(text_of(raw, str(manifest_path)))
+    except tomllib.TOMLDecodeError as error:
         raise LandingError(f"cannot read the manifest {manifest_path}: {error}") from error
     ran = ", ".join(f"{posixpath.basename(entry)} exit 0" for entry in entries)
-    return check, f"{ran}, manifest git_revision {manifest.get('git_revision', 'unknown')}"
+    # The manifest's git_revision names the temporary detached tip; the
+    # fingerprints name the inputs and tests the artifact was made from.
+    return check, (
+        f"{project_id} {label}: {ran}, manifest source_fingerprint "
+        f"{manifest.get('source_fingerprint', 'unknown')}, verification_fingerprint "
+        f"{manifest.get('verification_fingerprint', 'unknown')}"
+    )
 
 
 def build_if_stale(ctx: LandContext) -> None:
-    """Run the one build the artifact contract needs for every affected project.
+    """Run the one production run the artifact contract needs for every affected project.
 
-    The owner comes first, then every registered project whose production
-    inputs the unit changed, such as the deployable consumers of a library.
+    The owner comes first, then every registered project whose production or
+    verification inputs the unit changed, such as the deployable consumers of
+    a library. The rebased tip's own registry names the inputs, since the unit
+    may rename one and register the new name.
     """
     state = ctx.state
-    projects = affected_projects(
-        ctx.root, ctx.registry, landed_paths(ctx), unit_of(ctx).project_id
-    )
+    registry = registry_at(ctx, state.tip)
+    projects = affected_projects(ctx.root, registry, landed_paths(ctx), unit_of(ctx).project_id)
     if not projects:
         # Only a `suite` unit has no registered project as its owner.
-        state.check = "not applicable: the suite unit changes no registered production input"
-        state.build = "none; a suite unit has no production owner"
+        state.check = (
+            "not applicable: the suite unit changes no registered production or verification input"
+        )
+        state.build = "none; no registered production input changed"
         return
     checks: list[str] = []
     builds: list[str] = []
@@ -656,22 +747,19 @@ def seal(ctx: LandContext) -> None:
     # Start from the landing tip each time so that a resumed seal writes once.
     run(ctx, "checkout", "--quiet", "--force", "--detach", state.tip)
     run(ctx, "reset", "--quiet", "--soft", state.base)
-    inventory = inventory_path(ctx)
+    inventory = unit_inventory(ctx)
     evidence = unit.evidence_path
     if evidence is None:
         raise LandingError(f"row {unit.unit} has no evidence record")
     paths = (landed_paths(ctx) | {unit.plan_path, evidence}) - {inventory}
-    try:
-        evidence_text = (root / evidence).read_text(encoding="utf-8")
-        (root / evidence).write_text(
-            evidence_text.rstrip("\n")
-            + "\n\n"
-            + landing_section(state.base, state.check, state.build or None),
-            encoding="utf-8",
-        )
-        plan_text = (root / unit.plan_path).read_text(encoding="utf-8")
-    except OSError as error:
-        raise LandingError(f"cannot update the evidence or the plan: {error}") from error
+    evidence_text = text_of(read_file(root / evidence), evidence)
+    write_file(
+        root / evidence,
+        evidence_text.rstrip("\n")
+        + "\n\n"
+        + landing_section(state.base, state.check, state.build or None),
+    )
+    plan_text = text_of(read_file(root / unit.plan_path), unit.plan_path)
     plan_directory = posixpath.dirname(unit.plan_path)
     links = (
         posixpath.relpath(inventory, plan_directory),
@@ -679,40 +767,42 @@ def seal(ctx: LandContext) -> None:
     )
 
     def write_plan(stat: str) -> None:
-        closed = close_ledger_row(plan_text, unit.unit, links[0], stat, links[1])
-        (root / unit.plan_path).write_text(closed, encoding="utf-8")
+        write_file(
+            root / unit.plan_path, close_ledger_row(plan_text, unit.unit, links[0], stat, links[1])
+        )
 
-    # The diffstat cell does not change the plan's line counts, so the
-    # placeholder yields the final numstat; only the plan's hash moves after.
+    # Only the plan's hash moves between the placeholder and the final diffstat.
     write_plan(PLACEHOLDER_DIFFSTAT)
     rows = numstat_rows(root, state.base, paths)
-    draft = render_inventory(unit.unit, state.base, rows, inventory)
-    self_row = InventoryRow(str(len(draft.splitlines())), "0", "self", inventory)
-    write_plan(diffstat([*rows, self_row]))
+    write_plan(sealed_diffstat(unit.unit, state.base, rows, inventory))
     rows = numstat_rows(root, state.base, paths)
     # Recorded before the file exists, so that --abort can remove it.
     state.inventory = inventory
     save_state(ctx)
     target = root / inventory
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(render_inventory(unit.unit, state.base, rows, inventory), encoding="utf-8")
-    run(ctx, "add", "--all", "--", *sorted(paths | {inventory}))
+    make_directory(target.parent)
+    write_file(target, render_inventory(unit.unit, state.base, rows, inventory))
+    # The index already holds the tip, so a path the unit deletes is staged,
+    # and `git add` refuses a pathspec that matches no file.
+    present = sorted(path for path in paths | {inventory} if os.path.lexists(root / path))
+    run(ctx, "add", "--all", "--", *present)
 
 
 def run_guards(ctx: LandContext) -> None:
     python = program("LAND_UNIT_PYTHON", sys.executable)
-    staged = run(ctx, "diff", "--cached", "--name-only", "--no-renames").stdout
+    staged = paths_of(run(ctx, "diff", "--cached", "--name-only", "--no-renames", "-z").stdout)
     # The hooks' own commands, in the order of spec section 5.1 step 8.
     run_guard_chain(
         ctx,
         (
-            ("check-staged-units.py", python, [inventory_path(ctx)], None),
-            ("commit_scope.py", python, ["--check", subject(ctx)], staged),
+            ("check-staged-units.py", python, [unit_inventory(ctx)], None),
+            ("commit_scope.py", python, ["--check", unit_subject(ctx)], "\0".join(sorted(staged))),
             ("version_tool.py", python, ["check"], None),
             ("check-architecture-contract.sh", "bash", [], None),
             ("check-language-contract.py", python, [], None),
             ("check-documentation-contract.sh", "sh", [], None),
         ),
+        remedy=SEALED_REMEDY,
     )
 
 
@@ -722,7 +812,7 @@ def is_sealed(ctx: LandContext, rev: str) -> bool:
         return False
     shown = run(ctx, "log", "-1", "--format=%P%x00%s", rev, "--", check=False)
     parents, _, line = shown.stdout.rstrip("\n").partition("\0")
-    return shown.returncode == 0 and parents == ctx.state.base and line == subject(ctx)
+    return shown.returncode == 0 and parents == ctx.state.base and line == unit_subject(ctx)
 
 
 def seal_commit(ctx: LandContext) -> str:
@@ -730,10 +820,14 @@ def seal_commit(ctx: LandContext) -> str:
     for candidate in (ctx.state.sealed, "HEAD"):
         if is_sealed(ctx, candidate):
             return revision(ctx, candidate)
-    committed = run(ctx, "commit", "--quiet", "-m", subject(ctx), check=False)
+    committed = run(ctx, "commit", "--quiet", "-m", unit_subject(ctx), check=False)
     if committed.returncode != 0:
         output = (committed.stdout + committed.stderr).strip()
-        raise LandingStop("commit", f"the repository hooks rejected the sealed commit:\n{output}")
+        raise LandingStop(
+            "commit",
+            f"the repository hooks rejected the sealed commit:\n{output}",
+            remedy=SEALED_REMEDY,
+        )
     return revision(ctx, "HEAD")
 
 
@@ -750,7 +844,7 @@ def restore_main(ctx: LandContext) -> None:
 
 
 def finish(ctx: LandContext) -> None:
-    print(f"land-unit: landed {ctx.state.sealed} {subject(ctx)}")
+    print(f"land-unit: landed {ctx.state.sealed} {unit_subject(ctx)}")
     removed = run(ctx, "worktree", "remove", "--force", str(ctx.landing_dir), check=False)
     if removed.returncode != 0:
         say(f"warning: remove the landing worktree by hand: {removed.stderr.strip()}")
@@ -766,12 +860,15 @@ def commit_and_push(ctx: LandContext) -> str | None:
         state.previous = current
         state.sealed = sealed
         save_state(ctx)
-        # A compare-and-swap fast-forward from the sealed tree already on
-        # disk, so attaching main to it rewrites no file.
-        run(ctx, "checkout", "--quiet", "--detach", sealed)
-        run(ctx, "update-ref", "refs/heads/main", sealed, current)
-    run(ctx, "checkout", "--quiet", "main")
+    # From here main may be the unpushed seal, so any failure or Ctrl-C puts
+    # it back before it propagates.
     try:
+        if current != sealed:
+            # A compare-and-swap fast-forward from the sealed tree already on
+            # disk, so attaching main to it rewrites no file.
+            run(ctx, "checkout", "--quiet", "--detach", sealed)
+            run(ctx, "update-ref", "refs/heads/main", sealed, current)
+        run(ctx, "checkout", "--quiet", "main")
         pushed = run(ctx, "push", "--quiet", "--set-upstream", "origin", "main", check=False)
     except (LandingError, KeyboardInterrupt):
         restore_main(ctx)
@@ -794,7 +891,25 @@ def commit_and_push(ctx: LandContext) -> str | None:
         run(ctx, "merge", "--quiet", "--ff-only", "origin/main")
         finish(ctx)
         return None
-    run(ctx, "reset", "--quiet", "--hard", "origin/main")
+    # A fast-forward only: a commit made on local main from elsewhere stays.
+    forwarded = run(ctx, "merge", "--quiet", "--ff-only", "origin/main", check=False)
+    if forwarded.returncode != 0:
+        state.step = "unbump"
+        state.attempts = 0
+        save_state(ctx)
+        # restore_main leaves main alone once it is not the seal itself, so a
+        # commit made on main during the push sits on the unpushed seal.
+        on_seal = succeeds(ctx, "merge-base", "--is-ancestor", sealed, "refs/heads/main")
+        raise LandingStop(
+            "push",
+            "the push was rejected and local main cannot fast-forward to origin/main, "
+            "because it has commits origin/main lacks"
+            + (f" on top of this landing's unpushed sealed commit {sealed}" if on_seal else "")
+            + ": keep them on another branch (`git branch <name> main`), run "
+            "`git reset --hard origin/main` on main"
+            + (", which also drops the seal" if on_seal else "")
+            + f", then --continue lands again from unbump: {forwarded.stderr.strip()}",
+        )
     moved = origin != state.base
     state.attempts += 1
     if not moved or state.attempts > MAX_RETRIES:
@@ -872,9 +987,9 @@ def abort(ctx: LandContext) -> None:
     # tracks a unit's new inventory, so an untracked copy is the landing's.
     if inventory and os.path.lexists(ctx.root / inventory):
         if not succeeds(ctx, "ls-files", "--error-unmatch", "--", inventory):
-            (ctx.root / inventory).unlink()
+            remove_file(ctx.root / inventory)
     run(ctx, "worktree", "remove", "--force", str(ctx.landing_dir))
-    (ctx.landing_dir / STATE_FILE).unlink(missing_ok=True)
+    remove_file(ctx.landing_dir / STATE_FILE)
     print("land-unit: aborted; the canonical checkout is on main")
 
 
@@ -914,7 +1029,9 @@ def main(argv: list[str] | None = None) -> int:
         drive(ctx)
     except LandingStop as stop:
         say(f"stopped at {stop.step}: {stop}")
-        if landing_dir.exists():
+        if stop.remedy is not None:
+            say(stop.remedy)
+        elif landing_dir.exists():
             say("resolve it, then run land-unit.py --continue, or --abort to give up")
         return 1
     except LandingError as error:

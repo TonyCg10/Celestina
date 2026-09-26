@@ -64,9 +64,12 @@ hooks run in every worktree.
 `close` runs `git fetch origin main` and refuses while the worktree holds any
 change other than the two files `open` wrote, or while `unit/<project>/<unit>`
 has a commit that is not reachable from `origin/main` and `origin/main` tracks
-no inventory named `<unit>.numstat.tsv` under an `inventories/` directory.
-Otherwise it removes those two files and the worktree, then deletes the
-branch. The landing publishes one new sealed commit, so the session's own
+no inventory `<root>/<plan-slug>/<unit>.numstat.tsv` in the owner's inventory
+root: `docs/inventories` for `suite`, and `<path>/docs/inventories` for a
+project, with `path` from `docs/projects.toml`. An inventory of the same unit
+id anywhere else, such as another project's unit or a tracked fixture, does
+not count. Otherwise it removes those two files and the worktree, then deletes
+the branch. The landing publishes one new sealed commit, so the session's own
 commits never reach `origin/main`; after a landing, the unit's inventory on
 `origin/main` is what lets `close` accept the branch.
 
@@ -90,6 +93,11 @@ with its intent; and the fast checks (`cargo test`, `cargo clippy`,
 those commits are temporary and never published. A session does not build
 production, deploy, bump a version, set its row to `done` with an inventory
 link, or write an inventory. Those are landing steps.
+
+`qmllint-cxxqt.sh` reads the release QML module under the target directory
+that `cargo metadata --no-deps --format-version 1 --offline` reports from the
+application's root, so in a session worktree it finds the shared target
+directory; when Cargo gives no answer, it reads `<application>/target`.
 
 For the landing to accept the branch, its diff against `origin/main` must
 change exactly one active plan (a Markdown file other than `README.md` directly
@@ -128,12 +136,19 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    rules of the previous section, when the unit's inventory already exists on
    `origin/main` (the unit already landed), when a changed path lies outside
    the row prefix's registered commit scope, when the branch changes an
-   inventory that exists on `origin/main`, or when a `suite` unit asks for `bug`,
-   `milestone` or `release` (a suite unit that bumps products is recorded by
-   hand, as the version contract says). The registry is read from
+   inventory that exists on `origin/main`, or when `--kind` is `bug`,
+   `milestone` or `release` and the owner has no version to bump: a `suite`
+   unit, or a project the version contract does not version
+   (`versioned = false`, such as `celestina-rs`). The
+   [version contract](versioning.md) allows a `suite-bug`, `suite-milestone`
+   or `suite-release` that bumps one or more products, but the tool refuses it
+   because the author records those by hand. The registry is read from
    `origin/main`. Then it adds the landing worktree, detached on the branch,
    and writes the state file.
-2. **`unbump`.** In the landing worktree, the branch becomes one temporary
+2. **`unbump`.** Stops when local `main` is not an ancestor of `origin/main`
+   (it holds commits made elsewhere), before anything is rebuilt: keep those
+   commits on another branch and reset `main` to `origin/main`. In the landing
+   worktree, the branch becomes one temporary
    commit on its fork point with `origin/main`, made with `git commit-tree`.
    When the branch changed a registered version assignment, a mirror or
    `docs/version-history.tsv`, only those version bytes return to the fork
@@ -144,9 +159,13 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    ```
 
    Other edits in the same manifest, such as an added dependency, stay.
-3. **`rebase`.** Stops when the plan existed at the fork point but is no longer
+3. **`rebase`.** Records `origin/main` as the base. Stops when the base
+   tracks the unit's inventory, with the preflight's message
+   `<unit> already landed: origin/main tracks <inventory>`: a retry after a
+   rejected push rebases on a newer `origin/main`, which may carry the unit.
+   Stops when the plan existed at the fork point but is no longer
    on `origin/main`: archiving a plan while a unit is open is the author's
-   decision. Otherwise it records `origin/main` as the base and runs
+   decision. Otherwise it runs
    `git rebase --no-autosquash <base>` in the landing worktree. Conflicts in hot
    files are resolved as the next section says; any other conflict stops.
 4. **`bump_version`.** For `bug`, `milestone` and `release`, it runs the landing
@@ -165,17 +184,41 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    stdin, `version_tool.py check`, `check-language-contract.py` and
    `check-architecture-contract.sh`. The first failure stops the landing with
    its output.
-7. **`build_if_stale`.** The affected projects are the owning project first (a
-   `suite` unit has none), then every other registered project whose
-   production inputs hold a path the unit changed, in registry order, such as
-   the deployable consumers of a library. For each, it runs
+7. **`build_if_stale`.** The registry is the rebased tip's, so a unit that
+   renames an input and registers the new name is read with the new name.
+   The affected projects are the owning project first (a `suite` unit has
+   none), then, in registry order, every other registered project with a
+   production or verification input the unit changed, such as the deployable
+   consumers of a library. A changed path is an input when it is one of the
+   production inputs `production_artifact.py` fingerprints, expanded on the
+   tip, or when it or a directory above it matches a raw production or
+   verification input pattern (`fnmatch`), so a deleted file still counts.
+   The verification inputs are exactly the set whose bytes make the
+   verification fingerprint, which `production_artifact.py`'s
+   `verification_input_patterns` returns: the project's
+   `verification_inputs`, its registered verify, status, activate, complete
+   and deploy entries, `scripts/complete-production.py` for a deployable
+   project, and the shared paths such as `scripts/production_artifact.py`,
+   `scripts/production-common.sh`, `scripts/qmllint-cxxqt.sh`,
+   `docs/projects.toml` and the debt ratchets. A unit that changes a shared
+   path therefore marks every registered project, and each one whose
+   production inputs and artifacts are current takes the verification-only
+   path below, with no build.
+   A production input the tip's registry names but the tip lacks stops the
+   landing at `build_if_stale`, naming the project and the pattern. For each
+   affected project, it runs
    `production_artifact.py check <project> --require-verified`. Exit 0 means
-   the artifact is current and verified for these exact inputs, and nothing is
-   built. Otherwise a deployable project runs its registered
+   the artifact is current and verified for these exact inputs, and nothing
+   runs. When the check fails only with the verification errors
+   (`artifact is not verified yet` or `tests or rules changed`), the
+   production inputs and artifacts are unchanged, so only the verification
+   runs: the registered `verify_script`, then for a deployable project its
+   `deploy_script` and `status_script`, the rest of what its
+   `complete_script` runs. Otherwise a deployable project runs its registered
    `complete_script`, and a project that is not deployable runs its
-   `build_script`, then its `verify_script`; a non-zero exit stops the
-   landing. A `suite` unit that changes no registered production input runs
-   nothing.
+   `build_script`, then its `verify_script`. A non-zero exit stops the
+   landing. A `suite` unit that changes no registered production or
+   verification input runs nothing.
 8. **`seal`.** On the canonical checkout, the index holds the rebased tip and
    `HEAD` the base. It appends a `## Landing` section to the evidence record,
    closes the ledger row and writes the inventory, then stages the unit.
@@ -186,14 +229,19 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
 
    - **Base revision:** `<base>`
    - **Check:** <per project: the check command, its exit and its first output line>
-   - **Build:** <per built project: each entry it ran with exit 0, then manifest git_revision <revision>>
+   - **Build:** <per project that ran: `<project> build:` or `<project> verify:`, each entry with exit 0, then the manifest's source_fingerprint and verification_fingerprint>
    ```
 
-   When nothing was built, the `Build` line reads `artifact current; no build`.
+   For example:
+   `app verify: verify-production.sh exit 0, deploy-production.sh exit 0, status-production.sh exit 0, manifest source_fingerprint sha256:<digest>, verification_fingerprint sha256:<digest>`.
+   The fingerprints identify the inputs and the verification the artifact was
+   made from; the manifest's `git_revision` names only the temporary detached
+   tip. When nothing ran, the `Build` line reads `artifact current; no build`.
 
-   A `suite` unit without production inputs records the check
-   `not applicable: the suite unit changes no registered production input` and
-   the build `none; a suite unit has no production owner`. The row becomes
+   A `suite` unit that changes no registered production or verification input
+   records the check
+   `not applicable: the suite unit changes no registered production or verification input`
+   and the build `none; no registered production input changed`. The row becomes
    `done`; `Files / areas` becomes an `inventory` link and `Automated evidence`
    an `evidence` link, both relative to the plan; and `Diffstat` becomes the
    exact `N files, +X/-Y` including the inventory's own row. The inventory is
@@ -202,7 +250,8 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    hashes their final bytes. It has `Base revision` = the base, one exact `Pathspec` per
    changed path, the plan, the evidence and itself, the `Calculation` and
    `Hashes` lines, and one row per path in the format of the
-   [change policy](../governance/change-policy.md).
+   [change policy](../governance/change-policy.md). A path the unit deletes
+   is already staged as a deletion, so only the paths that exist are added.
 9. **`run_guards`.** With the unit staged, the hooks' own commands in order:
    `check-staged-units.py <inventory>`, `commit_scope.py --check <subject>`
    with the staged paths on stdin, `version_tool.py check`,
@@ -212,12 +261,20 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
 10. **`commit_and_push`.** One `git commit -m <subject>` through the
     repository hooks; a hook failure stops the landing. Local `main` is
     fast-forwarded to the sealed commit with a compare-and-swap, checked out,
-    and pushed with `git push --set-upstream origin main`. On success the tool
+    and pushed with `git push --set-upstream origin main`. From the
+    fast-forward to the end of the push, any failure or Ctrl-C first returns
+    local `main` to where it was. On success the tool
     prints `land-unit: landed <commit> <subject>` and removes the landing
     worktree. When the push fails, local `main` returns to where it was and the
     tool fetches. If `origin/main` already is the sealed commit, the unit
-    landed. Otherwise local `main` is reset to `origin/main` and the sealed
-    commit is discarded: if `origin/main` moved, the landing restarts at
+    landed. Otherwise the sealed commit is discarded and local `main` is
+    fast-forwarded to `origin/main` with `git merge --ff-only`, so a commit
+    made on local `main` from elsewhere is never discarded; when it cannot
+    fast-forward, the landing stops at `push`, saying whether those commits
+    sit on this landing's unpushed sealed commit, and to keep them on another
+    branch and run `git reset --hard origin/main` on `main`; `--continue` then
+    restarts at `unbump`, which stops again while `main` still holds them.
+    If `origin/main` moved, the landing restarts at
     `unbump` from the branch's unsealed commits, at most three times (four
     pushes in total); if it did not move, or after the third retry, the landing
     stops.
@@ -235,7 +292,9 @@ function in `scripts/landing.py`:
 - **The unit's plan** (the active plan the branch changes). `merge_plan`
   first compares the branch's plan with the fork point's, both without this
   unit's ledger row. When they differ, the branch changed the plan beyond its
-  own row, and the landing stops at `rebase` naming the plan. Otherwise it
+  own row, and the landing stops at `rebase` naming the plan and the first
+  line that differs on each side (the comparison is by whole lines, so a
+  reformatting also stops). Otherwise it
   takes `main`'s text and replaces the ledger row whose `Unit` is this unit
   with the branch's row, or, when `main` has no such row, inserts the branch's
   row after the row that precedes it on the branch (or first in the table).
@@ -243,16 +302,25 @@ function in `scripts/landing.py`:
 - **The debt ratchets** listed in `commit_policy.shared_ratchet_files` of
   `docs/projects.toml`. `merge_ratchet` keys each row by its non-integer
   cells; a row with other than exactly one integer cell stops the landing.
-  A key present on both sides takes the lower value; a key one side removed
-  stays removed; a key only the branch added is appended; comments and order
+  The comment line immediately above a row belongs to that row.
+  A key present on both sides takes the lower value and keeps `main`'s
+  comment, unless only the branch changed it; a key one side removed stays
+  removed, with its comment; a key only the branch added is appended with its
+  comment; every other line, such as the file's head comments, and the order
   follow `main`. The guards then prove every row equals the measurement.
-- **Every file named `Cargo.lock`.** The landing takes `main`'s file and runs
+- **Every file named `Cargo.lock`.** Every other conflicted path is resolved
+  first, and each lockfile last. When a `Cargo.toml` in the lockfile's
+  directory or below is still in conflict, the landing stops at `rebase`
+  naming that `Cargo.toml`: resolve it in the landing worktree, `git add` it,
+  then run `land-unit.py --continue`, which merges the lockfile and continues
+  the rebase. Otherwise the landing takes `main`'s file and runs
   `cargo metadata --offline --format-version 1` in its directory, so that
   Cargo records what the branch's manifests require. When cargo
   fails, which includes needing the network, the landing stops. When a
   package `main` already locks changes version or checksum, `lockfile_upgrades`
   names it and the landing stops; a package the branch added or removed is
-  accepted.
+  accepted. Either lockfile stop says to merge the lockfile by hand,
+  `git add` it in the landing worktree, then run `land-unit.py --continue`.
 
 A hot file deleted on one side stops the landing. Version sources, their
 mirrors and `docs/version-history.tsv` are not hot files: after `unbump` the
@@ -267,10 +335,20 @@ is unchanged.
 
 A stop prints `land-unit: stopped at <step>: <reason>`, where the reason names
 the file at fault when there is one, and exits 1. The step label is
-`preflight`, `rebase`, `build_if_stale`, `seal`, `guard` (for `pre_guards` and
-`run_guards`), `commit` or `push`.
+`preflight`, `unbump`, `rebase`, `build_if_stale`, `seal`, `guard` (for
+`pre_guards` and `run_guards`), `commit` or `push`.
 When the landing worktree exists, the tool adds
-`land-unit: resolve it, then run land-unit.py --continue, or --abort to give up`.
+`land-unit: resolve it, then run land-unit.py --continue, or --abort to give up`,
+unless the stop names its own remedy instead. After the seal, a `guard` stop of
+`run_guards` and a `commit` stop judge the staged unit, so they add:
+
+```text
+land-unit: the unit is sealed, so --continue only repeats this step on the same bytes, which helps only when the cause lies outside the unit, such as a missing tool; otherwise run land-unit.py --abort, fix the branch in its session worktree, and land it again
+```
+
+A `rebase` stop for a unit that already landed adds
+`land-unit: the unit is on main already: run land-unit.py --abort`, and a
+lockfile stop names the lockfile to `git add` in the landing worktree.
 Any other failure prints `land-unit: <reason>` and exits 1; Ctrl-C prints
 `land-unit: interrupted during <step>; run land-unit.py --continue or --abort`.
 
@@ -305,7 +383,8 @@ the tool runs; the tests use them.
 
 - Force-push, move the branch, or rewrite its commits. Local `main` moves only
   by fast-forward to the sealed commit, back to its previous commit when that
-  seal was not pushed, or to `origin/main` after a rejected push.
+  seal was not pushed, or by fast-forward to `origin/main` after a rejected
+  push.
 - Edit a tracked inventory; it writes one new inventory, in the commit that
   lands it.
 - Run with a dirty canonical checkout, off `main`, inside a session worktree,
@@ -315,6 +394,8 @@ the tool runs; the tests use them.
 - Pass `--no-verify`. The temporary commits of the landing worktree are made
   with `git commit-tree` and never published; the sealed commit is the only one
   that reaches `main`, and a hook failure fails the landing.
-- Build in a session worktree, run a deploy entry on its own, or build a
-  project whose artifact `check --require-verified` already accepts.
+- Build in a session worktree, deploy without running the project's verify
+  entry first, rebuild a project whose check reports only the verification
+  errors, or run any entry for a project whose artifact
+  `check --require-verified` already accepts.
 - Bump a product for a `suite` unit, or resolve a prose conflict.

@@ -73,6 +73,22 @@ check_warning_ratchet() {
     return 0
 }
 
+target_directory() {
+    # Prints the Cargo target directory of the application at $1, as Cargo
+    # resolves it there: a session worktree's .cargo/config.toml moves it out
+    # of the application. Without an answer from Cargo, it is $1/target.
+    reported=$(
+        cd "$1" && cargo metadata --no-deps --format-version 1 --offline 2>/dev/null \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["target_directory"])' \
+                2>/dev/null
+    ) || reported=
+    if [ -n "$reported" ]; then
+        printf '%s\n' "$reported"
+    else
+        printf '%s\n' "$1/target"
+    fi
+}
+
 # Internal entry point so the ratchet can be tested without a release build.
 if [ "${1-}" = '--check-warning-ratchet' ]; then
     if [ "$#" -ne 3 ]; then
@@ -81,6 +97,16 @@ if [ "${1-}" = '--check-warning-ratchet' ]; then
     fi
     check_warning_ratchet "$2" "$3"
     exit "$?"
+fi
+
+# Internal entry point so the target directory can be tested without a build.
+if [ "${1-}" = '--print-target-directory' ]; then
+    if [ "$#" -ne 2 ]; then
+        echo "usage: scripts/qmllint-cxxqt.sh --print-target-directory PROJECT_PATH" >&2
+        exit 2
+    fi
+    target_directory "$(CDPATH= cd -- "$2" && pwd)"
+    exit 0
 fi
 
 if [ "$#" -ne 1 ]; then
@@ -92,7 +118,7 @@ app_root=$(CDPATH= cd -- "$1" && pwd)
 project=$(basename -- "$app_root")
 qml_root=$app_root/qml
 module_root=$(
-    find "$app_root/target/release/build" \
+    find "$(target_directory "$app_root")/release/build" \
         -path '*/out/qt-build-utils/qml_modules' -type d \
         -printf '%T@ %p\n' 2>/dev/null \
     | sort -nr \

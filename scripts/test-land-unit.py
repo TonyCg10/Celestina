@@ -17,6 +17,7 @@ import time
 import tomllib
 import types
 import unittest
+from unittest import mock
 
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -164,7 +165,7 @@ class LandingFunctions(unittest.TestCase):
         changed = {PLAN, "app/src/main.rs", "app/docs/plans/active/README.md"}
 
         def discover(text: str, paths: set[str] = changed) -> landing.UnitRef:
-            return landing.discover_unit(Path("."), REGISTRY, paths, {PLAN: text}.get)
+            return landing.discover_unit(REGISTRY, paths, {PLAN: text}.get)
 
         unit = discover(plan_text(done_with_link, open_row))
         self.assertEqual(
@@ -247,6 +248,9 @@ class LandingFunctions(unittest.TestCase):
                 ledger_row("X-A", "done", diffstat="2 files, +4/-0"), done_b
             ),
         }
+        # The first line that differs once the unit's row is masked, as
+        # (line on the branch, line at the fork point).
+        first_lines = {"prose edit": (5, 5), "extra row": (13, 13), "another row edited": (11, 11)}
         for case, branch_text in cases.items():
             with self.subTest(case=case):
                 with self.assertRaises(landing.LandingStop) as raised:
@@ -255,6 +259,12 @@ class LandingFunctions(unittest.TestCase):
                 self.assertEqual(raised.exception.path, PLAN)
                 self.assertIn(
                     f"{PLAN}: the branch changed the plan beyond its own row X-B",
+                    str(raised.exception),
+                )
+                branch_line, base_line = first_lines[case]
+                self.assertIn(
+                    f"the plan differs outside that row, first at line {branch_line} on the "
+                    f"branch and line {base_line} at the fork point",
                     str(raised.exception),
                 )
 
@@ -268,6 +278,7 @@ class LandingFunctions(unittest.TestCase):
                 "lib/src/lib.rs",
                 "lib/scripts/build-production.sh",
                 "ws/Cargo.lock",
+                "scripts/production-common.sh",
             ):
                 (root / path).parent.mkdir(parents=True, exist_ok=True)
                 (root / path).write_text("fixture\n", encoding="utf-8")
@@ -283,6 +294,30 @@ class LandingFunctions(unittest.TestCase):
             self.assertEqual(affected({"app/docs/notes.md"}, "app"), ["app"])
             self.assertEqual(affected({"lib/src/lib.rs"}, "suite"), ["app", "lib"])
             self.assertEqual(affected({"docs/notes.md"}, "suite"), [])
+            # A changed verification input affects its project, for verification.
+            self.assertEqual(affected({"app/tests/case.txt"}, "suite"), ["app"])
+            # So do the registered scripts and the shared paths the verification
+            # fingerprint covers: a shared script marks every project.
+            self.assertEqual(affected({"scripts/production-common.sh"}, "suite"), ["app", "lib"])
+            self.assertEqual(affected({"app/scripts/deploy-production.sh"}, "suite"), ["app"])
+            self.assertEqual(affected({"scripts/complete-production.py"}, "suite"), ["app"])
+
+            # A deleted file under a glob input no longer expands, yet still
+            # marks its projects.
+            globbed = tomllib.loads(
+                REGISTRY_TOML.replace('production_inputs = ["lib/src"]', 'production_inputs = ["lib/src/*.rs"]')
+            )
+            projects = landing.affected_projects(root, globbed, {"lib/src/gone.rs"}, "suite")
+            self.assertEqual([project["id"] for project in projects], ["app", "lib"])
+
+            missing = tomllib.loads(
+                REGISTRY_TOML.replace('production_inputs = ["lib/src"]', 'production_inputs = ["lib/missing"]')
+            )
+            with self.assertRaises(landing.LandingStop) as raised:
+                landing.affected_projects(root, missing, {"docs/notes.md"}, "suite")
+            self.assertEqual(raised.exception.step, "build_if_stale")
+            self.assertIn("lib", str(raised.exception))
+            self.assertIn("`lib/missing`", str(raised.exception))
 
     def test_merge_ratchet_takes_lower_and_drops_removed(self) -> None:
         layouts = {
@@ -306,6 +341,102 @@ class LandingFunctions(unittest.TestCase):
             with self.subTest(broken=broken):
                 with self.assertRaises(landing.LandingStop):
                     landing.merge_ratchet("", broken, "")
+
+    def test_merge_ratchet_moves_each_comment_with_its_row(self) -> None:
+        head = (
+            "# Temporary known-debt ratchets.\n#\n"
+            "# Format: class<TAB>key<TAB>current maximum\n"
+        )
+
+        def entry(comment: str, key: str, value: int) -> str:
+            return f"# {comment}\n" + f"lines\t{key}\t{value}\n"
+
+        base = head + entry("A debt", "a.rs", 10) + entry("B debt", "b.rs", 20) + entry(
+            "C debt", "c.rs", 30
+        )
+        # main lowers a, removes b with its comment and rewords the file head.
+        main = head.replace("Temporary", "Main's") + entry("A debt", "a.rs", 8) + entry(
+            "C debt", "c.rs", 30
+        )
+        # The branch rewords a's comment, removes c and adds d with a comment.
+        branch = (
+            head.replace("Temporary", "Branch's")
+            + entry("A debt, reworded", "a.rs", 9)
+            + entry("B debt", "b.rs", 20)
+            + entry("D debt", "d.rs", 5)
+        )
+        self.assertEqual(
+            landing.merge_ratchet(base, main, branch),
+            head.replace("Temporary", "Main's")
+            + entry("A debt, reworded", "a.rs", 8)
+            + entry("D debt", "d.rs", 5),
+        )
+
+    def test_lockfile_blockers_are_the_workspace_manifests(self) -> None:
+        unresolved = ["app/Cargo.toml", "app/src/x.rs", "lib/Cargo.toml", "app/sub/Cargo.toml"]
+        self.assertEqual(
+            landing.lockfile_blockers("app/Cargo.lock", unresolved),
+            ["app/Cargo.toml", "app/sub/Cargo.toml"],
+        )
+        self.assertEqual(
+            landing.lockfile_blockers("Cargo.lock", unresolved),
+            ["app/Cargo.toml", "app/sub/Cargo.toml", "lib/Cargo.toml"],
+        )
+        self.assertEqual(landing.lockfile_blockers("lib/Cargo.lock", ["app/Cargo.toml"]), [])
+
+    def test_kind_refusal_needs_a_versioned_owner(self) -> None:
+        self.assertIsNone(landing.kind_refusal(REGISTRY, "app", "bug"))
+        self.assertIsNone(landing.kind_refusal(REGISTRY, "lib", "maintenance"))
+        self.assertIsNone(landing.kind_refusal(REGISTRY, "suite", "maintenance"))
+        self.assertIn("lib is not versioned", landing.kind_refusal(REGISTRY, "lib", "bug") or "")
+        self.assertIn(
+            "suite-milestone bumps products", landing.kind_refusal(REGISTRY, "suite", "milestone") or ""
+        )
+
+    def test_verification_only_reads_the_check_errors(self) -> None:
+        cases = {
+            "production-artifact: artifact is not verified yet; run verify-production.sh": True,
+            "production-artifact: tests or rules changed; run verify-production.sh again": True,
+            "production-artifact: artifact is not verified yet; run verify-production.sh; "
+            "tests or rules changed; run verify-production.sh again": True,
+            "production-artifact: production inputs changed; run build-production.sh; "
+            "tests or rules changed; run verify-production.sh again": False,
+            "production-artifact: missing app/target/production-artifact.toml; "
+            "run app/scripts/build-production.sh first": False,
+            "production-artifact: artifact digest or set does not match the recorded build": False,
+            "artifact: app current": False,
+            "": False,
+        }
+        for output, expected in cases.items():
+            with self.subTest(output=output):
+                self.assertIs(landing.verification_only(output), expected)
+
+    def test_owner_paths_subject_and_sealed_diffstat(self) -> None:
+        unit = landing.UnitRef("app", "app", PLAN, "FX-A", "Change FX-A", None)
+        app = next(project for project in REGISTRY["projects"] if project["id"] == "app")
+        self.assertEqual(landing.owner_docs_root(app), "app/docs")
+        self.assertEqual(landing.owner_docs_root(REGISTRY["suite"]), "docs")
+        self.assertEqual(landing.inventory_path(app, unit), INVENTORY)
+        with self.assertRaises(landing.LandingError):
+            landing.owner_docs_root({"id": "nowhere"})
+        self.assertEqual(landing.subject("app", "bug", "Change FX-A"), "app-bug: Change FX-A")
+        rows = [
+            landing.InventoryRow("3", "1", "0" * 64, "app/src/main.rs"),
+            landing.InventoryRow("-", "-", "1" * 64, "app/icon.png"),
+        ]
+        lines = len(landing.render_inventory("FX-A", "b" * 40, rows, INVENTORY).splitlines())
+        self.assertEqual(
+            landing.sealed_diffstat("FX-A", "b" * 40, rows, INVENTORY),
+            f"3 files, +{3 + lines}/-1",
+        )
+
+    def test_final_digest_names_an_unreadable_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            blocker = Path(temporary) / "file"
+            blocker.write_text("not a directory\n", encoding="utf-8")
+            with self.assertRaises(landing.LandingError) as raised:
+                landing.final_digest(blocker / "child")
+        self.assertIn(str(blocker / "child"), str(raised.exception))
 
     def test_lockfile_upgrades_names_moved_packages(self) -> None:
         main_lock = cargo_lock(
@@ -374,6 +505,46 @@ class LandingFunctions(unittest.TestCase):
         pathspecs = {line.split("\t")[1] for line in lines if line.startswith("Pathspec\t")}
         self.assertEqual(pathspecs, {row.path for row in rows} | {inventory})
         self.assertTrue(text.endswith("\n"))
+
+    def test_numstat_rows_of_a_mode_change_and_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            git(root, "init", "-q")
+            git(root, "config", "user.name", "Landing Fixture")
+            git(root, "config", "user.email", "fixture@example.invalid")
+            (root / "run.sh").write_text("echo run\n", encoding="utf-8")
+            (root / "old-link").symlink_to("run.sh")
+            git(root, "add", ".")
+            git(root, "commit", "-qm", "base")
+            base = git(root, "rev-parse", "HEAD").strip()
+
+            (root / "run.sh").chmod(0o755)
+            (root / "new-link").symlink_to("target/file")
+            (root / "old-link").unlink()
+            (root / "old-link").symlink_to("elsewhere")
+            calls: list[dict] = []
+            real_run = subprocess.run
+
+            def recording_run(*args, **kwargs):
+                calls.append(kwargs)
+                return real_run(*args, **kwargs)
+
+            with mock.patch.object(landing.subprocess, "run", recording_run):
+                rows = landing.numstat_rows(root, base, ["run.sh", "new-link", "old-link"])
+        self.assertEqual(
+            rows,
+            [
+                landing.InventoryRow("1", "0", hashlib.sha256(b"target/file").hexdigest(), "new-link"),
+                landing.InventoryRow("1", "1", hashlib.sha256(b"elsewhere").hexdigest(), "old-link"),
+                landing.InventoryRow("0", "0", hashlib.sha256(b"echo run\n").hexdigest(), "run.sh"),
+            ],
+        )
+        # Every Git call, `cat-file -e` included, reads no terminal and keeps
+        # its diagnostics.
+        self.assertEqual(len(calls), 6)
+        for kwargs in calls:
+            self.assertIs(kwargs.get("stdin"), subprocess.DEVNULL)
+            self.assertIs(kwargs.get("stderr"), subprocess.PIPE)
 
     def test_diffstat_ignores_binary_lines(self) -> None:
         rows = [
@@ -529,6 +700,10 @@ RATCHET = "# Fixture debt ratchet.\nlines\tapp/src/main.rs\t10\n"
 INVENTORY = "app/docs/inventories/2026-09-25-fixture/FX-A.numstat.tsv"
 EVIDENCE = "app/docs/evidence/2026-09-25-fx-a.md"
 STATUS_LINE = "- **Focus:** fixture baseline\n"
+RESUME_HINT = "resolve it, then run land-unit.py --continue"
+SEALED_REMEDY = (
+    "run land-unit.py --abort, fix the branch in its session worktree, and land it again"
+)
 
 
 def ratchet(value: int) -> str:
@@ -553,9 +728,49 @@ def load_production_fixture() -> types.ModuleType:
 PRODUCTION_FIXTURE = load_production_fixture()
 
 
+def load_land_unit() -> types.ModuleType:
+    """Import land-unit.py, whose name is not a module name."""
+    path = SCRIPTS / "land-unit.py"
+    spec = importlib.util.spec_from_file_location("land_unit", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    # Its dataclasses look their module up while they are defined.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+LAND_UNIT = load_land_unit()
+
+
+class LandUnitFiles(unittest.TestCase):
+    def test_file_errors_name_the_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            blocker = Path(temporary) / "file"
+            blocker.write_text("not a directory\n", encoding="utf-8")
+            below = blocker / "child"
+            operations = {
+                "write": lambda: LAND_UNIT.write_file(below, b"bytes"),
+                "read": lambda: LAND_UNIT.read_file(below),
+                "remove": lambda: LAND_UNIT.remove_file(below),
+                "directory": lambda: LAND_UNIT.make_directory(below / "inner"),
+            }
+            for name, operation in operations.items():
+                with self.subTest(operation=name):
+                    with self.assertRaises(LAND_UNIT.LandingError) as raised:
+                        operation()
+                    self.assertIn(str(below), str(raised.exception))
+            LAND_UNIT.write_file(Path(temporary) / "text", "text\n")
+            self.assertEqual(LAND_UNIT.read_file(Path(temporary) / "text"), b"text\n")
+            LAND_UNIT.remove_file(Path(temporary) / "text")
+            LAND_UNIT.remove_file(Path(temporary) / "text")
+            self.assertFalse((Path(temporary) / "text").exists())
+
+
 def python_guard(name: str) -> str:
     return f"""#!/usr/bin/env python3
-\"\"\"Fixture double of {name}: record the call and pass unless told to fail.
+\"\"\"Fixture double of {name}: record the call and its stdin, and pass unless told to fail.
 
 LAND_FIXTURE_FAIL_AFTER_SEAL=1 limits the failure to a run with staged
 changes, which only the guards after the seal see.
@@ -564,10 +779,12 @@ import os
 import subprocess
 import sys
 
-with open(os.path.join(os.environ["LAND_FIXTURE_RECORDS"], ".guards-ran"), "a") as log:
+records = os.environ["LAND_FIXTURE_RECORDS"]
+with open(os.path.join(records, ".guards-ran"), "a") as log:
     log.write("{name}\\n")
 if not sys.stdin.isatty():
-    sys.stdin.read()
+    with open(os.path.join(records, ".{name}-stdin"), "a", encoding="utf-8") as log:
+        log.write(sys.stdin.read() + "\\n--\\n")
 if os.environ.get("LAND_FIXTURE_FAIL_GUARD") == "{name}" and (
     os.environ.get("LAND_FIXTURE_FAIL_AFTER_SEAL") != "1"
     or subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode != 0
@@ -592,27 +809,38 @@ fi
 """
 
 
-def library_entry(phase: str) -> str:
-    """lib's production entry: the real entries' shape over the artifact runner."""
+def production_entry(project: str, phase: str) -> str:
+    """A build or verify entry in the real entries' shape over the artifact runner."""
     command = "run-build" if phase == "build" else "run-verification"
     work = (
-        "mkdir -p lib/target/release\nprintf '%s\\n' 'lib release' > lib/target/release/lib"
+        f"mkdir -p {project}/target/release\n"
+        f"printf '%s\\n' '{project} release' > {project}/target/release/{project}"
         if phase == "build"
         else ":"
     )
     return f"""#!/bin/sh
 set -eu
-# Fixture double of lib's {phase}-production.sh: without arguments, record the
-# run and delegate to the artifact runner, which calls back in internal mode.
+# Fixture double of {project}'s {phase}-production.sh: without arguments,
+# record the run and delegate to the artifact runner, which calls back in
+# internal mode.
 suite_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$suite_root"
 if [ "$#" -eq 0 ]; then
-    printf '%s\\n' '{phase}' >> "$LAND_FIXTURE_RECORDS/.lib-entries-ran"
-    exec python3 scripts/production_artifact.py {command} lib
+    printf '%s\\n' '{phase}' >> "$LAND_FIXTURE_RECORDS/.{project}-entries-ran"
+    exec python3 scripts/production_artifact.py {command} {project}
 fi
 [ "$1" = --production-runner-internal ] || exit 64
 [ "${{CELESTINA_PRODUCTION_RUNNER_PHASE:-}}" = {phase} ] || exit 64
 {work}
+"""
+
+
+def recording_entry(project: str, phase: str) -> str:
+    """A deploy or status entry that only records its run."""
+    return f"""#!/bin/sh
+set -eu
+# Fixture double of {project}'s {phase}-production.sh: record the run.
+printf '%s\\n' '{phase}' >> "$LAND_FIXTURE_RECORDS/.{project}-entries-ran"
 """
 
 
@@ -632,9 +860,18 @@ FIXTURE_GIT = """#!/bin/sh
 # Fixture wrapper of git, selected through LAND_UNIT_GIT:
 # - LAND_FIXTURE_STOP_AFTER=seal-write turns the seal's `git add --all` into a
 #   Ctrl-C of the landing, after the inventory exists and before it is staged;
+# - LAND_FIXTURE_STOP_AFTER=fast-forward turns the checkout of main that
+#   follows the fast-forward into a Ctrl-C;
 # - LAND_FIXTURE_PUSH=offline moves origin away before the push, as if the
 #   network went down;
-# - LAND_FIXTURE_PUSH=reports-failure pushes, then reports a failure.
+# - LAND_FIXTURE_PUSH=reports-failure pushes, then reports a failure;
+# - LAND_FIXTURE_PUSH=local-commit commits on local main from elsewhere,
+#   records that commit, then pushes.
+if [ "${LAND_FIXTURE_STOP_AFTER:-}" = fast-forward ] \
+    && [ "$*" = '--literal-pathspecs checkout --quiet main' ]; then
+    kill -INT "$PPID"
+    exit 130
+fi
 for argument in "$@"; do
     case "$argument:${LAND_FIXTURE_STOP_AFTER:-}:${LAND_FIXTURE_PUSH:-}" in
         --all:seal-write:*)
@@ -648,6 +885,12 @@ for argument in "$@"; do
             git "$@" || exit
             printf '%s\\n' 'fatal: the remote end hung up unexpectedly' >&2
             exit 128
+            ;;
+        push::local-commit)
+            tree=$(git rev-parse 'refs/heads/main^{tree}')
+            local=$(git commit-tree "$tree" -p refs/heads/main -m 'Local work')
+            git update-ref refs/heads/main "$local"
+            printf '%s\\n' "$local" > "$LAND_FIXTURE_RECORDS/local-commit"
             ;;
     esac
 done
@@ -670,23 +913,43 @@ fi
 FAKE_CARGO = """#!/bin/sh
 set -eu
 # Fixture double of cargo: record the call; fail like an offline resolver when
-# LAND_FIXTURE_CARGO_OFFLINE_FAILS=1.
+# LAND_FIXTURE_CARGO_OFFLINE_FAILS=1, and like cargo on a manifest that still
+# holds conflict markers; with LAND_FIXTURE_CARGO_LOCK, write that file's bytes
+# as the resolved Cargo.lock.
 printf '%s\\n' "$*" >> "$LAND_FIXTURE_RECORDS/cargo-calls"
 if [ "${LAND_FIXTURE_CARGO_OFFLINE_FAILS:-0}" = 1 ]; then
     printf '%s\\n' 'error: no matching package found; the network is needed' >&2
     exit 101
 fi
+if grep -q '^<<<<<<<' Cargo.toml 2>/dev/null; then
+    printf '%s\\n' 'error: failed to parse manifest' >&2
+    exit 101
+fi
+if [ -n "${LAND_FIXTURE_CARGO_LOCK:-}" ]; then
+    cat "$LAND_FIXTURE_CARGO_LOCK" > Cargo.lock
+fi
 printf '%s\\n' '{}'
 """
 
 
-def pre_receive_hook(counter: Path, accept_after: int | None) -> str:
+def pre_receive_hook(
+    counter: Path, accept_after: int | None, racer_file: str | None = None
+) -> str:
     """A hook that counts pushes, and moves main before each rejection.
 
     A rejected landing push means another landing won the race, so the double
-    advances main by one empty commit whenever it rejects.
+    advances main by one commit whenever it rejects: an empty one, or one that
+    adds `racer_file`, as when another clone landed the same unit.
     """
     accept = "false" if accept_after is None else f'[ "$count" -gt {accept_after} ]'
+    if racer_file is None:
+        tree = "tree=$(git rev-parse 'refs/heads/main^{tree}')"
+    else:
+        tree = f"""export GIT_INDEX_FILE="$(mktemp -d)/index"
+git read-tree refs/heads/main
+blob=$(printf '%s\\n' '# landed elsewhere' | git hash-object -w --stdin)
+git update-index --add --cacheinfo "100644,$blob,{racer_file}"
+tree=$(git write-tree)"""
     return f"""#!/bin/sh
 set -eu
 count=$(( $(cat '{counter}' 2>/dev/null || printf 0) + 1 ))
@@ -697,7 +960,7 @@ fi
 unset GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 export GIT_AUTHOR_NAME=Racer GIT_AUTHOR_EMAIL=racer@example.invalid
 export GIT_COMMITTER_NAME=Racer GIT_COMMITTER_EMAIL=racer@example.invalid
-tree=$(git rev-parse 'refs/heads/main^{{tree}}')
+{tree}
 racer=$(git commit-tree "$tree" -p refs/heads/main -m "Race $count")
 git update-ref refs/heads/main "$racer"
 printf '%s\\n' 'fixture: main moved; push rejected' >&2
@@ -808,17 +1071,17 @@ class LandUnitFixture(unittest.TestCase):
         self.write(root, PLAN, plan_text(ledger_row("FX-A", "planned")))
         entries = types.SimpleNamespace(root=root)
         (root / "app/scripts").mkdir(parents=True)
-        for phase in ("build", "verify"):
-            PRODUCTION_FIXTURE.ProductionArtifactFixture.write_entry_script(
-                entries, "app", phase, "v1"
-            )
+        PRODUCTION_FIXTURE.ProductionArtifactFixture.write_entry_script(
+            entries, "app", "build", "v1"
+        )
+        self.write(root, "app/scripts/verify-production.sh", production_entry("app", "verify"), 0o755)
         self.write(root, "app/scripts/complete-production.sh", COMPLETE_ENTRY, 0o755)
         for phase in ("deploy", "status"):
-            self.write(root, f"app/scripts/{phase}-production.sh", f"#!/bin/sh\n# {phase}\n", 0o755)
+            self.write(root, f"app/scripts/{phase}-production.sh", recording_entry("app", phase), 0o755)
         self.write(root, "lib/src/lib.rs", "pub fn lib() {}\n")
         self.write(root, "lib/docs/evidence/README.md", "# Evidence\n")
         for phase in ("build", "verify"):
-            self.write(root, f"lib/scripts/{phase}-production.sh", library_entry(phase), 0o755)
+            self.write(root, f"lib/scripts/{phase}-production.sh", production_entry("lib", phase), 0o755)
         self.write(root, "lib/scripts/status-production.sh", "#!/bin/sh\n# status\n", 0o755)
 
     # Sessions and other landings.
@@ -998,8 +1261,8 @@ class LandUnitFixture(unittest.TestCase):
         self.assertIn(f"- **Base revision:** `{before}`\n", landing_section)
         self.assertRegex(
             landing_section,
-            r"- \*\*Build:\*\* complete-production\.sh exit 0, "
-            r"manifest git_revision [0-9a-f]{40}\n$",
+            r"- \*\*Build:\*\* app build: complete-production\.sh exit 0, manifest "
+            r"source_fingerprint sha256:[0-9a-f]{64}, verification_fingerprint sha256:[0-9a-f]{64}\n$",
         )
         self.assertIn('version = "0.1.1"', self.show_main("app/Cargo.toml"))
         self.assertEqual(
@@ -1009,6 +1272,8 @@ class LandUnitFixture(unittest.TestCase):
         self.assertEqual(self.records_of(".guards-ran"), PRE_GUARD_ORDER + GUARD_ORDER)
         self.assertEqual(len(self.records_of(".builds-ran")), 1)
         self.assertEqual(self.records_of(".lib-entries-ran"), [])
+        # The complete entry drives the runner itself; no single entry ran.
+        self.assertEqual(self.records_of(".app-entries-ran"), [])
 
 
     def test_other_product_advanced_needs_no_build(self) -> None:
@@ -1155,10 +1420,19 @@ class LandUnitFixture(unittest.TestCase):
         )
         self.assertEqual(self.records_of("cargo-calls"), ["metadata --offline --format-version 1"])
         self.assertEqual(self.records_of(".builds-ran"), [])
+        self.assertIn(
+            f"`git add` app/Cargo.lock in {self.landing_dir}, then run land-unit.py --continue",
+            result.stderr,
+        )
 
-    def install_pre_receive(self, accept_after: int | None) -> Path:
+    def install_pre_receive(self, accept_after: int | None, racer_file: str | None = None) -> Path:
         counter = self.top / "pushes"
-        self.write(self.origin, "hooks/pre-receive", pre_receive_hook(counter, accept_after), 0o755)
+        self.write(
+            self.origin,
+            "hooks/pre-receive",
+            pre_receive_hook(counter, accept_after, racer_file),
+            0o755,
+        )
         return counter
 
     def test_push_rejected_retries_then_stops(self) -> None:
@@ -1293,6 +1567,9 @@ class LandUnitFixture(unittest.TestCase):
                 plan.replace("../../evidence/2026-09-25-fx-a.md", "../../../notes/fx-a.md"),
             )
 
+        def evidence_missing(worktree: Path) -> None:
+            (worktree / EVIDENCE).unlink()
+
         def dirty_checkout() -> None:
             self.write(self.repo, "scratch.txt", "left behind\n")
 
@@ -1315,6 +1592,11 @@ class LandUnitFixture(unittest.TestCase):
                 evidence_elsewhere,
                 None,
                 "app/notes/fx-a.md is not under app/docs/evidence/",
+            ),
+            "evidence record missing": (
+                evidence_missing,
+                None,
+                f"the evidence record {EVIDENCE} does not exist on unit/app/FX-A",
             ),
             "dirty canonical checkout": (
                 None,
@@ -1442,7 +1724,7 @@ class LandUnitFixture(unittest.TestCase):
         )
         self.assertTrue(
             self.show_main("docs/evidence/2026-09-25-su-a.md").endswith(
-                "- **Build:** none; a suite unit has no production owner\n"
+                "- **Build:** none; no registered production input changed\n"
             )
         )
         self.assertEqual(self.records_of(".builds-ran"), [])
@@ -1480,8 +1762,8 @@ class LandUnitFixture(unittest.TestCase):
         )
         self.assertRegex(
             evidence,
-            r"- \*\*Build:\*\* complete-production\.sh exit 0, "
-            r"manifest git_revision [0-9a-f]{40}\n$",
+            r"- \*\*Build:\*\* app build: complete-production\.sh exit 0, manifest "
+            r"source_fingerprint sha256:[0-9a-f]{64}, verification_fingerprint sha256:[0-9a-f]{64}\n$",
         )
 
     def test_interrupted_seal_abort_removes_inventory(self) -> None:
@@ -1527,6 +1809,8 @@ class LandUnitFixture(unittest.TestCase):
             "stopped at commit: the repository hooks rejected the sealed commit", result.stderr
         )
         self.assertIn("fixture hook pre-commit failed", result.stderr)
+        self.assertIn(SEALED_REMEDY, result.stderr)
+        self.assertNotIn(RESUME_HINT, result.stderr)
         self.assertEqual(self.records_of(".hooks-ran"), ["pre-commit"])
         self.assertEqual(self.git(self.repo, "rev-parse", "HEAD").strip(), before)
         self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), before)
@@ -1558,6 +1842,8 @@ class LandUnitFixture(unittest.TestCase):
         self.assertIn(INVENTORY, self.git(self.repo, "diff", "--cached", "--name-only"))
         self.assertEqual(len(self.records_of(".builds-ran")), 1)
         self.assertTrue((self.landing_dir / ".land-state.toml").is_file())
+        self.assertIn(SEALED_REMEDY, result.stderr)
+        self.assertNotIn(RESUME_HINT, result.stderr)
 
     def test_failing_early_guard_stops_before_the_build(self) -> None:
         worktree = self.open_branch("FX-A")
@@ -1607,7 +1893,11 @@ class LandUnitFixture(unittest.TestCase):
         self.assertTrue((self.landing_dir / ".land-state.toml").is_file())
         self.assertEqual(self.records_of(".builds-ran"), [])
 
-    def test_library_unit_builds_the_library_and_its_consumer(self) -> None:
+    def open_library_unit(self, change=None) -> str:
+        """Commit a lib unit LIB-A on its branch; return its evidence path.
+
+        `change(worktree)` replaces the default edit of lib's source.
+        """
         plan = "lib/docs/plans/active/2026-09-25-lib.md"
         evidence = "lib/docs/evidence/2026-09-25-lib-a.md"
         self.advance_main(
@@ -1624,10 +1914,17 @@ class LandUnitFixture(unittest.TestCase):
             evidence="[evidence](../../evidence/2026-09-25-lib-a.md)",
         )
         self.write(worktree, plan, plan_text(active))
-        with (worktree / "lib/src/lib.rs").open("a", encoding="utf-8") as source:
-            source.write("// LIB-A\n")
+        if change is None:
+            with (worktree / "lib/src/lib.rs").open("a", encoding="utf-8") as source:
+                source.write("// LIB-A\n")
+        else:
+            change(worktree)
         self.write(worktree, evidence, "# Evidence: LIB-A\n")
         self.commit_all(worktree, "Work on LIB-A")
+        return evidence
+
+    def test_library_unit_builds_the_library_and_its_consumer(self) -> None:
+        evidence = self.open_library_unit()
         before = self.origin_main()
 
         result = self.land("unit/lib/LIB-A", "--kind", "maintenance")
@@ -1641,11 +1938,14 @@ class LandUnitFixture(unittest.TestCase):
             r"- \*\*Check:\*\* `production_artifact\.py check lib --require-verified` exit 1: "
             r".*; `production_artifact\.py check app --require-verified` exit 1: ",
         )
+        fingerprints = (
+            r"manifest source_fingerprint sha256:[0-9a-f]{64}, "
+            r"verification_fingerprint sha256:[0-9a-f]{64}"
+        )
         self.assertRegex(
             landed,
-            r"- \*\*Build:\*\* build-production\.sh exit 0, verify-production\.sh exit 0, "
-            r"manifest git_revision [0-9a-f]{40}; complete-production\.sh exit 0, "
-            r"manifest git_revision [0-9a-f]{40}\n$",
+            r"- \*\*Build:\*\* lib build: build-production\.sh exit 0, verify-production\.sh "
+            rf"exit 0, {fingerprints}; app build: complete-production\.sh exit 0, {fingerprints}\n$",
         )
 
     def test_landed_unit_is_refused_at_preflight(self) -> None:
@@ -1663,6 +1963,374 @@ class LandUnitFixture(unittest.TestCase):
         )
         self.assertFalse(self.landing_dir.exists())
         self.assertEqual(len(self.records_of(".builds-ran")), 1)
+
+    def test_retry_stops_when_the_unit_landed_meanwhile(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        counter = self.install_pre_receive(accept_after=None, racer_file=INVENTORY)
+
+        result = self.land("unit/app/FX-A", "--kind", "bug")
+
+        racer = self.origin_main()
+        self.assertEqual(self.show_main(INVENTORY), "# landed elsewhere\n")
+        self.assert_not_landed(result, racer)
+        self.assertIn(
+            f"stopped at rebase: FX-A already landed: origin/main tracks {INVENTORY}",
+            result.stderr,
+        )
+        self.assertIn("land-unit.py --abort", result.stderr)
+        self.assertNotIn(RESUME_HINT, result.stderr)
+        self.assertEqual(counter.read_text(encoding="utf-8"), "1\n")
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+        # main returned from the rejected seal and fast-forwarded to origin.
+        self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), racer)
+        self.assertEqual(self.git(self.repo, "symbolic-ref", "--short", "HEAD").strip(), "main")
+        self.assertEqual(self.git(self.repo, "status", "--porcelain"), "")
+
+    def test_interrupt_after_the_fast_forward_restores_main(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+        self.forget_hooks()
+
+        result = self.land(
+            "unit/app/FX-A",
+            "--kind",
+            "bug",
+            LAND_UNIT_GIT=str(self.fixture_git),
+            LAND_FIXTURE_STOP_AFTER="fast-forward",
+        )
+
+        self.assert_not_landed(result, before)
+        self.assertIn("interrupted during commit_and_push", result.stderr)
+        self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), before)
+        self.assertEqual(self.git(self.repo, "symbolic-ref", "--short", "HEAD").strip(), "main")
+        state = (self.landing_dir / ".land-state.toml").read_text(encoding="utf-8")
+        self.assertIn('step = "commit_and_push"', state)
+
+        resumed = self.land("--continue")
+
+        self.assert_landed(resumed, before)
+        self.assertEqual(self.records_of(".hooks-ran"), ["pre-commit", "commit-msg"])
+
+    def test_rejected_push_keeps_local_main_commits(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        counter = self.install_pre_receive(accept_after=None)
+
+        result = self.land(
+            "unit/app/FX-A",
+            "--kind",
+            "bug",
+            LAND_UNIT_GIT=str(self.fixture_git),
+            LAND_FIXTURE_PUSH="local-commit",
+        )
+
+        local = self.records_of("local-commit")
+        self.assertEqual(len(local), 1)
+        self.assert_not_landed(result, self.origin_main())
+        self.assertIn(
+            "stopped at push: the push was rejected and local main cannot fast-forward "
+            "to origin/main",
+            result.stderr,
+        )
+        self.assertEqual(counter.read_text(encoding="utf-8"), "1\n")
+        self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), local[0])
+        self.assertEqual(self.git(self.repo, "symbolic-ref", "--short", "HEAD").strip(), "main")
+        # The foreign commit sits on this landing's own unpushed seal.
+        sealed = self.git(self.repo, "rev-parse", f"{local[0]}^").strip()
+        self.assertIn(f"on top of this landing's unpushed sealed commit {sealed}", result.stderr)
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+
+        resumed = self.land("--continue")
+
+        self.assertEqual(resumed.returncode, 1, msg=described(resumed))
+        self.assertIn(
+            "stopped at unbump: local main has commits that are not on origin/main",
+            resumed.stderr,
+        )
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+        self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), local[0])
+
+    def open_suite_unit(self, unit: str, change) -> str:
+        """Commit a suite unit on its branch after `change(worktree)`; return its evidence."""
+        plan = "docs/plans/active/2026-09-25-suite.md"
+        evidence = f"docs/evidence/2026-09-25-{unit.lower()}.md"
+        self.advance_main(
+            lambda clone: self.write(
+                clone, plan, plan_text(ledger_row(unit, "planned", prefix="`suite:`"))
+            ),
+            "suite-maintenance: Open the suite plan",
+        )
+        worktree = self.open_branch(unit, project="suite")
+        active = ledger_row(
+            unit,
+            "active",
+            prefix="`suite:`",
+            evidence=f"[evidence](../../evidence/{posixpath.basename(evidence)})",
+        )
+        self.write(worktree, plan, plan_text(active))
+        change(worktree)
+        self.write(worktree, evidence, f"# Evidence: {unit}\n")
+        self.commit_all(worktree, f"Work on {unit}")
+        return evidence
+
+    def test_suite_unit_renaming_an_input_uses_the_tip_registry(self) -> None:
+        def rename_library_source(worktree: Path) -> None:
+            (worktree / "lib/source").mkdir()
+            (worktree / "lib/src/lib.rs").rename(worktree / "lib/source/lib.rs")
+            (worktree / "lib/src").rmdir()
+            registry = (worktree / "docs/projects.toml").read_text(encoding="utf-8")
+            self.write(worktree, "docs/projects.toml", registry.replace('"lib/src"', '"lib/source"'))
+
+        evidence = self.open_suite_unit("SU-R", rename_library_source)
+        before = self.origin_main()
+
+        result = self.land("unit/suite/SU-R", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.records_of(".lib-entries-ran"), ["build", "verify"])
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+        self.assertRegex(
+            self.show_main(evidence), r"- \*\*Build:\*\* app build: .*; lib build: .*\n$"
+        )
+
+    def test_missing_registered_input_stops_at_the_build(self) -> None:
+        def register_a_missing_input(worktree: Path) -> None:
+            registry = (worktree / "docs/projects.toml").read_text(encoding="utf-8")
+            self.write(
+                worktree,
+                "docs/projects.toml",
+                registry.replace('"app/Cargo.toml", "app/src"', '"app/Cargo.toml", "app/missing", "app/src"'),
+            )
+
+        self.open_suite_unit("SU-M", register_a_missing_input)
+        before = self.origin_main()
+
+        result = self.land("unit/suite/SU-M", "--kind", "maintenance")
+
+        self.assert_not_landed(result, before)
+        self.assertIn("stopped at build_if_stale: ", result.stderr)
+        self.assertIn("app", result.stderr)
+        self.assertIn("`app/missing`", result.stderr)
+        self.assertEqual(self.records_of(".builds-ran"), [])
+
+    def test_verification_input_change_verifies_without_building(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write(worktree, "app/tests/case.txt", "case\nanother case\n")
+        self.write_unit(worktree, "FX-A", touch_source=False)
+        self.build_main()
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.records_of(".builds-ran"), [])
+        self.assertEqual(self.records_of(".app-entries-ran"), ["verify", "deploy", "status"])
+        evidence = self.show_main(EVIDENCE)
+        self.assertIn(
+            "exit 1: production-artifact: tests or rules changed; run verify-production.sh again",
+            evidence,
+        )
+        self.assertRegex(
+            evidence,
+            r"- \*\*Build:\*\* app verify: verify-production\.sh exit 0, deploy-production\.sh "
+            r"exit 0, status-production\.sh exit 0, manifest source_fingerprint "
+            r"sha256:[0-9a-f]{64}, verification_fingerprint sha256:[0-9a-f]{64}\n$",
+        )
+
+    def test_staged_names_reach_the_scope_guard_unquoted(self) -> None:
+        worktree = self.open_branch("FX-A")
+        # International input: a non-ASCII path, which Git quotes unless -z.
+        name = "app/docs/caf" + chr(0xE9) + ".md"
+        self.write(worktree, name, "# Notes\n")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "bug")
+
+        self.assert_landed(result, before)
+        runs = (self.records / ".commit_scope.py-stdin").read_text(encoding="utf-8")
+        early, sealed = runs.split("\n--\n")[:2]
+        self.assertIn(name, early.split("\0"))
+        self.assertIn(name, sealed.split("\0"))
+        self.assertIn(INVENTORY, sealed.split("\0"))
+
+    def test_library_verification_change_verifies_only(self) -> None:
+        def edit_status_entry(worktree: Path) -> None:
+            with (worktree / "lib/scripts/status-production.sh").open("a", encoding="utf-8") as entry:
+                entry.write("# LIB-A\n")
+
+        evidence = self.open_library_unit(edit_status_entry)
+        for phase in ("build", "verify"):
+            built = subprocess.run(
+                ["sh", f"lib/scripts/{phase}-production.sh"],
+                cwd=self.repo,
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=self.environment,
+            )
+            self.assertEqual(built.returncode, 0, msg=built.stderr)
+        (self.records / ".lib-entries-ran").unlink()
+        before = self.origin_main()
+
+        result = self.land("unit/lib/LIB-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        # A non-deployable project verifies alone: no build, deploy or status.
+        self.assertEqual(self.records_of(".lib-entries-ran"), ["verify"])
+        self.assertEqual(self.records_of(".builds-ran"), [])
+        self.assertRegex(
+            self.show_main(evidence),
+            r"- \*\*Build:\*\* lib verify: verify-production\.sh exit 0, manifest "
+            r"source_fingerprint sha256:[0-9a-f]{64}, verification_fingerprint "
+            r"sha256:[0-9a-f]{64}\n$",
+        )
+
+    def test_unversioned_owner_refuses_a_versioned_kind(self) -> None:
+        self.open_library_unit()
+        before = self.origin_main()
+
+        result = self.land("unit/lib/LIB-A", "--kind", "bug")
+
+        self.assert_not_landed(result, before)
+        self.assertIn("stopped at preflight: lib is not versioned", result.stderr)
+        self.assertFalse(self.landing_dir.exists())
+        self.assertEqual(self.records_of(".builds-ran"), [])
+
+    def conflicting_lockfiles(self, *, manifests: bool = False) -> tuple[str, str]:
+        """Branch and main each lock one more package; return (base, main's lock)."""
+        worktree = self.open_branch("FX-A")
+        branch_lock = cargo_lock("0.1.0", lock_package("newdep", "0.3.0", "d" * 64))
+        main_lock = cargo_lock("0.1.0", lock_package("otherdep", "1.0.0", "e" * 64))
+        self.write(worktree, "app/Cargo.lock", branch_lock)
+        if manifests:
+            self.write(worktree, "app/Cargo.toml", cargo_toml("0.1.0", 'newdep = "0.3"\n'))
+        self.write_unit(worktree, "FX-A")
+
+        def lock_another(clone: Path) -> None:
+            self.write(clone, "app/Cargo.lock", main_lock)
+            if manifests:
+                self.write(clone, "app/Cargo.toml", cargo_toml("0.1.0", 'otherdep = "1"\n'))
+
+        before = self.advance_main(lock_another, "app-maintenance: Lock another dependency")
+        return before, main_lock
+
+    def test_lockfile_merge_lands_the_branch_package(self) -> None:
+        before, main_lock = self.conflicting_lockfiles()
+        merged = main_lock + "\n" + lock_package("newdep", "0.3.0", "d" * 64)
+        self.write(self.records, "merged.lock", merged)
+
+        result = self.land(
+            "unit/app/FX-A",
+            "--kind",
+            "maintenance",
+            LAND_FIXTURE_CARGO_LOCK=str(self.records / "merged.lock"),
+        )
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.show_main("app/Cargo.lock"), merged)
+        # The build's toolchain probe runs `cargo --version` as well.
+        merges = [call for call in self.records_of("cargo-calls") if call.startswith("metadata")]
+        self.assertEqual(merges, ["metadata --offline --format-version 1"])
+
+    def test_lockfile_upgrade_stops_naming_the_package(self) -> None:
+        before, main_lock = self.conflicting_lockfiles()
+        moved = main_lock.replace('"1.0.0"', '"1.0.1"') + "\n" + lock_package(
+            "newdep", "0.3.0", "d" * 64
+        )
+        self.write(self.records, "moved.lock", moved)
+
+        result = self.land(
+            "unit/app/FX-A",
+            "--kind",
+            "maintenance",
+            LAND_FIXTURE_CARGO_LOCK=str(self.records / "moved.lock"),
+        )
+
+        self.assert_not_landed(result, before)
+        self.assertIn(
+            "stopped at rebase: app/Cargo.lock: the merged lockfile moves packages main "
+            "already locks: otherdep",
+            result.stderr,
+        )
+        self.assertIn(
+            f"`git add` app/Cargo.lock in {self.landing_dir}, then run land-unit.py --continue",
+            result.stderr,
+        )
+        self.assertEqual(self.records_of(".builds-ran"), [])
+
+    def test_conflicted_manifest_stops_before_the_lockfile(self) -> None:
+        before, main_lock = self.conflicting_lockfiles(manifests=True)
+
+        stopped = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_not_landed(stopped, before)
+        self.assertIn("stopped at rebase: conflict in app/Cargo.toml", stopped.stderr)
+        self.assertIn("app/Cargo.lock is merged once app/Cargo.toml is resolved", stopped.stderr)
+        self.assertNotIn("network", stopped.stderr)
+        self.assertEqual(self.records_of("cargo-calls"), [])
+
+        both = cargo_toml("0.1.0", 'newdep = "0.3"\notherdep = "1"\n')
+        self.write(self.landing_dir, "app/Cargo.toml", both)
+        self.git(self.landing_dir, "add", "app/Cargo.toml")
+        merged = main_lock + "\n" + lock_package("newdep", "0.3.0", "d" * 64)
+        self.write(self.records, "merged.lock", merged)
+        result = self.land("--continue", LAND_FIXTURE_CARGO_LOCK=str(self.records / "merged.lock"))
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.show_main("app/Cargo.toml"), both)
+        self.assertEqual(self.show_main("app/Cargo.lock"), merged)
+
+    def test_continue_after_a_sealed_guard_stop_says_to_abort(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+        failing = {
+            "LAND_FIXTURE_FAIL_GUARD": "check-documentation-contract.sh",
+            "LAND_FIXTURE_FAIL_AFTER_SEAL": "1",
+        }
+        self.assert_not_landed(self.land("unit/app/FX-A", "--kind", "bug", **failing), before)
+
+        result = self.land("--continue", **failing)
+
+        self.assert_not_landed(result, before)
+        self.assertIn(
+            "stopped at guard: check-documentation-contract.sh failed with exit 1", result.stderr
+        )
+        self.assertIn(SEALED_REMEDY, result.stderr)
+        self.assertNotIn(RESUME_HINT, result.stderr)
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+
+    def test_abort_during_a_rebase_stop(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A", edit_status=True)
+        before = self.advance_main(
+            lambda clone: self.write(
+                clone, "app/STATUS.md", "# App status\n\n- **Focus:** another unit\n"
+            ),
+            "app-maintenance: Record another focus",
+        )
+        branch_tip = self.git(self.repo, "rev-parse", "refs/heads/unit/app/FX-A").strip()
+        main_before = self.git(self.repo, "rev-parse", "refs/heads/main").strip()
+        self.assert_not_landed(self.land("unit/app/FX-A", "--kind", "bug"), before)
+
+        aborted = self.land("--abort")
+
+        self.assertEqual(aborted.returncode, 0, msg=described(aborted))
+        self.assertIn("land-unit: aborted; the canonical checkout is on main", aborted.stdout)
+        self.assertFalse(self.landing_dir.exists())
+        self.assertNotIn(".landing", self.git(self.repo, "worktree", "list"))
+        self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), main_before)
+        self.assertEqual(self.git(self.repo, "symbolic-ref", "--short", "HEAD").strip(), "main")
+        self.assertEqual(self.git(self.repo, "status", "--porcelain", "--untracked-files=all"), "")
+        self.assertEqual(
+            self.git(self.repo, "rev-parse", "refs/heads/unit/app/FX-A").strip(), branch_tip
+        )
+        self.assertEqual(self.origin_main(), before)
 
 
 if __name__ == "__main__":

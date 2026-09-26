@@ -138,9 +138,9 @@ are not on `origin/main`, then removes the worktree and deletes the branch.
 `production_artifact.py` refuses `run-build`, `run-verification` and `status`
 when `.celestina-worktree` exists at the repository root, with the message
 `production-artifact: this is a session worktree; production runs happen at
-landing (scripts/land-unit.py)`. `check` keeps working because the guards
-call it. The refusal is a registered rule change of the artifact tool and has
-its own test.
+landing (scripts/land-unit.py)`. `check` keeps working because
+`production-common.sh`'s deploy helper and `land-unit.py` call it. The
+refusal is a registered rule change of the artifact tool and has its own test.
 
 What a session does in its worktree: the whole unit — code, tests,
 documents, the dated evidence record under the owner's `docs/evidence/`, and
