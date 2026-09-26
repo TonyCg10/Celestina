@@ -22,7 +22,15 @@ fi
 while IFS=$'\t' read -r role _identifier _path qml_root; do
     case $role in
         application | shell) qml_roots+=("$qml_root") ;;
-        style) style_root=$qml_root ;;
+        style)
+            # One shared style owns the theme; a second registered module
+            # would silently replace the first instead of being inspected.
+            if [[ -n $style_root ]]; then
+                echo "$registry_file registers more than one shared style: $style_root and $qml_root." >&2
+                exit 1
+            fi
+            style_root=$qml_root
+            ;;
     esac
 done <<< "$registry_rows"
 

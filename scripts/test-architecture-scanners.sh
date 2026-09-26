@@ -422,6 +422,30 @@ elif [[ $output != *"sextita"* ]]; then
     fail "the guard failed without naming the unregistered-on-disk project"
 fi
 
+# A second registered shared style must stop the style guard, not replace the
+# first one as the theme every consumer is checked against.
+second_style_fixture="$fixture_tmp/projects-second-style.toml"
+{
+    cat "$repo_root/docs/projects.toml"
+    printf '%s\n' \
+        '' \
+        '[[projects]]' \
+        'id = "second-style"' \
+        'name = "Second style"' \
+        'path = "second-style"' \
+        'kind = "qml-module"' \
+        'commit_prefix = "second-style"' \
+        'source_roots = ["second-style"]' \
+        'commit_roots = ["second-style/"]'
+} > "$second_style_fixture"
+
+if output=$(ARCHITECTURE_REGISTRY_FILE="$second_style_fixture" \
+    bash "$style_guard" 2>&1); then
+    fail "the style guard accepted a second registered shared style"
+elif [[ $output != *"more than one shared style"* ]]; then
+    fail "the style guard failed on a second shared style without saying so"
+fi
+
 # The style guard reads the same registry and must fail closed on the same
 # project instead of scanning the roots it already knew.
 if output=$(ARCHITECTURE_REGISTRY_FILE="$registry_fixture" \

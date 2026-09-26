@@ -26,7 +26,11 @@ jobs:
           bash scripts/test-architecture-scanners.sh
           bash scripts/check-architecture-contract.sh
 
+      # Every step after the first runs even when an earlier one failed
+      # (`!cancelled()`), so one red step reports its failure without hiding
+      # what the other steps would have found.
       - name: Documentation, language, versions, and agent context
+        if: ${{ !cancelled() }}
         env:
           LANGUAGE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
@@ -43,12 +47,18 @@ jobs:
       # and which it does not; do not read this step as a full re-run of the
       # local hooks.
       - name: Commit scope
+        if: ${{ !cancelled() }}
         run: |
           bash scripts/test-commit-scope.sh
           bash scripts/test-staged-units.sh
           bash scripts/test-worktree.sh
           bash scripts/test-land-unit.sh
           bash scripts/test-qmllint-target.sh
+
+      # Hermetic fixtures of guards and helpers that no hook runs. The
+      # production-artifact entry also runs the production-common fixtures.
+      - name: Hermetic fixtures
+        if: ${{ !cancelled() }}
+        run: |
           python3 scripts/test-language-contract.py
           sh scripts/test-production-artifacts.sh
-          sh scripts/test-production-common.sh

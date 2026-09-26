@@ -5,7 +5,7 @@ because it verifies relationships across projects.
 
 | Workflow | Triggered by | Evidence |
 |---|---|---|
-| `contracts.yml` | every push/PR | architecture/style, documentation/language, versions, agent context, commit scope |
+| `contracts.yml` | every push/PR | architecture/style, documentation/language, versions, agent context, commit scope, hermetic fixtures |
 | `celestina-rs.yml` | `celestina-rs/` | Rust workspace formatting, lint, tests, backend coverage |
 | `celestina.yml` | shell or shared Rust changes | shell Rust-helper formatting, lint and tests; no Qt/C++ host build |
 
@@ -28,8 +28,10 @@ legacy language debt from growing.
 
 Commit-scope tests validate prefixes and staged-unit inventory unions. Local
 hooks are repeated in CI because `core.hooksPath` does not travel with Git.
-The same step runs the hermetic fixtures of the language guard and of the
-shared production-artifact helpers, which no hook runs.
+A separate "Hermetic fixtures" step runs the fixtures of the language guard
+and of the shared production-artifact helpers, which no hook runs. Every step
+after the first runs even when an earlier step failed, so one red step does
+not hide the verdict of the others; the job still fails.
 The version contract checks registered Cargo/CMake declarations, mirrors,
 append-only history fixtures and exact typed-commit SemVer transitions.
 
