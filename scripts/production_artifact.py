@@ -661,7 +661,8 @@ def main() -> int:
     args = parser().parse_args()
     try:
         root, registry, project = project_contract(args.registry, args.project)
-        # `check` stays available in a session worktree because the guards call it.
+        # The refusal leaves `check` alone: it only reads, and its callers are
+        # production-common.sh's deploy helper and scripts/land-unit.py.
         if (
             args.command in {"run-build", "run-verification", "status"}
             and session_worktree_marker(root) is not None

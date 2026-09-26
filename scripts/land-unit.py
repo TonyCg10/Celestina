@@ -6,8 +6,9 @@
     land-unit.py --abort
 
 The steps follow docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
-section 5.1: preflight, unbump, rebase, bump_version, checkout_canonical,
-build_if_stale, seal, run_guards, commit_and_push. The rebase happens in a
+section 5.1, as amended in section 10: preflight, unbump, rebase, bump_version,
+checkout_canonical, pre_guards, build_if_stale, seal, run_guards,
+commit_and_push. The rebase happens in a
 landing worktree at <parent>/<basename>.worktrees/.landing/, which also holds
 the resumable state in .land-state.toml. Commits made there are temporary: the
 only commit that reaches main is the sealed one, created in the canonical
@@ -276,6 +277,13 @@ def preflight(ctx: LandContext) -> None:
         raise LandingStop("preflight", f"{state.branch} has no changes against origin/main")
     unit = resolve_unit(ctx, changed)
     ctx.unit = unit
+    inventory = inventory_path(ctx)
+    if blob(ctx, f"origin/main:{inventory}") is not None:
+        raise LandingStop(
+            "preflight",
+            f"{unit.unit} already landed: origin/main tracks {inventory}",
+            inventory,
+        )
     violations = scope_violations(unit.prefix, ctx.registry, changed)
     if violations:
         raise LandingStop(
@@ -415,7 +423,9 @@ def hot_merge(ctx: LandContext, path: str) -> bytes | None:
         side = "main" if main is None else "the branch"
         raise LandingStop("rebase", f"{path} was deleted on {side}", path)
     if path == unit.plan_path:
-        return merge_plan(text_of(main, path), text_of(branch, path), unit.unit).encode()
+        return merge_plan(
+            text_of(base or b"", path), text_of(main, path), text_of(branch, path), unit.unit, path
+        ).encode()
     if path in ratchets:
         return merge_ratchet(
             text_of(base or b"", path), text_of(main, path), text_of(branch, path)
@@ -536,8 +546,48 @@ def checkout_canonical(ctx: LandContext) -> None:
     run(ctx, "checkout", "--quiet", "--detach", ctx.state.tip)
 
 
+def landed_paths(ctx: LandContext) -> set[str]:
+    """The paths the rebased tip changes against the base."""
+    state = ctx.state
+    return paths_of(
+        run(ctx, "diff", "--name-only", "--no-renames", "-z", state.base, state.tip).stdout
+    )
+
+
+def run_guard_chain(ctx: LandContext, guards: tuple) -> None:
+    """Run each guard of `(name, interpreter, arguments, stdin)`; the first failure stops."""
+    root = ctx.root
+    for name, interpreter, arguments, stdin in guards:
+        argv = [interpreter, str(root / "scripts" / name), *arguments]
+        result = run_process(argv, root, stdin=stdin, check=False)
+        if result.returncode != 0:
+            output = (result.stdout + result.stderr).strip()
+            raise LandingStop(
+                "guard", f"{name} failed with exit {result.returncode}:\n{output}", name
+            )
+
+
+def pre_guards(ctx: LandContext) -> None:
+    """Before any build, the guards whose verdict does not depend on the seal."""
+    python = program("LAND_UNIT_PYTHON", sys.executable)
+    changed = "\0".join(sorted(landed_paths(ctx)))
+    run_guard_chain(
+        ctx,
+        (
+            ("commit_scope.py", python, ["--check", subject(ctx)], changed),
+            ("version_tool.py", python, ["check"], None),
+            ("check-language-contract.py", python, [], None),
+            ("check-architecture-contract.sh", "bash", [], None),
+        ),
+    )
+
+
 def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None]:
-    """Ask the artifact tool whether `project` is current; build only when it is not."""
+    """Ask the artifact tool whether `project` is current; build only when it is not.
+
+    A deployable project runs its complete_script; one that is not runs its
+    build_script, then its verify_script.
+    """
     project_id = str(project.get("id"))
     python = program("LAND_UNIT_PYTHON", sys.executable)
     tool = str(ctx.root / "scripts/production_artifact.py")
@@ -551,40 +601,43 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None]:
     )
     if checked.returncode == 0:
         return check, None
-    key = "complete_script" if project.get("deployable") else "verify_script"
-    entry = project.get(key)
-    if not isinstance(entry, str):
-        raise LandingError(f"{project_id} registers no {key}")
-    built = run_process([str(ctx.root / entry)], ctx.root, check=False, capture=False)
-    if built.returncode != 0:
-        raise LandingStop(
-            "build_if_stale", f"{entry} failed with exit {built.returncode}", entry
-        )
+    keys = ("complete_script",) if project.get("deployable") else ("build_script", "verify_script")
+    entries = []
+    for key in keys:
+        entry = project.get(key)
+        if not isinstance(entry, str):
+            raise LandingError(f"{project_id} registers no {key}")
+        entries.append(entry)
+    for entry in entries:
+        built = run_process([str(ctx.root / entry)], ctx.root, check=False, capture=False)
+        if built.returncode != 0:
+            raise LandingStop(
+                "build_if_stale", f"{entry} failed with exit {built.returncode}", entry
+            )
     manifest_path = ctx.root / str(project.get("artifact_manifest", ""))
     try:
         manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise LandingError(f"cannot read the manifest {manifest_path}: {error}") from error
-    return check, (
-        f"{posixpath.basename(entry)} exit 0, manifest git_revision "
-        f"{manifest.get('git_revision', 'unknown')}"
-    )
+    ran = ", ".join(f"{posixpath.basename(entry)} exit 0" for entry in entries)
+    return check, f"{ran}, manifest git_revision {manifest.get('git_revision', 'unknown')}"
 
 
 def build_if_stale(ctx: LandContext) -> None:
-    """Run the one build the artifact contract needs for every affected project."""
+    """Run the one build the artifact contract needs for every affected project.
+
+    The owner comes first, then every registered project whose production
+    inputs the unit changed, such as the deployable consumers of a library.
+    """
     state = ctx.state
-    if unit_of(ctx).project_id == "suite":
-        changed = paths_of(
-            run(ctx, "diff", "--name-only", "--no-renames", "-z", state.base, state.tip).stdout
-        )
-        projects = affected_projects(ctx.root, ctx.registry, changed)
-        if not projects:
-            state.check = "not applicable: the suite unit changes no registered production input"
-            state.build = "none; a suite unit has no production owner"
-            return
-    else:
-        projects = [owner_table(ctx)]
+    projects = affected_projects(
+        ctx.root, ctx.registry, landed_paths(ctx), unit_of(ctx).project_id
+    )
+    if not projects:
+        # Only a `suite` unit has no registered project as its owner.
+        state.check = "not applicable: the suite unit changes no registered production input"
+        state.build = "none; a suite unit has no production owner"
+        return
     checks: list[str] = []
     builds: list[str] = []
     for project in projects:
@@ -607,10 +660,7 @@ def seal(ctx: LandContext) -> None:
     evidence = unit.evidence_path
     if evidence is None:
         raise LandingError(f"row {unit.unit} has no evidence record")
-    changed = paths_of(
-        run(ctx, "diff", "--name-only", "--no-renames", "-z", state.base, state.tip).stdout
-    )
-    paths = (changed | {unit.plan_path, evidence}) - {inventory}
+    paths = (landed_paths(ctx) | {unit.plan_path, evidence}) - {inventory}
     try:
         evidence_text = (root / evidence).read_text(encoding="utf-8")
         (root / evidence).write_text(
@@ -650,27 +700,20 @@ def seal(ctx: LandContext) -> None:
 
 
 def run_guards(ctx: LandContext) -> None:
-    root = ctx.root
     python = program("LAND_UNIT_PYTHON", sys.executable)
-    scripts = root / "scripts"
     staged = run(ctx, "diff", "--cached", "--name-only", "--no-renames").stdout
     # The hooks' own commands, in the order of spec section 5.1 step 8.
-    guards = (
-        ("check-staged-units.py", python, [inventory_path(ctx)], None),
-        ("commit_scope.py", python, ["--check", subject(ctx)], staged),
-        ("version_tool.py", python, ["check"], None),
-        ("check-architecture-contract.sh", "bash", [], None),
-        ("check-language-contract.py", python, [], None),
-        ("check-documentation-contract.sh", "sh", [], None),
+    run_guard_chain(
+        ctx,
+        (
+            ("check-staged-units.py", python, [inventory_path(ctx)], None),
+            ("commit_scope.py", python, ["--check", subject(ctx)], staged),
+            ("version_tool.py", python, ["check"], None),
+            ("check-architecture-contract.sh", "bash", [], None),
+            ("check-language-contract.py", python, [], None),
+            ("check-documentation-contract.sh", "sh", [], None),
+        ),
     )
-    for name, interpreter, arguments, stdin in guards:
-        argv = [interpreter, str(scripts / name), *arguments]
-        result = run_process(argv, root, stdin=stdin, check=False)
-        if result.returncode != 0:
-            output = (result.stdout + result.stderr).strip()
-            raise LandingStop(
-                "guard", f"{name} failed with exit {result.returncode}:\n{output}", name
-            )
 
 
 def is_sealed(ctx: LandContext, rev: str) -> bool:
@@ -776,6 +819,7 @@ STEP_FUNCTIONS = (
     rebase,
     bump_version,
     checkout_canonical,
+    pre_guards,
     build_if_stale,
     seal,
     run_guards,

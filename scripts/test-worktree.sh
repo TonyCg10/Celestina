@@ -140,3 +140,38 @@ for pattern in /.cargo/config.toml /.celestina-worktree; do
     [ "$count" = 1 ] || fail "info/exclude lists $pattern $count times instead of once"
 done
 printf 'ok %s\n' "open excludes its own files once and leaves the worktree clean"
+
+# 7. After a landing, the sealed commit is a squash, so the session's commits
+#    never reach origin/main; the inventory the landing added proves the unit
+#    landed, and close accepts the branch.
+run_entry open app APP-1
+expect_status 0 "reopen app APP-1"
+printf 'landed change\n' > "$unit_dir/change.txt"
+git -C "$unit_dir" add change.txt
+git -C "$unit_dir" commit -qm "fixture: unit work before the landing"
+run_entry close app APP-1
+expect_status 1 "close app APP-1 before the landing"
+expect_stderr "not on origin/main" "close app APP-1 before the landing"
+# Fixture only: another clone publishes the sealed commit with the inventory.
+lander=$temporary/lander
+git clone -q --branch main "$origin" "$lander"
+git -C "$lander" config user.name "Worktree Fixture"
+git -C "$lander" config user.email "fixture@example.invalid"
+git -C "$lander" config commit.gpgsign false
+git -C "$lander" config push.negotiate false
+mkdir -p "$lander/app/docs/inventories/x"
+printf 'landed change\n' > "$lander/change.txt"
+printf '# APP-1 exact change inventory\n' \
+    > "$lander/app/docs/inventories/x/APP-1.numstat.tsv"
+git -C "$lander" add change.txt app/docs/inventories/x/APP-1.numstat.tsv
+git -C "$lander" commit -qm "fixture: the sealed commit of APP-1"
+git -C "$lander" push -q origin HEAD:main
+[ -n "$(git -C "$repo" rev-list origin/main..unit/app/APP-1)" ] \
+    || fail "close app APP-1 after the landing: the fixture branch is already on origin/main"
+run_entry close app APP-1
+expect_status 0 "close app APP-1 after the landing"
+[ ! -e "$unit_dir" ] || fail "close app APP-1 after the landing: the worktree still exists"
+if git -C "$repo" show-ref --verify --quiet refs/heads/unit/app/APP-1; then
+    fail "close app APP-1 after the landing: the branch still exists"
+fi
+printf 'ok %s\n' "close accepts a landed unit whose inventory is on origin/main"

@@ -152,13 +152,14 @@ Do not commit or push without an explicit request. When requested:
 3. separate projects unless the unit is genuinely cross-suite;
 4. keep the single ledger base prefix and use
    `<prefix>-<bug|milestone|release|maintenance>: <English imperative>`;
-5. apply the exact SemVer transition and append the version-history row for a
-   product bug, milestone or release; maintenance changes leave both untouched;
+5. leave the version alone: for a product bug, milestone or release, the
+   landing applies the exact SemVer transition and appends the version-history
+   row; maintenance changes leave both untouched;
 6. request the landing: `python3 scripts/land-unit.py <branch> --kind <kind>`
    from the canonical checkout runs the version, staged-inventory and
    commit-scope guards itself;
-7. include code, version declarations, history, plan, inventory and evidence
-   in the same commit.
+7. let the landing include code, version declarations, history, plan,
+   inventory and evidence in its one commit.
 
 Finish merges before closing delivery units. Enable local hooks with
 `git config core.hooksPath .githooks`.

@@ -79,6 +79,9 @@ intentional major compatibility/lifecycle boundary.
    inventory and evidence in the same commit. The summary argument must equal
    the imperative text after the subject colon.
 
+Through `scripts/land-unit.py`, the landing performs steps 3 to 5 on top of the
+current `main`; see [the landing contract](landing.md).
+
 `python3 scripts/version_tool.py show` prints the registered current
 versions without maintaining another snapshot.
 `python3 scripts/audit-version-commits.py` replays all non-merge commits after

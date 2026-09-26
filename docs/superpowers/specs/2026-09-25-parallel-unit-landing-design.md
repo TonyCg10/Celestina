@@ -371,3 +371,33 @@ three units in causal order, each `suite-maintenance`:
 
 `LND-1-C` is the first unit landed by `land-unit.py` itself; its evidence
 record carries that `Landing` section. No product version moves.
+
+## 10. Amendments after implementation (2026-09-25)
+
+The review of the whole implementation changed four rules above. The
+[landing contract](../../contracts/landing.md) states the amended behaviour.
+
+- **§5.2, the active plan ledger.** Taking `main`'s content for every other
+  row and for the prose discarded any other edit the branch made to the plan,
+  and the inventory then sealed the wrong bytes. The ledger merge now applies
+  only when the branch's plan equals the fork point's with the unit's own row
+  masked on both sides; otherwise the landing stops at the rebase, naming the
+  plan and saying that the branch changed it beyond its own row.
+- **§5.1 step 6, the one build.** One rule now covers every unit kind. The
+  affected projects are the owner first (a `suite` unit has none), then every
+  other registered project whose production inputs the changed paths touch,
+  in registry order. Each gets `check --require-verified`; when it fails, a
+  deployable project runs `complete-production.sh`, and one that is not runs
+  `build-production.sh`, then `verify-production.sh`. A verify entry alone
+  refuses changed production inputs, and the artifact contract requires every
+  affected deployable consumer of a library to be completed.
+- **§4, `worktree.sh close`.** The sealed commit is a squash, so the session's
+  commits never reach `origin/main`. `close` now also accepts a clean
+  worktree whose branch has such commits when `origin/main` tracks an
+  inventory named `<unit>.numstat.tsv` under an `inventories/` directory.
+- **§5.1, guards before the build.** A new step `pre_guards` runs between
+  steps 5 and 6: on the rebased tip, `commit_scope.py --check <subject>` with
+  the changed paths on stdin, `version_tool.py check`, the language guard and
+  the architecture guard, so that a failure stops the landing before anything
+  is built or deployed. The full chain of step 8 still runs after the seal; a
+  failure in either stops with the label `guard`.

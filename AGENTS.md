@@ -261,9 +261,18 @@ Every project uses entries registered in `docs/projects.toml`:
 5. The shell additionally has `activate-production.sh`; completion updates the
    on-disk bundle but never replaces a live session.
 
-For a product `bug`, `milestone` or `release`, bump the registered SemVer source
-and append its history row before this build. `maintenance` changes do neither.
-See [docs/contracts/versioning.md](docs/contracts/versioning.md).
+The landing runs these entries on the tree it commits, for the owner and for
+every other project whose production inputs the unit changed, such as a
+library's deployable consumers: when a project's artifact is not current, it
+runs `complete-production.sh` for a deployable project and
+`build-production.sh` then `verify-production.sh` for one that is not. A
+session never runs them in its worktree; see
+[docs/contracts/landing.md](docs/contracts/landing.md).
+
+For a product `bug`, `milestone` or `release`, the landing bumps the registered
+SemVer source and appends its history row before this build; a session never
+bumps. `maintenance` changes do neither. See
+[docs/contracts/versioning.md](docs/contracts/versioning.md).
 
 Do not use a parallel Cargo/CMake build as final evidence when it leaves a
 different deployable binary. Do not run `clean`; production targets and caches
@@ -278,10 +287,11 @@ Run the common guard first:
 bash scripts/check-architecture-contract.sh
 ```
 
-Then use the affected project's registered `verify_script` and every guard for
-a changed cross-cutting contract. A build proves compilation; a smoke proves
-startup. Neither alone proves Wayland, compositor, portals, hardware,
-interaction, appearance, or AT-SPI. Record exactly what ran and what remains in
+Then run the affected project's fast checks and every guard for a changed
+cross-cutting contract; the landing runs the registered production entries on
+the tree it commits. A build proves compilation; a smoke proves startup.
+Neither alone proves Wayland, compositor, portals, hardware, interaction,
+appearance, or AT-SPI. Record exactly what ran and what remains in
 `VALIDATION.md`.
 
 ## Git and commits
@@ -289,15 +299,17 @@ interaction, appearance, or AT-SPI. Record exactly what ran and what remains in
 Celestina is one repository. Do not commit or push without a request. When the
 author requests a commit:
 
-1. select one coherent unit or the full batch of uncommitted `done` units in
-   the same plan;
-2. compare its paths with the index and exclude unrelated work;
+1. select the one unit its session branch carries; a landing lands one unit
+   per commit;
+2. keep unrelated work off that branch, because the landing commits the
+   branch's whole diff against `origin/main`;
 3. separate projects unless the change is genuinely cross-suite;
 4. keep the ledger's registered base prefix, choose the delivered change kind,
    and use an imperative English subject:
    `<prefix>-<bug|milestone|release|maintenance>: <action>`;
-5. for a product bug, milestone or release, apply the exact PATCH, MINOR or
-   MAJOR transition and append the matching `docs/version-history.tsv` row;
+5. leave the version alone: for a product bug, milestone or release, the
+   landing applies the exact PATCH, MINOR or MAJOR transition and appends the
+   matching `docs/version-history.tsv` row;
 6. run `python3 scripts/land-unit.py <branch> --kind <kind>` from the
    canonical checkout, which runs the version, staged-inventory and
    commit-scope guards itself.

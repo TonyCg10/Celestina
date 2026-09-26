@@ -96,7 +96,7 @@ class LandState:
     def dump(self) -> str:
         lines = []
         for key, value in asdict(self).items():
-            rendered = str(value) if isinstance(value, int) else json.dumps(value)
+            rendered = str(value) if isinstance(value, int) else toml_string(value)
             lines.append(f"{key} = {rendered}")
         return "\n".join(lines) + "\n"
 
@@ -116,6 +116,16 @@ class LandState:
                 raise LandingError(f"invalid landing state: `{field.name}` is missing or invalid")
             values[field.name] = value
         return cls(**values)
+
+
+def toml_string(value: str) -> str:
+    """A TOML basic string for `value`.
+
+    JSON's escapes are TOML's, except that JSON writes a character outside the
+    BMP as a surrogate pair, which TOML rejects, so non-ASCII text stays
+    literal; DEL is the one control character JSON leaves raw and TOML forbids.
+    """
+    return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
 
 
 # Ledger tables.
@@ -279,18 +289,23 @@ def scope_violations(
 
 
 def affected_projects(
-    root: Path, registry: Mapping[str, object], changed_paths: set[str]
+    root: Path, registry: Mapping[str, object], changed_paths: set[str], owner_id: str
 ) -> list[dict]:
-    """Registered projects, in registry order, whose production inputs hold a changed path.
+    """The owner, then every other registered project whose production inputs hold a changed path.
 
-    The inputs are the ones production_artifact.py fingerprints, expanded on
-    the tree at `root`; a changed path matches an input file or lies under an
-    input directory.
+    The owner comes first when it is a registered project (a `suite` unit has
+    none); the others follow in registry order. The inputs are the ones
+    production_artifact.py fingerprints, expanded on the tree at `root`; a
+    changed path matches an input file or lies under an input directory.
     """
+    owner: list[dict] = []
     affected = []
     projects = registry.get("projects", [])
     for project in projects if isinstance(projects, list) else []:
         if not isinstance(project, dict):
+            continue
+        if project.get("id") == owner_id:
+            owner.append(project)
             continue
         patterns = production_input_patterns(dict(registry), project)
         try:
@@ -303,16 +318,39 @@ def affected_projects(
             path == item or path.startswith(f"{item}/") for path in changed_paths for item in inputs
         ):
             affected.append(project)
-    return affected
+    return owner + affected
 
 
-def merge_plan(main_text: str, branch_text: str, unit: str) -> str:
-    """Main's plan with the branch's row for `unit`; every other line is main's."""
+def without_row(table: LedgerTable, unit: str) -> str:
+    """The table's whole text without the ledger row of `unit`, if it has one."""
+    lines = list(table.lines)
+    rows = table.unit_rows()
+    if unit in rows:
+        del lines[rows[unit]]
+    return "".join(lines)
+
+
+def merge_plan(base_text: str, main_text: str, branch_text: str, unit: str, path: str) -> str:
+    """Main's plan with the branch's row for `unit`; every other line is main's.
+
+    That is only sound when the branch changed nothing else in the plan, so
+    the merge stops unless the branch's text equals the base's with the unit's
+    row masked on both sides.
+    """
+    base = ledger_table(base_text, "the base's plan", "rebase")
     main = ledger_table(main_text, "main's plan", "rebase")
     branch = ledger_table(branch_text, "the branch's plan", "rebase")
     branch_rows = branch.unit_rows()
     if unit not in branch_rows:
         raise LandingStop("rebase", f"the branch's plan has no ledger row {unit}")
+    if without_row(branch, unit) != without_row(base, unit):
+        raise LandingStop(
+            "rebase",
+            f"{path}: the branch changed the plan beyond its own row {unit}, so the landing "
+            f"cannot merge it: resolve {path} in the landing worktree, `git add` it, run "
+            "`git rebase --continue` there, then land-unit.py --continue",
+            path,
+        )
     branch_index = branch_rows[unit]
     replacement = branch.lines[branch_index]
     if not replacement.endswith("\n"):

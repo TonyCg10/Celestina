@@ -68,8 +68,23 @@ status_script = "app/scripts/status-production.sh"
 complete_script = "app/scripts/complete-production.sh"
 artifact_manifest = "app/target/production-artifact.toml"
 artifact_paths = ["app/target/release/app"]
-production_inputs = ["app/Cargo.toml", "app/src"]
+production_inputs = ["app/Cargo.toml", "app/src", "lib/src"]
 verification_inputs = ["app/tests"]
+
+[[projects]]
+id = "lib"
+commit_prefix = "lib"
+versioned = false
+active_plans = "lib/docs/plans/active"
+commit_roots = ["lib/"]
+include_workspace_manifests = false
+deployable = false
+build_script = "lib/scripts/build-production.sh"
+verify_script = "lib/scripts/verify-production.sh"
+status_script = "lib/scripts/status-production.sh"
+artifact_manifest = "lib/target/production-artifact.toml"
+artifact_paths = ["lib/target/release/lib"]
+production_inputs = ["lib/src"]
 """
 REGISTRY = tomllib.loads(REGISTRY_TOML)
 PLAN = "app/docs/plans/active/2026-09-25-fixture.md"
@@ -199,22 +214,75 @@ class LandingFunctions(unittest.TestCase):
         done_a = ledger_row("X-A", "done", diffstat="1 files, +1/-0")
         planned_b = ledger_row("X-B", "planned")
         done_b = ledger_row("X-B", "done", diffstat="3 files, +9/-1")
+        base_text = plan_text(done_a, planned_b)
         main_text = plan_text(done_a, planned_b, prose="Main prose moved on.")
-        branch_text = plan_text(done_a, done_b, prose="The session edited prose.")
+        branch_text = plan_text(done_a, done_b)
 
-        merged = landing.merge_plan(main_text, branch_text, "X-B")
+        merged = landing.merge_plan(base_text, main_text, branch_text, "X-B", PLAN)
         self.assertEqual(merged, plan_text(done_a, done_b, prose="Main prose moved on."))
 
+        # A row the branch added: the base has every other line of the branch.
+        added_base = plan_text(done_a)
         other = ledger_row("X-Z", "done", diffstat="1 files, +2/-0")
-        merged = landing.merge_plan(plan_text(done_a, other), branch_text, "X-B")
+        merged = landing.merge_plan(added_base, plan_text(done_a, other), branch_text, "X-B", PLAN)
         self.assertEqual(merged, plan_text(done_a, done_b, other))
-        merged = landing.merge_plan(plan_text(other), branch_text, "X-B")
+        merged = landing.merge_plan(added_base, plan_text(other), branch_text, "X-B", PLAN)
         self.assertEqual(merged, plan_text(done_b, other))
 
         with self.assertRaises(landing.LandingStop):
-            landing.merge_plan("# No ledger\n", branch_text, "X-B")
+            landing.merge_plan(base_text, "# No ledger\n", branch_text, "X-B", PLAN)
         with self.assertRaises(landing.LandingStop):
-            landing.merge_plan(main_text, "# No ledger\n", "X-B")
+            landing.merge_plan(base_text, main_text, "# No ledger\n", "X-B", PLAN)
+
+    def test_merge_plan_stops_on_edits_beyond_own_row(self) -> None:
+        done_a = ledger_row("X-A", "done", diffstat="1 files, +1/-0")
+        planned_b = ledger_row("X-B", "planned")
+        done_b = ledger_row("X-B", "done", diffstat="3 files, +9/-1")
+        base_text = plan_text(done_a, planned_b)
+        main_text = plan_text(done_a, planned_b, prose="Main prose moved on.")
+        cases = {
+            "prose edit": plan_text(done_a, done_b, prose="The session edited prose."),
+            "extra row": plan_text(done_a, done_b, ledger_row("X-C", "planned")),
+            "another row edited": plan_text(
+                ledger_row("X-A", "done", diffstat="2 files, +4/-0"), done_b
+            ),
+        }
+        for case, branch_text in cases.items():
+            with self.subTest(case=case):
+                with self.assertRaises(landing.LandingStop) as raised:
+                    landing.merge_plan(base_text, main_text, branch_text, "X-B", PLAN)
+                self.assertEqual(raised.exception.step, "rebase")
+                self.assertEqual(raised.exception.path, PLAN)
+                self.assertIn(
+                    f"{PLAN}: the branch changed the plan beyond its own row X-B",
+                    str(raised.exception),
+                )
+
+    def test_affected_projects_puts_the_owner_first(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for path in (
+                "app/Cargo.toml",
+                "app/src/main.rs",
+                "app/scripts/build-production.sh",
+                "lib/src/lib.rs",
+                "lib/scripts/build-production.sh",
+                "ws/Cargo.lock",
+            ):
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_text("fixture\n", encoding="utf-8")
+
+            def affected(paths: set[str], owner: str) -> list[str]:
+                projects = landing.affected_projects(root, REGISTRY, paths, owner)
+                return [str(project["id"]) for project in projects]
+
+            # The library's source is an input of app, its consumer.
+            self.assertEqual(affected({"lib/src/lib.rs"}, "lib"), ["lib", "app"])
+            self.assertEqual(affected({"app/src/main.rs"}, "app"), ["app"])
+            # The owner is checked even when the unit touches none of its inputs.
+            self.assertEqual(affected({"app/docs/notes.md"}, "app"), ["app"])
+            self.assertEqual(affected({"lib/src/lib.rs"}, "suite"), ["app", "lib"])
+            self.assertEqual(affected({"docs/notes.md"}, "suite"), [])
 
     def test_merge_ratchet_takes_lower_and_drops_removed(self) -> None:
         layouts = {
@@ -378,6 +446,18 @@ class LandingFunctions(unittest.TestCase):
         with self.assertRaises(landing.LandingError):
             landing.LandState.load('step = "rebase"\n')
 
+    def test_land_state_round_trip_outside_the_bmp(self) -> None:
+        state = landing.LandState(
+            step="seal",
+            branch="unit/app/FX-A",
+            kind="maintenance",
+            summary="Ship the rocket \U0001F680 past DEL \x7f and caf\u00e9",
+            project_id="app",
+            unit="FX-A",
+            attempts=0,
+        )
+        self.assertEqual(landing.LandState.load(state.dump()), state)
+
     def test_unbumped_files_restore_only_versions(self) -> None:
         history = "# history\napp\t0.1.0\tbaseline\tFX-0\tAdopt the fixture baseline\n"
         base = {
@@ -427,6 +507,13 @@ COPIED_SCRIPTS = (
 )
 PYTHON_GUARDS = ("check-staged-units.py", "commit_scope.py", "check-language-contract.py")
 SHELL_GUARDS = ("check-architecture-contract.sh", "check-documentation-contract.sh")
+# The guards that run before the build, then the full chain after the seal;
+# version_tool.py is the real tool, so it records nothing.
+PRE_GUARD_ORDER = [
+    "commit_scope.py",
+    "check-language-contract.py",
+    "check-architecture-contract.sh",
+]
 GUARD_ORDER = [
     "check-staged-units.py",
     "commit_scope.py",
@@ -468,15 +555,23 @@ PRODUCTION_FIXTURE = load_production_fixture()
 
 def python_guard(name: str) -> str:
     return f"""#!/usr/bin/env python3
-\"\"\"Fixture double of {name}: record the call and pass unless told to fail.\"\"\"
+\"\"\"Fixture double of {name}: record the call and pass unless told to fail.
+
+LAND_FIXTURE_FAIL_AFTER_SEAL=1 limits the failure to a run with staged
+changes, which only the guards after the seal see.
+\"\"\"
 import os
+import subprocess
 import sys
 
 with open(os.path.join(os.environ["LAND_FIXTURE_RECORDS"], ".guards-ran"), "a") as log:
     log.write("{name}\\n")
 if not sys.stdin.isatty():
     sys.stdin.read()
-if os.environ.get("LAND_FIXTURE_FAIL_GUARD") == "{name}":
+if os.environ.get("LAND_FIXTURE_FAIL_GUARD") == "{name}" and (
+    os.environ.get("LAND_FIXTURE_FAIL_AFTER_SEAL") != "1"
+    or subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode != 0
+):
     print("fixture guard {name} failed", file=sys.stderr)
     sys.exit(1)
 """
@@ -485,12 +580,39 @@ if os.environ.get("LAND_FIXTURE_FAIL_GUARD") == "{name}":
 def shell_guard(name: str) -> str:
     return f"""#!/bin/sh
 set -eu
-# Fixture double of {name}: record the call and pass unless told to fail.
+# Fixture double of {name}: record the call and pass unless told to fail;
+# LAND_FIXTURE_FAIL_AFTER_SEAL=1 limits the failure to a run with staged changes.
 printf '%s\\n' '{name}' >> "$LAND_FIXTURE_RECORDS/.guards-ran"
 if [ "${{LAND_FIXTURE_FAIL_GUARD:-}}" = '{name}' ]; then
-    printf '%s\\n' 'fixture guard {name} failed' >&2
-    exit 1
+    if [ "${{LAND_FIXTURE_FAIL_AFTER_SEAL:-}}" != 1 ] || ! git diff --cached --quiet; then
+        printf '%s\\n' 'fixture guard {name} failed' >&2
+        exit 1
+    fi
 fi
+"""
+
+
+def library_entry(phase: str) -> str:
+    """lib's production entry: the real entries' shape over the artifact runner."""
+    command = "run-build" if phase == "build" else "run-verification"
+    work = (
+        "mkdir -p lib/target/release\nprintf '%s\\n' 'lib release' > lib/target/release/lib"
+        if phase == "build"
+        else ":"
+    )
+    return f"""#!/bin/sh
+set -eu
+# Fixture double of lib's {phase}-production.sh: without arguments, record the
+# run and delegate to the artifact runner, which calls back in internal mode.
+suite_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+cd "$suite_root"
+if [ "$#" -eq 0 ]; then
+    printf '%s\\n' '{phase}' >> "$LAND_FIXTURE_RECORDS/.lib-entries-ran"
+    exec python3 scripts/production_artifact.py {command} lib
+fi
+[ "$1" = --production-runner-internal ] || exit 64
+[ "${{CELESTINA_PRODUCTION_RUNNER_PHASE:-}}" = {phase} ] || exit 64
+{work}
 """
 
 
@@ -693,6 +815,11 @@ class LandUnitFixture(unittest.TestCase):
         self.write(root, "app/scripts/complete-production.sh", COMPLETE_ENTRY, 0o755)
         for phase in ("deploy", "status"):
             self.write(root, f"app/scripts/{phase}-production.sh", f"#!/bin/sh\n# {phase}\n", 0o755)
+        self.write(root, "lib/src/lib.rs", "pub fn lib() {}\n")
+        self.write(root, "lib/docs/evidence/README.md", "# Evidence\n")
+        for phase in ("build", "verify"):
+            self.write(root, f"lib/scripts/{phase}-production.sh", library_entry(phase), 0o755)
+        self.write(root, "lib/scripts/status-production.sh", "#!/bin/sh\n# status\n", 0o755)
 
     # Sessions and other landings.
 
@@ -879,8 +1006,9 @@ class LandUnitFixture(unittest.TestCase):
             self.show_main("docs/version-history.tsv"),
             HISTORY + "app\t0.1.1\tbug\tFX-A\tChange FX-A\n",
         )
-        self.assertEqual(self.records_of(".guards-ran"), GUARD_ORDER)
+        self.assertEqual(self.records_of(".guards-ran"), PRE_GUARD_ORDER + GUARD_ORDER)
         self.assertEqual(len(self.records_of(".builds-ran")), 1)
+        self.assertEqual(self.records_of(".lib-entries-ran"), [])
 
 
     def test_other_product_advanced_needs_no_build(self) -> None:
@@ -1413,19 +1541,128 @@ class LandUnitFixture(unittest.TestCase):
         before = self.origin_main()
 
         result = self.land(
-            "unit/app/FX-A", "--kind", "bug", LAND_FIXTURE_FAIL_GUARD="check-language-contract.py"
+            "unit/app/FX-A",
+            "--kind",
+            "bug",
+            LAND_FIXTURE_FAIL_GUARD="check-language-contract.py",
+            LAND_FIXTURE_FAIL_AFTER_SEAL="1",
         )
 
         self.assert_not_landed(result, before)
         self.assertIn(
             "stopped at guard: check-language-contract.py failed with exit 1", result.stderr
         )
-        self.assertEqual(self.records_of(".guards-ran"), GUARD_ORDER[:4])
+        self.assertEqual(self.records_of(".guards-ran"), PRE_GUARD_ORDER + GUARD_ORDER[:4])
         self.assertEqual(self.git(self.repo, "rev-parse", "HEAD").strip(), before)
         self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), before)
         self.assertIn(INVENTORY, self.git(self.repo, "diff", "--cached", "--name-only"))
         self.assertEqual(len(self.records_of(".builds-ran")), 1)
         self.assertTrue((self.landing_dir / ".land-state.toml").is_file())
+
+    def test_failing_early_guard_stops_before_the_build(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land(
+            "unit/app/FX-A", "--kind", "bug", LAND_FIXTURE_FAIL_GUARD="check-language-contract.py"
+        )
+
+        self.assert_not_landed(result, before)
+        self.assertIn("land-unit: pre_guards\n", result.stdout)
+        self.assertIn(
+            "stopped at guard: check-language-contract.py failed with exit 1", result.stderr
+        )
+        self.assertEqual(self.records_of(".guards-ran"), PRE_GUARD_ORDER[:2])
+        self.assertEqual(self.records_of(".builds-ran"), [])
+        self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), before)
+        state = (self.landing_dir / ".land-state.toml").read_text(encoding="utf-8")
+        self.assertIn('step = "pre_guards"', state)
+
+        result = self.land("--continue")
+
+        self.assert_landed(result, before)
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+
+    def test_plan_edited_beyond_own_row_stops(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        plan = (worktree / PLAN).read_text(encoding="utf-8")
+        self.write(worktree, PLAN, plan.replace("The fixture plan.", "The session's own plan."))
+        self.commit_all(worktree, "Rewrite the plan prose")
+
+        def plan_another_unit(clone: Path) -> None:
+            text = (clone / PLAN).read_text(encoding="utf-8")
+            planned = ledger_row("FX-A", "planned")
+            self.write(clone, PLAN, text.replace(planned, planned + ledger_row("FX-Z", "planned")))
+
+        before = self.advance_main(plan_another_unit, "app-maintenance: Plan another unit")
+        result = self.land("unit/app/FX-A", "--kind", "bug")
+
+        self.assert_not_landed(result, before)
+        self.assertIn(
+            f"stopped at rebase: {PLAN}: the branch changed the plan beyond its own row FX-A",
+            result.stderr,
+        )
+        self.assertTrue((self.landing_dir / ".land-state.toml").is_file())
+        self.assertEqual(self.records_of(".builds-ran"), [])
+
+    def test_library_unit_builds_the_library_and_its_consumer(self) -> None:
+        plan = "lib/docs/plans/active/2026-09-25-lib.md"
+        evidence = "lib/docs/evidence/2026-09-25-lib-a.md"
+        self.advance_main(
+            lambda clone: self.write(
+                clone, plan, plan_text(ledger_row("LIB-A", "planned", prefix="`lib:`"))
+            ),
+            "lib-maintenance: Open the library plan",
+        )
+        worktree = self.open_branch("LIB-A", project="lib")
+        active = ledger_row(
+            "LIB-A",
+            "active",
+            prefix="`lib:`",
+            evidence="[evidence](../../evidence/2026-09-25-lib-a.md)",
+        )
+        self.write(worktree, plan, plan_text(active))
+        with (worktree / "lib/src/lib.rs").open("a", encoding="utf-8") as source:
+            source.write("// LIB-A\n")
+        self.write(worktree, evidence, "# Evidence: LIB-A\n")
+        self.commit_all(worktree, "Work on LIB-A")
+        before = self.origin_main()
+
+        result = self.land("unit/lib/LIB-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.records_of(".lib-entries-ran"), ["build", "verify"])
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+        landed = self.show_main(evidence)
+        self.assertRegex(
+            landed,
+            r"- \*\*Check:\*\* `production_artifact\.py check lib --require-verified` exit 1: "
+            r".*; `production_artifact\.py check app --require-verified` exit 1: ",
+        )
+        self.assertRegex(
+            landed,
+            r"- \*\*Build:\*\* build-production\.sh exit 0, verify-production\.sh exit 0, "
+            r"manifest git_revision [0-9a-f]{40}; complete-production\.sh exit 0, "
+            r"manifest git_revision [0-9a-f]{40}\n$",
+        )
+
+    def test_landed_unit_is_refused_at_preflight(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+        head = self.assert_landed(self.land("unit/app/FX-A", "--kind", "bug"), before)
+
+        result = self.land("unit/app/FX-A", "--kind", "bug")
+
+        self.assert_not_landed(result, head)
+        self.assertIn(
+            f"stopped at preflight: FX-A already landed: origin/main tracks {INVENTORY}",
+            result.stderr,
+        )
+        self.assertFalse(self.landing_dir.exists())
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
 
 
 if __name__ == "__main__":

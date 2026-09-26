@@ -17,6 +17,13 @@ deployable app, an updated author-test binary:
 6. scanners for every changed cross-cutting contract;
 7. exact commands, results, and limits in evidence or the ledger.
 
+A session runs items 1, 2 and 6 in its worktree and records item 7 there.
+Items 3 to 5 happen at landing: on the tree it commits, `scripts/land-unit.py`
+builds and verifies every affected project whose artifact is not current,
+completes each deployable one, and appends the result to the evidence record;
+see
+[the landing contract](../contracts/landing.md).
+
 `verify_script` never installs or activates. Registered `complete_script`
 chains the full exit and never activates the live shell. See
 [production-artifacts.md](../contracts/production-artifacts.md).

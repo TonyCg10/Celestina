@@ -1,0 +1,37 @@
+# LND-1-D exact change inventory
+
+Base revision	52050c007c401b60b696b486cc15f1fee125e84d
+Pathspec	AGENTS.md
+Pathspec	CONTRIBUTING.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/contracts/versioning.md
+Pathspec	docs/evidence/2026-09-25-seal-at-landing-review.md
+Pathspec	docs/inventories/2026-09-25-seal-at-landing/LND-1-D.numstat.tsv
+Pathspec	docs/plans/active/2026-09-25-seal-at-landing.md
+Pathspec	docs/standards/verification.md
+Pathspec	docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/production_artifact.py
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-worktree.sh
+Pathspec	scripts/worktree.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+24	12	84fb99f767ebd9f5c26d3d6180648511b1a24cc7dbc4e41e250a08a1c067e630	AGENTS.md
+5	4	b62c84161f0c6f26d7d310cf74f47d1f8f1a57005163c53f252be924f5518705	CONTRIBUTING.md
+49	39	8d8624ae789e7291a2d9642d09ddc57913a0a8a94f026d40616df6d29cd700c1	docs/contracts/landing.md
+3	0	7acbbaf3bb0920d3c1a30307e1181fac5107e4ada7613de4c1a1d81894b70ddf	docs/contracts/versioning.md
+101	0	d60234df10ba46a63320a0626cb29ec7df4ba85075126ec3d6217bf4187dd57a	docs/evidence/2026-09-25-seal-at-landing-review.md
+37	0	self	docs/inventories/2026-09-25-seal-at-landing/LND-1-D.numstat.tsv
+1	0	aa420aaa6ac240e3344466204ce47dd74ed035ff26d0ed6d5d20c52746283f59	docs/plans/active/2026-09-25-seal-at-landing.md
+7	0	9d259de10762c9626a89338511dbac5ee78fe267b8c7608cbc9c108a58c0ae2e	docs/standards/verification.md
+30	0	5d9b20ea0379a5569d8b8872266cf2d1dc41eeeebf51568c793f01a41a46c17b	docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
+94	50	074431bd170378b3013ebf9b7245827d5011011b056e520be8007121be662025	scripts/land-unit.py
+47	9	5e9c30dabaa17345f133cfe599344d4697f5405a22cd5f076c4221d4301c3f2b	scripts/landing.py
+2	1	f323238f5bbdf7231cdf2790cb6a0b46ac524fbd63e934385f54613454b481ae	scripts/production_artifact.py
+252	15	7fdeb00c46e2f3c6d53c9e7fc064f8176aadc3c251da4acedb526e2790712e36	scripts/test-land-unit.py
+35	0	3a7f801ac16cef09abb0b9f174f02bafbec0485a8ef1e3e6fcb09b45c85a5d5c	scripts/test-worktree.sh
+22	3	0643a5cd14a489c1b3f71fe689d109dc800906cedaa95d5b1bf00a1edc8e19be	scripts/worktree.sh

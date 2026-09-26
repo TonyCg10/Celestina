@@ -12,8 +12,11 @@ set -eu
 #       production runs under), and exclude both through the repository's
 #       shared info/exclude so that a session never stages them.
 #   worktree.sh close PROJECT UNIT
-#       Refuse while the branch has commits that are not on origin/main, then
-#       remove the worktree and delete the branch.
+#       Refuse while the worktree holds uncommitted changes, or while the
+#       branch has commits that are not on origin/main and origin/main tracks
+#       no inventory <UNIT>.numstat.tsv (the landing publishes a squashed
+#       commit, so after a landing only its inventory proves the unit landed);
+#       then remove the worktree and delete the branch.
 #
 # Exit 2 on usage errors and 1 on a refusal, with one line on stderr.
 
@@ -127,7 +130,23 @@ git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch" \
     || refuse "no such branch: $branch"
 pending=$(git -C "$repo_root" rev-list origin/main.."$branch") \
     || refuse "cannot compare $branch with origin/main"
-[ -z "$pending" ] || refuse "$branch has commits that are not on origin/main"
+if [ -n "$pending" ]; then
+    tracked=$(git -C "$repo_root" ls-tree -r --name-only origin/main) \
+        || refuse "cannot list the files of origin/main"
+    landed=
+    while IFS= read -r path; do
+        case /$path in
+            */inventories/"$unit.numstat.tsv" | */inventories/*/"$unit.numstat.tsv")
+                landed=$path
+                break
+                ;;
+        esac
+    done <<EOF
+$tracked
+EOF
+    [ -n "$landed" ] || refuse "$branch has commits that are not on origin/main" \
+        "and origin/main has no inventory $unit.numstat.tsv"
+fi
 if [ -d "$unit_dir" ]; then
     # Only the two files this entry wrote may be left behind; anything else
     # is session work, and the marker stays until nothing else remains.
