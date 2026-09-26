@@ -35,6 +35,7 @@ Open and close a session worktree from the canonical checkout:
 
 ```sh
 scripts/worktree.sh open siderita SID-U2-A
+scripts/worktree.sh open siderita SID-U2-B --from unit/siderita/SID-U2-A
 scripts/worktree.sh close siderita SID-U2-A
 ```
 
@@ -46,9 +47,12 @@ error, with one line on stderr.
 
 `open` runs `git fetch origin main`, creates the branch `unit/<project>/<unit>`
 from `origin/main`, adds the worktree at
-`<parent>/<name>.worktrees/<project>-<unit>/` and prints its path. It refuses
-when that directory or that branch already exists. It writes two untracked
-files at the worktree's root:
+`<parent>/<name>.worktrees/<project>-<unit>/` and prints its path. With
+`--from BRANCH`, which only `open` takes, the branch starts from the local
+branch `BRANCH` instead, for a unit stacked on another unit's branch (see
+[Stacked branches](#stacked-branches)); it refuses when `BRANCH` does not
+exist. It refuses when that directory or that branch already exists. It
+writes two untracked files at the worktree's root:
 
 - `.cargo/config.toml`, whose `[build]` table sets `target-dir` to
   `<parent>/<name>.worktrees/.cargo-target`, so `cargo test` and
@@ -103,7 +107,11 @@ For the landing to accept the branch, its diff against `origin/main` must
 change exactly one active plan (a Markdown file other than `README.md` directly
 in an owner's registered `active_plans` directory), and that plan must have
 exactly one ledger row that is `active`, or `done` without an inventory link.
-That row's `Commit prefix` must be the plan owner's registered prefix, its
+A row open on the branch that `origin/main`'s plan closed (`done` with an
+inventory link) belongs to a unit that already landed, such as the dependency
+of a stacked branch, and is set aside while another open row remains; the
+unit's own row closed on `origin/main` is still the unit, which `preflight`
+then refuses as landed. That row's `Commit prefix` must be the plan owner's registered prefix, its
 `Intended change` is the subject's imperative text unless `--summary` replaces
 it, and its `Automated evidence` must link an existing `.md` record under the
 owner's `docs/evidence/` (root `docs/evidence/` for a suite plan).
@@ -291,7 +299,13 @@ function in `scripts/landing.py`:
 
 - **The unit's plan** (the active plan the branch changes). `merge_plan`
   first compares the branch's plan with the fork point's, both without this
-  unit's ledger row. When they differ, the branch changed the plan beyond its
+  unit's ledger row and without every other row that `main` already settles:
+  a branch row equal to `main`'s row, and a branch row that is open where
+  `main`'s is closed with every cell other than `Status`, `Files / areas`,
+  `Diffstat` and `Automated evidence` (the cells the seal writes) equal,
+  which is a landed dependency's row as its session left it. A row equal to
+  the fork point's is unchanged and needs no rule. When the texts still
+  differ, the branch changed the plan beyond its
   own row, and the landing stops at `rebase` naming the plan and the first
   line that differs on each side (the comparison is by whole lines, so a
   reformatting also stops). Otherwise it
@@ -322,14 +336,77 @@ function in `scripts/landing.py`:
   accepted. Either lockfile stop says to merge the lockfile by hand,
   `git add` it in the landing worktree, then run `land-unit.py --continue`.
 
-A hot file deleted on one side stops the landing. Version sources, their
-mirrors and `docs/version-history.tsv` are not hot files: after `unbump` the
-branch carries no version change, and `bump_version` writes them on the
-rebased tree. Every other conflict, including inventories, evidence records,
-`STATUS.md`, `ROADMAP.md`, `VALIDATION.md` and plan indexes, stops the landing
-for the author to resolve. Two branches that set different active checkpoints
+- **Another unit's evidence record or added inventory.** A conflicted
+  Markdown file directly in an owner's `docs/evidence/` other than its
+  `README.md` and other than this unit's evidence record, in an add/add or
+  modify/modify conflict, and a conflicted inventory at
+  `<owner docs>/inventories/<plan-slug>/` other than this unit's, in an
+  add/add conflict, take `main`'s copy, and the tool warns:
+
+  ```text
+  land-unit: warning: <path> is another unit's evidence record; the landing keeps origin/main's copy
+  land-unit: warning: <path> is another unit's inventory; the landing keeps origin/main's copy
+  ```
+
+  `other_unit_record` decides which paths these are. The branch's edits to
+  such a file are dropped, since `main`'s copy is the landed record.
+
+A hot file deleted on one side stops the landing, and so does another unit's
+record deleted on one side or an inventory both sides modified. Version
+sources, their mirrors and `docs/version-history.tsv` are not hot files: after
+`unbump` the branch carries no version change, and `bump_version` writes them
+on the rebased tree. Every other conflict, including this unit's own evidence
+record, `STATUS.md`, `ROADMAP.md`, `VALIDATION.md` and plan indexes, stops the
+landing for the author to resolve. Two branches that set different active checkpoints
 in one `ROADMAP.md` conflict in prose and stop; the one-active-checkpoint rule
 is unchanged.
+
+## Stacked branches
+
+A unit that needs another unit's unlanded work is prepared on a branch
+stacked on that unit's branch, its dependency. Open it from the canonical
+checkout with
+
+```sh
+scripts/worktree.sh open siderita SID-U2-B --from unit/siderita/SID-U2-A
+```
+
+or by hand with
+`git worktree add -b unit/siderita/SID-U2-B <parent>/<name>.worktrees/siderita-SID-U2-B unit/siderita/SID-U2-A`
+(then write the two files `open` writes), or with `scripts/worktree.sh open`
+followed by `git reset --hard unit/siderita/SID-U2-A` in the new worktree.
+The stacked branch then carries the dependency's commits: its change, its
+ledger row as its session left it, and its evidence record.
+
+Units land in dependency order. While the dependency has not landed, the
+stacked branch's plan has two open rows, and `preflight` stops naming both;
+when the branch is named `unit/<project>/<unit>`, it names the dependency and
+says to land it first. The dependency lands as one sealed commit, and its
+branch is never rewritten, so the stacked branch keeps its commits. The
+stacked unit then lands with the ordinary command, and the tool accepts
+what the dependency's landing left on both sides:
+
+- the dependency's row, open on the branch and closed on `main`, is set
+  aside by `discover_unit` and masked by `merge_plan`, as the plan rules
+  above say;
+- the dependency's evidence record exists on both sides, and `main`'s copy,
+  with its `## Landing` section, is kept;
+- the dependency's change exists on both sides, and Git's three-way merge
+  resolves every hunk that is identical on both sides;
+- the dependency's version bump and inventory exist only on `main`, since a
+  session writes neither and `unbump` drops a bump it did write, so they
+  merge cleanly.
+
+The sealed commit's diff against the previous `main` is then the stacked
+unit's own change, plan row, evidence record and inventory. The rebase takes
+the old fork point as its base, so a stacked change that touches lines next to
+a line the dependency changed conflicts as an ordinary file and stops the
+landing for the author to resolve. The dependency must share the stacked
+unit's plan: a branch whose dependency's row lies in another active plan
+changes two plans, and `preflight` stops. For such a stack, once the
+dependency landed, move the stacked unit's own commits onto `main` in its
+session worktree with `git rebase --onto origin/main <dependency branch>`
+before the landing.
 
 ## Stops and resumption
 

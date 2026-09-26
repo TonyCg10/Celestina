@@ -46,6 +46,9 @@ from version_tool import replace_source_version
 LEDGER_HEADING = "change and commit ledger"
 INVENTORY_HEADER = "added\tdeleted\tcontent\tpath"
 OPEN_ROW_RULE = "`active`, or `done` without an inventory link"
+# The cells close_ledger_row writes when the seal closes a row; every other
+# cell of a row is the session's.
+SEAL_COLUMNS = ("status", "files / areas", "diffstat", "automated evidence")
 VERSIONED_KINDS = ("bug", "milestone", "release")
 # The diffstat cell does not change the plan's line counts, so a plan closed
 # with this placeholder already has the plan's final numstat.
@@ -162,7 +165,7 @@ class LedgerTable:
         return dict(zip(self.header, cells))
 
     def unit_rows(self) -> dict[str, int]:
-        return {self.cells(index).get("unit", "").strip("` "): index for index in self.rows}
+        return {row_unit(self.cells(index)): index for index in self.rows}
 
 
 def ledger_table(text: str, label: str, step: str) -> LedgerTable:
@@ -198,6 +201,25 @@ def has_inventory_link(cell: str) -> bool:
     return any(target.endswith(".numstat.tsv") for _line, target in extract_inline_links(cell))
 
 
+def is_open_row(cells: Mapping[str, str]) -> bool:
+    """`active`, or `done` without an inventory link: a unit that has not landed."""
+    status = normalized_status(cells.get("status", ""))
+    return status == "active" or (
+        status == "done" and not has_inventory_link(cells.get("files / areas", ""))
+    )
+
+
+def is_closed_row(cells: Mapping[str, str]) -> bool:
+    """`done` with an inventory link: a unit the seal closed."""
+    return normalized_status(cells.get("status", "")) == "done" and has_inventory_link(
+        cells.get("files / areas", "")
+    )
+
+
+def row_unit(cells: Mapping[str, str]) -> str:
+    return cells.get("unit", "").strip("` ")
+
+
 def owner_tables(registry: Mapping[str, object]) -> list[Mapping[str, object]]:
     owners: list[Mapping[str, object]] = []
     suite = registry.get("suite")
@@ -221,11 +243,18 @@ def discover_unit(
     registry: Mapping[str, object],
     changed_paths: set[str],
     read_plan: Callable[[str], str | None],
+    read_main_plan: Callable[[str], str | None] | None = None,
+    branch_unit: str | None = None,
 ) -> UnitRef:
     """Find the one open ledger row of the one active plan a branch changes.
 
     Plan texts come from `read_plan`, so the caller decides which revision is
-    read.
+    read. A row open on the branch that `read_main_plan`'s plan (origin/main's)
+    closed belongs to a unit that already landed, such as the dependency a
+    stacked branch was created from, so it is set aside while another open row
+    remains. `branch_unit`, the unit the branch is named after, only names the
+    dependencies in the stop for a stacked branch whose dependency has not
+    landed.
     """
     candidates: list[tuple[str, Mapping[str, object]]] = []
     for owner in owner_tables(registry):
@@ -246,24 +275,31 @@ def discover_unit(
     if text is None:
         raise LandingStop("preflight", f"the branch deletes its plan {plan_path}", plan_path)
     table = ledger_table(text, plan_path, "preflight")
-    open_rows = []
-    for index in table.rows:
-        cells = table.cells(index)
-        status = normalized_status(cells.get("status", ""))
-        if status == "active" or (
-            status == "done" and not has_inventory_link(cells.get("files / areas", ""))
-        ):
-            open_rows.append(cells)
-    if len(open_rows) != 1:
-        units = ", ".join(cells.get("unit", "").strip("` ") for cells in open_rows)
+    open_rows = [cells for cells in map(table.cells, table.rows) if is_open_row(cells)]
+    main_text = read_main_plan(plan_path) if read_main_plan is not None else None
+    landed = set()
+    if main_text is not None:
+        main = ledger_table(main_text, f"origin/main's {plan_path}", "preflight")
+        landed = {row_unit(cells) for cells in map(main.cells, main.rows) if is_closed_row(cells)}
+    pending = [cells for cells in open_rows if row_unit(cells) not in landed]
+    candidates = pending or open_rows
+    if len(candidates) != 1:
+        units = [row_unit(cells) for cells in candidates]
+        dependencies = [unit for unit in units if unit != branch_unit]
+        stacked = (
+            f"; origin/main has not closed {', '.join(dependencies)}: a stacked branch lands "
+            f"after the unit it is stacked on, so land {', '.join(dependencies)} first"
+            if branch_unit in units and dependencies
+            else ""
+        )
         raise LandingStop(
             "preflight",
             f"{plan_path} must have exactly one ledger row that is {OPEN_ROW_RULE}; "
-            f"found {len(open_rows)}" + (f": {units}" if units else ""),
+            f"found {len(units)}" + (f": {', '.join(units)}" if units else "") + stacked,
             plan_path,
         )
-    cells = open_rows[0]
-    unit = cells["unit"].strip("` ")
+    cells = candidates[0]
+    unit = row_unit(cells)
     raw_prefix = cells["commit prefix"].strip().strip("`").strip()
     prefix = raw_prefix[:-1] if raw_prefix.endswith(":") else ""
     if prefix not in build_commit_scopes(dict(registry)):
@@ -294,6 +330,41 @@ def discover_unit(
         summary=cells.get("intended change", "").strip(),
         evidence_path=evidence_path,
     )
+
+
+def other_unit_record(
+    registry: Mapping[str, object], path: str, own: set[str], added: bool
+) -> str | None:
+    """Which kind of another unit's record `path` is, or None: main's copy settles its conflict.
+
+    An evidence record directly in an owner's `docs/evidence/`, other than its
+    index, is `evidence record`; an inventory at
+    `<owner docs>/inventories/<plan-slug>/` that both sides `added` is
+    `inventory`. A stacked branch carries its dependency's evidence as the
+    session left it, while main's copy has the landing section; an inventory is
+    immutable once main tracks it. The unit's `own` records, a modified
+    inventory and every other path are None.
+    """
+    if path in own:
+        return None
+    directory = posixpath.dirname(path)
+    for owner in owner_tables(registry):
+        if not isinstance(owner.get("active_plans"), str):
+            continue
+        docs = owner_docs_root(owner)
+        if (
+            directory == posixpath.join(docs, "evidence")
+            and path.endswith(".md")
+            and posixpath.basename(path).casefold() != "readme.md"
+        ):
+            return "evidence record"
+        if (
+            added
+            and path.endswith(".numstat.tsv")
+            and posixpath.dirname(directory) == posixpath.join(docs, "inventories")
+        ):
+            return "inventory"
+    return None
 
 
 def owner_docs_root(owner: Mapping[str, object]) -> str:
@@ -428,10 +499,40 @@ def verification_only(check_output: str) -> bool:
     return found and not any(part.strip() for part in rest.split(";"))
 
 
-def masked_lines(table: LedgerTable, unit: str) -> list[tuple[int, str]]:
-    """Every line of the table's text but `unit`'s ledger row, with its 1-based number."""
-    row = table.unit_rows().get(unit)
-    return [(index + 1, line) for index, line in enumerate(table.lines) if index != row]
+def masked_lines(table: LedgerTable, units: set[str]) -> list[tuple[int, str]]:
+    """Every line of the table's text but the ledger rows of `units`, with its 1-based number."""
+    rows = {index for unit, index in table.unit_rows().items() if unit in units}
+    return [(index + 1, line) for index, line in enumerate(table.lines) if index not in rows]
+
+
+def settled_rows(branch: LedgerTable, main: LedgerTable, unit: str) -> set[str]:
+    """The units other than `unit` whose branch row main's plan already holds or supersedes.
+
+    A row equal to main's is main's already. A row that is open on the branch
+    and that main closed, with every cell the seal does not write equal, is the
+    row of a unit that landed as its session left it: a branch stacked on that
+    unit carries it. Taking main's row loses nothing in either case.
+    """
+    main_rows = main.unit_rows()
+    settled = set()
+    for other, index in branch.unit_rows().items():
+        if other == unit or other not in main_rows:
+            continue
+        mine, theirs = branch.cells(index), main.cells(main_rows[other])
+        if branch.lines[index].rstrip("\r\n") == main.lines[main_rows[other]].rstrip("\r\n"):
+            settled.add(other)
+        elif (
+            branch.header == main.header
+            and is_open_row(mine)
+            and is_closed_row(theirs)
+            and all(
+                mine.get(column, "").strip() == theirs.get(column, "").strip()
+                for column in branch.header
+                if column not in SEAL_COLUMNS
+            )
+        ):
+            settled.add(other)
+    return settled
 
 
 def first_difference(
@@ -455,9 +556,10 @@ def first_difference(
 def merge_plan(base_text: str, main_text: str, branch_text: str, unit: str, path: str) -> str:
     """Main's plan with the branch's row for `unit`; every other line is main's.
 
-    That is only sound when the branch changed nothing else in the plan, so
-    the merge stops unless the branch's text equals the base's with the unit's
-    row masked on both sides.
+    That is only sound when the branch changed nothing else in the plan that
+    main does not already hold, so the merge stops unless the branch's text
+    equals the base's once the unit's row and the rows `settled_rows` accepts
+    are masked on both sides.
     """
     base = ledger_table(base_text, "the base's plan", "rebase")
     main = ledger_table(main_text, "main's plan", "rebase")
@@ -465,7 +567,8 @@ def merge_plan(base_text: str, main_text: str, branch_text: str, unit: str, path
     branch_rows = branch.unit_rows()
     if unit not in branch_rows:
         raise LandingStop("rebase", f"the branch's plan has no ledger row {unit}")
-    difference = first_difference(masked_lines(branch, unit), masked_lines(base, unit))
+    masked = {unit} | settled_rows(branch, main, unit)
+    difference = first_difference(masked_lines(branch, masked), masked_lines(base, masked))
     if difference is not None:
         raise LandingStop(
             "rebase",
@@ -488,7 +591,7 @@ def merge_plan(base_text: str, main_text: str, branch_text: str, unit: str, path
     anchor = main.separator
     position = branch.rows.index(branch_index)
     if position > 0:
-        previous_unit = branch.cells(branch.rows[position - 1]).get("unit", "").strip("` ")
+        previous_unit = row_unit(branch.cells(branch.rows[position - 1]))
         anchor = main_rows.get(previous_unit, main.separator)
     lines.insert(anchor + 1, replacement)
     return "".join(lines)
@@ -824,12 +927,13 @@ def close_ledger_row(
     cells = split_table_row(table.lines[index])
     if len(cells) != len(table.header):
         raise LandingStop("seal", f"the ledger row {unit} has the wrong number of cells")
-    values = {
-        "status": "done",
-        "files / areas": f"[inventory]({inventory_link})",
-        "diffstat": diffstat,
-        "automated evidence": f"[evidence]({evidence_link})",
-    }
+    values = dict(
+        zip(
+            SEAL_COLUMNS,
+            ("done", f"[inventory]({inventory_link})", diffstat, f"[evidence]({evidence_link})"),
+            strict=True,
+        )
+    )
     for column, value in values.items():
         cells[table.header.index(column)] = value
     lines = list(table.lines)

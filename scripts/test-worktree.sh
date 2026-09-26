@@ -192,3 +192,34 @@ if git -C "$repo" show-ref --verify --quiet refs/heads/unit/app/APP-1; then
     fail "close app APP-1 after the landing: the branch still exists"
 fi
 printf 'ok %s\n' "close accepts a landed unit whose inventory is on origin/main"
+
+# 8. A stacked unit opens from its dependency's branch, which must exist; only
+#    open takes --from.
+run_entry open app APP-2
+expect_status 0 "open app APP-2"
+printf 'dependency\n' > "$worktrees/app-APP-2/dependency.txt"
+git -C "$worktrees/app-APP-2" add dependency.txt
+git -C "$worktrees/app-APP-2" commit -qm "fixture: dependency work"
+run_entry open app APP-3 --from unit/app/APP-2
+expect_status 0 "open app APP-3 --from unit/app/APP-2"
+[ "$(cat "$stdout_file")" = "$worktrees/app-APP-3" ] \
+    || fail "open app APP-3 --from: printed $(cat "$stdout_file")"
+[ "$(git -C "$worktrees/app-APP-3" rev-parse HEAD)" = \
+    "$(git -C "$repo" rev-parse unit/app/APP-2)" ] \
+    || fail "open app APP-3 --from: HEAD is not the dependency's tip"
+[ "$(git -C "$worktrees/app-APP-3" symbolic-ref --short HEAD)" = unit/app/APP-3 ] \
+    || fail "open app APP-3 --from: the worktree is not on unit/app/APP-3"
+[ -f "$worktrees/app-APP-3/.celestina-worktree" ] \
+    || fail "open app APP-3 --from: marker is missing"
+run_entry open app APP-4 --from unit/app/APP-9
+expect_status 1 "open app APP-4 --from a missing branch"
+expect_stderr "no such branch: unit/app/APP-9" "open app APP-4 --from a missing branch"
+[ ! -e "$worktrees/app-APP-4" ] || fail "open app APP-4 --from: created a worktree"
+if git -C "$repo" show-ref --verify --quiet refs/heads/unit/app/APP-4; then
+    fail "open app APP-4 --from a missing branch: created the branch"
+fi
+run_entry close app APP-3 --from unit/app/APP-2
+expect_status 2 "close app APP-3 --from"
+run_entry open app APP-4 --after unit/app/APP-2
+expect_status 2 "open app APP-4 --after"
+printf 'ok %s\n' "open --from starts a stacked unit on its dependency's branch"

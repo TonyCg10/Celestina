@@ -22,6 +22,7 @@ programs it runs.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -48,6 +49,7 @@ from landing import (
     merge_plan,
     merge_ratchet,
     numstat_rows,
+    other_unit_record,
     owner_docs_root,
     owner_tables,
     render_inventory,
@@ -272,14 +274,22 @@ def changed_on_branch(ctx: LandContext) -> set[str]:
     )
 
 
-def resolve_unit(ctx: LandContext, changed: set[str]) -> UnitRef:
+def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
+    """The branch's unit; rows that `main` (origin/main or the base) closed are set aside."""
     branch = ctx.state.branch
 
-    def read_plan(path: str) -> str | None:
-        raw = blob(ctx, f"{branch}:{path}")
-        return None if raw is None else text_of(raw, f"{branch}:{path}")
+    def reader(rev: str) -> Callable[[str], str | None]:
+        def read_plan(path: str) -> str | None:
+            raw = blob(ctx, f"{rev}:{path}")
+            return None if raw is None else text_of(raw, f"{rev}:{path}")
 
-    return discover_unit(ctx.registry, changed, read_plan)
+        return read_plan
+
+    # worktree.sh names a unit's branch unit/<project>/<unit>; the name only
+    # tells the unit from its dependencies in the stop that lists both.
+    return discover_unit(
+        ctx.registry, changed, reader(branch), reader(main), posixpath.basename(branch)
+    )
 
 
 def rebase_in_progress(ctx: LandContext) -> bool:
@@ -320,7 +330,7 @@ def preflight(ctx: LandContext) -> None:
     changed = changed_on_branch(ctx)
     if not changed:
         raise LandingStop("preflight", f"{state.branch} has no changes against origin/main")
-    unit = resolve_unit(ctx, changed)
+    unit = resolve_unit(ctx, changed, "origin/main")
     ctx.unit = unit
     refuse_landed(ctx, "origin/main", "preflight")
     violations = scope_violations(unit.prefix, ctx.registry, changed)
@@ -462,6 +472,13 @@ def hot_merge(ctx: LandContext, path: str) -> bytes | None:
         return blob(ctx, f":{number}:{path}", cwd=landing)
 
     base, main, branch = stage(1), stage(2), stage(3)
+    own = {unit.evidence_path or "", unit_inventory(ctx)}
+    record = other_unit_record(ctx.registry, path, own, base is None)
+    if record is not None and main is not None and branch is not None:
+        # A branch stacked on a landed unit carries that unit's record as its
+        # session left it; main's copy is the landed one.
+        say(f"warning: {path} is another unit's {record}; the landing keeps origin/main's copy")
+        return main
     ratchets = ctx.registry.get("commit_policy", {}).get("shared_ratchet_files", [])
     is_hot = (
         path == unit.plan_path or path in ratchets or posixpath.basename(path) == "Cargo.lock"
@@ -965,7 +982,7 @@ def resume(root: Path, landing_dir: Path) -> LandContext:
         raise LandingError(f"{path} names an unknown step: {state.step}")
     ctx = LandContext(root, landing_dir, {}, state, None)
     ctx.registry = registry_at(ctx, state.base or "origin/main")
-    ctx.unit = resolve_unit(ctx, changed_on_branch(ctx))
+    ctx.unit = resolve_unit(ctx, changed_on_branch(ctx), state.base or "origin/main")
     return ctx
 
 

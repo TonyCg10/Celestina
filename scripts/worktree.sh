@@ -3,9 +3,11 @@ set -eu
 
 # Open or close the session worktree of one ledger unit.
 #
-#   worktree.sh open PROJECT UNIT
-#       Fetch origin/main, create the branch unit/<project>/<unit> from it and
-#       add its worktree at <parent>/<basename>.worktrees/<project>-<unit>/,
+#   worktree.sh open PROJECT UNIT [--from BRANCH]
+#       Fetch origin/main, create the branch unit/<project>/<unit> from it, or
+#       from the local branch BRANCH for a unit stacked on another unit's
+#       branch, and add its worktree at
+#       <parent>/<basename>.worktrees/<project>-<unit>/,
 #       outside the repository. Inside it, write the untracked files
 #       .cargo/config.toml (one Cargo target directory shared by every session)
 #       and .celestina-worktree (the marker production_artifact.py refuses
@@ -23,7 +25,7 @@ set -eu
 # Exit 2 on usage errors and 1 on a refusal, with one line on stderr.
 
 usage() {
-    printf '%s\n' 'usage: scripts/worktree.sh open|close PROJECT UNIT' >&2
+    printf '%s\n' 'usage: scripts/worktree.sh open PROJECT UNIT [--from BRANCH] | close PROJECT UNIT' >&2
     exit 2
 }
 
@@ -32,14 +34,19 @@ refuse() {
     exit 1
 }
 
-[ "$#" -eq 3 ] || usage
+[ "$#" -eq 3 ] || [ "$#" -eq 5 ] || usage
 command=$1
 project=$2
 unit=$3
+from=
 case $command in
     open | close) ;;
     *) usage ;;
 esac
+if [ "$#" -eq 5 ]; then
+    [ "$command" = open ] && [ "$4" = --from ] && [ -n "$5" ] || usage
+    from=$5
+fi
 
 # Both ids become path and branch components; accept only ledger-shaped ids.
 for identifier in "$project" "$unit"; do
@@ -110,9 +117,17 @@ if [ "$command" = open ]; then
     if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch"; then
         refuse "branch already exists: $branch"
     fi
+    start=origin/main
+    if [ -n "$from" ]; then
+        # A stacked unit starts from its dependency's local branch; the
+        # landing accepts it once that dependency has landed.
+        git -C "$repo_root" show-ref --verify --quiet "refs/heads/$from" \
+            || refuse "no such branch: $from"
+        start=refs/heads/$from
+    fi
     mkdir -p -- "$worktrees"
     git -C "$repo_root" worktree add --quiet --no-track -b "$branch" \
-        "$unit_dir" origin/main || refuse "cannot add the worktree $unit_dir"
+        "$unit_dir" "$start" || refuse "cannot add the worktree $unit_dir"
     # info/exclude lives in the common Git directory, so it covers every
     # worktree and the canonical checkout, where neither file exists.
     common_dir=$(git -C "$repo_root" rev-parse --path-format=absolute \
