@@ -33,6 +33,8 @@ enum class PairRefusal {
     Conflict,
     /** The offer waited longer than [PairingConsent.TTL_MS]. */
     Expired,
+    /** This phone's own addresses could not be read, so a link to itself could not be told apart. */
+    LocalUnknown,
 }
 
 /** A link read for the consent screen: an offer to show, or a refusal. */
@@ -48,9 +50,9 @@ sealed interface PairPreview {
         /**
          * Reads `uri` for the screen. `local` holds this phone's own
          * interface addresses as host literals; a link naming one of them is
-         * refused.
+         * refused, and so is every link when none of them could be read.
          */
-        fun of(uri: String?, local: Set<String> = emptySet()): PairPreview {
+        fun of(uri: String?, local: Set<String>): PairPreview {
             if (uri == null || !PairLink.accepts(uri)) return Refused(PairRefusal.NotMagnetita)
             var version: String? = null
             var id: String? = null
@@ -93,6 +95,8 @@ sealed interface PairPreview {
             // The core dials every address in order, so one bad address refuses the link.
             if (!addresses.all(LanAddress::isLan)) return Refused(PairRefusal.NotLan)
             val own = local.mapNotNull(LanAddress::canonicalHost).toSet()
+            // Fail closed: without this phone's addresses a link to itself would pass.
+            if (own.isEmpty()) return Refused(PairRefusal.LocalUnknown)
             if (addresses.any { LanAddress.hostOf(it) in own }) return Refused(PairRefusal.ThisPhone)
             return Offer(PairOffer(uri, id, fingerprint, addresses))
         }
@@ -227,13 +231,17 @@ sealed interface PairingState {
  * person confirms the very offer the screen shows, within [TTL_MS].
  *
  * - A different link arriving while one waits drops both and says so
- *   ([PairRefusal.Conflict]): neither is trusted, and the person scans
- *   again. The same link again is the same offer and changes nothing.
+ *   ([PairRefusal.Conflict]): neither is trusted. The conflict then holds
+ *   and every further link is ignored until the person dismisses it, so a
+ *   third link cannot replace the message before it is read. The same link
+ *   again is the same offer and changes nothing.
  * - A waiting offer expires after [TTL_MS] and is dismissed when no consent
  *   screen is in the foreground any more, so a link planted while the
  *   person looked away cannot wait for a later, genuine pairing.
  *
- * Pure, so the JVM tests pin it; `now` is a monotonic clock in ms.
+ * Pure, so the JVM tests pin it. `now` is a monotonic clock in ms; the
+ * app passes `SystemClock.elapsedRealtime`, which counts deep sleep, so an
+ * offer's two minutes are wall time. The default serves the JVM tests.
  */
 class PairingConsent(private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val _state = MutableStateFlow<PairingState>(PairingState.Idle)
@@ -241,19 +249,26 @@ class PairingConsent(private val now: () -> Long = { System.nanoTime() / 1_000_0
     private var offeredAt = 0L
     private var screens = 0
 
-    /** Offers a link, refusing it against this phone's own addresses `local`. */
+    /**
+     * Offers a link, refusing it against this phone's own addresses `local`.
+     * False when the link was ignored: a conflict is on screen, or the same
+     * link already waits.
+     */
     @Synchronized
-    fun offer(uri: String?, local: Set<String> = emptySet()) {
+    fun offer(uri: String?, local: Set<String>): Boolean {
         expire()
         val waiting = _state.value
+        if (waiting == PairingState.Refused(PairRefusal.Conflict)) return false
         if (waiting is PairingState.Confirming) {
-            if (waiting.offer.uri != uri) _state.value = PairingState.Refused(PairRefusal.Conflict)
-            return
+            if (waiting.offer.uri == uri) return false
+            _state.value = PairingState.Refused(PairRefusal.Conflict)
+            return true
         }
         _state.value = when (val preview = PairPreview.of(uri, local)) {
             is PairPreview.Offer -> PairingState.Confirming(preview.offer).also { offeredAt = now() }
             is PairPreview.Refused -> PairingState.Refused(preview.reason)
         }
+        return true
     }
 
     /** The person confirmed `offer`: its link to pair, once, or null when it is not the one waiting. */
@@ -279,7 +294,7 @@ class PairingConsent(private val now: () -> Long = { System.nanoTime() / 1_000_0
         }
     }
 
-    /** The person declined the offer or dismissed a refusal. */
+    /** The person declined the offer or dismissed a refusal; the only way out of a conflict. */
     @Synchronized
     fun dismiss() {
         _state.value = PairingState.Idle

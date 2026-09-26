@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
                     )
                 } else if (scanning) {
                     ScanScreen(
-                        onLink = { uri -> pairing.offer(uri, LocalAddresses.of(this)); scanning = false },
+                        onLink = { uri -> offerLink(uri); scanning = false },
                         onBack = { scanning = false },
                     )
                 } else {
@@ -235,11 +235,17 @@ class MainActivity : ComponentActivity() {
         if (intent.action != Intent.ACTION_VIEW || data.scheme != "magnetita" || data.host != "pair") return
         // Recents replays the intent that opened the task; that is not a new request.
         if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
-        pairing.offer(data.toString(), LocalAddresses.of(this))
+        offerLink(data.toString())
+    }
+
+    private fun offerLink(uri: String) {
+        if (!pairing.offer(uri, LocalAddresses.of(this))) android.util.Log.i(TAG, "pairing link ignored: a conflict or the same link is on screen")
     }
 
     companion object {
+        private const val TAG = "magnetita-main"
+
         /** Outlives the activity's recreation; the process's death drops a waiting offer, which is the safe side. */
-        private val pairing = PairingConsent()
+        private val pairing = PairingConsent { android.os.SystemClock.elapsedRealtime() }
     }
 }

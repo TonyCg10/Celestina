@@ -54,11 +54,17 @@
   more (`onStop` outside a configuration change), the offer is dropped. A
   different link arriving while one waits drops both and shows a
   `Conflict` refusal asking the person to scan again; the same link again
-  changes nothing. A link planted while the person looked away therefore
-  cannot wait for a later genuine scan. While an offer is shown, the window
+  changes nothing. The conflict holds, and every further link is ignored
+  until the person dismisses it, so a third link cannot replace the message
+  before it is read. A link planted while the person looked away therefore
+  cannot wait for a later genuine scan. The app's clock is
+  `SystemClock.elapsedRealtime`, which counts deep sleep. When this phone's
+  own addresses cannot be read, every link is refused (`LocalUnknown`)
+  rather than letting a link to the phone itself pass. While an offer is shown, the window
   hides other apps' overlays (`setHideOverlayWindows`, with the
-  `HIDE_OVERLAY_WINDOWS` permission), and the confirm button is disabled
-  for its first 500 ms. A recreated activity and a launch from Recents do
+  `HIDE_OVERLAY_WINDOWS` permission). The confirm button is disabled for
+  500 ms after the offer appears and again after every return of the
+  window's focus, and it arms only while the window is focused. A recreated activity and a launch from Recents do
   not re-offer the intent.
 - **AND-6.** `MirrorControl` passes `MirrorKey` and `MirrorGlobal` to
   the accessibility service only while `MirrorService.state` is
@@ -162,6 +168,27 @@ $KOTLINC -cp $CP -d out-red2 $M/link/Ports.kt $M/link/DesktopSignal.kt old-Pairi
 - **GREEN:** `OK (24 tests)`: 12 consent tests, 3 mirror tests, 4 delete
   tests and 5 neighbouring tests. The three guards printed OK.
 
+### Round 2
+
+The re-review found that a third link replaced the conflict message. It
+also asked for four small changes:
+
+- arm the tap guard again on every return of focus;
+- fail closed when the phone's own addresses cannot be read;
+- restore the stale-confirm assertion;
+- use a wall-time clock.
+
+The conflict now latches until dismissed, and the four changes are made.
+
+- **RED:** the round-2 tests against the round-1 `PairingConsent.kt` fail
+  to compile: `offer` returns no result, and `LocalUnknown` does not exist.
+- **GREEN:** `OK (26 tests)`: 14 consent tests, 3 mirror tests, 4 delete
+  tests and 5 neighbouring tests. The new tests are
+  `a_conflict_holds_until_the_person_dismisses_it` and
+  `no_readable_address_of_this_phone_refuses_every_link`, and the
+  different-offer assertion is back in
+  `only_the_confirmed_offer_pairs_and_only_once`.
+
 ## Limits
 
 - Gradle, the Android SDK and lint are not in this container. The Android
@@ -183,8 +210,9 @@ $KOTLINC -cp $CP -d out-red2 $M/link/Ports.kt $M/link/DesktopSignal.kt old-Pairi
     Until P-11 maps the error, the desktop reports `EIO`, not
     `ENOTEMPTY`.
 - `LocalAddresses` returns what the interfaces and the active network
-  report. If both sources fail, the own-address check has nothing to
-  compare against and only the LAN rule applies.
+  report. If both sources fail, or report nothing parseable, pairing by
+  link is refused with the `LocalUnknown` message until they answer. This
+  fails closed at the cost of availability.
 - The child count and the delete are two provider calls: an entry created
   between them is deleted with the folder. The storage access framework
   has no remove-if-empty call.

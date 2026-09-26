@@ -15,14 +15,18 @@ entries specific to the application are added here as its screens land.
 - **Procedure:** open a `magnetita://pair` link naming the desktop from
   another app (for example `adb shell am start -d '<link>'` or a note);
   press Home while the consent shows and reopen the app; open it again and
-  confirm; scan the desktop's QR and cancel, then scan and confirm; open a
+  leave the consent unanswered for two minutes; open it again and, while it
+  shows, open a second link naming another id; dismiss the message; open
+  the first link again and confirm; scan the desktop's QR and cancel, then scan and confirm; open a
   link naming `8.8.8.8:1760` and one naming the phone's own Wi-Fi address;
   with no mirror running, press keys and Back/Home/Recents on the
   desktop's mirror controls; run `rmdir` on a non-empty folder of the
   mount, then on an empty one
 - **Pass condition:** the link opens the consent screen with the desktop's
   id, fingerprint and address and pairs only on "Emparejar"; Home drops the
-  offer; the scan shows the same screen; the public and own addresses show
+  offer; after two minutes the consent turns into the expiry message; the
+  second link turns the consent into the message that both links were
+  discarded, which stays until dismissed; the scan shows the same screen; the public and own addresses show
   their refusals; keys and global actions do nothing without a stream; the
   non-empty folder and its files remain on the phone (the desktop reports
   an error, `ENOTEMPTY` once `MAG-D1-D` lands) and the empty one is removed

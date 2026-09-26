@@ -40,6 +40,7 @@
     <string name="pair_refused_not_lan">El enlace apunta fuera de tu red local; no se empareja</string>
     <string name="pair_refused_this_phone">El enlace apunta a este mismo teléfono; no se empareja</string>
     <string name="pair_refused_conflict">Llegaron dos enlaces distintos a la vez y se descartaron ambos; vuelve a escanear el código del escritorio</string>
+    <string name="pair_refused_local_unknown">No se pudieron leer las direcciones de este teléfono; no se empareja</string>
     <string name="pair_refused_expired">El enlace caducó sin respuesta; vuelve a escanear el código del escritorio</string>
     <string name="label_pairing">Emparejado</string>
     <string name="label_clipboard">Portapapeles</string>

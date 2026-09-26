@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.celestina.magnetita.R
@@ -45,11 +46,16 @@ fun PairConfirmScreen(state: PairingState, onPair: (PairOffer) -> Unit, onDismis
             when (state) {
                 is PairingState.Confirming -> {
                     val offer = state.offer
-                    // Taps in the first moments are ignored: a tap meant for what was on screen before must not pair.
-                    var armed by remember(offer) { mutableStateOf(false) }
-                    LaunchedEffect(offer) {
-                        kotlinx.coroutines.delay(ARM_MS)
-                        armed = true
+                    // Taps in the first moments are ignored, counted from the offer and
+                    // from every return of the window's focus: a tap meant for what was
+                    // on screen before, or for a window laid over this one, must not pair.
+                    val focused = LocalWindowInfo.current.isWindowFocused
+                    var armed by remember(offer, focused) { mutableStateOf(false) }
+                    LaunchedEffect(offer, focused) {
+                        if (focused) {
+                            kotlinx.coroutines.delay(ARM_MS)
+                            armed = true
+                        }
                     }
                     Group {
                         GroupRow(title = stringResource(R.string.label_desktop), detail = offer.deviceId)
@@ -82,6 +88,7 @@ fun PairConfirmScreen(state: PairingState, onPair: (PairOffer) -> Unit, onDismis
                                 PairRefusal.ThisPhone -> R.string.pair_refused_this_phone
                                 PairRefusal.Conflict -> R.string.pair_refused_conflict
                                 PairRefusal.Expired -> R.string.pair_refused_expired
+                                PairRefusal.LocalUnknown -> R.string.pair_refused_local_unknown
                             },
                         ),
                         style = MaterialTheme.typography.bodyMedium,

@@ -21,11 +21,16 @@ class PairingConsentTest {
     private fun link(vararg addresses: String, id: String = "desk1"): String =
         "magnetita://pair?v=1&id=$id&fp=$fp&secret=$secret" + addresses.joinToString("") { "&addr=$it" }
 
+    /** This phone's own addresses, as the interfaces report them. */
+    private val phone = setOf("127.0.0.1", "192.168.1.30")
+
+    private fun offer(uri: String): Boolean = consent.offer(uri, phone)
+
     private fun waiting(): PairOffer = (consent.state.value as PairingState.Confirming).offer
 
     @Test
     fun an_intent_without_confirmation_never_pairs() {
-        consent.offer(link("192.168.1.20:1760"))
+        offer(link("192.168.1.20:1760"))
         val shown = waiting()
         assertEquals("desk1", shown.deviceId)
         assertEquals(listOf("192.168.1.20:1760"), shown.addresses)
@@ -42,8 +47,12 @@ class PairingConsentTest {
     @Test
     fun only_the_confirmed_offer_pairs_and_only_once() {
         val uri = link("10.0.0.5:1760")
-        consent.offer(uri)
+        offer(uri)
         val shown = waiting()
+        // A screen holding a different offer than the waiting one cannot confirm it.
+        val other = shown.copy(uri = link("192.168.1.66:1760", id = "other"), deviceId = "other")
+        assertNull(consent.confirm(other))
+        assertEquals(PairingState.Confirming(shown), consent.state.value)
         assertEquals(uri, consent.confirm(shown))
         assertEquals(PairingState.Idle, consent.state.value)
         assertNull(consent.confirm(shown))
@@ -52,30 +61,43 @@ class PairingConsentTest {
     @Test
     fun a_different_link_while_one_waits_drops_both_and_says_so() {
         val planted = link("192.168.1.66:1760", id = "planted")
-        consent.offer(planted)
+        offer(planted)
         val shown = waiting()
-        consent.offer(link("192.168.1.20:1760"))
+        assertTrue(offer(link("192.168.1.20:1760")))
         assertEquals(PairingState.Refused(PairRefusal.Conflict), consent.state.value)
         // Neither link can be confirmed any more.
         assertNull(consent.confirm(shown))
-        // The person scans again and the genuine link is shown alone.
-        consent.offer(link("192.168.1.20:1760"))
+        // The person dismisses the message (a scan is reachable only from Idle) and scans again.
+        consent.dismiss()
+        offer(link("192.168.1.20:1760"))
         assertEquals("desk1", waiting().deviceId)
+    }
+
+    @Test
+    fun a_conflict_holds_until_the_person_dismisses_it() {
+        offer(link("192.168.1.20:1760"))
+        offer(link("192.168.1.66:1760", id = "planted"))
+        // A third link cannot replace the message before the person reads it.
+        assertFalse(offer(link("192.168.1.77:1760", id = "third")))
+        assertEquals(PairingState.Refused(PairRefusal.Conflict), consent.state.value)
+        consent.dismiss()
+        assertTrue(offer(link("192.168.1.77:1760", id = "third")))
+        assertEquals("third", waiting().deviceId)
     }
 
     @Test
     fun the_same_link_again_keeps_the_waiting_offer() {
         val uri = link("192.168.1.20:1760")
-        consent.offer(uri)
+        offer(uri)
         val shown = waiting()
-        consent.offer(uri)
+        assertFalse(offer(uri))
         assertEquals(PairingState.Confirming(shown), consent.state.value)
         assertEquals(uri, consent.confirm(shown))
     }
 
     @Test
     fun a_waiting_offer_expires() {
-        consent.offer(link("192.168.1.20:1760"))
+        offer(link("192.168.1.20:1760"))
         val shown = waiting()
         clock += PairingConsent.TTL_MS - 1
         assertEquals(1L, consent.remainingMs())
@@ -90,10 +112,10 @@ class PairingConsentTest {
 
     @Test
     fun an_expired_offer_is_replaced_by_the_next_link() {
-        consent.offer(link("192.168.1.66:1760", id = "planted"))
+        offer(link("192.168.1.66:1760", id = "planted"))
         clock += PairingConsent.TTL_MS
         val genuine = link("192.168.1.20:1760")
-        consent.offer(genuine)
+        offer(genuine)
         assertEquals("desk1", waiting().deviceId)
         assertEquals(genuine, consent.confirm(waiting()))
     }
@@ -101,7 +123,7 @@ class PairingConsentTest {
     @Test
     fun leaving_the_foreground_drops_the_offer_but_a_recreation_does_not() {
         consent.screenStarted()
-        consent.offer(link("192.168.1.20:1760"))
+        offer(link("192.168.1.20:1760"))
         // Rotation: the old screen stops while changing configurations, the new one starts.
         consent.screenStopped(changingConfigurations = true)
         consent.screenStarted()
@@ -117,13 +139,13 @@ class PairingConsentTest {
 
     @Test
     fun a_public_address_is_refused_before_the_person_is_asked() {
-        consent.offer(link("8.8.8.8:1760"))
+        offer(link("8.8.8.8:1760"))
         assertEquals(PairingState.Refused(PairRefusal.NotLan), consent.state.value)
         // One public address among LAN ones refuses the whole link: the core dials them all.
-        consent.offer(link("192.168.1.20:1760", "203.0.113.9:1760"))
+        offer(link("192.168.1.20:1760", "203.0.113.9:1760"))
         assertEquals(PairingState.Refused(PairRefusal.NotLan), consent.state.value)
         // A refusal is not pending: the next valid link is shown.
-        consent.offer(link("172.16.4.2:1760"))
+        offer(link("172.16.4.2:1760"))
         assertTrue(consent.state.value is PairingState.Confirming)
     }
 
@@ -141,11 +163,19 @@ class PairingConsentTest {
     }
 
     @Test
+    fun no_readable_address_of_this_phone_refuses_every_link() {
+        assertEquals(PairPreview.Refused(PairRefusal.LocalUnknown), PairPreview.of(link("192.168.1.20:1760"), emptySet()))
+        assertEquals(PairPreview.Refused(PairRefusal.LocalUnknown), PairPreview.of(link("192.168.1.20:1760"), setOf("wlan0")))
+        consent.offer(link("192.168.1.20:1760"), emptySet())
+        assertEquals(PairingState.Refused(PairRefusal.LocalUnknown), consent.state.value)
+    }
+
+    @Test
     fun links_the_core_would_refuse_are_refused() {
-        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of(null))
-        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of("https://example.org/?addr=192.168.1.2:1"))
-        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of(link("192.168.1.2:1760") + "x".repeat(600)))
-        assertEquals(PairPreview.Refused(PairRefusal.NoAddress), PairPreview.of(link()))
+        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of(null, phone))
+        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of("https://example.org/?addr=192.168.1.2:1", phone))
+        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of(link("192.168.1.2:1760") + "x".repeat(600), phone))
+        assertEquals(PairPreview.Refused(PairRefusal.NoAddress), PairPreview.of(link(), phone))
         val malformed = listOf(
             "magnetita://pair?v=1&fp=$fp&secret=$secret&addr=192.168.1.2:1760",
             "magnetita://pair?v=2&id=desk1&fp=$fp&secret=$secret&addr=192.168.1.2:1760",
@@ -163,7 +193,7 @@ class PairingConsentTest {
             link("192.168.1.2:1760") + "&secret=$secret",
         )
         for (uri in malformed) {
-            assertEquals(uri, PairPreview.Refused(PairRefusal.Malformed), PairPreview.of(uri))
+            assertEquals(uri, PairPreview.Refused(PairRefusal.Malformed), PairPreview.of(uri, phone))
         }
     }
 
