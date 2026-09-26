@@ -1,0 +1,186 @@
+# Evidence: CI contracts green again, with the style guard over Hematita
+
+- **Date:** 2026-09-26
+- **Scope:** `AUD-1-B` (program unit P-1) of the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md), closing TOOL-1, TOOL-2 and TOOL-13 of the [tooling audit](2026-09-26-monorepo-audit-tooling.md) as far as the row's intended change reaches (see Limits); session worktree `Celestina.worktrees/suite-AUD-1-B`, branch `unit/suite/AUD-1-B`, forked from `origin/main` at `2a3c74f`
+- **Environment:** Linux container (kernel 6.18) running as uid 0; Python 3.11.15, Git 2.43.0; no Qt 6 SDK, `qmllint`, CXX-Qt build, libmpv or Android SDK; no Wayland session or AT-SPI bus. The workflow run below used `GIT_CONFIG_GLOBAL=/dev/null`, so no personal Git identity or signing setting reached the fixtures, as on a fresh GitHub runner
+- **Artifact:** the landing builds it. The unit changes `hematita/qml`, a Hematita production input, and `celestina-style/scripts/check-style-contract.sh`, a verification input shared by every registered project
+
+## Procedure
+
+Reproduce the two CI failures on the unchanged tree:
+
+```sh
+bash scripts/test-architecture-scanners.sh
+python3 scripts/test-version-contract.py
+```
+
+Change the guard and the fixtures, then run the widened style guard before
+and after the two Hematita token fixes:
+
+```sh
+bash celestina-style/scripts/check-style-contract.sh
+```
+
+Prove the new fixtures fail on the defects they exist for, by temporary
+mutation reverted before commit: restore the hand-listed style guard from
+`HEAD` and run the scanner fixtures; then create an unregistered
+`<root>/zzzfixture/qml/` and run them again.
+
+Run every command of `.github/workflows/contracts.yml`, in its order, on the
+committed tree (`18f5f22`):
+
+```sh
+export GIT_CONFIG_GLOBAL=/dev/null
+ARCHITECTURE_COMPARE_REF=origin/main bash scripts/test-architecture-scanners.sh
+ARCHITECTURE_COMPARE_REF=origin/main bash scripts/check-architecture-contract.sh
+LANGUAGE_COMPARE_REF=origin/main bash scripts/test-documentation-contract.sh
+LANGUAGE_COMPARE_REF=origin/main bash scripts/check-documentation-contract.sh
+LANGUAGE_COMPARE_REF=origin/main python3 scripts/check-language-contract.py
+LANGUAGE_COMPARE_REF=origin/main python3 scripts/test-version-contract.py
+LANGUAGE_COMPARE_REF=origin/main python3 scripts/version_tool.py check
+LANGUAGE_COMPARE_REF=origin/main python3 scripts/audit-version-commits.py
+bash scripts/test-commit-scope.sh
+bash scripts/test-staged-units.sh
+bash scripts/test-worktree.sh
+bash scripts/test-land-unit.sh
+bash scripts/test-qmllint-target.sh
+python3 scripts/test-language-contract.py
+sh scripts/test-production-artifacts.sh
+sh scripts/test-production-common.sh
+```
+
+The last three lines are the ones this unit adds to the workflow.
+
+## Result
+
+- **Exit (RED, unchanged tree `2a3c74f`):** `test-architecture-scanners.sh`
+  exit 1 with `check-style-contract.sh: an input list omits hematita/qml`
+  three times, once per hand-written list; `test-version-contract.py` exit 1,
+  `test_current_repository_static_contract`:
+  `Items in the first set but not the second: 'hematita'`. These are the two
+  failures of GitHub `contracts` runs 94 to 97 that TOOL-1 records.
+- **Exit (RED, widened guard before the Hematita fixes):**
+  `check-style-contract.sh` exit 1, reporting
+  `hematita/qml/components/HistoryGraph.qml:99` (`Qt.rgba(`, local colour
+  transformation, found by the structural scanner and by the grep pattern)
+  and `hematita/qml/components/PathCrumbs.qml:61` (`Font.Normal`, direct
+  font weight, found by both). Nothing else in `hematita/qml` was reported.
+- **Exit (GREEN, after the fixes):** `check-style-contract.sh` exit 0
+  (`Contrast contract: OK`, `QML visual contract: OK`);
+  `test-architecture-scanners.sh` exit 0; `test-version-contract.py` exit 0,
+  22 tests.
+- **Exit (mutations):** with the old hand-listed style guard the scanner
+  fixtures exit 1: `check-style-contract.sh: hard-codes the registered
+  project` for `celestina`, `celestina-style`, `siderita`, `magnetita`,
+  `grafita` and `fluorita`, and `the style guard did not inspect a registered
+  application` (the guard printed OK over a registry naming a sixth
+  application). With an unregistered `zzzfixture/qml/` they exit 1:
+  `zzzfixture/qml exists but no registered project owns it, so no guard
+  inspects it`.
+- **Exit (workflow, every step in order):**
+
+  | Step | Command | Exit | Time |
+  |---|---|---|---|
+  | Architecture and style | `test-architecture-scanners.sh` | 0 | 10 s |
+  | Architecture and style | `check-architecture-contract.sh` | 0 | 5 s |
+  | Documentation, language, versions | `test-documentation-contract.sh` | 0 | 13 s |
+  | Documentation, language, versions | `check-documentation-contract.sh` | 0 | 39 s |
+  | Documentation, language, versions | `check-language-contract.py` | 0 | 1 s |
+  | Documentation, language, versions | `test-version-contract.py` | 0 | 1 s |
+  | Documentation, language, versions | `version_tool.py check` | 0 | 0 s |
+  | Documentation, language, versions | `audit-version-commits.py` | 0 | 70 s |
+  | Commit scope | `test-commit-scope.sh` | 0 | 49 s |
+  | Commit scope | `test-staged-units.sh` | 0 | 4 s |
+  | Commit scope | `test-worktree.sh` | 0 | 1 s |
+  | Commit scope | `test-land-unit.sh` | 0 | 56 s |
+  | Commit scope | `test-qmllint-target.sh` | 0 | 0 s |
+  | Commit scope | `test-language-contract.py` (added) | 0 | 1 s |
+  | Commit scope | `test-production-artifacts.sh` (added) | 0 | 9 s |
+  | Commit scope | `test-production-common.sh` (added) | 0 | 1 s |
+
+  `audit-version-commits.py` reported 444 non-merge commits after adoption;
+  `version_tool.py check` reported 8 owners; `test-land-unit.sh` ran 56
+  tests.
+
+### Observed facts
+
+- **TOOL-2, the guard half.** `celestina-style/scripts/check-style-contract.sh`
+  no longer names a project. It asks `scripts/architecture_scanners.py
+  registry-qml-projects` for the QML roots, the same scanner command and the
+  same `ARCHITECTURE_REGISTRY_FILE` override the architecture guard already
+  uses, so both guards inspect one registry-derived set. The theme file is
+  `<style root>/CelestinaTheme.qml`. The guard exits 1 when the registry
+  cannot be read, declares no application or no style, or names a QML root
+  that does not exist. Against the current registry the file set differs
+  from the old one only by the 27 files under `hematita/qml`.
+- **TOOL-2, the fix half.** Both replacements produce the same value as the
+  literal they replace, so nothing a person sees changes and the unit stays
+  `suite-maintenance` under ruling R-A6:
+  - `HistoryGraph.qml`: `Qt.rgba(trace.r, trace.g, trace.b,
+    accentSoftOpacity)` became `CelestinaTheme.withAlpha(graph.trace,
+    CelestinaTheme.accentSoftOpacity)`. `withAlpha` is
+    `Qt.rgba(value.r, value.g, value.b, clamp(alpha, 0, 1))` and
+    `accentSoftOpacity` is `0.14`, inside the clamp. Hematita's
+    `ResourceRow.qml` already calls `withAlpha` on a trace colour the same
+    way.
+  - `PathCrumbs.qml`: `Font.Normal` became `CelestinaTheme.weightRegular`,
+    which the theme declares as `Font.Normal`.
+  No theme token was added, so CelestinaStyle does not change.
+- **TOOL-1.** `scripts/test-version-contract.py` derives the expected owners
+  from the raw registry: every project that declares a `version_source`,
+  unless it says `versioned = false`. It also asserts that the set is not
+  empty and that the version history names exactly those owners. The old
+  input-list check in `scripts/test-architecture-scanners.sh`, which only
+  compared the style guard's lines against `siderita/qml`, is removed. In its
+  place, the hard-coding check that covered the architecture guard now
+  covers both guards and also catches a `find` list. A new check fails when
+  a top-level `<dir>/qml/` exists that no registered project owns. The
+  end-to-end `sextita` registry fixture now also runs the style guard,
+  which must fail and name `sextita/qml`.
+- **TOOL-13, the CI half.** `.github/workflows/contracts.yml` runs
+  `test-language-contract.py`, `test-production-artifacts.sh` and
+  `test-production-common.sh` at the end of the "Commit scope" step, where
+  the finding puts them. `.github/workflows/README.md` says so. The three
+  are hermetic: none needs Cargo, Qt or a personal Git identity, and the
+  language fixtures set their own.
+
+## Limits
+
+- **GitHub itself was not run.** The workflow ran locally with
+  `origin/main` as the compare reference instead of `github.event.before`.
+  Python here is 3.11; `ubuntu-latest` ships a newer one. "GitHub
+  `contracts` green on the landed commit" can only be observed after the
+  author lands and pushes.
+- **No Qt.** Qt, `qmllint` and `hematita/scripts/verify-production.sh` were
+  not available, so the two QML edits were not linted or rendered here.
+  Hematita's `scripts/qmllint-baseline.tsv` row is 0 warnings, and
+  `ResourceRow.qml` already uses the same `withAlpha` call on a `color`
+  property inside that clean module; the landing's Hematita verification
+  is the check.
+- **Landing cost.** `hematita/qml` is a Hematita production input, so the
+  landing runs Hematita's `complete-production.sh`. The style guard is in
+  every project's shared verification inputs
+  (`scripts/production_artifact.py`), so every other project whose artifact
+  is current takes the verification-only path (TOOL-9).
+- **Not closed here.** Two parts of the findings lie outside this row's
+  intended change, and they stay open:
+  - TOOL-1's third fix bullet: treat a red `contracts` run as blocking,
+    through branch protection or a landing refusal. Branch protection is a
+    GitHub setting outside the repository; a landing refusal would change
+    `scripts/land-unit.py`.
+  - TOOL-13's second fix bullet: run `test-architecture-scanners.sh` and
+    `test-version-contract.py` in the landing's `pre_guards` when a unit
+    changes `docs/projects.toml` or `scripts/`. That also changes
+    `scripts/land-unit.py`, which `AUD-1-C` and `AUD-1-F` own.
+  - TOOL-13's "documented and accepted gaps" (merges not audited in CI,
+    intermediate commits not re-checked, `--history-scope-only` reading
+    today's registry) are unchanged by design.
+
+## Follow-up
+
+- The two open fix bullets above need a ledger row: `AUD-1-F` (P-20), which
+  already owns `scripts/land-unit.py` and `.github/workflows/contracts.yml`,
+  or a new suite row. Branch protection is the author's decision.
+- `STYLE-G7-N` (P-16) plans a pattern for a literal alpha passed to
+  `withAlpha`. The Hematita call passes a token, so that pattern will not
+  flag it. That unit edits the same guard file, so it rebases onto this one.
