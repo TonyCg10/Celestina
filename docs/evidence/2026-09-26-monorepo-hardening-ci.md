@@ -163,6 +163,16 @@ That double-counted it; none of the three had ever run in CI.
     shared style to a copy of the registry and requires the refusal
     message. With the previous guard restored, that fixture exits 1 with
     `the style guard failed on a second shared style without saying so`.
+  - `scripts/check-architecture-contract.sh` reads the same scanner rows
+    and had the same last-one-wins assignment, so it now refuses a second
+    `qml-module` project too, naming both roots. A sibling fixture requires
+    a line starting `architecture: ERROR:` with the refusal, which tells it
+    apart from the style guard's message printed later in the same run.
+    With the previous architecture guard restored, that fixture fails with
+    `the architecture guard failed on a second shared style without saying
+    so`. After this change, `test-architecture-scanners.sh`,
+    `check-architecture-contract.sh` (with `ARCHITECTURE_COMPARE_REF=origin/main`),
+    `check-documentation-contract.sh` and `check-language-contract.py` exit 0.
 
 ## Limits
 

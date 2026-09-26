@@ -446,6 +446,16 @@ elif [[ $output != *"more than one shared style"* ]]; then
     fail "the style guard failed on a second shared style without saying so"
 fi
 
+# The architecture guard reads the same rows and must refuse the registry
+# itself; its own prefix tells its refusal apart from the style guard it runs.
+if output=$(ARCHITECTURE_REGISTRY_FILE="$second_style_fixture" \
+    bash "$architecture_guard" 2>&1); then
+    fail "the architecture guard accepted a second registered shared style"
+elif ! grep -q '^architecture: ERROR: .*registers more than one shared style' \
+    <<< "$output"; then
+    fail "the architecture guard failed on a second shared style without saying so"
+fi
+
 # The style guard reads the same registry and must fail closed on the same
 # project instead of scanning the roots it already knew.
 if output=$(ARCHITECTURE_REGISTRY_FILE="$registry_fixture" \
