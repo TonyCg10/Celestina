@@ -174,10 +174,12 @@ enum Step {
     Cancelled,
 }
 
-/// Whether `item` may still be acted on: not a mount root, and still the
-/// entry the scan saw (same device and inode). Between this check and the
-/// operation's own syscalls a replacement can still slip in; the window is
-/// that short, not closed.
+/// Whether `item` may still be acted on: not a mount root (listed in the
+/// mount table, or on another mount than the folder holding it, which
+/// `check_identity` tells by mount id), and still the entry the scan saw
+/// (same device and inode). Between this check and the operation's own
+/// syscalls a replacement can still slip in; the window is that short, not
+/// closed.
 fn admissible(item: &Item, boundaries: &HashSet<PathBuf>) -> Result<(), Step> {
     if boundaries.contains(&item.path) {
         return Err(Step::Refused);

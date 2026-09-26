@@ -7,22 +7,32 @@
 //! path that is gone, or an entry that is not the one the scan recorded.
 //!
 //! It works on directory descriptors, never on re-resolved paths: the
-//! analysed folder is opened with `O_DIRECTORY | O_NOFOLLOW`, every folder
-//! down to the target is opened the same way from the previous descriptor,
-//! and every entry is removed with `unlinkat` relative to the descriptor of
-//! the folder that holds it. A folder swapped for a symbolic link after it
-//! was opened cannot redirect the removal, because nothing is looked up by
-//! path again. The one thing a descriptor cannot pin is the analysed folder
-//! itself being renamed while the deletion runs: the removal then continues
-//! inside the folder it opened, wherever that now lives.
+//! analysed folder is resolved once (every link on the way to it followed,
+//! as the walk did, and refused unless the resolved path is still the folder
+//! and the mount the given one names), opened with
+//! `O_DIRECTORY | O_NOFOLLOW`, every folder down to the target is opened the
+//! same way from the previous descriptor, and every entry is removed with
+//! `unlinkat` relative to the descriptor of the folder that holds it. A
+//! folder swapped for a symbolic link after it was opened cannot redirect
+//! the removal, because nothing is looked up by path again. The one thing a
+//! descriptor cannot pin is the analysed folder itself being renamed while
+//! the deletion runs: the removal then continues inside the folder it
+//! opened, wherever that now lives.
+//!
+//! Mounts are told by identity: every folder on the way, the target and
+//! every entry below it must lie on the analysed folder's mount, by the
+//! kernel's mount id and by device number, and a path the mount table lists
+//! (compared below the resolved folder, which is how the table names it) is
+//! refused as well. A bind mount on the same device is therefore refused
+//! whatever path reaches it.
 //!
 //! Before removing anything it walks the whole subtree read-only, the same
-//! descent the removal will take, and refuses if any folder in it is another
-//! device's mount or listed as a mount boundary, or if the tree is deeper
-//! than [`MAX_DEPTH`]: nothing is touched if any inner folder is a mount.
-//! The removal pass repeats every check as the defence against a change
-//! between the two passes. Every folder is checked again after it is opened:
-//! the descriptor's device and inode must be the ones listed.
+//! descent the removal will take, and refuses if any entry in it is on
+//! another mount, or if the tree is deeper than [`MAX_DEPTH`]: nothing is
+//! touched if any inner folder is a mount. The removal pass repeats every
+//! check as the defence against a change between the two passes. Every
+//! folder is checked again after it is opened: the descriptor's device,
+//! inode and mount must be the ones listed.
 //!
 //! Removal is depth-first, a folder's files before its subfolders and every
 //! folder after its content, asking `cancel` before every entry; a symbolic
@@ -37,19 +47,23 @@ use std::fs;
 use std::io;
 use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
 use celestina_core::CancellationToken;
-use rustix::fs::{
-    fstat, openat, statat, unlinkat, AtFlags, Dir, FileType, Mode, OFlags, Stat, CWD,
-};
+use rustix::fs::{openat, unlinkat, AtFlags, Dir, FileType, Mode, OFlags, CWD};
 use rustix::io::Errno;
+
+use super::identity::{entry_at, entry_of, entry_of_path, Entry};
 
 /// Every folder is opened read-only as a directory, never through a link.
 const DIR_FLAGS: OFlags = OFlags::RDONLY
     .union(OFlags::DIRECTORY)
     .union(OFlags::NOFOLLOW)
+    .union(OFlags::CLOEXEC);
+/// The folder holding an entry [`check_identity`] checks, reached as its
+/// path leads, links included.
+const HOLDER_FLAGS: OFlags = OFlags::RDONLY
+    .union(OFlags::DIRECTORY)
     .union(OFlags::CLOEXEC);
 
 /// Folders open at once below the target: one descriptor per level is what
@@ -85,6 +99,9 @@ pub enum Refusal {
     /// Something else now sits at the path: its device and inode are not
     /// the ones the scan recorded.
     Changed,
+    /// The analysed folder's path now resolves to another folder, or onto
+    /// another mount, than the one it names.
+    RootMoved,
 }
 
 #[derive(Debug)]
@@ -108,6 +125,9 @@ impl fmt::Display for RemoveError {
                         "a folder on its way is a link or no longer a folder"
                     }
                     Refusal::Changed => "another entry replaced the one that was scanned",
+                    Refusal::RootMoved => {
+                        "the analysed folder now resolves to another folder or mount"
+                    }
                 };
                 write!(f, "refused to delete {}: {why}", path.display())
             }
@@ -160,25 +180,46 @@ impl From<RemoveError> for Failure {
     }
 }
 
-/// Refuses `path` unless it is still the entry the scan saw there: the same
-/// device and inode, read without following a link. It narrows the window in
-/// which a replaced entry would be acted on to the time between this check
-/// and the removal's own syscalls; it cannot close it.
+/// Refuses `path` unless it is still the entry the scan saw there — the
+/// same device and inode, read without following a link — and unless it is
+/// on the same mount as the folder that holds it (by the kernel's mount id
+/// and by device number), so a mount root is refused whatever path names it.
+/// It narrows the window in which a replaced entry would be acted on to the
+/// time between this check and the operation's own syscalls; it cannot
+/// close it.
 ///
 /// # Errors
 ///
 /// [`RemoveError::Refused`] with [`Refusal::Missing`] when nothing is there,
-/// [`Refusal::Changed`] when something else is.
+/// [`Refusal::Changed`] when something else is, [`Refusal::MountRoot`] when
+/// it is where a filesystem is mounted.
 pub fn check_identity(path: &Path, dev: u64, ino: u64) -> Result<(), RemoveError> {
     let refuse = |reason| RemoveError::Refused {
         path: path.to_path_buf(),
         reason,
     };
-    let meta = fs::symlink_metadata(path).map_err(|_| refuse(Refusal::Missing))?;
-    if (meta.dev(), meta.ino()) == (dev, ino) {
+    let Some(name) = path.file_name() else {
+        // `/`, or a path ending in `..`: the root of a mount, or not a name
+        // an entry can be checked by.
+        return Err(refuse(Refusal::MountRoot));
+    };
+    let holder_path = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    // The folder that holds the entry, followed if it is reached through a
+    // link, and the entry looked up in that very folder.
+    let holder = openat(CWD, holder_path, HOLDER_FLAGS, Mode::empty())
+        .map_err(|_| refuse(Refusal::Missing))?;
+    let holder_entry = entry_of(&holder).map_err(|_| refuse(Refusal::Missing))?;
+    let entry = entry_at(&holder, Path::new(name)).map_err(|_| refuse(Refusal::Missing))?;
+    if (entry.dev, entry.ino) != (dev, ino) {
+        return Err(refuse(Refusal::Changed));
+    }
+    if entry.same_mount(&holder_entry) {
         Ok(())
     } else {
-        Err(refuse(Refusal::Changed))
+        Err(refuse(Refusal::MountRoot))
     }
 }
 
@@ -212,44 +253,41 @@ pub fn delete_tree(
     if target == root {
         return Err(refuse(Refusal::IsRoot).into());
     }
-    if !target.starts_with(&root) {
+    let Ok(relative) = target.strip_prefix(&root) else {
         return Err(refuse(Refusal::Outside).into());
-    }
-    let (parent_fd, name) = open_parent(&root, &target)?;
-    let stat = match statat(&parent_fd, name.as_os_str(), AtFlags::SYMLINK_NOFOLLOW) {
-        Ok(stat) => stat,
+    };
+    let base = open_root(&root, path)?;
+    let target = base.path.join(relative);
+    let (parent_fd, name) = base.open_parent(&target, boundaries)?;
+    let entry = match entry_at(&parent_fd, Path::new(&name)) {
+        Ok(entry) => entry,
         Err(Errno::NOENT) => return Err(refuse(Refusal::Missing).into()),
         Err(errno) => return Err(io_error(&target, errno).into()),
     };
     if let Some(identity) = expected {
-        if (stat.st_dev, stat.st_ino) != identity {
+        if (entry.dev, entry.ino) != identity {
             return Err(refuse(Refusal::Changed).into());
         }
     }
-    if boundaries.contains(&target) {
-        return Err(refuse(Refusal::MountRoot).into());
-    }
-    let parent_stat =
-        fstat(&parent_fd).map_err(|errno| io_error(target.parent().unwrap_or(&root), errno))?;
-    if stat.st_dev != parent_stat.st_dev {
+    if boundaries.contains(&target) || !entry.same_mount(&base.entry) {
         return Err(refuse(Refusal::MountRoot).into());
     }
 
     let mut check = Removal {
-        device: stat.st_dev,
+        root: base.entry,
         boundaries,
         cancel,
         dry: true,
         seen: HashSet::new(),
         removed: Removed::default(),
     };
-    check.run(&parent_fd, name.clone(), &target, &stat)?;
+    check.run(&parent_fd, name.clone(), &target, &entry)?;
     let mut walk = Removal {
         dry: false,
         ..check
     };
     walk.removed = Removed::default();
-    match walk.run(&parent_fd, name, &target, &stat) {
+    match walk.run(&parent_fd, name, &target, &entry) {
         Ok(()) => Ok(walk.removed),
         Err(error) => Err(Failure {
             error,
@@ -269,7 +307,8 @@ struct Frame {
 }
 
 struct Removal<'a> {
-    device: u64,
+    /// The analysed folder: every entry removed must lie on its mount.
+    root: Entry,
     boundaries: &'a HashSet<PathBuf>,
     cancel: &'a CancellationToken,
     /// The read-only pass: the same descent and checks, nothing removed.
@@ -280,21 +319,21 @@ struct Removal<'a> {
 }
 
 impl Removal<'_> {
-    /// Removes `name` (at `path`, described by `stat`) from `parent`: a file
-    /// or link at once, a folder after everything below it.
+    /// Removes `name` (at `path`, described by `entry`) from `parent`: a
+    /// file or link at once, a folder after everything below it.
     fn run(
         &mut self,
         parent: &OwnedFd,
         name: OsString,
         path: &Path,
-        stat: &Stat,
+        entry: &Entry,
     ) -> Result<(), RemoveError> {
         self.check_cancel()?;
-        if !is_dir(stat) {
-            return self.unlink_leaf(parent, &name, path, stat);
+        if !entry.is_dir() {
+            return self.unlink_leaf(parent, &name, path, entry);
         }
         let mut stack: Vec<Frame> = Vec::new();
-        let top = self.open_folder(parent, name, path.to_path_buf(), stat)?;
+        let top = self.open_folder(parent, name, path.to_path_buf(), entry)?;
         stack.push(top);
         loop {
             let depth = stack.len();
@@ -314,11 +353,11 @@ impl Removal<'_> {
             };
             let child_path = frame.path.join(&child);
             self.check_cancel()?;
-            let child_stat = statat(&frame.fd, child.as_os_str(), AtFlags::SYMLINK_NOFOLLOW)
+            let child_entry = entry_at(&frame.fd, Path::new(&child))
                 .map_err(|errno| io_error(&child_path, errno))?;
-            if !is_dir(&child_stat) {
+            if !child_entry.is_dir() {
                 // Listed as a folder, now something else: removed as itself.
-                self.unlink_leaf(&frame.fd, &child, &child_path, &child_stat)?;
+                self.unlink_leaf(&frame.fd, &child, &child_path, &child_entry)?;
                 continue;
             }
             if depth >= MAX_DEPTH {
@@ -327,7 +366,7 @@ impl Removal<'_> {
                     source: io::Error::other(format!("deeper than {MAX_DEPTH} folders")),
                 });
             }
-            let opened = self.open_folder(&frame.fd, child, child_path, &child_stat)?;
+            let opened = self.open_folder(&frame.fd, child, child_path, &child_entry)?;
             stack.push(opened);
         }
         Ok(())
@@ -341,15 +380,15 @@ impl Removal<'_> {
         parent: &OwnedFd,
         name: OsString,
         path: PathBuf,
-        stat: &Stat,
+        entry: &Entry,
     ) -> Result<Frame, RemoveError> {
-        if stat.st_dev != self.device || self.boundaries.contains(&path) {
-            return Err(RemoveError::Refused {
-                path,
-                reason: Refusal::MountRoot,
-            });
+        if !entry.same_mount(&self.root) || self.boundaries.contains(&path) {
+            return Err(mount_root(path));
         }
-        let fd = open_checked(parent, name.as_os_str(), &path, (stat.st_dev, stat.st_ino))?;
+        let (fd, opened) = open_checked(parent, name.as_os_str(), &path, entry)?;
+        if !opened.same_mount(&self.root) {
+            return Err(mount_root(path));
+        }
         let mut names = Vec::new();
         for entry in Dir::read_from(&fd).map_err(|errno| io_error(&path, errno))? {
             let entry = entry.map_err(|errno| io_error(&path, errno))?;
@@ -363,12 +402,12 @@ impl Removal<'_> {
         for child in names {
             self.check_cancel()?;
             let child_path = path.join(&child);
-            let child_stat = statat(&fd, child.as_os_str(), AtFlags::SYMLINK_NOFOLLOW)
-                .map_err(|errno| io_error(&child_path, errno))?;
-            if is_dir(&child_stat) {
+            let child_entry =
+                entry_at(&fd, Path::new(&child)).map_err(|errno| io_error(&child_path, errno))?;
+            if child_entry.is_dir() {
                 subfolders.push(child);
             } else {
-                self.unlink_leaf(&fd, &child, &child_path, &child_stat)?;
+                self.unlink_leaf(&fd, &child, &child_path, &child_entry)?;
             }
         }
         // Popped from the end: reversed, the listing order is kept.
@@ -377,23 +416,28 @@ impl Removal<'_> {
             fd,
             path,
             name,
-            bytes: blocks(stat),
+            bytes: entry.allocated,
             subfolders,
         })
     }
 
+    /// Removes a file, a link or another non-folder entry; one on another
+    /// mount (a file bind-mounted in place) is refused in both passes.
     fn unlink_leaf(
         &mut self,
         parent: &OwnedFd,
         name: &OsStr,
         path: &Path,
-        stat: &Stat,
+        entry: &Entry,
     ) -> Result<(), RemoveError> {
+        if !entry.same_mount(&self.root) {
+            return Err(mount_root(path.to_path_buf()));
+        }
         if self.dry {
             return Ok(());
         }
         unlinkat(parent, name, AtFlags::empty()).map_err(|errno| io_error(path, errno))?;
-        let bytes = leaf_bytes(stat, &mut self.seen);
+        let bytes = leaf_bytes(entry, &mut self.seen);
         self.count(bytes);
         Ok(())
     }
@@ -416,15 +460,11 @@ fn add(removed: &mut Removed, bytes: u64) {
     removed.bytes = removed.bytes.saturating_add(bytes);
 }
 
-fn is_dir(stat: &Stat) -> bool {
-    FileType::from_raw_mode(stat.st_mode) == FileType::Directory
-}
-
-/// Allocated bytes (`st_blocks` counts 512-byte units).
-fn blocks(stat: &Stat) -> u64 {
-    u64::try_from(stat.st_blocks)
-        .unwrap_or(0)
-        .saturating_mul(super::walk::BLOCK_BYTES)
+fn mount_root(path: PathBuf) -> RemoveError {
+    RemoveError::Refused {
+        path,
+        reason: Refusal::MountRoot,
+    }
 }
 
 /// A file's allocated bytes, zero for a second name of an inode already
@@ -433,35 +473,36 @@ fn blocks(stat: &Stat) -> u64 {
 /// Only a file with more than one name is remembered. Removing a name lowers
 /// the link count of the names left, so a later name is looked up whatever
 /// its count reads now.
-fn leaf_bytes(stat: &Stat, seen: &mut HashSet<(u64, u64)>) -> u64 {
-    if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile {
-        return blocks(stat);
+fn leaf_bytes(entry: &Entry, seen: &mut HashSet<(u64, u64)>) -> u64 {
+    if entry.kind != FileType::RegularFile {
+        return entry.allocated;
     }
-    let key = (stat.st_dev, stat.st_ino);
+    let key = (entry.dev, entry.ino);
     if seen.contains(&key) {
         return 0;
     }
-    if stat.st_nlink > 1 {
+    if entry.linked {
         seen.insert(key);
     }
-    blocks(stat)
+    entry.allocated
 }
 
 /// Opens the folder `name` in `parent` without following a link and refuses
 /// it as [`Refusal::Changed`] unless the opened descriptor is the folder
-/// `identity` (device, inode) was listed with: the check `statat` made
-/// before the open cannot see a swap between the two calls.
+/// `listed` was described as (device and inode): the lookup made before the
+/// open cannot see a swap between the two calls. Answers the descriptor with
+/// the entry it refers to.
 fn open_checked<Fd: AsFd>(
     parent: Fd,
     name: &OsStr,
     path: &Path,
-    identity: (u64, u64),
-) -> Result<OwnedFd, RemoveError> {
+    listed: &Entry,
+) -> Result<(OwnedFd, Entry), RemoveError> {
     let fd =
         openat(parent, name, DIR_FLAGS, Mode::empty()).map_err(|errno| io_error(path, errno))?;
-    let opened = fstat(&fd).map_err(|errno| io_error(path, errno))?;
-    if (opened.st_dev, opened.st_ino) == identity {
-        Ok(fd)
+    let opened = entry_of(&fd).map_err(|errno| io_error(path, errno))?;
+    if (opened.dev, opened.ino) == (listed.dev, listed.ino) {
+        Ok((fd, opened))
     } else {
         Err(RemoveError::Refused {
             path: path.to_path_buf(),
@@ -477,35 +518,87 @@ fn io_error(path: &Path, errno: Errno) -> RemoveError {
     }
 }
 
-/// Opens `root` and every folder from it down to `target`'s parent, each
-/// from the previous descriptor without following a link, and answers the
-/// parent's descriptor with `target`'s name in it.
-///
-/// A folder on the way that is a link or no longer a folder is a
-/// [`Refusal::Symlink`] naming it: the lexical "inside" would not be where
-/// the kernel goes. One that is gone is [`Refusal::Missing`].
-fn open_parent(root: &Path, target: &Path) -> Result<(OwnedFd, OsString), RemoveError> {
+/// The analysed folder, resolved and open: its descriptor, its resolved path
+/// and its entry, whose mount every removal must stay on.
+struct Base {
+    fd: OwnedFd,
+    path: PathBuf,
+    entry: Entry,
+}
+
+/// Resolves `root` (every link on the way followed; the last component a
+/// real folder, as the walk requires) and opens it without following a
+/// link. The folder opened must be the one `root` names, on the same mount,
+/// or the deletion is refused as [`Refusal::RootMoved`]: a component on the
+/// way changed between the lookups. Refusals name `target`, the path asked.
+fn open_root(root: &Path, target: &Path) -> Result<Base, RemoveError> {
     let refuse = |reason| RemoveError::Refused {
         path: target.to_path_buf(),
         reason,
     };
-    let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else {
-        return Err(refuse(Refusal::IsRoot));
-    };
-    let relative = parent
-        .strip_prefix(root)
-        .map_err(|_| refuse(Refusal::Outside))?;
-    let open = |at: &OwnedFd, name: &OsStr, path: &Path| {
-        openat(at, name, DIR_FLAGS, Mode::empty()).map_err(|errno| on_the_way(target, path, errno))
-    };
-    let mut fd = openat(CWD, root, DIR_FLAGS, Mode::empty())
-        .map_err(|errno| on_the_way(target, root, errno))?;
-    let mut current = root.to_path_buf();
-    for component in relative.components() {
-        current.push(component);
-        fd = open(&fd, component.as_os_str(), &current)?;
+    let named = entry_of_path(root).map_err(|errno| on_the_way(target, root, errno))?;
+    if !named.is_dir() {
+        return Err(refuse(Refusal::Symlink {
+            at: root.to_path_buf(),
+        }));
     }
-    Ok((fd, name.to_os_string()))
+    let path = fs::canonicalize(root).map_err(|error| match error.kind() {
+        io::ErrorKind::NotFound => refuse(Refusal::Missing),
+        _ => RemoveError::Io {
+            path: root.to_path_buf(),
+            source: error,
+        },
+    })?;
+    let fd = openat(CWD, &path, DIR_FLAGS, Mode::empty())
+        .map_err(|errno| on_the_way(target, &path, errno))?;
+    let entry = entry_of(&fd).map_err(|errno| io_error(&path, errno))?;
+    if (entry.dev, entry.ino) != (named.dev, named.ino) || entry.mount != named.mount {
+        return Err(refuse(Refusal::RootMoved));
+    }
+    Ok(Base { fd, path, entry })
+}
+
+impl Base {
+    /// Opens every folder from the analysed one down to `target`'s parent,
+    /// each from the previous descriptor without following a link, and
+    /// answers the parent's descriptor with `target`'s name in it.
+    ///
+    /// A folder on the way that is a link or no longer a folder is a
+    /// [`Refusal::Symlink`] naming it: the lexical "inside" would not be
+    /// where the kernel goes. One that is gone is [`Refusal::Missing`]. One
+    /// on another mount, or listed in `boundaries`, is a
+    /// [`Refusal::MountRoot`] naming it.
+    fn open_parent(
+        &self,
+        target: &Path,
+        boundaries: &HashSet<PathBuf>,
+    ) -> Result<(OwnedFd, OsString), RemoveError> {
+        let refuse = |reason| RemoveError::Refused {
+            path: target.to_path_buf(),
+            reason,
+        };
+        let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else {
+            return Err(refuse(Refusal::IsRoot));
+        };
+        let relative = parent
+            .strip_prefix(&self.path)
+            .map_err(|_| refuse(Refusal::Outside))?;
+        let mut fd = self.fd.try_clone().map_err(|source| RemoveError::Io {
+            path: self.path.clone(),
+            source,
+        })?;
+        let mut current = self.path.clone();
+        for component in relative.components() {
+            current.push(component);
+            fd = openat(&fd, component.as_os_str(), DIR_FLAGS, Mode::empty())
+                .map_err(|errno| on_the_way(target, &current, errno))?;
+            let on_the_way = entry_of(&fd).map_err(|errno| io_error(&current, errno))?;
+            if !on_the_way.same_mount(&self.entry) || boundaries.contains(&current) {
+                return Err(mount_root(current));
+            }
+        }
+        Ok((fd, name.to_os_string()))
+    }
 }
 
 /// A folder on the way to `target` that did not open: [`Refusal::Missing`]
@@ -550,23 +643,24 @@ fn normalise(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{open_checked, Refusal, RemoveError, CWD};
-    use rustix::fs::{fstat, AtFlags};
+    use super::{entry_of, entry_of_path, open_checked, Entry, Refusal, RemoveError, CWD};
     use std::path::Path;
 
     #[test]
     fn an_opened_folder_is_checked_against_the_identity_it_was_listed_with() {
-        let dir = std::env::temp_dir();
-        let stat = rustix::fs::statat(CWD, &dir, AtFlags::empty()).expect("stat");
-        let fd = open_checked(CWD, dir.as_os_str(), &dir, (stat.st_dev, stat.st_ino))
-            .expect("same identity");
-        assert_eq!(fstat(&fd).expect("fstat").st_ino, stat.st_ino);
-        let other = open_checked(
-            CWD,
-            dir.as_os_str(),
-            Path::new("/x"),
-            (stat.st_dev, stat.st_ino.wrapping_add(1)),
-        );
+        let dir = std::env::temp_dir()
+            .canonicalize()
+            .expect("temporary folder");
+        let listed = entry_of_path(&dir).expect("entry");
+        let (fd, opened) =
+            open_checked(CWD, dir.as_os_str(), &dir, &listed).expect("same identity");
+        assert_eq!(entry_of(&fd).expect("entry").ino, listed.ino);
+        assert!(opened.same_mount(&listed));
+        let replaced = Entry {
+            ino: listed.ino.wrapping_add(1),
+            ..listed
+        };
+        let other = open_checked(CWD, dir.as_os_str(), Path::new("/x"), &replaced);
         assert!(matches!(
             other,
             Err(RemoveError::Refused {

@@ -10,8 +10,9 @@
 //! The threads are detached by design, not joined. Joining would block the
 //! Qt thread for as long as the walk takes to reach its next cancellation
 //! check. A detached thread holds nothing the hub owns: the walks own their
-//! root path, the check a `Weak<Tree>` it upgrades one group at a time, and
-//! each a `CxxQtThread`
+//! root path (which the core resolves there, on the worker, never on the Qt
+//! thread), the check a `Weak<Tree>` it upgrades just long enough to copy
+//! one group's paths, and each a `CxxQtThread`
 //! whose `queue` drops a result once the hub is gone. Every result carries
 //! the generation it was asked under; the hub drops one that is no longer
 //! current, so a cancelled worker finishing late changes nothing.
@@ -163,11 +164,13 @@ pub fn spawn_graft(
 /// so a verdict about an older tree, or a finish from a cancelled check,
 /// never lands.
 ///
-/// The check holds the tree weakly and upgrades it once per group, so a
-/// pruning or a graft on the Qt thread finds the hub's `Arc` unshared and
-/// changes it in place; when the upgrade fails (the analysis is gone) the
-/// check stops. A group being compared at the moment of a pruning still
-/// holds its strong reference, so that one pruning copies the tree once.
+/// The check holds the tree weakly and upgrades it once per group only to
+/// copy that group's paths and recorded identities, dropping the strong
+/// reference before it reads a byte, so a pruning or a graft on the Qt
+/// thread finds the hub's `Arc` unshared and changes it in place; when the
+/// upgrade fails (the analysis is gone) the check stops. A copy that is no
+/// longer the file the scan recorded (a link, a FIFO, another file) is
+/// never read, and its group is reported as unreadable.
 ///
 /// # Errors
 ///
@@ -189,8 +192,9 @@ pub fn spawn_confirm(
                 let Some(strong) = tree.upgrade() else {
                     return;
                 };
-                let checked = duplicates::confirm(&strong, group, &token, &mut |_| {});
+                let files = duplicates::members(&strong, group);
                 drop(strong);
+                let checked = duplicates::confirm(files, &token, &mut |_| {});
                 match checked {
                     Ok(verified) => {
                         let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
@@ -198,7 +202,7 @@ pub fn spawn_confirm(
                         });
                     }
                     Err(ConfirmError::Cancelled) => return,
-                    Err(ConfirmError::Read { .. }) => {
+                    Err(ConfirmError::Read { .. } | ConfirmError::Changed { .. }) => {
                         let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
                             hub.apply_unreadable(generation, epoch, index);
                         });

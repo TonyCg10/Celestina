@@ -3,11 +3,12 @@
 //!
 //! Nodes live in one `Vec` addressed by [`NodeId`], so an id handed to the
 //! interface stays valid for the life of the scan, including after
-//! [`Tree::prune`] (a pruned node is emptied and unlinked, never moved) and
+//! [`Tree::prune_many`] (a pruned node is emptied and unlinked, never moved) and
 //! [`Tree::graft`] (a replaced subtree is unlinked and the fresh one
 //! appended). [`Tree::is_live`] tells an id still in the tree from one of a
 //! subtree that was pruned or replaced.
 
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -38,11 +39,12 @@ pub struct Node {
     pub others_below: u64,
     /// The directory could not be listed; what it holds is not in the tree.
     pub unreadable: bool,
-    /// A directory on another device than the scanned root: listed as a leaf
-    /// with no size, because a mount is analysed from its own root.
+    /// A directory on another mount than the scanned root (another device,
+    /// another mount id, or a mount table target): listed as a leaf with no
+    /// size, because a mount is analysed from its own root.
     pub other_device: bool,
-    /// The device and inode `symlink_metadata` gave the entry when it was
-    /// scanned, so an action can tell the same entry from a replacement.
+    /// The device and inode the walk read for the entry, without following
+    /// it, so an action can tell the same entry from a replacement.
     pub dev: u64,
     pub ino: u64,
     pub children: Vec<NodeId>,
@@ -51,6 +53,8 @@ pub struct Node {
 #[derive(Clone, Debug)]
 pub struct Tree {
     pub root: NodeId,
+    /// The scanned folder, every link on the way to it resolved: the path
+    /// the mount table and every path below it agree on.
     pub path: PathBuf,
     pub device: u64,
     pub nodes: Vec<Node>,
@@ -105,14 +109,84 @@ impl Tree {
         children
     }
 
-    /// Removes `id`'s subtree from the aggregates of every ancestor and
-    /// unlinks it from its parent; answers the allocated bytes removed.
-    /// `None` for the root or an unknown id.
+    /// [`Tree::prune_many`] for one id: `None` for the root or an unknown
+    /// id, otherwise the allocated bytes removed (zero for an id no longer
+    /// in the tree).
     pub fn prune(&mut self, id: NodeId) -> Option<u64> {
-        if id == self.root {
+        if id == self.root || self.node(id).is_none() {
             return None;
         }
-        let node = self.nodes.get_mut(id.0 as usize)?;
+        Some(self.prune_many(&[id]))
+    }
+
+    /// Removes every subtree in `ids` from the aggregates of every ancestor
+    /// and unlinks it from its parent; answers the allocated bytes removed.
+    ///
+    /// The root, unknown ids, repeated ids, ids no longer in the tree and ids
+    /// below another one of `ids` are skipped — the one above takes them
+    /// out — so nothing is subtracted twice. Each parent's children are
+    /// filtered once against a set, so pruning k of n siblings costs
+    /// O(n + k·depth) instead of O(k·n).
+    pub fn prune_many(&mut self, ids: &[NodeId]) -> u64 {
+        let chosen: HashSet<NodeId> = ids
+            .iter()
+            .copied()
+            .filter(|id| *id != self.root && self.node(*id).is_some())
+            .collect();
+        let mut by_parent: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
+        for id in &chosen {
+            if self.has_ancestor_in(*id, &chosen) {
+                continue;
+            }
+            if let Some(parent) = self.node(*id).and_then(|node| node.parent) {
+                by_parent.entry(parent).or_default().insert(*id);
+            }
+        }
+        let mut freed = 0u64;
+        for (parent, members) in by_parent {
+            if !self.is_live(parent) {
+                continue;
+            }
+            let Some(holder) = self.nodes.get_mut(parent.0 as usize) else {
+                continue;
+            };
+            let mut unlinked = Vec::new();
+            holder.children.retain(|child| {
+                let gone = members.contains(child);
+                if gone {
+                    unlinked.push(*child);
+                }
+                !gone
+            });
+            for id in unlinked {
+                freed = freed.saturating_add(self.detach(id));
+            }
+        }
+        freed
+    }
+
+    /// Whether an ancestor of `id` is in `set`.
+    fn has_ancestor_in(&self, id: NodeId, set: &HashSet<NodeId>) -> bool {
+        let mut cursor = self.node(id).and_then(|node| node.parent);
+        // A parent chain longer than the arena would be a cycle.
+        for _ in 0..=self.nodes.len() {
+            let Some(current) = cursor else {
+                return false;
+            };
+            if set.contains(&current) {
+                return true;
+            }
+            cursor = self.node(current).and_then(|node| node.parent);
+        }
+        false
+    }
+
+    /// Empties `id`, already unlinked from its parent, and subtracts what it
+    /// held from every ancestor; answers its allocated bytes.
+    fn detach(&mut self, id: NodeId) -> u64 {
+        let Some(node) = self.nodes.get_mut(id.0 as usize) else {
+            return 0;
+        };
         let (allocated, apparent, files, others) = (
             node.allocated,
             node.apparent,
@@ -125,9 +199,6 @@ impl Tree {
         node.files_below = 0;
         node.others_below = 0;
         node.children.clear();
-        if let Some(parent) = parent.and_then(|p| self.nodes.get_mut(p.0 as usize)) {
-            parent.children.retain(|child| *child != id);
-        }
         let mut cursor = parent;
         while let Some(ancestor) = cursor.and_then(|a| self.nodes.get_mut(a.0 as usize)) {
             ancestor.allocated = ancestor.allocated.saturating_sub(allocated);
@@ -136,7 +207,7 @@ impl Tree {
             ancestor.others_below = ancestor.others_below.saturating_sub(others);
             cursor = ancestor.parent;
         }
-        Some(allocated)
+        allocated
     }
 
     /// Whether `id` is reachable from the root through `children`: false
@@ -165,7 +236,7 @@ impl Tree {
 
     /// Replaces the subtree at `id` with `fresh` (a scan of the same path):
     /// the old root is unlinked from its parent and zeroed like
-    /// [`Tree::prune`]'s, the nodes below it stay in the arena unreachable
+    /// [`Tree::prune_many`]'s, the nodes below it stay in the arena unreachable
     /// (and [`Tree::is_live`] false), the fresh ones are appended with new ids, the fresh root taking `id`'s name
     /// and place among its siblings, and every ancestor's totals moved by
     /// the difference. Ids outside the subtree keep their meaning.
@@ -362,6 +433,38 @@ mod tests {
         assert_eq!((pruned.allocated, pruned.files_below), (0, 0));
         assert_eq!(tree.prune(NodeId(1)), Some(40));
         assert_eq!(tree.node(NodeId(0)).expect("root").allocated, 0);
+    }
+
+    #[test]
+    fn prune_many_unlinks_each_parent_once_and_counts_nothing_twice() {
+        let mut tree = three_levels();
+        // c and a, a twice, the root and an unknown id: 50 bytes, once.
+        assert_eq!(
+            tree.prune_many(&[NodeId(4), NodeId(2), NodeId(2), NodeId(0), NodeId(99)]),
+            50
+        );
+        assert_eq!(tree.node(NodeId(1)).expect("dir").children, vec![NodeId(3)]);
+        for id in [0, 1] {
+            let n = tree.node(NodeId(id)).expect("ancestor");
+            assert_eq!((n.allocated, n.apparent, n.files_below), (20, 10, 1));
+        }
+        assert!(!tree.is_live(NodeId(2)) && !tree.is_live(NodeId(4)));
+
+        // A folder and a file inside it: the folder already carries the file.
+        let mut nested = three_levels();
+        nested.nodes.push(node("side", Kind::File, Some(0), 5, 1));
+        nested.nodes[0].children.push(NodeId(5));
+        for ancestor in &mut nested.nodes[..1] {
+            ancestor.allocated += 5;
+            ancestor.files_below += 1;
+        }
+        assert_eq!(nested.prune_many(&[NodeId(3), NodeId(1)]), 70);
+        let root = nested.node(NodeId(0)).expect("root");
+        assert_eq!((root.allocated, root.files_below), (5, 1));
+        // An id below a pruned folder is no longer in the tree: nothing moves.
+        assert_eq!(nested.prune_many(&[NodeId(2)]), 0);
+        assert_eq!(nested.prune(NodeId(2)), Some(0));
+        assert_eq!(nested.node(NodeId(0)).expect("root").allocated, 5);
     }
 
     #[test]

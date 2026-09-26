@@ -12,9 +12,10 @@ use hematita_core::usage::empty::empty_folders;
 use hematita_core::usage::tree::{NodeId, Tree};
 use hematita_core::usage::view::unreadable_below;
 
-/// The duplicate candidates a scan offers, biggest size first. A home folder
-/// holds tens of thousands of equal-sized files; the page lists, and the
-/// content check reads, only the groups that free the most.
+/// The duplicate candidates a scan offers, the groups that free the most
+/// first. A home folder holds tens of thousands of equal-sized files; the
+/// page lists, and the content check reads, only the groups that free the
+/// most.
 pub const SHOWN_GROUPS: usize = 500;
 
 /// What the scan thread derives from a finished tree, so the Qt thread never
