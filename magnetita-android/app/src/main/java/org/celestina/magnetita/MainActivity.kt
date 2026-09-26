@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import org.celestina.magnetita.core.Core
 import org.celestina.magnetita.link.LinkService
 import org.celestina.magnetita.link.LinkState
+import org.celestina.magnetita.link.LocalAddresses
 import org.celestina.magnetita.link.MediaCommand
 import org.celestina.magnetita.link.Outbound
 import org.celestina.magnetita.link.PairingConsent
@@ -100,6 +101,24 @@ class MainActivity : ComponentActivity() {
                 if (consent !is PairingState.Idle) {
                     // Pairing waits for the person: the only way to it is the confirm button.
                     BackHandler { pairing.dismiss() }
+                    if (consent is PairingState.Confirming) {
+                        // The offer ends on its own once its time is up.
+                        LaunchedEffect(consent) {
+                            while (pairing.state.value == consent) {
+                                val left = pairing.remainingMs()
+                                if (left == 0L) {
+                                    pairing.expire()
+                                    break
+                                }
+                                kotlinx.coroutines.delay(left)
+                            }
+                        }
+                        // No other app's overlay may sit over the confirm button (tapjacking).
+                        androidx.compose.runtime.DisposableEffect(Unit) {
+                            window.setHideOverlayWindows(true)
+                            onDispose { window.setHideOverlayWindows(false) }
+                        }
+                    }
                     PairConfirmScreen(
                         state = consent,
                         onPair = { offer -> pairing.confirm(offer)?.let { uri -> LinkService.pair(this, uri) } },
@@ -107,7 +126,7 @@ class MainActivity : ComponentActivity() {
                     )
                 } else if (scanning) {
                     ScanScreen(
-                        onLink = { uri -> pairing.offer(uri); scanning = false },
+                        onLink = { uri -> pairing.offer(uri, LocalAddresses.of(this)); scanning = false },
                         onBack = { scanning = false },
                     )
                 } else {
@@ -166,6 +185,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        pairing.screenStarted()
+    }
+
+    /** Leaving the foreground drops a waiting offer; a planted link must not wait for a genuine scan. */
+    override fun onStop() {
+        pairing.screenStopped(isChangingConfigurations)
+        super.onStop()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) LinkService.focused(this) else LinkService.blurred(this)
@@ -205,12 +235,10 @@ class MainActivity : ComponentActivity() {
         if (intent.action != Intent.ACTION_VIEW || data.scheme != "magnetita" || data.host != "pair") return
         // Recents replays the intent that opened the task; that is not a new request.
         if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
-        if (!pairing.offer(data.toString())) android.util.Log.i(TAG, "pairing link ignored: another waits for the person")
+        pairing.offer(data.toString(), LocalAddresses.of(this))
     }
 
     companion object {
-        private const val TAG = "magnetita-main"
-
         /** Outlives the activity's recreation; the process's death drops a waiting offer, which is the safe side. */
         private val pairing = PairingConsent()
     }

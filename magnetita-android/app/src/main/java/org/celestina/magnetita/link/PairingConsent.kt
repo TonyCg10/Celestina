@@ -7,9 +7,9 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * What a `magnetita://pair` link names, read only to show it to the person
  * before anything is dialled. The core parses the link again and its parse
- * is the one that pairs; this preview refuses every ambiguity the core would
- * resolve silently (a repeated id or fingerprint), so what the screen shows
- * is what the core uses.
+ * is the one that pairs; this preview refuses everything the core refuses
+ * and every ambiguity the core would resolve silently (a repeated field),
+ * so the screen never shows an offer the core would read differently.
  */
 data class PairOffer(
     val uri: String,
@@ -17,12 +17,23 @@ data class PairOffer(
     val deviceId: String,
     /** The pinned certificate's SHA-256 as colon-separated hex pairs, as the desktop prints fingerprints. */
     val fingerprint: String,
-    /** Every `ip:port` the core would dial, in order; all on the LAN. */
+    /** Every `ip:port` the core would dial, in order; all on the LAN and none this phone's own. */
     val addresses: List<String>,
 )
 
-/** Why a pairing link was refused before the person was asked. */
-enum class PairRefusal { NotMagnetita, Malformed, NoAddress, NotLan }
+/** Why a pairing link was refused, or why a waiting offer ended, without pairing. */
+enum class PairRefusal {
+    NotMagnetita,
+    Malformed,
+    NoAddress,
+    NotLan,
+    /** An address is one of this phone's own: another app here would answer as the desktop. */
+    ThisPhone,
+    /** A second, different link arrived while one waited: both are dropped. */
+    Conflict,
+    /** The offer waited longer than [PairingConsent.TTL_MS]. */
+    Expired,
+}
 
 /** A link read for the consent screen: an offer to show, or a refusal. */
 sealed interface PairPreview {
@@ -30,21 +41,33 @@ sealed interface PairPreview {
     data class Refused(val reason: PairRefusal) : PairPreview
 
     companion object {
-        /** The id bound of the wire (`MAX_IDENT`). */
-        private const val MAX_ID = 128
+        /** The wire's bounds on an id or an address (`MAX_IDENT`) and on a list (`MAX_LIST`). */
+        private const val MAX_IDENT = 128
+        private const val MAX_LIST = 256
 
-        fun of(uri: String?): PairPreview {
+        /**
+         * Reads `uri` for the screen. `local` holds this phone's own
+         * interface addresses as host literals; a link naming one of them is
+         * refused.
+         */
+        fun of(uri: String?, local: Set<String> = emptySet()): PairPreview {
             if (uri == null || !PairLink.accepts(uri)) return Refused(PairRefusal.NotMagnetita)
+            var version: String? = null
             var id: String? = null
             var fingerprint: String? = null
+            var secret = false
             val addresses = ArrayList<String>()
             for (field in uri.removePrefix(PairLink.PREFIX).split('&')) {
                 val eq = field.indexOf('=')
                 if (eq < 0) return Refused(PairRefusal.Malformed)
                 val value = field.substring(eq + 1)
                 when (field.substring(0, eq)) {
+                    "v" -> {
+                        if (version != null) return Refused(PairRefusal.Malformed)
+                        version = value
+                    }
                     "id" -> {
-                        if (id != null || value.isEmpty() || value.length > MAX_ID || !value.all(::isAsciiAlphanumeric)) {
+                        if (id != null || value.isEmpty() || value.length > MAX_IDENT || !value.all(::isAsciiAlphanumeric)) {
                             return Refused(PairRefusal.Malformed)
                         }
                         id = value
@@ -53,17 +76,28 @@ sealed interface PairPreview {
                         if (fingerprint != null) return Refused(PairRefusal.Malformed)
                         fingerprint = fingerprintText(value) ?: return Refused(PairRefusal.Malformed)
                     }
-                    "addr" -> addresses += value
+                    "secret" -> {
+                        if (secret || fingerprintText(value) == null) return Refused(PairRefusal.Malformed)
+                        secret = true
+                    }
+                    "addr" -> {
+                        if (value.isEmpty() || value.length > MAX_IDENT || addresses.size >= MAX_LIST) {
+                            return Refused(PairRefusal.Malformed)
+                        }
+                        addresses += value
+                    }
                 }
             }
-            if (id == null || fingerprint == null) return Refused(PairRefusal.Malformed)
+            if (version != "1" || id == null || fingerprint == null || !secret) return Refused(PairRefusal.Malformed)
             if (addresses.isEmpty()) return Refused(PairRefusal.NoAddress)
-            // The core dials every address in order, so one outside the LAN refuses the link.
+            // The core dials every address in order, so one bad address refuses the link.
             if (!addresses.all(LanAddress::isLan)) return Refused(PairRefusal.NotLan)
+            val own = local.mapNotNull(LanAddress::canonicalHost).toSet()
+            if (addresses.any { LanAddress.hostOf(it) in own }) return Refused(PairRefusal.ThisPhone)
             return Offer(PairOffer(uri, id, fingerprint, addresses))
         }
 
-        /** 64 hex digits as `aa:bb:…`, or null. */
+        /** 64 hex digits (32 bytes) as `aa:bb:…`, or null. */
         private fun fingerprintText(hex: String): String? {
             if (hex.length != 64 || !hex.all(LanAddress::isHexDigit)) return null
             return hex.lowercase().chunked(2).joinToString(":")
@@ -75,26 +109,52 @@ sealed interface PairPreview {
 
 /**
  * Which `ip:port` literals a pairing link may name: RFC 1918 IPv4 and IPv6
- * unique-local (`fc00::/7`) addresses, the addresses of a home LAN. Loopback
- * (another app on this phone), link-local, public and shared (CGNAT)
- * addresses, host names and scope ids are refused. Parsing is strict so an
- * address accepted here is the one the core's `SocketAddr` parse reads.
+ * unique-local (`fc00::/7`) addresses, the addresses of a home LAN. Loopback,
+ * link-local, public and shared (CGNAT) addresses, host names and scope ids
+ * are refused. Parsing is strict so an address accepted here is the one the
+ * core's `SocketAddr` parse reads. This phone's own LAN address passes here;
+ * [PairPreview.of] refuses it against the interface addresses it is given.
  */
 object LanAddress {
     fun isLan(address: String): Boolean {
-        if (address.startsWith("[")) {
-            val close = address.indexOf(']')
-            if (close < 0 || address.getOrNull(close + 1) != ':' || !port(address.substring(close + 2))) return false
-            val hextets = ipv6(address.substring(1, close)) ?: return false
-            return (hextets[0] and 0xfe00) == 0xfc00
+        val host = parse(address) ?: return false
+        return if (host.size == 4) {
+            host[0] == 10 || (host[0] == 172 && host[1] in 16..31) || (host[0] == 192 && host[1] == 168)
+        } else {
+            (host[0] and 0xfe00) == 0xfc00
         }
-        val colon = address.lastIndexOf(':')
-        if (colon < 0 || !port(address.substring(colon + 1))) return false
-        val v4 = ipv4(address.substring(0, colon)) ?: return false
-        return v4[0] == 10 || (v4[0] == 172 && v4[1] in 16..31) || (v4[0] == 192 && v4[1] == 168)
+    }
+
+    /** The canonical host of an `ip:port` literal, comparable with [canonicalHost], or null. */
+    fun hostOf(address: String): String? = parse(address)?.let(::canonical)
+
+    /**
+     * The canonical form of a bare host literal as an interface reports it
+     * (`192.168.1.20`, `fd00:0:0:0:0:0:0:5%wlan0`), or null. The scope id is
+     * dropped: a local address is this phone's on any interface.
+     */
+    fun canonicalHost(host: String): String? {
+        val bare = host.removePrefix("/").substringBefore('%')
+        val words = if (':' in bare) ipv6(bare) else ipv4(bare)
+        return words?.let(::canonical)
     }
 
     internal fun isHexDigit(c: Char): Boolean = c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F'
+
+    /** Four octets for IPv4, eight hextets for IPv6, or null. */
+    private fun parse(address: String): IntArray? {
+        if (address.startsWith("[")) {
+            val close = address.indexOf(']')
+            if (close < 0 || address.getOrNull(close + 1) != ':' || !port(address.substring(close + 2))) return null
+            return ipv6(address.substring(1, close))
+        }
+        val colon = address.lastIndexOf(':')
+        if (colon < 0 || !port(address.substring(colon + 1))) return null
+        return ipv4(address.substring(0, colon))
+    }
+
+    private fun canonical(words: IntArray): String =
+        if (words.size == 4) words.joinToString(".") else words.joinToString(":") { it.toString(16) }
 
     private fun port(text: String): Boolean =
         text.length in 1..5 && text.all { it in '0'..'9' } && text.toInt() in 1..65535
@@ -157,44 +217,93 @@ sealed interface PairingState {
     /** The screen shows this offer and waits for the person's answer. */
     data class Confirming(val offer: PairOffer) : PairingState
 
-    /** A link was refused; the screen says why until dismissed. */
+    /** A link was refused, or an offer ended unanswered; the screen says why until dismissed. */
     data class Refused(val reason: PairRefusal) : PairingState
 }
 
 /**
  * The consent in front of pairing. Every link, whether from the exported
  * deep link or from the scanner, is offered here; nothing pairs until the
- * person confirms the very offer the screen shows. While one offer waits,
- * any other link is ignored, so a second intent cannot swap the desktop
- * under the person's finger. Pure, so the JVM tests pin it.
+ * person confirms the very offer the screen shows, within [TTL_MS].
+ *
+ * - A different link arriving while one waits drops both and says so
+ *   ([PairRefusal.Conflict]): neither is trusted, and the person scans
+ *   again. The same link again is the same offer and changes nothing.
+ * - A waiting offer expires after [TTL_MS] and is dismissed when no consent
+ *   screen is in the foreground any more, so a link planted while the
+ *   person looked away cannot wait for a later, genuine pairing.
+ *
+ * Pure, so the JVM tests pin it; `now` is a monotonic clock in ms.
  */
-class PairingConsent {
+class PairingConsent(private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val _state = MutableStateFlow<PairingState>(PairingState.Idle)
     val state: StateFlow<PairingState> = _state.asStateFlow()
+    private var offeredAt = 0L
+    private var screens = 0
 
-    /** Offers a link; false when ignored because another is awaiting the person. */
+    /** Offers a link, refusing it against this phone's own addresses `local`. */
     @Synchronized
-    fun offer(uri: String?): Boolean {
-        if (_state.value is PairingState.Confirming) return false
-        _state.value = when (val preview = PairPreview.of(uri)) {
-            is PairPreview.Offer -> PairingState.Confirming(preview.offer)
+    fun offer(uri: String?, local: Set<String> = emptySet()) {
+        expire()
+        val waiting = _state.value
+        if (waiting is PairingState.Confirming) {
+            if (waiting.offer.uri != uri) _state.value = PairingState.Refused(PairRefusal.Conflict)
+            return
+        }
+        _state.value = when (val preview = PairPreview.of(uri, local)) {
+            is PairPreview.Offer -> PairingState.Confirming(preview.offer).also { offeredAt = now() }
             is PairPreview.Refused -> PairingState.Refused(preview.reason)
         }
-        return true
     }
 
     /** The person confirmed `offer`: its link to pair, once, or null when it is not the one waiting. */
     @Synchronized
     fun confirm(offer: PairOffer): String? {
+        expire()
         val current = _state.value
         if (current !is PairingState.Confirming || current.offer != offer) return null
         _state.value = PairingState.Idle
         return offer.uri
     }
 
+    /** How long the waiting offer has left, 0 when none waits. */
+    @Synchronized
+    fun remainingMs(): Long =
+        if (_state.value is PairingState.Confirming) (offeredAt + TTL_MS - now()).coerceAtLeast(0) else 0
+
+    /** Ends a waiting offer whose time is up; the screen then says it expired. */
+    @Synchronized
+    fun expire() {
+        if (_state.value is PairingState.Confirming && now() - offeredAt >= TTL_MS) {
+            _state.value = PairingState.Refused(PairRefusal.Expired)
+        }
+    }
+
     /** The person declined the offer or dismissed a refusal. */
     @Synchronized
     fun dismiss() {
         _state.value = PairingState.Idle
+    }
+
+    /** A screen that shows the consent came to the foreground. */
+    @Synchronized
+    fun screenStarted() {
+        screens += 1
+    }
+
+    /**
+     * A screen that shows the consent left the foreground. When none is left
+     * the offer is dropped, unless the screen is only being recreated
+     * (`changingConfigurations`), which starts it again at once.
+     */
+    @Synchronized
+    fun screenStopped(changingConfigurations: Boolean) {
+        screens = (screens - 1).coerceAtLeast(0)
+        if (screens == 0 && !changingConfigurations) _state.value = PairingState.Idle
+    }
+
+    companion object {
+        /** How long an offer waits for the person. */
+        const val TTL_MS = 120_000L
     }
 }

@@ -9,6 +9,13 @@ daemon links, reached through UniFFI.
 
 - Pair with the Celestina desktop by scanning the QR its Magnetita app shows,
   or by typing the six-digit code; keep the desktop pinned by certificate.
+- A pairing link, scanned or opened from another app, pairs only after the
+  person confirms the desktop's id, fingerprint and addresses on the
+  consent screen, within two minutes and while the screen stays in front.
+  Every address must be on the LAN (RFC 1918 IPv4 or `fc00::/7` IPv6) and
+  none may be this phone's own, so a desktop reachable only through a
+  public, CGNAT or VPN address cannot pair by link; the six-digit code is
+  the path meant for that case once the wire carries it.
 - Hold the session in a foreground service across screen off, app switches
   and Wi-Fi changes; reconnect without being asked.
 - Grow capability by capability with the program's roadmap: battery, find

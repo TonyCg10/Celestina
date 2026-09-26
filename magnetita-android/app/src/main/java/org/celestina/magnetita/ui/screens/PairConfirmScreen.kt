@@ -13,6 +13,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -40,6 +45,12 @@ fun PairConfirmScreen(state: PairingState, onPair: (PairOffer) -> Unit, onDismis
             when (state) {
                 is PairingState.Confirming -> {
                     val offer = state.offer
+                    // Taps in the first moments are ignored: a tap meant for what was on screen before must not pair.
+                    var armed by remember(offer) { mutableStateOf(false) }
+                    LaunchedEffect(offer) {
+                        kotlinx.coroutines.delay(ARM_MS)
+                        armed = true
+                    }
                     Group {
                         GroupRow(title = stringResource(R.string.label_desktop), detail = offer.deviceId)
                         GroupRow(title = stringResource(R.string.label_fingerprint), detail = offer.fingerprint)
@@ -53,7 +64,7 @@ fun PairConfirmScreen(state: PairingState, onPair: (PairOffer) -> Unit, onDismis
                         modifier = Modifier.padding(horizontal = 32.dp),
                     )
                     Spacer(Modifier.height(20.dp))
-                    Button(onClick = { onPair(offer) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    Button(onClick = { onPair(offer) }, enabled = armed, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                         Text(stringResource(R.string.action_pair))
                     }
                     TextButton(onClick = onDismiss, modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -68,6 +79,9 @@ fun PairConfirmScreen(state: PairingState, onPair: (PairOffer) -> Unit, onDismis
                                 PairRefusal.Malformed -> R.string.pair_refused_malformed
                                 PairRefusal.NoAddress -> R.string.pair_refused_no_address
                                 PairRefusal.NotLan -> R.string.pair_refused_not_lan
+                                PairRefusal.ThisPhone -> R.string.pair_refused_this_phone
+                                PairRefusal.Conflict -> R.string.pair_refused_conflict
+                                PairRefusal.Expired -> R.string.pair_refused_expired
                             },
                         ),
                         style = MaterialTheme.typography.bodyMedium,
@@ -84,3 +98,6 @@ fun PairConfirmScreen(state: PairingState, onPair: (PairOffer) -> Unit, onDismis
         }
     }
 }
+
+/** How long the confirm button stays disabled after an offer appears. */
+private const val ARM_MS = 500L

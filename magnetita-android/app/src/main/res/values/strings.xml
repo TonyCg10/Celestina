@@ -38,6 +38,9 @@
     <string name="pair_refused_malformed">Ese enlace de emparejamiento no es válido</string>
     <string name="pair_refused_no_address">El enlace no dice dónde está el escritorio</string>
     <string name="pair_refused_not_lan">El enlace apunta fuera de tu red local; no se empareja</string>
+    <string name="pair_refused_this_phone">El enlace apunta a este mismo teléfono; no se empareja</string>
+    <string name="pair_refused_conflict">Llegaron dos enlaces distintos a la vez y se descartaron ambos; vuelve a escanear el código del escritorio</string>
+    <string name="pair_refused_expired">El enlace caducó sin respuesta; vuelve a escanear el código del escritorio</string>
     <string name="label_pairing">Emparejado</string>
     <string name="label_clipboard">Portapapeles</string>
     <string name="detail_clipboard">Se comparte con la app delante; desde el azulejo o Compartir en cualquier momento</string>

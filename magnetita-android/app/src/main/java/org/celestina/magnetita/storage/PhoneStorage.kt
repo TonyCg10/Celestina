@@ -187,11 +187,20 @@ class PhoneStorage(private val context: Context) {
         return out
     }
 
-    /** How many entries the tree's directory `id` holds, or null when the provider does not say. */
+    /**
+     * How many entries the tree's directory `id` holds, or null when the
+     * provider does not say: a listing still loading or carrying an error is
+     * not a count.
+     */
     private fun childCount(tree: Uri, id: String): Int? = runCatching {
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id)
         context.contentResolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID), null, null, null)
-            ?.use { c -> c.count.takeIf { it >= 0 } }
+            ?.use { c ->
+                val extras = c.extras
+                val incomplete = extras != null &&
+                    (extras.getBoolean(DocumentsContract.EXTRA_LOADING, false) || extras.getString(DocumentsContract.EXTRA_ERROR) != null)
+                if (incomplete) null else c.count.takeIf { it >= 0 }
+            }
     }.getOrNull()
 
     private fun stat(uri: Uri): StorageEntry? =

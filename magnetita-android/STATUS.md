@@ -13,7 +13,8 @@
   `VAL-MAG-11`
 - **Author validation:** `VAL-MAG-11` in Magnetita's
   [VALIDATION.md](../magnetita/VALIDATION.md) covers the first pairing on
-  the S25U; this project's own lane starts empty
+  the S25U; this project's own lane holds `VAL-AND-1`, pending, for the
+  pairing consent and the input gates of `AND-6-D`
 
 ## Current checkout truth
 
