@@ -1,13 +1,34 @@
 # Grafita implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** GRA-H1
 - **Authorised sequence:** G8-G13, opened by author decision on 2026-08-19 and
-  closed the same day. Nothing is in flight; a new checkpoint needs a new
-  falsifiable problem and the author's word
+  closed the same day. `GRA-H1` is the hardening the author asked for after
+  the 2026-09-26 monorepo audit
 - **Related author validation:** `VAL-G7`, `VAL-G8` and `VAL-G9`, all pending
   and none blocking; earlier completed observations and deliberate exclusions
   are in [VALIDATION.md](VALIDATION.md)
+
+## GRA-H1 — Hardening after the monorepo audit
+
+The falsifiable problem, reproduced by the audit: a PDF of about 20 KB aborts
+the process through unbounded recursion and unchecked slices under
+`panic = "abort"`, and a 1 MiB gzip inflates into a 1 GiB document, because
+the 64 MiB limit applies only to the compressed file. Siderita's Space preview
+runs the same importer in-process, so the file manager dies too. The
+highlighter also does quadratic work on long lines, and the recent list is read
+and rewritten on the GUI thread.
+
+The boundary is `grafita-core` for the importer, the recent list and the
+preferences, and Grafita's `cpp/` for the highlighter. The tangible outcome is
+a typed refusal for every hostile document, under tests that also pass as root,
+and no disk IO or quadratic work on the GUI thread.
+
+The plan is
+[Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
+`GRA-H1-A` (importer hardening) and `GRA-H1-B` (highlighting, IO off the GUI
+thread, the shared `file_uri` owner and STATUS). The findings are in
+[the Hematita and Grafita audit record](../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md).
 
 ## G7 — reading comfort, closed 2026-08-19
 

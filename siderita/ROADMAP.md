@@ -1,13 +1,36 @@
 # Siderita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** SID-H1
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07`,
   `VAL-SID-11`, `VAL-SID-15` and `VAL-SID-U1` in [VALIDATION.md](VALIDATION.md);
   none of them blocks implementation
 
 `SID-M1` remains the next settled checkpoint after `SID-G7` and `SID-A1`, and
-has no active execution plan.
+has no active execution plan; `SID-H1` comes first.
+
+## SID-H1 — Hardening after the monorepo audit
+
+The falsifiable problem, reproduced by the audit: a crafted archive whose
+symlinks chain outward writes outside the folder the person chose; a copy
+that loses a same-name race deletes the other writer's file; a move across
+filesystems removes the source before its copy is durable; a restore from a
+volume Trash ignores relative `Path=` records; and quitting kills write
+workers mid-file. Undo, the Trash verbs and the device listings also block the
+Qt thread.
+
+The boundary is each promise's owner: `siderita-archive` for containment,
+`siderita-ops` for the loss-free verbs, the controller for job lifecycle and
+threading. The tangible outcome is the same verbs, with every reproduced
+failure pinned by a regression test and no blocking work left on the Qt
+thread.
+
+The plan is
+[Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
+`SID-H1-A` (archive containment), `SID-H1-B` (loss-free verbs) and `SID-H1-C`
+(lifecycle, threading, the shared owners, documentation and accessibility).
+The findings are in
+[the Siderita audit record](../docs/evidence/2026-09-26-monorepo-audit-siderita.md).
 
 ## SID-G7 — Shared reading surface in both text panes
 

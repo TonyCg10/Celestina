@@ -96,6 +96,8 @@ records work but grants no authorization beyond the repository rules.
 8. Publish `CelestinaTreemap` and `CelestinaUsageList`, extracted from
    Hematita's local controls with navigation-only contracts, so Siderita
    becomes their second consumer.
+9. Close the module's findings from the 2026-09-26 monorepo audit
+   (`STYLE-G7-N`), after the suite plan's `AUD-1-B`.
 
 ## Implementation exit
 
@@ -132,6 +134,7 @@ stable symbols are authoritative; line counts are a hand-off aid and may drift.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
+| STYLE-G7-N | `celestina-style:` | planned | `CelestinaScrollBar.qml`; `GlassMenuItem.qml`; `CelestinaTheme.qml` (swatch and `lockScrim` tokens); `scripts/check-style-contract.sh`; `scripts/check-contrast-contract.py` (root) lock pairs; `tests/` (`tst_switch.qml`, `tst_textfield.qml`); `scripts/test-architecture-scanners.sh` (root) fixture | — | Spanish `qsTr` scrollbar names. Swatch tokens, and a guard for literal `withAlpha`/`multiplyAlpha`. A `lockScrim` token plus lock pairs in `check-contrast-contract.py`. `tst_switch.qml`, `tst_textfield.qml`. (P-16: STY-1, STY-2, STY-3; SH-6 (token and contract half)) | `celestina-style/scripts/check-style-contract.sh` with a new fixture in `test-architecture-scanners.sh`; `python3 scripts/check-contrast-contract.py`; the new Qt Quick tests; build and verify (the landing rebuilds Celestina) | None |
 | STYLE-G7-K | `celestina-style:` | active | `CelestinaIcon.qml`; the vendored Lucide catalogue | — | Draw the shared glyphs at the weight the author asked for without changing any icon size, and rasterize every vendored icon at the density it will really be drawn at so a scaled output receives a pixmap the size of the area it fills rather than a smaller one stretched | [per-output sizing and raster fidelity](../../../../celestina/docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md) | `VAL-PANEL-1` in Celestina |
 | STYLE-G7-J | `celestina-style:` | active | `GlassSurface.qml`; `CelestinaTheme.qml`; `DESIGN.md`; `VALIDATION.md`; focused glass tests; style version/status/roadmap/evidence and the root version history | — | Keep rounded `GlassSurface` defaults pixel-compatible while retaining one opt-in ExternalBackdrop silhouette and open edge-stroke path for Celestina's bar-edge `ContextualVeil` membrane; keep that role genuinely shadow- and edge-halo-free, retain only the demonstrated vertical attachment-gap bounds, and leave the droplet mouth, meniscus, hanging neck, tangent landing, tension geometry and opener feedback entirely with the shell without adding Style tokens or an API that mutates dense content surfaces | [continuous veil and membrane evidence](../../evidence/2026-08-11-edge-attached-glass-silhouette.md) | `VAL-PANEL-1` in Celestina |
 | STYLE-G7-H | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-H.numstat.tsv); `CelestinaTreemap.qml`; `CelestinaUsageList.qml`; `CelestinaTheme.qml`; their tests; `CMakeLists.txt`; `DESIGN.md`; `STATUS.md`; root version history | 12 files, +220/-16 | Give the shared treemap and usage list concentric corners (a `radiusMd` panel, content inset `spaceSm`, nothing drawn in the inset), `spaceSm` tile gaps with padded labels shown only where they fit, right-eliding row names beside a fixed-width numbers column, and add the six-hue `usagePalette` rank palette; move the module to 1.9.1 | [evidence](../../evidence/2026-09-25-usage-controls-corners.md) | `VAL-STYLE-04` |
@@ -252,6 +255,20 @@ then reports the deployed artifacts current and verified without activating a
 session. The immutable inventory, commit and author-visible validation remain
 pending; `STYLE-G7-J` stays `active`.
 
+
+## STYLE-G7-N boundary
+
+The 2026-09-26 monorepo audit found four gaps in the shared module: the scroll
+bar reads English accessible names aloud in Spanish products, the swatch
+anatomy of `GlassMenuItem` uses literals the style guard cannot see, several
+shared controls have no Qt Quick test, and the contrast contract never checks
+lock text over a bright wallpaper. The unit owns the tokens, the guard pattern,
+the contrast pairs and the tests; the lock's own darker wash stays with
+Celestina's `SURF-1-F`. It is a row of this plan because the project has one
+active checkpoint and the author asked for the whole audit program (ruling
+R-A8 of [the audit evidence](../../../../docs/evidence/2026-09-26-monorepo-audit.md));
+the findings are in
+[the shell and style audit record](../../../../docs/evidence/2026-09-26-monorepo-audit-shell-style.md).
 
 ## STYLE-G7-K boundary
 

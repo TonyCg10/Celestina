@@ -1,11 +1,33 @@
 # Celestina Rust workspace implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** RS-H1
 - **Related author validation:** product-level queues linked from
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`CORE-M1` is the next settled candidate and has no active execution plan.
+`CORE-M1` remains the next settled candidate after `RS-H1` and has no
+active execution plan.
+
+## RS-H1 — Shared owners after the monorepo audit
+
+The falsifiable problem found by the audit: the same rule is implemented
+several times with different answers. `file://` URIs are turned into paths
+about seven times; `atomic_file::replace` has no mode, so private state comes
+out world-readable and user media loses its mode; nothing owns
+`XDG_RUNTIME_DIR`, and several copies fall back to world-writable `/tmp`;
+readers of small state files bound nothing; and the `.desktop` scan is copied
+three times, unbounded, partly on the Qt thread.
+
+The boundary is `celestina-core`: each rule gains one tested owner, purely
+added (ruling R-A3), so no consumer's behaviour changes until its own bug
+unit adopts it. The tangible outcome is those owners with their tests, and a
+workspace README, AGENTS and crate docs that match the checkout.
+
+The plan is
+[Shared owners after the monorepo audit](docs/plans/active/2026-09-26-hardening.md),
+with the single unit `RS-H1-A`. It records `dotfiles-core`'s missing consumer
+as an exclusion for the author's decision (ruling R-A4). The findings are in
+[the shared crates audit record](../docs/evidence/2026-09-26-monorepo-audit-shared-crates.md).
 
 ## CORE-M1 — Supersede running scans
 

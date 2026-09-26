@@ -69,6 +69,24 @@ is the one tenant the park was yielding direct scanout to.
   through the popup's own gates exactly as a fresh open. Wallpaper stays
   hard-closing: moving it onto SoftCard is its own cleanup, not this unit.
 
+- **SURF-1-E — the lock and the polkit prompt tell the truth (audit).** The
+  2026-09-26 monorepo audit found that `lock` reports `confirmed` before the
+  compositor covers anything, that the lock shares a style import symlink that
+  can fall back to `/tmp` while QML can emit its unlock verdict, that the
+  polkit prompt renders caller-influenced text as rich text, and that the
+  clipboard history is written world-readable. This unit fixes them with the
+  shared owners from the Rust workspace's `RS-H1-A`. The author asked for the
+  whole audit program; it is a row of this plan because the project has one
+  active checkpoint (ruling R-A8 of
+  [the audit evidence](../../../../docs/evidence/2026-09-26-monorepo-audit.md)).
+- **SURF-1-F — no blocking waits, bounded helper IO, an accessible lock
+  (audit).** The rest of the shell's audit findings: synchronous D-Bus and
+  process waits on the GUI thread, a clipboard re-offer that blocks Wayland
+  dispatch, unbounded Niri and polkit streams, a lock that ignores reduced
+  motion and whose text drops to about 1.3:1 over a bright wallpaper, and
+  README and STATUS that contradict the checkout. The findings are in
+  [the shell and style audit record](../../../../docs/evidence/2026-09-26-monorepo-audit-shell-style.md).
+
 ## Exclusions
 
 - No change to placement, dismissal semantics, focus return, glass anatomy,
@@ -80,7 +98,9 @@ is the one tenant the park was yielding direct scanout to.
   removal does not end the flicker, that investigation is a new unit with its
   own evidence, not an extension of this one.
 - No change to the panel, lock, polkit prompt or wallpaper surfaces: they are
-  already persistent.
+  already persistent. The audit units `SURF-1-E` and `SURF-1-F` change the
+  lock's and the prompt's behaviour, security, threading and accessibility,
+  never their surface lifetime.
 - The blur teardown ordering contract (withdraw before hide, niri #3660
   class) and the layer-shell no-zero-size-on-unopposed-axis contract are
   load-bearing and must be preserved, not simplified away.
@@ -99,6 +119,9 @@ is the one tenant the park was yielding direct scanout to.
 5. Exercise the slice in the nested session (open/close bursts, spaced opens,
    outside-click and Escape dismissal, keyboard focus return, multi-output),
    then build, verify and deploy the production bundle.
+6. The audit units, each on its own branch: `SURF-1-E` after the Rust
+   workspace's `RS-H1-A`, then `SURF-1-F` stacked on it after CelestinaStyle's
+   `STYLE-G7-N`.
 
 ## Implementation exit
 
@@ -118,6 +141,8 @@ is the one tenant the park was yielding direct scanout to.
 - The physical flicker itself is author-eyes-only and stays in `VAL-SURF-1`:
   spaced menu opens on the live session, compared against the 2026-08-18
   observation.
+- `SURF-1-E` and `SURF-1-F` close on their own rows' automated evidence and
+  Celestina's `scripts/complete-production.sh`, without activating a session.
 
 ## Change and commit ledger
 
@@ -127,3 +152,5 @@ is the one tenant the park was yielding direct scanout to.
 | SURF-1-B | `celestina:` | active | `src/osdcontroller.*`, `src/toastcontroller.*` | Quiet surfaces park mapped between bursts | — | [nest exercise](../../evidence/2026-08-20-persistent-carriers-nest-exercise.md) | `VAL-SURF-1` |
 | SURF-1-C | `celestina:` | active | `src/denseglass.*`, `src/niriclient.*`, `src/niri_adapter.rs` | Companion unpark driven by Niri fullscreen state instead of a timer | — | [nest exercise](../../evidence/2026-08-20-persistent-carriers-nest-exercise.md) | `VAL-SURF-1` |
 | SURF-1-D | `celestina:` | done | [exact inventory](../../inventories/2026-08-20-persistent-carriers/SURF-1-D.numstat.tsv) | The popup-backed menus park by closing their popup silently and resume by replaying its open; a fast toggle during the closing beat or a park racing the queued replay no longer strands a ghost — five races closed after a two-agent audit of the full close/park/revive path | 11 files, +296/-17 | [SURF-1-D delivery](../../evidence/2026-08-22-surf-1-d-fast-toggle-races.md) | author's live exercise (2026-08-22), reported clean |
+| SURF-1-E | `celestina:` | planned | `src/shellservice.cpp` (`lock` verb); `src/lock/main.cpp` and `src/main.cpp` (style import root); `src/lockauthenticator.cpp`; `src/lockcontroller.cpp`; `src/lockverify/main.cpp`; `qml/PolkitPrompt.qml`; `src/provider_adapter/clipboard.rs`; `src/provider_adapter/brightness.rs`; `src/provider_adapter/melibea.rs`; their CTest and QML tests | Report `lock` as pending, then confirmed or failed. Use a private 0700 import root with no `/tmp` fallback, and route the unlock through C++ only. Force `PlainText` in the polkit prompt. Take the account from `getuid()`. Handle PAM expiry and echo-on prompts. Fix the sleep-inhibitor edges. Store the clipboard through the private writer. Use `runtime_dir` for the DDC lock and Melibea. (P-10: SH-1, SH-2, SH-3, SH-11, SH-12, SH-13; RS-2, RS-3 (shell adoption)) | — | CTest `shellservice_test` (started but never confirmed → failed), `lockauthenticator_test` (single verdict, uid), `tst_polkitprompt.qml` renders `<b>x</b>` literally, clipboard file mode test; `check-architecture-contract.sh`; Celestina `complete-production.sh` (no activation) | None |
+| SURF-1-F | `celestina:` | planned | `src/lockcontroller.cpp`; `src/polkitagent.cpp`; `src/polkitconversation.cpp`; `src/polkitpromptcontroller.cpp`; `src/lockauthenticator.cpp`; `src/main.cpp` and the controllers that read reduced motion; `src/lock/LockScreen.qml`; `qml/PolkitPrompt.qml`; `src/provider_adapter/clipboard.rs`; `src/provider_adapter/media.rs`; `src/provider_adapter/settings.rs`; `src/provider_adapter/melibea.rs`; `src/niri_adapter.rs`; `celestina-rs/crates/celestina-shell-core/src/nightlight.rs`; `README.md`; `STATUS.md` | Async Inhibit and Register, a cached polkit owner, and signal-driven child IO. Non-blocking clipboard send with a deadline. Bounded niri stream and one settings reader. Decoded cover URI. Polkit retry on refusal and a bounded queue. A single verdict, and no `disconnect(this)`. `ProtocolDecoder` for polkit stdout. One reduced-motion owner, also read by the lock. Lock wash and accessible names and alerts. Per-minute clock. `expect` and `#[allow]` cleanup. README and STATUS truth. (P-17: SH-4, SH-5, SH-6 (lock half), SH-7, SH-8, SH-9, SH-10, SH-14, SH-15, SH-17, SH-19, SH-20, SH-21; RS-1 (cover), RS-6 (settings), RS-18) | — | CTest (async paths; `spy.count()==1`; retry); QML tests (lock under reduced motion, `Accessible.name`); helper `cargo test` (a `%20` cover accepted and published decoded; clipboard send deadline; oversized niri line); `check-contrast-contract.py`; `check-documentation-contract.sh`; Celestina `complete-production.sh` | `VAL-R6` |

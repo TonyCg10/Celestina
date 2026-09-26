@@ -1,16 +1,39 @@
 # Fluorita implementation roadmap
 
-- **Status:** planned
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** FLU-H1
 - **Authorised sequence:** F7-F15, opened by author decision on 2026-08-19 and
-  delivered on 2026-08-20 in a single commit. Nothing is in flight; a new
-  checkpoint needs a measured need and the author's word
-- **Related author validation:** none; completed observations are in
+  delivered on 2026-08-20 in a single commit. `FLU-H1` is the hardening the
+  author asked for after the 2026-09-26 monorepo audit
+- **Related author validation:** `VAL-FLU-EDIT`, `VAL-FLU-METADATA` and
+  `VAL-FLU-TEARDOWN` for `FLU-H1`, none blocking; completed observations are in
   [VALIDATION.md](VALIDATION.md)
 
 Fluorita 1.0 is implemented and its F0-F4 arc is closed. Do not reopen it,
 repeat completed perceptual tests in this file or treat a manual check as
 unfinished implementation.
+
+## FLU-H1 — Hardening after the monorepo audit
+
+The falsifiable problem found by the audit: a same-format Replace renames the
+new bytes over the original instead of sending it to the Trash, for edits,
+metadata writes and batches alike, which contradicts ADR 0009 and loses the
+original for good; edits land through the state-file helper, which resets a
+photo's mode; a file-controlled duration aborts Fluorita and Siderita's player;
+and the library leaves stale rows after in-place edits and never sees folder
+moves.
+
+The boundary is `fluorita-engine` for landing edits and bounding what files
+claim, `fluorita-core` and `fluorita-engine` for the one playback handshake,
+and the app for the catalogue projection, the editor and the threads. The
+tangible outcome is a recoverable original after every Replace, no crash from
+a crafted file, and a library that stays true off the GUI thread.
+
+The plan is
+[Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
+`FLU-H1-A` (safe landing and bounded input) and `FLU-H1-B` (library truth,
+editor promises, the shared handshake and threads that end). The findings are
+in [the Fluorita audit record](../docs/evidence/2026-09-26-monorepo-audit-fluorita.md).
 
 ## F5 — Source-first library and direct activation
 

@@ -1,8 +1,11 @@
 # Celestina Rust workspace status
 
-- **Updated:** 2026-08-03
-- **Implementation:** the registered workspace crates are present and consumed;
-  the next maintenance checkpoint is planned, not active
+- **Updated:** 2026-09-26
+- **Implementation:** the registered workspace crates are present;
+  `dotfiles-core` has no consumer (see the RS-H1 plan's exclusions); `RS-H1`,
+  the shared owners that follow the 2026-09-26 monorepo audit, is the active
+  checkpoint with its unit planned
+  ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Author validation:** routed to the owning applications; see
   [VALIDATION.md](VALIDATION.md)
 

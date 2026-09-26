@@ -1,8 +1,10 @@
 # Grafita status
 
-- **Updated:** 2026-09-07
-- **Implementation:** checkpoints G0-G13 are present and delivered; no
-  checkpoint is active
+- **Updated:** 2026-09-26
+- **Implementation:** checkpoints G0-G13 are present and delivered; `GRA-H1`,
+  the hardening that follows the 2026-09-26 monorepo audit, is the active
+  checkpoint with every unit planned
+  ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Author validation:** the version-1 interaction pass is closed; `VAL-G7`,
   `VAL-GRA-SAVEAS`, `VAL-G8` and `VAL-G9` are requested and intentionally
   excluded coverage is recorded in [VALIDATION.md](VALIDATION.md)

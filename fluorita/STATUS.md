@@ -1,8 +1,10 @@
 # Fluorita status
 
-- **Updated:** 2026-09-07
-- **Implementation:** checkpoints F0-F15 are closed and delivered; no
-  checkpoint is active
+- **Updated:** 2026-09-26
+- **Implementation:** checkpoints F0-F15 are closed and delivered; `FLU-H1`,
+  the hardening that follows the 2026-09-26 monorepo audit, is the active
+  checkpoint with every unit planned
+  ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Author validation:** the version-1 playback and interaction pass is closed;
   `VAL-FLU-SOURCES`, `VAL-FLU-IMMERSIVE`, `VAL-FLU-TEARDOWN`, `VAL-FLU-BYTES`,
   `VAL-FLU-EDIT` and `VAL-FLU-METADATA` are open, and the surfaces F11-F15

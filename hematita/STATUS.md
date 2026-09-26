@@ -1,6 +1,9 @@
 # Hematita status
 
-- **Updated:** 2026-09-25
+- **Updated:** 2026-09-26
+- **Active checkpoint:** `HEM-H1`, the hardening that follows the 2026-09-26
+  monorepo audit, with every unit planned
+  ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Delivered as 1.2.2:** `S3-C` — a section change no longer resets the
   storage analysis: `open()` runs only when the section is shown on the
   locations zone, so the folder, scan, filters, selection and cursor survive;
