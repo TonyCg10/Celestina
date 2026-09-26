@@ -1,19 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
--->
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The phone's identity (its private key and certificate) and the pinned
+     desktops live under files/magnetita. They belong to this install on this
+     phone: a cloud restore or a device-to-device transfer would clone the
+     identity onto another phone, so both exclude them. The manifest's
+     allowBackup="false" does not stop a device-to-device transfer on its own. -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="magnetita" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="magnetita" />
     </device-transfer>
-    -->
 </data-extraction-rules>

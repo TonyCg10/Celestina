@@ -92,6 +92,8 @@ class PhoneStorage(private val context: Context) {
                     live.sendDone(request.request, true, "")
                 }
                 StorageRequest.DELETE -> {
+                    // The provider deletes a directory recursively; the wire deletes only an empty one.
+                    DeleteRule.refusal(stat(uri)) { childCount(tree, id) }?.let { error(it) }
                     if (!DocumentsContract.deleteDocument(context.contentResolver, uri)) error("not deleted")
                     live.sendDone(request.request, true, "")
                 }
@@ -149,6 +151,7 @@ class PhoneStorage(private val context: Context) {
                 }
                 StorageRequest.DELETE -> {
                     lastListing = null
+                    DeleteRule.refusal(if (file.exists()) entryOf(file) else null) { file.list()?.size }?.let { error(it) }
                     if (!file.delete()) error("not deleted")
                     live.sendDone(request.request, true, "")
                 }
@@ -183,6 +186,13 @@ class PhoneStorage(private val context: Context) {
         out.sortBy { it.name }
         return out
     }
+
+    /** How many entries the tree's directory `id` holds, or null when the provider does not say. */
+    private fun childCount(tree: Uri, id: String): Int? = runCatching {
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id)
+        context.contentResolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID), null, null, null)
+            ?.use { c -> c.count.takeIf { it >= 0 } }
+    }.getOrNull()
 
     private fun stat(uri: Uri): StorageEntry? =
         runCatching {

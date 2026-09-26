@@ -31,6 +31,13 @@
     <string name="action_allow_camera">Permitir la cámara</string>
     <string name="scan_not_magnetita">Ese código no es de Magnetita</string>
     <string name="action_back">Atrás</string>
+    <string name="label_desktop">Escritorio</string>
+    <string name="pair_confirm_hint">Empareja solo si lo has pedido tú: ese escritorio verá tus notificaciones, mensajes, contactos y archivos</string>
+    <string name="action_pair">Emparejar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="pair_refused_malformed">Ese enlace de emparejamiento no es válido</string>
+    <string name="pair_refused_no_address">El enlace no dice dónde está el escritorio</string>
+    <string name="pair_refused_not_lan">El enlace apunta fuera de tu red local; no se empareja</string>
     <string name="label_pairing">Emparejado</string>
     <string name="label_clipboard">Portapapeles</string>
     <string name="detail_clipboard">Se comparte con la app delante; desde el azulejo o Compartir en cualquier momento</string>

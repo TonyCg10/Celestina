@@ -58,7 +58,10 @@ class MirrorService : Service() {
             return START_NOT_STICKY
         }
         val started = ScreenMirror(applicationContext, projection, live, options) { reason ->
+            // However the stream ends, the desktop's input ends with it.
+            geometry = null
             _state.value = MirrorState.Idle
+            MirrorInput.instance?.releaseAll()
             mirror = null
             current = null
             LinkService.input { it.sendMirrorStop() }
@@ -125,6 +128,12 @@ class MirrorService : Service() {
 
         private val _state = MutableStateFlow<MirrorState>(MirrorState.Idle)
         val state: StateFlow<MirrorState> = _state.asStateFlow()
+
+        /** The desktop's keys and global actions: honoured only while streaming. */
+        val control = MirrorControl(
+            streaming = { _state.value is MirrorState.Streaming },
+            sink = { MirrorInput.instance },
+        )
 
         /** The streaming mirror's picture and screen sizes, for touches. */
         @Volatile private var geometry: Pair<Pair<Int, Int>, Pair<Int, Int>>? = null

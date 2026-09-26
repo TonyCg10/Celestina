@@ -111,8 +111,11 @@ class LinkService : LifecycleService() {
                         DesktopSignal.MirrorStop -> org.celestina.magnetita.mirror.MirrorService.stop(this@LinkService)
                         DesktopSignal.MirrorKeyframe -> org.celestina.magnetita.mirror.MirrorService.keyframe()
                         is DesktopSignal.MirrorTouched -> org.celestina.magnetita.mirror.MirrorService.touch(signal.touch.phase, signal.touch.x, signal.touch.y, signal.touch.pointer)
-                        is DesktopSignal.MirrorGlobal -> org.celestina.magnetita.mirror.MirrorInput.instance?.global(signal.action)
-                        is DesktopSignal.MirrorKey -> org.celestina.magnetita.mirror.MirrorInput.instance?.key(signal.keycode, signal.pressed)
+                        // Keys and global actions act only while the mirror streams.
+                        is DesktopSignal.MirrorGlobal ->
+                            if (!org.celestina.magnetita.mirror.MirrorService.control.global(signal.action)) android.util.Log.i(TAG, "mirror global dropped: no stream or no input service")
+                        is DesktopSignal.MirrorKey ->
+                            if (!org.celestina.magnetita.mirror.MirrorService.control.key(signal.keycode, signal.pressed)) android.util.Log.i(TAG, "mirror key dropped: no stream or no input service")
                         is DesktopSignal.Storage -> {
                             val live = controllerRef?.live
                             if (live != null) storageExecutor.execute { storage.answer(signal.request, live) }
@@ -386,7 +389,7 @@ class LinkService : LifecycleService() {
             context.startForegroundService(Intent(context, LinkService::class.java))
         }
 
-        /** Pairs with the desktop a QR (or the system camera's link) named. */
+        /** Pairs with the desktop the person confirmed on the consent screen; nothing else calls this. */
         fun pair(context: Context, uri: String) {
             context.startForegroundService(Intent(context, LinkService::class.java).putExtra(EXTRA_PAIR_URI, uri))
         }
