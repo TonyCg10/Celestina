@@ -156,6 +156,15 @@ or selection state. The same six glyph accents, in the order of
 for share visualizations: position i uses entry i mod 6. That is the one place
 they fill an area, and they do so at `accentSoftOpacity` under the ink.
 
+Wallpaper and artwork are hostile input, so the washes laid over them are
+roles with a measured floor rather than a generic dim. `mediaScrim` keeps
+media text readable over a cover; `lockScrim` (`#d9000000`) is the lock's wash
+over the wallpaper, dense enough that the lock's clock, date, passphrase and
+failure message (`text`, `textMuted`, `danger`) hold 4.5:1 over a white
+wallpaper, directly and through a `ContextualVeil` card or its fallback. The
+general `scrim` stays lighter: it dims a scene behind a modal card rather than
+carrying text. The lock surface itself belongs to Celestina.
+
 Schemes are data, not comment-swapped blocks. Only the dark scheme currently
 ships. A future light scheme requires a complete token set, consumer evidence
 and its own accepted checkpoint.
@@ -322,7 +331,7 @@ compatibility policy changes that contract.
 | `GlassSurface` | Regular/Strong material over bounded in-scene capture or an explicit compositor-supplied backdrop, with a readable fallback |
 | `GlassCard` | Glass surface with shared card anatomy/elevation, no application state |
 | `GlassContextMenu` | Floating menu container with focus/input ownership and event-driven recapture |
-| `GlassMenuItem` | Keyboard/pointer-operable menu row with role/name/state and semantic ink |
+| `GlassMenuItem` | Keyboard/pointer-operable menu row with role/name/state and semantic ink; its colour swatch is `compMenuSwatchSize` with a `swatchOutline` ring, and an automatic swatch draws a `compMenuSwatchSlash` slash in `textMuted` |
 
 One screen uses a coherent button emphasis hierarchy rather than several equal
 primaries. `CelestinaSlider` owns the pending mark because media requests are
@@ -363,7 +372,9 @@ click is the transition this rule exists to forbid.
 
 Normal text meets at least 4.5:1 and large text 3:1 in every state. Meaningful
 non-text shapes meet 3:1 against their actual surface. Static contrast checks
-cover deterministic pairs; hostile artwork/wallpaper and real assistive
+cover deterministic pairs, including the washes laid over hostile input,
+composited over black and white extremes: compositor glass, the media scrim
+and the lock's wash, veil card and fallback. Real wallpapers, artwork and assistive
 technology remain author validation.
 
 Actions expose an accessible role, name, state and action. Lists, tabs,
@@ -380,6 +391,10 @@ surface and restore focus to the exact invoker.
 - `qmlformat --check`, `all_qmllint`, the style contract guard, contrast checks,
   production build and affected consumers form automated evidence according to
   [the verification standard](../docs/standards/verification.md).
+- Colour derivation lives in the theme. Outside `CelestinaTheme.qml` the style
+  guard refuses `Qt.rgba`/`darker`/`lighter`/`tint` and any `withAlpha` or
+  `multiplyAlpha` call whose alpha argument starts with a number, across line
+  breaks; the alpha is a theme token, or an expression that starts with one.
 - The exact canonical artifact is produced by `scripts/build-production.sh`
   and checked by `scripts/verify-production.sh`. CelestinaStyle is not
   deployable; `scripts/status-production.sh` reports artifact provenance.

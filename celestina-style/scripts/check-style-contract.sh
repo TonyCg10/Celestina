@@ -128,6 +128,75 @@ check_pattern \
     'direct visual opacity; use a state/emphasis token' \
     'opacity[[:space:]]*:[^;]*[[:space:]?:]0\.[0-9]+'
 
+# A colour recipe called with a numeric alpha is a colour derivation spelled
+# outside the theme, exactly like `Qt.rgba`. The calls are usually wrapped over
+# several lines, so a line-oriented grep cannot see the argument; this reads each
+# call's second argument as a whole. A token or an expression that starts with
+# one (`CelestinaTheme.decorationOpacitySoft / 3`) is accepted.
+if literal_alpha_hits=$(python3 - "${contract_files[@]}" <<'PY'
+import re
+import sys
+
+CALL = re.compile(r"\b(?:withAlpha|multiplyAlpha)\s*\(")
+NUMERIC = re.compile(r"[-+]?(?:[0-9]|\.[0-9])")
+OPENERS = {"(": ")", "[": "]", "{": "}"}
+
+
+def second_argument(text, start):
+    """Return the text after the call's first top-level comma, or None."""
+    depth = 0
+    quote = ""
+    index = start
+    while index < len(text):
+        char = text[index]
+        if quote:
+            if char == "\\":
+                index += 2
+                continue
+            if char == quote:
+                quote = ""
+        elif char in "\"'`":
+            quote = char
+        elif char in OPENERS:
+            depth += 1
+        elif char in ")]}":
+            if depth == 0:
+                return None
+            depth -= 1
+        elif char == "," and depth == 0:
+            return text[index + 1 :].lstrip()
+        index += 1
+    return None
+
+
+status = 0
+for path in sys.argv[1:]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+    except (OSError, UnicodeDecodeError) as error:
+        print(f"{path}: {error}", file=sys.stderr)
+        status = 2
+        continue
+    for match in CALL.finditer(text):
+        argument = second_argument(text, match.end())
+        if argument is not None and NUMERIC.match(argument):
+            line = text.count("\n", 0, match.start()) + 1
+            source = text.splitlines()[line - 1].strip()
+            print(f"{path}:{line}:{source}")
+sys.exit(status)
+PY
+); then
+    if [[ -n $literal_alpha_hits ]]; then
+        printf '%s\n' "$literal_alpha_hits"
+        printf 'ERROR: literal alpha passed to withAlpha/multiplyAlpha; add a theme token\n\n' >&2
+        failures=1
+    fi
+else
+    printf 'ERROR: could not complete the literal alpha check.\n\n' >&2
+    failures=1
+fi
+
 if ! python3 celestina-style/scripts/check-contrast-contract.py; then
     failures=1
 fi

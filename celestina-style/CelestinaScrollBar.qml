@@ -82,7 +82,10 @@ Item {
     implicitHeight: root.horizontal ? root.activeThickness : 0
 
     Accessible.role: Accessible.ScrollBar
-    Accessible.name: root.horizontal ? "Horizontal scroll" : "Vertical scroll"
+    // A screen reader speaks this to the person using the product, so it is
+    // product copy like every other name in the module.
+    Accessible.name: root.horizontal ? qsTr("Desplazamiento horizontal")
+                                     : qsTr("Desplazamiento vertical")
 
     /// Moves the viewport so the handle starts at `offset` along the track.
     function scrollToHandle(offset) {

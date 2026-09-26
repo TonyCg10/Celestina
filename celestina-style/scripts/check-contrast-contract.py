@@ -16,8 +16,10 @@ import sys
 from typing import Iterable
 
 
-THEME = pathlib.Path(__file__).resolve().parents[1] / "CelestinaTheme.qml"
+MODULE = pathlib.Path(__file__).resolve().parents[1]
+THEME = MODULE / "CelestinaTheme.qml"
 TEXT = THEME.read_text(encoding="utf-8")
+GLASS = MODULE / "GlassSurface.qml"
 RGBA = tuple[float, float, float, float]
 
 
@@ -68,6 +70,26 @@ def mixed_role(
     if not re.search(pattern, TEXT, flags=re.S):
         raise ValueError(f"role {name} no longer uses the contractual recipe")
     return mix(source, target, amount)
+
+
+def contextual_veil(highlight: RGBA, strength: float) -> RGBA:
+    """The tint a ContextualVeil paints: the highlight at the veil strength.
+
+    The recipe lives in GlassSurface.qml, not the theme, so it is checked
+    there; a veil that changed its tint would otherwise be measured wrongly.
+    """
+    glass = GLASS.read_text(encoding="utf-8")
+    tint = (
+        r"materialRole\s*===\s*GlassSurface\.ContextualVeil\s*"
+        r"\?\s*CelestinaTheme\.glassHighlight\b"
+    )
+    amount = (
+        r"materialRole\s*===\s*GlassSurface\.ContextualVeil\s*"
+        r"\?\s*CelestinaTheme\.glassContextualVeilStrength\b"
+    )
+    if not re.search(tint, glass) or not re.search(amount, glass):
+        raise ValueError("ContextualVeil no longer uses the contractual recipe")
+    return highlight[0], highlight[1], highlight[2], highlight[3] * strength
 
 
 def mix(source: RGBA, target: RGBA, amount: float) -> RGBA:
@@ -240,6 +262,36 @@ try:
         require(
             f"media/{artwork_name}/progress", rendered_progress, rendered_track, 3.0
         )
+
+    # The lock paints its clock, date, passphrase and failure message over the
+    # user's wallpaper through `lockScrim`. The prompt sits on a ContextualVeil
+    # card that samples that same washed backdrop, or on `surfaceStrong` when
+    # there is nothing to sample. A wallpaper is hostile input and the failure
+    # message is read under stress, so every pair holds the 4.5:1 text floor,
+    # the clock's display size notwithstanding.
+    lock_scrim = literal("lockScrim")
+    veil = contextual_veil(
+        literal("glassHighlight"), scalar("glassContextualVeilStrength")
+    )
+    lock_fallback = literal("surfaceStrong")
+    lock_inks = {
+        "text": text_hi,
+        "secondary text": text_lo,
+        "danger": danger,
+    }
+    for wallpaper_name, wallpaper in extremes():
+        washed = composite(lock_scrim, wallpaper)
+        lock_surfaces = {
+            "wash": washed,
+            "veil card": composite(veil, washed),
+            "fallback card": composite(lock_fallback, washed),
+        }
+        for surface_name, surface in lock_surfaces.items():
+            for ink_name, ink in lock_inks.items():
+                require(
+                    f"lock/{wallpaper_name}/{surface_name}/{ink_name}",
+                    ink, surface, 4.5,
+                )
 
     primary_states = {
         "normal": accent,

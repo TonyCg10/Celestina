@@ -1,6 +1,6 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-09-25
+- **Updated:** 2026-09-26
 - **Implementation:** the shared source contract is at 1.9.1, with the
   reading controls, the shared treemap and usage list, the glass material
   roles and the vendored icon catalogue published; `STYLE-G7-J` and
@@ -10,6 +10,16 @@
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- `STYLE-G7-N` closes the 2026-09-26 audit's style findings.
+  `CelestinaScrollBar` names itself in Spanish through `qsTr`; the
+  `GlassMenuItem` swatch takes `compMenuSwatchSize`, `compMenuSwatchSlash` and
+  `swatchOutline`, and the style guard refuses a numeric alpha passed to
+  `withAlpha`/`multiplyAlpha` outside the theme; `lockScrim` is the lock's
+  wash, and the contrast contract holds the lock's text at 4.5:1 over a white
+  wallpaper; `CelestinaSwitch` and `CelestinaTextField` have Qt Quick tests.
+  Celestina's lock adopts `lockScrim` in its own unit. See
+  [the record](docs/evidence/2026-09-26-tokens-and-lock-contrast.md).
 
 - Delivered as `1.9.1`: `STYLE-G7-H`. `CelestinaTreemap` and
   `CelestinaUsageList` take a `radiusMd` panel with their content inset

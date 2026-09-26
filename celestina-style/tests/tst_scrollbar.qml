@@ -50,6 +50,22 @@ TestCase {
         height: 400
     }
 
+    Flickable {
+        id: wideDocument
+        width: 400
+        height: 40
+        contentWidth: 4000
+        contentHeight: 40
+    }
+
+    CelestinaScrollBar {
+        id: horizontalBar
+        surface: wideDocument
+        horizontal: true
+        width: 400
+        height: 8
+    }
+
     function init() {
         longDocument.contentY = 0
         wait(0)
@@ -106,6 +122,16 @@ TestCase {
         longDocument.contentY = (longDocument.contentHeight - longDocument.height) / 2
         wait(0)
         fuzzyCompare(bar.handleOffset, bar.handleTravel / 2, 0.5)
+    }
+
+    // A screen reader speaks the bar's name to the person using the product,
+    // so it is Spanish product copy like every other name in the module. No
+    // translator is installed, so `qsTr` returns its source text.
+    function test_the_accessible_names_are_product_copy() {
+        compare(bar.Accessible.role, Accessible.ScrollBar)
+        compare(bar.Accessible.name, "Desplazamiento vertical")
+        compare(horizontalBar.Accessible.role, Accessible.ScrollBar)
+        compare(horizontalBar.Accessible.name, "Desplazamiento horizontal")
     }
 
     // Nothing to travel through: the division that converts between the two

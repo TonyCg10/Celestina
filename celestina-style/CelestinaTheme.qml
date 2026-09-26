@@ -224,6 +224,10 @@ QtObject {
     readonly property real accentPressedWashOpacity: 0.26
     readonly property real accentDisabledInkOpacity: 0.75
 
+    // A colour swatch's outline: a faint ring of the text ink, so a swatch as
+    // dark as the menu behind it still reads as a disc.
+    readonly property real swatchOutlineOpacity: 0.24
+
     // The panel body's balance: roughly half elevated tint, half of whatever
     // the surface sits on. One dial for every panel, menu section and context
     // menu — they held three identical copies of it before.
@@ -313,6 +317,9 @@ QtObject {
         required property color codeNumber
         required property color codeKeyword
         required property color scrim
+        // The lock's wash over the wallpaper. Denser than `scrim` because the
+        // lock's text sits directly on it; see `lockScrim` in schemeDark.
+        required property color lockScrim
         // Translucent state washes (foreground = text/textMuted by contract).
         required property color surface
         required property color surfaceStrong
@@ -330,6 +337,8 @@ QtObject {
         required property color accentSoft
         required property color accentSoftBorder
         required property color successSoft
+        // Outline of a menu colour swatch (GlassMenuItem).
+        required property color swatchOutline
         // A primary action that remains identifiable while disabled.
         required property color accentDisabledFill
         required property color accentDisabledInk
@@ -425,6 +434,11 @@ QtObject {
         codeNumber: theme.ref.codeNumber
         codeKeyword: theme.ref.codeKeyword
         scrim: "#73000000"
+        // Wallpaper is untrusted visual input, and the lock paints its clock,
+        // date, passphrase and failure message straight over it. This floor
+        // keeps every one of them at 4.5:1 over a white wallpaper, measured
+        // through the ContextualVeil card as well (check-contrast-contract.py).
+        lockScrim: "#d9000000"
         // State layers are translucent; actual work/group surfaces use the
         // opaque card/elevated roles through CelestinaSurface.
         surface: "#d914171c"
@@ -456,6 +470,8 @@ QtObject {
                                               theme.accentLinkMix),
                               theme.accentSoftBorderOpacity)
         successSoft: "#1c59dc9e"
+        swatchOutline: theme.withAlpha(theme.ref.textHi,
+                                       theme.swatchOutlineOpacity)
         accentDisabledFill: theme.withAlpha(theme.ref.accent,
                                             theme.accentSelectedOpacity)
         accentDisabledInk: theme.withAlpha(theme.ref.accent,
@@ -552,6 +568,7 @@ QtObject {
     readonly property color codeNumber: scheme.codeNumber
     readonly property color codeKeyword: scheme.codeKeyword
     readonly property color scrim: scheme.scrim
+    readonly property color lockScrim: scheme.lockScrim
     readonly property color surface: scheme.surface
     readonly property color surfaceStrong: scheme.surfaceStrong
     readonly property color surfaceHover: scheme.surfaceHover
@@ -568,6 +585,7 @@ QtObject {
     readonly property color accentSoft: scheme.accentSoft
     readonly property color accentSoftBorder: scheme.accentSoftBorder
     readonly property color successSoft: scheme.successSoft
+    readonly property color swatchOutline: scheme.swatchOutline
     readonly property color accentDisabledFill: scheme.accentDisabledFill
     readonly property color accentDisabledInk: scheme.accentDisabledInk
     readonly property color mediaScrim: scheme.mediaScrim
@@ -902,6 +920,10 @@ QtObject {
     readonly property int compMenuWidth: 232
     readonly property int compMenuPadding: 6
     readonly property int compMenuMargins: 24
+    // A menu row's colour swatch: the disc, and the slash an automatic
+    // (no colour chosen) swatch draws across it.
+    readonly property int compMenuSwatchSize: 14
+    readonly property int compMenuSwatchSlash: 11
     // Edge-attached glass scales only its vertical travel from the stable menu
     // width. The owner span, body landing and elastic tension depend on real
     // shell placement geometry and deliberately remain with that host.

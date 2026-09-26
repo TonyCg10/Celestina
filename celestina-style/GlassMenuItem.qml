@@ -63,9 +63,10 @@ MenuItem {
 
             Rectangle {
                 id: swatch
+                objectName: "glassMenuSwatch"
                 anchors.centerIn: parent
-                width: 14
-                height: 14
+                width: CelestinaTheme.compMenuSwatchSize
+                height: CelestinaTheme.compMenuSwatchSize
                 radius: width / 2
                 visible: control.showSwatch
                 color: control.automaticSwatch
@@ -73,13 +74,12 @@ MenuItem {
                 border.width: CelestinaTheme.borderHairline
                 border.color: control.automaticSwatch
                               ? CelestinaTheme.textMuted
-                              : CelestinaTheme.withAlpha(
-                                    CelestinaTheme.text, 0.24)
+                              : CelestinaTheme.swatchOutline
 
                 Rectangle {
                     anchors.centerIn: parent
                     visible: control.automaticSwatch
-                    width: 11
+                    width: CelestinaTheme.compMenuSwatchSlash
                     height: CelestinaTheme.borderHairline
                     radius: height / 2
                     rotation: -45
