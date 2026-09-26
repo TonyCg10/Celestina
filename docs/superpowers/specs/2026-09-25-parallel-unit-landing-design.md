@@ -374,7 +374,8 @@ record carries that `Landing` section. No product version moves.
 
 ## 10. Amendments after implementation (2026-09-25)
 
-The review of the whole implementation changed four rules above. The
+The review of the whole implementation changed four rules above, and on
+2026-09-26 `AUD-1-C` amended §5.1 and §5.2 for stacked branches. The
 [landing contract](../../contracts/landing.md) states the amended behaviour.
 
 - **§5.2, the active plan ledger.** Taking `main`'s content for every other
@@ -401,3 +402,14 @@ The review of the whole implementation changed four rules above. The
   the architecture guard, so that a failure stops the landing before anything
   is built or deployed. The full chain of step 8 still runs after the seal; a
   failure in either stops with the label `guard`.
+- **§5.1 and §5.2, stacked branches (`AUD-1-C`, 2026-09-26).** A branch
+  created from another unit's branch lands after that dependency landed.
+  Rows `origin/main` closed are settled: discovery sets aside an open row
+  that `main` closed, and a changed plan that holds only such rows, unless
+  the row is the unit's own; the plan merge masks a row equal to `main`'s and
+  an open row `main` closed with the session's cells unchanged; another
+  active plan holding only settled rows takes `main`'s text; and the
+  preflight scope check leaves out paths whose bytes equal `main`'s. In an
+  add/add conflict, another unit's evidence record or inventory takes
+  `main`'s copy. A dependency that has not landed stops the preflight, which
+  names it.

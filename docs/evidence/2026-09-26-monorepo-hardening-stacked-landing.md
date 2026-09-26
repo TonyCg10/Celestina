@@ -4,8 +4,9 @@
 - **Scope:** `AUD-1-C` (program unit P-0b, ruling R-A1) of the
   [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md);
   no audit finding. `scripts/landing.py`, `scripts/land-unit.py`,
-  `scripts/worktree.sh`, their fixture tests and
-  [the landing contract](../contracts/landing.md)
+  `scripts/worktree.sh`, their fixture tests,
+  [the landing contract](../contracts/landing.md) and the §10 amendment of
+  [the landing design](../superpowers/specs/2026-09-25-parallel-unit-landing-design.md)
 - **Environment:** session worktree `unit/suite/AUD-1-C` in a Linux container
   (kernel 6.18); Python 3.11.15, Git 2.43.0; the fixtures build their own
   repositories, bare origins and fixture production entries in temporary
@@ -18,6 +19,7 @@
 ```sh
 python3 scripts/test-land-unit.py LandingFunctions
 python3 scripts/test-land-unit.py -k stacked -k another_unit
+python3 scripts/test-land-unit.py -k cross_prefix -k two_dependency
 bash scripts/test-land-unit.sh
 sh scripts/test-worktree.sh
 bash scripts/check-architecture-contract.sh
@@ -29,7 +31,10 @@ printf 'scripts/landing.py\0docs/contracts/landing.md' \
 ```
 
 The tests were written first and run against the unchanged scripts (RED),
-then the scripts were changed and the same tests run again (GREEN).
+then the scripts were changed and the same tests run again (GREEN). A review
+round then added stacks across plans and prefixes and tightened five rules;
+its new tests were run against the first round's scripts (RED) before the
+second round's scripts made them pass (GREEN).
 
 ## Result
 
@@ -44,8 +49,16 @@ then the scripts were changed and the same tests run again (GREEN).
   `conflict in app/docs/inventories/2026-09-25-fixture/FX-Z.numstat.tsv`.
   `test-worktree.sh` failed on `open app APP-3 --from unit/app/APP-2` with
   exit 2 (usage).
-- **GREEN:** `bash scripts/test-land-unit.sh` ran 64 tests, OK (56 before this
-  unit, 8 new); `sh scripts/test-worktree.sh` printed 9 `ok` lines (8 before,
+- **RED, review round:** against the first round's scripts,
+  `LandingFunctions` ran 25 tests with 6 failures and 3 errors (the missing
+  `read_base_plan`, `stacked_on` and `merge_settled_plan`; a reworded,
+  closed-and-edited, reopened or extra-cell row masked silently or without
+  its row named; a modify/modify evidence record resolved to main's copy),
+  and the four cross-plan fixtures failed at `preflight` with
+  `the branch must change exactly one active plan; found 2` (one dependency)
+  or `found 3` (two dependencies) and no dependency named.
+- **GREEN:** `bash scripts/test-land-unit.sh` ran 70 tests, OK (56 before this
+  unit, 14 new); `sh scripts/test-worktree.sh` printed 9 `ok` lines (8 before,
   1 new).
 
 ## Observed facts
@@ -78,6 +91,28 @@ then the scripts were changed and the same tests run again (GREEN).
   `the branch changed the plan beyond its own row FX-B`. The pure test
   `test_merge_plan_accepts_rows_main_already_has` also stops a dependency row
   reworded beyond the seal's cells and a closed row that differs from main's.
+- **Cross-prefix stack** (`test_cross_prefix_stack_lands_after_its_dependency`).
+  The app unit `FX-A` is stacked on the library unit `LIB-A`, which has its
+  own plan and the `lib:` prefix. After `LIB-A` landed, `FX-A` lands as one
+  commit whose diff holds only `app/src/stacked.rs`, the app plan, `FX-A`'s
+  evidence and its inventory; the library plan, evidence and source keep
+  main's bytes, and the tool says the library plan
+  `holds only rows origin/main settles`. Before `LIB-A` landed, the landing
+  stops at `preflight` with `found 2` plans and
+  `origin/main has not closed LIB-A: ... so land LIB-A first`.
+- **Two dependencies** (`test_two_dependency_stack_lands_after_both`,
+  `test_two_dependency_stack_stops_naming_the_unlanded_one`). `FX-A` starts
+  from `unit/lib/LIB-A` and merges `unit/suite/SU-D`. With both landed it
+  lands as one commit of its own paths; with only `LIB-A` landed it stops
+  naming `SU-D` alone.
+- **Tightened rules** (pure tests). A branch whose own row main closed
+  returns that row, so preflight reports it as landed, whatever main did with
+  the dependency's row. The landing-order wording appears only when a
+  `unit/*/<unit>` branch of the dependency is an ancestor of the branch;
+  otherwise the stop only names the open rows. A modify/modify conflict on
+  another unit's evidence record is not resolved. A row with an extra cell,
+  or a row the fork point had closed and the branch reopened, is not masked,
+  and the stop names its ledger row.
 - **Another unit's added inventory**
   (`test_added_inventory_of_another_unit_takes_mains_copy`). A branch carrying
   a file at another unit's inventory path, which main gains from a racing
@@ -100,14 +135,12 @@ then the scripts were changed and the same tests run again (GREEN).
   not inside a fixture landing.
 - No real stacked branch of this program was landed: the landing needs the
   canonical checkout and a push to `origin/main`, which a session does not do.
-- A stack across two active plans, such as `MAG-D1-E` on `RS-H1-A` or
-  `AUD-1-E` on `MAG-D1-E` and `AND-6-D`, still stops at `preflight`: the branch
-  changes two active plans, and a dependency under another prefix also falls
-  outside the stacked row's commit scope. The contract documents the manual
-  route, `git rebase --onto origin/main <dependency branch>` in the stacked
-  session's worktree once the dependency landed.
+- A file of a dependency under another prefix that a later unit changed on
+  main differs from main on the stacked branch, so the preflight scope check
+  still refuses it; the author resolves such a stack by hand.
+- A dependency whose plan was archived on main after it landed leaves the
+  stacked branch with a plan main lacks, which is not set aside and stops.
 
 ## Follow-up
 
-- Decide whether the landing should accept a stack across plans or prefixes
-  (see Limits) before `MAG-D1-E`, `SURF-1-F` and `AUD-1-E` land.
+None.

@@ -107,11 +107,25 @@ For the landing to accept the branch, its diff against `origin/main` must
 change exactly one active plan (a Markdown file other than `README.md` directly
 in an owner's registered `active_plans` directory), and that plan must have
 exactly one ledger row that is `active`, or `done` without an inventory link.
-A row open on the branch that `origin/main`'s plan closed (`done` with an
-inventory link) belongs to a unit that already landed, such as the dependency
-of a stacked branch, and is set aside while another open row remains; the
-unit's own row closed on `origin/main` is still the unit, which `preflight`
-then refuses as landed. That row's `Commit prefix` must be the plan owner's registered prefix, its
+What a unit that already landed left on the branch does not count, which is
+what lets a [stacked branch](#stacked-branches) land:
+
+- a changed active plan whose text on the branch equals `origin/main`'s or
+  the fork point's once the rows `origin/main` settles are masked (see
+  `merge_plan` under [Hot files](#hot-files)) is set aside while another
+  changed plan remains;
+- in the unit's plan, a row open on the branch that `origin/main` closed
+  (`done` with an inventory link) is set aside while another open row
+  remains.
+
+The row of the unit the branch is named after (`unit/<project>/<unit>`) is
+never set aside: when `origin/main` closed it, it is the unit, and
+`preflight` then refuses it as landed. When more than one plan or row
+remains, the stop lists them and names the open rows `origin/main` has not
+closed; for each one whose branch `unit/*/<unit>` exists and is an ancestor
+of the landing's branch, it says to land that unit first.
+
+That row's `Commit prefix` must be the plan owner's registered prefix, its
 `Intended change` is the subject's imperative text unless `--summary` replaces
 it, and its `Automated evidence` must link an existing `.md` record under the
 owner's `docs/evidence/` (root `docs/evidence/` for a suite plan).
@@ -150,7 +164,13 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    (`versioned = false`, such as `celestina-rs`). The
    [version contract](versioning.md) allows a `suite-bug`, `suite-milestone`
    or `suite-release` that bumps one or more products, but the tool refuses it
-   because the author records those by hand. The registry is read from
+   because the author records those by hand. The scope check leaves out the
+   changed paths that only carry units `origin/main` already holds: a path
+   whose bytes on the branch equal `origin/main`'s, a plan set aside by the
+   rules of the previous section, and another unit's evidence record or
+   inventory that the fork point lacks and `origin/main` has, which the rebase
+   resolves to `origin/main`'s copy. `pre_guards` and `run_guards` then judge
+   what the rebased tip really changes. The registry is read from
    `origin/main`. Then it adds the landing worktree, detached on the branch,
    and writes the state file.
 2. **`unbump`.** Stops when local `main` is not an ancestor of `origin/main`
@@ -303,16 +323,26 @@ function in `scripts/landing.py`:
   a branch row equal to `main`'s row, and a branch row that is open where
   `main`'s is closed with every cell other than `Status`, `Files / areas`,
   `Diffstat` and `Automated evidence` (the cells the seal writes) equal,
-  which is a landed dependency's row as its session left it. A row equal to
-  the fork point's is unchanged and needs no rule. When the texts still
-  differ, the branch changed the plan beyond its
-  own row, and the landing stops at `rebase` naming the plan and the first
-  line that differs on each side (the comparison is by whole lines, so a
-  reformatting also stops). Otherwise it
+  which is a landed dependency's row as its session left it. That second
+  rule requires the row to have as many cells as the header on both sides,
+  and never applies to a row the fork point had already closed. A row equal
+  to the fork point's is unchanged and needs no rule; `settled_rows` decides
+  the rest. When the texts still differ, the branch changed the plan beyond
+  its own row, and the landing stops at `rebase` naming the plan, the first
+  line that differs on each side and, when that line is a ledger row, its
+  unit (the comparison is by whole lines, so a reformatting also stops).
+  Otherwise it
   takes `main`'s text and replaces the ledger row whose `Unit` is this unit
   with the branch's row, or, when `main` has no such row, inserts the branch's
   row after the row that precedes it on the branch (or first in the table).
   Every other row and all prose are `main`'s.
+- **Another active plan** the branch changes, which a stacked branch carries
+  from a dependency in another plan. `merge_settled_plan` takes `main`'s text
+  when `plan_settled` holds: once the rows `settled_rows` accepts are masked
+  on every side, the branch's plan equals `main`'s or the fork point's. The
+  tool then says
+  `land-unit: <path> holds only rows origin/main settles; the landing keeps origin/main's copy`.
+  Otherwise the landing stops at `rebase` naming the plan.
 - **The debt ratchets** listed in `commit_policy.shared_ratchet_files` of
   `docs/projects.toml`. `merge_ratchet` keys each row by its non-integer
   cells; a row with other than exactly one integer cell stops the landing.
@@ -336,12 +366,11 @@ function in `scripts/landing.py`:
   accepted. Either lockfile stop says to merge the lockfile by hand,
   `git add` it in the landing worktree, then run `land-unit.py --continue`.
 
-- **Another unit's evidence record or added inventory.** A conflicted
-  Markdown file directly in an owner's `docs/evidence/` other than its
-  `README.md` and other than this unit's evidence record, in an add/add or
-  modify/modify conflict, and a conflicted inventory at
-  `<owner docs>/inventories/<plan-slug>/` other than this unit's, in an
-  add/add conflict, take `main`'s copy, and the tool warns:
+- **Another unit's added evidence record or inventory.** In an add/add
+  conflict, a Markdown file directly in an owner's `docs/evidence/` other than
+  its `README.md` and other than this unit's evidence record, and an
+  inventory at `<owner docs>/inventories/<plan-slug>/` other than this
+  unit's, take `main`'s copy, and the tool warns:
 
   ```text
   land-unit: warning: <path> is another unit's evidence record; the landing keeps origin/main's copy
@@ -349,10 +378,12 @@ function in `scripts/landing.py`:
   ```
 
   `other_unit_record` decides which paths these are. The branch's edits to
-  such a file are dropped, since `main`'s copy is the landed record.
+  such a file are dropped, since `main`'s copy is the landed record. A
+  modify/modify conflict on another unit's record, which the fork point
+  already had, is an edit of an older record and stops like any other file.
 
 A hot file deleted on one side stops the landing, and so does another unit's
-record deleted on one side or an inventory both sides modified. Version
+record deleted on one side. Version
 sources, their mirrors and `docs/version-history.tsv` are not hot files: after
 `unbump` the branch carries no version change, and `bump_version` writes them
 on the rebased tree. Every other conflict, including this unit's own evidence
@@ -378,21 +409,29 @@ followed by `git reset --hard unit/siderita/SID-U2-A` in the new worktree.
 The stacked branch then carries the dependency's commits: its change, its
 ledger row as its session left it, and its evidence record.
 
-Units land in dependency order. While the dependency has not landed, the
-stacked branch's plan has two open rows, and `preflight` stops naming both;
-when the branch is named `unit/<project>/<unit>`, it names the dependency and
-says to land it first. The dependency lands as one sealed commit, and its
-branch is never rewritten, so the stacked branch keeps its commits. The
-stacked unit then lands with the ordinary command, and the tool accepts
-what the dependency's landing left on both sides:
+A unit that needs two unlanded units starts from one dependency's branch and
+merges the other's (`git merge unit/<project>/<unit>`) in its worktree. A
+dependency may belong to another plan and another prefix than the stacked
+unit.
+
+Units land in dependency order. While a dependency has not landed, the
+stacked branch carries its open row: in the unit's plan, that plan has two
+open rows; in another plan, the branch changes two plans that are not set
+aside. Either way `preflight` stops, names the dependency's row and says to
+land it first. The dependency lands as one sealed commit, and its branch is
+never rewritten, so the stacked branch keeps its commits. The stacked unit
+then lands with the ordinary command, and the tool accepts what the
+dependency's landing left on both sides:
 
 - the dependency's row, open on the branch and closed on `main`, is set
-  aside by `discover_unit` and masked by `merge_plan`, as the plan rules
-  above say;
+  aside by `discover_unit` and masked by `merge_plan`; when it lies in
+  another plan, that plan is set aside, the scope check leaves it out, and
+  `merge_settled_plan` keeps `main`'s copy;
 - the dependency's evidence record exists on both sides, and `main`'s copy,
-  with its `## Landing` section, is kept;
+  with its `## Landing` section, is kept; the scope check leaves it out;
 - the dependency's change exists on both sides, and Git's three-way merge
-  resolves every hunk that is identical on both sides;
+  resolves every hunk that is identical on both sides; a path whose bytes
+  equal `main`'s is left out of the scope check;
 - the dependency's version bump and inventory exist only on `main`, since a
   session writes neither and `unbump` drops a bump it did write, so they
   merge cleanly.
@@ -401,12 +440,10 @@ The sealed commit's diff against the previous `main` is then the stacked
 unit's own change, plan row, evidence record and inventory. The rebase takes
 the old fork point as its base, so a stacked change that touches lines next to
 a line the dependency changed conflicts as an ordinary file and stops the
-landing for the author to resolve. The dependency must share the stacked
-unit's plan: a branch whose dependency's row lies in another active plan
-changes two plans, and `preflight` stops. For such a stack, once the
-dependency landed, move the stacked unit's own commits onto `main` in its
-session worktree with `git rebase --onto origin/main <dependency branch>`
-before the landing.
+landing for the author to resolve. A file of the dependency that another
+unit changed on `main` after the dependency landed differs from `main` on
+the branch, so under another prefix it stops the scope check at
+`preflight`.
 
 ## Stops and resumption
 

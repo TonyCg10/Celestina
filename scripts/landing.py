@@ -86,6 +86,9 @@ class UnitRef:
     unit: str
     summary: str
     evidence_path: str | None
+    # Other active plans the branch changes that hold only rows origin/main
+    # settles: the plans of the units a stacked branch depends on.
+    settled_plans: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -239,63 +242,95 @@ def is_plan_file(path: str, directory: str) -> bool:
     )
 
 
+def is_active_plan(registry: Mapping[str, object], path: str) -> bool:
+    """Whether `path` is an active plan of a registered owner."""
+    return any(
+        isinstance(owner.get("active_plans"), str)
+        and is_plan_file(path, str(owner.get("active_plans")))
+        for owner in owner_tables(registry)
+    )
+
+
 def discover_unit(
     registry: Mapping[str, object],
     changed_paths: set[str],
     read_plan: Callable[[str], str | None],
     read_main_plan: Callable[[str], str | None] | None = None,
     branch_unit: str | None = None,
+    *,
+    read_base_plan: Callable[[str], str | None] | None = None,
+    stacked_on: Callable[[str], bool] | None = None,
 ) -> UnitRef:
     """Find the one open ledger row of the one active plan a branch changes.
 
-    Plan texts come from `read_plan`, so the caller decides which revision is
-    read. A row open on the branch that `read_main_plan`'s plan (origin/main's)
-    closed belongs to a unit that already landed, such as the dependency a
-    stacked branch was created from, so it is set aside while another open row
-    remains. `branch_unit`, the unit the branch is named after, only names the
-    dependencies in the stop for a stacked branch whose dependency has not
-    landed.
+    Plan texts come from `read_plan` (the branch), `read_main_plan`
+    (origin/main) and `read_base_plan` (the fork point), so the caller decides
+    which revisions are read. A changed plan that `plan_settled` finds holds
+    nothing main lacks belongs to units that already landed, such as the
+    dependencies of a stacked branch, and is set aside while another plan
+    remains. In the unit's plan, a row open on the branch that main closed is
+    set aside the same way, except the row of `branch_unit`, the unit the
+    branch is named after: when main closed it, it is the unit, which
+    preflight then refuses as landed. A stop that lists open rows main has not
+    closed names them; `stacked_on(unit)` says whether the branch is stacked on
+    that unit's branch, which words the stop as a landing order.
     """
-    candidates: list[tuple[str, Mapping[str, object]]] = []
+    read_main = read_main_plan or (lambda _path: None)
+    read_base = read_base_plan or (lambda _path: None)
+    plans: list[tuple[str, Mapping[str, object]]] = []
     for owner in owner_tables(registry):
         directory = owner.get("active_plans")
         if not isinstance(directory, str):
             continue
-        candidates.extend(
-            (path, owner) for path in sorted(changed_paths) if is_plan_file(path, directory)
-        )
-    if len(candidates) != 1:
-        listed = ", ".join(path for path, _owner in candidates) or "none"
+        plans.extend((path, owner) for path in sorted(changed_paths) if is_plan_file(path, directory))
+    texts: dict[str, str] = {}
+    for path, _owner in plans:
+        text = read_plan(path)
+        if text is None:
+            raise LandingStop("preflight", f"the branch deletes its plan {path}", path)
+        texts[path] = text
+    unsettled = [
+        (path, owner)
+        for path, owner in plans
+        if not plan_settled(read_base(path), read_main(path), texts[path])
+    ]
+    own_plans = [
+        (path, owner)
+        for path, owner in plans
+        if branch_unit is not None and branch_unit in open_units(texts[path], path)
+    ]
+    chosen = unsettled or own_plans or plans
+    if len(chosen) != 1:
+        listed = ", ".join(path for path, _owner in chosen) or "none"
+        pending = [
+            unit
+            for path, _owner in chosen
+            for unit in open_units(texts[path], path) - closed_units(read_main(path), path)
+            if unit != branch_unit
+        ]
         raise LandingStop(
             "preflight",
-            f"the branch must change exactly one active plan; found {len(candidates)}: {listed}",
+            f"the branch must change exactly one active plan; found {len(chosen)}: {listed}"
+            + dependency_hint(sorted(pending), stacked_on),
         )
-    plan_path, owner = candidates[0]
-    text = read_plan(plan_path)
-    if text is None:
-        raise LandingStop("preflight", f"the branch deletes its plan {plan_path}", plan_path)
-    table = ledger_table(text, plan_path, "preflight")
+    plan_path, owner = chosen[0]
+    table = ledger_table(texts[plan_path], plan_path, "preflight")
     open_rows = [cells for cells in map(table.cells, table.rows) if is_open_row(cells)]
-    main_text = read_main_plan(plan_path) if read_main_plan is not None else None
-    landed = set()
-    if main_text is not None:
-        main = ledger_table(main_text, f"origin/main's {plan_path}", "preflight")
-        landed = {row_unit(cells) for cells in map(main.cells, main.rows) if is_closed_row(cells)}
-    pending = [cells for cells in open_rows if row_unit(cells) not in landed]
-    candidates = pending or open_rows
+    landed = closed_units(read_main(plan_path), plan_path)
+    own = [cells for cells in open_rows if row_unit(cells) == branch_unit]
+    if own and branch_unit in landed:
+        candidates = own
+    else:
+        candidates = [cells for cells in open_rows if row_unit(cells) not in landed] or open_rows
     if len(candidates) != 1:
         units = [row_unit(cells) for cells in candidates]
-        dependencies = [unit for unit in units if unit != branch_unit]
-        stacked = (
-            f"; origin/main has not closed {', '.join(dependencies)}: a stacked branch lands "
-            f"after the unit it is stacked on, so land {', '.join(dependencies)} first"
-            if branch_unit in units and dependencies
-            else ""
-        )
+        pending = [unit for unit in units if unit != branch_unit and unit not in landed]
         raise LandingStop(
             "preflight",
             f"{plan_path} must have exactly one ledger row that is {OPEN_ROW_RULE}; "
-            f"found {len(units)}" + (f": {', '.join(units)}" if units else "") + stacked,
+            f"found {len(units)}"
+            + (f": {', '.join(units)}" if units else "")
+            + dependency_hint(pending, stacked_on),
             plan_path,
         )
     cells = candidates[0]
@@ -329,7 +364,40 @@ def discover_unit(
         unit=unit,
         summary=cells.get("intended change", "").strip(),
         evidence_path=evidence_path,
+        settled_plans=tuple(path for path, _owner in plans if path != plan_path),
     )
+
+
+def open_units(text: str, label: str) -> set[str]:
+    """The units whose ledger row in `text` is open."""
+    table = ledger_table(text, label, "preflight")
+    return {row_unit(cells) for cells in map(table.cells, table.rows) if is_open_row(cells)}
+
+
+def closed_units(text: str | None, label: str) -> set[str]:
+    """The units whose ledger row in `text`, origin/main's plan, the seal closed."""
+    if text is None:
+        return set()
+    table = ledger_table(text, f"origin/main's {label}", "preflight")
+    return {row_unit(cells) for cells in map(table.cells, table.rows) if is_closed_row(cells)}
+
+
+def dependency_hint(pending: list[str], stacked_on: Callable[[str], bool] | None) -> str:
+    """The tail of a preflight stop naming open rows that origin/main has not closed.
+
+    Only the units whose branch the branch is stacked on are named as units to
+    land first; other open rows are only named.
+    """
+    if not pending:
+        return ""
+    stacked = [unit for unit in pending if stacked_on is not None and stacked_on(unit)]
+    hint = f"; origin/main has not closed {', '.join(pending)}"
+    if stacked:
+        hint += (
+            ": a stacked branch lands after the unit it is stacked on, so land "
+            f"{', '.join(stacked)} first"
+        )
+    return hint
 
 
 def other_unit_record(
@@ -337,15 +405,16 @@ def other_unit_record(
 ) -> str | None:
     """Which kind of another unit's record `path` is, or None: main's copy settles its conflict.
 
-    An evidence record directly in an owner's `docs/evidence/`, other than its
-    index, is `evidence record`; an inventory at
-    `<owner docs>/inventories/<plan-slug>/` that both sides `added` is
-    `inventory`. A stacked branch carries its dependency's evidence as the
-    session left it, while main's copy has the landing section; an inventory is
-    immutable once main tracks it. The unit's `own` records, a modified
-    inventory and every other path are None.
+    When both sides `added` the path, an evidence record directly in an
+    owner's `docs/evidence/`, other than its index, is `evidence record`, and
+    an inventory at `<owner docs>/inventories/<plan-slug>/` is `inventory`. A
+    stacked branch carries its dependency's evidence as the session left it,
+    while main's copy has the landing section; an inventory is immutable once
+    main tracks it. The unit's `own` records, a record the fork point already
+    had (a modify/modify conflict, whose branch edit main's copy would drop)
+    and every other path are None.
     """
-    if path in own:
+    if path in own or not added:
         return None
     directory = posixpath.dirname(path)
     for owner in owner_tables(registry):
@@ -359,8 +428,7 @@ def other_unit_record(
         ):
             return "evidence record"
         if (
-            added
-            and path.endswith(".numstat.tsv")
+            path.endswith(".numstat.tsv")
             and posixpath.dirname(directory) == posixpath.join(docs, "inventories")
         ):
             return "inventory"
@@ -505,24 +573,40 @@ def masked_lines(table: LedgerTable, units: set[str]) -> list[tuple[int, str]]:
     return [(index + 1, line) for index, line in enumerate(table.lines) if index not in rows]
 
 
-def settled_rows(branch: LedgerTable, main: LedgerTable, unit: str) -> set[str]:
+def settled_rows(
+    branch: LedgerTable, main: LedgerTable, unit: str | None, base: LedgerTable | None = None
+) -> set[str]:
     """The units other than `unit` whose branch row main's plan already holds or supersedes.
 
     A row equal to main's is main's already. A row that is open on the branch
-    and that main closed, with every cell the seal does not write equal, is the
-    row of a unit that landed as its session left it: a branch stacked on that
-    unit carries it. Taking main's row loses nothing in either case.
+    and that main closed, with as many cells as the header on both sides and
+    every cell the seal does not write equal, is the row of a unit that landed
+    as its session left it: a branch stacked on that unit carries it. A row
+    the fork point had already closed never qualifies that way, since a branch
+    that reopens a landed row changed it. Taking main's row loses nothing in
+    either case.
     """
     main_rows = main.unit_rows()
+    base_rows = base.unit_rows() if base is not None else {}
     settled = set()
     for other, index in branch.unit_rows().items():
         if other == unit or other not in main_rows:
             continue
-        mine, theirs = branch.cells(index), main.cells(main_rows[other])
-        if branch.lines[index].rstrip("\r\n") == main.lines[main_rows[other]].rstrip("\r\n"):
+        line = branch.lines[index]
+        main_line = main.lines[main_rows[other]]
+        if line.rstrip("\r\n") == main_line.rstrip("\r\n"):
             settled.add(other)
-        elif (
+            continue
+        mine, theirs = branch.cells(index), main.cells(main_rows[other])
+        if (
             branch.header == main.header
+            and len(split_table_row(line)) == len(branch.header)
+            and len(split_table_row(main_line)) == len(main.header)
+            and not (
+                base is not None
+                and other in base_rows
+                and is_closed_row(base.cells(base_rows[other]))
+            )
             and is_open_row(mine)
             and is_closed_row(theirs)
             and all(
@@ -533,6 +617,51 @@ def settled_rows(branch: LedgerTable, main: LedgerTable, unit: str) -> set[str]:
         ):
             settled.add(other)
     return settled
+
+
+def masked_texts(table: LedgerTable, units: set[str]) -> list[str]:
+    return [line for _number, line in masked_lines(table, units)]
+
+
+def plan_settled(base_text: str | None, main_text: str | None, branch_text: str) -> bool:
+    """Whether a plan the branch changes holds nothing main lacks.
+
+    That is so when, once the rows `settled_rows` accepts are masked on every
+    side, the branch's plan equals main's or the fork point's: every line the
+    branch changed is a row main already holds or closed. A plan main lacks,
+    or one without a ledger on the branch or on main, is not settled.
+    """
+    if main_text is None:
+        return False
+    try:
+        branch = ledger_table(branch_text, "the branch's plan", "rebase")
+        main = ledger_table(main_text, "main's plan", "rebase")
+    except LandingStop:
+        return False
+    base = None
+    if base_text is not None:
+        try:
+            base = ledger_table(base_text, "the base's plan", "rebase")
+        except LandingStop:
+            base = None
+    settled = settled_rows(branch, main, None, base)
+    mine = masked_texts(branch, settled)
+    return mine == masked_texts(main, settled) or (
+        base is not None and mine == masked_texts(base, settled)
+    )
+
+
+def merge_settled_plan(base_text: str | None, main_text: str, branch_text: str, path: str) -> str:
+    """Main's text of another active plan the branch changes, when `plan_settled` holds."""
+    if plan_settled(base_text, main_text, branch_text):
+        return main_text
+    raise LandingStop(
+        "rebase",
+        f"{path}: the branch changed another unit's plan beyond the rows origin/main "
+        f"closed, so the landing cannot merge it: resolve {path} in the landing worktree, "
+        "`git add` it, run `git rebase --continue` there, then land-unit.py --continue",
+        path,
+    )
 
 
 def first_difference(
@@ -567,14 +696,17 @@ def merge_plan(base_text: str, main_text: str, branch_text: str, unit: str, path
     branch_rows = branch.unit_rows()
     if unit not in branch_rows:
         raise LandingStop("rebase", f"the branch's plan has no ledger row {unit}")
-    masked = {unit} | settled_rows(branch, main, unit)
+    masked = {unit} | settled_rows(branch, main, unit, base)
     difference = first_difference(masked_lines(branch, masked), masked_lines(base, masked))
     if difference is not None:
+        row = {index + 1: other for other, index in branch_rows.items()}.get(difference[0])
         raise LandingStop(
             "rebase",
             f"{path}: the branch changed the plan beyond its own row {unit}: the plan differs "
             f"outside that row, first at line {difference[0]} on the branch and line "
-            f"{difference[1]} at the fork point, so the landing cannot merge it: resolve "
+            f"{difference[1]} at the fork point"
+            + (f" (ledger row {row})" if row is not None else "")
+            + ", so the landing cannot merge it: resolve "
             f"{path} in the landing worktree, `git add` it, run `git rebase --continue` "
             "there, then land-unit.py --continue",
             path,

@@ -46,8 +46,10 @@ from landing import (
     landing_section,
     lockfile_blockers,
     lockfile_upgrades,
+    is_active_plan,
     merge_plan,
     merge_ratchet,
+    merge_settled_plan,
     numstat_rows,
     other_unit_record,
     owner_docs_root,
@@ -274,9 +276,20 @@ def changed_on_branch(ctx: LandContext) -> set[str]:
     )
 
 
+def stacked_on(ctx: LandContext, unit: str) -> bool:
+    """Whether a branch `unit/<project>/<unit>` exists and is an ancestor of the landing's branch."""
+    own = f"refs/heads/{ctx.state.branch}"
+    refs = run(ctx, "for-each-ref", "--format=%(refname)", f"refs/heads/unit/*/{unit}").stdout
+    return any(
+        ref != own and succeeds(ctx, "merge-base", "--is-ancestor", ref, own)
+        for ref in refs.split()
+    )
+
+
 def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
-    """The branch's unit; rows that `main` (origin/main or the base) closed are set aside."""
+    """The branch's unit; plans and rows that `main` (origin/main or the base) settles are set aside."""
     branch = ctx.state.branch
+    fork = run(ctx, "merge-base", main, branch).stdout.strip()
 
     def reader(rev: str) -> Callable[[str], str | None]:
         def read_plan(path: str) -> str | None:
@@ -288,8 +301,44 @@ def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
     # worktree.sh names a unit's branch unit/<project>/<unit>; the name only
     # tells the unit from its dependencies in the stop that lists both.
     return discover_unit(
-        ctx.registry, changed, reader(branch), reader(main), posixpath.basename(branch)
+        ctx.registry,
+        changed,
+        reader(branch),
+        reader(main),
+        posixpath.basename(branch),
+        read_base_plan=reader(fork),
+        stacked_on=lambda unit: stacked_on(ctx, unit),
     )
+
+
+def carried_paths(ctx: LandContext, changed: set[str]) -> set[str]:
+    """The changed paths that only carry the work of units origin/main already holds.
+
+    A stacked branch carries its dependencies' commits. A path whose bytes on
+    the branch equal origin/main's, a plan `discover_unit` set aside, and
+    another unit's record the rebase resolves to origin/main's copy land
+    nothing of this unit, so the scope of its prefix does not judge them; the
+    guards judge what the rebased tip really changes.
+    """
+    unit = unit_of(ctx)
+    branch = ctx.state.branch
+    differs = paths_of(
+        run(ctx, "diff", "--name-only", "--no-renames", "-z", "origin/main", branch).stdout
+    )
+    fork = run(ctx, "merge-base", "origin/main", branch).stdout.strip()
+    own = {unit.evidence_path or "", unit_inventory(ctx)}
+    carried = set()
+    for path in changed:
+        if path not in differs or path in unit.settled_plans:
+            carried.add(path)
+            continue
+        added = blob(ctx, f"{fork}:{path}") is None
+        if (
+            other_unit_record(ctx.registry, path, own, added) is not None
+            and blob(ctx, f"origin/main:{path}") is not None
+        ):
+            carried.add(path)
+    return carried
 
 
 def rebase_in_progress(ctx: LandContext) -> bool:
@@ -333,7 +382,9 @@ def preflight(ctx: LandContext) -> None:
     unit = resolve_unit(ctx, changed, "origin/main")
     ctx.unit = unit
     refuse_landed(ctx, "origin/main", "preflight")
-    violations = scope_violations(unit.prefix, ctx.registry, changed)
+    violations = scope_violations(
+        unit.prefix, ctx.registry, changed - carried_paths(ctx, changed)
+    )
     if violations:
         raise LandingStop(
             "preflight",
@@ -480,14 +531,28 @@ def hot_merge(ctx: LandContext, path: str) -> bytes | None:
         say(f"warning: {path} is another unit's {record}; the landing keeps origin/main's copy")
         return main
     ratchets = ctx.registry.get("commit_policy", {}).get("shared_ratchet_files", [])
+    another_plan = path != unit.plan_path and is_active_plan(ctx.registry, path)
     is_hot = (
-        path == unit.plan_path or path in ratchets or posixpath.basename(path) == "Cargo.lock"
+        path == unit.plan_path
+        or another_plan
+        or path in ratchets
+        or posixpath.basename(path) == "Cargo.lock"
     )
     if not is_hot:
         return None
     if main is None or branch is None:
         side = "main" if main is None else "the branch"
         raise LandingStop("rebase", f"{path} was deleted on {side}", path)
+    if another_plan:
+        # A plan of a unit this branch is stacked on, which landed meanwhile.
+        merged_plan = merge_settled_plan(
+            None if base is None else text_of(base, path),
+            text_of(main, path),
+            text_of(branch, path),
+            path,
+        )
+        say(f"{path} holds only rows origin/main settles; the landing keeps origin/main's copy")
+        return merged_plan.encode()
     if path == unit.plan_path:
         return merge_plan(
             text_of(base or b"", path), text_of(main, path), text_of(branch, path), unit.unit, path
