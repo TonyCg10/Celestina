@@ -37,8 +37,10 @@ use std::process::Command;
 
 use celestina_core::CancellationToken;
 use cxx_qt::CxxQtThread;
-use hematita_core::usage::remove::{check_identity, delete_tree, Failure, RemoveError, Removed};
-use hematita_core::usage::tree::NodeId;
+use hematita_core::usage::remove::{
+    check_identity, delete_tree, Failure, RemoveError, Removed, Scanned,
+};
+use hematita_core::usage::tree::{Kind, NodeId};
 use siderita_ops::OpError;
 
 use crate::analysis::qobject::HematitaAnalysis;
@@ -70,9 +72,23 @@ pub struct Item {
     pub id: NodeId,
     pub path: PathBuf,
     pub allocated: u64,
-    /// The device and inode the scan recorded, checked again before acting.
+    /// The device, inode and kind the scan recorded, checked again before
+    /// acting.
     pub dev: u64,
     pub ino: u64,
+    pub kind: Kind,
+}
+
+impl Item {
+    /// What the scan recorded of the entry, as the core checks it.
+    #[must_use]
+    pub fn scanned(&self) -> Scanned {
+        Scanned {
+            dev: self.dev,
+            ino: self.ino,
+            kind: self.kind,
+        }
+    }
 }
 
 /// What an action did. `removed` lists only the entries that are gone, each
@@ -177,14 +193,14 @@ enum Step {
 /// Whether `item` may still be acted on: not a mount root (listed in the
 /// mount table, or on another mount than the folder holding it, which
 /// `check_identity` tells by mount id), and still the entry the scan saw
-/// (same device and inode). Between this check and the operation's own
+/// (same device, inode and kind). Between this check and the operation's own
 /// syscalls a replacement can still slip in; the window is that short, not
 /// closed.
 fn admissible(item: &Item, boundaries: &HashSet<PathBuf>) -> Result<(), Step> {
     if boundaries.contains(&item.path) {
         return Err(Step::Refused);
     }
-    match check_identity(&item.path, item.dev, item.ino) {
+    match check_identity(&item.path, &item.scanned()) {
         Ok(()) => Ok(()),
         Err(RemoveError::Refused { .. }) => Err(Step::Refused),
         Err(_) => Err(Step::Failed),
@@ -360,7 +376,7 @@ pub fn spawn_delete(
                 &boundaries,
                 |done| target.progress(done),
                 |item| {
-                    let expected = Some((item.dev, item.ino));
+                    let expected = Some(item.scanned());
                     match delete_tree(&item.path, &within, &boundaries, expected, &token) {
                         Ok(_) => Step::Removed,
                         Err(failure) => stopped(failure),
@@ -440,12 +456,38 @@ mod tests {
             allocated: 4096,
             dev,
             ino,
+            kind: Kind::Dir,
+        }
+    }
+
+    /// A folder of its own under the temporary directory, removed on drop.
+    /// The temporary directory itself is no admissible item where it is a
+    /// mount point (a tmpfs `/tmp`): the admission refuses a mount root.
+    struct TempFolder(PathBuf);
+
+    impl TempFolder {
+        fn new() -> Self {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "hematita-actions-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir_all(&path).expect("temporary folder");
+            Self(path)
+        }
+    }
+
+    impl Drop for TempFolder {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir(&self.0);
         }
     }
 
     fn run_one(mut step: impl FnMut() -> Step) -> ActionReport {
-        let dir = std::env::temp_dir();
-        let items = [real_item(7, &dir)];
+        let folder = TempFolder::new();
+        let items = [real_item(7, &folder.0)];
         let token = CancellationToken::new();
         run(
             ActionKind::Delete,

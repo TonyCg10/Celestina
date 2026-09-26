@@ -6,8 +6,9 @@
 //! number of the folder it is mounted on, and any path text can reach it
 //! through a link, but its mount id is its own. Where the kernel does not
 //! report the id, `mount` is `None` and the device number and the mount
-//! table are what is left to tell a mount by; where it has no `statx` at all,
-//! `fstatat` answers the same fields without the id.
+//! table are what is left to tell a mount by; where it has no `statx` at all
+//! (`ENOSYS`), or a seccomp profile refuses it (`EPERM`), `fstatat` answers
+//! the same fields without the id, so a filter cannot empty a scan silently.
 //!
 //! Every lookup is `AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT`: a link is an
 //! entry of its own, and an automount point is described without being
@@ -19,6 +20,7 @@ use std::path::Path;
 use rustix::fs::{fstat, makedev, statat, statx, AtFlags, FileType, Stat, Statx, StatxFlags, CWD};
 use rustix::io::Errno;
 
+use super::tree::Kind;
 use super::walk::BLOCK_BYTES;
 
 const MASK: StatxFlags = StatxFlags::BASIC_STATS.union(StatxFlags::MNT_ID);
@@ -43,6 +45,16 @@ pub(crate) struct Entry {
 impl Entry {
     pub fn is_dir(&self) -> bool {
         self.kind == FileType::Directory
+    }
+
+    /// The tree's kind for this entry: a folder, a regular file, or anything
+    /// else (a link, a socket, a FIFO, a device).
+    pub fn tree_kind(&self) -> Kind {
+        match self.kind {
+            FileType::Directory => Kind::Dir,
+            FileType::RegularFile => Kind::File,
+            _ => Kind::Other,
+        }
     }
 
     /// Whether `self` lies on the same mount as `other`: the same device,
@@ -74,7 +86,7 @@ impl Entry {
 pub(crate) fn entry_at<Fd: AsFd>(dir: Fd, name: &Path) -> Result<Entry, Errno> {
     match statx(&dir, name, LOOKUP, MASK) {
         Ok(found) => Ok(from_statx(&found)),
-        Err(Errno::NOSYS) => {
+        Err(Errno::NOSYS | Errno::PERM) => {
             statat(&dir, name, AtFlags::SYMLINK_NOFOLLOW).map(|stat| Entry::from_stat(&stat))
         }
         Err(errno) => Err(errno),
@@ -91,7 +103,7 @@ pub(crate) fn entry_of_path(path: &Path) -> Result<Entry, Errno> {
 pub(crate) fn entry_of<Fd: AsFd>(fd: Fd) -> Result<Entry, Errno> {
     match statx(&fd, "", AtFlags::EMPTY_PATH, MASK) {
         Ok(found) => Ok(from_statx(&found)),
-        Err(Errno::NOSYS) => fstat(&fd).map(|stat| Entry::from_stat(&stat)),
+        Err(Errno::NOSYS | Errno::PERM) => fstat(&fd).map(|stat| Entry::from_stat(&stat)),
         Err(errno) => Err(errno),
     }
 }

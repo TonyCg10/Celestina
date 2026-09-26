@@ -25,7 +25,7 @@ use celestina_core::CancellationToken;
 use hematita_core::usage::duplicates::{candidates, confirm, members, ConfirmError, Group};
 use hematita_core::usage::empty::empty_folders;
 use hematita_core::usage::remove::{
-    check_identity, delete_tree, Failure, Refusal, RemoveError, Removed,
+    check_identity, delete_tree, Failure, Refusal, RemoveError, Removed, Scanned,
 };
 use hematita_core::usage::tree::{Kind, Node, NodeId, Tree};
 use hematita_core::usage::walk::{scan, scan_bounded, scan_subtree, Progress, ScanError};
@@ -396,19 +396,19 @@ fn a_scanned_node_carries_its_device_and_inode_and_a_replacement_is_refused() {
     let root = tree.node(tree.root).expect("root");
     let root_meta = fs::symlink_metadata(&fx.root).expect("root metadata");
     assert_eq!((root.dev, root.ino), (root_meta.dev(), root_meta.ino()));
-    assert!(check_identity(&path, node.dev, node.ino).is_ok());
+    assert!(check_identity(&path, &Scanned::of(node)).is_ok());
 
     // Replace the file with another of the same name.
     let spare = fx.root.join("spare.bin");
     fs::write(&spare, b"other").expect("spare");
     fs::rename(&spare, &path).expect("replace");
     assert_eq!(
-        refused_error(check_identity(&path, node.dev, node.ino).map(|()| unreachable_removed())),
+        refused_error(check_identity(&path, &Scanned::of(node)).map(|()| unreachable_removed())),
         Refusal::Changed
     );
     fs::remove_file(&path).expect("remove");
     assert_eq!(
-        refused_error(check_identity(&path, node.dev, node.ino).map(|()| unreachable_removed())),
+        refused_error(check_identity(&path, &Scanned::of(node)).map(|()| unreachable_removed())),
         Refusal::Missing
     );
 }
@@ -699,7 +699,10 @@ fn delete_tree_refuses_an_entry_whose_identity_changed() {
             &fx.path("docs"),
             &fx.root,
             &no_bounds(),
-            Some((docs.dev, docs.ino.wrapping_add(1))),
+            Some(Scanned {
+                ino: docs.ino.wrapping_add(1),
+                ..Scanned::of(docs)
+            }),
             &token
         )),
         Refusal::Changed
@@ -709,7 +712,7 @@ fn delete_tree_refuses_an_entry_whose_identity_changed() {
         &fx.path("docs"),
         &fx.root,
         &no_bounds(),
-        Some((docs.dev, docs.ino)),
+        Some(Scanned::of(docs)),
         &token,
     )
     .expect("the scanned identity is accepted");
@@ -1068,7 +1071,7 @@ fn a_file_swapped_for_a_link_after_the_scan_is_neither_read_nor_deleted() {
     let copy = tree
         .node(child(&tree, tree.root, "copy-of-big.bin"))
         .expect("copy");
-    let scanned = (copy.dev, copy.ino);
+    let scanned = Scanned::of(copy);
     // The same bytes elsewhere: a check that followed the link would call
     // them a copy, and a deletion that followed it would remove them.
     let outside = unique_dir();
@@ -1203,8 +1206,15 @@ fn a_mount_on_the_way_or_at_the_entry_is_refused_by_identity() {
     let meta = fs::symlink_metadata("/proc").expect("proc");
     assert_eq!(
         refused_error(
-            check_identity(Path::new("/proc"), meta.dev(), meta.ino())
-                .map(|()| unreachable_removed())
+            check_identity(
+                Path::new("/proc"),
+                &Scanned {
+                    dev: meta.dev(),
+                    ino: meta.ino(),
+                    kind: Kind::Dir,
+                }
+            )
+            .map(|()| unreachable_removed())
         ),
         Refusal::MountRoot
     );
@@ -1318,10 +1328,78 @@ fn bind_mount_checks() {
     );
     assert_eq!(
         refused_error(
-            check_identity(&bound, meta.dev(), meta.ino()).map(|()| unreachable_removed())
+            check_identity(
+                &bound,
+                &Scanned {
+                    dev: meta.dev(),
+                    ino: meta.ino(),
+                    kind: Kind::Dir,
+                }
+            )
+            .map(|()| unreachable_removed())
         ),
         Refusal::MountRoot
     );
     assert!(fx.path("real/elsewhere/inside.txt").exists());
     assert!(bound.join("inside.txt").exists());
+}
+
+#[test]
+fn an_inode_number_reused_by_another_kind_of_entry_is_refused() {
+    let fx = fixture(false);
+    let tree = scan_ok(&fx.root);
+    let scanned = Scanned::of(
+        tree.node(child(&tree, tree.root, "copy-of-big.bin"))
+            .expect("copy"),
+    );
+    let path = fx.path("copy-of-big.bin");
+    let token = CancellationToken::new();
+    // The same device and inode recorded as another kind: what a reused
+    // inode number looks like, whether or not this filesystem reuses it.
+    let as_link = Scanned {
+        kind: Kind::Other,
+        ..scanned
+    };
+    assert_eq!(
+        refused_error(check_identity(&path, &as_link).map(|()| unreachable_removed())),
+        Refusal::Changed
+    );
+    assert_eq!(
+        refused(delete_tree(
+            &path,
+            &fx.root,
+            &no_bounds(),
+            Some(as_link),
+            &token
+        )),
+        Refusal::Changed
+    );
+    assert!(check_identity(&path, &scanned).is_ok());
+
+    // Removed, then a link made in its place: the filesystem may hand the
+    // freed inode number to the link, and the kind still tells them apart.
+    let outside = unique_dir();
+    fs::create_dir_all(&outside).expect("outside");
+    let guard = Fixture {
+        root: outside.clone(),
+    };
+    fs::write(outside.join("keep.bin"), b"keep").expect("keep");
+    fs::remove_file(&path).expect("remove copy");
+    std::os::unix::fs::symlink(outside.join("keep.bin"), &path).expect("link");
+    assert_eq!(
+        refused_error(check_identity(&path, &scanned).map(|()| unreachable_removed())),
+        Refusal::Changed
+    );
+    assert_eq!(
+        refused(delete_tree(
+            &path,
+            &fx.root,
+            &no_bounds(),
+            Some(scanned),
+            &token
+        )),
+        Refusal::Changed
+    );
+    assert!(outside.join("keep.bin").exists());
+    drop(guard);
 }

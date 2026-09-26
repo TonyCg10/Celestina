@@ -188,9 +188,17 @@ second path remains. Dependency direction is unchanged (no new dependency;
   path and first crumb); duplicate rows show the files' size (`st_size`)
   and are ordered by the space they free; a scan past ten million entries
   fails as Hematita's generic failure and Siderita's `too-many`.
-- A device and inode pair cannot tell a file from a replacement that
-  reused its inode number; `delete_tree`'s `expected` identity has no type
-  to compare. The content check does compare the type.
+- The deletion and trash identity (`Scanned`) compares the tree's kind
+  (folder, file, other), not the full file type: two "other" entries (a link
+  and a FIFO) reusing one inode number are not told apart, and both are
+  removed as a name, never descended into. Time stamps and sizes are not
+  compared, so a file written to after the scan is still accepted.
+- On an overlay filesystem without `xino` whose layers live on different
+  filesystems, a file reports its layer's device rather than the overlay's,
+  so the deletion's per-entry mount check refuses it as `MountRoot`: it
+  fails closed there instead of deleting.
+- `scan_subtree` (the graft after a stopped deletion) applies the entry
+  ceiling to the subtree it scans, not to the whole tree it is grafted into.
 - The walk still lists folders by path, so a folder swapped for a link
   between its lookup and its listing is counted where the link leads (its
   subfolders are then leaves by mount identity); it only counts, never
@@ -198,6 +206,42 @@ second path remains. Dependency direction is unchanged (no new dependency;
 - Kernels older than 5.8 report no mount id: there the device number and
   the mount table (now compared under the resolved root) decide, as
   before.
+
+## Review corrections
+
+The review of this unit found one important and four minor points; one
+further commit on the branch addresses them.
+
+1. **Important — the actions tests on a tmpfs `/tmp`.** `run_one` in
+   `hematita/src/actions.rs` used `std::env::temp_dir()` itself as the
+   admissible item; `check_identity` now refuses a mount root, so where
+   `/tmp` is a tmpfs both tests calling it would fail at the landing's
+   `cargo test`. It now makes a folder of its own under the temporary
+   directory (`TempFolder`, removed on drop) and every assertion is kept.
+2. **The kind in the identity.** `remove::Scanned { dev, ino, kind }`
+   (`Scanned::of(node)`) replaces the `(dev, ino)` pair in `delete_tree`'s
+   `expected` and in `check_identity`; `actions::Item` carries `kind` from
+   the node and hands `Item::scanned()` to both. An inode number reused by
+   another kind of entry is `Changed`. Test:
+   `an_inode_number_reused_by_another_kind_of_entry_is_refused` (the same
+   device and inode recorded as another kind, then a file removed and a
+   link made in its place). Its RED is the first round's observation: the
+   swap test's link received the removed file's inode number and the
+   deletion accepted it (`Removed { entries: 1 }`).
+3. **`EPERM` falls back.** `identity` treats `EPERM` from `statx` like
+   `ENOSYS` and answers through `fstatat`/`fstat`, so a seccomp profile that
+   refuses `statx` cannot turn every entry into a vanished one.
+4. **Author validation.** `VAL-HEM-H1` in `hematita/VALIDATION.md` covers the
+   resolved path Siderita now shows, the bind-mount refusals and the
+   duplicate sizes; the ledger row names it.
+5. **Limits.** The overlay filesystem and `scan_subtree` lines above.
+
+Commands after the corrections, all exit 0: `cargo test -p hematita-core
+--offline` as uid 0 and the same binaries as uid 65534 (95 unit, 11
+capture, 36 `usage_tree`), clippy `-D warnings`, `fmt --check`, and the
+three guards. The `actions.rs` and `analysis_session.rs` edits were checked
+by reading: `Kind` is imported where `Item` names it, `Scanned` is `Copy`,
+and `TempFolder` uses only `std`.
 
 ## Follow-up
 

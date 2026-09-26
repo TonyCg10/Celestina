@@ -330,7 +330,7 @@ impl Session {
     }
 
     /// The outermost selected entries as the action workers take them,
-    /// each with the device and inode the scan recorded.
+    /// each with the device, inode and kind the scan recorded.
     pub fn action_items(&self) -> Vec<Item> {
         let Some(tree) = self.tree.as_ref() else {
             return Vec::new();
@@ -344,6 +344,7 @@ impl Session {
                     allocated: node.allocated,
                     dev: node.dev,
                     ino: node.ino,
+                    kind: node.kind,
                 })
             })
             .collect()

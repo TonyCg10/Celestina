@@ -54,6 +54,7 @@ use rustix::fs::{openat, unlinkat, AtFlags, Dir, FileType, Mode, OFlags, CWD};
 use rustix::io::Errno;
 
 use super::identity::{entry_at, entry_of, entry_of_path, Entry};
+use super::tree::{Kind, Node};
 
 /// Every folder is opened read-only as a directory, never through a link.
 const DIR_FLAGS: OFlags = OFlags::RDONLY
@@ -72,6 +73,39 @@ const HOLDER_FLAGS: OFlags = OFlags::RDONLY
 /// read-only pass, before anything is removed and well before the default
 /// limit of 1024 open descriptors could be reached.
 pub const MAX_DEPTH: usize = 256;
+
+/// What the scan recorded of an entry, checked again before it is acted on:
+/// its device, its inode and its kind. The kind refuses an inode number the
+/// filesystem gave again to another kind of entry (a link, or a folder, where
+/// a file was), which a device and inode alone cannot tell. Time stamps and
+/// sizes are left out: an entry that was only written to is still the same
+/// one, and refusing it would be a false `Changed`.
+///
+/// The kind is the tree's: two entries that are neither a file nor a folder
+/// (a link and a FIFO) are not told apart, and both are removed as a name,
+/// never descended into.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Scanned {
+    pub dev: u64,
+    pub ino: u64,
+    pub kind: Kind,
+}
+
+impl Scanned {
+    /// What `node` recorded.
+    #[must_use]
+    pub fn of(node: &Node) -> Self {
+        Self {
+            dev: node.dev,
+            ino: node.ino,
+            kind: node.kind,
+        }
+    }
+
+    fn matches(&self, entry: &Entry) -> bool {
+        (entry.dev, entry.ino, entry.tree_kind()) == (self.dev, self.ino, self.kind)
+    }
+}
 
 /// What a deletion removed, completed or not.
 ///
@@ -96,8 +130,8 @@ pub enum Refusal {
     Symlink {
         at: PathBuf,
     },
-    /// Something else now sits at the path: its device and inode are not
-    /// the ones the scan recorded.
+    /// Something else now sits at the path: its device, inode or kind are
+    /// not the ones the scan recorded.
     Changed,
     /// The analysed folder's path now resolves to another folder, or onto
     /// another mount, than the one it names.
@@ -181,7 +215,8 @@ impl From<RemoveError> for Failure {
 }
 
 /// Refuses `path` unless it is still the entry the scan saw there — the
-/// same device and inode, read without following a link — and unless it is
+/// same device, inode and kind ([`Scanned`]), read without following a
+/// link — and unless it is
 /// on the same mount as the folder that holds it (by the kernel's mount id
 /// and by device number), so a mount root is refused whatever path names it.
 /// It narrows the window in which a replaced entry would be acted on to the
@@ -193,7 +228,7 @@ impl From<RemoveError> for Failure {
 /// [`RemoveError::Refused`] with [`Refusal::Missing`] when nothing is there,
 /// [`Refusal::Changed`] when something else is, [`Refusal::MountRoot`] when
 /// it is where a filesystem is mounted.
-pub fn check_identity(path: &Path, dev: u64, ino: u64) -> Result<(), RemoveError> {
+pub fn check_identity(path: &Path, scanned: &Scanned) -> Result<(), RemoveError> {
     let refuse = |reason| RemoveError::Refused {
         path: path.to_path_buf(),
         reason,
@@ -213,7 +248,7 @@ pub fn check_identity(path: &Path, dev: u64, ino: u64) -> Result<(), RemoveError
         .map_err(|_| refuse(Refusal::Missing))?;
     let holder_entry = entry_of(&holder).map_err(|_| refuse(Refusal::Missing))?;
     let entry = entry_at(&holder, Path::new(name)).map_err(|_| refuse(Refusal::Missing))?;
-    if (entry.dev, entry.ino) != (dev, ino) {
+    if !scanned.matches(&entry) {
         return Err(refuse(Refusal::Changed));
     }
     if entry.same_mount(&holder_entry) {
@@ -226,7 +261,7 @@ pub fn check_identity(path: &Path, dev: u64, ino: u64) -> Result<(), RemoveError
 /// Permanently deletes `path` and everything below it, provided it lies
 /// strictly inside `within` on `within`'s side of every mount.
 ///
-/// `expected` is the device and inode the scan recorded for `path`; the
+/// `expected` is what the scan recorded for `path` ([`Scanned`]); the
 /// deletion is refused when the entry found there now is another one.
 /// `None` skips that check.
 ///
@@ -241,7 +276,7 @@ pub fn delete_tree(
     path: &Path,
     within: &Path,
     boundaries: &HashSet<PathBuf>,
-    expected: Option<(u64, u64)>,
+    expected: Option<Scanned>,
     cancel: &CancellationToken,
 ) -> Result<Removed, Failure> {
     let refuse = |reason| RemoveError::Refused {
@@ -264,8 +299,8 @@ pub fn delete_tree(
         Err(Errno::NOENT) => return Err(refuse(Refusal::Missing).into()),
         Err(errno) => return Err(io_error(&target, errno).into()),
     };
-    if let Some(identity) = expected {
-        if (entry.dev, entry.ino) != identity {
+    if let Some(scanned) = expected {
+        if !scanned.matches(&entry) {
             return Err(refuse(Refusal::Changed).into());
         }
     }

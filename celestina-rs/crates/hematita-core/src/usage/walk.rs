@@ -30,7 +30,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use celestina_core::CancellationToken;
-use rustix::fs::FileType;
 
 use super::identity::{entry_of_path, Entry};
 use super::tree::{Kind, Node, NodeId, Tree};
@@ -213,11 +212,7 @@ pub fn scan_bounded(
                 continue;
             };
             entries_seen += 1;
-            let kind = match found.kind {
-                FileType::Directory => Kind::Dir,
-                FileType::RegularFile => Kind::File,
-                _ => Kind::Other,
-            };
+            let kind = found.tree_kind();
             let counted =
                 kind == Kind::File && (!found.linked || seen_inodes.insert((found.dev, found.ino)));
             if kind == Kind::File && !counted {

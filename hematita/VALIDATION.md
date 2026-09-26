@@ -203,3 +203,30 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Result:** not run
 - **Evidence:** none
 
+
+## VAL-HEM-H1 — Mounts, resolved paths and duplicates after the hardening
+
+- **Status:** pending
+- **Related implementation:** HEM-H1-A
+- **Requires:** the deployed Hematita and Siderita carrying `HEM-H1-A`; a
+  folder reached through a symbolic link (for example `ln -s ~/data
+  ~/link`); a bind mount on the same disk (`sudo mount --bind ~/music
+  ~/data/bound`, undone afterwards with `sudo umount`); two copies of
+  one file
+- **Procedure:** in Hematita, open `~/link` and scan it: the crumbs keep
+  the path as opened, the analysis matches a scan of `~/data`, and
+  `bound` is listed as another mount with no size; select `bound`, and
+  then its holding folder, and delete permanently: both are refused and
+  nothing under `~/music` changes; trash `bound`: refused. In Siderita,
+  open `~/link` and show its folder usage: the current path and the first
+  crumb name `~/data`, `bound` is not descended into, and moving up
+  and down the crumbs still works. Back in Hematita, check that the
+  duplicate rows show each file's size and list the groups that free the
+  most first, and that confirming them marks the two copies identical
+- **Pass condition:** a folder reached through a link is analysed as its
+  real folder in both applications, Siderita shows it under its real path,
+  and nothing reads as broken because of it; the
+  bind mount is a leaf and every deletion or trash that would cross it is
+  refused with nothing removed; duplicate sizes match `ls -l`
+- **Result:** not run
+- **Evidence:** none
