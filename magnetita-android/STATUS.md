@@ -1,6 +1,6 @@
 # Magnetita Android status
 
-- **Updated:** 2026-09-13
+- **Updated:** 2026-09-26
 - **Implementation:** `AND-6`, the application's design, is the one open
   checkpoint since 2026-09-13, paired with Magnetita's `MAG-D1`: the
   author closed the own-protocol program with `VAL-MAG-15` passed. `AND-5`,
@@ -21,13 +21,14 @@
   "Archivos" row is the shared root: the
   desktop's listings, reads, writes, renames and deletions run through
   the documents contract on one storage thread, and the link says whether
-  a root is shared on every connect (`AND-5-A`).
+  a root is shared on every connect (`AND-5-A`). A delete of a non-empty
+  folder is refused with `not empty` in both modes (`AND-6-D`).
 - The desktop's Mirror asks for the screen; the phone consents through
   the system's dialog (opened at once in front, from a notification
   otherwise), captures into an HEVC encoder and streams it on the link's
   video stream; the desktop's touches, back, home and recents land through
   the accessibility service the device screen's row enables (`AND-4-A`,
-  `-B`).
+  `-B`), and only while the mirror streams (`AND-6-D`).
 - The control screen turns the phone into the desktop's trackpad,
   keyboard and command deck; motion takes a fast path to the held
   session (`AND-3-A`).
@@ -60,7 +61,10 @@
 - A foreground service of type `connectedDevice` holds the session: it
   browses `_magnetita._udp` through `NsdManager`, dials only pinned
   desktops, reports the battery, and reconnects on a schedule. A
-  `magnetita://pair` link pairs. On the S25U the session survived screen
+  `magnetita://pair` link, scanned or opened from another app, pairs only
+  after the person confirms the desktop's id, fingerprint and LAN address
+  on the consent screen; the identity and the pins are excluded from
+  backup and device transfer (`AND-6-D`). On the S25U the session survived screen
   off, an app switch and a Wi-Fi toggle against the live daemon.
 - The device screen shows the desktop, the link, the address and the
   battery sent; the scan screen reads the desktop's QR with CameraX and
