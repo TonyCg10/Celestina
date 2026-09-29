@@ -1,13 +1,11 @@
-//! The device certificate — our identity on the TLS wire, and the thing the
-//! phone pins.
+//! The device certificate — our identity on the own link's TLS, and the thing
+//! the phone pins.
 //!
-//! KDE Connect does not use a certificate authority. Each device makes one
-//! self-signed certificate, keeps it forever, and the *first* time two devices
-//! pair they remember each other's certificate — trust-on-first-use. From then
-//! on a link is trusted only if the certificate matches the pinned one, so the
-//! certificate *is* the device's identity; its SHA-256 [`fingerprint`] is what
-//! the trust store pins. The short code humans compare is a separate symmetric
-//! hash of both public keys and the active pairing timestamp.
+//! There is no certificate authority. Each device makes one self-signed
+//! certificate and keeps it forever; pairing by QR carries each side's
+//! fingerprint to the other, and from then on a link is trusted only if the
+//! certificate matches the pinned one, so the certificate *is* the device's
+//! identity; its SHA-256 [`fingerprint`] is what the trust store pins.
 //!
 //! So this is generated once and never casually regenerated — throwing it away
 //! is unpairing from every device at once. [`DeviceCert::ensure`] makes it on
@@ -22,8 +20,8 @@ use std::path::Path;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 
-/// The file names under the cert directory. Matching KDE Connect's own names
-/// keeps the on-disk layout familiar to anyone who has looked at its config.
+/// The file names under the cert directory. They are the names the daemon has
+/// always used, so an existing identity is found where it was left.
 const CERT_FILE: &str = "certificate.pem";
 const KEY_FILE: &str = "privateKey.pem";
 
@@ -38,8 +36,8 @@ pub struct DeviceCert {
 
 impl DeviceCert {
     /// Load the certificate at `dir`, or generate and persist a fresh one there
-    /// if absent. `device_id` becomes the certificate's Common Name, the way
-    /// KDE Connect binds the id to the key. A missing directory is created
+    /// if absent. `device_id` becomes the certificate's Common Name. A missing
+    /// directory is created
     /// `0700`, and both files are written owner-only through
     /// [`celestina_core::atomic_file::replace_private`], whose sibling is
     /// `0600` from its creation: the private key is never readable by another
@@ -74,8 +72,10 @@ impl DeviceCert {
             CertificateParams::new(Vec::new()).expect("no subject-alt-names is always valid");
         let mut dn = DistinguishedName::new();
         dn.push(DnType::CommonName, device_id);
-        dn.push(DnType::OrganizationName, "KDE");
-        dn.push(DnType::OrganizationalUnitName, "Kde connect");
+        // Only new certificates carry this name: pins are by fingerprint, so
+        // an identity made under the older name stays valid.
+        dn.push(DnType::OrganizationName, "Celestina");
+        dn.push(DnType::OrganizationalUnitName, "Magnetita");
         params.distinguished_name = dn;
 
         let key_pair = KeyPair::generate().expect("ring generates a P-256 key");
@@ -132,6 +132,14 @@ pub fn fingerprint_der(der: &CertificateDer<'_>) -> String {
 #[cfg(test)]
 mod tests {
     use super::DeviceCert;
+
+    #[test]
+    fn a_new_certificate_names_the_suite_not_kde_connect() {
+        let der = DeviceCert::generate("celestina-test").chain().unwrap()[0].to_vec();
+        let has = |needle: &[u8]| der.windows(needle.len()).any(|w| w == needle);
+        assert!(has(b"Magnetita") && has(b"Celestina"));
+        assert!(!has(b"KDE") && !has(b"Kde connect"));
+    }
 
     #[test]
     fn a_generated_cert_parses_to_a_chain_and_key() {

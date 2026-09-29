@@ -63,11 +63,28 @@ pub struct Phone {
     endpoint: Endpoint,
 }
 
+/// How many envelopes the control stream's reader holds for [`PhoneSession::next`]
+/// before it stops reading; past it, QUIC flow control holds the desktop.
+const CONTROL_QUEUE: usize = 64;
+
 /// A session with a desktop, and what came out of pairing for it.
 pub struct PhoneSession {
     pub session: Arc<Session>,
     pub desktop: Hello,
     share: Arc<ShareState>,
+    /// What the control stream's one reader task read, in order. A
+    /// control-stream read is not cancel-safe: a read dropped mid-frame
+    /// loses the bytes it had taken and the next read takes body bytes for a
+    /// length. So the reads live in one task that is never cancelled, and
+    /// [`Self::next`] waits on this channel, which is cancel-safe.
+    control: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Result<Envelope, LinkError>>>,
+    reader: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for PhoneSession {
+    fn drop(&mut self) {
+        self.reader.abort();
+    }
 }
 
 /// What [`PhoneSession::next`] yields: an envelope from the desktop, or a
@@ -94,7 +111,23 @@ struct ShareState {
 }
 
 impl PhoneSession {
+    /// Must run inside the tokio runtime the session belongs to: the
+    /// control stream's reader is spawned on it.
     fn wrap(session: Session, desktop: Hello) -> Self {
+        let session = Arc::new(session);
+        let (control_tx, control_rx) = tokio::sync::mpsc::channel(CONTROL_QUEUE);
+        let reader = {
+            let session = Arc::clone(&session);
+            tokio::spawn(async move {
+                loop {
+                    let next = session.recv().await;
+                    let failed = next.is_err();
+                    if control_tx.send(next).await.is_err() || failed {
+                        break;
+                    }
+                }
+            })
+        };
         let (received_tx, received_rx) = tokio::sync::mpsc::unbounded_channel();
         let share = Arc::new(ShareState {
             transfers: session.transfers(),
@@ -105,9 +138,11 @@ impl PhoneSession {
             received_rx: tokio::sync::Mutex::new(received_rx),
         });
         Self {
-            session: Arc::new(session),
+            session,
             desktop,
             share,
+            control: tokio::sync::Mutex::new(control_rx),
+            reader,
         }
     }
 }
@@ -292,11 +327,16 @@ impl PhoneSession {
     }
 
     /// Waits for the next envelope, up to `timeout`; `None` on timeout.
+    /// Only channel receives are raced here, so a timeout never cuts a frame.
     pub async fn next(&self, timeout: Duration) -> Result<Option<Incoming>, LinkError> {
+        let mut control = self.control.lock().await;
         let mut received = self.share.received_rx.lock().await;
         let got = tokio::select! {
-            env = tokio::time::timeout(timeout, self.session.recv()) => match env {
-                Ok(r) => Incoming::Envelope(r?),
+            env = tokio::time::timeout(timeout, control.recv()) => match env {
+                Ok(Some(r)) => Incoming::Envelope(r?),
+                Ok(None) => {
+                    return Err(LinkError::Connection("the control stream has ended".into()))
+                }
                 Err(_) => return Ok(None),
             },
             Some(done) = received.recv() => done,
@@ -1032,5 +1072,115 @@ pub fn describe(env: &Envelope) -> String {
         (capability::STORAGE, 12) => "storage: delete".into(),
         (capability::COMMANDS, 3) => "commands: result".into(),
         (cap, kind) => format!("capability {cap} kind {kind}, {} bytes", env.body.len()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use magnetita_proto::pair::QrPairing;
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "magnetita-mobile-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    /// A desktop on loopback that pairs the phone by QR and then hands its
+    /// endpoint and session to the test.
+    async fn paired(dir: &Path) -> (Endpoint, Session, PhoneSession) {
+        let cert = DeviceCert::generate("desktop");
+        let desktop_fp = fingerprint_of(&cert.chain().unwrap()[0]);
+        let desktop = Endpoint::bind(
+            EndpointConfig {
+                cert,
+                hello: Hello {
+                    device_id: "desktop".into(),
+                    device_name: "Celestina".into(),
+                    device_kind: DeviceKind::Desktop,
+                    capabilities: vec![],
+                },
+            },
+            "127.0.0.1:0".parse().unwrap(),
+        )
+        .unwrap();
+        let secret = [7u8; 32];
+        let uri = QrPayload {
+            device_id: "desktop".into(),
+            fingerprint: desktop_fp,
+            secret,
+            addresses: vec![desktop.local_addr().unwrap().to_string()],
+        }
+        .to_uri();
+        let phone = Phone::open(dir, "slow reader").unwrap();
+        let desktop_side = async {
+            let incoming = desktop.accept().await.unwrap().handshake().await.unwrap();
+            let fp = incoming.peer_fingerprint();
+            let (session, _) = desktop
+                .admit(incoming, Expect::Fingerprint(fp))
+                .await
+                .unwrap();
+            let mut pairing = QrPairing::desktop(secret, desktop_fp, fp);
+            let proof = session.recv().await.unwrap();
+            let (reply, _) = pairing.accept_proof(&proof.body).unwrap();
+            session
+                .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
+                .await
+                .unwrap();
+            session
+        };
+        let (desktop_session, paired) = tokio::join!(desktop_side, phone.pair(&uri));
+        (desktop, desktop_session, paired.unwrap().1)
+    }
+
+    /// MAG-4: a timeout that fires while a large frame is still arriving
+    /// must not lose the bytes already read. Every envelope arrives whole
+    /// and in order however short the caller's wait.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_slow_frame_survives_the_callers_timeouts() {
+        let dir = scratch("slow");
+        let (_endpoint, desktop, phone) = paired(&dir).await;
+        const FRAMES: usize = 24;
+        let sender = tokio::spawn(async move {
+            for n in 0..FRAMES {
+                let text = char::from(b'a' + (n % 26) as u8)
+                    .to_string()
+                    .repeat(200 * 1024);
+                desktop
+                    .send_message(
+                        capability::CLIPBOARD,
+                        ClipboardText::KIND,
+                        ClipboardText { text }.encode(),
+                    )
+                    .await
+                    .unwrap();
+            }
+            desktop
+        });
+        let mut got = Vec::new();
+        let until = tokio::time::Instant::now() + Duration::from_secs(30);
+        while got.len() < FRAMES && tokio::time::Instant::now() < until {
+            match phone.next(Duration::from_millis(1)).await {
+                Ok(Some(Incoming::Envelope(env))) => got.push(env),
+                Ok(Some(other)) => panic!("unexpected {other:?}"),
+                Ok(None) => {}
+                Err(e) => panic!("the control stream fell out of step: {e}"),
+            }
+        }
+        assert_eq!(got.len(), FRAMES, "every frame arrives");
+        for (n, env) in got.iter().enumerate() {
+            let text = ClipboardText::decode(&env.body).unwrap().text;
+            assert_eq!(text.len(), 200 * 1024);
+            assert!(text.bytes().all(|b| b == b'a' + (n % 26) as u8));
+        }
+        let _desktop = sender.await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

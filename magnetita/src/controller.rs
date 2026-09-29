@@ -971,7 +971,16 @@ impl qobject::DevicesModel {
             .map(|device| device.mount_path.clone())
             .unwrap_or_default();
         if !mount.is_empty() {
-            let _ = std::process::Command::new("xdg-open").arg(mount).spawn();
+            // xdg-open hands the folder to the file manager and exits; a
+            // thread waits for it so no zombie is left per click.
+            match std::process::Command::new("xdg-open").arg(mount).spawn() {
+                Ok(mut child) => {
+                    std::thread::spawn(move || {
+                        let _ = child.wait();
+                    });
+                }
+                Err(error) => eprintln!("magnetita: xdg-open: {error}"),
+            }
         }
     }
 }

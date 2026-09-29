@@ -3,6 +3,34 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-17 — Liveness, released input and the accessible conversation row
+
+- **Status:** pending
+- **Related implementation:** `MAG-D1-E` (P-12), recorded in
+  [the runtime hardening evidence](docs/evidence/2026-09-26-runtime-hardening.md)
+- **Requires:** the landed daemon and application deployed, the S25U with
+  the own application, Siderita, Orca or another AT-SPI reader, a terminal
+- **Procedure:** hold Ctrl on the phone's keyboard screen and a drag on its
+  trackpad, then turn the phone's Wi-Fi off; start the mirror with the
+  Magnetita window closed and leave it streaming a minute, then open the
+  window; drag quickly across the mirror window; with the phone connected,
+  press Forget in the application and, while it runs, use Siderita's phone
+  entry; with the phone's folder mounted, run `systemctl --user stop
+  magnetitad` and list `$XDG_RUNTIME_DIR/magnetita`; on the Messages page,
+  reach a conversation with Tab and open it with Enter, and listen to what
+  the reader says for a row with unread messages; watch the phone's battery
+  over a day linked and idle
+- **Pass condition:** no key or button stays pressed on the desktop after
+  the phone drops; the daemon's memory stays flat while nobody reads the
+  mirror, and the window shows the phone within a key frame of opening; the
+  mirrored phone follows the drag without lag building up; Siderita answers
+  during the Forget, which completes within two seconds; the stop leaves no
+  mountpoint behind; Tab reaches the row, Enter opens it, and the reader
+  names the contact, the last message and the unread count; the idle
+  phone's battery drain is no worse than before
+- **Result:** not run
+- **Evidence:** none yet
+
 ## VAL-MAG-16 — Wire admission, private state and bounds on the real session
 
 - **Status:** pending

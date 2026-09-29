@@ -20,8 +20,9 @@ use magnetita_proto::storage::{
     Data, Delete, Done, Entry, List, Listing, Mkdir, Read, Rename, Stat, StatReply, Write,
 };
 use magnetita_proto::Envelope;
-use tokio::sync::{mpsc::UnboundedSender, oneshot};
+use tokio::sync::oneshot;
 
+use super::writer::Outbox;
 use crate::lock::LockOk;
 
 /// How long one request may take before the file system gives up on it.
@@ -36,8 +37,23 @@ const TTL: Duration = Duration::from_secs(15);
 /// round trips as the wire allows and the kernel's 128 KiB reads are served
 /// from the window already fetched.
 const READ_CHUNK: u32 = magnetita_proto::storage::MAX_RANGE as u32;
+/// Why a request failed without reaching the phone.
+const CLOSED: &str = "link closed";
 /// How long a fetched read window stays good for the next kernel read.
 const WINDOW_TTL: Duration = Duration::from_secs(5);
+/// The most entries one directory listing gathers, across its pages. A
+/// phone that keeps answering `more` stops here instead of growing the
+/// daemon without end; a larger directory shows its first entries.
+const MAX_LISTING: usize = 65_536;
+/// The most inode numbers kept at once. The kernel's own references are
+/// counted and released by `forget`; past this, numbers the kernel never
+/// looked up (handed out by listings) are dropped.
+const MAX_INODES: usize = 65_536;
+/// The most cached attributes, listings and read windows. A window is up to
+/// a wire range (about 1 MiB), so few are kept.
+const MAX_ATTRS: usize = 16_384;
+const MAX_DIRS: usize = 64;
+const MAX_WINDOWS: usize = 8;
 
 /// The clients by device id, for the file systems and the tests.
 static CLIENTS: LazyLock<Mutex<HashMap<String, Arc<StorageClient>>>> =
@@ -47,20 +63,70 @@ pub(crate) fn clients() -> &'static Mutex<HashMap<String, Arc<StorageClient>>> {
     &CLIENTS
 }
 
-/// One session's requests to the phone, answered by request id.
+/// Publishes `client` as `device_id`'s until the returned guard drops; the
+/// drop closes it, so no file-system thread keeps waiting on a session that
+/// is gone, however that session ended.
+pub(crate) fn register(device_id: &str, client: &Arc<StorageClient>) -> Registered {
+    clients()
+        .lock_ok()
+        .insert(device_id.to_owned(), Arc::clone(client));
+    Registered {
+        device_id: device_id.to_owned(),
+        client: Arc::clone(client),
+    }
+}
+
+/// Takes `client` out of the registry, unless a newer session of the same
+/// device has already put its own there.
+pub(crate) fn unregister(device_id: &str, client: &Arc<StorageClient>) {
+    let mut clients = clients().lock_ok();
+    if clients
+        .get(device_id)
+        .is_some_and(|current| Arc::ptr_eq(current, client))
+    {
+        clients.remove(device_id);
+    }
+}
+
+pub(crate) struct Registered {
+    device_id: String,
+    client: Arc<StorageClient>,
+}
+
+impl Drop for Registered {
+    fn drop(&mut self) {
+        self.client.close();
+        unregister(&self.device_id, &self.client);
+    }
+}
+
+/// One session's requests to the phone, answered by request id. Closed when
+/// its session ends: the requests in flight fail at once, and a later one
+/// fails before it starts a timer, so no file-system thread is left waiting
+/// inside the link's runtime while that runtime stops.
 pub(crate) struct StorageClient {
-    outbox: UnboundedSender<Envelope>,
-    pending: Mutex<HashMap<u32, oneshot::Sender<Envelope>>>,
+    outbox: Outbox,
+    /// `None` once closed.
+    pending: Mutex<Option<HashMap<u32, oneshot::Sender<Envelope>>>>,
     next: AtomicU32,
 }
 
 impl StorageClient {
-    pub(crate) fn new(outbox: UnboundedSender<Envelope>) -> Arc<Self> {
+    pub(crate) fn new(outbox: Outbox) -> Arc<Self> {
         Arc::new(Self {
             outbox,
-            pending: Mutex::new(HashMap::new()),
+            pending: Mutex::new(Some(HashMap::new())),
             next: AtomicU32::new(1),
         })
+    }
+
+    /// Fails every request in flight and every later one.
+    pub(crate) fn close(&self) {
+        self.pending.lock_ok().take();
+    }
+
+    pub(crate) fn is_closed(&self) -> bool {
+        self.pending.lock_ok().is_none()
     }
 
     /// A reply from the phone: matched to its request, else dropped.
@@ -73,9 +139,20 @@ impl StorageClient {
             _ => None,
         };
         if let Some(request) = request {
-            if let Some(waiter) = self.pending.lock_ok().remove(&request) {
+            let waiter = self
+                .pending
+                .lock_ok()
+                .as_mut()
+                .and_then(|pending| pending.remove(&request));
+            if let Some(waiter) = waiter {
                 let _ = waiter.send(env);
             }
+        }
+    }
+
+    fn forget_request(&self, request: u32) {
+        if let Some(pending) = self.pending.lock_ok().as_mut() {
+            pending.remove(&request);
         }
     }
 
@@ -85,27 +162,31 @@ impl StorageClient {
 
     async fn call(&self, kind: u16, body: Vec<u8>, request: u32) -> Result<Envelope, String> {
         let (tx, rx) = oneshot::channel();
-        self.pending.lock_ok().insert(request, tx);
+        match self.pending.lock_ok().as_mut() {
+            Some(pending) => pending.insert(request, tx),
+            None => return Err(CLOSED.into()),
+        };
         let env = Envelope {
             capability: capability::STORAGE,
             kind,
             id: 0,
             body,
         };
-        if self.outbox.send(env).is_err() {
-            self.pending.lock_ok().remove(&request);
-            return Err("link closed".into());
+        if let Err(refused) = self.outbox.send(env) {
+            self.forget_request(request);
+            return Err(refused.to_string());
         }
         match tokio::time::timeout(REQUEST_TIMEOUT, rx).await {
             Ok(Ok(env)) => Ok(env),
-            Ok(Err(_)) => Err("link closed".into()),
+            Ok(Err(_)) => Err(CLOSED.into()),
             Err(_) => {
-                self.pending.lock_ok().remove(&request);
+                self.forget_request(request);
                 Err("the phone did not answer".into())
             }
         }
     }
 
+    /// Every entry of `path`, page by page, up to [`MAX_LISTING`].
     pub(crate) async fn list(&self, path: &str) -> Result<Vec<Entry>, String> {
         let mut all = Vec::new();
         loop {
@@ -122,6 +203,14 @@ impl StorageClient {
             }
             let more = listing.more && !listing.entries.is_empty();
             all.extend(listing.entries);
+            if all.len() >= MAX_LISTING {
+                all.truncate(MAX_LISTING);
+                crate::runtime::log(
+                    "storage",
+                    &format!("{path:?}: listing stopped at {MAX_LISTING} entries"),
+                );
+                return Ok(all);
+            }
             if !more {
                 return Ok(all);
             }
@@ -214,18 +303,28 @@ impl StorageClient {
 }
 
 /// Inode numbers for wire paths: the root is 1, the rest are handed out on
-/// first sight and kept for the mount's life, moved on rename.
+/// first sight, moved on rename, and dropped once the kernel forgets them.
+/// Only numbers handed to the kernel in an entry reply are counted; numbers
+/// a listing handed out are dropped when the table is full, since the
+/// kernel never holds them.
 #[derive(Default)]
 struct Inodes {
     by_path: HashMap<String, u64>,
     by_ino: HashMap<u64, String>,
+    /// The kernel's lookup count per inode.
+    lookups: HashMap<u64, u64>,
     next: u64,
+    /// The table size that triggers the next prune. When the kernel holds
+    /// most numbers a prune frees few, so the next one waits for a quarter
+    /// of the bound more, instead of every insert paying a full scan.
+    prune_at: usize,
 }
 
 impl Inodes {
     fn new() -> Self {
         let mut s = Self {
             next: 2,
+            prune_at: MAX_INODES,
             ..Default::default()
         };
         s.by_path.insert(String::new(), 1);
@@ -237,6 +336,10 @@ impl Inodes {
         if let Some(&ino) = self.by_path.get(path) {
             return ino;
         }
+        if self.by_ino.len() >= self.prune_at {
+            self.prune();
+            self.prune_at = (self.by_ino.len() + MAX_INODES / 4).max(MAX_INODES);
+        }
         let ino = self.next;
         self.next += 1;
         self.by_path.insert(path.to_owned(), ino);
@@ -246,6 +349,44 @@ impl Inodes {
 
     fn path(&self, ino: u64) -> Option<String> {
         self.by_ino.get(&ino).cloned()
+    }
+
+    /// The kernel was handed `ino` in an entry reply.
+    fn looked_up(&mut self, ino: u64) {
+        if ino != 1 {
+            *self.lookups.entry(ino).or_default() += 1;
+        }
+    }
+
+    /// The kernel dropped `n` references; true when `ino` is gone.
+    fn forget(&mut self, ino: u64, n: u64) -> bool {
+        if ino == 1 {
+            return false;
+        }
+        let left = match self.lookups.get_mut(&ino) {
+            Some(count) => {
+                *count = count.saturating_sub(n);
+                *count
+            }
+            None => 0,
+        };
+        if left > 0 {
+            return false;
+        }
+        self.lookups.remove(&ino);
+        if let Some(path) = self.by_ino.remove(&ino) {
+            self.by_path.remove(&path);
+        }
+        true
+    }
+
+    /// Drops every number the kernel does not hold.
+    fn prune(&mut self) {
+        let lookups = &self.lookups;
+        self.by_ino
+            .retain(|ino, _| *ino == 1 || lookups.contains_key(ino));
+        let by_ino = &self.by_ino;
+        self.by_path.retain(|_, ino| by_ino.contains_key(ino));
     }
 
     fn moved(&mut self, from: &str, to: &str) {
@@ -262,6 +403,21 @@ impl Inodes {
             self.by_path.insert(new.clone(), ino);
             self.by_ino.insert(ino, new);
         }
+    }
+}
+
+/// Makes room for one more entry in a cache of at most `cap`: the expired
+/// go first, then the oldest.
+fn make_room<V>(map: &mut HashMap<u64, V>, cap: usize, ttl: Duration, at: impl Fn(&V) -> Instant) {
+    if map.len() < cap {
+        return;
+    }
+    map.retain(|_, v| at(v).elapsed() < ttl);
+    while map.len() >= cap {
+        let Some(oldest) = map.iter().min_by_key(|(_, v)| at(v)).map(|(k, _)| *k) else {
+            return;
+        };
+        map.remove(&oldest);
     }
 }
 
@@ -315,6 +471,18 @@ impl PhoneFs {
         }
     }
 
+    /// Runs one request to the phone on the link's runtime, from this file
+    /// system's thread; a closed client answers at once, off the runtime.
+    fn wait<T>(
+        &self,
+        request: impl std::future::Future<Output = Result<T, String>>,
+    ) -> Result<T, String> {
+        if self.client.is_closed() {
+            return Err(CLOSED.into());
+        }
+        self.handle.block_on(request)
+    }
+
     fn attr(&self, ino: u64, entry: &Entry) -> FileAttr {
         let mtime = UNIX_EPOCH + Duration::from_millis(entry.mtime_ms);
         let (kind, perm, nlink) = if entry.dir {
@@ -342,7 +510,19 @@ impl PhoneFs {
     }
 
     fn remember(&self, ino: u64, entry: Entry) {
-        self.attrs.lock_ok().insert(ino, (entry, Instant::now()));
+        let mut attrs = self.attrs.lock_ok();
+        if !attrs.contains_key(&ino) {
+            make_room(&mut attrs, MAX_ATTRS, TTL, |(_, at)| *at);
+        }
+        attrs.insert(ino, (entry, Instant::now()));
+    }
+
+    /// The inode for `path`, counted as handed to the kernel.
+    fn looked_up(&self, path: &str) -> u64 {
+        let mut inodes = self.inodes.lock_ok();
+        let ino = inodes.get_or_insert(path);
+        inodes.looked_up(ino);
+        ino
     }
 
     fn forget_attr(&self, ino: u64) {
@@ -363,16 +543,18 @@ impl PhoneFs {
                 return Ok(entries.clone());
             }
         }
-        let entries = self.handle.block_on(self.client.list(path))?;
+        let entries = self.wait(self.client.list(path))?;
         for entry in &entries {
             if let Some(child) = join(path, OsStr::new(&entry.name)) {
                 let child_ino = self.inodes.lock_ok().get_or_insert(&child);
                 self.remember(child_ino, entry.clone());
             }
         }
-        self.dirs
-            .lock_ok()
-            .insert(ino, (entries.clone(), Instant::now()));
+        let mut dirs = self.dirs.lock_ok();
+        if !dirs.contains_key(&ino) {
+            make_room(&mut dirs, MAX_DIRS, TTL, |(_, at)| *at);
+        }
+        dirs.insert(ino, (entries.clone(), Instant::now()));
         Ok(entries)
     }
 
@@ -392,11 +574,13 @@ impl PhoneFs {
                 return Ok(window.bytes[from..to].to_vec());
             }
         }
-        let bytes = self
-            .handle
-            .block_on(self.client.read(path, offset, READ_CHUNK))?;
+        let bytes = self.wait(self.client.read(path, offset, READ_CHUNK))?;
         let out = bytes[..wanted.min(bytes.len())].to_vec();
-        self.windows.lock_ok().insert(
+        let mut windows = self.windows.lock_ok();
+        if !windows.contains_key(&ino) {
+            make_room(&mut windows, MAX_WINDOWS, WINDOW_TTL, |w| w.at);
+        }
+        windows.insert(
             ino,
             Window {
                 start: offset,
@@ -431,7 +615,7 @@ impl PhoneFs {
             }
         }
         let path = self.path_of(ino).ok_or("unknown inode")?;
-        let entry = self.handle.block_on(self.client.stat(&path))?;
+        let entry = self.wait(self.client.stat(&path))?;
         if let Some(e) = &entry {
             self.remember(ino, e.clone());
         }
@@ -439,9 +623,9 @@ impl PhoneFs {
     }
 
     fn entry_reply(&self, path: &str, reply: ReplyEntry) {
-        match self.handle.block_on(self.client.stat(path)) {
+        match self.wait(self.client.stat(path)) {
             Ok(Some(entry)) => {
-                let ino = self.inodes.lock_ok().get_or_insert(path);
+                let ino = self.looked_up(path);
                 let attr = self.attr(ino, &entry);
                 self.remember(ino, entry);
                 reply.entry(&TTL, &attr, Generation(0));
@@ -474,13 +658,22 @@ impl Filesystem for PhoneFs {
             });
         match listed {
             Some(Some(entry)) => {
-                let ino = self.inodes.lock_ok().get_or_insert(&path);
+                let ino = self.looked_up(&path);
                 let attr = self.attr(ino, &entry);
                 self.remember(ino, entry);
                 reply.entry(&TTL, &attr, Generation(0));
             }
             Some(None) => reply.error(fuser::Errno::ENOENT),
             None => self.entry_reply(&path, reply),
+        }
+    }
+
+    /// The kernel let go of `ino`: once it holds no reference, its number
+    /// and everything cached for it go.
+    fn forget(&self, _req: &Request, ino: INodeNo, nlookup: u64) {
+        if self.inodes.lock_ok().forget(ino.0, nlookup) {
+            self.forget_dir(ino.0);
+            self.forget_attr(ino.0);
         }
     }
 
@@ -522,8 +715,7 @@ impl Filesystem for PhoneFs {
                 return reply.error(fuser::Errno::ENOENT);
             };
             if self
-                .handle
-                .block_on(self.client.write(&path, size, &[], true))
+                .wait(self.client.write(&path, size, &[], true))
                 .is_err()
             {
                 return reply.error(fuser::Errno::EIO);
@@ -549,7 +741,7 @@ impl Filesystem for PhoneFs {
         let Some(path) = self.path_of(parent.0).and_then(|p| join(&p, name)) else {
             return reply.error(fuser::Errno::ENOENT);
         };
-        if self.handle.block_on(self.client.mkdir(&path)).is_err() {
+        if self.wait(self.client.mkdir(&path)).is_err() {
             return reply.error(fuser::Errno::EIO);
         }
         self.forget_dir(parent.0);
@@ -564,7 +756,7 @@ impl Filesystem for PhoneFs {
         let Some(path) = self.path_of(parent.0).and_then(|p| join(&p, name)) else {
             return reply.error(fuser::Errno::ENOENT);
         };
-        match self.handle.block_on(self.client.delete(&path)) {
+        match self.wait(self.client.delete(&path)) {
             Ok(()) => {
                 let ino = self.inodes.lock_ok().by_path.get(&path).copied();
                 if let Some(ino) = ino {
@@ -593,7 +785,7 @@ impl Filesystem for PhoneFs {
         let (Some(from), Some(to)) = (from, to) else {
             return reply.error(fuser::Errno::ENOENT);
         };
-        match self.handle.block_on(self.client.rename(&from, &to)) {
+        match self.wait(self.client.rename(&from, &to)) {
             Ok(()) => {
                 self.inodes.lock_ok().moved(&from, &to);
                 self.attrs.lock_ok().clear();
@@ -655,8 +847,7 @@ impl Filesystem for PhoneFs {
         let mut written = 0usize;
         for chunk in data.chunks(READ_CHUNK as usize) {
             if self
-                .handle
-                .block_on(
+                .wait(
                     self.client
                         .write(&path, offset + written as u64, chunk, false),
                 )
@@ -728,30 +919,44 @@ impl Filesystem for PhoneFs {
         name: &OsStr,
         _mode: u32,
         _umask: u32,
-        _flags: i32,
+        flags: i32,
         reply: ReplyCreate,
     ) {
         let Some(path) = self.path_of(parent.0).and_then(|p| join(&p, name)) else {
             return reply.error(fuser::Errno::ENOENT);
         };
-        if self
-            .handle
-            .block_on(self.client.write(&path, 0, &[], true))
-            .is_err()
-        {
-            return reply.error(fuser::Errno::EIO);
-        }
-        self.forget_dir(parent.0);
-        let entry = Entry {
-            name: name.to_string_lossy().into_owned(),
-            dir: false,
-            size: 0,
-            mtime_ms: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0),
+        // The kernel asks to create from its own, possibly stale, view: a
+        // file made on the phone meanwhile is asked about afresh, and only
+        // an explicit O_TRUNC ever empties it.
+        let existing = match self.wait(self.client.stat(&path)) {
+            Ok(existing) => existing,
+            Err(_) => return reply.error(fuser::Errno::EIO),
         };
-        let ino = self.inodes.lock_ok().get_or_insert(&path);
+        let (exclusive, truncate) = create_flags(flags);
+        let entry = match existing {
+            Some(_) if exclusive => return reply.error(fuser::Errno::EEXIST),
+            Some(entry) if entry.dir => return reply.error(fuser::Errno::EISDIR),
+            Some(entry) if !truncate => entry,
+            _ => {
+                if self
+                    .wait(self.client.write(&path, 0, &[], truncate))
+                    .is_err()
+                {
+                    return reply.error(fuser::Errno::EIO);
+                }
+                Entry {
+                    name: name.to_string_lossy().into_owned(),
+                    dir: false,
+                    size: 0,
+                    mtime_ms: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0),
+                }
+            }
+        };
+        self.forget_dir(parent.0);
+        let ino = self.looked_up(&path);
         let attr = self.attr(ino, &entry);
         self.remember(ino, entry);
         reply.created(
@@ -762,6 +967,15 @@ impl Filesystem for PhoneFs {
             FopenFlags::empty(),
         );
     }
+}
+
+/// What a create's open flags ask: (`O_EXCL`, `O_TRUNC`).
+fn create_flags(flags: i32) -> (bool, bool) {
+    let flags = rustix::fs::OFlags::from_bits_retain(flags as u32);
+    (
+        flags.contains(rustix::fs::OFlags::EXCL),
+        flags.contains(rustix::fs::OFlags::TRUNC),
+    )
 }
 
 /// Mounts the phone at `mountpoint`; dropping the session unmounts.
@@ -813,6 +1027,195 @@ mod tests {
         assert_eq!(inodes.path(ab).as_deref(), Some("c/b"));
         assert_eq!(inodes.path(other).as_deref(), Some("ab"));
         assert_eq!(inodes.get_or_insert("c/b"), ab);
+    }
+
+    /// MAG-17: a phone that answers `more` forever is stopped at the cap.
+    #[tokio::test]
+    async fn an_endless_listing_stops_at_the_cap() {
+        let (outbox, mut requests) = super::super::writer::Outbox::detached(4);
+        let client = StorageClient::new(outbox);
+        let phone = Arc::clone(&client);
+        tokio::spawn(async move {
+            while let Some(item) = requests.recv().await {
+                let Some(env) = item.into_envelope() else {
+                    continue;
+                };
+                let Ok(list) = List::decode(&env.body) else {
+                    continue;
+                };
+                let entries = (0..256)
+                    .map(|n| Entry {
+                        name: format!("{}-{n}", list.offset),
+                        dir: false,
+                        size: 0,
+                        mtime_ms: 0,
+                    })
+                    .collect();
+                let listing = Listing {
+                    request: list.request,
+                    entries,
+                    more: true,
+                    error: String::new(),
+                };
+                phone.reply(Envelope {
+                    capability: capability::STORAGE,
+                    kind: Listing::KIND,
+                    id: 0,
+                    body: listing.encode(),
+                });
+            }
+        });
+        let listed = tokio::time::timeout(Duration::from_secs(60), client.list("DCIM"))
+            .await
+            .expect("an endless listing must end")
+            .unwrap();
+        assert_eq!(listed.len(), MAX_LISTING);
+    }
+
+    /// MAG-27: a file-system thread waiting on the phone when the session
+    /// ends returns at once, and neither it nor a later kernel request
+    /// touches the link's runtime once that runtime has stopped (a timer on
+    /// a stopped runtime panics the thread).
+    #[test]
+    fn a_closed_client_frees_the_file_system_thread_before_the_runtime_stops() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let (outbox, _requests) = super::super::writer::Outbox::detached(8);
+        let client = StorageClient::new(outbox);
+        let fs = Arc::new(PhoneFs::new(Arc::clone(&client), runtime.handle().clone()));
+        let waiting = {
+            let fs = Arc::clone(&fs);
+            let client = Arc::clone(&client);
+            std::thread::spawn(move || {
+                let started = Instant::now();
+                (fs.wait(client.list("DCIM")), started.elapsed())
+            })
+        };
+        std::thread::sleep(Duration::from_millis(200));
+        client.close();
+        let (answer, waited) = waiting.join().expect("the waiting thread returns");
+        assert_eq!(answer, Err(CLOSED.to_owned()));
+        assert!(waited < Duration::from_secs(2), "waited {waited:?}");
+        drop(runtime);
+        let later = {
+            let fs = Arc::clone(&fs);
+            std::thread::spawn(move || fs.wait(client.stat("notes.txt")))
+        };
+        assert_eq!(
+            later
+                .join()
+                .expect("a request after the runtime stopped must not panic"),
+            Err(CLOSED.to_owned())
+        );
+    }
+
+    /// A session cut before its own cleanup still closes its client and
+    /// leaves the registry, and never removes a newer session's client.
+    #[test]
+    fn a_dropped_registration_closes_its_client_and_spares_a_newer_one() {
+        let client = || StorageClient::new(super::super::writer::Outbox::detached(1).0);
+        let old = client();
+        let guard = register("guarded-phone", &old);
+        drop(guard);
+        assert!(old.is_closed());
+        assert!(!clients().lock_ok().contains_key("guarded-phone"));
+
+        let older = client();
+        let older_guard = register("guarded-phone", &older);
+        let newer = client();
+        let newer_guard = register("guarded-phone", &newer);
+        drop(older_guard);
+        assert!(older.is_closed() && !newer.is_closed());
+        assert!(clients()
+            .lock_ok()
+            .get("guarded-phone")
+            .is_some_and(|current| Arc::ptr_eq(current, &newer)));
+        drop(newer_guard);
+        assert!(!clients().lock_ok().contains_key("guarded-phone"));
+    }
+
+    #[test]
+    fn inodes_the_kernel_forgets_are_dropped_and_unheld_ones_pruned() {
+        let mut inodes = Inodes::new();
+        let held = inodes.get_or_insert("held");
+        inodes.looked_up(held);
+        inodes.looked_up(held);
+        let listed = inodes.get_or_insert("listed");
+        assert!(!inodes.forget(held, 1), "one reference is left");
+        assert!(inodes.forget(held, 1));
+        assert_eq!(inodes.path(held), None);
+        assert!(!inodes.forget(1, 1), "the root stays");
+        let again = inodes.get_or_insert("again");
+        inodes.looked_up(again);
+        inodes.prune();
+        assert_eq!(inodes.path(listed), None, "nobody holds a listed number");
+        assert_eq!(inodes.path(again).as_deref(), Some("again"));
+        assert_eq!(inodes.path(1).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn the_inode_table_is_bounded() {
+        let mut inodes = Inodes::new();
+        for n in 0..(MAX_INODES * 2) {
+            inodes.get_or_insert(&format!("f{n}"));
+        }
+        assert!(inodes.by_ino.len() <= MAX_INODES);
+        assert_eq!(inodes.by_ino.len(), inodes.by_path.len());
+    }
+
+    #[test]
+    fn a_table_the_kernel_holds_is_not_scanned_on_every_insert() {
+        let mut inodes = Inodes::new();
+        assert_eq!(inodes.prune_at, MAX_INODES);
+        for n in 0..=MAX_INODES {
+            let ino = inodes.get_or_insert(&format!("held{n}"));
+            inodes.looked_up(ino);
+        }
+        let raised = inodes.prune_at;
+        assert!(
+            raised > MAX_INODES,
+            "the full table pruned nothing and waits"
+        );
+        for n in 0..(MAX_INODES / 8) {
+            inodes.get_or_insert(&format!("listed{n}"));
+        }
+        assert_eq!(inodes.prune_at, raised, "no prune until the next quarter");
+    }
+
+    #[test]
+    fn a_full_cache_drops_the_expired_then_the_oldest() {
+        let now = Instant::now();
+        let old = now - Duration::from_secs(60);
+        let mut map: HashMap<u64, Instant> = HashMap::new();
+        map.insert(1, old);
+        map.insert(2, now);
+        map.insert(3, now + Duration::from_millis(1));
+        make_room(&mut map, 3, Duration::from_secs(15), |at| *at);
+        assert_eq!(map.len(), 2);
+        assert!(!map.contains_key(&1));
+        make_room(&mut map, 2, Duration::from_secs(15), |at| *at);
+        assert_eq!(map.keys().copied().collect::<Vec<_>>(), [3]);
+    }
+
+    #[test]
+    fn a_create_truncates_or_refuses_only_when_asked() {
+        use rustix::fs::OFlags;
+        let bits = |f: OFlags| f.bits() as i32;
+        assert_eq!(
+            create_flags(bits(OFlags::CREATE | OFlags::WRONLY)),
+            (false, false)
+        );
+        assert_eq!(
+            create_flags(bits(OFlags::CREATE | OFlags::EXCL | OFlags::WRONLY)),
+            (true, false)
+        );
+        assert_eq!(
+            create_flags(bits(OFlags::CREATE | OFlags::TRUNC | OFlags::WRONLY)),
+            (false, true)
+        );
     }
 
     #[test]

@@ -3,12 +3,12 @@
 //! suite's engine (libmpv, as Fluorita and Siderita do) into the shared
 //! `MpvVideo` surface, and the window's pointer, wheel and keys go back to
 //! the daemon as the wire's touches, swipes and keys. One worker thread
-//! carries the D-Bus calls so no touch waits on the GUI thread, and one
-//! watcher polls the daemon's link state so the window opens and closes
-//! with the phone.
+//! carries the D-Bus calls over one connection, merging a drag's moves, so
+//! no touch waits on the GUI thread (`mirror_input`), and one watcher polls
+//! the daemon's link state over its own connection so the window opens and
+//! closes with the phone.
 
 use core::pin::Pin;
-use std::sync::mpsc::{channel, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -16,6 +16,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 
 use crate::lifecycle::{Guard, Owned};
+use crate::mirror_input::{InputQueue, Outbound};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -218,14 +219,6 @@ fn fitted_size(tile: &Tile, picture_width: i32, picture_height: i32) -> (i32, i3
     }
 }
 
-/// What the input worker sends the daemon, in order.
-enum Outbound {
-    Touch { action: u8, x: u16, y: u16 },
-    Key { keycode: u16, pressed: bool },
-    Global(String),
-    Stop,
-}
-
 #[derive(Default)]
 pub struct MirrorViewRust {
     streaming: bool,
@@ -247,7 +240,7 @@ pub struct MirrorViewRust {
     reopen: Option<String>,
     /// A close waits for the surface to let the context go.
     closing: bool,
-    input: Option<Sender<Outbound>>,
+    input: Option<InputQueue>,
     input_worker: Option<JoinHandle<()>>,
     owned: Owned,
 }
@@ -333,37 +326,33 @@ impl qobject::MirrorView {
         if self.rust().input.is_some() {
             return;
         }
-        // The input worker: every touch is one D-Bus call, off the GUI thread.
-        let (tx, rx) = channel::<Outbound>();
-        let worker = std::thread::spawn(move || {
-            while let Ok(op) = rx.recv() {
-                let result = match op {
-                    Outbound::Touch { action, x, y } => {
-                        crate::devices::mirror_link_touch(action, x, y)
-                    }
-                    Outbound::Key { keycode, pressed } => {
-                        crate::devices::mirror_link_key(keycode, pressed)
-                    }
-                    Outbound::Global(action) => crate::devices::mirror_link_global(&action),
-                    Outbound::Stop => crate::devices::mirror_stop(),
-                };
-                if let Err(error) = result {
-                    eprintln!("magnetita: mirror input: {error}");
-                }
+        // The input worker: one connection, off the GUI thread.
+        match crate::mirror_input::spawn(crate::devices::MirrorBus::open) {
+            Ok((queue, worker)) => {
+                let state = self.as_mut().rust_mut().get_mut();
+                state.input = Some(queue);
+                state.input_worker = Some(worker);
             }
-        });
-        {
-            let state = self.as_mut().rust_mut().get_mut();
-            state.input = Some(tx);
-            state.input_worker = Some(worker);
+            Err(error) => eprintln!("magnetita: mirror input: {error}"),
         }
         // The watcher: the daemon's link state, on its own thread, applied on
         // the GUI thread while this object is alive.
         let qt = self.as_mut().qt_thread();
         self.rust().owned.spawn(move |guard: Guard| {
             let mut last = String::new();
+            let mut bus: Option<crate::devices::MirrorBus> = None;
             while guard.open() {
-                let now = crate::devices::mirror_link().unwrap_or_default();
+                if bus.is_none() {
+                    bus = crate::devices::MirrorBus::open().ok();
+                }
+                let now = match bus.as_ref().map(crate::devices::MirrorBus::link) {
+                    Some(Ok(now)) => now,
+                    // The bus went away: connect again on the next round.
+                    Some(Err(_)) | None => {
+                        bus = None;
+                        String::new()
+                    }
+                };
                 if now != last {
                     last = now.clone();
                     let _ = qt.queue(move |view: Pin<&mut qobject::MirrorView>| {
@@ -592,7 +581,9 @@ impl qobject::MirrorView {
 
     fn send(self: Pin<&mut Self>, op: Outbound) {
         if let Some(input) = &self.rust().input {
-            let _ = input.send(op);
+            if !input.push(op) {
+                eprintln!("magnetita: mirror input: the queue is full; input dropped");
+            }
         }
     }
 

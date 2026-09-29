@@ -15,6 +15,7 @@
 use minicbor::{Decoder, Encoder};
 
 use crate::bound::{self, MAX_IDENT, MAX_LIST};
+use crate::codec::wrote;
 use crate::error::DecodeError;
 
 /// The capability ids of the own protocol. Each has a module that owns its
@@ -95,31 +96,13 @@ impl Hello {
 
     pub fn encode(&self) -> Vec<u8> {
         let mut e = Encoder::new(Vec::new());
-        e.map(4)
-            .unwrap()
-            .u32(KEY_ID)
-            .unwrap()
-            .str(&self.device_id)
-            .unwrap()
-            .u32(KEY_NAME)
-            .unwrap()
-            .str(&self.device_name)
-            .unwrap()
-            .u32(KEY_KIND)
-            .unwrap()
-            .u8(self.device_kind.to_wire())
-            .unwrap()
-            .u32(KEY_CAPABILITIES)
-            .unwrap()
-            .array(self.capabilities.len() as u64)
-            .unwrap();
+        wrote(e.map(4));
+        wrote(wrote(e.u32(KEY_ID)).str(&self.device_id));
+        wrote(wrote(e.u32(KEY_NAME)).str(&self.device_name));
+        wrote(wrote(e.u32(KEY_KIND)).u8(self.device_kind.to_wire()));
+        wrote(wrote(e.u32(KEY_CAPABILITIES)).array(self.capabilities.len() as u64));
         for c in &self.capabilities {
-            e.array(2)
-                .unwrap()
-                .u16(c.capability)
-                .unwrap()
-                .u16(c.version)
-                .unwrap();
+            wrote(wrote(wrote(e.array(2)).u16(c.capability)).u16(c.version));
         }
         e.into_writer()
     }

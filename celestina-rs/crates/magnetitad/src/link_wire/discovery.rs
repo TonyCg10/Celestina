@@ -1,23 +1,16 @@
-//! Where the own-protocol peers are: this daemon advertises itself on
-//! `_magnetita._udp` and browses for phones doing the same.
+//! How a phone finds this desktop: the daemon advertises itself on
+//! `_magnetita._udp` so the phone can dial it. The phone does not
+//! advertise and the desktop never dials, so nothing here browses.
 //!
-//! Both are Avahi subprocesses, the way [`mirror_discovery`](crate::mirror_discovery)
-//! reaches the ADB advertisements: `avahi-browse -rpt` is bounded and
-//! terminating, and `avahi-publish` is one long-lived child owned by pid for
+//! The advertisement is one long-lived `avahi-publish` child owned by pid for
 //! the daemon's lifetime and terminated by its process group, never by name.
-//! The parsing is `magnetita-link`'s, shared with the peer.
 
 use std::process::{Child, Stdio};
-use std::sync::atomic::AtomicBool;
-use std::time::{Duration, Instant};
 
-use magnetita_link::discovery::{parse_peers, Peer, SERVICE_TYPE};
+use magnetita_link::discovery::SERVICE_TYPE;
 use rustix::process::Pid;
 
 use crate::subprocess;
-
-/// How long a browse may take before it is abandoned.
-const BROWSE_BUDGET: Duration = Duration::from_secs(4);
 
 /// The advertisement this daemon keeps up while it listens: one owned
 /// `avahi-publish`, killed by pid when dropped.
@@ -45,18 +38,4 @@ impl Drop for Advertisement {
     fn drop(&mut self) {
         subprocess::terminate_group_and_reap(&mut self.child, self.group);
     }
-}
-
-/// Asks Avahi which Magnetita peers are advertising right now.
-pub(crate) fn browse(stopping: &AtomicBool) -> Vec<Peer> {
-    let deadline = Instant::now() + BROWSE_BUDGET;
-    let Some(output) = subprocess::command_output_from(
-        "avahi-browse",
-        &["-rpt", SERVICE_TYPE],
-        deadline,
-        stopping,
-    ) else {
-        return Vec::new();
-    };
-    parse_peers(&String::from_utf8_lossy(&output))
 }

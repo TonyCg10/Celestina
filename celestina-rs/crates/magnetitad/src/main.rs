@@ -12,7 +12,6 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::error::Error;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use celestina_core::xdg;
 use magnetita_net::{DeviceCert, PayloadLimiter, TrustStore};
@@ -33,6 +32,8 @@ mod revocation;
 mod runtime;
 mod session_registration;
 mod settings;
+mod shutdown;
+mod signals;
 mod subprocess;
 use devices::{push_log, Commands, Devices, Log, LogEntry, Registry};
 use lock::LockOk;
@@ -68,6 +69,8 @@ struct Daemon {
     revocations: Arc<Revocations>,
     payloads: PayloadLimiter,
     dbus: Option<zbus::blocking::Connection>,
+    /// `Changed` and `Event`, emitted off the link's runtime.
+    signals: signals::Signals,
     /// The bounded phone-id to server-id map behind notification replace and
     /// withdraw, owned by the module that posts them.
     notifications: notify::Mirror,
@@ -77,6 +80,8 @@ struct Daemon {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    // First, so a stop during startup is waited for too, never a kill.
+    let termination = shutdown::Termination::install()?;
     let dir = xdg::config_home()
         .ok_or("no XDG config home to store the device identity")?
         .join("magnetita");
@@ -140,6 +145,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         pending_clipboards: clipboard::PendingClipboards::default(),
         revocations,
         payloads: PayloadLimiter::new(),
+        signals: signals::Signals::on_bus(dbus.clone()),
         dbus,
         notifications: notify::Mirror::default(),
         last_clipboard: Mutex::new(String::new()),
@@ -159,9 +165,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     let _own_wire = link_wire::install(Arc::clone(&daemon), cert.clone(), device_id, pairing);
 
     log("ready", "listening for the phone on the own wire");
-    loop {
-        thread::park();
-    }
+    log("stop", termination.wait());
+    // Dropping the wire (declared last, dropped first) ends its sessions,
+    // which unmount the phone and release its input; then the adb worker.
+    Ok(())
 }
 
 impl Daemon {
@@ -208,23 +215,14 @@ impl Daemon {
     }
 
     /// Tell consumers of the contract that the device set or a device's state
-    /// changed, so they re-read it. Best-effort; a broken bus is not fatal.
+    /// changed, so they re-read it; bursts are coalesced.
     fn notify_change(&self) {
-        if let Some(connection) = &self.dbus {
-            let _ = connection.emit_signal(
-                Option::<&str>::None,
-                devices::OBJECT_PATH,
-                devices::INTERFACE,
-                devices::CHANGED_SIGNAL,
-                &(),
-            );
-        }
+        self.signals.raise(signals::Signal::Changed);
     }
 }
 
 /// Record a connection-log line for the app, and signal that a new entry landed.
-/// Best-effort on the bus; the entry is kept regardless so the app sees it on
-/// its next read.
+/// The entry is kept regardless of the bus so the app sees it on its next read.
 fn ui_log(daemon: &Daemon, device: &str, message: &str, failure: bool) {
     push_log(
         &daemon.log,
@@ -235,13 +233,5 @@ fn ui_log(daemon: &Daemon, device: &str, message: &str, failure: bool) {
             time_ms: millis(),
         },
     );
-    if let Some(connection) = &daemon.dbus {
-        let _ = connection.emit_signal(
-            Option::<&str>::None,
-            devices::OBJECT_PATH,
-            devices::INTERFACE,
-            devices::EVENT_SIGNAL,
-            &(),
-        );
-    }
+    daemon.signals.raise(signals::Signal::Event);
 }

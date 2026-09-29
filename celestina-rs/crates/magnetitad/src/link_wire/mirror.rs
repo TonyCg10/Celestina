@@ -11,7 +11,7 @@
 
 use std::collections::VecDeque;
 use std::io::Write;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::Mutex;
 
 use magnetita_link::RecvStream;
@@ -60,16 +60,94 @@ fn next_video_fifo() -> Result<std::path::PathBuf, celestina_core::xdg::PrivateD
     Ok(crate::runtime::private_runtime_base()?.join(format!("mirror-{n}.video")))
 }
 
-/// The picture as a FIFO the application's window reads. Bytes queue
-/// without bound until a reader opens the FIFO and while it decodes: a
-/// dropped chunk is a corrupt stream, a slow reader only costs memory. A
-/// reader that closes and reopens gets the stream again from wherever it
-/// is; the phone's next key frame (ten seconds apart at most) restores
-/// the picture.
+/// How many access units wait for the window: two seconds at 60 frames.
+const FEED_QUEUE: usize = 120;
+/// How many chunks of the phone's sound wait for `pw-cat`: about half a
+/// second of 16-bit stereo at 48 kHz (192 KB/s) in the stream's 16 KiB
+/// reads. Sound later than that is dropped rather than played out of step
+/// with the picture.
+const SOUND_QUEUE: usize = 6;
+
+/// The picture as a FIFO the application's window reads. Access units wait
+/// in a bounded queue until a reader opens the FIFO and while it decodes.
+/// When the reader falls behind, or none has opened the FIFO, the queue does
+/// not grow: units are dropped up to the next key frame, and the phone is
+/// asked for one at once, so the picture resumes decodable instead of the
+/// daemon holding the whole stream in memory. A reader that closes and
+/// reopens gets the stream again from its next key frame.
 pub(crate) struct FifoPlayer;
 
+/// A unit as the feed queues it: its bytes and whether it is a key frame.
+type Unit = (Vec<u8>, bool);
+
+/// What [`Feed::push`] did with a unit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fed {
+    Queued,
+    /// Dropped while waiting for the next key frame to fit.
+    Dropped,
+    /// Dropped, and the phone should be asked for a key frame: the queue
+    /// just overflowed, or a key frame found it still full.
+    WantKey,
+    /// The feed thread is gone.
+    Closed,
+}
+
+/// The feed's bounded queue and its one policy: past the bound, drop to the
+/// next key frame that fits.
+struct Feed {
+    tx: SyncSender<Unit>,
+    dropping: bool,
+}
+
+impl Feed {
+    fn new(capacity: usize) -> (Self, Receiver<Unit>) {
+        let (tx, rx) = sync_channel(capacity);
+        (
+            Self {
+                tx,
+                dropping: false,
+            },
+            rx,
+        )
+    }
+
+    fn push(&mut self, unit: Unit) -> Fed {
+        let key = unit.1;
+        if self.dropping && !key {
+            return Fed::Dropped;
+        }
+        match self.tx.try_send(unit) {
+            Ok(()) => {
+                self.dropping = false;
+                Fed::Queued
+            }
+            Err(TrySendError::Full(_)) => {
+                let first = !self.dropping;
+                self.dropping = true;
+                if first || key {
+                    Fed::WantKey
+                } else {
+                    Fed::Dropped
+                }
+            }
+            Err(TrySendError::Disconnected(_)) => Fed::Closed,
+        }
+    }
+}
+
+/// The request that makes the phone's encoder send a key frame now.
+fn keyframe_request() -> Envelope {
+    Envelope {
+        capability: capability::MIRROR,
+        kind: MirrorKeyframe::KIND,
+        id: 0,
+        body: MirrorKeyframe.encode(),
+    }
+}
+
 struct FifoSink {
-    tx: Option<Sender<(Vec<u8>, bool)>>,
+    feed: Option<Feed>,
     stopping: std::sync::Arc<std::sync::atomic::AtomicBool>,
     path: std::path::PathBuf,
     /// The stream cut into access units, and what a new reader needs first.
@@ -104,7 +182,7 @@ impl MirrorPlayer for FifoPlayer {
             log("mirror", &format!("video fifo: {e}"));
             return None;
         }
-        let (tx, rx) = channel::<(Vec<u8>, bool)>();
+        let (feed, rx) = Feed::new(FEED_QUEUE);
         let stopping = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let stop = std::sync::Arc::clone(&stopping);
         let feed_path = path.clone();
@@ -127,12 +205,7 @@ impl MirrorPlayer for FifoPlayer {
                     while rx.try_recv().is_ok() {
                         QUEUED.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
                     }
-                    own().queue_input(Envelope {
-                        capability: capability::MIRROR,
-                        kind: MirrorKeyframe::KIND,
-                        id: 0,
-                        body: MirrorKeyframe.encode(),
-                    });
+                    own().queue_input(keyframe_request());
                     let mut started = false;
                     let (mut units, mut bytes, mut keys, mut skipped) = (0u64, 0u64, 0u64, 0u64);
                     let mut blocked = std::time::Duration::ZERO;
@@ -197,7 +270,7 @@ impl MirrorPlayer for FifoPlayer {
             .ok()?;
         *VIDEO_PATH.lock_ok() = Some(path.clone());
         Some(Box::new(FifoSink {
-            tx: Some(tx),
+            feed: Some(feed),
             stopping,
             path,
             units,
@@ -231,10 +304,21 @@ impl VideoSink for FifoSink {
             (self.units_in, self.keys_in, self.arrived) = (0, 0, 0);
             self.last_report = std::time::Instant::now();
         }
-        if let Some(tx) = &self.tx {
+        if let Some(feed) = &mut self.feed {
             for unit in complete {
-                QUEUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                let _ = tx.send(unit);
+                match feed.push(unit) {
+                    Fed::Queued => {
+                        QUEUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    Fed::WantKey => {
+                        log(
+                            "mirror",
+                            "feed: the window fell behind; dropping to a key frame",
+                        );
+                        own().queue_input(keyframe_request());
+                    }
+                    Fed::Dropped | Fed::Closed => {}
+                }
             }
         }
     }
@@ -242,7 +326,7 @@ impl VideoSink for FifoSink {
     fn close(&mut self) {
         self.stopping
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        self.tx.take();
+        self.feed.take();
         // A feed thread blocked in its open needs a reader to appear once.
         let _ = rustix::fs::open(
             &self.path,
@@ -267,7 +351,7 @@ impl Drop for FifoSink {
 /// desktop, with no codec and no buffer beyond PipeWire's own.
 struct Speaker {
     child: std::process::Child,
-    tx: Option<Sender<Vec<u8>>>,
+    tx: Option<SyncSender<Vec<u8>>>,
 }
 
 impl Speaker {
@@ -293,7 +377,7 @@ impl Speaker {
             .map_err(|e| log("mirror", &format!("sound: pw-cat: {e}")))
             .ok()?;
         let mut stdin = child.stdin.take()?;
-        let (tx, rx) = channel::<Vec<u8>>();
+        let (tx, rx) = sync_channel::<Vec<u8>>(SOUND_QUEUE);
         std::thread::Builder::new()
             .name("magnetita-mirror-sound".into())
             .spawn(move || {
@@ -312,8 +396,9 @@ impl Speaker {
     }
 
     fn write(&mut self, bytes: &[u8]) {
+        // Sound that cannot be played now is worth nothing later.
         if let Some(tx) = &self.tx {
-            let _ = tx.send(bytes.to_vec());
+            let _ = tx.try_send(bytes.to_vec());
         }
     }
 
@@ -360,7 +445,7 @@ pub(crate) struct OwnMirror {
     host: Mutex<Option<std::net::IpAddr>>,
     /// The owning session's outbox: input goes straight to the link, not
     /// through the tick.
-    outbox: Mutex<Option<tokio::sync::mpsc::UnboundedSender<Envelope>>>,
+    outbox: Mutex<Option<super::writer::Outbox>>,
     state: Mutex<Option<LinkState>>,
     sink: Mutex<Option<Box<dyn VideoSink>>>,
     /// The phone's sound, played here while the phone streams it: a
@@ -409,13 +494,12 @@ impl OwnMirror {
     /// Input for the phone: down the owning session's link at once, or
     /// queued for the tick to hand over while no session owns the mirror.
     pub(crate) fn queue_input(&self, env: Envelope) {
-        let env = match self.outbox.lock_ok().as_ref() {
-            Some(outbox) => match outbox.send(env) {
-                Ok(()) => return,
-                Err(tokio::sync::mpsc::error::SendError(env)) => env,
-            },
-            None => env,
-        };
+        if let Some(outbox) = self.outbox.lock_ok().as_ref() {
+            // A full queue means the phone stopped reading; input that late
+            // is worth nothing, and the session ends at its send deadline.
+            let _ = outbox.send(env);
+            return;
+        }
         let mut input = self.input.lock_ok();
         if input.len() < 1024 {
             input.push_back(env);
@@ -424,11 +508,7 @@ impl OwnMirror {
 
     /// The session's tick: what to send, if anything, given the intent.
     /// The owning session leaves its outbox so input skips the tick.
-    pub(crate) fn tick(
-        &self,
-        device_id: &str,
-        outbox: &tokio::sync::mpsc::UnboundedSender<Envelope>,
-    ) -> Vec<Envelope> {
+    pub(crate) fn tick(&self, device_id: &str, outbox: &super::writer::Outbox) -> Vec<Envelope> {
         let mut out = Vec::new();
         let wanted = *self.wanted.lock_ok();
         {
@@ -618,6 +698,32 @@ pub(crate) mod testing {
 mod tests {
     use super::*;
 
+    /// MAG-7: the feed never holds more than its bound. Past it, units are
+    /// dropped up to the next key frame, which is asked for at once, and the
+    /// stream resumes at that key frame.
+    #[test]
+    fn a_full_feed_drops_to_the_next_key_frame() {
+        let unit = |n: u8, key: bool| (vec![n], key);
+        let (mut feed, rx) = Feed::new(3);
+        assert_eq!(feed.push(unit(0, true)), Fed::Queued);
+        assert_eq!(feed.push(unit(1, false)), Fed::Queued);
+        assert_eq!(feed.push(unit(2, false)), Fed::Queued);
+        // Nobody reads: the queue is full.
+        assert_eq!(feed.push(unit(3, false)), Fed::WantKey);
+        assert_eq!(feed.push(unit(4, false)), Fed::Dropped);
+        // A key frame that finds it still full asks again.
+        assert_eq!(feed.push(unit(5, true)), Fed::WantKey);
+        assert_eq!(rx.try_recv().unwrap(), unit(0, true));
+        // Room again, but only a key frame restarts the stream.
+        assert_eq!(feed.push(unit(6, false)), Fed::Dropped);
+        assert_eq!(feed.push(unit(7, true)), Fed::Queued);
+        assert_eq!(feed.push(unit(8, false)), Fed::WantKey);
+        let rest: Vec<_> = rx.try_iter().collect();
+        assert_eq!(rest, [unit(1, false), unit(2, false), unit(7, true)]);
+        drop(rx);
+        assert_eq!(feed.push(unit(9, true)), Fed::Closed);
+    }
+
     #[test]
     fn the_options_map_onto_the_wire_and_the_intent_drives_start_and_stop() {
         let mut options = std::collections::HashMap::new();
@@ -632,16 +738,16 @@ mod tests {
 
         let mirror = OwnMirror::default();
         assert!(mirror
-            .tick("phone", &tokio::sync::mpsc::unbounded_channel().0)
+            .tick("phone", &super::super::writer::Outbox::detached(8).0)
             .is_empty());
         mirror.request_start(start);
-        let sent = mirror.tick("phone", &tokio::sync::mpsc::unbounded_channel().0);
+        let sent = mirror.tick("phone", &super::super::writer::Outbox::detached(8).0);
         assert_eq!(sent.len(), 1);
         assert_eq!(sent[0].kind, MirrorStart::KIND);
         assert_eq!(mirror.state(), LinkState::Starting);
         assert!(
             mirror
-                .tick("phone", &tokio::sync::mpsc::unbounded_channel().0)
+                .tick("phone", &super::super::writer::Outbox::detached(8).0)
                 .is_empty(),
             "starting is asked once"
         );
@@ -663,7 +769,7 @@ mod tests {
             }
         );
         mirror.request_stop();
-        let sent = mirror.tick("phone", &tokio::sync::mpsc::unbounded_channel().0);
+        let sent = mirror.tick("phone", &super::super::writer::Outbox::detached(8).0);
         assert_eq!(sent[0].kind, MirrorStop::KIND);
         assert_eq!(mirror.state(), LinkState::Idle);
     }

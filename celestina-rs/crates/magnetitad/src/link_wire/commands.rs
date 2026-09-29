@@ -16,7 +16,7 @@ use magnetita_proto::Envelope;
 use serde::{Deserialize, Serialize};
 
 use crate::lock::LockOk;
-use crate::subprocess::{self, GroupPolicy};
+use crate::subprocess;
 
 /// How long one run may take before its whole process group is terminated.
 const RUN_BUDGET: Duration = Duration::from_secs(60);
@@ -37,9 +37,14 @@ pub(crate) struct Registered {
 /// a command line may carry anything, and replaced whole through a synced
 /// sibling, so a crash or a full disk mid-save leaves the previous file. A
 /// change reaches memory only once the file holds it.
+///
+/// Changes are serialised by `writing`, held across the synced write; the
+/// entries' lock is taken only to copy them and to swap in what the file now
+/// holds, so a run or a listing never waits for a disk.
 pub(crate) struct CommandStore {
     path: Option<PathBuf>,
     entries: Mutex<BTreeMap<u32, Registered>>,
+    writing: Mutex<()>,
 }
 
 impl CommandStore {
@@ -64,15 +69,13 @@ impl CommandStore {
         Self {
             path,
             entries: Mutex::new(entries),
+            writing: Mutex::new(()),
         }
     }
 
     #[cfg(test)]
     pub(crate) fn in_memory() -> Self {
-        Self {
-            path: None,
-            entries: Mutex::new(BTreeMap::new()),
-        }
+        Self::load_from(None)
     }
 
     pub(crate) fn list(&self) -> Vec<Registered> {
@@ -90,13 +93,13 @@ impl CommandStore {
         if name.trim().is_empty() || program.trim().is_empty() {
             return Err("name and program are required".into());
         }
-        let mut entries = self.entries.lock_ok();
+        let _writing = self.writing.lock_ok();
+        let mut next = self.entries.lock_ok().clone();
         let id = if id == 0 {
-            entries.keys().max().copied().unwrap_or(0) + 1
+            next.keys().max().copied().unwrap_or(0) + 1
         } else {
             id
         };
-        let mut next = entries.clone();
         next.insert(
             id,
             Registered {
@@ -107,16 +110,16 @@ impl CommandStore {
             },
         );
         self.persist(&next)?;
-        *entries = next;
+        *self.entries.lock_ok() = next;
         Ok(id)
     }
 
     pub(crate) fn remove(&self, id: u32) -> Result<bool, String> {
-        let mut entries = self.entries.lock_ok();
-        let mut next = entries.clone();
+        let _writing = self.writing.lock_ok();
+        let mut next = self.entries.lock_ok().clone();
         let removed = next.remove(&id).is_some();
         self.persist(&next)?;
-        *entries = next;
+        *self.entries.lock_ok() = next;
         Ok(removed)
     }
 
@@ -164,7 +167,6 @@ impl CommandStore {
                 if status.is_none() {
                     subprocess::terminate_group_and_reap(&mut child, group);
                 }
-                let _ = GroupPolicy::Terminate;
                 status.is_some_and(|s| s.success())
             }
             Err(_) => false,
@@ -173,7 +175,15 @@ impl CommandStore {
     }
 }
 
-static STORE: std::sync::LazyLock<CommandStore> = std::sync::LazyLock::new(CommandStore::load);
+/// The author's `commands.json`, or, in the tests, a registry in memory, so
+/// a test never reads or writes the real configuration.
+static STORE: std::sync::LazyLock<CommandStore> = std::sync::LazyLock::new(|| {
+    if cfg!(test) {
+        CommandStore::load_from(None)
+    } else {
+        CommandStore::load()
+    }
+});
 
 /// The daemon's one registry.
 pub(crate) fn store() -> &'static CommandStore {
@@ -222,6 +232,32 @@ mod tests {
         assert!(store.remove(id).is_err());
         assert_eq!(store.list().len(), 1);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn the_tests_registry_never_touches_the_real_configuration() {
+        assert_eq!(store().path, None);
+    }
+
+    /// A save in progress holds the writers, never the readers: a listing
+    /// answers while another thread is inside the synced write.
+    #[test]
+    fn a_listing_does_not_wait_for_a_save() {
+        let store = std::sync::Arc::new(CommandStore::in_memory());
+        store.set(0, "Say hi", "true", vec![]).unwrap();
+        let saving = store.writing.lock_ok();
+        let reader = std::sync::Arc::clone(&store);
+        let listed = std::thread::spawn(move || reader.list().len());
+        let started = Instant::now();
+        while !listed.is_finished() {
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "a listing waited behind a save"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        drop(saving);
+        assert_eq!(listed.join().unwrap(), 1);
     }
 
     #[test]

@@ -65,6 +65,11 @@ and the shell consume and that must not break.
    `_magnetita._udp` through Avahi (over the `zbus` the mirror discovery
    already uses); the phone uses `NsdManager`. Either side may dial; the
    fingerprint, not the address, decides trust.
+   *Amended 2026-09-27 (`MAG-D1-E`, audit finding `MAG-11`):* as built, only
+   the daemon advertises and only the phone dials, by the QR's address or the
+   advertisement. The phone never registers a service, so the daemon's
+   browse-and-dial loop could find nothing but itself; it is removed, and the
+   daemon browses nothing for the own wire.
 
 5. **Pairing is out-of-band by default.** The desktop shows a QR code carrying
    its device id, certificate fingerprint, reachable addresses and a one-time

@@ -95,17 +95,25 @@ pub struct Configs {
     pub client: quinn::ClientConfig,
 }
 
+/// How long a connection may stay silent before it counts as dead.
+const IDLE_TIMEOUT_MS: u32 = 30_000;
+/// How often an otherwise silent connection proves it is alive: three
+/// chances inside the idle timeout, and a phone's radio that may sleep
+/// between them. A streaming mirror is never silent, so it needs no faster
+/// beat; a one-second keep-alive kept the phone's Wi-Fi awake all day.
+const KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(10);
+
 fn transport() -> Arc<quinn::TransportConfig> {
     let mut tp = quinn::TransportConfig::default();
     // Measured in MAG-P0: the phone's uplink black-holed larger datagrams.
     tp.initial_mtu(1200).mtu_discovery_config(None);
     // A static mirror or an idle phone must not look like a dead peer.
-    tp.keep_alive_interval(Some(std::time::Duration::from_secs(1)));
-    tp.max_idle_timeout(Some(
-        std::time::Duration::from_secs(30)
-            .try_into()
-            .expect("30 s fits"),
-    ));
+    tp.keep_alive_interval(Some(KEEP_ALIVE));
+    // In milliseconds as a QUIC varint: a conversion that cannot fail, where
+    // a failed `Duration` conversion would have meant no idle timeout at all.
+    tp.max_idle_timeout(Some(quinn::IdleTimeout::from(quinn::VarInt::from_u32(
+        IDLE_TIMEOUT_MS,
+    ))));
     Arc::new(tp)
 }
 
@@ -138,5 +146,25 @@ impl Configs {
         ));
         client.transport_config(transport());
         Ok(Self { server, client })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const IDLE_TIMEOUT: std::time::Duration =
+        std::time::Duration::from_millis(IDLE_TIMEOUT_MS as u64);
+
+    #[test]
+    fn the_keep_alive_is_slow_and_leaves_three_chances_before_the_idle_timeout() {
+        assert!(KEEP_ALIVE >= std::time::Duration::from_secs(10));
+        assert!(KEEP_ALIVE * 3 <= IDLE_TIMEOUT);
+        assert_eq!(
+            quinn::IdleTimeout::try_from(IDLE_TIMEOUT).ok(),
+            Some(quinn::IdleTimeout::from(quinn::VarInt::from_u32(
+                IDLE_TIMEOUT_MS
+            )))
+        );
     }
 }

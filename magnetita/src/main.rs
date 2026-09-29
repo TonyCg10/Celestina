@@ -3,6 +3,7 @@ mod controller;
 mod devices;
 mod lifecycle;
 mod messages;
+mod mirror_input;
 mod mirror_view;
 mod pairing;
 mod projection;

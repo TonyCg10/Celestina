@@ -12,6 +12,17 @@ use minicbor::{Decoder, Encoder};
 use crate::bound;
 use crate::error::DecodeError;
 
+/// The one place an encoder step's result is opened. Every encoder in this
+/// crate writes into a `Vec<u8>`, whose minicbor writer error is
+/// `Infallible`, and writes only integers, booleans, text, bytes and headers,
+/// none of which can fail to encode; so the error arm cannot be reached.
+pub(crate) fn wrote<T>(step: Result<T, minicbor::encode::Error<std::convert::Infallible>>) -> T {
+    match step {
+        Ok(value) => value,
+        Err(error) => unreachable!("encoding into a Vec cannot fail: {error}"),
+    }
+}
+
 /// A message under construction. Consumed by [`Map::finish`].
 pub(crate) struct Map(Encoder<Vec<u8>>);
 
@@ -19,60 +30,60 @@ impl Map {
     /// Starts a map that will hold exactly `fields` pairs.
     pub fn new(fields: u64) -> Self {
         let mut e = Encoder::new(Vec::new());
-        e.map(fields).unwrap();
+        wrote(e.map(fields));
         Self(e)
     }
 
     pub fn u8(mut self, key: u32, v: u8) -> Self {
-        self.0.u32(key).unwrap().u8(v).unwrap();
+        wrote(wrote(self.0.u32(key)).u8(v));
         self
     }
 
     pub fn u16(mut self, key: u32, v: u16) -> Self {
-        self.0.u32(key).unwrap().u16(v).unwrap();
+        wrote(wrote(self.0.u32(key)).u16(v));
         self
     }
 
     pub fn u32(mut self, key: u32, v: u32) -> Self {
-        self.0.u32(key).unwrap().u32(v).unwrap();
+        wrote(wrote(self.0.u32(key)).u32(v));
         self
     }
 
     pub fn u64(mut self, key: u32, v: u64) -> Self {
-        self.0.u32(key).unwrap().u64(v).unwrap();
+        wrote(wrote(self.0.u32(key)).u64(v));
         self
     }
 
     pub fn i16(mut self, key: u32, v: i16) -> Self {
-        self.0.u32(key).unwrap().i16(v).unwrap();
+        wrote(wrote(self.0.u32(key)).i16(v));
         self
     }
 
     pub fn bool(mut self, key: u32, v: bool) -> Self {
-        self.0.u32(key).unwrap().bool(v).unwrap();
+        wrote(wrote(self.0.u32(key)).bool(v));
         self
     }
 
     pub fn text(mut self, key: u32, v: &str) -> Self {
-        self.0.u32(key).unwrap().str(v).unwrap();
+        wrote(wrote(self.0.u32(key)).str(v));
         self
     }
 
     pub fn bytes(mut self, key: u32, v: &[u8]) -> Self {
-        self.0.u32(key).unwrap().bytes(v).unwrap();
+        wrote(wrote(self.0.u32(key)).bytes(v));
         self
     }
 
     /// Writes `key` followed by an array header; the caller then writes
     /// `len` items with [`Map::item`].
     pub fn list(mut self, key: u32, len: usize) -> Self {
-        self.0.u32(key).unwrap().array(len as u64).unwrap();
+        wrote(wrote(self.0.u32(key)).array(len as u64));
         self
     }
 
     /// Writes `key` followed by one already-encoded nested map.
     pub fn nested(mut self, key: u32, encoded: &[u8]) -> Self {
-        self.0.u32(key).unwrap();
+        wrote(self.0.u32(key));
         self.0.writer_mut().extend_from_slice(encoded);
         self
     }
@@ -85,13 +96,13 @@ impl Map {
 
     /// Writes one text item into an open list.
     pub fn text_item(mut self, v: &str) -> Self {
-        self.0.str(v).unwrap();
+        wrote(self.0.str(v));
         self
     }
 
     /// Writes one `u64` item into an open list.
     pub fn u64_item(mut self, v: u64) -> Self {
-        self.0.u64(v).unwrap();
+        wrote(self.0.u64(v));
         self
     }
 

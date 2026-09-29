@@ -13,7 +13,7 @@ On it, every message is one **envelope**, a CBOR map with integer keys:
 
 | Key | Field | Type | Meaning |
 |---|---|---|---|
-| 0 | version | u8 | `1`. Refused before any other field is read when it is not. |
+| 0 | version | u8 | `1`. Checked when its key is read, in whatever position the map puts it; any other value refuses the envelope before its body reaches a capability. |
 | 1 | capability | u16 | Which capability's module owns the body. |
 | 2 | kind | u16 | Which message of that capability. |
 | 3 | id | u32 | A per-connection counter; a reply names the id it answers. |
@@ -54,8 +54,11 @@ Capability `0` kind `0`, the first envelope both ways:
 | 2 | device_kind | u8: 0 desktop, 1 phone |
 | 3 | capabilities | list of `[capability u16, version u16]`, ≤ 256, no duplicates |
 
-Both sides keep the capabilities both offer, each at the lower version.
-Anything only one side offers is not used and is not an error.
+Both sides are to keep the capabilities both offer, each at the lower
+version; anything only one side offers is not used and is not an error.
+Today neither end computes that intersection yet: the desktop advertises
+every capability it serves, the phone only `battery` and `find`, and each
+uses what it implements (`MAG-8`, negotiated in the suite plan's `AUD-1-E`).
 
 Vector: `a4007030656232316232386165373464353463016a4573637269746f72696f02000382820101820902`.
 

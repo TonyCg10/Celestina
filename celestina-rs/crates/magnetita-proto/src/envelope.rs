@@ -17,6 +17,7 @@
 use minicbor::{Decoder, Encoder};
 
 use crate::bound::{self, MAX_BYTES};
+use crate::codec::wrote;
 use crate::error::DecodeError;
 
 /// The wire version this build speaks. Bumped only for a change that neither
@@ -46,30 +47,12 @@ impl Envelope {
     /// Encodes with the version this build speaks.
     pub fn encode(&self) -> Vec<u8> {
         let mut e = Encoder::new(Vec::new());
-        // Writing to a Vec cannot fail; the unwraps are the encoder's
-        // Infallible error type, not a runtime possibility.
-        e.map(5)
-            .unwrap()
-            .u32(KEY_VERSION)
-            .unwrap()
-            .u8(PROTOCOL_VERSION)
-            .unwrap()
-            .u32(KEY_CAPABILITY)
-            .unwrap()
-            .u16(self.capability)
-            .unwrap()
-            .u32(KEY_KIND)
-            .unwrap()
-            .u16(self.kind)
-            .unwrap()
-            .u32(KEY_ID)
-            .unwrap()
-            .u32(self.id)
-            .unwrap()
-            .u32(KEY_BODY)
-            .unwrap()
-            .bytes(&self.body)
-            .unwrap();
+        wrote(e.map(5));
+        wrote(wrote(e.u32(KEY_VERSION)).u8(PROTOCOL_VERSION));
+        wrote(wrote(e.u32(KEY_CAPABILITY)).u16(self.capability));
+        wrote(wrote(e.u32(KEY_KIND)).u16(self.kind));
+        wrote(wrote(e.u32(KEY_ID)).u32(self.id));
+        wrote(wrote(e.u32(KEY_BODY)).bytes(&self.body));
         e.into_writer()
     }
 

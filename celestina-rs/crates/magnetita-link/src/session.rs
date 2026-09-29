@@ -87,6 +87,21 @@ impl Session {
         Ok(())
     }
 
+    /// Ends the control stream after everything written to it and waits
+    /// until the peer has acknowledged receiving all of it. A connection
+    /// closed straight after a write may drop what the peer had not yet
+    /// received; closed after this, the peer still reads every envelope.
+    /// Nothing may be sent on the control stream afterwards.
+    pub async fn finish_control(&self) -> Result<(), LinkError> {
+        let mut s = self.control_send.lock().await;
+        s.finish()
+            .map_err(|e| LinkError::Connection(e.to_string()))?;
+        s.stopped()
+            .await
+            .map_err(|e| LinkError::Connection(e.to_string()))?;
+        Ok(())
+    }
+
     /// Encodes `body` as the next envelope of `capability`/`kind` and sends it.
     pub async fn send_message(
         &self,

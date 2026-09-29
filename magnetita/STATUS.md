@@ -1,176 +1,105 @@
 # Magnetita status
 
-- **Updated:** 2026-09-13
-- **Reconnection:** a phone that dials again while its earlier session
-  is still open on this side (its application restarted or reinstalled)
-  supersedes it since 2026-09-11: the older session is told to leave and
-  the newer one takes the slot, instead of being dropped as a duplicate
-  until the 30 s idle timeout.
-- **Mirror window:** the link mirror is a window of the application
-  since 2026-09-12 (`src/mirror_view.rs`, `qml/MirrorWindow.qml`): the
-  daemon writes the phone's picture, raw HEVC or H.264, to a FIFO named by
-  `Mirror1.LinkVideo`, and the app decodes it with the suite's engine
-  (libmpv, the `MpvVideo` surface Fluorita and Siderita share) into a
-  window that keeps the phone's aspect through every resize; its pointer,
-  wheel and keys go back through `LinkTouch`, `LinkKey` and `LinkGlobal`
-  from a worker thread (left button and drag are touches, the wheel a
-  swipe, right button Back, middle Home, F1/F2/F3 Back/Home/Recents). The
-  daemon spawns no `mpv` and no `ffmpeg`; the window opens when the phone
-  streams and closes with it, and closing it stops the mirror.
-- **Implementation:** `MAG-D1`, the design of the two applications, is
-  the one open checkpoint since 2026-09-13: the author closed the
-  own-protocol program with `VAL-MAG-11`, `-12`, `-14` and `-15` passed
-  and `-13` deferred, and `MAG-P7-D` retired the adb mirror picture (the
-  adb worker keeps the screen off). `MAG-M1` is archived. `MAG-P7`, storage over the own wire and the retirement
-  of the second path, is archived, paired with `magnetita-android`'s
-  `AND-5`; the storage capability, the FUSE mount and the removal of the
-  KDE Connect wire are done, and `MAG-P7-D` (the `adb` mirror path) waits
-  on `VAL-MAG-14`. `MAG-P6`, the
-  mirror as a capability of the link, is implemented and archived.
-  `MAG-P5`, commands, trackpad and keyboard, met its exit the same day and
-  is archived; `VAL-MAG-13` carries the author's hand. `MAG-P4`, the
-  daily set, met its exit the same day and is archived; `VAL-MAG-12`
-  carries the author's daily use. `MAG-P3`, the
-  Android application foundation, met its exit on 2026-09-09 and is
-  archived, paired with `AND-1`. `MAG-P2`, the link, is closed (`4011e53`, `95a4cc8`):
-  `magnetita-link` carries `magnetita-proto` over QUIC with pinned
-  certificates, `magnetitad` hosted the own wire next to KDE Connect on one
-  runtime thread with `StartPairing` on `Devices1`, and `magnetita-peer`
-  drives it from a shell. Deployed on 2026-09-09 and exercised end to
-  end by the peer against the live daemon; closed, the author having ruled
-  that the only other host is the phone of `MAG-P3`. `MAG-S1`'s pending production exit was carried by the same
-  deployment. `MAG-P1` is complete (`07e70c4`, `a071e39`):
-  `magnetita-proto` holds the envelope, hello, pairing and the catalog of
-  twelve capabilities, 63 tests, with [the wire document](docs/protocol.md). `MAG-P0`'s spikes
-  are measured, closed and committed (`ad26b3e`). `MAG-S1` (hostile network input) and
-  `MAG-R1` (the one-button wireless mirror) are delivered, committed and
-  deployed; `MAG-S1`'s plan is archived with its canonical production exit
-  still pending as a deployment action. `MAG-R2` (the mirror without
-  discovery) is committed but **not deployed**. `MAG-M1` is done
-- **Author validation:** the original 1.0 daily set passed on the real phone,
-  before the 2026-07-29 hardening. **Every one of `VAL-MAG-01` through
-  `VAL-MAG-04` and `VAL-MAG-06` through `VAL-MAG-09` is still pending**, so no
-  corrected path has an author pass against the phone. This, not the code, is
-  Magnetita's largest open risk
+- **Updated:** 2026-09-27
+- **Implementation:** `MAG-D1`, the design of the two applications, is the
+  one open checkpoint since 2026-09-13, when the author closed the
+  own-protocol program (`MAG-P0` through `MAG-P7`) with `VAL-MAG-11`, `-12`,
+  `-14` and `-15` passed and `-13` deferred. Its rows `MAG-D1-D` and
+  `MAG-D1-E` carry the 2026-09-26 audit's Magnetita fixes: wire admission,
+  identity and bounds, then session liveness, released input, the bounded
+  mirror feed and FUSE caches, the daemon's stop, the dependency trims and
+  the accessible conversation row. Every earlier plan (`MAG-S1`, `MAG-R1`,
+  `MAG-R2`, `MAG-M1`, `MAG-P0` to `MAG-P7`) is archived; see the records
+  below.
+- **Versioning:** from 2026-09-26 a Magnetita product fix lands as
+  `magnetita-bug` and moves the PATCH version. The audit found 37 earlier
+  product fixes landed as `maintenance` (`MAG-25`), so the installed version
+  under-reports what changed before that date; history is immutable, and the
+  waiver is recorded in [the MAG-D1 plan](docs/plans/active/2026-09-13-app-design.md).
+- **Author validation:** `VAL-MAG-16` and `VAL-MAG-17` check the audit
+  fixes on the real session. `VAL-MAG-01` to `-04` and `-06` to `-10`,
+  written for the retired KDE Connect wire, are still pending; no live
+  observation of that wire is reused for the own one.
 
 ## Current checkout truth
 
-- The daemon speaks one wire, the suite's own: the KDE Connect link,
-  discovery, pairing v8, payload sockets and the `sshfs` mount are gone
-  (`MAG-P7-C`). The phone's files arrive over the `storage` capability
-  from the document tree the person shared and are a FUSE directory at
-  the runtime path Siderita browses, `mounted` and `mountPath` unchanged
-  in `Devices1` (`MAG-P7-A`, `-B`).
-- The mirror runs over the link: `Mirror1`'s `StartLink` asks the phone
-  for its screen, the raw HEVC arrives on a bulk stream of a fixed id and
-  plays in an `mpv` window the daemon owns, and `LinkTouch` and
-  `LinkGlobal` go back; the desktop app's Mirror control prefers it and
-  falls back to `adb` (`MAG-P6-A` through `-D`).
-- Registered commands (name, program, arguments) live in the daemon's
-  configuration and reach the phone as ids and names; a run is a bounded
-  process group. The phone's trackpad and keyboard drive one virtual
-  `uinput` device the daemon owns, through a rate governor
-  (`MAG-P5-A`, `-B`).
-- Contacts, SMS and calls reach the desktop over the own wire: the contact
-  book names numbers, conversations and threads show on the desktop app's
-  messages page and replies go back, received messages and calls become
-  notifications with reply and buttons, and `Devices1` publishes the call
-  state and the SMS methods (`MAG-P4-E`, `-F`, `-G`).
-- The phone's player shows on the desktop's media card over the own wire
-  and the desktop's buttons drive it; the desktop's MPRIS players reach
-  the phone through the same playerctl worker while it asks (`MAG-P4-D`).
-- Files travel both ways on the own wire on their own streams and resume
-  after a broken link; received files are published in the downloads
-  directory only while the device is still paired (`MAG-P4-C`).
-- The phone's notifications show on the desktop over the own wire with
-  their buttons; the desktop's presses, replies and dismissals go back,
-  also through `Devices1.NotificationAction`, `ReplyNotification` and
-  `DismissNotification` (`MAG-P4-B`).
-- The clipboard travels both ways on the own wire: the desktop's changes
-  drain into the phone's session, the phone's text is written through the
-  Wayland adapter, and the daemon asks for the phone's clipboard when a
-  session opens (`MAG-P4-A`).
-- The desktop app shows the pairing QR: its pairing action arms the
-  daemon's window, draws the code, counts the two minutes down and names
-  the phone once it arrives (`MAG-P3-B`). A paired, connected own-wire
-  phone reads as connected, not connecting.
-- The S25U pairs with the daemon by scanning its QR, holds the session
-  through screen off, app switch and Wi-Fi toggle, and rings on `Ring`;
-  the daemon answers a QR proof from a phone it still pins, so a phone
-  that forgot it can pair again (`MAG-P3-C`).
-- Delivered as `1.2.2`: `FEEDBACK-1-MAG`. A plugin row and its switch lit at
-  the same time whenever the pointer was on the switch; the row now paints the
-  shared `CelestinaRowHighlight` and yields its hover to the switch. "Olvidar"
-  and "Vincular" are the `unlink` and `link` glyphs with the words in their
-  accessible names; the mirror start, the mirror settings and the mirror
-  choice segments are `checkable` — re-binding `checked` on click, as the
-  plugin switch does, so the button still shows only what the daemon
-  confirms. The choice labels stay words because they are the values. Hand
-  check: `VAL-MAG-10`.
-- The checkout is clean of Magnetita work: `MAG-S1`, `MAG-R1` and `MAG-R2` are
-  all committed.
-- The installed daemon carries `MAG-S1`, `MAG-R1` and `MAG-R2`'s port pinning
-  and remembered endpoint, but **not** `MAG-R2`'s stale-advertisement fallback:
-  `verify-production.sh` runs a workspace-wide `cargo fmt --all --check` and
-  unrelated in-flight `grafita-core` work was failing it when that correction
-  landed. Redeploying is the only thing standing between the tree and the
-  installed bytes.
-- The mirror was observed working end to end against the real S25U, including
-  pairing on six digits alone and pinning to the fixed port. What has never been
-  observed is a mirror after a *phone* reboot (`VAL-MAG-09`).
-
-- Until `MAG-P7-C`, `magnetitad` implemented KDE Connect discovery, TCP/TLS trust, local pairing,
-  storage mount, the daily plugins and `org.celestina.Devices1`.
-- Siderita consumes the mount/device/media contract; the Celestina shell
-  consumes phone/battery state; the standalone Magnetita app owns pairing,
-  diagnostics and settings UI.
-- Pairing v8 timestamp/code validation, identity binding, bounded admission,
-  durable revocation, payload publication barriers and typed MPRIS actions are
-  implemented and covered by unit/loopback evidence.
-- App actions use one ordered owned worker. Snapshot reads/watchers remain
-  detached best-effort work and still lack a fully deterministic shutdown path.
-- Live phone evidence for the released daily set predates the 2026-07-29
-  hardening; it is not reused as proof of the corrected paths.
-- `SendFileUri` on
-  `org.celestina.Devices1`. It names the file by the percent-encoded `file://`
-  URI the portal and the clipboard already speak, decodes it by bytes with
-  `celestina_core::percent`, and refuses a URI that is not a local `file://` one
-  or whose escapes are malformed with a typed reason. `Command::SendFile` now
-  carries a `PathBuf`, so a filename that is not valid UTF-8 reaches
-  `serve_file` unaltered. `SendFile` itself is unchanged and stays for
-  compatibility: it is a published interface and altering the meaning of its
-  argument would break any other caller. Siderita's send-to-phone menu item is the
-  first consumer, under its own `SID-G7-G`. Committed and deployed; no live file
-  transfer has been observed since — that is `VAL-MAG-HARDENING`. See the
-  [byte-exact send evidence](docs/evidence/2026-08-06-byte-exact-send-to-phone.md).
-- The `MAG-S1` corrections are committed and installed. They have never been
-  exercised against the phone: `VAL-MAG-06` is what would prove the corrected
-  boundaries hold, and it has not been run.
+- **One wire, the suite's own.** `magnetitad` speaks `magnetita-proto` over
+  `magnetita-link`'s QUIC on UDP 1760, with certificates pinned by
+  fingerprint; the KDE Connect wire, its discovery, pairing, payload sockets
+  and the `sshfs` mount were removed in `MAG-P7-C`. The daemon advertises
+  `_magnetita._udp` and never dials: the phone finds it by the QR or the
+  advertisement.
+- **Pairing and identity.** The app's pairing action arms a two-minute QR
+  window; only a verified proof closes it, and wrong proofs refuse their
+  address, never the window. A session runs under the id its pinned
+  certificate gives, and a hello naming another id is closed. A phone that
+  dials again while its earlier session is open supersedes it.
+- **Sessions.** Each session reads its control stream from one task and
+  writes it from one writer with a 10 s send deadline; a phone that stops
+  reading is closed at the deadline. `Forget` is a durable barrier: the
+  session's tick closes the session and acknowledges it, and the D-Bus call
+  waits for that off the bus's executor. Adapters that block (the
+  clipboard's `wl-copy`, notification calls) run on their own thread.
+  Keys and buttons a phone holds are released when its session ends. On a
+  daemon stop, what a session had queued on its control stream reaches the
+  phone before the connection closes (written within 1 s, its receipt
+  acknowledged within 2 s more); a phone that does not acknowledge in time
+  is closed anyway, and a file transfer in flight on its own stream is cut
+  and resumes on the next session.
+- **The daily set** travels on the own wire: battery, find, the clipboard
+  both ways, the phone's notifications with their buttons and replies,
+  files both ways with resume, the phone's player on the desktop's card and
+  the desktop's players on the phone, contacts, SMS and calls.
+- **Commands, trackpad and keyboard.** Registered commands (name, program,
+  arguments) live in `commands.json` and reach the phone as ids and names;
+  a run is a bounded process group. The phone's trackpad and keyboard drive
+  one virtual `uinput` device through a rate governor that releases always
+  pass.
+- **The phone's files** are a FUSE directory at
+  `$XDG_RUNTIME_DIR/magnetita/<device-id>/`, served over the `storage`
+  capability from the folder the person shared; `mounted` and `mountPath`
+  in `Devices1` are unchanged. Listings and caches are bounded, and a stop
+  (`SIGTERM`) unmounts before the daemon exits.
+- **The mirror** is a window of the application: `Mirror1`'s `StartLink`
+  asks the phone for its screen, the daemon writes the raw HEVC or H.264 to
+  a FIFO in its runtime directory through a bounded queue that drops to the
+  next key frame when the window falls behind, and the app decodes it with
+  the suite's engine (libmpv). The window's input goes back over one bus
+  connection, a drag's moves merged. The daemon spawns no `mpv` and no
+  `ffmpeg`; the adb worker only turns the phone's screen off, and browses
+  for adb only while that is wanted.
+- **`org.celestina.Devices1`** is served on zbus's tokio backend; its
+  `Changed` and `Event` signals are coalesced on one thread. Siderita
+  consumes the mount, device and media contract, the Celestina shell the
+  phone and battery state; the application owns pairing, diagnostics and
+  settings.
+- **The application** orders actions on one owned bounded worker and
+  reflects only confirmed snapshots. Its device lists are parallel string
+  lists replaced whole on each snapshot (`MAG-22`'s row-level models are
+  not done).
 
 ## Planned implementation debt
 
-- Give the app's detached read/watch side explicit ownership, cancellation and
-  deterministic join without regressing burst coalescing (`MAG-M1`).
-- Keep packaging and resource diagnostics aligned with the canonical production
-  artifact workflow. Service activation remains deploy-only.
-- The own-protocol program (`MAG-P0` through `MAG-P7`, accepted in
-  [ADR 0001](docs/decisions/0001-own-protocol-and-android-app.md) on
-  2026-09-04) is planned and not started: a private QUIC protocol shared by
-  both ends through one Rust crate, a Kotlin/Compose Android application,
-  remote input, SMS, contacts and telephony, and the mirror as a capability
-  of the link. Its [five discussions](docs/discussions/README.md) are
-  concluded and applied; the `MAG-P0` spikes verify them. The KDE Connect
-  wire and the `adb`/`scrcpy` mirror are removed in `MAG-P7`. The drawing
-  tablet and presenter stay out by the author's choice.
+- Row-level models for the device and conversation lists, and position-only
+  media updates kept apart from `Changed` (`MAG-22`; needs a real Qt build).
+- The mirror window's link watcher polls `LinkState` every 400 ms over its
+  one connection; watching a signal needs the daemon to emit
+  `PropertiesChanged` for the link mirror (`MAG-13`).
+- A mirror touch-up can still be lost on the daemon side when the phone has
+  stopped reading and the session's outbox is full; the session then ends
+  at its send deadline, and the phone's own gesture timeout lifts the touch.
+- Capability negotiation, one owner for the protocol's rules on both ends,
+  the Messages page driven by signals, and `uniffi`'s bindgen made opt-in
+  with `--features bindgen` in the Android build script (`AUD-1-E` in the
+  suite plan). Until then the `bindgen` feature is on by default and only
+  `magnetita-peer` and `magnetitad`'s tests opt out (`RS-13`).
+- Magnetita Android's STATUS version line and README install step
+  (`MAG-24`, under `magnetita-android:`).
 
 ## Blockers
 
-No implementation blocker is recorded. The installed daemon carries
-everything committed through `3419cff`; `celestina/scripts/complete-production.sh`
-is still owed for the shell bundle's copy of `magnetita-core`, unchanged since
-`MAG-S1`. No other
-implementation blocker is recorded. The real phone/network is required only
-for the independent validation queue.
+No implementation blocker is recorded. The real phone and network are
+needed only for the author validation queue.
 
 ## Evidence boundary
 

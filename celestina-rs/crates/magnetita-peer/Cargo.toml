@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 magnetita-proto = { path = "../magnetita-proto" }
 magnetita-link = { path = "../magnetita-link" }
-magnetita-mobile = { path = "../magnetita-mobile" }
+magnetita-mobile = { path = "../magnetita-mobile", default-features = false }
 magnetita-net = { path = "../magnetita-net" }
 tokio = { workspace = true, features = ["rt-multi-thread", "time", "macros", "io-util"] }
 

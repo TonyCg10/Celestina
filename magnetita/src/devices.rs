@@ -492,9 +492,7 @@ pub fn mirror_start() -> Result<(), String> {
 
 /// Stop mirroring on whichever path is up, and stop reconnecting.
 pub fn mirror_stop() -> Result<(), String> {
-    let proxy = mirror_proxy()?;
-    let _: Result<(), zbus::Error> = proxy.call("StopLink", &());
-    proxy.call("Stop", &()).map_err(|error| error.to_string())
+    MirrorBus::open()?.stop()
 }
 
 /// Change one mirror option. The daemon refuses a value outside its contract,
@@ -513,43 +511,80 @@ pub fn mirror_pair(code: &str) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
-/// The link mirror as one line, `state|video|width height`, so a watcher
-/// compares it whole; empty against a daemon without the link mirror.
-pub fn mirror_link() -> Result<String, String> {
-    let proxy = mirror_proxy()?;
-    let state: String = proxy
-        .get_property("LinkState")
-        .map_err(|error| error.to_string())?;
-    let video: String = proxy.get_property("LinkVideo").unwrap_or_default();
-    let picture: String = proxy.get_property("LinkPicture").unwrap_or_default();
-    Ok(format!("{state}|{video}|{picture}"))
+/// One session-bus connection and its `Mirror1` proxy, kept by the thread
+/// that uses it: the mirror window's input worker and its link watcher each
+/// hold one for their life instead of connecting per touch or per poll.
+pub struct MirrorBus {
+    proxy: Proxy<'static>,
 }
 
-/// A touch on the mirrored phone: `action` 0 down, 1 move, 2 up, in the
-/// streamed picture's pixels.
-pub fn mirror_link_touch(action: u8, x: u16, y: u16) -> Result<(), String> {
-    mirror_proxy()?
-        .call("LinkTouch", &(action, x, y, 0u8))
-        .map_err(|error| error.to_string())
+impl MirrorBus {
+    pub fn open() -> Result<Self, String> {
+        Self::on(&Connection::session().map_err(|error| error.to_string())?)
+    }
+
+    /// The same, on a connection the caller already holds.
+    fn on(connection: &Connection) -> Result<Self, String> {
+        Ok(Self {
+            proxy: mirror_proxy_on(connection)?,
+        })
+    }
+
+    /// The link mirror as one line, `state|video|width height`, so a watcher
+    /// compares it whole; empty against a daemon without the link mirror.
+    pub fn link(&self) -> Result<String, String> {
+        let state: String = self
+            .proxy
+            .get_property("LinkState")
+            .map_err(|error| error.to_string())?;
+        let video: String = self.proxy.get_property("LinkVideo").unwrap_or_default();
+        let picture: String = self.proxy.get_property("LinkPicture").unwrap_or_default();
+        Ok(format!("{state}|{video}|{picture}"))
+    }
+
+    /// Stop mirroring on whichever path is up, and stop reconnecting.
+    pub fn stop(&self) -> Result<(), String> {
+        let _: Result<(), zbus::Error> = self.proxy.call("StopLink", &());
+        self.proxy
+            .call("Stop", &())
+            .map_err(|error| error.to_string())
+    }
 }
 
-/// An Android key on the mirrored phone.
-pub fn mirror_link_key(keycode: u16, pressed: bool) -> Result<(), String> {
-    mirror_proxy()?
-        .call("LinkKey", &(keycode, pressed))
-        .map_err(|error| error.to_string())
-}
-
-/// `Back`, `Home` or `Recents` on the mirrored phone.
-pub fn mirror_link_global(action: &str) -> Result<(), String> {
-    mirror_proxy()?
-        .call("LinkGlobal", &(action,))
-        .map_err(|error| error.to_string())
+impl crate::mirror_input::MirrorSink for MirrorBus {
+    /// A touch (`action` 0 down, 1 move, 2 up, in the streamed picture's
+    /// pixels), an Android key, `Back`/`Home`/`Recents`, or the stop.
+    fn send(&mut self, op: &crate::mirror_input::Outbound) -> Result<(), String> {
+        use crate::mirror_input::Outbound;
+        let sent: Result<(), zbus::Error> = match op {
+            Outbound::Touch { action, x, y } => {
+                self.proxy.call("LinkTouch", &(*action, *x, *y, 0u8))
+            }
+            Outbound::Key { keycode, pressed } => self.proxy.call("LinkKey", &(*keycode, *pressed)),
+            Outbound::Global(action) => self.proxy.call("LinkGlobal", &(action.as_str(),)),
+            Outbound::Stop => return self.stop(),
+        };
+        sent.map_err(|error| error.to_string())
+    }
 }
 
 fn mirror_proxy() -> Result<Proxy<'static>, String> {
     let connection = Connection::session().map_err(|error| error.to_string())?;
-    Proxy::new(&connection, SERVICE, MIRROR_OBJECT, MIRROR_INTERFACE)
+    mirror_proxy_on(&connection)
+}
+
+/// `Mirror1` on `connection`, reading every property from the daemon. A
+/// proxy caches properties by default and refreshes them only on
+/// `PropertiesChanged`, which the daemon does not emit for the link mirror:
+/// a proxy kept for a watcher's life would read its first `LinkState`
+/// forever.
+fn mirror_proxy_on(connection: &Connection) -> Result<Proxy<'static>, String> {
+    zbus::blocking::proxy::Builder::<Proxy<'static>>::new(connection)
+        .destination(SERVICE)
+        .and_then(|builder| builder.path(MIRROR_OBJECT))
+        .and_then(|builder| builder.interface(MIRROR_INTERFACE))
+        .map(|builder| builder.cache_properties(zbus::proxy::CacheProperties::No))
+        .and_then(|builder| builder.build())
         .map_err(|error| error.to_string())
 }
 
@@ -649,6 +684,83 @@ fn i32_field(dict: &HashMap<String, OwnedValue>, key: &str) -> i32 {
     dict.get(key)
         .and_then(|value| i32::try_from(value.clone()).ok())
         .unwrap_or(-1)
+}
+
+#[cfg(test)]
+mod mirror_bus_tests {
+    use super::{MirrorBus, MIRROR_OBJECT, SERVICE};
+    use std::io::{BufRead, BufReader};
+    use std::process::{Child, Command, Stdio};
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
+    use zbus::blocking::connection::Builder;
+
+    /// A stand-in `Mirror1` whose link state moves when the test says.
+    struct Mirror(Arc<AtomicU32>);
+
+    #[zbus::interface(name = "org.celestina.Mirror1")]
+    impl Mirror {
+        #[zbus(property)]
+        fn link_state(&self) -> String {
+            ["idle", "starting", "streaming"][self.0.load(Ordering::SeqCst) as usize % 3].into()
+        }
+        #[zbus(property)]
+        fn link_video(&self) -> String {
+            String::new()
+        }
+        #[zbus(property)]
+        fn link_picture(&self) -> String {
+            String::new()
+        }
+    }
+
+    /// A private bus of the test's own, killed when dropped.
+    struct Bus(Child, String);
+
+    impl Drop for Bus {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    fn private_bus() -> Option<Bus> {
+        let mut child = Command::new("dbus-daemon")
+            .args(["--session", "--nofork", "--print-address=1"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()?;
+        let mut address = String::new();
+        BufReader::new(child.stdout.take()?)
+            .read_line(&mut address)
+            .ok()?;
+        Some(Bus(child, address.trim().to_owned()))
+    }
+
+    /// The watcher keeps one bus for its life: every read must be the
+    /// daemon's current state, not the first one it saw.
+    #[test]
+    fn a_long_lived_mirror_bus_reads_the_current_link_state() {
+        let bus = private_bus()
+            .expect("this test starts a private bus with dbus-daemon, which must be on PATH");
+        let state = Arc::new(AtomicU32::new(0));
+        let _daemon = Builder::address(bus.1.as_str())
+            .unwrap()
+            .name(SERVICE)
+            .unwrap()
+            .serve_at(MIRROR_OBJECT, Mirror(Arc::clone(&state)))
+            .unwrap()
+            .build()
+            .unwrap();
+        let client = Builder::address(bus.1.as_str()).unwrap().build().unwrap();
+        let watcher = MirrorBus::on(&client).unwrap();
+        assert_eq!(watcher.link().unwrap(), "idle||");
+        state.store(1, Ordering::SeqCst);
+        assert_eq!(watcher.link().unwrap(), "starting||");
+        state.store(2, Ordering::SeqCst);
+        assert_eq!(watcher.link().unwrap(), "streaming||");
+    }
 }
 
 #[cfg(test)]

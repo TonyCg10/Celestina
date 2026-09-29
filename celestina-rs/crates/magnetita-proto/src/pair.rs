@@ -29,6 +29,7 @@ use rand_core::{CryptoRng, RngCore};
 use spake2::{Ed25519Group, Identity, Password, Spake2};
 
 use crate::bound::{self, MAX_IDENT};
+use crate::codec::wrote;
 use crate::error::DecodeError;
 
 /// SHA-256 of a device's certificate: what the trust store remembers.
@@ -137,7 +138,7 @@ fn unhex_32(s: &str, what: &'static str) -> Result<[u8; 32], PairError> {
 /// Every pairing message is `{0: bytes}`; this is that one shape.
 fn encode_single(bytes: &[u8]) -> Vec<u8> {
     let mut e = Encoder::new(Vec::new());
-    e.map(1).unwrap().u32(0).unwrap().bytes(bytes).unwrap();
+    wrote(wrote(wrote(e.map(1)).u32(0)).bytes(bytes));
     e.into_writer()
 }
 

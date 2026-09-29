@@ -1,12 +1,12 @@
 //! The peer trust store — who we have paired with, remembered by certificate.
 //!
-//! KDE Connect's trust is first-use, not authority: the first time we pair with
-//! a phone we write down its certificate's [`fingerprint`] under its device id,
-//! and from then on a link claiming to be that phone is believed only if the
-//! certificate still matches. A *different* certificate for a known id is the
-//! one thing we refuse outright — it is either the phone reinstalled (and the
-//! user must deliberately re-pair) or someone standing in the middle, and we do
-//! not guess which.
+//! Trust is a pin, not an authority: when a phone pairs by QR we write down its
+//! certificate's [`fingerprint`] under its device id, and from then on a link
+//! claiming to be that phone is believed only if the certificate still
+//! matches. A *different* certificate for a known id is the one thing we
+//! refuse outright — it is either the phone reinstalled (and the user must
+//! deliberately re-pair) or someone standing in the middle, and we do not
+//! guess which.
 //!
 //! So the store answers one question — [`TrustStore::check`] — with three
 //! honest outcomes: known-and-matching, never-seen, or known-but-changed. It is

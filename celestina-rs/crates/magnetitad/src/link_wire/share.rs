@@ -22,8 +22,8 @@ use magnetita_proto::capability;
 use magnetita_proto::daily::share::{ShareAccept, ShareDone, ShareOffer, ShareReject};
 use magnetita_proto::Envelope;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use tokio::sync::mpsc::UnboundedSender;
 
+use super::writer::Outbox;
 use crate::incoming_file;
 use crate::lock::LockOk;
 use crate::runtime::log;
@@ -112,7 +112,7 @@ pub(crate) struct SessionShare {
     transfers: Transfers,
     store: Arc<ShareStore>,
     download_dir: PathBuf,
-    outbox: UnboundedSender<Envelope>,
+    outbox: Outbox,
     next_transfer: AtomicU32,
     outgoing: Mutex<Waiting<Outgoing>>,
     incoming: Mutex<Waiting<Incoming>>,
@@ -126,7 +126,7 @@ impl SessionShare {
         transfers: Transfers,
         store: Arc<ShareStore>,
         download_dir: PathBuf,
-        outbox: UnboundedSender<Envelope>,
+        outbox: Outbox,
     ) -> Arc<Self> {
         Arc::new(Self {
             daemon,

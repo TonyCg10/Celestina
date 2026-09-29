@@ -39,9 +39,10 @@ use rustix::process::Pid;
 
 use crate::subprocess;
 
-/// How often the LAN is asked what is advertised. Fast enough that toggling
-/// Wireless debugging feels immediate, slow enough to be nothing next to the
-/// `playerctl` polling this daemon already does.
+/// How often the LAN is asked what is advertised while the phone's screen is
+/// wanted off: fast enough that toggling Wireless debugging feels immediate.
+/// With no screen off wanted the worker does not ask at all; adb serves
+/// nothing else since the adb picture retired.
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Budget for one `adb` call. `adb connect` against an unreachable host is the
@@ -182,6 +183,10 @@ struct Session {
     /// The control-only scrcpy keeping the phone's screen off for the own
     /// link's mirror; exits and restores the screen when killed.
     screen_off: Option<(Child, Pid)>,
+    /// The own link's mirror wants the screen off: the only time the LAN is
+    /// browsed for the phone's adb, so its pairing code can be entered and
+    /// its endpoint found.
+    screen_off_wanted: bool,
     seen_connect: Option<Advertisement>,
     seen_pairing: Option<Advertisement>,
     options: MirrorOptions,
@@ -207,6 +212,7 @@ impl Session {
             published,
             stopping,
             screen_off: None,
+            screen_off_wanted: false,
             seen_connect: None,
             seen_pairing: None,
             options,
@@ -234,9 +240,16 @@ impl Session {
             if self.stopping.load(Ordering::Acquire) {
                 break;
             }
-            self.poll_discovery();
+            if self.wants_discovery() {
+                self.poll_discovery();
+            }
         }
         self.kill_screen_off();
+    }
+
+    /// Whether anything needs the phone's adb advertisements now.
+    fn wants_discovery(&self) -> bool {
+        self.screen_off_wanted || self.screen_off.is_some()
     }
 
     /// The phone's screen off while the own link mirrors it, through a
@@ -244,6 +257,7 @@ impl Session {
     /// else the advertised one, is dialled first. Back on: that scrcpy is
     /// killed, and it restores the screen as it leaves.
     fn screen_off(&mut self, on: bool, host: Option<std::net::IpAddr>) {
+        self.screen_off_wanted = on;
         if !on {
             self.kill_screen_off();
             return;
@@ -251,6 +265,8 @@ impl Session {
         if self.screen_off.is_some() {
             return;
         }
+        // Nothing was browsed while nothing wanted the screen off.
+        self.poll_discovery();
         if !tool_available("scrcpy") || !tool_available("adb") {
             log("mirror", "screen off: scrcpy or adb is not installed");
             return;
@@ -314,7 +330,11 @@ impl Session {
 
     fn command(&mut self, command: MirrorCommand) {
         let event = match command {
-            MirrorCommand::Pair(code) => MirrorEvent::CodeEntered { code },
+            MirrorCommand::Pair(code) => {
+                // The pairing advertisement as it is now, not as last browsed.
+                self.poll_discovery();
+                MirrorEvent::CodeEntered { code }
+            }
             MirrorCommand::SetOption(key, value) => {
                 self.set_option(&key, &value);
                 return;
@@ -763,10 +783,10 @@ impl MirrorInterface {
     /// Start mirroring, and keep mirroring across the phone's port changes.
     /// Answers immediately: the work is the worker's, and the app reflects only
     /// what [`State`](Self::state) then confirms.
-    fn start(&self) -> zbus::fdo::Result<()> {
+    async fn start(&self) -> zbus::fdo::Result<()> {
         // Since MAG-P7-D the one mirror is the link's; the older name stays
         // for the consumers that call it.
-        self.start_link()
+        self.start_link().await
     }
 
     /// Stop mirroring and stop reconnecting. Never touches a scrcpy this daemon
@@ -815,7 +835,7 @@ impl MirrorInterface {
     /// Start the mirror over the paired phone's own link, with the same
     /// options mapped onto the wire. The window opens when the phone
     /// answers; `LinkState` says where it stands.
-    fn start_link(&self) -> zbus::fdo::Result<()> {
+    async fn start_link(&self) -> zbus::fdo::Result<()> {
         let state = crate::link_wire::mirror::own().state();
         crate::runtime::log(
             "mirror",
@@ -838,7 +858,11 @@ impl MirrorInterface {
             .request_start(crate::link_wire::mirror::start_from_options(&options));
         // The window is the application's: a start from the shell's plugin,
         // with no application running, launches it in its mirror-only mode.
-        ensure_mirror_window();
+        // It may ask systemd over the bus, which a blocking zbus call must
+        // never do on the bus's own runtime.
+        if let Err(e) = tokio::task::spawn_blocking(ensure_mirror_window).await {
+            crate::runtime::log("mirror", &format!("window: {e}"));
+        }
         Ok(())
     }
 
@@ -980,6 +1004,28 @@ mod tests {
         }
     }
 
+    /// MAG-11: the worker browses for the phone's adb only while the
+    /// link's mirror wants the screen off.
+    #[test]
+    fn the_lan_is_browsed_only_while_the_screen_off_is_wanted() {
+        let dir = std::env::temp_dir().join(format!("magnetita-adb-idle-{}", std::process::id()));
+        let mut session = Session::new(
+            Arc::new(Mutex::new(snapshot_of(
+                &MirrorLink::new(),
+                &MirrorOptions::default(),
+            ))),
+            Arc::new(AtomicBool::new(false)),
+            MirrorOptions::default(),
+            dir.join("mirror.json"),
+            dir.join("mirror-endpoint"),
+        );
+        assert!(!session.wants_discovery(), "an idle worker browses nothing");
+        session.screen_off_wanted = true;
+        assert!(session.wants_discovery());
+        session.screen_off(false, None);
+        assert!(!session.wants_discovery());
+    }
+
     #[test]
     fn a_fresh_link_reports_idle_with_no_reason() {
         let snapshot = snapshot_of(&MirrorLink::new(), &MirrorOptions::default());
@@ -1004,7 +1050,10 @@ mod tests {
             PathBuf::from("/nonexistent/mirror.json"),
             PathBuf::from("/nonexistent/mirror-endpoint"),
         );
-        assert_eq!(mirror.snapshot().state, "idle");
+        // Without adb or scrcpy the worker publishes the missing tool as
+        // soon as it runs, which races this read; either is a started worker.
+        let state = mirror.snapshot().state;
+        assert!(matches!(state, "idle" | "failed"), "started as {state}");
         worker.stop();
         // A second stop is a no-op, so Drop after an explicit stop is safe.
         worker.stop();

@@ -1,8 +1,8 @@
 //! The pins, and the one way a certificate becomes a fingerprint here.
 //!
-//! The store itself is `magnetita-net`'s [`TrustStore`]: the same file, the
-//! same colon-separated hex the KDE Connect wire pins, so a phone paired on
-//! either wire is one entry. This module adds what the link needs on top:
+//! The store itself is `magnetita-net`'s [`TrustStore`], whose pins are
+//! colon-separated hex, the form the store has always kept, so pins made
+//! before the own wire still match. This module adds what the link needs on top:
 //! a lookup by fingerprint alone, because on an incoming QUIC connection the
 //! certificate is known before the hello names a device.
 
@@ -48,7 +48,7 @@ mod tests {
     use magnetita_net::cert::fingerprint_der;
 
     #[test]
-    fn text_form_matches_the_kde_connect_wire() {
+    fn text_form_is_the_stores_colon_separated_hex() {
         let fp = [0xab; 32];
         let text = fingerprint_text(&fp);
         assert_eq!(text.len(), 95);

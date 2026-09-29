@@ -11,11 +11,11 @@ license = "GPL-3.0-or-later"
 celestina-core = { path = "../celestina-core" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-# The KDE Connect link is TLS with a self-signed, pinned peer cert (TOFU), not a
-# CA chain — rustls with the ring provider gives us that with a custom verifier
-# and no C toolchain. No async runtime: CP0 speaks to one phone over blocking
-# std::net sockets in a thread, so tokio is weight we have not earned yet.
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# The device certificate and key in rustls's types: the own link is QUIC with
+# TLS 1.3 only, a self-signed certificate pinned by fingerprint rather than a
+# CA chain, on the ring provider with no C toolchain. No TLS 1.2 and no log
+# facade: nothing here speaks TLS 1.2 or installs a logger.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 rustls-pemfile = "2"
 # One self-signed EC cert, generated in-process on first run and then pinned.
 # Pinned to the ring backend so it shares rustls's provider and pulls no C

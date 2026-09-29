@@ -12,8 +12,8 @@ use std::net::{IpAddr, SocketAddr};
 /// The service both ends advertise while the link is listening.
 pub const SERVICE_TYPE: &str = "_magnetita._udp";
 
-/// The port the daemon listens on: inside the range the author's firewall
-/// already admits for KDE Connect, and one no KDE Connect socket uses.
+/// The port the daemon listens on: inside the 1714–1764 range the author's
+/// firewall already admits, opened years ago for KDE Connect.
 pub const PORT: u16 = 1760;
 
 /// One resolved (`=`) line of `avahi-browse -rpt`, before any validation of

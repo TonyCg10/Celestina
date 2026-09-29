@@ -1,18 +1,11 @@
-# Magnetita's CP0 daemon as a systemd *user* service — keeps the phone linked
-# across logins, the way Valent's daemon did (which this replaces).
+# magnetitad, Magnetita's phone link, as a systemd *user* service: it keeps
+# the suite's own QUIC wire open on UDP 1760 for the phone's application,
+# serves org.celestina.Devices1 and org.celestina.Mirror1, and mounts the
+# phone's shared folder under $XDG_RUNTIME_DIR/magnetita/.
 #
-# Install:
-#   cargo build --release -p magnetitad        # in celestina-rs/
-#   install -m755 celestina-rs/target/release/magnetitad ~/.local/bin/magnetitad
-#   install -m644 magnetita/magnetitad.service ~/.config/systemd/user/magnetitad.service
-#   systemctl --user daemon-reload
-#   systemctl --user enable --now magnetitad.service
-#
-# Watch its connection story:
+# Installed by scripts/deploy-production.sh (never enabled by it); ExecStart
+# is rewritten there to the deployed binary. Watch it with:
 #   journalctl --user -u magnetitad -f
-#
-# It binds UDP+TCP 1716, so Valent/kdeconnectd must be stopped and disabled:
-#   systemctl --user disable --now valent-daemon.service
 
 [Unit]
 Description=Magnetita, the Celestina phone link
@@ -21,6 +14,9 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/magnetitad
+# SIGTERM makes the daemon close its sessions and unmount the phone before it
+# exits; this only catches a daemon that was killed instead.
+ExecStopPost=-/bin/sh -c 'for m in %t/magnetita/*/; do [ -d "$$m" ] && /usr/bin/fusermount3 -uz "$$m" 2>/dev/null; done; true'
 Restart=on-failure
 RestartSec=5
 SyslogIdentifier=magnetitad

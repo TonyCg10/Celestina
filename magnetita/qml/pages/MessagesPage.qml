@@ -61,7 +61,7 @@ Item {
                 width: parent.width
                 label: index < root.messages.conversationLabels.length ? root.messages.conversationLabels[index] : modelData
                 snippet: index < root.messages.conversationSnippets.length ? root.messages.conversationSnippets[index] : ""
-                unread: index < root.messages.conversationUnread.length ? root.messages.conversationUnread[index] : "0"
+                unread: index < root.messages.conversationUnread.length ? (parseInt(root.messages.conversationUnread[index], 10) || 0) : 0
                 onOpenRequested: root.messages.openConversation(modelData, label)
             }
         }

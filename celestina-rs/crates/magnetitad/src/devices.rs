@@ -44,6 +44,8 @@ const COMMAND_QUEUE_CAPACITY: usize = 32;
 /// `Device::pump` wakes once per second, so two seconds covers one in-flight
 /// read plus command processing without letting a D-Bus call hang forever.
 const FORGET_ACK_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long a call this daemon makes on its bus connection may wait.
+const OUTGOING_CALL_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// One connected device, as the contract exposes it.
 #[derive(Clone, Debug)]
@@ -479,6 +481,35 @@ impl Devices {
         })
     }
 
+    /// What a revocation needs, owned, so it can wait off the bus's executor.
+    fn revoker(&self) -> Revoker {
+        Revoker {
+            registry: Arc::clone(&self.registry),
+            trust: Arc::clone(&self.trust),
+            revocations: Arc::clone(&self.revocations),
+        }
+    }
+
+    /// `Forget` and `Unpair`: the trust write and the wait for the live
+    /// session's acknowledgement (up to [`FORGET_ACK_TIMEOUT`]) run on a
+    /// blocking thread, so every other `Devices1` and `Mirror1` call keeps
+    /// being served meanwhile.
+    async fn revoke(&self, device_id: String) -> zbus::fdo::Result<()> {
+        let revoker = self.revoker();
+        tokio::task::spawn_blocking(move || revoker.revoke(&device_id))
+            .await
+            .map_err(|e| zbus::fdo::Error::Failed(format!("the revocation did not finish: {e}")))?
+    }
+}
+
+/// The registry, the pins and the barrier a revocation crosses.
+struct Revoker {
+    registry: Registry,
+    trust: Arc<Mutex<TrustStore>>,
+    revocations: Arc<Revocations>,
+}
+
+impl Revoker {
     /// Whether a device id is currently connected (has a live entry).
     fn is_connected(&self, device_id: &str) -> bool {
         self.registry
@@ -558,8 +589,8 @@ impl Devices {
     }
 
     /// Drop the pairing with the connected device (the app's "Desvincular").
-    fn unpair(&self, device_id: String) -> zbus::fdo::Result<()> {
-        self.revoke(&device_id)
+    async fn unpair(&self, device_id: String) -> zbus::fdo::Result<()> {
+        self.revoke(device_id).await
     }
 
     /// Ring the connected device (the app's "Sonar" — find-my-phone).
@@ -738,7 +769,7 @@ impl Devices {
         peers
             .into_iter()
             .map(|peer| {
-                let connected = self.is_connected(&peer.device_id);
+                let connected = self.revoker().is_connected(&peer.device_id);
                 let fields = [
                     ("id", Value::from(peer.device_id)),
                     ("name", Value::from(peer.device_name)),
@@ -759,8 +790,8 @@ impl Devices {
     }
 
     /// Forget durably and wait for any live session to cross the same barrier.
-    fn forget(&self, device_id: String) -> zbus::fdo::Result<()> {
-        self.revoke(&device_id)
+    async fn forget(&self, device_id: String) -> zbus::fdo::Result<()> {
+        self.revoke(device_id).await
     }
 
     /// Arms the own wire's pairing window and returns the text the QR must
@@ -802,6 +833,11 @@ pub(crate) fn serve(
     mirror: crate::mirror::Mirror,
 ) -> zbus::Result<zbus::blocking::Connection> {
     zbus::blocking::connection::Builder::session()?
+        // The daemon's own calls on this connection are the notification
+        // server's (post, close, capabilities), made from the desktop
+        // worker; a server that never answers must not hold that worker,
+        // and with it the wire's stop: zbus sets no timeout of its own.
+        .method_timeout(OUTGOING_CALL_TIMEOUT)
         .name(BUS_NAME)?
         .serve_at(
             crate::mirror::OBJECT_PATH,
@@ -824,6 +860,47 @@ mod tests {
     use std::os::unix::ffi::OsStrExt;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
+
+    /// MAG-15: a `Forget` waiting for a session's acknowledgement does not
+    /// hold the executor that serves every other call.
+    #[test]
+    fn forget_waits_without_holding_the_executor() {
+        let registry = registry();
+        let trust = Arc::new(Mutex::new(magnetita_net::TrustStore::in_memory()));
+        let devices = super::Devices::new(
+            Arc::clone(&registry),
+            Arc::new(Mutex::new(Default::default())),
+            Arc::new(Mutex::new(Default::default())),
+            trust,
+            Arc::new(crate::revocation::Revocations::new()),
+            Arc::new(Mutex::new(crate::settings::Settings::default())),
+            std::env::temp_dir().join("magnetita-forget-settings.json"),
+        );
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let started = std::time::Instant::now();
+        let (forgot, other_call) = runtime.block_on(async {
+            tokio::join!(
+                async {
+                    let result = devices.forget("phone".to_owned()).await;
+                    (result, started.elapsed())
+                },
+                async {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    started.elapsed()
+                }
+            )
+        });
+        // Nobody acknowledges: the session stays connected in this test.
+        assert!(forgot.0.is_err());
+        assert!(forgot.1 >= super::FORGET_ACK_TIMEOUT);
+        assert!(
+            other_call < std::time::Duration::from_secs(1),
+            "another call waited {other_call:?} behind the Forget"
+        );
+    }
 
     fn registry() -> Registry {
         let entry = DeviceEntry::connected(

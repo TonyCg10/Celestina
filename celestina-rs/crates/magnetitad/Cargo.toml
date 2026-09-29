@@ -13,16 +13,20 @@ path = "src/main.rs"
 magnetita-core = { path = "../magnetita-core" }
 magnetita-net = { path = "../magnetita-net" }
 # The own wire (ADR 0001): the protocol and the QUIC link, on one owned
-# runtime thread next to the KDE Connect threads.
+# runtime thread.
 magnetita-proto = { path = "../magnetita-proto" }
 magnetita-link = { path = "../magnetita-link" }
-tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync", "macros", "fs", "io-util"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "sync", "macros", "fs", "io-util", "signal"] }
 rand_core = { workspace = true, features = ["getrandom"] }
 celestina-core.workspace = true
 # The device contract (org.celestina.Devices1) on the session bus — the same
 # zbus the suite's portal backend uses. Its blocking API keeps the daemon
-# thread-based; zbus runs its own small executor for the served interface.
-zbus = "5"
+# thread-based. On tokio, the one async runtime this daemon already carries,
+# instead of zbus's default async-io stack (a second executor, RS-5): zbus
+# then serves the interface from its own tokio runtime, so a blocking zbus
+# call must never run on a tokio thread; signals go out through `signals`,
+# and the interface's waits are async.
+zbus = { version = "5", default-features = false, features = ["tokio", "blocking-api"] }
 # Plugin settings persist as JSON in the config dir (settings.rs).
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -36,7 +40,7 @@ rustix = { version = "1.1.4", features = ["fs", "pipe", "process"] }
 
 [dev-dependencies]
 # The phone's directory server, so the loopback tests browse a real tree.
-magnetita-mobile = { path = "../magnetita-mobile" }
+magnetita-mobile = { path = "../magnetita-mobile", default-features = false }
 
 [lints]
 workspace = true

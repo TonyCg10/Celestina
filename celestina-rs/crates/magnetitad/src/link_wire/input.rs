@@ -6,7 +6,8 @@
 //!
 //! A sink trait keeps the loopback tests off the host's input: they record.
 
-use std::sync::Mutex;
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use magnetita_proto::control::input::{Button, Key, PointerButton, PointerMove, Scroll, Text};
@@ -56,35 +57,124 @@ impl Governor {
     }
 }
 
-/// Dispatches one decoded input envelope to the sink.
-pub(crate) fn apply(sink: &dyn InputSink, kind: u16, body: &[u8]) -> Result<(), String> {
-    match kind {
-        PointerMove::KIND => {
-            let m = PointerMove::decode(body).map_err(|e| e.to_string())?;
-            sink.pointer_move(i32::from(m.dx), i32::from(m.dy));
-        }
+/// One input envelope, decoded and checked at this boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Event {
+    Move(PointerMove),
+    Button(PointerButton),
+    Scroll(Scroll),
+    Key(Key),
+    Text(Text),
+}
+
+fn decode(kind: u16, body: &[u8]) -> Result<Event, String> {
+    Ok(match kind {
+        PointerMove::KIND => Event::Move(PointerMove::decode(body).map_err(|e| e.to_string())?),
         PointerButton::KIND => {
-            let b = PointerButton::decode(body).map_err(|e| e.to_string())?;
-            sink.pointer_button(b.button, b.pressed);
+            Event::Button(PointerButton::decode(body).map_err(|e| e.to_string())?)
         }
-        Scroll::KIND => {
-            let s = Scroll::decode(body).map_err(|e| e.to_string())?;
-            sink.scroll(i32::from(s.dx), i32::from(s.dy));
-        }
+        Scroll::KIND => Event::Scroll(Scroll::decode(body).map_err(|e| e.to_string())?),
         Key::KIND => {
             let k = Key::decode(body).map_err(|e| e.to_string())?;
             if k.code == 0 || k.code > 248 {
                 return Err("key code out of range".into());
             }
-            sink.key(k.code, k.pressed);
+            Event::Key(k)
         }
-        Text::KIND => {
-            let t = Text::decode(body).map_err(|e| e.to_string())?;
-            sink.text(&t.text);
-        }
+        Text::KIND => Event::Text(Text::decode(body).map_err(|e| e.to_string())?),
         other => return Err(format!("unknown input kind {other}")),
+    })
+}
+
+fn dispatch(sink: &dyn InputSink, event: &Event) {
+    match event {
+        Event::Move(m) => sink.pointer_move(i32::from(m.dx), i32::from(m.dy)),
+        Event::Button(b) => sink.pointer_button(b.button, b.pressed),
+        Event::Scroll(s) => sink.scroll(i32::from(s.dx), i32::from(s.dy)),
+        Event::Key(k) => sink.key(k.code, k.pressed),
+        Event::Text(t) => sink.text(&t.text),
     }
-    Ok(())
+}
+
+/// What one session holds down on the shared virtual device.
+#[derive(Default)]
+struct Held {
+    keys: BTreeSet<u16>,
+    buttons: Vec<Button>,
+}
+
+/// One session's input: the governor that bounds it and what it holds down.
+///
+/// The virtual device is the daemon's and outlives every session, so a key
+/// or button a session pressed stays pressed on the author's desktop until
+/// something releases it. This tracks every press and release; a release of
+/// something held always passes, past the governor and the input setting,
+/// because dropping it is what strands a key. Dropping the session's input
+/// releases whatever is still held: a phone that leaves mid-drag or mid-Ctrl,
+/// or a session superseded or forgotten, strands nothing.
+pub(crate) struct SessionInput {
+    sink: Arc<dyn InputSink>,
+    governor: Governor,
+    held: Mutex<Held>,
+}
+
+impl SessionInput {
+    pub(crate) fn new(sink: Arc<dyn InputSink>) -> Self {
+        Self {
+            sink,
+            governor: Governor::default(),
+            held: Mutex::new(Held::default()),
+        }
+    }
+
+    /// Decodes one envelope and hands it to the sink. `enabled` is the input
+    /// setting: with it off, or past the governor, only releases pass.
+    pub(crate) fn apply(&self, enabled: bool, kind: u16, body: &[u8]) -> Result<(), String> {
+        let event = decode(kind, body)?;
+        let mut held = self.held.lock_ok();
+        let releases_held = match &event {
+            Event::Key(k) => !k.pressed && held.keys.contains(&k.code),
+            Event::Button(b) => !b.pressed && held.buttons.contains(&b.button),
+            _ => false,
+        };
+        if !releases_held && (!enabled || !self.governor.admit()) {
+            return Ok(());
+        }
+        match &event {
+            Event::Key(k) if k.pressed => {
+                held.keys.insert(k.code);
+            }
+            Event::Key(k) => {
+                held.keys.remove(&k.code);
+            }
+            Event::Button(b) if b.pressed => {
+                if !held.buttons.contains(&b.button) {
+                    held.buttons.push(b.button);
+                }
+            }
+            Event::Button(b) => held.buttons.retain(|held| *held != b.button),
+            _ => {}
+        }
+        dispatch(self.sink.as_ref(), &event);
+        Ok(())
+    }
+
+    /// Releases every key and button this session still holds.
+    pub(crate) fn release_all(&self) {
+        let held = std::mem::take(&mut *self.held.lock_ok());
+        for button in held.buttons {
+            self.sink.pointer_button(button, false);
+        }
+        for code in held.keys {
+            self.sink.key(code, false);
+        }
+    }
+}
+
+impl Drop for SessionInput {
+    fn drop(&mut self) {
+        self.release_all();
+    }
 }
 
 // The one raw evdev code the table needs: left shift.
@@ -363,37 +453,63 @@ mod tests {
         assert_eq!(key_for_char('\u{e9}'), None);
     }
 
+    fn key(code: u16, pressed: bool) -> Vec<u8> {
+        Key { code, pressed }.encode()
+    }
+
+    fn button(button: Button, pressed: bool) -> Vec<u8> {
+        PointerButton { button, pressed }.encode()
+    }
+
     #[test]
     fn events_are_dispatched_by_kind_and_bad_codes_are_refused() {
-        let sink = testing::Recorder::default();
-        apply(
-            &sink,
-            PointerMove::KIND,
-            &PointerMove { dx: 3, dy: -2 }.encode(),
-        )
-        .unwrap();
-        apply(
-            &sink,
-            Key::KIND,
-            &Key {
-                code: 30,
-                pressed: true,
-            }
-            .encode(),
-        )
-        .unwrap();
-        assert!(apply(
-            &sink,
-            Key::KIND,
-            &Key {
-                code: 900,
-                pressed: true
-            }
-            .encode()
-        )
-        .is_err());
-        assert!(apply(&sink, 99, &[]).is_err());
-        assert_eq!(sink.0.lock_ok().as_slice(), ["move 3 -2", "key 30 true"]);
+        let sink = Arc::new(testing::Recorder::default());
+        let input = SessionInput::new(Arc::clone(&sink) as Arc<dyn InputSink>);
+        input
+            .apply(
+                true,
+                PointerMove::KIND,
+                &PointerMove { dx: 3, dy: -2 }.encode(),
+            )
+            .unwrap();
+        input.apply(true, Key::KIND, &key(30, true)).unwrap();
+        input.apply(true, Key::KIND, &key(30, false)).unwrap();
+        assert!(input.apply(true, Key::KIND, &key(900, true)).is_err());
+        assert!(input.apply(true, 99, &[]).is_err());
+        drop(input);
+        assert_eq!(
+            sink.0.lock_ok().as_slice(),
+            ["move 3 -2", "key 30 true", "key 30 false"]
+        );
+    }
+
+    /// MAG-6: a session that ends while a key and a button are held releases
+    /// both, and a release is never dropped by the governor or the setting.
+    #[test]
+    fn what_a_session_holds_is_released_when_it_ends() {
+        let sink = Arc::new(testing::Recorder::default());
+        let input = SessionInput::new(Arc::clone(&sink) as Arc<dyn InputSink>);
+        input.apply(true, Key::KIND, &key(29, true)).unwrap();
+        input
+            .apply(true, PointerButton::KIND, &button(Button::Left, true))
+            .unwrap();
+        input.apply(true, Key::KIND, &key(30, true)).unwrap();
+        // A burst uses up the second; the setting is then switched off.
+        while input.governor.admit() {}
+        input.apply(false, Key::KIND, &key(30, false)).unwrap();
+        input.apply(false, Key::KIND, &key(31, true)).unwrap();
+        drop(input);
+        assert_eq!(
+            sink.0.lock_ok().as_slice(),
+            [
+                "key 29 true",
+                "button Left true",
+                "key 30 true",
+                "key 30 false",
+                "button Left false",
+                "key 29 false",
+            ]
+        );
     }
 
     #[test]

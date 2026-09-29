@@ -16,9 +16,11 @@ or grant authority.
 
 ## Local boundary
 
-- `magnetita/` is a thin Qt/QML client plus packaging. Domain, protocol,
-  transport, and service belong to `magnetita-core`, `magnetita-net`, and
-  `magnetitad` in `celestina-rs`.
+- `magnetita/` is a thin Qt/QML client plus packaging. In `celestina-rs`, the
+  wire belongs to `magnetita-proto`, the QUIC link to `magnetita-link`, the
+  phone's side to `magnetita-mobile` (UniFFI for the Android app, with
+  `magnetita-peer` as its shell stand-in), what both ends share to
+  `magnetita-core` and `magnetita-net`, and the service to `magnetitad`.
 - The UI requests actions and reflects only snapshots confirmed by
   `org.celestina.Devices1`; it does not maintain optimistic parallel truth.
 - Blocking D-Bus never runs on the Qt thread. An owned bounded worker orders
@@ -26,9 +28,13 @@ or grant authority.
   touched lifecycle gains deterministic shutdown.
 - Evolve `org.celestina.Devices1` compatibly: preserve methods and extend
   `a{sv}` additively.
-- Preserve measured KDE Connect invariants: the phone drives pairing; the side
-  initiating the payload connection is the TLS server; payloads use 1739–1764;
-  phone-to-PC clipboard is manual because of the observed Android restriction.
+- Preserve the own wire's measured invariants: the phone dials and drives
+  pairing by QR; a session runs under the id its pinned certificate gives;
+  the link listens on UDP 1760 with 1200-byte datagrams and a 10 s
+  keep-alive; phone-to-PC clipboard is manual because of the observed
+  Android restriction. A session's loop never waits on the phone or on a
+  desktop adapter: sends go through its writer, blocking adapters through
+  their own thread.
 - Treat network input, names, certificates, sizes, and payloads as hostile.
   Pairing needs explicit acceptance; `Forget` is a durable barrier and later
   results from the revoked source cannot publish.

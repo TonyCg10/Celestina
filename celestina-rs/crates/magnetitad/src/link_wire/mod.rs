@@ -1,15 +1,23 @@
 //! The own protocol inside the daemon: one runtime thread that listens,
-//! dials, pairs and runs sessions, publishing each phone into the same
-//! registry the KDE Connect links publish into.
+//! pairs and runs sessions, publishing each phone into the registry
+//! `org.celestina.Devices1` serves. The phone always dials: it finds the
+//! desktop by the QR's address or by this daemon's mDNS advertisement, and
+//! the desktop never browses for phones.
 //!
 //! The daemon stays thread-based; QUIC needs an async runtime, so this module
 //! owns exactly one, on one thread, and everything the link does happens
-//! there. What crosses to the rest of the daemon is what already crosses for
-//! a KDE Connect link: a [`DeviceEntry`] in the registry, a command channel,
-//! a [`SessionRegistration`] whose drop cleans up, and the revocation
-//! barrier — `Forget` on `org.celestina.Devices1` forgets the pin in the
-//! shared trust store, and this thread closes the session and acknowledges
-//! the generation, exactly as the KDE Connect thread does.
+//! there. What crosses to the rest of the daemon is a [`DeviceEntry`] in the
+//! registry, a command channel, a [`SessionRegistration`] whose drop cleans
+//! up, and the revocation barrier — `Forget` on `org.celestina.Devices1`
+//! forgets the pin in the shared trust store, and the session's tick closes
+//! the session and acknowledges the generation.
+//!
+//! Nothing a session's loop does waits on the phone or on the desktop: its
+//! sends are queued for the control stream's one writer, which closes the
+//! connection when a write outlives its deadline (`writer`), and the
+//! adapters that block (the clipboard's `wl-copy`, notification calls) run
+//! on their own thread (`desktop_worker`). So the tick that enforces Forget,
+//! stop and supersede always runs.
 //!
 //! Pairing is armed from the app: [`PairingArm::arm`] draws a one-time
 //! secret and returns the QR text; for two minutes an unpinned phone may
@@ -32,7 +40,7 @@ use std::time::{Duration, Instant};
 use magnetita_link::endpoint::Expect;
 use magnetita_link::trust::fingerprint_text;
 use magnetita_link::{
-    Backoff, DeviceCert, Endpoint, EndpointConfig, LinkError, Session, TrustStore, TrustedPeer,
+    DeviceCert, Endpoint, EndpointConfig, LinkError, Session, TrustStore, TrustedPeer,
 };
 use magnetita_proto::control::commands::{CommandResult, CommandRun};
 use magnetita_proto::daily::battery::BatteryStatus;
@@ -54,6 +62,7 @@ use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
 use crate::devices::{command_channel, Command, DeviceEntry};
 mod admission;
 pub(crate) mod commands;
+mod desktop_worker;
 pub(crate) mod discovery;
 pub(crate) mod input;
 pub(crate) mod media;
@@ -63,6 +72,7 @@ pub(crate) mod notifications;
 pub(crate) mod phone;
 pub(crate) mod share;
 pub(crate) mod storage;
+pub(crate) mod writer;
 
 use crate::lock::LockOk;
 use crate::runtime::log;
@@ -70,14 +80,21 @@ use crate::session_registration::SessionRegistration;
 use crate::{ui_log, Daemon};
 pub(crate) use admission::PairingArm;
 use discovery::Advertisement;
+use writer::Outbox;
 
-/// How often the dialer asks Avahi who is around.
-const BROWSE_INTERVAL: Duration = Duration::from_secs(5);
 /// How often a session checks the revocation barrier and its command queue.
 const TICK: Duration = Duration::from_secs(1);
 /// How long a newer session of the same phone waits for the older one to
 /// leave: a tick to notice the order, and the cleanup after it.
 const SUPERSEDE_WAIT: Duration = Duration::from_secs(5);
+/// How long a stopping wire waits for its sessions to notice on their tick
+/// and clean up: the unmount included.
+const STOP_WAIT: Duration = Duration::from_secs(5);
+/// How long a stopping session waits for its queued sends to be written,
+/// then for the phone to acknowledge receiving them; together well inside
+/// [`STOP_WAIT`].
+const STOP_FLUSH: Duration = Duration::from_secs(1);
+const STOP_FINISH: Duration = Duration::from_secs(2);
 
 /// The running wire: stop it and join it.
 pub(crate) struct LinkWire {
@@ -92,6 +109,19 @@ impl Drop for LinkWire {
             let _ = join.join();
         }
     }
+}
+
+/// Lets every task end on its own, up to `limit`, then cuts what is left;
+/// true when none had to be cut. A session sees the stop on its tick and runs
+/// its whole cleanup, awaits included; cutting it drops it at an await.
+async fn drain(tasks: &mut tokio::task::JoinSet<()>, limit: Duration) -> bool {
+    let ended = tokio::time::timeout(limit, async { while tasks.join_next().await.is_some() {} })
+        .await
+        .is_ok();
+    if !ended {
+        tasks.shutdown().await;
+    }
+    ended
 }
 
 /// What this daemon offers on the own wire today.
@@ -335,6 +365,13 @@ pub(crate) fn spawn(
                     return;
                 }
             };
+            let desktop = match desktop_worker::DesktopWorker::spawn() {
+                Ok(worker) => worker,
+                Err(e) => {
+                    let _ = bound_tx.send(Err(LinkError::Io(e)));
+                    return;
+                }
+            };
             let _ = bound_tx.send(Ok(local));
             let _advertisement = advertise
                 .then(|| Advertisement::publish(&device_id, "Celestina", local.port()).ok())
@@ -348,6 +385,7 @@ pub(crate) fn spawn(
                     admission::MAX_PAIRING_ATTEMPTS,
                 )),
                 adapters,
+                desktop,
                 stop,
             });
             runtime.block_on(wire.run());
@@ -377,34 +415,42 @@ struct Wire {
     /// Unpinned connections waiting for their proof hold one of these.
     pairing_attempts: Arc<tokio::sync::Semaphore>,
     adapters: Adapters,
+    /// Runs the adapters that block, in order, off the runtime.
+    desktop: desktop_worker::DesktopWorker,
     stop: Arc<AtomicBool>,
 }
 
 impl Wire {
     async fn run(self: &Arc<Self>) {
-        let accepter = Arc::clone(self);
-        let dialer = Arc::clone(self);
-        tokio::join!(accepter.accept_loop(), dialer.dial_loop());
+        Arc::clone(self).accept_loop().await;
     }
 
     /// Lets each attempt in and hands it to a task of its own at once: the
     /// TLS handshake, the pin check and the hello all run there, inside the
-    /// handshake budget, never here.
+    /// handshake budget, never here. The loop owns those tasks: on stop it
+    /// lets every session see the stop on its tick and clean up (unmount,
+    /// release input, leave the registry) before the endpoint closes, and
+    /// only a session that outlives [`STOP_WAIT`] is cut.
     async fn accept_loop(self: Arc<Self>) {
+        let mut tasks = tokio::task::JoinSet::new();
         loop {
             let next = tokio::select! {
                 pending = self.endpoint.accept() => pending,
-                _ = self.stopped() => return,
+                Some(_) = tasks.join_next(), if !tasks.is_empty() => continue,
+                _ = self.stopped() => break,
             };
-            let Some(pending) = next else { return };
+            let Some(pending) = next else { break };
             let wire = Arc::clone(&self);
-            tokio::spawn(async move {
+            tasks.spawn(async move {
                 let address = pending.remote_address();
                 match pending.handshake().await {
                     Ok(incoming) => wire.admit(incoming).await,
                     Err(e) => log("link", &format!("{address}: handshake: {e}")),
                 }
             });
+        }
+        if !drain(&mut tasks, STOP_WAIT).await {
+            log("link", "a session did not end in time; cut");
         }
     }
 
@@ -544,67 +590,26 @@ impl Wire {
             return;
         }
         drop(attempt);
-        if let Err(e) = session
-            .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
-            .await
+        // The session's writer starts with the session; this one reply has
+        // the same deadline.
+        let sent = tokio::time::timeout(
+            writer::SEND_DEADLINE,
+            session.send_message(capability::PAIRING, pair_kind::QR_REPLY, reply),
+        )
+        .await;
+        if let Err(e) = sent
+            .map_err(|_| "past its deadline".to_owned())
+            .and_then(|r| r.map_err(|e| e.to_string()))
         {
             log(
                 "link",
                 &format!("{}: pairing reply: {e}", hello.device_name),
             );
+            session.close("pairing reply");
             return;
         }
         ui_log(&self.daemon, &hello.device_name, "emparejado", false);
         self.run_session(session, hello, "paired").await;
-    }
-
-    async fn dial_loop(self: Arc<Self>) {
-        let mut backoff = Backoff::new();
-        loop {
-            tokio::select! {
-                _ = tokio::time::sleep(BROWSE_INTERVAL) => {}
-                _ = self.stopped() => return,
-            }
-            let stop = Arc::clone(&self.stop);
-            let peers = match tokio::task::spawn_blocking(move || discovery::browse(&stop)).await {
-                Ok(p) => p,
-                Err(_) => continue,
-            };
-            let mut dialled = false;
-            for peer in peers {
-                let known = self.daemon.trust.lock_ok().is_trusted(&peer.device_id);
-                let connected = self.daemon.devices.lock_ok().contains_key(&peer.device_id);
-                if !known || connected {
-                    continue;
-                }
-                dialled = true;
-                let snapshot = trust_snapshot(&self.daemon.trust);
-                match self
-                    .endpoint
-                    .connect(peer.address, Expect::Trusted(&snapshot))
-                    .await
-                {
-                    Ok((session, hello)) => {
-                        backoff.reset();
-                        let wire = Arc::clone(&self);
-                        tokio::spawn(
-                            async move { wire.run_session(session, hello, "dialled").await },
-                        );
-                    }
-                    Err(e) => {
-                        log(
-                            "link",
-                            &format!("{} at {}: {e}", peer.device_id, peer.address),
-                        );
-                        let delay = backoff.next_delay();
-                        tokio::time::sleep(delay).await;
-                    }
-                }
-            }
-            if !dialled {
-                backoff.reset();
-            }
-        }
     }
 
     async fn stopped(&self) {
@@ -679,6 +684,25 @@ impl Wire {
                 session.close("duplicate");
                 return;
             }
+            // The pin is checked again here, under the registry's lock: a
+            // Forget that landed while this session waited for the earlier
+            // one to leave removed it, and that session's teardown cleared
+            // the revocation's tombstone, so nothing else would stop this
+            // session from registering unpinned. The registry lock is taken
+            // before the trust lock everywhere both are held.
+            let still = admission::session_id(
+                &daemon.trust.lock_ok(),
+                &session.peer_fingerprint(),
+                &hello.device_id,
+            );
+            if still.as_deref() != Ok(device_id.as_str()) {
+                log(
+                    "link",
+                    &format!("{name}: forgotten while it waited; refused"),
+                );
+                session.close("forgotten");
+                return;
+            }
             daemon.commands.lock_ok().insert(device_id.clone(), sender);
             let mut entry = DeviceEntry::connected(
                 device_id.clone(),
@@ -698,23 +722,27 @@ impl Wire {
         );
         ui_log(daemon, &name, "conectado y cifrado", false);
         mirror::own().set_host(session.remote_address().ip());
+        // Every send from here on is queued for the control stream's one
+        // writer; nothing below waits on the phone's flow control.
+        let (outbox, writer) = writer::spawn(Arc::clone(&session), name.clone());
+        let queue = |env: magnetita_proto::Envelope, what: &str| {
+            if let Err(e) = outbox.send(env) {
+                log("link", &format!("{name}: {what}: {e}"));
+            }
+        };
         if daemon.settings.lock_ok().clipboard {
             // The phone answers only while its application is in front.
-            if let Err(e) = session
-                .send_message(
-                    capability::CLIPBOARD,
-                    ClipboardRequest::KIND,
-                    ClipboardRequest.encode(),
-                )
-                .await
-            {
-                log("link", &format!("{name}: clipboard request: {e}"));
-            }
+            queue(
+                magnetita_proto::Envelope {
+                    capability: capability::CLIPBOARD,
+                    kind: ClipboardRequest::KIND,
+                    id: 0,
+                    body: ClipboardRequest.encode(),
+                },
+                "clipboard request",
+            );
         }
 
-        let (outbox, mut outbox_rx) =
-            tokio::sync::mpsc::unbounded_channel::<magnetita_proto::Envelope>();
-        let shares_outbox = outbox.clone();
         let shares = share::SessionShare::new(
             Arc::clone(daemon),
             &device_id,
@@ -722,46 +750,32 @@ impl Wire {
             session.transfers(),
             Arc::clone(&self.adapters.shares),
             self.adapters.download_dir.clone(),
-            outbox,
+            outbox.clone(),
         );
-        let storage_client = storage::StorageClient::new(shares_outbox.clone());
-        storage::clients()
-            .lock_ok()
-            .insert(device_id.clone(), Arc::clone(&storage_client));
+        let storage_client = storage::StorageClient::new(outbox.clone());
+        // Closes the client and takes it out of the registry however the
+        // session ends, cut by the stop's drain included.
+        let _registered_client = storage::register(&device_id, &storage_client);
         // The phone's files, mounted while it shares a root; dropping the
         // session unmounts, so a lost link never strands the directory.
         let mut phone_mount: Option<fuser::BackgroundSession> = None;
-        let governor = input::Governor::default();
+        // Dropped with the session, releasing what the phone still holds.
+        let input = input::SessionInput::new(Arc::clone(&self.adapters.input));
         let media = Arc::new(media::SessionMedia::default());
         if daemon.settings.lock_ok().media {
-            let req = media::SessionMedia::request();
-            if let Err(e) = session
-                .send_message(req.capability, req.kind, req.body)
-                .await
-            {
-                log("link", &format!("{name}: media request: {e}"));
-            }
+            queue(media::SessionMedia::request(), "media request");
         }
         {
             let settings = *daemon.settings.lock_ok();
-            let mut greetings = Vec::new();
             if settings.contacts {
                 let since = phone::store().with(&device_id, |book| book.contacts_version);
-                greetings.push(phone::contacts_request(since));
+                queue(phone::contacts_request(since), "phone request");
             }
             if settings.sms {
-                greetings.push(phone::conversations_request());
+                queue(phone::conversations_request(), "phone request");
             }
             if settings.commands {
-                greetings.push(commands::store().published());
-            }
-            for env in greetings {
-                if let Err(e) = session
-                    .send_message(env.capability, env.kind, env.body)
-                    .await
-                {
-                    log("link", &format!("{name}: phone request: {e}"));
-                }
+                queue(commands::store().published(), "phone request");
             }
         }
         // Bulk streams are accepted by their own task: `select!` drops the
@@ -814,11 +828,14 @@ impl Wire {
             })
         };
         let mut tick = tokio::time::interval(TICK);
+        // Set when the daemon stops: the session ends in order (see below)
+        // instead of at once.
+        let mut stopping = false;
         loop {
             tokio::select! {
                 Some(envelope) = control_rx.recv() => match envelope {
                     Ok(env) if env.capability == capability::PAIRING && env.kind == pair_kind::QR_PROOF => {
-                        self.prove_again(&session, &name, &env.body).await;
+                        self.prove_again(&session, &outbox, &name, &env.body);
                     }
                     Ok(env) if env.capability == capability::MEDIA => {
                         self.handle_media(&device_id, &name, &media, &env);
@@ -861,7 +878,10 @@ impl Wire {
                             }
                         } else if !available {
                             if let Some(mounted) = phone_mount.take() {
-                                let _ = tokio::task::spawn_blocking(move || drop(mounted)).await;
+                                // An unmount waits for the file system's
+                                // thread, which may be inside a request to
+                                // the phone; the loop does not wait with it.
+                                drop(tokio::task::spawn_blocking(move || drop(mounted)));
                                 daemon.set_mount(&device_id, None);
                                 daemon.notify_change();
                             }
@@ -869,32 +889,32 @@ impl Wire {
                     }
                     Ok(env) if env.capability == capability::STORAGE => storage_client.reply(env),
                     Ok(env) if env.capability == capability::INPUT => {
-                        self.handle_input(&name, &governor, env.kind, &env.body);
+                        self.handle_input(&name, &input, env.kind, &env.body);
                     }
                     Ok(env) if env.capability == capability::COMMANDS && env.kind == CommandRun::KIND => {
                         if self.daemon.settings.lock_ok().commands {
                             if let Ok(run) = CommandRun::decode(&env.body) {
-                                let outbox = shares_outbox.clone();
+                                let outbox = outbox.clone();
                                 let stop = Arc::clone(&self.stop);
                                 let who = name.clone();
                                 tokio::task::spawn_blocking(move || {
                                     let result = commands::store().run(run.id, &stop);
                                     log("link", &format!("{who}: command {} {}", run.id, if result.ok { "ok" } else { "failed" }));
-                                    let _ = outbox.send(magnetita_proto::Envelope {
+                                    if let Err(e) = outbox.send(magnetita_proto::Envelope {
                                         capability: capability::COMMANDS,
                                         kind: CommandResult::KIND,
                                         id: 0,
                                         body: result.encode(),
-                                    });
+                                    }) {
+                                        log("link", &format!("{who}: command result: {e}"));
+                                    }
                                 });
                             }
                         }
                     }
                     Ok(env) if env.capability == capability::SHARE => {
                         if let Some(reply) = shares.handle(&env) {
-                            if let Err(e) = session.send_message(reply.capability, reply.kind, reply.body).await {
-                                log("link", &format!("{name}: share: {e}"));
-                            }
+                            queue(reply, "share");
                         }
                     }
                     Ok(env) => self.handle(&device_id, &name, env),
@@ -912,7 +932,7 @@ impl Wire {
                 // Motion may arrive as datagrams: same body, no reliability.
                 Some(datagram) = datagram_rx.recv() => match datagram {
                     Ok(env) if env.capability == capability::INPUT => {
-                        self.handle_input(&name, &governor, env.kind, &env.body);
+                        self.handle_input(&name, &input, env.kind, &env.body);
                     }
                     Ok(_) => {}
                     Err(e) => {
@@ -920,37 +940,27 @@ impl Wire {
                         break;
                     }
                 },
-                Some(reply) = outbox_rx.recv() => {
-                    if let Err(e) = session.send_message(reply.capability, reply.kind, reply.body).await {
-                        log("link", &format!("{name}: share: {e}"));
-                    }
-                }
                 _ = tick.tick() => {
                     shares.expire(Instant::now());
-                    for env in mirror::own().tick(&device_id, &shares_outbox) {
-                        if let Err(e) = session.send_message(env.capability, env.kind, env.body).await {
-                            log("link", &format!("{name}: mirror: {e}"));
-                        }
+                    for env in mirror::own().tick(&device_id, &outbox) {
+                        queue(env, "mirror");
                     }
                     media.set_active(daemon.settings.lock_ok().media);
                     for state in media.tick() {
-                        if let Err(e) = session.send_message(state.capability, state.kind, state.body).await {
-                            log("link", &format!("{name}: media: {e}"));
-                        }
+                        queue(state, "media");
                     }
                     // The desktop's clipboard changes land in the shared slot
                     // for every device; this wire drains its own entry here.
                     if let Some(text) = daemon.pending_clipboards.take(&device_id) {
-                        if let Err(e) = session
-                            .send_message(
-                                capability::CLIPBOARD,
-                                ClipboardText::KIND,
-                                ClipboardText { text }.encode(),
-                            )
-                            .await
-                        {
-                            log("link", &format!("{name}: clipboard: {e}"));
-                        }
+                        queue(
+                            magnetita_proto::Envelope {
+                                capability: capability::CLIPBOARD,
+                                kind: ClipboardText::KIND,
+                                id: 0,
+                                body: ClipboardText { text }.encode(),
+                            },
+                            "clipboard",
+                        );
                     }
                     if let Some(generation) = daemon.revocations.current(&device_id) {
                         session.close("forgotten");
@@ -964,9 +974,7 @@ impl Wire {
                             superseded = true;
                             continue;
                         }
-                        if let Err(e) = self.command(&session, &shares, &media, &device_id, command).await {
-                            log("link", &format!("{name}: command: {e}"));
-                        }
+                        self.command(&outbox, &shares, &media, &device_id, &name, command);
                     }
                     if superseded {
                         session.close("superseded");
@@ -974,27 +982,56 @@ impl Wire {
                         break;
                     }
                     if self.stop.load(Ordering::Relaxed) {
-                        session.close("daemon stopping");
+                        stopping = true;
                         break;
                     }
                 }
             }
         }
-        acceptor.abort();
-        control_reader.abort();
-        datagram_reader.abort();
-        if mirror::own().owned_by(&device_id) {
-            mirror::own().stopped();
-        }
-        phone::store().forget_device(&device_id);
-        daemon.pending_clipboards.clear(&device_id);
-        self.adapters.notifications.forget_device(&device_id);
-        storage::clients().lock_ok().remove(&device_id);
+        // The phone's files first: the requests in flight fail now instead of
+        // at their timeout, and the unmount comes before the link's runtime
+        // can stop under the file system's thread.
+        storage_client.close();
+        storage::unregister(&device_id, &storage_client);
         if let Some(mounted) = phone_mount.take() {
             let _ = tokio::task::spawn_blocking(move || drop(mounted)).await;
             daemon.set_mount(&device_id, None);
             daemon.notify_change();
         }
+        if stopping {
+            // What is already queued for the phone (a share's end, a
+            // command's result) reaches it before the connection closes:
+            // written by the writer, then the control stream finished and
+            // its receipt acknowledged by the phone. A close alone lets the
+            // phone drop what it had not yet received.
+            let delivered = outbox.flush(STOP_FLUSH).await
+                && matches!(
+                    tokio::time::timeout(STOP_FINISH, session.finish_control()).await,
+                    Ok(Ok(()))
+                );
+            if !delivered {
+                log(
+                    "link",
+                    &format!("{name}: stopping before the phone received every send"),
+                );
+            }
+            session.close("daemon stopping");
+        }
+        writer.abort();
+        acceptor.abort();
+        control_reader.abort();
+        datagram_reader.abort();
+        drop(input);
+        if mirror::own().owned_by(&device_id) {
+            mirror::own().stopped();
+        }
+        phone::store().forget_device(&device_id);
+        daemon.pending_clipboards.clear(&device_id);
+        let notifications = Arc::clone(&self.adapters.notifications);
+        let gone = device_id.clone();
+        self.desktop.run("notification cleanup", move || {
+            notifications.forget_device(&gone)
+        });
     }
 
     /// Media envelopes from the phone: its player onto the registry's card,
@@ -1033,14 +1070,36 @@ impl Wire {
     }
 
     /// Trackpad and keyboard events: gated by the setting, bounded by the
-    /// governor, decoded at this boundary, and handed to the sink.
-    fn handle_input(&self, name: &str, governor: &input::Governor, kind: u16, body: &[u8]) {
-        if !self.daemon.settings.lock_ok().input || !governor.admit() {
-            return;
-        }
-        if let Err(e) = input::apply(self.adapters.input.as_ref(), kind, body) {
+    /// session's governor, decoded at this boundary, and handed to the sink;
+    /// a release of a held key or button always passes.
+    fn handle_input(&self, name: &str, input: &input::SessionInput, kind: u16, body: &[u8]) {
+        let enabled = self.daemon.settings.lock_ok().input;
+        if let Err(e) = input.apply(enabled, kind, body) {
             log("link", &format!("{name}: input: {e}"));
         }
+    }
+
+    /// Shows or replaces one phone notification on the desktop worker.
+    fn post_notification(&self, device_id: &str, name: &str, note: NotificationPosted) {
+        let bridge = Arc::clone(&self.adapters.notifications);
+        let server = Arc::clone(&self.adapters.notification_server);
+        let daemon = Arc::clone(&self.daemon);
+        let (device_id, name) = (device_id.to_owned(), name.to_owned());
+        self.desktop.run("notification", move || {
+            if let Some(line) = bridge.posted(server.as_ref(), &device_id, &name, &note) {
+                ui_log(&daemon, &name, &line, false);
+            }
+        });
+    }
+
+    /// Withdraws one phone notification on the desktop worker.
+    fn withdraw_notification(&self, device_id: &str, key: &str) {
+        let bridge = Arc::clone(&self.adapters.notifications);
+        let server = Arc::clone(&self.adapters.notification_server);
+        let (device_id, key) = (device_id.to_owned(), key.to_owned());
+        self.desktop.run("notification withdrawal", move || {
+            bridge.dismissed(server.as_ref(), &device_id, &key)
+        });
     }
 
     /// Contacts, SMS and calls from the phone: into the store, onto the
@@ -1104,14 +1163,7 @@ impl Wire {
                                 icon: None,
                                 media: false,
                             };
-                            if let Some(line) = self.adapters.notifications.posted(
-                                self.adapters.notification_server.as_ref(),
-                                device_id,
-                                name,
-                                &note,
-                            ) {
-                                ui_log(&self.daemon, name, &line, false);
-                            }
+                            self.post_notification(device_id, name, note);
                         }
                     }
                     Err(e) => log("link", &format!("{name}: sms: {e}")),
@@ -1148,13 +1200,8 @@ impl Wire {
             }
         }
         self.daemon.notify_change();
-        let server = self.adapters.notification_server.as_ref();
         match event.state {
-            CallState::Ended => {
-                self.adapters
-                    .notifications
-                    .dismissed(server, device_id, phone::CALL_KEY);
-            }
+            CallState::Ended => self.withdraw_notification(device_id, phone::CALL_KEY),
             state => {
                 let note = NotificationPosted {
                     key: phone::CALL_KEY.into(),
@@ -1176,13 +1223,7 @@ impl Wire {
                     icon: None,
                     media: false,
                 };
-                if let Some(line) = self
-                    .adapters
-                    .notifications
-                    .posted(server, device_id, name, &note)
-                {
-                    ui_log(&self.daemon, name, &line, false);
-                }
+                self.post_notification(device_id, name, note);
             }
         }
     }
@@ -1191,7 +1232,7 @@ impl Wire {
     /// admitted as trusted, yet it sends a QR proof: answer it from the armed
     /// window so the phone can pin again, and keep the session. As for a
     /// first pairing, only a proof that verifies closes the window.
-    async fn prove_again(&self, session: &Session, name: &str, proof: &[u8]) {
+    fn prove_again(&self, session: &Session, outbox: &Outbox, name: &str, proof: &[u8]) {
         let Some(secret) = self.pairing.live_secret() else {
             log(
                 "link",
@@ -1213,11 +1254,13 @@ impl Wire {
             log("link", &format!("{name}: the pairing window closed first"));
             return;
         }
-        match session
-            .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
-            .await
-        {
-            Ok(_) => ui_log(&self.daemon, name, "emparejado de nuevo", false),
+        match outbox.send(magnetita_proto::Envelope {
+            capability: capability::PAIRING,
+            kind: pair_kind::QR_REPLY,
+            id: 0,
+            body: reply,
+        }) {
+            Ok(()) => ui_log(&self.daemon, name, "emparejado de nuevo", false),
             Err(e) => log("link", &format!("{name}: pairing reply: {e}")),
         }
     }
@@ -1240,9 +1283,14 @@ impl Wire {
                     Ok(clip) if magnetita_core::clipboard::is_syncable(&clip.text) => {
                         // Record before writing so the watcher does not echo it back.
                         *self.daemon.last_clipboard.lock_ok() = clip.text.clone();
-                        if (self.adapters.clipboard_sink)(&clip.text) {
-                            ui_log(&self.daemon, name, "portapapeles recibido", false);
-                        }
+                        let sink = Arc::clone(&self.adapters.clipboard_sink);
+                        let daemon = Arc::clone(&self.daemon);
+                        let name = name.to_owned();
+                        self.desktop.run("clipboard", move || {
+                            if sink(&clip.text) {
+                                ui_log(&daemon, &name, "portapapeles recibido", false);
+                            }
+                        });
                     }
                     Ok(_) => log("link", &format!("{name}: clipboard: not syncable")),
                     Err(e) => log("link", &format!("{name}: clipboard: {e}")),
@@ -1255,26 +1303,13 @@ impl Wire {
                 match NotificationPosted::decode(&env.body) {
                     Ok(note)
                         if note.media && !self.daemon.settings.lock_ok().media_notifications => {}
-                    Ok(note) => {
-                        if let Some(line) = self.adapters.notifications.posted(
-                            self.adapters.notification_server.as_ref(),
-                            device_id,
-                            name,
-                            &note,
-                        ) {
-                            ui_log(&self.daemon, name, &line, false);
-                        }
-                    }
+                    Ok(note) => self.post_notification(device_id, name, note),
                     Err(e) => log("link", &format!("{name}: notification: {e}")),
                 }
             }
             (capability::NOTIFICATIONS, NotificationDismissed::KIND) => {
                 match NotificationDismissed::decode(&env.body) {
-                    Ok(gone) => self.adapters.notifications.dismissed(
-                        self.adapters.notification_server.as_ref(),
-                        device_id,
-                        &gone.key,
-                    ),
+                    Ok(gone) => self.withdraw_notification(device_id, &gone.key),
                     Err(e) => log("link", &format!("{name}: notification: {e}")),
                 }
             }
@@ -1285,126 +1320,99 @@ impl Wire {
         }
     }
 
-    async fn command(
+    /// One action from `Devices1` for the phone, queued for the writer.
+    fn command(
         &self,
-        session: &Session,
+        outbox: &Outbox,
         shares: &Arc<share::SessionShare>,
         media: &Arc<media::SessionMedia>,
         device_id: &str,
+        name: &str,
         command: Command,
-    ) -> Result<(), LinkError> {
-        match command {
-            Command::Superseded => {}
-            Command::CommandsChanged => {
-                let env = commands::store().published();
-                session
-                    .send_message(env.capability, env.kind, env.body)
-                    .await?;
-            }
-            Command::SmsList => {
-                let env = phone::conversations_request();
-                session
-                    .send_message(env.capability, env.kind, env.body)
-                    .await?;
-            }
+    ) {
+        let env = match command {
+            Command::Superseded => None,
+            Command::CommandsChanged => Some(commands::store().published()),
+            Command::SmsList => Some(phone::conversations_request()),
             Command::SmsThread { thread, before_ms } => {
-                let env = phone::thread_request(thread, before_ms);
-                session
-                    .send_message(env.capability, env.kind, env.body)
-                    .await?;
+                Some(phone::thread_request(thread, before_ms))
             }
-            Command::SmsSend { thread, body } => {
-                let env = phone::sms_send(thread, &body);
-                session
-                    .send_message(env.capability, env.kind, env.body)
-                    .await?;
-            }
-            Command::CallAction(action) => {
-                let env = phone::call_command(action);
-                session
-                    .send_message(env.capability, env.kind, env.body)
-                    .await?;
-            }
+            Command::SmsSend { thread, body } => Some(phone::sms_send(thread, &body)),
+            Command::CallAction(action) => Some(phone::call_command(action)),
             // A reply on an SMS notification is a send in that thread; a
             // button on the call notification is a call action.
             Command::NotificationReply { key, text } if key.starts_with(phone::SMS_KEY_PREFIX) => {
-                if let Ok(thread) = key[phone::SMS_KEY_PREFIX.len()..].parse::<u64>() {
-                    let env = phone::sms_send(thread, &text);
-                    session
-                        .send_message(env.capability, env.kind, env.body)
-                        .await?;
-                }
+                key[phone::SMS_KEY_PREFIX.len()..]
+                    .parse::<u64>()
+                    .ok()
+                    .map(|thread| phone::sms_send(thread, &text))
             }
             Command::NotificationAction { key, action } if key == phone::CALL_KEY => {
                 let state =
                     phone::store().with(device_id, |book| book.call.as_ref().map(|c| c.state));
-                if let Some(state) = state {
-                    if let Some((_, call_action)) =
-                        phone::call_buttons(state).get(usize::from(action))
-                    {
-                        let env = phone::call_command(*call_action);
-                        session
-                            .send_message(env.capability, env.kind, env.body)
-                            .await?;
-                    }
-                }
+                state.and_then(|state| {
+                    phone::call_buttons(state)
+                        .get(usize::from(action))
+                        .map(|(_, call_action)| phone::call_command(*call_action))
+                })
             }
             Command::NotificationDismiss { key }
-                if key == phone::CALL_KEY || key.starts_with(phone::SMS_KEY_PREFIX) => {}
-            Command::Media(action) => {
-                if let Some(env) = media.command_for_phone(action) {
-                    session
-                        .send_message(env.capability, env.kind, env.body)
-                        .await?;
-                }
+                if key == phone::CALL_KEY || key.starts_with(phone::SMS_KEY_PREFIX) =>
+            {
+                None
             }
+            Command::Media(action) => media.command_for_phone(action),
             Command::SendFile(path) => match shares.offer(path) {
-                Ok(offer) => {
-                    session
-                        .send_message(offer.capability, offer.kind, offer.body)
-                        .await?;
+                Ok(offer) => Some(offer),
+                Err(e) => {
+                    log("link", &format!("share: {e}"));
+                    None
                 }
-                Err(e) => log("link", &format!("share: {e}")),
             },
-            Command::Ring => {
-                session
-                    .send_message(capability::FIND, FindRing::KIND, FindRing.encode())
-                    .await?;
-            }
-            Command::NotificationAction { key, action } => {
-                session
-                    .send_message(
-                        capability::NOTIFICATIONS,
-                        NotificationAction::KIND,
-                        NotificationAction { key, action }.encode(),
-                    )
-                    .await?;
-            }
-            Command::NotificationReply { key, text } => {
-                session
-                    .send_message(
-                        capability::NOTIFICATIONS,
-                        NotificationReply::KIND,
-                        NotificationReply { key, text }.encode(),
-                    )
-                    .await?;
-            }
-            Command::NotificationDismiss { key } => {
-                session
-                    .send_message(
-                        capability::NOTIFICATIONS,
-                        NotificationDismissed::KIND,
-                        NotificationDismissed { key }.encode(),
-                    )
-                    .await?;
+            Command::Ring => Some(envelope(
+                capability::FIND,
+                FindRing::KIND,
+                FindRing.encode(),
+            )),
+            Command::NotificationAction { key, action } => Some(envelope(
+                capability::NOTIFICATIONS,
+                NotificationAction::KIND,
+                NotificationAction { key, action }.encode(),
+            )),
+            Command::NotificationReply { key, text } => Some(envelope(
+                capability::NOTIFICATIONS,
+                NotificationReply::KIND,
+                NotificationReply { key, text }.encode(),
+            )),
+            Command::NotificationDismiss { key } => Some(envelope(
+                capability::NOTIFICATIONS,
+                NotificationDismissed::KIND,
+                NotificationDismissed { key }.encode(),
+            )),
+        };
+        if let Some(env) = env {
+            if let Err(e) = outbox.send(env) {
+                log("link", &format!("{name}: command: {e}"));
             }
         }
-        Ok(())
+    }
+}
+
+/// An envelope for the writer, which numbers it.
+fn envelope(capability: u16, kind: u16, body: Vec<u8>) -> magnetita_proto::Envelope {
+    magnetita_proto::Envelope {
+        capability,
+        kind,
+        id: 0,
+        body,
     }
 }
 
 #[cfg(test)]
 mod admission_tests;
+
+#[cfg(test)]
+mod session_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1427,6 +1435,7 @@ mod tests {
             revocations: Arc::new(Revocations::new()),
             payloads: magnetita_net::PayloadLimiter::new(),
             dbus: None,
+            signals: crate::signals::Signals::on_bus(None),
             notifications: Default::default(),
             last_clipboard: Mutex::new(String::new()),
         })

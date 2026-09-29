@@ -3,7 +3,7 @@
 //! The link — `magnetita-proto` on the wire.
 //!
 //! QUIC with mutual TLS on self-signed certificates: each device holds one
-//! certificate for life (the same [`DeviceCert`] the KDE Connect wire uses),
+//! certificate for life ([`DeviceCert`]),
 //! and after pairing the only thing that authenticates a connection is the
 //! peer certificate's SHA-256 fingerprint, pinned in the [`TrustStore`].
 //! The TLS layer here therefore accepts *any* certificate; what it never does
