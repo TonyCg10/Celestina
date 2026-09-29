@@ -38,7 +38,7 @@ from production_artifact import (
     production_input_patterns,
     verification_input_patterns,
 )
-from project_registry import build_commit_scopes, path_allowed
+from project_registry import build_commit_scopes, halted_projects, path_allowed
 from version_contract import VersionContractError, parse_registry, read_source_version
 from version_tool import replace_source_version
 
@@ -567,12 +567,21 @@ def affected_projects(
     so a shared script such as scripts/production-common.sh affects every
     project. `registry` must be the one of the tree at `root`: an input it
     names that does not exist there stops the landing.
+
+    A halted project is never affected, not even as the owner: no landing
+    builds, verifies or deploys it (AGENTS.md "Halted projects").
     """
+    try:
+        halted = {project.id for project in halted_projects(dict(registry))}
+    except ValueError as error:
+        raise LandingStop(
+            "build_if_stale", f"docs/projects.toml: {error}", "docs/projects.toml"
+        ) from error
     owner: list[dict] = []
     affected = []
     projects = registry.get("projects", [])
     for project in projects if isinstance(projects, list) else []:
-        if not isinstance(project, dict):
+        if not isinstance(project, dict) or project.get("id") in halted:
             continue
         if project.get("id") == owner_id:
             owner.append(project)

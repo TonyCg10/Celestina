@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import PurePosixPath
+import re
 from typing import Any
 
 
@@ -16,6 +18,78 @@ class CommitScope:
     roots: tuple[str, ...]
     files: tuple[str, ...] = ()
     allow_all: bool = False
+
+
+@dataclass(frozen=True)
+class HaltedProject:
+    """A project the author halted; AGENTS.md "Halted projects" is the rule."""
+
+    id: str
+    name: str
+    since: str
+    commit_prefixes: tuple[str, ...]
+    commit_roots: tuple[str, ...]
+
+
+HALTED_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def halted_projects(registry: dict[str, Any]) -> tuple[HaltedProject, ...]:
+    """Return every project whose registry entry carries `halted = "YYYY-MM-DD"`.
+
+    A halted project keeps its registration, so history, scopes and inventories
+    still resolve; this is the one reader of the marker that every tool uses to
+    announce the halt, refuse its commits and leave it out of production runs.
+    """
+    halted: list[HaltedProject] = []
+    projects = registry.get("projects", ())
+    if not isinstance(projects, (list, tuple)):
+        raise ValueError("projects must be a list of tables")
+    for index, project in enumerate(projects):
+        if not isinstance(project, dict) or "halted" not in project:
+            continue
+        label = f"projects[{index}].halted"
+        since = project["halted"]
+        if not isinstance(since, str) or HALTED_DATE.fullmatch(since) is None:
+            raise ValueError(f'{label} must be a date string "YYYY-MM-DD"')
+        try:
+            date.fromisoformat(since)
+        except ValueError as error:
+            raise ValueError(f"{label} is not a calendar date: {since}") from error
+        project_id = project.get("id")
+        prefix = project.get("commit_prefix")
+        if not isinstance(project_id, str) or not isinstance(prefix, str):
+            raise ValueError(f"projects[{index}] needs an id and a commit_prefix to be halted")
+        name = project.get("name")
+        prefixes = [prefix]
+        roots = list(
+            normalized_roots(project.get("commit_roots", ()), f"projects[{index}].commit_roots")
+        )
+        for component_index, component in enumerate(project.get("component_commit_scopes", ())):
+            component_label = f"projects[{index}].component_commit_scopes[{component_index}]"
+            component_prefix = component.get("prefix") if isinstance(component, dict) else None
+            if not isinstance(component_prefix, str):
+                raise ValueError(f"{component_label}.prefix must be a string")
+            prefixes.append(component_prefix)
+            roots.extend(normalized_roots(component.get("roots", ()), f"{component_label}.roots"))
+        halted.append(
+            HaltedProject(
+                id=project_id,
+                name=name if isinstance(name, str) and name else project_id,
+                since=since,
+                commit_prefixes=unique(prefixes),
+                commit_roots=unique(roots),
+            )
+        )
+    return tuple(halted)
+
+
+def halted_owner(path: str, halted: tuple[HaltedProject, ...]) -> HaltedProject | None:
+    """The halted project whose commit roots hold `path`, if any."""
+    for project in halted:
+        if path_allowed(path, CommitScope(project.commit_roots)):
+            return project
+    return None
 
 
 def optional_bool(table: dict[str, Any], key: str, label: str) -> bool:

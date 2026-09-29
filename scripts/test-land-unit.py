@@ -635,6 +635,51 @@ class LandingFunctions(unittest.TestCase):
             self.assertIn("lib", str(raised.exception))
             self.assertIn("`lib/missing`", str(raised.exception))
 
+    def test_affected_projects_never_include_a_halted_project(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for path in (
+                "app/Cargo.toml",
+                "app/src/main.rs",
+                "app/scripts/build-production.sh",
+                "lib/src/lib.rs",
+                "lib/scripts/build-production.sh",
+                "ws/Cargo.lock",
+                "scripts/production-common.sh",
+            ):
+                (root / path).parent.mkdir(parents=True, exist_ok=True)
+                (root / path).write_text("fixture\n", encoding="utf-8")
+
+            def halted(project_id: str, since: str = "2026-09-27") -> dict:
+                return tomllib.loads(
+                    REGISTRY_TOML.replace(
+                        f'commit_prefix = "{project_id}"\n',
+                        f'commit_prefix = "{project_id}"\nhalted = "{since}"\n',
+                    )
+                )
+
+            def affected(registry: dict, paths: set[str], owner: str) -> list[str]:
+                projects = landing.affected_projects(root, registry, paths, owner)
+                return [str(project["id"]) for project in projects]
+
+            # A halted consumer of a shared input is not rebuilt for it.
+            self.assertEqual(affected(halted("app"), {"lib/src/lib.rs"}, "lib"), ["lib"])
+            self.assertEqual(affected(halted("app"), {"lib/src/lib.rs"}, "suite"), ["lib"])
+            # A shared script that marks every project skips the halted one.
+            self.assertEqual(
+                affected(halted("app"), {"scripts/production-common.sh"}, "suite"), ["lib"]
+            )
+            # Not even as the owner: a halted project is never built.
+            self.assertEqual(affected(halted("lib"), {"lib/src/lib.rs"}, "lib"), ["app"])
+            self.assertEqual(affected(halted("app"), {"app/src/main.rs"}, "app"), [])
+
+            with self.assertRaises(landing.LandingStop) as raised:
+                landing.affected_projects(
+                    root, halted("app", "someday"), {"lib/src/lib.rs"}, "lib"
+                )
+            self.assertEqual(raised.exception.step, "build_if_stale")
+            self.assertIn("projects[0].halted", str(raised.exception))
+
     def test_merge_ratchet_takes_lower_and_drops_removed(self) -> None:
         layouts = {
             "class, key, value": lambda key, value: f"lines\t{key}\t{value}\n",

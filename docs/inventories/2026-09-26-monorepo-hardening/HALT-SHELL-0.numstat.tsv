@@ -1,0 +1,19 @@
+# HALT-SHELL-0 exact change inventory
+
+Base revision	d36c71dbd884bca7a0d5e5165f5bfb30ccc5d2a0
+Pathspec	docs/evidence/2026-09-28-landing-skips-halted.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/HALT-SHELL-0.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	scripts/landing.py
+Pathspec	scripts/project_registry.py
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+65	0	ee8edad65fa56eaa2fd2e03552a182b6862b64360f444929ce0e44c2098bf635	docs/evidence/2026-09-28-landing-skips-halted.md
+19	0	self	docs/inventories/2026-09-26-monorepo-hardening/HALT-SHELL-0.numstat.tsv
+4	0	b12616a437c4de61be9b11fb8f321c5c348bb99e3ccc54250dd4f7da8610f241	docs/plans/active/2026-09-26-monorepo-hardening.md
+11	2	d476c65d88402a35b24490b2dd60b9958e8b06721866aeecc4bfad509d494fe5	scripts/landing.py
+74	0	dcffadd9cd8db163c8b1a983363d34281724933811b7a13ef2fc7fbf2bbd8546	scripts/project_registry.py
+45	0	255dad30a7ea67d1a75de78491b5fe44b3706397c8d88175e87809524a43f642	scripts/test-land-unit.py
