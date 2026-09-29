@@ -383,3 +383,130 @@ fn a_queued_send_reaches_the_phone_before_the_stop_closes() {
     });
     assert_eq!((replies, rings), (20, 1), "every queued send arrives");
 }
+
+/// A phone abandons one upload, by ending its stream short or by a hostile
+/// reset, then uploads another on the same session: the desktop receives the
+/// second whole. One abandoned stream never stops the bulk streams after it.
+fn a_later_upload_arrives_after_an_abandoned_one(reset: bool) {
+    use magnetita_proto::daily::share::{ShareAccept, ShareDone, ShareOffer};
+    let cert = DeviceCert::generate("desktop");
+    let daemon = test_daemon(&cert);
+    let arm = PairingArm::default();
+    let downloads = std::env::temp_dir().join(format!(
+        "magnetita-abandon-{}-{}",
+        std::process::id(),
+        u8::from(reset)
+    ));
+    let _ = std::fs::remove_dir_all(&downloads);
+    let (wire, addr) = spawn(
+        Arc::clone(&daemon),
+        cert.clone(),
+        "desktop".into(),
+        arm.clone(),
+        "127.0.0.1:0".parse().unwrap(),
+        false,
+        Adapters {
+            download_dir: downloads.clone(),
+            ..test_adapters()
+        },
+    )
+    .unwrap();
+    let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (phone, phone_fp) = rt.block_on(async { phone("abandoning") });
+    let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+    let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+    let next_share = |kind: u16| {
+        rt.block_on(async {
+            loop {
+                let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                    .await
+                    .expect("a share message in time")
+                    .unwrap();
+                if env.capability == capability::SHARE && env.kind == kind {
+                    break env;
+                }
+            }
+        })
+    };
+    let offer = |transfer: u32, name: &str| ShareOffer {
+        transfer,
+        name: name.into(),
+        size: 10,
+        mime: String::new(),
+    };
+    rt.block_on(session.send_message(
+        capability::SHARE,
+        ShareOffer::KIND,
+        offer(7, "a.bin").encode(),
+    ))
+    .unwrap();
+    next_share(ShareAccept::KIND);
+    rt.block_on(async {
+        let mut stream = session.open_transfer(7).await.unwrap();
+        if reset {
+            let _ = stream.reset(0u32.into());
+        } else {
+            stream.write_all(&[1u8; 3]).await.unwrap();
+            let _ = stream.finish();
+        }
+        session
+            .send_message(
+                capability::SHARE,
+                ShareDone::KIND,
+                ShareDone {
+                    transfer: 7,
+                    complete: false,
+                }
+                .encode(),
+            )
+            .await
+            .unwrap();
+    });
+    rt.block_on(session.send_message(
+        capability::SHARE,
+        ShareOffer::KIND,
+        offer(8, "b.bin").encode(),
+    ))
+    .unwrap();
+    let accepted = loop {
+        let accept = ShareAccept::decode(&next_share(ShareAccept::KIND).body).unwrap();
+        if accept.transfer == 8 {
+            break accept;
+        }
+    };
+    assert_eq!(accepted.offset, 0);
+    rt.block_on(async {
+        let mut stream = session.open_transfer(8).await.unwrap();
+        stream.write_all(&[2u8; 10]).await.unwrap();
+        stream.finish().unwrap();
+        let _ = stream.stopped().await;
+    });
+    let done = loop {
+        let done = ShareDone::decode(&next_share(ShareDone::KIND).body).unwrap();
+        if done.transfer == 8 {
+            break done;
+        }
+    };
+    assert!(
+        done.complete,
+        "the upload after the abandoned one arrived whole"
+    );
+    assert_eq!(
+        std::fs::read(downloads.join("b.bin")).unwrap(),
+        vec![2u8; 10]
+    );
+    session.close("done");
+    drop(wire);
+    let _ = std::fs::remove_dir_all(&downloads);
+}
+
+#[test]
+fn a_later_upload_arrives_after_one_abandoned_short() {
+    a_later_upload_arrives_after_an_abandoned_one(false);
+}
+
+#[test]
+fn a_later_upload_arrives_after_one_reset_before_its_id() {
+    a_later_upload_arrives_after_an_abandoned_one(true);
+}

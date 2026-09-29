@@ -24,6 +24,11 @@ pub enum LinkError {
     Closed,
     /// A frame declared more bytes than a message may carry.
     FrameTooLarge(u32),
+    /// The session did not negotiate this capability: the peer's hello did
+    /// not offer it, so nothing of it is sent or handled.
+    Declined(u16),
+    /// A local bound refused the operation before anything was sent.
+    Refused(&'static str),
 }
 
 impl fmt::Display for LinkError {
@@ -37,6 +42,8 @@ impl fmt::Display for LinkError {
             Self::Pairing(e) => write!(f, "pairing: {e}"),
             Self::Closed => f.write_str("the peer closed"),
             Self::FrameTooLarge(n) => write!(f, "a frame of {n} bytes exceeds the message limit"),
+            Self::Declined(c) => write!(f, "capability {c} was not negotiated for this session"),
+            Self::Refused(why) => write!(f, "refused: {why}"),
         }
     }
 }

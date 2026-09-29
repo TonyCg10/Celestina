@@ -54,11 +54,15 @@ Capability `0` kind `0`, the first envelope both ways:
 | 2 | device_kind | u8: 0 desktop, 1 phone |
 | 3 | capabilities | list of `[capability u16, version u16]`, ≤ 256, no duplicates |
 
-Both sides are to keep the capabilities both offer, each at the lower
-version; anything only one side offers is not used and is not an error.
-Today neither end computes that intersection yet: the desktop advertises
-every capability it serves, the phone only `battery` and `find`, and each
-uses what it implements (`MAG-8`, negotiated in the suite plan's `AUD-1-E`).
+Both sides keep the capabilities both offer, each at the lower version
+(`magnetita_proto::Negotiated`); anything only one side offers is not used
+and is not an error. Each end advertises every capability it sends or
+handles, keeps the negotiated set per session and gates on it both ways:
+a send of a capability the peer did not offer is refused before it is
+queued, and a received envelope of one is refused and logged, never
+handled. The hello (0) and pairing (14) run outside any capability and
+always pass. An unknown capability in a peer's hello is simply not
+agreed (`MAG-8`, `AUD-1-E`).
 
 Vector: `a4007030656232316232386165373464353463016a4573637269746f72696f02000382820101820902`.
 

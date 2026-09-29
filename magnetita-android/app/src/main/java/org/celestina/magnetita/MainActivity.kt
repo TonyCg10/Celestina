@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import org.celestina.magnetita.core.Core
 import org.celestina.magnetita.link.LinkService
 import org.celestina.magnetita.link.LinkState
+import org.celestina.magnetita.link.CorePairing
 import org.celestina.magnetita.link.LocalAddresses
 import org.celestina.magnetita.link.MediaCommand
 import org.celestina.magnetita.link.Outbound
@@ -151,7 +152,7 @@ class MainActivity : ComponentActivity() {
                             } else if (page == 1) {
                     val remote = remember {
                         object : Remote {
-                            override fun move(dx: Int, dy: Int) = LinkService.input { it.pointerMove(dx, dy) }
+                            override fun move(dx: Int, dy: Int) = LinkService.move(dx, dy)
                             override fun button(button: Int, pressed: Boolean) = LinkService.input { it.pointerButton(button, pressed) }
                             override fun scroll(dx: Int, dy: Int) = LinkService.input { it.scroll(dx, dy) }
                             override fun key(code: Int, pressed: Boolean) = LinkService.input { it.key(code, pressed) }
@@ -246,6 +247,6 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "magnetita-main"
 
         /** Outlives the activity's recreation; the process's death drops a waiting offer, which is the safe side. */
-        private val pairing = PairingConsent { android.os.SystemClock.elapsedRealtime() }
+        private val pairing = PairingConsent(CorePairing::preview) { android.os.SystemClock.elapsedRealtime() }
     }
 }

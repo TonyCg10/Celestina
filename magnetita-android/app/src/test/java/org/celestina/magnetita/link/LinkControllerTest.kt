@@ -5,6 +5,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,22 +17,30 @@ class LinkControllerTest {
     private class FakeSession(override val desktopId: String, override val desktopName: String) : LiveSession {
         val reports = mutableListOf<Pair<Int, Boolean>>()
         var alive = true
+        override val gone: Boolean get() = !alive
         var closed: String? = null
-        val incoming = ArrayDeque<LinkEvent>()
+        val incoming = ArrayDeque<DesktopEvent>()
+
+        /** Each event handed to the loop, with how many upload bytes had gone by then. */
+        val handedAt = mutableListOf<Pair<DesktopSignal, Int>>()
         override fun reportBattery(level: Int, charging: Boolean): Boolean { reports += level to charging; return alive }
         val clips = mutableListOf<String>()
         override fun sendClipboard(text: String): Boolean { clips += text; return alive }
         val notes = mutableListOf<String>()
-        override fun sendNotification(note: PhoneNotification): Boolean { notes += "post:" + note.key; return alive }
+        /** The core refuses notifications, as against a desktop that did not negotiate them. */
+        var declineNotes = false
+        override fun sendNotification(note: PhoneNotification): Boolean { notes += "post:" + note.key; return alive && !declineNotes }
         override fun sendNotificationGone(key: String): Boolean { notes += "gone:$key"; return alive }
         val offers = mutableListOf<String>()
         val written = java.io.ByteArrayOutputStream()
         var finished = false
-        val accepted = mutableListOf<Pair<Int, String>>()
+        val accepted = mutableListOf<Triple<Int, String, Long>>()
         override fun offerFile(name: String, size: Long, mime: String): Int? { offers += "$name:$size"; return 9 }
         override fun writeTransfer(transfer: Int, bytes: ByteArray): Boolean { written.write(bytes); return alive }
         override fun finishTransfer(transfer: Int): Boolean { finished = true; return alive }
-        override fun acceptFile(transfer: Int, dir: String): Boolean { accepted += transfer to dir; return alive }
+        val abandoned = mutableListOf<Int>()
+        override fun abandonTransfer(transfer: Int): Boolean { abandoned += transfer; return alive }
+        override fun acceptFile(transfer: Int, dir: String, usableBytes: Long): Boolean { accepted += Triple(transfer, dir, usableBytes); return alive }
         override fun rejectFile(transfer: Int): Boolean = alive
         val media = mutableListOf<String>()
         override fun openStream(id: Int): Boolean = alive
@@ -58,9 +67,9 @@ class LinkControllerTest {
         override fun scroll(dx: Int, dy: Int): Boolean = alive
         override fun key(code: Int, pressed: Boolean): Boolean = alive
         override fun typeText(text: String): Boolean = alive
-        override suspend fun next(timeoutMs: Long): LinkEvent? {
+        override suspend fun next(timeoutMs: Long): DesktopEvent? {
             if (!alive) throw IllegalStateException("connection lost")
-            incoming.removeFirstOrNull()?.let { return it }
+            incoming.removeFirstOrNull()?.let { handedAt += it.signal to written.size(); return it }
             delay(timeoutMs)
             if (!alive) throw IllegalStateException("connection lost")
             return null
@@ -83,12 +92,22 @@ class LinkControllerTest {
         }
     }
 
+    /** A schedule that hands out the delays it was given, then the last. */
+    private class ScriptedSchedule(private val delays: List<Long> = listOf(250L)) : RetrySchedule {
+        var next = 0
+        var resets = 0
+        override fun nextDelayMs(): Long = delays[next.coerceAtMost(delays.lastIndex)].also { next += 1 }
+        override fun reset() { next = 0; resets += 1 }
+    }
+
+    private fun event(signal: DesktopSignal) = DesktopEvent(signal.toString(), signal)
+
     @Test
     fun aScannedUriPairsHoldsThatSessionAndThenReconnectsThroughDiscovery() = runTest {
         val first = FakeSession("desk", "Celestina")
         val second = FakeSession("desk", "Celestina")
         val connector = FakeConnector(emptyList(), ArrayDeque(listOf(first, second)))
-        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 9 to false }, io = coroutineContext, pollMs = 100)
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 9 to false }, ScriptedSchedule(), io = coroutineContext, pollMs = 100)
         val job = launch { controller.run() }
         advanceTimeBy(150)
         assertEquals(LinkState.NeedsPairing, controller.state.value)
@@ -106,7 +125,7 @@ class LinkControllerTest {
     @Test
     fun withoutPinsItAsksForPairingAndDialsNobody() = runTest {
         val connector = FakeConnector(emptyList(), ArrayDeque())
-        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 50 to false }, io = coroutineContext, pollMs = 100)
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 50 to false }, ScriptedSchedule(), io = coroutineContext, pollMs = 100)
         val job = launch { controller.run() }
         advanceTimeBy(1_000)
         assertEquals(LinkState.NeedsPairing, controller.state.value)
@@ -120,7 +139,7 @@ class LinkControllerTest {
         val second = FakeSession("desk", "Celestina")
         val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(first, second)))
         val discovery = Discovery { listOf(Advertised("stranger", "10.0.0.9:1760"), Advertised("desk", "10.0.0.1:1760")) }
-        val controller = LinkController(connector, discovery, { 42 to true }, io = coroutineContext, pollMs = 100)
+        val controller = LinkController(connector, discovery, { 42 to true }, ScriptedSchedule(), io = coroutineContext, pollMs = 100)
         val job = launch { controller.run() }
         advanceTimeBy(500)
         assertEquals(listOf("10.0.0.1:1760"), connector.dialled)
@@ -143,16 +162,22 @@ class LinkControllerTest {
     }
 
     @Test
-    fun aRefusedDialBacksOffWithTheSchedule() = runTest {
+    fun aRefusedDialWaitsTheSchedulesDelaysAndAnEstablishedSessionResetsIt() = runTest {
         val connector = FakeConnector(listOf("desk"), ArrayDeque())
-        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 1 to false }, io = coroutineContext, pollMs = 100)
+        val schedule = ScriptedSchedule(listOf(300L, 700L))
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 1 to false }, schedule, io = coroutineContext, pollMs = 100)
         val job = launch { controller.run() }
         advanceTimeBy(100)
         val waiting = controller.state.first { it is LinkState.Waiting } as LinkState.Waiting
-        assertEquals(Backoff.FIRST_MS, waiting.retryMs)
-        advanceTimeBy(Backoff.FIRST_MS + 100)
+        assertEquals(300L, waiting.retryMs)
+        advanceTimeBy(300 + 50)
         val again = controller.state.first { it is LinkState.Waiting } as LinkState.Waiting
-        assertEquals(Backoff.FIRST_MS * 2, again.retryMs)
+        assertEquals(700L, again.retryMs)
+        // A session that comes up starts the schedule over.
+        connector.sessions += FakeSession("desk", "Celestina")
+        advanceTimeBy(800)
+        assertTrue(controller.state.value is LinkState.Connected)
+        assertEquals(1, schedule.resets)
         job.cancel()
     }
 
@@ -160,10 +185,10 @@ class LinkControllerTest {
     fun aBatteryRequestIsAnsweredAndAForgetClosesTheSession() = runTest {
         val session = FakeSession("desk", "Celestina")
         val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
-        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, io = coroutineContext, pollMs = 100)
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, ScriptedSchedule(), io = coroutineContext, pollMs = 100)
         val job = launch { controller.run() }
         advanceTimeBy(200)
-        session.incoming += LinkEvent(1, 2, "battery: requested")
+        session.incoming += event(DesktopSignal.BatteryRequested)
         advanceTimeBy(200)
         assertEquals(listOf(30 to false, 30 to false), session.reports)
         controller.disconnect()
@@ -177,7 +202,7 @@ class LinkControllerTest {
     fun aClipboardHandedToTheLoopGoesOutOnTheNextPollAndSignalsArriveDecoded() = runTest {
         val session = FakeSession("desk", "Celestina")
         val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
-        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, io = coroutineContext, pollMs = 100)
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, ScriptedSchedule(), io = coroutineContext, pollMs = 100)
         val seen = mutableListOf<DesktopSignal>()
         val job = launch { controller.run() }
         val watcher = launch { controller.signals.collect { seen += it } }
@@ -199,11 +224,11 @@ class LinkControllerTest {
         assertTrue("the held session is exposed for input", controller.live === session)
         assertEquals(listOf("post:k1", "gone:k1"), session.notes)
         assertEquals(listOf("state:YT", "cmd:mpv:3", "request"), session.media)
-        session.incoming += LinkEvent(2, 1, "clipboard: 5 bytes", "hello")
-        session.incoming += LinkEvent(2, 2, "clipboard: requested")
-        session.incoming += LinkEvent(3, 3, "notification: action", key = "k1", action = 0)
-        session.incoming += LinkEvent(3, 4, "notification: reply", text = "on my way", key = "k1")
-        session.incoming += LinkEvent(3, 2, "notification: dismiss", key = "k1")
+        session.incoming += event(DesktopSignal.ClipboardText("hello"))
+        session.incoming += event(DesktopSignal.ClipboardRequested)
+        session.incoming += event(DesktopSignal.NotificationAction("k1", 0))
+        session.incoming += event(DesktopSignal.NotificationReply("k1", "on my way"))
+        session.incoming += event(DesktopSignal.NotificationDismiss("k1"))
         advanceTimeBy(600)
         assertEquals(
             listOf<DesktopSignal>(
@@ -225,8 +250,9 @@ class LinkControllerTest {
         val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
         val payload = ByteArray(200_000) { (it % 251).toByte() }
         val controller = LinkController(
-            connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false },
+            connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, ScriptedSchedule(),
             files = { uri -> if (uri == "content://photo") payload.inputStream() else null },
+            freeSpace = { 5_000L },
             io = coroutineContext, pollMs = 100,
         )
         controller.receiveDir = "/tmp/received"
@@ -235,24 +261,135 @@ class LinkControllerTest {
         controller.send(Outbound.File("content://photo", "photo.bin", payload.size.toLong(), "application/octet-stream"))
         advanceTimeBy(200)
         assertEquals(listOf("photo.bin:200000"), session.offers)
-        session.incoming += LinkEvent(5, 2, "share: accepted", transfer = 9, offset = 150_000)
+        session.incoming += event(DesktopSignal.ShareAccepted(9, 150_000))
         advanceTimeBy(300)
         assertTrue(session.finished)
         assertEquals(50_000, session.written.size())
         assertTrue(payload.copyOfRange(150_000, 200_000).contentEquals(session.written.toByteArray()))
-        session.incoming += LinkEvent(5, 1, "share: offer", text = "doc.pdf", transfer = 3, size = 10)
+        session.incoming += event(DesktopSignal.ShareOffered(3, "doc.pdf", 10))
         advanceTimeBy(300)
-        assertEquals(listOf(3 to "/tmp/received"), session.accepted)
+        assertEquals(listOf(Triple(3, "/tmp/received", 5_000L)), session.accepted)
         job.cancel()
     }
 
+    /** AND-7: the sender suspends on its queue; nothing waits for a poll. */
     @Test
-    fun theScheduleDoublesToAMinuteAndResets() {
-        val b = Backoff()
-        val delays = (0..10).map { b.nextDelayMs() }
-        assertEquals(listOf(250L, 500L, 1000L, 2000L, 4000L), delays.take(5))
-        assertEquals(60_000L, delays[9])
-        b.reset()
-        assertEquals(250L, b.nextDelayMs())
+    fun aQueuedMessageGoesOutWithoutWaitingForAPoll() = runTest {
+        val session = FakeSession("desk", "Celestina")
+        val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, ScriptedSchedule(), io = coroutineContext, pollMs = 60_000)
+        val job = launch { controller.run() }
+        runCurrent()
+        assertTrue(controller.state.value is LinkState.Connected)
+        controller.sendClipboard("now")
+        controller.batteryChanged()
+        runCurrent()
+        assertEquals(listOf("now"), session.clips)
+        assertEquals(2, session.reports.size)
+        controller.disconnect()
+        runCurrent()
+        assertEquals("forgotten", session.closed)
+        job.cancel()
+    }
+
+    /**
+     * AND-2: an accepted file streams in its own coroutine, so what the
+     * desktop sends next is handled before the upload has gone; an upload
+     * the desktop abandons is stopped.
+     */
+    @Test
+    fun anUploadDoesNotHoldTheReceiveLoopAndStopsWhenAbandoned() = runTest {
+        val session = FakeSession("desk", "Celestina")
+        val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
+        val payload = ByteArray(300_000) { 1 }
+        val controller = LinkController(
+            connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, ScriptedSchedule(),
+            files = { payload.inputStream() },
+            io = coroutineContext, pollMs = 100,
+        )
+        val job = launch { controller.run() }
+        advanceTimeBy(200)
+        controller.send(Outbound.File("content://big", "big.bin", payload.size.toLong(), "application/octet-stream"))
+        advanceTimeBy(200)
+        session.incoming += event(DesktopSignal.ShareAccepted(9, 0))
+        session.incoming += event(DesktopSignal.Ring)
+        advanceTimeBy(300)
+        assertEquals("the loop took the ring before the upload ran", 0, session.handedAt.single { it.first == DesktopSignal.Ring }.second)
+        assertEquals(300_000, session.written.size())
+        assertTrue(session.finished)
+
+        // A second upload the desktop abandons at once never streams.
+        session.finished = false
+        session.written.reset()
+        controller.send(Outbound.File("content://big", "again.bin", payload.size.toLong(), "application/octet-stream"))
+        advanceTimeBy(200)
+        session.incoming += event(DesktopSignal.ShareAccepted(9, 0))
+        session.incoming += event(DesktopSignal.ShareEnded(9, false))
+        advanceTimeBy(300)
+        assertEquals(0, session.written.size())
+        assertTrue(!session.finished)
+        job.cancel()
+    }
+
+    /**
+     * A send the core refuses (a capability the desktop did not negotiate)
+     * drops that message only: the sender goes on, and a forget still closes.
+     */
+    @Test
+    fun aDeclinedSendDoesNotStopTheSender() = runTest {
+        val live = FakeSession("desk", "Celestina")
+        live.declineNotes = true
+        val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(live)))
+        val controller = LinkController(connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 42 to true }, ScriptedSchedule(), io = coroutineContext, pollMs = 100)
+        val job = launch { controller.run() }
+        advanceTimeBy(300)
+        assertEquals(1, live.reports.size)
+        controller.send(Outbound.Notification(PhoneNotification("k", "app", "t", "b", 0L, false, emptyList(), null, false)))
+        advanceTimeBy(50)
+        controller.sendClipboard("after the declined note")
+        controller.batteryChanged()
+        advanceTimeBy(300)
+        assertEquals(listOf("post:k"), live.notes)
+        assertEquals(listOf("after the declined note"), live.clips)
+        assertEquals(2, live.reports.size)
+        controller.disconnect()
+        advanceTimeBy(300)
+        assertEquals("forgotten", live.closed)
+        job.cancel()
+    }
+
+    /** A read error in an uploaded file ends that upload alone, told to the desktop. */
+    @Test
+    fun anUploadReadErrorEndsOnlyThatUpload() = runTest {
+        val session = FakeSession("desk", "Celestina")
+        val connector = FakeConnector(listOf("desk"), ArrayDeque(listOf(session)))
+        val broken = object : java.io.InputStream() {
+            override fun read(): Int = throw java.io.IOException("provider gone")
+            override fun read(b: ByteArray, off: Int, len: Int): Int = throw java.io.IOException("provider gone")
+        }
+        val controller = LinkController(
+            connector, { listOf(Advertised("desk", "10.0.0.1:1760")) }, { 30 to false }, ScriptedSchedule(),
+            files = { broken },
+            io = coroutineContext, pollMs = 100,
+        )
+        var failure: Throwable? = null
+        val job = launch { try { controller.run() } catch (e: Throwable) { failure = e } }
+        advanceTimeBy(200)
+        controller.send(Outbound.File("content://big", "big.bin", 10L, "application/octet-stream"))
+        advanceTimeBy(200)
+        session.incoming += event(DesktopSignal.ShareAccepted(9, 0))
+        session.incoming += event(DesktopSignal.Ring)
+        advanceTimeBy(300)
+        assertEquals(null, failure)
+        assertTrue(job.isActive)
+        assertEquals(listOf(9), session.abandoned)
+        assertTrue(!session.finished)
+        assertEquals(null, session.closed)
+        assertTrue(controller.state.value is LinkState.Connected)
+        // The session goes on after the failed upload.
+        controller.sendClipboard("still here")
+        advanceTimeBy(100)
+        assertEquals(listOf("still here"), session.clips)
+        job.cancel()
     }
 }

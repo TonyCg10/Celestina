@@ -23,6 +23,7 @@ import org.celestina.magnetita.MainActivity
 import org.celestina.magnetita.R
 import org.celestina.magnetita.core.Core
 import org.celestina.magnetita.notifications.PhoneNotifications
+import uniffi.magnetita_mobile.clipboardSyncable
 
 /**
  * The session lives here, in a foreground service of the `connectedDevice`
@@ -40,7 +41,7 @@ class LinkService : LifecycleService() {
     // published `ringing` state (the app's indicator and stop button)
     // truthful either way, instead of two places deciding it independently.
     private val ringer by lazy { Ringer(applicationContext) { _ringing.value = false } }
-    private val clipboardPolicy = ClipboardPolicy()
+    private val clipboardPolicy = ClipboardPolicy(::clipboardSyncable)
     private val media by lazy { org.celestina.magnetita.media.PhoneMedia(applicationContext) }
     private val book by lazy { org.celestina.magnetita.phone.PhoneBook(applicationContext) }
     private val messages by lazy { org.celestina.magnetita.phone.Messages(applicationContext) }
@@ -70,6 +71,7 @@ class LinkService : LifecycleService() {
             connector = CoreConnector(phone),
             discovery = NsdDiscovery(applicationContext),
             battery = { readBattery() },
+            schedule = CoreSchedule(),
             files = { uri -> runCatching { contentResolver.openInputStream(android.net.Uri.parse(uri)) }.getOrNull() },
             log = { android.util.Log.i(TAG, it) },
         )
@@ -120,6 +122,7 @@ class LinkService : LifecycleService() {
                             val live = controllerRef?.live
                             if (live != null) storageExecutor.execute { storage.answer(signal.request, live) }
                         }
+                        is DesktopSignal.Declined, is DesktopSignal.Unhandled -> android.util.Log.i(TAG, "desktop signal not acted on: $signal")
                         else -> {}
                     }
                 }
@@ -207,9 +210,14 @@ class LinkService : LifecycleService() {
      */
     private fun offerClipboard(text: String? = null) {
         val value = text ?: runCatching { clipboard.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() }.getOrNull()
-        if (clipboardPolicy.offer(value)) {
-            controller?.sendClipboard(value!!)
-            _clipboardNote.value = getString(R.string.clipboard_sent)
+        when (clipboardPolicy.offer(value)) {
+            ClipboardPolicy.Offer.Send -> {
+                controller?.sendClipboard(value!!)
+                _clipboardNote.value = getString(R.string.clipboard_sent)
+            }
+            // The wire's rule refuses it; the person sees why nothing went.
+            ClipboardPolicy.Offer.Refused -> _clipboardNote.value = getString(R.string.clipboard_refused)
+            ClipboardPolicy.Offer.Nothing -> {}
         }
     }
 
@@ -313,13 +321,42 @@ class LinkService : LifecycleService() {
 
         @Volatile private var controllerRef: LinkController? = null
 
-        /** Input that cannot wait for a poll goes straight to the held session, off the main thread. */
+        /** A button, a scroll, a key or text for the held session, in order, off the main thread. */
         fun input(work: (org.celestina.magnetita.link.LiveSession) -> Unit) {
-            val live = controllerRef?.live ?: return
-            inputExecutor.execute { runCatching { work(live) } }
+            if (controllerRef?.live == null) return
+            if (!inputQueue.offer(work)) android.util.Log.w(TAG, "input dropped: the link is behind")
+            drainInput()
         }
 
+        /** Pointer motion for the held session; moves that wait merge into one. */
+        fun move(dx: Int, dy: Int) {
+            if (controllerRef?.live == null) return
+            if (!inputQueue.move(dx, dy)) android.util.Log.w(TAG, "motion dropped: the link is behind")
+            drainInput()
+        }
+
+        // One worker drains the bounded queue; at most one drain waits in the
+        // executor, so its own queue never grows (AND-7).
+        private val inputQueue = InputQueue()
+        private val inputScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
         private val inputExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+        private fun drainInput() {
+            if (!inputScheduled.compareAndSet(false, true)) return
+            inputExecutor.execute {
+                inputScheduled.set(false)
+                while (true) {
+                    val op = inputQueue.poll() ?: break
+                    val live = controllerRef?.live ?: continue
+                    runCatching {
+                        when (op) {
+                            is InputQueue.Op.Move -> live.pointerMove(op.dx, op.dy)
+                            is InputQueue.Op.Other -> op.send(live)
+                        }
+                    }
+                }
+            }
+        }
 
         private val _desktopMedia = MutableStateFlow<MediaState?>(null)
 

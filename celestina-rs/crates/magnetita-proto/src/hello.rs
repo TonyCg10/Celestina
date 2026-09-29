@@ -168,6 +168,45 @@ pub fn negotiate(
         .collect()
 }
 
+/// What one session may use: the capabilities both hellos offer, each at the
+/// lower version, as [`negotiate`] computes them. Both ends keep one per
+/// session and gate every send and every handler on it, so a capability the
+/// other side did not offer is refused, never guessed at. The hello and the
+/// pairing exchange are the protocol's own and always pass: they run before
+/// or outside any capability.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Negotiated {
+    capabilities: Vec<CapabilityVersion>,
+}
+
+impl Negotiated {
+    /// The set `local` and `remote` agree on.
+    pub fn between(local: &[CapabilityVersion], remote: &[CapabilityVersion]) -> Self {
+        Self {
+            capabilities: negotiate(local, remote),
+        }
+    }
+
+    /// Whether an envelope of `capability` may be sent or handled.
+    pub fn allows(&self, capability: u16) -> bool {
+        matches!(capability, capability::HELLO | capability::PAIRING)
+            || self.version(capability).is_some()
+    }
+
+    /// The agreed version of `capability`, `None` when it was not agreed.
+    pub fn version(&self, capability: u16) -> Option<u16> {
+        self.capabilities
+            .iter()
+            .find(|c| c.capability == capability)
+            .map(|c| c.version)
+    }
+
+    /// The agreed capabilities, in the order the local side lists them.
+    pub fn capabilities(&self) -> &[CapabilityVersion] {
+        &self.capabilities
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,6 +271,43 @@ mod tests {
             }]
         );
         assert!(negotiate(&local, &[]).is_empty());
+    }
+
+    #[test]
+    fn a_session_allows_only_what_both_sides_agreed() {
+        let desktop = sample().capabilities;
+        // An older phone: battery and a capability this build never heard of.
+        let phone = vec![
+            CapabilityVersion {
+                capability: capability::BATTERY,
+                version: 3,
+            },
+            CapabilityVersion {
+                capability: 999,
+                version: 1,
+            },
+        ];
+        let session = Negotiated::between(&desktop, &phone);
+        assert!(session.allows(capability::BATTERY));
+        assert_eq!(session.version(capability::BATTERY), Some(1));
+        // Offered here, declined there: refused both ways.
+        assert!(!session.allows(capability::MIRROR));
+        // Offered there, unknown here: never used.
+        assert!(!session.allows(999));
+        assert_eq!(session.version(999), None);
+        // The protocol's own exchanges run outside any capability.
+        assert!(session.allows(capability::HELLO));
+        assert!(session.allows(capability::PAIRING));
+        assert_eq!(
+            session.capabilities(),
+            &[CapabilityVersion {
+                capability: capability::BATTERY,
+                version: 1
+            }]
+        );
+        let nothing = Negotiated::default();
+        assert!(!nothing.allows(capability::BATTERY));
+        assert!(nothing.allows(capability::PAIRING));
     }
 
     #[test]

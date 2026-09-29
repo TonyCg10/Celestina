@@ -87,27 +87,39 @@ pub struct Peer {
 /// Longest device id accepted from the network.
 const MAX_DEVICE_ID: usize = 64;
 
-/// The Magnetita peers in an `avahi-browse -rpt _magnetita._udp` output,
-/// best address first, one entry per (id, address).
-pub fn parse_peers(output: &str) -> Vec<Peer> {
+/// Most peers one browse reports; an advertisement flood is cut here.
+const MAX_PEERS: usize = 64;
+
+/// One advertisement as a resolver reports it, before any validation: the
+/// service name, the host as an address literal, and the port.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Candidate<'a> {
+    pub name: &'a str,
+    pub host: &'a str,
+    pub port: &'a str,
+}
+
+/// The discovery rule every browser applies, whatever resolves the service:
+/// the name is a device id of at most 64 ASCII alphanumerics, the host an
+/// address [`reachability_rank`] accepts and the port non-zero. What passes
+/// comes back best address first, one entry per (id, address), stable
+/// within a rank, and at most 64 peers.
+pub fn rank_peers<'a>(candidates: impl IntoIterator<Item = Candidate<'a>>) -> Vec<Peer> {
     let mut found: Vec<(u8, Peer)> = Vec::new();
-    for line in output.lines() {
-        let Some(r) = parse_resolved(line) else {
-            continue;
-        };
-        if r.service_type != SERVICE_TYPE {
-            continue;
+    for c in candidates {
+        if found.len() >= MAX_PEERS {
+            break;
         }
-        if r.name.is_empty()
-            || r.name.len() > MAX_DEVICE_ID
-            || !r.name.bytes().all(|b| b.is_ascii_alphanumeric())
+        if c.name.is_empty()
+            || c.name.len() > MAX_DEVICE_ID
+            || !c.name.bytes().all(|b| b.is_ascii_alphanumeric())
         {
             continue;
         }
-        let Ok(ip) = r.address.parse::<IpAddr>() else {
+        let Ok(ip) = c.host.parse::<IpAddr>() else {
             continue;
         };
-        let Ok(port) = r.port.parse::<u16>() else {
+        let Ok(port) = c.port.parse::<u16>() else {
             continue;
         };
         if port == 0 {
@@ -117,7 +129,7 @@ pub fn parse_peers(output: &str) -> Vec<Peer> {
             continue;
         };
         let peer = Peer {
-            device_id: r.name.to_owned(),
+            device_id: c.name.to_owned(),
             address: SocketAddr::new(ip, port),
         };
         if found.iter().any(|(_, p)| *p == peer) {
@@ -127,6 +139,22 @@ pub fn parse_peers(output: &str) -> Vec<Peer> {
     }
     found.sort_by_key(|(rank, _)| *rank);
     found.into_iter().map(|(_, p)| p).collect()
+}
+
+/// The Magnetita peers in an `avahi-browse -rpt _magnetita._udp` output,
+/// under [`rank_peers`].
+pub fn parse_peers(output: &str) -> Vec<Peer> {
+    rank_peers(
+        output
+            .lines()
+            .filter_map(parse_resolved)
+            .filter(|r| r.service_type == SERVICE_TYPE)
+            .map(|r| Candidate {
+                name: r.name,
+                host: r.address,
+                port: r.port,
+            }),
+    )
 }
 
 #[cfg(test)]
@@ -154,6 +182,42 @@ mod tests {
                 address: "10.0.0.134:1760".parse().unwrap()
             }]
         );
+    }
+
+    #[test]
+    fn candidates_from_any_resolver_follow_one_rule() {
+        fn c<'a>(name: &'a str, host: &'a str, port: &'a str) -> Candidate<'a> {
+            Candidate { name, host, port }
+        }
+        let long = "a".repeat(65);
+        let peers = rank_peers([
+            c("desk", "fd00::5", "1760"),
+            c("desk", "192.168.1.5", "1760"),
+            c("desk", "192.168.1.5", "1760"),
+            c("desk", "fe80::1", "1760"),
+            c("desk", "127.0.0.1", "1760"),
+            c("desk", "desk.local", "1760"),
+            c("desk", "192.168.1.6", "0"),
+            c("desk", "192.168.1.6", "70000"),
+            c("../x", "192.168.1.7", "1760"),
+            c(&long, "192.168.1.8", "1760"),
+        ]);
+        assert_eq!(
+            peers,
+            vec![
+                Peer {
+                    device_id: "desk".into(),
+                    address: "192.168.1.5:1760".parse().unwrap()
+                },
+                Peer {
+                    device_id: "desk".into(),
+                    address: "[fd00::5]:1760".parse().unwrap()
+                },
+            ]
+        );
+        let hosts: Vec<String> = (0..100).map(|n| format!("192.168.2.{n}")).collect();
+        let many = rank_peers(hosts.iter().map(|h| c("desk", h, "1760")));
+        assert_eq!(many.len(), MAX_PEERS);
     }
 
     #[test]

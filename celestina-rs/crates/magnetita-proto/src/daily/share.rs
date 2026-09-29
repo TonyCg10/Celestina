@@ -87,6 +87,17 @@ impl ShareOffer {
     }
 }
 
+/// The name a received file is saved under: only the last component of what
+/// the sender named, so a crafted path cannot leave the receiving directory;
+/// `None` when nothing usable is left, and the receiver picks its own name.
+/// Both ends save received files through this one rule.
+pub fn safe_filename(name: &str) -> Option<&str> {
+    std::path::Path::new(name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty() && !n.contains('\0'))
+}
+
 fn decode_transfer(
     body: &[u8],
     what: &'static str,
@@ -184,6 +195,17 @@ mod tests {
     use crate::codec::testing::{hex, unhex};
 
     const VECTOR: &str = "a400070168696d672e6a7065670219c350036a696d6167652f6a706567";
+
+    #[test]
+    fn a_received_name_keeps_only_its_last_component() {
+        assert_eq!(safe_filename("../../secrets.txt"), Some("secrets.txt"));
+        assert_eq!(safe_filename("/etc/passwd"), Some("passwd"));
+        assert_eq!(safe_filename("photo.jpg"), Some("photo.jpg"));
+        assert_eq!(safe_filename(""), None);
+        assert_eq!(safe_filename(".."), None);
+        assert_eq!(safe_filename("a/.."), None);
+        assert_eq!(safe_filename("/"), None);
+    }
 
     #[test]
     fn golden_vector_round_trips() {

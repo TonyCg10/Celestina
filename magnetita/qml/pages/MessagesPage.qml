@@ -7,9 +7,10 @@ import QtQuick.Layouts
 import org.celestina.magnetita 1.0
 
 // The phone's SMS: the conversation list, then one thread with a field to
-// answer. Everything comes from the daemon, which asks the phone; the page
-// re-reads while it is on screen, since the daemon signals no SMS change
-// of its own.
+// answer. Everything comes from the daemon's cache. Opening the page asks
+// the phone for a fresh list once; after that the daemon's `Changed`
+// signal, which received messages raise, drives every re-read while the
+// page is on screen. Nothing polls.
 Item {
     id: root
 
@@ -17,19 +18,32 @@ Item {
     required property string deviceId
 
     readonly property bool threadOpen: root.messages.openThread.length > 0
+    readonly property bool shown: root.visible && root.deviceId.length > 0
+
+    Binding {
+        target: root.messages
+        property: "active"
+        value: root.shown
+    }
+
+    // A device change can also make the page shown; both land in one pull,
+    // queued once for the end of this turn of the event loop.
+    function pullSoon() {
+        if (root.shown)
+            Qt.callLater(root.pullNow)
+    }
+
+    function pullNow() {
+        if (root.shown)
+            root.messages.pull()
+    }
 
     onDeviceIdChanged: {
         root.messages.deviceId = root.deviceId
-        root.messages.refresh()
+        root.pullSoon()
     }
 
-    Timer {
-        interval: 3000
-        running: root.visible && root.deviceId.length > 0
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root.messages.refresh()
-    }
+    onShownChanged: root.pullSoon()
 
     // ── The list ─────────────────────────────────────────────────────────
     ScrollPage {

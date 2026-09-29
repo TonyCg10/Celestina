@@ -39,7 +39,7 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import org.celestina.magnetita.R
-import org.celestina.magnetita.link.PairLink
+import org.celestina.magnetita.link.CorePairing
 import org.celestina.magnetita.ui.components.Canvas
 import org.celestina.magnetita.ui.components.Header
 
@@ -65,7 +65,7 @@ fun ScanScreen(onLink: (String) -> Unit, onBack: () -> Unit) {
             ) {
                 if (granted) {
                     Viewfinder { text ->
-                        if (PairLink.accepts(text)) onLink(text!!) else foreign = true
+                        if (text != null && CorePairing.accepts(text)) onLink(text) else foreign = true
                     }
                 } else {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {

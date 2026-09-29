@@ -7,13 +7,17 @@
 //! the loop that enforces Forget, stop and supersede. A write that outlives
 //! its deadline closes the connection, and the closed connection ends the
 //! session.
+//!
+//! The outbox is also where the session's negotiated capabilities gate what
+//! leaves: an envelope of a capability the phone's hello did not offer is
+//! refused here, whoever queued it (MAG-8).
 
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
 use magnetita_link::Session;
-use magnetita_proto::Envelope;
+use magnetita_proto::{Envelope, Negotiated};
 use tokio::sync::mpsc::error::TrySendError;
 
 use crate::runtime::log;
@@ -39,14 +43,17 @@ pub(crate) enum Refused {
     Full,
     /// The session has ended.
     Closed,
+    /// The phone did not negotiate this capability.
+    Declined(u16),
 }
 
 impl fmt::Display for Refused {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Refused::Full => "the control stream is backed up",
-            Refused::Closed => "the session has ended",
-        })
+        match self {
+            Refused::Full => f.write_str("the control stream is backed up"),
+            Refused::Closed => f.write_str("the session has ended"),
+            Refused::Declined(c) => write!(f, "the phone did not negotiate capability {c}"),
+        }
     }
 }
 
@@ -56,6 +63,7 @@ impl fmt::Display for Refused {
 #[derive(Clone)]
 pub(crate) struct Outbox {
     tx: tokio::sync::mpsc::Sender<Item>,
+    negotiated: Arc<Negotiated>,
 }
 
 /// What waits for the writer: an envelope, or a mark the writer answers once
@@ -80,6 +88,9 @@ impl Outbox {
     /// Queues one envelope without waiting. The writer gives it the next
     /// envelope id; `env.id` is ignored.
     pub(crate) fn send(&self, env: Envelope) -> Result<(), Refused> {
+        if !self.negotiated.allows(env.capability) {
+            return Err(Refused::Declined(env.capability));
+        }
         self.queue(Item::Envelope(env))
     }
 
@@ -101,18 +112,25 @@ impl Outbox {
         })
     }
 
-    /// An outbox whose queue the test reads itself, with no session behind.
+    /// An outbox whose queue the test reads itself, with no session behind,
+    /// for a phone that offered everything this daemon does.
     #[cfg(test)]
     pub(crate) fn detached(capacity: usize) -> (Self, tokio::sync::mpsc::Receiver<Item>) {
         let (tx, rx) = tokio::sync::mpsc::channel(capacity);
-        (Self { tx }, rx)
+        let all = super::offered();
+        let negotiated = Arc::new(Negotiated::between(&all, &all));
+        (Self { tx, negotiated }, rx)
     }
 }
 
 /// Starts the writer of `session`'s control stream on the current runtime.
 /// The task ends when every [`Outbox`] is gone, when a write fails, or when
 /// a write outlives [`SEND_DEADLINE`]; the last two close the connection.
-pub(crate) fn spawn(session: Arc<Session>, name: String) -> (Outbox, tokio::task::JoinHandle<()>) {
+pub(crate) fn spawn(
+    session: Arc<Session>,
+    name: String,
+    negotiated: Arc<Negotiated>,
+) -> (Outbox, tokio::task::JoinHandle<()>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Item>(QUEUE);
     let task = tokio::spawn(async move {
         while let Some(item) = rx.recv().await {
@@ -145,7 +163,7 @@ pub(crate) fn spawn(session: Arc<Session>, name: String) -> (Outbox, tokio::task
             }
         }
     });
-    (Outbox { tx }, task)
+    (Outbox { tx, negotiated }, task)
 }
 
 #[cfg(test)]
@@ -165,5 +183,43 @@ mod tests {
         assert_eq!(outbox.send(env()), Err(Refused::Full));
         drop(rx);
         assert_eq!(outbox.send(env()), Err(Refused::Closed));
+    }
+
+    /// MAG-8: what the phone did not offer never leaves, whoever queues it.
+    #[test]
+    fn a_capability_the_phone_declined_is_refused_before_the_queue() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+        let battery_only = [magnetita_proto::CapabilityVersion {
+            capability: magnetita_proto::capability::BATTERY,
+            version: 1,
+        }];
+        let outbox = Outbox {
+            tx,
+            negotiated: Arc::new(Negotiated::between(&super::super::offered(), &battery_only)),
+        };
+        let env = |capability| Envelope {
+            capability,
+            kind: 1,
+            id: 0,
+            body: Vec::new(),
+        };
+        let clipboard = magnetita_proto::capability::CLIPBOARD;
+        assert_eq!(
+            outbox.send(env(clipboard)),
+            Err(Refused::Declined(clipboard))
+        );
+        assert_eq!(
+            outbox.send(env(magnetita_proto::capability::BATTERY)),
+            Ok(())
+        );
+        assert_eq!(
+            outbox.send(env(magnetita_proto::capability::PAIRING)),
+            Ok(())
+        );
+        let queued = rx.try_recv().ok().and_then(Item::into_envelope);
+        assert_eq!(
+            queued.map(|e| e.capability),
+            Some(magnetita_proto::capability::BATTERY)
+        );
     }
 }

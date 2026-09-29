@@ -9,17 +9,17 @@ license = "GPL-3.0-or-later"
 name = "magnetita_mobile"
 crate-type = ["cdylib", "rlib"]
 
-# The crate's own Kotlin bindings generator, run by the Android build. Only it
-# needs uniffi's bindgen and command-line stack (RS-13). The feature is on by
-# default until the Android build names it, and the crates that link this
-# library (magnetita-peer, magnetitad's tests) opt out.
+# The crate's own Kotlin bindings generator, run by the Android build with
+# `--features bindgen` (magnetita-android/scripts/build-native.sh). Only it
+# needs uniffi's bindgen and command-line stack (RS-13), so the feature is
+# opt-in: the library, the phone's cdylib and every crate that links it
+# build without that stack.
 [[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 required-features = ["bindgen"]
 
 [features]
-default = ["bindgen"]
 bindgen = ["uniffi/cli"]
 
 [dependencies]

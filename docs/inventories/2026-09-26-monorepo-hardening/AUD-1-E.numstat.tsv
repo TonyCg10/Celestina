@@ -1,0 +1,155 @@
+# AUD-1-E exact change inventory
+
+Base revision	962510f939262c811884d6a138be5c7bddb4e8ed
+Pathspec	celestina-rs/crates/magnetita-core/src/clipboard.rs
+Pathspec	celestina-rs/crates/magnetita-core/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/demux.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/discovery.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/endpoint.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/error.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/session.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/tls.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-mobile/src/discovery.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/pairing.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/signal.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/main.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/clipboard.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/daily/share.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/hello.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/pair.rs
+Pathspec	celestina-rs/crates/magnetitad/src/clipboard.rs
+Pathspec	celestina-rs/crates/magnetitad/src/devices.rs
+Pathspec	celestina-rs/crates/magnetitad/src/incoming_file.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/negotiation_tests.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/phone.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/session_tests.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/writer.rs
+Pathspec	celestina-rs/crates/magnetitad/src/main.rs
+Pathspec	docs/evidence/2026-09-26-negotiated-capabilities.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-E.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/version-history.tsv
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/VALIDATION.md
+Pathspec	magnetita-android/app/build.gradle.kts
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Backoff.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/ClipboardPolicy.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CorePairing.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/InputQueue.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LocalAddresses.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/NsdDiscovery.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/PairingConsent.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/phone/Messages.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/share/Downloads.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/DocumentPaths.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/ScanScreen.kt
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/ClipboardPolicyTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/InputQueueTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/PairingConsentTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/mirror/MirrorGeometryTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/storage/DocumentPathsTest.kt
+Pathspec	magnetita-android/scripts/build-native.sh
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/docs/protocol.md
+Pathspec	magnetita/qml/pages/MessagesPage.qml
+Pathspec	magnetita/src/devices.rs
+Pathspec	magnetita/src/messages.rs
+Pathspec	scripts/language-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+0	51	deleted	celestina-rs/crates/magnetita-core/src/clipboard.rs
+4	4	8ea9da12397654b85fcea709b724730af07dea413ac04c2004c462e9c38a0b54	celestina-rs/crates/magnetita-core/src/lib.rs
+276	0	fea87e78e498bfd957135ed4a6fb2df7279f8a5d64f4afa66f50526406e10e75	celestina-rs/crates/magnetita-link/src/demux.rs
+79	15	5a76f92115bfd77e5e2f86186d2d26fb836bf0a7e32059158fbf69fdab90139b	celestina-rs/crates/magnetita-link/src/discovery.rs
+175	0	496b7b25cf9a8b962f9d11e7d9ab94f9afa25bff4edda5b64e6fdd3756f7d85c	celestina-rs/crates/magnetita-link/src/endpoint.rs
+7	0	03fa20e93d4fa4417033d3f94e23a32bf07d45f85765b57fe11134f113de8b5d	celestina-rs/crates/magnetita-link/src/error.rs
+2	0	69e0b7ff93861307fdaf6d58611593c504b87086dd6869294e522c0db4cf32e4	celestina-rs/crates/magnetita-link/src/lib.rs
+47	7	edd8d3de9ccdb591582c97175f7c8101a6f9a05144820ab3381fd541588b5654	celestina-rs/crates/magnetita-link/src/session.rs
+6	0	4ace0d80b68906aa906a9a9179eebc0a7889e41081aa51304d0c9238f311686d	celestina-rs/crates/magnetita-link/src/tls.rs
+5	5	f3d434740406899b60db798a9760d4733d75dacce12a132d5ecf8ddaa41ad45d	celestina-rs/crates/magnetita-mobile/Cargo.toml
+138	0	6abc97f126105557ff154ef51b194e85e2decc029d5bc6387df2106079aaa3f7	celestina-rs/crates/magnetita-mobile/src/discovery.rs
+8	2	275ef45adc93d556ad7bcaaf2b59d4562c1b4390a4cfd0f6ab5af2b44b52e868	celestina-rs/crates/magnetita-mobile/src/lib.rs
+360	294	442751b7f339e8bb0f876e0ac638135433cd7db26abfdb23f2cba2ca3e7cefcd	celestina-rs/crates/magnetita-mobile/src/mobile.rs
+314	0	eb428649203966bf80933716b6075bd4844bd093151000e451031381b23e225e	celestina-rs/crates/magnetita-mobile/src/pairing.rs
+836	474	eb1a9abe49a341fdaa405747b17313f0f02ef5bac4b01e8165869cbb7db09eef	celestina-rs/crates/magnetita-mobile/src/phone.rs
+942	0	4264e9e98547c8a31630a3274cf1432fd60278a732c142ed56289f0d8f27de53	celestina-rs/crates/magnetita-mobile/src/signal.rs
+10	4	89219bdbe59a172c09610aec2a2d7bbd08d0826ab587a8ad1b05b9696afac396	celestina-rs/crates/magnetita-peer/src/lib.rs
+50	70	b74cd62dc16830bd6fa8e307b114c885ea63bd67ce700d68b82c8025daadff5b	celestina-rs/crates/magnetita-peer/src/main.rs
+43	0	4da89dd4dd71b0da16bee16be91cfa5dffe4c8f06c49bca154992422cf0e0cd2	celestina-rs/crates/magnetita-proto/src/daily/clipboard.rs
+22	0	770579bb9066d41b8c40b033a1de840eece86bc9d399de0b2eb4771c1209e552	celestina-rs/crates/magnetita-proto/src/daily/share.rs
+76	0	8a17ae3c535535b276196fe3aec5593bcbaeb0ccd4bedbe8673a637cd2009427	celestina-rs/crates/magnetita-proto/src/hello.rs
+1	1	6a6c3d95c2bc6ca8a337c2f029ef5d5a4f76d891c68928f974662348460fcdc2	celestina-rs/crates/magnetita-proto/src/lib.rs
+42	1	d135e7fd85b9e7e9e551ce335c8d9085bfe3d5e6d563f066629a4a98b5ac17ca	celestina-rs/crates/magnetita-proto/src/pair.rs
+4	1	bc917203fe9ab86e7d8066fc47a6d60671a7e5504074a20147e780934501590f	celestina-rs/crates/magnetitad/src/clipboard.rs
+49	4	8188ac9f2e75af3882f92cc0c1b4d7b7c70b2cb5129db7958c56747fcc78e7b1	celestina-rs/crates/magnetitad/src/devices.rs
+3	5	434ebb4847c0832cde23a333abeb40230123d1fd828927cad03d72585a992659	celestina-rs/crates/magnetitad/src/incoming_file.rs
+87	77	3e8e0140bc739d2e4bbdca890c46c1671f503cfceb34b644abefc94f7e06cb77	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+186	0	c2323e622bd7630a5575e5db74d042021469a02fdd0d5b1b820c0915e299e861	celestina-rs/crates/magnetitad/src/link_wire/negotiation_tests.rs
+9	0	6fbb0e435e0953de703e76e0e695f271bf71bdc20caf9674e3e6abae3ec3f897	celestina-rs/crates/magnetitad/src/link_wire/phone.rs
+127	0	c72ca9de130041a5c0ee1b4ce779b0d716e74992733f57a001c2048d5f276969	celestina-rs/crates/magnetitad/src/link_wire/session_tests.rs
+65	9	1e2e983b4d26231a5dab328ae13180949660401a9aa3f9564a86fa9b774b31fa	celestina-rs/crates/magnetitad/src/link_wire/writer.rs
+1	1	e6ac604d648206ce6fc68099456dbbce50d54183e7412e9c31147de41f460c3d	celestina-rs/crates/magnetitad/src/main.rs
+337	0	98e67ac1962289d3ca26ed07ca1dc91dbc6ccbc7087915f8ba20ed05383b7b3a	docs/evidence/2026-09-26-negotiated-capabilities.md
+155	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-E.numstat.tsv
+1	1	f49aec1abd5653f9a1d6d49d19a56620b7faed4f173f197c13a43c72fe58ffd0	docs/plans/active/2026-09-26-monorepo-hardening.md
+2	0	8fe3ac1ee38101d8a93bd8b6a30e4a32106a3b0d5b0020746431495bcaa87e7b	docs/version-history.tsv
+12	2	2960e724863c9f170e579e8fccdc0dfebdef6c8d03d0cfc5a245f2e82f54fde3	magnetita-android/STATUS.md
+26	0	d67626e118905bca3b4c535778484c31c01d0eaedbd5b40beef2657cb7082d87	magnetita-android/VALIDATION.md
+1	1	f50c4728b04154a728d527e6ecbe5e6ef668c1dabc3e140fc710d05800358d0b	magnetita-android/app/build.gradle.kts
+3	2	c27fe73e27b32f99855a28c84d0e0e51a871652d5aaf0c01a1da4bbb11cb4be7	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+0	25	deleted	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Backoff.kt
+22	14	85c306c2905ea7c084317e6ec2226c0a402b8c6554309668e92a0a8eaabacfb1	magnetita-android/app/src/main/java/org/celestina/magnetita/link/ClipboardPolicy.kt
+65	17	7b7429f8c34962bf992035f301ab90d4466812a68d1eacb9b1c78e99c311bc8b	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CoreConnector.kt
+34	0	47d1a08b3c47a6e6459765b47591730fb00580ff03907db38627ff2ae40aa831	magnetita-android/app/src/main/java/org/celestina/magnetita/link/CorePairing.kt
+12	93	044259acc9ba63a50891af0f561793a3170c95ce74fcf23a44da1955e21da083	magnetita-android/app/src/main/java/org/celestina/magnetita/link/DesktopSignal.kt
+57	0	3fdc1114fcb02e259ba5a78e28352e026ef5894d46d437e818f1b9af60459b43	magnetita-android/app/src/main/java/org/celestina/magnetita/link/InputQueue.kt
+117	62	17727666a155057286da81b3eb6beefc2eca99b3fc2267f460366aac8efacbef	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkController.kt
+44	7	8b32924f5852315c78b90a891cbe56e71e0ba5bf1c07abe654ccd912c802ceb4	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+1	1	f55d1a05d37f40b4b873fe451086b6fefc6c9ccb5b194caf9380ff9bbf95d8c4	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LocalAddresses.kt
+16	16	eebd6a3bbb2711c6df82276780884a2fb1c4cfc21a3ca8d614070fc73aa27250	magnetita-android/app/src/main/java/org/celestina/magnetita/link/NsdDiscovery.kt
+13	179	6ddc5300bdcf86e5595afeaca06585a4203cd72d46e469fc48e0ddba9d685e04	magnetita-android/app/src/main/java/org/celestina/magnetita/link/PairingConsent.kt
+41	44	0fc1392e76eeaa1fdd6a29f3bbc9dddaaa0aefb1d3ea7828022002188177bd3a	magnetita-android/app/src/main/java/org/celestina/magnetita/link/Ports.kt
+43	13	9d767e3ce15b109c0f59060afe791a95614f9031e40f543527e2188f28848264	magnetita-android/app/src/main/java/org/celestina/magnetita/phone/Messages.kt
+13	3	a703cfc1a9bbada711aed0bd4a37591e932a616eeea4d99878a31209ff1d3ae1	magnetita-android/app/src/main/java/org/celestina/magnetita/share/Downloads.kt
+6	10	b9b83734f8b110a4d024fb6f4aca817ae667e8e824f2b1bbfee1bb4dafd32d1d	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/DocumentPaths.kt
+13	17	bb6c4b918c9c6cb7612dff528b65c6e1a15a5f47a77f2bbd4ce364806cdd58e5	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+2	2	c40e6db4e84adb51f27aa76fc42dbbd55965ded42c9269fbc0729fd57607789c	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/ScanScreen.kt
+1	0	cad220cc416c6463477df3af923571be399be3359a9fc3487a5279c9e6583c46	magnetita-android/app/src/main/res/values/strings.xml
+18	16	d4e585b1da88cd3905da810b7d610fc568836ce73078062fca2d142cccc5473d	magnetita-android/app/src/test/java/org/celestina/magnetita/link/ClipboardPolicyTest.kt
+0	45	deleted	magnetita-android/app/src/test/java/org/celestina/magnetita/link/DesktopSignalTest.kt
+42	0	b724d2051ab0af9a58ba2be91f5fcb6a1b94df009e5c312d206e6adb87fc98ec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/InputQueueTest.kt
+170	33	5dab969617cb1716811ec5fc81f55c04dbdd059d9e7096cb7fc9bf744a72b73e	magnetita-android/app/src/test/java/org/celestina/magnetita/link/LinkControllerTest.kt
+23	81	34d4470504ca738fa9831af8a3206556d479720ade315a32ffbe75936b6d2300	magnetita-android/app/src/test/java/org/celestina/magnetita/link/PairingConsentTest.kt
+0	15	7371a9bb2f81077908a9bbcd2c8a5edbe4ecb7ea6b7dfc053869f0698b274eb4	magnetita-android/app/src/test/java/org/celestina/magnetita/mirror/MirrorGeometryTest.kt
+0	16	d01a28250f2978175a5ee55adaca1851a0e7244d559181ca7b474e72a5c520e6	magnetita-android/app/src/test/java/org/celestina/magnetita/storage/DocumentPathsTest.kt
+3	1	c6974689ca413a54ccdd3b90120312e51fd07ff10c100d35a94cece5929238a7	magnetita-android/scripts/build-native.sh
+1	1	c7ff40ba0dfc11a28afe775e87479b3c04fd65f571502f494be8f9ce0f605201	magnetita/Cargo.lock
+1	1	3df5cb26828dfebda68753c932ad47d0b75908a017b0b44e428f62b2f857dcbc	magnetita/Cargo.toml
+9	7	d299990c02981015f41a179a408d7ea5276e0c8c087a90e33e616452424bde44	magnetita/STATUS.md
+9	5	f5744897585a37d7778e39be45ec357a01ee5fa97ea0818a96507ff3a411f3cd	magnetita/docs/protocol.md
+25	11	e849622ee1166a4fda318984db3b396245a229a916c040d645ef73c190e6ad1a	magnetita/qml/pages/MessagesPage.qml
+13	1	0b5b30ddce6a0aaedcec3a46f890533bf74c49ee39ea0b1fbdf45ff754af8be0	magnetita/src/devices.rs
+68	1	4b7f1792e707a503966248a1a637a42c267535fbf998230f9358007ab3b0b721	magnetita/src/messages.rs
+0	1	cc14f7097bba8512725c05127d4974506f3663192c0c9cb10cd559535217ebd5	scripts/language-baseline.tsv

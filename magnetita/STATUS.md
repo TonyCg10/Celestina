@@ -1,6 +1,6 @@
 # Magnetita status
 
-- **Updated:** 2026-09-27
+- **Updated:** 2026-09-28
 - **Implementation:** `MAG-D1`, the design of the two applications, is the
   one open checkpoint since 2026-09-13, when the author closed the
   own-protocol program (`MAG-P0` through `MAG-P7`) with `VAL-MAG-11`, `-12`,
@@ -34,6 +34,11 @@
   address, never the window. A session runs under the id its pinned
   certificate gives, and a hello naming another id is closed. A phone that
   dials again while its earlier session is open supersedes it.
+- **Negotiated capabilities.** Both ends advertise every capability they
+  use and keep, per session, what both hellos offer; each refuses a send
+  or a received message of anything else (`AUD-1-E`). A phone build older
+  than `AUD-1-E` offered only battery and find, so against this daemon it
+  keeps only those two: the desktop and the APK land together.
 - **Sessions.** Each session reads its control stream from one task and
   writes it from one writer with a 10 s send deadline; a phone that stops
   reading is closed at the deadline. `Forget` is a durable barrier: the
@@ -76,7 +81,9 @@
 - **The application** orders actions on one owned bounded worker and
   reflects only confirmed snapshots. Its device lists are parallel string
   lists replaced whole on each snapshot (`MAG-22`'s row-level models are
-  not done).
+  not done). The Messages page does not poll: it asks the phone once when
+  it opens (`RefreshSms`) and re-reads the daemon's cache on `Changed`
+  (`AUD-1-E`).
 
 ## Planned implementation debt
 
@@ -88,11 +95,6 @@
 - A mirror touch-up can still be lost on the daemon side when the phone has
   stopped reading and the session's outbox is full; the session then ends
   at its send deadline, and the phone's own gesture timeout lifts the touch.
-- Capability negotiation, one owner for the protocol's rules on both ends,
-  the Messages page driven by signals, and `uniffi`'s bindgen made opt-in
-  with `--features bindgen` in the Android build script (`AUD-1-E` in the
-  suite plan). Until then the `bindgen` feature is on by default and only
-  `magnetita-peer` and `magnetitad`'s tests opt out (`RS-13`).
 - Magnetita Android's STATUS version line and README install step
   (`MAG-24`, under `magnetita-android:`).
 

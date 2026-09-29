@@ -8,11 +8,17 @@
 //! scanning, and it reports what only it knows. All of that is [`Phone`]
 //! and [`PhoneSession`], plain Rust; the `mobile` module wraps them for
 //! UniFFI so Kotlin gets one object per Rust object and no rule of its own.
-//! There is no Kotlin logic to keep in step: the bindings are generated
-//! from this crate at build time.
+//! What the desktop sends reaches Kotlin as one typed [`signal::DesktopSignal`];
+//! the rules Kotlin needs before a session exists (the pairing preview, the
+//! discovery ranking and the reconnection schedule) are `pairing` and
+//! `discovery`. There is no Kotlin logic to keep in step: the bindings are
+//! generated from this crate at build time.
 
+pub mod discovery;
 pub mod mobile;
+pub mod pairing;
 pub mod phone;
+pub mod signal;
 pub mod storage;
 
 pub use phone::{Phone, PhoneSession};

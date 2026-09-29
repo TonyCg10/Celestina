@@ -176,7 +176,7 @@ impl Daemon {
     /// is the value we just received from a phone (our own wl-copy echo), which
     /// would otherwise loop back and forth forever.
     fn push_clipboard(&self, text: String) {
-        if !magnetita_core::clipboard::is_syncable(&text) || !self.settings.lock_ok().clipboard {
+        if !crate::clipboard::syncable(&text) || !self.settings.lock_ok().clipboard {
             return;
         }
         {

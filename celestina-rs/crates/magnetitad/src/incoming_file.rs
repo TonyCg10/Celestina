@@ -35,12 +35,10 @@ pub(crate) fn download_dir() -> PathBuf {
 }
 
 /// Only the file-name component of a shared name, so a crafted path cannot
-/// escape the downloads dir.
+/// escape the downloads dir: the wire's one rule, which the phone applies
+/// too (AND-9), with the desktop's own name when nothing usable is left.
 pub(crate) fn safe_filename(name: &str) -> String {
-    Path::new(name)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
+    magnetita_proto::daily::share::safe_filename(name)
         .unwrap_or("archivo")
         .to_owned()
 }

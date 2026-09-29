@@ -19,27 +19,45 @@ import org.celestina.magnetita.link.SmsMessage
 class Messages(private val context: Context) {
     private val canRead get() = PhonePermissions.granted(context, android.Manifest.permission.READ_SMS)
 
-    /** Every conversation, newest first: the last message of each thread. */
+    /**
+     * The newest conversations, at most [MAX_CONVERSATIONS]: one row per
+     * thread from the threads provider, never a walk over every message
+     * (AND-3). The addresses come from the canonical addresses the threads
+     * name, and the unread counts from the unread inbox rows only.
+     */
     fun sendConversations() {
         if (!canRead) {
             LinkService.send(context, Outbound.Conversations(emptyList()))
             return
         }
-        val seen = LinkedHashMap<Long, SmsConversation>()
-        val unread = HashMap<Long, Int>()
-        context.contentResolver.query(
-            Telephony.Sms.CONTENT_URI,
-            arrayOf(Telephony.Sms.THREAD_ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.READ, Telephony.Sms.TYPE),
-            null, null, "${Telephony.Sms.DATE} DESC",
+        val resolver = context.contentResolver
+        val threads = ArrayList<Triple<Long, List<Long>, Pair<String, Long>>>()
+        resolver.query(
+            THREADS,
+            arrayOf(Telephony.Threads._ID, Telephony.Threads.RECIPIENT_IDS, Telephony.Threads.SNIPPET, Telephony.Threads.DATE),
+            null, null, "${Telephony.Threads.DATE} DESC LIMIT $MAX_CONVERSATIONS",
         )?.use { c ->
-            while (c.moveToNext()) {
-                val thread = c.getLong(0)
-                val address = c.getString(1).orEmpty()
-                if (c.getInt(4) == 0 && c.getInt(5) == Telephony.Sms.MESSAGE_TYPE_INBOX) unread[thread] = (unread[thread] ?: 0) + 1
-                if (thread !in seen) seen[thread] = SmsConversation(thread, listOf(address), c.getString(2).orEmpty(), c.getLong(3), 0)
+            while (threads.size < MAX_CONVERSATIONS && c.moveToNext()) {
+                val recipients = c.getString(1).orEmpty().split(' ').mapNotNull { it.toLongOrNull() }
+                threads += Triple(c.getLong(0), recipients, c.getString(2).orEmpty() to c.getLong(3))
             }
         }
-        val list = seen.values.map { it.copy(unread = unread[it.thread] ?: 0) }.take(256)
+        val wanted = threads.flatMap { it.second }.distinct()
+        val addresses = HashMap<Long, String>()
+        wanted.chunked(QUERY_ARGS).forEach { ids ->
+            resolver.query(
+                CANONICAL_ADDRESSES, arrayOf("_id", "address"),
+                "_id IN (${ids.joinToString(",") { "?" }})", ids.map { it.toString() }.toTypedArray(), null,
+            )?.use { c -> while (c.moveToNext()) addresses[c.getLong(0)] = c.getString(1).orEmpty() }
+        }
+        val unread = HashMap<Long, Int>()
+        resolver.query(
+            Telephony.Sms.CONTENT_URI, arrayOf(Telephony.Sms.THREAD_ID),
+            "${Telephony.Sms.READ} = 0 AND ${Telephony.Sms.TYPE} = ?", arrayOf(Telephony.Sms.MESSAGE_TYPE_INBOX.toString()), null,
+        )?.use { c -> while (c.moveToNext()) unread.merge(c.getLong(0), 1, Int::plus) }
+        val list = threads.map { (thread, recipients, last) ->
+            SmsConversation(thread, recipients.mapNotNull { addresses[it] }, last.first, last.second, unread[thread] ?: 0)
+        }
         LinkService.send(context, Outbound.Conversations(list))
     }
 
@@ -80,6 +98,18 @@ class Messages(private val context: Context) {
             "${Telephony.Sms.THREAD_ID} = ?", arrayOf(thread.toString()), "${Telephony.Sms.DATE} DESC LIMIT 1",
         )?.use { c -> if (c.moveToFirst()) return c.getString(0) }
         return null
+    }
+
+    companion object {
+        /** The threads provider, one row per conversation. */
+        private val THREADS = Telephony.Threads.CONTENT_URI.buildUpon().appendQueryParameter("simple", "true").build()
+        private val CANONICAL_ADDRESSES = android.net.Uri.parse("content://mms-sms/canonical-addresses")
+
+        /** The wire's bound on one conversation list. */
+        private const val MAX_CONVERSATIONS = 256
+
+        /** Bind arguments per `IN` query, well under SQLite's limit. */
+        private const val QUERY_ARGS = 256
     }
 
     /** An SMS arrived: the system tells every listener, default app or not. */

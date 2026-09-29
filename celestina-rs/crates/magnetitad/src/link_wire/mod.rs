@@ -57,7 +57,7 @@ use magnetita_proto::phone::contacts::ContactsSync;
 use magnetita_proto::phone::sms::{SmsConversations, SmsReceived, SmsThread};
 use magnetita_proto::phone::telephony::{CallEvent, CallState};
 use magnetita_proto::storage::StorageState;
-use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
+use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello, Negotiated};
 
 use crate::devices::{command_channel, Command, DeviceEntry};
 mod admission;
@@ -124,66 +124,39 @@ async fn drain(tasks: &mut tokio::task::JoinSet<()>, limit: Duration) -> bool {
     ended
 }
 
-/// What this daemon offers on the own wire today.
+/// What this daemon offers on the own wire today, each at version 1: every
+/// capability it sends or handles. A session uses only what the phone's
+/// hello also offers ([`Negotiated`]).
+pub(crate) fn offered() -> Vec<CapabilityVersion> {
+    [
+        capability::BATTERY,
+        capability::FIND,
+        capability::CLIPBOARD,
+        capability::NOTIFICATIONS,
+        capability::SHARE,
+        capability::MEDIA,
+        capability::CONTACTS,
+        capability::SMS,
+        capability::TELEPHONY,
+        capability::COMMANDS,
+        capability::INPUT,
+        capability::MIRROR,
+        capability::STORAGE,
+    ]
+    .into_iter()
+    .map(|capability| CapabilityVersion {
+        capability,
+        version: 1,
+    })
+    .collect()
+}
+
 fn hello(device_id: &str) -> Hello {
     Hello {
         device_id: device_id.to_owned(),
         device_name: "Celestina".into(),
         device_kind: DeviceKind::Desktop,
-        capabilities: vec![
-            CapabilityVersion {
-                capability: capability::BATTERY,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::FIND,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::CLIPBOARD,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::NOTIFICATIONS,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::SHARE,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::MEDIA,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::CONTACTS,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::SMS,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::TELEPHONY,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::COMMANDS,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::INPUT,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::MIRROR,
-                version: 1,
-            },
-            CapabilityVersion {
-                capability: capability::STORAGE,
-                version: 1,
-            },
-        ],
+        capabilities: offered(),
     }
 }
 
@@ -724,13 +697,27 @@ impl Wire {
         mirror::own().set_host(session.remote_address().ip());
         // Every send from here on is queued for the control stream's one
         // writer; nothing below waits on the phone's flow control.
-        let (outbox, writer) = writer::spawn(Arc::clone(&session), name.clone());
+        // What both hellos offer is all this session uses: the outbox refuses
+        // the rest on the way out and the loop below on the way in (MAG-8).
+        let negotiated = Arc::new(Negotiated::between(&offered(), &hello.capabilities));
+        let agreed: Vec<u16> = negotiated
+            .capabilities()
+            .iter()
+            .map(|c| c.capability)
+            .collect();
+        log(
+            "link",
+            &format!("{name}: negotiated capabilities {agreed:?}"),
+        );
+        let (outbox, writer) =
+            writer::spawn(Arc::clone(&session), name.clone(), Arc::clone(&negotiated));
         let queue = |env: magnetita_proto::Envelope, what: &str| {
             if let Err(e) = outbox.send(env) {
                 log("link", &format!("{name}: {what}: {e}"));
             }
         };
-        if daemon.settings.lock_ok().clipboard {
+        let allows = |capability| negotiated.allows(capability);
+        if daemon.settings.lock_ok().clipboard && allows(capability::CLIPBOARD) {
             // The phone answers only while its application is in front.
             queue(
                 magnetita_proto::Envelope {
@@ -762,19 +749,19 @@ impl Wire {
         // Dropped with the session, releasing what the phone still holds.
         let input = input::SessionInput::new(Arc::clone(&self.adapters.input));
         let media = Arc::new(media::SessionMedia::default());
-        if daemon.settings.lock_ok().media {
+        if daemon.settings.lock_ok().media && allows(capability::MEDIA) {
             queue(media::SessionMedia::request(), "media request");
         }
         {
             let settings = *daemon.settings.lock_ok();
-            if settings.contacts {
+            if settings.contacts && allows(capability::CONTACTS) {
                 let since = phone::store().with(&device_id, |book| book.contacts_version);
                 queue(phone::contacts_request(since), "phone request");
             }
-            if settings.sms {
+            if settings.sms && allows(capability::SMS) {
                 queue(phone::conversations_request(), "phone request");
             }
-            if settings.commands {
+            if settings.commands && allows(capability::COMMANDS) {
                 queue(commands::store().published(), "phone request");
             }
         }
@@ -787,11 +774,15 @@ impl Wire {
             let name = name.clone();
             tokio::spawn(async move {
                 loop {
-                    match transfers.accept().await {
-                        Ok(stream) => {
-                            if streams_tx.send(stream).is_err() {
+                    match transfers.accept_or_skip().await {
+                        Ok(magnetita_link::Accepted::Stream(id, stream)) => {
+                            if streams_tx.send((id, stream)).is_err() {
                                 break;
                             }
+                        }
+                        // One stream the phone reset or ended early; the next ones still come.
+                        Ok(magnetita_link::Accepted::Skipped(why)) => {
+                            log("link", &format!("{name}: a bulk stream was skipped: {why}"));
                         }
                         Err(e) => {
                             log("link", &format!("{name}: bulk stream: {e}"));
@@ -831,9 +822,17 @@ impl Wire {
         // Set when the daemon stops: the session ends in order (see below)
         // instead of at once.
         let mut stopping = false;
+        // A refused capability is logged once per session, not per message.
+        let mut refused_logged = std::collections::HashSet::new();
+        let mut refused = |capability: u16, what: &str| {
+            if refused_logged.insert(capability) {
+                log("link", &format!("{name}: refused {what} of capability {capability}: not negotiated; further ones are dropped quietly"));
+            }
+        };
         loop {
             tokio::select! {
                 Some(envelope) = control_rx.recv() => match envelope {
+                    Ok(env) if !allows(env.capability) => refused(env.capability, "a message"),
                     Ok(env) if env.capability == capability::PAIRING && env.kind == pair_kind::QR_PROOF => {
                         self.prove_again(&session, &outbox, &name, &env.body);
                     }
@@ -924,14 +923,15 @@ impl Wire {
                     }
                 },
                 Some((transfer, stream)) = streams_rx.recv() => match transfer {
-                    mirror::VIDEO_STREAM if mirror::own().owned_by(&device_id) => mirror::own().video_stream(stream),
-                    mirror::AUDIO_STREAM if mirror::own().owned_by(&device_id) => mirror::own().audio_stream(stream),
+                    mirror::VIDEO_STREAM if allows(capability::MIRROR) && mirror::own().owned_by(&device_id) => mirror::own().video_stream(stream),
+                    mirror::AUDIO_STREAM if allows(capability::MIRROR) && mirror::own().owned_by(&device_id) => mirror::own().audio_stream(stream),
                     mirror::VIDEO_STREAM | mirror::AUDIO_STREAM => {}
-                    _ => shares.stream_arrived(transfer, stream),
+                    _ if allows(capability::SHARE) => shares.stream_arrived(transfer, stream),
+                    _ => refused(capability::SHARE, "a bulk stream"),
                 },
                 // Motion may arrive as datagrams: same body, no reliability.
                 Some(datagram) = datagram_rx.recv() => match datagram {
-                    Ok(env) if env.capability == capability::INPUT => {
+                    Ok(env) if env.capability == capability::INPUT && allows(capability::INPUT) => {
                         self.handle_input(&name, &input, env.kind, &env.body);
                     }
                     Ok(_) => {}
@@ -945,13 +945,14 @@ impl Wire {
                     for env in mirror::own().tick(&device_id, &outbox) {
                         queue(env, "mirror");
                     }
-                    media.set_active(daemon.settings.lock_ok().media);
+                    media.set_active(daemon.settings.lock_ok().media && allows(capability::MEDIA));
                     for state in media.tick() {
                         queue(state, "media");
                     }
                     // The desktop's clipboard changes land in the shared slot
                     // for every device; this wire drains its own entry here.
-                    if let Some(text) = daemon.pending_clipboards.take(&device_id) {
+                    let pending = daemon.pending_clipboards.take(&device_id);
+                    if let Some(text) = pending.filter(|_| allows(capability::CLIPBOARD)) {
                         queue(
                             magnetita_proto::Envelope {
                                 capability: capability::CLIPBOARD,
@@ -1128,7 +1129,7 @@ impl Wire {
             (capability::SMS, SmsConversations::KIND) if settings.sms => {
                 match SmsConversations::decode(&env.body) {
                     Ok(list) => {
-                        store.with(device_id, |book| book.conversations = list.conversations);
+                        store.with(device_id, |book| book.set_conversations(list.conversations));
                         self.daemon.notify_change();
                     }
                     Err(e) => log("link", &format!("{name}: sms: {e}")),
@@ -1280,7 +1281,7 @@ impl Wire {
                     return;
                 }
                 match ClipboardText::decode(&env.body) {
-                    Ok(clip) if magnetita_core::clipboard::is_syncable(&clip.text) => {
+                    Ok(clip) if crate::clipboard::syncable(&clip.text) => {
                         // Record before writing so the watcher does not echo it back.
                         *self.daemon.last_clipboard.lock_ok() = clip.text.clone();
                         let sink = Arc::clone(&self.adapters.clipboard_sink);
@@ -1415,6 +1416,9 @@ mod admission_tests;
 mod session_tests;
 
 #[cfg(test)]
+mod negotiation_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::devices::{Commands, Log, Registry};
@@ -1441,7 +1445,16 @@ mod tests {
         })
     }
 
+    /// A phone that offers every capability this daemon does.
     pub(super) fn phone(name: &str) -> (Endpoint, Fingerprint) {
+        phone_offering(name, offered())
+    }
+
+    /// A phone whose hello offers exactly `capabilities`.
+    pub(super) fn phone_offering(
+        name: &str,
+        capabilities: Vec<CapabilityVersion>,
+    ) -> (Endpoint, Fingerprint) {
         let cert = DeviceCert::generate(name);
         let fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let hello = Hello {
@@ -1449,10 +1462,7 @@ mod tests {
             device_id: magnetita_link::device_id_of(&fp),
             device_name: name.into(),
             device_kind: DeviceKind::Phone,
-            capabilities: vec![CapabilityVersion {
-                capability: capability::BATTERY,
-                version: 1,
-            }],
+            capabilities,
         };
         (
             Endpoint::bind(

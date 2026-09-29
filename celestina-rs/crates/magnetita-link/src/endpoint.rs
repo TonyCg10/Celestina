@@ -437,6 +437,181 @@ mod tests {
         assert_eq!(r.read_to_end(1024).await.unwrap(), b"payload");
     }
 
+    /// A desktop and a phone session over loopback, pinned both ways.
+    async fn sessions() -> (Endpoint, Endpoint, Session, Session) {
+        let (desktop, desktop_fp) = endpoint("desktop", DeviceKind::Desktop);
+        let (phone, phone_fp) = endpoint("phone", DeviceKind::Phone);
+        let desktop_trust = pinned(&phone_fp, "phone");
+        let phone_trust = pinned(&desktop_fp, "desktop");
+        let addr = desktop.local_addr().unwrap();
+        let accept = async {
+            let incoming = desktop.accept().await.unwrap().handshake().await.unwrap();
+            desktop
+                .admit(incoming, Expect::Trusted(&desktop_trust))
+                .await
+                .unwrap()
+        };
+        let dial = phone.connect(addr, Expect::Trusted(&phone_trust));
+        let ((server, _), (client, _)) = tokio::join!(accept, async { dial.await.unwrap() });
+        (desktop, phone, server, client)
+    }
+
+    /// Streams that open and stay silent before their id do not delay the
+    /// stream after them: ids are read side by side, each within the budget.
+    #[tokio::test]
+    async fn silent_bulk_streams_delay_no_other_stream() {
+        let (_desktop, _phone, server, client) = sessions().await;
+        let conn = client.transfers().conn.clone();
+        let mut silent = Vec::new();
+        for _ in 0..2 {
+            let mut s = conn.open_uni().await.unwrap();
+            // One byte of the four: the stream exists and says no more.
+            s.write_all(&[0]).await.unwrap();
+            silent.push(s);
+        }
+        let mut good = client.open_transfer(9).await.unwrap();
+        good.write_all(b"frame").await.unwrap();
+        good.finish().unwrap();
+        let started = std::time::Instant::now();
+        let (id, _stream) =
+            tokio::time::timeout(Duration::from_secs(5), server.transfers().accept())
+                .await
+                .expect("the good stream in time")
+                .unwrap();
+        assert_eq!(id, 9);
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "the good stream waited {:?} behind silent ones",
+            started.elapsed()
+        );
+        // The silent ones are skipped once their budget runs out.
+        for _ in 0..2 {
+            let skipped = tokio::time::timeout(
+                crate::STREAM_HEADER_BUDGET + Duration::from_secs(2),
+                server.transfers().accept_or_skip(),
+            )
+            .await
+            .expect("the skip in time")
+            .unwrap();
+            assert!(matches!(skipped, crate::Accepted::Skipped(_)));
+        }
+        drop(silent);
+    }
+
+    /// On a side that reads only reserved streams, streams nobody reserved
+    /// are stopped at once: they never hold the stream limit, and a later
+    /// reserved stream still arrives.
+    #[tokio::test]
+    async fn unreserved_streams_never_hold_the_stream_limit() {
+        let (_desktop, _phone, server, client) = sessions().await;
+        let transfers = server.transfers();
+        transfers.reserve_only();
+        // Start the demultiplexer; nothing is reserved yet.
+        drop(transfers.expect(1000).unwrap());
+        let mut unread = Vec::new();
+        for id in 100..116u32 {
+            let mut s = client.open_transfer(id).await.unwrap();
+            s.write_all(b"x").await.unwrap();
+            let _ = s.finish();
+            unread.push(s);
+        }
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let expected = transfers.expect(5).unwrap();
+        let opened = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut s = client.open_transfer(5).await.unwrap();
+            s.write_all(b"file").await.unwrap();
+            s.finish().unwrap();
+        })
+        .await;
+        assert!(
+            opened.is_ok(),
+            "opening the reserved stream waited for a stream slot"
+        );
+        let mut stream = tokio::time::timeout(Duration::from_secs(2), expected.stream())
+            .await
+            .expect("the reserved stream in time")
+            .unwrap();
+        assert_eq!(stream.read_to_end(16).await.unwrap(), b"file");
+        drop(unread);
+    }
+
+    /// A reserved transfer gets its own stream whatever order the streams
+    /// arrive in; another stream never takes it.
+    #[tokio::test]
+    async fn expected_streams_reach_their_own_waiters() {
+        let (_desktop, _phone, server, client) = sessions().await;
+        let transfers = server.transfers();
+        let first = transfers.expect(1).unwrap();
+        let second = transfers.expect(2).unwrap();
+        assert!(transfers.expect(1).is_err(), "one waiter per transfer");
+        for id in [2u32, 1] {
+            let mut s = client.open_transfer(id).await.unwrap();
+            s.write_all(&[id as u8; 3]).await.unwrap();
+            s.finish().unwrap();
+        }
+        let mut one = tokio::time::timeout(Duration::from_secs(5), first.stream())
+            .await
+            .unwrap()
+            .unwrap();
+        let mut two = tokio::time::timeout(Duration::from_secs(5), second.stream())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(one.read_to_end(16).await.unwrap(), vec![1u8; 3]);
+        assert_eq!(two.read_to_end(16).await.unwrap(), vec![2u8; 3]);
+        // A waiter dropped unanswered frees its transfer; the connection's
+        // end answers the ones still waiting.
+        drop(transfers.expect(3).unwrap());
+        let waiting = transfers.expect(3).unwrap();
+        client.close("done");
+        let ended = tokio::time::timeout(Duration::from_secs(5), waiting.stream())
+            .await
+            .expect("the end in time");
+        assert!(ended.is_err());
+    }
+
+    /// A bulk stream the peer resets or ends before naming its transfer is
+    /// skipped; the streams after it still arrive.
+    #[tokio::test]
+    async fn an_abandoned_bulk_stream_does_not_stop_the_next() {
+        let (_desktop, _phone, server, client) = sessions().await;
+        let conn = client.transfers().conn.clone();
+        // Reset before any byte; then a stream that ends after two bytes of
+        // its id; then a good one.
+        let mut reset = conn.open_uni().await.unwrap();
+        reset.write_all(&[]).await.unwrap();
+        let _ = reset.reset(0u32.into());
+        let mut short = conn.open_uni().await.unwrap();
+        short.write_all(&[0, 0]).await.unwrap();
+        short.finish().unwrap();
+        let mut good = client.open_transfer(9).await.unwrap();
+        good.write_all(b"bytes").await.unwrap();
+        good.finish().unwrap();
+        let transfers = server.transfers();
+        let mut skipped = 0;
+        let (id, mut stream) = loop {
+            match tokio::time::timeout(Duration::from_secs(5), transfers.accept_or_skip())
+                .await
+                .expect("a stream in time")
+                .unwrap()
+            {
+                crate::Accepted::Stream(id, stream) => break (id, stream),
+                crate::Accepted::Skipped(_) => skipped += 1,
+            }
+        };
+        assert_eq!(id, 9);
+        assert!(skipped >= 1, "the short stream was skipped");
+        assert_eq!(stream.read_to_end(64).await.unwrap(), b"bytes");
+        // The connection's end is an error, not a skip.
+        client.close("done");
+        assert!(
+            tokio::time::timeout(Duration::from_secs(5), transfers.accept_or_skip())
+                .await
+                .expect("an answer in time")
+                .is_err()
+        );
+    }
+
     #[tokio::test]
     async fn an_unpinned_peer_is_closed_before_any_envelope() {
         let (desktop, _) = endpoint("desktop", DeviceKind::Desktop);

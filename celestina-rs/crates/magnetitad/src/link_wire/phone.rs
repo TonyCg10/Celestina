@@ -79,11 +79,20 @@ pub(crate) struct DeviceBook {
     pub(crate) contacts_version: u64,
     pub(crate) people: BTreeMap<u64, Person>,
     pub(crate) conversations: Vec<Conversation>,
+    /// Whether the phone has sent its conversation list this session; until
+    /// then a read of the list asks the phone for it (MAG-12).
+    pub(crate) conversations_held: bool,
     pub(crate) threads: HashMap<u64, Vec<SmsMessage>>,
     pub(crate) call: Option<CallEvent>,
 }
 
 impl DeviceBook {
+    /// The phone's conversation list replaces the one held.
+    pub(crate) fn set_conversations(&mut self, list: Vec<Conversation>) {
+        self.conversations = list;
+        self.conversations_held = true;
+    }
+
     /// Applies a page of the phone's contacts.
     pub(crate) fn sync(&mut self, page: &ContactsSync) {
         for c in &page.contacts {

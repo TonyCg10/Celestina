@@ -103,6 +103,9 @@ const IDLE_TIMEOUT_MS: u32 = 30_000;
 /// beat; a one-second keep-alive kept the phone's Wi-Fi awake all day.
 const KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Bulk streams the peer may hold open at once.
+const MAX_BULK_STREAMS: u32 = 16;
+
 fn transport() -> Arc<quinn::TransportConfig> {
     let mut tp = quinn::TransportConfig::default();
     // Measured in MAG-P0: the phone's uplink black-holed larger datagrams.
@@ -114,6 +117,9 @@ fn transport() -> Arc<quinn::TransportConfig> {
     tp.max_idle_timeout(Some(quinn::IdleTimeout::from(quinn::VarInt::from_u32(
         IDLE_TIMEOUT_MS,
     ))));
+    // Bulk streams open at once: the mirror's two and a few transfers. A
+    // peer cannot hold more than this many open while their ids are read.
+    tp.max_concurrent_uni_streams(quinn::VarInt::from_u32(MAX_BULK_STREAMS));
     Arc::new(tp)
 }
 

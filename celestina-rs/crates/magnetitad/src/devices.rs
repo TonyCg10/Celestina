@@ -624,14 +624,25 @@ impl Devices {
     }
 
     /// The phone's conversations as the daemon holds them, newest first,
-    /// each `thread`, `label`, `addresses`, `snippet`, `timestamp`, `unread`;
-    /// asking also refreshes them from the phone (`Changed` follows).
+    /// each `thread`, `label`, `addresses`, `snippet`, `timestamp`, `unread`.
+    /// Only a read before the phone has sent any asks the phone for them
+    /// (`Changed` follows); after that received messages keep the list
+    /// current and `RefreshSms` asks again (MAG-12).
     fn sms_conversations(
         &self,
         device_id: String,
     ) -> zbus::fdo::Result<Vec<HashMap<String, OwnedValue>>> {
-        let _ = self.forward(&device_id, Command::SmsList);
-        Ok(crate::link_wire::phone::store().conversations(&device_id))
+        let store = crate::link_wire::phone::store();
+        if !store.with(&device_id, |book| book.conversations_held) {
+            let _ = self.forward(&device_id, Command::SmsList);
+        }
+        Ok(store.conversations(&device_id))
+    }
+
+    /// Asks the phone for its conversation list again, as when the person
+    /// opens the messages; the answer replaces the list and `Changed` follows.
+    fn refresh_sms(&self, device_id: String) -> zbus::fdo::Result<()> {
+        self.forward(&device_id, Command::SmsList)
     }
 
     /// One conversation's cached messages, oldest first, each `id`, `fromMe`,
@@ -900,6 +911,40 @@ mod tests {
             other_call < std::time::Duration::from_secs(1),
             "another call waited {other_call:?} behind the Forget"
         );
+    }
+
+    /// MAG-12: reading the conversations asks the phone only until it has
+    /// sent its list; an explicit refresh asks again.
+    #[test]
+    fn only_the_first_read_or_a_refresh_asks_the_phone_for_its_conversations() {
+        let commands: super::Commands = Arc::new(Mutex::new(Default::default()));
+        let (sender, asked) = command_channel();
+        let device = format!("sms-reader-{}", std::process::id());
+        commands.lock_ok().insert(device.clone(), sender);
+        let devices = super::Devices::new(
+            registry(),
+            Arc::new(Mutex::new(Default::default())),
+            commands,
+            Arc::new(Mutex::new(magnetita_net::TrustStore::in_memory())),
+            Arc::new(crate::revocation::Revocations::new()),
+            Arc::new(Mutex::new(crate::settings::Settings::default())),
+            std::env::temp_dir().join("magnetita-sms-settings.json"),
+        );
+        let requests = || {
+            std::iter::from_fn(|| asked.try_recv().ok())
+                .filter(|c| matches!(c, Command::SmsList))
+                .count()
+        };
+        devices.sms_conversations(device.clone()).unwrap();
+        assert_eq!(requests(), 1, "nothing held: the phone is asked");
+        crate::link_wire::phone::store().with(&device, |book| book.set_conversations(vec![]));
+        for _ in 0..3 {
+            devices.sms_conversations(device.clone()).unwrap();
+        }
+        assert_eq!(requests(), 0, "a held list is read, not fetched again");
+        devices.refresh_sms(device.clone()).unwrap();
+        assert_eq!(requests(), 1, "a refresh asks the phone");
+        crate::link_wire::phone::store().forget_device(&device);
     }
 
     fn registry() -> Registry {

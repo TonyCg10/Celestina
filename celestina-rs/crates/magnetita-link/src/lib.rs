@@ -26,6 +26,7 @@
 //! follows; running it is the daemon's, so that it stays one owned thread.
 
 pub mod backoff;
+pub mod demux;
 pub mod discovery;
 pub mod endpoint;
 pub mod error;
@@ -34,6 +35,7 @@ pub mod tls;
 pub mod trust;
 
 pub use backoff::Backoff;
+pub use demux::{Accepted, Expected, STREAM_HEADER_BUDGET};
 pub use discovery::{Peer, PORT, SERVICE_TYPE};
 pub use endpoint::{Endpoint, EndpointConfig, Incoming, Pending};
 pub use error::LinkError;

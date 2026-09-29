@@ -1,10 +1,11 @@
 package org.celestina.magnetita.link
 
 /**
- * What an envelope from the desktop asks of the phone, decided from the
- * capability and kind ids of the wire document (`magnetita/docs/protocol.md`).
- * Pure, so it is tested on the JVM; the bodies stay opaque here because
- * the ones this screen set handles are empty.
+ * What the desktop asked of the phone, one value per message. The core
+ * (`magnetita-mobile`) decides every signal from the wire: the capability
+ * and kind ids, the bodies, the defaults and the refusals stay on that side,
+ * and [CoreConnector] only carries its typed signal across into this form,
+ * which the pure controller and its JVM tests use.
  */
 sealed interface DesktopSignal {
     data object Ring : DesktopSignal
@@ -79,95 +80,13 @@ sealed interface DesktopSignal {
 
     /** The desktop browses the shared root. */
     data class Storage(val request: StorageRequest) : DesktopSignal
-    data class Other(val capability: Int, val kind: Int) : DesktopSignal
 
-    companion object {
-        const val CAPABILITY_BATTERY = 1
-        const val CAPABILITY_CLIPBOARD = 2
-        const val CAPABILITY_NOTIFICATIONS = 3
-        const val CAPABILITY_FIND = 4
-        const val CAPABILITY_SHARE = 5
-        const val CAPABILITY_MEDIA = 6
-        const val CAPABILITY_COMMANDS = 7
-        const val CAPABILITY_MIRROR = 9
-        const val CAPABILITY_STORAGE = 13
-        const val CAPABILITY_SMS = 10
-        const val CAPABILITY_CONTACTS = 11
-        const val CAPABILITY_TELEPHONY = 12
-        const val KIND_MEDIA_STATE = 1
-        const val KIND_MEDIA_COMMAND = 2
-        const val KIND_MEDIA_REQUEST = 3
-        const val KIND_SHARE_OFFER = 1
-        const val KIND_SHARE_ACCEPT = 2
-        const val KIND_SHARE_REJECT = 3
-        const val KIND_SHARE_DONE = 4
-        const val KIND_SHARE_TEXT = 5
-        /** The core's own kind for a file it finished receiving; not on the wire. */
-        const val KIND_FILE_RECEIVED = 100
-        const val KIND_NOTIFICATION_DISMISSED = 2
-        const val KIND_NOTIFICATION_ACTION = 3
-        const val KIND_NOTIFICATION_REPLY = 4
-        const val KIND_BATTERY_REQUEST = 2
-        const val KIND_CLIPBOARD_TEXT = 1
-        const val KIND_CLIPBOARD_REQUEST = 2
-        const val KIND_FIND_RING = 1
-        const val KIND_FIND_STOP = 2
+    /**
+     * Refused by the core, never acted on: a capability this session did not
+     * negotiate, or an offer past the phone's bounds, already declined.
+     */
+    data class Declined(val capability: Int, val kind: Int, val reason: String) : DesktopSignal
 
-        fun of(event: LinkEvent): DesktopSignal = when (event.capability to event.kind) {
-            CAPABILITY_FIND to KIND_FIND_RING -> Ring
-            CAPABILITY_FIND to KIND_FIND_STOP -> StopRinging
-            CAPABILITY_BATTERY to KIND_BATTERY_REQUEST -> BatteryRequested
-            CAPABILITY_CLIPBOARD to KIND_CLIPBOARD_TEXT ->
-                event.text?.let { ClipboardText(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_CLIPBOARD to KIND_CLIPBOARD_REQUEST -> ClipboardRequested
-            CAPABILITY_NOTIFICATIONS to KIND_NOTIFICATION_DISMISSED ->
-                event.key?.let { NotificationDismiss(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_NOTIFICATIONS to KIND_NOTIFICATION_ACTION ->
-                if (event.key != null && event.action != null) NotificationAction(event.key, event.action) else Other(event.capability, event.kind)
-            CAPABILITY_NOTIFICATIONS to KIND_NOTIFICATION_REPLY ->
-                if (event.key != null && event.text != null) NotificationReply(event.key, event.text) else Other(event.capability, event.kind)
-            CAPABILITY_SHARE to KIND_SHARE_OFFER ->
-                if (event.transfer != null && event.text != null && event.size != null) ShareOffered(event.transfer, event.text, event.size) else Other(event.capability, event.kind)
-            CAPABILITY_SHARE to KIND_SHARE_ACCEPT ->
-                if (event.transfer != null) ShareAccepted(event.transfer, event.offset ?: 0) else Other(event.capability, event.kind)
-            CAPABILITY_SHARE to KIND_SHARE_REJECT ->
-                if (event.transfer != null) ShareEnded(event.transfer, false) else Other(event.capability, event.kind)
-            CAPABILITY_SHARE to KIND_SHARE_DONE ->
-                if (event.transfer != null) ShareEnded(event.transfer, event.complete ?: false) else Other(event.capability, event.kind)
-            CAPABILITY_SHARE to KIND_FILE_RECEIVED ->
-                if (event.transfer != null && event.path != null) FileReceived(event.transfer, event.path, event.complete ?: false) else Other(event.capability, event.kind)
-            CAPABILITY_SHARE to KIND_SHARE_TEXT ->
-                event.text?.let { ShareText(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_MEDIA to KIND_MEDIA_STATE ->
-                event.media?.let { DesktopMedia(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_MEDIA to KIND_MEDIA_COMMAND ->
-                event.mediaCommand?.let { MediaControl(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_MEDIA to KIND_MEDIA_REQUEST -> MediaRequested
-            CAPABILITY_CONTACTS to 1 -> ContactsRequested(event.contactsSince ?: 0)
-            CAPABILITY_SMS to 1 -> if (event.conversationsWanted) ConversationsRequested else Other(event.capability, event.kind)
-            CAPABILITY_SMS to 2 ->
-                if (event.thread != null) ThreadRequested(event.thread, event.beforeMs, event.limit ?: 50) else Other(event.capability, event.kind)
-            CAPABILITY_SMS to 4 ->
-                if (event.smsSend && event.thread != null && event.text != null) SmsSendRequested(event.thread, event.text) else Other(event.capability, event.kind)
-            CAPABILITY_TELEPHONY to 2 -> event.callAction?.let { CallCommand(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_COMMANDS to 1 -> event.commands?.let { Commands(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_COMMANDS to 3 ->
-                if (event.commandId != null && event.commandOk != null) CommandResult(event.commandId, event.commandOk) else Other(event.capability, event.kind)
-            CAPABILITY_MIRROR to 1 -> event.mirrorStart?.let { MirrorStart(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_MIRROR to 3 -> if (event.mirrorStop) MirrorStop else Other(event.capability, event.kind)
-            CAPABILITY_MIRROR to 7 -> if (event.mirrorKeyframe) MirrorKeyframe else Other(event.capability, event.kind)
-            CAPABILITY_MIRROR to 4 -> event.mirrorTouch?.let { MirrorTouched(it) } ?: Other(event.capability, event.kind)
-            CAPABILITY_MIRROR to 5 ->
-                if (event.mirrorKey != null && event.mirrorKeyPressed != null) MirrorKey(event.mirrorKey, event.mirrorKeyPressed) else Other(event.capability, event.kind)
-            CAPABILITY_MIRROR to 6 -> event.mirrorGlobal?.let { MirrorGlobal(it) } ?: Other(event.capability, event.kind)
-            else -> if (event.capability == CAPABILITY_STORAGE && event.storage != null) Storage(event.storage) else Other(event.capability, event.kind)
-        }
-    }
-}
-
-/** The pairing links the scanner accepts; the core parses the rest. */
-object PairLink {
-    const val PREFIX = "magnetita://pair?"
-
-    fun accepts(text: String?): Boolean = text != null && text.startsWith(PREFIX) && text.length <= 512
+    /** A message this build does not handle, or whose body did not decode. */
+    data class Unhandled(val capability: Int, val kind: Int) : DesktopSignal
 }

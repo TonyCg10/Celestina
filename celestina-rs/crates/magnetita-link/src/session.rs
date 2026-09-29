@@ -7,12 +7,14 @@
 //! raw bytes and nothing else — the `share` messages on the control stream
 //! say what they are.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use magnetita_proto::bound::MAX_MESSAGE;
 use magnetita_proto::pair::Fingerprint;
 use magnetita_proto::{capability, Envelope, Hello};
 
+use crate::demux::{Accepted, Demux, Expected};
 use crate::error::LinkError;
 
 /// The whole handshake — accept or dial, TLS, pin check, hello both ways —
@@ -20,10 +22,12 @@ use crate::error::LinkError;
 pub const HANDSHAKE_BUDGET: Duration = Duration::from_secs(10);
 
 /// The bulk-stream half of a session, cloneable and owned by the task that
-/// moves the bytes. Dropping it does not close the connection.
+/// moves the bytes. Dropping it does not close the connection. Incoming
+/// streams are told apart by [`crate::demux`].
 #[derive(Clone)]
 pub struct Transfers {
-    conn: quinn::Connection,
+    pub(crate) conn: quinn::Connection,
+    demux: Arc<Demux>,
 }
 
 impl Transfers {
@@ -34,18 +38,46 @@ impl Transfers {
         Ok(s)
     }
 
-    /// Accepts the next bulk stream and reads its transfer id.
+    /// The next bulk stream nobody [`Self::expect`]s, with its transfer id.
+    /// A stream the peer reset, ended or left silent before its id is
+    /// [`Accepted::Skipped`], and ids are read side by side, so one such
+    /// stream never delays or stops the streams after it. Only the
+    /// connection's end is an error.
+    pub async fn accept_or_skip(&self) -> Result<Accepted, LinkError> {
+        self.demux.next().await
+    }
+
+    /// The next bulk stream with its transfer id, skipping streams that
+    /// ended before their id ([`Self::accept_or_skip`]).
     pub async fn accept(&self) -> Result<(u32, quinn::RecvStream), LinkError> {
-        let mut r = self.conn.accept_uni().await?;
-        let mut id = [0u8; 4];
-        r.read_exact(&mut id).await?;
-        Ok((u32::from_be_bytes(id), r))
+        loop {
+            if let Accepted::Stream(id, r) = self.accept_or_skip().await? {
+                return Ok((id, r));
+            }
+        }
+    }
+
+    /// Reserves the stream of `transfer` before the peer is told to send it:
+    /// it reaches the returned waiter whenever it arrives, whatever other
+    /// streams arrive around it. Must run inside the session's runtime.
+    pub fn expect(&self, transfer: u32) -> Result<Expected, LinkError> {
+        self.demux.expect(transfer)
+    }
+
+    /// Takes only reserved streams from now on: a stream nobody
+    /// [`Self::expect`]s is stopped at once instead of queued for
+    /// [`Self::accept`], so unread streams never hold the connection's
+    /// stream slots. The phone, which receives only what it accepted, runs
+    /// this way; the desktop reads the queue.
+    pub fn reserve_only(&self) {
+        self.demux.reserve_only();
     }
 }
 
 /// An open, pinned connection. Dropping it closes the connection.
 pub struct Session {
     conn: quinn::Connection,
+    demux: Arc<Demux>,
     pub(crate) control_send: tokio::sync::Mutex<quinn::SendStream>,
     control_recv: tokio::sync::Mutex<quinn::RecvStream>,
     peer_fingerprint: Fingerprint,
@@ -60,6 +92,7 @@ impl Session {
         peer_fingerprint: Fingerprint,
     ) -> Self {
         Self {
+            demux: Arc::new(Demux::new(conn.clone())),
             conn,
             control_send: tokio::sync::Mutex::new(send),
             control_recv: tokio::sync::Mutex::new(recv),
@@ -168,6 +201,7 @@ impl Session {
     pub fn transfers(&self) -> Transfers {
         Transfers {
             conn: self.conn.clone(),
+            demux: Arc::clone(&self.demux),
         }
     }
 
@@ -193,6 +227,12 @@ impl Session {
     pub async fn recv_datagram(&self) -> Result<Envelope, LinkError> {
         let bytes = self.conn.read_datagram().await?;
         Ok(Envelope::decode(&bytes)?)
+    }
+
+    /// Whether the connection has ended, by either side or by its idle
+    /// timeout; a failed call on an open session is a refusal, not an end.
+    pub fn is_closed(&self) -> bool {
+        self.conn.close_reason().is_some()
     }
 
     /// Closes with a reason the peer sees in its logs, never in its UI.

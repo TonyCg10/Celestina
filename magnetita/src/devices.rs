@@ -266,7 +266,8 @@ pub struct Message {
     pub timestamp: u64,
 }
 
-/// The phone's conversations; asking also refreshes them from the phone.
+/// The phone's conversations as the daemon holds them; the daemon asks the
+/// phone only until it has a list.
 pub fn sms_conversations(device_id: &str) -> Result<Vec<Conversation>, String> {
     let connection = Connection::session().map_err(|error| error.to_string())?;
     let proxy =
@@ -303,6 +304,17 @@ pub fn sms_thread(device_id: &str, thread: u64) -> Result<Vec<Message>, String> 
             timestamp: u64_field(d, "timestamp"),
         })
         .collect())
+}
+
+/// Asks the phone for its conversation list again; `Changed` follows the
+/// answer.
+pub fn sms_refresh(device_id: &str) -> Result<(), String> {
+    let connection = Connection::session().map_err(|error| error.to_string())?;
+    let proxy =
+        Proxy::new(&connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    proxy
+        .call("RefreshSms", &(device_id,))
+        .map_err(|error| error.to_string())
 }
 
 /// Send `body` in `thread` from the phone.

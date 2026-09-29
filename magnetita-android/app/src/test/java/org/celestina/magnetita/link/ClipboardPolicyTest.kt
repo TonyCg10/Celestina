@@ -1,29 +1,31 @@
 package org.celestina.magnetita.link
 
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** What is worth the wire, and what would only echo. */
+/**
+ * What would only echo, and what the wire's rule refuses. The rule itself
+ * (bound, NUL) is the core's and is tested there; here it is a fake.
+ */
 class ClipboardPolicyTest {
+    private val policy = ClipboardPolicy { it != "refused by the rule" }
+
     @Test
     fun itSendsTextOnceAndNeverEchoesWhatTheDesktopSent() {
-        val policy = ClipboardPolicy()
-        assertFalse(policy.offer(null))
-        assertFalse(policy.offer("   "))
-        assertTrue(policy.offer("first"))
-        assertFalse(policy.offer("first"))
-        assertTrue(policy.offer("second"))
+        assertEquals(ClipboardPolicy.Offer.Nothing, policy.offer(null))
+        assertEquals(ClipboardPolicy.Offer.Nothing, policy.offer("   "))
+        assertEquals(ClipboardPolicy.Offer.Send, policy.offer("first"))
+        assertEquals(ClipboardPolicy.Offer.Nothing, policy.offer("first"))
+        assertEquals(ClipboardPolicy.Offer.Send, policy.offer("second"))
         policy.received("from the desk")
-        assertFalse(policy.offer("from the desk"))
-        assertTrue(policy.offer("typed after"))
+        assertEquals(ClipboardPolicy.Offer.Nothing, policy.offer("from the desk"))
+        assertEquals(ClipboardPolicy.Offer.Send, policy.offer("typed after"))
     }
 
     @Test
-    fun itRefusesTheProtocolBoundAndNulBytes() {
-        val policy = ClipboardPolicy()
-        assertFalse(policy.offer("x".repeat(ClipboardPolicy.MAX_BYTES + 1)))
-        assertTrue(policy.offer("x".repeat(ClipboardPolicy.MAX_BYTES)))
-        assertFalse(policy.offer("a\u0000b"))
+    fun whatTheWireRefusesIsSaidAndNotRecorded() {
+        assertEquals(ClipboardPolicy.Offer.Refused, policy.offer("refused by the rule"))
+        // Not recorded as exchanged: the same text is judged again next time.
+        assertEquals(ClipboardPolicy.Offer.Refused, policy.offer("refused by the rule"))
     }
 }

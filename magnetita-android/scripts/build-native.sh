@@ -35,7 +35,9 @@ mkdir -p "$out/jniLibs" "$out/kotlin"
 cd "$workspace"
 cargo ndk -t arm64-v8a -o "$out/jniLibs" build --release -p magnetita-mobile
 cargo build --release -p magnetita-mobile
-cargo run -q --release -p magnetita-mobile --bin uniffi-bindgen -- \
+# The generator is behind the crate's opt-in `bindgen` feature (RS-13), so the
+# library the phone links never carries uniffi's command-line stack.
+cargo run -q --release -p magnetita-mobile --features bindgen --bin uniffi-bindgen -- \
     generate --library target/release/libmagnetita_mobile.so \
     --language kotlin --no-format --out-dir "$out/kotlin"
 echo "build-native: $(ls "$out/jniLibs/arm64-v8a") and bindings in $out/kotlin"

@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
-//! Magnetita's shared shapes with no sockets, no TLS and no threads: what a
-//! clipboard text worth syncing is, a phone notification, a player's state
-//! and the transport actions, the mirror's state machine and its options.
+//! Magnetita's shared shapes with no sockets, no TLS and no threads: a phone
+//! notification, a player's state and the transport actions, the mirror's
+//! state machine and its options. What clipboard text is worth syncing is
+//! the wire's rule and lives with its bound in `magnetita-proto`.
 //! The wire itself is `magnetita-proto` and the link `magnetita-link`; this
 //! crate is what the daemon, the desktop app and the shell agree on.
 
-pub mod clipboard;
 pub mod mirror;
 pub mod mirror_options;
 pub mod mpris;

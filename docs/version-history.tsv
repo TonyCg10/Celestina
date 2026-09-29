@@ -184,3 +184,5 @@ grafita	1.2.6	bug	GRA-H1-B	Move highlight, recent and preference work off the GU
 fluorita	1.3.7	bug	FLU-H1-B	Keep the library true off the GUI thread and give the player handshake one owner
 siderita	1.7.5	bug	SID-H1-C	Fix unbounded reads, detached write workers and stale listings
 magnetita	2.0.2	bug	MAG-D1-E	Read the phone's control stream from one task and keep the daemon off blocking calls
+magnetita	2.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's rules from Rust
+magnetita-android	1.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's rules from Rust

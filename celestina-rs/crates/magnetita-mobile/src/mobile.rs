@@ -11,14 +11,12 @@ use std::time::Duration;
 
 use magnetita_link::trust::fingerprint_text;
 
-use crate::phone::{
-    button_from_index, button_index, clipboard_text, command_fields, describe, global_index,
-    media_fields, mirror_fields, notification_fields, phone_fields, share_fields, touch_index,
-    Incoming, Phone, PhoneSession,
-};
-use crate::storage::{self, StorageRequest};
+use crate::phone::{button_from_index, describe, Incoming, Phone, PhoneSession};
+use crate::signal::{signal_of, DesktopSignal};
+use crate::storage;
+use magnetita_link::LinkError;
 use magnetita_proto::control::input::Button;
-use magnetita_proto::daily::media::{MediaCommand, MediaState};
+use magnetita_proto::daily::media::{MediaButton, MediaCommand, MediaState};
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 use magnetita_proto::mirror::{Codec, MirrorStarted};
 use magnetita_proto::phone::contacts::{Contact, ContactsSync};
@@ -29,26 +27,86 @@ use magnetita_proto::phone::telephony::{CallEvent, CallState};
 use magnetita_proto::storage::Entry;
 
 /// Why a call failed, as Kotlin sees it.
-#[derive(Debug, uniffi::Error)]
+#[derive(Debug, PartialEq, Eq, uniffi::Error)]
 #[uniffi(flat_error)]
 pub enum MobileError {
+    /// The link failed: a connection, a handshake, the pairing.
     Link(String),
+    /// The desktop did not negotiate the capability this call needs.
+    Declined(String),
+    /// A bound of this phone refused the call before anything was sent.
+    Refused(String),
+    /// A small integer code Kotlin passed names nothing; it is refused, never
+    /// mapped to the nearest value.
+    UnknownCode(String),
 }
 
 impl std::fmt::Display for MobileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Link(m) => f.write_str(m),
+            Self::Link(m) | Self::Declined(m) | Self::Refused(m) | Self::UnknownCode(m) => {
+                f.write_str(m)
+            }
         }
     }
 }
 
 impl std::error::Error for MobileError {}
 
-impl From<magnetita_link::LinkError> for MobileError {
-    fn from(e: magnetita_link::LinkError) -> Self {
-        Self::Link(e.to_string())
+impl From<LinkError> for MobileError {
+    fn from(e: LinkError) -> Self {
+        match e {
+            LinkError::Declined(_) => Self::Declined(e.to_string()),
+            LinkError::Refused(_) => Self::Refused(e.to_string()),
+            other => Self::Link(other.to_string()),
+        }
     }
+}
+
+fn unknown(what: &str, code: u8) -> MobileError {
+    MobileError::UnknownCode(format!("unknown {what} code {code}"))
+}
+
+/// 0 ringing, 1 answered, 2 missed, 3 ended.
+fn call_state(code: u8) -> Result<CallState, MobileError> {
+    Ok(match code {
+        0 => CallState::Ringing,
+        1 => CallState::Answered,
+        2 => CallState::Missed,
+        3 => CallState::Ended,
+        _ => return Err(unknown("call state", code)),
+    })
+}
+
+/// 0 left, 1 right, 2 middle.
+fn pointer_button(code: u8) -> Result<Button, MobileError> {
+    Ok(match code {
+        0 => Button::Left,
+        1 => Button::Right,
+        2 => Button::Middle,
+        _ => return Err(unknown("pointer button", code)),
+    })
+}
+
+/// 0 HEVC, 1 H.264.
+fn codec_of(code: u8) -> Result<Codec, MobileError> {
+    Ok(match code {
+        0 => Codec::Hevc,
+        1 => Codec::H264,
+        _ => return Err(unknown("codec", code)),
+    })
+}
+
+/// 0 play, 1 pause, 2 play/pause, 3 next, 4 previous, 5 stop.
+fn media_button(code: u8) -> Result<MediaButton, MobileError> {
+    button_from_index(code).ok_or_else(|| unknown("media button", code))
+}
+
+/// Whether `text` may go to the desktop as clipboard: the wire's one rule
+/// (MAG-19), so the application shows a refusal instead of "sent".
+#[uniffi::export]
+pub fn clipboard_syncable(text: String) -> bool {
+    magnetita_proto::daily::clipboard::syncable(&text)
 }
 
 /// Who this phone is.
@@ -68,71 +126,18 @@ pub struct PinnedDesktop {
     pub fingerprint: String,
 }
 
-/// One envelope, described for a log and carried for a handler.
-#[derive(uniffi::Record)]
-pub struct Event {
-    pub capability: u16,
-    pub kind: u16,
+/// One envelope from the desktop: a line for the log and what it asks.
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
+pub struct DesktopEvent {
     pub description: String,
-    pub body: Vec<u8>,
-    /// The clipboard text, or a notification reply's, decoded here so
-    /// Kotlin never reads the wire.
-    pub text: Option<String>,
-    /// The phone's notification key a desktop message names.
-    pub key: Option<String>,
-    /// The button index of a notification action.
-    pub action: Option<u16>,
-    /// The transfer a share message names.
-    pub transfer: Option<u32>,
-    /// An offered file's size.
-    pub size: Option<u64>,
-    /// The offset an acceptance asks to send from.
-    pub offset: Option<u64>,
-    /// Whether a finished transfer carried every byte.
-    pub complete: Option<bool>,
-    /// Where a received file landed on this phone.
-    pub path: Option<String>,
-    /// One of the desktop's players, when the message is its state.
-    pub media: Option<MobileMediaState>,
-    /// The desktop's command for one of this phone's players.
-    pub media_command: Option<MobileMediaCommand>,
-    /// Contacts changed since this version are wanted.
-    pub contacts_since: Option<u64>,
-    /// The conversation list is wanted.
-    pub conversations_wanted: bool,
-    /// A page of this thread is wanted, older than `before_ms`.
-    pub thread: Option<u64>,
-    pub before_ms: Option<u64>,
-    pub limit: Option<u16>,
-    /// Send `text` in `thread` (with `text`).
-    pub sms_send: bool,
-    /// 0 mute, 1 answer, 2 hang up.
-    pub call_action: Option<u8>,
-    /// The desktop's registered commands, when the message is the list.
-    pub commands: Option<Vec<MobileCommand>>,
-    /// A run's result: the id and whether it succeeded.
-    pub command_id: Option<u32>,
-    pub command_ok: Option<bool>,
-    /// The desktop asks for the mirror with these options.
-    pub mirror_start: Option<MobileMirrorStart>,
-    pub mirror_stop: bool,
-    /// The desktop wants a key frame now.
-    pub mirror_keyframe: bool,
-    /// A touch on the mirrored screen: phase 0 down, 1 move, 2 up.
-    pub mirror_touch: Option<MobileTouch>,
-    /// An Android key code, with `command_ok` unused; pressed in `mirror_key_pressed`.
-    pub mirror_key: Option<u16>,
-    pub mirror_key_pressed: Option<bool>,
-    /// 0 back, 1 home, 2 recents.
-    pub mirror_global: Option<u8>,
-    /// The desktop browses the shared root.
-    pub storage: Option<MobileStorageRequest>,
+    pub signal: DesktopSignal,
 }
 
 /// One storage request: `kind` 0 list, 1 stat, 2 read, 3 write, 4 mkdir,
-/// 5 rename (`to` set), 6 delete. `offset` is the page for a list and the
-/// byte for a read or write; `len` the read's; `bytes` the write's.
-#[derive(uniffi::Record, Clone)]
+/// 5 rename (`to` set), 6 delete. `offset` is the first entry for a list and
+/// the byte for a read or write; `len` a list's page size or a read's
+/// length; `bytes` the write's. Paths were checked at the wire.
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileStorageRequest {
     pub kind: u8,
     pub request: u32,
@@ -145,7 +150,7 @@ pub struct MobileStorageRequest {
 }
 
 /// One file or directory as the wire carries it.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileEntry {
     pub name: String,
     pub dir: bool,
@@ -162,67 +167,8 @@ fn entry_from(e: MobileEntry) -> Entry {
     }
 }
 
-fn storage_record(env: &magnetita_proto::Envelope) -> Option<MobileStorageRequest> {
-    let r = StorageRequest::decode(env)?;
-    let request = r.request();
-    let blank = MobileStorageRequest {
-        kind: 0,
-        request,
-        path: String::new(),
-        to: String::new(),
-        offset: 0,
-        len: 0,
-        bytes: Vec::new(),
-        truncate: false,
-    };
-    Some(match r {
-        StorageRequest::List(m) => MobileStorageRequest {
-            kind: 0,
-            path: m.path,
-            offset: m.offset as u64,
-            ..blank
-        },
-        StorageRequest::Stat(m) => MobileStorageRequest {
-            kind: 1,
-            path: m.path,
-            ..blank
-        },
-        StorageRequest::Read(m) => MobileStorageRequest {
-            kind: 2,
-            path: m.path,
-            offset: m.offset,
-            len: m.len,
-            ..blank
-        },
-        StorageRequest::Write(m) => MobileStorageRequest {
-            kind: 3,
-            path: m.path,
-            offset: m.offset,
-            bytes: m.bytes,
-            truncate: m.truncate,
-            ..blank
-        },
-        StorageRequest::Mkdir(m) => MobileStorageRequest {
-            kind: 4,
-            path: m.path,
-            ..blank
-        },
-        StorageRequest::Rename(m) => MobileStorageRequest {
-            kind: 5,
-            path: m.from,
-            to: m.to,
-            ..blank
-        },
-        StorageRequest::Delete(m) => MobileStorageRequest {
-            kind: 6,
-            path: m.path,
-            ..blank
-        },
-    })
-}
-
 /// What the desktop asks the mirror to be.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileMirrorStart {
     pub max_size: u16,
     pub fps: u8,
@@ -233,7 +179,7 @@ pub struct MobileMirrorStart {
     pub screen_off: bool,
 }
 
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileTouch {
     pub phase: u8,
     pub x: u16,
@@ -246,14 +192,14 @@ pub const MIRROR_VIDEO_STREAM: u32 = 0xFFFF_0001;
 pub const MIRROR_AUDIO_STREAM: u32 = 0xFFFF_0002;
 
 /// One registered command as the phone sees it.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileCommand {
     pub id: u32,
     pub name: String,
 }
 
 /// One contact as its vCard.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileContact {
     pub id: u64,
     pub version: u64,
@@ -261,7 +207,7 @@ pub struct MobileContact {
 }
 
 /// One conversation in the list.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileConversation {
     pub thread: u64,
     pub addresses: Vec<String>,
@@ -271,7 +217,7 @@ pub struct MobileConversation {
 }
 
 /// One message; attachments are counted by the mime types they carry.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileSmsMessage {
     pub id: u64,
     pub from_me: bool,
@@ -297,7 +243,7 @@ fn message_out(m: MobileSmsMessage) -> SmsMessage {
 }
 
 /// One player's state, either side's.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileMediaState {
     pub player: String,
     pub title: String,
@@ -314,7 +260,7 @@ pub struct MobileMediaState {
 
 /// A button (0 play, 1 pause, 2 play/pause, 3 next, 4 previous, 5 stop),
 /// a seek or a volume for one player.
-#[derive(uniffi::Record, Clone)]
+#[derive(uniffi::Record, Clone, Debug, PartialEq)]
 pub struct MobileMediaCommand {
     pub player: String,
     pub button: Option<u8>,
@@ -337,26 +283,6 @@ fn media_state_out(s: MobileMediaState) -> MediaState {
         volume: s.volume,
     }
 }
-
-fn media_state_in(s: MediaState) -> MobileMediaState {
-    MobileMediaState {
-        player: s.player,
-        title: s.title,
-        artist: s.artist,
-        album: s.album,
-        playing: s.playing,
-        position_ms: s.position_ms,
-        length_ms: s.length_ms,
-        can_seek: s.can_seek,
-        can_next: s.can_next,
-        can_previous: s.can_previous,
-        volume: s.volume,
-    }
-}
-
-/// The kind [`MobileSession::next`] uses for a file this phone finished
-/// receiving; not a wire kind, so it cannot collide with one.
-pub const FILE_RECEIVED_KIND: u16 = 100;
 
 /// One of the phone's notifications, as the listener sees it.
 #[derive(uniffi::Record)]
@@ -517,14 +443,36 @@ impl MobileSession {
         Ok(self.handle.block_on(self.inner.finish_transfer(transfer))?)
     }
 
-    /// Accepts an offered file into `dir`; its end arrives as an event of
-    /// kind [`FILE_RECEIVED_KIND`] with the path.
-    pub fn accept_file(&self, transfer: u32, dir: String) -> Result<(), MobileError> {
-        let task = self
-            .handle
-            .block_on(self.inner.accept_file(transfer, PathBuf::from(dir)))?;
+    /// Accepts an offered file into `dir`, where `usable_bytes` are free; its
+    /// end arrives as [`DesktopSignal::FileReceived`]. An offer that would not
+    /// fit is declined to the desktop and refused here.
+    pub fn accept_file(
+        &self,
+        transfer: u32,
+        dir: String,
+        usable_bytes: u64,
+    ) -> Result<(), MobileError> {
+        let task = self.handle.block_on(self.inner.accept_file(
+            transfer,
+            PathBuf::from(dir),
+            Some(usable_bytes),
+        ))?;
         self.handle.spawn(task);
         Ok(())
+    }
+
+    /// Gives up an accepted transfer whose source failed; the desktop is
+    /// told it was abandoned.
+    pub fn abandon_transfer(&self, transfer: u32) -> Result<(), MobileError> {
+        Ok(self
+            .handle
+            .block_on(self.inner.abandon_transfer(transfer))?)
+    }
+
+    /// Whether the session has ended. A call that failed while this is
+    /// false was refused, and the session goes on.
+    pub fn is_closed(&self) -> bool {
+        self.inner.is_closed()
     }
 
     pub fn reject_file(&self, transfer: u32) -> Result<(), MobileError> {
@@ -542,7 +490,7 @@ impl MobileSession {
     pub fn send_media_command(&self, command: MobileMediaCommand) -> Result<(), MobileError> {
         let command = MediaCommand {
             player: command.player,
-            button: command.button.and_then(button_from_index),
+            button: command.button.map(media_button).transpose()?,
             seek_ms: command.seek_ms,
             volume: command.volume,
         };
@@ -635,12 +583,7 @@ impl MobileSession {
         name: Option<String>,
         timestamp_ms: u64,
     ) -> Result<(), MobileError> {
-        let state = match state {
-            0 => CallState::Ringing,
-            1 => CallState::Answered,
-            2 => CallState::Missed,
-            _ => CallState::Ended,
-        };
+        let state = call_state(state)?;
         let event = CallEvent {
             state,
             number,
@@ -662,11 +605,7 @@ impl MobileSession {
 
     /// 0 left, 1 right, 2 middle.
     pub fn pointer_button(&self, button: u8, pressed: bool) -> Result<(), MobileError> {
-        let button = match button {
-            0 => Button::Left,
-            1 => Button::Right,
-            _ => Button::Middle,
-        };
+        let button = pointer_button(button)?;
         Ok(self
             .handle
             .block_on(self.inner.send_pointer_button(button, pressed))?)
@@ -708,7 +647,7 @@ impl MobileSession {
         let started = MirrorStarted {
             width,
             height,
-            codec: if codec == 1 { Codec::H264 } else { Codec::Hevc },
+            codec: codec_of(codec)?,
             audio,
         };
         Ok(self
@@ -776,126 +715,253 @@ impl MobileSession {
         Ok(self.handle.block_on(self.inner.send_text(&text))?)
     }
 
-    /// Blocks up to `timeout_ms` for the next envelope; `None` on timeout.
-    pub fn next(&self, timeout_ms: u64) -> Result<Option<Event>, MobileError> {
-        let env = self
+    /// Blocks up to `timeout_ms` for what the desktop sends next; `None` on
+    /// timeout.
+    pub fn next(&self, timeout_ms: u64) -> Result<Option<DesktopEvent>, MobileError> {
+        let incoming = self
             .handle
             .block_on(self.inner.next(Duration::from_millis(timeout_ms)))?;
-        Ok(env.map(|incoming| match incoming {
-            Incoming::Envelope(e) => {
-                let (key, action, reply) = notification_fields(&e);
-                let share = share_fields(&e);
-                let media = media_fields(&e);
-                let phone = phone_fields(&e);
-                let commands = command_fields(&e);
-                let mirror = mirror_fields(&e);
-                let storage_request = storage_record(&e);
-                let text = clipboard_text(&e).or(reply).or(share.text);
-                Event {
-                    capability: e.capability,
-                    kind: e.kind,
-                    description: describe(&e),
-                    key,
-                    action,
-                    transfer: share.transfer,
-                    size: share.size,
-                    offset: share.offset,
-                    complete: share.complete,
-                    path: None,
-                    media: media.state.map(media_state_in),
-                    media_command: media.command.map(|c| MobileMediaCommand {
-                        player: c.player,
-                        button: c.button.map(button_index),
-                        seek_ms: c.seek_ms,
-                        volume: c.volume,
-                    }),
-                    contacts_since: phone.contacts_since,
-                    conversations_wanted: phone.conversations_wanted,
-                    thread: phone
-                        .thread_request
-                        .as_ref()
-                        .map(|r| r.thread)
-                        .or(phone.sms_send.as_ref().map(|s| s.thread)),
-                    before_ms: phone.thread_request.as_ref().and_then(|r| r.before_ms),
-                    limit: phone.thread_request.as_ref().map(|r| r.limit),
-                    sms_send: phone.sms_send.is_some(),
-                    call_action: phone.call_action,
-                    commands: commands.list.map(|l| {
-                        l.into_iter()
-                            .map(|(id, name)| MobileCommand { id, name })
-                            .collect()
-                    }),
-                    command_id: commands.result.map(|r| r.0),
-                    command_ok: commands.result.map(|r| r.1),
-                    mirror_start: mirror.start.map(|m| MobileMirrorStart {
-                        max_size: m.max_size,
-                        fps: m.fps,
-                        bitrate_kbps: m.bitrate_kbps,
-                        codec: match m.codec {
-                            Codec::Hevc => 0,
-                            Codec::H264 => 1,
-                        },
-                        audio: m.audio,
-                        screen_off: m.screen_off,
-                    }),
-                    mirror_stop: mirror.stop,
-                    mirror_keyframe: mirror.keyframe,
-                    mirror_touch: mirror.touch.map(|t| MobileTouch {
-                        phase: touch_index(t.action),
-                        x: t.x,
-                        y: t.y,
-                        pointer: t.pointer,
-                    }),
-                    mirror_key: mirror.key.map(|k| k.keycode),
-                    mirror_key_pressed: mirror.key.map(|k| k.pressed),
-                    mirror_global: mirror.global.map(global_index),
-                    storage: storage_request,
-                    text: text.or(phone.sms_send.map(|s| s.body)),
-                    body: e.body,
-                }
-            }
-            Incoming::FileReceived {
-                transfer,
-                path,
-                complete,
-            } => Event {
-                capability: magnetita_proto::capability::SHARE,
-                kind: FILE_RECEIVED_KIND,
-                description: format!("share: received {}", path.display()),
-                text: None,
-                key: None,
-                action: None,
-                transfer: Some(transfer),
-                size: None,
-                offset: None,
-                complete: Some(complete),
-                path: Some(path.to_string_lossy().into_owned()),
-                media: None,
-                media_command: None,
-                contacts_since: None,
-                conversations_wanted: false,
-                thread: None,
-                before_ms: None,
-                limit: None,
-                sms_send: false,
-                call_action: None,
-                commands: None,
-                command_id: None,
-                command_ok: None,
-                mirror_start: None,
-                mirror_stop: false,
-                mirror_keyframe: false,
-                mirror_touch: None,
-                mirror_key: None,
-                mirror_key_pressed: None,
-                mirror_global: None,
-                storage: None,
-                body: Vec::new(),
-            },
-        }))
+        Ok(incoming.map(event_of))
     }
 
     pub fn close(&self, reason: String) {
         self.inner.close(&reason);
+    }
+}
+
+/// What one [`Incoming`] asks of the application.
+fn event_of(incoming: Incoming) -> DesktopEvent {
+    match incoming {
+        Incoming::Envelope(env) => DesktopEvent {
+            description: describe(&env),
+            signal: signal_of(&env),
+        },
+        Incoming::FileReceived {
+            transfer,
+            path,
+            complete,
+        } => DesktopEvent {
+            description: format!("share: received {}", path.display()),
+            signal: DesktopSignal::FileReceived {
+                transfer,
+                path: path.to_string_lossy().into_owned(),
+                complete,
+            },
+        },
+        Incoming::Refused {
+            capability,
+            kind,
+            reason,
+        } => DesktopEvent {
+            description: format!("capability {capability} kind {kind} refused: {reason}"),
+            signal: DesktopSignal::Declined {
+                capability,
+                kind,
+                reason: reason.to_owned(),
+            },
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use magnetita_link::endpoint::Expect;
+    use magnetita_link::{fingerprint_of, DeviceCert, Endpoint, EndpointConfig, Session};
+    use magnetita_proto::daily::clipboard::ClipboardText;
+    use magnetita_proto::mirror::MirrorStop;
+    use magnetita_proto::pair::{kind as pair_kind, QrPairing, QrPayload};
+    use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
+
+    /// MAG-28: a code Kotlin passes that names nothing is refused with a
+    /// typed error, never mapped to the nearest value.
+    #[test]
+    fn unknown_ffi_codes_are_refused() {
+        assert_eq!(call_state(3), Ok(CallState::Ended));
+        assert_eq!(pointer_button(2), Ok(Button::Middle));
+        assert_eq!(codec_of(1), Ok(Codec::H264));
+        assert_eq!(media_button(5), Ok(MediaButton::Stop));
+        assert_eq!(
+            call_state(4),
+            Err(MobileError::UnknownCode("unknown call state code 4".into()))
+        );
+        assert!(matches!(
+            pointer_button(3),
+            Err(MobileError::UnknownCode(_))
+        ));
+        assert!(matches!(codec_of(2), Err(MobileError::UnknownCode(_))));
+        assert!(matches!(media_button(6), Err(MobileError::UnknownCode(_))));
+        for code in [u8::MAX, 200] {
+            assert!(call_state(code).is_err());
+            assert!(pointer_button(code).is_err());
+            assert!(codec_of(code).is_err());
+            assert!(media_button(code).is_err());
+        }
+    }
+
+    #[test]
+    fn link_refusals_reach_kotlin_as_their_own_errors() {
+        assert!(matches!(
+            MobileError::from(LinkError::Declined(2)),
+            MobileError::Declined(_)
+        ));
+        assert!(matches!(
+            MobileError::from(LinkError::Refused("too big")),
+            MobileError::Refused(_)
+        ));
+        assert!(matches!(
+            MobileError::from(LinkError::Closed),
+            MobileError::Link(_)
+        ));
+    }
+
+    #[test]
+    fn what_the_session_refused_or_received_reaches_kotlin_typed() {
+        let refused = event_of(Incoming::Refused {
+            capability: 9,
+            kind: 3,
+            reason: "not negotiated",
+        });
+        assert_eq!(
+            refused.signal,
+            DesktopSignal::Declined {
+                capability: 9,
+                kind: 3,
+                reason: "not negotiated".into()
+            }
+        );
+        let received = event_of(Incoming::FileReceived {
+            transfer: 4,
+            path: PathBuf::from("/x/a.jpg"),
+            complete: true,
+        });
+        assert_eq!(
+            received.signal,
+            DesktopSignal::FileReceived {
+                transfer: 4,
+                path: "/x/a.jpg".into(),
+                complete: true
+            }
+        );
+    }
+
+    /// A desktop on its own runtime that offers `capabilities`, pairs the
+    /// phone whose QR it prints and hands its session back.
+    fn desktop(
+        rt: &tokio::runtime::Runtime,
+        capabilities: Vec<CapabilityVersion>,
+    ) -> (String, tokio::task::JoinHandle<(Endpoint, Session)>) {
+        let cert = DeviceCert::generate("desktop");
+        let desktop_fp = fingerprint_of(&cert.chain().unwrap()[0]);
+        let endpoint = rt.block_on(async {
+            Endpoint::bind(
+                EndpointConfig {
+                    cert,
+                    hello: Hello {
+                        device_id: "desktop".into(),
+                        device_name: "Celestina".into(),
+                        device_kind: DeviceKind::Desktop,
+                        capabilities,
+                    },
+                },
+                "127.0.0.1:0".parse().unwrap(),
+            )
+            .unwrap()
+        });
+        let secret = [9u8; 32];
+        let uri = QrPayload {
+            device_id: "desktop".into(),
+            fingerprint: desktop_fp,
+            secret,
+            addresses: vec![endpoint.local_addr().unwrap().to_string()],
+        }
+        .to_uri();
+        let task = rt.spawn(async move {
+            let incoming = endpoint.accept().await.unwrap().handshake().await.unwrap();
+            let fp = incoming.peer_fingerprint();
+            let (session, _) = endpoint
+                .admit(incoming, Expect::Fingerprint(fp))
+                .await
+                .unwrap();
+            let mut pairing = QrPairing::desktop(secret, desktop_fp, fp);
+            let proof = session.recv().await.unwrap();
+            let (reply, _) = pairing.accept_proof(&proof.body).unwrap();
+            session
+                .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
+                .await
+                .unwrap();
+            (endpoint, session)
+        });
+        (uri, task)
+    }
+
+    /// The FFI face end to end over loopback, against a desktop that offers
+    /// only clipboard and battery: typed events, the declined capability
+    /// refused both ways, and an unknown code refused.
+    #[test]
+    fn the_ffi_session_gates_on_what_the_desktop_offered() {
+        let dir = std::env::temp_dir().join(format!("magnetita-ffi-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let offered = [capability::CLIPBOARD, capability::BATTERY]
+            .into_iter()
+            .map(|capability| CapabilityVersion {
+                capability,
+                version: 1,
+            })
+            .collect();
+        let (uri, desktop) = desktop(&rt, offered);
+        let phone = MobilePhone::open(dir.to_string_lossy().into_owned(), "ffi".into()).unwrap();
+        let session = phone.pair(uri).unwrap();
+        let (_endpoint, desktop) = rt.block_on(desktop).unwrap();
+
+        rt.block_on(async {
+            desktop
+                .send_message(
+                    capability::CLIPBOARD,
+                    ClipboardText::KIND,
+                    ClipboardText { text: "hi".into() }.encode(),
+                )
+                .await
+                .unwrap();
+            desktop
+                .send_message(capability::MIRROR, MirrorStop::KIND, MirrorStop.encode())
+                .await
+                .unwrap();
+        });
+        let first = session.next(5_000).unwrap().unwrap();
+        assert_eq!(
+            first.signal,
+            DesktopSignal::ClipboardText { text: "hi".into() }
+        );
+        assert_eq!(first.description, "clipboard: 5 bytes");
+        let second = session.next(5_000).unwrap().unwrap();
+        assert!(matches!(
+            second.signal,
+            DesktopSignal::Declined {
+                capability: capability::MIRROR,
+                ..
+            }
+        ));
+
+        session.send_clipboard("from the phone".into()).unwrap();
+        session.report_battery(50, true).unwrap();
+        assert!(matches!(
+            session.run_command(1),
+            Err(MobileError::Declined(_))
+        ));
+        assert!(matches!(
+            session.pointer_button(7, true),
+            Err(MobileError::UnknownCode(_))
+        ));
+        assert!(matches!(
+            session.send_clipboard(String::new()),
+            Err(MobileError::Refused(_))
+        ));
+        // Refusals leave the session open; only its end is an end.
+        assert!(!session.is_closed());
+        session.close("done".into());
+        assert!(session.is_closed());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

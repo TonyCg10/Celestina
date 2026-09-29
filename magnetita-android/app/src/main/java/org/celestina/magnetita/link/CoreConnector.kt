@@ -11,6 +11,9 @@ import uniffi.magnetita_mobile.MobileMediaState
 import uniffi.magnetita_mobile.MobileNotification
 import uniffi.magnetita_mobile.MobilePhone
 import uniffi.magnetita_mobile.MobileSession
+import uniffi.magnetita_mobile.ReconnectSchedule
+import uniffi.magnetita_mobile.DesktopSignal as CoreSignal
+import uniffi.magnetita_mobile.MobileStorageRequest
 
 /** The [Connector] over the Rust core: every rule stays on the other side. */
 class CoreConnector(private val phone: MobilePhone) : Connector {
@@ -26,6 +29,7 @@ class CoreConnector(private val phone: MobilePhone) : Connector {
 private class CoreSession(private val inner: MobileSession) : LiveSession {
     override val desktopId: String = inner.desktopId()
     override val desktopName: String = inner.desktopName()
+    override val gone: Boolean get() = inner.isClosed()
 
     override fun reportBattery(level: Int, charging: Boolean): Boolean =
         runCatching { inner.reportBattery(level.coerceIn(0, 100).toUByte(), charging) }.isSuccess
@@ -61,8 +65,11 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
     override fun finishTransfer(transfer: Int): Boolean =
         runCatching { inner.finishTransfer(transfer.toUInt()) }.isSuccess
 
-    override fun acceptFile(transfer: Int, dir: String): Boolean =
-        runCatching { inner.acceptFile(transfer.toUInt(), dir) }.isSuccess
+    override fun abandonTransfer(transfer: Int): Boolean =
+        runCatching { inner.abandonTransfer(transfer.toUInt()) }.isSuccess
+
+    override fun acceptFile(transfer: Int, dir: String, usableBytes: Long): Boolean =
+        runCatching { inner.acceptFile(transfer.toUInt(), dir, usableBytes.coerceAtLeast(0).toULong()) }.isSuccess
 
     override fun rejectFile(transfer: Int): Boolean =
         runCatching { inner.rejectFile(transfer.toUInt()) }.isSuccess
@@ -130,22 +137,63 @@ private class CoreSession(private val inner: MobileSession) : LiveSession {
 
     private fun SmsMessage.toMobile() = MobileSmsMessage(id.toULong(), fromMe, address, body, timestampMs.toULong(), attachmentMimes)
 
-    override suspend fun next(timeoutMs: Long): LinkEvent? = withContext(Dispatchers.IO) {
-        inner.next(timeoutMs.toULong())?.let { LinkEvent(
-            it.capability.toInt(), it.kind.toInt(), it.description, it.text, it.key, it.action?.toInt(),
-            it.transfer?.toInt(), it.size?.toLong(), it.offset?.toLong(), it.complete, it.path,
-            it.media?.let { m -> MediaState(m.player, m.title, m.artist, m.album, m.playing, m.positionMs.toLong(), m.lengthMs.toLong(), m.canSeek, m.canNext, m.canPrevious, m.volume.toInt()) },
-            it.mediaCommand?.let { c -> MediaCommand(c.player, c.button?.toInt(), c.seekMs?.toLong(), c.volume?.toInt()) },
-            it.contactsSince?.toLong(), it.conversationsWanted, it.thread?.toLong(), it.beforeMs?.toLong(), it.limit?.toInt(), it.smsSend, it.callAction?.toInt(),
-            it.commands?.map { c -> c.id.toInt() to c.name }, it.commandId?.toInt(), it.commandOk,
-            it.mirrorStart?.let { m -> MirrorOptions(m.maxSize.toInt(), m.fps.toInt(), m.bitrateKbps.toInt(), m.codec.toInt(), m.audio, m.screenOff) },
-            it.mirrorStop,
-            it.mirrorTouch?.let { t -> MirrorTouch(t.phase.toInt(), t.x.toInt(), t.y.toInt(), t.pointer.toInt()) },
-            it.mirrorKey?.toInt(), it.mirrorKeyPressed, it.mirrorGlobal?.toInt(),
-            it.storage?.let { s -> StorageRequest(s.kind.toInt(), s.request.toInt(), s.path, s.to, s.offset.toLong(), s.len.toInt(), s.bytes, s.truncate) },
-            it.mirrorKeyframe,
-        ) }
+    override suspend fun next(timeoutMs: Long): DesktopEvent? = withContext(Dispatchers.IO) {
+        inner.next(timeoutMs.toULong())?.let { DesktopEvent(it.description, it.signal.toApp()) }
     }
 
     override fun close(reason: String) = inner.close(reason)
+}
+
+/** The core's typed signal in the controller's form: a carry, no decision. */
+private fun CoreSignal.toApp(): DesktopSignal = when (this) {
+    CoreSignal.Ring -> DesktopSignal.Ring
+    CoreSignal.StopRinging -> DesktopSignal.StopRinging
+    CoreSignal.BatteryRequested -> DesktopSignal.BatteryRequested
+    is CoreSignal.ClipboardText -> DesktopSignal.ClipboardText(text)
+    CoreSignal.ClipboardRequested -> DesktopSignal.ClipboardRequested
+    is CoreSignal.NotificationDismiss -> DesktopSignal.NotificationDismiss(key)
+    is CoreSignal.NotificationAction -> DesktopSignal.NotificationAction(key, action.toInt())
+    is CoreSignal.NotificationReply -> DesktopSignal.NotificationReply(key, text)
+    is CoreSignal.ShareOffered -> DesktopSignal.ShareOffered(transfer.toInt(), name, size.toLong())
+    is CoreSignal.ShareAccepted -> DesktopSignal.ShareAccepted(transfer.toInt(), offset.toLong())
+    is CoreSignal.ShareEnded -> DesktopSignal.ShareEnded(transfer.toInt(), complete)
+    is CoreSignal.FileReceived -> DesktopSignal.FileReceived(transfer.toInt(), path, complete)
+    is CoreSignal.ShareText -> DesktopSignal.ShareText(text)
+    is CoreSignal.DesktopMedia -> DesktopSignal.DesktopMedia(
+        state.let { m -> MediaState(m.player, m.title, m.artist, m.album, m.playing, m.positionMs.toLong(), m.lengthMs.toLong(), m.canSeek, m.canNext, m.canPrevious, m.volume.toInt()) },
+    )
+    is CoreSignal.MediaControl -> DesktopSignal.MediaControl(
+        command.let { c -> MediaCommand(c.player, c.button?.toInt(), c.seekMs?.toLong(), c.volume?.toInt()) },
+    )
+    CoreSignal.MediaRequested -> DesktopSignal.MediaRequested
+    is CoreSignal.ContactsRequested -> DesktopSignal.ContactsRequested(since.toLong())
+    CoreSignal.ConversationsRequested -> DesktopSignal.ConversationsRequested
+    is CoreSignal.ThreadRequested -> DesktopSignal.ThreadRequested(thread.toLong(), beforeMs?.toLong(), limit.toInt())
+    is CoreSignal.SmsSendRequested -> DesktopSignal.SmsSendRequested(thread.toLong(), body)
+    is CoreSignal.CallCommand -> DesktopSignal.CallCommand(action.toInt())
+    is CoreSignal.Commands -> DesktopSignal.Commands(list.map { it.id.toInt() to it.name })
+    is CoreSignal.CommandResult -> DesktopSignal.CommandResult(id.toInt(), ok)
+    is CoreSignal.MirrorStart -> DesktopSignal.MirrorStart(
+        options.let { m -> MirrorOptions(m.maxSize.toInt(), m.fps.toInt(), m.bitrateKbps.toInt(), m.codec.toInt(), m.audio, m.screenOff) },
+    )
+    CoreSignal.MirrorStop -> DesktopSignal.MirrorStop
+    CoreSignal.MirrorKeyframe -> DesktopSignal.MirrorKeyframe
+    is CoreSignal.MirrorTouched -> DesktopSignal.MirrorTouched(touch.let { t -> MirrorTouch(t.phase.toInt(), t.x.toInt(), t.y.toInt(), t.pointer.toInt()) })
+    is CoreSignal.MirrorKey -> DesktopSignal.MirrorKey(keycode.toInt(), pressed)
+    is CoreSignal.MirrorGlobal -> DesktopSignal.MirrorGlobal(action.toInt())
+    is CoreSignal.Storage -> DesktopSignal.Storage(request.toApp())
+    is CoreSignal.Declined -> DesktopSignal.Declined(capability.toInt(), kind.toInt(), reason)
+    is CoreSignal.Unhandled -> DesktopSignal.Unhandled(capability.toInt(), kind.toInt())
+}
+
+private fun MobileStorageRequest.toApp(): StorageRequest =
+    StorageRequest(kind.toInt(), request.toInt(), path, to, offset.toLong(), len.toInt(), bytes, truncate)
+
+/** The core's reconnection schedule, the desktop link's own numbers. */
+class CoreSchedule : RetrySchedule {
+    private val inner = ReconnectSchedule()
+
+    override fun nextDelayMs(): Long = inner.nextDelayMs().toLong()
+
+    override fun reset() = inner.reset()
 }

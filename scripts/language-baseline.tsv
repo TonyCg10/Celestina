@@ -23,7 +23,6 @@
 1	celestina-rs/crates/grafita-core/src/probe.rs
 2	celestina-rs/crates/grafita-core/src/search.rs
 9	celestina-rs/crates/grafita-core/tests/documents.rs
-1	celestina-rs/crates/magnetita-core/src/clipboard.rs
 2	celestina-rs/crates/magnetitad/src/clipboard.rs
 7	celestina-rs/crates/magnetitad/src/devices.rs
 12	celestina-style/CelestinaFileIcon.qml

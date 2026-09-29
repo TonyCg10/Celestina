@@ -34,6 +34,19 @@ impl ClipboardText {
     }
 }
 
+/// Whether `text` is clipboard content worth syncing, in either direction:
+/// the one rule both ends and both directions share, under the wire's
+/// [`MAX_CLIPBOARD`] bound.
+///
+/// Empty carries nothing. A NUL means some layer decoded bytes that were never
+/// text — a lossy UTF-8 decode of an image selection produces exactly that, a
+/// string of replacement characters that still carries the original NULs — and
+/// such a value must not reach a peer under any framing. Oversized content is
+/// refused rather than truncated: half a clipboard is not what was copied.
+pub fn syncable(text: &str) -> bool {
+    !text.is_empty() && text.len() <= MAX_CLIPBOARD && !text.contains('\0')
+}
+
 /// Desktop → phone: send your clipboard if you may. Kind 2, empty body.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct ClipboardRequest;
@@ -65,6 +78,36 @@ mod tests {
         };
         assert_eq!(hex(&m.encode()), VECTOR);
         assert_eq!(ClipboardText::decode(&unhex(VECTOR)).unwrap(), m);
+    }
+
+    fn lossily_decoded_binary() -> String {
+        "\u{fffd}PNG\r\n\u{1a}\n\0\0\0\rIHDR\0\0\0@".to_owned()
+    }
+
+    #[test]
+    fn ordinary_copied_text_up_to_the_wire_bound_is_syncable() {
+        assert!(syncable("hello world"));
+        assert!(syncable("several\nlines\tand tabs, and \u{e9}"));
+        assert!(syncable(&"a".repeat(MAX_CLIPBOARD)));
+    }
+
+    /// MAG-19: one bound. A text the wire carries is a text either end syncs.
+    #[test]
+    fn the_sync_rule_and_the_wire_share_one_bound() {
+        let at_bound = ClipboardText {
+            text: "a".repeat(MAX_CLIPBOARD),
+        };
+        let decoded = ClipboardText::decode(&at_bound.encode()).unwrap();
+        assert!(syncable(&decoded.text));
+        assert!(!syncable(&"a".repeat(MAX_CLIPBOARD + 1)));
+    }
+
+    #[test]
+    fn empty_and_nul_carrying_content_is_not_syncable() {
+        assert!(!syncable(""));
+        assert!(!syncable("\0"));
+        assert!(!syncable("text\0with a nul"));
+        assert!(!syncable(&lossily_decoded_binary()));
     }
 
     #[test]

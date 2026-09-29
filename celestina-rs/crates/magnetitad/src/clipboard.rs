@@ -11,6 +11,9 @@ use std::sync::Mutex;
 
 use crate::lock::LockOk;
 use crate::subprocess;
+/// The one clipboard rule, the wire's (MAG-19): both directions and both
+/// ends sync exactly what the protocol carries.
+pub(crate) use magnetita_proto::daily::clipboard::syncable;
 
 /// How long one clipboard tool may take. [`read`] and [`write`] run on the
 /// thread pumping a phone link, so an unresponsive compositor tool must cost
@@ -88,7 +91,7 @@ pub(crate) fn read() -> Option<String> {
         Instant::now() + CLIPBOARD_TIMEOUT,
         &stopping,
     )?;
-    decode(output).filter(|text| magnetita_core::clipboard::is_syncable(text))
+    decode(output).filter(|text| syncable(text))
 }
 
 /// The decode half of [`read`], separated so the rule can be tested without a

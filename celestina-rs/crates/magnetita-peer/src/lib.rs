@@ -12,9 +12,8 @@ use std::process::Command;
 use magnetita_link::discovery::{parse_peers, Peer as Advertised, SERVICE_TYPE};
 
 pub use magnetita_mobile::mobile::MIRROR_VIDEO_STREAM;
-pub use magnetita_mobile::phone::{
-    clipboard_text, command_fields, describe, media_fields, phone_fields, share_fields, Incoming,
-};
+pub use magnetita_mobile::phone::{describe, Incoming};
+pub use magnetita_mobile::signal::{signal_of, DesktopSignal};
 pub use magnetita_mobile::storage::{self, StorageRequest};
 pub use magnetita_mobile::{Phone, PhoneSession};
 
@@ -57,7 +56,14 @@ mod tests {
             device_id: "desktop".into(),
             device_name: "Celestina".into(),
             device_kind: DeviceKind::Desktop,
-            capabilities: vec![],
+            // What a desktop offers that this test uses.
+            capabilities: [capability::BATTERY, capability::FIND]
+                .into_iter()
+                .map(|capability| magnetita_proto::CapabilityVersion {
+                    capability,
+                    version: 1,
+                })
+                .collect(),
         };
         (
             Endpoint::bind(

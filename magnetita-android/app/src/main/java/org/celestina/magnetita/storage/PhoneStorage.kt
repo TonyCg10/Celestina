@@ -64,17 +64,12 @@ class PhoneStorage(private val context: Context) {
         }
         val treeId = DocumentsContract.getTreeDocumentId(tree)
         val id = DocumentPaths.childId(treeId, request.path)
-        if (id == null) {
-            fail(request, live, "bad path")
-            return
-        }
         val uri = DocumentsContract.buildDocumentUriUsingTree(tree, id)
         runCatching {
             when (request.kind) {
                 StorageRequest.LIST -> {
                     val all = listed("tree:" + request.path) { list(tree, id) }
-                    val page = all.drop(request.offset.toInt()).take(PAGE)
-                    live.sendListing(request.request, page, all.size > request.offset.toInt() + PAGE, "")
+                    sendPage(all, request, live)
                 }
                 StorageRequest.STAT -> live.sendStatReply(request.request, stat(uri))
                 StorageRequest.READ -> live.sendData(request.request, read(uri, request.offset, request.len), "")
@@ -104,10 +99,6 @@ class PhoneStorage(private val context: Context) {
 
     /** The same requests over plain files when the whole phone is shared. */
     private fun answerFiles(root: File, request: StorageRequest, live: LiveSession) {
-        if (!DocumentPaths.valid(request.path) || !DocumentPaths.valid(request.to)) {
-            fail(request, live, "bad path")
-            return
-        }
         val file = if (request.path.isEmpty()) root else File(root, request.path)
         runCatching {
             when (request.kind) {
@@ -115,8 +106,7 @@ class PhoneStorage(private val context: Context) {
                     val all = listed("files:" + request.path) {
                         (file.listFiles() ?: error("not a directory")).map { entryOf(it) }.sortedBy { it.name }
                     }
-                    val page = all.drop(request.offset.toInt()).take(PAGE)
-                    live.sendListing(request.request, page, all.size > request.offset.toInt() + PAGE, "")
+                    sendPage(all, request, live)
                 }
                 StorageRequest.STAT -> live.sendStatReply(request.request, if (file.exists()) entryOf(file) else null)
                 StorageRequest.READ -> RandomAccessFile(file, "r").use { raf ->
@@ -240,7 +230,7 @@ class PhoneStorage(private val context: Context) {
 
     private fun create(tree: Uri, treeId: String, path: String, dir: Boolean): Uri {
         val (parent, name) = DocumentPaths.split(path)
-        val parentId = DocumentPaths.childId(treeId, parent) ?: error("bad path")
+        val parentId = DocumentPaths.childId(treeId, parent)
         val parentUri = DocumentsContract.buildDocumentUriUsingTree(tree, parentId)
         val mime = if (dir) DocumentsContract.Document.MIME_TYPE_DIR else mimeOf(name)
         return DocumentsContract.createDocument(context.contentResolver, parentUri, mime, name) ?: error("not created")
@@ -249,15 +239,22 @@ class PhoneStorage(private val context: Context) {
     private fun rename(tree: Uri, treeId: String, from: String, to: String) {
         val (fromParent, fromName) = DocumentPaths.split(from)
         val (toParent, toName) = DocumentPaths.split(to)
-        var uri = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentPaths.childId(treeId, from) ?: error("bad path"))
+        var uri = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentPaths.childId(treeId, from))
         if (fromParent != toParent) {
-            val source = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentPaths.childId(treeId, fromParent) ?: error("bad path"))
-            val target = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentPaths.childId(treeId, toParent) ?: error("bad path"))
+            val source = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentPaths.childId(treeId, fromParent))
+            val target = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentPaths.childId(treeId, toParent))
             uri = DocumentsContract.moveDocument(context.contentResolver, uri, source, target) ?: error("not moved")
         }
         if (fromName != toName) {
             DocumentsContract.renameDocument(context.contentResolver, uri, toName) ?: error("not renamed")
         }
+    }
+
+    /** One page of a listing: the wire's page size, which the request carries. */
+    private fun sendPage(all: List<StorageEntry>, request: StorageRequest, live: LiveSession) {
+        val from = request.offset.coerceIn(0, all.size.toLong()).toInt()
+        val page = all.drop(from).take(request.len.coerceAtLeast(1))
+        live.sendListing(request.request, page, all.size > from + page.size, "")
     }
 
     private fun mimeOf(name: String): String {
@@ -267,7 +264,6 @@ class PhoneStorage(private val context: Context) {
 
     companion object {
         private const val KEY_TREE = "tree"
-        private const val PAGE = 256
         private const val LISTING_MS = 10_000L
         private val COLUMNS = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,

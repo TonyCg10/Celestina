@@ -6,7 +6,7 @@ import java.net.NetworkInterface
 
 /**
  * This phone's own interface addresses as host literals, for
- * [PairPreview.of]: a pairing link naming one of them would be answered by
+ * [CorePairing.preview]: a pairing link naming one of them would be answered by
  * another app on this phone listening on every interface. Read from the
  * interfaces and from the active network's link properties; a source that
  * fails adds nothing. Local system calls only, no network traffic.

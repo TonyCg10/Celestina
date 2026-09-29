@@ -40,5 +40,5 @@ pub mod storage;
 
 pub use envelope::{Envelope, PROTOCOL_VERSION};
 pub use error::DecodeError;
-pub use hello::{capability, negotiate, CapabilityVersion, DeviceKind, Hello};
+pub use hello::{capability, negotiate, CapabilityVersion, DeviceKind, Hello, Negotiated};
 pub use pair::{CodePairing, Fingerprint, PairError, Pinned, QrPairing, QrPayload};

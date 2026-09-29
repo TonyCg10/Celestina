@@ -33,3 +33,29 @@ entries specific to the application are added here as its screens land.
 - **Result:** not run
 - **Evidence:** pending; the automated half is
   [the pairing consent record](docs/evidence/2026-09-26-pairing-consent.md)
+
+## VAL-AND-2 — Negotiated capabilities and the core's rules on the phone
+
+- **Status:** pending
+- **Related implementation:** `AUD-1-E` (suite plan)
+- **Requires:** the release APK and the deployed `magnetitad` of the same
+  `AUD-1-E` landing on the S25U and the desktop; a phone with the SMS
+  grant and a few conversations; a file of a few hundred MB on the phone
+- **Procedure:** pair or reconnect and read the daemon's journal line
+  `negotiated capabilities`; ring the phone, send the clipboard both ways,
+  send a notification action, open the Messages page on the desktop and
+  leave it open for a minute while a song plays, then receive an SMS;
+  share the large file from the phone to the desktop and, while it
+  uploads, ring the phone and browse the phone's mount; copy a text of
+  more than 256 KB on the phone and send it with the tile; send the phone
+  a file larger than the free storage
+- **Pass condition:** the journal lists all thirteen capabilities; every
+  daily action works as before; the Messages page fills once when opened,
+  shows the new SMS without a refresh and keeps its scroll, and the phone
+  does not rescan its SMS while the page stays open; the ring and the
+  mount answer during the upload; the long text shows the refusal message
+  and nothing reaches the desktop; the oversized file is declined and the
+  desktop reports it
+- **Result:** not run
+- **Evidence:** pending; the automated half is
+  [the negotiated capabilities record](../docs/evidence/2026-09-26-negotiated-capabilities.md)

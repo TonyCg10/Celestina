@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use magnetita_link::trust::fingerprint_text;
 use magnetita_link::LinkError;
-use magnetita_peer::{browse, clipboard_text, describe, dir_default, Incoming, Phone};
+use magnetita_peer::{browse, describe, dir_default, signal_of, DesktopSignal, Incoming, Phone};
 use magnetita_proto::daily::media::MediaState;
 use magnetita_proto::daily::notifications::{Action, NotificationPosted};
 use magnetita_proto::mirror::{Codec, MirrorStarted};
@@ -219,22 +219,19 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
             let until = tokio::time::Instant::now() + Duration::from_secs(hold);
             while tokio::time::Instant::now() < until {
                 match session.next(until - tokio::time::Instant::now()).await? {
-                    Some(Incoming::Envelope(env)) => {
-                        let share = magnetita_peer::share_fields(&env);
-                        let offset = share.offset;
-                        match (env.capability, env.kind, share.transfer) {
-                            (5, 1, Some(id)) => {
-                                session
-                                    .accept_file(id, downloads.clone())
-                                    .await
-                                    .map(tokio::spawn)?;
-                                println!("accepted transfer {id} into {}", downloads.display());
-                            }
-                            (5, 2, Some(id))
-                                if sending.as_ref().is_some_and(|(mine, _)| *mine == id) =>
-                            {
-                                let (_, path) = sending.as_ref().unwrap();
-                                let offset = offset.unwrap_or(0);
+                    Some(Incoming::Envelope(env)) => match signal_of(&env) {
+                        DesktopSignal::ShareOffered { transfer: id, .. } => {
+                            session
+                                .accept_file(id, downloads.clone(), None)
+                                .await
+                                .map(tokio::spawn)?;
+                            println!("accepted transfer {id} into {}", downloads.display());
+                        }
+                        DesktopSignal::ShareAccepted {
+                            transfer: id,
+                            offset,
+                        } if sending.as_ref().is_some_and(|(mine, _)| *mine == id) => {
+                            if let Some((_, path)) = sending.as_ref() {
                                 let bytes = std::fs::read(path)?;
                                 for chunk in bytes[offset.min(bytes.len() as u64) as usize..]
                                     .chunks(64 * 1024)
@@ -244,31 +241,21 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                 session.finish_transfer(id).await?;
                                 println!("sent from offset {offset}");
                             }
-                            (6, 1, _) => {
-                                let m = magnetita_peer::media_fields(&env);
-                                if let Some(state) = m.state {
-                                    println!(
-                                        "media: {} playing={} {} - {}",
-                                        state.player, state.playing, state.artist, state.title
-                                    );
-                                }
-                            }
-                            (6, 2, _) => {
-                                let m = magnetita_peer::media_fields(&env);
-                                if let Some(c) = m.command {
-                                    println!("media command: {} {:?}", c.player, c.button);
-                                }
-                            }
-                            (10, 4, _) => {
-                                let p = magnetita_peer::phone_fields(&env);
-                                if let Some(send) = p.sms_send {
-                                    println!("sms send: thread {} {:?}", send.thread, send.body);
-                                }
-                            }
-                            (9, 1, _) if mirror_file.is_some() => {
+                        }
+                        DesktopSignal::DesktopMedia { state } => println!(
+                            "media: {} playing={} {} - {}",
+                            state.player, state.playing, state.artist, state.title
+                        ),
+                        DesktopSignal::MediaControl { command } => {
+                            println!("media command: {} {:?}", command.player, command.button)
+                        }
+                        DesktopSignal::SmsSendRequested { thread, body } => {
+                            println!("sms send: thread {thread} {body:?}")
+                        }
+                        DesktopSignal::MirrorStart { .. } => {
+                            if let Some(path) = mirror_file.as_ref() {
                                 // Answer the desktop with a fixed shape and pace
                                 // the file's bytes as the phone would its frames.
-                                let path = mirror_file.clone().unwrap();
                                 session
                                     .send_mirror_started(&MirrorStarted {
                                         width: 1080,
@@ -280,7 +267,7 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                 session
                                     .open_stream(magnetita_peer::MIRROR_VIDEO_STREAM)
                                     .await?;
-                                let bytes = std::fs::read(&path)?;
+                                let bytes = std::fs::read(path)?;
                                 println!("mirror: streaming {} bytes", bytes.len());
                                 for chunk in bytes.chunks(32 * 1024) {
                                     session
@@ -293,38 +280,31 @@ async fn run(args: &[String]) -> Result<(), LinkError> {
                                     .await;
                                 println!("mirror: stream ended");
                             }
-                            (13, _, _) if serving.is_some() => {
-                                if let Some(request) = magnetita_peer::StorageRequest::decode(&env)
-                                {
-                                    let reply = magnetita_peer::storage::serve(
-                                        serving.as_deref().unwrap(),
-                                        &request,
-                                    );
-                                    session.send_storage(reply).await?;
-                                }
-                            }
-                            (9, 3, _) => println!("mirror: stop"),
-                            (9, 4, _) => println!("mirror: touch"),
-                            (7, 1, _) => {
-                                let c = magnetita_peer::command_fields(&env);
-                                for (id, name) in c.list.unwrap_or_default() {
-                                    println!("command {id}: {name}");
-                                }
-                            }
-                            (7, 3, _) => {
-                                let c = magnetita_peer::command_fields(&env);
-                                println!("command result: {:?}", c.result);
-                            }
-                            (12, 2, _) => {
-                                let p = magnetita_peer::phone_fields(&env);
-                                println!("call action: {:?}", p.call_action);
-                            }
-                            _ => match clipboard_text(&env) {
-                                Some(text) => println!("clipboard: {text}"),
-                                None => println!("{}", describe(&env)),
-                            },
                         }
-                    }
+                        DesktopSignal::Storage { .. } => {
+                            let request = magnetita_peer::StorageRequest::decode(&env);
+                            if let (Some(root), Some(request)) = (serving.as_deref(), request) {
+                                let reply = magnetita_peer::storage::serve(root, &request);
+                                session.send_storage(reply).await?;
+                            }
+                        }
+                        DesktopSignal::Commands { list } => {
+                            for c in list {
+                                println!("command {}: {}", c.id, c.name);
+                            }
+                        }
+                        DesktopSignal::CommandResult { id, ok } => {
+                            println!("command result: {id} {ok}")
+                        }
+                        DesktopSignal::CallCommand { action } => println!("call action: {action}"),
+                        DesktopSignal::ClipboardText { text } => println!("clipboard: {text}"),
+                        _ => println!("{}", describe(&env)),
+                    },
+                    Some(Incoming::Refused {
+                        capability,
+                        kind,
+                        reason,
+                    }) => println!("refused capability {capability} kind {kind}: {reason}"),
                     Some(Incoming::FileReceived {
                         transfer,
                         path,

@@ -5,16 +5,15 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeoutOrNull
-import java.net.Inet4Address
-import kotlin.coroutines.resume
+import uniffi.magnetita_mobile.Resolution
+import uniffi.magnetita_mobile.rankAdvertised
 
 /**
  * `_magnetita._udp` through Android's `NsdManager`, one bounded browse per
- * call: discover for a few seconds, resolve each service, prefer IPv4.
- * The multicast lock is held only while browsing, which is what the
- * battery wants.
+ * call: discover for a few seconds and resolve each service. Which of the
+ * results to dial, in which order, is the core's discovery rule
+ * (`rankAdvertised`), the one the desktop's link applies. The multicast
+ * lock is held only while browsing, which is what the battery wants.
  */
 class NsdDiscovery(context: Context, private val browseMs: Long = 4_000) : Discovery {
     private val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
@@ -23,7 +22,7 @@ class NsdDiscovery(context: Context, private val browseMs: Long = 4_000) : Disco
     override suspend fun browse(): List<Advertised> {
         val lock = wifi.createMulticastLock("magnetita-browse").apply { setReferenceCounted(false); acquire() }
         try {
-            val found = LinkedHashMap<String, Advertised>()
+            val found = ArrayList<Resolution>()
             val listener = object : NsdManager.DiscoveryListener {
                 override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {}
                 override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
@@ -34,12 +33,10 @@ class NsdDiscovery(context: Context, private val browseMs: Long = 4_000) : Disco
                     nsd.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                         override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {}
                         override fun onServiceResolved(info: NsdServiceInfo) {
-                            val host = info.host ?: return
-                            if (host.isLoopbackAddress || host.isLinkLocalAddress) return
-                            val text = if (host is Inet4Address) host.hostAddress else "[${host.hostAddress}]"
-                            val id = info.serviceName
-                            if (id.length <= 64 && id.all { it.isLetterOrDigit() }) {
-                                synchronized(found) { found.putIfAbsent("$id@$text", Advertised(id, "$text:${info.port}")) }
+                            val host = info.host?.hostAddress ?: return
+                            val port = info.port.takeIf { it in 1..65535 } ?: return
+                            synchronized(found) {
+                                if (found.size < MAX_RESOLVED) found += Resolution(info.serviceName.orEmpty(), host, port.toUShort())
                             }
                         }
                     })
@@ -51,8 +48,8 @@ class NsdDiscovery(context: Context, private val browseMs: Long = 4_000) : Disco
             } finally {
                 runCatching { nsd.stopServiceDiscovery(listener) }
             }
-            // IPv4 first: the daemon binds both, and v4 is what the QR names.
-            return synchronized(found) { found.values.sortedBy { if (it.address.startsWith("[")) 1 else 0 } }
+            val seen = synchronized(found) { found.toList() }
+            return rankAdvertised(seen).map { Advertised(it.deviceId, it.address) }
         } finally {
             runCatching { lock.release() }
         }
@@ -60,5 +57,8 @@ class NsdDiscovery(context: Context, private val browseMs: Long = 4_000) : Disco
 
     companion object {
         const val SERVICE_TYPE = "_magnetita._udp."
+
+        /** Most resolutions one browse keeps; a flood of advertisements stops here. */
+        private const val MAX_RESOLVED = 64
     }
 }

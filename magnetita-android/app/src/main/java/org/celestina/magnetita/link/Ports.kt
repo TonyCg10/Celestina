@@ -17,10 +17,18 @@ interface Connector {
     fun pair(uri: String): Result<LiveSession>
 }
 
-/** One open session, as the controller drives it. */
+/**
+ * One open session, as the controller drives it. A call returns false when
+ * it did not do its job: the session has ended ([gone]), or the core refused
+ * it (a capability the desktop did not negotiate, a bound, a code) while the
+ * session goes on.
+ */
 interface LiveSession {
     val desktopId: String
     val desktopName: String
+
+    /** Whether the session has ended; a false result while this is false was a refusal. */
+    val gone: Boolean
 
     /** Sends a battery report; false when the session is gone. */
     fun reportBattery(level: Int, charging: Boolean): Boolean
@@ -43,8 +51,16 @@ interface LiveSession {
     /** Ends an accepted transfer. */
     fun finishTransfer(transfer: Int): Boolean
 
-    /** Accepts an offered file into `dir`; its end arrives as a signal. */
-    fun acceptFile(transfer: Int, dir: String): Boolean
+    /** Gives up an accepted transfer whose source failed; the desktop is told. */
+    fun abandonTransfer(transfer: Int): Boolean
+
+    /**
+     * Accepts an offered file into `dir`, where `usableBytes` are free; its
+     * end arrives as a signal. False when the core refused it (too large for
+     * the space left) or the session is gone; a refusal is declined to the
+     * desktop by the core.
+     */
+    fun acceptFile(transfer: Int, dir: String, usableBytes: Long): Boolean
 
     fun rejectFile(transfer: Int): Boolean
 
@@ -95,54 +111,23 @@ interface LiveSession {
     fun typeText(text: String): Boolean
 
     /**
-     * Waits up to `timeoutMs` for the next envelope: a short description, or
-     * null on timeout. Throws when the session is gone. Suspends, so the
-     * wait is real time on the device and virtual time in a test.
+     * Waits up to `timeoutMs` for what the desktop sends next, or null on
+     * timeout. Throws when the session is gone. Suspends, so the wait is
+     * real time on the device and virtual time in a test.
      */
-    suspend fun next(timeoutMs: Long): LinkEvent?
+    suspend fun next(timeoutMs: Long): DesktopEvent?
 
     fun close(reason: String)
 }
 
-/**
- * An envelope the desktop sent, described for a log and carried for a
- * handler; `text` is the clipboard text the core already decoded.
- */
-data class LinkEvent(
-    val capability: Int,
-    val kind: Int,
-    val description: String,
-    val text: String? = null,
-    val key: String? = null,
-    val action: Int? = null,
-    val transfer: Int? = null,
-    val size: Long? = null,
-    val offset: Long? = null,
-    val complete: Boolean? = null,
-    val path: String? = null,
-    val media: MediaState? = null,
-    val mediaCommand: MediaCommand? = null,
-    val contactsSince: Long? = null,
-    val conversationsWanted: Boolean = false,
-    val thread: Long? = null,
-    val beforeMs: Long? = null,
-    val limit: Int? = null,
-    val smsSend: Boolean = false,
-    val callAction: Int? = null,
-    val commands: List<Pair<Int, String>>? = null,
-    val commandId: Int? = null,
-    val commandOk: Boolean? = null,
-    val mirrorStart: MirrorOptions? = null,
-    val mirrorStop: Boolean = false,
-    val mirrorTouch: MirrorTouch? = null,
-    val mirrorKey: Int? = null,
-    val mirrorKeyPressed: Boolean? = null,
-    val mirrorGlobal: Int? = null,
-    val storage: StorageRequest? = null,
-    val mirrorKeyframe: Boolean = false,
-)
+/** One message from the desktop: a line for the log and what it asks. */
+data class DesktopEvent(val description: String, val signal: DesktopSignal)
 
-/** One browse request from the desktop; `kind` is one of the constants. */
+/**
+ * One browse request from the desktop; `kind` is one of the constants. The
+ * core checked the paths at the wire; `len` is a listing's page size or a
+ * read's length.
+ */
 class StorageRequest(
     val kind: Int,
     val request: Int,
@@ -270,6 +255,18 @@ fun interface Discovery {
 /** Opens the bytes of a file this phone offers, by the URI the share gave. */
 fun interface FileSource {
     fun open(uri: String): java.io.InputStream?
+}
+
+/**
+ * The wait between attempts to reach the desktop; the real one is the core's
+ * reconnection schedule, the tests pass their own.
+ */
+interface RetrySchedule {
+    /** How long to wait before the next attempt, in ms; counts the attempt. */
+    fun nextDelayMs(): Long
+
+    /** A session was established: the next failure starts over. */
+    fun reset()
 }
 
 /** What the phone knows about itself that the desktop wants. */

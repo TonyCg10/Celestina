@@ -1,6 +1,11 @@
 //! The phone's SMS on the desktop: the conversation list, one open thread
 //! and a send, all read from and written through `Devices1`. The daemon
 //! holds the messages; this model only projects the page it is shown.
+//!
+//! Nothing polls (MAG-12). While the page is `active` the model re-reads the
+//! daemon's cache when `Changed` says something moved, and it asks the phone
+//! for a fresh list only when the person opens the page (`pull`). A snapshot
+//! equal to the one shown changes nothing, so a re-read keeps the scroll.
 
 use core::pin::Pin;
 use std::sync::mpsc::{sync_channel, SyncSender};
@@ -35,11 +40,18 @@ pub mod qobject {
         #[qproperty(QStringList, message_from_me)]
         #[qproperty(QStringList, message_names)]
         #[qproperty(bool, available)]
+        /// Whether the page is on screen; `Changed` re-reads only then.
+        #[qproperty(bool, active)]
         type MessagesModel = super::MessagesModelRust;
 
         /// Re-read the conversations (and the open thread) from the daemon.
         #[qinvokable]
         fn refresh(self: Pin<&mut MessagesModel>);
+
+        /// Ask the phone for a fresh list, then re-read; the page calls it
+        /// when it opens. The first call also starts the `Changed` watch.
+        #[qinvokable]
+        fn pull(self: Pin<&mut MessagesModel>);
 
         /// Show one conversation.
         #[qinvokable]
@@ -70,6 +82,11 @@ pub struct MessagesModelRust {
     message_from_me: QStringList,
     message_names: QStringList,
     available: bool,
+    active: bool,
+    /// The `Changed` watch runs from the first `pull` until the model drops.
+    watching: bool,
+    /// What the page shows, so an equal re-read changes nothing.
+    shown: Option<Snapshot>,
     sender: Option<SyncSender<(String, u64, String)>>,
     worker: Option<JoinHandle<()>>,
     /// The refresh threads, joined on drop; a late snapshot is dropped.
@@ -86,12 +103,57 @@ impl Drop for MessagesModelRust {
     }
 }
 
+#[derive(Clone, PartialEq, Eq)]
 struct Snapshot {
     conversations: Vec<crate::devices::Conversation>,
     thread: Option<(u64, Vec<crate::devices::Message>)>,
 }
 
 impl qobject::MessagesModel {
+    pub fn pull(mut self: Pin<&mut Self>) {
+        self.as_mut().start_watch();
+        let device = self.rust().device_id.to_string();
+        if device.is_empty() {
+            return;
+        }
+        let qt = self.as_mut().qt_thread();
+        self.rust().owned.spawn(move |guard| {
+            if let Err(error) = crate::devices::sms_refresh(&device) {
+                eprintln!("magnetita: messages refresh failed: {error}");
+            }
+            if !guard.open() {
+                return;
+            }
+            let _ = qt.queue(|model: Pin<&mut qobject::MessagesModel>| model.refresh());
+        });
+    }
+
+    /// Starts, once, the thread that re-reads on `Changed` while the page is
+    /// active; it ends when the model drops.
+    fn start_watch(mut self: Pin<&mut Self>) {
+        if self.rust().watching {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().watching = true;
+        let qt = self.as_mut().qt_thread();
+        self.rust().owned.spawn(move |guard| {
+            let delivery = guard.clone();
+            let result = crate::devices::watch_changes(guard, move || {
+                if !delivery.open() {
+                    return;
+                }
+                let _ = qt.queue(|model: Pin<&mut qobject::MessagesModel>| {
+                    if model.rust().active {
+                        model.refresh();
+                    }
+                });
+            });
+            if let Err(error) = result {
+                eprintln!("magnetita: messages watch unavailable: {error}");
+            }
+        });
+    }
+
     pub fn refresh(mut self: Pin<&mut Self>) {
         let device = self.rust().device_id.to_string();
         if device.is_empty() {
@@ -127,6 +189,11 @@ impl qobject::MessagesModel {
     }
 
     fn apply(mut self: Pin<&mut Self>, snapshot: Snapshot) {
+        self.as_mut().set_available(true);
+        if self.rust().shown.as_ref() == Some(&snapshot) {
+            return;
+        }
+        self.as_mut().rust_mut().get_mut().shown = Some(snapshot.clone());
         let threads: QStringList = snapshot
             .conversations
             .iter()
@@ -170,7 +237,6 @@ impl qobject::MessagesModel {
                 self.as_mut().set_message_names(names);
             }
         }
-        self.as_mut().set_available(true);
     }
 
     pub fn open_conversation(mut self: Pin<&mut Self>, thread: QString, label: QString) {
@@ -179,6 +245,7 @@ impl qobject::MessagesModel {
         self.as_mut().set_message_bodies(QStringList::default());
         self.as_mut().set_message_from_me(QStringList::default());
         self.as_mut().set_message_names(QStringList::default());
+        self.as_mut().rust_mut().get_mut().shown = None;
         self.refresh();
     }
 

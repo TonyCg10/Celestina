@@ -1,6 +1,6 @@
 # Magnetita Android status
 
-- **Updated:** 2026-09-26
+- **Updated:** 2026-09-28
 - **Implementation:** `AND-6`, the application's design, is the one open
   checkpoint since 2026-09-13, paired with Magnetita's `MAG-D1`: the
   author closed the own-protocol program with `VAL-MAG-15` passed. `AND-5`,
@@ -49,7 +49,17 @@
   granted on the system page the device screen opens.
 - The clipboard travels both ways: the desktop's text becomes the phone's;
   the phone's goes out in front, from the quick-settings tile and from the
-  share target (`AND-2-A`).
+  share target (`AND-2-A`); text the wire's one bound refuses is not sent
+  and the screen says so (`AUD-1-E`).
+- Every protocol rule the app needs lives in `magnetita-mobile` and is
+  reached through UniFFI (`AUD-1-E`): the desktop's messages arrive as one
+  typed signal each, and the pairing preview with its LAN rule, the
+  discovery ranking, the reconnection schedule and the clipboard bound are
+  the core's. The phone advertises every capability it uses and refuses
+  what the desktop did not negotiate. Uploads stream in their own
+  coroutine, the sender waits on its queue instead of a timer, and waiting
+  pointer motion merges in a bounded queue. The conversation list reads one
+  row per thread, and a received file above the space left is declined.
 - The project is the author's Android Studio scaffold moved into the
   repository under the package `org.celestina.magnetita`, `minSdk 31`,
   Kotlin 2.2, Compose Material 3, AGP 9.

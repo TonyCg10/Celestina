@@ -177,7 +177,18 @@ pub struct QrPayload {
 
 const QR_SCHEME: &str = "magnetita://pair?";
 
+/// The longest query a pairing link may carry after its scheme.
+pub const MAX_QR_QUERY: usize = 4096;
+
 impl QrPayload {
+    /// Whether `text` is a pairing link at all: the scheme and the length
+    /// bound, before any field is read. A scanner uses it to tell a
+    /// Magnetita QR from any other.
+    pub fn is_link(text: &str) -> bool {
+        text.strip_prefix(QR_SCHEME)
+            .is_some_and(|query| query.len() <= MAX_QR_QUERY)
+    }
+
     /// The text the QR carries. Hex keeps it scannable and unambiguous.
     pub fn to_uri(&self) -> String {
         let mut s = format!(
@@ -200,7 +211,7 @@ impl QrPayload {
         let query = uri
             .strip_prefix(QR_SCHEME)
             .ok_or(PairError::BadPayload("scheme"))?;
-        if query.len() > 4096 {
+        if query.len() > MAX_QR_QUERY {
             return Err(PairError::BadPayload("length"));
         }
         let (mut version, mut id, mut fp, mut secret, mut addresses) =
@@ -209,7 +220,15 @@ impl QrPayload {
             let (k, v) = field
                 .split_once('=')
                 .ok_or(PairError::BadPayload("field"))?;
+            // A field named twice is refused: a reader that kept the first
+            // and one that kept the last would pair with different desktops,
+            // and the phone's consent screen reads the link through this
+            // very parse.
             match k {
+                "v" if version.is_some() => return Err(PairError::BadPayload("version")),
+                "id" if id.is_some() => return Err(PairError::BadPayload("id")),
+                "fp" if fp.is_some() => return Err(PairError::BadPayload("fingerprint")),
+                "secret" if secret.is_some() => return Err(PairError::BadPayload("secret")),
                 "v" => version = Some(v),
                 "id" => {
                     if v.is_empty()
@@ -592,6 +611,28 @@ mod tests {
             QrPayload::parse_uri(&bad_id).unwrap_err(),
             PairError::BadPayload("id")
         );
+    }
+
+    /// A repeated field would let one reader pair with the first value and
+    /// another with the last; the link is refused instead.
+    #[test]
+    fn qr_payload_refuses_a_repeated_field() {
+        let uri = payload().to_uri();
+        for (extra, what) in [
+            ("&v=1", "version"),
+            ("&id=evil", "id"),
+            (&*format!("&fp={}", "0".repeat(64)), "fingerprint"),
+            (&*format!("&secret={}", "0".repeat(64)), "secret"),
+        ] {
+            assert_eq!(
+                QrPayload::parse_uri(&format!("{uri}{extra}")).unwrap_err(),
+                PairError::BadPayload(what),
+                "{extra}"
+            );
+        }
+        // Addresses are a list: repeating the field is how it is written.
+        let two = format!("{uri}&addr=10.0.0.2:1760");
+        assert_eq!(QrPayload::parse_uri(&two).unwrap().addresses.len(), 2);
     }
 
     #[test]

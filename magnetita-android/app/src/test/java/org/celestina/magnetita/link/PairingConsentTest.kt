@@ -9,14 +9,32 @@ import org.junit.Test
 /**
  * The consent in front of pairing (audit finding AND-1): a link, from the
  * exported deep link or the scanner, pairs only after the person confirms
- * the desktop it names, in time, and only when every address is on the LAN
- * and none is this phone's own.
+ * the offer it shows, in time. How a link is read (the parse, the LAN rule,
+ * this phone's own addresses) is the core's `preview_pairing`, tested in
+ * `magnetita-mobile`; here a fake reads the links these tests write.
  */
 class PairingConsentTest {
     private val fp = "00112233445566778899aabbccddeeff00112233445566778899AABBCCDDEEFF"
     private val secret = "ab".repeat(32)
     private var clock = 1_000L
-    private val consent = PairingConsent { clock }
+    /** Reads the links [link] writes: every address public in 8.0.0.0/8 is refused. */
+    private val preview: (String?, Set<String>) -> PairPreview = { uri, _ ->
+        val fields = uri?.substringAfter('?')?.split('&')?.map { it.substringBefore('=') to it.substringAfter('=') }.orEmpty()
+        val addresses = fields.filter { it.first == "addr" }.map { it.second }
+        when {
+            uri == null -> PairPreview.Refused(PairRefusal.NotMagnetita)
+            addresses.any { it.startsWith("8.") } -> PairPreview.Refused(PairRefusal.NotLan)
+            else -> PairPreview.Offer(
+                PairOffer(
+                    uri,
+                    fields.first { it.first == "id" }.second,
+                    fields.first { it.first == "fp" }.second.lowercase().chunked(2).joinToString(":"),
+                    addresses,
+                ),
+            )
+        }
+    }
+    private val consent = PairingConsent(preview) { clock }
 
     private fun link(vararg addresses: String, id: String = "desk1"): String =
         "magnetita://pair?v=1&id=$id&fp=$fp&secret=$secret" + addresses.joinToString("") { "&addr=$it" }
@@ -138,88 +156,12 @@ class PairingConsentTest {
     }
 
     @Test
-    fun a_public_address_is_refused_before_the_person_is_asked() {
+    fun a_refused_link_is_shown_as_refused_and_is_not_pending() {
         offer(link("8.8.8.8:1760"))
         assertEquals(PairingState.Refused(PairRefusal.NotLan), consent.state.value)
-        // One public address among LAN ones refuses the whole link: the core dials them all.
-        offer(link("192.168.1.20:1760", "203.0.113.9:1760"))
-        assertEquals(PairingState.Refused(PairRefusal.NotLan), consent.state.value)
+        assertEquals(0L, consent.remainingMs())
         // A refusal is not pending: the next valid link is shown.
         offer(link("172.16.4.2:1760"))
         assertTrue(consent.state.value is PairingState.Confirming)
-    }
-
-    @Test
-    fun an_address_of_this_phone_is_refused() {
-        val local = setOf("192.168.1.30", "/fd00:0:0:0:0:0:0:30%wlan0", "127.0.0.1", "not-an-address")
-        consent.offer(link("192.168.1.30:1760"), local)
-        assertEquals(PairingState.Refused(PairRefusal.ThisPhone), consent.state.value)
-        consent.offer(link("[fd00::30]:1760"), local)
-        assertEquals(PairingState.Refused(PairRefusal.ThisPhone), consent.state.value)
-        consent.offer(link("192.168.1.20:1760", "192.168.1.30:1760"), local)
-        assertEquals(PairingState.Refused(PairRefusal.ThisPhone), consent.state.value)
-        consent.offer(link("192.168.1.20:1760"), local)
-        assertTrue(consent.state.value is PairingState.Confirming)
-    }
-
-    @Test
-    fun no_readable_address_of_this_phone_refuses_every_link() {
-        assertEquals(PairPreview.Refused(PairRefusal.LocalUnknown), PairPreview.of(link("192.168.1.20:1760"), emptySet()))
-        assertEquals(PairPreview.Refused(PairRefusal.LocalUnknown), PairPreview.of(link("192.168.1.20:1760"), setOf("wlan0")))
-        consent.offer(link("192.168.1.20:1760"), emptySet())
-        assertEquals(PairingState.Refused(PairRefusal.LocalUnknown), consent.state.value)
-    }
-
-    @Test
-    fun links_the_core_would_refuse_are_refused() {
-        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of(null, phone))
-        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of("https://example.org/?addr=192.168.1.2:1", phone))
-        assertEquals(PairPreview.Refused(PairRefusal.NotMagnetita), PairPreview.of(link("192.168.1.2:1760") + "x".repeat(600), phone))
-        assertEquals(PairPreview.Refused(PairRefusal.NoAddress), PairPreview.of(link(), phone))
-        val malformed = listOf(
-            "magnetita://pair?v=1&fp=$fp&secret=$secret&addr=192.168.1.2:1760",
-            "magnetita://pair?v=2&id=desk1&fp=$fp&secret=$secret&addr=192.168.1.2:1760",
-            "magnetita://pair?id=desk1&fp=$fp&secret=$secret&addr=192.168.1.2:1760",
-            "magnetita://pair?v=1&id=desk1&fp=$fp&addr=192.168.1.2:1760",
-            "magnetita://pair?v=1&id=desk1&fp=$fp&secret=abc&addr=192.168.1.2:1760",
-            "magnetita://pair?v=1&id=desk1&fp=abc&secret=$secret&addr=192.168.1.2:1760",
-            link("192.168.1.2:1760", id = "bad-id"),
-            link("192.168.1.2:1760") + "&",
-            link("192.168.1.2:1760") + "&addr=",
-            // A repeated field would let the screen show one value and the core use another.
-            link("192.168.1.2:1760") + "&id=evil",
-            link("192.168.1.2:1760") + "&fp=" + "0".repeat(64),
-            link("192.168.1.2:1760") + "&v=1",
-            link("192.168.1.2:1760") + "&secret=$secret",
-        )
-        for (uri in malformed) {
-            assertEquals(uri, PairPreview.Refused(PairRefusal.Malformed), PairPreview.of(uri, phone))
-        }
-    }
-
-    @Test
-    fun only_private_and_unique_local_addresses_are_on_the_lan() {
-        for (lan in listOf("10.0.0.1:1760", "10.255.255.254:1", "172.16.0.1:1760", "172.31.255.1:1760", "192.168.0.10:65535", "[fd12:3456::1]:1760", "[fc00::1]:1760", "[fd00::192.168.1.2]:1760")) {
-            assertTrue(lan, LanAddress.isLan(lan))
-        }
-        val refused = listOf(
-            "8.8.8.8:1760", "172.15.0.1:1760", "172.32.0.1:1760", "192.169.0.1:1760", "100.64.0.1:1760",
-            "127.0.0.1:1760", "169.254.1.1:1760", "0.0.0.0:1760", "255.255.255.255:1760",
-            "[2001:db8::1]:1760", "[fe80::1]:1760", "[::1]:1760", "[::ffff:192.168.1.2]:1760", "[fd00::1%2]:1760",
-            "192.168.1.2", "192.168.1.2:0", "192.168.1.2:65536", "192.168.1.2:+1", "192.168.01.2:1760", "192.168.1:1760",
-            "192.168.1.2.3:1760", "fd00::1:1760", "[fd00::1]1760", "[fd00:::1]:1760", "[fd00::1::2]:1760",
-            "[1:2:3:4:5:6:7:8:9]:1760", "desktop.local:1760", "", ":1760",
-        )
-        for (address in refused) {
-            assertFalse(address, LanAddress.isLan(address))
-        }
-    }
-
-    @Test
-    fun hosts_compare_in_one_canonical_form() {
-        assertEquals("fd00:0:0:0:0:0:0:30", LanAddress.hostOf("[fd00::30]:1760"))
-        assertEquals("fd00:0:0:0:0:0:0:30", LanAddress.canonicalHost("fd00:0:0:0:0:0:0:30%wlan0"))
-        assertEquals("192.168.1.30", LanAddress.canonicalHost("/192.168.1.30"))
-        assertNull(LanAddress.canonicalHost("wlan0"))
     }
 }
