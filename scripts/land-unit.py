@@ -22,6 +22,7 @@ programs it runs.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -45,9 +46,13 @@ from landing import (
     landing_section,
     lockfile_blockers,
     lockfile_upgrades,
+    is_active_plan,
     merge_plan,
+    merge_other_evidence,
     merge_ratchet,
+    merge_settled_plan,
     numstat_rows,
+    other_unit_record,
     owner_docs_root,
     owner_tables,
     render_inventory,
@@ -272,14 +277,71 @@ def changed_on_branch(ctx: LandContext) -> set[str]:
     )
 
 
-def resolve_unit(ctx: LandContext, changed: set[str]) -> UnitRef:
+def stacked_on(ctx: LandContext, unit: str) -> bool:
+    """Whether a branch `unit/<project>/<unit>` exists and is an ancestor of the landing's branch."""
+    own = f"refs/heads/{ctx.state.branch}"
+    refs = run(ctx, "for-each-ref", "--format=%(refname)", f"refs/heads/unit/*/{unit}").stdout
+    return any(
+        ref != own and succeeds(ctx, "merge-base", "--is-ancestor", ref, own)
+        for ref in refs.split()
+    )
+
+
+def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
+    """The branch's unit; plans and rows that `main` (origin/main or the base) settles are set aside."""
     branch = ctx.state.branch
+    fork = run(ctx, "merge-base", main, branch).stdout.strip()
 
-    def read_plan(path: str) -> str | None:
-        raw = blob(ctx, f"{branch}:{path}")
-        return None if raw is None else text_of(raw, f"{branch}:{path}")
+    def reader(rev: str) -> Callable[[str], str | None]:
+        def read_plan(path: str) -> str | None:
+            raw = blob(ctx, f"{rev}:{path}")
+            return None if raw is None else text_of(raw, f"{rev}:{path}")
 
-    return discover_unit(ctx.registry, changed, read_plan)
+        return read_plan
+
+    # worktree.sh names a unit's branch unit/<project>/<unit>; such a branch
+    # must carry that unit, which tells it from the dependencies it carries.
+    parts = branch.split("/")
+    branch_unit = parts[2] if len(parts) == 3 and parts[0] == "unit" else None
+    return discover_unit(
+        ctx.registry,
+        changed,
+        reader(branch),
+        reader(main),
+        branch_unit,
+        read_base_plan=reader(fork),
+        stacked_on=lambda unit: stacked_on(ctx, unit),
+    )
+
+
+def carried_paths(ctx: LandContext, changed: set[str]) -> set[str]:
+    """The changed paths that only carry the work of units origin/main already holds.
+
+    A stacked branch carries its dependencies' commits. A path whose bytes on
+    the branch equal origin/main's, a plan `discover_unit` set aside, and
+    another unit's record the rebase resolves to origin/main's copy land
+    nothing of this unit, so the scope of its prefix does not judge them; the
+    guards judge what the rebased tip really changes.
+    """
+    unit = unit_of(ctx)
+    branch = ctx.state.branch
+    differs = paths_of(
+        run(ctx, "diff", "--name-only", "--no-renames", "-z", "origin/main", branch).stdout
+    )
+    fork = run(ctx, "merge-base", "origin/main", branch).stdout.strip()
+    own = {unit.evidence_path or "", unit_inventory(ctx)}
+    carried = set()
+    for path in changed:
+        if path not in differs or path in unit.settled_plans:
+            carried.add(path)
+            continue
+        added = blob(ctx, f"{fork}:{path}") is None
+        if (
+            other_unit_record(ctx.registry, path, own, added) is not None
+            and blob(ctx, f"origin/main:{path}") is not None
+        ):
+            carried.add(path)
+    return carried
 
 
 def rebase_in_progress(ctx: LandContext) -> bool:
@@ -320,10 +382,12 @@ def preflight(ctx: LandContext) -> None:
     changed = changed_on_branch(ctx)
     if not changed:
         raise LandingStop("preflight", f"{state.branch} has no changes against origin/main")
-    unit = resolve_unit(ctx, changed)
+    unit = resolve_unit(ctx, changed, "origin/main")
     ctx.unit = unit
     refuse_landed(ctx, "origin/main", "preflight")
-    violations = scope_violations(unit.prefix, ctx.registry, changed)
+    violations = scope_violations(
+        unit.prefix, ctx.registry, changed - carried_paths(ctx, changed)
+    )
     if violations:
         raise LandingStop(
             "preflight",
@@ -462,15 +526,43 @@ def hot_merge(ctx: LandContext, path: str) -> bytes | None:
         return blob(ctx, f":{number}:{path}", cwd=landing)
 
     base, main, branch = stage(1), stage(2), stage(3)
+    own = {unit.evidence_path or "", unit_inventory(ctx)}
+    record = other_unit_record(ctx.registry, path, own, base is None)
+    if record == "evidence record" and main is not None and branch is not None:
+        # A branch stacked on a landed unit carries that unit's record as its
+        # session left it; main's copy adds only the landing section.
+        merged = merge_other_evidence(text_of(main, path), text_of(branch, path), path)
+        say(
+            f"{path} is another unit's evidence record; the landing keeps origin/main's "
+            "copy, which adds only its landing section"
+        )
+        return merged.encode()
+    if record is not None and main is not None and branch is not None:
+        say(f"warning: {path} is another unit's {record}; the landing keeps origin/main's copy")
+        return main
     ratchets = ctx.registry.get("commit_policy", {}).get("shared_ratchet_files", [])
+    another_plan = path != unit.plan_path and is_active_plan(ctx.registry, path)
     is_hot = (
-        path == unit.plan_path or path in ratchets or posixpath.basename(path) == "Cargo.lock"
+        path == unit.plan_path
+        or another_plan
+        or path in ratchets
+        or posixpath.basename(path) == "Cargo.lock"
     )
     if not is_hot:
         return None
     if main is None or branch is None:
         side = "main" if main is None else "the branch"
         raise LandingStop("rebase", f"{path} was deleted on {side}", path)
+    if another_plan:
+        # A plan of a unit this branch is stacked on, which landed meanwhile.
+        merged_plan = merge_settled_plan(
+            None if base is None else text_of(base, path),
+            text_of(main, path),
+            text_of(branch, path),
+            path,
+        )
+        say(f"{path} holds only rows origin/main settles; the landing keeps origin/main's copy")
+        return merged_plan.encode()
     if path == unit.plan_path:
         return merge_plan(
             text_of(base or b"", path), text_of(main, path), text_of(branch, path), unit.unit, path
@@ -965,7 +1057,7 @@ def resume(root: Path, landing_dir: Path) -> LandContext:
         raise LandingError(f"{path} names an unknown step: {state.step}")
     ctx = LandContext(root, landing_dir, {}, state, None)
     ctx.registry = registry_at(ctx, state.base or "origin/main")
-    ctx.unit = resolve_unit(ctx, changed_on_branch(ctx))
+    ctx.unit = resolve_unit(ctx, changed_on_branch(ctx), state.base or "origin/main")
     return ctx
 
 

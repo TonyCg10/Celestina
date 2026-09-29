@@ -1,0 +1,27 @@
+# AUD-1-C exact change inventory
+
+Base revision	2a3c74fe053638299fa384ea8c389f30b639d3f2
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/evidence/2026-09-26-monorepo-hardening-stacked-landing.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-C.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-worktree.sh
+Pathspec	scripts/worktree.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+144	14	0a1884d9d507e28a1a58b86377b8b00959fcd07f03af31699940f4a55940eedc	docs/contracts/landing.md
+178	0	c6baf2f915ba15e07e7ff199894c7b488c86c176bb987650e6b0b12631014b5b	docs/evidence/2026-09-26-monorepo-hardening-stacked-landing.md
+27	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-C.numstat.tsv
+1	1	84774e5d3605a6dee4618430fcf4f43d2bf08dea4163bb23aa0105ea1ae49845	docs/plans/active/2026-09-26-monorepo-hardening.md
+16	1	959de3f131dc53fa176653365e84f8bd1d4fc8a857574d7db55b4b58ed997ff7	docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
+101	9	fe7d92258d04c0577bf2f95ddb684e70992a5c1d40ffe6d6c48e53feedee2257	scripts/land-unit.py
+358	43	017d6e14716c8e6c2ffd48018838dae955e811f731b4297b5cc8f58eb8862698	scripts/landing.py
+615	0	a40f758c25e30f52431f9cbcd614c20fb7cbcdd5ce1e9526368e2cef5f9560e2	scripts/test-land-unit.py
+31	0	189b925afa5fe6c669129491a10fa1f50ae25b0d1d6c3b5baa40c91dc5fdad1a	scripts/test-worktree.sh
+21	6	d2b0fc9750df7b8ae9d9b210415b1f6919c05b774115f3c02631529f4a5442f4	scripts/worktree.sh
