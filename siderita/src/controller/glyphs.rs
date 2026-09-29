@@ -35,25 +35,26 @@ impl qobject::SideritaController {
         QString::from(accent_for_extension(&extension_of(&name.to_string())))
     }
 
-    /// The image an entry carries as its own icon, as a `file://` URL, or an
-    /// empty string when it carries none. Answered from the key so the bytes of
-    /// the path survive the round trip through QML.
+    /// The image an entry may carry as its own icon, as an `image://thumb/`
+    /// URL, or an empty string when its name says it carries none. Answered
+    /// from the key so the bytes of the path survive the round trip through
+    /// QML.
+    ///
+    /// Decided from the name alone, because this runs in a delegate's binding
+    /// on the Qt thread. Finding the picture is the thumbnail provider's job,
+    /// on its own bounded pool: a program, a song or a package holds it inside
+    /// itself, and a launcher names an icon file the provider resolves
+    /// (`crate::ownicon`). The launcher used to be read and resolved right
+    /// here, so a FIFO named `x.desktop` in a browsed folder froze the window.
     pub fn own_icon_url(&self, key: &QString) -> QString {
         let Ok(path) = crate::pathkey::decode(key) else {
             return QString::default();
         };
-        // A launcher names a file on disk; a program, a song or a package holds
-        // the picture inside itself, and that one goes through the thumbnail
-        // provider — which caches it, decodes it off this thread, and already
-        // knows how to reach the file from a key.
-        if let Some(icon) = crate::ownicon::own_icon(&path) {
-            return QString::from(format!("file://{}", icon.display()).as_str());
-        }
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if siderita_embedded::may_carry_image(&name) {
+        let carries = crate::ownicon::names_its_icon(&path)
+            || path
+                .file_name()
+                .is_some_and(|name| siderita_embedded::may_carry_image(&name.to_string_lossy()));
+        if carries {
             return QString::from(format!("image://thumb/{}", key).as_str());
         }
         QString::default()

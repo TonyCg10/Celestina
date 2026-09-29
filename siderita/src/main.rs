@@ -2,6 +2,7 @@ mod apps;
 mod bookmarks;
 mod controller;
 mod dbus;
+mod devicemodel;
 mod devices;
 mod editor;
 mod embedded;
@@ -92,4 +93,13 @@ fn main() {
     if let Some(app) = app.as_mut() {
         app.exec();
     }
+
+    // The window is gone but a copy, a move or an extraction may still be
+    // writing. Each is cancelled and given time to roll its partial
+    // destination back, so quitting never leaves a truncated file under its
+    // final name.
+    controller::jobs::shutdown(std::time::Duration::from_secs(10));
+    // Thumbnail decodes hold no half-written file, so they get a short wait:
+    // what is queued is dropped, and a read stuck on a dead mount is left.
+    embedded::ffi::siderita_thumbnail_shutdown(1000);
 }

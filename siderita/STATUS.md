@@ -1,12 +1,13 @@
 # Siderita status
 
-- **Updated:** 2026-09-26
+- **Updated:** 2026-09-28
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4`, `SID-B1`, `SID-U1`, `SID-U1-B` and `SID-U1-C` are closed and archived;
   `SID-H1`, the hardening that follows the 2026-09-26 monorepo audit, is the
   active checkpoint: `SID-H1-A` contains archive extraction to its root,
-  `SID-H1-B`, the loss-free `siderita-ops` verbs, is active, and the other
-  units are planned
+  `SID-H1-B` makes the `siderita-ops` verbs loss-free, `SID-H1-C` makes the
+  job lifecycle deterministic and takes the remaining work off the Qt thread,
+  and `SID-H1-D` is planned
   ([plan](docs/plans/active/2026-09-26-hardening.md)); the portal-parenting one
   remains planned
 - **Author validation:** mixed; current manual queue is in
@@ -14,6 +15,27 @@
 
 ## Current checkout truth
 
+- `SID-H1-C` (P-15 of the 2026-09-26 audit): quitting cancels every running
+  job and waits (up to ten seconds) for each worker's rollback, so a copy is
+  no longer killed halfway under its final name; a job ends from its worker,
+  so closing the tab that started it no longer leaves its ring turning; folder
+  changes that arrive while a job writes are replayed when the jobs end; a
+  watcher refresh no longer cancels a navigation in flight. Search, Trash,
+  Recientes, «Abrir con…», the quick look's text, the compress name and the
+  favourites' kinds carry generations, so a stale answer is dropped. Undo and
+  the Trash verbs run as jobs with progress and Cancel; the device listings
+  come from one process-wide model on two bus workers; creations, renames,
+  paste planning, the text preview and launcher icons leave the Qt thread; the
+  thumbnail pool is bounded and cancellable; the PE icon reader reads a
+  bounded number of bytes; a scan stuck on a dead mount no longer blocks the
+  tab's later navigations. `file://` URIs go through `celestina-core`'s strict
+  parser (another host's file is refused) and the chooser through
+  `desktop_entry::scan`. The embedded player's close order and handle
+  generation are fixed in Siderita's own copy (FLU-12). Two dialogs gained
+  their role, spatial motion honours reduced motion, and the sizes menu uses
+  `CelestinaSlider`. The app crate was type-checked and its Qt-free tests run
+  against a CXX-Qt stub mirror; nothing ran with Qt. See
+  [the evidence](docs/evidence/2026-09-26-app-threading.md).
 - `SID-H1-A` (P-4 of the 2026-09-26 audit): a crafted archive no longer
   steers extraction outside the folder it creates. The tar the audit used to
   reach outside through a chain of links (SID-1) is now a regression test and
@@ -176,12 +198,13 @@
   prefix therefore still holds `1.5.1`; re-run
   `siderita/scripts/complete-production.sh` once that file is settled.
 
-- Uncommitted in the checkout: `SID-A1`, compressing and extracting. A new pure
+- Committed (recorded before its landing): `SID-A1`, compressing and extracting. A new pure
   crate, `siderita-archive`, identifies a container by its bytes, lists it,
   extracts it into a folder and creates one, holding `siderita-ops`' own
   guarantees: it never overwrites (a second extraction lands beside the first
-  under a freed name), it stages the whole extraction and promotes or removes
-  it whole, and it refuses any member whose stored name or symlink target would
+  under a freed name), it staged the whole extraction and promoted or removed
+  it whole (it now writes the visible destination directly, contained by
+  `SID-H1-A`), and it refuses any member whose stored name or symlink target would
   land outside the destination — the stored bytes are read, never `zip`'s
   sanitised spelling, so an escape is reported instead of quietly renamed. The
   containers are pure Rust: no `unzip`, no `tar`, no process. The entry menu
@@ -207,12 +230,12 @@
   the three repository guards — no production run, no version transition, no
   inventory and nothing tried by hand: that is `VAL-SID-07`.
 
-- Uncommitted in the checkout: `SID-G7-I`. The tab strip keeps deriving its own
+- Committed (recorded before its landing): `SID-G7-I`. The tab strip keeps deriving its own
   label: routing it through the adapter costs qmllint warnings the project's
   inventoried debt ceiling refuses, and a ratchet is not raised for a label. The
   folder heading, where it cost nothing, keeps the adapter.
 
-- Uncommitted in the checkout: `SID-G7-H`, two of the low findings of the
+- Committed (recorded before its landing): `SID-G7-H`, two of the low findings of the
   [light monorepo audit](../docs/evidence/2026-08-06-light-monorepo-audit.md).
   Pressing Ctrl+V with nothing on the clipboard but a cut into the folder those
   entries already occupy is no longer a silent no-op: the plan reports the
@@ -230,7 +253,7 @@
   limits, including one comparison against a key left deliberately open, are in
   the [evidence](docs/evidence/2026-08-06-silent-paste-and-label-surgery.md).
 
-- Uncommitted in the checkout: `SID-G7-G`, the three Siderita items of stage 3
+- Committed (recorded before its landing): `SID-G7-G`, the three Siderita items of stage 3
   of the [light monorepo audit](../docs/evidence/2026-08-06-light-monorepo-audit.md).
   A breadcrumb is published key-first, so a folder whose name contains a tab — a
   legal filename character — no longer moves the cut QML makes and leaves the
@@ -250,13 +273,13 @@
   limit and the rest are in the
   [evidence](docs/evidence/2026-08-06-path-key-correctness-debt.md).
 
-- Uncommitted in the checkout: `SID-G7-F`, repairing a regression `SID-G7-E`
+- Committed (recorded before its landing): `SID-G7-F`, repairing a regression `SID-G7-E`
   introduced. The thumbnail provider converts its id with `toUtf8`, so a name
   carrying an accent resolves again; the seam is now exposed and tested through
   the same URL a delegate writes, which is where the previous tests were not
   looking.
 
-- Uncommitted in the checkout: `SID-G7-D`, the byte-exact path seam. Every path
+- Committed (recorded before its landing): `SID-G7-D`, the byte-exact path seam. Every path
   that crosses the Qt boundary is now the percent key of
   [ADR 0008](../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),
   published beside its own lossy display text; every invokable decodes that key
@@ -277,7 +300,7 @@
   addressed files through `QString`; and the system clipboard used to exchange
   paths with the rest of the desktop, so copying such a name *to another
   application* was lossy.
-- Uncommitted in the checkout: `SID-G7-E`, the two remaining Qt seams that still
+- Committed (recorded before its landing): `SID-G7-E`, the two remaining Qt seams that still
   decoded a byte-exact key into a `QString`. The thumbnail provider now carries
   the decoded path as `QByteArray`, finds the file with `::stat` on those bytes,
   reads it through a descriptor opened on them, derives the extension from them,
@@ -294,7 +317,7 @@
   inventory and nothing tried by hand: that is still `VAL-SID-06`. What remains
   is in the
   [evidence](docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md).
-- Uncommitted in the checkout: `SID-G7-C`, the corrective unit from the suite
+- Committed (recorded before its landing): `SID-G7-C`, the corrective unit from the suite
   audit. Pasting an entry into its own folder now duplicates instead of trashing
   the original to make room for it; the portal answers `writable` only when it
   was asked for and confirms an overwrite before returning a save destination;

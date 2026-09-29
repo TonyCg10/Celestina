@@ -15,11 +15,13 @@
 //! already caches, runs off the UI thread and knows how to decode. This module
 //! only says that they should, and `siderita-embedded` does the reading.
 //!
-//! Everything here runs on the Qt thread, called from a delegate's binding, so
-//! it is answered from a cache after the first time. It has to be: resolving a
-//! name against every theme directory cost 165 `stat` calls per launcher, and a
-//! grid of forty of them re-resolved on every rebind — 6 600 calls, 2.5 ms of a
-//! thread that should be drawing.
+//! Everything here blocks on the filesystem and runs on the thumbnail
+//! provider's pool, never on the Qt thread: a delegate only asks
+//! [`names_its_icon`], which reads nothing. The launcher itself is read through
+//! `celestina_core::desktop_entry::read`, which takes regular files only and a
+//! bounded number of bytes, so a FIFO or a huge file named `x.desktop` neither
+//! blocks nor exhausts the reader. Resolved names are still cached: resolving
+//! one against every theme directory costs about 165 `stat` calls.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -112,13 +114,20 @@ fn cache() -> &'static Mutex<HashMap<String, Option<PathBuf>>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// The image file a launcher names as its own icon, if any.
+/// Whether an entry with this name is a launcher that may name an icon of its
+/// own. Reads nothing, so a delegate may ask it on the Qt thread.
+pub(crate) fn names_its_icon(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension == "desktop")
+}
+
+/// The image file a launcher names as its own icon, if any. Blocking: only
+/// the thumbnail provider's pool calls it.
 pub(crate) fn own_icon(path: &Path) -> Option<PathBuf> {
-    if path.extension()? != "desktop" {
+    if !names_its_icon(path) {
         return None;
     }
-    let content = std::fs::read_to_string(path).ok()?;
-    let entry = celestina_core::desktop_entry::parse("", &content)?;
+    let entry = celestina_core::desktop_entry::read(path).ok()?;
     if entry.icon.is_empty() {
         return None;
     }
@@ -196,6 +205,24 @@ mod tests {
     fn only_a_desktop_entry_carries_an_icon_of_its_own() {
         assert_eq!(own_icon(Path::new("/tmp/imagen.png")), None);
         assert_eq!(own_icon(Path::new("/tmp/no-existe.desktop")), None);
+        assert!(super::names_its_icon(Path::new("/tmp/juego.desktop")));
+        assert!(!super::names_its_icon(Path::new("/tmp/imagen.png")));
+    }
+
+    /// RS-4: a FIFO named like a launcher used to block this reader forever.
+    #[test]
+    fn a_fifo_named_like_a_launcher_is_not_read() {
+        let dir = std::env::temp_dir().join(format!("siderita-ownicon-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mk dir");
+        let fifo = dir.join("trampa.desktop");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("run mkfifo");
+        assert!(made.success());
+        assert_eq!(own_icon(&fifo), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The configured theme is searched, and what it inherits after it, with

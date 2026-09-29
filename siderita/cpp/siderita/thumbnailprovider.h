@@ -13,10 +13,17 @@
 #include <QtCore/QByteArray>
 #include <QtCore/QSize>
 
+#include <cstdint>
+
 class QQmlApplicationEngine;
 
 // Adds the "thumb" provider to `engine`. Call once, before loading the QML.
 void register_siderita_thumbnail_provider(QQmlApplicationEngine &engine);
+
+// Drains the provider's pool on quit: drops the requests not started and
+// waits at most `milliseconds` for the running ones. Call once, after the
+// event loop has returned.
+void siderita_thumbnail_shutdown(::std::int32_t milliseconds);
 
 // The freedesktop cache key for the file named by `pathBytes`: the canonical
 // `file://` URI, spelled exactly as `QUrl::fromLocalFile().toEncoded()` spells

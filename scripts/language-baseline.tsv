@@ -91,7 +91,6 @@
 10	siderita/qml/Main.qml
 38	siderita/qml/PickerWindow.qml
 1	siderita/qml/components/PropRow.qml
-1	siderita/qml/components/SizeRow.qml
 10	siderita/qml/components/chrome/DetailsHeader.qml
 4	siderita/qml/components/chrome/GlassPill.qml
 4	siderita/qml/components/chrome/InfoPill.qml
@@ -130,14 +129,12 @@
 6	siderita/scripts/run.sh
 12	siderita/scripts/smoke.sh
 2	siderita/src/apps.rs
-5	siderita/src/controller/fileops.rs
 2	siderita/src/controller/find.rs
 1	siderita/src/controller/mounts.rs
 1	siderita/src/controller/navigation.rs
 2	siderita/src/controller/scan.rs
 1	siderita/src/controller/selection.rs
 2	siderita/src/controller/shell.rs
-1	siderita/src/devices.rs
 9	siderita/src/editor.rs
 4	siderita/src/media.rs
 2	siderita/src/places.rs

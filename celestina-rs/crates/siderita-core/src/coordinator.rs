@@ -66,6 +66,12 @@ impl ScanCoordinator {
         is_current
     }
 
+    /// Whether a scan was begun and has not been answered or cancelled yet.
+    #[must_use]
+    pub const fn in_flight(&self) -> bool {
+        self.active.is_some()
+    }
+
     pub fn cancel_active(&mut self) {
         if let Some(active) = self.active.take() {
             active.cancellation.cancel();
@@ -125,6 +131,25 @@ mod tests {
             coordinator.publish(result),
             PublishOutcome::Stale(_)
         ));
+    }
+
+    /// SID-8: the controller asks this before a watcher refresh, which must
+    /// not cancel a navigation whose scan is still out.
+    #[test]
+    fn a_scan_is_in_flight_until_it_is_answered_or_cancelled() {
+        let mut coordinator = ScanCoordinator::new();
+        assert!(!coordinator.in_flight());
+        let request = coordinator.begin("A").expect("scan request");
+        assert!(coordinator.in_flight());
+        let answer = DirectorySnapshot::empty(request.generation(), PathBuf::from("A"));
+        assert!(matches!(
+            coordinator.publish(answer),
+            PublishOutcome::Accepted(_)
+        ));
+        assert!(!coordinator.in_flight());
+        coordinator.begin("B").expect("scan request");
+        coordinator.cancel_active();
+        assert!(!coordinator.in_flight());
     }
 
     #[test]

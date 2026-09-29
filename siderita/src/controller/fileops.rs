@@ -27,27 +27,150 @@ use crate::pathkey;
 /// that wrote it — so a name that is not valid UTF-8 survives a copy to another
 /// application and back, which is precisely what the older path-shaped seam
 /// could not do.
+///
+/// A URI naming another host is not a local file and is skipped too: the
+/// clipboard is shared with every application on the desktop, and
+/// `file://otherhost/etc/passwd` used to become the local `/etc/passwd`.
 fn clipboard_paths(list: &QStringList) -> Vec<PathBuf> {
     list.iter()
         .map(QString::to_string)
-        .filter_map(|uri| crate::dbus::uri_to_path(&uri))
+        .filter_map(|uri| celestina_core::file_uri::to_path(&uri).ok())
         .collect()
 }
 
+/// Announces the entry a job reached on the Qt thread, and answers the
+/// throttled byte read-out for it: at most about one update per 60 ms, so a
+/// large file animates without flooding the Qt event loop. Paste, trash and
+/// undo report the same way.
+fn entry_progress(
+    qt: &cxx_qt::CxxQtThread<qobject::SideritaController>,
+    job: u64,
+    index: usize,
+    path: &Path,
+) -> impl FnMut(Progress) {
+    let done = i32::try_from(index).unwrap_or(i32::MAX);
+    let announced = display_name(path);
+    let _ = qt.queue(move |controller| {
+        controller.job_reached(job, done, Some(announced), Some(String::new()));
+    });
+    let qt = qt.clone();
+    let mut last = std::time::Instant::now();
+    move |progress: Progress| {
+        if last.elapsed().as_millis() < 60 {
+            return;
+        }
+        last = std::time::Instant::now();
+        let detail = format!("{} copiados", crate::format::size(progress.bytes));
+        let _ = qt.queue(move |controller| {
+            controller.job_reached(job, done, None, Some(detail));
+        });
+    }
+}
+
+/// Applies an undo record on a worker as job `job`, announcing each entry and
+/// the bytes a move back across disks copies, and answering one line per
+/// entry that could not be put back.
+fn reverse(
+    action: UndoAction,
+    cancellation: &CancellationToken,
+    qt: &cxx_qt::CxxQtThread<qobject::SideritaController>,
+    job: u64,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    match action {
+        UndoAction::Rename { renamed, old_name } => {
+            let _ = entry_progress(qt, job, 0, &renamed);
+            if let Err(error) = siderita_ops::rename(&renamed, old_name.as_os_str(), cancellation) {
+                failures.push(format!("{}: {error}", display_name(&renamed)));
+            }
+        }
+        UndoAction::Move { entries } => {
+            for (index, (moved_to, original_parent)) in entries.iter().enumerate() {
+                if cancellation.is_cancelled() {
+                    break;
+                }
+                let mut on_progress = entry_progress(qt, job, index, moved_to);
+                if let Err(error) = siderita_ops::move_entry(
+                    moved_to,
+                    original_parent,
+                    cancellation,
+                    &mut on_progress,
+                ) {
+                    failures.push(format!("{}: {error}", display_name(moved_to)));
+                }
+            }
+        }
+        UndoAction::Trash { infos } => {
+            for (index, info) in infos.iter().enumerate() {
+                if cancellation.is_cancelled() {
+                    break;
+                }
+                // Restoring reports no bytes; the entry reached is announced.
+                let _ = entry_progress(qt, job, index, info);
+                match siderita_ops::restore_from_trash(info, cancellation) {
+                    Ok(restored) if !restored.left_behind.is_empty() => {
+                        failures.push(super::display::left_behind_line(
+                            &restored.to,
+                            restored.left_behind.len(),
+                        ));
+                    }
+                    Ok(_) => {}
+                    Err(error) => failures.push(format!("{}: {error}", display_name(info))),
+                }
+            }
+        }
+    }
+    failures
+}
+
 impl qobject::SideritaController {
+    /// Runs a quick write — a creation or a rename — on a worker, and `done`
+    /// back on the Qt thread with its outcome.
+    ///
+    /// Quick is not free: one `mkdir` or `rename` on a phone that stopped
+    /// answering, a sleeping share or a dying disk blocks for as long as that
+    /// filesystem likes, and on the Qt thread that froze the window. The
+    /// worker is kept in the job register, so quitting waits for it.
+    fn write_off_thread<T: Send + 'static>(
+        mut self: Pin<&mut Self>,
+        work: impl FnOnce() -> T + Send + 'static,
+        done: impl FnOnce(Pin<&mut Self>, T) + Send + 'static,
+    ) {
+        let qt = self.qt_thread();
+        let started = super::jobs::spawn_worker(move || {
+            let outcome = work();
+            let _ = qt.queue(move |controller| done(controller, outcome));
+        });
+        if let Err(error) = started {
+            self.as_mut()
+                .set_op_error(QString::from(error.to_string().as_str()));
+        }
+    }
+
     pub fn new_folder(mut self: Pin<&mut Self>, name: &QString) {
         self.as_mut().set_op_error(QString::default());
         let Some(parent) = self.rust().history.current().map(Path::to_path_buf) else {
             return;
         };
         let name = name.to_string();
-        let outcome =
-            siderita_ops::create_directory(&parent, OsStr::new(&name), &CancellationToken::new());
-        // Creating is not undoable; a success supersedes the last undoable op.
-        if outcome.is_ok() {
-            self.as_mut().set_undo(None);
-        }
-        self.finish_op(outcome.map(|_| ()));
+        self.write_off_thread(
+            move || {
+                siderita_ops::create_directory(
+                    &parent,
+                    OsStr::new(&name),
+                    &CancellationToken::new(),
+                )
+                .map(|_| ())
+            },
+            |mut controller, outcome| {
+                // Creating is not undoable; a success supersedes the last
+                // undoable op.
+                if outcome.is_ok() {
+                    controller.as_mut().set_undo(None);
+                }
+                controller.finish_op(outcome);
+            },
+        );
     }
 
     pub fn new_file(mut self: Pin<&mut Self>, name: &QString) {
@@ -56,12 +179,18 @@ impl qobject::SideritaController {
             return;
         };
         let name = name.to_string();
-        let outcome =
-            siderita_ops::create_file(&parent, OsStr::new(&name), &CancellationToken::new());
-        if outcome.is_ok() {
-            self.as_mut().set_undo(None);
-        }
-        self.finish_op(outcome.map(|_| ()));
+        self.write_off_thread(
+            move || {
+                siderita_ops::create_file(&parent, OsStr::new(&name), &CancellationToken::new())
+                    .map(|_| ())
+            },
+            |mut controller, outcome| {
+                if outcome.is_ok() {
+                    controller.as_mut().set_undo(None);
+                }
+                controller.finish_op(outcome);
+            },
+        );
     }
 
     /// Renames the entry `key` names. `new_name` is the text a person typed,
@@ -73,15 +202,24 @@ impl qobject::SideritaController {
             return;
         };
         let new_name = new_name.to_string();
-        let outcome = siderita_ops::rename(&path, OsStr::new(&new_name), &CancellationToken::new());
-        if let Ok(renamed) = &outcome {
-            let undo = path.file_name().map(|old_name| UndoAction::Rename {
-                renamed: renamed.to.clone(),
-                old_name: old_name.to_os_string(),
-            });
-            self.as_mut().set_undo(undo);
-        }
-        self.finish_op(outcome.map(|_| ()));
+        self.write_off_thread(
+            move || {
+                siderita_ops::rename(&path, OsStr::new(&new_name), &CancellationToken::new()).map(
+                    |renamed| {
+                        path.file_name().map(|old_name| UndoAction::Rename {
+                            renamed: renamed.to,
+                            old_name: old_name.to_os_string(),
+                        })
+                    },
+                )
+            },
+            |mut controller, outcome| {
+                let outcome = outcome.map(|undo| {
+                    controller.as_mut().set_undo(undo);
+                });
+                controller.finish_op(outcome);
+            },
+        );
     }
 
     /// Renames a whole selection in one pass: `paths[i]` becomes `names[i]`.
@@ -97,20 +235,29 @@ impl qobject::SideritaController {
         if paths.is_empty() || paths.len() != names.len() {
             return;
         }
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
-        for (path, name) in paths.iter().zip(names.iter()) {
-            // La validación del nombre la hace `siderita_ops::rename` (rechaza
-            // vacío, separador, `.`/`..` y NUL), igual que el renombrado de uno
-            // en uno; un pre-chequeo a mano aquí sólo repetía la mitad, peor.
-            if let Err(error) = siderita_ops::rename(path, OsStr::new(name), &cancellation) {
-                failures.push(format!("{}: {error}", display_name(path)));
-            }
-        }
-        // Deliberately no undo: a batch rename is many renames, and the single
-        // undo slot can only honestly reverse one.
-        self.as_mut().set_undo(None);
-        self.as_mut().finish_batch(paths.len(), &failures);
+        let total = paths.len();
+        self.write_off_thread(
+            move || {
+                let cancellation = CancellationToken::new();
+                let mut failures = Vec::new();
+                for (path, name) in paths.iter().zip(names.iter()) {
+                    // The name is validated by `siderita_ops::rename` (it
+                    // refuses an empty name, a separator, `.`/`..` and NUL),
+                    // exactly as for a single rename.
+                    if let Err(error) = siderita_ops::rename(path, OsStr::new(name), &cancellation)
+                    {
+                        failures.push(format!("{}: {error}", display_name(path)));
+                    }
+                }
+                failures
+            },
+            move |mut controller, failures| {
+                // Deliberately no undo: a batch rename is many renames, and
+                // the single undo slot can only honestly reverse one.
+                controller.as_mut().set_undo(None);
+                controller.finish_batch(total, &failures);
+            },
+        );
     }
 
     pub fn trash_path(mut self: Pin<&mut Self>, key: &QString) {
@@ -143,9 +290,10 @@ impl qobject::SideritaController {
     /// cancellation, since it is the same shape of long write.
     ///
     /// Registered as its own job, so it runs alongside whatever else is
-    /// writing: each job carries its own cancellation and its own counters, and
-    /// the domain reserves every destination name atomically, so two writers in
-    /// one folder cannot overwrite each other.
+    /// writing: each job carries its own cancellation and its own counters.
+    /// Two writers aiming at one name do not overwrite each other: the Trash
+    /// reserves its record name and places the body with a no-replace rename,
+    /// so the loser is told the name is taken.
     fn spawn_trash(mut self: Pin<&mut Self>, paths: Vec<PathBuf>) {
         if *self.conflict_pending() {
             return;
@@ -157,7 +305,7 @@ impl qobject::SideritaController {
         );
 
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
+        self.as_mut().run_job(job, move || {
             let total = paths.len();
             let mut failures = Vec::new();
             let mut infos = Vec::new();
@@ -167,25 +315,7 @@ impl qobject::SideritaController {
                     break;
                 }
 
-                let done = index as i32;
-                let announced = display_name(path);
-                let _ = qt.queue(move |controller| {
-                    controller.job_reached(job, done, Some(announced), Some(String::new()));
-                });
-
-                // Throttled byte progress, same cadence as a paste (fileops::spawn_paste).
-                let qt_progress = qt.clone();
-                let mut last = std::time::Instant::now();
-                let mut on_progress = move |progress: Progress| {
-                    if last.elapsed().as_millis() < 60 {
-                        return;
-                    }
-                    last = std::time::Instant::now();
-                    let detail = format!("{} copiados", crate::format::size(progress.bytes));
-                    let _ = qt_progress.queue(move |controller| {
-                        controller.job_reached(job, done, None, Some(detail));
-                    });
-                };
+                let mut on_progress = entry_progress(&qt, job, index, path);
 
                 match siderita_ops::trash(path, &token, &mut on_progress) {
                     Ok(trashed) => {
@@ -207,6 +337,7 @@ impl qobject::SideritaController {
             let _ = qt.queue(move |controller| {
                 controller.finish_trash(job, total, infos, failures, cancelled);
             });
+            super::jobs::JobEnd::Done
         });
     }
 
@@ -226,12 +357,7 @@ impl qobject::SideritaController {
         }
         self.as_mut().finish_batch(total, &failures);
         if failures.is_empty() && cancelled {
-            self.as_mut().push_notice(
-                "Operación cancelada",
-                "circle-stop",
-                super::notices::NoticeTone::Info,
-                false,
-            );
+            self.as_mut().notice_cancelled();
         }
     }
 
@@ -265,7 +391,8 @@ impl qobject::SideritaController {
         // publish.
         let uris: QStringList = paths
             .iter()
-            .map(|path| QString::from(crate::dbus::path_to_uri(path).as_str()))
+            .filter_map(|path| celestina_core::file_uri::from_path(path))
+            .map(|uri| QString::from(uri.as_str()))
             .collect();
         qobject::system_clipboard_set_uris(&uris, cut);
         let keys: QStringList = paths.iter().map(|path| pathkey::publish(path)).collect();
@@ -361,7 +488,7 @@ impl qobject::SideritaController {
         let sources: Vec<PathBuf> = uris
             .iter()
             .map(QString::to_string)
-            .filter_map(|uri| crate::dbus::uri_to_path(&uri))
+            .filter_map(|uri| celestina_core::file_uri::to_path(&uri).ok())
             .collect();
         self.as_mut().drop_paths(sources, destination, move_entries);
     }
@@ -400,9 +527,11 @@ impl qobject::SideritaController {
         self.begin_paste(sources, destination, move_entries);
     }
 
-    /// Shared tail of paste / drop: refuse an empty set, detect destination
-    /// collisions up front (on the Qt thread), and either start the worker
-    /// straight away or hold the batch back for a conflict choice.
+    /// Shared tail of paste / drop: refuse an empty set, then detect
+    /// destination collisions up front — on a reader, because that is an
+    /// `lstat` of every source and every destination name, any of which can
+    /// sit on a mount that stopped answering — and hand the plan to
+    /// `paste_planned`.
     pub(crate) fn begin_paste(
         mut self: Pin<&mut Self>,
         sources: Vec<PathBuf>,
@@ -412,10 +541,32 @@ impl qobject::SideritaController {
         if sources.is_empty() {
             return;
         }
+        let qt = self.qt_thread();
+        let started = super::jobs::spawn_reader(move || {
+            // Sorted out before any write: free names, real collisions, and the
+            // entry that would collide with itself (see `plan_paste`).
+            let plan = super::paste::plan_paste(sources, &destination, cut);
+            let _ = qt.queue(move |controller| controller.paste_planned(plan, destination, cut));
+        });
+        if let Err(error) = started {
+            self.as_mut()
+                .set_op_error(QString::from(error.to_string().as_str()));
+        }
+    }
 
-        // Sorted out before any write: free names, real collisions, and the
-        // entry that would collide with itself (see `plan_paste`).
-        let plan = super::paste::plan_paste(sources, &destination, cut);
+    /// Starts a planned paste straight away, or holds it back for a conflict
+    /// choice.
+    fn paste_planned(
+        mut self: Pin<&mut Self>,
+        plan: super::paste::PastePlan,
+        destination: PathBuf,
+        cut: bool,
+    ) {
+        // A second paste planned while the first waits on its conflict
+        // question must not replace it: that question is still on screen.
+        if self.rust().pending_paste.is_some() && !plan.colliding.is_empty() {
+            return;
+        }
         if plan.sources.is_empty() {
             // Nothing left to write. When the whole paste was a cut into the
             // folder its entries already live in, that is not a reason to say
@@ -580,7 +731,7 @@ impl qobject::SideritaController {
         );
 
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
+        self.as_mut().run_job(job, move || {
             let mut outcome = PasteOutcome {
                 total: sources.len(),
                 sources: sources.clone(),
@@ -597,27 +748,7 @@ impl qobject::SideritaController {
                     break;
                 }
 
-                let name = display_name(source);
-                let done = index as i32;
-                let announced = name.clone();
-                let _ = qt.queue(move |controller| {
-                    controller.job_reached(job, done, Some(announced), Some(String::new()));
-                });
-
-                // Throttled byte progress: at most ~one update per 60 ms, so a
-                // large file animates without flooding the Qt event loop.
-                let qt_progress = qt.clone();
-                let mut last = std::time::Instant::now();
-                let mut on_progress = move |progress: Progress| {
-                    if last.elapsed().as_millis() < 60 {
-                        return;
-                    }
-                    last = std::time::Instant::now();
-                    let detail = format!("{} copiados", crate::format::size(progress.bytes));
-                    let _ = qt_progress.queue(move |controller| {
-                        controller.job_reached(job, done, None, Some(detail));
-                    });
-                };
+                let mut on_progress = entry_progress(&qt, job, index, source);
 
                 super::paste::paste_one(
                     source,
@@ -637,6 +768,7 @@ impl qobject::SideritaController {
             let _ = qt.queue(move |controller| {
                 controller.finish_paste(job, cut, outcome);
             });
+            super::jobs::JobEnd::Done
         });
     }
 
@@ -692,12 +824,7 @@ impl qobject::SideritaController {
         self.as_mut().finish_batch(outcome.total, &outcome.failures);
         if outcome.failures.is_empty() {
             if outcome.cancelled {
-                self.as_mut().push_notice(
-                    "Operación cancelada",
-                    "circle-stop",
-                    super::notices::NoticeTone::Info,
-                    false,
-                );
+                self.as_mut().notice_cancelled();
             } else if outcome.skipped > 0 {
                 let message = format!("{} omitidos", outcome.skipped);
                 self.as_mut().push_notice(
@@ -713,6 +840,11 @@ impl qobject::SideritaController {
     /// Reverses the last undoable operation (rename / move / trash). Single
     /// level: the action is consumed, and like a batch write the view refreshes
     /// once and any per-entry failures are reported together.
+    ///
+    /// It runs as a job. Undoing a move to another disk copies everything back,
+    /// and undoing a trash from another disk's Trash does too; on the Qt thread
+    /// either froze the window for as long as it took, with no progress and no
+    /// Cancel.
     pub fn undo(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
         let Some(action) = self.as_mut().rust_mut().get_mut().last_undo.take() else {
@@ -720,51 +852,27 @@ impl qobject::SideritaController {
         };
         self.as_mut().set_undo(None);
 
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
         let total = match &action {
             UndoAction::Rename { .. } => 1,
             UndoAction::Move { entries } => entries.len(),
             UndoAction::Trash { infos } => infos.len(),
         };
-
-        match action {
-            UndoAction::Rename { renamed, old_name } => {
-                if let Err(error) =
-                    siderita_ops::rename(&renamed, old_name.as_os_str(), &cancellation)
-                {
-                    failures.push(format!("{}: {error}", display_name(&renamed)));
+        let (job, token) =
+            self.as_mut()
+                .start_job(action.label(), super::jobs::JobKind::Undo, total);
+        let qt = self.qt_thread();
+        self.as_mut().run_job(job, move || {
+            let failures = reverse(action, &token, &qt, job);
+            let cancelled = token.is_cancelled();
+            let _ = qt.queue(move |mut controller| {
+                controller.as_mut().end_job(job);
+                controller.as_mut().finish_batch(total, &failures);
+                if failures.is_empty() && cancelled {
+                    controller.as_mut().notice_cancelled();
                 }
-            }
-            UndoAction::Move { entries } => {
-                for (moved_to, original_parent) in &entries {
-                    if let Err(error) = siderita_ops::move_entry(
-                        moved_to,
-                        original_parent,
-                        &cancellation,
-                        &mut |_| {},
-                    ) {
-                        failures.push(format!("{}: {error}", display_name(moved_to)));
-                    }
-                }
-            }
-            UndoAction::Trash { infos } => {
-                for info in &infos {
-                    match siderita_ops::restore_from_trash(info, &cancellation) {
-                        Ok(restored) if !restored.left_behind.is_empty() => {
-                            failures.push(super::display::left_behind_line(
-                                &restored.to,
-                                restored.left_behind.len(),
-                            ));
-                        }
-                        Ok(_) => {}
-                        Err(error) => failures.push(format!("{}: {error}", display_name(info))),
-                    }
-                }
-            }
-        }
-
-        self.as_mut().finish_batch(total, &failures);
+            });
+            super::jobs::JobEnd::Done
+        });
     }
 
     /// Records (or clears) how to reverse the last operation, keeping the
@@ -816,7 +924,7 @@ impl qobject::SideritaController {
 #[cfg(test)]
 mod tests {
     use super::clipboard_paths;
-    use crate::dbus::path_to_uri;
+    use celestina_core::file_uri::from_path;
     use cxx_qt_lib::{QString, QStringList};
     use std::ffi::OsString;
     use std::os::unix::ffi::OsStringExt;
@@ -828,7 +936,8 @@ mod tests {
     fn round_trip(paths: &[PathBuf]) -> Vec<PathBuf> {
         let published: QStringList = paths
             .iter()
-            .map(|path| QString::from(path_to_uri(path).as_str()))
+            .filter_map(|path| from_path(path))
+            .map(|uri| QString::from(uri.as_str()))
             .collect();
         clipboard_paths(&published)
     }
@@ -855,6 +964,23 @@ mod tests {
             .iter()
             .map(|value| QString::from(*value))
             .collect();
+        assert_eq!(clipboard_paths(&held), vec![PathBuf::from("/tmp/nota.txt")]);
+    }
+
+    /// SID-18: another host's file is not a local file. The shared clipboard
+    /// used to turn `file://otherhost/etc/passwd` into the local `/etc/passwd`,
+    /// and a query or fragment into part of the name.
+    #[test]
+    fn a_clipboard_uri_naming_another_host_is_skipped() {
+        let held: QStringList = [
+            "file://otherhost/etc/passwd",
+            "file:///tmp/a?b",
+            "file:///tmp/a#b",
+            "file://localhost/tmp/nota.txt",
+        ]
+        .iter()
+        .map(|value| QString::from(*value))
+        .collect();
         assert_eq!(clipboard_paths(&held), vec![PathBuf::from("/tmp/nota.txt")]);
     }
 }

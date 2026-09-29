@@ -36,18 +36,25 @@ impl qobject::SideritaController {
     fn start_common(mut self: Pin<&mut Self>, initial: PathBuf) {
         if self.rust().executor.is_none() {
             let qt_thread = self.qt_thread();
-            let executor = ScanExecutor::new(move |result| {
+            // A process out of threads gets a tab that says it cannot read
+            // folders (`request_scan_inner` reports the missing executor),
+            // not a panic that takes every other tab down with it.
+            match ScanExecutor::new(move |result| {
                 let _ = qt_thread.queue(move |controller| {
                     controller.handle_scan_result(result);
                 });
-            });
-            self.as_mut().rust_mut().get_mut().executor = Some(executor);
+            }) {
+                Ok(executor) => self.as_mut().rust_mut().get_mut().executor = Some(executor),
+                Err(error) => eprintln!("Siderita: {error}"),
+            }
         }
 
         // Work started in another tab is still this tab's business to show.
         self.as_mut().watch_jobs();
         self.as_mut().reload_bookmarks();
         self.as_mut().refresh_place_props();
+        // What each favourite points at is looked up on a reader, from here on.
+        self.as_mut().refresh_favorite_props();
 
         if self.rust().history.current().is_none() {
             self.as_mut().rust_mut().get_mut().history = NavigationHistory::new(initial.clone());
@@ -237,7 +244,7 @@ fn initial_location() -> PathBuf {
         Some(arg) => {
             let text = arg.to_string_lossy();
             if text.starts_with("file:") {
-                if let Some(path) = crate::dbus::uri_to_path(&text) {
+                if let Ok(path) = celestina_core::file_uri::to_path(&text) {
                     return path;
                 }
             }
@@ -255,8 +262,9 @@ fn home_location() -> PathBuf {
 
 fn resolve_location(input: &str, current: Option<&Path>) -> PathBuf {
     // A local file:// URI (typed, pasted, or from another app) → its path.
+    // One naming another host is not a local folder and is not guessed at.
     if input.starts_with("file:") {
-        if let Some(path) = crate::dbus::uri_to_path(input) {
+        if let Ok(path) = celestina_core::file_uri::to_path(input) {
             return path;
         }
     }

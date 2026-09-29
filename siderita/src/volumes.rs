@@ -6,8 +6,6 @@
 //! rather than touching `/proc/mounts` or `mount(8)` directly.
 
 use std::collections::HashMap;
-use std::sync::mpsc;
-use std::time::Duration;
 
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::Value;
@@ -30,13 +28,12 @@ pub struct Volume {
     pub mount_point: String,
 }
 
-/// Lists the mountable removable filesystems UDisks2 reports. Read-only.
-pub fn list_volumes() -> Result<Vec<Volume>, String> {
-    let connection =
-        Connection::system().map_err(|error| format!("UDisks2 no disponible: {error}"))?;
-
+/// Lists the mountable removable filesystems UDisks2 reports, over the
+/// connection [`crate::devicemodel`] keeps. Read-only, and blocking: never on
+/// the Qt thread.
+pub fn list_volumes(connection: &Connection) -> Result<Vec<Volume>, String> {
     let manager = zbus::blocking::fdo::ObjectManagerProxy::new(
-        &connection,
+        connection,
         UDISKS,
         "/org/freedesktop/UDisks2",
     )
@@ -53,7 +50,7 @@ pub fn list_volumes() -> Result<Vec<Volume>, String> {
             continue;
         }
         let path = path.as_str();
-        let Ok(block) = Proxy::new(&connection, UDISKS, path, IFACE_BLOCK) else {
+        let Ok(block) = Proxy::new(connection, UDISKS, path, IFACE_BLOCK) else {
             continue;
         };
 
@@ -69,7 +66,7 @@ pub fn list_volumes() -> Result<Vec<Volume>, String> {
             .get_property::<zbus::zvariant::OwnedObjectPath>("Drive")
             .map(|drive| drive.as_str().to_owned())
             .unwrap_or_default();
-        if !drive_is_removable(&connection, &drive_path) {
+        if !drive_is_removable(connection, &drive_path) {
             continue;
         }
 
@@ -79,7 +76,7 @@ pub fn list_volumes() -> Result<Vec<Volume>, String> {
             .unwrap_or_default();
         let label = block.get_property::<String>("IdLabel").unwrap_or_default();
 
-        let filesystem = Proxy::new(&connection, UDISKS, path, IFACE_FILESYSTEM)
+        let filesystem = Proxy::new(connection, UDISKS, path, IFACE_FILESYSTEM)
             .map_err(|error| format!("UDisks2: {error}"))?;
         let mount_point = filesystem
             .get_property::<Vec<Vec<u8>>>("MountPoints")
@@ -100,16 +97,16 @@ pub fn list_volumes() -> Result<Vec<Volume>, String> {
     Ok(volumes)
 }
 
-/// Blocks, invoking `on_change` whenever UDisks2 reports a device added or
-/// removed — a hotplug — so the caller can reload the list. Meant to run on a
-/// worker thread; returns only on a fatal bus error. Plugging one drive exposes
-/// several interfaces at once, so a burst is coalesced (300 ms quiet window)
-/// into a single `on_change` rather than a storm of reloads.
-pub fn watch_changes<F: Fn() + Send + 'static>(on_change: F) -> Result<(), String> {
-    let connection =
-        Connection::system().map_err(|error| format!("UDisks2 no disponible: {error}"))?;
+/// Calls `on_change` whenever UDisks2 reports a device added or removed — a
+/// hotplug — from threads of its own, for as long as the connection lives.
+/// Plugging one drive exposes several interfaces at once; the caller coalesces
+/// the burst.
+pub fn forward_changes<F: Fn() + Send + Sync + 'static>(
+    connection: &Connection,
+    on_change: F,
+) -> Result<(), String> {
     let manager = zbus::blocking::fdo::ObjectManagerProxy::new(
-        &connection,
+        connection,
         UDISKS,
         "/org/freedesktop/UDisks2",
     )
@@ -122,38 +119,38 @@ pub fn watch_changes<F: Fn() + Send + 'static>(on_change: F) -> Result<(), Strin
         .receive_interfaces_removed()
         .map_err(|error| format!("UDisks2: {error}"))?;
 
-    // One feeder thread per signal pushes a tick into a coalescing channel; the
-    // signal payloads are irrelevant — any add/remove means "re-enumerate".
-    let (tx, rx) = mpsc::channel::<()>();
-    let tx_removed = tx.clone();
-    std::thread::spawn(move || {
-        for _ in added {
-            if tx.send(()).is_err() {
-                break;
+    // One feeder thread per signal; the payloads are irrelevant — any add or
+    // remove means "re-enumerate".
+    let on_change = std::sync::Arc::new(on_change);
+    let on_removed = std::sync::Arc::clone(&on_change);
+    std::thread::Builder::new()
+        .name("siderita-udisks-signal".to_owned())
+        .spawn(move || {
+            for _ in added {
+                on_change();
             }
-        }
-    });
-    std::thread::spawn(move || {
-        for _ in removed {
-            if tx_removed.send(()).is_err() {
-                break;
+        })
+        .map_err(|error| format!("UDisks2: {error}"))?;
+    std::thread::Builder::new()
+        .name("siderita-udisks-signal".to_owned())
+        .spawn(move || {
+            for _ in removed {
+                on_removed();
             }
-        }
-    });
-
-    while rx.recv().is_ok() {
-        // Drain the rest of the burst, then reload once it settles.
-        while rx.recv_timeout(Duration::from_millis(300)).is_ok() {}
-        on_change();
-    }
+        })
+        .map_err(|error| format!("UDisks2: {error}"))?;
     Ok(())
+}
+
+/// A connection to the system bus, where UDisks2 lives.
+pub fn system_bus() -> Result<Connection, String> {
+    Connection::system().map_err(|error| format!("UDisks2 no disponible: {error}"))
 }
 
 /// Mounts the volume at `object_path`, returning its mount point. May prompt for
 /// authorization via polkit.
 pub fn mount(object_path: &str) -> Result<String, String> {
-    let connection =
-        Connection::system().map_err(|error| format!("UDisks2 no disponible: {error}"))?;
+    let connection = system_bus()?;
     let filesystem = Proxy::new(&connection, UDISKS, object_path, IFACE_FILESYSTEM)
         .map_err(|error| format!("UDisks2: {error}"))?;
     let options: HashMap<&str, Value> = HashMap::new();
@@ -164,8 +161,7 @@ pub fn mount(object_path: &str) -> Result<String, String> {
 
 /// Unmounts the volume at `object_path`. May prompt for authorization.
 pub fn unmount(object_path: &str) -> Result<(), String> {
-    let connection =
-        Connection::system().map_err(|error| format!("UDisks2 no disponible: {error}"))?;
+    let connection = system_bus()?;
     let filesystem = Proxy::new(&connection, UDISKS, object_path, IFACE_FILESYSTEM)
         .map_err(|error| format!("UDisks2: {error}"))?;
     let options: HashMap<&str, Value> = HashMap::new();

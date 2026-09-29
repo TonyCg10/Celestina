@@ -75,6 +75,12 @@ pub struct SideritaControllerRust {
     pub(super) prop_accessed: QString,
     pub(super) prop_symlink: QString,
     pub(super) prop_is_dir: bool,
+    pub(super) preview_text: QString,
+    pub(super) archive_suggestion: QString,
+    /// Which compress-name suggestion is still wanted.
+    pub(super) archive_suggestions: siderita_core::Latest,
+    /// Which quick-look text sample is still wanted.
+    pub(super) previews: siderita_core::Latest,
     pub(super) search_active: bool,
     pub(super) trash_active: bool,
     pub(super) recent_active: bool,
@@ -83,6 +89,9 @@ pub struct SideritaControllerRust {
     pub(super) custom_icons: std::collections::HashMap<String, crate::icons::IconAppearance>,
     pub(super) favorite_entries: QStringList,
     pub(super) favorites: std::collections::BTreeSet<String>,
+    /// What each favourite pointed at when last looked up, on a reader.
+    pub(super) favorite_kinds: std::collections::HashMap<String, &'static str>,
+    pub(super) favorite_lookups: siderita_core::SingleFlight,
     pub(super) search_running: bool,
     pub(super) search_query: QString,
     pub(super) search_summary: QString,
@@ -91,6 +100,12 @@ pub struct SideritaControllerRust {
     pub(super) search_kinds: QStringList,
     pub(super) search_hits: Vec<crate::search::SearchHit>,
     pub(super) search_cancel: Option<CancellationToken>,
+    /// Which search answer is still wanted: a newer search or closing the
+    /// results retires every older one (`siderita_core::Latest`).
+    pub(super) searches: siderita_core::Latest,
+    /// At most one Trash and one Recientes listing in flight each.
+    pub(super) trash_listing: siderita_core::SingleFlight,
+    pub(super) recent_listing: siderita_core::SingleFlight,
     pub(super) pending_select_path: Option<PathBuf>,
     pub(super) bookmark_names: QStringList,
     pub(super) bookmark_paths: QStringList,
@@ -127,18 +142,19 @@ pub struct SideritaControllerRust {
     pub(super) open_with_path: PathBuf,
     pub(super) open_with_mime: String,
     pub(super) open_with_ids: Vec<String>,
+    /// Which "Abrir con…" gathering is still wanted.
+    pub(super) open_with_requests: siderita_core::Latest,
     pub(super) volume_names: QStringList,
     pub(super) volume_devices: QStringList,
     pub(super) volume_mounts: QStringList,
     pub(super) volume_busy: bool,
-    // Set once the UDisks2 hotplug watch thread is running for this controller.
-    pub(super) volume_watch_started: bool,
+    // Set once this tab is subscribed to the process-wide device model.
+    pub(super) devices_subscribed: bool,
     pub(super) hidden_device_count: i32,
     pub(super) phone_names: QStringList,
     pub(super) phone_types: QStringList,
     pub(super) phone_mounts: QStringList,
     pub(super) phone_revision: i32,
-    pub(super) phone_watch_started: bool,
     pub(super) phones: Vec<crate::devices::Device>,
     pub(super) place_keys: QStringList,
     pub(super) hidden_place_count: i32,
@@ -172,7 +188,7 @@ impl Default for SideritaControllerRust {
         let custom_icons = crate::icons::load();
         let custom_icon_entries = icon_override_entries(&custom_icons);
         let favorites = crate::favorites::load();
-        let favorite_entries = favorite_entry_list(&favorites);
+        let favorite_entries = favorite_entry_list(&favorites, &std::collections::HashMap::new());
         Self {
             current_path: QString::default(),
             current_path_key: QString::default(),
@@ -187,6 +203,8 @@ impl Default for SideritaControllerRust {
             custom_icon_entries,
             favorites,
             favorite_entries,
+            favorite_kinds: std::collections::HashMap::new(),
+            favorite_lookups: siderita_core::SingleFlight::new(),
             notice_rows: QStringList::default(),
             notices: notices::Notices::default(),
             selected_token: QString::default(),
@@ -235,6 +253,10 @@ impl Default for SideritaControllerRust {
             prop_accessed: QString::default(),
             prop_symlink: QString::default(),
             prop_is_dir: false,
+            preview_text: QString::default(),
+            archive_suggestion: QString::default(),
+            archive_suggestions: siderita_core::Latest::new(),
+            previews: siderita_core::Latest::new(),
             search_active: false,
             trash_active: false,
             recent_active: false,
@@ -247,6 +269,9 @@ impl Default for SideritaControllerRust {
             search_kinds: QStringList::default(),
             search_hits: Vec::new(),
             search_cancel: None,
+            searches: siderita_core::Latest::new(),
+            trash_listing: siderita_core::SingleFlight::new(),
+            recent_listing: siderita_core::SingleFlight::new(),
             pending_select_path: None,
             bookmark_names: QStringList::default(),
             bookmark_paths: QStringList::default(),
@@ -283,17 +308,17 @@ impl Default for SideritaControllerRust {
             open_with_path: PathBuf::new(),
             open_with_mime: String::new(),
             open_with_ids: Vec::new(),
+            open_with_requests: siderita_core::Latest::new(),
             volume_names: QStringList::default(),
             volume_devices: QStringList::default(),
             volume_mounts: QStringList::default(),
             volume_busy: false,
-            volume_watch_started: false,
+            devices_subscribed: false,
             hidden_device_count: 0,
             phone_names: QStringList::default(),
             phone_types: QStringList::default(),
             phone_mounts: QStringList::default(),
             phone_revision: 0,
-            phone_watch_started: false,
             phones: Vec::new(),
             place_keys: QStringList::default(),
             hidden_place_count: 0,
@@ -312,6 +337,17 @@ impl Default for SideritaControllerRust {
                 .into_iter()
                 .map(|(name, path)| (name, crate::pathkey::encode(&path)))
                 .collect(),
+        }
+    }
+}
+
+impl Drop for SideritaControllerRust {
+    /// A batch parked on a password waits for this tab's dialog; with the tab
+    /// gone nobody can answer it, so its job leaves the register now instead
+    /// of turning on every other tab's surface for the rest of the process.
+    fn drop(&mut self) {
+        if let Some(job) = self.pending_password.as_ref().and_then(|batch| batch.job()) {
+            super::jobs::finish(job);
         }
     }
 }

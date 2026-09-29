@@ -6,6 +6,8 @@ import org.celestina.siderita 1.0
 // of the selection and of the folder), not by QML, and changing the container
 // asks for it again — unless the person has typed their own, which is never
 // overwritten. What is sent is the selection as-is, the name and the format.
+// The controller answers through `archiveSuggestion`, off the Qt thread; the
+// stub answers at once, clearing it first as the real one does.
 TestCase {
     id: testCase
     name: "CompressDialog"
@@ -20,10 +22,12 @@ TestCase {
     QtObject {
         id: controllerStub
 
-        // El nombre sugerido depende del formato, como en el controlador real.
-        function archiveSuggestedName(keys, format) {
+        // The suggested name depends on the format, as in the real controller.
+        property string archiveSuggestion: ""
+        function suggestArchiveName(keys, format) {
             testCase.suggestCalls.push({ keys: keys, format: format })
-            return "proyecto." + format
+            controllerStub.archiveSuggestion = ""
+            controllerStub.archiveSuggestion = "proyecto." + format
         }
         function compressKeys(keys, name, format) {
             testCase.compressCalls.push({ keys: keys, name: name, format: format })
@@ -71,9 +75,22 @@ TestCase {
         dialog.openFor(["clave:uno"])
         dialog.chooseFormat("tar.gz")
         compare(dialog.format, "tar.gz")
-        // It asked for a new one for the new container (plus the earlier check).
+        // It asked for a new one for the new container, and the field follows.
         compare(testCase.suggestCalls[testCase.suggestCalls.length - 1].format,
                 "tar.gz")
+        compare(dialog.offered, "proyecto.tar.gz")
+    }
+
+    // Reopening on the same selection still fills the field although the
+    // suggestion is the same as last time: each request clears it first, so
+    // the repeat is still a change the dialog hears.
+    function test_f_a_repeated_suggestion_still_fills_the_field() {
+        dialog.openFor(["clave:uno"])
+        dialog.dismiss()
+        dialog.openFor(["clave:uno"])
+        compare(dialog.offered, "proyecto.zip")
+        dialog.confirm()
+        compare(testCase.compressCalls[0].name, "proyecto.zip")
     }
 
     function test_c_confirming_sends_the_selection_the_name_and_the_format() {
@@ -83,7 +100,7 @@ TestCase {
         compare(testCase.compressCalls[0].keys.length, 2)
         compare(testCase.compressCalls[0].name, "proyecto.zip")
         compare(testCase.compressCalls[0].format, "zip")
-        // Y devuelve el foco a la vista, como cualquier modal de esta carpeta.
+        // And it gives focus back to the view, like every modal of this folder.
         compare(dialog.shown, false)
         compare(testCase.focusReturns, 1)
     }

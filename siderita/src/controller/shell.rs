@@ -5,9 +5,9 @@
 //! cannot even be started.
 
 use core::pin::Pin;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 
 use super::display_name;
@@ -35,31 +35,73 @@ impl qobject::SideritaController {
         }
     }
 
-    /// Opens the "Abrir con…" chooser for the entry `key` names: classifies its MIME type,
-    /// gathers the applications that declare it (plus the current default) and
-    /// publishes them for the dialog. A type that cannot be classified is
-    /// reported through `op_error`.
+    /// Opens the "Abrir con…" chooser for the entry `key` names: classifies its
+    /// MIME type, gathers the applications that declare it (plus the current
+    /// default) and publishes them for the dialog. A type that cannot be
+    /// classified is reported through `op_error`.
+    ///
+    /// The gathering runs on a reader: it starts `xdg-mime` twice and reads
+    /// every `.desktop` file on the system, which on the Qt thread froze the
+    /// window for as long as that took — for good, on a FIFO named like an
+    /// entry. Only the answer to the latest request is shown.
     pub fn open_with(mut self: Pin<&mut Self>, key: &QString) {
         self.as_mut().set_op_error(QString::default());
         let Some(path) = self.as_mut().accept_key(key) else {
             return;
         };
+        let Ok(generation) = self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .open_with_requests
+            .issue()
+        else {
+            return;
+        };
+        let qt = self.qt_thread();
+        let started = super::jobs::spawn_reader(move || {
+            let found = crate::apps::choices_for(&path);
+            let _ = qt.queue(move |controller| {
+                controller.open_with_found(generation, path, found);
+            });
+        });
+        if started.is_err() {
+            self.as_mut()
+                .rust_mut()
+                .get_mut()
+                .open_with_requests
+                .retire();
+        }
+    }
 
-        let Some(mime) = crate::apps::detect_mime(&path) else {
+    /// Publishes the chooser for `path`, if it is still the one asked for.
+    fn open_with_found(
+        mut self: Pin<&mut Self>,
+        generation: celestina_core::Generation,
+        path: PathBuf,
+        found: Option<crate::apps::Choices>,
+    ) {
+        if !self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .open_with_requests
+            .accept(generation)
+        {
+            return;
+        }
+        let Some(choices) = found else {
             self.as_mut()
                 .set_op_error(QString::from("No se pudo determinar el tipo del archivo"));
             return;
         };
 
-        let apps = crate::apps::apps_for_mime(&mime);
-        let default_id = crate::apps::default_app_id(&mime);
-        let default_index = default_id
-            .as_ref()
-            .and_then(|id| apps.iter().position(|app| &app.id == id))
+        let default_index = choices
+            .default_index
             .and_then(|index| i32::try_from(index).ok())
             .unwrap_or(-1);
-
-        let names: QStringList = apps
+        let names: QStringList = choices
+            .apps
             .iter()
             .map(|app| QString::from(app.name.as_str()))
             .collect();
@@ -68,9 +110,9 @@ impl qobject::SideritaController {
         {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
-            state.open_with_ids = apps.into_iter().map(|app| app.id).collect();
+            state.open_with_ids = choices.apps.into_iter().map(|app| app.id).collect();
             state.open_with_path = path;
-            state.open_with_mime = mime;
+            state.open_with_mime = choices.mime;
         }
         self.as_mut().set_open_with_apps(names);
         self.as_mut().set_open_with_default_index(default_index);
@@ -81,6 +123,9 @@ impl qobject::SideritaController {
 
     /// Launches the chosen application on the stored file, optionally making it
     /// the default for the file's MIME type first. Closes the chooser.
+    ///
+    /// Both halves wait on a process (`xdg-mime default` runs to completion),
+    /// so they run on a reader and report back.
     pub fn open_with_app(mut self: Pin<&mut Self>, index: i32, set_default: bool) {
         self.as_mut().set_open_with_pending(false);
         let Ok(index) = usize::try_from(index) else {
@@ -98,26 +143,45 @@ impl qobject::SideritaController {
             )
         };
 
-        if set_default {
-            if let Err(error) = crate::apps::set_default_app(&mime, &id) {
-                self.as_mut().set_op_error(QString::from(error.as_str()));
-            }
-        }
-        match crate::apps::launch_with(&id, &path) {
-            Ok(()) => {
-                let message = format!("Abriendo {}…", display_name(&path));
-                self.as_mut().push_notice(
-                    message.as_str(),
-                    "share-2",
-                    super::notices::NoticeTone::Info,
-                    false,
-                );
-            }
-            Err(error) => self.as_mut().set_op_error(QString::from(error.as_str())),
-        }
+        let qt = self.qt_thread();
+        let _ = super::jobs::spawn_reader(move || {
+            let defaulted = if set_default {
+                crate::apps::set_default_app(&mime, &id)
+            } else {
+                Ok(())
+            };
+            let launched = crate::apps::launch_with(&id, &path);
+            let _ = qt.queue(move |mut controller| {
+                if let Err(error) = defaulted {
+                    controller
+                        .as_mut()
+                        .set_op_error(QString::from(error.as_str()));
+                }
+                match launched {
+                    Ok(()) => {
+                        let message = format!("Abriendo {}…", display_name(&path));
+                        controller.as_mut().push_notice(
+                            message.as_str(),
+                            "share-2",
+                            super::notices::NoticeTone::Info,
+                            false,
+                        );
+                    }
+                    Err(error) => controller
+                        .as_mut()
+                        .set_op_error(QString::from(error.as_str())),
+                }
+            });
+        });
     }
 
     pub fn cancel_open_with(mut self: Pin<&mut Self>) {
+        // A chooser still being gathered is no longer wanted either.
+        self.as_mut()
+            .rust_mut()
+            .get_mut()
+            .open_with_requests
+            .retire();
         self.as_mut().set_open_with_pending(false);
     }
 

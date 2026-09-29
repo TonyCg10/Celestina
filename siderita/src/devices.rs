@@ -8,12 +8,15 @@
 //! the user must act on. The `Changed` signal drives live refresh, the same way
 //! UDisks2's add/remove drives [`volumes`].
 //!
+//! Every call here blocks on the session bus, and a Magnetita that is
+//! activatable but slow to start holds a call for up to the bus's default
+//! timeout. None of them may run on the Qt thread: [`crate::devicemodel`]
+//! calls them on its own worker, over one connection it keeps.
+//!
 //! [`volumes`]: crate::volumes
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::mpsc;
-use std::time::Duration;
 
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::OwnedValue;
@@ -46,90 +49,78 @@ pub struct Device {
     pub media_position: i64,
 }
 
-/// Send a local file to a device via Magnetita (best-effort — no bus or no
-/// Magnetita simply does nothing).
+/// The Magnetita proxy on `connection`. Built per call because a proxy is
+/// cheap; the connection under it is the one [`crate::devicemodel`] keeps.
+fn proxy(connection: &Connection) -> zbus::Result<Proxy<'static>> {
+    Proxy::new(connection, SERVICE, OBJECT, INTERFACE)
+}
+
+/// Send a local file to a device via Magnetita (best-effort — no Magnetita
+/// simply does nothing).
 ///
 /// `SendFileUri`, not `SendFile`: the argument is the percent-encoded `file://`
-/// URI [`crate::dbus::path_to_uri`] writes, which is the same spelling the
-/// portal and the clipboard already carry and the only one that survives a name
-/// that is not valid UTF-8 (ADR 0008). `SendFile` takes a plain path and stays
-/// on the daemon for compatibility with other callers, but a path put through
-/// `to_string_lossy` to reach it names a file Magnetita will not find.
-pub fn send_file(device_id: &str, path: &Path) {
-    let Ok(connection) = Connection::session() else {
+/// URI `celestina_core::file_uri::from_path` writes, which is the same spelling
+/// the portal and the clipboard already carry and the only one that survives a
+/// name that is not valid UTF-8 (ADR 0008). `SendFile` takes a plain path and
+/// stays on the daemon for compatibility with other callers, but a path put
+/// through `to_string_lossy` to reach it names a file Magnetita will not find.
+pub fn send_file(connection: &Connection, device_id: &str, path: &Path) {
+    let (Ok(magnetita), Some(uri)) = (proxy(connection), celestina_core::file_uri::from_path(path))
+    else {
         return;
     };
-    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
-        return;
-    };
-    let uri = crate::dbus::path_to_uri(path);
-    let _: Result<(), zbus::Error> = proxy.call("SendFileUri", &(device_id, uri.as_str()));
+    let _: Result<(), zbus::Error> = magnetita.call("SendFileUri", &(device_id, uri.as_str()));
 }
 
 /// Ask Magnetita to ring a connected phone (best-effort).
-pub fn ring(device_id: &str) {
-    call_device_method("Ring", device_id);
+pub fn ring(connection: &Connection, device_id: &str) {
+    if let Ok(magnetita) = proxy(connection) {
+        let _: Result<(), zbus::Error> = magnetita.call("Ring", &(device_id,));
+    }
 }
 
 /// Drive a connected phone's active player (best-effort).
-pub fn media_action(device_id: &str, action: &str) {
-    let Ok(connection) = Connection::session() else {
-        return;
-    };
-    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
-        return;
-    };
-    let _: Result<(), zbus::Error> = proxy.call("MediaAction", &(device_id, action));
+pub fn media_action(connection: &Connection, device_id: &str, action: &str) {
+    if let Ok(magnetita) = proxy(connection) {
+        let _: Result<(), zbus::Error> = magnetita.call("MediaAction", &(device_id, action));
+    }
 }
 
-/// Lists the devices Magnetita reports. `Ok(vec![])` when Magnetita is not on
-/// the bus — an empty list, not a failure to surface.
-pub fn list_devices() -> Result<Vec<Device>, String> {
-    let Ok(connection) = Connection::session() else {
-        return Ok(Vec::new());
-    };
-    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
-        return Ok(Vec::new());
+/// Lists the devices Magnetita reports: an empty list when Magnetita is not on
+/// the bus, which is not a failure to surface.
+pub fn list_devices(connection: &Connection) -> Vec<Device> {
+    let Ok(magnetita) = proxy(connection) else {
+        return Vec::new();
     };
     let live_raw: Vec<HashMap<String, OwnedValue>> =
-        proxy.call("ListDevices", &()).unwrap_or_default();
+        magnetita.call("ListDevices", &()).unwrap_or_default();
     let paired_raw: Vec<HashMap<String, OwnedValue>> =
-        proxy.call("ListPaired", &()).unwrap_or_default();
+        magnetita.call("ListPaired", &()).unwrap_or_default();
     let live = live_raw.iter().map(parse_device).collect();
     let paired = paired_raw.iter().map(parse_paired_device).collect();
-    Ok(merge_devices(live, paired))
+    merge_devices(live, paired)
 }
 
-/// Blocks watching the `Changed` signal, calling `on_change` (coalesced over a
-/// short burst) each time the device set or a device's state changes. The match
-/// rule is set up even if Magnetita is not up yet, so it fires once Magnetita
-/// appears and emits.
-pub fn watch_changes<F: Fn() + Send + 'static>(on_change: F) -> Result<(), String> {
-    let connection =
-        Connection::session().map_err(|error| format!("bus de sesión no disponible: {error}"))?;
-    let proxy = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE)
-        .map_err(|error| format!("Magnetita no disponible: {error}"))?;
-    let changed = proxy
+/// Calls `on_change` each time Magnetita emits `Changed`, from a thread of its
+/// own, for as long as the connection lives. The match rule is set up even if
+/// Magnetita is not up yet, so it fires once Magnetita appears and emits.
+pub fn forward_changes<F: Fn() + Send + 'static>(
+    connection: &Connection,
+    on_change: F,
+) -> Result<(), String> {
+    let magnetita = proxy(connection).map_err(|error| format!("Magnetita: {error}"))?;
+    let changed = magnetita
         .receive_signal("Changed")
         .map_err(|error| format!("Magnetita: {error}"))?;
-
-    let (tx, rx) = mpsc::channel::<()>();
-    std::thread::spawn(move || {
-        for _ in changed {
-            if tx.send(()).is_err() {
-                break;
+    std::thread::Builder::new()
+        .name("siderita-magnetita-signal".to_owned())
+        .spawn(move || {
+            for _ in changed {
+                on_change();
             }
-        }
-    });
-
-    while rx.recv().is_ok() {
-        // Drain a burst (a connect that also mounts fires twice), then reload.
-        while rx.recv_timeout(Duration::from_millis(200)).is_ok() {}
-        on_change();
-    }
-    // Keep the connection alive for the whole watch.
-    drop(connection);
-    Ok(())
+        })
+        .map(drop)
+        .map_err(|error| format!("Magnetita: {error}"))
 }
 
 fn parse_device(dict: &HashMap<String, OwnedValue>) -> Device {
@@ -171,16 +162,6 @@ fn merge_devices(mut live: Vec<Device>, paired: Vec<Device>) -> Vec<Device> {
         live.push(known);
     }
     live
-}
-
-fn call_device_method(method: &'static str, device_id: &str) {
-    let Ok(connection) = Connection::session() else {
-        return;
-    };
-    let Ok(proxy) = Proxy::new(&connection, SERVICE, OBJECT, INTERFACE) else {
-        return;
-    };
-    let _: Result<(), zbus::Error> = proxy.call(method, &(device_id,));
 }
 
 fn str_field(dict: &HashMap<String, OwnedValue>, key: &str) -> String {

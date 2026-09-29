@@ -46,7 +46,8 @@ fn latest_navigation_eventually_publishes_under_burst_load() {
     let (sender, receiver) = mpsc::channel();
     let executor = ScanExecutor::new(move |result| {
         let _ = sender.send(result);
-    });
+    })
+    .expect("a scan worker");
 
     executor.submit(first_request).expect("submit first");
     executor.submit(second_request).expect("submit second");

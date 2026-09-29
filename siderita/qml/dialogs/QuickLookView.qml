@@ -49,7 +49,10 @@ CelestinaModalLayer {
     // shown read-only.
     // Una sesión a la vez: cada paso de selección cierra la anterior antes de
     // abrir nada, y cerrar el modal no deja ningún decodificador vivo.
-    onQlPathChanged: quickLookView.sync()
+    onQlPathChanged: {
+        quickLookView.sync()
+        quickLookView.syncText()
+    }
     onShownChanged: {
         quickLookView.sync()
         if (quickLookView.shown) {
@@ -109,9 +112,17 @@ CelestinaModalLayer {
             quickLookView.player.close()
     }
 
-    readonly property string qlText: (owner.quickLookOpen && qlKind !== "directory"
-                                      && !qlIsImage && qlPath.length > 0)
-                                     ? controller.previewText(qlPath) : ""
+    // The text sample is read on a worker (the file may sit on a mount that
+    // stopped answering); the controller clears it on every request and fills
+    // it only with the answer for the latest one.
+    readonly property bool qlWantsText: owner.quickLookOpen && qlKind !== "directory"
+                                        && !qlIsImage && qlPath.length > 0
+    onQlWantsTextChanged: quickLookView.syncText()
+    function syncText() {
+        quickLookView.controller.requestPreviewText(quickLookView.qlWantsText
+                                                    ? quickLookView.qlPath : "")
+    }
+    readonly property string qlText: qlWantsText ? controller.previewText : ""
     readonly property bool qlHasText: qlText.length > 0
 
     // The URL comes from the controller, which owns the one `file://` codec

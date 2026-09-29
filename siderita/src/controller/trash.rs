@@ -16,20 +16,36 @@
 //! unplugged. Any one of those questions can block for as long as that
 //! filesystem takes to give up, and while it did, the window was frozen: the
 //! author saw the whole application stop on opening Papelera or Recientes.
-//! Nothing here reads the filesystem on the Qt thread, and an answer that
-//! arrives after the person has left is dropped rather than painted.
+//!
+//! So nothing here touches the filesystem on the Qt thread: the listings run
+//! on readers, and restoring, purging and emptying run as jobs on the same
+//! register a paste uses, with progress and Cancel. Each listing carries a
+//! generation and at most one runs at a time (`siderita_core::SingleFlight`):
+//! a listing that lands after the person left, or after a newer one was
+//! asked for, is dropped rather than painted, and toggling Papelera against a
+//! hung mount no longer starts one stuck thread per toggle.
 
 use core::pin::Pin;
 use std::path::{Path, PathBuf};
 
-use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
+use siderita_core::Landing;
 use siderita_ops::{TrashEntry, Unrestorable};
 
+use super::jobs::JobKind;
 use super::qobject;
 use super::{display_name, search_hit_parent, RECENT_LIMIT};
 use crate::pathkey;
+
+/// What a Trash job does to each record it is given.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TrashVerb {
+    /// Put the entry back where it came from.
+    Restore,
+    /// Delete it for good.
+    Purge,
+}
 
 /// One finished row of a listed location.
 ///
@@ -157,25 +173,56 @@ impl qobject::SideritaController {
         self.as_mut().set_loading(true);
         self.as_mut()
             .begin_read_notice("Leyendo la papelera…", "user-trash");
+        // One listing at a time: a request made while one runs is served by
+        // the run that follows it.
+        let Ok(Some(generation)) = self.as_mut().rust_mut().get_mut().trash_listing.request()
+        else {
+            return;
+        };
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
+        let started = super::jobs::spawn_reader(move || {
             let listed = gather_trash();
             let _ = qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
-                controller.trash_listed(listed);
+                controller.trash_listed(generation, listed);
             });
         });
+        if let Err(error) = started {
+            let _ = self
+                .as_mut()
+                .rust_mut()
+                .get_mut()
+                .trash_listing
+                .land(generation);
+            self.as_mut().clear_listing_state();
+            self.as_mut()
+                .set_op_error(QString::from(error.to_string().as_str()));
+        }
     }
 
     /// A Trash listing that has arrived.
     fn trash_listed(
         mut self: Pin<&mut Self>,
+        generation: celestina_core::Generation,
         listed: Result<(Vec<TrashEntry>, Vec<ListedRow>), String>,
     ) {
         // A slow volume can hold a listing back for as long as it likes, and by
-        // then the person may be reading a folder. An answer nobody is waiting
-        // for is dropped: it must never pull the window back into Papelera.
-        if !self.rust().trash_active {
-            return;
+        // then the person may be reading a folder, or a purge may have asked
+        // for a newer listing. Only the answer still wanted is painted: it
+        // must never pull the window back into Papelera, nor repaint an entry
+        // that is gone.
+        match self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .trash_listing
+            .land(generation)
+        {
+            Landing::Publish => {}
+            Landing::Rerun => {
+                self.as_mut().load_trash();
+                return;
+            }
+            Landing::Drop => return,
         }
         self.as_mut().set_loading(false);
         self.as_mut().end_read_notice();
@@ -227,20 +274,48 @@ impl qobject::SideritaController {
         self.as_mut().set_loading(true);
         self.as_mut()
             .begin_read_notice("Leyendo Recientes…", "clock-arrow-up");
+        let Ok(Some(generation)) = self.as_mut().rust_mut().get_mut().recent_listing.request()
+        else {
+            return;
+        };
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
+        let started = super::jobs::spawn_reader(move || {
             let rows = gather_recent();
             let _ = qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
-                controller.recent_listed(rows);
+                controller.recent_listed(generation, rows);
             });
         });
+        if started.is_err() {
+            let _ = self
+                .as_mut()
+                .rust_mut()
+                .get_mut()
+                .recent_listing
+                .land(generation);
+            self.as_mut().clear_listing_state();
+        }
     }
 
     /// A Recientes listing that has arrived. Dropped, like the Trash's, if the
-    /// person has already left.
-    fn recent_listed(mut self: Pin<&mut Self>, rows: Vec<ListedRow>) {
-        if !self.rust().recent_active {
-            return;
+    /// person has already left or a newer listing was asked for.
+    fn recent_listed(
+        mut self: Pin<&mut Self>,
+        generation: celestina_core::Generation,
+        rows: Vec<ListedRow>,
+    ) {
+        match self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .recent_listing
+            .land(generation)
+        {
+            Landing::Publish => {}
+            Landing::Rerun => {
+                self.as_mut().load_recent();
+                return;
+            }
+            Landing::Drop => return,
         }
         self.as_mut().set_loading(false);
         self.as_mut().end_read_notice();
@@ -307,6 +382,7 @@ impl qobject::SideritaController {
     /// call it) without repainting.
     pub(crate) fn exit_recent(mut self: Pin<&mut Self>) {
         if self.rust().recent_active {
+            self.as_mut().rust_mut().get_mut().recent_listing.retire();
             self.as_mut().rust_mut().get_mut().search_hits.clear();
             self.as_mut().set_recent_active(false);
             self.as_mut().clear_listing_state();
@@ -338,6 +414,7 @@ impl qobject::SideritaController {
     /// it is safe to call on any navigation) and returns to the folder.
     pub(crate) fn exit_trash(mut self: Pin<&mut Self>) {
         if self.rust().trash_active {
+            self.as_mut().rust_mut().get_mut().trash_listing.retire();
             self.as_mut().rust_mut().get_mut().search_hits.clear();
             self.as_mut().set_trash_active(false);
             self.as_mut().clear_listing_state();
@@ -358,140 +435,160 @@ impl qobject::SideritaController {
     }
 
     /// The `.trashinfo` record of the trashed entry whose body the key
-    /// `trashed` names, if that entry is still in the loaded list and its
-    /// record still exists.
+    /// `trashed` names, if that entry is still in the loaded list.
     ///
     /// The identity of a trashed entry is its own path, never its position: the
     /// list is reloaded after every restore, purge and empty, so a row index
     /// captured when a menu opened can name a different entry by the time the
     /// menu item is clicked — and "Eliminar permanentemente" is irreversible.
+    /// Whether the record still exists is the job's question, asked on its
+    /// worker: a record that vanished meanwhile fails there, and is reported.
     fn trash_record(&self, trashed: &QString) -> Option<PathBuf> {
         let trashed = pathkey::decode(trashed).ok()?;
-        let info = self
-            .rust()
+        self.rust()
             .trash_entries
             .iter()
             .find(|entry| entry.trashed == trashed)
-            .map(|entry| entry.info.clone())?;
-        info.exists().then_some(info)
+            .map(|entry| entry.info.clone())
     }
 
-    /// Permanently deletes the trashed entry whose body sits at `trashed`, then
-    /// refreshes the view.
+    /// Every record in the loaded Trash listing.
+    fn trash_records(&self) -> Vec<PathBuf> {
+        self.rust()
+            .trash_entries
+            .iter()
+            .map(|entry| entry.info.clone())
+            .collect()
+    }
+
+    /// Permanently deletes the trashed entry whose body sits at `trashed`, as
+    /// a job, then refreshes the view.
     pub fn purge_trash(mut self: Pin<&mut Self>, trashed: &QString) {
         self.as_mut().set_op_error(QString::default());
         let Some(info) = self.trash_record(trashed) else {
             return;
         };
-        match siderita_ops::purge_from_trash(&info) {
-            Ok(_) => self.as_mut().load_trash(),
-            Err(error) => self
-                .as_mut()
-                .set_op_error(QString::from(error.to_string().as_str())),
-        }
+        self.spawn_trash_verb(TrashVerb::Purge, vec![info]);
     }
-    /// Restores the trashed entry whose body sits at `trashed`, then refreshes
-    /// both the Trash view and the current folder (the entry may reappear
-    /// there). A refusal (its origin is taken) surfaces as `op_error`.
+
+    /// Restores the trashed entry whose body sits at `trashed`, as a job, then
+    /// refreshes both the Trash view and the current folder (the entry may
+    /// reappear there). A refusal (its origin is taken) surfaces as `op_error`.
     pub fn restore_trash(mut self: Pin<&mut Self>, trashed: &QString) {
         self.as_mut().set_op_error(QString::default());
         let Some(info) = self.trash_record(trashed) else {
             return;
         };
-        match siderita_ops::restore_from_trash(&info, &CancellationToken::new()) {
-            Ok(restored) => {
-                self.as_mut().after_trash_write();
-                // After the refresh, which clears `op_error`: a restore from
-                // another disk's Trash that left part of the entry there.
-                if !restored.left_behind.is_empty() {
-                    let line =
-                        super::display::left_behind_line(&restored.to, restored.left_behind.len());
-                    self.as_mut().set_op_error(QString::from(line.as_str()));
-                }
-            }
-            Err(error) => self
-                .as_mut()
-                .set_op_error(QString::from(error.to_string().as_str())),
-        }
+        self.spawn_trash_verb(TrashVerb::Restore, vec![info]);
     }
+
     /// Restores every entry currently in the Trash view. Each is attempted
     /// independently; failures (e.g. an origin now occupied) are reported
     /// together after the list and the folder are refreshed.
     pub fn restore_all_trash(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
-        let infos: Vec<PathBuf> = self
-            .rust()
-            .trash_entries
-            .iter()
-            .map(|e| e.info.clone())
-            .collect();
-        if infos.is_empty() {
-            return;
-        }
-        let cancellation = CancellationToken::new();
-        let mut failures = Vec::new();
-        for info in &infos {
-            match siderita_ops::restore_from_trash(info, &cancellation) {
-                Ok(restored) if !restored.left_behind.is_empty() => failures.push(
-                    super::display::left_behind_line(&restored.to, restored.left_behind.len()),
-                ),
-                Ok(_) => {}
-                Err(error) => failures.push(format!("{}: {error}", display_name(info))),
-            }
-        }
-        // Refresh first (both clear op_error), then report any failures last.
-        self.as_mut().after_trash_write();
-        if !failures.is_empty() {
-            let total = infos.len();
-            let summary = if failures.len() == total {
-                failures.join("\n")
-            } else {
-                format!(
-                    "{} de {} restauraciones fallaron:\n{}",
-                    failures.len(),
-                    total,
-                    failures.join("\n")
-                )
-            };
-            self.as_mut().set_op_error(QString::from(summary.as_str()));
-        }
+        let infos = self.trash_records();
+        self.spawn_trash_verb(TrashVerb::Restore, infos);
     }
+
     /// Permanently deletes every entry in the Trash view. Irreversible — the QML
     /// gates this behind a confirmation. Each is purged independently; failures
-    /// are reported together after the list is refreshed. The current folder is
-    /// untouched (trashed entries live in the Trash, not here), so unlike
-    /// restore there is nothing to refresh but the Trash list itself.
+    /// are reported together after the list is refreshed.
     pub fn empty_trash(mut self: Pin<&mut Self>) {
         self.as_mut().set_op_error(QString::default());
-        let infos: Vec<PathBuf> = self
-            .rust()
-            .trash_entries
-            .iter()
-            .map(|e| e.info.clone())
-            .collect();
+        let infos = self.trash_records();
+        self.spawn_trash_verb(TrashVerb::Purge, infos);
+    }
+
+    /// Runs a Trash verb over `infos` as a job. Restoring from another disk's
+    /// Trash copies, and emptying a large Trash deletes whole trees: either
+    /// used to freeze the window for as long as it took, with no progress and
+    /// no way to stop it. Now each entry is announced on the ring, and Cancel
+    /// stops between entries.
+    fn spawn_trash_verb(mut self: Pin<&mut Self>, verb: TrashVerb, infos: Vec<PathBuf>) {
         if infos.is_empty() {
             return;
         }
-        let mut failures = Vec::new();
-        for info in &infos {
-            if let Err(error) = siderita_ops::purge_from_trash(info) {
-                failures.push(format!("{}: {error}", display_name(info)));
+        let total = infos.len();
+        let (label, kind) = match verb {
+            TrashVerb::Restore => ("Restaurando…", JobKind::Restore),
+            TrashVerb::Purge => ("Eliminando…", JobKind::Purge),
+        };
+        let (job, token) = self.as_mut().start_job(label, kind, total);
+        let qt = self.qt_thread();
+        self.as_mut().run_job(job, move || {
+            let mut failures = Vec::new();
+            for (index, info) in infos.iter().enumerate() {
+                if token.is_cancelled() {
+                    break;
+                }
+                let done = i32::try_from(index).unwrap_or(i32::MAX);
+                let announced = display_name(info);
+                let _ = qt.queue(move |controller| {
+                    controller.job_reached(job, done, Some(announced), Some(String::new()));
+                });
+                match verb {
+                    TrashVerb::Restore => match siderita_ops::restore_from_trash(info, &token) {
+                        Ok(restored) if !restored.left_behind.is_empty() => {
+                            failures.push(super::display::left_behind_line(
+                                &restored.to,
+                                restored.left_behind.len(),
+                            ));
+                        }
+                        Ok(_) => {}
+                        Err(siderita_ops::OpError::Cancelled) => break,
+                        Err(error) => failures.push(format!("{}: {error}", display_name(info))),
+                    },
+                    TrashVerb::Purge => {
+                        if let Err(error) = siderita_ops::purge_from_trash(info) {
+                            failures.push(format!("{}: {error}", display_name(info)));
+                        }
+                    }
+                }
             }
+            let cancelled = token.is_cancelled();
+            let _ = qt.queue(move |controller| {
+                controller.finish_trash_verb(job, verb, total, failures, cancelled);
+            });
+            super::jobs::JobEnd::Done
+        });
+    }
+
+    /// Ends a Trash verb on the Qt thread: repaint first (a repaint clears
+    /// `op_error`), then report what failed, all together.
+    fn finish_trash_verb(
+        mut self: Pin<&mut Self>,
+        job: u64,
+        verb: TrashVerb,
+        total: usize,
+        failures: Vec<String>,
+        cancelled: bool,
+    ) {
+        self.as_mut().end_job(job);
+        match verb {
+            TrashVerb::Restore => self.as_mut().after_trash_write(),
+            // The current folder is untouched (trashed entries live in the
+            // Trash), so only the Trash listing needs repainting.
+            TrashVerb::Purge => self.as_mut().load_trash(),
         }
-        self.as_mut().load_trash();
         if !failures.is_empty() {
-            let total = infos.len();
             let summary = if failures.len() == total {
                 failures.join("\n")
             } else {
+                let what = match verb {
+                    TrashVerb::Restore => "restauraciones fallaron",
+                    TrashVerb::Purge => "no se pudieron borrar",
+                };
                 format!(
-                    "{} de {} no se pudieron borrar:\n{}",
+                    "{} de {} {what}:\n{}",
                     failures.len(),
                     total,
                     failures.join("\n")
                 )
             };
             self.as_mut().set_op_error(QString::from(summary.as_str()));
+        } else if cancelled {
+            self.as_mut().notice_cancelled();
         }
     }
 

@@ -194,8 +194,9 @@ impl qobject::FileChooserPortal {
     ///
     /// `keys` are the path keys of ADR 0008, decoded here; the URIs the caller
     /// finally receives keep the portal's own spelling, produced downstream by
-    /// `crate::dbus::path_to_uri`. A key that will not decode is dropped rather
-    /// than handed to another application as a name it cannot resolve.
+    /// `celestina_core::file_uri::from_path`. A key that will not decode is
+    /// dropped rather than handed to another application as a name it cannot
+    /// resolve.
     pub fn answer(self: Pin<&mut Self>, token: &QString, keys: &QStringList) {
         let token = token.to_string();
         let paths: Vec<PathBuf> = keys
@@ -393,7 +394,7 @@ impl FileChooser {
                 }
                 let uris: Vec<String> = chosen
                     .iter()
-                    .map(|path| crate::dbus::path_to_uri(path))
+                    .filter_map(|path| celestina_core::file_uri::from_path(path))
                     .collect();
                 let mut results: HashMap<String, OwnedValue> = HashMap::new();
                 if let Ok(value) = OwnedValue::try_from(Value::from(uris)) {
@@ -597,32 +598,58 @@ fn current_folder(options: &HashMap<String, OwnedValue>) -> Option<String> {
 /// `a(sa(us))` — a list of (name, list of (kind, pattern)) where kind 0 is a
 /// glob and 1 a MIME type.
 fn filters(options: &HashMap<String, OwnedValue>) -> Vec<String> {
-    let Some(value) = options.get("filters") else {
+    let Some(Ok(value)) = options.get("filters").map(OwnedValue::try_clone) else {
         return Vec::new();
     };
-    let Ok(list) = Vec::<(String, Vec<(u32, String)>)>::try_from(
-        value
-            .try_clone()
-            .unwrap_or_else(|_| OwnedValue::try_from(Value::from(0u32)).expect("scalar value")),
-    ) else {
+    let Ok(list) = Vec::<(String, Vec<(u32, String)>)>::try_from(value) else {
         return Vec::new();
     };
     list.into_iter()
         .map(|(name, patterns)| {
-            let joined = patterns
-                .into_iter()
-                .flat_map(|(kind, pattern)| {
+            filter_line(
+                &name,
+                patterns.into_iter().flat_map(|(kind, pattern)| {
                     if kind == 1 {
                         globs_for_mime(&pattern)
                     } else {
                         vec![pattern]
                     }
-                })
-                .collect::<Vec<_>>()
-                .join("|");
-            format!("{name}\t{joined}")
+                }),
+            )
         })
         .collect()
+}
+
+/// One `name\tpattern|pattern|…` line, safe to cut where the QML cuts it.
+///
+/// Every character here comes from the application that asked for the
+/// chooser, and a tab in a name or a `|` in a pattern used to shift the fields
+/// the QML reads. A tab or line break in the name is shown as a space — it is
+/// only a label. A pattern holding a delimiter cannot be carried whole, and
+/// dropping it would hide files the application asked for, so it widens to
+/// `*`, like a MIME type this chooser does not know.
+fn filter_line(name: &str, patterns: impl Iterator<Item = String>) -> String {
+    let label: String = name
+        .chars()
+        .map(|character| {
+            if matches!(character, '\t' | '\n' | '\r') {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect();
+    let joined = patterns
+        .map(|pattern| {
+            if pattern.contains(['\t', '\n', '\r', '|']) {
+                "*".to_owned()
+            } else {
+                pattern
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("|");
+    format!("{label}\t{joined}")
 }
 
 /// The name patterns a MIME filter stands for.
@@ -665,6 +692,20 @@ fn globs_for_mime(mime: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SID-19: the caller's names and patterns cannot shift the fields the
+    /// chooser cuts them into.
+    #[test]
+    fn a_delimiter_in_a_filter_cannot_shift_its_fields() {
+        let line = filter_line(
+            "Pic\ttures",
+            ["*.png".to_owned(), "*.a|b".to_owned(), "*.x\ty".to_owned()].into_iter(),
+        );
+        assert_eq!(line, "Pic tures\t*.png|*|*");
+        let (name, patterns) = line.split_once('\t').expect("one tab");
+        assert_eq!(name, "Pic tures");
+        assert_eq!(patterns.split('|').count(), 3);
+    }
 
     #[test]
     fn a_mime_filter_becomes_the_extensions_it_stands_for() {

@@ -21,11 +21,21 @@
 //! the points a long operation asks "should I stop?" are exactly the points at
 //! which it is safe to wait — see `celestina_core::CancellationToken::pause`.
 //!
+//! The register also owns the worker threads. A job ends when its worker
+//! returns, from the worker itself, and not when the tab that started it hears
+//! about it: a tab closed mid-copy is not there to hear, and its job used to
+//! stay on every other tab's surface for the rest of the process. And because
+//! the handles are kept, quitting cancels every job and waits for each worker
+//! to finish its rollback, instead of killing a copy halfway and leaving a
+//! truncated file under its final name ([`shutdown`]).
+//!
 //! The marker above declares the Spanish here: a job's label is the line a
 //! person reads while it runs.
 
 use core::pin::Pin;
 use std::sync::{Mutex, OnceLock};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use celestina_core::CancellationToken;
 use cxx_qt::Threading;
@@ -39,6 +49,9 @@ struct Registry {
     jobs: Vec<Job>,
     next_id: u64,
     listeners: Vec<cxx_qt::CxxQtThread<qobject::SideritaController>>,
+    /// Every worker thread a job or a quick write started, so quitting can
+    /// wait for them. Finished ones are reaped whenever another is added.
+    workers: Vec<JoinHandle<()>>,
 }
 
 fn registry() -> &'static Mutex<Registry> {
@@ -48,6 +61,7 @@ fn registry() -> &'static Mutex<Registry> {
             jobs: Vec::new(),
             next_id: 0,
             listeners: Vec::new(),
+            workers: Vec::new(),
         })
     })
 }
@@ -67,6 +81,100 @@ fn wake_listeners() {
     });
 }
 
+/// How a worker left its job.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum JobEnd {
+    /// The work is over: the job leaves the register as the worker returns.
+    Done,
+    /// The work waits for a person (an archive's password) and resumes under
+    /// the same job on another worker, so the job stays.
+    Parked,
+}
+
+/// Starts a worker thread whose handle the register keeps, so [`shutdown`]
+/// can wait for it.
+///
+/// A thread the operating system refuses is an error for the caller to report;
+/// it is never a panic.
+pub(crate) fn spawn_worker(work: impl FnOnce() + Send + 'static) -> std::io::Result<()> {
+    let handle = std::thread::Builder::new()
+        .name("siderita-write".to_owned())
+        .spawn(work)?;
+    if let Ok(mut state) = registry().lock() {
+        let (finished, running): (Vec<_>, Vec<_>) = std::mem::take(&mut state.workers)
+            .into_iter()
+            .partition(JoinHandle::is_finished);
+        state.workers = running;
+        state.workers.push(handle);
+        drop(state);
+        for worker in finished {
+            let _ = worker.join();
+        }
+    }
+    Ok(())
+}
+
+/// Starts a thread that only reads — a search walk, a listing, a lookup — and
+/// answers through the Qt queue.
+///
+/// Its handle is not kept on purpose. A reader holds nothing half-written that
+/// quitting could corrupt, every answer it sends is checked against a
+/// generation before anything is painted, and one blocked on a mount that
+/// stopped answering must not hold the quit open the way a writer's rollback
+/// is allowed to.
+pub(crate) fn spawn_reader(work: impl FnOnce() + Send + 'static) -> std::io::Result<()> {
+    std::thread::Builder::new()
+        .name("siderita-read".to_owned())
+        .spawn(work)
+        .map(drop)
+}
+
+/// Removes a job from the register and tells every tab. Safe from any thread:
+/// the worker calls it as it returns, whether or not the tab that started the
+/// job still exists.
+pub(crate) fn finish(id: u64) {
+    if let Ok(mut state) = registry().lock() {
+        state.jobs.retain(|job| job.id != id);
+    }
+    wake_listeners();
+}
+
+/// Cancels every job and waits for the workers, for at most `patience`.
+///
+/// Called once, after the event loop has returned. Cancelling is what makes a
+/// copy, a move or an extraction roll back its partial destination, and the
+/// wait is what lets that rollback finish before the process exits. A worker
+/// still blocked past the deadline (a write to a mount that stopped answering)
+/// is left behind rather than holding the process open for ever, and the log
+/// says how many were, so an incomplete file has an explanation.
+pub(crate) fn shutdown(patience: Duration) {
+    let workers = {
+        let Ok(mut state) = registry().lock() else {
+            return;
+        };
+        for job in &state.jobs {
+            job.cancel.cancel();
+        }
+        state.listeners.clear();
+        std::mem::take(&mut state.workers)
+    };
+    let deadline = Instant::now() + patience;
+    let mut abandoned = 0usize;
+    for worker in workers {
+        while !worker.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if worker.is_finished() {
+            let _ = worker.join();
+        } else {
+            abandoned += 1;
+        }
+    }
+    if abandoned > 0 {
+        eprintln!("Siderita: {abandoned} write worker(s) did not stop before quitting");
+    }
+}
+
 /// What a job is doing, as a stable token rather than as its Spanish label: the
 /// surface picks an icon from this, and a translated word must never decide
 /// which glyph a person sees.
@@ -77,6 +185,12 @@ pub(crate) enum JobKind {
     Trash,
     Compress,
     Extract,
+    /// Taking entries back out of the Trash.
+    Restore,
+    /// Deleting entries from the Trash for good.
+    Purge,
+    /// Reversing the last rename, move or trash.
+    Undo,
 }
 
 impl JobKind {
@@ -88,6 +202,9 @@ impl JobKind {
             Self::Trash => "user-trash",
             Self::Compress => "archive-compress",
             Self::Extract => "archive-extract",
+            Self::Restore => "rotate-ccw",
+            Self::Purge => "eraser",
+            Self::Undo => "undo",
         }
     }
 }
@@ -250,13 +367,42 @@ impl qobject::SideritaController {
         wake_listeners();
     }
 
-    /// Removes a finished job from the register.
+    /// Removes a finished job from the register. Idempotent: a worker has
+    /// usually ended its job already by the time its outcome reaches the tab.
     pub(crate) fn end_job(self: Pin<&mut Self>, id: u64) {
-        if let Ok(mut state) = registry().lock() {
-            state.jobs.retain(|job| job.id != id);
-        }
-        wake_listeners();
+        finish(id);
         self.publish_jobs();
+    }
+
+    /// Runs `work` as the worker of job `id`. The job ends when the worker
+    /// returns [`JobEnd::Done`], from the worker itself; a thread that cannot
+    /// be started ends the job at once and says so.
+    pub(crate) fn run_job(
+        mut self: Pin<&mut Self>,
+        id: u64,
+        work: impl FnOnce() -> JobEnd + Send + 'static,
+    ) {
+        let started = spawn_worker(move || {
+            if work() == JobEnd::Done {
+                finish(id);
+            }
+        });
+        if let Err(error) = started {
+            self.as_mut().end_job(id);
+            let message = format!("No se pudo iniciar la operación: {error}");
+            self.as_mut().set_op_error(QString::from(message.as_str()));
+        }
+    }
+
+    /// Says that a job was stopped part-way, for a job that has nothing else
+    /// to report: one sentence, worded once, for every verb.
+    pub(crate) fn notice_cancelled(self: Pin<&mut Self>) {
+        self.push_notice(
+            "Operación cancelada",
+            "circle-stop",
+            super::notices::NoticeTone::Info,
+            false,
+        );
     }
 
     /// Cancels one job by id, leaving every other one running.
@@ -322,13 +468,21 @@ impl qobject::SideritaController {
     /// per job from them and works nothing out on its own. `op_running` is the
     /// single scalar left — "is anything writing" is still a question other
     /// parts of the application ask.
+    ///
+    /// The moment the register empties is also when a folder change that
+    /// arrived meanwhile is replayed (`scan::replay_deferred_change`): changes
+    /// are only held back while something writes, never dropped.
     pub(crate) fn publish_jobs(mut self: Pin<&mut Self>) {
         let running = registry()
             .lock()
             .map(|state| !state.jobs.is_empty())
             .unwrap_or(false);
+        let was_running = *self.op_running();
         self.as_mut().set_op_running(running);
-        self.publish_job_rows();
+        self.as_mut().publish_job_rows();
+        if was_running && !running {
+            self.as_mut().replay_deferred_change();
+        }
     }
 
     /// The per-job rows, as the parallel lists the operations surface consumes.

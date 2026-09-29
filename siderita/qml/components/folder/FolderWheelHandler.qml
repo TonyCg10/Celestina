@@ -107,7 +107,9 @@ WheelHandler {
         id: wheelAnimation
         target: root.view
         property: "contentY"
-        duration: CelestinaTheme.motionNormal
+        // Reduced motion jumps to the destination: the same distance, no
+        // glide.
+        duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
         easing.type: CelestinaTheme.easeStandard
         onFinished: root.targetContentY = root.boundedY(root.view.contentY)
     }

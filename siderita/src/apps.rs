@@ -3,14 +3,15 @@
 //!
 //! MIME classification and the default-app database are delegated to the
 //! desktop's own `xdg-mime` (integration via freedesktop, not a reimplemented
-//! shared-mime-info), while the candidate-app list is built by parsing the
-//! `.desktop` files under the XDG application directories — the one part worth
-//! doing here, and the part that is unit-testable without a session.
+//! shared-mime-info), while the candidate-app list comes from the suite's one
+//! application scan, `celestina_core::desktop_entry::scan`. Everything here
+//! blocks — processes and a walk of every application directory — and runs on
+//! a worker thread.
 
 use std::path::Path;
-
-use celestina_core::desktop_entry;
 use std::process::{Command, Stdio};
+
+use celestina_core::{desktop_entry, CancellationToken};
 
 /// A launchable desktop application: its `.desktop` id and display name.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -22,55 +23,74 @@ pub struct DesktopApp {
     pub name: String,
 }
 
-/// The fields of a `[Desktop Entry]` group this module cares about.
-/// The visible applications that declare support for `mime`, de-duplicated by id
-/// (a user `.desktop` shadows a system one of the same name) and sorted by name.
-pub fn apps_for_mime(mime: &str) -> Vec<DesktopApp> {
-    let mut seen = std::collections::HashSet::new();
-    let mut apps = Vec::new();
+/// The most desktop-file ids one chooser scan reads. A desktop has a few
+/// hundred; the bound is what keeps a directory stuffed with entries from
+/// turning "Abrir con…" into a long read.
+const MAX_ENTRIES: usize = 4096;
 
-    for dir in desktop_entry::application_dirs() {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("desktop") {
-                continue;
-            }
-            let Some(id) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if seen.contains(id) {
-                continue; // a more specific dir already provided this id
-            }
-            let Ok(content) = std::fs::read_to_string(&path) else {
-                continue;
-            };
-            let Some(parsed) = desktop_entry::parse(id, &content) else {
-                continue;
-            };
-            // The id is claimed whether or not this entry handles the type: a
-            // user override shadows the system one either way.
-            seen.insert(id.to_owned());
-            if parsed.is_application && !parsed.hidden && !parsed.no_display && parsed.handles(mime)
-            {
-                apps.push(DesktopApp {
-                    id: id.to_owned(),
-                    // An entry with no name is still a launchable application;
-                    // its id is what to call it.
-                    name: if parsed.name.is_empty() {
-                        id.to_owned()
-                    } else {
-                        parsed.name
-                    },
-                });
-            }
-        }
-    }
+/// What the "Abrir con…" chooser offers for one file.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Choices {
+    /// The file's MIME type, as the desktop classifies it.
+    pub mime: String,
+    /// The visible applications that declare it, sorted by name.
+    pub apps: Vec<DesktopApp>,
+    /// Which of them is the current default, if any is.
+    pub default_index: Option<usize>,
+}
 
-    apps.sort_by_key(|a| a.name.to_lowercase());
-    apps
+/// Everything the chooser needs for `path`, or `None` when its type cannot be
+/// classified. Runs `xdg-mime` twice and reads every `.desktop` file on the
+/// system, so it belongs on a worker thread — it used to run inside the Qt
+/// thread's `open_with` invokable, where a FIFO named `x.desktop` froze the
+/// window for good.
+pub fn choices_for(path: &Path) -> Option<Choices> {
+    let mime = detect_mime(path)?;
+    let apps = apps_for_mime(&mime, &CancellationToken::new()).unwrap_or_default();
+    let default_index =
+        default_app_id(&mime).and_then(|id| apps.iter().position(|app| app.id == id));
+    Some(Choices {
+        mime,
+        apps,
+        default_index,
+    })
+}
+
+/// The visible applications that declare support for `mime`, sorted by name.
+///
+/// The walk is `celestina_core::desktop_entry::scan`'s — one shadowing rule
+/// for the whole suite (a user `.desktop` shadows a system one of the same
+/// id, whether or not it reads), every file read bounded and only when it is a
+/// regular file — and "visible" is the entry's own `is_listable`.
+pub fn apps_for_mime(
+    mime: &str,
+    cancellation: &CancellationToken,
+) -> Result<Vec<DesktopApp>, desktop_entry::ScanCancelled> {
+    apps_in(
+        &desktop_entry::application_search_dirs(),
+        mime,
+        cancellation,
+    )
+}
+
+/// [`apps_for_mime`] over the given application directories.
+fn apps_in(
+    dirs: &[std::path::PathBuf],
+    mime: &str,
+    cancellation: &CancellationToken,
+) -> Result<Vec<DesktopApp>, desktop_entry::ScanCancelled> {
+    let scanned = desktop_entry::scan(dirs, cancellation, MAX_ENTRIES)?;
+    let mut apps: Vec<DesktopApp> = scanned
+        .entries
+        .into_iter()
+        .filter(|entry| entry.is_listable() && entry.handles(mime))
+        .map(|entry| DesktopApp {
+            id: entry.id,
+            name: entry.name,
+        })
+        .collect();
+    apps.sort_by_key(|app| app.name.to_lowercase());
+    Ok(apps)
 }
 
 /// Classifies `path`'s MIME type via `xdg-mime query filetype`, the desktop's
@@ -151,7 +171,7 @@ mod tests {
     }
 
     fn handles(entry: &DesktopEntry, mime: &str) -> bool {
-        entry.is_application && !entry.hidden && !entry.no_display && entry.handles(mime)
+        entry.is_listable() && entry.handles(mime)
     }
 
     const FIREFOX: &str = "\
@@ -200,6 +220,37 @@ Name=Ventana nueva
 ";
         let entry = parse(content).expect("entry");
         assert_eq!(entry.name, "Real");
+    }
+
+    /// RS-4: a FIFO named `x.desktop` in an application directory used to
+    /// block the chooser — on the Qt thread — for good. It is skipped, and the
+    /// real entry beside it is still offered.
+    #[test]
+    fn a_fifo_named_like_an_entry_neither_blocks_nor_hides_the_others() {
+        let dir = std::env::temp_dir().join(format!("siderita-apps-fifo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mk dir");
+        std::fs::write(dir.join("firefox.desktop"), FIREFOX).expect("write entry");
+        let made = std::process::Command::new("mkfifo")
+            .arg(dir.join("trampa.desktop"))
+            .status()
+            .expect("run mkfifo");
+        assert!(made.success());
+
+        let apps = super::apps_in(
+            std::slice::from_ref(&dir),
+            "text/html",
+            &celestina_core::CancellationToken::new(),
+        )
+        .expect("not cancelled");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            apps,
+            vec![super::DesktopApp {
+                id: "firefox.desktop".to_owned(),
+                name: "Firefox".to_owned(),
+            }]
+        );
     }
 
     #[test]

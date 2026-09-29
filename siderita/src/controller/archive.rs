@@ -47,6 +47,13 @@ pub(crate) struct Pending {
     total: usize,
 }
 
+impl Pending {
+    /// The job this parked batch holds in the register, if it was given one.
+    pub(crate) fn job(&self) -> Option<u64> {
+        self.job
+    }
+}
+
 impl qobject::SideritaController {
     /// Whether the entry `key` names is an archive this domain can extract,
     /// decided by its bytes and never by its name — the same rule content
@@ -77,45 +84,61 @@ impl qobject::SideritaController {
         any
     }
 
-    /// The file name the compress dialog starts with for this selection and
-    /// format: one entry keeps its own stem, several take the folder's name, and
-    /// a name already taken is stepped past — so the suggested name never asks a
-    /// person to accept overwriting something.
+    /// Composes the file name the compress dialog offers for this selection
+    /// and format into `archive_suggestion`: one entry keeps its own stem,
+    /// several take the folder's name, and a name already taken is stepped
+    /// past — so the suggested name never asks a person to accept overwriting
+    /// something.
     ///
     /// Composed here rather than in QML because it is a *name on disk*: it is
     /// answered from the bytes of the entries and of the folder, which QML never
-    /// takes apart.
-    pub fn archive_suggested_name(&self, keys: &QStringList, format: &QString) -> QString {
-        let Some(format) = Format::from_token(&format.to_string()) else {
-            return QString::default();
+    /// takes apart. Whether a name is taken is asked on a reader, since the
+    /// folder may be a mount that stopped answering; only the answer to the
+    /// latest request is published.
+    pub fn suggest_archive_name(mut self: Pin<&mut Self>, keys: &QStringList, format: &QString) {
+        let (Some(format), Ok(paths), Some(folder)) = (
+            Format::from_token(&format.to_string()),
+            crate::pathkey::decode_list(keys),
+            self.rust().history.current().map(Path::to_path_buf),
+        ) else {
+            // Nothing to suggest for this request, and an earlier one still
+            // walking must not answer for it.
+            self.as_mut()
+                .rust_mut()
+                .get_mut()
+                .archive_suggestions
+                .retire();
+            return;
         };
-        let Ok(paths) = crate::pathkey::decode_list(keys) else {
-            return QString::default();
+        // Cleared first, so the answer is a change even when it repeats the
+        // last one — the dialog fills its field on that change.
+        self.as_mut().set_archive_suggestion(QString::default());
+        let Ok(generation) = self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .archive_suggestions
+            .issue()
+        else {
+            return;
         };
-        let Some(folder) = self.rust().history.current() else {
-            return QString::default();
-        };
-        let fallback = folder
-            .file_name()
-            .map(OsStr::to_os_string)
-            .unwrap_or_else(|| OsString::from("archivos"));
-        let stem = siderita_archive::default_stem(&paths, &fallback);
-
-        let mut name = stem.to_os_string();
-        name.push(".");
-        name.push(format.extension());
-        if std::fs::symlink_metadata(folder.join(&name)).is_ok() {
-            // The suggestion names an archive file, so the marker keeps its
-            // `.zip` / `.tar.gz` where a person expects to read it.
-            let freed = siderita_ops::next_available(
-                folder,
-                &name,
-                "nuevo",
-                siderita_ops::NameShape::Extension(format.extension()),
-            );
-            name = freed.file_name().map(OsStr::to_os_string).unwrap_or(name);
-        }
-        QString::from(name.to_string_lossy().as_ref())
+        let qt = self.qt_thread();
+        let _ = super::jobs::spawn_reader(move || {
+            let name = suggested_name(&paths, &folder, format);
+            let _ = qt.queue(move |mut controller| {
+                if controller
+                    .as_mut()
+                    .rust_mut()
+                    .get_mut()
+                    .archive_suggestions
+                    .accept(generation)
+                {
+                    controller
+                        .as_mut()
+                        .set_archive_suggestion(QString::from(name.to_string_lossy().as_ref()));
+                }
+            });
+        });
     }
 
     /// Extracts every archive in `keys` into the folder being shown.
@@ -217,7 +240,7 @@ impl qobject::SideritaController {
         };
         let qt = self.qt_thread();
 
-        std::thread::spawn(move || {
+        self.as_mut().run_job(job, move || {
             let Pending {
                 job: _,
                 archives,
@@ -277,7 +300,7 @@ impl qobject::SideritaController {
                         let _ = qt.queue(move |controller| {
                             controller.ask_for_password(waiting, name, tried);
                         });
-                        return;
+                        return super::jobs::JobEnd::Parked;
                     }
                     Err(error) => failures.push(report(archive, &error)),
                 }
@@ -288,6 +311,7 @@ impl qobject::SideritaController {
             let _ = qt.queue(move |controller| {
                 controller.finish_archive_op(job, total, failures, skipped, cancelled);
             });
+            super::jobs::JobEnd::Done
         });
     }
 
@@ -364,7 +388,7 @@ impl qobject::SideritaController {
         );
         let qt = self.qt_thread();
 
-        std::thread::spawn(move || {
+        self.as_mut().run_job(job, move || {
             let total = sources.len();
             announce(&qt, job, 0, &destination);
             let mut on_progress = throttled(&qt, job, "comprimidos", 0);
@@ -384,6 +408,7 @@ impl qobject::SideritaController {
             let _ = qt.queue(move |controller| {
                 controller.finish_archive_op(job, total, failures, Vec::new(), cancelled);
             });
+            super::jobs::JobEnd::Done
         });
     }
 
@@ -419,14 +444,35 @@ impl qobject::SideritaController {
         let total = total.max(reported.len());
         self.as_mut().finish_batch(total, &reported);
         if reported.is_empty() && cancelled {
-            self.as_mut().push_notice(
-                "Operación cancelada",
-                "circle-stop",
-                super::notices::NoticeTone::Info,
-                false,
-            );
+            self.as_mut().notice_cancelled();
         }
     }
+}
+
+/// The archive name for `paths` in `folder`, stepped past a name that is
+/// taken. Blocking: readers only.
+fn suggested_name(paths: &[PathBuf], folder: &Path, format: Format) -> OsString {
+    let fallback = folder
+        .file_name()
+        .map(OsStr::to_os_string)
+        .unwrap_or_else(|| OsString::from("archivos"));
+    let stem = siderita_archive::default_stem(paths, &fallback);
+
+    let mut name = stem.to_os_string();
+    name.push(".");
+    name.push(format.extension());
+    if std::fs::symlink_metadata(folder.join(&name)).is_ok() {
+        // The suggestion names an archive file, so the marker keeps its
+        // `.zip` / `.tar.gz` where a person expects to read it.
+        let freed = siderita_ops::next_available(
+            folder,
+            &name,
+            "nuevo",
+            siderita_ops::NameShape::Extension(format.extension()),
+        );
+        name = freed.file_name().map(OsStr::to_os_string).unwrap_or(name);
+    }
+    name
 }
 
 /// One extraction of one archive, weighed and reported like any other.

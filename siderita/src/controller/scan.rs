@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use siderita_core::{DirectorySnapshot, EntryKind, PublishOutcome, ScanResult, WatchState};
+use siderita_core::{
+    DirectorySnapshot, EntryKind, PublishOutcome, ScanResult, SnapshotFreshness, WatchState,
+};
 use siderita_qt::RowKind;
 
 use super::qobject;
@@ -71,12 +73,46 @@ impl qobject::SideritaController {
     /// "Leyendo carpeta…" loading state — the new snapshot simply replaces the old
     /// when it lands. This is what keeps an actively-changing folder from
     /// flickering.
+    ///
+    /// It never overrides something a person asked for. A navigation still
+    /// waiting on its scan, or any scan that is not itself quiet, is left
+    /// alone: the watch still names the folder being left, and a rescan of it
+    /// used to cancel the navigation and snap the path bar back — for good,
+    /// when the folder being left kept changing faster than the new one read.
+    /// The change is not lost: the watch stays stale, and the landing or the
+    /// rollback of that navigation settles it — a scan of this same folder
+    /// that began before the change lands still stale, and is followed by one
+    /// more quiet rescan.
     pub(crate) fn refresh_quiet(mut self: Pin<&mut Self>) {
+        let busy = {
+            let state = self.rust();
+            state.pending_nav.is_some() || (state.coordinator.in_flight() && !state.quiet_scan)
+        };
+        if busy {
+            return;
+        }
         let Some(location) = self.rust().history.current().map(Path::to_path_buf) else {
             return;
         };
-        self.as_mut().rust_mut().get_mut().pending_nav = None;
         self.as_mut().request_scan_inner(location, true);
+    }
+
+    /// Rescans the folder on screen if a change reached it while it could not
+    /// be acted on: while a job was writing, while a navigation was pending, or
+    /// after a scan of it had begun. While a job still writes it waits, as
+    /// `on_fs_change` does; the end of the jobs replays it.
+    pub(crate) fn replay_deferred_change(mut self: Pin<&mut Self>) {
+        if *self.op_running() {
+            return;
+        }
+        let stale = self
+            .rust()
+            .watch
+            .as_ref()
+            .is_some_and(|watch| watch.freshness() == SnapshotFreshness::Stale);
+        if stale {
+            self.as_mut().refresh_quiet();
+        }
     }
 
     /// Scans a navigation's destination and holds the history change back until
@@ -107,7 +143,14 @@ impl qobject::SideritaController {
                 // Remembered for the answer: only the scan in flight can be
                 // published, so this is the one `handle_scan_result` will hear
                 // from, and a quiet one may not write a banner.
-                self.as_mut().rust_mut().get_mut().quiet_scan = quiet;
+                let state = self.as_mut().rust_mut();
+                let state = state.get_mut();
+                state.quiet_scan = quiet;
+                // A change to the watched folder from here on may postdate
+                // this scan's read; the watch remembers it for the landing.
+                if let Some(watch) = state.watch.as_mut() {
+                    watch.begin_rescan(&destination);
+                }
                 request
             }
             Err(error) => {
@@ -201,6 +244,10 @@ impl qobject::SideritaController {
                 // After the projection, so a folder that remembers a different
                 // sort re-projects once with it rather than twice on arrival.
                 self.as_mut().apply_folder_view();
+                // A change that reached this folder after the scan began may
+                // not be in what just landed; the watch is still stale then,
+                // and one more quiet rescan picks it up.
+                self.as_mut().replay_deferred_change();
             }
             Err(error) => {
                 let is_current = self
@@ -465,6 +512,9 @@ impl qobject::SideritaController {
         if let Some(previous_location) = previous_location {
             self.as_mut().publish_location(&previous_location);
             self.as_mut().update_navigation_state();
+            // The folder never left the screen; a change it received while
+            // the navigation was pending is still owed a rescan.
+            self.as_mut().replay_deferred_change();
         }
     }
 
@@ -506,15 +556,6 @@ impl qobject::SideritaController {
         let Some(watched) = self.rust().watched.clone() else {
             return;
         };
-        // A running paste/move is itself the source of these writes, and it
-        // already does its own refresh() when it finishes (finish_batch). Quiet
-        // rescans in the meantime reset the entry model (beginResetModel), which
-        // tears down every delegate — killing the in-flight right-click gesture
-        // and starving the progress panel's own queued Qt-thread updates for
-        // nothing, since the batch's own refresh will show the final state.
-        if !degraded && *self.op_running() {
-            return;
-        }
         let became_stale = {
             let state = self.as_mut().rust_mut();
             let state = state.get_mut();
@@ -529,6 +570,16 @@ impl qobject::SideritaController {
         };
         if degraded {
             self.as_mut().set_watch_degraded(true);
+        }
+        // While any job writes, the rescan waits: quiet rescans in the middle
+        // of a paste reset the entry model, which tears down every delegate —
+        // killing the in-flight right-click gesture and starving the progress
+        // surface's own queued updates. The change is recorded above, though,
+        // and `publish_jobs` replays it in every tab the moment the register
+        // empties; it used to be dropped, leaving every tab stale until some
+        // unrelated event arrived.
+        if !degraded && *self.op_running() {
+            return;
         }
         if became_stale {
             // Quiet: a watched folder changing must never flash the loading
@@ -701,7 +752,7 @@ mod tests {
         let path = PathBuf::from(OsStr::from_bytes(b"/home/u/informe#3.pdf"));
         assert_eq!(
             format!("file://{}", pathkey::encode(&path)),
-            crate::dbus::path_to_uri(&path)
+            celestina_core::file_uri::from_path(&path).expect("an absolute path")
         );
     }
 }

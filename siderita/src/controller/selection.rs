@@ -8,7 +8,7 @@
 use core::pin::Pin;
 use std::path::Path;
 
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use siderita_qt::RowKind;
 
@@ -253,7 +253,9 @@ impl qobject::SideritaController {
     /// it has one owner.
     pub fn path_uri(&self, key: &QString) -> QString {
         pathkey::decode(key)
-            .map(|path| QString::from(crate::dbus::path_to_uri(&path).as_str()))
+            .ok()
+            .and_then(|path| celestina_core::file_uri::from_path(&path))
+            .map(|uri| QString::from(uri.as_str()))
             .unwrap_or_default()
     }
 
@@ -308,36 +310,46 @@ impl qobject::SideritaController {
         self.as_mut().request_nav_scan(PendingNav::To(parent));
     }
 
-    /// A lossy, capped sample for the read-only quick-look pane.
+    /// Reads a lossy, capped sample of `key` for the read-only quick-look
+    /// pane into `preview_text`, which is empty until it lands — and stays
+    /// empty for a binary file, or one that cannot be read, which the overlay
+    /// reads as "no text preview". An empty key only clears it.
     ///
     /// This does not decide whether anything is editable and must never be
     /// asked to: `grafita-core` classifies content by bytes and encoding on a
     /// worker, and its answer is what routes `Space` to the editor. What
     /// reaches quick-look has already been refused as editable, so this only
     /// has to render something legible from it.
-    pub fn preview_text(&self, key: &QString) -> QString {
-        // Cap the read: a preview only needs the first screenful or two, and this
-        // runs on the GUI thread (the user pressed space), so it must stay cheap.
-        const MAX_BYTES: usize = 128 * 1024;
+    ///
+    /// The read runs on a reader. It used to run inside the Qt thread's
+    /// binding, where a file on a phone or share that stopped answering froze
+    /// the window on Space; only the sample of the latest request is shown.
+    pub fn request_preview_text(mut self: Pin<&mut Self>, key: &QString) {
+        self.as_mut().set_preview_text(QString::default());
         let Ok(path) = pathkey::decode(key) else {
-            return QString::default();
+            self.as_mut().rust_mut().get_mut().previews.retire();
+            return;
         };
-        let Ok(file) = std::fs::File::open(&path) else {
-            return QString::default();
+        let Ok(generation) = self.as_mut().rust_mut().get_mut().previews.issue() else {
+            return;
         };
-        use std::io::Read;
-        let mut buf = Vec::new();
-        if file.take(MAX_BYTES as u64).read_to_end(&mut buf).is_err() {
-            return QString::default();
-        }
-        // A NUL byte in the sample is the cheap, reliable "this is binary" tell —
-        // real text files don't carry them, most binaries do within 128 KiB.
-        if buf.contains(&0) {
-            return QString::default();
-        }
-        // Lossy so one stray non-UTF-8 byte shows a � rather than blanking the
-        // whole preview; genuinely binary content was already rejected above.
-        QString::from(String::from_utf8_lossy(&buf).as_ref())
+        let qt = self.qt_thread();
+        let _ = super::jobs::spawn_reader(move || {
+            let sample = text_sample(&path).unwrap_or_default();
+            let _ = qt.queue(move |mut controller| {
+                if controller
+                    .as_mut()
+                    .rust_mut()
+                    .get_mut()
+                    .previews
+                    .accept(generation)
+                {
+                    controller
+                        .as_mut()
+                        .set_preview_text(QString::from(sample.as_str()));
+                }
+            });
+        });
     }
 
     /// Opens the properties panel for `key`: the metadata is gathered inline
@@ -404,4 +416,30 @@ fn path_info_lines(path: &Path, is_dir: bool, date: Option<String>) -> QStringLi
         lines.push(QString::from(date.as_str()));
     }
     lines.into_iter().collect()
+}
+
+/// The first screenful or two of a regular file, decoded lossily, or `None`
+/// for a binary file or one that cannot be read. Blocking: readers only.
+fn text_sample(path: &std::path::Path) -> Option<String> {
+    use std::io::Read;
+    // A preview only needs the first screenful or two.
+    const MAX_BYTES: u64 = 128 * 1024;
+    // Opening a FIFO would wait for a writer that may never come.
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut sample = Vec::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(MAX_BYTES)
+        .read_to_end(&mut sample)
+        .ok()?;
+    // A NUL byte in the sample is the cheap, reliable "this is binary" tell —
+    // real text files don't carry them, most binaries do within 128 KiB.
+    if sample.contains(&0) {
+        return None;
+    }
+    // Lossy so one stray non-UTF-8 byte shows a replacement character rather
+    // than blanking the whole preview.
+    Some(String::from_utf8_lossy(&sample).into_owned())
 }

@@ -188,6 +188,8 @@ pub mod qobject {
         #[qproperty(QString, prop_accessed)]
         #[qproperty(QString, prop_symlink)]
         #[qproperty(bool, prop_is_dir)]
+        #[qproperty(QString, preview_text)]
+        #[qproperty(QString, archive_suggestion)]
         #[qproperty(bool, search_active)]
         #[qproperty(bool, search_running)]
         #[qproperty(QString, search_query)]
@@ -323,11 +325,9 @@ pub mod qobject {
         #[qinvokable]
         fn reveal_path(self: Pin<&mut SideritaController>, path: &QString);
 
-        /// A bounded, read-only text preview for the quick-look overlay,
-        /// decoded lossily. Empty for a binary file — or one it cannot read —
-        /// which the overlay reads as "no text preview".
+        /// Reads `key`'s quick-look text sample into `preview_text`, off the Qt thread.
         #[qinvokable]
-        fn preview_text(self: &SideritaController, path: &QString) -> QString;
+        fn request_preview_text(self: Pin<&mut SideritaController>, key: &QString);
 
         #[qinvokable]
         fn add_bookmark(self: Pin<&mut SideritaController>, path: &QString);
@@ -397,14 +397,13 @@ pub mod qobject {
         #[qinvokable]
         fn are_archives(self: &SideritaController, keys: &QStringList) -> bool;
 
-        /// The file name the compress dialog opens with for this selection and
-        /// container format, already stepped past any name that is taken.
+        /// Composes the compress dialog's name into `archive_suggestion`, off the Qt thread.
         #[qinvokable]
-        fn archive_suggested_name(
-            self: &SideritaController,
+        fn suggest_archive_name(
+            self: Pin<&mut SideritaController>,
             keys: &QStringList,
             format: &QString,
-        ) -> QString;
+        );
 
         /// Extracts every archive in `keys` into the folder being shown.
         #[qinvokable]
@@ -719,7 +718,7 @@ mod display;
 mod fileops;
 mod find;
 mod glyphs;
-mod jobs;
+pub(crate) mod jobs;
 mod keys;
 mod marks;
 mod mounts;

@@ -177,6 +177,11 @@ pub struct SideritaPlayerRust {
 
     commands: Option<Sender<Command>>,
     worker: Option<JoinHandle<()>>,
+    /// Which session may still publish a render handle. Bumped by every open
+    /// and every teardown, so a handle queued by a session that has since been
+    /// closed — its `mpv_handle` already destroyed — is never handed to the
+    /// surface.
+    generation: u64,
 }
 
 impl qobject::SideritaPlayer {
@@ -235,9 +240,11 @@ impl qobject::SideritaPlayer {
 
         let (sender, receiver) = mpsc::channel::<Command>();
         let qt_thread = self.qt_thread();
+        let generation = self.rust().generation.wrapping_add(1);
+        self.as_mut().rust_mut().generation = generation;
         let worker = std::thread::Builder::new()
             .name("siderita-player".to_owned())
-            .spawn(move || run_session(&path, kind, &receiver, &qt_thread));
+            .spawn(move || run_session(&path, kind, generation, &receiver, &qt_thread));
 
         match worker {
             Ok(handle) => {
@@ -291,8 +298,15 @@ impl qobject::SideritaPlayer {
             return;
         }
         if *self.render_handle() != 0 {
-            self.as_mut().set_render_handle(0);
+            // Marked before the handle is cleared, not after (FLU-12, the
+            // ordering Fluorita's own player already keeps). A surface that
+            // never rendered answers `contextReleased` synchronously from
+            // inside the property write; marked after, that acknowledgement
+            // reached a player that did not yet know it was closing, was
+            // ignored, and `closing` then stuck — parking every later preview
+            // until Siderita restarted.
             self.as_mut().rust_mut().closing = true;
+            self.as_mut().set_render_handle(0);
             // The surface answers from the render thread; `surface_released`
             // finishes the teardown.
             return;
@@ -320,6 +334,9 @@ impl qobject::SideritaPlayer {
     /// Stops the worker and joins it. Synchronous by design: past this point no
     /// decoder of the previous item is alive.
     fn stop_worker(mut self: core::pin::Pin<&mut Self>) {
+        // Whatever the stopped session queued is stale from here on.
+        let retired = self.rust().generation.wrapping_add(1);
+        self.as_mut().rust_mut().generation = retired;
         if let Some(commands) = self.as_mut().rust_mut().commands.take() {
             let _ = commands.send(Command::Stop);
         }
@@ -397,6 +414,7 @@ fn milliseconds(duration: Duration) -> i32 {
 fn run_session(
     path: &std::path::Path,
     kind: MediaKind,
+    session_generation: u64,
     commands: &mpsc::Receiver<Command>,
     qt_thread: &cxx_qt::CxxQtThread<qobject::SideritaPlayer>,
 ) {
@@ -434,7 +452,15 @@ fn run_session(
 
     if let Some(handle) = session.render_handle() {
         let address = handle.value();
-        let _ = qt_thread.queue(move |mut player| player.as_mut().set_render_handle(address));
+        let _ = qt_thread.queue(move |mut player| {
+            // The close that ended this session may already have run: it joins
+            // the worker, which destroys the instance, and this closure was
+            // queued before either. Publishing now would hand the surface the
+            // address of a freed `mpv_handle` (FLU-12).
+            if player.rust().generation == session_generation {
+                player.as_mut().set_render_handle(address);
+            }
+        });
     }
 
     loop {

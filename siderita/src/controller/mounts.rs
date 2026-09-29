@@ -1,8 +1,9 @@
 //! Mountable devices in the sidebar: removable volumes (UDisks2) and phones
-//! (Magnetita). Reading each list is inline and quick; mounting can block on a
-//! polkit prompt so it runs on a worker thread and reports back on the Qt
-//! thread. Each list also arms a once-per-controller hotplug watch, and the user
-//! can hide devices they never want to see.
+//! (Magnetita). Both lists come from the process-wide device model
+//! (`crate::devicemodel`), whose workers own the bus; this tab only reads what
+//! the model holds. Mounting can block on a polkit prompt so it runs on a
+//! worker thread and reports back on the Qt thread, and the user can hide
+//! devices they never want to see.
 
 use core::pin::Pin;
 use std::path::Path;
@@ -44,11 +45,21 @@ fn mount_key(mount: &str) -> QString {
 }
 
 impl qobject::SideritaController {
-    /// Reads the removable volumes UDisks2 reports and publishes them to the
-    /// sidebar (parallel name / device / mount-point lists), keeping the full
-    /// records for mount / unmount by index. Read-only and quick — runs inline.
+    /// Publishes the removable volumes UDisks2 reports to the sidebar (parallel
+    /// name / device / mount-point lists), keeping the full records for mount /
+    /// unmount by index.
+    ///
+    /// No bus call happens here. The listing lives in the process-wide device
+    /// model (`crate::devicemodel`), which a worker keeps current; the first
+    /// call subscribes this tab to it, and every later one — the model's own
+    /// wake-up after a hotplug, or a hide in this tab — only re-reads what the
+    /// model holds.
     pub fn load_volumes(mut self: Pin<&mut Self>) {
-        let mut volumes = match crate::volumes::list_volumes() {
+        self.as_mut().subscribe_devices();
+        let Some(listed) = crate::devicemodel::volumes() else {
+            return;
+        };
+        let mut volumes = match listed {
             Ok(volumes) => volumes,
             Err(error) => {
                 self.as_mut().set_op_error(QString::from(error.as_str()));
@@ -82,40 +93,26 @@ impl qobject::SideritaController {
         self.as_mut().set_volume_names(names);
         self.as_mut().set_volume_devices(devices);
         self.as_mut().set_volume_mounts(mounts);
-
-        // First load also arms the hotplug watch, so later plug/unplug events
-        // refresh the list on their own.
-        self.as_mut().start_volume_watch();
     }
 
-    /// Starts, once per controller, a background thread that watches UDisks2 for
-    /// a device being added or removed and reloads the list on the Qt thread —
-    /// so plugging or unplugging a drive updates "Dispositivos" without a manual
-    /// refresh. Best-effort: an unavailable bus just logs and gives up.
-    fn start_volume_watch(mut self: Pin<&mut Self>) {
-        if self.rust().volume_watch_started {
+    /// Subscribes this tab to the device model, once. The model starts its two
+    /// workers the first time any tab asks.
+    fn subscribe_devices(mut self: Pin<&mut Self>) {
+        if self.rust().devices_subscribed {
             return;
         }
-        self.as_mut().rust_mut().get_mut().volume_watch_started = true;
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let result = crate::volumes::watch_changes(move || {
-                let _ = qt.queue(|controller: Pin<&mut qobject::SideritaController>| {
-                    controller.load_volumes();
-                });
-            });
-            if let Err(error) = result {
-                eprintln!("Siderita: watch de dispositivos no disponible: {error}");
-            }
-        });
+        self.as_mut().rust_mut().get_mut().devices_subscribed = true;
+        crate::devicemodel::subscribe(self.qt_thread());
     }
 
-    /// Reads the phones Magnetita reports and publishes them to the sidebar
-    /// (parallel name / type / mount-path lists), keeping the records for
-    /// open-by-index. Read-only and quick — runs inline. Also arms the watch so
-    /// later connect / mount / leave events refresh on their own.
+    /// Publishes the phones Magnetita reports to the sidebar (parallel name /
+    /// type / mount-path lists), keeping the records for open-by-index. Like
+    /// the volumes, read from the device model and never from the bus.
     pub fn load_phones(mut self: Pin<&mut Self>) {
-        let phones = crate::devices::list_devices().unwrap_or_default();
+        self.as_mut().subscribe_devices();
+        let Some(phones) = crate::devicemodel::phones() else {
+            return;
+        };
 
         let names: QStringList = phones
             .iter()
@@ -136,30 +133,6 @@ impl qobject::SideritaController {
         self.as_mut().set_phone_mounts(mounts);
         let next_revision = self.phone_revision().wrapping_add(1);
         self.as_mut().set_phone_revision(next_revision);
-
-        self.as_mut().start_phone_watch();
-    }
-
-    /// Starts, once per controller, a thread that watches Magnetita's `Changed`
-    /// signal and reloads the phone list on the Qt thread — so a phone
-    /// connecting, mounting or leaving updates "Dispositivos" without a manual
-    /// refresh. Best-effort: an unavailable bus just logs and gives up.
-    fn start_phone_watch(mut self: Pin<&mut Self>) {
-        if self.rust().phone_watch_started {
-            return;
-        }
-        self.as_mut().rust_mut().get_mut().phone_watch_started = true;
-        let qt = self.qt_thread();
-        std::thread::spawn(move || {
-            let result = crate::devices::watch_changes(move || {
-                let _ = qt.queue(|controller: Pin<&mut qobject::SideritaController>| {
-                    controller.load_phones();
-                });
-            });
-            if let Err(error) = result {
-                eprintln!("Siderita: watch de Magnetita no disponible: {error}");
-            }
-        });
     }
 
     /// Opens the phone at `index` by navigating to its mount path. A phone that
@@ -213,7 +186,7 @@ impl qobject::SideritaController {
     /// Ask a connected phone to ring through Magnetita's stable D-Bus API.
     pub fn ring_phone(&self, index: i32) {
         if let Some(phone) = self.connected_phone(index) {
-            crate::devices::ring(&phone.id);
+            crate::devicemodel::ring(&phone.id);
         }
     }
 
@@ -224,7 +197,7 @@ impl qobject::SideritaController {
             return;
         }
         if let Some(phone) = self.connected_phone(index) {
-            crate::devices::media_action(&phone.id, &action);
+            crate::devicemodel::media_action(&phone.id, &action);
         }
     }
 
@@ -252,7 +225,7 @@ impl qobject::SideritaController {
             // The path goes out as bytes, not as display text: `send_file` calls
             // Magnetita's `SendFileUri` with the percent-encoded `file://` URI.
             // This was the last verb that let a lossy path leave the process.
-            crate::devices::send_file(&phone.id, &path);
+            crate::devicemodel::send_file(&phone.id, path);
         }
     }
 
@@ -283,7 +256,7 @@ impl qobject::SideritaController {
                 match result {
                     Ok(_) => {
                         controller.as_mut().settle_notice(notice, "Disco montado");
-                        controller.as_mut().load_volumes();
+                        crate::devicemodel::reload_volumes();
                     }
                     // The failure already speaks through `op_error`, which the
                     // column renders above this notice; repeating it here would
@@ -329,7 +302,7 @@ impl qobject::SideritaController {
                         controller
                             .as_mut()
                             .settle_notice(notice, "Disco desmontado");
-                        controller.as_mut().load_volumes();
+                        crate::devicemodel::reload_volumes();
                     }
                     Err(error) => {
                         controller.as_mut().drop_notice(notice);
@@ -383,7 +356,7 @@ impl qobject::SideritaController {
                 controller.as_mut().drop_notice(notice);
                 match result {
                     Ok(mount_point) => {
-                        controller.as_mut().load_volumes();
+                        crate::devicemodel::reload_volumes();
                         if !mount_point.is_empty() {
                             controller
                                 .as_mut()

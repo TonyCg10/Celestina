@@ -21,6 +21,7 @@ Item {
         rotation: parent.collapsed ? -90 : 0
 
         Behavior on rotation {
+            enabled: !CelestinaTheme.reducedMotion
             NumberAnimation {
                 duration: CelestinaTheme.motionFast
                 easing.type: CelestinaTheme.easeStandard

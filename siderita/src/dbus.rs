@@ -74,7 +74,12 @@ struct FileManager1 {
 #[zbus::interface(name = "org.freedesktop.FileManager1")]
 impl FileManager1 {
     fn show_folders(&self, uris: Vec<String>, _startup_id: String) {
-        self.request_folders(uris.iter().filter_map(|uri| uri_to_path(uri)));
+        // Any session peer may call this; a URI naming another host, or one
+        // carrying a query or a fragment, names no local folder.
+        self.request_folders(
+            uris.iter()
+                .filter_map(|uri| celestina_core::file_uri::to_path(uri).ok()),
+        );
     }
 
     fn show_items(&self, uris: Vec<String>, _startup_id: String) {
@@ -111,121 +116,34 @@ fn serve(qt: cxx_qt::CxxQtThread<qobject::FileManager1Service>) -> zbus::Result<
     }
 }
 
-/// The containing folder of a `file://` item URI.
+/// The containing folder of a `file://` item URI naming a local file.
 fn parent_folder(uri: &str) -> Option<PathBuf> {
-    uri_to_path(uri).and_then(|path| path.parent().map(Path::to_path_buf))
-}
-
-/// A local path as a `file://` URI, percent-encoding by bytes everything a URI
-/// cannot carry raw — `#` and `?` included, which is why this is not
-/// `encodeURI` in QML: a drag of `informe#3.pdf` used to hand the receiving
-/// application a URI that truncated at the `#`.
-///
-/// The exact inverse of [`uri_to_path`], and the only spelling in the app: the
-/// portal's answers and the drag payload must agree, because a file chooser and
-/// a drop can hand the same name to the same application.
-pub(crate) fn path_to_uri(path: &Path) -> String {
-    format!(
-        "file://{}",
-        celestina_core::percent::encode(&celestina_core::percent::path_bytes(path))
-    )
-}
-
-/// Converts a `file://` URI to a local path, percent-decoded byte-for-byte so a
-/// non-UTF-8 path round-trips. Returns `None` for a non-file URI. Shared with the
-/// path bar's `file://` handling.
-pub(crate) fn uri_to_path(uri: &str) -> Option<PathBuf> {
-    let rest = uri.strip_prefix("file://")?;
-    // Drop an optional authority (host) before the path's leading '/'.
-    let path = match rest.find('/') {
-        Some(0) => rest,
-        Some(index) => &rest[index..],
-        None => return None,
-    };
-    let bytes = celestina_core::percent::decode(path);
-    if bytes.is_empty() {
-        return None;
-    }
-    Some(celestina_core::percent::path_from_bytes(&bytes))
+    celestina_core::file_uri::to_path(uri)
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parent_folder, path_to_uri, uri_to_path};
-    use std::path::{Path, PathBuf};
-
-    #[test]
-    fn paths_become_percent_encoded_file_uris() {
-        assert_eq!(
-            path_to_uri(Path::new("/home/u/a.txt")),
-            "file:///home/u/a.txt"
-        );
-        assert_eq!(
-            path_to_uri(Path::new("/home/u/a b.txt")),
-            "file:///home/u/a%20b.txt"
-        );
-        // The bug this codec exists to close: `#` and `?` are URI syntax, and a
-        // consumer handed them raw reads the name as ending before them.
-        assert_eq!(
-            path_to_uri(Path::new("/home/u/informe#3.pdf")),
-            "file:///home/u/informe%233.pdf"
-        );
-        assert_eq!(
-            path_to_uri(Path::new("/home/u/q?.txt")),
-            "file:///home/u/q%3F.txt"
-        );
-        // Non-ASCII is encoded byte by byte.
-        assert_eq!(
-            path_to_uri(Path::new("/home/u/\u{65e5}")),
-            "file:///home/u/%E6%97%A5"
-        );
-    }
-
-    #[test]
-    fn a_uri_round_trips_between_the_two_halves() {
-        for path in [
-            "/home/u/some dir/x.txt",
-            "/home/u/informe#3.pdf",
-            "/home/u/\u{65e5}\u{672c}.txt",
-        ] {
-            assert_eq!(
-                uri_to_path(&path_to_uri(Path::new(path))),
-                Some(PathBuf::from(path))
-            );
-        }
-    }
-
-    #[test]
-    fn decodes_a_plain_file_uri() {
-        assert_eq!(
-            uri_to_path("file:///home/toni/nota.txt"),
-            Some(PathBuf::from("/home/toni/nota.txt"))
-        );
-    }
-
-    #[test]
-    fn decodes_percent_escapes_and_an_authority() {
-        assert_eq!(
-            uri_to_path("file:///home/toni/a%20b"),
-            Some(PathBuf::from("/home/toni/a b"))
-        );
-        // A host authority before the path is dropped.
-        assert_eq!(
-            uri_to_path("file://localhost/etc/hosts"),
-            Some(PathBuf::from("/etc/hosts"))
-        );
-    }
-
-    #[test]
-    fn rejects_a_non_file_uri() {
-        assert!(uri_to_path("http://example.com/x").is_none());
-        assert!(uri_to_path("trash:///").is_none());
-    }
+    use super::parent_folder;
+    use std::path::PathBuf;
 
     #[test]
     fn parent_folder_of_an_item_uri() {
         assert_eq!(
             parent_folder("file:///home/toni/nota.txt"),
+            Some(PathBuf::from("/home/toni"))
+        );
+    }
+
+    /// SID-18: `FileManager1` answers any session peer, and another host's
+    /// file used to open the local path of the same name.
+    #[test]
+    fn an_item_on_another_host_has_no_local_folder() {
+        assert_eq!(parent_folder("file://otherhost/etc/passwd"), None);
+        assert_eq!(parent_folder("file:///home/toni/nota.txt#x"), None);
+        assert_eq!(
+            parent_folder("file://localhost/home/toni/nota.txt"),
             Some(PathBuf::from("/home/toni"))
         );
     }

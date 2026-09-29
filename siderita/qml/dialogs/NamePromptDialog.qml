@@ -6,9 +6,12 @@ import org.celestina.siderita 1.0
     // ── Name prompt (new folder / new file / rename) ─────────────────
 CelestinaModalLayer {
     id: namePrompt
-    property var controller
-    property var owner
-    property var backdrop   // mainPanel: el fondo que difumina el cristal
+    required property SideritaController controller
+    // The surface the card sizes itself against, and gives focus back to. Its
+    // `focusView()` is the window's own, which no QML type names.
+    required property var owner
+    // What the glass samples behind the card (the main panel).
+    required property Item backdrop
     anchors.fill: parent
     z: 60
     onDismissRequested: namePrompt.dismiss()
@@ -37,7 +40,7 @@ CelestinaModalLayer {
     function dismiss() {
         namePrompt.shown = false
         promptField.text = ""
-        owner.focusView()
+        namePrompt.owner.focusView()
     }
     function confirm() {
         const value = promptField.text
@@ -46,20 +49,24 @@ CelestinaModalLayer {
             return
         }
         if (namePrompt.mode === "folder")
-            controller.newFolder(value)
+            namePrompt.controller.newFolder(value)
         else if (namePrompt.mode === "file")
-            controller.newFile(value)
+            namePrompt.controller.newFile(value)
         else
-            controller.renamePath(namePrompt.targetPath, value)
+            namePrompt.controller.renamePath(namePrompt.targetPath, value)
         namePrompt.dismiss()
     }
 
     GlassCard {
         anchors.centerIn: parent
-        width: Math.min(380, owner.width - 48)
+        width: Math.min(380, namePrompt.owner.width - 48)
         height: 142
         backdropSource: namePrompt.backdrop
         // (not transform-scaled — a scale transform desynced the glass backdrop)
+        // A modal like every other: assistive technology hears a dialog, named
+        // by the question it asks.
+        Accessible.role: Accessible.Dialog
+        Accessible.name: namePrompt.heading
 
         // Swallow clicks so they never reach the dismiss backdrop.
         MouseArea { anchors.fill: parent }

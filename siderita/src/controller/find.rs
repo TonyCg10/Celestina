@@ -52,6 +52,11 @@ impl qobject::SideritaController {
         if let Some(token) = self.as_mut().rust_mut().get_mut().search_cancel.take() {
             token.cancel();
         }
+        // This search supersedes every earlier one: whatever they find now
+        // lands on a generation nobody wants and is dropped.
+        let Ok(generation) = self.as_mut().rust_mut().get_mut().searches.issue() else {
+            return;
+        };
         let token = CancellationToken::new();
         self.as_mut().rust_mut().get_mut().search_cancel = Some(token.clone());
         self.as_mut()
@@ -63,20 +68,41 @@ impl qobject::SideritaController {
 
         const LIMIT: usize = 500;
         let qt = self.qt_thread();
-        std::thread::spawn(move || {
+        // Every outcome is handed back, even an empty stopped one: whether it
+        // is still wanted is the generation's question, and a stopped search
+        // that found nothing still has to take its "Buscando…" down.
+        let started = super::jobs::spawn_reader(move || {
             let outcome = crate::search::search(&root, &query, LIMIT, &token);
-            if token.is_cancelled() && outcome.hits.is_empty() {
-                // A search superseded before it found anything: drop it.
-                return;
-            }
             let _ = qt.queue(move |controller: Pin<&mut qobject::SideritaController>| {
-                controller.publish_search(outcome);
+                controller.publish_search(generation, outcome);
             });
         });
+        if let Err(error) = started {
+            eprintln!("Siderita: could not start the search thread: {error}");
+            self.as_mut().rust_mut().get_mut().searches.retire();
+            self.as_mut().set_search_running(false);
+            self.as_mut().set_search_summary(QString::default());
+        }
     }
 
-    /// Publishes a finished (or cancelled) search onto the Qt thread.
-    fn publish_search(mut self: Pin<&mut Self>, outcome: crate::search::SearchOutcome) {
+    /// Publishes a finished (or stopped) search onto the Qt thread, if it is
+    /// still the search a person is waiting for. A search closed while it
+    /// walked, or superseded by a newer query, used to land anyway and reopen
+    /// or flash its results.
+    fn publish_search(
+        mut self: Pin<&mut Self>,
+        generation: celestina_core::Generation,
+        outcome: crate::search::SearchOutcome,
+    ) {
+        if !self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .searches
+            .accept(generation)
+        {
+            return;
+        }
         let current = self.rust().history.current().map(Path::to_path_buf);
         let in_current = |hit: &crate::search::SearchHit| current.as_deref() == hit.path.parent();
 
@@ -170,6 +196,8 @@ impl qobject::SideritaController {
         );
     }
 
+    /// Stops the walk. What it found so far is still published, as a search
+    /// "detenida"; only leaving the results retires it.
     pub fn cancel_search(mut self: Pin<&mut Self>) {
         if let Some(token) = self.as_mut().rust_mut().get_mut().search_cancel.take() {
             token.cancel();
@@ -178,8 +206,10 @@ impl qobject::SideritaController {
 
     /// Leaves search without touching the view — the caller repaints (a folder
     /// reproject, or a navigation scan) once it has decided what to show next.
+    /// Unlike stopping a search, leaving it retires its answer too.
     pub(crate) fn exit_search(mut self: Pin<&mut Self>) {
         self.as_mut().cancel_search();
+        self.as_mut().rust_mut().get_mut().searches.retire();
         self.as_mut().rust_mut().get_mut().search_hits.clear();
         self.as_mut().set_search_running(false);
         self.as_mut().set_search_active(false);

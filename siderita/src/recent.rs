@@ -77,7 +77,7 @@ fn parse(content: &str) -> Vec<RecentItem> {
         let Some(href) = attribute(tag, "href") else {
             continue;
         };
-        let Some(path) = crate::dbus::uri_to_path(&href) else {
+        let Ok(path) = celestina_core::file_uri::to_path(&href) else {
             continue;
         };
         let stamp = attribute(tag, "visited")

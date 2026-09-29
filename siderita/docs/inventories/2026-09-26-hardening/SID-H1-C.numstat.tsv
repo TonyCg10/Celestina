@@ -1,0 +1,115 @@
+# SID-H1-C exact change inventory
+
+Base revision	339461d963fde18d69ea0e64430af1fb23be1a61
+Pathspec	celestina-rs/crates/siderita-core/src/coordinator.rs
+Pathspec	celestina-rs/crates/siderita-core/src/executor.rs
+Pathspec	celestina-rs/crates/siderita-core/src/lib.rs
+Pathspec	celestina-rs/crates/siderita-core/src/reply.rs
+Pathspec	celestina-rs/crates/siderita-core/src/watch.rs
+Pathspec	celestina-rs/crates/siderita-core/tests/latest_scan.rs
+Pathspec	celestina-rs/crates/siderita-embedded/src/pe.rs
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/README.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/cpp/siderita/thumbnailprovider.h
+Pathspec	siderita/cpp/thumbnailprovider.cpp
+Pathspec	siderita/docs/evidence/2026-09-26-app-threading.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-C.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/SizeRow.qml
+Pathspec	siderita/qml/components/folder/FolderWheelHandler.qml
+Pathspec	siderita/qml/components/folder/OperationRing.qml
+Pathspec	siderita/qml/components/sidebar/SidebarChevron.qml
+Pathspec	siderita/qml/dialogs/CompressDialog.qml
+Pathspec	siderita/qml/dialogs/NamePromptDialog.qml
+Pathspec	siderita/qml/dialogs/QuickLookView.qml
+Pathspec	siderita/src/apps.rs
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/controller/archive.rs
+Pathspec	siderita/src/controller/fileops.rs
+Pathspec	siderita/src/controller/find.rs
+Pathspec	siderita/src/controller/glyphs.rs
+Pathspec	siderita/src/controller/jobs.rs
+Pathspec	siderita/src/controller/marks.rs
+Pathspec	siderita/src/controller/mounts.rs
+Pathspec	siderita/src/controller/navigation.rs
+Pathspec	siderita/src/controller/scan.rs
+Pathspec	siderita/src/controller/selection.rs
+Pathspec	siderita/src/controller/shell.rs
+Pathspec	siderita/src/controller/state.rs
+Pathspec	siderita/src/controller/trash.rs
+Pathspec	siderita/src/dbus.rs
+Pathspec	siderita/src/devicemodel.rs
+Pathspec	siderita/src/devices.rs
+Pathspec	siderita/src/embedded.rs
+Pathspec	siderita/src/main.rs
+Pathspec	siderita/src/media.rs
+Pathspec	siderita/src/ownicon.rs
+Pathspec	siderita/src/portal.rs
+Pathspec	siderita/src/recent.rs
+Pathspec	siderita/src/volumes.rs
+Pathspec	siderita/tests/qml/tst_compress_dialog.qml
+Pathspec	siderita/tests/qml/tst_size_row.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+25	0	52d7e33565868485f6f7c0b684f5e11835939a17d3a7f7c6da76bfe58347025e	celestina-rs/crates/siderita-core/src/coordinator.rs
+410	61	dac27c1dad86fca72eb01b49655606f18d50bb2134688eb687f247b10ab0a819	celestina-rs/crates/siderita-core/src/executor.rs
+5	1	19846443834cc707d3a205a3cc7615533bfb92d793373cd370d1345b1752b191	celestina-rs/crates/siderita-core/src/lib.rs
+208	0	75475f96edadce6adaf6df46f33932c1374b9f3ea4db9bc29f4c292a5bbbdfbe	celestina-rs/crates/siderita-core/src/reply.rs
+58	1	b71616434a1c9c2246706a7f6c84f9b6ec2f444218c4a4663d125baf59623ece	celestina-rs/crates/siderita-core/src/watch.rs
+2	1	5dc7833179c1868e7c5c1e4bbcaacc42082c38e79d8268c601190154867a7574	celestina-rs/crates/siderita-core/tests/latest_scan.rs
+279	63	ed3df2d82b0941dae1ca6368ee86c335c5d6ae96a500e9a552c9318a95a3d571	celestina-rs/crates/siderita-embedded/src/pe.rs
+1	0	3d5311f38109d94ec2cc328187c97e5201e6ca25206a11cbb5a4c28a478d4f03	docs/version-history.tsv
+1	2	e2921ddcfb30a2c2483cf441360717234d29e457ce42c2167ea24132a79c765e	scripts/architecture-baseline.tsv
+0	3	263263bdd83d910abf8ddd2b83f1cb2ef0170b46951ccb94f2ce4561fe07459a	scripts/language-baseline.tsv
+1	1	8c215abf7f2fcaee7f9e2f44e7166785c483f0e3335905d3bdfe75c368bd1d1d	scripts/qmllint-baseline.tsv
+1	1	55b148f03c2cf078fa86b4ef8f4e8503802b3c009f2e4661899f936fae504d6d	siderita/Cargo.lock
+1	1	5944fc279c1b8672385210b3e6ff75ea0256c7d2bee4f8f03153edf951e2d960	siderita/Cargo.toml
+5	3	136073699f622fc0823d5f76ee844c34ab0ce14de0049081ce0e00711121df15	siderita/README.md
+36	13	27992b7def8c4111537fe7fc16701c56d754a3ddd43565e8b76a04eb9bfc84bf	siderita/STATUS.md
+7	0	45290052414553fd43ab7d4fb3c13eb44d42f58669357dbdddb19a2a327006db	siderita/cpp/siderita/thumbnailprovider.h
+101	4	9efd5ebd25466e3dd4d60ce510632455ca310f62e2727692b747829335f02b2d	siderita/cpp/thumbnailprovider.cpp
+225	0	f1d7ceeb02bb29b3b2447643248e4503cd0cec5d5a0fed3a384c728622765589	siderita/docs/evidence/2026-09-26-app-threading.md
+115	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-C.numstat.tsv
+1	1	85d83d5d655de47250b544467dee82cb75cdb09343f8342ac5a109220d263eab	siderita/docs/plans/active/2026-09-26-hardening.md
+28	34	9f2fd56319e592c10965115fe594c9c263137c0224eeb0015ab4611109bc9b4a	siderita/qml/components/SizeRow.qml
+3	1	8d4c4cc5394e5f5323c911aedbc0b8679210d42a82c4183f7a6a27f8d40a4986	siderita/qml/components/folder/FolderWheelHandler.qml
+4	2	bdc00c230aaf53de4b004c8c6b0c783470fcbed81425f2b349c2e5a804eedb48	siderita/qml/components/folder/OperationRing.qml
+1	0	0f21ef506d45bf1166ba17b123fc8965e45872dd5a9687225bab41610425e891	siderita/qml/components/sidebar/SidebarChevron.qml
+38	13	f611a49728acdbeac64d8d6ed249afeba059658cc31d4617d153e2a7e5161ee2	siderita/qml/dialogs/CompressDialog.qml
+15	8	f8e3d4ecc705269e87fcba67b0b7874cdb7cc7845095ea8b704940ba9e75807e	siderita/qml/dialogs/NamePromptDialog.qml
+15	4	05408507e86fb8ccca3c2dc37340be836e47ff987814a0b1e5e2cd7b3a0f1dd6	siderita/qml/dialogs/QuickLookView.qml
+105	54	ac169327374e575a42bb93f26ab35ac1c87223dd01f9d2973683a6bd1347aab8	siderita/src/apps.rs
+9	10	63c28cd0c18b6dd0edad91dac24c5bc30b17331df520098c548c252feba8b7c0	siderita/src/controller.rs
+89	43	57d216c6d858a8b46193a7df2cd92cd0c2afb00e0291ab9f3ec90f5aaf4cacdc	siderita/src/controller/archive.rs
+269	143	94382343b4aaeb023bb2e7afb6e7d95e2c847f09b43e7cf8756f327ebc11d758	siderita/src/controller/fileops.rs
+38	8	ce171253a331e7e6b1ce8e508e3e86313af65f5f196a965bf54ffe9a3f7db3bf	siderita/src/controller/find.rs
+16	15	26baf8e1c6045937cba4a756ca458a401fd61d94b11e83f2c805db80b9d68f86	siderita/src/controller/glyphs.rs
+160	6	989c10f91c9a87c83346a5b1fa3665195bac18ad547c569304f6ac2917e24372	siderita/src/controller/jobs.rs
+83	9	b0e66829a9b813715e524065560a5f00a9f5e046aa6470423a1f8183ce034750	siderita/src/controller/marks.rs
+38	65	5b3f46190b44cd7ba2c6b3337f123b602d0739bfde7357b3abdd8708067e5545	siderita/src/controller/mounts.rs
+13	5	24f5a416ed5fc61efad9b2c1120dacfc5710a59f0590994d8eaebad0aa32aa0a	siderita/src/controller/navigation.rs
+64	13	098f2abeb5d9a9fc8a6e8c0324575a31d21e4268c4f6fadb364461af14a7c96b	siderita/src/controller/scan.rs
+61	23	0037961cb76581fae4cf68ef91776a552b3f960b5daad676d730a54392c244b7	siderita/src/controller/selection.rs
+97	33	c1f6072113309e503943563255bf69682e7c1aacd9b86898e536b508c1f24b7f	siderita/src/controller/shell.rs
+42	6	0a23388f241408ecff59f4e56264504f65dbf1fef490d9bc1e007e78dc61866c	siderita/src/controller/state.rs
+196	99	491d6a2d11c69de2bd1668adad5a1ebf6810b9dc7b09692fc3edcfa65e5f05c1	siderita/src/controller/trash.rs
+21	103	01384119eb14332385d64f9e2ee55e19ba0de1dd11aa73881c9876cf33d000de	siderita/src/dbus.rs
+300	0	fd8ba3f39dd1667bc01b47e2141517b9bf4c6928b244a43e93283f5633557b77	siderita/src/devicemodel.rs
+55	74	415ddef34532193b957f1ef01137f78c0b0a27be81e7487d89f8dd3119002858	siderita/src/devices.rs
+33	11	5b2a7bf95df73066311a5d664ed4175ce29f71a6861e46d1915bcec710250e19	siderita/src/embedded.rs
+10	0	b2db5a2836d2b5a43d660290d103a1ee4c90d960898cd4c971bd16bb2f8846dc	siderita/src/main.rs
+29	3	8f5a8cdc9ff4342cac3495c379cc48f489a8a6c1b2ef13a687fca9e39ce410dc	siderita/src/media.rs
+36	9	85cd7c6b59e17875badb16607f3044f8f21e0baf117904ebde0e3423d022268e	siderita/src/ownicon.rs
+57	16	c8afc54fc624f4910441b29a4841f03e44666e643c19b1496114a56d1f5c8913	siderita/src/portal.rs
+1	1	30270f1053d8858aaef6d86702a6c0634d5d0e70bdb2aad4c68d4bc1a6b37f8b	siderita/src/recent.rs
+42	46	5981ee77bec420d2c4728e237fb25b6565faf6212bda73453f5e18ed6e4efc09	siderita/src/volumes.rs
+22	5	ab0877bbd26db02c721bbab11d63cc733b65e224950ad0585990e348d60d467f	siderita/tests/qml/tst_compress_dialog.qml
+79	0	a44387c5ddc518ee2a81f9773d8850a0bcd54197e9c8a51c0a0db24e94feb5e2	siderita/tests/qml/tst_size_row.qml

@@ -6,7 +6,7 @@
 
 use core::pin::Pin;
 
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 
 use super::display::display_name;
@@ -28,11 +28,32 @@ pub(crate) fn icon_override_entries(
         .collect()
 }
 
-/// The starred entries as `key\tkind` lines. The kind is resolved here, once
-/// per refresh, so the sidebar can show a folder as a folder and say plainly
-/// when a favourite's target is gone rather than offering a row that leads
-/// nowhere. A key that will not decode is dropped: it names nothing.
-pub(crate) fn favorite_entry_list(keys: &std::collections::BTreeSet<String>) -> QStringList {
+/// The starred entries as `key\tkind` lines, so the sidebar can show a folder
+/// as a folder and say plainly when a favourite's target is gone rather than
+/// offering a row that leads nowhere. A key that will not decode is dropped:
+/// it names nothing.
+///
+/// The kinds come from [`favorite_kinds`], which runs on a reader; this only
+/// formats what is known. A favourite not looked at yet is shown as a folder,
+/// what most favourites are, until its lookup lands a moment later.
+pub(crate) fn favorite_entry_list(
+    keys: &std::collections::BTreeSet<String>,
+    kinds: &std::collections::HashMap<String, &'static str>,
+) -> QStringList {
+    keys.iter()
+        .filter(|key| pathkey::decode_str(key).is_ok())
+        .map(|key| {
+            let kind = kinds.get(key).copied().unwrap_or("directory");
+            QString::from(format!("{key}\t{kind}").as_str())
+        })
+        .collect()
+}
+
+/// What each favourite points at now. Blocking — one `stat` per favourite,
+/// and one on an unplugged share hangs until the share gives up — so it only
+/// ever runs on a reader, never on the Qt thread where it used to run on every
+/// refresh.
+fn favorite_kinds(keys: &[String]) -> std::collections::HashMap<String, &'static str> {
     keys.iter()
         .filter_map(|key| {
             let path = pathkey::decode_str(key).ok()?;
@@ -41,7 +62,7 @@ pub(crate) fn favorite_entry_list(keys: &std::collections::BTreeSet<String>) -> 
                 Ok(_) => "file",
                 Err(_) => "missing",
             };
-            Some(QString::from(format!("{key}\t{kind}").as_str()))
+            Some((key.clone(), kind))
         })
         .collect()
 }
@@ -145,8 +166,61 @@ impl qobject::SideritaController {
         self.as_mut().refresh_favorite_props();
     }
 
-    fn refresh_favorite_props(mut self: Pin<&mut Self>) {
-        let entries = favorite_entry_list(&self.rust().favorites);
+    /// Publishes the favourites with the kinds known so far, then looks their
+    /// targets up again on a reader — at most one lookup at a time, so a
+    /// favourite on a hung share cannot pile threads up.
+    pub(crate) fn refresh_favorite_props(mut self: Pin<&mut Self>) {
+        let entries = favorite_entry_list(&self.rust().favorites, &self.rust().favorite_kinds);
+        self.as_mut().set_favorite_entries(entries);
+
+        let Ok(Some(generation)) = self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .favorite_lookups
+            .request()
+        else {
+            return;
+        };
+        let keys: Vec<String> = self.rust().favorites.iter().cloned().collect();
+        let qt = self.qt_thread();
+        let started = super::jobs::spawn_reader(move || {
+            let kinds = favorite_kinds(&keys);
+            let _ = qt.queue(move |controller| controller.favorite_kinds_found(generation, kinds));
+        });
+        if started.is_err() {
+            let _ = self
+                .as_mut()
+                .rust_mut()
+                .get_mut()
+                .favorite_lookups
+                .land(generation);
+        }
+    }
+
+    /// A favourite lookup has landed: publish the kinds it found, or run once
+    /// more when the favourites changed while it ran.
+    fn favorite_kinds_found(
+        mut self: Pin<&mut Self>,
+        generation: celestina_core::Generation,
+        kinds: std::collections::HashMap<String, &'static str>,
+    ) {
+        match self
+            .as_mut()
+            .rust_mut()
+            .get_mut()
+            .favorite_lookups
+            .land(generation)
+        {
+            siderita_core::Landing::Publish => {}
+            siderita_core::Landing::Rerun => {
+                self.as_mut().refresh_favorite_props();
+                return;
+            }
+            siderita_core::Landing::Drop => return,
+        }
+        self.as_mut().rust_mut().get_mut().favorite_kinds = kinds;
+        let entries = favorite_entry_list(&self.rust().favorites, &self.rust().favorite_kinds);
         self.as_mut().set_favorite_entries(entries);
     }
 

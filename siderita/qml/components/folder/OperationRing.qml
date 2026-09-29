@@ -89,8 +89,9 @@ Item {
     // Reports arrive at most every 60 ms, which on its own reads as a stutter.
     // Interpolating between two of them is what makes the ring move at the
     // screen's rate rather than at the worker's.
+    // Under reduced motion the arc steps with each report instead of sweeping.
     Behavior on arcStart {
-        enabled: ring.indeterminate
+        enabled: ring.indeterminate && !CelestinaTheme.reducedMotion
         NumberAnimation {
             duration: CelestinaTheme.motionFast
             easing.type: CelestinaTheme.easeStandard
@@ -117,7 +118,7 @@ Item {
                             ? 90
                             : 3.6 * Math.max(0, Math.min(100, ring.percent))
                 Behavior on sweepAngle {
-                    enabled: !ring.indeterminate
+                    enabled: !ring.indeterminate && !CelestinaTheme.reducedMotion
                     NumberAnimation { duration: CelestinaTheme.motionNormal }
                 }
             }
@@ -184,6 +185,7 @@ Item {
 
     scale: hover.hovered ? 1.06 : 1
     Behavior on scale {
+        enabled: !CelestinaTheme.reducedMotion
         NumberAnimation { duration: CelestinaTheme.motionFast }
     }
 }

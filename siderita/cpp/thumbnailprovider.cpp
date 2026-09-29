@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <QtCore/QAtomicInt>
 #include <QtCore/QByteArray>
 #include <QtCore/QCryptographicHash>
 #include <QtCore/QDateTime>
@@ -171,6 +172,55 @@ void writeCache(const QString &largeDir, const QString &cachePath, const QImage 
     }
 }
 
+// The icon file at `pathBytes` — one a launcher names, found in an icon theme —
+// decoded at thumbnail size. A scalable icon is rendered at that size rather
+// than at its nominal one, so a grid cell gets a crisp picture instead of a
+// 48-pixel stamp scaled up; a raster one is only ever scaled down.
+QImage loadIconFile(const QByteArray &pathBytes)
+{
+    // Checked before anything is opened: `open` on a FIFO blocks.
+    if (!sourceModified(pathBytes).isValid()) {
+        return QImage();
+    }
+    ReadDescriptor descriptor(pathBytes);
+    QFile file;
+    if (!descriptor.adoptInto(file)) {
+        return QImage();
+    }
+    QImageReader reader(&file);
+    const QSize natural = reader.size();
+    const QByteArray format = reader.format();
+    const bool scalable = format == "svg" || format == "svgz";
+    if (natural.isValid() &&
+        (scalable || natural.width() > kThumbMax || natural.height() > kThumbMax)) {
+        reader.setScaledSize(natural.scaled(kThumbMax, kThumbMax, Qt::KeepAspectRatio));
+    }
+    return reader.read();
+}
+
+// The provider's own pool, bounded.
+//
+// Thumbnails used to run on the global pool, unbounded: scrolling past a folder
+// of 5 000 images queued 5 000 decodes, and reads blocked on a slow mount held
+// the very threads QML's own asynchronous loaders use. This pool has a few
+// threads of its own, and a request the view no longer needs is taken back out
+// of its queue (`ThumbnailResponse::cancel`).
+//
+// Deliberately never destroyed: a QThreadPool's destructor waits for every
+// running task without a bound, and a read blocked on a mount that stopped
+// answering would then hold the quit open for ever. Quitting drains it instead,
+// with a bound (`siderita_thumbnail_shutdown`), and a task still blocked after
+// that is left to the process's exit.
+QThreadPool &thumbnailPool()
+{
+    static QThreadPool *const pool = [] {
+        auto *created = new QThreadPool();
+        created->setMaxThreadCount(qBound(2, QThread::idealThreadCount() / 2, 4));
+        return created;
+    }();
+    return *pool;
+}
+
 // Loads a thumbnail for the file named by `pathBytes`: a valid cached one from
 // the shared cache, else a freshly generated + cached one. Returns a null image
 // for anything that is not a loadable image (the delegate then keeps its generic
@@ -215,6 +265,25 @@ QImage loadThumbnail(const QByteArray &pathBytes)
         const ::rust::Slice<const ::std::uint8_t> raw(
             reinterpret_cast<const ::std::uint8_t *>(pathBytes.constData()),
             static_cast<::std::size_t>(pathBytes.size()));
+
+        // A launcher does not hold its picture, it names one: the icon file an
+        // installed theme provides. Resolving that name reads the launcher and
+        // searches every theme directory, which is why it happens here, on
+        // this pool, and not in the delegate's binding on the Qt thread.
+        //
+        // It is not written to the shared cache: the picture belongs to the
+        // icon theme, not to the launcher file, so a cached copy would outlive
+        // a theme change — and the cache is shared with every other
+        // application, which draws launchers its own way.
+        const ::rust::Vec<::std::uint8_t> named = siderita_own_icon_path(raw);
+        if (!named.empty()) {
+            QImage icon = loadIconFile(QByteArray(reinterpret_cast<const char *>(named.data()),
+                                                  static_cast<qsizetype>(named.size())));
+            if (!icon.isNull()) {
+                return icon;
+            }
+        }
+
         const ::rust::Vec<::std::uint8_t> carried = siderita_embedded_image(raw);
         if (!carried.empty()) {
             QImage embedded = QImage::fromData(QByteArray(
@@ -271,8 +340,12 @@ QByteArray pathBytesForId(const QString &id)
     return QByteArray::fromPercentEncoding(id.toUtf8());
 }
 
-// One async request: does the work on the global thread pool and hands back the
-// image when done.
+// One async request: does the work on the provider's bounded pool and hands
+// back the image when done.
+//
+// The engine owns the response and deletes it after `finished`; the pool never
+// does (`setAutoDelete(false)`), so a response taken back out of the queue by
+// `cancel` is simply never run.
 class ThumbnailResponse : public QQuickImageResponse, public QRunnable
 {
 public:
@@ -280,7 +353,7 @@ public:
         : m_pathBytes(pathBytes)
     {
         setAutoDelete(false);
-        QThreadPool::globalInstance()->start(this);
+        thumbnailPool().start(this);
     }
 
     QQuickTextureFactory *textureFactory() const override
@@ -288,15 +361,30 @@ public:
         return QQuickTextureFactory::textureFactoryForImage(m_image);
     }
 
+    // The view scrolled past, or the delegate went away. A request still
+    // queued is taken out and never decoded; one already running skips the
+    // work if it has not reached it yet. Either way `finished` is emitted
+    // exactly once, which is what lets the engine clean the response up.
+    void cancel() override
+    {
+        m_cancelled.storeRelease(1);
+        if (thumbnailPool().tryTake(this)) {
+            Q_EMIT finished();
+        }
+    }
+
     void run() override
     {
-        m_image = loadThumbnail(m_pathBytes);
+        if (!m_cancelled.loadAcquire()) {
+            m_image = loadThumbnail(m_pathBytes);
+        }
         Q_EMIT finished();
     }
 
 private:
     QByteArray m_pathBytes;
     QImage m_image;
+    QAtomicInt m_cancelled;
 };
 
 class ThumbnailProvider : public QQuickAsyncImageProvider
@@ -351,6 +439,15 @@ QByteArray siderita_thumbnail_resolved_path(const QByteArray &key)
     const QUrl url(QStringLiteral("image://thumb/") + QString::fromUtf8(key));
     const QString id = url.toString(QUrl::RemoveScheme | QUrl::RemoveAuthority).mid(1);
     return pathBytesForId(id);
+}
+
+void siderita_thumbnail_shutdown(::std::int32_t milliseconds)
+{
+    // Requests nobody started yet are dropped; the ones running get a bounded
+    // wait. Their responses still emit `finished`, into an engine that no
+    // longer listens.
+    thumbnailPool().clear();
+    thumbnailPool().waitForDone(milliseconds);
 }
 
 void register_siderita_thumbnail_provider(QQmlApplicationEngine &engine)
