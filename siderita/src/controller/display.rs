@@ -25,6 +25,17 @@ pub(crate) fn display_name(path: &Path) -> String {
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
 }
 
+/// The batch line for an entry that a copy across filesystems (a move, a
+/// Trash into another disk's Trash, a restore from one) finished only in
+/// part: `count` entries arrived or changed while it was copied, so they were
+/// not taken and are still where they were.
+pub(crate) fn left_behind_line(path: &Path, count: usize) -> String {
+    format!(
+        "{}: {count} elemento(s) añadido(s) o cambiado(s) mientras se copiaba no se movieron y siguen donde estaban",
+        display_name(path)
+    )
+}
+
 /// The stable token a row's kind is published under. A vocabulary the QML maps
 /// to a glyph, not prose, so it stays English on both sides of the seam.
 pub(crate) const fn kind_key(kind: RowKind) -> &'static str {
@@ -82,6 +93,12 @@ mod tests {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn a_partial_copy_names_the_entry_and_the_count() {
+        let line = super::left_behind_line(Path::new("/media/usb/fotos"), 3);
+        assert!(line.starts_with("fotos: 3 "), "{line}");
+    }
 
     #[test]
     fn display_name_uses_the_final_component() {

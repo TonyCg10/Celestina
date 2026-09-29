@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use celestina_core::CancellationToken;
 
-use crate::copy::{copy_to, guard_not_inside, plan_destination, rollback, Progress};
+use crate::copy::{copy_to, guard_not_inside, plan_destination, Durability, Progress};
 use crate::error::OpError;
 
 /// The paths a successful move went between.
@@ -12,15 +12,22 @@ use crate::error::OpError;
 pub struct Moved {
     pub from: PathBuf,
     pub to: PathBuf,
+    /// Source entries a move across filesystems did not remove, because they
+    /// arrived in a source folder or changed after they were copied. They are
+    /// still at the source, and a folder holding one is still there too.
+    /// Always empty for a move within one filesystem, which is one rename.
+    pub left_behind: Vec<PathBuf>,
 }
 
 /// Moves `source` into `into_dir`, keeping its own file name.
 ///
 /// On the same filesystem this is a single atomic `rename`. Across filesystems
-/// it becomes copy → verify → remove-source, and the source is **removed only
-/// after** the copy has completed and been revalidated — a cancelled or failed
-/// cross-device move always leaves the source intact. Like copy, it refuses to
-/// overwrite an existing destination.
+/// it becomes copy → sync → verify → remove-source: the source is **removed
+/// only after** every copied file and folder has been synced to disk and the
+/// copy revalidated, and then only the entries that were copied are removed —
+/// see [`Moved::left_behind`]. A cancelled or failed cross-device move always
+/// leaves the source intact. Like copy, it refuses to overwrite an existing
+/// destination.
 pub fn move_entry(
     source: &Path,
     into_dir: &Path,
@@ -53,12 +60,14 @@ pub fn move_entry(
         Ok(()) => Ok(Moved {
             from: source.to_path_buf(),
             to: destination,
+            left_behind: Vec::new(),
         }),
         Err(crate::reserve::RenameFailure::Io(error)) if is_cross_device(&error) => {
-            relocate_by_copy(source, &destination, cancellation, progress)?;
+            let left_behind = relocate_by_copy(source, &destination, cancellation, progress)?;
             Ok(Moved {
                 from: source.to_path_buf(),
                 to: destination,
+                left_behind,
             })
         }
         Err(failure) => Err(failure.into_op_error(&destination)),
@@ -110,35 +119,48 @@ pub fn move_as(
         Ok(()) => Ok(Moved {
             from: source.to_path_buf(),
             to: destination.to_path_buf(),
+            left_behind: Vec::new(),
         }),
         Err(crate::reserve::RenameFailure::Io(error)) if is_cross_device(&error) => {
-            relocate_by_copy(source, destination, cancellation, progress)?;
+            let left_behind = relocate_by_copy(source, destination, cancellation, progress)?;
             Ok(Moved {
                 from: source.to_path_buf(),
                 to: destination.to_path_buf(),
+                left_behind,
             })
         }
         Err(failure) => Err(failure.into_op_error(destination)),
     }
 }
 
-/// The cross-device path: copy onto `destination`, revalidate it against the
-/// source, and only then remove the source. Any failure keeps the source and
-/// rolls the partial destination back.
+/// The cross-device path: copy onto `destination` and sync every copied file
+/// and folder, revalidate the copy against the source, and only then remove
+/// from the source the entries that were copied, and only while each is still
+/// what was copied. Returns the source entries it left (see
+/// [`Moved::left_behind`]).
+///
+/// Any failure before the removal keeps the source whole and removes only the
+/// destination entries this copy created.
 pub(crate) fn relocate_by_copy(
     source: &Path,
     destination: &Path,
     cancellation: &CancellationToken,
     progress: &mut dyn FnMut(Progress),
-) -> Result<(), OpError> {
-    copy_to(source, destination, cancellation, progress)?;
+) -> Result<Vec<PathBuf>, OpError> {
+    let journal = copy_to(
+        source,
+        destination,
+        cancellation,
+        progress,
+        Durability::Synced,
+    )?;
 
     if let Err(error) = verify(source, destination) {
-        rollback(destination);
+        journal.roll_back();
         return Err(error);
     }
 
-    remove_source(source)
+    Ok(journal.remove_sources())
 }
 
 /// Confirms the copy landed: same kind, and for a plain file the same length.
@@ -168,25 +190,6 @@ fn verify(source: &Path, destination: &Path) -> Result<(), OpError> {
             message: "the copied destination did not match the source; source kept".to_owned(),
         })
     }
-}
-
-fn remove_source(source: &Path) -> Result<(), OpError> {
-    let metadata = fs::symlink_metadata(source).map_err(|error| {
-        if error.kind() == io::ErrorKind::NotFound {
-            OpError::SourceMissing {
-                path: source.to_path_buf(),
-            }
-        } else {
-            OpError::io(source, &error)
-        }
-    })?;
-
-    let removed = if metadata.is_dir() {
-        fs::remove_dir_all(source)
-    } else {
-        fs::remove_file(source)
-    };
-    removed.map_err(|error| OpError::io(source, &error))
 }
 
 /// Whether a `rename` failed only because the paths straddle two filesystems.
@@ -351,5 +354,147 @@ mod tests {
         assert!(matches!(error, OpError::Cancelled));
         assert_eq!(fs::read(&source).expect("source intact"), b"precious");
         assert!(!destination.exists(), "no partial destination may survive");
+    }
+
+    /// SID-3: a copy-move removes only what it copied. Two sibling folders are
+    /// moved; when the second one is created, the first has been listed and
+    /// copied completely, and that is when a newcomer lands in each folder and
+    /// both copied files change. Every newcomer and every change must still
+    /// exist afterwards, at the source or at the destination.
+    #[test]
+    fn a_copy_move_keeps_what_arrived_or_changed_during_the_copy() {
+        let dir = TestDir::new("newcomer");
+        let source = dir.path().join("src");
+        for folder in ["a", "b"] {
+            fs::create_dir_all(source.join(folder)).expect("mk folder");
+            fs::write(source.join(folder).join("old.txt"), b"old").expect("seed");
+        }
+        let destination = dir.path().join("dst");
+
+        let mut planted = false;
+        let plant = |progress: crate::copy::Progress| {
+            // Items: the top folder, the first folder, its file, then the
+            // second folder. At four the first folder is done.
+            if progress.items == 4 && !planted {
+                planted = true;
+                for folder in ["a", "b"] {
+                    fs::write(source.join(folder).join("new.txt"), b"new").expect("plant");
+                    let mut old = fs::OpenOptions::new()
+                        .append(true)
+                        .open(source.join(folder).join("old.txt"))
+                        .expect("open old");
+                    std::io::Write::write_all(&mut old, b" and changed").expect("append");
+                }
+            }
+        };
+        let mut plant = plant;
+        let left_behind =
+            relocate_by_copy(&source, &destination, &CancellationToken::new(), &mut plant)
+                .expect("move");
+        assert!(planted, "the copy never reached the second folder");
+
+        // The first folder's newcomer and its changed file were never copied
+        // as they are now: both stay, and both are reported.
+        assert!(
+            left_behind.len() >= 2,
+            "the move did not report what it left: {left_behind:?}"
+        );
+        for path in &left_behind {
+            assert!(path.exists(), "{} was reported but is gone", path.display());
+        }
+
+        for folder in ["a", "b"] {
+            for (name, content) in [
+                ("new.txt", &b"new"[..]),
+                ("old.txt", &b"old and changed"[..]),
+            ] {
+                let at_source = fs::read(source.join(folder).join(name)).ok();
+                let at_destination = fs::read(destination.join(folder).join(name)).ok();
+                assert!(
+                    at_source.as_deref() == Some(content)
+                        || at_destination.as_deref() == Some(content),
+                    "{folder}/{name} was lost: source {at_source:?}, destination {at_destination:?}"
+                );
+            }
+        }
+    }
+
+    /// Review I-1: a write into the part of a file the copy has already read
+    /// happens before the copy ends, and must still keep the source. The
+    /// modification time is set far back first, so the rewrite is visible even
+    /// where the filesystem's clock is coarser than this test.
+    #[test]
+    fn a_file_rewritten_during_its_own_copy_is_kept() {
+        use std::io::Write;
+        let dir = TestDir::new("rewrite");
+        let source = dir.path().join("big.bin");
+        fs::write(&source, vec![b'o'; 256 * 1024]).expect("seed");
+        let long_ago = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        fs::File::options()
+            .write(true)
+            .open(&source)
+            .and_then(|file| file.set_modified(long_ago))
+            .expect("age the source");
+        let destination = dir.path().join("moved.bin");
+
+        let mut written = false;
+        let left_behind = relocate_by_copy(
+            &source,
+            &destination,
+            &CancellationToken::new(),
+            &mut |progress| {
+                if progress.bytes >= 64 * 1024 && !written {
+                    written = true;
+                    fs::OpenOptions::new()
+                        .write(true)
+                        .open(&source)
+                        .and_then(|mut file| file.write_all(b"NEWDATA"))
+                        .expect("rewrite the start");
+                }
+            },
+        )
+        .expect("move");
+
+        assert!(written, "the copy never reached 64 KiB");
+        let kept = fs::read(&source).ok();
+        let copied = fs::read(&destination).ok();
+        assert!(
+            kept.as_deref()
+                .is_some_and(|bytes| bytes.starts_with(b"NEWDATA"))
+                || copied
+                    .as_deref()
+                    .is_some_and(|bytes| bytes.starts_with(b"NEWDATA")),
+            "the rewrite was lost: source {:?}, destination starts {:?}",
+            kept.map(|bytes| bytes.len()),
+            copied.map(|bytes| String::from_utf8_lossy(&bytes[..7]).into_owned())
+        );
+        assert_eq!(left_behind, vec![source.clone()]);
+    }
+
+    /// Review M-2: removing one name of a hard-linked file changes the
+    /// inode's change time, which the other name shares. That is not a
+    /// change to the file, and the move must still take both names.
+    #[test]
+    fn a_hard_linked_pair_is_moved_whole() {
+        let dir = TestDir::new("hardlink");
+        let source = dir.path().join("src");
+        fs::create_dir(&source).expect("mk src");
+        fs::write(source.join("a.txt"), b"shared").expect("seed");
+        fs::hard_link(source.join("a.txt"), source.join("a-link.txt")).expect("link");
+        let destination = dir.path().join("dst");
+
+        let left_behind = relocate_by_copy(
+            &source,
+            &destination,
+            &CancellationToken::new(),
+            &mut |_| {},
+        )
+        .expect("move");
+
+        assert_eq!(left_behind, Vec::<PathBuf>::new());
+        assert!(!source.exists(), "the source folder stayed");
+        for name in ["a.txt", "a-link.txt"] {
+            assert_eq!(fs::read(destination.join(name)).expect("copied"), b"shared");
+        }
     }
 }

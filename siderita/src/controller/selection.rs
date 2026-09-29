@@ -117,11 +117,11 @@ impl qobject::SideritaController {
                 .ok()
                 .and_then(|i| self.rust().trash_entries.get(i))
                 .map(|e| {
-                    let origin = e.original.to_string_lossy();
+                    let origin = super::trash::origin_line(e);
                     let date = crate::format::trash_date(&e.deletion_date);
                     QString::from(
                         if date.is_empty() {
-                            origin.into_owned()
+                            origin
                         } else {
                             format!("{origin} · {date}")
                         }

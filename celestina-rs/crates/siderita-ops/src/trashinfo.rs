@@ -7,6 +7,31 @@ use celestina_core::percent;
 
 use crate::error::OpError;
 
+/// Why a Trash record may not be restored where it points. A volume's Trash
+/// was written by whoever had the volume before, so its records are hostile
+/// input; see [`restore_from_trash`](crate::restore_from_trash).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Unrestorable {
+    /// A relative `Path=` that climbs out of its directory with `..`.
+    ClimbsOut,
+    /// A relative `Path=` with no directory to read it from.
+    Relative,
+    /// A record in a volume's Trash that points outside that volume.
+    OutsideVolume,
+}
+
+impl std::fmt::Display for Unrestorable {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::ClimbsOut => "the .trashinfo records a relative Path= that climbs out with ..",
+            Self::Relative => {
+                "the .trashinfo records a relative Path= with no directory to read it from"
+            }
+            Self::OutsideVolume => "the .trashinfo in a volume's Trash points outside that volume",
+        })
+    }
+}
+
 /// One recoverable entry in the freedesktop Trash, read from its `.trashinfo`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TrashEntry {
@@ -14,8 +39,17 @@ pub struct TrashEntry {
     pub info: PathBuf,
     /// The entry's body under `files/<name>`.
     pub trashed: PathBuf,
-    /// The absolute path it will be restored to (the recorded `Path=`).
+    /// The absolute path it will be restored to: the recorded `Path=`, or,
+    /// when the record is relative, that path under the directory the spec
+    /// reads it from (the volume's top directory for a volume's Trash).
+    ///
+    /// When [`TrashEntry::unrestorable`] is set this is instead the `Path=`
+    /// exactly as recorded, which is not a place anything will be written and
+    /// must not be shown as one.
     pub original: PathBuf,
+    /// Why a restore will refuse this entry, or `None` when it can be
+    /// restored to [`TrashEntry::original`].
+    pub unrestorable: Option<Unrestorable>,
     /// The spec `DeletionDate=` string, or empty if the record omits it.
     pub deletion_date: String,
     /// The original file name, lossily, for display.
@@ -32,9 +66,9 @@ pub struct TrashEntry {
 /// cannot be restored.
 pub fn list_trash() -> Result<Vec<TrashEntry>, OpError> {
     let mut out = Vec::new();
-    for home in crate::volume::all_trash_roots() {
+    for root in crate::volume::all_trash_roots() {
         // One unreadable volume must not empty the whole view.
-        if let Ok(entries) = list_trash_at_volume(&home.root, home.top.as_deref()) {
+        if let Ok(entries) = list_trash_at(&root) {
             out.extend(entries);
         }
     }
@@ -44,18 +78,13 @@ pub fn list_trash() -> Result<Vec<TrashEntry>, OpError> {
 
 /// Lists the Trash rooted at `trash_root`. Split out so listing is testable
 /// without touching the real `$XDG_DATA_HOME`.
-#[cfg(test)]
+///
+/// A record may write its original path relative to the directory its Trash
+/// lives in (a volume's top directory, for a volume's Trash), which is the
+/// one form this crate never writes and every reader must still understand;
+/// [`crate::volume::resolve_original`] is the one rule for it, shared with
+/// restore.
 pub(crate) fn list_trash_at(trash_root: &Path) -> Result<Vec<TrashEntry>, OpError> {
-    list_trash_at_volume(trash_root, None)
-}
-
-/// The same, for a Trash that sits on a volume: a record there may write its
-/// original path relative to the volume's top directory, which is the one form
-/// this crate never writes and every reader must still understand.
-pub(crate) fn list_trash_at_volume(
-    trash_root: &Path,
-    top: Option<&Path>,
-) -> Result<Vec<TrashEntry>, OpError> {
     let info_dir = trash_root.join("info");
     let entries = match fs::read_dir(&info_dir) {
         Ok(entries) => entries,
@@ -70,13 +99,18 @@ pub(crate) fn list_trash_at_volume(
         if info.extension() != Some(OsStr::new("trashinfo")) {
             continue;
         }
-        let Ok(content) = fs::read_to_string(&info) else {
+        let Ok(Some(content)) = read_record(&info) else {
             continue;
         };
         let Some(recorded) = parse_original_path(&content) else {
             continue;
         };
-        let original = crate::volume::resolve_original(&recorded, top);
+        // The same rule restore applies, so the listing never offers a
+        // hostile record's path as a place the entry will go back to.
+        let (original, unrestorable) = match crate::volume::restore_target(&recorded, trash_root) {
+            Ok(original) => (original, None),
+            Err(reason) => (recorded, Some(reason)),
+        };
         let Some(trashed) = trashed_file_for(&info) else {
             continue;
         };
@@ -92,6 +126,7 @@ pub(crate) fn list_trash_at_volume(
             info,
             trashed,
             original,
+            unrestorable,
             deletion_date: parse_deletion_date(&content).unwrap_or_default(),
             name,
         });
@@ -109,6 +144,38 @@ fn sort_newest_first(out: &mut [TrashEntry]) {
             .cmp(&a.deletion_date)
             .then_with(|| a.name.cmp(&b.name))
     });
+}
+
+/// The largest `.trashinfo` this reads. A record is a few hundred bytes; a
+/// fully percent-encoded `PATH_MAX` path is 12 KiB. The bound keeps a hostile
+/// Trash on a volume from making a reader take in an arbitrary file.
+const MAX_RECORD_BYTES: u64 = 64 * 1024;
+
+/// Reads one `.trashinfo`, bounded, refusing anything but a regular file (a
+/// FIFO named like a record would otherwise block the reader), or `Ok(None)`
+/// when it does not exist.
+pub(crate) fn read_record(info: &Path) -> Result<Option<String>, OpError> {
+    use celestina_core::atomic_file::{read_bounded, ReadError};
+    match read_bounded(info, MAX_RECORD_BYTES) {
+        Ok(Some(bytes)) => String::from_utf8(bytes).map(Some).map_err(|_| OpError::Io {
+            path: info.to_path_buf(),
+            kind: io::ErrorKind::InvalidData,
+            message: "the .trashinfo is not UTF-8".to_owned(),
+        }),
+        Ok(None) => Ok(None),
+        Err(error) => {
+            let kind = match &error {
+                ReadError::NotRegular { .. } => io::ErrorKind::InvalidInput,
+                ReadError::TooLarge { .. } => io::ErrorKind::InvalidData,
+                ReadError::Io { source, .. } => source.kind(),
+            };
+            Err(OpError::Io {
+                path: info.to_path_buf(),
+                kind,
+                message: error.to_string(),
+            })
+        }
+    }
 }
 
 /// Derives `<trash_root>/files/<name>` from `<trash_root>/info/<name>.trashinfo`.
@@ -238,5 +305,41 @@ mod tests {
             url_decode("/bad%2").is_none(),
             "a truncated escape is rejected"
         );
+    }
+
+    /// Review round 2, minor A: the listing applies restore's rule, so a
+    /// hostile record is flagged and its path is not offered as a place to
+    /// restore to.
+    #[test]
+    fn a_hostile_volume_record_is_listed_as_unrestorable() {
+        let dir = TestDir::new("hostile");
+        let top = dir.path().join("volume");
+        let trash = top.join(".Trash-1000");
+        fs::create_dir_all(trash.join("files")).expect("mk files");
+        fs::create_dir_all(trash.join("info")).expect("mk info");
+        fs::create_dir_all(top.join("docs")).expect("mk docs");
+        for (name, recorded) in [("x.txt", "../x.txt"), ("ok.txt", "docs/ok.txt")] {
+            fs::write(trash.join("files").join(name), b"body").expect("body");
+            fs::write(
+                trash.join("info").join(format!("{name}.trashinfo")),
+                format!("[Trash Info]\nPath={recorded}\nDeletionDate=2026-09-26T10:00:00\n"),
+            )
+            .expect("record");
+        }
+
+        let entries = list_trash_at(&trash).expect("list");
+
+        let hostile = entries
+            .iter()
+            .find(|entry| entry.name == "x.txt")
+            .expect("listed");
+        assert_eq!(hostile.unrestorable, Some(super::Unrestorable::ClimbsOut));
+        assert_eq!(hostile.original, PathBuf::from("../x.txt"));
+        let fine = entries
+            .iter()
+            .find(|entry| entry.name == "ok.txt")
+            .expect("listed");
+        assert_eq!(fine.unrestorable, None);
+        assert_eq!(fine.original, top.join("docs/ok.txt"));
     }
 }

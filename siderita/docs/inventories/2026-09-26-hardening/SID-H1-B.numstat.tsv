@@ -1,0 +1,57 @@
+# SID-H1-B exact change inventory
+
+Base revision	b14d089c9b963feac17f4b6323e58caac9ee5764
+Pathspec	celestina-rs/crates/siderita-ops/src/copy.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/error.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/lib.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/purge.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/relocate.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/replace.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/restore.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/trash.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/trashinfo.rs
+Pathspec	celestina-rs/crates/siderita-ops/src/volume.rs
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/docs/evidence/2026-09-26-copy-move-trash.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-B.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/src/controller/actions.rs
+Pathspec	siderita/src/controller/display.rs
+Pathspec	siderita/src/controller/fileops.rs
+Pathspec	siderita/src/controller/paste.rs
+Pathspec	siderita/src/controller/selection.rs
+Pathspec	siderita/src/controller/trash.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+486	32	851d22c8c7003ab4d6fc9d3f48bcd2b1d0635f8095eaac8f66a41fc274c8c182	celestina-rs/crates/siderita-ops/src/copy.rs
+17	0	d2d1ab92749cf1b481f832f531535303b13b795b632c4fa7ee72526165f5f134	celestina-rs/crates/siderita-ops/src/error.rs
+4	2	5474d3ad092fe1559a558631fccf92a5ad20adb8945890fc7e396978bc8442dc	celestina-rs/crates/siderita-ops/src/lib.rs
+2	2	6568e49ff029f53a5b1e3a7fdc8cf951c1d852d4a3246dc2bee74b33abbbe41a	celestina-rs/crates/siderita-ops/src/purge.rs
+178	33	f6bd93acc60ee9150ea35aa90b040a896abb49e7edf32ea2954050123efc7643	celestina-rs/crates/siderita-ops/src/relocate.rs
+611	0	98af4496e46e1c036991cc371799c3204e44dab35c89ad1a43c75d885ff2c19e	celestina-rs/crates/siderita-ops/src/replace.rs
+161	29	d70ffd8b789704f1ae12820608faf18e766300bc39aa626599f4269f5af43078	celestina-rs/crates/siderita-ops/src/restore.rs
+156	38	7d5beae25de3347c7008bef8ba6b8503802357e8df34a9478abff70979acb8af	celestina-rs/crates/siderita-ops/src/trash.rs
+119	16	44744a580c78a75c36b1351b9531bd91742843228f07586e48cc210d9d141c0b	celestina-rs/crates/siderita-ops/src/trashinfo.rs
+575	93	2baac2630b2efb18cb3a27647c5628dabfb4f62fb3b5cae3bbde3931fe13535f	celestina-rs/crates/siderita-ops/src/volume.rs
+1	0	f76809ba2eda8e82f4d83ec69b741ebde38f9072484cda9c2bd35b0fe808d053	docs/version-history.tsv
+1	1	617ea4fc7b4cd882aaa6da7cbbe7efa6435a6ff20b9be06229c7fad512974470	siderita/Cargo.lock
+1	1	ce7b6a84ee1724da5180c750319c8219b53557c67496cc7b3d11fc88354619f3	siderita/Cargo.toml
+4	3	69fc9b5aa601b89180d8896bb9f12fc83ad6ac93daa41b2f3099bd068eb91bd9	siderita/ROADMAP.md
+3	2	cb52d7ae7c9228ce4e9f765a4bf531f2b6f4c381ce95a2ff4d05c919728a409c	siderita/STATUS.md
+23	0	4e05f858715028e3c61f267ccb2fdf13facc7570cc98ceda7bcb77e841a14214	siderita/VALIDATION.md
+364	0	48d763c7d37fad00a7bd8f37b9627d28631e2869eded653e27beba692ac02a42	siderita/docs/evidence/2026-09-26-copy-move-trash.md
+57	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-B.numstat.tsv
+6	1	0ca6632051eff9b9e00917b81468aa7638bd95a2888832708806e6e03821ae38	siderita/docs/plans/active/2026-09-26-hardening.md
+2	1	10d8a25cd27c300848bd17b919519c24a05b24e37efcfb94a66c8157d4e31033	siderita/src/controller/actions.rs
+17	0	4b58e260dc10c3921c076ea0b9183adf6b75cfa4ad6a23bdd417965351759c3b	siderita/src/controller/display.rs
+20	3	f0200e4304aa5d517e61cbfd69d5e9b5b96ecc75c6e02268a1431222c03bdae6	siderita/src/controller/fileops.rs
+113	16	e238e703eed47664999030fedf25836f36951c5924fb313a1a3ff73fd3290e50	siderita/src/controller/paste.rs
+2	2	a6dddf2a3ab0847f212622d7c22dcb05cc967201c9e6837d25f6d55c2543bf10	siderita/src/controller/selection.rs
+34	5	eb44e3232e300cafa8d2b1d58cb9d08cbba39171c68ec8924a0610239ba17f99	siderita/src/controller/trash.rs

@@ -188,7 +188,17 @@ impl qobject::SideritaController {
                 };
 
                 match siderita_ops::trash(path, &token, &mut on_progress) {
-                    Ok(trashed) => infos.push(trashed.info),
+                    Ok(trashed) => {
+                        // Trashing into another disk's Trash copies; what
+                        // arrived or changed meanwhile stayed, and is said.
+                        if !trashed.left_behind.is_empty() {
+                            failures.push(super::display::left_behind_line(
+                                path,
+                                trashed.left_behind.len(),
+                            ));
+                        }
+                        infos.push(trashed.info);
+                    }
                     Err(error) => failures.push(format!("{}: {error}", display_name(path))),
                 }
             }
@@ -740,8 +750,15 @@ impl qobject::SideritaController {
             }
             UndoAction::Trash { infos } => {
                 for info in &infos {
-                    if let Err(error) = siderita_ops::restore_from_trash(info, &cancellation) {
-                        failures.push(format!("{}: {error}", display_name(info)));
+                    match siderita_ops::restore_from_trash(info, &cancellation) {
+                        Ok(restored) if !restored.left_behind.is_empty() => {
+                            failures.push(super::display::left_behind_line(
+                                &restored.to,
+                                restored.left_behind.len(),
+                            ));
+                        }
+                        Ok(_) => {}
+                        Err(error) => failures.push(format!("{}: {error}", display_name(info))),
                     }
                 }
             }

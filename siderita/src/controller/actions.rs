@@ -40,7 +40,8 @@ impl UndoAction {
 pub(crate) enum ConflictStrategy {
     /// Leave the existing entry; the source is not pasted.
     Skip,
-    /// Send the existing entry to Trash (recoverable), then paste over it.
+    /// Put the pasted entry in place of the existing one, which goes to the
+    /// Trash (recoverable) only once the new one is ready.
     Replace,
     /// Paste beside the existing entry under a freed "(copia)" name.
     KeepBoth,

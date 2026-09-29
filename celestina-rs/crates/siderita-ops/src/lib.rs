@@ -12,7 +12,7 @@
 //!
 //! ## Verbs
 //!
-//! Create-folder, create-file, rename, copy, move, send-to-Trash,
+//! Create-folder, create-file, rename, copy, move, replace, send-to-Trash,
 //! list-Trash, restore-from-Trash and purge-from-Trash are all implemented. The
 //! loss-free verbs hold the
 //! guarantee that a source is never removed before its destination is verified,
@@ -27,6 +27,7 @@ mod name;
 mod purge;
 mod relocate;
 mod rename;
+mod replace;
 mod reserve;
 mod restore;
 mod trash;
@@ -41,6 +42,7 @@ pub use name::{validate_name, NameError};
 pub use purge::purge_from_trash;
 pub use relocate::{move_as, move_entry, Moved};
 pub use rename::{rename, Renamed};
+pub use replace::{replace_with_copy, replace_with_move, Replaced};
 pub use restore::{restore_from_trash, Restored};
 pub use trash::{trash, Trashed};
-pub use trashinfo::{list_trash, TrashEntry};
+pub use trashinfo::{list_trash, TrashEntry, Unrestorable};

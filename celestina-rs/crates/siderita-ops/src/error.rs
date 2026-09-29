@@ -24,6 +24,12 @@ pub enum OpError {
         source: PathBuf,
         destination: PathBuf,
     },
+    /// A replacement was asked to trash `target`, which holds `source` itself:
+    /// trashing it would take the very entry meant to replace it.
+    SourceInsideTarget { source: PathBuf, target: PathBuf },
+    /// The entry is where a volume is mounted: sending it to the Trash would
+    /// copy the whole volume into the home Trash and empty the volume.
+    MountPoint { path: PathBuf },
     /// The source is a file type this domain will not copy (socket, fifo, device).
     UnsupportedFileType { path: PathBuf },
     /// Any other IO failure, tagged with the path it happened on.
@@ -67,6 +73,17 @@ impl fmt::Display for OpError {
                 "cannot copy '{}' into itself ('{}')",
                 source.display(),
                 destination.display()
+            ),
+            Self::SourceInsideTarget { source, target } => write!(
+                formatter,
+                "cannot replace '{}' with '{}', which is inside it",
+                target.display(),
+                source.display()
+            ),
+            Self::MountPoint { path } => write!(
+                formatter,
+                "'{}' is where a volume is mounted and cannot be sent to the Trash",
+                path.display()
             ),
             Self::UnsupportedFileType { path } => {
                 write!(

@@ -3,7 +3,7 @@
 - **Status:** active
 - **Active implementation checkpoint:** SID-H1
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07`,
-  `VAL-SID-11`, `VAL-SID-15` and `VAL-SID-U1` in [VALIDATION.md](VALIDATION.md);
+  `VAL-SID-11`, `VAL-SID-15`, `VAL-SID-17` and `VAL-SID-U1` in [VALIDATION.md](VALIDATION.md);
   none of them blocks implementation
 
 `SID-M1` remains the next settled checkpoint after `SID-G7` and `SID-A1`, and
@@ -27,8 +27,9 @@ thread.
 
 The plan is
 [Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
-`SID-H1-A` (archive containment), `SID-H1-B` (loss-free verbs) and `SID-H1-C`
-(lifecycle, threading, the shared owners, documentation and accessibility).
+`SID-H1-A` (archive containment), `SID-H1-B` (loss-free verbs), `SID-H1-C`
+(lifecycle, threading, the shared owners, documentation and accessibility)
+and `SID-H1-D` (local Trash dates, waiting on a shared local-time owner).
 The findings are in
 [the Siderita audit record](../docs/evidence/2026-09-26-monorepo-audit-siderita.md).
 

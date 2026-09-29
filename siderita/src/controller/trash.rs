@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use siderita_ops::TrashEntry;
+use siderita_ops::{TrashEntry, Unrestorable};
 
 use super::qobject;
 use super::{display_name, search_hit_parent, RECENT_LIMIT};
@@ -63,6 +63,22 @@ fn body_facts(path: &Path) -> (bool, String) {
     }
 }
 
+/// Where a trashed entry came from, as its row and its detail show it: the
+/// original path, or, for a record a restore will refuse (another tool's, on
+/// a volume, pointing out of it), why — never that record's path presented as
+/// a place the entry would go back to.
+pub(super) fn origin_line(entry: &TrashEntry) -> String {
+    match entry.unrestorable {
+        None => entry.original.to_string_lossy().into_owned(),
+        Some(Unrestorable::ClimbsOut | Unrestorable::OutsideVolume) => {
+            "No se puede restaurar: su registro apunta fuera de su volumen".to_owned()
+        }
+        Some(Unrestorable::Relative) => {
+            "No se puede restaurar: su registro no dice de dónde vino".to_owned()
+        }
+    }
+}
+
 /// Reads the Trash: the entries themselves, which carry the identity restore
 /// and purge resolve, and the row each one shows.
 fn gather_trash() -> Result<(Vec<TrashEntry>, Vec<ListedRow>), String> {
@@ -76,7 +92,7 @@ fn gather_trash() -> Result<(Vec<TrashEntry>, Vec<ListedRow>), String> {
                 path: entry.trashed.clone(),
                 is_dir,
                 // Where it was, and when it went to the Trash.
-                subtitle: entry.original.to_string_lossy().into_owned(),
+                subtitle: origin_line(entry),
                 size,
                 date: crate::format::trash_date(&entry.deletion_date),
             }
@@ -383,7 +399,16 @@ impl qobject::SideritaController {
             return;
         };
         match siderita_ops::restore_from_trash(&info, &CancellationToken::new()) {
-            Ok(_) => self.as_mut().after_trash_write(),
+            Ok(restored) => {
+                self.as_mut().after_trash_write();
+                // After the refresh, which clears `op_error`: a restore from
+                // another disk's Trash that left part of the entry there.
+                if !restored.left_behind.is_empty() {
+                    let line =
+                        super::display::left_behind_line(&restored.to, restored.left_behind.len());
+                    self.as_mut().set_op_error(QString::from(line.as_str()));
+                }
+            }
             Err(error) => self
                 .as_mut()
                 .set_op_error(QString::from(error.to_string().as_str())),
@@ -406,8 +431,12 @@ impl qobject::SideritaController {
         let cancellation = CancellationToken::new();
         let mut failures = Vec::new();
         for info in &infos {
-            if let Err(error) = siderita_ops::restore_from_trash(info, &cancellation) {
-                failures.push(format!("{}: {error}", display_name(info)));
+            match siderita_ops::restore_from_trash(info, &cancellation) {
+                Ok(restored) if !restored.left_behind.is_empty() => failures.push(
+                    super::display::left_behind_line(&restored.to, restored.left_behind.len()),
+                ),
+                Ok(_) => {}
+                Err(error) => failures.push(format!("{}: {error}", display_name(info))),
             }
         }
         // Refresh first (both clear op_error), then report any failures last.

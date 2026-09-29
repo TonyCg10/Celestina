@@ -4,6 +4,29 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-17 — Replacing, moving to a stick, and restoring another tool's Trash
+
+- **Status:** pending
+- **Related implementation:** `SID-H1-B`
+- **Requires:** a verified Siderita artifact on the real Niri/Wayland session,
+  a USB stick mounted writable (ideally FAT or exFAT, as it came), a folder
+  of several hundred megabytes on the home disk, and Nautilus
+- **Procedure:** paste a file over one of the same name and answer
+  «Reemplazar», then do the same with a folder and cancel it half-way; cut the
+  large folder, paste it on the stick, and while it copies save a new file into
+  the source folder from another application; delete a file on the stick with
+  Nautilus, then open Papelera in Siderita and restore it
+- **Pass condition:** a finished replacement shows the new entry under the
+  old name and the old one in Papelera; a cancelled one leaves the old entry
+  exactly where it was and no hidden `.siderita-replace-` entry behind; the cut
+  ends with a line saying some items stayed, the new file is still in the
+  source folder, and the clipboard still holds the cut; the stick's own
+  `.Trash-$uid` receives Siderita's deletes too; the Nautilus-deleted file is
+  listed and returns to its folder on the stick
+- **Result:** not run by hand
+- **Evidence:** the stick's filesystem and mount options (`findmnt`), `ls -a`
+  of its root, and any failure text
+
 ## VAL-SID-U1 — A folder's occupation in the properties dialog and the quick look
 
 - **Status:** pending

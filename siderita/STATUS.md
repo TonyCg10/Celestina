@@ -4,8 +4,9 @@
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4`, `SID-B1`, `SID-U1`, `SID-U1-B` and `SID-U1-C` are closed and archived;
   `SID-H1`, the hardening that follows the 2026-09-26 monorepo audit, is the
-  active checkpoint: `SID-H1-A` contains archive extraction to its root and
-  the other units are planned
+  active checkpoint: `SID-H1-A` contains archive extraction to its root,
+  `SID-H1-B`, the loss-free `siderita-ops` verbs, is active, and the other
+  units are planned
   ([plan](docs/plans/active/2026-09-26-hardening.md)); the portal-parenting one
   remains planned
 - **Author validation:** mixed; current manual queue is in

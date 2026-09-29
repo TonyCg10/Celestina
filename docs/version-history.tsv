@@ -177,3 +177,4 @@ magnetita-android	1.0.2	bug	AND-6-D	Require consent before pairing and gate desk
 siderita	1.7.3	bug	SID-H1-A	Fix archive extraction escaping its root and the password on argv
 grafita	1.2.5	bug	GRA-H1-A	Harden the document importer against hostile input
 fluorita	1.3.6	bug	FLU-H1-A	Harden Replace to trash its original and bound what files claim
+siderita	1.7.4	bug	SID-H1-B	Keep copy, move, Trash and restore from deleting what they did not create

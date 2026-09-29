@@ -10,7 +10,7 @@ use crate::trashinfo::trashed_file_for;
 /// counterpart to [`restore_from_trash`](crate::restore_from_trash) — the entry
 /// is gone from disk, not moved anywhere.
 ///
-/// Takes the info-file path — the same identity [`list_home_trash`] reports and
+/// Takes the info-file path — the same identity [`list_trash`] reports and
 /// restore consumes — so a Trash browser can purge exactly what it listed. The
 /// body is unlinked without following a symlink (a symlinked directory is
 /// unlinked, never recursed into), and a directory body is removed whole. A body
@@ -19,7 +19,7 @@ use crate::trashinfo::trashed_file_for;
 /// dropped last, so a failure removing the body leaves the entry still listed
 /// and retryable rather than orphaning the info.
 ///
-/// [`list_home_trash`]: crate::list_home_trash
+/// [`list_trash`]: crate::list_trash
 pub fn purge_from_trash(info: &Path) -> Result<(), OpError> {
     let trashed = trashed_file_for(info).ok_or_else(|| OpError::Io {
         path: info.to_path_buf(),

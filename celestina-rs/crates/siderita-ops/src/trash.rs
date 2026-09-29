@@ -9,6 +9,7 @@ use celestina_core::{percent, CancellationToken};
 use crate::copy::Progress;
 use crate::error::OpError;
 use crate::relocate::{is_cross_device, relocate_by_copy};
+use crate::reserve::{rename_without_replacing, RenameFailure};
 
 /// Where an entry landed after being sent to the Trash.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -19,18 +20,28 @@ pub struct Trashed {
     pub trashed: PathBuf,
     /// The `Trash/info/<name>.trashinfo` recording where it came from.
     pub info: PathBuf,
+    /// Entries a trashing by copy (into a Trash on another filesystem) left
+    /// at the original location because they arrived or changed during the
+    /// copy; see [`crate::Moved::left_behind`]. Empty for a rename.
+    pub left_behind: Vec<PathBuf>,
 }
 
 /// Sends `source` to the Trash it belongs in: the home one
 /// (`$XDG_DATA_HOME/Trash`) when they share a filesystem, and the volume's own
 /// (`.Trash-$uid`, or a sticky shared `.Trash/$uid`) otherwise.
 ///
+/// The record's `Path=` is relative to the volume's top directory in a
+/// volume's Trash, as GIO writes it, so the entry still restores when the
+/// volume is mounted somewhere else; in the home Trash it is absolute.
+///
 /// Follows the spec's ordering: an `info/<name>.trashinfo` is created with
 /// `O_EXCL` first, which reserves a unique name, and only then is the entry
-/// moved into `files/<name>`. On the same filesystem the move is an atomic
-/// rename; if the entry lives on another filesystem it is copied, verified and
-/// only then removed (the same no-data-loss path as a cross-device move). A
-/// failure rolls the reserved info file back.
+/// moved into `files/<name>`. That move never replaces anything: a
+/// `files/<name>` that already exists (an orphan body, or one another tool
+/// left) makes the name unusable and the next free one is taken. On the same
+/// filesystem the move is a rename; if the entry lives on another filesystem
+/// it is copied, synced, verified and only then removed (the same no-data-loss
+/// path as a cross-device move). A failure rolls the reserved info file back.
 ///
 /// Which Trash is chosen matters for more than tidiness: trashing into the home
 /// Trash from another disk copies every byte onto the home filesystem, so a
@@ -60,8 +71,8 @@ pub fn trash(
         Err(error) => return Err(OpError::io(source, &error)),
     }
 
-    let home = crate::volume::trash_home_for(source)?;
-    trash_into(source, &home.root, cancellation, progress)
+    let root = crate::volume::trash_home_for(source)?;
+    trash_into(source, &root, cancellation, progress)
 }
 
 /// Sends `source` into the Trash directory rooted at `trash_root` (which will
@@ -89,48 +100,90 @@ pub(crate) fn trash_into(
     fs::create_dir_all(&files_dir).map_err(|error| OpError::io(&files_dir, &error))?;
     fs::create_dir_all(&info_dir).map_err(|error| OpError::io(&info_dir, &error))?;
 
-    // Reserve a free name by creating its .trashinfo with O_EXCL.
-    let (trashed_name, info_path, mut info_file) = reserve_name(&info_dir, name)?;
-
-    let content = trashinfo(&original);
-    if let Err(error) = info_file.write_all(content.as_bytes()) {
-        let _ = fs::remove_file(&info_path);
-        return Err(OpError::io(&info_path, &error));
-    }
-    drop(info_file);
-
-    let destination = files_dir.join(&trashed_name);
-    match fs::rename(source, &destination) {
-        Ok(()) => {}
-        Err(error) if is_cross_device(&error) => {
-            if let Err(moved) = relocate_by_copy(source, &destination, cancellation, progress) {
-                let _ = fs::remove_file(&info_path);
-                return Err(moved);
-            }
-        }
+    let source_is_directory = match fs::symlink_metadata(source) {
+        Ok(data) => data.is_dir(),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            let _ = fs::remove_file(&info_path);
             return Err(OpError::SourceMissing {
                 path: source.to_path_buf(),
             });
         }
-        Err(error) => {
-            let _ = fs::remove_file(&info_path);
-            return Err(OpError::io(&destination, &error));
-        }
-    }
+        Err(error) => return Err(OpError::io(source, &error)),
+    };
+    // Relative to the volume's top in a volume's Trash, absolute at home.
+    let content = trashinfo(&crate::volume::recorded_path(&original, trash_root));
 
-    Ok(Trashed {
-        original,
-        trashed: destination,
-        info: info_path,
-    })
+    let mut attempt = 0;
+    loop {
+        // Reserve a free name by creating its .trashinfo with O_EXCL.
+        let (trashed_name, info_path, mut info_file, next) =
+            reserve_name(&info_dir, &files_dir, name, attempt)?;
+        attempt = next;
+
+        if let Err(error) = info_file.write_all(content.as_bytes()) {
+            let _ = fs::remove_file(&info_path);
+            return Err(OpError::io(&info_path, &error));
+        }
+        drop(info_file);
+
+        let destination = files_dir.join(&trashed_name);
+        let left_behind = match rename_without_replacing(source, &destination, source_is_directory)
+        {
+            Ok(()) => Vec::new(),
+            // Another entry took `files/<name>` after the name was chosen:
+            // give the record back and take the next name.
+            Err(RenameFailure::Taken) => {
+                let _ = fs::remove_file(&info_path);
+                continue;
+            }
+            Err(RenameFailure::Io(error)) if is_cross_device(&error) => {
+                match relocate_by_copy(source, &destination, cancellation, progress) {
+                    Ok(left_behind) => left_behind,
+                    Err(OpError::AlreadyExists { path }) if path == destination => {
+                        let _ = fs::remove_file(&info_path);
+                        continue;
+                    }
+                    Err(moved) => {
+                        let _ = fs::remove_file(&info_path);
+                        return Err(moved);
+                    }
+                }
+            }
+            Err(RenameFailure::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+                let _ = fs::remove_file(&info_path);
+                return Err(OpError::SourceMissing {
+                    path: source.to_path_buf(),
+                });
+            }
+            Err(RenameFailure::Io(error)) => {
+                let _ = fs::remove_file(&info_path);
+                return Err(OpError::io(&destination, &error));
+            }
+        };
+
+        return Ok(Trashed {
+            original,
+            trashed: destination,
+            info: info_path,
+            left_behind,
+        });
+    }
 }
 
 /// Creates `info/<candidate>.trashinfo` with `O_EXCL`, suffixing the name until
-/// a free one is found, and returns the reserved name, its info path and handle.
-fn reserve_name(info_dir: &Path, base: &OsStr) -> Result<(OsString, PathBuf, File), OpError> {
-    for attempt in 0..10_000u32 {
+/// a free one is found, starting at suffix `from`, and returns the reserved
+/// name, its info path and handle, and the suffix to resume from if the move
+/// then finds `files/<name>` taken after all.
+///
+/// A candidate whose `files/<name>` already exists is skipped as well, so an
+/// orphan body is never the target of a move; the move itself refuses to
+/// replace one that appears later.
+fn reserve_name(
+    info_dir: &Path,
+    files_dir: &Path,
+    base: &OsStr,
+    from: u32,
+) -> Result<(OsString, PathBuf, File, u32), OpError> {
+    for attempt in from..10_000u32 {
         let candidate = if attempt == 0 {
             base.to_os_string()
         } else {
@@ -139,12 +192,18 @@ fn reserve_name(info_dir: &Path, base: &OsStr) -> Result<(OsString, PathBuf, Fil
             suffixed
         };
 
+        match fs::symlink_metadata(files_dir.join(&candidate)) {
+            Ok(_) => continue,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(OpError::io(&files_dir.join(&candidate), &error)),
+        }
+
         let mut info_name = candidate.clone();
         info_name.push(".trashinfo");
         let info_path = info_dir.join(&info_name);
 
         match File::create_new(&info_path) {
-            Ok(file) => return Ok((candidate, info_path, file)),
+            Ok(file) => return Ok((candidate, info_path, file, attempt + 1)),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(OpError::io(&info_path, &error)),
         }
@@ -340,5 +399,64 @@ mod tests {
     fn format_utc_matches_a_known_instant() {
         // 2021-01-01T00:00:00 UTC = 1609459200.
         assert_eq!(format_utc(1_609_459_200), "2021-01-01T00:00:00");
+    }
+
+    /// SID-14: a body already sitting at `files/<name>` without a record (an
+    /// orphan, or another tool's) is never replaced by a new trashing.
+    #[test]
+    fn an_orphan_body_in_files_is_never_replaced() {
+        let dir = TestDir::new("orphan-body");
+        let trash_root = dir.path().join("Trash");
+        fs::create_dir_all(trash_root.join("files")).expect("mk files");
+        let orphan = trash_root.join("files/note.txt");
+        fs::write(&orphan, b"orphan").expect("seed orphan");
+        let source = dir.path().join("note.txt");
+        fs::write(&source, b"new").expect("seed source");
+
+        let trashed = trash_into(&source, &trash_root, &live(), &mut |_| {}).expect("trash");
+
+        assert_ne!(trashed.trashed, orphan, "the orphan's name was reused");
+        assert_eq!(fs::read(&orphan).expect("orphan kept"), b"orphan");
+        assert_eq!(fs::read(&trashed.trashed).expect("trashed"), b"new");
+    }
+
+    /// Review round 2, minor B: in a volume's Trash the record is relative to
+    /// the volume's top, so it restores after the volume is mounted at another
+    /// path. Two directories stand in for the two mount points.
+    #[test]
+    fn a_volume_record_is_relative_and_survives_a_remount() {
+        let dir = TestDir::new("remount");
+        let first = dir.path().join("first-mount");
+        fs::create_dir_all(first.join("docs")).expect("mk docs");
+        let source = first.join("docs/nota uno.txt");
+        fs::write(&source, b"on the stick").expect("seed");
+
+        let trashed =
+            trash_into(&source, &first.join(".Trash-1000"), &live(), &mut |_| {}).expect("trash");
+        let record = fs::read_to_string(&trashed.info).expect("read info");
+        assert!(record.contains("\nPath=docs/nota%20uno.txt\n"), "{record}");
+
+        let second = dir.path().join("second-mount");
+        fs::rename(&first, &second).expect("remount elsewhere");
+        let info = second.join(".Trash-1000/info/nota uno.txt.trashinfo");
+        let restored = crate::restore_from_trash(&info, &live()).expect("restore");
+
+        assert_eq!(restored.to, second.join("docs/nota uno.txt"));
+        assert_eq!(fs::read(&restored.to).expect("back"), b"on the stick");
+    }
+
+    /// The home Trash keeps writing the absolute path.
+    #[test]
+    fn a_home_record_stays_absolute() {
+        let dir = TestDir::new("home-absolute");
+        let source = dir.path().join("nota.txt");
+        fs::write(&source, b"x").expect("seed");
+        let trashed =
+            trash_into(&source, &dir.path().join("Trash"), &live(), &mut |_| {}).expect("trash");
+        let record = fs::read_to_string(&trashed.info).expect("read info");
+        assert!(
+            record.contains(&format!("\nPath={}\n", url_encode(&source))),
+            "{record}"
+        );
     }
 }

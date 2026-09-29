@@ -1,13 +1,40 @@
+//! language-contract: product-copy
+//!
 //! Deciding and performing one paste.
 //!
 //! Planning is separate from writing because the interesting question is
 //! settled before any byte moves: which sources survive, which collisions the
 //! user still has to answer, and which "collision" is an entry meeting itself.
+//!
+//! The marker above declares the Spanish here: the failure lines a paste
+//! collects, and the "copia" marker of a kept-both name, are what a person
+//! reads.
 
 use super::{display_name, ConflictStrategy};
 use celestina_core::CancellationToken;
 use siderita_ops::Progress;
 use std::path::{Path, PathBuf};
+
+/// Records a move's leftovers, if it had any: a line the batch reports and,
+/// for a cut, the source kept on the clipboard, since part of it is still
+/// there. Answers whether there were any.
+fn note_left_behind(
+    source: &Path,
+    left_behind: &[PathBuf],
+    cut: bool,
+    outcome: &mut PasteOutcome,
+) -> bool {
+    if left_behind.is_empty() {
+        return false;
+    }
+    outcome
+        .failures
+        .push(super::display::left_behind_line(source, left_behind.len()));
+    if cut {
+        outcome.unmoved.push(source.to_path_buf());
+    }
+    true
+}
 
 /// A paste held back because at least one destination already exists, waiting
 /// for the user's conflict choices before the worker starts.
@@ -178,18 +205,31 @@ pub(crate) fn paste_one(
     match strategy {
         ConflictStrategy::Skip => outcome.skipped += 1,
         ConflictStrategy::Replace => {
-            // Trash the existing entry (recoverable) before placing the source,
-            // so nothing is hard-deleted to make room.
-            if let Err(error) = siderita_ops::trash(&target, token, on_progress) {
-                outcome
-                    .failures
-                    .push(format!("{}: {error}", display_name(source)));
-                if cut {
-                    outcome.unmoved.push(source.to_path_buf());
+            // The domain places the new entry first, under a hidden name, and
+            // only then sends the existing one to the Trash (recoverable) and
+            // renames the new one into place: a placement that fails or is
+            // cancelled leaves the existing entry untouched, and a target that
+            // holds the source is refused before anything moves.
+            let replaced = if cut {
+                siderita_ops::replace_with_move(source, &target, token, on_progress)
+            } else {
+                siderita_ops::replace_with_copy(source, &target, token, on_progress)
+            };
+            match replaced {
+                Ok(replaced) => {
+                    note_left_behind(source, &replaced.left_behind, cut, outcome);
                 }
-                return;
+                Err(error) => {
+                    outcome
+                        .failures
+                        .push(format!("{}: {error}", display_name(source)));
+                    // A failed replacement moves a cut source back; only if it
+                    // is really still there does the clipboard keep it.
+                    if cut && std::fs::symlink_metadata(source).is_ok() {
+                        outcome.unmoved.push(source.to_path_buf());
+                    }
+                }
             }
-            place_into(source, destination_dir, cut, token, on_progress, outcome);
         }
         ConflictStrategy::KeepBoth => {
             // A folder's name has no extension to preserve; a file's does.
@@ -200,7 +240,9 @@ pub(crate) fn paste_one(
             };
             let freed = siderita_ops::next_available(destination_dir, name, "copia", shape);
             let result = if cut {
-                siderita_ops::move_as(source, &freed, token, on_progress).map(|_| ())
+                siderita_ops::move_as(source, &freed, token, on_progress).map(|moved| {
+                    note_left_behind(source, &moved.left_behind, cut, outcome);
+                })
             } else {
                 siderita_ops::copy_as(source, &freed, token, on_progress)
             };
@@ -216,8 +258,8 @@ pub(crate) fn paste_one(
     }
 }
 
-/// The plain placement (copy or move into a directory, keeping the source name),
-/// shared by the no-collision path and by "replace" after the old entry is gone.
+/// The plain placement (copy or move into a directory, keeping the source
+/// name), for a source whose name is free in the destination.
 fn place_into(
     source: &Path,
     destination_dir: &Path,
@@ -228,9 +270,14 @@ fn place_into(
 ) {
     if cut {
         match siderita_ops::move_entry(source, destination_dir, token, on_progress) {
+            // A move that left part of its source behind is split in two
+            // places; undoing it would collide with that part, so it is not
+            // offered.
             Ok(moved) => {
-                if let Some(parent) = moved.from.parent() {
-                    outcome.undo_moves.push((moved.to, parent.to_path_buf()));
+                if !note_left_behind(source, &moved.left_behind, cut, outcome) {
+                    if let Some(parent) = moved.from.parent() {
+                        outcome.undo_moves.push((moved.to, parent.to_path_buf()));
+                    }
                 }
             }
             Err(error) => {
@@ -249,7 +296,8 @@ fn place_into(
 
 #[cfg(test)]
 mod tests {
-    use super::{holds_exactly, plan_paste, ConflictStrategy};
+    use super::{holds_exactly, paste_one, plan_paste, ConflictStrategy, PasteOutcome};
+    use celestina_core::CancellationToken;
     use std::path::PathBuf;
 
     /// A scratch directory of this test's own, in the repository idiom: named
@@ -313,5 +361,54 @@ mod tests {
         ));
         assert!(!holds_exactly(&[PathBuf::from("/tmp/a")], &consumed));
         assert!(!holds_exactly(&[], &consumed));
+    }
+
+    fn empty_outcome() -> PasteOutcome {
+        PasteOutcome {
+            total: 1,
+            sources: Vec::new(),
+            failures: Vec::new(),
+            unmoved: Vec::new(),
+            undo_moves: Vec::new(),
+            skipped: 0,
+            conflict_touched: false,
+            cancelled: false,
+        }
+    }
+
+    /// SID-15: "Reemplazar" on `a/x/x` pasted into `a` would trash `a/x`, and
+    /// the source inside it. The replacement is refused before anything moves,
+    /// for a copy and for a cut, and a cut source stays on the clipboard.
+    #[test]
+    fn replacing_a_folder_that_holds_the_source_is_refused_and_touches_nothing() {
+        let folder = scratch("replace-ancestor");
+        let holder = folder.join("x");
+        std::fs::create_dir(&holder).expect("mk holder");
+        let source = holder.join("x");
+        std::fs::write(&source, b"inner").expect("write fixture");
+
+        for cut in [false, true] {
+            let mut outcome = empty_outcome();
+            paste_one(
+                &source,
+                &folder,
+                cut,
+                ConflictStrategy::Replace,
+                &CancellationToken::new(),
+                &mut |_| {},
+                &mut outcome,
+            );
+            assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+            assert!(outcome.conflict_touched);
+            assert_eq!(std::fs::read(&source).expect("source kept"), b"inner");
+            assert!(holder.is_dir(), "the holder was not trashed");
+            let expected: Vec<PathBuf> = if cut {
+                vec![source.clone()]
+            } else {
+                Vec::new()
+            };
+            assert_eq!(outcome.unmoved, expected);
+        }
+        let _ = std::fs::remove_dir_all(&folder);
     }
 }
