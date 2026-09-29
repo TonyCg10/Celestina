@@ -346,3 +346,29 @@ with the ruling that settled each:
 - **Base revision:** `9d022dd5d2f4935550194d10a5131b91ef184889`
 - **Check:** not applicable: the suite unit changes no registered production or verification input
 - **Build:** none; no registered production input changed
+
+## Addendum 2026-09-27: shell halted
+
+Appended on 2026-09-27; the record above is unchanged.
+
+The author halted the Celestina shell on 2026-09-27 (see
+[Halted projects](../../AGENTS.md#halted-projects)). The consequences for
+this program:
+
+- Every `SH-*` finding (SH-1 to SH-21), in this record and in
+  [the shell and style audit record](2026-09-26-monorepo-audit-shell-style.md),
+  stays recorded exactly as written and will not be acted on.
+- P-10 (`SURF-1-E`) and P-17 (`SURF-1-F`) are withdrawn from the delivery
+  program. Their rows remain in the shell's plan, unedited and frozen by the
+  halt.
+- The shell halves of shared findings fall with them: the shell adoption of
+  RS-1, RS-2, RS-3 and RS-6, RS-18 in `celestina-shell-core`, the crate
+  documentation that P-6 would have corrected there, and SH-6's token and
+  contract half in P-16, which exists only for the shell's lock. The shared
+  owners and every other product's adoption are unaffected.
+- The backlog items SH-16 and SH-18 are withdrawn.
+- No landing in this program builds, verifies or deploys the shell, even
+  when a unit changes one of its registered production inputs.
+
+The finding counts in the summary above are those of the audit as run; they
+are not recomputed.

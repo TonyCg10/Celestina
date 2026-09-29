@@ -1,5 +1,10 @@
 # Celestina author validation
 
+> **Halted.** The author halted this project on 2026-09-27; see
+> [Halted projects](../AGENTS.md#halted-projects) in the root contract. The
+> cases below keep their recorded statuses, and the pending ones stay
+> recorded but are not scheduled: no agent prepares, proposes or runs them.
+
 This is the manual validation lane. It is entered only when the author asks to
 exercise the live Niri session, hardware, appearance or accessibility. Pending
 or deferred cases here do not keep an implementation milestone open.

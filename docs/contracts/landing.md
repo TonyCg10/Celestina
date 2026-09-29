@@ -239,7 +239,9 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    `docs/projects.toml` and the debt ratchets. A unit that changes a shared
    path therefore marks every registered project, and each one whose
    production inputs and artifacts are current takes the verification-only
-   path below, with no build.
+   path below, with no build. A project the registry marks `halted` is never
+   affected, not even as the owner: no landing builds, verifies or deploys it
+   (see [Halted projects](../../AGENTS.md#halted-projects)).
    A production input the tip's registry names but the tip lacks stops the
    landing at `build_if_stale`, naming the project and the pattern. For each
    affected project, it runs

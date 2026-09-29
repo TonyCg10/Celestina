@@ -1,7 +1,20 @@
 # Celestina implementation roadmap
 
-- **Status:** active
+- **Status:** blocked
 - **Active implementation checkpoint:** SURF-1
+
+**Halted.** The author halted the Celestina shell on 2026-09-27: no further
+implementation, audit, refactor, build, verification, deployment or
+activation happens here, and nothing new is proposed. See
+[Halted projects](../AGENTS.md#halted-projects) in the root contract. The
+status is `blocked` rather than `idle` only because the documentation
+contract cannot archive a plan whose rows are unfinished: the
+[SURF-1 plan](docs/plans/active/2026-08-20-persistent-carriers.md) stays in
+place as a record, unedited since the halt: `SURF-1-A`, `SURF-1-B` and
+`SURF-1-C` keep the status `active` and `SURF-1-E` and `SURF-1-F` the status
+`planned` that they had when it came, and the halt freezes all five. The
+halt is the named condition and it is not a task: nobody works to clear it.
+The tables below are history.
 
 This roadmap contains only work an agent can implement and verify. Real Niri,
 hardware, visual and assistive-technology checks live in
@@ -35,12 +48,12 @@ of the design when they provide the narrow capability the shell needs.
 | DIAG-1 | complete | Make the seconds before a freeze reconstructable, without recording anything private |
 | WMAP-1 | complete | Show what a workspace holds, as its real layout, without focusing it |
 | PANEL-1 | complete | Replace the hard panel plate with borderless compositor glass and route contextual content through the canonical shared glass material |
-| UX-2 | planned | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
+| UX-2 | halted | Establish and then implement one coherent shell-wide visual and interaction language after SHELL-D5 is applied |
 | R6 | complete | First-party `ext-session-lock` and deterministic lock-before-suspend, with `VAL-R6` still unrun |
 | LOCK-1 | complete | Let the session recede behind its own blurred wallpaper instead of vanishing into an opaque slab, and uncover it continuously |
 | LIVE-1 | complete | Make the shell survive and look right on the real session: the crash, the membrane that only reached the primary monitor, the missing connectivity indicators, and two providers that misread the machine |
 | BUBBLE-1 | complete | Present Melibea's native minimized windows as a compact shell bubble group and accessible selector |
-| SURF-1 | active | End the per-popup whole-output map/unmap churn with persistent parked carriers |
+| SURF-1 | halted | End the per-popup whole-output map/unmap churn with persistent parked carriers |
 | R8 | complete | Reversible Noctalia removal and the first-party Polkit agent are delivered; live departure remains `VAL-R8` |
 | R9 | conditional | Keep the independent greeter unless a demonstrated regression reopens it |
 
@@ -703,7 +716,11 @@ and [delivery evidence](docs/evidence/2026-08-18-melibea-bubbles.md).
 Coordinated window-to-bubble motion and any future preview contract remain
 Melibea M7 work, not part of this checkpoint.
 
-## SURF-1 — Persistent carriers end the per-popup scene change (active)
+## SURF-1 — Persistent carriers end the per-popup scene change (halted)
+
+Halted on 2026-09-27 with `SURF-1-A`, `SURF-1-B` and `SURF-1-C` unfinished and
+the audit rows `SURF-1-E` and `SURF-1-F` never started; the plan's ledger
+is kept as the halt found it. See the Halted note at the top of this roadmap.
 
 **Outcome:** opening or closing any panel menu, focused overlay, on-screen
 display or toast changes only content inside surfaces that are already
@@ -777,7 +794,9 @@ concurrent process are the author's own live use to keep confirming; no
 `VAL-*` checkpoint was opened because both are already-observed live
 behaviour rather than a pending procedure.
 
-## UX-2 — Shell visual and interaction language (planned)
+## UX-2 — Shell visual and interaction language (halted)
+
+Halted on 2026-09-27 before any plan existed; it will not start.
 
 **Outcome:** the panel, overlays, context menus and future clock/date surface
 read as one deliberate shell: clear hierarchy, purposeful iconography,

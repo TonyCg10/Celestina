@@ -1,6 +1,12 @@
 # Celestina status
 
-- **Updated:** 2026-09-19
+- **Updated:** 2026-09-27
+- **Focus:** halted. The author halted the Celestina shell on 2026-09-27; no
+  work of any kind is planned, proposed or scheduled here. See
+  [Halted projects](../AGENTS.md#halted-projects) in the root contract. Every
+  entry below is history kept for rollback and reference, not a next step
+- **Blockers:** none. The halt is the author's decision, not a blocker for an
+  agent to clear; only the author lifts it, by editing that root section
 - **CAST-1 (complete, 1.3.2):** the shared screen no longer freezes on its
   first frame. The defect was upstream's (`xdg-desktop-portal-wlr` 0.8.x never
   asks PipeWire for the next cycle on the wlr-screencopy path niri exposes;
@@ -30,17 +36,14 @@
 - **Implementation:** R0-R7, R8's departure slice, LVR-1 through LVR-3, the
   static hardening previously drafted as `AUD-1`, `UX-1` and `WSG-1` are
   complete; `BUBBLE-1` is complete and deployed as Celestina 0.32.0.
-  `SURF-1` is active under
-  [the persistent-carriers plan](docs/plans/active/2026-08-20-persistent-carriers.md):
-  every popup route still maps and unmaps a whole-output carrier per open,
-  which is the scene-change churn the author measured (2026-08-18) as a
-  slight physical flicker of that monitor; the checkpoint parks the carriers
-  persistently and moves the companion unpark from a timer to Niri fullscreen
-  state. All three units are implemented and exercised in the nest against
-  the compositor's own layer list
-  ([evidence](docs/evidence/2026-08-20-persistent-carriers-nest-exercise.md));
-  the production bundle is verified and deployed without activating the
-  session, which runs Noctalia. Activation and `VAL-SURF-1` are the author's
+  `SURF-1` is halted with
+  [the persistent-carriers plan](docs/plans/active/2026-08-20-persistent-carriers.md)
+  left open as a record: `SURF-1-A`, `SURF-1-B` and `SURF-1-C` were
+  implemented and exercised in the nest against the compositor's own layer
+  list ([evidence](docs/evidence/2026-08-20-persistent-carriers-nest-exercise.md))
+  but never closed, and the audit rows `SURF-1-E` and `SURF-1-F` never
+  started. The ledger keeps those rows as the halt found them, and the
+  halt freezes all five
 - **Design direction:** `PANEL-1` is active for the author-selected borderless
   glass bar: one nearly transparent, shadowless `ContextualVeil` reaches
   edge-to-edge with no outer margin and owns one real compositor-blur region.
@@ -65,8 +68,8 @@
   the same drop membrane, from the panel icon of what they report, retreat to
   their own corners when the zone is taken, and the display stays silent while
   its own menu is open: no surface paints
-  its own opaque plate, and none captures a scene it is not part of. The rest of `UX-2`
-  remains planned under the still-open `SHELL-D5` discussion
+  its own opaque plate, and none captures a scene it is not part of. `UX-2` is
+  halted and will not start
 - **Author validation:** the author closed the LVR-3 phase on 2026-08-07 after
   first-generation media, the four-item tray, Bluetooth state retention,
   output-triggered DDC rediscovery, outside-click dismissal and a clean
@@ -111,7 +114,10 @@ full day is `VAL-R8`, and it has not been claimed. See
 
 ## Implementation checkpoint
 
-No implementation checkpoint is active. `BUBBLE-1` delivered Melibea's
+The project is halted (2026-09-27). `SURF-1` is the last checkpoint the
+roadmap names; it is `blocked` by the halt, its plan's ledger is kept as the
+halt found it, and nothing will resume it. The
+paragraph below is the record of the previous checkpoint. `BUBBLE-1` delivered Melibea's
 compositor-authoritative native minimized state as one compact panel bubble
 group and an accessible selector; Celestina never owns window lifetime and
 removes nothing optimistically. The 0.32.0 bundle and the combined Niri binary

@@ -1,6 +1,6 @@
 # Suite status
 
-- **Updated:** 2026-09-26
+- **Updated:** 2026-09-27
 - **Current focus:** AUD-1, the monorepo hardening program that follows the
   2026-09-26 audit; project units of the same program follow each local
   roadmap
@@ -44,8 +44,9 @@ thread, and a delivery pipeline whose CI has been red since 2026-09-25. The
 suite plan carries the pipeline and cross-suite rows (`AUD-1-A` to
 `AUD-1-F`); each affected project carries its own rows, in a new hardening
 plan (Siderita, Hematita, Grafita, Fluorita, the Rust workspace) or as new
-rows of its active plan (Celestina, CelestinaStyle, Magnetita, Magnetita
-Android). Only documentation-only suite units land from a container without
+rows of its active plan (CelestinaStyle, Magnetita, Magnetita Android; the
+Celestina shell's rows were withdrawn when the author halted the shell on
+2026-09-27, see [Halted projects](AGENTS.md#halted-projects)). Only documentation-only suite units land from a container without
 Qt, libmpv or the Android SDK; every other unit is prepared on its own branch
 and landed by the author in program order. The findings and rulings are in
 [the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md) and the
@@ -87,7 +88,7 @@ pre-migration detail is explicitly historical and is not current instruction.
 |---|---|---|
 | Governance foundation | complete | archived GOV-1 plan |
 | Project document migration | complete | root/project canonical documents and histories |
-| Reusable production artifacts | entries complete for all seven projects | production evidence |
+| Reusable production artifacts | entries complete for all seven projects; the Celestina shell's are halted since 2026-09-27 and no landing runs them | production evidence |
 | Registry-backed guards and commit policy | complete | production/documentation/architecture/hook fixtures |
 | Product version convention | complete | registered sources, typed commits and append-only history |
 | Repository language | canonical rules and current guard success output are English; legacy diagnostics and code/UI debt remain ratcheted | language standard and guard |
@@ -108,7 +109,9 @@ python3 scripts/check-language-contract.py
 
 ## Blockers
 
-No governance blocker is recorded. Product-specific blockers live only in
+No governance blocker is recorded. The Celestina shell is halted by the
+author's decision of 2026-09-27; that is a decision, not a blocker, and it is
+recorded in [Halted projects](AGENTS.md#halted-projects). Product-specific blockers live only in
 their project status documents.
 
 ## Evidence

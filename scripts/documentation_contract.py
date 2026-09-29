@@ -19,6 +19,7 @@ from urllib.parse import unquote, urlsplit
 from project_registry import (
     CommitScope,
     build_commit_scopes,
+    halted_projects,
     parse_subject_prefix,
     path_allowed,
     pathspec_allowed,
@@ -482,6 +483,10 @@ class DocumentationContract:
             self.commit_scopes = build_commit_scopes(self.registry)
         except (KeyError, TypeError, ValueError) as error:
             self.error("docs/projects.toml", f"invalid commit scope: {error}")
+        try:
+            halted_projects(self.registry)
+        except ValueError as error:
+            self.error("docs/projects.toml", f"invalid halt: {error}")
 
         version_policy = self.registry.get("version_policy")
         if version_policy is not None:

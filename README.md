@@ -16,7 +16,7 @@ direction is [docs/VISION.md](docs/VISION.md); current work is
 |---|---|---|
 | [celestina-rs](celestina-rs/) | Pure shared domain, protocol, IO and engine crates | Rust |
 | [celestina-style](celestina-style/) | Shared semantic tokens, assets and QML controls | Qt Quick/QML |
-| [celestina](celestina/) | Niri shell, panel, overlays and session command service | Rust · C++20 · Qt/QML |
+| [celestina](celestina/) | Niri shell, panel, overlays and session command service; **halted** since 2026-09-27, see [Halted projects](AGENTS.md#halted-projects) | Rust · C++20 · Qt/QML |
 | [siderita](siderita/) | File manager and desktop file chooser | Rust · CXX-Qt · QML |
 | [magnetita](magnetita/) | Phone link over its own protocol, daemon and client | Rust · CXX-Qt · QML |
 | [grafita](grafita/) | Text editor, standalone and embedded in Siderita | Rust · CXX-Qt · QML |

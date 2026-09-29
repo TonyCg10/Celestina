@@ -59,6 +59,11 @@ name = "Celestina shell"
 path = "celestina"
 kind = "qt-shell"
 commit_prefix = "celestina"
+# The author halted the shell on this date; AGENTS.md "Halted projects" is the
+# rule. agent-context.py announces it, commit_scope.py refuses its prefixes and
+# paths, and the landing never builds, verifies or deploys it. Only the author
+# lifts it, by editing that section and removing this key.
+halted = "2026-09-27"
 version_source = { kind = "cmake-project", path = "celestina/CMakeLists.txt", project = "celestina" }
 version_mirrors = [
   { kind = "cargo-package", path = "celestina/Cargo.toml", package = "celestina-shell" },

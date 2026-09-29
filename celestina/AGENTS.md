@@ -1,5 +1,12 @@
 # celestina — Niri shell local contract
 
+> **Halted.** This project is halted by the author's decision of 2026-09-27.
+> Do not plan, audit, change, build, verify, deploy, or activate anything
+> here, and do not propose work on it. See
+> [Halted projects](../AGENTS.md#halted-projects) in the root contract; only
+> the author lifts the halt, by editing that section. The rest of this file is
+> kept as history.
+
 This file inherits the root [`AGENTS.md`](../AGENTS.md) in full. It defines the
 shell's Rust/C++/Qt/QML boundary; it does not authorize activating surfaces,
 editing Niri, hiding Noctalia, or installing tools.

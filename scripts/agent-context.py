@@ -18,6 +18,7 @@ from documentation_contract import (
     normalized_status,
     repository_root,
 )
+from project_registry import HaltedProject, halted_projects
 
 
 DOCUMENT_FIELDS = ("readme", "status", "roadmap", "validation")
@@ -275,28 +276,50 @@ def relevant_active_plans(
     return result
 
 
-def resolve_context(root: Path, raw_target: str) -> tuple[list[Path], list[str]]:
+def halt_notice(project: HaltedProject) -> str:
+    return (
+        f"HALTED: {project.name} is halted since {project.since}; "
+        'see AGENTS.md "Halted projects". Stop.'
+    )
+
+
+def halted_owners(
+    registry: dict[str, object], projects: list[dict[str, object]], errors: list[str]
+) -> list[HaltedProject]:
+    """The halted projects among the path's owners, in owner order."""
+    try:
+        halted = {project.id: project for project in halted_projects(registry)}
+    except ValueError as error:
+        errors.append(f"docs/projects.toml: {error}")
+        return []
+    return [halted[str(project.get("id"))] for project in projects if project.get("id") in halted]
+
+
+def resolve_context(
+    root: Path, raw_target: str
+) -> tuple[list[Path], list[str], list[HaltedProject]]:
     errors: list[str] = []
     try:
         registry = load_registry(root)
     except RegistryError as error:
-        return [], [str(error)]
+        return [], [str(error)], []
 
     raw_path = Path(raw_target)
     if not raw_path.is_absolute():
         raw_path = root / raw_path
     lexical_target = Path(os.path.abspath(raw_path))
     if not inside_root(root, lexical_target):
-        return [], [f"lexical path leaves the repository: {raw_target}"]
+        return [], [f"lexical path leaves the repository: {raw_target}"], []
     resolved_target = lexical_target.resolve(strict=False)
     if not inside_root(root, resolved_target):
-        return [], [f"resolved path leaves the repository: {raw_target}"]
+        return [], [f"resolved path leaves the repository: {raw_target}"], []
 
     targets = [lexical_target]
     if resolved_target != lexical_target:
         targets.append(resolved_target)
     relative_targets = [target.relative_to(root) for target in targets]
     projects = projects_for_targets(relative_targets, registry)
+    halted = halted_owners(registry, projects, errors)
 
     result: list[Path] = []
     seen: set[Path] = set()
@@ -346,22 +369,28 @@ def resolve_context(root: Path, raw_target: str) -> tuple[list[Path], list[str]]
         if plan not in seen:
             seen.add(plan)
             result.append(plan)
-    return result, errors
+    return result, errors, halted
 
 
 def main(argv: list[str] | None = None) -> int:
     arguments = parse_args(sys.argv[1:] if argv is None else argv)
     root = arguments.root.resolve()
-    context, errors = resolve_context(root, arguments.path)
+    context, errors, halted = resolve_context(root, arguments.path)
     if errors:
         for error in errors:
             print(f"agent-context: {error}", file=sys.stderr)
         return 1
     relative_context = [path.relative_to(root).as_posix() for path in context]
+    notices = [halt_notice(project) for project in halted]
     if arguments.json:
+        # The JSON array stays a list of paths for its consumers; the halt is
+        # announced on stderr, where a caller reading only stdout still sees it
+        # in its terminal.
+        for notice in notices:
+            print(notice, file=sys.stderr)
         print(json.dumps(relative_context, ensure_ascii=False, indent=2))
     else:
-        print("\n".join(relative_context))
+        print("\n".join([*notices, *relative_context]))
     return 0
 
 

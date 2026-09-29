@@ -799,6 +799,69 @@ elif ! grep -F "path leaves the repository" "$temporary/outside.out" >/dev/null;
     fail "agent-context failed outside the repository without a stable diagnostic"
 fi
 
+# A halted owner is announced before anything else, and the reading order that
+# follows is unchanged, so the agent still finds the root rule that stops it.
+halted_owner=$temporary/halted-owner
+cp -R "$valid" "$halted_owner"
+sed -i '/^commit_prefix = "app"$/a halted = "2026-09-27"' \
+    "$halted_owner/docs/projects.toml"
+halted_notice='HALTED: App is halted since 2026-09-27; see AGENTS.md "Halted projects". Stop.'
+if ! python3 "$checker" --root "$halted_owner" --quiet; then
+    fail "the documentation guard rejected a valid halt"
+fi
+if ! python3 "$context" --root "$halted_owner" app/src/main.rs \
+    > "$temporary/halted-app-context.txt"; then
+    fail "agent-context failed for a halted owner"
+else
+    { printf '%s\n' "$halted_notice"; cat "$expected/app-context.txt"; } \
+        > "$temporary/halted-app-expected.txt"
+    if ! diff -u "$temporary/halted-app-expected.txt" \
+        "$temporary/halted-app-context.txt"; then
+        fail "agent-context did not announce the halted owner first"
+    fi
+fi
+# A shared root counts: the halted app owns core/crates/app-core as a source root.
+if ! python3 "$context" --root "$halted_owner" core/crates/app-core/src/lib.rs \
+    > "$temporary/halted-core-context.txt" ||
+    [ "$(head -n 1 "$temporary/halted-core-context.txt")" != "$halted_notice" ]; then
+    fail "agent-context did not announce a halted owner of a shared source root"
+fi
+# A path the halted project does not own is not announced.
+if ! python3 "$context" --root "$halted_owner" core/README.md \
+    > "$temporary/halted-other-context.txt"; then
+    fail "agent-context failed for a path outside the halted project"
+elif grep -F 'HALTED:' "$temporary/halted-other-context.txt" >/dev/null; then
+    fail "agent-context announced a halt for a path the halted project does not own"
+fi
+# JSON keeps its array of paths; the notice goes to stderr.
+if ! python3 "$context" --root "$halted_owner" --json app/src/main.rs \
+    > "$temporary/halted-app-context.json" 2> "$temporary/halted-app-context.err"; then
+    fail "agent-context --json failed for a halted owner"
+elif ! python3 -c 'import json, sys; json.load(open(sys.argv[1]))' \
+    "$temporary/halted-app-context.json" ||
+    [ "$(cat "$temporary/halted-app-context.err")" != "$halted_notice" ]; then
+    fail "agent-context --json did not keep its array and announce the halt on stderr"
+fi
+
+bad_halt=$temporary/bad-halt
+cp -R "$valid" "$bad_halt"
+sed -i '/^commit_prefix = "app"$/a halted = "2026-02-30"' \
+    "$bad_halt/docs/projects.toml"
+if python3 "$checker" --root "$bad_halt" --quiet \
+    > "$temporary/bad-halt-checker.out" 2>&1; then
+    fail "the documentation guard accepted a halt that is not a calendar date"
+elif ! grep -F 'invalid halt: projects[0].halted is not a calendar date' \
+    "$temporary/bad-halt-checker.out" >/dev/null; then
+    fail "the invalid halt date had no stable documentation diagnostic"
+fi
+if python3 "$context" --root "$bad_halt" app/src/main.rs \
+    > "$temporary/bad-halt-context.out" 2>&1; then
+    fail "agent-context accepted a halt that is not a calendar date"
+elif ! grep -F 'projects[0].halted is not a calendar date' \
+    "$temporary/bad-halt-context.out" >/dev/null; then
+    fail "agent-context had no stable invalid halt diagnostic"
+fi
+
 missing_context_field=$temporary/missing-context-field
 cp -R "$valid" "$missing_context_field"
 sed -i '/context_documents = \["app\/docs\/context.md"\]/d' \

@@ -501,3 +501,17 @@ Ordered by value divided by effort.
 6. **`celestina-maintenance`: documentation truth.** README and STATUS lock and polkit sections, the checkpoint section and the truncated SURF-1 bullet. Covers SH-8. Effort S.
 7. **`celestina-style-bug`: style module gaps.** Spanish scrollbar names, swatch tokens plus the `withAlpha` guard pattern, lock-composition contrast rows (the contract half of SH-6), Switch and TextField tests. Covers STY-1, STY-2, STY-3, SH-6 (contract). Effort M. The lock's darker wash and dense backing for SH-6 follow in unit 1 or a small `celestina:` unit once the token exists. SH-16 (shared backdrop field) fits here if the recipe is promoted to CelestinaStyle.
 8. **`siderita-bug`: use CelestinaSlider in SizeRow.** Covers STY-4. Effort S.
+
+## Addendum 2026-09-27: shell halted
+
+Appended on 2026-09-27; the record above is unchanged.
+
+The author halted the Celestina shell on 2026-09-27 (see
+[Halted projects](../../AGENTS.md#halted-projects)). Every shell finding in
+this record (SH-1 to SH-21), including the backlog items SH-16 and SH-18 and
+the proposed shell units above, stays recorded exactly as written and will
+not be acted on. SH-6 is a shell finding in both halves: its lock wash and its
+lock-composition contrast rows exist only for the shell's lock. The style
+findings (STY-1 to STY-4) are unaffected and keep their units. The program
+consequences are in the addendum of
+[the monorepo audit](2026-09-26-monorepo-audit.md#addendum-2026-09-27-shell-halted).

@@ -22,6 +22,30 @@ another language. See
 [docs/standards/language.md](docs/standards/language.md) and
 [ADR 0007](docs/decisions/0007-spanish-product-copy.md).
 
+## Halted projects
+
+The Celestina shell is halted by the author's decision of 2026-09-27. The halt
+covers the `celestina/` project, the crate registered only for it
+(`celestina-rs/crates/celestina-shell-core`), their commit prefixes
+`celestina:` and `celestina-shell-core:`, the shell's scripts, and its
+registered production entries.
+
+- No agent plans, audits, implements, refactors, adopts shared owners into,
+  builds, verifies, deploys, or activates it, and no agent proposes work on it.
+- Monorepo-wide programs, audits, counts, and landings do not include it. A
+  shared change never extends to it and never rebuilds it.
+- A request that touches it is answered by pointing at this section, and the
+  work stops there.
+- Its bytes stay in the repository as history and rollback; nothing is
+  deleted.
+- `docs/projects.toml` marks it `halted`. `scripts/agent-context.py` announces
+  the halt, `scripts/commit_scope.py` refuses its prefixes and paths, and the
+  landing drops it from every production run.
+
+The halt is lifted only by the author editing this section. The commit guard
+accepts a change to a halted project only in a commit that also changes this
+section.
+
 ## Mandatory preflight
 
 Before acting:

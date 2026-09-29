@@ -1,5 +1,10 @@
 # Celestina Desktop
 
+> **Halted.** The author halted this project on 2026-09-27; no work of any
+> kind is planned, proposed or scheduled here. See
+> [Halted projects](../AGENTS.md#halted-projects) in the root contract. This
+> README describes the product as it stood when it was halted.
+
 Celestina Desktop is the shell/session component of the suite for a personal
 Niri/Wayland environment. It owns a truthful per-output panel, keyboard
 overlays and a versioned session command service while Noctalia responsibilities

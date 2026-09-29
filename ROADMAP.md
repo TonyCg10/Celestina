@@ -165,7 +165,9 @@ one single-prefix commit with a trustworthy guard chain, and no project needs
 a second active checkpoint to carry its share.
 
 **Tangible outcome:** the audit's 184 findings are durable evidence, and every
-scheduled finding has a ledger row in exactly one plan. When the suite rows
+scheduled finding has a ledger row in exactly one plan, except the Celestina
+shell's, withdrawn when the author halted the shell on 2026-09-27 (see
+[Halted projects](AGENTS.md#halted-projects)). When the suite rows
 close, GitHub `contracts` is green on `main`, a fix to any linked crate stales
 and rebuilds every app that links it, the Magnetita protocol has one owner on
 both ends, and the hooks judge the index with committed rules.
@@ -190,7 +192,7 @@ findings in [the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md).
 
 | Project | Canonical implementation queue |
 |---|---|
-| Celestina shell | [celestina/ROADMAP.md](celestina/ROADMAP.md) |
+| Celestina shell (halted since 2026-09-27; see [Halted projects](AGENTS.md#halted-projects)) | [celestina/ROADMAP.md](celestina/ROADMAP.md) |
 | Shared Rust crates | [celestina-rs/ROADMAP.md](celestina-rs/ROADMAP.md) |
 | Shared visual language | [celestina-style/ROADMAP.md](celestina-style/ROADMAP.md) |
 | Siderita | [siderita/ROADMAP.md](siderita/ROADMAP.md) |

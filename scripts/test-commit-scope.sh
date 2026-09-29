@@ -44,6 +44,22 @@ if git -C "$root" show HEAD:docs/projects.toml 2>/dev/null | \
     typed_subjects=true
 fi
 
+# The halt is interpreted like every other rule: by the registry reader
+# committed in HEAD. Before that reader and the shell's `halted` marker have
+# landed, the shell's prefixes still pass the real-history fixtures below.
+shell_halted=false
+if git -C "$root" show HEAD:scripts/project_registry.py 2>/dev/null | \
+    grep -q '^def halted_projects' &&
+    git -C "$root" show HEAD:docs/projects.toml 2>/dev/null | \
+    grep -q '^halted = '; then
+    shell_halted=true
+fi
+if [ "$shell_halted" = true ]; then
+    halted_shell_expectation=fail
+else
+    halted_shell_expectation=pass
+fi
+
 fixture_subject() {
     raw=$1
     if [ "$typed_subjects" != true ]; then
@@ -125,7 +141,7 @@ expect_scope fail 'siderita: collect unrelated changes' \
 
 # Legitimate changes must remain unobstructed.
 expect_scope pass 'siderita: update one surface' 'siderita/src/main.rs' 'siderita/qml/Main.qml'
-expect_scope pass 'suite: align two projects' 'siderita/src/main.rs' 'celestina/src/main.cpp'
+expect_scope pass 'suite: align two projects' 'siderita/src/main.rs' 'grafita/src/main.rs'
 # An application and its own core land together.
 expect_scope pass 'magnetita: update its clipboard flow' \
     'magnetita/ROADMAP.md' 'celestina-rs/crates/magnetita-core/src/clipboard.rs'
@@ -153,9 +169,11 @@ expect_scope fail 'grafita: reject a lookalike crate' \
 # --no-renames gives the guard both source and destination of a move.
 expect_scope fail 'siderita: move a foreign file into scope' \
     'celestina/src/foreign.cpp' 'siderita/src/foreign.cpp'
-# The shell and its core share a prefix.
-expect_scope pass 'celestina: update the shell core' \
+# The shell and its core share a prefix, and the halt closes both.
+expect_scope "$halted_shell_expectation" 'celestina: update the shell core' \
     'celestina/src/main.cpp' 'celestina-rs/crates/celestina-shell-core/src/lib.rs'
+expect_scope "$halted_shell_expectation" 'suite: align the shell with a project' \
+    'siderita/src/main.rs' 'celestina/src/main.cpp'
 # Ratchet ownership is exercised below in a repository whose HEAD already
 # contains the new policy. The current checkout's HEAD may predate this worktree
 # migration, and scope replay intentionally uses only committed rules.
@@ -540,6 +558,121 @@ if [ -n "$ratchet_tmp" ]; then
     if check_merge; then
         fail "a merge deleted a source while retaining its INDEX ratchet row"
     fi
+
+    # A halted project is closed to every commit that does not also change the
+    # root contract's "Halted projects" section. The fixture first removes any
+    # halt the copied registry carries, so both directions are exercised.
+    reset_ratchet_fixture
+    sed -i '/^halted = /d' "$ratchet_tmp/docs/projects.toml"
+    printf '%s\n' '# Fixture contract' '' '## Repository language' '' 'English.' \
+        '' '## Mandatory preflight' '' 'Read first.' > "$ratchet_tmp/AGENTS.md"
+    mkdir -p "$ratchet_tmp/celestina/src" "$ratchet_tmp/siderita/src" \
+        "$ratchet_tmp/celestina-rs/crates/celestina-shell-core/src"
+    printf '%s\n' '// shell' > "$ratchet_tmp/celestina/src/main.cpp"
+    printf '%s\n' '// shell core' \
+        > "$ratchet_tmp/celestina-rs/crates/celestina-shell-core/src/lib.rs"
+    printf '%s\n' '// siderita' > "$ratchet_tmp/siderita/src/main.rs"
+    git -C "$ratchet_tmp" add .
+    git -C "$ratchet_tmp" commit -qm 'fixture: an unhalted shell'
+    halt_registry() {
+        sed -i '/^commit_prefix = "celestina"$/a halted = "2026-09-27"' \
+            "$ratchet_tmp/docs/projects.toml"
+    }
+    halt_section() {
+        python3 - "$ratchet_tmp/AGENTS.md" "$1" <<'PYTHON'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+section = "## Halted projects\n\n" + sys.argv[2] + "\n\n"
+path.write_text(text.replace("## Mandatory preflight", section + "## Mandatory preflight"), encoding="utf-8")
+PYTHON
+    }
+    check_halted_path() {
+        printf '%s\n' "$1" >> "$ratchet_tmp/$2"
+        git -C "$ratchet_tmp" add "$2"
+    }
+
+    reset_ratchet_fixture
+    halt_registry
+    git -C "$ratchet_tmp" add docs/projects.toml
+    check_halted_path '// quiet' celestina/src/main.cpp
+    if check_index 'suite: halt the shell quietly'; then
+        fail "a staged halt reached its project without changing the halt section"
+    fi
+
+    reset_ratchet_fixture
+    halt_registry
+    halt_section 'The shell is halted.'
+    git -C "$ratchet_tmp" add docs/projects.toml AGENTS.md
+    check_halted_path '// halted' celestina/src/main.cpp
+    check_index 'suite: halt the shell' || \
+        fail "the commit that writes the halt section was refused"
+    git -C "$ratchet_tmp" commit -qm 'fixture: halt the shell'
+
+    reset_ratchet_fixture
+    check_halted_path '// change' celestina/src/main.cpp
+    if check_index 'celestina: update the shell'; then
+        fail "a halted project accepted a commit under its own prefix"
+    fi
+
+    reset_ratchet_fixture
+    check_halted_path '// change' celestina/src/main.cpp
+    if check_index 'suite: update the halted shell'; then
+        fail "the suite prefix reached a halted project"
+    fi
+
+    reset_ratchet_fixture
+    check_halted_path '// change' celestina-rs/crates/celestina-shell-core/src/lib.rs
+    if check_index 'celestina-shell-core: extend the halted core'; then
+        fail "a halted project's component prefix was accepted"
+    fi
+
+    reset_ratchet_fixture
+    check_halted_path '// change' siderita/src/main.rs
+    check_index 'siderita: update one surface' || \
+        fail "the halt refused a project that is not halted"
+
+    reset_ratchet_fixture
+    check_halted_path 'Read first, again.' AGENTS.md
+    check_halted_path '// change' celestina/src/main.cpp
+    if check_index 'suite: update the contract elsewhere'; then
+        fail "an AGENTS.md change outside the halt section lifted the halt"
+    fi
+
+    reset_ratchet_fixture
+    sed -i '/^halted = /d' "$ratchet_tmp/docs/projects.toml"
+    git -C "$ratchet_tmp" add docs/projects.toml
+    check_halted_path '// change' celestina/src/main.cpp
+    if check_index 'suite: remove the shell halt quietly'; then
+        fail "a staged registry lifted a halt without changing the halt section"
+    fi
+
+    reset_ratchet_fixture
+    sed -i '/^halted = /d' "$ratchet_tmp/docs/projects.toml"
+    sed -i 's/^The shell is halted\.$/The author lifted the halt./' \
+        "$ratchet_tmp/AGENTS.md"
+    git -C "$ratchet_tmp" add docs/projects.toml AGENTS.md
+    check_halted_path '// resumed' celestina/src/main.cpp
+    check_index 'suite: lift the shell halt' || \
+        fail "the author's change to the halt section could not lift the halt"
+
+    reset_ratchet_fixture
+    if printf '%s\n' 'celestina/src/main.cpp' | \
+        python3 "$ratchet_tmp/scripts/commit_scope.py" --root "$ratchet_tmp" \
+            --check 'celestina: update the shell' >/dev/null 2>&1; then
+        fail "--check accepted a halted project"
+    fi
+    if ! printf '%s\n' 'AGENTS.md' 'celestina/src/main.cpp' | \
+        python3 "$ratchet_tmp/scripts/commit_scope.py" --root "$ratchet_tmp" \
+            --check 'suite: lift the shell halt' >/dev/null 2>&1; then
+        fail "--check did not leave a change to AGENTS.md to the commit hook"
+    fi
+    if ! printf '%s\n' 'celestina/src/main.cpp' | \
+        python3 "$ratchet_tmp/scripts/commit_scope.py" --root "$ratchet_tmp" \
+            --history-scope-only 'celestina: record an old change' >/dev/null 2>&1; then
+        fail "history replay applied the halt to commits made before it"
+    fi
 fi
 
 # Format and vocabulary are also contractual; there is no silent bypass.
@@ -638,7 +771,7 @@ expect_scope pass 'fluorita-qt: keep the render seam narrow' \
     'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
 expect_scope fail 'fluorita-qt: cross a project boundary' \
     'celestina-rs/crates/fluorita-qt/src/renderitem.cpp' 'fluorita/qml/Main.qml'
-expect_scope pass 'celestina-shell-core: extend the command vocabulary' \
+expect_scope "$halted_shell_expectation" 'celestina-shell-core: extend the command vocabulary' \
     'celestina-rs/crates/celestina-shell-core/src/lib.rs' \
     'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
 

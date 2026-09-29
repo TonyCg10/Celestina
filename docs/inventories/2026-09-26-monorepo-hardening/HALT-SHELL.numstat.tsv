@@ -1,0 +1,51 @@
+# HALT-SHELL exact change inventory
+
+Base revision	616245f1157da7fabcc31b6fdb192397ce72ae6e
+Pathspec	AGENTS.md
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	celestina/AGENTS.md
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit-shell-style.md
+Pathspec	docs/evidence/2026-09-26-monorepo-audit.md
+Pathspec	docs/evidence/2026-09-28-halt-shell.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/HALT-SHELL.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/projects.toml
+Pathspec	scripts/agent-context.py
+Pathspec	scripts/commit_scope.py
+Pathspec	scripts/documentation_contract.py
+Pathspec	scripts/test-commit-scope.sh
+Pathspec	scripts/test-documentation-contract.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+24	0	e66776e3f3e3a2eedd778032bee3b346015f585eed68f6bc7c0b583f17ada05d	AGENTS.md
+1	1	cbcfa5f9068c3add9b6b93f92fa09016d8364acfb7f5378960584b9af9767bb1	README.md
+4	2	4625472ffa5c9a85068f9e39077f8ff867dbf69c2abce09359abaa145782a150	ROADMAP.md
+8	5	f5875ebb273863461afa27369045956ba2a540180cb9d95831cfd2d9d52cc5b2	STATUS.md
+7	0	3ae69692f968f49ea6f0a15ddd7cb7a5cc4aca707b90406c5da6f006edb0c542	celestina/AGENTS.md
+5	0	265e78d9917cf8f995b131e764c610cc216d7a751c930460e8af43c02bebaa2d	celestina/README.md
+24	5	f25a7a715d27c728745262b5d600cb256a472b819d13e6cd6ccb3bcf59995443	celestina/ROADMAP.md
+21	15	b3942300c4fd70c6995d9d4be28f5f2ae380fcd0f23d5b453189ddc4c6922281	celestina/STATUS.md
+5	0	34921857c5d8c1d2a88913b4a987bd93e43d89114bc8c5b65803e39708ebef07	celestina/VALIDATION.md
+13	6	40062508eb1aa5812a256756e468257db16f2f8e05264ece0a453b9aa86be3ac	celestina/docs/plans/active/README.md
+3	1	50a90973f51daeff91684ea32621999b71d0bc3003026c1dde1e6ed56bed1b09	docs/contracts/landing.md
+14	0	a37d10e1e2b2b493ad15dae7e246c0b47879a5dd9f6bba81d8f9cf25348b6750	docs/evidence/2026-09-26-monorepo-audit-shell-style.md
+26	0	7ccb1bfbb2018624fea5ea9eb8292a76864c1a5cb7bd3d2df34b07b0c7939a61	docs/evidence/2026-09-26-monorepo-audit.md
+66	0	d16abb0a1466577e12d2fb20ca5a74e7849446b571228d7f870b6a9c62adce5b	docs/evidence/2026-09-28-halt-shell.md
+51	0	self	docs/inventories/2026-09-26-monorepo-hardening/HALT-SHELL.numstat.tsv
+27	6	7f163a854af201cdd57198a3e9bd4d74f78560cb8525c486b302e6f246d79276	docs/plans/active/2026-09-26-monorepo-hardening.md
+5	0	a56c7fbf4c493978af449e1eb6d7a324bade9f79958883d0ba095088dad0fcdc	docs/projects.toml
+36	7	312baf1872ff37f5721a75ca775f2abf2416022349d5a5fa7a176dc55283636f	scripts/agent-context.py
+146	2	47a2d46ac198de86c6ff80b63aba03b976dcdf9b2fa661856721990d1e0e6cfc	scripts/commit_scope.py
+5	0	e4b229b192a5d117452c1b6651ed72b3ac18be0815718473acaafebb7cd58dd0	scripts/documentation_contract.py
+137	4	ee4688a115b336533f29e084cbbec95c832472872a857845c8c26deb6456b56c	scripts/test-commit-scope.sh
+63	0	8217f7d275f9f215890ac9311eff4e398fc3f2f291e1aa7610213cf2aa303258	scripts/test-documentation-contract.sh

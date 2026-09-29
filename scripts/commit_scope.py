@@ -30,6 +30,11 @@ ARCHITECTURE_SCANNER = "scripts/architecture_scanners.py"
 LANGUAGE_SCANNER = "scripts/check-language-contract.py"
 VERSION_CONTRACT = "scripts/version_contract.py"
 REGISTRY = "docs/projects.toml"
+# A halted project (docs/projects.toml `halted`) is closed to every commit
+# except one that also changes this section of the root contract: that is how
+# the author, and only the author, lifts or amends a halt.
+AGENTS = "AGENTS.md"
+HALTED_SECTION = "## Halted projects"
 # git's own candidate list for `core.commentChar = auto`, in its order. The
 # first entry is also git's default comment character.
 COMMENT_CHAR_CANDIDATES = "#;@!$%^&|:"
@@ -74,6 +79,7 @@ IMPERATIVE_VERBS = frozenset(
         "extract",
         "fix",
         "guard",
+        "halt",
         "handle",
         "harden",
         "honor",
@@ -85,6 +91,7 @@ IMPERATIVE_VERBS = frozenset(
         "inspect",
         "isolate",
         "keep",
+        "lift",
         "limit",
         "lower",
         "make",
@@ -916,6 +923,131 @@ def validate(
     raise SystemExit(1)
 
 
+def halted_section(raw: bytes | None) -> str | None:
+    """The root contract's "Halted projects" section, heading included."""
+    if raw is None:
+        return None
+    lines = raw.decode("utf-8", "surrogateescape").splitlines()
+    try:
+        start = next(
+            index for index, line in enumerate(lines) if line.rstrip() == HALTED_SECTION
+        )
+    except StopIteration:
+        return None
+    end = next(
+        (
+            index
+            for index in range(start + 1, len(lines))
+            if re.match(r"#{1,2} ", lines[index])
+        ),
+        len(lines),
+    )
+    return "\n".join(lines[start:end]).rstrip()
+
+
+def halted_in(
+    rules: tuple[dict[str, Any], dict[str, object], dict[str, Any]], source: str
+) -> tuple[Any, ...]:
+    """The halted projects one registry revision declares, read by HEAD's rule.
+
+    Like the typed subjects, the halt activates only once its reader is
+    committed: a HEAD whose project_registry.py has no `halted_projects` is
+    interpreted without it.
+    """
+    _scopes, namespace, registry = rules
+    rule = namespace.get("halted_projects")
+    if not callable(rule):
+        return ()
+    try:
+        halted = call_dynamic_rule(
+            f"HEAD:{PROJECT_REGISTRY} halted_projects over {source}:{REGISTRY}",
+            rule,
+            registry,
+        )
+    except ValueError as error:
+        fail(f"{source}:{REGISTRY}: {error}")
+    return tuple(halted)
+
+
+def validate_halt(
+    prefix: str,
+    paths: list[str],
+    rules: tuple[tuple[dict[str, Any], dict[str, object], dict[str, Any]], ...],
+    sources: tuple[str, ...],
+    *,
+    lifted: bool,
+) -> None:
+    """Refuse a commit that reaches a halted project unless it changes the halt.
+
+    Both registry revisions count, so a staged registry can neither halt a
+    project quietly nor unhalt it by itself; only a change to the root
+    contract's "Halted projects" section in the same commit opens the way.
+    """
+    if lifted:
+        return
+    by_id: dict[str, Any] = {}
+    owner_rule: Callable[..., Any] | None = None
+    for authority, source in zip(rules, sources):
+        halted = halted_in(authority, source)
+        if not halted:
+            continue
+        rule = authority[1].get("halted_owner")
+        if not callable(rule):
+            fail(f"{PROJECT_REGISTRY} does not expose halted_owner")
+        owner_rule = rule
+        for project in halted:
+            by_id.setdefault(project.id, project)
+    if not by_id or owner_rule is None:
+        return
+    halted = tuple(by_id.values())
+    reached: dict[str, list[str]] = {}
+    for project in halted:
+        if prefix in project.commit_prefixes:
+            reached.setdefault(project.id, []).append(f'prefix "{prefix}:"')
+    for path in paths:
+        owner = call_dynamic_rule(
+            f"HEAD:{PROJECT_REGISTRY} halted_owner", owner_rule, path, halted
+        )
+        if owner is not None:
+            reached.setdefault(owner.id, []).append(path)
+    if not reached:
+        return
+    for project in halted:
+        if project.id not in reached:
+            continue
+        print(
+            f"commit-msg: {project.name} is halted since {project.since} "
+            f'(AGENTS.md "{HALTED_SECTION.removeprefix("## ")}"); '
+            "this commit reaches it:",
+            file=sys.stderr,
+        )
+        for item in reached[project.id]:
+            print(f"  {item}", file=sys.stderr)
+    print(
+        "\nNo agent works on a halted project. Only the author lifts a halt, "
+        "by changing that section of AGENTS.md in the same commit.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def validate_staged_halt(
+    root: Path,
+    prefix: str,
+    paths: list[str],
+    head_rules: tuple[dict[str, Any], dict[str, object], dict[str, Any]],
+    index_rules: tuple[dict[str, Any], dict[str, object], dict[str, Any]],
+) -> None:
+    validate_halt(
+        prefix,
+        paths,
+        (head_rules, index_rules),
+        ("HEAD", "INDEX"),
+        lifted=halted_section(git_blob(root, "HEAD", AGENTS))
+        != halted_section(git_blob(root, "INDEX", AGENTS)),
+    )
+
+
 def validate_version_update(
     root: Path,
     prefix: str,
@@ -1128,12 +1260,22 @@ def main() -> None:
             registry_source="HEAD",
             rule_namespace=committed_registry_rules,
         )
-        validate(
+        paths = stdin_paths()
+        prefix, _kind, _action, _wrapper = validate(
             args.check,
-            stdin_paths(),
+            paths,
             scopes,
             registry_namespace,
             require_kind=registry.get("version_policy") is not None,
+        )
+        # Without an index the section cannot be compared, so a path list that
+        # includes the root contract is left to the commit hook, which does.
+        validate_halt(
+            prefix,
+            paths,
+            ((scopes, registry_namespace, registry),),
+            ("HEAD",),
+            lifted=AGENTS in paths,
         )
         return
 
@@ -1172,6 +1314,7 @@ def main() -> None:
             head_rules,
             index_rules,
         )
+        validate_staged_halt(root, prefix, paths, head_rules, index_rules)
         validate_ratchet_updates(root, prefix, paths, registry, authorities)
         validate_version_update(
             root,
@@ -1228,6 +1371,7 @@ def main() -> None:
         head_rules,
         index_rules,
     )
+    validate_staged_halt(root, prefix, paths, head_rules, index_rules)
     validate_ratchet_updates(root, prefix, paths, registry, authorities)
     validate_version_update(
         root,
