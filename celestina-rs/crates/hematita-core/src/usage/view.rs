@@ -37,6 +37,21 @@ pub struct Row {
 /// [`unreadable_below`]'s output, indexed by node.
 #[must_use]
 pub fn children_rows(tree: &Tree, current: NodeId, unreadable: &[u32], limit: usize) -> Vec<Row> {
+    children_rows_where(tree, current, unreadable, limit, |_| true)
+}
+
+/// [`children_rows`] of the children `keep` accepts: the filter applies
+/// before the cap, so a small match is listed rather than lost in the
+/// remainder, and the remainder merges only the matches beyond `limit`.
+/// Shares stay fractions of `current`'s whole allocation.
+#[must_use]
+pub fn children_rows_where(
+    tree: &Tree,
+    current: NodeId,
+    unreadable: &[u32],
+    limit: usize,
+    mut keep: impl FnMut(NodeId) -> bool,
+) -> Vec<Row> {
     let Some(parent) = tree.node(current) else {
         return Vec::new();
     };
@@ -49,7 +64,8 @@ pub fn children_rows(tree: &Tree, current: NodeId, unreadable: &[u32], limit: us
         }
     };
     let below = |id: NodeId| unreadable.get(id.0 as usize).copied().unwrap_or(0);
-    let children = tree.children_by_size(current);
+    let mut children = tree.children_by_size(current);
+    children.retain(|id| keep(*id));
     let (listed, rest) = if children.len() > limit && limit > 0 {
         children.split_at(limit - 1)
     } else {
@@ -272,6 +288,71 @@ mod tests {
         let tree = leaf_only();
         let rows = children_rows(&tree, tree.root, &unreadable_below(&tree), 40);
         assert!(rows.is_empty());
+    }
+
+    /// root(0) holding `count` files, file `i` of `i + 1` bytes at id `i + 1`.
+    fn wide(count: u32) -> Tree {
+        let total: u64 = (1..=u64::from(count)).sum();
+        let mut nodes = vec![node("root", Kind::Dir, None, total)];
+        for index in 0..count {
+            nodes.push(node("f", Kind::File, Some(0), u64::from(index) + 1));
+        }
+        nodes[0].children = (1..=count).map(NodeId).collect();
+        tree_of(nodes, 0)
+    }
+
+    #[test]
+    fn a_folder_of_ten_thousand_entries_projects_at_most_the_row_cap() {
+        let tree = wide(10_000);
+        let unreadable = unreadable_below(&tree);
+        let rows = children_rows(&tree, tree.root, &unreadable, MAX_ROWS);
+        assert_eq!(rows.len(), MAX_ROWS);
+        let rest = &rows[MAX_ROWS - 1];
+        assert_eq!(rest.id, None);
+        assert_eq!(rest.merged, 10_000 - (MAX_ROWS - 1));
+        let listed: u64 = rows.iter().map(|row| row.allocated).sum();
+        assert_eq!(
+            listed, tree.nodes[0].allocated,
+            "the remainder keeps the sums"
+        );
+    }
+
+    #[test]
+    fn a_filter_is_applied_before_the_cap_so_small_matches_are_listed() {
+        let tree = wide(10_000);
+        let unreadable = unreadable_below(&tree);
+        // The smallest files match: none of them is among the biggest forty.
+        let rows = children_rows_where(&tree, tree.root, &unreadable, MAX_ROWS, |id| id.0 <= 50);
+        assert_eq!(rows.len(), MAX_ROWS);
+        assert_eq!(rows[0].id, Some(NodeId(50)), "the biggest match first");
+        assert!(rows[..MAX_ROWS - 1]
+            .iter()
+            .all(|row| row.id.is_some_and(|id| id.0 <= 50)));
+        let rest = &rows[MAX_ROWS - 1];
+        assert_eq!((rest.id, rest.merged), (None, 50 - (MAX_ROWS - 1)));
+        assert_eq!(rest.allocated, (1..=11).sum::<u64>(), "only matches merge");
+        let total = tree.nodes[0].allocated as f64;
+        assert!(
+            (rows[0].share - 50.0 / total).abs() < 1e-12,
+            "shares of the folder"
+        );
+    }
+
+    #[test]
+    fn a_filter_that_keeps_nothing_projects_nothing() {
+        let tree = four_children();
+        let rows = children_rows_where(&tree, tree.root, &unreadable_below(&tree), 3, |_| false);
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn a_filter_keeping_everything_is_the_plain_projection() {
+        let tree = four_children();
+        let unreadable = unreadable_below(&tree);
+        assert_eq!(
+            children_rows_where(&tree, tree.root, &unreadable, 3, |_| true),
+            children_rows(&tree, tree.root, &unreadable, 3)
+        );
     }
 
     #[test]

@@ -23,7 +23,7 @@
 
 use std::collections::HashSet;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Weak;
 use std::time::{Duration, Instant};
@@ -33,12 +33,15 @@ use cxx_qt::CxxQtThread;
 use hematita_core::usage::duplicates::{self, ConfirmError, Group};
 use hematita_core::usage::mounts::{mount_targets, parse_mountinfo};
 use hematita_core::usage::tree::{NodeId, Tree};
+use hematita_core::usage::verdicts::{Verdict, VerdictBatch};
 use hematita_core::usage::walk::{self, Progress};
 
 use crate::analysis::qobject::HematitaAnalysis;
 use crate::analysis_view::{findings, Findings};
+use crate::kernel_text;
 
-/// The least time between two progress publications of one scan.
+/// The least time between two progress publications of one scan, and
+/// between two batches of the content check's verdicts.
 pub const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
 const MOUNTINFO: &str = "/proc/self/mountinfo";
@@ -74,7 +77,7 @@ impl Drop for WorkerHandle {
 /// both still stop at other devices; only same-device mounts (bind mounts,
 /// subvolumes) would go unrecognised.
 pub fn mount_boundaries() -> HashSet<PathBuf> {
-    std::fs::read_to_string(MOUNTINFO)
+    kernel_text::read_text(Path::new(MOUNTINFO))
         .map(|text| mount_targets(&parse_mountinfo(&text)))
         .unwrap_or_default()
 }
@@ -156,8 +159,11 @@ pub fn spawn_graft(
 }
 
 /// Checks `groups` — each with its index among the hub's candidates — by
-/// content on the `hematita-confirm` thread, one group at a time, so the page
-/// fills as each verdict lands; then says it is done.
+/// content on the `hematita-confirm` thread, one group at a time, and hands
+/// the verdicts to the hub in batches: the first at once, then at most one
+/// batch per [`PROGRESS_INTERVAL`] (a long read publishes what was decided
+/// before it), and the rest at the end; then says it is done. Five hundred
+/// small groups are therefore a handful of publications, not five hundred.
 /// A group with a file that cannot be read keeps its unverified row and is
 /// reported as unreadable. Every result carries `epoch`, the hub's confirm
 /// epoch when the check started: a cancel, a restart or a pruning moves it,
@@ -187,27 +193,38 @@ pub fn spawn_confirm(
     std::thread::Builder::new()
         .name("hematita-confirm".to_owned())
         .spawn(move || {
+            let send = |verdicts: Vec<(usize, Verdict)>| {
+                let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
+                    hub.apply_verdicts(generation, epoch, verdicts);
+                });
+            };
+            let mut batch = VerdictBatch::new(PROGRESS_INTERVAL);
             for (index, group) in &groups {
-                let index = *index;
                 let Some(strong) = tree.upgrade() else {
                     return;
                 };
                 let files = duplicates::members(&strong, group);
                 drop(strong);
-                let checked = duplicates::confirm(files, &token, &mut |_| {});
-                match checked {
-                    Ok(verified) => {
-                        let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
-                            hub.apply_verified(generation, epoch, index, verified);
-                        });
+                let checked = duplicates::confirm(files, &token, &mut |_| {
+                    if let Some(ready) = batch.take_due(Instant::now()) {
+                        send(ready);
                     }
+                });
+                let verdict = match checked {
+                    Ok(verified) => Verdict::Sets(verified),
                     Err(ConfirmError::Cancelled) => return,
                     Err(ConfirmError::Read { .. } | ConfirmError::Changed { .. }) => {
-                        let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
-                            hub.apply_unreadable(generation, epoch, index);
-                        });
+                        Verdict::Unreadable
                     }
+                };
+                batch.push(*index, verdict);
+                if let Some(ready) = batch.take_due(Instant::now()) {
+                    send(ready);
                 }
+            }
+            let rest = batch.take_rest();
+            if !rest.is_empty() {
+                send(rest);
             }
             let _ = qt.queue(move |hub: Pin<&mut HematitaAnalysis>| {
                 hub.confirm_finished(generation, epoch);

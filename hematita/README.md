@@ -5,13 +5,13 @@ on it. It replaces Mission Center.
 
 ## User contract
 
-- Performance: CPU, memory, and in later phases disks, network and GPU, each
-  with sixty seconds of history.
+- Performance: CPU, memory, every whole disk, every Ethernet or Wi-Fi
+  interface and the AMD GPU, each with sixty seconds of history.
 - Processes and applications (H3), sensors (H4) and systemd services (H5)
   follow the [design](../docs/superpowers/specs/2026-09-21-hematita-design.md).
-- Hematita reads `/proc` and `/sys` directly; it needs no daemon and no
-  privilege to observe. Acting on other users' processes and on services
-  arrives with polkit in H5.
+- Hematita reads `/proc` and `/sys` directly, every file bounded; it needs
+  no daemon and no privilege to observe. Acting on another user's process or
+  on a system unit goes through polkit, one call at a time (ADR 0010).
 - Version 1.0 replaces Mission Center for the author: performance, processes,
   applications, sensors and services.
 - Almacenamiento: mount points, browsing, a scan where you are, size list and
@@ -22,8 +22,8 @@ on it. It replaces Mission Center.
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/hematita-core` | Parsers over `/proc` and `/sys` text, rate samplers, the history ring; no Qt, no IO |
-| `src/` | The sampling thread, its immutable snapshot, load thresholds, CXX-Qt objects, single-instance activation |
+| `../celestina-rs/crates/hematita-core` | Parsers over `/proc` and `/sys` text, rate samplers, the history ring, and the storage analyser's domain; no Qt, and file IO only in `usage` (the walk, the duplicate check, the guarded deletion) |
+| `src/` | The sampling thread and the bounded kernel-file reader, its immutable snapshot, load thresholds, CXX-Qt objects, single-instance activation |
 | `qml/` | The window, the pill navigation strip and the pages |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Hematita.desktop` | Desktop discovery |

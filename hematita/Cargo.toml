@@ -1,6 +1,6 @@
 [package]
 name = "hematita"
-version = "1.2.3"
+version = "1.2.4"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -21,17 +21,22 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # Everything the kernel reports, parsed and tested without Qt. This binary
 # adds a window, a sampling thread and nothing else.
 hematita-core = { path = "../celestina-rs/crates/hematita-core" }
-# The .desktop parser the suite already shares; Hematita reads an
-# application's name and icon from it.
+# The suite's shared owners: the bounded `.desktop` lookup Hematita reads an
+# application's name and icon through, the bounded reader of every kernel
+# file, and the cancellation token of the storage workers.
 celestina-core = { path = "../celestina-rs/crates/celestina-core" }
-# Sending SIGTERM/SIGKILL, reading the clock tick rate and a mount's capacity
-# (`statvfs`, the `fs` feature) without `unsafe`: rustix wraps the syscalls in
+# Sending SIGTERM/SIGKILL, reading the clock tick rate, a mount's capacity
+# and a command line opened without waiting (`statvfs` and `open`, the `fs`
+# feature) without `unsafe`: rustix wraps the syscalls in
 # safe Rust and is already pinned in the workspace by magnetitad at this exact
 # version.
 rustix = { version = "1.1.4", features = ["process", "param", "fs"] }
-# Single-instance activation: a second `hematita` raises the running window
-# instead of mapping another one. The session bus is how the suite talks
-# between processes, so this earns zbus rather than a socket protocol.
+# The two buses: single-instance activation on the session bus (a second
+# `hematita` raises the running window instead of mapping another one), and
+# systemd on both buses, whose unit listing the sampler reads and whose unit
+# actions the Services page asks for (through polkit on the system bus). The
+# session bus is how the suite talks between processes and systemd has no
+# other interface, so this earns zbus rather than a socket protocol.
 zbus = "5"
 # The suite's one trash implementation; the analyzer's trash verb goes through
 # it, reversible from Siderita, instead of growing a second.

@@ -59,6 +59,8 @@ fn main() {
     // in ../celestina-style; symlinked into qml/ so they register under a
     // clean `qml/...` resource path (a `..` in the source path would embed
     // `..` in the qrc alias and break type resolution at run time).
+    // ByteUnits is Hematita's own singleton: the one way its pages word a
+    // number of bytes.
     let module = QmlModule::new("org.celestina.hematita")
         .version(1, 0)
         .qml_file(
@@ -71,6 +73,11 @@ fn main() {
                 .version(1, 0)
                 .singleton(true),
         )
+        .qml_file(
+            QmlFile::from("qml/components/ByteUnits.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
         .qml_files(QML_FILES);
 
     // Naming any rerun-if-changed stops cargo watching the whole package, so
@@ -78,6 +85,7 @@ fn main() {
     for qml in QML_FILES.iter().copied().chain([
         "qml/CelestinaTheme.qml",
         "qml/CelestinaIcons.qml",
+        "qml/components/ByteUnits.qml",
         "qml/icons.qrc",
         "qml/fonts.qrc",
     ]) {
@@ -89,12 +97,14 @@ fn main() {
     println!("cargo::rerun-if-changed=src/analysis_view.rs");
     println!("cargo::rerun-if-changed=src/analysis_workers.rs");
     println!("cargo::rerun-if-changed=src/browse.rs");
+    println!("cargo::rerun-if-changed=src/kernel_text.rs");
     println!("cargo::rerun-if-changed=src/lists.rs");
     println!("cargo::rerun-if-changed=src/locations.rs");
     println!("cargo::rerun-if-changed=src/privilege.rs");
     println!("cargo::rerun-if-changed=src/publish.rs");
     println!("cargo::rerun-if-changed=src/sampler.rs");
     println!("cargo::rerun-if-changed=src/usage_worker.rs");
+    println!("cargo::rerun-if-changed=src/watchdog.rs");
 
     CxxQtBuilder::new_qml_module(module)
         // Shared icon resources and Inter Variable, compiled in.

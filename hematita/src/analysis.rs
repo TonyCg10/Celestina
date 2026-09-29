@@ -85,8 +85,12 @@ pub mod qobject {
         // browse* — index-aligned entries of the browsed folder
         // browseFailed — the browsed folder could not be listed
         // progress* — the running scan's totals and where it is
-        // entry* — index-aligned children of the analysed folder, filtered
-        // treemapRects — flat [id, x, y, w, h] per tile, remainder id -1
+        // entry* — index-aligned children of the analysed folder, filtered,
+        //   biggest first and at most the folder's row limit (MAX_ROWS until
+        //   showMoreRows pages further): past it the last row is the merged
+        //   rest (id -2, never the page's -1 for "none"; entryMerged its count)
+        // treemapRects — flat [id, x, y, w, h] per tile of the unfiltered
+        //   capped rows, remainder id -1
         // current* — the analysed folder's allocation and unreadable count
         // group*, member* — duplicate sets (while the filter is on)
         // selectedIds — node ids; showDuplicates, showEmpty — the filters
@@ -132,6 +136,7 @@ pub mod qobject {
         #[qproperty(QVariant, entry_empty)]
         #[qproperty(QVariant, entry_duplicate)]
         #[qproperty(QVariant, entry_unreadable)]
+        #[qproperty(QVariant, entry_merged)]
         #[qproperty(QVariant, treemap_rects)]
         #[qproperty(f64, current_allocated)]
         #[qproperty(i32, current_unreadable)]
@@ -200,6 +205,11 @@ pub mod qobject {
         /// Enters the analysed folder with node `id`.
         #[qinvokable]
         fn enter_id(self: Pin<&mut HematitaAnalysis>, id: i32);
+
+        /// Lists another page of the analysed folder's entries when some sit
+        /// past the list's cap (the merged row); the map keeps its own cap.
+        #[qinvokable]
+        fn show_more_rows(self: Pin<&mut HematitaAnalysis>);
 
         /// Turns the two filters on or off.
         #[qinvokable]
@@ -273,6 +283,7 @@ pub struct HematitaAnalysisRust {
     entry_empty: QVariant,
     entry_duplicate: QVariant,
     entry_unreadable: QVariant,
+    entry_merged: QVariant,
     treemap_rects: QVariant,
     current_allocated: f64,
     current_unreadable: i32,
@@ -348,6 +359,7 @@ impl Default for HematitaAnalysisRust {
             entry_empty: doubles(&[]),
             entry_duplicate: doubles(&[]),
             entry_unreadable: doubles(&[]),
+            entry_merged: doubles(&[]),
             treemap_rects: doubles(&[]),
             current_allocated: 0.0,
             current_unreadable: 0,
@@ -560,6 +572,15 @@ impl qobject::HematitaAnalysis {
         }
     }
 
+    pub fn show_more_rows(mut self: Pin<&mut Self>) {
+        if self.rust().state != Mode::Analysed {
+            return;
+        }
+        if self.as_mut().rust_mut().session.show_more_rows() {
+            self.publish();
+        }
+    }
+
     pub fn up(mut self: Pin<&mut Self>) {
         match self.rust().state {
             Mode::Locations => {}
@@ -687,6 +708,7 @@ impl qobject::HematitaAnalysis {
         self.as_mut().set_entry_duplicate(doubles(&view.duplicate));
         self.as_mut()
             .set_entry_unreadable(doubles(&view.unreadable));
+        self.as_mut().set_entry_merged(doubles(&view.merged));
         self.as_mut().set_treemap_rects(doubles(&view.rects));
         self.as_mut().set_current_allocated(view.current_allocated);
         self.as_mut()

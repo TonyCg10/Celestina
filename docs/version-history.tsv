@@ -178,3 +178,4 @@ siderita	1.7.3	bug	SID-H1-A	Fix archive extraction escaping its root and the pas
 grafita	1.2.5	bug	GRA-H1-A	Harden the document importer against hostile input
 fluorita	1.3.6	bug	FLU-H1-A	Harden Replace to trash its original and bound what files claim
 siderita	1.7.4	bug	SID-H1-B	Keep copy, move, Trash and restore from deleting what they did not create
+hematita	1.2.4	bug	HEM-H1-B	Harden the storage page, the services and the kernel readers

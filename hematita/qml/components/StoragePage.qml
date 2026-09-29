@@ -49,7 +49,7 @@ Item {
         const verb = verbs[page.analysis.actionKind] || ""
         switch (page.analysis.actionOutcome) {
         case "done":
-            return qsTr("%1: hecho (%2)").arg(verb).arg(page.bytesText(page.analysis.actionBytes))
+            return qsTr("%1: hecho (%2)").arg(verb).arg(ByteUnits.size(page.analysis.actionBytes))
         case "partial":
             return qsTr("%1: %2 de %3").arg(verb).arg(page.analysis.actionDone)
                                        .arg(page.analysis.actionTotal)
@@ -79,32 +79,41 @@ Item {
     })
     readonly property string progressText: qsTr("%1 archivos · %2")
                                                .arg(page.analysis.progressFiles.toLocaleString(Qt.locale(), "f", 0))
-                                               .arg(page.bytesText(page.analysis.progressBytes))
-    readonly property var currentRow: {
-        for (let index = 0; index < page.usageRows.length; ++index) {
-            if (page.usageRows[index].id === page.currentId)
-                return page.usageRows[index]
-        }
-        return null
-    }
+                                               .arg(ByteUnits.size(page.analysis.progressBytes))
+    // -1 is "nothing chosen"; no published row carries it (the merged row
+    // has its own id), so an unchosen list shows no details.
+    readonly property var currentRow: page.rowOf(page.currentId)
     readonly property string currentFolderName: {
         const names = page.analysis.crumbNames
         return names.length > 0 ? names[names.length - 1] : ""
     }
 
-    function bytesText(bytes) {
-        if (bytes >= 1099511627776) return (bytes / 1099511627776).toLocaleString(Qt.locale(), "f", 1) + " TiB"
-        if (bytes >= 1073741824) return (bytes / 1073741824).toLocaleString(Qt.locale(), "f", 1) + " GiB"
-        if (bytes >= 1048576) return (bytes / 1048576).toLocaleString(Qt.locale(), "f", 1) + " MiB"
-        if (bytes >= 1024) return (bytes / 1024).toLocaleString(Qt.locale(), "f", 0) + " KiB"
-        return qsTr("%1 B").arg(bytes)
+    function rowOf(id) {
+        for (let index = 0; index < page.usageRows.length; ++index) {
+            if (page.usageRows[index].id === id)
+                return page.usageRows[index]
+        }
+        return null
     }
 
-    // The published order is biggest first, so the index is the size rank.
-    function toneOf(rank, duplicate, empty, unreadable) {
+    // Enter or a double click on a row: a folder opens; the merged row of
+    // the entries past the list's cap lists another page of them, so every
+    // entry can be reached.
+    function enterRow(id) {
+        const row = page.rowOf(id)
+        if (row !== null && row.merged > 0)
+            page.analysis.showMoreRows()
+        else
+            page.analysis.enterId(id)
+    }
+
+    // The published order is biggest first, so the index is the size rank;
+    // the merged remainder stays neutral.
+    function toneOf(rank, duplicate, empty, unreadable, merged) {
         if (unreadable === 1) return "unreadable"
         if (duplicate === 1) return "duplicate"
         if (empty === 1) return "empty"
+        if (merged > 0) return "other"
         return "p" + (rank % 6)
     }
 
@@ -115,22 +124,30 @@ Item {
                                published.entryApparent.length, published.entryShares.length,
                                published.entryFilesBelow.length, published.entryEmpty.length,
                                published.entryDuplicate.length,
-                               published.entryUnreadable.length)
+                               published.entryUnreadable.length,
+                               published.entryMerged.length)
         const rows = []
         const byId = {}
         for (let index = 0; index < count; ++index) {
             const share = published.entryShares[index]
+            // The hub lists forty rows at first; past them the last one is
+            // the rest of the folder merged, which names how many it holds
+            // and how to list them.
+            const merged = published.entryMerged[index]
             const row = { id: published.entryIds[index],
-                          name: published.entryNames[index],
+                          name: merged > 0 ? qsTr("otros (%1) · Intro para ver más").arg(merged)
+                                           : published.entryNames[index],
                           kind: published.entryKinds[index],
+                          merged: merged,
                           tone: page.toneOf(index,
                                             published.entryDuplicate[index],
                                             published.entryEmpty[index],
-                                            published.entryUnreadable[index]),
+                                            published.entryUnreadable[index],
+                                            merged),
                           share: share,
-                          size: page.bytesText(published.entryAllocated[index]),
+                          size: ByteUnits.size(published.entryAllocated[index]),
                           percent: qsTr("%1 %").arg((share * 100).toLocaleString(Qt.locale(), "f", 1)),
-                          apparent: page.bytesText(published.entryApparent[index]),
+                          apparent: ByteUnits.size(published.entryApparent[index]),
                           detail: index < published.entryCopies.length
                                   && published.entryCopies[index] > 0
                                   ? qsTr("%1 copias").arg(published.entryCopies[index]) : "",
@@ -144,6 +161,8 @@ Item {
         const dimmed = []
         for (let at = 0; at + 4 < rects.length; at += 5) {
             const id = rects[at]
+            // The map's remainder tile (-1) is never a listed row: the map
+            // names it itself.
             const row = byId[id]
             tiles.push({ id: id, x: rects[at + 1], y: rects[at + 2], w: rects[at + 3],
                          h: rects[at + 4], name: row ? row.name : "",
@@ -168,7 +187,7 @@ Item {
         let member = 0
         for (let group = 0; group < groups; ++group) {
             duplicates.push({ header: true, group: group, count: published.groupCounts[group],
-                              size: page.bytesText(published.groupSizes[group]),
+                              size: ByteUnits.size(published.groupSizes[group]),
                               verified: published.groupVerified[group] === 1,
                               unreadable: published.groupUnreadable[group] === 1,
                               id: -1, name: "", path: "" })
@@ -208,7 +227,9 @@ Item {
                     copies.push(published.memberPaths[index])
             }
         }
-        return { name: row.name, path: (folder === "/" ? "" : folder) + "/" + row.name,
+        // The merged remainder is many entries and has no path of its own.
+        const path = row.merged > 0 ? "" : (folder === "/" ? "" : folder) + "/" + row.name
+        return { name: row.name, path: path,
                  allocated: row.size, apparent: row.apparent, files: row.files, copies: copies }
     }
 
@@ -227,8 +248,8 @@ Item {
                              path: published.locationPaths[index],
                              share: total > 0 ? used / total : 0,
                              usage: total > 0
-                                    ? qsTr("%1 de %2").arg(page.bytesText(used))
-                                                      .arg(page.bytesText(total))
+                                    ? qsTr("%1 de %2").arg(ByteUnits.size(used))
+                                                      .arg(ByteUnits.size(total))
                                     : "",
                              readable: published.locationReadable[index] === 1 })
         }
@@ -240,7 +261,7 @@ Item {
         for (let index = 0; index < folderCount; ++index)
             folder.push({ name: published.browseNames[index],
                           kind: published.browseKinds[index],
-                          size: page.bytesText(published.browseApparent[index]) })
+                          size: ByteUnits.size(published.browseApparent[index]) })
         const key = published.crumbPaths.join("\n")
         if (key !== page.folderKey || page.folderRows.length === 0) {
             page.folderKey = key
@@ -271,7 +292,7 @@ Item {
         const count = page.analysis.selectedCount
         if (count > 1)
             confirm.ask(qsTr("¿Enviar %1 elementos (%2) a la papelera?")
-                            .arg(count).arg(page.bytesText(page.analysis.selectedBytes)),
+                            .arg(count).arg(ByteUnits.size(page.analysis.selectedBytes)),
                         qsTr("Papelera"),
                         { kind: "trash", revision: page.analysis.selectionRevision })
         else
@@ -283,7 +304,7 @@ Item {
             return
         confirm.ask(qsTr("¿Borrar definitivamente %1 elementos (%2)? No se podrán recuperar.")
                         .arg(page.analysis.selectedCount)
-                        .arg(page.bytesText(page.analysis.selectedBytes)),
+                        .arg(ByteUnits.size(page.analysis.selectedBytes)),
                     qsTr("Borrar"),
                     { kind: "delete", revision: page.analysis.selectionRevision })
     }
@@ -532,7 +553,7 @@ Item {
                             emptyText: page.filtered ? qsTr("Nada coincide con el filtro")
                                                      : qsTr("Carpeta vacía")
                             onChosen: function(id) { page.currentId = id }
-                            onEntered: function(id) { page.analysis.enterId(id) }
+                            onEntered: function(id) { page.enterRow(id) }
                             onUpRequested: {
                                 page.analysis.up()
                                 page.focusBody()

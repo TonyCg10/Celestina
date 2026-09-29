@@ -70,17 +70,10 @@ Item {
         return value.toLocaleString(Qt.locale(), "f", 1) + " %"
     }
 
-    function bytesText(bytes) {
-        if (bytes >= 1073741824) return (bytes / 1073741824).toLocaleString(Qt.locale(), "f", 1) + " GiB"
-        if (bytes >= 1048576) return (bytes / 1048576).toLocaleString(Qt.locale(), "f", 1) + " MiB"
-        if (bytes >= 1024) return (bytes / 1024).toLocaleString(Qt.locale(), "f", 0) + " KiB"
-        return Math.round(bytes) + " B"
-    }
-
     // A negative rate is the hub's word for "cannot be read" — somebody
     // else's process, or one not yet read twice; a zero is a measured idle.
     function rateText(value) {
-        return value < 0 ? "—" : table.bytesText(value) + "/s"
+        return value < 0 ? "—" : ByteUnits.rate(value)
     }
 
     function weave() {
@@ -550,7 +543,7 @@ Item {
                             user: slot.processData.user
                             pid: String(slot.processData.pid)
                             cpu: table.percentText(slot.processData.cpu)
-                            memory: table.bytesText(slot.processData.memory * 1024)
+                            memory: ByteUnits.size(slot.processData.memory * 1024)
                             read: table.rateText(slot.processData.read)
                             write: table.rateText(slot.processData.write)
                             actionable: slot.processData.actionable
@@ -568,7 +561,7 @@ Item {
                             iconName: slot.groupData.icon
                             count: slot.groupData.count
                             cpu: table.percentText(slot.groupData.cpu)
-                            memory: table.bytesText(slot.groupData.memory * 1024)
+                            memory: ByteUnits.size(slot.groupData.memory * 1024)
                             expanded: !!table.expanded[slot.groupData.id]
                             onClicked: table.toggleGroup(slot.groupData.id)
                         }

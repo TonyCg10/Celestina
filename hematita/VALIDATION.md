@@ -230,3 +230,49 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   refused with nothing removed; duplicate sizes match `ls -l`
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-HEM-H1-B — A bounded storage page and honest services after the hardening
+
+- **Status:** pending
+- **Related implementation:** HEM-H1-B
+- **Requires:** the deployed Hematita carrying `HEM-H1-B`; a folder with
+  a few thousand entries (for example `node_modules` or a photo dump) and
+  a folder with many duplicate files; the polkit authentication agent of
+  the real session
+- **Procedure:** scan the big folder: the list shows forty rows, the last
+  being the merged row, in the neutral colour, which names its count and
+  that Enter lists more, and the map as many tiles; before moving the cursor the details card shows nothing;
+  move to the last row by keyboard, read the details (no path) and hear
+  Orca name the row; Space on it selects nothing; press Enter (and, once,
+  double-click it): forty more entries are listed each time, the cursor
+  stays where it was, the map does not change, and at the end the list
+  holds every entry with no merged row; select one of the smallest entries
+  and trash it; turn the duplicate filter on: the list keeps small
+  matching entries that were inside "otros" before, and the map dims what
+  does not match. Scan the duplicates folder and press "confirm": the page
+  fills in steps a few times per second, the window stays responsive, and
+  the duplicate filter then keeps only folders with a proven copy. On
+  Servicios, stop a system unit and leave the polkit prompt open for five
+  minutes: at 300 s the page reads the action as failed; then
+  `ps -T -p $(pidof hematita)` lists no `hematita-systemd` or
+  `hematita-systemd-call` thread (one left means closing the connection
+  did not release the call: record it); run the action again and answer
+  it: it works.
+  In Procesos, run `sudo -s` in a terminal and watch the new shell's owner
+  become root within two seconds; create a user (`sudo useradd -m probe`)
+  and start a process as it (`sudo -u probe sleep 300`): its user column
+  reads `probe` within a minute; the application names and icons of the
+  Aplicaciones page are the same as before. Close the window while the
+  Servicios page is loading: it closes at once. Read a few sizes on
+  Rendimiento (the memory row included, now in adaptive units), Procesos
+  and Almacenamiento: all use the same units, and a small amount reads
+  "N B" everywhere
+- **Pass condition:** no folder lists more than forty rows until asked
+  for more, every entry is reachable a page at a time, and nothing freezes
+  the window; no details show while nothing is chosen; verdicts arrive
+  without stalls; an unanswered unit action ends as failed at 300 s,
+  leaves no action thread behind, and a later one works; the owner column
+  follows `sudo` and names a new user within a minute; closing never
+  hangs; byte amounts read alike on every page
+- **Result:** not run
+- **Evidence:** none

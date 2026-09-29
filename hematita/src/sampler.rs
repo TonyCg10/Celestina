@@ -5,15 +5,18 @@
 //! is applied whole, so the window never shows one second's CPU beside another
 //! second's memory. A source that cannot be read leaves its section
 //! [`Section::Unavailable`] with the reason while the others keep publishing.
+//! Every kernel file is read bounded, through [`crate::kernel_text`].
 
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use celestina_core::desktop_entry;
 use hematita_core::cpu::{self, CpuSampler};
 use hematita_core::disk::{self, SECTOR_BYTES};
 use hematita_core::gpu::{self, AmdgpuFiles, GpuReading};
@@ -24,6 +27,8 @@ use hematita_core::process::{self, ProcessSampler};
 use hematita_core::rate::NamedCounters;
 use hematita_core::sensors::{self, Chip, ChipListing};
 use hematita_core::services::{Scope, Unit};
+
+use crate::kernel_text::{self, TextError, ARGV0_LIMIT};
 
 /// A number nobody stares at, and rare enough that the monitor is not a reason
 /// the machine is busy. The one place the cadence lives.
@@ -42,6 +47,24 @@ pub const SERVICE_TICKS: u64 = 5;
 /// tick: a driver that gains a channel while the window is up — a card that
 /// binds, a module that loads — is shown within half a minute instead of never.
 pub const SENSOR_FACTS_TICKS: u64 = 30;
+
+/// A process's name and application are read again once every fifteenth
+/// process read (half a minute), each process on its own read so the
+/// re-reads spread instead of landing together: a launcher that moves a
+/// running process into its application's scope is shown within that time.
+/// An `exec`, which changes the kernel's `comm`, is caught on the next read.
+pub const FACTS_REFRESH_READS: u64 = 15;
+
+/// The account table is read again at most once every thirtieth process
+/// read (a minute), and only when a listed process's uid has no name in it:
+/// a user created during the session gets a name without the table being
+/// read every tick.
+pub const USERS_REFRESH_READS: u64 = 30;
+
+/// How long [`stop`] waits for the sampling thread before leaving it to end
+/// on its own. A tick checks the stop flag between its sections and sleeps
+/// in 100 ms slices, so this is reached only when one read is itself slow.
+pub const STOP_WAIT: Duration = Duration::from_millis(500);
 
 const STAT_PATH: &str = "/proc/stat";
 const MEMINFO_PATH: &str = "/proc/meminfo";
@@ -161,43 +184,89 @@ pub struct ProcessReading {
 pub struct ProcessSnapshot {
     pub own_uid: u32,
     pub readings: Vec<ProcessReading>,
-    /// Read once when the thread starts and shared by every snapshot: a user
-    /// created during a session is rare, and shows as a number.
+    /// Read when the thread starts and shared by every snapshot; read again,
+    /// at most every [`USERS_REFRESH_READS`] process reads, when a listed
+    /// uid has no name. Until then such a uid shows as a number.
     pub users: Arc<HashMap<u32, String>>,
+    /// Per desktop id a listed process belongs to, the name and icon its
+    /// `.desktop` entry gives; an id without a readable entry is absent.
+    pub applications: Arc<HashMap<String, Application>>,
 }
 
-/// What does not change while a process lives, read once per (pid, start).
+/// What an application's `.desktop` entry says it is called and looks like.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Application {
+    pub name: String,
+    pub icon: String,
+}
+
+/// What is read about a process besides its counters, kept per (pid, start)
+/// and read again when its `comm` changes or its turn to refresh comes.
 #[derive(Clone, Debug)]
 struct ProcessFacts {
     start_ticks: u64,
+    /// The kernel's `comm` when the facts were read; an `exec` changes it.
+    comm: String,
     name: String,
-    uid: u32,
     application: Option<String>,
 }
 
 struct ProcessState {
     sampler: ProcessSampler,
-    io: NamedCounters<2>,
+    /// Keyed by `(pid, start_ticks)`: a recycled pid starts its rates over.
+    io: NamedCounters<2, (u32, u64)>,
     facts: HashMap<u32, ProcessFacts>,
+    /// Desktop id to its entry, looked up on this thread once while any
+    /// process of that application is listed; `None` is a remembered absence.
+    applications: HashMap<String, Option<Application>>,
     users: Arc<HashMap<u32, String>>,
     own_uid: u32,
     clock_ticks: u64,
+    /// Process reads so far, which staggers the facts' refreshes.
+    reads: u64,
+    /// The process read at which the account table was last read.
+    users_read: u64,
 }
 
 impl ProcessState {
     fn new() -> Self {
-        let users = read(Path::new(PASSWD_PATH))
-            .map(|text| passwd::parse(&text))
-            .unwrap_or_default();
+        let users = read_users().unwrap_or_default();
         Self {
             sampler: ProcessSampler::new(),
             io: NamedCounters::new(),
             facts: HashMap::new(),
+            applications: HashMap::new(),
             users: Arc::new(users),
             own_uid: rustix::process::getuid().as_raw(),
             clock_ticks: rustix::param::clock_ticks_per_second(),
+            reads: 0,
+            users_read: 0,
         }
     }
+
+    /// Reads the account table again when a listed uid has no name and the
+    /// last read is [`USERS_REFRESH_READS`] process reads old; a table that
+    /// cannot be read keeps the names already known.
+    fn refresh_users<'a>(&mut self, uids: impl IntoIterator<Item = &'a u32>) {
+        let unknown = uids.into_iter().any(|uid| !self.users.contains_key(uid));
+        if !users_due(unknown, self.reads, self.users_read) {
+            return;
+        }
+        self.users_read = self.reads;
+        if let Ok(users) = read_users() {
+            self.users = Arc::new(users);
+        }
+    }
+}
+
+fn read_users() -> Result<HashMap<u32, String>, Reason> {
+    read(Path::new(PASSWD_PATH)).map(|text| passwd::parse(&text))
+}
+
+/// Whether the account table is read again on process read `reads`, the
+/// last read of it having been on read `last`.
+fn users_due(unknown: bool, reads: u64, last: u64) -> bool {
+    unknown && reads.wrapping_sub(last) >= USERS_REFRESH_READS
 }
 
 /// The two buses' unit lists. Each bus is its own section: the system bus
@@ -252,11 +321,22 @@ pub struct Identity {
     pub gpu_id: String,
 }
 
-fn read(path: &Path) -> Result<String, Reason> {
-    std::fs::read_to_string(path).map_err(|_| Reason {
-        kind: ReasonKind::Unreadable,
+/// A kernel text file, bounded by [`kernel_text::TEXT_LIMIT`]. A file over
+/// the limit is `Malformed` — it is not the file this reads — and any other
+/// failure `Unreadable`.
+pub(crate) fn read(path: &Path) -> Result<String, Reason> {
+    kernel_text::read_text(path).map_err(|error| Reason {
+        kind: reason_of_text_error(&error),
         path: path.display().to_string(),
     })
+}
+
+fn reason_of_text_error(error: &TextError) -> ReasonKind {
+    if error.is_too_large() {
+        ReasonKind::Malformed
+    } else {
+        ReasonKind::Unreadable
+    }
 }
 
 fn malformed(path: &Path) -> Reason {
@@ -324,8 +404,26 @@ type Subscriber = Box<dyn Fn(&Snapshot) + Send + 'static>;
 /// reader.
 struct Hub {
     subscribers: Mutex<Vec<Subscriber>>,
+    run: Mutex<Option<Run>>,
+}
+
+/// One sampling thread: its own stop flag, so a thread [`stop`] stopped
+/// waiting for can never be revived by a later [`subscribe`], and the
+/// channel whose sender it drops when it ends.
+struct Run {
     stop: Arc<AtomicBool>,
-    handle: Mutex<Option<JoinHandle<()>>>,
+    ended: mpsc::Receiver<()>,
+    handle: JoinHandle<()>,
+}
+
+/// How [`stop`] parted with a sampling thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stopped {
+    /// The thread ended within the wait and was joined.
+    Joined,
+    /// The thread was still inside a slow read; it was left to end on its
+    /// own, and it publishes nothing more.
+    Detached,
 }
 
 static HUB: OnceLock<Hub> = OnceLock::new();
@@ -333,8 +431,7 @@ static HUB: OnceLock<Hub> = OnceLock::new();
 fn hub() -> &'static Hub {
     HUB.get_or_init(|| Hub {
         subscribers: Mutex::new(Vec::new()),
-        stop: Arc::new(AtomicBool::new(false)),
-        handle: Mutex::new(None),
+        run: Mutex::new(None),
     })
 }
 
@@ -347,14 +444,14 @@ fn hub() -> &'static Hub {
 /// is told, rather than being left listening to nothing.
 pub fn subscribe(callback: impl Fn(&Snapshot) + Send + 'static) -> std::io::Result<()> {
     let shared = hub();
-    // The `handle` lock is taken first and held across the registration, so a
+    // The `run` lock is taken first and held across the registration, so a
     // `subscribe` racing a [`stop`] either registers before that `stop` drains
     // the list — and is dropped with it — or waits and registers on a hub that
-    // is already stopped and armed again. Registering outside this lock could
-    // have put a subscriber into a list `stop` was about to clear while the
-    // caller believed it was listening.
-    let mut handle = shared
-        .handle
+    // is already stopped. Registering outside this lock could have put a
+    // subscriber into a list `stop` was about to clear while the caller
+    // believed it was listening.
+    let mut running = shared
+        .run
         .lock()
         .map_err(|_| std::io::Error::other("sampler lock poisoned"))?;
     shared
@@ -362,56 +459,77 @@ pub fn subscribe(callback: impl Fn(&Snapshot) + Send + 'static) -> std::io::Resu
         .lock()
         .map_err(|_| std::io::Error::other("sampler subscribers lock poisoned"))?
         .push(Box::new(callback));
-    if handle.is_none() {
-        let stop = Arc::clone(&shared.stop);
-        *handle = Some(
-            thread::Builder::new()
-                .name("hematita-sampler".to_owned())
-                .spawn(move || {
-                    run(&stop, &|snapshot| {
-                        if let Ok(subscribers) = hub().subscribers.lock() {
-                            for subscriber in subscribers.iter() {
-                                subscriber(&snapshot);
-                            }
+    if running.is_none() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&stop);
+        let (ended_sender, ended) = mpsc::channel::<()>();
+        let handle = thread::Builder::new()
+            .name("hematita-sampler".to_owned())
+            .spawn(move || {
+                // Dropped when this thread ends, however it ends.
+                let _ended = ended_sender;
+                run(&flag, &|snapshot| {
+                    if let Ok(subscribers) = hub().subscribers.lock() {
+                        // Read under the lock `stop` drains through, after it
+                        // raised the flag: a stopped run never reaches the
+                        // subscribers of the next one.
+                        if flag.load(Ordering::Acquire) {
+                            return;
                         }
-                    });
-                })?,
-        );
+                        for subscriber in subscribers.iter() {
+                            subscriber(&snapshot);
+                        }
+                    }
+                });
+            })?;
+        *running = Some(Run {
+            stop,
+            ended,
+            handle,
+        });
     }
     Ok(())
 }
 
-/// Asks the thread to stop, waits for it, and leaves the hub able to start
-/// again: the subscribers of the run that just ended are dropped, and the
-/// flag is lowered so a later [`subscribe`] spawns a thread that lives.
+/// Asks the thread to stop, waits for it at most [`STOP_WAIT`], and leaves
+/// the hub able to start again: the subscribers of the run that just ended
+/// are dropped, and a later [`subscribe`] spawns a new thread with a flag of
+/// its own. A second call is a no-op.
 ///
-/// The thread checks the flag every hundred milliseconds, so this waits that
-/// long at worst; a join that returns an error means it panicked, and there is
-/// nothing left to do about that during shutdown. A second call is a no-op.
-///
-/// Because [`subscribe`] now registers inside the `handle` lock this holds,
-/// the guarantee is total: no subscriber can be registered between the drain
-/// below and the lowering of the flag, so the hub a later `subscribe` finds is
-/// either running or stopped-and-empty, never a drained hub holding a
-/// subscriber that will never be called.
+/// This runs on the Qt thread when the window goes away, so it must not
+/// wait for a read that does not answer: the thread checks its flag between
+/// the sections of a tick and every hundred milliseconds while it sleeps,
+/// but one service listing can take its two-second timeout and opening a bus
+/// has none. A thread still inside such a read when the wait ends is left to
+/// finish it; its flag is raised, so it publishes nothing and then ends.
 pub fn stop() {
     let shared = hub();
-    shared.stop.store(true, Ordering::Relaxed);
-    // The `handle` lock is held across the whole sequence, so a `subscribe`
-    // racing this either registers before the flag is read or waits and finds
-    // a hub that is stopped, drained and armed again — never one that is
-    // half-way between.
-    if let Ok(mut handle) = shared.handle.lock() {
-        if let Some(handle) = handle.take() {
-            let _ = handle.join();
+    let Ok(mut running) = shared.run.lock() else {
+        return;
+    };
+    let Some(current) = running.take() else {
+        return;
+    };
+    current.stop.store(true, Ordering::Release);
+    // The thread is done publishing, or will publish nothing more, so
+    // nothing will call these again; keeping them would hold every
+    // closure's captured `CxxQtThread` for the life of the process.
+    if let Ok(mut subscribers) = shared.subscribers.lock() {
+        subscribers.clear();
+    }
+    let _ = finish(current, STOP_WAIT);
+}
+
+/// Waits at most `limit` for `run` to end; joins it when it did, and drops
+/// its handle (detaching it) when it did not.
+fn finish(run: Run, limit: Duration) -> Stopped {
+    match run.ended.recv_timeout(limit) {
+        Err(RecvTimeoutError::Timeout) => Stopped::Detached,
+        // Nothing is ever sent: the sender dropping is the thread ending.
+        Ok(()) | Err(RecvTimeoutError::Disconnected) => {
+            let _ = run.handle.join();
+            Stopped::Joined
         }
-        // The thread is gone, so nothing will call these again; keeping them
-        // would hold every closure's captured `CxxQtThread` for the life of
-        // the process.
-        if let Ok(mut subscribers) = shared.subscribers.lock() {
-            subscribers.clear();
-        }
-        shared.stop.store(false, Ordering::Relaxed);
     }
 }
 
@@ -441,7 +559,7 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
     let mut session_bus: Option<zbus::blocking::Connection> = None;
     let mut generation = 0u64;
     let mut last = Instant::now();
-    while !stop.load(Ordering::Relaxed) {
+    while !stop.load(Ordering::Acquire) {
         generation += 1;
         let now = Instant::now();
         let elapsed = now.duration_since(last);
@@ -461,13 +579,21 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
         } else {
             None
         };
+        // A stop asked for during the slower sections ends the tick here
+        // rather than after the buses.
+        if stop.load(Ordering::Acquire) {
+            break;
+        }
         // The first tick asks too, so the page fills at once instead of after
         // five seconds of nothing.
         let service_section = if generation == 1 || generation % SERVICE_TICKS == 0 {
-            Some(sample_services(&mut system_bus, &mut session_bus))
+            Some(sample_services(&mut system_bus, &mut session_bus, stop))
         } else {
             None
         };
+        if stop.load(Ordering::Acquire) {
+            break;
+        }
         publish(Snapshot {
             generation,
             cpu,
@@ -482,7 +608,7 @@ fn run(stop: &AtomicBool, publish: &dyn Fn(Snapshot)) {
         });
         // Sleep in short slices so a close does not wait a whole interval.
         let mut slept = Duration::ZERO;
-        while slept < INTERVAL && !stop.load(Ordering::Relaxed) {
+        while slept < INTERVAL && !stop.load(Ordering::Acquire) {
             let slice = Duration::from_millis(100);
             thread::sleep(slice);
             slept += slice;
@@ -543,13 +669,42 @@ fn bus_unavailable(label: &str) -> Reason {
 }
 
 /// A listing that did not happen: why, and whether the connection it was
-/// asked over is worth keeping. A manager that answered with an error is a
-/// live bus; anything else — a socket that went away, a reply that could not
-/// be read at all — means this connection is finished and the next service
-/// tick has to open a new one.
+/// asked over is worth keeping.
+#[derive(Debug, PartialEq, Eq)]
 struct ListFailure {
     reason: Reason,
     keep_connection: bool,
+}
+
+/// What a failed `ListUnits` says about the manager and the connection.
+///
+/// - A reply that arrived but is not `a(ssssssouso)` (`Variant`,
+///   `InvalidReply`) is `Malformed`: the manager answered, so the
+///   connection is alive and stays.
+/// - A D-Bus error reply (`MethodError`) — no manager on that bus
+///   (`ServiceUnknown`), a refusal (`AccessDenied`) — leaves the listing
+///   unavailable; the bus itself carried that answer, so the connection
+///   stays too.
+/// - Anything else — a socket that went away, a timeout — leaves this
+///   connection unfit to reuse, and the next service tick opens another.
+fn failure_of(error: &zbus::Error, bus_label: &str) -> ListFailure {
+    match error {
+        zbus::Error::Variant(_) | zbus::Error::InvalidReply => ListFailure {
+            reason: Reason {
+                kind: ReasonKind::Malformed,
+                path: bus_label.to_owned(),
+            },
+            keep_connection: true,
+        },
+        zbus::Error::MethodError(..) => ListFailure {
+            reason: bus_unavailable(bus_label),
+            keep_connection: true,
+        },
+        _ => ListFailure {
+            reason: bus_unavailable(bus_label),
+            keep_connection: false,
+        },
+    }
 }
 
 /// Every unit one manager has loaded. A manager that answers something other
@@ -585,20 +740,7 @@ fn list_units(
                 sub,
             })
             .collect()),
-        // The manager replied, and what it replied was not what this asked
-        // for: the bus is alive and the connection stays. Every other error,
-        // a timeout included, leaves the connection unfit to reuse.
-        Err(zbus::Error::MethodError(..)) => Err(ListFailure {
-            reason: Reason {
-                kind: ReasonKind::Malformed,
-                path: bus_label.to_owned(),
-            },
-            keep_connection: true,
-        }),
-        Err(_) => Err(ListFailure {
-            reason: bus_unavailable(bus_label),
-            keep_connection: false,
-        }),
+        Err(error) => Err(failure_of(&error, bus_label)),
     }
 }
 
@@ -633,25 +775,31 @@ fn section_of_bus(
 }
 
 /// Both managers' unit lists, on this thread. This is the only place the
-/// sampler talks to a bus, and it does it every [`SERVICE_TICKS`] ticks.
+/// sampler talks to a bus, and it does it every [`SERVICE_TICKS`] ticks. A
+/// stop asked for after the system bus answered skips the session bus; the
+/// snapshot is not published then anyway.
 fn sample_services(
     system: &mut Option<zbus::blocking::Connection>,
     user: &mut Option<zbus::blocking::Connection>,
+    stop: &AtomicBool,
 ) -> ServiceSnapshot {
-    ServiceSnapshot {
-        system: section_of_bus(
-            system,
-            zbus::blocking::connection::Builder::system,
-            Scope::System,
-            SYSTEM_BUS,
-        ),
-        user: section_of_bus(
+    let system = section_of_bus(
+        system,
+        zbus::blocking::connection::Builder::system,
+        Scope::System,
+        SYSTEM_BUS,
+    );
+    let user = if stop.load(Ordering::Acquire) {
+        Section::Unavailable(bus_unavailable(SESSION_BUS))
+    } else {
+        section_of_bus(
             user,
             zbus::blocking::connection::Builder::session,
             Scope::User,
             SESSION_BUS,
-        ),
-    }
+        )
+    };
+    ServiceSnapshot { system, user }
 }
 
 /// Every `hwmonN` directory as a chip. The labels and limits are read once per
@@ -733,8 +881,10 @@ fn sample_sensors(
 
 /// Every process the kernel lists, with its CPU share of the whole machine,
 /// its resident size and its disk rates. `status` is read exactly once per
-/// PID per tick: the facts come from it the first time a PID is seen, and the
-/// resident size from it every time.
+/// PID per tick, and its owner and resident size are taken from it every
+/// time: a `setuid` or a `setuid` binary's `exec` shows at once. The name
+/// and the application come from the cached facts, read again when the
+/// kernel's `comm` changes (an `exec`) or the process's refresh turn comes.
 fn sample_processes(
     state: &mut ProcessState,
     elapsed: Duration,
@@ -747,12 +897,14 @@ fn sample_processes(
             state.sampler.reset();
             state.io.reset();
             state.facts.clear();
+            state.applications.clear();
             return Section::Unavailable(Reason {
                 kind: ReasonKind::Unreadable,
                 path: PROC_ROOT.to_owned(),
             });
         }
     };
+    state.reads = state.reads.wrapping_add(1);
     let mut ticks = Vec::new();
     let mut io_readings = Vec::new();
     let mut partial = Vec::new();
@@ -779,77 +931,124 @@ fn sample_processes(
             continue;
         };
         let facts = match state.facts.get(&pid) {
-            Some(facts) if facts.start_ticks == stat.start_ticks => facts.clone(),
+            Some(facts) if facts_current(facts, &stat, pid, state.reads) => facts.clone(),
             _ => {
-                let cmdline = std::fs::read(dir.join("cmdline"))
-                    .map(|bytes| process::parse_cmdline(&bytes))
-                    .unwrap_or_default();
-                let application = read(&dir.join("cgroup"))
-                    .ok()
-                    .and_then(|text| process::parse_cgroup(&text))
-                    .map(|scope| scope.desktop_id);
-                let facts = ProcessFacts {
-                    start_ticks: stat.start_ticks,
-                    name: display_name(&stat.comm, &cmdline),
-                    uid: status.uid,
-                    application,
-                };
+                let facts = read_facts(&dir, &stat);
                 state.facts.insert(pid, facts.clone());
                 facts
             }
         };
-        // Resident size changes every tick; it is the one status field the
-        // cache cannot answer.
+        // Resident size and owner change while a process lives; they are
+        // what the cache cannot answer.
         let memory_kib = status.rss_kib.unwrap_or(0);
-        if facts.uid == state.own_uid {
+        if status.uid == state.own_uid {
             if let Some(io) = read(&dir.join("io"))
                 .ok()
                 .and_then(|text| process::parse_io(&text).ok())
             {
-                io_readings.push((
-                    io_key(pid, stat.start_ticks),
-                    [io.read_bytes, io.write_bytes],
-                ));
+                io_readings.push(((pid, stat.start_ticks), [io.read_bytes, io.write_bytes]));
             }
         }
         ticks.push((pid, stat.start_ticks, stat.cpu_ticks));
-        partial.push((pid, stat.start_ticks, facts, memory_kib));
+        partial.push((pid, stat.start_ticks, status.uid, facts, memory_kib));
     }
-    let live: HashSet<u32> = partial.iter().map(|(pid, _, _, _)| *pid).collect();
+    state.refresh_users(partial.iter().map(|(_, _, uid, ..)| uid));
+    let live: HashSet<u32> = partial.iter().map(|(pid, ..)| *pid).collect();
     state.facts.retain(|pid, _| live.contains(pid));
+    let applications = listed_applications(
+        &mut state.applications,
+        partial
+            .iter()
+            .filter_map(|(.., facts, _)| facts.application.as_deref()),
+    );
     let cpu: HashMap<u32, f32> = state
         .sampler
         .sample(&ticks, elapsed, state.clock_ticks, cores)
         .into_iter()
         .collect();
-    let io: HashMap<String, [f64; 2]> =
+    let io: HashMap<(u32, u64), [f64; 2]> =
         state.io.sample(&io_readings, elapsed).into_iter().collect();
     let readings = partial
         .into_iter()
-        .map(|(pid, start_ticks, facts, memory_kib)| ProcessReading {
-            pid,
-            start_ticks,
-            name: facts.name,
-            uid: facts.uid,
-            cpu_percent: cpu.get(&pid).copied(),
-            memory_kib,
-            io_rate: io.get(&io_key(pid, start_ticks)).copied(),
-            application: facts.application,
-        })
+        .map(
+            |(pid, start_ticks, uid, facts, memory_kib)| ProcessReading {
+                pid,
+                start_ticks,
+                name: facts.name,
+                uid,
+                cpu_percent: cpu.get(&pid).copied(),
+                memory_kib,
+                io_rate: io.get(&(pid, start_ticks)).copied(),
+                application: facts.application,
+            },
+        )
         .collect();
     Section::Available(ProcessSnapshot {
         own_uid: state.own_uid,
         readings,
         users: Arc::clone(&state.users),
+        applications: Arc::new(applications),
     })
 }
 
-/// The name an IO counter is remembered under. A PID alone is not an
-/// identity — the kernel reuses them — so the process's start time is part of
-/// the key and a recycled PID starts its rates over instead of inheriting the
-/// counters of whatever held that number before it.
-fn io_key(pid: u32, start_ticks: u64) -> String {
-    format!("{pid}:{start_ticks}")
+/// Whether the cached facts still describe the process `stat` reads now:
+/// the same start (not a recycled pid), the same `comm` (no `exec` since),
+/// and not this process's turn to refresh on read number `reads`.
+fn facts_current(facts: &ProcessFacts, stat: &process::ProcessStat, pid: u32, reads: u64) -> bool {
+    let turn = reads.wrapping_add(u64::from(pid)) % FACTS_REFRESH_READS == 0;
+    facts.start_ticks == stat.start_ticks && facts.comm == stat.comm && !turn
+}
+
+/// A process's name, from the start of its command line, and the desktop
+/// application its cgroup places it in.
+fn read_facts(dir: &Path, stat: &process::ProcessStat) -> ProcessFacts {
+    let cmdline = kernel_text::read_prefix(&dir.join("cmdline"), ARGV0_LIMIT)
+        .map(|bytes| process::parse_cmdline(&bytes))
+        .unwrap_or_default();
+    let application = read(&dir.join("cgroup"))
+        .ok()
+        .and_then(|text| process::parse_cgroup(&text))
+        .map(|scope| scope.desktop_id);
+    ProcessFacts {
+        start_ticks: stat.start_ticks,
+        comm: stat.comm.clone(),
+        name: display_name(&stat.comm, &cmdline),
+        application,
+    }
+}
+
+/// The entries of the applications `listed` names, each looked up once while
+/// any of its processes is listed: `known` keeps the answers (an absence
+/// included) for those ids and forgets the others, so an application that
+/// comes back is looked up again.
+fn listed_applications<'a>(
+    known: &mut HashMap<String, Option<Application>>,
+    listed: impl Iterator<Item = &'a str>,
+) -> HashMap<String, Application> {
+    let live: HashSet<&str> = listed.collect();
+    known.retain(|id, _| live.contains(id.as_str()));
+    let mut found = HashMap::new();
+    for id in live {
+        let entry = known
+            .entry(id.to_owned())
+            .or_insert_with(|| application_entry(id));
+        if let Some(application) = entry {
+            found.insert(id.to_owned(), application.clone());
+        }
+    }
+    found
+}
+
+/// The name and icon of desktop id `id` (without `.desktop`), read bounded
+/// through the suite's one desktop-entry lookup, under its one shadowing
+/// rule. An entry without a name is no answer.
+fn application_entry(id: &str) -> Option<Application> {
+    let dirs = desktop_entry::application_search_dirs();
+    let entry = desktop_entry::find(&dirs, &format!("{id}.desktop"))?;
+    (!entry.name.is_empty()).then_some(Application {
+        name: entry.name,
+        icon: entry.icon,
+    })
 }
 
 /// The name shown for a process: the first word of its command line when it
@@ -1156,4 +1355,205 @@ fn sample_interfaces(
         })
         .collect();
     sections
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn method_error(name: &str) -> zbus::Error {
+        let message = zbus::message::Message::method_call(SYSTEMD_OBJECT, "ListUnits")
+            .expect("a well-formed path and member")
+            .build(&())
+            .expect("a message with an empty body");
+        zbus::Error::MethodError(
+            zbus::names::OwnedErrorName::try_from(name).expect("a well-formed error name"),
+            None,
+            message,
+        )
+    }
+
+    fn stat(pid: u32, comm: &str, start_ticks: u64) -> process::ProcessStat {
+        process::ProcessStat {
+            pid,
+            comm: comm.to_owned(),
+            state: 'S',
+            ppid: 1,
+            cpu_ticks: 0,
+            start_ticks,
+        }
+    }
+
+    fn facts(comm: &str, start_ticks: u64) -> ProcessFacts {
+        ProcessFacts {
+            start_ticks,
+            comm: comm.to_owned(),
+            name: comm.to_owned(),
+            application: None,
+        }
+    }
+
+    #[test]
+    fn a_reply_of_the_wrong_shape_is_malformed_and_keeps_the_connection() {
+        for error in [
+            zbus::Error::Variant(zbus::zvariant::Error::IncorrectType),
+            zbus::Error::InvalidReply,
+        ] {
+            let failure = failure_of(&error, SYSTEM_BUS);
+            assert_eq!(failure.reason.kind, ReasonKind::Malformed, "{error:?}");
+            assert!(failure.keep_connection);
+        }
+    }
+
+    #[test]
+    fn an_error_reply_is_an_unavailable_manager_on_a_live_bus() {
+        for name in [
+            "org.freedesktop.DBus.Error.ServiceUnknown",
+            "org.freedesktop.DBus.Error.AccessDenied",
+        ] {
+            let failure = failure_of(&method_error(name), SESSION_BUS);
+            assert_eq!(
+                failure,
+                ListFailure {
+                    reason: bus_unavailable(SESSION_BUS),
+                    keep_connection: true,
+                },
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_broken_or_silent_bus_drops_the_connection() {
+        let timeout = zbus::Error::from(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "timed out",
+        ));
+        let failure = failure_of(&timeout, SYSTEM_BUS);
+        assert_eq!(failure.reason.kind, ReasonKind::Unreadable);
+        assert!(!failure.keep_connection);
+    }
+
+    #[test]
+    fn facts_are_read_again_after_an_exec_or_a_recycled_pid() {
+        let cached = facts("bash", 100);
+        // A read that is not this process's refresh turn.
+        let reads = 1;
+        assert!(facts_current(&cached, &stat(41, "bash", 100), 41, reads));
+        assert!(
+            !facts_current(&cached, &stat(41, "sudo", 100), 41, reads),
+            "exec"
+        );
+        assert!(
+            !facts_current(&cached, &stat(41, "bash", 900), 41, reads),
+            "recycled"
+        );
+    }
+
+    #[test]
+    fn each_process_refreshes_once_per_period_on_its_own_read() {
+        let cached = facts("bash", 100);
+        for pid in [1_u32, 2, 41, 4_194_303] {
+            let turns = (0..FACTS_REFRESH_READS)
+                .filter(|reads| !facts_current(&cached, &stat(pid, "bash", 100), pid, *reads))
+                .count();
+            assert_eq!(turns, 1, "pid {pid}");
+        }
+        // Neighbouring pids take their turns on different reads.
+        let turn_of = |pid: u32| {
+            (0..FACTS_REFRESH_READS)
+                .find(|reads| !facts_current(&cached, &stat(pid, "bash", 100), pid, *reads))
+        };
+        assert_ne!(turn_of(41), turn_of(42));
+    }
+
+    #[test]
+    fn the_account_table_is_read_again_only_for_an_unknown_uid_and_not_often() {
+        assert!(!users_due(false, 1000, 0), "every uid has a name");
+        assert!(!users_due(true, 29, 0), "read at the start, too soon");
+        assert!(users_due(true, 30, 0));
+        assert!(!users_due(true, 45, 30), "read a moment ago");
+        assert!(users_due(true, 60, 30));
+    }
+
+    #[test]
+    fn an_application_is_looked_up_once_while_it_is_listed() {
+        let mut known: HashMap<String, Option<Application>> = HashMap::new();
+        known.insert(
+            "gone".to_owned(),
+            Some(Application {
+                name: "Gone".to_owned(),
+                icon: String::new(),
+            }),
+        );
+        known.insert(
+            "kept".to_owned(),
+            Some(Application {
+                name: "Kept".to_owned(),
+                icon: "kept".to_owned(),
+            }),
+        );
+        let found = listed_applications(
+            &mut known,
+            ["kept", "kept", "hematita-test-no-such-application"].into_iter(),
+        );
+        assert!(!known.contains_key("gone"), "no process lists it any more");
+        assert_eq!(
+            known.get("hematita-test-no-such-application"),
+            Some(&None),
+            "an absence is remembered"
+        );
+        assert_eq!(found.len(), 1);
+        assert_eq!(found.get("kept").map(|app| app.icon.as_str()), Some("kept"));
+    }
+
+    #[test]
+    fn an_oversized_kernel_file_is_malformed_and_a_missing_one_unreadable() {
+        let refused = TextError::File(celestina_core::atomic_file::ReadError::TooLarge {
+            path: PathBuf::from("/proc/cpuinfo"),
+            limit: 4,
+        });
+        assert_eq!(reason_of_text_error(&refused), ReasonKind::Malformed);
+        let missing = TextError::Missing {
+            path: PathBuf::from("/proc/1/io"),
+        };
+        assert_eq!(reason_of_text_error(&missing), ReasonKind::Unreadable);
+        let reason = read(Path::new("/proc/hematita-no-such-file")).expect_err("missing");
+        assert_eq!(reason.kind, ReasonKind::Unreadable);
+    }
+
+    #[test]
+    fn a_thread_that_ends_in_time_is_joined() {
+        let (ended_sender, ended) = mpsc::channel::<()>();
+        let handle = thread::spawn(move || drop(ended_sender));
+        let run = Run {
+            stop: Arc::new(AtomicBool::new(true)),
+            ended,
+            handle,
+        };
+        assert_eq!(finish(run, Duration::from_secs(5)), Stopped::Joined);
+    }
+
+    #[test]
+    fn a_thread_stuck_in_a_read_is_left_behind_instead_of_waited_for() {
+        let (ended_sender, ended) = mpsc::channel::<()>();
+        let (release, parked) = mpsc::channel::<()>();
+        let handle = thread::spawn(move || {
+            let _ended = ended_sender;
+            // Stands for a bus that does not answer.
+            let _ = parked.recv();
+        });
+        let run = Run {
+            stop: Arc::new(AtomicBool::new(true)),
+            ended,
+            handle,
+        };
+        let started = Instant::now();
+        assert_eq!(finish(run, Duration::from_millis(50)), Stopped::Detached);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the wait is bounded"
+        );
+        let _ = release.send(());
+    }
 }

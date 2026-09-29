@@ -11,6 +11,7 @@
 //! are tokens; a unit's name and description are systemd's own data, shown raw.
 
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList, QVariant};
@@ -20,6 +21,7 @@ use hematita_core::services::{self, is_actionable, Outcome, Scope, Unit, UnitKin
 use crate::lists::{doubles, strings};
 use crate::publish;
 use crate::sampler::{self, Reason, Section, ServiceSnapshot, Snapshot};
+use crate::watchdog::{self, Waited};
 
 const SYSTEMD_SERVICE: &str = "org.freedesktop.systemd1";
 const SYSTEMD_OBJECT: &str = "/org/freedesktop/systemd1";
@@ -28,13 +30,20 @@ const SYSTEMD_MANAGER: &str = "org.freedesktop.systemd1.Manager";
 /// `systemctl` itself asks for.
 const REPLACE: &str = "replace";
 
-/// How long an action's connection waits for systemd's reply. The default 25
-/// seconds is a bus timeout, not a human one: a system unit's call does not
-/// return until polkit has asked the person and the person has answered,
-/// which is a dialog somebody may reach for a password manager to answer.
-/// Five minutes is longer than any prompt anyone should be left with, and it
-/// is still bounded — a call that never answers is not a thread left forever.
+/// How long an action waits for systemd's reply, connection included. The
+/// default 25 seconds is a bus timeout, not a human one: a system unit's call
+/// does not return until polkit has asked the person and the person has
+/// answered, which is a dialog somebody may reach for a password manager to
+/// answer. Five minutes is longer than any prompt anyone should be left with.
+///
+/// The call cannot bound itself — `Proxy::call_with_flags` ignores the
+/// connection's `method_timeout` — so [`watchdog::answer_within`] enforces
+/// this: when it passes, the action reads as `failed` and its connection is
+/// closed, which fails the call still waiting on it and ends its thread.
 const ACTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// The thread one action's call runs on, under the worker's watchdog.
+const CALL_THREAD: &str = "hematita-systemd-call";
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -228,25 +237,99 @@ fn outcome_of_reply(
     }
 }
 
-/// One unit action, start to finish, on this worker thread.
+/// One unit action, start to finish, from this worker thread, waiting at
+/// most [`ACTION_TIMEOUT`] for it.
 ///
-/// The connection is this call's own and is built with [`ACTION_TIMEOUT`],
-/// because the reply does not come back until the person has answered polkit.
+/// The connection and the call run on their own thread under the watchdog;
+/// the connection is left where the watchdog can reach it, so an expired
+/// wait closes it rather than leaving a call parked on it until the process
+/// exits.
+fn call_unit(scope: Scope, name: String, method: &'static str) -> Outcome {
+    let line: Arc<Mutex<CallLine<zbus::blocking::Connection>>> =
+        Arc::new(Mutex::new(CallLine::Opening));
+    let shared = Arc::clone(&line);
+    let waited = watchdog::answer_within(CALL_THREAD, ACTION_TIMEOUT, move || {
+        ask_manager(scope, &name, method, &shared)
+    });
+    outcome_of_wait(waited, || {
+        let connection = line.lock().ok().and_then(|mut line| line.expire());
+        if let Some(connection) = connection {
+            // Shutting the socket fails the call still waiting on it.
+            let _ = connection.close();
+        }
+    })
+}
+
+/// Where one action's connection stands, shared by its call and the
+/// watchdog that may give up on it.
+#[derive(Debug, PartialEq, Eq)]
+enum CallLine<C> {
+    /// The connection is being opened.
+    Opening,
+    /// The call is being made over it.
+    Open(C),
+    /// The watchdog gave up; a connection opened now must not be used.
+    Expired,
+}
+
+impl<C: Clone> CallLine<C> {
+    /// Records the opened connection; false when the watchdog already gave
+    /// up, so the call is not made after the page was told it failed.
+    fn open(&mut self, connection: &C) -> bool {
+        if matches!(self, Self::Expired) {
+            return false;
+        }
+        *self = Self::Open(connection.clone());
+        true
+    }
+
+    /// Gives up on the call: the open connection, if any, to close.
+    fn expire(&mut self) -> Option<C> {
+        match std::mem::replace(self, Self::Expired) {
+            Self::Open(connection) => Some(connection),
+            Self::Opening | Self::Expired => None,
+        }
+    }
+}
+
+/// What a bounded wait for one action means to the person; `release` runs
+/// only when the wait expired.
+fn outcome_of_wait(waited: std::io::Result<Waited<Outcome>>, release: impl FnOnce()) -> Outcome {
+    match waited {
+        Ok(Waited::Answered(outcome)) => outcome,
+        Ok(Waited::Expired) => {
+            release();
+            Outcome::Failed
+        }
+        Ok(Waited::Lost) | Err(_) => Outcome::Failed,
+    }
+}
+
+/// Opens this action's own connection, leaves a handle to it on `line` and
+/// makes the call, unless the watchdog gave up while it was opening.
+///
 /// The call carries `AllowInteractiveAuth`: systemd passes that message flag
 /// to polkit as `AllowUserInteraction`, and without it polkit never consults
 /// an authentication agent — it refuses with
 /// `InteractiveAuthorizationRequired` even on a session that has one (see
 /// ADR 0010). The returned object path is the job systemd queued; the page
 /// reports the call, not the job, so it is dropped.
-fn call_unit(scope: Scope, name: &str, method: &str) -> Outcome {
+fn ask_manager(
+    scope: Scope,
+    name: &str,
+    method: &str,
+    line: &Mutex<CallLine<zbus::blocking::Connection>>,
+) -> Outcome {
     let builder = match scope {
         Scope::System => zbus::blocking::connection::Builder::system(),
         Scope::User => zbus::blocking::connection::Builder::session(),
     };
-    let Ok(connection) = builder.and_then(|builder| builder.method_timeout(ACTION_TIMEOUT).build())
-    else {
+    let Ok(connection) = builder.and_then(|builder| builder.build()) else {
         return Outcome::Failed;
     };
+    if !line.lock().is_ok_and(|mut line| line.open(&connection)) {
+        return Outcome::Failed;
+    }
     let Ok(proxy) = zbus::blocking::Proxy::new(
         &connection,
         SYSTEMD_SERVICE,
@@ -441,7 +524,7 @@ impl qobject::HematitaServices {
         let spawned = std::thread::Builder::new()
             .name("hematita-systemd".to_owned())
             .spawn(move || {
-                let outcome = call_unit(scope, &unit, method);
+                let outcome = call_unit(scope, unit, method);
                 let _ = qt.queue(move |mut hub: Pin<&mut qobject::HematitaServices>| {
                     if publish::still_current(token, hub.rust().action_token) {
                         hub.as_mut()
@@ -545,6 +628,38 @@ mod tests {
             ))),
             Outcome::NoAgent
         );
+    }
+
+    #[test]
+    fn an_action_nobody_answers_in_time_fails_and_releases_its_call() {
+        let mut released = false;
+        assert_eq!(
+            outcome_of_wait(Ok(Waited::Expired), || released = true),
+            Outcome::Failed
+        );
+        assert!(released, "the expired call's connection is closed");
+        let mut released = false;
+        assert_eq!(
+            outcome_of_wait(Ok(Waited::Answered(Outcome::Denied)), || released = true),
+            Outcome::Denied
+        );
+        assert!(!released, "an answered call keeps nothing to release");
+        assert_eq!(outcome_of_wait(Ok(Waited::Lost), || {}), Outcome::Failed);
+        assert_eq!(
+            outcome_of_wait(Err(std::io::Error::other("no thread")), || {}),
+            Outcome::Failed
+        );
+    }
+
+    #[test]
+    fn a_call_line_the_watchdog_gave_up_on_is_never_used() {
+        let mut line = CallLine::Opening;
+        assert!(line.open(&7_u8));
+        assert_eq!(line.expire(), Some(7), "the open connection is closed");
+        assert!(!line.open(&8), "opened too late: no call is made");
+        let mut early: CallLine<u8> = CallLine::Opening;
+        assert_eq!(early.expire(), None, "nothing opened yet");
+        assert!(!early.open(&9));
     }
 
     #[test]

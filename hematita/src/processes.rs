@@ -17,7 +17,6 @@ use std::sync::Arc;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList, QVariant};
 
-use celestina_core::desktop_entry;
 use hematita_core::process;
 use hematita_core::process_view::{self, ProcessRow, SortField};
 use hematita_core::services::Outcome;
@@ -154,10 +153,6 @@ pub struct HematitaProcessesRust {
     action_token: u64,
     latest: Option<Arc<ProcessSnapshot>>,
     own_uid: u32,
-    /// Desktop id to its name and icon, resolved once per id from the XDG
-    /// directories. `None` is a remembered absence, so a missing `.desktop`
-    /// is looked for once and not once per tick.
-    entries: HashMap<String, Option<(String, String)>>,
 }
 
 impl Default for HematitaProcessesRust {
@@ -200,7 +195,6 @@ impl Default for HematitaProcessesRust {
             action_token: 0,
             latest: None,
             own_uid: 0,
-            entries: HashMap::new(),
         }
     }
 }
@@ -370,7 +364,7 @@ impl qobject::HematitaProcesses {
         let mut group_names = Vec::new();
         let mut group_icons = Vec::new();
         for group in &groups {
-            let (name, icon) = self.as_mut().rust_mut().entry_for(&group.id);
+            let (name, icon) = entry_for(&snapshot, &group.id);
             group_names.push(name);
             group_icons.push(icon);
         }
@@ -555,31 +549,17 @@ impl HematitaProcessesRust {
                 uid: reading.uid,
             })
     }
+}
 
-    /// The application's name and icon from its `.desktop` file, resolved
-    /// once per id. A missing entry answers the id as the name and no icon.
-    ///
-    /// This reads files on the Qt thread: a handful of small ones, once per
-    /// application id for the life of the window. It is the same trade
-    /// Siderita's icon resolution makes.
-    fn entry_for(&mut self, desktop_id: &str) -> (String, String) {
-        if let Some(cached) = self.entries.get(desktop_id) {
-            return cached
-                .clone()
-                .unwrap_or_else(|| (desktop_id.to_owned(), String::new()));
-        }
-        let file = format!("{desktop_id}.desktop");
-        let found = desktop_entry::application_dirs()
-            .into_iter()
-            .find_map(|dir| {
-                let text = std::fs::read_to_string(dir.join(&file)).ok()?;
-                let entry = desktop_entry::parse(&file, &text)?;
-                Some((entry.name, entry.icon))
-            })
-            .filter(|(name, _)| !name.is_empty());
-        self.entries.insert(desktop_id.to_owned(), found.clone());
-        found.unwrap_or_else(|| (desktop_id.to_owned(), String::new()))
-    }
+/// The application's name and icon as the snapshot carries them: the
+/// sampler thread looked its `.desktop` entry up, bounded, while its
+/// processes are listed, so nothing is read here. An id without an entry
+/// answers the id as the name and no icon.
+fn entry_for(snapshot: &ProcessSnapshot, desktop_id: &str) -> (String, String) {
+    snapshot.applications.get(desktop_id).map_or_else(
+        || (desktop_id.to_owned(), String::new()),
+        |application| (application.name.clone(), application.icon.clone()),
+    )
 }
 
 /// Kibibytes as the `double` QML reads. A `double` is exact to 2^53, which
@@ -601,17 +581,17 @@ fn still_the_same(expected: &ProcessIdentity, current: &Option<ProcessIdentity>)
 
 /// Reads one PID's start time and owner from `/proc`, now.
 ///
-/// This is blocking IO on the Qt thread: two small files, once per signal a
-/// person asked for. It is the only way to close the gap between a snapshot
-/// up to two seconds old and the syscall, and it is accepted for the same
-/// reason the `.desktop` read is — it happens on a human action, not on a
-/// tick.
+/// This is blocking IO on the Qt thread: two small files, bounded like every
+/// kernel file the sampler reads, once per signal a person asked for. It is
+/// the only way to close the gap between a snapshot up to two seconds old
+/// and the syscall, and it is accepted because it happens on a human action,
+/// not on a tick.
 fn read_identity_now(pid: i32) -> Option<ProcessIdentity> {
     let pid_u32 = u32::try_from(pid).ok()?;
     let directory = Path::new("/proc").join(pid_u32.to_string());
-    let stat_text = std::fs::read_to_string(directory.join("stat")).ok()?;
+    let stat_text = sampler::read(&directory.join("stat")).ok()?;
     let stat = process::parse_stat(&stat_text).ok()?;
-    let status_text = std::fs::read_to_string(directory.join("status")).ok()?;
+    let status_text = sampler::read(&directory.join("status")).ok()?;
     let status = process::parse_status(&status_text).ok()?;
     // `/proc/<pid>/stat` names the pid it describes; if it does not name the
     // one that was asked for, this is not the file it was meant to be.
@@ -652,8 +632,10 @@ fn row_of(reading: &ProcessReading, own_uid: u32) -> ProcessRow {
 
 #[cfg(test)]
 mod tests {
-    use super::{row_of, still_the_same, HematitaProcessesRust, ProcessIdentity, Refusal, NO_RATE};
-    use crate::sampler::{ProcessReading, ProcessSnapshot};
+    use super::{
+        entry_for, row_of, still_the_same, HematitaProcessesRust, ProcessIdentity, Refusal, NO_RATE,
+    };
+    use crate::sampler::{Application, ProcessReading, ProcessSnapshot};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -677,6 +659,7 @@ mod tests {
                 own_uid,
                 readings,
                 users: Arc::new(HashMap::new()),
+                applications: Arc::new(HashMap::new()),
             })),
             ..HematitaProcessesRust::default()
         }
@@ -765,6 +748,31 @@ mod tests {
         // `/proc` had no answer: the process is gone, which is never the
         // same process.
         assert!(!still_the_same(&expected, &None));
+    }
+
+    #[test]
+    fn an_application_reads_as_the_entry_the_snapshot_carries() {
+        let snapshot = ProcessSnapshot {
+            own_uid: 1000,
+            readings: Vec::new(),
+            users: Arc::new(HashMap::new()),
+            applications: Arc::new(HashMap::from([(
+                "kitty".to_owned(),
+                Application {
+                    name: "kitty".to_owned(),
+                    icon: "kitty".to_owned(),
+                },
+            )])),
+        };
+        assert_eq!(
+            entry_for(&snapshot, "kitty"),
+            ("kitty".to_owned(), "kitty".to_owned())
+        );
+        assert_eq!(
+            entry_for(&snapshot, "org.example.Unknown"),
+            ("org.example.Unknown".to_owned(), String::new()),
+            "no entry: the id as the name, no icon"
+        );
     }
 
     #[test]

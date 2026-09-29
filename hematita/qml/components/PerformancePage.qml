@@ -123,19 +123,9 @@ Item {
         return Math.round(value) + " %"
     }
 
-    function gib(kib) {
-        return (kib / 1048576).toLocaleString(Qt.locale(), "f", 1) + " GiB"
-    }
-
-    function bytesText(bytes) {
-        if (bytes >= 1073741824) return (bytes / 1073741824).toLocaleString(Qt.locale(), "f", 1) + " GiB"
-        if (bytes >= 1048576) return (bytes / 1048576).toLocaleString(Qt.locale(), "f", 1) + " MiB"
-        if (bytes >= 1024) return (bytes / 1024).toLocaleString(Qt.locale(), "f", 0) + " KiB"
-        return Math.round(bytes) + " B"
-    }
-
-    function rateText(bytesPerSecond) {
-        return page.bytesText(bytesPerSecond) + "/s"
+    // Memory arrives in kibibytes, as the kernel counts it.
+    function kibText(kib) {
+        return ByteUnits.size(kib * 1024)
     }
 
     // The value beside the name in the side list.
@@ -145,10 +135,10 @@ Item {
         const n = row.numbers
         switch (row.kind) {
         case "cpu": return page.percentText(n[0])
-        case "memory": return page.gib(n[0]) + " / " + page.gib(n[1])
+        case "memory": return page.kibText(n[0]) + " / " + page.kibText(n[1])
         case "gpu": return page.percentText(n[0])
-        case "disk": return "↓ " + page.rateText(n[0]) + "  ↑ " + page.rateText(n[1])
-        case "network": return "↓ " + page.rateText(n[0]) + "  ↑ " + page.rateText(n[1])
+        case "disk": return "↓ " + ByteUnits.rate(n[0]) + "  ↑ " + ByteUnits.rate(n[1])
+        case "network": return "↓ " + ByteUnits.rate(n[0]) + "  ↑ " + ByteUnits.rate(n[1])
         }
         return ""
     }
@@ -163,24 +153,24 @@ Item {
                     qsTr("Frecuencia"), n[1] > 0 ? (n[1] / 1000).toLocaleString(Qt.locale(), "f", 2) + " GHz" : "—",
                     qsTr("Núcleos"), String(n[2])]
         case "memory":
-            return [qsTr("En uso"), page.gib(n[0]),
-                    qsTr("Total"), page.gib(n[1]),
-                    qsTr("Intercambio"), page.gib(n[2]) + " / " + page.gib(n[3])]
+            return [qsTr("En uso"), page.kibText(n[0]),
+                    qsTr("Total"), page.kibText(n[1]),
+                    qsTr("Intercambio"), page.kibText(n[2]) + " / " + page.kibText(n[3])]
         case "gpu":
             return [qsTr("Uso"), page.percentText(n[0]),
                     qsTr("Memoria ocupada"), page.percentText(n[1]),
-                    qsTr("VRAM"), page.bytesText(n[2]) + " / " + page.bytesText(n[3]),
-                    qsTr("GTT"), page.bytesText(n[4]) + " / " + page.bytesText(n[5]),
+                    qsTr("VRAM"), ByteUnits.size(n[2]) + " / " + ByteUnits.size(n[3]),
+                    qsTr("GTT"), ByteUnits.size(n[4]) + " / " + ByteUnits.size(n[5]),
                     qsTr("Reloj"), n[6] > 0 ? Math.round(n[6]) + " MHz" : "—",
                     qsTr("Reloj de memoria"), n[7] > 0 ? Math.round(n[7]) + " MHz" : "—"]
         case "disk":
-            return [qsTr("Lectura"), page.rateText(n[0]),
-                    qsTr("Escritura"), page.rateText(n[1]),
-                    qsTr("Capacidad"), page.bytesText(n[2]),
+            return [qsTr("Lectura"), ByteUnits.rate(n[0]),
+                    qsTr("Escritura"), ByteUnits.rate(n[1]),
+                    qsTr("Capacidad"), ByteUnits.size(n[2]),
                     qsTr("Tipo"), n[3] === 1 ? qsTr("Disco mecánico") : qsTr("Estado sólido")]
         case "network":
-            return [qsTr("Recibido"), page.rateText(n[0]),
-                    qsTr("Enviado"), page.rateText(n[1]),
+            return [qsTr("Recibido"), ByteUnits.rate(n[0]),
+                    qsTr("Enviado"), ByteUnits.rate(n[1]),
                     qsTr("Velocidad"), n[2] > 0 ? Math.round(n[2]) + " Mbit/s" : "—",
                     qsTr("Estado"), n[4] === 1 ? qsTr("Activa") : qsTr("Inactiva")]
         }

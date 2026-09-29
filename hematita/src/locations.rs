@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 use hematita_core::usage::mounts::{self, Mount};
 
+use crate::kernel_text;
 use crate::sampler;
 
 const MOUNTS: &str = "/proc/self/mounts";
@@ -167,7 +168,7 @@ fn capacity(path: &Path) -> Option<(u64, u64)> {
 /// Reads the mount table and every shown mount's capacity. Blocking: call it
 /// on a worker thread. An unreadable mount table is an empty list.
 pub fn read_locations() -> Vec<Location> {
-    let text = std::fs::read_to_string(MOUNTS).unwrap_or_default();
+    let text = kernel_text::read_text(Path::new(MOUNTS)).unwrap_or_default();
     locations_from(
         mounts::parse_mounts(&text),
         &capacity,

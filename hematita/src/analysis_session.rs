@@ -14,13 +14,16 @@
 //! confirm epoch first, so no verdict about the older tree lands, and
 //! [`Session::node_id`] answers only for ids still reachable from the root.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::sync::Arc;
 
 use hematita_core::usage::duplicates::Verified;
 use hematita_core::usage::layout::{squarify, Rect};
+use hematita_core::usage::marks::Marks;
 use hematita_core::usage::tree::{Kind, NodeId, Tree};
+use hematita_core::usage::verdicts::Verdict;
+use hematita_core::usage::view::{children_rows, children_rows_where, flat_rects, Row, MAX_ROWS};
 
 use crate::actions::Item;
 use crate::analysis_view::{self, Findings, GroupRow, Kept};
@@ -51,12 +54,23 @@ fn kind_token(kind: Kind) -> &'static str {
     }
 }
 
-fn mark(marks: &[bool], id: NodeId) -> f64 {
-    flag(marks.get(id.0 as usize).copied().unwrap_or(false))
-}
+/// The id the storage page holds when no entry is chosen (its `currentId`
+/// default in QML). No Rust path decides "nothing chosen", so this exists
+/// for the tests that prove no published row carries it: node ids are never
+/// negative and the remainder has [`MORE_ID`].
+#[cfg(test)]
+const NO_ID: f64 = -1.0;
+
+/// The id of the listed row that stands for the entries past the list's
+/// cap. Activating it asks for another page ([`Session::show_more_rows`]).
+/// It is not the treemap's remainder id (`view::REMAINDER_ID`, -1), which
+/// the map draws but never lets anyone choose.
+pub const MORE_ID: f64 = -2.0;
 
 /// The analysed lists, computed from the owned tree before any property is
-/// written.
+/// written. The entry lists hold at most the folder's row limit
+/// ([`MAX_ROWS`] until the person asks for more), the last of them the
+/// merged remainder, [`MORE_ID`], when the folder has more.
 #[derive(Default)]
 pub struct Analysed {
     pub ids: Vec<f64>,
@@ -69,6 +83,8 @@ pub struct Analysed {
     pub empty: Vec<f64>,
     pub duplicate: Vec<f64>,
     pub unreadable: Vec<f64>,
+    /// Per row: how many entries it merges; 0 for a real entry.
+    pub merged: Vec<f64>,
     pub rects: Vec<f64>,
     pub current_allocated: f64,
     pub current_unreadable: i32,
@@ -101,13 +117,18 @@ pub struct Session {
     pub action: Option<WorkerHandle>,
     /// The graft scans running, one per folder a deletion stopped inside.
     pub grafts: Vec<(NodeId, WorkerHandle)>,
-    /// Per node: a duplicate or empty folder exactly, and one at or below.
-    pub duplicate_exact: Vec<bool>,
-    pub duplicate_below: Vec<bool>,
-    pub empty_exact: Vec<bool>,
-    pub empty_below: Vec<bool>,
+    /// The copies proven identical: the entries painted as duplicates.
+    pub verified: Marks,
+    /// Every member of a listed duplicate row, verified or not: what the
+    /// duplicate filter keeps a folder for.
+    pub listed: Marks,
+    /// The empty folders: painted, and what the empty filter keeps.
+    pub empty: Marks,
     /// The analysed folder.
     pub current: NodeId,
+    /// Per folder whose list was paged past [`MAX_ROWS`]: how many rows it
+    /// lists now. The map keeps [`MAX_ROWS`] whatever this says.
+    row_limits: HashMap<NodeId, usize>,
     /// Changed only through the methods below, each of which moves
     /// `selection_revision`.
     selection: Vec<NodeId>,
@@ -129,12 +150,12 @@ impl Default for Session {
             action_epoch: 0,
             action: None,
             grafts: Vec::new(),
-            duplicate_exact: Vec::new(),
-            duplicate_below: Vec::new(),
-            empty_exact: Vec::new(),
-            empty_below: Vec::new(),
+            verified: Marks::default(),
+            listed: Marks::default(),
+            empty: Marks::default(),
             current: NodeId(0),
             selection: Vec::new(),
+            row_limits: HashMap::new(),
             selection_revision: 0,
         }
     }
@@ -152,10 +173,10 @@ impl Session {
         self.verdicts.clear();
         self.unreadable_groups.clear();
         self.candidate_copies.clear();
-        self.duplicate_exact.clear();
-        self.duplicate_below.clear();
-        self.empty_exact.clear();
-        self.empty_below.clear();
+        self.verified = Marks::default();
+        self.listed = Marks::default();
+        self.empty = Marks::default();
+        self.row_limits.clear();
         self.clear_selection();
     }
 
@@ -166,9 +187,39 @@ impl Session {
         self.current = tree.root;
         self.findings = findings;
         self.tree = Some(Arc::new(tree));
+        self.row_limits.clear();
         self.clear_selection();
         self.mark_empty();
         self.mark_duplicates();
+    }
+
+    /// How many rows the analysed folder's list holds.
+    pub fn row_limit(&self) -> usize {
+        self.row_limits
+            .get(&self.current)
+            .copied()
+            .unwrap_or(MAX_ROWS)
+    }
+
+    /// Lists another [`MAX_ROWS`] entries of the analysed folder, so every
+    /// entry past the cap can be reached, a page at a time; the limit never
+    /// passes the folder's child count. False when everything is listed.
+    pub fn show_more_rows(&mut self) -> bool {
+        let Some(count) = self
+            .tree
+            .as_ref()
+            .and_then(|tree| tree.node(self.current))
+            .map(|node| node.children.len())
+        else {
+            return false;
+        };
+        let limit = self.row_limit();
+        if limit >= count {
+            return false;
+        }
+        let next = limit.saturating_add(MAX_ROWS).min(count);
+        self.row_limits.insert(self.current, next);
+        true
     }
 
     /// A content check, an action or a graft is running.
@@ -194,24 +245,19 @@ impl Session {
         let Some(tree) = self.tree.as_ref() else {
             return;
         };
-        let empty = &self.findings.empty;
-        self.empty_exact = analysis_view::marks_exact(tree.nodes.len(), empty.iter().copied());
-        self.empty_below = analysis_view::marks_below(tree, empty.iter().copied());
+        self.empty = Marks::of(tree, self.findings.empty.iter().copied());
     }
 
-    /// Marks the members of the listed duplicate rows, after a verdict: the
-    /// filter keeps every listed member; only a verified copy is painted as
-    /// a duplicate, and an unverified candidate carries its group's count.
+    /// Marks the members of the listed duplicate rows from scratch, for a
+    /// new, pruned or grafted tree: the filter keeps every listed member;
+    /// only a verified copy is painted as a duplicate, and an unverified
+    /// candidate carries its group's count. A verdict changes the marks of
+    /// its own group only ([`Session::apply_verdicts`]).
     pub fn mark_duplicates(&mut self) {
         let Some(tree) = self.tree.as_ref() else {
             return;
         };
         let rows = self.group_rows();
-        let verified: Vec<NodeId> = rows
-            .iter()
-            .filter(|row| row.verified)
-            .flat_map(|row| row.nodes.iter().copied())
-            .collect();
         let mut copies = vec![0_u32; tree.nodes.len()];
         for row in rows.iter().filter(|row| !row.verified) {
             let count = u32::try_from(row.nodes.len()).unwrap_or(u32::MAX);
@@ -221,9 +267,13 @@ impl Session {
                 }
             }
         }
-        self.duplicate_exact = analysis_view::marks_exact(tree.nodes.len(), verified);
-        self.duplicate_below =
-            analysis_view::marks_below(tree, rows.into_iter().flat_map(|row| row.nodes));
+        self.verified = Marks::of(
+            tree,
+            rows.iter()
+                .filter(|row| row.verified)
+                .flat_map(|row| row.nodes.iter().copied()),
+        );
+        self.listed = Marks::of(tree, rows.into_iter().flat_map(|row| row.nodes));
         self.candidate_copies = copies;
     }
 
@@ -309,19 +359,57 @@ impl Session {
             .collect()
     }
 
-    /// Records the verdict of candidate `index`; false when there is none.
-    pub fn set_verdict(&mut self, index: usize, verified: Vec<Verified>) -> bool {
-        let Some(slot) = self.verdicts.get_mut(index) else {
+    /// Records a batch of the content check's verdicts; false when none of
+    /// them changed anything, so nothing needs publishing.
+    pub fn apply_verdicts(&mut self, verdicts: Vec<(usize, Verdict)>) -> bool {
+        let mut changed = false;
+        for (index, verdict) in verdicts {
+            changed |= match verdict {
+                Verdict::Sets(sets) => self.set_verdict(index, sets),
+                Verdict::Unreadable => self.set_unreadable(index),
+            };
+        }
+        changed
+    }
+
+    /// Records the verdict of candidate `index` and updates the marks of its
+    /// members alone: each loses its unverified count, a copy proven
+    /// identical is painted, and one that matched nothing leaves the
+    /// duplicate filter. False when there is no such undecided candidate.
+    fn set_verdict(&mut self, index: usize, sets: Vec<Verified>) -> bool {
+        let Some(tree) = self.tree.as_ref() else {
             return false;
         };
-        *slot = Some(verified);
-        self.mark_duplicates();
+        let (Some(slot), Some(group)) = (
+            self.verdicts.get_mut(index),
+            self.findings.candidates.get(index),
+        ) else {
+            return false;
+        };
+        if slot.is_some() {
+            return false;
+        }
+        let proven: HashSet<NodeId> = sets
+            .iter()
+            .flat_map(|set| set.nodes.iter().copied())
+            .collect();
+        for id in &group.nodes {
+            if let Some(count) = self.candidate_copies.get_mut(id.0 as usize) {
+                *count = 0;
+            }
+            if proven.contains(id) {
+                self.verified.insert(tree, *id);
+            } else {
+                self.listed.remove(tree, *id);
+            }
+        }
+        *slot = Some(sets);
         true
     }
 
     /// A copy of candidate `index` could not be read; false when there is
     /// no such candidate.
-    pub fn set_unreadable(&mut self, index: usize) -> bool {
+    fn set_unreadable(&mut self, index: usize) -> bool {
         let Some(slot) = self.unreadable_groups.get_mut(index) else {
             return false;
         };
@@ -546,51 +634,33 @@ impl Session {
             .get(self.current.0 as usize)
             .map_or(0, |count| i32::try_from(*count).unwrap_or(i32::MAX));
 
-        let children = tree.children_by_size(self.current);
-        let sizes: Vec<u64> = children
-            .iter()
-            .map(|id| tree.node(*id).map_or(0, |n| n.allocated))
-            .collect();
+        // The map shows the whole folder, the list what the filters keep;
+        // both are the core's capped projection, so a folder of a hundred
+        // thousand entries is at most `MAX_ROWS` tiles and, until the person
+        // pages further, `MAX_ROWS` rows.
+        let unreadable = &self.findings.unreadable;
+        let whole = children_rows(tree, self.current, unreadable, MAX_ROWS);
+        let ids: Vec<Option<NodeId>> = whole.iter().map(|row| row.id).collect();
+        let sizes: Vec<u64> = whole.iter().map(|row| row.allocated).collect();
         let unit = Rect {
             x: 0.0,
             y: 0.0,
             w: 1.0,
             h: 1.0,
         };
-        let ids: Vec<Option<NodeId>> = children.iter().map(|id| Some(*id)).collect();
-        view.rects = hematita_core::usage::view::flat_rects(&ids, &squarify(&sizes, unit));
-
-        let mut filters: Vec<&[bool]> = Vec::new();
-        if show_duplicates {
-            filters.push(&self.duplicate_below);
-        }
-        if show_empty {
-            filters.push(&self.empty_below);
-        }
-        for id in analysis_view::project(&children, &filters) {
-            let Some(node) = tree.node(id) else {
-                continue;
-            };
-            view.ids.push(f64::from(id.0));
-            view.names.push(lossy(&node.name));
-            view.kinds.push(kind_token(node.kind).to_owned());
-            view.allocated.push(bytes(node.allocated));
-            view.apparent.push(bytes(node.apparent));
-            view.shares.push(if current.allocated > 0 {
-                bytes(node.allocated) / bytes(current.allocated)
-            } else {
-                0.0
-            });
-            view.files_below.push(bytes(node.files_below));
-            view.empty.push(mark(&self.empty_exact, id));
-            view.duplicate.push(mark(&self.duplicate_exact, id));
-            view.unreadable.push(flag(node.unreadable));
-            view.copies.push(f64::from(
-                self.candidate_copies
-                    .get(id.0 as usize)
-                    .copied()
-                    .unwrap_or(0),
-            ));
+        view.rects = flat_rects(&ids, &squarify(&sizes, unit));
+        let limit = self.row_limit();
+        let rows = if show_duplicates || show_empty {
+            children_rows_where(tree, self.current, unreadable, limit, |id| {
+                (!show_duplicates || self.listed.holds(id)) && (!show_empty || self.empty.holds(id))
+            })
+        } else if limit == MAX_ROWS {
+            whole
+        } else {
+            children_rows(tree, self.current, unreadable, limit)
+        };
+        for row in &rows {
+            self.push_row(tree, row, &mut view);
         }
 
         if show_duplicates {
@@ -610,6 +680,31 @@ impl Session {
             }
         }
         view
+    }
+
+    /// One projected row onto the lists; the remainder carries [`MORE_ID`],
+    /// no name, and no mark.
+    fn push_row(&self, tree: &Tree, row: &Row, view: &mut Analysed) {
+        let node = row.id.and_then(|id| tree.node(id));
+        view.ids.push(row.id.map_or(MORE_ID, |id| f64::from(id.0)));
+        view.names.push(lossy(&row.name));
+        view.kinds.push(kind_token(row.kind).to_owned());
+        view.allocated.push(bytes(row.allocated));
+        view.apparent.push(bytes(row.apparent));
+        view.shares.push(row.share);
+        view.files_below.push(bytes(row.files_below));
+        let marked = |marks: &Marks| flag(row.id.is_some_and(|id| marks.contains(id)));
+        view.empty.push(marked(&self.empty));
+        view.duplicate.push(marked(&self.verified));
+        view.unreadable
+            .push(flag(node.is_some_and(|node| node.unreadable)));
+        view.copies.push(f64::from(row.id.map_or(0, |id| {
+            self.candidate_copies
+                .get(id.0 as usize)
+                .copied()
+                .unwrap_or(0)
+        })));
+        view.merged.push(row.merged as f64);
     }
 }
 
@@ -682,6 +777,211 @@ mod tests {
         let mut session = Session::default();
         session.load(tree, found);
         session
+    }
+
+    /// `/r` holding `a` (files `x`, `y`) and `b` (files `z`, `w`), where
+    /// `x`, `y` and `z` share one size and `w` has its own.
+    fn twins() -> Session {
+        let mut nodes = vec![
+            node("/r", Kind::Dir, None, 80, &[1, 2]),
+            node("a", Kind::Dir, Some(0), 40, &[3, 4]),
+            node("b", Kind::Dir, Some(0), 40, &[5, 6]),
+            node("x", Kind::File, Some(1), 20, &[]),
+            node("y", Kind::File, Some(1), 20, &[]),
+            node("z", Kind::File, Some(2), 20, &[]),
+            node("w", Kind::File, Some(2), 20, &[]),
+        ];
+        nodes[6].apparent = 19;
+        let tree = Tree {
+            root: NodeId(0),
+            path: PathBuf::from("/r"),
+            device: 1,
+            nodes,
+            unreadable_dirs: 0,
+            hard_link_names: 0,
+        };
+        let found = analysis_view::findings(&tree);
+        let mut session = Session::default();
+        session.load(tree, found);
+        session
+    }
+
+    /// Every mark the session keeps, as plain values, for comparison.
+    fn marks_of(session: &Session) -> (Marks, Marks, Vec<u32>) {
+        (
+            session.verified.clone(),
+            session.listed.clone(),
+            session.candidate_copies.clone(),
+        )
+    }
+
+    #[test]
+    fn a_batch_of_verdicts_marks_only_its_groups_and_matches_a_rebuild() {
+        let mut session = twins();
+        assert_eq!(session.findings.candidates.len(), 1);
+        assert!(session.listed.holds(NodeId(2)), "b holds the candidate z");
+        let proven = vec![Verified {
+            size: 20,
+            nodes: vec![NodeId(3), NodeId(4)],
+        }];
+        assert!(session.apply_verdicts(vec![(0, Verdict::Sets(proven))]));
+        assert!(session.verified.contains(NodeId(3)) && session.verified.contains(NodeId(4)));
+        assert!(
+            !session.listed.holds(NodeId(2)),
+            "z matched nothing: b leaves the filter"
+        );
+        assert!(session.listed.holds(NodeId(1)));
+        assert_eq!(session.candidate_copies.iter().copied().max(), Some(0));
+        let incremental = marks_of(&session);
+        session.mark_duplicates();
+        assert_eq!(
+            incremental,
+            marks_of(&session),
+            "the same marks as a rebuild"
+        );
+        let view = session.view(true, false);
+        assert_eq!(view.ids, vec![1.0], "only a holds a duplicate now");
+    }
+
+    #[test]
+    fn a_decided_or_unknown_group_changes_nothing() {
+        let mut session = twins();
+        assert!(session.apply_verdicts(vec![(0, Verdict::Sets(Vec::new()))]));
+        assert!(!session.listed.holds(NodeId(0)), "no copy matched");
+        assert!(!session.apply_verdicts(vec![(0, Verdict::Sets(Vec::new()))]));
+        assert!(!session.apply_verdicts(vec![(7, Verdict::Unreadable)]));
+    }
+
+    #[test]
+    fn an_unreadable_group_keeps_its_unverified_marks() {
+        let mut session = twins();
+        let before = marks_of(&session);
+        assert!(session.apply_verdicts(vec![(0, Verdict::Unreadable)]));
+        assert_eq!(marks_of(&session), before);
+        assert!(session.group_rows()[0].unreadable);
+    }
+
+    #[test]
+    fn a_folder_of_many_entries_lists_at_most_the_row_cap() {
+        let count = 1000_u32;
+        let mut nodes = vec![node("/r", Kind::Dir, None, u64::from(count), &[])];
+        for index in 0..count {
+            // A hundred sizes, ten files of each: every file is a candidate.
+            nodes.push(node(
+                "f",
+                Kind::File,
+                Some(0),
+                u64::from(index % 100) + 1,
+                &[],
+            ));
+        }
+        nodes[0].children = (1..=count).map(NodeId).collect();
+        let tree = Tree {
+            root: NodeId(0),
+            path: PathBuf::from("/r"),
+            device: 1,
+            nodes,
+            unreadable_dirs: 0,
+            hard_link_names: 0,
+        };
+        let found = analysis_view::findings(&tree);
+        let mut session = Session::default();
+        session.load(tree, found);
+        let view = session.view(false, false);
+        assert_eq!(view.ids.len(), MAX_ROWS);
+        assert_eq!(view.names.len(), MAX_ROWS);
+        assert_eq!(view.merged.len(), MAX_ROWS);
+        assert_eq!(view.ids.last(), Some(&MORE_ID));
+        assert_eq!(view.merged.last(), Some(&f64::from(count - 39)));
+        assert!(
+            view.rects.len() <= MAX_ROWS * 5 + 5,
+            "the map is capped too"
+        );
+        // The duplicate filter keeps every file, and is capped the same way.
+        let filtered = session.view(true, false);
+        assert_eq!(filtered.ids.len(), MAX_ROWS);
+        assert_eq!(filtered.merged.last(), Some(&f64::from(count - 39)));
+    }
+
+    /// `/r` holding `count` files of distinct sizes and folder `sub` (last id)
+    /// holding one file.
+    fn wide(count: u32) -> Session {
+        let mut nodes = vec![node("/r", Kind::Dir, None, 0, &[])];
+        for index in 0..count {
+            nodes.push(node("f", Kind::File, Some(0), u64::from(index) + 2, &[]));
+        }
+        let sub = count + 1;
+        nodes.push(node("sub", Kind::Dir, Some(0), 1, &[sub + 1]));
+        nodes.push(node("g", Kind::File, Some(sub), 1, &[]));
+        nodes[0].children = (1..=sub).map(NodeId).collect();
+        nodes[0].allocated = nodes.iter().skip(1).map(|n| n.allocated).sum();
+        let tree = Tree {
+            root: NodeId(0),
+            path: PathBuf::from("/r"),
+            device: 1,
+            nodes,
+            unreadable_dirs: 0,
+            hard_link_names: 0,
+        };
+        let found = analysis_view::findings(&tree);
+        let mut session = Session::default();
+        session.load(tree, found);
+        session
+    }
+
+    #[test]
+    fn the_remainder_never_carries_the_id_of_no_entry() {
+        assert_ne!(MORE_ID, NO_ID);
+        let view = wide(100).view(false, false);
+        assert_eq!(view.ids.last(), Some(&MORE_ID));
+        assert!(
+            !view.ids.contains(&NO_ID),
+            "nothing published reads as unset"
+        );
+        let filtered = wide(100).view(false, true);
+        assert!(!filtered.ids.contains(&NO_ID));
+    }
+
+    #[test]
+    fn every_entry_past_the_cap_is_reached_a_page_at_a_time() {
+        let count = 1000_u32;
+        let mut session = wide(count);
+        let listed = |session: &Session| {
+            session
+                .view(false, false)
+                .ids
+                .iter()
+                .filter(|id| **id >= 0.0)
+                .count()
+        };
+        assert_eq!(listed(&session), MAX_ROWS - 1);
+        assert!(session.show_more_rows());
+        let view = session.view(false, false);
+        assert_eq!(view.ids.len(), 2 * MAX_ROWS);
+        assert_eq!(view.ids.last(), Some(&MORE_ID));
+        assert!(
+            view.rects.len() <= MAX_ROWS * 5 + 5,
+            "the map keeps its own cap"
+        );
+        let mut pages = 1;
+        while session.show_more_rows() {
+            pages += 1;
+            assert!(pages < 100, "the paging ends");
+        }
+        let view = session.view(false, false);
+        assert_eq!(
+            view.ids.len(),
+            count as usize + 1,
+            "every child, no remainder"
+        );
+        assert!(!view.ids.contains(&MORE_ID));
+        assert!(!session.show_more_rows(), "nothing left to show");
+        // Another folder starts at the cap again; a new analysis forgets.
+        session.current = NodeId(count + 1);
+        assert_eq!(session.view(false, false).ids, vec![f64::from(count + 2)]);
+        session.current = NodeId(0);
+        session.reset();
+        assert!(session.row_limits.is_empty());
     }
 
     #[test]

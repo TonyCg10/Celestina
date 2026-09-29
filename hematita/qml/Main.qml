@@ -255,7 +255,9 @@ ApplicationWindow {
         }
     }
 
-    // The sampler thread outlives no window: it is asked to stop and joined
-    // before the objects its snapshots are queued to go away.
+    // The sampler publishes to no window that is gone: it is asked to stop
+    // and joined, or, when a slow read holds it past half a second, left to
+    // end without publishing, before the objects its snapshots are queued to
+    // go away.
     Component.onDestruction: machine.shutdown()
 }

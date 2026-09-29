@@ -65,9 +65,10 @@ pub mod qobject {
         #[qinvokable]
         fn start(self: Pin<&mut HematitaResources>);
 
-        /// Stops the shared sampler thread and waits for it. The window calls
-        /// it when it goes away, so the thread does not outlive the objects
-        /// its snapshots are queued to.
+        /// Stops the shared sampler thread and waits for it at most half a
+        /// second; a thread still inside a slow read by then ends on its own
+        /// and publishes nothing more. The window calls it when it goes
+        /// away, so no snapshot reaches the objects it was queued to after.
         #[qinvokable]
         fn shutdown(self: Pin<&mut HematitaResources>);
     }

@@ -14,8 +14,8 @@ use std::sync::Arc;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 
-use hematita_core::usage::duplicates::Verified;
 use hematita_core::usage::tree::{NodeId, Tree};
+use hematita_core::usage::verdicts::Verdict;
 use hematita_core::usage::walk::{Progress, ScanError};
 
 use super::{qobject, Mode, FAILED, REFUSED};
@@ -143,39 +143,19 @@ impl qobject::HematitaAnalysis {
         }
     }
 
-    pub(crate) fn apply_verified(
+    /// A batch of the content check's verdicts: the marks of each group
+    /// change, then the page is published once for the whole batch.
+    pub(crate) fn apply_verdicts(
         mut self: Pin<&mut Self>,
         generation: u64,
         epoch: u64,
-        index: usize,
-        verified: Vec<Verified>,
+        verdicts: Vec<(usize, Verdict)>,
     ) {
         if !self.rust().confirm_current(generation, epoch) || self.rust().session.confirm.is_none()
         {
             return;
         }
-        if self
-            .as_mut()
-            .rust_mut()
-            .session
-            .set_verdict(index, verified)
-        {
-            self.publish();
-        }
-    }
-
-    /// A copy of candidate `index` could not be read; its row says so.
-    pub(crate) fn apply_unreadable(
-        mut self: Pin<&mut Self>,
-        generation: u64,
-        epoch: u64,
-        index: usize,
-    ) {
-        if !self.rust().confirm_current(generation, epoch) || self.rust().session.confirm.is_none()
-        {
-            return;
-        }
-        if self.as_mut().rust_mut().session.set_unreadable(index) {
+        if self.as_mut().rust_mut().session.apply_verdicts(verdicts) {
             self.publish();
         }
     }

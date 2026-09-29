@@ -4,6 +4,7 @@ mod analysis;
 mod analysis_session;
 mod analysis_view;
 mod browse;
+mod kernel_text;
 mod lists;
 mod locations;
 mod privilege;
@@ -14,6 +15,7 @@ mod sampler;
 mod sensors;
 mod services;
 mod usage_worker;
+mod watchdog;
 
 use cxx_qt_lib::{
     QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,

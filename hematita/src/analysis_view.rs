@@ -1,9 +1,10 @@
 //! What the analysed mode shows of a scanned tree, as plain values.
 //!
-//! The hub owns the tree; these functions decide which children a filter
-//! keeps and which rows a verified group becomes, without a QObject — so
-//! each rule is tested on a hand-built tree. The treemap's crossing to QML
-//! and the unreadable counts live in `hematita_core::usage::view`.
+//! The hub owns the tree; these functions decide which rows a verified group
+//! becomes and what a pruning leaves of what the hub keeps, without a
+//! QObject — so each rule is tested on a hand-built tree. The capped rows,
+//! the treemap's crossing to QML, the unreadable counts and the filters'
+//! marks live in `hematita_core::usage::{view, marks}`.
 
 use std::collections::HashSet;
 
@@ -40,52 +41,6 @@ pub fn findings(tree: &Tree) -> Findings {
         empty: empty_folders(tree),
         unreadable: unreadable_below(tree),
     }
-}
-
-/// Per node: whether it is in `set` or has something of `set` below it. Each
-/// member climbs its ancestors until it meets one already marked, so the cost
-/// follows the set, not the tree.
-#[must_use]
-pub fn marks_below(tree: &Tree, set: impl IntoIterator<Item = NodeId>) -> Vec<bool> {
-    let mut marks = vec![false; tree.nodes.len()];
-    for id in set {
-        let mut cursor = Some(id);
-        while let Some(current) = cursor {
-            match marks.get_mut(current.0 as usize) {
-                Some(mark) if !*mark => *mark = true,
-                _ => break,
-            }
-            cursor = tree.node(current).and_then(|n| n.parent);
-        }
-    }
-    marks
-}
-
-/// Per node: whether it is exactly one of `set`.
-#[must_use]
-pub fn marks_exact(len: usize, set: impl IntoIterator<Item = NodeId>) -> Vec<bool> {
-    let mut marks = vec![false; len];
-    for id in set {
-        if let Some(mark) = marks.get_mut(id.0 as usize) {
-            *mark = true;
-        }
-    }
-    marks
-}
-
-/// The children a filter keeps: all of them when no filter is on, otherwise
-/// those marked by every active filter.
-#[must_use]
-pub fn project(children: &[NodeId], filters: &[&[bool]]) -> Vec<NodeId> {
-    children
-        .iter()
-        .copied()
-        .filter(|id| {
-            filters
-                .iter()
-                .all(|marks| marks.get(id.0 as usize).copied().unwrap_or(false))
-        })
-        .collect()
 }
 
 /// A selection that keeps one copy: every member but the lowest id.
@@ -281,28 +236,6 @@ mod tests {
             unreadable_dirs: 1,
             hard_link_names: 0,
         }
-    }
-
-    #[test]
-    fn a_filter_keeps_the_children_holding_a_match() {
-        let tree = tree();
-        let duplicates = marks_below(&tree, [NodeId(3), NodeId(4)]);
-        let empty = marks_below(&tree, [NodeId(5)]);
-        let children = tree.children_by_size(tree.root);
-        assert_eq!(project(&children, &[]), vec![NodeId(1), NodeId(2)]);
-        assert_eq!(project(&children, &[&duplicates]), vec![NodeId(1)]);
-        assert_eq!(project(&children, &[&empty]), vec![NodeId(2)]);
-        assert!(project(&children, &[&duplicates, &empty]).is_empty());
-        assert_eq!(
-            project(&tree.children_by_size(NodeId(1)), &[&duplicates]),
-            vec![NodeId(3), NodeId(4)]
-        );
-    }
-
-    #[test]
-    fn exact_marks_name_only_the_members() {
-        let marks = marks_exact(4, [NodeId(1), NodeId(9)]);
-        assert_eq!(marks, vec![false, true, false, false]);
     }
 
     #[test]

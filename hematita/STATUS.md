@@ -10,7 +10,26 @@
   only from the regular file the scan recorded, and the core tests pass as
   root and as a user; not landed
   ([evidence](docs/evidence/2026-09-26-mount-and-delete-safety.md));
-  `HEM-H1-B` planned
+  `HEM-H1-B` active — the storage page lists forty rows per folder through
+  the core's capped projection, and forty more each time the merged row is
+  activated, so every entry stays reachable; it filters before the cap, and
+  receives the content check's verdicts in batches that change only their
+  own groups' marks; a unit action waits at most five minutes under a
+  watchdog that closes its connection; a D-Bus error reply no longer reads
+  as a malformed listing; a process's owner is read every time and its
+  name and application again after an `exec` or every half minute, and the
+  account table again when an unknown uid appears (at most once a minute); every
+  kernel file is read bounded; closing the window waits at most half a
+  second for the sampler; application names come from the shared bounded
+  `.desktop` lookup on the sampler thread; one byte formatter; not landed
+  ([evidence](docs/evidence/2026-09-26-storage-page-and-readers.md))
+- **Follow-ups recorded by `HEM-H1-B`, not scheduled:** a deadline for
+  opening a bus connection (the sampler's listing and a unit action open
+  theirs with a blocking handshake that has none; a hung bus stalls the
+  sampler's ticks, though no longer the window's shutdown); and, outside
+  Hematita's prefix, `celestina-core::desktop_entry`'s adoption note, which
+  still says no consumer calls `find` although Hematita now does (a
+  `celestina-rs` unit updates it)
 - **Delivered as 1.2.2:** `S3-C` — a section change no longer resets the
   storage analysis: `open()` runs only when the section is shown on the
   locations zone, so the folder, scan, filters, selection and cursor survive;
@@ -174,22 +193,25 @@
 
 ## Current checkout truth
 
-- The project is registered and builds a release binary at `0.6.0`. The
-  window shows the pill strip with five sections, and all five now have a
-  page: Performance, Processes, Applications, Sensors and Services. The
-  Services page lists units from both the session and the system bus; the
-  person's own user units start, stop and restart without authorisation,
-  while a system unit and a foreign process go through polkit — a `pkexec`
-  prompt for the process case, a system-bus call for the unit case — and
-  every privileged outcome is one of five typed words (`done`, `no-agent`,
-  `denied`, `failed`, `refused`) read as a sentence. The headless smoke
-  steps through all five sections one second apart and asserts three shape
-  lines: the CPU contract on the first row, the Sensors page publishing at
-  least one chip and one channel, and the Services page listing at least
-  one system unit. Nobody has looked at any page on a real session yet
-  (`VAL-H1` through `VAL-H5` all pending), and the session running this
-  suite has no authentication agent registered on either bus today, so the
-  privileged paths this checkout can exercise answer only `no-agent`.
+- The project is registered and builds a release binary at `1.2.2`, the
+  version deployed to the author's prefix. The window shows the pill strip
+  with six sections, each with its page: Performance, Processes,
+  Applications, Sensors, Services and Almacenamiento. The Services page
+  lists units from both the session and the system bus; the person's own
+  user units start, stop and restart without authorisation, while a system
+  unit and a foreign process go through polkit — a `pkexec` prompt for the
+  process case, a system-bus call for the unit case — and every privileged
+  outcome is one of five typed words (`done`, `no-agent`, `denied`,
+  `failed`, `refused`) read as a sentence. The headless smoke steps through
+  every section one second apart and asserts four shape lines: the CPU
+  contract on the first row, the Sensors page publishing at least one chip
+  and one channel, the Services page listing at least one system unit and
+  the Storage page listing at least one location. On the real session
+  `VAL-H1`, `VAL-H3`, `VAL-H4` and `VAL-VIS-2` passed; `VAL-H2`, `VAL-H5`
+  and the storage validations stay pending (see Author validation above),
+  and the session running this suite has no authentication agent registered
+  on either bus today, so the privileged paths this checkout can exercise
+  answer only `no-agent`.
 - `hematita-core` provides `ratio`, `cpu`, `memory` and `history`: `/proc/stat`
   and `/proc/meminfo` parsing, a CPU sampler that turns two readings into a
   rate, cpufreq and model parsing, and a sixty-sample ring, all covered by
@@ -235,11 +257,11 @@
 - Nobody has looked at the page on a real session yet: the evidence for H1-C
   and for H2-B is offscreen only, and appearance, keyboard and focus belong
   to `VAL-H1` and `VAL-H2`.
-- The release binary is built, verified and installed at
-  `~/.local/bin/hematita` at `0.4.0`, with its desktop entry and icon set
-  registered under `~/.local/share`; the installed bytes match the checkout's
-  `hematita/target/release/hematita` byte for byte. See the
-  [production completion record](docs/evidence/2026-09-22-h3-production-completion.md).
+- The release binary is installed at `~/.local/bin/hematita` at `1.2.2`,
+  with its desktop entry and icon set registered under `~/.local/share`; each
+  landing's production completion checks the installed bytes against the
+  verified artifact. See the latest
+  [production completion record](docs/evidence/2026-09-25-s3-production-completion.md).
 - As of `H3-A` the side list is a list for the keyboard and for AT: it takes
   Tab, arrows move the current item, the selection and the current index are
   one value, and the view carries `Accessible.List` with a name, so an
@@ -470,14 +492,16 @@
   session bus; that failure is now said once on stderr. Deployed as
   `0.6.2`. See the
   [visual feedback evidence](docs/evidence/2026-09-23-visual-feedback.md).
-- Known open item, recorded 2026-09-22: the unit action's `ACTION_TIMEOUT` is
-  inert, because `zbus::Proxy::call_with_flags` does not consult the
-  connection's `method_timeout`, so an unanswered prompt parks one worker
-  thread and its connection until the bus replies or the process exits; the
-  listing's two-second timeout is effective. A watchdog on the worker, and
-  the correction of the overstating comment in `src/services.rs`, are booked
-  for the next checkpoint — see the addendum in the
-  [privilege fixes 2 evidence](docs/evidence/2026-09-22-h5-privilege-fixes-2.md).
+- Known open item, recorded 2026-09-22 and closed in this checkout by
+  `HEM-H1-B` (not landed): the unit action's `ACTION_TIMEOUT` was inert,
+  because `zbus::Proxy::call_with_flags` does not consult the connection's
+  `method_timeout`, so an unanswered prompt parked one worker thread and its
+  connection until the bus replied or the process exited. The call now runs
+  under a watchdog (`src/watchdog.rs`) that answers `failed` after five
+  minutes and closes the call's connection; the listing's two-second
+  timeout was and is effective — see the addendum in the
+  [privilege fixes 2 evidence](docs/evidence/2026-09-22-h5-privilege-fixes-2.md)
+  and the [HEM-H1-B evidence](docs/evidence/2026-09-26-storage-page-and-readers.md).
 - `H5-Z` closed the checkpoint at `0.6.0`: the release binary is built,
   verified and deployed to the author's prefix. The Services page lists
   every user and system unit from both buses, manages the person's own
