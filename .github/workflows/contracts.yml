@@ -9,6 +9,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # A push audits only the commits it published; the weekly run replays the
+  # whole typed history (scripts/audit-version-commits.py without --since).
+  schedule:
+    - cron: "17 4 * * 1"
 
 jobs:
   suite-contracts:
@@ -33,13 +37,15 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           LANGUAGE_COMPARE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          # Empty on the schedule, so that run replays everything.
+          VERSION_AUDIT_SINCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           bash scripts/test-documentation-contract.sh
           bash scripts/check-documentation-contract.sh
           python3 scripts/check-language-contract.py
           python3 scripts/test-version-contract.py
           python3 scripts/version_tool.py check
-          python3 scripts/audit-version-commits.py
+          python3 scripts/audit-version-commits.py ${VERSION_AUDIT_SINCE:+--since "$VERSION_AUDIT_SINCE"}
 
       # Hooks are local by definition (`core.hooksPath` is not transported), so
       # pushed history is replayed here. The replay is partial by design and

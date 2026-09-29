@@ -6,8 +6,9 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
+
+from project_registry import load_registry
 
 
 def main() -> int:
@@ -16,8 +17,10 @@ def main() -> int:
     args = parser.parse_args()
 
     suite = Path(__file__).resolve().parent.parent
-    with (suite / "docs/projects.toml").open("rb") as stream:
-        registry = tomllib.load(stream)
+    try:
+        registry = load_registry(suite / "docs/projects.toml")
+    except ValueError as error:
+        parser.error(str(error))
     project = next(
         (item for item in registry["projects"] if item["id"] == args.project), None
     )

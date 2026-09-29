@@ -15,6 +15,9 @@ import tomllib
 import types
 from urllib.parse import unquote, urlsplit
 
+from repo_git import GitError
+import repo_git
+
 
 BASE_RE = re.compile(r"Base revision\t([0-9a-f]{40})")
 HASH_RE = re.compile(r"[0-9a-f]{64}")
@@ -40,13 +43,15 @@ DOCUMENTATION_RULE_NAMES = (
 )
 
 
+def git_run(root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return repo_git.run(root, *args)
+    except GitError as error:
+        raise StagedUnitError(str(error)) from error
+
+
 def git(root: Path, *args: str, check: bool = True) -> bytes:
-    process = subprocess.run(
-        ["git", "-C", str(root), *args],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    process = git_run(root, *args)
     if check and process.returncode != 0:
         detail = process.stderr.decode("utf-8", "replace").strip()
         raise StagedUnitError(
@@ -135,23 +140,12 @@ def normalized_repo_path(raw: str) -> str:
 
 
 def index_bytes(root: Path, path: str) -> bytes | None:
-    process = subprocess.run(
-        ["git", "-C", str(root), "show", f":{path}"],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
+    process = git_run(root, "show", f":{path}")
     return process.stdout if process.returncode == 0 else None
 
 
 def path_exists_at_head(root: Path, path: str) -> bool:
-    process = subprocess.run(
-        ["git", "-C", str(root), "cat-file", "-e", f"HEAD:{path}"],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    return process.returncode == 0
+    return git_run(root, "cat-file", "-e", f"HEAD:{path}").returncode == 0
 
 
 def worktree_bytes(root: Path, path: str) -> bytes | None:

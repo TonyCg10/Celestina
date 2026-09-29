@@ -19,6 +19,7 @@ direction is [docs/VISION.md](docs/VISION.md); current work is
 | [celestina](celestina/) | Niri shell, panel, overlays and session command service; **halted** since 2026-09-27, see [Halted projects](AGENTS.md#halted-projects) | Rust · C++20 · Qt/QML |
 | [siderita](siderita/) | File manager and desktop file chooser | Rust · CXX-Qt · QML |
 | [magnetita](magnetita/) | Phone link over its own protocol, daemon and client | Rust · CXX-Qt · QML |
+| [magnetita-android](magnetita-android/) | The phone side of Magnetita's protocol | Kotlin · Jetpack Compose · Rust (UniFFI) |
 | [grafita](grafita/) | Text editor, standalone and embedded in Siderita | Rust · CXX-Qt · QML |
 | [fluorita](fluorita/) | Local media library/player, standalone and embedded in Siderita | Rust · C++ · CXX-Qt · QML |
 | [hematita](hematita/) | Resource monitor: performance, processes, sensors | Rust · CXX-Qt · QML |
@@ -27,7 +28,8 @@ Each project owns a concise README, current STATUS, implementation-only ROADMAP,
 author VALIDATION queue and local AGENTS delta. The machine-readable inventory
 of paths, commit scopes, product version sources and production artifact
 commands is
-[docs/projects.toml](docs/projects.toml).
+[docs/projects.toml](docs/projects.toml); when this table and the registry
+differ, the registry is right.
 
 ## Architecture
 

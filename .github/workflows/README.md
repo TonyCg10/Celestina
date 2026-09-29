@@ -53,9 +53,13 @@ older commits pass that would not have passed against the registry in force when
 they were written.
 
 `scripts/audit-version-commits.py` is the stricter replay, and the one that
-carries the claim the other cannot. It replays every non-merge commit after the
-version policy was adopted, reads the registry from each commit's **own parent**
-rather than from `HEAD`, requires the typed subject, rejects a published
+carries the claim the other cannot. On a push or pull request it replays the
+non-merge commits after the revision before the push (or the pull request's
+base), since earlier commits were audited when they were pushed; the weekly
+scheduled run, and a push whose "before" revision is unknown or all zeros,
+replays every non-merge commit after the version policy was adopted. For each
+commit it reads the registry from the commit's **own parent** rather than from
+`HEAD`, requires the typed subject, rejects a published
 `fixup!`/`squash!`/`amend!`, and checks the SemVer transition against the
 manifests as they stood. That is what stops an untyped or unversioned delivery
 from reaching `main` unnoticed.

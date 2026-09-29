@@ -16,8 +16,12 @@ import sys
 import tomllib
 from urllib.parse import unquote, urlsplit
 
+from repo_git import BlobReader, GitError
+import repo_git
 from project_registry import (
+    REGISTRY_PATH,
     CommitScope,
+    parse_registry,
     build_commit_scopes,
     halted_projects,
     parse_subject_prefix,
@@ -100,19 +104,16 @@ def inside_root(root: Path, candidate: Path) -> bool:
 
 
 def load_registry(root: Path) -> dict[str, object]:
-    registry_path = root / "docs/projects.toml"
     try:
-        with registry_path.open("rb") as handle:
-            registry = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError) as error:
-        raise RegistryError(f"cannot read docs/projects.toml: {error}") from error
-
-    if registry.get("schema_version") != 1:
-        raise RegistryError("docs/projects.toml requires schema_version = 1")
+        raw = (root / REGISTRY_PATH).read_bytes()
+    except OSError as error:
+        raise RegistryError(f"cannot read {REGISTRY_PATH}: {error}") from error
+    try:
+        registry = parse_registry(raw, REGISTRY_PATH)
+    except ValueError as error:
+        raise RegistryError(str(error)) from error
     if not isinstance(registry.get("suite"), dict):
-        raise RegistryError("docs/projects.toml does not contain [suite]")
-    if not isinstance(registry.get("projects"), list):
-        raise RegistryError("docs/projects.toml does not contain [[projects]]")
+        raise RegistryError(f"{REGISTRY_PATH} does not contain [suite]")
     return registry
 
 
@@ -305,8 +306,9 @@ def github_anchors(text: str) -> set[str]:
 
 
 class DocumentationContract:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, quiet: bool = False) -> None:
         self.root = root.resolve()
+        self.quiet = quiet
         self.errors: list[str] = []
         self.registry: dict[str, object] = {}
         self.prefixes: set[str] = set()
@@ -334,6 +336,15 @@ class DocumentationContract:
         # in the successor's plan, which may sort after the archived one.
         self.pending_archive_transitions: list[tuple[Path, str]] = []
         self._is_git_root: bool | None = None
+        # History is immutable, so one run reads it through one batch process
+        # and a few whole-repository listings instead of a process per row
+        # (TOOL-7).
+        self.blobs: BlobReader | None = None
+        self._tracked: set[str] | None = None
+        self._dirty: set[str] | None = None
+        self._commits: dict[str, tuple[tuple[str, ...], str] | None] = {}
+        self._numstats: dict[tuple[str, str], dict[str, tuple[str, str]] | None] = {}
+        self._last_changes: dict[str, str] | None = None
 
     def relative(self, path: Path) -> str:
         try:
@@ -1510,14 +1521,8 @@ class DocumentationContract:
         if posixpath.dirname(plan_relative) != archive_directory:
             return
 
-        status = self.git_command(
-            "status",
-            "--porcelain=v1",
-            "--untracked-files=all",
-            "--",
-            plan_relative,
-        )
-        if status is None or status.returncode != 0 or status.stdout.strip():
+        dirty = self.dirty_paths()
+        if dirty is None or plan_relative in dirty:
             return
         addition = self.git_command(
             "log",
@@ -1531,10 +1536,10 @@ class DocumentationContract:
         if addition is None or addition.returncode != 0 or not addition.stdout.strip():
             return
         archive_commit = addition.stdout.decode("ascii").strip()
-        parent = self.git_command("rev-parse", f"{archive_commit}^")
-        if parent is None or parent.returncode != 0:
+        record = self.commit_record(archive_commit)
+        if record is None or not record[0]:
             return
-        parent_commit = parent.stdout.decode("ascii").strip()
+        parent_commit = record[0][0]
         active_relative = posixpath.join(active_directory, posixpath.basename(plan_relative))
         if not self.git_object_exists(f"{parent_commit}:{active_relative}"):
             return
@@ -1591,14 +1596,155 @@ class DocumentationContract:
 
     def git_command(self, *arguments: str) -> subprocess.CompletedProcess[bytes] | None:
         try:
-            return subprocess.run(
-                ["git", "-C", str(self.root), *arguments],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-            )
-        except OSError:
+            return repo_git.run(self.root, *arguments)
+        except GitError:
             return None
+
+    def blob_reader(self) -> BlobReader:
+        if self.blobs is None:
+            self.blobs = BlobReader(self.root)
+        return self.blobs
+
+    def read_object(self, name: str) -> bytes | None:
+        try:
+            return self.blob_reader().read(name)
+        except GitError:
+            return None
+
+    def tracked_paths(self) -> set[str] | None:
+        """Every path in the index, listed once per run."""
+        if self._tracked is None:
+            result = self.git_command("ls-files", "-z")
+            if result is None or result.returncode != 0:
+                return None
+            self._tracked = set(repo_git.paths(result.stdout))
+        return self._tracked
+
+    def dirty_paths(self) -> set[str] | None:
+        """Every path `git status` reports, listed once per run."""
+        if self._dirty is None:
+            result = self.git_command(
+                "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames"
+            )
+            if result is None or result.returncode != 0:
+                return None
+            self._dirty = {entry[3:] for entry in repo_git.paths(result.stdout) if len(entry) > 3}
+        return self._dirty
+
+    def commit_record(self, commit: str) -> tuple[tuple[str, ...], str] | None:
+        """A commit's parents and its subject as `%s` renders it, from the object itself."""
+        if commit not in self._commits:
+            raw = self.read_object(f"{commit}^{{commit}}")
+            record = None
+            if raw is not None:
+                head, _, message = raw.partition(b"\n\n")
+                parents = tuple(
+                    line.split(b" ", 1)[1].decode("ascii")
+                    for line in head.split(b"\n")
+                    if line.startswith(b"parent ")
+                )
+                paragraph = message.lstrip(b"\n").split(b"\n\n", 1)[0]
+                subject = " ".join(
+                    line.strip() for line in paragraph.decode("utf-8", "replace").splitlines()
+                )
+                record = (parents, subject)
+            self._commits[commit] = record
+        return self._commits[commit]
+
+    @staticmethod
+    def log_records(raw: bytes) -> list[tuple[str, list[bytes]]]:
+        """`git log -z --format=%x01%H` output as (commit, NUL-separated fields)."""
+        records = []
+        for chunk in raw.split(b"\x01"):
+            if not chunk:
+                continue
+            commit, _, rest = chunk.partition(b"\0")
+            fields = [field for field in rest.lstrip(b"\n").split(b"\0") if field]
+            records.append((commit.decode("ascii").strip(), fields))
+        return records
+
+    def last_change(self, inventory: str) -> str | None:
+        """The newest commit that touches `inventory`, as `git log -1 -- PATH` names it.
+
+        Every tracked inventory is looked up in one `git log` the first time
+        one is needed; a path that log does not name is looked up alone.
+        """
+        if self._last_changes is None:
+            self._last_changes = {}
+            tracked = sorted(
+                path for path in (self.tracked_paths() or set()) if path.endswith(".numstat.tsv")
+            )
+            if tracked:
+                result = self.git_command(
+                    "--literal-pathspecs", "log", "--format=%x01%H", "--name-only", "-z",
+                    "--no-renames", "--", *tracked,
+                )
+                if result is not None and result.returncode == 0:
+                    for commit, names in self.log_records(result.stdout):
+                        for name in names:
+                            self._last_changes.setdefault(os.fsdecode(name), commit)
+                    self.prefetch_numstats(sorted(set(self._last_changes.values())))
+        if inventory not in self._last_changes:
+            result = self.git_command(
+                "--literal-pathspecs", "log", "-1", "--format=%H", "--", inventory
+            )
+            if result is None or result.returncode != 0 or not result.stdout.strip():
+                return None
+            self._last_changes[inventory] = result.stdout.decode("ascii").strip()
+        return self._last_changes[inventory]
+
+    def prefetch_numstats(self, endpoints: list[str]) -> None:
+        """Each endpoint's numstat against its first parent, in one `git log`."""
+        if not endpoints:
+            return
+        result = self.git_command(
+            "log", "--no-walk=unsorted", "--diff-merges=first-parent", "--numstat", "-z",
+            "--no-renames", "--format=%x01%H", *endpoints,
+        )
+        if result is None or result.returncode != 0:
+            return
+        for commit, fields in self.log_records(result.stdout):
+            record = self.commit_record(commit)
+            if record is None or not record[0]:
+                continue
+            table: dict[str, tuple[str, str]] = {}
+            for field in fields:
+                cells = field.split(b"\t", 2)
+                if len(cells) != 3:
+                    table = {}
+                    break
+                table[os.fsdecode(cells[2])] = (
+                    cells[0].decode("ascii", "replace"),
+                    cells[1].decode("ascii", "replace"),
+                )
+            else:
+                self._numstats[(record[0][0], commit)] = table
+
+    def historical_numstat(
+        self, base: str, endpoint: str
+    ) -> dict[str, tuple[str, str]] | None:
+        """`git diff --numstat` between two commits, one process per pair not prefetched."""
+        key = (base, endpoint)
+        if key not in self._numstats:
+            result = self.git_command(
+                "diff", "--no-ext-diff", "--numstat", "-z", "--no-renames", base, endpoint
+            )
+            table: dict[str, tuple[str, str]] | None = None
+            if result is not None and result.returncode == 0:
+                table = {}
+                for record in result.stdout.split(b"\0"):
+                    if not record:
+                        continue
+                    cells = record.split(b"\t", 2)
+                    if len(cells) != 3:
+                        table = None
+                        break
+                    table[os.fsdecode(cells[2])] = (
+                        cells[0].decode("ascii", "replace"),
+                        cells[1].decode("ascii", "replace"),
+                    )
+            self._numstats[key] = table
+        return self._numstats[key]
 
     def is_real_git_root(self) -> bool:
         if self._is_git_root is not None:
@@ -1616,8 +1762,7 @@ class DocumentationContract:
         return self._is_git_root
 
     def git_object_exists(self, object_name: str) -> bool:
-        result = self.git_command("cat-file", "-e", object_name)
-        return result is not None and result.returncode == 0
+        return self.read_object(object_name) is not None
 
     def parse_git_numstat(
         self,
@@ -1856,12 +2001,7 @@ class DocumentationContract:
         return None
 
     def commit_path_bytes(self, commit: str, raw_path: str) -> bytes | None:
-        if not self.git_object_exists(f"{commit}:{raw_path}"):
-            return None
-        result = self.git_command("show", f"{commit}:{raw_path}")
-        if result is None or result.returncode != 0:
-            return None
-        return result.stdout
+        return self.read_object(f"{commit}:{raw_path}")
 
     def check_inventory_against_git(
         self,
@@ -1896,19 +2036,13 @@ class DocumentationContract:
             return
 
         inventory_relative = self.relative(inventory_path)
-        tracked = self.git_command("ls-files", "--error-unmatch", "--", inventory_relative)
-        status = self.git_command(
-            "status",
-            "--porcelain=v1",
-            "--untracked-files=all",
-            "--",
-            inventory_relative,
-        )
-        if tracked is None or status is None:
+        tracked = self.tracked_paths()
+        dirty = self.dirty_paths()
+        if tracked is None or dirty is None:
             self.error(inventory_path, "could not query the inventory Git status")
             return
-        inventory_is_tracked = tracked.returncode == 0
-        inventory_is_dirty = not inventory_is_tracked or bool(status.stdout.strip())
+        inventory_is_tracked = inventory_relative in tracked
+        inventory_is_dirty = not inventory_is_tracked or inventory_relative in dirty
 
         if inventory_is_dirty:
             if plan_relative not in row_paths:
@@ -1932,18 +2066,17 @@ class DocumentationContract:
                 )
                 return
         else:
-            last_change = self.git_command("log", "-1", "--format=%H", "--", inventory_relative)
-            if last_change is None or last_change.returncode != 0 or not last_change.stdout.strip():
+            endpoint = self.last_change(inventory_relative)
+            if endpoint is None:
                 self.error(inventory_path, "could not resolve the historical inventory commit")
                 return
-            endpoint = last_change.stdout.decode("ascii").strip()
             ancestor_target = endpoint
             claim_group = f"commit:{endpoint}"
-            parent = self.git_command("rev-parse", f"{endpoint}^")
-            if parent is None or parent.returncode != 0:
+            record = self.commit_record(endpoint)
+            if record is None or not record[0]:
                 self.error(inventory_path, "could not resolve the inventory commit parent")
                 return
-            direct_parent = parent.stdout.decode("ascii").strip()
+            direct_parent = record[0][0]
             if base_revision != direct_parent:
                 self.error(
                     inventory_path,
@@ -1952,15 +2085,11 @@ class DocumentationContract:
                 )
                 return
 
-            subject = self.git_command("log", "-1", "--format=%s", endpoint)
             historical_prefix = ""
-            if subject is not None and subject.returncode == 0:
-                try:
-                    historical_prefix, _action = parse_subject_prefix(
-                        subject.stdout.decode("utf-8", "replace").strip()
-                    )
-                except ValueError:
-                    historical_prefix = ""
+            try:
+                historical_prefix, _action = parse_subject_prefix(record[1].strip())
+            except ValueError:
+                historical_prefix = ""
             if historical_prefix != commit_prefix:
                 self.error(
                     inventory_path,
@@ -1990,8 +2119,13 @@ class DocumentationContract:
                 )
             )
 
-        ancestor = self.git_command("merge-base", "--is-ancestor", base_revision, ancestor_target)
-        if ancestor is None or ancestor.returncode != 0:
+        # A historical endpoint's base is its direct parent, checked above.
+        ancestor = (
+            None
+            if endpoint is not None
+            else self.git_command("merge-base", "--is-ancestor", base_revision, ancestor_target)
+        )
+        if endpoint is None and (ancestor is None or ancestor.returncode != 0):
             self.error(
                 inventory_path,
                 f"Base revision {base_revision} is not an ancestor of endpoint {ancestor_target}",
@@ -2027,21 +2161,11 @@ class DocumentationContract:
                 if raw_path
             }
         else:
-            changed = self.git_command(
-                "diff",
-                "--no-ext-diff",
-                "--name-only",
-                "-z",
-                "--no-renames",
-                base_revision,
-                endpoint,
-            )
-            if changed is None or changed.returncode != 0:
+            historical = self.historical_numstat(base_revision, endpoint)
+            if historical is None:
                 self.error(inventory_path, "could not enumerate the historical Git change")
                 return
-            worktree_paths = {
-                os.fsdecode(raw_path) for raw_path in changed.stdout.split(b"\0") if raw_path
-            }
+            worktree_paths = set(historical)
             commit_scope = self.commit_scopes.get(commit_prefix)
             if commit_scope is not None:
                 outside_scope = sorted(
@@ -2143,21 +2267,8 @@ class DocumentationContract:
                             actual = None
                 final_bytes = self.current_path_bytes(raw_path)
             else:
-                diff = self.git_command(
-                    "diff",
-                    "--no-ext-diff",
-                    "--numstat",
-                    "--no-renames",
-                    base_revision,
-                    endpoint,
-                    "--",
-                    raw_path,
-                )
-                actual = (
-                    self.parse_git_numstat(inventory_path, unit, raw_path, diff.stdout)
-                    if diff is not None and diff.returncode == 0
-                    else None
-                )
+                table = self.historical_numstat(base_revision, endpoint)
+                actual = None if table is None else table.get(raw_path, ("0", "0"))
                 final_bytes = self.commit_path_bytes(endpoint, raw_path)
 
             if actual != (expected_added, expected_deleted):
@@ -2640,6 +2751,13 @@ class DocumentationContract:
                 )
 
     def run(self) -> list[str]:
+        try:
+            return self.check_all()
+        finally:
+            if self.blobs is not None:
+                self.blobs.close()
+
+    def check_all(self) -> list[str]:
         self.check_registry()
         files = iter_repository_files(self.root)
         self.check_vendor_files(files)
@@ -2663,12 +2781,15 @@ class DocumentationContract:
         can repair. Without somewhere to put that, one malformed line would keep
         this contract red for ever, and a contract that is always red is one
         nobody can gate on. Listing it is therefore the opposite of hiding it:
-        the errors are still printed, every entry must give a reason, and the
+        the errors are still reported, every entry must give a reason, and the
         scope is only `docs/inventories/`, so this cannot become a way to excuse
         a document somebody could simply fix.
 
-        The list can only shrink: an entry that no longer matches a real error
-        is itself an error, so a boundary that stops failing must be removed.
+        An entry names the class of defect it records, and excuses only the
+        errors that class produces (`ERRATUM_CLASSES`); any other error of the
+        same inventory stays an error (TOOL-14). The list can only shrink: an
+        entry that no longer matches a real error is itself an error, so a
+        boundary that stops failing must be removed.
         """
         errata = read_documentation_errata(self.root)
         if not errata:
@@ -2676,42 +2797,82 @@ class DocumentationContract:
         remaining: list[str] = []
         excused: dict[str, list[str]] = {}
         for error in errors:
-            label = error.split(":", 1)[0]
-            if label in errata and "/docs/inventories/" in f"/{label}":
+            label, _, message = error.partition(":")
+            erratum = errata.get(label)
+            if (
+                erratum is not None
+                and "/docs/inventories/" in f"/{label}"
+                and erratum_excuses(erratum[0], message.strip())
+            ):
                 excused.setdefault(label, []).append(error)
             else:
                 remaining.append(error)
-        for path, reason in sorted(errata.items()):
+        for path, (defect, reason) in sorted(errata.items()):
             if "/docs/inventories/" not in f"/{path}":
                 remaining.append(
                     f"{ERRATA_FILE}: only an inventory may be listed: {path}"
                 )
+            elif defect not in ERRATUM_CLASSES:
+                known = ", ".join(sorted(ERRATUM_CLASSES))
+                remaining.append(
+                    f"{ERRATA_FILE}: {path} must start its reason with a known "
+                    f"defect class and a colon ({known}), not `{defect}`"
+                )
             elif path not in excused:
                 remaining.append(
-                    f"{ERRATA_FILE}: {path} reports no error, so its erratum is "
-                    "stale and must be removed"
+                    f"{ERRATA_FILE}: {path} reports no {defect} error, so its "
+                    "erratum is stale and must be removed"
+                )
+            elif self.quiet:
+                count = len(excused[path])
+                print(
+                    f"erratum ({defect}): {path}: {count} recorded error(s) excused",
+                    file=sys.stderr,
                 )
             else:
                 for error in excused[path]:
-                    print(f"erratum ({reason}): {error}", file=sys.stderr)
+                    print(f"erratum ({defect}: {reason}): {error}", file=sys.stderr)
         return remaining
 
 
 ERRATA_FILE = "scripts/documentation-errata.tsv"
+# The defects an erratum may record, each with the only errors it produces. An
+# inventory whose Pathspec boundaries were written on one line bounds nothing:
+# every row lies outside it, Git's change therefore looks unclaimed, and the
+# comparison cannot run.
+ERRATUM_CLASSES: dict[str, tuple[re.Pattern[str], ...]] = {
+    "unbounded-pathspec": (
+        re.compile(r"line [0-9]+: path outside Pathspec for [A-Za-z0-9._-]+: "),
+        re.compile(
+            r"inventory for [A-Za-z0-9._-]+ contains paths unchanged according to Git: "
+        ),
+        re.compile(r"no Pathspec in [A-Za-z0-9._-]+ claims any row, "),
+    ),
+}
 
 
-def read_documentation_errata(root: Path) -> dict[str, str]:
-    """Immutable records whose errors are recorded rather than repairable."""
+def erratum_excuses(defect: str, message: str) -> bool:
+    """Whether `message` is an error the recorded `defect` produces."""
+    return any(pattern.match(message) for pattern in ERRATUM_CLASSES.get(defect, ()))
+
+
+def read_documentation_errata(root: Path) -> dict[str, tuple[str, str]]:
+    """Immutable records whose errors are recorded rather than repairable.
+
+    Each row is `path<TAB>class: reason`; the class is the part of the reason
+    before its first colon.
+    """
     path = root / ERRATA_FILE
     if not path.is_file():
         return {}
-    errata: dict[str, str] = {}
+    errata: dict[str, tuple[str, str]] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.startswith("#"):
             continue
         cells = line.split("\t")
         if len(cells) == 2 and cells[0] and cells[1].strip():
-            errata[cells[0]] = cells[1].strip()
+            defect, _, reason = cells[1].strip().partition(":")
+            errata[cells[0]] = (defect.strip(), reason.strip())
     return errata
 
 
@@ -2730,7 +2891,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     arguments = parse_args(sys.argv[1:] if argv is None else argv)
     root = arguments.root.resolve()
-    errors = DocumentationContract(root).run()
+    errors = DocumentationContract(root, quiet=arguments.quiet).run()
     if errors:
         for error in errors:
             print(error, file=sys.stderr)

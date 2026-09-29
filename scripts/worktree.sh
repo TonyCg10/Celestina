@@ -20,7 +20,12 @@ set -eu
 #       docs/inventories for the suite and <path>/docs/inventories for a
 #       project registered with that path (the landing publishes a squashed
 #       commit, so after a landing only its inventory proves the unit landed);
+#       also refuse while the branch holds a commit made after the landing
+#       commit that added that inventory, which the landing never saw;
 #       then remove the worktree and delete the branch.
+#
+# A fetch that takes longer than CELESTINA_NETWORK_TIMEOUT seconds (300 by
+# default) is a refusal, not a hang.
 #
 # Exit 2 on usage errors and 1 on a refusal, with one line on stderr.
 
@@ -66,21 +71,26 @@ marker_name=.celestina-worktree
 registry=$repo_root/docs/projects.toml
 registry_status=0
 # Prints the owner's inventory root; exit 1 names an unregistered project.
-inventory_root=$(python3 - "$registry" "$project" <<'EOF'
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+inventory_root=$(python3 - "$registry" "$project" "$script_dir" <<'EOF'
 import sys
-import tomllib
 
-registry_path, project = sys.argv[1], sys.argv[2]
+registry_path, project, scripts = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, scripts)
+from pathlib import Path
+
 try:
-    with open(registry_path, "rb") as handle:
-        registry = tomllib.load(handle)
-except (OSError, tomllib.TOMLDecodeError) as error:
-    print(f"worktree: cannot read {registry_path}: {error}", file=sys.stderr)
+    from project_registry import load_registry
+except ImportError as error:
+    print(f"worktree: cannot load the registry reader: {error}", file=sys.stderr)
     sys.exit(2)
-projects = registry.get("projects", [])
-if not isinstance(projects, list):
-    print(f"worktree: {registry_path} has no [[projects]] list", file=sys.stderr)
+
+try:
+    registry = load_registry(Path(registry_path))
+except ValueError as error:
+    print(f"worktree: {error}", file=sys.stderr)
     sys.exit(2)
+projects = registry["projects"]
 if project == "suite":
     print("docs/inventories")
     sys.exit(0)
@@ -107,10 +117,24 @@ worktrees=$repo_parent/$repo_name.worktrees
 unit_dir=$worktrees/$project-$unit
 branch=unit/$project/$unit
 
+network_timeout=${CELESTINA_NETWORK_TIMEOUT:-300}
+case $network_timeout in
+    '' | *[!0-9]*) network_timeout=300 ;;
+esac
+remote() {
+    # A stalled remote must not hang the session (TOOL-19); coreutils'
+    # timeout ends it where it exists.
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$network_timeout" "$@"
+    else
+        "$@"
+    fi
+}
+
 # open starts from the newest origin/main, and close must see a landing made
 # from any clone.
-git -C "$repo_root" fetch --quiet origin main \
-    || refuse "cannot fetch main from origin"
+remote git -C "$repo_root" fetch --quiet origin main \
+    || refuse "cannot fetch main from origin (or it took over $network_timeout s)"
 
 if [ "$command" = open ]; then
     [ ! -e "$unit_dir" ] || refuse "worktree already exists: $unit_dir"
@@ -176,6 +200,18 @@ $tracked
 EOF
     [ -n "$landed" ] || refuse "$branch has commits that are not on origin/main" \
         "and origin/main has no inventory $inventory_root/<plan>/$unit.numstat.tsv"
+    # The landing sealed what the branch held then; a commit made on the
+    # branch after that commit would be lost with the branch.
+    landing_commit=$(git -C "$repo_root" log -1 --format=%H --diff-filter=A \
+        origin/main -- "$landed") || refuse "cannot find the commit that landed $landed"
+    landing_time=$(git -C "$repo_root" log -1 --format=%ct "$landing_commit") \
+        || refuse "cannot read the time of $landing_commit"
+    later=$(git -C "$repo_root" log --format='%H %ct' origin/main.."$branch" \
+        | awk -v landed="$landing_time" '$2 > landed { print substr($1, 1, 12) }') \
+        || refuse "cannot compare $branch with the landing commit"
+    [ -z "$later" ] || refuse "$branch has commits made after its landing" \
+        "($(printf '%s' "$later" | tr '\n' ' ' | sed 's/ $//')); keep them on another" \
+        "branch, or delete $branch by hand"
 fi
 if [ -d "$unit_dir" ]; then
     # Only the two files this entry wrote may be left behind; anything else

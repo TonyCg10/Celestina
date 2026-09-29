@@ -167,6 +167,110 @@ class LanguageContractTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("new non-English repository text", result.stdout)
 
+    def test_markers_do_not_exempt_documents(self) -> None:
+        # About twenty Markdown records parked development prose behind the
+        # markers (TOOL-11); a document is never product copy or a fixture.
+        (self.root / "notes").mkdir()
+        for marker in ("product-copy", "allow-non-english"):
+            with self.subTest(marker=marker):
+                self.write_baseline()
+                (self.root / "notes/record.md").write_text(
+                    f"<!-- language-contract: {marker} -->\n"
+                    "El agente ejecuta la prueba de la aplicación.\n",
+                    encoding="utf-8",
+                )
+                result = self.run_guard()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("notes/record.md: new non-English repository text", result.stdout)
+
+    def test_product_copy_counts_only_in_rust_and_cpp(self) -> None:
+        self.write_baseline()
+        (self.root / "src/copy.py").write_text(
+            "# language-contract: product-copy\nEMPTY = \"Sin álbum\"\n", encoding="utf-8"
+        )
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("src/copy.py: new non-English repository text", result.stdout)
+        (self.root / "src/copy.py").unlink()
+        for suffix in (".rs", ".cpp", ".h"):
+            with self.subTest(suffix=suffix):
+                (self.root / f"src/copy{suffix}").write_text(
+                    "// language-contract: product-copy\nconst char *EMPTY = \"Sin álbum\";\n",
+                    encoding="utf-8",
+                )
+                self.assertEqual(self.run_guard().returncode, 0)
+
+    def test_markers_never_exempt_a_canonical_path(self) -> None:
+        self.write_baseline()
+        (self.root / "docs/standards/example.md").write_text(
+            "<!-- language-contract: allow-non-english -->\nEl agente ejecuta la verificación.\n",
+            encoding="utf-8",
+        )
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("docs/standards/example.md: non-English canonical text", result.stdout)
+
+    def test_a_document_may_cite_product_copy_in_code(self) -> None:
+        # Plans and evidence quote the strings a person reads; quoted in code
+        # they are the product copy they cite, and the prose around them is
+        # still scanned.
+        self.write_baseline()
+        (self.root / "notes").mkdir()
+        (self.root / "notes/record.md").write_text(
+            "The notice reads `\"Operación cancelada\"` after a cancel.\n\n"
+            "```qml\n"
+            "Text { text: qsTr(\"Añadir carpeta…\") }\n"
+            "```\n\n"
+            "```rust\n"
+            "assert!(queue.settle(first, \"Carpeta leída\"));\n"
+            "```\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_guard().returncode, 0)
+        with (self.root / "notes/record.md").open("a", encoding="utf-8") as record:
+            record.write('The "Tamaño" button moved to the left.\n')
+        result = self.run_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("notes/record.md: new non-English repository text (1", result.stdout)
+
+    def test_a_citation_does_not_exempt_prose_around_it(self) -> None:
+        # The reviewer's probes: each shape the old scanner flagged must stay
+        # flagged, except a literal quoted inside one inline code span in a
+        # record that is not canonical, which is the citation itself.
+        (self.root / "notes").mkdir()
+        sentence = "Esta función está rota y hay que arreglarla"
+        cases = {
+            "inline span": (f'Run it and see `"{sentence}"` here.\n', False),
+            "span across a blank line": (
+                f'The `x flag.\n\nWe said "{sentence}" loudly.\n\nThen `y`.\n', True
+            ),
+            "unclosed fence": (f'```\n"{sentence}"\nmore\n', True),
+            "qsTr in prose": (f'Call qsTr("{sentence}") please.\n', True),
+            "plain prose": (f"{sentence}.\n", True),
+        }
+        for path in ("notes/record.md", "docs/standards/example.md"):
+            canonical = path.startswith("docs/")
+            for name, (text, flagged) in cases.items():
+                with self.subTest(path=path, case=name):
+                    self.write_baseline()
+                    (self.root / path).write_text(text, encoding="utf-8")
+                    result = self.run_guard()
+                    self.assertEqual(result.returncode != 0, flagged or canonical, result.stdout)
+                    (self.root / path).unlink()
+
+    def test_international_input_fixtures_keep_their_marker(self) -> None:
+        self.write_baseline()
+        (self.root / "tests").mkdir()
+        (self.root / "tests/tst_input.qml").write_text(
+            "// language-contract: allow-non-english\nText { text: \"Imágenes\" }\n",
+            encoding="utf-8",
+        )
+        (self.root / "src/fold.rs").write_text(
+            "// language-contract: allow-non-english\n// `cancion` finds `Canción`.\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_guard().returncode, 0)
+
     def test_an_unmarked_source_keeps_the_old_rule(self) -> None:
         self.write_baseline()
         (self.root / "src/other.rs").write_text(

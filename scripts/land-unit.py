@@ -2,13 +2,13 @@
 """Land one unit branch on main from the canonical checkout.
 
     land-unit.py BRANCH --kind bug|milestone|release|maintenance [--summary TEXT]
+                 [--accept-red-ci]
     land-unit.py --continue
     land-unit.py --abort
 
-The steps follow docs/superpowers/specs/2026-09-25-parallel-unit-landing-design.md
-section 5.1, as amended in section 10: preflight, unbump, rebase, bump_version,
-checkout_canonical, pre_guards, build_if_stale, seal, run_guards,
-commit_and_push. The rebase happens in a
+The steps follow docs/contracts/landing.md: preflight, unbump, rebase,
+bump_version, checkout_canonical, pre_guards, build_if_stale, seal,
+run_guards, commit_and_push, deploy. The rebase happens in a
 landing worktree at <parent>/<basename>.worktrees/.landing/, which also holds
 the resumable state in .land-state.toml. Commits made there are temporary: the
 only commit that reaches main is the sealed one, created in the canonical
@@ -16,20 +16,25 @@ checkout through the repository hooks.
 
 Exit 0 when the unit landed, 1 when the landing stopped or failed, 2 on usage
 errors. LAND_UNIT_GIT, LAND_UNIT_CARGO and LAND_UNIT_PYTHON override the
-programs it runs.
+programs it runs; LAND_UNIT_NETWORK_TIMEOUT bounds a fetch or push (300 s) and
+LAND_UNIT_CI_STATUS replaces, or with `off` skips, the read of the latest
+GitHub `contracts` run on main.
 """
 
 from __future__ import annotations
 
 import argparse
+import http.client
 from collections.abc import Callable
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import posixpath
 import subprocess
 import sys
 import tomllib
+import urllib.request
 
 from landing import (
     PLACEHOLDER_DIFFSTAT,
@@ -85,6 +90,9 @@ class LandContext:
     registry: dict
     state: LandState
     unit: UnitRef | None
+    # --accept-red-ci: land although GitHub `contracts` is red on main, which
+    # only the unit that makes it green should need.
+    accept_red_ci: bool = False
 
 
 # Processes.
@@ -103,8 +111,14 @@ def run_process(
     check: bool = True,
     capture: bool = True,
     raw: bool = False,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess:
-    """Run one program; with `raw`, stdout stays bytes."""
+    """Run one program; with `raw`, stdout stays bytes.
+
+    Text is decoded with `surrogateescape`, so a path that is not UTF-8 is
+    reported instead of raising a traceback, and a `timeout` ends a stalled
+    program with a LandingError (TOOL-19).
+    """
     command = " ".join(argv)
     try:
         result = subprocess.run(
@@ -117,8 +131,12 @@ def run_process(
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.PIPE if capture else None,
             text=not raw,
+            errors=None if raw else "surrogateescape",
+            timeout=timeout,
             check=False,
         )
+    except subprocess.TimeoutExpired as error:
+        raise LandingError(f"`{command}` timed out after {timeout:g} s") from error
     except OSError as error:
         raise LandingError(f"cannot run `{command}`: {error}") from error
     if check and result.returncode != 0:
@@ -130,6 +148,15 @@ def run_process(
     return result
 
 
+def network_timeout() -> float:
+    """Seconds a fetch or push may take before the landing gives up on the remote."""
+    try:
+        value = float(os.environ.get("LAND_UNIT_NETWORK_TIMEOUT", "300"))
+    except ValueError:
+        return 300.0
+    return value if value > 0 else 300.0
+
+
 def run(
     ctx: LandContext,
     *args: str,
@@ -139,7 +166,12 @@ def run(
     environment: dict[str, str] | None = None,
     raw: bool = False,
 ) -> subprocess.CompletedProcess:
-    """Run one Git command; every Git call of the landing goes through here."""
+    """Run one Git command; every Git call of the landing goes through here.
+
+    A fetch or a push talks to the remote, so it ends after
+    `network_timeout()` seconds instead of hanging on a stalled one.
+    """
+    remote = bool(args) and args[0] in {"fetch", "push", "pull", "ls-remote"}
     return run_process(
         [program("LAND_UNIT_GIT", "git"), "--literal-pathspecs", *args],
         cwd or ctx.root,
@@ -147,6 +179,7 @@ def run(
         environment=environment,
         check=check,
         raw=raw,
+        timeout=network_timeout() if remote else None,
     )
 
 
@@ -353,6 +386,78 @@ def rebase_in_progress(ctx: LandContext) -> bool:
     return False
 
 
+# GitHub `contracts` on main (TOOL-1).
+
+CI_WORKFLOW = "contracts.yml"
+CI_TIMEOUT_SECONDS = 20
+RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
+
+
+def github_repository(url: str) -> str | None:
+    """`OWNER/REPO` of a GitHub remote URL, or None for any other remote."""
+    for prefix in ("https://github.com/", "http://github.com/", "git@github.com:", "ssh://git@github.com/"):
+        if url.startswith(prefix):
+            name = url[len(prefix) :].removesuffix("/").removesuffix(".git")
+            if name.count("/") == 1 and all(name.split("/")):
+                return name
+    return None
+
+
+def contracts_status_source(ctx: LandContext) -> str | None:
+    """Where the latest `contracts` run on main is read from, or None to skip.
+
+    `LAND_UNIT_CI_STATUS=off` skips the read, and any other value replaces
+    the GitHub API URL (the tests point it at a file). The public API needs no
+    credentials for a public repository; a remote that is not on GitHub has
+    no status to read.
+    """
+    configured = os.environ.get("LAND_UNIT_CI_STATUS", "")
+    if configured == "off":
+        return None
+    if configured:
+        return configured
+    remote = run(ctx, "remote", "get-url", "origin", check=False).stdout.strip()
+    repository = github_repository(remote)
+    if repository is None:
+        return None
+    return (
+        f"https://api.github.com/repos/{repository}/actions/workflows/{CI_WORKFLOW}"
+        "/runs?branch=main&event=push&per_page=1"
+    )
+
+
+def red_contracts_run(ctx: LandContext) -> str | None:
+    """The URL of the latest `contracts` run on main when it failed, else None.
+
+    A status that cannot be read is a warning, not a stop: the landing must
+    work offline, and branch protection on GitHub is the author's gate for
+    what reaches main in other ways.
+    """
+    source = contracts_status_source(ctx)
+    if source is None:
+        return None
+    request = urllib.request.Request(
+        source,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "celestina-land-unit"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=CI_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read(1_000_000).decode("utf-8"))
+        runs = payload.get("workflow_runs", [])
+        latest = runs[0] if isinstance(runs, list) and runs else None
+    except (OSError, ValueError, AttributeError, http.client.HTTPException) as error:
+        say(
+            f"warning: cannot read the latest GitHub {CI_WORKFLOW} run on main ({error}); "
+            "continuing without it"
+        )
+        return None
+    if not isinstance(latest, dict):
+        return None
+    if latest.get("status") != "completed" or latest.get("conclusion") not in RED_CONCLUSIONS:
+        return None
+    return str(latest.get("html_url") or latest.get("head_sha") or "the latest run")
+
+
 # Steps.
 
 
@@ -376,6 +481,16 @@ def preflight(ctx: LandContext) -> None:
     run(ctx, "fetch", "--quiet", "origin", "main")
     if not succeeds(ctx, "merge-base", "--is-ancestor", "main", "origin/main"):
         raise LandingStop("preflight", "local main has commits that are not on origin/main")
+    red = red_contracts_run(ctx)
+    if red is not None:
+        if not ctx.accept_red_ci:
+            raise LandingStop(
+                "preflight",
+                f"GitHub {CI_WORKFLOW} failed on main ({red}); a red main enforces nothing, "
+                "so land the unit that makes it green first, with --accept-red-ci",
+            )
+        say(f"warning: GitHub {CI_WORKFLOW} failed on main ({red}); landing with --accept-red-ci")
+        state.red_ci = red
     if not succeeds(ctx, "rev-parse", "--verify", "--quiet", f"refs/heads/{state.branch}"):
         raise LandingStop("preflight", f"no such branch: {state.branch}")
     ctx.registry = registry_at(ctx, "origin/main")
@@ -728,65 +843,101 @@ def run_guard_chain(ctx: LandContext, guards: tuple, remedy: str | None = None) 
             )
 
 
+# The fixture tests that read the registry or the guards' own code: a unit
+# that changes either runs them before anything is built (TOOL-13).
+REGISTRY_COUPLED_TESTS = (
+    ("test-architecture-scanners.sh", "bash"),
+    ("test-version-contract.py", "python"),
+)
+
+
 def pre_guards(ctx: LandContext) -> None:
     """Before any build, the guards whose verdict does not depend on the seal."""
     python = program("LAND_UNIT_PYTHON", sys.executable)
-    changed = "\0".join(sorted(landed_paths(ctx)))
-    run_guard_chain(
-        ctx,
-        (
-            ("commit_scope.py", python, ["--check", unit_subject(ctx)], changed),
-            ("version_tool.py", python, ["check"], None),
-            ("check-language-contract.py", python, [], None),
-            ("check-architecture-contract.sh", "bash", [], None),
-        ),
+    paths = landed_paths(ctx)
+    changed = "\0".join(sorted(paths))
+    guards: list[tuple[str, str, list[str], str | None]] = [
+        ("commit_scope.py", python, ["--check", unit_subject(ctx)], changed),
+        ("version_tool.py", python, ["check"], None),
+        ("check-language-contract.py", python, [], None),
+        ("check-architecture-contract.sh", "bash", [], None),
+    ]
+    if any(path == "docs/projects.toml" or path.startswith("scripts/") for path in paths):
+        for name, interpreter in REGISTRY_COUPLED_TESTS:
+            if (ctx.root / "scripts" / name).is_file():
+                guards.append((name, python if interpreter == "python" else interpreter, [], None))
+    run_guard_chain(ctx, tuple(guards))
+
+
+def artifact_check(ctx: LandContext, project_id: str) -> subprocess.CompletedProcess:
+    python = program("LAND_UNIT_PYTHON", sys.executable)
+    tool = str(ctx.root / "scripts/production_artifact.py")
+    return run_process(
+        [python, tool, "check", project_id, "--require-verified"], ctx.root, check=False
     )
 
 
-def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None]:
+def registered_entries(project: dict, keys: tuple[str, ...]) -> list[str]:
+    entries = []
+    for key in keys:
+        entry = project.get(key)
+        if not isinstance(entry, str):
+            raise LandingError(f"{project.get('id')} registers no {key}")
+        entries.append(entry)
+    return entries
+
+
+def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None, bool]:
     """Ask the artifact tool whether `project` is current; build only when it must.
 
     When the check fails only because the artifact is not verified for the
-    current tests and rules, the verification runs alone: the verify_script,
-    then for a deployable project the deploy_script and status_script, the rest
-    of what its complete_script runs. Otherwise a deployable project runs its
-    complete_script, and one that is not runs its build_script, then its
-    verify_script.
+    current tests and rules, the verification runs alone: the verify_script.
+    Otherwise the project runs its build_script, then its verify_script. A
+    deployable project is not deployed here: its deploy_script and
+    status_script, the rest of what its complete_script runs, wait for the
+    push, so a unit that a later guard, a hook or a lost push race stops is
+    never installed (TOOL-8). Afterwards `check --require-verified` must pass,
+    so the fingerprints the evidence records are the current ones (TOOL-19).
+    Returns the check line, the build line (None when nothing ran) and
+    whether the project waits for the deploy step, which every affected
+    deployable project does, built or not: an artifact that is already
+    current may never have been installed, as after a lost push race or an
+    abort before the push, and deploying verified bytes again is harmless.
     """
     project_id = str(project.get("id"))
-    python = program("LAND_UNIT_PYTHON", sys.executable)
-    tool = str(ctx.root / "scripts/production_artifact.py")
-    checked = run_process(
-        [python, tool, "check", project_id, "--require-verified"], ctx.root, check=False
-    )
+    checked = artifact_check(ctx, project_id)
     lines = [line for line in (checked.stdout + checked.stderr).splitlines() if line.strip()]
     check = (
         f"`production_artifact.py check {project_id} --require-verified` exit "
         f"{checked.returncode}: {lines[0] if lines else 'no output'}"
     )
-    if checked.returncode == 0:
-        return check, None
     deployable = bool(project.get("deployable"))
+    if deployable:
+        registered_entries(project, ("deploy_script", "status_script"))
+    if checked.returncode == 0:
+        return check, None, deployable
     if verification_only(checked.stderr):
         label = "verify"
-        keys: tuple[str, ...] = (
-            ("verify_script", "deploy_script", "status_script") if deployable else ("verify_script",)
-        )
+        keys: tuple[str, ...] = ("verify_script",)
     else:
         label = "build"
-        keys = ("complete_script",) if deployable else ("build_script", "verify_script")
-    entries = []
-    for key in keys:
-        entry = project.get(key)
-        if not isinstance(entry, str):
-            raise LandingError(f"{project_id} registers no {key}")
-        entries.append(entry)
+        keys = ("build_script", "verify_script")
+    entries = registered_entries(project, keys)
     for entry in entries:
         built = run_process([str(ctx.root / entry)], ctx.root, check=False, capture=False)
         if built.returncode != 0:
             raise LandingStop(
                 "build_if_stale", f"{entry} failed with exit {built.returncode}", entry
             )
+    rechecked = artifact_check(ctx, project_id)
+    if rechecked.returncode != 0:
+        detail = (rechecked.stdout + rechecked.stderr).strip()
+        raise LandingStop(
+            "build_if_stale",
+            f"{project_id}: the artifact is not current and verified after "
+            f"{', '.join(posixpath.basename(entry) for entry in entries)}: {detail}",
+            str(project.get("artifact_manifest", "")) or None,
+        )
     manifest_path = ctx.root / str(project.get("artifact_manifest", ""))
     raw = read_file(manifest_path)
     try:
@@ -800,20 +951,27 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None]:
         f"{project_id} {label}: {ran}, manifest source_fingerprint "
         f"{manifest.get('source_fingerprint', 'unknown')}, verification_fingerprint "
         f"{manifest.get('verification_fingerprint', 'unknown')}"
-    )
+    ), deployable
 
 
 def build_if_stale(ctx: LandContext) -> None:
-    """Run the one production run the artifact contract needs for every affected project.
+    """Run the build and verification the artifact contract needs for every affected project.
 
     The owner comes first, then every registered project whose production or
     verification inputs the unit changed, such as the deployable consumers of
     a library. The rebased tip's own registry names the inputs, since the unit
-    may rename one and register the new name.
+    may rename one and register the new name; the base names what they were.
     """
     state = ctx.state
     registry = registry_at(ctx, state.tip)
-    projects = affected_projects(ctx.root, registry, landed_paths(ctx), unit_of(ctx).project_id)
+    projects = affected_projects(
+        ctx.root,
+        registry,
+        landed_paths(ctx),
+        unit_of(ctx).project_id,
+        lambda path: blob(ctx, f"{state.base}:{path}"),
+    )
+    state.deploy = ""
     if not projects:
         # Only a `suite` unit has no registered project as its owner.
         state.check = (
@@ -823,13 +981,39 @@ def build_if_stale(ctx: LandContext) -> None:
         return
     checks: list[str] = []
     builds: list[str] = []
+    deploys: list[str] = []
     for project in projects:
-        check, build = check_and_build(ctx, project)
+        check, build, deploy = check_and_build(ctx, project)
         checks.append(check)
         if build is not None:
             builds.append(build)
+        if deploy:
+            deploys.append(str(project.get("id")))
     state.check = "; ".join(checks)
     state.build = "; ".join(builds)
+    state.deploy = " ".join(deploys)
+
+
+def deploy_line(ctx: LandContext) -> str | None:
+    """What the deploy step will run, for the evidence's Landing section."""
+    pending = ctx.state.deploy.split()
+    if not pending:
+        return None
+    registry = registry_at(ctx, ctx.state.tip)
+    tables = {
+        str(project.get("id")): project
+        for project in registry.get("projects", [])
+        if isinstance(project, dict)
+    }
+    return "; ".join(
+        f"{project_id}: "
+        + ", ".join(
+            posixpath.basename(entry)
+            for entry in registered_entries(tables[project_id], ("deploy_script", "status_script"))
+        )
+        for project_id in pending
+        if project_id in tables
+    )
 
 
 def seal(ctx: LandContext) -> None:
@@ -849,7 +1033,13 @@ def seal(ctx: LandContext) -> None:
         root / evidence,
         evidence_text.rstrip("\n")
         + "\n\n"
-        + landing_section(state.base, state.check, state.build or None),
+        + landing_section(
+            state.base,
+            state.check,
+            state.build or None,
+            deploy=deploy_line(ctx),
+            red_ci=state.red_ci or None,
+        ),
     )
     plan_text = text_of(read_file(root / unit.plan_path), unit.plan_path)
     plan_directory = posixpath.dirname(unit.plan_path)
@@ -883,7 +1073,7 @@ def seal(ctx: LandContext) -> None:
 def run_guards(ctx: LandContext) -> None:
     python = program("LAND_UNIT_PYTHON", sys.executable)
     staged = paths_of(run(ctx, "diff", "--cached", "--name-only", "--no-renames", "-z").stdout)
-    # The hooks' own commands, in the order of spec section 5.1 step 8.
+    # The hooks' own commands, in the order of docs/contracts/landing.md (run_guards).
     run_guard_chain(
         ctx,
         (
@@ -935,15 +1125,66 @@ def restore_main(ctx: LandContext) -> None:
     run(ctx, "checkout", "--quiet", "--force", "main")
 
 
-def finish(ctx: LandContext) -> None:
+def landed(ctx: LandContext) -> None:
+    """Record that origin/main holds the sealed commit; the deploy step follows."""
+    ctx.state.pushed = "yes"
+    save_state(ctx)
     print(f"land-unit: landed {ctx.state.sealed} {unit_subject(ctx)}")
+
+
+def remove_landing(ctx: LandContext) -> None:
     removed = run(ctx, "worktree", "remove", "--force", str(ctx.landing_dir), check=False)
     if removed.returncode != 0:
         say(f"warning: remove the landing worktree by hand: {removed.stderr.strip()}")
 
 
+def pending_deploys(ctx: LandContext) -> list[dict]:
+    wanted = ctx.state.deploy.split()
+    registry = registry_at(ctx, ctx.state.sealed or "HEAD")
+    tables = {
+        str(project.get("id")): project
+        for project in registry.get("projects", [])
+        if isinstance(project, dict)
+    }
+    missing = [project_id for project_id in wanted if project_id not in tables]
+    if missing:
+        raise LandingError(f"the registry has no project {', '.join(missing)} to deploy")
+    return [tables[project_id] for project_id in wanted]
+
+
+def deploy(ctx: LandContext) -> None:
+    """Deploy what build_if_stale built and verified, now that main holds it.
+
+    Each deployable project runs its deploy_script, then its status_script;
+    a project leaves the pending list once both passed, so --continue
+    resumes with the next one.
+    """
+    state = ctx.state
+    for project in pending_deploys(ctx):
+        project_id = str(project.get("id"))
+        for entry in registered_entries(project, ("deploy_script", "status_script")):
+            ran = run_process([str(ctx.root / entry)], ctx.root, check=False, capture=False)
+            if ran.returncode != 0:
+                raise LandingStop(
+                    "deploy",
+                    f"{entry} failed with exit {ran.returncode}; the unit is on main as "
+                    f"{state.sealed}, but {state.deploy} is not deployed",
+                    entry,
+                    remedy=(
+                        "fix the cause and run land-unit.py --continue to deploy again, or "
+                        "--abort, which leaves main as it is and names what to deploy by hand"
+                    ),
+                )
+        state.deploy = " ".join(item for item in state.deploy.split() if item != project_id)
+        save_state(ctx)
+    remove_landing(ctx)
+
+
 def commit_and_push(ctx: LandContext) -> str | None:
     state = ctx.state
+    if state.pushed:
+        # Resumed after the push: the deploy step is what remains.
+        return None
     sealed = seal_commit(ctx)
     current = revision(ctx, "refs/heads/main")
     if current != sealed:
@@ -966,7 +1207,7 @@ def commit_and_push(ctx: LandContext) -> str | None:
         restore_main(ctx)
         raise
     if pushed.returncode == 0:
-        finish(ctx)
+        landed(ctx)
         return None
     restore_main(ctx)
     fetched = run(ctx, "fetch", "--quiet", "origin", "main", check=False)
@@ -981,7 +1222,7 @@ def commit_and_push(ctx: LandContext) -> str | None:
     if origin == sealed:
         # The push reached origin although Git reported a failure.
         run(ctx, "merge", "--quiet", "--ff-only", "origin/main")
-        finish(ctx)
+        landed(ctx)
         return None
     # A fast-forward only: a commit made on local main from elsewhere stays.
     forwarded = run(ctx, "merge", "--quiet", "--ff-only", "origin/main", check=False)
@@ -1031,6 +1272,7 @@ STEP_FUNCTIONS = (
     seal,
     run_guards,
     commit_and_push,
+    deploy,
 )
 STEPS = tuple(function.__name__ for function in STEP_FUNCTIONS)
 
@@ -1070,6 +1312,22 @@ def abort(ctx: LandContext) -> None:
     except (OSError, LandingError) as error:
         say(f"warning: no readable landing state ({error}); removing the landing anyway")
     inventory = ctx.state.inventory
+    if ctx.state.pushed:
+        # The unit is on origin/main: main stays, and only the deployment the
+        # landing did not finish is left to the author.
+        run(ctx, "worktree", "remove", "--force", str(ctx.landing_dir))
+        remove_file(ctx.landing_dir / STATE_FILE)
+        pending = ctx.state.deploy.split()
+        if pending:
+            entries = []
+            for project in pending_deploys(ctx):
+                entries.extend(registered_entries(project, ("deploy_script", "status_script")))
+            say(
+                f"the unit landed as {ctx.state.sealed}, but {' '.join(pending)} is not "
+                f"deployed; run {', then '.join(entries)}"
+            )
+        print("land-unit: aborted after the push; main keeps the landed unit")
+        return
     # restore_main moves main back only while it still is the unpushed seal.
     restore_main(ctx)
     head = run(ctx, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
@@ -1082,7 +1340,8 @@ def abort(ctx: LandContext) -> None:
             remove_file(ctx.root / inventory)
     run(ctx, "worktree", "remove", "--force", str(ctx.landing_dir))
     remove_file(ctx.landing_dir / STATE_FILE)
-    print("land-unit: aborted; the canonical checkout is on main")
+    # Deployment waits for the push, so an abort before it installed nothing.
+    print("land-unit: aborted; the canonical checkout is on main, and nothing was deployed")
 
 
 def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
@@ -1090,13 +1349,20 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("branch", nargs="?")
     parser.add_argument("--kind", choices=KINDS)
     parser.add_argument("--summary")
+    parser.add_argument(
+        "--accept-red-ci",
+        action="store_true",
+        help="land although GitHub contracts failed on main (for the unit that fixes it)",
+    )
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--continue", dest="resume", action="store_true")
     modes.add_argument("--abort", action="store_true")
     args = parser.parse_args(argv)
     if args.resume or args.abort:
-        if args.branch or args.kind or args.summary:
-            parser.error("--continue and --abort take no branch, --kind or --summary")
+        if args.branch or args.kind or args.summary or args.accept_red_ci:
+            parser.error(
+                "--continue and --abort take no branch, --kind, --summary or --accept-red-ci"
+            )
     elif not args.branch or not args.kind:
         parser.error("a landing needs BRANCH and --kind")
     return args
@@ -1109,7 +1375,7 @@ def main(argv: list[str] | None = None) -> int:
     placeholder = LandState(
         "preflight", args.branch or "", args.kind or "", args.summary or "", "", "", 0
     )
-    ctx = LandContext(root, landing_dir, {}, placeholder, None)
+    ctx = LandContext(root, landing_dir, {}, placeholder, None, args.accept_red_ci)
     try:
         if session_worktree_marker(root) is not None:
             raise LandingError("this is a session worktree; land from the canonical checkout")

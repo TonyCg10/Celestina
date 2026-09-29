@@ -56,7 +56,7 @@ to — it is deleted.
    get a different kind of surface, and they must get one: they cannot be left
    silent.
 3. The bottom bar is compressed: sort and view mode merge into **one** icon
-   that opens a menu, and the magnifier (the `zoom-in` "Tamaño" button, today at
+   that opens a menu, and the magnifier (the `zoom-in` `"Tamaño"` button, today at
    the bottom right) moves to the left, so the rest of the bottom is free.
 4. Responsive behaviour when many operations run at once: collapse to a circle
    carrying the count, which expands upward on press. The author noted this is

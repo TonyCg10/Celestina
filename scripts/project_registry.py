@@ -5,12 +5,55 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
+import tomllib
 from typing import Any
 
 
 COMMIT_KINDS = ("bug", "milestone", "release", "maintenance")
+REGISTRY_PATH = "docs/projects.toml"
+
+
+def parse_registry(raw: bytes, source: str = REGISTRY_PATH) -> dict[str, Any]:
+    """The one reader of `docs/projects.toml`'s shape (TOOL-18).
+
+    UTF-8 TOML with `schema_version = 1`, a `[[projects]]` list of tables
+    whose `id`s are distinct strings and, when present, a `[suite]` table.
+    Every other rule, such as requiring `[suite]`, belongs to the tool that
+    applies it. Raises ValueError naming `source`.
+    """
+    try:
+        registry = tomllib.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise ValueError(f"{source}: invalid registry: {error}") from error
+    if registry.get("schema_version") != 1:
+        raise ValueError(f"{source} requires schema_version = 1")
+    if "suite" in registry and not isinstance(registry["suite"], dict):
+        raise ValueError(f"{source}: [suite] must be a table")
+    projects = registry.get("projects")
+    if not isinstance(projects, list):
+        raise ValueError(f"{source} does not contain [[projects]]")
+    seen: set[str] = set()
+    for index, project in enumerate(projects):
+        if not isinstance(project, dict):
+            raise ValueError(f"{source}: projects[{index}] is not a table")
+        project_id = project.get("id")
+        if not isinstance(project_id, str) or not project_id:
+            raise ValueError(f"{source}: projects[{index}].id is required")
+        if project_id in seen:
+            raise ValueError(f"{source}: duplicate id: {project_id}")
+        seen.add(project_id)
+    return registry
+
+
+def load_registry(path: Path) -> dict[str, Any]:
+    """`parse_registry` over the file at `path`."""
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise ValueError(f"cannot read {path}: {error}") from error
+    return parse_registry(raw, str(path))
 
 
 @dataclass(frozen=True)

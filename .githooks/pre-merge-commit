@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+# Git runs this hook, not pre-commit, before an automatic merge commit, so a
+# merge that brings a broken document in is refused here (TOOL-5). commit-msg
+# then judges the merge's ratchets and refuses a delivery batch in it.
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec sh "$script_dir/committed-rules.sh" pre-merge-commit "$@"

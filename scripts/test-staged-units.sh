@@ -589,4 +589,101 @@ elif ! grep -F 'requires exactly one commit prefix: app, core' \
     exit 1
 fi
 
+# The hooks judge the index with the rules committed in HEAD (TOOL-5, TOOL-6).
+. "$script_dir/fixtures/hooks/repository.sh"
+hooks_root=$temporary/hooks
+make_hook_repository "$hooks_root" "$script_dir" "$script_dir/../.githooks"
+broken_link='See [missing](does-not-exist.md).'
+hooks_branch=$(git -C "$hooks_root" symbolic-ref --short HEAD)
+hooks_base=$(git -C "$hooks_root" rev-parse HEAD)
+# Each case starts from the fixture's first commit, so one case that slips
+# through cannot fail the next one.
+restart_hooks() {
+    git -C "$hooks_root" checkout -q -f "$hooks_branch"
+    git -C "$hooks_root" reset -q --hard "$hooks_base"
+}
+
+# A broken link staged and then removed from the worktree is still committed,
+# so the documentation contract must read the index, not the worktree.
+cp "$hooks_root/README.md" "$temporary/readme.clean"
+printf '\n%s\n' "$broken_link" >> "$hooks_root/README.md"
+git -C "$hooks_root" add README.md
+cp "$temporary/readme.clean" "$hooks_root/README.md"
+if git -C "$hooks_root" commit -qm 'suite-maintenance: Add a partially staged link' \
+    > "$temporary/partial.out" 2>&1; then
+    printf 'FAIL: pre-commit accepted a broken link that only the index holds\n' >&2
+    exit 1
+elif ! grep -F 'README.md: line' "$temporary/partial.out" | grep -F 'broken local link' >/dev/null; then
+    printf 'FAIL: the partially staged link produced no stable diagnostic\n' >&2
+    cat "$temporary/partial.out" >&2
+    exit 1
+fi
+restart_hooks
+
+# A worktree that holds the broken link while the index does not is not the
+# commit, so it does not block it.
+printf 'The fixture changes.\n' >> "$hooks_root/AGENTS.md"
+git -C "$hooks_root" add AGENTS.md
+printf '\n%s\n' "$broken_link" >> "$hooks_root/README.md"
+if ! git -C "$hooks_root" commit -qm 'suite-maintenance: Record an agent note' \
+    > "$temporary/unstaged-link.out" 2>&1; then
+    printf 'FAIL: pre-commit judged an unstaged worktree edit:\n' >&2
+    cat "$temporary/unstaged-link.out" >&2
+    exit 1
+fi
+restart_hooks
+
+# An automatic merge runs pre-merge-commit, not pre-commit.
+git -C "$hooks_root" checkout -qb side
+printf '\n%s\n' "$broken_link" >> "$hooks_root/README.md"
+git -C "$hooks_root" commit -qam 'suite-maintenance: Add a broken link' --no-verify
+git -C "$hooks_root" checkout -q "$hooks_branch"
+printf 'Another note.\n' >> "$hooks_root/AGENTS.md"
+git -C "$hooks_root" commit -qam 'suite-maintenance: Record another agent note'
+if git -C "$hooks_root" merge -q --no-ff side -m 'Merge branch side' \
+    > "$temporary/merge-hook.out" 2>&1; then
+    printf 'FAIL: a merge brought a broken link in through the hooks\n' >&2
+    exit 1
+elif ! grep -F 'broken local link' "$temporary/merge-hook.out" >/dev/null; then
+    printf 'FAIL: the merge produced no stable diagnostic\n' >&2
+    cat "$temporary/merge-hook.out" >&2
+    exit 1
+fi
+git -C "$hooks_root" merge --abort 2>/dev/null || :
+restart_hooks
+
+# The same merge without the broken link lands through the same hooks.
+git -C "$hooks_root" checkout -qb clean-side
+printf 'A side note.\n' >> "$hooks_root/README.md"
+git -C "$hooks_root" commit -qam 'suite-maintenance: Record a side note'
+git -C "$hooks_root" checkout -q "$hooks_branch"
+printf 'Another note.\n' >> "$hooks_root/AGENTS.md"
+git -C "$hooks_root" commit -qam 'suite-maintenance: Record another agent note'
+if ! git -C "$hooks_root" merge -q --no-ff clean-side -m 'Merge branch clean-side' \
+    > "$temporary/clean-merge.out" 2>&1; then
+    printf 'FAIL: the hooks refused a clean merge:\n' >&2
+    cat "$temporary/clean-merge.out" >&2
+    exit 1
+fi
+restart_hooks
+
+# An unstaged edit that turns the worktree's guards into no-ops changes
+# nothing: HEAD's guards still run.
+for disabled in documentation_contract.py check-language-contract.py \
+    check-staged-units.py commit_scope.py git_hooks.py; do
+    printf 'import sys\nsys.exit(0)\n' > "$hooks_root/scripts/$disabled"
+done
+printf '\n%s\n' "$broken_link" >> "$hooks_root/README.md"
+git -C "$hooks_root" add README.md
+if git -C "$hooks_root" commit -qm 'suite-maintenance: Add a link past disabled guards' \
+    > "$temporary/disabled-guards.out" 2>&1; then
+    printf 'FAIL: unstaged no-op guards disabled pre-commit\n' >&2
+    exit 1
+elif ! grep -F 'broken local link' "$temporary/disabled-guards.out" >/dev/null; then
+    printf 'FAIL: the disabled guards produced no stable diagnostic\n' >&2
+    cat "$temporary/disabled-guards.out" >&2
+    exit 1
+fi
+restart_hooks
+
 printf 'Staged inventories: OK\n'

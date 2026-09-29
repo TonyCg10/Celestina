@@ -201,6 +201,7 @@ if [ -n "$ratchet_tmp" ]; then
         "$ratchet_tmp/docs/projects.toml"
     cp "$root/scripts/commit_scope.py" \
         "$root/scripts/project_registry.py" \
+        "$root/scripts/repo_git.py" \
         "$root/scripts/architecture_scanners.py" \
         "$root/scripts/check-language-contract.py" \
         "$root/scripts/check-staged-units.py" \
@@ -774,6 +775,31 @@ expect_scope fail 'fluorita-qt: cross a project boundary' \
 expect_scope "$halted_shell_expectation" 'celestina-shell-core: extend the command vocabulary' \
     'celestina-rs/crates/celestina-shell-core/src/lib.rs' \
     'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
+
+# Called by Git, commit-msg runs the guard committed in HEAD: an unstaged
+# edit that turns the worktree's guard into a no-op does not open the gate
+# (TOOL-6). The fixture commits the real guards, then disables their worktree
+# copies.
+. "$script_dir/fixtures/hooks/repository.sh"
+hook_temporary=$(mktemp -d)
+make_hook_repository "$hook_temporary/repository" "$script_dir" "$root/.githooks"
+hook_repository=$hook_temporary/repository
+for disabled in commit_scope.py check-staged-units.py git_hooks.py; do
+    printf 'import sys\nsys.exit(0)\n' > "$hook_repository/scripts/$disabled"
+done
+printf 'A note.\n' >> "$hook_repository/README.md"
+git -C "$hook_repository" add README.md
+if git -C "$hook_repository" commit -qm 'not even a valid subject' \
+    > "$hook_temporary/subject.out" 2>&1; then
+    fail "an unstaged no-op commit_scope.py let an invalid subject through commit-msg"
+elif ! grep -F "commit-msg: the subject must use" "$hook_temporary/subject.out" >/dev/null; then
+    fail "the committed commit-msg guard gave no stable diagnostic: $(cat "$hook_temporary/subject.out")"
+fi
+if ! git -C "$hook_repository" commit -qm 'suite-maintenance: Record a note' \
+    > "$hook_temporary/valid.out" 2>&1; then
+    fail "the committed commit-msg guard refused a valid subject: $(cat "$hook_temporary/valid.out")"
+fi
+rm -rf -- "$hook_temporary"
 
 if [ "$failures" -ne 0 ]; then
     printf '\n%d commit-scope test(s) failed.\n' "$failures" >&2

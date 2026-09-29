@@ -9,8 +9,9 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import subprocess
 from pathlib import Path
+
+import repo_git
 
 
 TEXT_SUFFIXES = {
@@ -34,7 +35,22 @@ QSTR_LITERAL = re.compile(
     r"""qsTr\s*\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')""", re.DOTALL
 )
 PRODUCT_COPY_MARKER = "language-contract: product-copy"
+ALLOW_MARKER = "language-contract: allow-non-english"
 STRING_LITERAL = re.compile(r"""("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')""")
+# Where each exemption marker counts (TOOL-11). `product-copy` declares that a
+# Rust or C++ file's string literals are what a person reads, as ADR 0007
+# says; `allow-non-english` labels a fixture or detector that needs foreign
+# input, which is code, never a document. Neither counts in a canonical path,
+# and a marker anywhere else changes nothing, so it cannot park prose.
+PRODUCT_COPY_SUFFIXES = frozenset({".rs", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp"})
+DOCUMENT_SUFFIXES = frozenset({".md", ".txt"})
+# A plan or evidence record cites product copy the way code holds it: as a
+# string literal inside a closed fenced block or inside an inline code span
+# that does not cross a blank line. Only those literals are blanked, and never
+# in a canonical path; the prose around them, a qsTr() call in prose and the
+# text after a fence that never closes are scanned like any other line.
+FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+CODE_SPAN = re.compile(r"(`+)((?:[^`\n]|\n(?![ \t]*\n))+?)\1")
 
 
 def is_localization(path: str) -> bool:
@@ -65,13 +81,76 @@ def is_canonical(path: str) -> bool:
     return False
 
 
-def suspicious_lines(text: str, *, suffix: str = "") -> list[int]:
+def blank_literals(text: str) -> str:
+    """`text` with every string literal emptied; newlines inside one are kept."""
+    return STRING_LITERAL.sub(
+        lambda match: '""' + "\n" * match.group(0).count("\n"), text
+    )
+
+
+def markdown_without_cited_copy(text: str) -> str:
+    """Markdown with the product copy it cites in code blanked, line numbers kept."""
+    lines = text.split("\n")
+    prose: list[int] = []
+    index = 0
+    while index < len(lines):
+        opening = FENCE.match(lines[index])
+        if opening is None:
+            prose.append(index)
+            index += 1
+            continue
+        marker = opening.group(1)
+        closing = next(
+            (
+                later
+                for later in range(index + 1, len(lines))
+                if FENCE.match(lines[later]) and lines[later].strip().startswith(marker)
+            ),
+            None,
+        )
+        if closing is None:
+            # An unclosed fence cites nothing: the rest is prose.
+            prose.extend(range(index, len(lines)))
+            break
+        for inside in range(index + 1, closing):
+            lines[inside] = blank_literals(lines[inside])
+        index = closing + 1
+    # Inline spans, within each run of prose lines.
+    runs: list[list[int]] = []
+    for number in prose:
+        if runs and runs[-1][-1] == number - 1:
+            runs[-1].append(number)
+        else:
+            runs.append([number])
+    for run in runs:
+        joined = "\n".join(lines[number] for number in run)
+        joined = CODE_SPAN.sub(
+            lambda match: match.group(1) + blank_literals(match.group(2)) + match.group(1),
+            joined,
+        )
+        for number, line in zip(run, joined.split("\n")):
+            lines[number] = line
+    return "\n".join(lines)
+
+
+def honoured_markers(head: str, suffix: str, path: str) -> tuple[bool, bool]:
+    """Whether the head's `allow-non-english` and `product-copy` markers count here."""
+    if path and is_canonical(path):
+        return False, False
+    allow = ALLOW_MARKER in head and suffix not in DOCUMENT_SUFFIXES
+    product_copy = PRODUCT_COPY_MARKER in head and suffix in PRODUCT_COPY_SUFFIXES
+    return allow, product_copy
+
+
+def suspicious_lines(text: str, *, suffix: str = "", path: str = "") -> list[int]:
     head = "\n".join(text.splitlines()[:10])
-    if "language-contract: allow-non-english" in head:
+    allow, product_copy = honoured_markers(head, suffix, path)
+    if allow:
         return []
     # A marked file declares that its string literals are what a person reads.
     # Everything outside a literal in that file is still development truth.
-    product_copy = PRODUCT_COPY_MARKER in head
+    if suffix == ".md" and not (path and is_canonical(path)):
+        text = markdown_without_cited_copy(text)
     if suffix == ".qml":
         # Only the argument of qsTr() is product copy. A bare literal in QML is
         # a state token, an icon name or a path — development truth. Blanked
@@ -83,7 +162,7 @@ def suspicious_lines(text: str, *, suffix: str = "") -> list[int]:
     for number, line in enumerate(text.splitlines(), 1):
         if LOCALE_DESKTOP.match(line):
             continue
-        if product_copy and suffix != ".qml":
+        if product_copy:
             line = STRING_LITERAL.sub("", line)
         if ACCENTED_SPANISH.search(line) or len(SPANISH_WORDS.findall(line)) >= 2:
             result.append(number)
@@ -91,12 +170,8 @@ def suspicious_lines(text: str, *, suffix: str = "") -> list[int]:
 
 
 def repository_paths(root: Path) -> list[str]:
-    output = subprocess.check_output(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-        cwd=root,
-        text=True,
-    )
-    return sorted(set(output.splitlines()))
+    output = repo_git.output(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+    return sorted(set(repo_git.paths(output)))
 
 
 def scan(root: Path) -> tuple[dict[str, int], list[str]]:
@@ -112,7 +187,7 @@ def scan(root: Path) -> tuple[dict[str, int], list[str]]:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        lines = suspicious_lines(text, suffix=path.suffix.lower())
+        lines = suspicious_lines(text, suffix=path.suffix.lower(), path=relative)
         if not lines:
             continue
         if is_canonical(relative):
@@ -123,58 +198,48 @@ def scan(root: Path) -> tuple[dict[str, int], list[str]]:
     return legacy, errors
 
 
-def read_baseline(path: Path) -> dict[str, int]:
+def parse_baseline(text: str, source: str) -> dict[str, int]:
+    """The one parser of the language ratchet: `count<TAB>path` rows (TOOL-18).
+
+    The repository scan, the history comparison and the commit hook
+    (commit_scope.py, through HEAD's copy of this module) all read it here.
+    """
     result: dict[str, int] = {}
-    for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for number, raw in enumerate(text.splitlines(), 1):
         if not raw or raw.startswith("#"):
             continue
         fields = raw.split("\t")
         if len(fields) != 2 or not fields[0].isdigit() or not fields[1]:
-            raise ValueError(f"{path}:{number}: invalid language baseline row")
+            raise ValueError(f"{source}:{number}: invalid language baseline row")
         count, relative = int(fields[0]), fields[1]
         if count <= 0 or relative in result:
-            raise ValueError(f"{path}:{number}: invalid or duplicate language debt")
+            raise ValueError(f"{source}:{number}: invalid or duplicate language debt")
         result[relative] = count
     return result
 
 
+def read_baseline(path: Path) -> dict[str, int]:
+    return parse_baseline(path.read_text(encoding="utf-8"), str(path))
+
+
 def compare_ref_resolves(root: Path, revision: str) -> bool:
     """Whether the comparison ref names a commit this checkout actually has."""
-    return subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"],
-        cwd=root,
-        capture_output=True,
-    ).returncode == 0
+    return repo_git.run(root, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}").returncode == 0
 
 
 def historical_baseline_exists(root: Path, revision: str) -> bool:
-    return subprocess.run(
-        ["git", "cat-file", "-e", f"{revision}:scripts/language-baseline.tsv"],
-        cwd=root,
-        capture_output=True,
-    ).returncode == 0
+    return repo_git.run(root, "cat-file", "-e", f"{revision}:scripts/language-baseline.tsv").returncode == 0
 
 
 def read_historical_baseline(root: Path, revision: str) -> dict[str, int]:
-    result = subprocess.run(
-        ["git", "show", f"{revision}:scripts/language-baseline.tsv"],
-        cwd=root,
-        text=True,
-        capture_output=True,
-    )
+    result = repo_git.run(root, "show", f"{revision}:scripts/language-baseline.tsv")
     if result.returncode != 0:
         raise ValueError(
             f"could not read scripts/language-baseline.tsv at {revision}"
         )
-    parsed: dict[str, int] = {}
-    for number, raw in enumerate(result.stdout.splitlines(), 1):
-        if not raw or raw.startswith("#"):
-            continue
-        fields = raw.split("\t")
-        if len(fields) != 2 or not fields[0].isdigit() or not fields[1]:
-            raise ValueError(f"{revision}:language-baseline:{number}: invalid row")
-        parsed[fields[1]] = int(fields[0])
-    return parsed
+    return parse_baseline(
+        repo_git.decode(result.stdout), f"{revision}:scripts/language-baseline.tsv"
+    )
 
 
 def main() -> int:

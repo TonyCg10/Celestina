@@ -134,7 +134,7 @@ causes.
 - [x] Record the reduction the migration earned.
 
 The build order, exclusions and ledger are in the
-[active plan](docs/plans/archive/2026-08-04-spanish-product-copy.md).
+[archived plan](docs/plans/archive/2026-08-04-spanish-product-copy.md).
 
 ## LND-1 — Seal at landing
 
@@ -197,8 +197,13 @@ findings in [the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md).
 | Shared visual language | [celestina-style/ROADMAP.md](celestina-style/ROADMAP.md) |
 | Siderita | [siderita/ROADMAP.md](siderita/ROADMAP.md) |
 | Magnetita | [magnetita/ROADMAP.md](magnetita/ROADMAP.md) |
+| Magnetita Android | [magnetita-android/ROADMAP.md](magnetita-android/ROADMAP.md) |
 | Grafita | [grafita/ROADMAP.md](grafita/ROADMAP.md) |
 | Fluorita | [fluorita/ROADMAP.md](fluorita/ROADMAP.md) |
+| Hematita | [hematita/ROADMAP.md](hematita/ROADMAP.md) |
+
+The table follows the projects registered in [docs/projects.toml](docs/projects.toml),
+which is the list to trust when the two differ.
 
 ## Later suite-level implementation
 

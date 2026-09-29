@@ -1,6 +1,6 @@
 # Suite status
 
-- **Updated:** 2026-09-27
+- **Updated:** 2026-09-28
 - **Current focus:** AUD-1, the monorepo hardening program that follows the
   2026-09-26 audit; project units of the same program follow each local
   roadmap
@@ -88,7 +88,7 @@ pre-migration detail is explicitly historical and is not current instruction.
 |---|---|---|
 | Governance foundation | complete | archived GOV-1 plan |
 | Project document migration | complete | root/project canonical documents and histories |
-| Reusable production artifacts | entries complete for all seven projects; the Celestina shell's are halted since 2026-09-27 and no landing runs them | production evidence |
+| Reusable production artifacts | entries complete for every project registered in [docs/projects.toml](docs/projects.toml); the Celestina shell's are halted since 2026-09-27 and no landing runs them | production evidence |
 | Registry-backed guards and commit policy | complete | production/documentation/architecture/hook fixtures |
 | Product version convention | complete | registered sources, typed commits and append-only history |
 | Repository language | canonical rules and current guard success output are English; legacy diagnostics and code/UI debt remain ratcheted | language standard and guard |
@@ -116,10 +116,12 @@ their project status documents.
 
 ## Evidence
 
-The complete guard commands, prior seven-manifest verification, installed-state
-audit, exact language-baseline movement and final runner invalidation are in
-[the GOV-2 evidence](docs/evidence/2026-08-03-guard-contract-alignment.md). Its
-final runner integration changed registered build scripts, so existing manifests are
-intentionally stale. No release artifact was rebuilt or deployed. The earlier
-verification pass compiled test/debug targets only and is not reported as real
-Wayland, hardware or assistive-technology validation.
+The evidence of the active program is in
+[the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md) and in the
+records its ledger rows link; the tooling unit `AUD-1-F` is in
+[the tooling-integrity evidence](docs/evidence/2026-09-26-tooling-integrity.md).
+Whether each artifact is current is reproduced with `status-production.sh`, as
+above, and never transcribed here. The earlier GOV-2 record, including its
+seven-manifest verification of that time, stays in
+[the GOV-2 evidence](docs/evidence/2026-08-03-guard-contract-alignment.md) as
+history; it is not the current state of any artifact.

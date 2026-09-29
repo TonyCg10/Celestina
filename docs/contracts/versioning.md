@@ -58,41 +58,48 @@ avoid a required bump. A bug fix uses `bug` even when the patch is small; a
 completed feature checkpoint uses `milestone`; `release` is reserved for an
 intentional major compatibility/lifecycle boundary.
 
-## Agent workflow
+## What the landing does
 
-1. Implement and verify the ledger unit before choosing its final subject.
-2. Choose the kind from the delivered outcome, not from the size of the diff.
-3. For `bug`, `milestone` or `release`, update the version before the canonical
-   production build. Use the helper so every registered declaration and the
-   history row move together:
+A session never bumps a version: it implements and verifies the ledger unit,
+and the author chooses the kind from the delivered outcome, not from the size
+of the diff, when the unit lands. For a `bug`, `milestone` or `release`,
+`scripts/land-unit.py` then, on top of the current `main`:
+
+1. drops any version change the session made (`unbump`);
+2. runs the helper on the rebased tree, so every registered declaration and
+   the history row move together, with the summary equal to the imperative
+   text after the subject colon:
 
    ```sh
-   python3 scripts/version_tool.py bump siderita bug \
+   python3 scripts/version_tool.py --root <landing worktree> bump siderita bug \
      --unit SID-8-A \
      --summary "Fix picker synchronization"
    ```
 
-4. Run `python3 scripts/version_tool.py check`, then the project's normal
-   verification and `complete-production.sh`. The built and deployed binary
-   must therefore contain the new version; a parallel build is not sufficient.
-5. Include the version declarations, mirrors, history row, code, plan,
-   inventory and evidence in the same commit. The summary argument must equal
-   the imperative text after the subject colon.
+3. runs `version_tool.py check` among its guards, then builds and verifies the
+   release artifact, so the binary it later deploys contains the new version;
+4. seals the version declarations, mirrors, history row, code, plan,
+   inventory and evidence into one commit.
 
-Through `scripts/land-unit.py`, the landing performs steps 3 to 5 on top of the
-current `main`; see [the landing contract](landing.md).
+The steps, stops and resumption are in [the landing contract](landing.md).
+Running the helper by hand is reserved for the exceptions that contract names,
+which the author records by hand, such as a `suite-bug` that bumps several
+products.
 
 `python3 scripts/version_tool.py show` prints the registered current
 versions without maintaining another snapshot.
 `python3 scripts/audit-version-commits.py` replays all non-merge commits after
-adoption against their first parent; CI therefore catches deliveries made with
-local hooks disabled.
+adoption against their first parent, or with `--since REV` only those after
+`REV`; CI audits the pushed range on every push and the whole history on a
+weekly schedule, so it catches deliveries made with local hooks disabled.
 
 ## Ownership and cross-suite changes
 
-The six top-level products currently versioned are Celestina, CelestinaStyle,
-Siderita, Magnetita, Grafita and Fluorita. The virtual `celestina-rs` workspace
-and component prefixes have no aggregate product version. A component-only
+The versioned products are the registered projects with a `version_source`;
+`python3 scripts/version_tool.py show` lists them from
+[docs/projects.toml](../projects.toml), which is the list to trust. The virtual
+`celestina-rs` workspace (`versioned = false`) and component prefixes have no
+aggregate product version. A component-only
 maintenance commit may use its component prefix. A component bug delivered by
 one product uses that product's primary `-bug` prefix and bumps that product.
 

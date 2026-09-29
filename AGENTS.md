@@ -106,8 +106,8 @@ See [docs/standards/rust-cpp-qt-qml.md](docs/standards/rust-cpp-qt-qml.md).
 | Inter-process contract | stable, backward-compatible API |
 
 Pure crates never depend on adapters or UI. One application never imports
-another application's UI. Siderita may consume narrow Grafita and Fluorita
-domain/seams while retaining its own Qt state and composition. Accepted details
+another application's UI. Siderita may consume narrow Grafita, Fluorita and
+Hematita domain/seams while retaining its own Qt state and composition. Accepted details
 and exceptions, including the bounded `fluorita-qt` bridge, live in
 [docs/standards/architecture.md](docs/standards/architecture.md).
 
@@ -238,7 +238,10 @@ never plans, ledgers, status, or evidence. Both additionally cover
 lowers its baseline row in the same commit instead of publishing a revision
 whose relevant guard is red. Python rules committed in HEAD interpret source,
 baselines and registry TOML from INDEX; staged or unstaged rule modules never
-execute in the current hook. HEAD and INDEX must both authorize every normal
+execute in the current hook, because every hook runs the guards from `HEAD:scripts`
+extracted to a temporary directory, over a copy of the index. Only a guard or
+`scripts/git_hooks.py` that HEAD lacks runs from the worktree, once, in the
+commit that adds it. HEAD and INDEX must both authorize every normal
 commit path and prefix, so staged policy cannot authorize its own expansion.
 Delivery discovery uses the conservative union of HEAD and INDEX layouts and
 rejects conflicting ownership. Merge commits cannot change ratchets and their
@@ -340,7 +343,8 @@ author requests a commit:
 
 `.githooks/pre-commit` and `.githooks/commit-msg` verify the staged batch,
 format, base scope, change kind, version transition, and the single
-ledger-declared prefix. `suite:` never wraps incompatible local batches. Enable hooks in each clone with
+ledger-declared prefix; `.githooks/pre-merge-commit` runs the language and
+documentation contracts over an automatic merge. `suite:` never wraps incompatible local batches. Enable hooks in each clone with
 `git config core.hooksPath .githooks`; Git does not transport that setting.
 Merges cannot close inventoried delivery units: finish the merge, then deliver
 the unit in an ordinary prefixed commit. Normal, revert and fixup subjects must

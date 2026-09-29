@@ -23,6 +23,7 @@ vendor-neutral: every agent follows the same repository contract.
 | What must the author test manually? | root/project `VALIDATION.md` |
 | What was actually verified? | [evidence/](evidence/) or registered project-local `docs/evidence/` |
 | What is retained only as history? | [history/](history/) and [plans/archive/](plans/archive/) |
+| Which step plans and design specs did a session write before its unit? | [superpowers/](superpowers/), see below |
 | Which projects, prefixes and artifact entries exist? | [projects.toml](projects.toml) |
 
 The checkout plus reproducible evidence wins over a stale status claim. A plan,
@@ -68,6 +69,22 @@ plan; the inventory path, links and explicit stable `Plan ID` remain unchanged.
 The `Plan ID` exists from plan creation and no later than the first commit that
 contains one of its inventories.
 
+## Working plans and specs
+
+`docs/superpowers/plans/` and `docs/superpowers/specs/` hold the step-by-step
+plans and design specs that sessions wrote with the superpowers skills before
+implementing a unit. They are working documents, registered here so that the
+registry and the tools may cite them: a design spec can be a project's
+`context_documents` entry. They are not a second ledger or a second contract
+tree and grant no authority: the unit's row in its plan under
+[plans/](plans/), its evidence, and the contracts and decisions they informed
+win over them, and a spec the landing or another tool follows has a canonical
+successor, such as [contracts/landing.md](contracts/landing.md) for the
+parallel-unit landing. English is their language; like any Markdown record
+outside the canonical paths, they may cite product copy as a string literal
+inside a closed fenced code block or an inline code span, and the language
+guard scans everything else.
+
 ## Governance
 
 - [Change and authorization policy](governance/change-policy.md)
@@ -79,6 +96,7 @@ contains one of its inventories.
 - [Content activation contract](contracts/content-activation.md)
 - [Reusable production artifacts](contracts/production-artifacts.md)
 - [Product versions and typed commits](contracts/versioning.md)
+- [Landing contract](contracts/landing.md)
 
 ## Completed migration
 

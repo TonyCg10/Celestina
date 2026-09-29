@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, fields
-import fnmatch
 import hashlib
 import json
 import os
@@ -34,11 +33,11 @@ from production_artifact import (
     ContractError,
     ERROR_PREFIX,
     VERIFICATION_ERRORS,
-    expand_patterns,
-    production_input_patterns,
-    verification_input_patterns,
+    inputs_changed,
 )
 from project_registry import build_commit_scopes, halted_projects, path_allowed
+from repo_git import GitError
+import repo_git
 from version_contract import VersionContractError, parse_registry, read_source_version
 from version_tool import replace_source_version
 
@@ -117,6 +116,15 @@ class LandState:
     # main before the fast-forward, and the sealed commit it moved to.
     previous: str = ""
     sealed: str = ""
+    # The deployable projects that build_if_stale built or verified, which
+    # the deploy step deploys once the push landed them; space-separated ids,
+    # each removed once its deploy and status entries passed (TOOL-8).
+    deploy: str = ""
+    # "yes" once origin/main holds the sealed commit: from then on nothing
+    # moves main back, and --abort only reports what is not deployed.
+    pushed: str = ""
+    # The failed `contracts` run the author landed over with --accept-red-ci.
+    red_ci: str = ""
 
     def dump(self) -> str:
         lines = []
@@ -544,29 +552,24 @@ def scope_violations(
     return sorted(path for path in changed_paths if not path_allowed(path, scope))
 
 
-def matches_pattern(path: str, pattern: str) -> bool:
-    """Whether `path`, or a directory above it, matches one registered input pattern."""
-    parts = path.split("/")
-    return any(
-        fnmatch.fnmatchcase("/".join(parts[:end]), pattern) for end in range(1, len(parts) + 1)
-    )
-
-
 def affected_projects(
-    root: Path, registry: Mapping[str, object], changed_paths: set[str], owner_id: str
+    root: Path,
+    registry: Mapping[str, object],
+    changed_paths: set[str],
+    owner_id: str,
+    read_base: Callable[[str], bytes | None],
 ) -> list[dict]:
     """The owner, then every other registered project whose inputs hold a changed path.
 
     The owner comes first when it is a registered project (a `suite` unit has
-    none); the others follow in registry order. A project is affected when a
-    changed path is one of its production inputs, which production_artifact.py
-    fingerprints, expanded on the tree at `root`, or matches one of the raw
-    production or verification input patterns, so that a deleted file still
-    counts; a pattern also matches every path below a directory it names. The
-    verification inputs are the whole set production_artifact.py fingerprints,
-    so a shared script such as scripts/production-common.sh affects every
-    project. `registry` must be the one of the tree at `root`: an input it
-    names that does not exist there stops the landing.
+    none); the others follow in registry order. Whether a project's inputs
+    hold a changed path is production_artifact.py's `inputs_changed`: an
+    expanded production input, or a raw production or verification pattern so
+    that a deleted file still counts. A shared verification input that each
+    project reads only in part, such as `docs/projects.toml` or a debt
+    ratchet, counts only when the project's slice of it changed; `read_base`
+    returns a path's bytes on the base. `registry` must be the one of the tree
+    at `root`: an input it names that does not exist there stops the landing.
 
     A halted project is never affected, not even as the owner: no landing
     builds, verifies or deploys it (AGENTS.md "Halted projects").
@@ -586,30 +589,16 @@ def affected_projects(
         if project.get("id") == owner_id:
             owner.append(project)
             continue
-        patterns = production_input_patterns(dict(registry), project)
-        inputs: list[str] = []
-        for pattern in patterns:
-            try:
-                inputs.extend(logical for _disk, logical in expand_patterns(root, [pattern]))
-            except ContractError as error:
-                raise LandingStop(
-                    "build_if_stale",
-                    f"docs/projects.toml: the production input `{pattern}` of "
-                    f"{project.get('id')} cannot be expanded on the rebased tip: {error}",
-                    "docs/projects.toml",
-                ) from error
         try:
-            patterns.extend(verification_input_patterns(root, project))
+            changed = inputs_changed(root, dict(registry), project, changed_paths, read_base)
         except ContractError as error:
             raise LandingStop(
                 "build_if_stale",
-                f"docs/projects.toml: the verification inputs of {project.get('id')} "
-                f"cannot be read on the rebased tip: {error}",
+                f"docs/projects.toml: the inputs of {project.get('id')} cannot be "
+                f"read on the rebased tip: {error}",
                 "docs/projects.toml",
             ) from error
-        if any(
-            path == item or path.startswith(f"{item}/") for path in changed_paths for item in inputs
-        ) or any(matches_pattern(path, pattern) for path in changed_paths for pattern in patterns):
+        if changed:
             affected.append(project)
     return owner + affected
 
@@ -1026,20 +1015,19 @@ def git_program() -> str:
 def git_run(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Run one Git command in `root`; every Git call of this module goes through here.
 
-    It never reads the terminal, and it keeps stdout and stderr.
+    It never reads the terminal and keeps stdout and stderr, decoded so that a
+    path that is not UTF-8 reaches the caller instead of a traceback (TOOL-19).
     """
-    command = [git_program(), "--literal-pathspecs", "-C", str(root), *args]
     try:
-        return subprocess.run(
-            command,
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-    except OSError as error:
-        raise LandingError(f"cannot run {' '.join(command)}: {error}") from error
+        result = repo_git.run(root, "--literal-pathspecs", *args, program=git_program())
+    except GitError as error:
+        raise LandingError(str(error)) from error
+    return subprocess.CompletedProcess(
+        result.args,
+        result.returncode,
+        repo_git.decode(result.stdout),
+        repo_git.decode(result.stderr),
+    )
 
 
 def git_output(root: Path, *args: str, allowed: tuple[int, ...] = (0,)) -> str:
@@ -1161,10 +1149,26 @@ def close_ledger_row(
     return "".join(lines)
 
 
-def landing_section(base: str, check_output: str, build: str | None) -> str:
-    return (
-        "## Landing\n\n"
-        f"- **Base revision:** `{base}`\n"
-        f"- **Check:** {check_output}\n"
-        f"- **Build:** {build if build is not None else 'artifact current; no build'}\n"
-    )
+def landing_section(
+    base: str,
+    check_output: str,
+    build: str | None,
+    *,
+    deploy: str | None = None,
+    red_ci: str | None = None,
+) -> str:
+    """The evidence's Landing section; `deploy` and `red_ci` add a line each."""
+    lines = [
+        "## Landing\n\n",
+        f"- **Base revision:** `{base}`\n",
+        f"- **Check:** {check_output}\n",
+        f"- **Build:** {build if build is not None else 'artifact current; no build'}\n",
+    ]
+    if deploy is not None:
+        lines.append(f"- **Deploy:** after the push: {deploy}\n")
+    if red_ci is not None:
+        lines.append(
+            f"- **CI:** GitHub `contracts` had failed on main ({red_ci}); "
+            "landed with `--accept-red-ci`\n"
+        )
+    return "".join(lines)

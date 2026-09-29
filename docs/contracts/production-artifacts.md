@@ -59,6 +59,15 @@ itself. A nonzero child or changed interval leaves no new build seal.
 shared QML change invalidates consumers, ignores targets/builds/VCS caches, and
 never uses mtimes for artifact identity.
 
+Three shared verification inputs are hashed by the project's slice, not whole:
+`docs/projects.toml` by the project's own table and `[commit_policy]`,
+`scripts/architecture-baseline.tsv` by the rows of paths under the project's
+`commit_roots`, and `scripts/qmllint-baseline.tsv` by the project's row. Bytes
+that cannot be read as that format count whole. A unit that lowers one
+project's ratchet row or edits one project's table therefore re-verifies that
+project, not every registered one; the guards themselves still judge the whole
+files on every commit and landing.
+
 The verification fingerprint requires `verify_script` and `status_script` for
 every project; deployable projects additionally require `deploy_script`,
 `complete_script`, and the shared completion orchestrator. A declared activation
@@ -119,8 +128,14 @@ no metadata call, while the landing's affected-project matching and
 Deriving the closure at fingerprint time would give those readers a second,
 invisible input set.
 
-The manifest records the toolchain probes (`cargo`, `rustc`, `cmake`, the C++
-compiler and Qt). rustup chooses the compiler by the directory Cargo runs in,
+The manifest records the probes of the toolchains the project's build uses,
+which its registry table declares in `toolchains`, drawn from `rust` (`cargo`
+and `rustc`), `cmake`, `cxx` (the C++ compiler), `qt` and `jdk`; a project
+that declares none is probed for all but `jdk`, and the production-input guard
+refuses an unknown name. A Qt or CMake upgrade therefore stales only the
+artifacts built with them, not a pure-Rust library or the APK, and a probe an
+older manifest recorded but the project no longer declares is not compared.
+rustup chooses the compiler by the directory Cargo runs in,
 so the Rust probes run in the directory of each declared Cargo manifest, or
 in the project directory when it declares none: Magnetita records its app's
 compiler in `magnetita/` and its daemon's, which `celestina-rs/` pins, as

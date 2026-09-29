@@ -99,6 +99,11 @@ component_commit_scopes = [
   { prefix = "celestina-shell-core", roots = ["celestina-rs/crates/celestina-shell-core/"], include_workspace_manifests = true },
 ]
 
+# `toolchains` names what each build runs (production_artifact.py
+# TOOLCHAIN_PROBES); only those are probed and compared, so a Qt or CMake
+# upgrade stales the artifacts built with them and no others. A project that
+# declares none is probed for every toolchain.
+
 [[projects]]
 id = "celestina-style"
 name = "CelestinaStyle"
@@ -119,6 +124,7 @@ include_workspace_manifests = false
 production_role = "shared-module"
 deployable = false
 build_script = "celestina-style/scripts/build-production.sh"
+toolchains = ["cmake", "cxx", "qt"]
 verify_script = "celestina-style/scripts/verify-production.sh"
 status_script = "celestina-style/scripts/status-production.sh"
 artifact_manifest = "celestina-style/build/production-artifact.toml"
@@ -146,6 +152,7 @@ include_workspace_manifests = false
 production_role = "rust-workspace"
 deployable = false
 build_script = "celestina-rs/scripts/build-production.sh"
+toolchains = ["rust"]
 verify_script = "celestina-rs/scripts/verify-production.sh"
 status_script = "celestina-rs/scripts/status-production.sh"
 artifact_manifest = "celestina-rs/target/production-artifact.toml"
@@ -181,6 +188,7 @@ include_workspace_manifests = true
 production_role = "desktop-application"
 deployable = true
 build_script = "siderita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
 complete_script = "siderita/scripts/complete-production.sh"
 verify_script = "siderita/scripts/verify-production.sh"
 deploy_script = "siderita/scripts/deploy-production.sh"
@@ -221,6 +229,7 @@ include_workspace_manifests = true
 production_role = "desktop-application-and-user-daemon"
 deployable = true
 build_script = "magnetita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
 complete_script = "magnetita/scripts/complete-production.sh"
 verify_script = "magnetita/scripts/verify-production.sh"
 deploy_script = "magnetita/scripts/deploy-production.sh"
@@ -260,6 +269,7 @@ include_workspace_manifests = false
 production_role = "android-application"
 deployable = false
 build_script = "magnetita-android/scripts/build-production.sh"
+toolchains = ["rust", "jdk"]
 verify_script = "magnetita-android/scripts/verify-production.sh"
 status_script = "magnetita-android/scripts/status-production.sh"
 artifact_manifest = "magnetita-android/app/build/production-manifest.toml"
@@ -294,6 +304,7 @@ include_workspace_manifests = true
 production_role = "desktop-application"
 deployable = true
 build_script = "grafita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
 complete_script = "grafita/scripts/complete-production.sh"
 verify_script = "grafita/scripts/verify-production.sh"
 deploy_script = "grafita/scripts/deploy-production.sh"
@@ -330,6 +341,7 @@ include_workspace_manifests = true
 production_role = "desktop-media-application"
 deployable = true
 build_script = "fluorita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
 complete_script = "fluorita/scripts/complete-production.sh"
 verify_script = "fluorita/scripts/verify-production.sh"
 deploy_script = "fluorita/scripts/deploy-production.sh"
@@ -368,6 +380,7 @@ include_workspace_manifests = true
 production_role = "desktop-application"
 deployable = true
 build_script = "hematita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
 complete_script = "hematita/scripts/complete-production.sh"
 verify_script = "hematita/scripts/verify-production.sh"
 deploy_script = "hematita/scripts/deploy-production.sh"

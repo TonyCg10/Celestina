@@ -425,10 +425,18 @@ esac
             "deploy_script": "demo/scripts/deploy-production.sh",
             "activate_script": "demo/scripts/activate-production.sh",
             "inputs": expected,
+            # The registry and the debt ratchets count by the project's slice.
+            "scoped": [
+                "docs/projects.toml",
+                "scripts/architecture-baseline.tsv",
+                "scripts/qmllint-baseline.tsv",
+            ],
         }
         self.assertEqual(
             production_artifact.verification_fingerprint(self.root, demo),
-            production_artifact.digest_paths(self.root, expected, contract_data=contract),
+            production_artifact.digest_paths(
+                self.root, expected, contract_data=contract, project=demo
+            ),
         )
         library = production_artifact.verification_input_patterns(self.root, projects["library"])
         self.assertNotIn("scripts/complete-production.py", library)
@@ -811,6 +819,113 @@ helper = { path = "../rs/crates/helper" }
         rustc.write_text(f"#!/bin/sh\nprintf '%s\\n' 'rustc {version}'\n", encoding="utf-8")
         rustc.chmod(0o755)
         return {"PATH": f"{tools}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+    def fake_tool(self, name: str, output: str) -> dict[str, str]:
+        tools = self.root / "fake-tools"
+        tools.mkdir(exist_ok=True)
+        tool = tools / name
+        tool.write_text(f"#!/bin/sh\nprintf '%s\\n' '{output}'\n", encoding="utf-8")
+        tool.chmod(0o755)
+        return {"PATH": f"{tools}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+    def test_only_the_declared_toolchains_are_compared(self) -> None:
+        # A Qt upgrade staled every artifact, a pure-Rust library's and an
+        # APK's included, because every project was probed for every tool.
+        self.replace_in_registry(
+            'production_inputs = ["demo/src"]',
+            'production_inputs = ["demo/src"]\ntoolchains = ["rust"]',
+        )
+        self.fake_rustc("1.0.0")
+        old_qt = self.fake_tool("qtpaths6", "6.5.0")
+        self.run_tool("run-build", "demo", environment=old_qt)
+        self.run_tool("run-verification", "demo", environment=old_qt)
+        manifest = tomllib.loads(self.demo_manifest.read_text(encoding="utf-8"))
+        self.assertEqual(sorted(manifest["toolchain"]), ["cargo", "rustc"])
+        new_qt = self.fake_tool("qtpaths6", "6.9.0")
+        self.run_tool("check", "demo", "--require-verified", environment=new_qt)
+        new_rust = self.fake_rustc("2.0.0")
+        stale = self.run_tool("check", "demo", "--require-verified", expect=1, environment=new_rust)
+        self.assertIn("the toolchain changed since the build", stale.stderr)
+
+        # An older manifest that recorded every probe is judged by the
+        # declared ones only.
+        undeclared = self.demo_manifest.read_text(encoding="utf-8").replace(
+            "[toolchain]\n", "[toolchain]\nqt = \"6.0.0\"\n"
+        )
+        self.demo_manifest.write_text(undeclared, encoding="utf-8")
+        self.run_tool("run-build", "demo", environment=new_rust)
+        self.run_tool("run-verification", "demo", environment=new_rust)
+        self.run_tool("check", "demo", "--require-verified", environment=new_qt)
+
+        self.replace_in_registry('toolchains = ["rust"]', 'toolchains = ["bazel"]')
+        refused = self.run_tool("check-inputs", expect=1)
+        self.assertIn("demo: toolchains must be a list drawn from", refused.stderr)
+
+    def test_verification_reads_only_the_projects_slice_of_shared_inputs(self) -> None:
+        # One project's ratchet decrease or registry edit re-verified and
+        # redeployed every project (TOOL-9).
+        self.replace_in_registry('path = "demo"\n', 'path = "demo"\ncommit_roots = ["demo/"]\n')
+        self.replace_in_registry(
+            'path = "library"\n', 'path = "library"\ncommit_roots = ["library/"]\n'
+        )
+        baseline = self.root / "scripts/architecture-baseline.tsv"
+        baseline.write_text(
+            "# debt\nlines\tdemo/src/main.rs\t40\nlines\tlibrary/src/lib.rs\t30\n",
+            encoding="utf-8",
+        )
+        lint = self.root / "scripts/qmllint-baseline.tsv"
+        lint.write_text("# warnings\n4\tdemo\n2\tlibrary\n", encoding="utf-8")
+        self.run_build()
+        self.run_verification()
+
+        baseline.write_text(
+            "# debt\nlines\tdemo/src/main.rs\t40\nlines\tlibrary/src/lib.rs\t29\n",
+            encoding="utf-8",
+        )
+        lint.write_text("# warnings\n4\tdemo\n1\tlibrary\n", encoding="utf-8")
+        self.replace_in_registry(
+            'verification_inputs = ["library/tests/*.txt"]',
+            'verification_inputs = ["library/tests/*.txt", "library/src"]',
+        )
+        self.run_tool("check", "demo", "--require-verified")
+
+        baseline.write_text(
+            "# debt\nlines\tdemo/src/main.rs\t39\nlines\tlibrary/src/lib.rs\t29\n",
+            encoding="utf-8",
+        )
+        stale = self.run_tool("check", "demo", "--require-verified", expect=1)
+        self.assertIn("tests or rules changed", stale.stderr)
+        self.assertIn("changed verification input: scripts/architecture-baseline.tsv", stale.stderr)
+
+    def test_the_shared_qml_module_reads_every_qml_root(self) -> None:
+        # The style guard the shared module's verification runs derives its
+        # QML roots from every project's table, so a new QML root elsewhere
+        # re-verifies the module, and nothing else of another table does.
+        sys.path.insert(0, str(TOOL.parent))
+        import production_artifact
+
+        style = {"id": "library", "kind": "qml-module"}
+        registry = (
+            'schema_version = 1\n[[projects]]\nid = "library"\nkind = "qml-module"\n'
+            '[[projects]]\nid = "demo"\nkind = "cxx-qt-application"\npath = "demo"\n'
+            'source_roots = ["demo/src"]\nnote = "a"\n'
+        )
+        slice_of = lambda text: production_artifact.input_slice(  # noqa: E731
+            "docs/projects.toml", text.encode(), style
+        )
+        other = {"id": "demo", "kind": "cxx-qt-application"}
+        self.assertNotEqual(
+            slice_of(registry), slice_of(registry.replace('["demo/src"]', '["demo/src", "demo/qml"]'))
+        )
+        self.assertEqual(slice_of(registry), slice_of(registry.replace('note = "a"', 'note = "b"')))
+        self.assertEqual(
+            production_artifact.input_slice("docs/projects.toml", registry.encode(), other),
+            production_artifact.input_slice(
+                "docs/projects.toml",
+                registry.replace('id = "library"\nkind = "qml-module"', 'id = "library"\nkind = "qml-module"\nx = 1').encode(),
+                other,
+            ),
+        )
 
     def test_toolchain_change_makes_the_artifact_stale(self) -> None:
         old = self.fake_rustc("1.0.0")

@@ -72,8 +72,12 @@ no inventory `<root>/<plan-slug>/<unit>.numstat.tsv` in the owner's inventory
 root: `docs/inventories` for `suite`, and `<path>/docs/inventories` for a
 project, with `path` from `docs/projects.toml`. An inventory of the same unit
 id anywhere else, such as another project's unit or a tracked fixture, does
-not count. Otherwise it removes those two files and the worktree, then deletes
-the branch. The landing publishes one new sealed commit, so the session's own
+not count. It also refuses while the branch has a commit, not on
+`origin/main`, whose committer time is later than that of the commit that
+added the inventory: the landing never saw it, and deleting the branch would
+lose it. Otherwise it removes those two files and the worktree, then deletes
+the branch. Both entries give up on a fetch that takes longer than
+`CELESTINA_NETWORK_TIMEOUT` seconds (300 by default) instead of hanging. The landing publishes one new sealed commit, so the session's own
 commits never reach `origin/main`; after a landing, the unit's inventory on
 `origin/main` is what lets `close` accept the branch.
 
@@ -92,16 +96,23 @@ refuses to run in a session worktree as well.
 
 A session does, in its worktree: the whole unit (code, tests and documents);
 the dated evidence record under the owner's `docs/evidence/`; the ledger row
-with its intent; and the fast checks (`cargo test`, `cargo clippy`,
-`qmllint-cxxqt.sh`, the guard chain). It commits there as often as it likes;
+with its intent; and the fast checks (`cargo test`, `cargo clippy`, the guard
+chain). It commits there as often as it likes;
 those commits are temporary and never published. A session does not build
 production, deploy, bump a version, set its row to `done` with an inventory
 link, or write an inventory. Those are landing steps.
 
-`qmllint-cxxqt.sh` reads the release QML module under the target directory
-that `cargo metadata --no-deps --format-version 1 --offline` reports from the
-application's root, so in a session worktree it finds the shared target
-directory; when Cargo gives no answer, it reads `<application>/target`.
+A session does not run `qmllint-cxxqt.sh`: it lints against the release QML
+module that only `build-production.sh` generates, which a session never runs,
+so it runs inside the project's `verify-production.sh` at landing. It reads the
+module under the target directory that
+`cargo metadata --no-deps --format-version 1 --offline` reports from the
+application's root, or `<application>/target` when Cargo gives no answer, and
+it takes the application's own module: the URI its `build.rs` declares with
+`QmlModule::new`, generated in a build directory of its own package
+(`<package>-<hash>`), the newest when several are. A module of another
+application in a shared target directory is never used; without its own, the
+lint stops.
 
 For the landing to accept the branch, its diff against `origin/main` must
 change exactly one active plan (a Markdown file other than `README.md` directly
@@ -146,6 +157,7 @@ canonical checkout:
 ```sh
 python3 scripts/land-unit.py unit/siderita/SID-U2-A --kind bug
 python3 scripts/land-unit.py unit/siderita/SID-U2-A --kind bug --summary "Fix picker synchronization"
+python3 scripts/land-unit.py unit/suite/AUD-1-B --kind maintenance --accept-red-ci
 python3 scripts/land-unit.py --continue
 python3 scripts/land-unit.py --abort
 ```
@@ -154,14 +166,17 @@ python3 scripts/land-unit.py --abort
 `<prefix>-<kind>: <summary>`, where the summary is `--summary` or the row's
 `Intended change`. For a versioned kind the same text is the version-history
 summary, so the subject and the history row agree as the version contract
-requires. `--continue` and `--abort` take no branch, `--kind` or `--summary`.
+requires. `--continue` and `--abort` take no branch, `--kind`, `--summary` or
+`--accept-red-ci`.
 The tool prints `land-unit: <step>` as each step starts, and exits 0 when the
 unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
 
 1. **`preflight`.** Stops when the landing worktree already exists, when the
    canonical checkout is not a clean `main` (the message lists the
    `git status --porcelain` lines), when local `main` has commits that are not
-   on `origin/main` after `git fetch origin main`, when the branch does not
+   on `origin/main` after `git fetch origin main`, when the latest GitHub
+   `contracts` run on `main` failed (see [A red main](#a-red-main)) and
+   `--accept-red-ci` was not given, when the branch does not
    exist or has no changes, when the branch does not satisfy the plan and row
    rules of the previous section, when the unit's inventory already exists on
    `origin/main` (the unit already landed), when a changed path lies outside
@@ -218,30 +233,40 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    the guards whose verdict does not depend on the seal, in order:
    `commit_scope.py --check <subject>` with the paths the unit changes on
    stdin, `version_tool.py check`, `check-language-contract.py` and
-   `check-architecture-contract.sh`. The first failure stops the landing with
-   its output.
+   `check-architecture-contract.sh`; then, when the unit changes
+   `docs/projects.toml` or a path under `scripts/`, the fixture tests that read
+   the registry or the guards' own code, `test-architecture-scanners.sh` and
+   `test-version-contract.py`. The first failure stops the landing with its
+   output.
 7. **`build_if_stale`.** The registry is the rebased tip's, so a unit that
    renames an input and registers the new name is read with the new name.
    The affected projects are the owning project first (a `suite` unit has
    none), then, in registry order, every other registered project with a
    production or verification input the unit changed, such as the deployable
-   consumers of a library. A changed path is an input when it is one of the
-   production inputs `production_artifact.py` fingerprints, expanded on the
-   tip, or when it or a directory above it matches a raw production or
-   verification input pattern (`fnmatch`), so a deleted file still counts.
+   consumers of a library. Whether a changed path is an input is decided by
+   `inputs_changed` in `scripts/production_artifact.py`, the one owner of that
+   matching, which `agent-context.py` shares: the path is one of the
+   production inputs the tool fingerprints, expanded on the tip, or a
+   directory above one, or it or a directory above it matches a raw production
+   or verification input pattern (`fnmatch`), so a deleted file still counts.
    The verification inputs are exactly the set whose bytes make the
-   verification fingerprint, which `production_artifact.py`'s
-   `verification_input_patterns` returns: the project's
-   `verification_inputs`, its registered verify, status, activate, complete
-   and deploy entries, `scripts/complete-production.py` for a deployable
-   project, and the shared paths such as `scripts/production_artifact.py`,
-   `scripts/production-common.sh`, `scripts/qmllint-cxxqt.sh`,
-   `docs/projects.toml` and the debt ratchets. A unit that changes a shared
-   path therefore marks every registered project, and each one whose
-   production inputs and artifacts are current takes the verification-only
-   path below, with no build. A project the registry marks `halted` is never
-   affected, not even as the owner: no landing builds, verifies or deploys it
-   (see [Halted projects](../../AGENTS.md#halted-projects)).
+   verification fingerprint, which `verification_input_patterns` returns: the
+   project's `verification_inputs`, its registered verify, status, activate,
+   complete and deploy entries, `scripts/complete-production.py` for a
+   deployable project, and the shared paths such as
+   `scripts/production_artifact.py`, `scripts/production-common.sh` and
+   `scripts/qmllint-cxxqt.sh`. Three shared files count per project, for the
+   fingerprint as for this matching: `docs/projects.toml` through the
+   project's own table and the commit policy, `scripts/architecture-baseline.tsv`
+   through the rows of paths under the project's `commit_roots`, and
+   `scripts/qmllint-baseline.tsv` through the project's row. A unit that edits
+   one project's table or lowers one project's ratchet row therefore affects
+   that project only, while a change to a shared script still marks every
+   registered project, and each one whose production inputs and artifacts are
+   current takes the verification-only path below, with no build. A project the
+   registry marks `halted` is never affected, not even as the owner: no landing
+   builds, verifies or deploys it (see
+   [Halted projects](../../AGENTS.md#halted-projects)).
    A production input the tip's registry names but the tip lacks stops the
    landing at `build_if_stale`, naming the project and the pattern. For each
    affected project, it runs
@@ -249,14 +274,16 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    the artifact is current and verified for these exact inputs, and nothing
    runs. When the check fails only with the verification errors
    (`artifact is not verified yet` or `tests or rules changed`), the
-   production inputs and artifacts are unchanged, so only the verification
-   runs: the registered `verify_script`, then for a deployable project its
-   `deploy_script` and `status_script`, the rest of what its
-   `complete_script` runs. Otherwise a deployable project runs its registered
-   `complete_script`, and a project that is not deployable runs its
-   `build_script`, then its `verify_script`. A non-zero exit stops the
-   landing. A `suite` unit that changes no registered production or
-   verification input runs nothing.
+   production inputs and artifacts are unchanged, so only the registered
+   `verify_script` runs. Otherwise the project runs its `build_script`, then
+   its `verify_script`. Nothing is deployed here: for a deployable project the
+   rest of what its `complete_script` runs, the `deploy_script` and the
+   `status_script`, waits for the push (step 11), so a unit that a later
+   guard, a hook or a lost push race stops is never installed. A non-zero exit
+   stops the landing. After the entries, `check --require-verified` runs again
+   and must pass, so the fingerprints the evidence records are the current
+   ones; otherwise the landing stops at `build_if_stale`. A `suite` unit that
+   changes no registered production or verification input runs nothing.
 8. **`seal`.** On the canonical checkout, the index holds the rebased tip and
    `HEAD` the base. It appends a `## Landing` section to the evidence record,
    closes the ledger row and writes the inventory, then stages the unit.
@@ -268,10 +295,14 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    - **Base revision:** `<base>`
    - **Check:** <per project: the check command, its exit and its first output line>
    - **Build:** <per project that ran: `<project> build:` or `<project> verify:`, each entry with exit 0, then the manifest's source_fingerprint and verification_fingerprint>
+   - **Deploy:** after the push: <per deployable affected project: `<project>:` and the deploy and status entries>
+   - **CI:** GitHub `contracts` had failed on main (<run>); landed with `--accept-red-ci`
    ```
 
-   For example:
-   `app verify: verify-production.sh exit 0, deploy-production.sh exit 0, status-production.sh exit 0, manifest source_fingerprint sha256:<digest>, verification_fingerprint sha256:<digest>`.
+   The `Deploy` line appears when a deployable project is affected, and the
+   `CI` line only for a landing with `--accept-red-ci`. For example:
+   `app verify: verify-production.sh exit 0, manifest source_fingerprint sha256:<digest>, verification_fingerprint sha256:<digest>`
+   and `after the push: app: deploy-production.sh, status-production.sh`.
    The fingerprints identify the inputs and the verification the artifact was
    made from; the manifest's `git_revision` names only the temporary detached
    tip. When nothing ran, the `Build` line reads `artifact current; no build`.
@@ -299,11 +330,13 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
 10. **`commit_and_push`.** One `git commit -m <subject>` through the
     repository hooks; a hook failure stops the landing. Local `main` is
     fast-forwarded to the sealed commit with a compare-and-swap, checked out,
-    and pushed with `git push --set-upstream origin main`. From the
+    and pushed with `git push --set-upstream origin main`; a fetch or push
+    that takes longer than `LAND_UNIT_NETWORK_TIMEOUT` seconds (300 by
+    default) is a failure, not a hang. From the
     fast-forward to the end of the push, any failure or Ctrl-C first returns
     local `main` to where it was. On success the tool
-    prints `land-unit: landed <commit> <subject>` and removes the landing
-    worktree. When the push fails, local `main` returns to where it was and the
+    prints `land-unit: landed <commit> <subject>` and records in its state
+    that the unit is pushed. When the push fails, local `main` returns to where it was and the
     tool fetches. If `origin/main` already is the sealed commit, the unit
     landed. Otherwise the sealed commit is discarded and local `main` is
     fast-forwarded to `origin/main` with `git merge --ff-only`, so a commit
@@ -316,6 +349,17 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
     `unbump` from the branch's unsealed commits, at most three times (four
     pushes in total); if it did not move, or after the third retry, the landing
     stops.
+
+11. **`deploy`.** Only now, with the unit on `origin/main`, each deployable
+    project `build_if_stale` found affected runs its registered
+    `deploy_script`, then its `status_script`, in the order of step 7, whether
+    or not a build ran: an artifact that was already current may never have
+    been installed, as after a lost push race or an abort before the push, and
+    deploying verified bytes again changes nothing. A
+    project leaves the pending list in the state file once both passed. A
+    non-zero exit stops the landing at `deploy`: the unit is on `main`, and
+    `--continue` deploys the projects still pending. When nothing is pending,
+    the tool removes the landing worktree.
 
 The sealed commit is derived, never rebased: every retry recomputes the
 version, the build decision and the inventory against the parent the commit
@@ -468,7 +512,7 @@ worktree, keeping `main`'s side of the dependency's files, then land again.
 A stop prints `land-unit: stopped at <step>: <reason>`, where the reason names
 the file at fault when there is one, and exits 1. The step label is
 `preflight`, `unbump`, `rebase`, `build_if_stale`, `seal`, `guard` (for
-`pre_guards` and `run_guards`), `commit` or `push`.
+`pre_guards` and `run_guards`), `commit`, `push` or `deploy`.
 When the landing worktree exists, the tool adds
 `land-unit: resolve it, then run land-unit.py --continue, or --abort to give up`,
 unless the stop names its own remedy instead. After the seal, a `guard` stop of
@@ -489,7 +533,8 @@ again. From `unbump` on, the tool keeps its state in
 `<parent>/<name>.worktrees/.landing/.land-state.toml`: the step that was
 running, the branch, the kind, the summary, the project, the unit, the retry
 count, and what later steps recorded (base, landing tip, check and build
-results, inventory path, and `main`'s previous and sealed commits).
+results, inventory path, `main`'s previous and sealed commits, the projects
+still to deploy, and whether the push landed the unit).
 `land-unit.py --continue` reads it and resumes at that step. For a rebase
 conflict, the message says to resolve the files in the landing worktree,
 `git add` them, run `git rebase --continue` there, then
@@ -501,15 +546,43 @@ it; after a rejected push that stopped the landing, `--continue` restarts at
 The canonical checkout is detached on the rebased tip from
 `checkout_canonical` until `commit_and_push` moves `main`. A stop there leaves
 it detached on purpose, with `main` untouched, so the author can inspect the
-tree that was about to land. `land-unit.py --abort` moves local `main` back
-to its previous commit while it still is the sealed commit, checks out `main`
-with `--force` (discarding the staged seal), deletes the unit's untracked
-inventory if the seal wrote one, removes the landing worktree with its state
-file, and prints `land-unit: aborted; the canonical checkout is on main`. The
+tree that was about to land. `land-unit.py --abort` before the push moves
+local `main` back to its previous commit while it still is the sealed commit,
+checks out `main` with `--force` (discarding the staged seal), deletes the
+unit's untracked inventory if the seal wrote one, removes the landing worktree
+with its state file, and prints
+`land-unit: aborted; the canonical checkout is on main, and nothing was deployed`:
+deployment waits for the push, so there is nothing to restore. After the push,
+`--abort` leaves `main` as it is, removes the landing worktree, names each
+project still to deploy with the entries to run by hand, and prints
+`land-unit: aborted after the push; main keeps the landed unit`. The
 branch is never changed, so a new landing starts from the same session work.
 
 `LAND_UNIT_GIT`, `LAND_UNIT_CARGO` and `LAND_UNIT_PYTHON` replace the programs
-the tool runs; the tests use them.
+the tool runs; the tests use them. `LAND_UNIT_CI_STATUS` replaces the GitHub API
+URL of the `contracts` status, or skips its read with `off`.
+
+## A red main
+
+A `contracts` run that is red on `main` enforces nothing, and the steps after
+the failing one never ran. `preflight` therefore reads the latest run of
+`.github/workflows/contracts.yml` on `main` through GitHub's public REST API,
+which needs no credentials for a public repository, with a 20 s timeout.
+When that run completed with `failure`, `timed_out` or `startup_failure`, the
+landing stops; the unit that makes `main` green again lands with
+`--accept-red-ci`, and the tool says it did. A remote that is not on GitHub is
+not read, and a status that cannot be read (offline, rate-limited, private)
+is a warning, not a stop.
+
+The landing is not the only way to reach `main`, so the author's own gate is
+GitHub branch protection on `main` requiring the `suite-contracts` check of
+`contracts.yml` to pass. That setting lives on GitHub, outside the repository,
+and only the author can enable it.
+
+The tests land one documentation-only `suite` unit in a clone of the
+repository with the real guards, the real registry and the real hooks
+(`RealGuardLanding` in `scripts/test-land-unit.py`); every other landing test
+replaces them with doubles.
 
 ## What the tool never does
 
@@ -527,7 +600,7 @@ the tool runs; the tests use them.
   with `git commit-tree` and never published; the sealed commit is the only one
   that reaches `main`, and a hook failure fails the landing.
 - Build in a session worktree, deploy without running the project's verify
-  entry first, rebuild a project whose check reports only the verification
-  errors, or run any entry for a project whose artifact
-  `check --require-verified` already accepts.
+  entry first, deploy before the push has put the unit on `main`, rebuild a
+  project whose check reports only the verification errors, or run any entry
+  for a project whose artifact `check --require-verified` already accepts.
 - Bump a product for a `suite` unit, or resolve a prose conflict.

@@ -803,6 +803,19 @@ elif ! grep -Fx 'app/README.md' "$temporary/consumer-directory-context.txt" >/de
     fail "agent-context omitted the consumers of a crate below the target directory"
 fi
 
+# A halted consumer is left out: no agent works on it, so its documents would
+# only send an agent to a project it must not touch.
+sed -i '/^commit_prefix = "app"$/a halted = "2026-09-27"' \
+    "$consumer_case/docs/projects.toml"
+if ! python3 "$context" --root "$consumer_case" core/crates/app-core/src/lib.rs \
+    > "$temporary/halted-consumer-context.txt" 2>&1; then
+    fail "agent-context failed on a crate a halted project consumes"
+elif grep -F 'app/' "$temporary/halted-consumer-context.txt" >/dev/null \
+    || grep -F 'HALTED' "$temporary/halted-consumer-context.txt" >/dev/null \
+    || ! grep -Fx 'core/README.md' "$temporary/halted-consumer-context.txt" >/dev/null; then
+    fail "agent-context listed a halted consumer: $(cat "$temporary/halted-consumer-context.txt")"
+fi
+
 cross_owner_symlink=$temporary/cross-owner-symlink
 cp -R "$valid/." "$cross_owner_symlink/"
 ln -s ../../core/crates/app-core/src/lib.rs \
@@ -1061,6 +1074,63 @@ expect_failure obsolete-target-unregistered 'requires a resolvable decision or e
 expect_failure obsolete-target-index 'requires a resolvable decision or evidence link'
 expect_failure empty-evidence-section 'required section `Procedure` is empty'
 expect_failure missing-script "registered script does not exist"
+
+# An erratum excuses only the errors of the defect class it records (TOOL-14):
+# another error in the same inventory stays an error, an unknown class and a
+# stale entry are errors, and --quiet prints one line per erratum.
+errata_root=$temporary/errata
+mkdir -p "$errata_root/scripts"
+if ! python3 - "$script_dir" "$errata_root" > "$temporary/errata.out" 2>&1 <<'PYTHON'
+import contextlib
+import io
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+import documentation_contract as contract
+
+root = Path(sys.argv[2])
+inventory = "app/docs/inventories/2026-08-03-app/APP-1B.numstat.tsv"
+other = "app/docs/inventories/2026-08-03-app/APP-1C.numstat.tsv"
+(root / contract.ERRATA_FILE).write_text(
+    f"# path<TAB>class: reason\n{inventory}\tunbounded-pathspec: one line\n",
+    encoding="utf-8",
+)
+recorded = [
+    f"{inventory}: line 3: path outside Pathspec for APP-1B: app/src/main.rs",
+    f"{inventory}: inventory for APP-1B contains paths unchanged according to Git: `x`",
+    f"{inventory}: no Pathspec in APP-1B claims any row, so nothing bounds it",
+]
+foreign = f"{inventory}: line 4: stale SHA-256 for app/src/main.rs; inventory a, final state b"
+checker = contract.DocumentationContract(root, quiet=True)
+stderr = io.StringIO()
+with contextlib.redirect_stderr(stderr):
+    remaining = checker.partition_errata([*recorded, foreign])
+assert remaining == [foreign], remaining
+lines = stderr.getvalue().splitlines()
+assert lines == [f"erratum (unbounded-pathspec): {inventory}: 3 recorded error(s) excused"], lines
+
+stderr = io.StringIO()
+with contextlib.redirect_stderr(stderr):
+    remaining = contract.DocumentationContract(root).partition_errata(recorded)
+assert remaining == [], remaining
+assert len(stderr.getvalue().splitlines()) == 3, stderr.getvalue()
+
+remaining = checker.partition_errata([foreign])
+assert any("reports no unbounded-pathspec error" in error for error in remaining), remaining
+
+(root / contract.ERRATA_FILE).write_text(
+    f"{inventory}\tone line\n{other}\tunbounded-pathspec: stale\n", encoding="utf-8"
+)
+with contextlib.redirect_stderr(io.StringIO()):
+    remaining = checker.partition_errata(recorded)
+assert any("must start its reason with a known defect class" in error for error in remaining), remaining
+assert recorded[0] in remaining, remaining
+assert any(f"{other} reports no unbounded-pathspec error" in error for error in remaining), remaining
+PYTHON
+then
+    fail "errata scoping: $(cat "$temporary/errata.out")"
+fi
 
 if [ "$failures" -ne 0 ]; then
     printf '\nDocumentation contract: %s fixture(s) failed.\n' "$failures" >&2

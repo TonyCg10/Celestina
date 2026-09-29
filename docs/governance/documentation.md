@@ -129,4 +129,6 @@ A new registered project includes, in one coherent unit:
 - English repository content and language-contract coverage.
 
 Do not create a second documentation tree when a canonical owner already
-exists.
+exists. The one registered working tree, `docs/superpowers/`, holds session
+plans and specs and never the ledger, evidence or contracts; see
+[the documentation map](../README.md#working-plans-and-specs).

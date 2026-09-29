@@ -21,7 +21,7 @@ from documentation_contract import (
 from production_artifact import (
     ContractError,
     expand_patterns,
-    hashed_by,
+    path_reaches,
     production_input_patterns,
 )
 from project_registry import HaltedProject, halted_projects
@@ -112,15 +112,25 @@ def consumer_projects(
     proves those inputs hold each app's whole Cargo path-package closure, so
     the registry answers without running Cargo here. An input that does not
     exist is that guard's error to report; here it is skipped.
+
+    A halted project is not a consumer: no agent works on it and no landing
+    rebuilds it, so its documents would only send an agent to read about a
+    project it must not touch. It stays listed when it owns the path, with
+    the halt notice.
     """
     targets = [relative.as_posix() for relative in relatives if relative.parts]
     projects = registry.get("projects", [])
     if not isinstance(projects, list):
         errors.append("projects: must be a list of tables in docs/projects.toml")
         return []
+    try:
+        halted = {project.id for project in halted_projects(registry)}
+    except ValueError as error:
+        errors.append(f"docs/projects.toml: {error}")
+        return []
     consumers: list[dict[str, object]] = []
     for project in projects:
-        if not isinstance(project, dict):
+        if not isinstance(project, dict) or project.get("id") in halted:
             continue
         inputs: list[str] = []
         for pattern in production_input_patterns(registry, project):
@@ -128,10 +138,7 @@ def consumer_projects(
                 inputs.extend(logical for _disk, logical in expand_patterns(root, [pattern]))
             except ContractError:
                 continue
-        if any(
-            hashed_by(target, inputs) or any(item.startswith(f"{target}/") for item in inputs)
-            for target in targets
-        ):
+        if any(path_reaches(target, inputs) for target in targets):
             consumers.append(project)
     return consumers
 

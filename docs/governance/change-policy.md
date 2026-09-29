@@ -61,7 +61,11 @@ implementation. An ADR explains a decision but does not grant permission.
   evidence directory. Normal commit paths and prefixes must be authorized by
   both HEAD and INDEX; a staged registry cannot authorize its own expansion.
   Committed Python from HEAD interprets both registry revisions and all staged
-  source/baseline data, so neither INDEX nor worktree rule modules execute.
+  source/baseline data, so neither INDEX nor worktree rule modules execute:
+  every hook extracts `HEAD:scripts` to a temporary directory and runs the
+  guards from there, and the language and documentation contracts read a copy
+  of the index, not the worktree. A guard HEAD lacks runs from the worktree
+  once, in the commit that adds it.
   Delivery layouts are the conservative HEAD/INDEX union and conflicting owner
   or prefix assignments fail. Merge commits cannot change ratchets and their
   staged guarded sources must match the INDEX rows exactly. A semantics-changing
@@ -172,9 +176,10 @@ Before commit:
 - partial staging does not change inventory truth;
 - merges finish before delivery units close.
 
-`.githooks/pre-commit`, `.githooks/commit-msg`,
+`.githooks/pre-commit`, `.githooks/pre-merge-commit`, `.githooks/commit-msg`,
 `scripts/check-staged-units.py`, and `scripts/commit_scope.py` enforce these
-rules locally and in CI where applicable. New normal, revert and fixup subjects
+rules locally and in CI where applicable; `.githooks/committed-rules.sh` and
+`scripts/git_hooks.py` run them with the rules committed in HEAD. New normal, revert and fixup subjects
 must begin their inner action with a recognized English imperative and pass a
 conservative non-English prose detector; this deliberately catches common
 violations but is not full linguistic analysis. Historical replay has a

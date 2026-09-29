@@ -12,6 +12,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
+import functools
 import re
 import tomllib
 
@@ -324,9 +325,16 @@ def _decode(raw: bytes | str, label: str) -> str:
         raise VersionSourceError(f"{label}: source is not UTF-8: {error}") from error
 
 
+@functools.lru_cache(maxsize=64)
+def _cached_toml(text: str) -> dict[str, object]:
+    return tomllib.loads(text)
+
+
 def _parse_toml(text: str, label: str) -> dict[str, object]:
+    """The parsed manifest; the history audit reads the same lockfile bytes
+    for many commits, so one parse serves them all. Callers only read it."""
     try:
-        data = tomllib.loads(text)
+        data = _cached_toml(text)
     except tomllib.TOMLDecodeError as error:
         raise VersionSourceError(f"{label}: invalid TOML: {error}") from error
     if not isinstance(data, dict):

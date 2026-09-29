@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import re
 import subprocess
 import sys
@@ -13,6 +14,9 @@ import types
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from repo_git import GitError
+import repo_git
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -228,25 +232,22 @@ def load_scopes(
     return scopes, namespace, data
 
 
+def git_run(root: Path, *args: str):
+    try:
+        return repo_git.run(root, *args)
+    except GitError as error:
+        fail(str(error))
+
+
 def git_output(root: Path, *args: str, check: bool = True) -> bytes:
-    process = subprocess.run(
-        ["git", "-C", str(root), *args],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
+    process = git_run(root, *args)
     if check and process.returncode != 0:
         fail(f"could not run git {' '.join(args)}")
     return process.stdout
 
 
 def is_merge(root: Path) -> bool:
-    return subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "-q", "--verify", "MERGE_HEAD"],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    ).returncode == 0
+    return git_run(root, "rev-parse", "-q", "--verify", "MERGE_HEAD").returncode == 0
 
 
 def staged_paths(root: Path) -> list[str]:
@@ -265,12 +266,7 @@ def stdin_paths() -> list[str]:
 
 def git_blob(root: Path, revision: str, path: str) -> bytes | None:
     spec = f":{path}" if revision == "INDEX" else f"{revision}:{path}"
-    process = subprocess.run(
-        ["git", "-C", str(root), "show", spec],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
+    process = git_run(root, "show", spec)
     return process.stdout if process.returncode == 0 else None
 
 
@@ -339,49 +335,50 @@ def parse_architecture_ratchet(raw: bytes, source: str) -> dict[tuple[str, str],
     return result
 
 
-def parse_language_ratchet(raw: bytes, source: str) -> dict[str, int]:
-    result: dict[str, int] = {}
+def parse_language_ratchet(
+    raw: bytes, source: str, language_namespace: dict[str, object]
+) -> dict[str, int]:
+    """The language ratchet, read by the parser HEAD's language contract uses."""
     try:
-        lines = raw.decode("utf-8").splitlines()
+        text = raw.decode("utf-8")
     except UnicodeDecodeError as error:
         fail(f"{source}: language ratchet is not UTF-8: {error}")
-    for number, line in enumerate(lines, 1):
-        if not line or line.startswith("#"):
-            continue
-        fields = line.split("\t")
-        if len(fields) != 2 or not fields[0].isdigit() or int(fields[0]) <= 0:
-            fail(f"{source}:{number}: invalid language ratchet row")
-        if fields[1] in result:
-            fail(f"{source}:{number}: duplicate language ratchet row")
-        result[fields[1]] = int(fields[0])
-    return result
+    parser = language_namespace.get("parse_baseline")
+    if not callable(parser):
+        fail(f"{LANGUAGE_SCANNER} does not expose parse_baseline")
+    try:
+        return call_dynamic_rule(
+            f"HEAD:{LANGUAGE_SCANNER} parse_baseline", parser, text, source
+        )
+    except ValueError as error:
+        fail(str(error))
 
 
 def index_mode(root: Path, path: str) -> str | None:
-    process = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "--stage", "--", path],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-    if process.returncode != 0 or not process.stdout.strip():
+    process = git_run(root, "ls-files", "--stage", "--", path)
+    output = repo_git.decode(process.stdout)
+    if process.returncode != 0 or not output.strip():
         return None
-    return process.stdout.split(maxsplit=1)[0]
+    return output.split(maxsplit=1)[0]
 
 
 def changed_keys(before: dict[object, int], after: dict[object, int]) -> set[object]:
     return {key for key in set(before) | set(after) if before.get(key) != after.get(key)}
 
 
-def has_staged_architecture_resolution(
+def has_staged_field(
     root: Path,
-    source: str,
+    marker: str,
     prefix: str,
     staged: set[str],
     registry: dict[str, Any],
     architecture_namespace: dict[str, object],
 ) -> bool:
+    """Whether a staged evidence record in the prefix's canonical root holds `marker`.
+
+    `marker` is a whole line of the record, such as the architecture or the
+    language resolution field.
+    """
     evidence_root_for_prefix = architecture_namespace.get(
         "canonical_evidence_root_for_prefix"
     )
@@ -400,7 +397,6 @@ def has_staged_architecture_resolution(
     if evidence_root is None:
         return False
 
-    marker = ARCHITECTURE_RESOLUTION_FIELD.format(source)
     for path in sorted(staged):
         if not call_dynamic_rule(
             f"HEAD:{ARCHITECTURE_SCANNER} is_canonical_evidence_path",
@@ -438,48 +434,14 @@ def has_staged_language_migration(
     evidence has to say so in the exact declared field, so the reduction is
     something somebody wrote down rather than something that merely happened.
     """
-    if LANGUAGE_SCANNER not in staged:
-        return False
-
-    evidence_root_for_prefix = architecture_namespace.get(
-        "canonical_evidence_root_for_prefix"
+    return LANGUAGE_SCANNER in staged and has_staged_field(
+        root,
+        LANGUAGE_MIGRATION_FIELD.format(LANGUAGE_SCANNER),
+        prefix,
+        staged,
+        registry,
+        architecture_namespace,
     )
-    is_evidence_path = architecture_namespace.get("is_canonical_evidence_path")
-    if not callable(evidence_root_for_prefix) or not callable(is_evidence_path):
-        fail(f"{ARCHITECTURE_SCANNER} does not expose canonical evidence rules")
-    try:
-        evidence_root = call_dynamic_rule(
-            f"HEAD:{ARCHITECTURE_SCANNER} canonical_evidence_root_for_prefix",
-            evidence_root_for_prefix,
-            registry,
-            prefix,
-        )
-    except (TypeError, ValueError, RuntimeError) as error:
-        fail(f"{REGISTRY}: could not resolve evidence ownership: {error}")
-    if evidence_root is None:
-        return False
-
-    marker = LANGUAGE_MIGRATION_FIELD.format(LANGUAGE_SCANNER)
-    for path in sorted(staged):
-        if not call_dynamic_rule(
-            f"HEAD:{ARCHITECTURE_SCANNER} is_canonical_evidence_path",
-            is_evidence_path,
-            path,
-            (evidence_root,),
-        ):
-            continue
-        if index_mode(root, path) not in {"100644", "100755"}:
-            continue
-        raw = git_blob(root, "INDEX", path)
-        if raw is None:
-            continue
-        try:
-            lines = raw.decode("utf-8").splitlines()
-        except UnicodeDecodeError:
-            continue
-        if marker in (line.strip() for line in lines):
-            return True
-    return False
 
 
 def architecture_value(
@@ -530,9 +492,14 @@ def language_value(
     # be measured exactly as the repository scan measures it. Dropping it here
     # counted every `qsTr()` string as debt and disagreed with the guard the
     # same commit had just run.
+    # The path decides whether an exemption marker counts at all (TOOL-11). A
+    # HEAD scanner from before that rule takes no path and ignores it.
+    options: dict[str, str] = {"suffix": PurePosixPath(source).suffix.lower()}
+    if "path" in inspect.signature(scanner).parameters:
+        options["path"] = source
     return call_dynamic_rule(
         f"HEAD:{LANGUAGE_SCANNER} suspicious_lines",
-        lambda value: len(scanner(value, suffix=PurePosixPath(source).suffix.lower())),
+        lambda value: len(scanner(value, **options)),
         text,
     )
 
@@ -554,9 +521,9 @@ def validate_architecture_index(
         raw = git_blob(root, "INDEX", source)
         expected = after.get(key)
         if expected is None and key in before and kind == "lines":
-            if not has_staged_architecture_resolution(
+            if not has_staged_field(
                 root,
-                source,
+                ARCHITECTURE_RESOLUTION_FIELD.format(source),
                 prefix,
                 staged,
                 registry,
@@ -749,8 +716,12 @@ def validate_ratchet_updates(
     elif old_raw is None or new_raw is None:
         fail(f"{LANGUAGE_RATCHET}: shared ratchet file cannot be added or deleted")
     else:
-        language_before = parse_language_ratchet(old_raw, f"HEAD:{LANGUAGE_RATCHET}")
-        language_after = parse_language_ratchet(new_raw, f"INDEX:{LANGUAGE_RATCHET}")
+        language_before = parse_language_ratchet(
+            old_raw, f"HEAD:{LANGUAGE_RATCHET}", language_namespace
+        )
+        language_after = parse_language_ratchet(
+            new_raw, f"INDEX:{LANGUAGE_RATCHET}", language_namespace
+        )
     if LANGUAGE_RATCHET in staged:
         validate_rows(
             LANGUAGE_RATCHET,
@@ -1225,7 +1196,9 @@ def validate_merge(root: Path, paths: list[str]) -> None:
     architecture = parse_architecture_ratchet(
         architecture_raw, f"INDEX:{ARCHITECTURE_RATCHET}"
     )
-    language = parse_language_ratchet(language_raw, f"INDEX:{LANGUAGE_RATCHET}")
+    language = parse_language_ratchet(
+        language_raw, f"INDEX:{LANGUAGE_RATCHET}", language_namespace
+    )
 
     suite = registry.get("suite")
     if not isinstance(suite, dict) or not isinstance(suite.get("commit_prefix"), str):

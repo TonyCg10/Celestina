@@ -185,6 +185,20 @@ git -C "$lander" commit -qm "fixture: the sealed commit of APP-1"
 git -C "$lander" push -q origin HEAD:main
 [ -n "$(git -C "$repo" rev-list origin/main..unit/app/APP-1)" ] \
     || fail "close app APP-1 after the landing: the fixture branch is already on origin/main"
+# A commit made on the branch after the landing never reached main, so close
+# keeps the branch (TOOL-19).
+landing_time=$(git -C "$lander" log -1 --format=%ct)
+printf 'late change\n' > "$unit_dir/late.txt"
+git -C "$unit_dir" add late.txt
+GIT_COMMITTER_DATE="@$((landing_time + 60)) +0000" \
+    git -C "$unit_dir" commit -qm "fixture: unit work after the landing"
+run_entry close app APP-1
+expect_status 1 "close app APP-1 with a commit after the landing"
+expect_stderr "has commits made after its landing" \
+    "close app APP-1 with a commit after the landing"
+[ -d "$unit_dir" ] || fail "close app APP-1: removed a branch with work after the landing"
+git -C "$unit_dir" reset -q --hard HEAD~1
+printf 'ok %s\n' "close refuses a branch with commits made after its landing"
 run_entry close app APP-1
 expect_status 0 "close app APP-1 after the landing"
 [ ! -e "$unit_dir" ] || fail "close app APP-1 after the landing: the worktree still exists"

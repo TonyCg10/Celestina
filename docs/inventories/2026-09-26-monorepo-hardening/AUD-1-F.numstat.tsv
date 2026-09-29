@@ -1,0 +1,103 @@
+# AUD-1-F exact change inventory
+
+Base revision	a64dc43d69107e0ec8ef01d031b79a7725928bc6
+Pathspec	.githooks/commit-msg
+Pathspec	.githooks/committed-rules.sh
+Pathspec	.githooks/pre-commit
+Pathspec	.githooks/pre-merge-commit
+Pathspec	.github/workflows/README.md
+Pathspec	.github/workflows/contracts.yml
+Pathspec	AGENTS.md
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/README.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/contracts/versioning.md
+Pathspec	docs/evidence/2026-09-26-tooling-integrity.md
+Pathspec	docs/governance/change-policy.md
+Pathspec	docs/governance/documentation.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-F.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/projects.toml
+Pathspec	docs/standards/language.md
+Pathspec	docs/superpowers/specs/2026-09-22-siderita-bottom-chrome-design.md
+Pathspec	scripts/agent-context.py
+Pathspec	scripts/audit-version-commits.py
+Pathspec	scripts/check-language-contract.py
+Pathspec	scripts/check-staged-units.py
+Pathspec	scripts/commit_scope.py
+Pathspec	scripts/complete-production.py
+Pathspec	scripts/documentation-errata.tsv
+Pathspec	scripts/documentation_contract.py
+Pathspec	scripts/fixtures/hooks/repository.sh
+Pathspec	scripts/git_hooks.py
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/production_artifact.py
+Pathspec	scripts/project_registry.py
+Pathspec	scripts/qmllint-cxxqt.sh
+Pathspec	scripts/repo_git.py
+Pathspec	scripts/test-commit-scope.sh
+Pathspec	scripts/test-documentation-contract.sh
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-language-contract.py
+Pathspec	scripts/test-production-artifacts.py
+Pathspec	scripts/test-qmllint-target.sh
+Pathspec	scripts/test-staged-units.sh
+Pathspec	scripts/test-worktree.sh
+Pathspec	scripts/version_contract.py
+Pathspec	scripts/worktree.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+10	3	386c64f6760932813f96f4c55145cbb9842de279500471e5829f431645ea6e38	.githooks/commit-msg
+32	0	719d089419ca25576e4467ad6405efb25fc2b36a87b9e72ad59fe251d8f4656d	.githooks/committed-rules.sh
+3	10	c72c95740030e03dbb9519bf58a4a8d1cbe4373018e3764ab4e9e33b7806cd53	.githooks/pre-commit
+8	0	19355599380e4b8ffe5aba4386d3afebc8a8c238aae9a94d9d1e6c2234cec735	.githooks/pre-merge-commit
+7	3	3c56d2788ab5b515bd08c602affe9ef2003646637b77898ed0cf1eb42c274b03	.github/workflows/README.md
+7	1	d550cb6c18f114456436f10785584062e4c3ccca6af277040c0ec1d81197ea79	.github/workflows/contracts.yml
+8	4	334cb52a0bf8b8e8186df251d5e0448b734df572687e5283426fa1392a54b33c	AGENTS.md
+3	1	f0f373785d3fef905832ff5ed31e45e8443997123fd276213b6f6ea4c0f98cd2	README.md
+6	1	096a44041fe56a82c9ffd1fad5d6d8935be1d316678cdda64e3ee304d4dc4977	ROADMAP.md
+11	9	48bf662d033b95de5cd8924ebd3989a5eb3c433f24d281c63932fc02c4f65e9c	STATUS.md
+18	0	a385ec033f20bda7797151cb18c635f8a6fdd9cf39d475cf5721beda2d94d306	docs/README.md
+125	52	9e09d53954f817c5b92e1b1339c4495d90be3675cb4df5144778e90213585d8f	docs/contracts/landing.md
+17	2	64dd2607c75e5e0903127c0b83fd7146f728dc4b3790da87f04805573e039125	docs/contracts/production-artifacts.md
+27	20	7924a6366f22811928e3b0914aa6ad6538f4f631fcc9c245e3167e9c39f7317f	docs/contracts/versioning.md
+186	0	939595135b3c50275201c6f197c46deb9687055c0ce41423547e443d8bce9a1e	docs/evidence/2026-09-26-tooling-integrity.md
+8	3	2e4b8529e8b5b5279a762f49724d9366638e96502fea36a975fd829ea90fa867	docs/governance/change-policy.md
+3	1	21df874fbdd5f89d1f648b0e8bcfae8c861c1bdece4d0ccee2354c2782114c49	docs/governance/documentation.md
+103	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-F.numstat.tsv
+1	1	31d94e13dbebc1d7de22411f67b2ee3d7912e4d616f73e61dd433ae8c1c473b8	docs/plans/active/2026-09-26-monorepo-hardening.md
+13	0	5db08255870dad41f298ea48634e876fb8099baf285f644150651ebec2c050c6	docs/projects.toml
+10	3	fd408415e6e570f69d43f91275972ecee50cce31dd82903a9d3de10313f49ee1	docs/standards/language.md
+1	1	2b53c92b1ae694fbe670fd17bf97bf1e27d864bfa7c13fe1e096b2e0046b5f6e	docs/superpowers/specs/2026-09-22-siderita-bottom-chrome-design.md
+13	6	d98eb87f91ef11033b89060a43b5a0438a30408fa0a03650550b0ff336930bd2	scripts/agent-context.py
+157	110	a7fa295c58119ea3e376db744a1a4517d9550106b9272670ee1e8a77a8f62ed1	scripts/audit-version-commits.py
+106	41	20be4081fdf8a6af47088fa9365a2c873f2ce73e48a4b6c3d03e2fed907ebfc3	scripts/check-language-contract.py
+13	19	6de9f4e01192dda069462de96cb0ccbe9d2c081a80f626725dab9a62b99b0a41	scripts/check-staged-units.py
+63	90	6a95e6012b19eb0259ca7dd15b19017f028536f347aa118980508dc32d6eb29d	scripts/commit_scope.py
+6	3	4f7f48e32cd7d7bf790afd9491a75f64e1827558006545dfff1e5b8d13a8abfa	scripts/complete-production.py
+8	4	3f655e2b70722c3dbb826363da1d339a630224059d7b6e9eff37980d880a2894	scripts/documentation-errata.tsv
+268	107	e231cabe0847a3023c6d3dc0b6ba27add077b8ac91c59049880c607ea9aa656d	scripts/documentation_contract.py
+47	0	04983f03fd464a2840a3334a204b2fecdece2d651e809487e210ab33940f0e37	scripts/fixtures/hooks/repository.sh
+201	0	d517cc6cf103d5c66090c70006b98e16410bc9e3ec13a5e18fb88d283e6b8dab	scripts/git_hooks.py
+319	53	95c8dab74599bf04c2c49c056abc0a3dee23a6a1c3d463a6d2dc39493dea002b	scripts/land-unit.py
+63	59	f3b5973789a8381c592445746483367fcc62ed7c34285edea5a543c21976d78e	scripts/landing.py
+256	43	d0e5ae116a4fe33db45d4a8f1ded31165fe0e1482544beb17a0e3627ad2fd0d0	scripts/production_artifact.py
+44	1	cc16203909facec19ce8623f542e13b3b669910ad7782d77683e0b04030f3271	scripts/project_registry.py
+41	15	c9333cc64d0a2150fd1e9de37c67c9379f4f770a0a7be4185b087573ce58cba8	scripts/qmllint-cxxqt.sh
+150	0	be116fed8571f1a113a5ad4ffbb68fb5c66c5ed4b299937e017e0eee7e154ba2	scripts/repo_git.py
+26	0	165fab61c0e67165712aac32ccff6fa9b8ebb3b109b845b0fd7fed153085de43	scripts/test-commit-scope.sh
+70	0	53ae03167b25cbf3022e23a22efe7436ab9f920e2ed6b1157abf0068ffaf7ad7	scripts/test-documentation-contract.sh
+580	26	d0bc49a9b8d175f1e4734123160b6d262a025d176f6ae8978e99d4f5411cd74e	scripts/test-land-unit.py
+104	0	8fe84c44b815216dc9874f9a0ad28ac7067145b3657ce4a1dfc6fd3dc55195ba	scripts/test-language-contract.py
+116	1	acc4ead99af41ace4b8548ba6d4ca730a81e5dbe71e8501773a8b1edd742a59c	scripts/test-production-artifacts.py
+56	11	642c6a9f1d9275c95f7ee941cd23bce2053dbbe33a6e2119731fab8d871a73c9	scripts/test-qmllint-target.sh
+97	0	8001347cc84d16ae900b36995c1d5051be1bb9c25330568d0e286dfb0fe22f47	scripts/test-staged-units.sh
+14	0	d6aa95972ca1f7a87bfc29fb71235c1a6204dacb0a7e28c8aee8bd947bcb7162	scripts/test-worktree.sh
+9	1	e47fd41f0c7231b5dd363d70c949adaa0d8d9d07303df8f1ee3583c24354c364	scripts/version_contract.py
+48	12	7e24df9088cea2a4cbfc382e52cbe06b69961fa9a63c25285aca980dfb03a4d0	scripts/worktree.sh

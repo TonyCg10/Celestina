@@ -35,15 +35,22 @@ Non-English text is permitted only when its purpose requires it:
 - explicit localization resources under `i18n/`, `l10n/`, `locale/`, or
   `translations/`;
 - locale-qualified desktop entries such as `Name[es]=...`;
-- fixtures that test Unicode, locale, encoding, or international input and carry
-  `language-contract: allow-non-english` near the top;
+- fixtures and detectors that test Unicode, locale, encoding, or international
+  input and carry `language-contract: allow-non-english` near the top; the
+  marker counts only in code, never in a Markdown or text document;
+- product copy a Markdown record outside the canonical paths cites as a
+  string literal inside a closed fenced code block, or inside an inline code
+  span that does not cross a blank line, such as the notice text an evidence
+  record quotes; the prose around it, a `qsTr()` call in prose and the text
+  after a fence that never closes are scanned;
 - immutable historical records created before this standard, until a dedicated
   translation preserves their meaning and references.
 
 The `product-copy` marker exempts string literals and nothing else: comments,
 identifiers and diagnostics in a marked file stay English. Marking a file is a
 claim that its literals are user-visible, and it may not be used to park
-development prose.
+development prose. The guard honours it only in Rust and C++ sources, and
+neither marker in a canonical path; a marker anywhere else changes nothing.
 
 Do not use an exception to write operational instructions, comments, or
 diagnostics in another language. A localization resource contains translated

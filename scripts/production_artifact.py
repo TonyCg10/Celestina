@@ -11,7 +11,9 @@ another binary.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 import datetime as dt
+import fnmatch
 import glob
 import hashlib
 import json
@@ -26,6 +28,9 @@ import tomllib
 from typing import Any, Iterable
 
 from cargo_closure import CargoClosure, CargoGraphError, CargoMetadata, path_closure
+from project_registry import load_registry as read_registry_file
+from repo_git import GitError
+import repo_git
 
 
 SCHEMA_VERSION = 1
@@ -92,52 +97,77 @@ def run_text(command: list[str], cwd: Path) -> str:
 
 
 def git_state(root: Path) -> tuple[str, bool]:
-    revision = run_text(["git", "rev-parse", "HEAD"], root)
     try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=normal"],
-            cwd=root,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
+        head = repo_git.run(root, "rev-parse", "HEAD", timeout=PROBE_TIMEOUT_SECONDS)
+        status = repo_git.run(
+            root, "status", "--porcelain", "--untracked-files=normal",
+            timeout=PROBE_TIMEOUT_SECONDS,
         )
-    except (OSError, subprocess.CalledProcessError):
-        return revision, True
-    return revision, bool(result.stdout)
+    except GitError:
+        return "unavailable", True
+    revision = repo_git.decode(head.stdout).strip() if head.returncode == 0 else "unavailable"
+    return revision, status.returncode != 0 or bool(status.stdout)
 
 
 RUST_PROBES = {
     "cargo": ["cargo", "--version"],
     "rustc": ["rustc", "--version"],
 }
+# The toolchains a project's build may declare in `toolchains`, and the probe
+# each one records; `rust` records the RUST_PROBES per build directory.
+TOOLCHAIN_PROBES: dict[str, list[str] | None] = {
+    "rust": None,
+    "cmake": ["cmake", "--version"],
+    "cxx": ["c++", "--version"],
+    "qt": ["qtpaths6", "--qt-version"],
+    "jdk": ["java", "-version"],
+}
+
+
+def declared_toolchains(project: dict[str, Any]) -> tuple[str, ...]:
+    """The toolchains the project's build uses, as the registry declares them.
+
+    A project that declares none is probed for every toolchain, which stales
+    its artifact on any upgrade; declaring the list is what keeps a Qt or
+    CMake upgrade from staling a pure-Rust library or an APK.
+    """
+    declared = project.get("toolchains")
+    if declared is None:
+        return tuple(name for name in TOOLCHAIN_PROBES if name != "jdk")
+    if not isinstance(declared, list) or not all(
+        isinstance(name, str) and name in TOOLCHAIN_PROBES for name in declared
+    ):
+        known = ", ".join(TOOLCHAIN_PROBES)
+        raise ContractError(f"{project['id']}: toolchains must be a list drawn from {known}")
+    return tuple(dict.fromkeys(declared))
 
 
 def toolchain(root: Path, project: dict[str, Any]) -> dict[str, str]:
     """The versions of the tools the project's build runs.
 
-    rustup chooses the compiler by the directory Cargo runs in, walking up to
-    the nearest toolchain file, so the Rust probes run in the directory of
-    each declared Cargo manifest: Magnetita's app on the default toolchain in
-    `magnetita/`, its daemon on the one `celestina-rs/` pins. One directory
-    records `cargo` and `rustc`; several record `cargo@<dir>` and
-    `rustc@<dir>` for each. The C++ compiler, CMake and Qt do not depend on
-    the directory and are probed once.
+    Only the toolchains the project declares are probed. rustup chooses the
+    compiler by the directory Cargo runs in, walking up to the nearest
+    toolchain file, so the Rust probes run in the directory of each declared
+    Cargo manifest: Magnetita's app on the default toolchain in `magnetita/`,
+    its daemon on the one `celestina-rs/` pins. One directory records `cargo`
+    and `rustc`; several record `cargo@<dir>` and `rustc@<dir>` for each. The
+    other toolchains do not depend on the directory and are probed once.
     """
     directories = rust_probe_directories(root, project)
     probes: dict[str, str] = {}
-    for directory in directories:
-        suffix = ""
-        if len(directories) > 1:
-            suffix = f"@{directory.relative_to(root).as_posix() or '.'}"
-        for name, command in RUST_PROBES.items():
-            probes[f"{name}{suffix}"] = run_text(command, directory)
-    for name, command in (
-        ("cmake", ["cmake", "--version"]),
-        ("cxx", [os.environ.get("CXX", "c++"), "--version"]),
-        ("qt", ["qtpaths6", "--qt-version"]),
-    ):
-        probes[name] = run_text(command, directories[0])
+    for name in declared_toolchains(project):
+        command = TOOLCHAIN_PROBES[name]
+        if command is None:
+            for directory in directories:
+                suffix = ""
+                if len(directories) > 1:
+                    suffix = f"@{directory.relative_to(root).as_posix() or '.'}"
+                for probe, rust_command in RUST_PROBES.items():
+                    probes[f"{probe}{suffix}"] = run_text(rust_command, directory)
+        elif name == "cxx":
+            probes[name] = run_text([os.environ.get("CXX", "c++"), "--version"], directories[0])
+        else:
+            probes[name] = run_text(command, directories[0])
     return probes
 
 
@@ -169,8 +199,10 @@ def rust_probe_directories(root: Path, project: dict[str, Any]) -> list[Path]:
 def load_registry(registry_path: Path) -> tuple[Path, dict[str, Any], dict[str, Any]]:
     registry_path = registry_path.resolve()
     try:
-        data = tomllib.loads(registry_path.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as error:
+        # One reader for the registry's shape, which refuses a duplicate id
+        # instead of keeping the last table that carries it (TOOL-18).
+        data = read_registry_file(registry_path)
+    except ValueError as error:
         raise ContractError(f"cannot read registry {registry_path}: {error}") from error
 
     root = registry_path.parent.parent
@@ -304,6 +336,7 @@ def digest_paths(
     paths: Iterable[str],
     *,
     contract_data: dict[str, Any],
+    project: dict[str, Any] | None = None,
 ) -> str:
     hasher = hashlib.sha256()
     hash_bytes(hasher, "fingerprint-schema", str(FINGERPRINT_SCHEMA).encode("ascii"))
@@ -313,8 +346,108 @@ def digest_paths(
         json.dumps(contract_data, sort_keys=True, separators=(",", ":")).encode("utf-8"),
     )
     for disk_path, logical in expand_patterns(root, paths):
-        feed_path(hasher, disk_path, logical, ignore_build_outputs=True)
+        feed_input(hasher, disk_path, logical, project)
     return f"sha256:{hasher.hexdigest()}"
+
+
+# Shared verification inputs each project reads only in part. Its fingerprint
+# hashes its own slice, so a unit that lowers another project's ratchet row or
+# edits another project's registry table does not re-verify and redeploy
+# every project (TOOL-9).
+REGISTRY_INPUT = "docs/projects.toml"
+ARCHITECTURE_BASELINE = "scripts/architecture-baseline.tsv"
+QMLLINT_BASELINE = "scripts/qmllint-baseline.tsv"
+SCOPED_VERIFICATION_INPUTS = (REGISTRY_INPUT, ARCHITECTURE_BASELINE, QMLLINT_BASELINE)
+# The shared QML module's verification runs the style guard over every QML
+# root the registry declares, so its registry slice also holds each project's
+# `id`, `kind`, `path` and `source_roots`: the fields that guard derives the
+# roots from (architecture_scanners.registry_qml_projects).
+QML_ROOT_READER_KINDS = frozenset({"qml-module"})
+QML_ROOT_FIELDS = ("id", "kind", "path", "source_roots")
+
+
+def owned_by(path: str, project: dict[str, Any]) -> bool:
+    roots = project.get("commit_roots", [])
+    if not isinstance(roots, list):
+        return False
+    return any(
+        isinstance(root, str) and root and (path == root.rstrip("/") or path.startswith(
+            root if root.endswith("/") else f"{root}/"
+        ))
+        for root in roots
+    )
+
+
+def input_slice(logical: str, raw: bytes, project: dict[str, Any]) -> bytes:
+    """The part of a scoped shared input that `project`'s verification reads.
+
+    The registry contributes the project's own table and the commit policy
+    that names the ratchets, and for the shared QML module the QML-root fields
+    of every project; the architecture baseline the rows of paths the
+    project owns (its `commit_roots`); the qmllint baseline the project's row.
+    Bytes that cannot be read as that format count whole, so no change hides.
+    """
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw
+    project_id = project.get("id")
+    if logical == REGISTRY_INPUT:
+        try:
+            registry = tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            return raw
+        tables = [
+            table
+            for table in registry.get("projects", [])
+            if isinstance(table, dict) and table.get("id") == project_id
+        ]
+        scoped: dict[str, Any] = {
+            "project": tables,
+            "commit_policy": registry.get("commit_policy"),
+        }
+        if project.get("kind") in QML_ROOT_READER_KINDS:
+            scoped["qml_roots"] = [
+                {field: table.get(field) for field in QML_ROOT_FIELDS}
+                for table in registry.get("projects", [])
+                if isinstance(table, dict)
+            ]
+        return json.dumps(scoped, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    rows = [line for line in text.splitlines() if line and not line.startswith("#")]
+    if logical == ARCHITECTURE_BASELINE:
+        kept = []
+        for row in rows:
+            cells = row.split("\t")
+            if len(cells) != 3:
+                return raw
+            source = cells[1].rsplit(":", 1)[0] if cells[0] == "control" else cells[1]
+            if owned_by(source, project):
+                kept.append(row)
+        return "\n".join(kept).encode("utf-8")
+    if logical == QMLLINT_BASELINE:
+        kept = []
+        for row in rows:
+            cells = row.split("\t")
+            if len(cells) != 2:
+                return raw
+            if cells[1] == project_id:
+                kept.append(row)
+        return "\n".join(kept).encode("utf-8")
+    return raw
+
+
+def feed_input(
+    hasher: Any, disk_path: Path, logical: str, project: dict[str, Any] | None
+) -> None:
+    """Hash one expanded input: a scoped shared file by its slice, others whole."""
+    if project is not None and logical in SCOPED_VERIFICATION_INPUTS and disk_path.is_file():
+        try:
+            raw = disk_path.read_bytes()
+        except OSError as error:
+            raise ContractError(f"cannot read {logical}: {error}") from error
+        hash_bytes(hasher, f"slice:{logical}", input_slice(logical, raw, project))
+        return
+    feed_path(hasher, disk_path, logical, ignore_build_outputs=True)
 
 
 def declared_production_inputs(project: dict[str, Any]) -> list[str]:
@@ -432,20 +565,24 @@ def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
         ),
         "activate_script": registered_script(project, "activate_script", required=False),
         "inputs": inputs,
+        "scoped": list(SCOPED_VERIFICATION_INPUTS),
     }
-    return digest_paths(root, inputs, contract_data=contract)
+    return digest_paths(root, inputs, contract_data=contract, project=project)
 
 
-def input_digests(root: Path, patterns: Iterable[str]) -> dict[str, str]:
+def input_digests(
+    root: Path, patterns: Iterable[str], project: dict[str, Any] | None = None
+) -> dict[str, str]:
     """One digest per expanded input path, so a failed check can name what changed.
 
     The fingerprints above stay the identity of an artifact; these digests are
-    only the explanation recorded next to them.
+    only the explanation recorded next to them. With `project`, a scoped
+    shared input is digested by its slice, as the verification fingerprint is.
     """
     digests = {}
     for disk_path, logical in expand_patterns(root, patterns):
         hasher = hashlib.sha256()
-        feed_path(hasher, disk_path, logical, ignore_build_outputs=True)
+        feed_input(hasher, disk_path, logical, project)
         digests[logical] = f"sha256:{hasher.hexdigest()}"
     return digests
 
@@ -476,12 +613,18 @@ def changed_inputs(recorded: object, current: dict[str, str], label: str) -> lis
 
 
 def changed_toolchain(recorded: object, current: dict[str, str]) -> list[str]:
+    """The declared probes whose value differs from the manifest's.
+
+    A probe the manifest records but the project no longer declares, such as
+    the Qt version an older runner recorded for a pure-Rust library, is not
+    compared: the build does not use that toolchain.
+    """
     if not isinstance(recorded, dict):
         return ["the manifest records no toolchain"]
     return [
-        f"toolchain {name}: {recorded.get(name, 'absent')!r} -> {current.get(name, 'absent')!r}"
-        for name in sorted(set(recorded) | set(current))
-        if recorded.get(name) != current.get(name)
+        f"toolchain {name}: {recorded.get(name, 'absent')!r} -> {current[name]!r}"
+        for name in sorted(current)
+        if recorded.get(name) != current[name]
     ]
 
 
@@ -647,7 +790,7 @@ def validate_manifest(
             details.extend(
                 changed_inputs(
                     manifest.get("verification_input_digests"),
-                    input_digests(root, verification_input_patterns(root, project)),
+                    input_digests(root, verification_input_patterns(root, project), project),
                     "verification",
                 )
             )
@@ -670,6 +813,73 @@ def hashed_by(path: str, inputs: Iterable[str]) -> bool:
             below = path[len(item) + 1 :].split("/")
             if not any(part in IGNORED_DIRECTORY_NAMES for part in below):
                 return True
+    return False
+
+
+def path_reaches(path: str, inputs: Iterable[str]) -> bool:
+    """Whether a change at `path` changes what the fingerprint over `inputs` reads.
+
+    `inputs` are expanded input paths. A path reaches them when the walk
+    hashes it (`hashed_by`) or when it is a directory above one of them.
+    This is the one matcher the landing and agent-context.py use.
+    """
+    inputs = list(inputs)
+    return hashed_by(path, inputs) or any(item.startswith(f"{path}/") for item in inputs)
+
+
+def pattern_covers(path: str, pattern: str) -> bool:
+    """Whether `path`, or a directory above it, matches one raw input pattern.
+
+    A deleted file no longer expands, so the landing also matches the raw
+    patterns.
+    """
+    parts = path.split("/")
+    return any(
+        fnmatch.fnmatchcase("/".join(parts[:end]), pattern) for end in range(1, len(parts) + 1)
+    )
+
+
+def inputs_changed(
+    root: Path,
+    registry: dict[str, Any],
+    project: dict[str, Any],
+    changed_paths: Iterable[str],
+    read_base: Callable[[str], bytes | None],
+) -> bool:
+    """Whether `changed_paths` change a production or verification input of `project`.
+
+    `root` is the tree the change produced, whose registry `registry` is; an
+    input it names that does not exist there raises ContractError.
+    `read_base` returns a path's bytes before the change. A scoped shared
+    input counts only when the project's slice of it changed (TOOL-9).
+    """
+    changed = set(changed_paths)
+    patterns = production_input_patterns(registry, project)
+    inputs: list[str] = []
+    for pattern in patterns:
+        try:
+            inputs.extend(logical for _disk, logical in expand_patterns(root, [pattern]))
+        except ContractError as error:
+            raise ContractError(
+                f"the production input `{pattern}` cannot be expanded: {error}"
+            ) from error
+    if any(path_reaches(path, inputs) for path in changed):
+        return True
+    verification = verification_input_patterns(root, project)
+    for path in changed:
+        if path in SCOPED_VERIFICATION_INPUTS and path in verification:
+            before = read_base(path)
+            try:
+                after = (root / path).read_bytes()
+            except OSError:
+                return True
+            if before is None or input_slice(path, before, project) != input_slice(
+                path, after, project
+            ):
+                return True
+            continue
+        if any(pattern_covers(path, pattern) for pattern in [*patterns, *verification]):
+            return True
     return False
 
 
@@ -723,6 +933,7 @@ def input_contract_errors(
         project_id = project.get("id", "project")
         try:
             declared_production_inputs(project)
+            declared_toolchains(project)
         except ContractError as error:
             errors.append(str(error))
             continue
@@ -813,7 +1024,9 @@ def run_build(
     artifacts = collect_artifacts(root, project)
     current_verification = verification_fingerprint(root, project)
     production_digests = input_digests(root, production_input_patterns(registry, project))
-    verification_digests = input_digests(root, verification_input_patterns(root, project))
+    verification_digests = input_digests(
+        root, verification_input_patterns(root, project), project
+    )
     current_toolchain = toolchain(root, project)
     if production_fingerprint(root, registry, project) != started_from:
         raise ContractError(
@@ -906,7 +1119,7 @@ def run_verification(
 
     manifest["verification_fingerprint"] = current_verification
     manifest["verification_input_digests"] = input_digests(
-        root, verification_input_patterns(root, project)
+        root, verification_input_patterns(root, project), project
     )
     manifest["verified"] = True
     manifest["verified_at"] = utc_now()

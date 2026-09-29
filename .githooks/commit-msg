@@ -2,11 +2,18 @@
 set -eu
 
 # Canonical prefixes and roots live in docs/projects.toml. The guard also checks
-# the single prefix of the staged inventory batch. This wrapper stays small so
-# scope can be tested without preparing the index:
+# the single prefix of the staged inventory batch.
+#
+# Called by Git with the message file, it runs the commit-scope guard committed
+# in HEAD (committed-rules.sh). Called with an option, it is the tool the tests
+# and the landing use to check scope without preparing the index, and it runs
+# the scripts next to it:
 #   printf '%s\n' PATH... | .githooks/commit-msg --check 'prefix-kind: action'
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
-exec python3 "$root/scripts/commit_scope.py" "$@"
+case ${1-} in
+    --*) exec python3 "$root/scripts/commit_scope.py" "$@" ;;
+esac
+exec sh "$script_dir/committed-rules.sh" commit-msg "$@"
