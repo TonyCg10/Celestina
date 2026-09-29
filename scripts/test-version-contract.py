@@ -231,18 +231,18 @@ class StaticAndSourceTests(unittest.TestCase):
                 return None
 
         snapshot = contract.validate_snapshot(model, "WORKTREE", read_worktree)
-        self.assertEqual(
-            set(snapshot.versions),
-            {
-                "celestina",
-                "celestina-style",
-                "siderita",
-                "magnetita",
-                "grafita",
-                "fluorita",
-                "magnetita-android",
-            },
-        )
+        # The expected owners are read from the raw registry, not written here:
+        # a hand-written set went stale the day Hematita was registered. A
+        # project is versioned when it declares a version source, unless it
+        # says `versioned = false`.
+        expected = {
+            project["id"]
+            for project in registry["projects"]
+            if project.get("versioned", "version_source" in project)
+        }
+        self.assertTrue(expected, "the registry declares no versioned product")
+        self.assertEqual(set(snapshot.versions), expected)
+        self.assertEqual({row.owner for row in snapshot.history}, expected)
 
     def test_semver_uses_exact_patch_minor_and_major_transitions(self) -> None:
         current = contract.SemVer.parse("0.5.4", "fixture")

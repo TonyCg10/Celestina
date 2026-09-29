@@ -96,8 +96,8 @@ Item {
             ShapePath {
                 strokeWidth: 0
                 strokeColor: CelestinaTheme.clear
-                fillColor: Qt.rgba(graph.trace.r, graph.trace.g, graph.trace.b,
-                                   CelestinaTheme.accentSoftOpacity)
+                fillColor: CelestinaTheme.withAlpha(graph.trace,
+                                                    CelestinaTheme.accentSoftOpacity)
                 PathPolyline { path: graph.areaPoints }
             }
 

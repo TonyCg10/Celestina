@@ -1,0 +1,29 @@
+# AUD-1-B exact change inventory
+
+Base revision	4eedb4075f895ee81d4c2a2fe5be2ab8540b580e
+Pathspec	.github/workflows/README.md
+Pathspec	.github/workflows/contracts.yml
+Pathspec	celestina-style/scripts/check-style-contract.sh
+Pathspec	docs/evidence/2026-09-26-monorepo-hardening-ci.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-B.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	hematita/qml/components/HistoryGraph.qml
+Pathspec	hematita/qml/components/PathCrumbs.qml
+Pathspec	scripts/check-architecture-contract.sh
+Pathspec	scripts/test-architecture-scanners.sh
+Pathspec	scripts/test-version-contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+5	1	c174ffe198381050dc75d26b3ee59c2ac1803c444acc79526990df30f1edfdf6	.github/workflows/README.md
+13	0	4b008870f0c928d14f07e39eb49eac47bd05a5561494a2e32d79971bf083b182	.github/workflows/contracts.yml
+46	7	92012c149abc77b5ddbfdf3cb9c410406d905d344b19fea493b01b325f9df3d1	celestina-style/scripts/check-style-contract.sh
+223	0	1b710947026c2bb48a34adb1a62c1d3dfe033d3fad95f7a5678818d0c1876471	docs/evidence/2026-09-26-monorepo-hardening-ci.md
+29	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-B.numstat.tsv
+1	1	ba0869914e95930aedf8847a1ebe5cab58b60d3225d8fb947e800f8ff7824101	docs/plans/active/2026-09-26-monorepo-hardening.md
+2	2	c3674ea9881a100d42e62bbf14c282f0bb340ac006a4adb04d3d0b39f4f0b7f0	hematita/qml/components/HistoryGraph.qml
+1	1	d0d0260b9f1f70da9321617175fdc1f92644fe971589458fb6cfa6248a228b53	hematita/qml/components/PathCrumbs.qml
+10	1	469ebc0432353884d21004a818acd00f9d613420600337656bd7049c6ae21a2e	scripts/check-architecture-contract.sh
+68	26	2836e9fdb097f8c61c1282c14072b2571d8b70ec0967a5f1c5cd5e41c7d87c17	scripts/test-architecture-scanners.sh
+12	12	f7537aaff2f611857eca8c846722391b7a1e0a17bd66e29e54e7cbd00ec47a61	scripts/test-version-contract.py
