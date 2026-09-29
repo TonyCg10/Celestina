@@ -771,6 +771,38 @@ elif ! diff -u "$expected/core-context.txt" "$temporary/core-context.txt"; then
     fail "agent-context omitted the physical AGENTS file or project owner"
 fi
 
+# A shared crate's consumers are the projects whose production inputs hold
+# it, not only the owners whose source roots name it (TOOL-21): an agent that
+# changes the crate must read the contracts of every app that links it.
+consumer_case=$temporary/consumer
+cp -R "$valid/." "$consumer_case/"
+sed -i 's|^source_roots = \["app/src", "core/crates/app-core"\]$|source_roots = ["app/src"]|' \
+    "$consumer_case/docs/projects.toml"
+if ! python3 "$context" --root "$consumer_case" core/crates/app-core/src/lib.rs \
+    > "$temporary/no-consumer-context.txt"; then
+    fail "agent-context failed on a crate no project consumes"
+elif grep -Fx 'app/README.md' "$temporary/no-consumer-context.txt" >/dev/null; then
+    fail "agent-context named a project that neither owns nor consumes the crate"
+fi
+sed -i 's|^source_roots = \["app/src"\]$|source_roots = ["app/src"]\nproduction_inputs = ["app/src", "core/crates/app-core"]|' \
+    "$consumer_case/docs/projects.toml"
+if ! python3 "$context" --root "$consumer_case" core/crates/app-core/src/lib.rs \
+    > "$temporary/consumer-context.txt"; then
+    fail "agent-context failed on a crate a project consumes"
+elif ! grep -Fx 'app/AGENTS.md' "$temporary/consumer-context.txt" >/dev/null \
+    || ! grep -Fx 'app/README.md' "$temporary/consumer-context.txt" >/dev/null \
+    || ! grep -Fx 'core/README.md' "$temporary/consumer-context.txt" >/dev/null; then
+    fail "agent-context omitted the project whose production inputs hold the crate"
+fi
+# A directory above a crate holds everything below it, so the consumers of
+# every input under it are listed too.
+if ! python3 "$context" --root "$consumer_case" core/crates \
+    > "$temporary/consumer-directory-context.txt"; then
+    fail "agent-context failed on a directory above a consumed crate"
+elif ! grep -Fx 'app/README.md' "$temporary/consumer-directory-context.txt" >/dev/null; then
+    fail "agent-context omitted the consumers of a crate below the target directory"
+fi
+
 cross_owner_symlink=$temporary/cross-owner-symlink
 cp -R "$valid/." "$cross_owner_symlink/"
 ln -s ../../core/crates/app-core/src/lib.rs \

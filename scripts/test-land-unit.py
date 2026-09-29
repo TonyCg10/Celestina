@@ -1033,6 +1033,7 @@ COPIED_SCRIPTS = (
     "version_contract.py",
     "version_tool.py",
     "production_artifact.py",
+    "cargo_closure.py",
     "complete-production.py",
     "landing.py",
     "land-unit.py",

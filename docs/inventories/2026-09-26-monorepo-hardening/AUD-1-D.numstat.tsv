@@ -1,0 +1,37 @@
+# AUD-1-D exact change inventory
+
+Base revision	1c2e8b36a8255f9521a3840980d4b49ac7f4b5e4
+Pathspec	docs/README.md
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/evidence/2026-09-26-monorepo-hardening-inputs.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-D.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/projects.toml
+Pathspec	magnetita-android/app/build.gradle.kts
+Pathspec	scripts/agent-context.py
+Pathspec	scripts/cargo_closure.py
+Pathspec	scripts/check-architecture-contract.sh
+Pathspec	scripts/production_artifact.py
+Pathspec	scripts/test-architecture-scanners.sh
+Pathspec	scripts/test-documentation-contract.sh
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-production-artifacts.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	1	500514445f71684b64c77520f538900844d21a771f8cbeb1fb9abc99abc381ed	docs/README.md
+50	0	16cd1bb4755dec705c4d5e7e98f1a792be5dfbb847e0161a5441ec31ba9e9b55	docs/contracts/production-artifacts.md
+245	0	f701b6e0dea894c12535d7718f2401541d9b0693dd164e9e19ee924f38ebebf1	docs/evidence/2026-09-26-monorepo-hardening-inputs.md
+37	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-D.numstat.tsv
+3	3	ed4f3eab4dd4ee7d3695ce5264c13e8ac68a056faf4584991dcf1334b7563704	docs/plans/active/2026-09-26-monorepo-hardening.md
+17	4	cfe2e0efec7f57249e8d44b6242c7ebf5fb81882d979c83e848358ae3347dc00	docs/projects.toml
+6	3	840a4d24ef38f437c9c48c1b2f73a010f6318d6cc605d6f04d5daaae4ab03355	magnetita-android/app/build.gradle.kts
+52	0	69364925cb8258b50542adab27d691bb2d80dc064353125322140204264288fd	scripts/agent-context.py
+252	0	3f619d4680c682612d9b18e4620c5dc7481e120aac37a3cee03a12322a453ea7	scripts/cargo_closure.py
+14	0	0e971bbec86c79401c78bc27ef7cf2450543cee89c2c08eff755d98845423b0e	scripts/check-architecture-contract.sh
+324	14	cc92dc4067d5f03ff64869afbd4c39c36958636c8c8656e37acb3ab69c7b8ae6	scripts/production_artifact.py
+26	0	50e4bf019c60a546954dfc25b2821b111882ac40d6690455a587d2179ab2b61a	scripts/test-architecture-scanners.sh
+32	0	a494e4e9dd7c123103b6bb2ad0b8b1b388b27ac23f59a33e8683b4b80e0817db	scripts/test-documentation-contract.sh
+1	0	e58212ae1e68d4405edb356205bfd87b77bc206e8bfbc3da5779164223c884af	scripts/test-land-unit.py
+297	0	70404a847b98e80c9c6be9d32d73aa00162756783346fbbfc44cf3c5c1da696b	scripts/test-production-artifacts.py

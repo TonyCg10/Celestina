@@ -18,9 +18,12 @@ val nativeOut = layout.buildDirectory.dir("native")
 val buildNative by tasks.registering(Exec::class) {
     description = "Cross-compiles magnetita-mobile for arm64 and generates its Kotlin bindings."
     workingDir = rootProject.projectDir
-    inputs.dir(rootProject.file("../celestina-rs/crates/magnetita-mobile/src"))
-    inputs.dir(rootProject.file("../celestina-rs/crates/magnetita-link/src"))
-    inputs.dir(rootProject.file("../celestina-rs/crates/magnetita-proto/src"))
+    // Cargo tracks the whole crate closure, its manifests, the lockfile and
+    // the toolchain. The hand-listed subset that stood here missed
+    // magnetita-net, the manifests and the lockfile (MAG-9), so Gradle could
+    // skip this task and pack a stale library. The task therefore always
+    // runs, and Cargo's incremental build decides what to recompile.
+    outputs.upToDateWhen { false }
     outputs.dir(nativeOut)
     commandLine("sh", "scripts/build-native.sh", nativeOut.get().asFile.absolutePath)
 }

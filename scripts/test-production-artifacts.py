@@ -569,6 +569,303 @@ esac
         result = self.run_tool("check", "demo", expect=1)
         self.assertIn("production inputs changed", result.stderr)
 
+    def replace_in_registry(self, old: str, new: str) -> None:
+        registered = self.registry.read_text(encoding="utf-8")
+        self.assertIn(old, registered)
+        self.registry.write_text(registered.replace(old, new, 1), encoding="utf-8")
+
+    def write_file(self, relative: str, text: str) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def write_cargo_fixture(self) -> None:
+        """A demo app that links a workspace crate the way Magnetita links magnetitad's.
+
+        `demo` reaches `link` under a renamed key, `link` reaches `core` only
+        through the workspace table, `demo` needs `helper` only to build, and
+        `link` names `fixtures` only for its tests. Cargo, not this file,
+        decides which of them the release artifact links.
+        """
+        self.write_file(
+            "rs/Cargo.toml",
+            """[workspace]
+members = ["crates/core", "crates/link", "crates/helper", "crates/fixtures"]
+resolver = "2"
+
+[workspace.dependencies]
+core = { path = "crates/core" }
+""",
+        )
+        for name in ("core", "helper", "fixtures"):
+            self.write_file(
+                f"rs/crates/{name}/Cargo.toml",
+                f'[package]\nname = "{name}"\nversion = "0.1.0"\nedition = "2021"\n',
+            )
+            self.write_file(f"rs/crates/{name}/src/lib.rs", "\n")
+        self.write_file(
+            "rs/crates/link/Cargo.toml",
+            """[package]
+name = "link"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core.workspace = true
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }
+""",
+        )
+        self.write_file("rs/crates/link/src/lib.rs", "\n")
+        self.write_file(
+            "demo/Cargo.toml",
+            """[package]
+name = "demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+linked = { package = "link", path = "../rs/crates/link" }
+
+[build-dependencies]
+helper = { path = "../rs/crates/helper" }
+""",
+        )
+        self.write_file("demo/build.rs", "fn main() {}\n")
+        self.replace_in_registry(
+            'production_inputs = ["demo/src"]',
+            'cargo_manifests = ["demo/Cargo.toml"]\n'
+            'production_inputs = ["demo/Cargo.toml", "demo/build.rs", "demo/src", '
+            '"rs/Cargo.toml", "rs/crates/link", "rs/crates/core", "rs/crates/helper"]',
+        )
+
+    def test_linked_cargo_packages_satisfy_the_input_guard(self) -> None:
+        self.write_cargo_fixture()
+        result = self.run_tool("check-inputs")
+        self.assertIn("production inputs: every buildable project", result.stdout)
+
+    def test_input_guard_names_a_missing_linked_path_package(self) -> None:
+        # The TOOL-3 defect: a crate the app links only through another crate
+        # and a workspace-inherited key, absent from production_inputs, so a
+        # fix to it left the installed binary "current".
+        self.write_cargo_fixture()
+        self.replace_in_registry('"rs/crates/core", ', "")
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "demo: production_inputs miss rs/crates/core (core, a linked path package)",
+            result.stderr,
+        )
+
+        self.replace_in_registry(', "rs/crates/helper"', "")
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn("demo: production_inputs miss rs/crates/helper", result.stderr)
+
+    def test_input_guard_requires_the_inherited_workspace_manifest(self) -> None:
+        self.write_cargo_fixture()
+        self.replace_in_registry('"rs/Cargo.toml", ', "")
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "demo: production_inputs miss rs/Cargo.toml (the workspace manifest core inherits from)",
+            result.stderr,
+        )
+
+    def test_input_guard_requires_the_own_targets_and_lockfile(self) -> None:
+        self.write_cargo_fixture()
+        self.write_file("demo/Cargo.lock", "version = 4\n")
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "demo: production_inputs miss demo/Cargo.lock (the lockfile the build resolves against)",
+            result.stderr,
+        )
+        self.replace_in_registry('"demo/build.rs", ', '"demo/Cargo.lock", ')
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "demo: production_inputs miss demo/build.rs (a build target of demo)", result.stderr
+        )
+
+    def test_input_guard_requires_an_existing_cargo_manifest_to_be_declared(self) -> None:
+        self.write_cargo_fixture()
+        self.replace_in_registry('cargo_manifests = ["demo/Cargo.toml"]\n', "")
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "demo: demo/Cargo.toml exists, but cargo_manifests does not name it", result.stderr
+        )
+
+    def test_closure_follows_normal_and_build_dependencies_only(self) -> None:
+        self.write_cargo_fixture()
+        sys.path.insert(0, str(TOOL.parent))
+        import cargo_closure
+
+        closure = cargo_closure.path_closure(self.root, ["demo/Cargo.toml"])
+        # `fixtures` is linked into link's tests only, so it is not part of
+        # what the release artifact is made from.
+        self.assertEqual(
+            [package.directory for package in closure.packages],
+            ["demo", "rs/crates/core", "rs/crates/helper", "rs/crates/link"],
+        )
+        demo = closure.packages[0]
+        self.assertEqual(demo.sources, ("demo/build.rs", "demo/src/main.rs"))
+        self.assertEqual(demo.workspace_manifest, "demo/Cargo.toml")
+        self.assertEqual(closure.packages[1].workspace_manifest, "rs/Cargo.toml")
+        self.run_tool("check-inputs")
+
+    def test_input_guard_requires_the_selected_toolchain_file(self) -> None:
+        self.write_cargo_fixture()
+        self.write_file("demo/rust-toolchain.toml", '[toolchain]\nchannel = "stable"\n')
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "demo: production_inputs miss demo/rust-toolchain.toml "
+            "(the toolchain file the build selects)",
+            result.stderr,
+        )
+        self.replace_in_registry('"demo/build.rs", ', '"demo/build.rs", "demo/rust-toolchain.toml", ')
+        self.run_tool("check-inputs")
+
+    def test_input_guard_reports_a_manifest_cargo_cannot_read(self) -> None:
+        self.write_cargo_fixture()
+        self.write_file("demo/Cargo.toml", "[package\nname = \n")
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "production-artifact: demo: cargo metadata failed for demo/Cargo.toml with exit ",
+            result.stderr,
+        )
+
+    def test_input_guard_refuses_a_path_dependency_outside_the_repository(self) -> None:
+        self.write_cargo_fixture()
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        crate = Path(outside.name) / "stray"
+        (crate / "src").mkdir(parents=True)
+        (crate / "Cargo.toml").write_text(
+            '[package]\nname = "stray"\nversion = "0.1.0"\nedition = "2021"\n',
+            encoding="utf-8",
+        )
+        (crate / "src/lib.rs").write_text("\n", encoding="utf-8")
+        manifest = (self.root / "demo/Cargo.toml").read_text(encoding="utf-8")
+        self.write_file(
+            "demo/Cargo.toml",
+            manifest.replace(
+                "[build-dependencies]", f'stray = {{ path = "{crate}" }}\n\n[build-dependencies]'
+            ),
+        )
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(
+            "demo: the path dependency of demo lies outside the repository", result.stderr
+        )
+
+    def fake_rustc_reporting_its_directory(self) -> dict[str, str]:
+        tools = self.root / "fake-tools"
+        tools.mkdir(exist_ok=True)
+        rustc = tools / "rustc"
+        rustc.write_text("#!/bin/sh\nprintf 'rustc in %s\\n' \"$(pwd -P)\"\n", encoding="utf-8")
+        rustc.chmod(0o755)
+        return {"PATH": f"{tools}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+    def test_toolchain_is_probed_where_the_build_runs(self) -> None:
+        # rustup picks the toolchain by directory, so a probe at the root
+        # recorded the default compiler for an app built with a pinned one.
+        environment = self.fake_rustc_reporting_its_directory()
+        real = self.root.resolve()
+        self.run_tool("run-build", "demo", environment=environment)
+        manifest = tomllib.loads(self.demo_manifest.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["toolchain"]["rustc"], f"rustc in {real / 'demo'}")
+
+        # A project whose Cargo builds run in two places records both.
+        self.write_cargo_fixture()
+        self.replace_in_registry(
+            'cargo_manifests = ["demo/Cargo.toml"]',
+            'cargo_manifests = ["demo/Cargo.toml", "rs/crates/link/Cargo.toml"]',
+        )
+        self.run_tool("run-build", "demo", environment=environment)
+        manifest = tomllib.loads(self.demo_manifest.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["toolchain"]["rustc@demo"], f"rustc in {real / 'demo'}")
+        self.assertEqual(
+            manifest["toolchain"]["rustc@rs/crates/link"],
+            f"rustc in {real / 'rs/crates/link'}",
+        )
+        self.assertNotIn("rustc", manifest["toolchain"])
+        self.run_tool("check", "demo", environment=environment)
+
+    def test_buildable_project_with_empty_inputs_is_refused(self) -> None:
+        # Magnetita Android declared no inputs, so its fingerprint hashed only
+        # the build script and the APK stayed "current" forever (TOOL-4).
+        self.replace_in_registry(
+            'production_inputs = ["demo/src"]', "production_inputs = []"
+        )
+        message = "demo declares no production_inputs"
+        for arguments in (("run-build", "demo"), ("check", "demo"), ("check-inputs",)):
+            with self.subTest(arguments=arguments):
+                result = self.run_tool(*arguments, expect=1)
+                self.assertIn(message, result.stderr)
+        self.assertFalse(self.demo_manifest.exists())
+
+        self.replace_in_registry("production_inputs = []\n", "")
+        result = self.run_tool("check-inputs", expect=1)
+        self.assertIn(message, result.stderr)
+
+    def fake_rustc(self, version: str) -> dict[str, str]:
+        tools = self.root / "fake-tools"
+        tools.mkdir(exist_ok=True)
+        rustc = tools / "rustc"
+        rustc.write_text(f"#!/bin/sh\nprintf '%s\\n' 'rustc {version}'\n", encoding="utf-8")
+        rustc.chmod(0o755)
+        return {"PATH": f"{tools}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+    def test_toolchain_change_makes_the_artifact_stale(self) -> None:
+        old = self.fake_rustc("1.0.0")
+        self.run_tool("run-build", "demo", environment=old)
+        self.run_tool("run-verification", "demo", environment=old)
+        self.run_tool("check", "demo", "--require-verified", environment=old)
+
+        new = self.fake_rustc("2.0.0")
+        result = self.run_tool("check", "demo", "--require-verified", expect=1, environment=new)
+        first, *details = result.stderr.splitlines()
+        self.assertEqual(
+            first,
+            "production-artifact: the toolchain changed since the build; run build-production.sh",
+        )
+        self.assertIn(
+            "production-artifact:   toolchain rustc: 'rustc 1.0.0' -> 'rustc 2.0.0'", details
+        )
+        # The binary itself came from the other compiler, so a verification
+        # alone cannot clear it.
+        reseal = self.run_tool("run-verification", "demo", expect=1, environment=new)
+        self.assertIn("the toolchain changed since the build", reseal.stderr)
+        self.run_tool("run-build", "demo", environment=new)
+        self.run_tool("run-verification", "demo", environment=new)
+        self.run_tool("check", "demo", "--require-verified", environment=new)
+
+    def test_failed_check_names_the_changed_inputs(self) -> None:
+        self.run_build()
+        self.run_verification()
+        (self.root / "demo/src/main.rs").write_text("fn main() { loop {} }\n", encoding="utf-8")
+        (self.root / "demo/tests/new.txt").write_text("case v2\n", encoding="utf-8")
+
+        result = self.run_tool("check", "demo", "--require-verified", expect=1)
+        first, *details = result.stderr.splitlines()
+        self.assertEqual(
+            first,
+            "production-artifact: production inputs changed; run build-production.sh; "
+            "tests or rules changed; run verify-production.sh again",
+        )
+        self.assertIn("production-artifact:   changed production input: demo/src", details)
+        self.assertIn(
+            "production-artifact:   new verification input: demo/tests/new.txt", details
+        )
+
+    def test_repository_registry_declares_every_linked_cargo_package(self) -> None:
+        # The registry guard over the real tree: every app's production inputs
+        # hold the whole path-package closure Cargo reports for it.
+        result = subprocess.run(
+            [sys.executable, str(TOOL), "check-inputs"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
     def test_session_worktree_refuses_build_verify_and_status(self) -> None:
         (self.root / ".celestina-worktree").write_text(
             'project = "demo"\n', encoding="utf-8"

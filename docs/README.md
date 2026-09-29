@@ -37,7 +37,12 @@ registered as `suite.shared_rules`, the selected owners' explicit
 `context_documents`, every applicable general and product owner, its
 README/STATUS/ROADMAP/VALIDATION set, relevant contracts and both suite and
 project active plans. Shared crates therefore retain the `celestina-rs` context
-and also receive the more specific consumer context.
+and also receive the more specific consumer context. The owners are the
+projects whose `path` or `source_roots` hold the path; after them come its
+consumers, every project whose production inputs hold it or lie below it, such
+as each app that links a shared crate. The production-input guard proves those inputs
+cover each app's Cargo path-package closure, so a crate's consumers are
+complete without the helper running Cargo.
 
 The output is meant to be complete, not merely sufficient: a local `AGENTS.md`
 names the workflow, governance and engineering standards it depends on, so the

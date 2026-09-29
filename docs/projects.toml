@@ -92,6 +92,7 @@ activate_script = "celestina/scripts/activate-production.sh"
 status_script = "celestina/scripts/status-production.sh"
 artifact_manifest = "celestina/build/production-artifact.toml"
 artifact_paths = ["celestina/build/celestina", "celestina/build/celestina-lock", "celestina/build/celestina-lock-verify", "celestina/build/libcelestina-lock-session.so", "celestina/build/celestina-polkit-converse", "celestina/build/rust-target/release/celestina-niri-adapter", "celestina/build/rust-target/release/celestina-provider-adapter", "celestina-style/build/libcelestina-style.so", "celestina-style/build/CelestinaStyle", "celestina/scripts/celestina-launcher.sh", "celestina/celestina.desktop"]
+cargo_manifests = ["celestina/Cargo.toml"]
 production_inputs = ["celestina/celestina.desktop", "celestina/CMakeLists.txt", "celestina/Cargo.toml", "celestina/Cargo.lock", "celestina/src", "celestina/qml", "celestina-style/CMakeLists.txt", "celestina-style/*.qml", "celestina-style/qmldir", "celestina-style/fonts", "celestina-style/icons", "celestina-style/scripts/build-production.sh", "celestina-rs/crates/celestina-shell-core", "celestina-rs/crates/celestina-core", "celestina-rs/crates/magnetita-core"]
 verification_inputs = ["celestina/tests", "celestina/scripts/qmllint-production.sh", "celestina/scripts/smoke-production.sh", "celestina-style/tests", "celestina-style/gallery", "celestina-style/scripts/verify-production.sh", "celestina-style/scripts/smoke-production.sh", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
@@ -149,6 +150,7 @@ verify_script = "celestina-rs/scripts/verify-production.sh"
 status_script = "celestina-rs/scripts/status-production.sh"
 artifact_manifest = "celestina-rs/target/production-artifact.toml"
 artifact_paths = ["celestina-rs/target/release/magnetitad"]
+cargo_manifests = ["celestina-rs/Cargo.toml"]
 production_inputs = ["celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock", "celestina-rs/rust-toolchain.toml", "celestina-rs/crates/*/Cargo.toml", "celestina-rs/crates/*/src"]
 verification_inputs = ["celestina-rs/crates/*/tests"]
 component_commit_scopes = [
@@ -185,6 +187,7 @@ deploy_script = "siderita/scripts/deploy-production.sh"
 status_script = "siderita/scripts/status-production.sh"
 artifact_manifest = "siderita/target/production-artifact.toml"
 artifact_paths = ["siderita/target/release/siderita"]
+cargo_manifests = ["siderita/Cargo.toml"]
 production_inputs = ["siderita/Cargo.toml", "siderita/Cargo.lock", "siderita/rust-toolchain.toml", "siderita/build.rs", "siderita/src", "siderita/cpp", "siderita/qml", "siderita/portal", "siderita/org.celestina.Siderita.desktop", "celestina-style/icons/apps/org.celestina.Siderita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/siderita-archive", "celestina-rs/crates/siderita-embedded", "celestina-rs/crates/siderita-core", "celestina-rs/crates/siderita-ops", "celestina-rs/crates/siderita-qt", "celestina-rs/crates/grafita-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt", "celestina-rs/crates/hematita-core"]
 verification_inputs = ["siderita/tests", "siderita/scripts/qml-tests.sh", "siderita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
@@ -224,7 +227,8 @@ deploy_script = "magnetita/scripts/deploy-production.sh"
 status_script = "magnetita/scripts/status-production.sh"
 artifact_manifest = "magnetita/target/production-artifact.toml"
 artifact_paths = ["magnetita/target/release/magnetita", "celestina-rs/target/release/magnetitad"]
-production_inputs = ["magnetita/Cargo.toml", "magnetita/Cargo.lock", "magnetita/build.rs", "magnetita/src", "magnetita/qml", "magnetita/org.celestina.Magnetita.desktop", "magnetita/magnetitad.service", "celestina-style/icons/apps/org.celestina.Magnetita.svg", "celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock", "celestina-rs/rust-toolchain.toml", "celestina-rs/crates/celestina-core", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetitad"]
+cargo_manifests = ["magnetita/Cargo.toml", "celestina-rs/crates/magnetitad/Cargo.toml"]
+production_inputs = ["magnetita/Cargo.toml", "magnetita/Cargo.lock", "magnetita/build.rs", "magnetita/src", "magnetita/qml", "magnetita/org.celestina.Magnetita.desktop", "magnetita/magnetitad.service", "celestina-style/icons/apps/org.celestina.Magnetita.svg", "celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock", "celestina-rs/rust-toolchain.toml", "celestina-rs/crates/celestina-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt", "celestina-rs/crates/magnetita-core", "celestina-rs/crates/magnetita-link", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetita-proto", "celestina-rs/crates/magnetitad", "celestina-rs/crates/siderita-ops"]
 verification_inputs = ["magnetita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "magnetita-core", roots = ["celestina-rs/crates/magnetita-core/"], include_workspace_manifests = true },
@@ -260,6 +264,12 @@ verify_script = "magnetita-android/scripts/verify-production.sh"
 status_script = "magnetita-android/scripts/status-production.sh"
 artifact_manifest = "magnetita-android/app/build/production-manifest.toml"
 artifact_paths = ["magnetita-android/app/build/outputs/apk/release/app-release.apk"]
+cargo_manifests = ["celestina-rs/crates/magnetita-mobile/Cargo.toml"]
+# The APK packs the arm64 magnetita-mobile library that scripts/build-native.sh
+# cross-compiles, so its Rust closure is an input like the Kotlin sources.
+# lint.xml only steers lint, which verify runs.
+production_inputs = ["magnetita-android/app/src/main", "magnetita-android/app/build.gradle.kts", "magnetita-android/build.gradle.kts", "magnetita-android/settings.gradle.kts", "magnetita-android/gradle.properties", "magnetita-android/gradle", "magnetita-android/gradlew", "magnetita-android/scripts/build-native.sh", "celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock", "celestina-rs/rust-toolchain.toml", "celestina-rs/crates/celestina-core", "celestina-rs/crates/magnetita-link", "celestina-rs/crates/magnetita-mobile", "celestina-rs/crates/magnetita-net", "celestina-rs/crates/magnetita-proto"]
+verification_inputs = ["magnetita-android/app/src/test", "magnetita-android/app/lint.xml", "celestina-rs/crates/magnetita-peer", "celestina-rs/rust-toolchain.toml"]
 
 [[projects]]
 id = "grafita"
@@ -290,7 +300,8 @@ deploy_script = "grafita/scripts/deploy-production.sh"
 status_script = "grafita/scripts/status-production.sh"
 artifact_manifest = "grafita/target/production-artifact.toml"
 artifact_paths = ["grafita/target/release/grafita"]
-production_inputs = ["grafita/Cargo.toml", "grafita/Cargo.lock", "grafita/build.rs", "grafita/src", "grafita/cpp", "grafita/qml", "grafita/org.celestina.Grafita.desktop", "celestina-style/icons/apps/org.celestina.Grafita.svg", "celestina-rs/crates/grafita-core"]
+cargo_manifests = ["grafita/Cargo.toml"]
+production_inputs = ["grafita/Cargo.toml", "grafita/Cargo.lock", "grafita/build.rs", "grafita/src", "grafita/cpp", "grafita/qml", "grafita/org.celestina.Grafita.desktop", "celestina-style/icons/apps/org.celestina.Grafita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/grafita-core"]
 verification_inputs = ["grafita/scripts/smoke.sh", "celestina-rs/crates/grafita-core/tests", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "grafita-core", roots = ["celestina-rs/crates/grafita-core/"], include_workspace_manifests = true },
@@ -325,7 +336,8 @@ deploy_script = "fluorita/scripts/deploy-production.sh"
 status_script = "fluorita/scripts/status-production.sh"
 artifact_manifest = "fluorita/target/production-artifact.toml"
 artifact_paths = ["fluorita/target/release/fluorita"]
-production_inputs = ["fluorita/Cargo.toml", "fluorita/Cargo.lock", "fluorita/build.rs", "fluorita/src", "fluorita/cpp", "fluorita/qml", "fluorita/org.celestina.Fluorita.desktop", "celestina-style/icons/apps/org.celestina.Fluorita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt"]
+cargo_manifests = ["fluorita/Cargo.toml"]
+production_inputs = ["fluorita/Cargo.toml", "fluorita/Cargo.lock", "fluorita/build.rs", "fluorita/src", "fluorita/cpp", "fluorita/qml", "fluorita/org.celestina.Fluorita.desktop", "celestina-style/icons/apps/org.celestina.Fluorita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt", "celestina-rs/crates/siderita-ops"]
 verification_inputs = ["fluorita/scripts/smoke.sh", "celestina-rs/crates/fluorita-engine/tests", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "fluorita-core", roots = ["celestina-rs/crates/fluorita-core/"], include_workspace_manifests = true },
@@ -362,7 +374,8 @@ deploy_script = "hematita/scripts/deploy-production.sh"
 status_script = "hematita/scripts/status-production.sh"
 artifact_manifest = "hematita/target/production-artifact.toml"
 artifact_paths = ["hematita/target/release/hematita"]
-production_inputs = ["hematita/Cargo.toml", "hematita/Cargo.lock", "hematita/build.rs", "hematita/src", "hematita/qml", "hematita/org.celestina.Hematita.desktop", "celestina-style/icons/apps/org.celestina.Hematita.svg", "celestina-rs/crates/hematita-core"]
+cargo_manifests = ["hematita/Cargo.toml"]
+production_inputs = ["hematita/Cargo.toml", "hematita/Cargo.lock", "hematita/build.rs", "hematita/src", "hematita/qml", "hematita/org.celestina.Hematita.desktop", "celestina-style/icons/apps/org.celestina.Hematita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/hematita-core", "celestina-rs/crates/siderita-ops"]
 verification_inputs = ["hematita/scripts/smoke.sh", "celestina-rs/crates/hematita-core/tests", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "hematita-core", roots = ["celestina-rs/crates/hematita-core/"], include_workspace_manifests = true },

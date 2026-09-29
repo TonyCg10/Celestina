@@ -465,6 +465,32 @@ elif [[ $output != *"sextita/qml"* ]]; then
     fail "the style guard failed without naming the registered QML root it lacks"
 fi
 
+# The registry guard: a Cargo path package an app links but its production
+# inputs omit must stop the architecture guard, naming the app and the crate
+# (TOOL-3, FLU-21: Fluorita links siderita-ops).
+missing_input_fixture="$fixture_tmp/projects-missing-input.toml"
+if ! python3 - "$repo_root/docs/projects.toml" "$missing_input_fixture" <<'PY'
+import sys
+
+source, target = sys.argv[1:]
+text = open(source, encoding="utf-8").read()
+start = text.index('id = "fluorita"')
+end = text.index("[[projects]]", start)
+section = text[start:end]
+edited = section.replace(', "celestina-rs/crates/siderita-ops"]', "]", 1)
+if edited == section:
+    raise SystemExit("the fluorita inputs no longer name siderita-ops")
+open(target, "w", encoding="utf-8").write(text[:start] + edited + text[end:])
+PY
+then
+    fail "could not prepare the missing-input registry fixture"
+elif output=$(ARCHITECTURE_REGISTRY_FILE="$missing_input_fixture" \
+    bash "$architecture_guard" 2>&1); then
+    fail "the architecture guard accepted production inputs that omit a linked crate"
+elif [[ $output != *"fluorita: production_inputs miss celestina-rs/crates/siderita-ops"* ]]; then
+    fail "the architecture guard did not name the linked crate the inputs omit"
+fi
+
 if ((failures)); then
     exit 1
 fi

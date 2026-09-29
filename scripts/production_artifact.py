@@ -25,6 +25,8 @@ import tempfile
 import tomllib
 from typing import Any, Iterable
 
+from cargo_closure import CargoClosure, CargoGraphError, CargoMetadata, path_closure
+
 
 SCHEMA_VERSION = 1
 FINGERPRINT_SCHEMA = 1
@@ -48,10 +50,25 @@ ERROR_PREFIX = "production-artifact: "
 UNVERIFIED_ERROR = "artifact is not verified yet; run verify-production.sh"
 VERIFICATION_CHANGED_ERROR = "tests or rules changed; run verify-production.sh again"
 VERIFICATION_ERRORS = (UNVERIFIED_ERROR, VERIFICATION_CHANGED_ERROR)
+# A version probe answers at once; one that hangs must not hang every check,
+# status and deploy with it.
+PROBE_TIMEOUT_SECONDS = 30
+TOOLCHAIN_CHANGED_ERROR = "the toolchain changed since the build; run build-production.sh"
+# A failed check names at most this many changed inputs, then counts the rest.
+MAX_REPORTED_CHANGES = 20
 
 
 class ContractError(RuntimeError):
-    """A production artifact does not satisfy the repository contract."""
+    """A production artifact does not satisfy the repository contract.
+
+    `details` are the facts behind the one-line message, such as the inputs
+    that changed; they are printed on their own lines after it, so the first
+    line keeps the format scripts/landing.py reads.
+    """
+
+    def __init__(self, message: str, details: Iterable[str] = ()) -> None:
+        super().__init__(message)
+        self.details = tuple(details)
 
 
 def utc_now() -> str:
@@ -67,8 +84,9 @@ def run_text(command: list[str], cwd: Path) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            timeout=PROBE_TIMEOUT_SECONDS,
         )
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return "unavailable"
     return result.stdout.strip().splitlines()[0] if result.stdout.strip() else "unknown"
 
@@ -89,15 +107,63 @@ def git_state(root: Path) -> tuple[str, bool]:
     return revision, bool(result.stdout)
 
 
-def toolchain(root: Path) -> dict[str, str]:
-    probes = {
-        "cargo": ["cargo", "--version"],
-        "rustc": ["rustc", "--version"],
-        "cmake": ["cmake", "--version"],
-        "cxx": [os.environ.get("CXX", "c++"), "--version"],
-        "qt": ["qtpaths6", "--qt-version"],
-    }
-    return {name: run_text(command, root) for name, command in probes.items()}
+RUST_PROBES = {
+    "cargo": ["cargo", "--version"],
+    "rustc": ["rustc", "--version"],
+}
+
+
+def toolchain(root: Path, project: dict[str, Any]) -> dict[str, str]:
+    """The versions of the tools the project's build runs.
+
+    rustup chooses the compiler by the directory Cargo runs in, walking up to
+    the nearest toolchain file, so the Rust probes run in the directory of
+    each declared Cargo manifest: Magnetita's app on the default toolchain in
+    `magnetita/`, its daemon on the one `celestina-rs/` pins. One directory
+    records `cargo` and `rustc`; several record `cargo@<dir>` and
+    `rustc@<dir>` for each. The C++ compiler, CMake and Qt do not depend on
+    the directory and are probed once.
+    """
+    directories = rust_probe_directories(root, project)
+    probes: dict[str, str] = {}
+    for directory in directories:
+        suffix = ""
+        if len(directories) > 1:
+            suffix = f"@{directory.relative_to(root).as_posix() or '.'}"
+        for name, command in RUST_PROBES.items():
+            probes[f"{name}{suffix}"] = run_text(command, directory)
+    for name, command in (
+        ("cmake", ["cmake", "--version"]),
+        ("cxx", [os.environ.get("CXX", "c++"), "--version"]),
+        ("qt", ["qtpaths6", "--qt-version"]),
+    ):
+        probes[name] = run_text(command, directories[0])
+    return probes
+
+
+def rust_probe_directories(root: Path, project: dict[str, Any]) -> list[Path]:
+    """Where the project's Cargo builds run: each declared manifest's directory.
+
+    A project without `cargo_manifests` builds in its registered directory,
+    or at the root without one.
+    """
+    directories: list[Path] = []
+    manifests = project.get("cargo_manifests")
+    if isinstance(manifests, list):
+        for manifest in manifests:
+            if not isinstance(manifest, str) or not manifest:
+                continue
+            directory = lexical_repo_path(root, manifest).parent
+            if directory.is_dir() and directory not in directories:
+                directories.append(directory)
+    if directories:
+        return directories
+    relative = project.get("path")
+    if isinstance(relative, str) and relative:
+        directory = lexical_repo_path(root, relative)
+        if directory.is_dir():
+            return [directory]
+    return [root]
 
 
 def load_registry(registry_path: Path) -> tuple[Path, dict[str, Any], dict[str, Any]]:
@@ -251,6 +317,28 @@ def digest_paths(
     return f"sha256:{hasher.hexdigest()}"
 
 
+def declared_production_inputs(project: dict[str, Any]) -> list[str]:
+    """The project's own `production_inputs`, refused when a buildable project has none.
+
+    A buildable project whose list is empty or absent would fingerprint only
+    its build script, so its artifact would stay current whatever its sources
+    became (TOOL-4).
+    """
+    inputs = project.get("production_inputs")
+    if inputs is None:
+        inputs = []
+    if not isinstance(inputs, list) or not all(
+        isinstance(item, str) and item for item in inputs
+    ):
+        raise ContractError(f"{project['id']} has invalid production_inputs")
+    if project.get("build_script") and not inputs:
+        raise ContractError(
+            f"{project['id']} declares no production_inputs; a buildable project "
+            "must name the inputs its artifact is made from"
+        )
+    return list(inputs)
+
+
 def production_input_patterns(registry: dict[str, Any], project: dict[str, Any]) -> list[str]:
     """The declared inputs whose bytes decide whether `project`'s artifact is current."""
     inputs = list(project.get("production_inputs", []))
@@ -263,6 +351,7 @@ def production_input_patterns(registry: dict[str, Any], project: dict[str, Any])
 
 
 def production_fingerprint(root: Path, registry: dict[str, Any], project: dict[str, Any]) -> str:
+    declared_production_inputs(project)
     inputs = production_input_patterns(registry, project)
     contract = {
         "project": project["id"],
@@ -347,6 +436,55 @@ def verification_fingerprint(root: Path, project: dict[str, Any]) -> str:
     return digest_paths(root, inputs, contract_data=contract)
 
 
+def input_digests(root: Path, patterns: Iterable[str]) -> dict[str, str]:
+    """One digest per expanded input path, so a failed check can name what changed.
+
+    The fingerprints above stay the identity of an artifact; these digests are
+    only the explanation recorded next to them.
+    """
+    digests = {}
+    for disk_path, logical in expand_patterns(root, patterns):
+        hasher = hashlib.sha256()
+        feed_path(hasher, disk_path, logical, ignore_build_outputs=True)
+        digests[logical] = f"sha256:{hasher.hexdigest()}"
+    return digests
+
+
+def changed_inputs(recorded: object, current: dict[str, str], label: str) -> list[str]:
+    """The inputs whose recorded digest differs from `current`, one line each."""
+    if not isinstance(recorded, dict):
+        return [
+            f"the manifest records no {label} input digests, "
+            "so the changed inputs cannot be named"
+        ]
+    lines = [f"new {label} input: {path}" for path in sorted(current.keys() - recorded.keys())]
+    lines.extend(
+        f"removed {label} input: {path}" for path in sorted(recorded.keys() - current.keys())
+    )
+    lines.extend(
+        f"changed {label} input: {path}"
+        for path in sorted(current.keys() & recorded.keys())
+        if current[path] != recorded[path]
+    )
+    lines.sort(key=lambda line: line.rsplit(": ", 1)[1])
+    if not lines:
+        return [f"every {label} input is unchanged; the declared input list or artifacts changed"]
+    if len(lines) > MAX_REPORTED_CHANGES:
+        hidden = len(lines) - MAX_REPORTED_CHANGES
+        lines = lines[:MAX_REPORTED_CHANGES] + [f"and {hidden} more {label} inputs"]
+    return lines
+
+
+def changed_toolchain(recorded: object, current: dict[str, str]) -> list[str]:
+    if not isinstance(recorded, dict):
+        return ["the manifest records no toolchain"]
+    return [
+        f"toolchain {name}: {recorded.get(name, 'absent')!r} -> {current.get(name, 'absent')!r}"
+        for name in sorted(set(recorded) | set(current))
+        if recorded.get(name) != current.get(name)
+    ]
+
+
 def artifact_digest(path: Path, logical: str) -> tuple[str, int, str]:
     hasher = hashlib.sha256()
     feed_path(hasher, path, logical, ignore_build_outputs=False)
@@ -403,7 +541,13 @@ def serialize_manifest(manifest: dict[str, Any]) -> str:
     lines.append("")
     lines.append("[toolchain]")
     for key, value in sorted(manifest.get("toolchain", {}).items()):
-        lines.append(f"{key} = {toml_value(value)}")
+        lines.append(f"{toml_value(key)} = {toml_value(value)}")
+    for table in ("production_input_digests", "verification_input_digests"):
+        if table not in manifest:
+            continue
+        lines.extend(("", f"[{table}]"))
+        for key, value in sorted(manifest[table].items()):
+            lines.append(f"{toml_value(key)} = {toml_value(value)}")
     for artifact in manifest.get("artifacts", []):
         lines.extend(("", "[[artifacts]]"))
         for key in ("path", "kind", "size", "sha256"):
@@ -454,8 +598,10 @@ def validate_manifest(
     *,
     require_verified: bool,
 ) -> dict[str, Any]:
+    declared_production_inputs(project)
     manifest = read_manifest(root, project)
     errors: list[str] = []
+    details: list[str] = []
     if manifest.get("schema_version") != SCHEMA_VERSION:
         errors.append("incompatible manifest version")
     if manifest.get("project") != project["id"]:
@@ -466,6 +612,22 @@ def validate_manifest(
     current_source = production_fingerprint(root, registry, project)
     if manifest.get("source_fingerprint") != current_source:
         errors.append("production inputs changed; run build-production.sh")
+        details.extend(
+            changed_inputs(
+                manifest.get("production_input_digests"),
+                input_digests(root, production_input_patterns(registry, project)),
+                "production",
+            )
+        )
+
+    # An artifact another compiler or Qt produced is another artifact, even
+    # from the same sources, so only a rebuild clears this (TOOL-22).
+    toolchain_changes = changed_toolchain(
+        manifest.get("toolchain"), toolchain(root, project)
+    )
+    if toolchain_changes:
+        errors.append(TOOLCHAIN_CHANGED_ERROR)
+        details.extend(toolchain_changes)
 
     try:
         current_artifacts = collect_artifacts(root, project)
@@ -482,10 +644,125 @@ def validate_manifest(
         current_verification = verification_fingerprint(root, project)
         if manifest.get("verification_fingerprint") != current_verification:
             errors.append(VERIFICATION_CHANGED_ERROR)
+            details.extend(
+                changed_inputs(
+                    manifest.get("verification_input_digests"),
+                    input_digests(root, verification_input_patterns(root, project)),
+                    "verification",
+                )
+            )
 
     if errors:
-        raise ContractError("; ".join(dict.fromkeys(errors)))
+        raise ContractError("; ".join(dict.fromkeys(errors)), details)
     return manifest
+
+
+def hashed_by(path: str, inputs: Iterable[str]) -> bool:
+    """Whether the fingerprint over the expanded `inputs` reads the bytes at `path`.
+
+    An input covers itself and everything below it, except what the walk
+    skips as build output or cache.
+    """
+    for item in inputs:
+        if path == item:
+            return True
+        if path.startswith(f"{item}/"):
+            below = path[len(item) + 1 :].split("/")
+            if not any(part in IGNORED_DIRECTORY_NAMES for part in below):
+                return True
+    return False
+
+
+def required_cargo_inputs(closure: CargoClosure, project_path: str) -> list[tuple[str, str]]:
+    """Each path a release build of the closure reads, with why it is required.
+
+    A path package outside the project is required whole: its build script,
+    C++ sources and included files reach the artifact as much as its `src`.
+    The project's own packages are required by manifest and compiled targets,
+    because the rest of the project directory holds documents and scripts.
+    """
+    required: dict[str, str] = {}
+    for package in closure.packages:
+        own = package.directory == project_path or package.directory.startswith(
+            f"{project_path}/"
+        )
+        if own:
+            required.setdefault(package.manifest, f"the manifest of {package.name}")
+            for source in package.sources:
+                required.setdefault(source, f"a build target of {package.name}")
+        else:
+            required.setdefault(package.directory, f"{package.name}, a linked path package")
+        if package.workspace_manifest != package.manifest:
+            required.setdefault(
+                package.workspace_manifest,
+                f"the workspace manifest {package.name} inherits from",
+            )
+    for lockfile in closure.lockfiles:
+        required.setdefault(lockfile, "the lockfile the build resolves against")
+    for toolchain_file in closure.toolchain_files:
+        required.setdefault(toolchain_file, "the toolchain file the build selects")
+    return sorted(required.items())
+
+
+def input_contract_errors(
+    root: Path, registry: dict[str, Any], metadata: CargoMetadata | None = None
+) -> list[str]:
+    """Every registered project whose production inputs miss what its artifact is made from.
+
+    A buildable project must declare production inputs. A project whose
+    directory holds a `Cargo.toml` must name it in `cargo_manifests`, and the
+    inputs of every project with `cargo_manifests` must hash the whole
+    path-package closure Cargo reports for them (TOOL-3). The fingerprint
+    itself stays a pure function of the declared inputs and never asks Cargo
+    for the graph, so `check`, deploy, the landing's affected-project matching
+    and agent-context.py read the same list this guard proves complete.
+    """
+    reader = metadata if metadata is not None else CargoMetadata(root)
+    errors: list[str] = []
+    for project in registry.get("projects", []):
+        project_id = project.get("id", "project")
+        try:
+            declared_production_inputs(project)
+        except ContractError as error:
+            errors.append(str(error))
+            continue
+        try:
+            inputs = [
+                logical
+                for _disk, logical in expand_patterns(
+                    root, production_input_patterns(registry, project)
+                )
+            ]
+        except ContractError as error:
+            errors.append(f"{project_id}: {error}")
+            continue
+
+        manifests = project.get("cargo_manifests", [])
+        if not isinstance(manifests, list) or not all(
+            isinstance(item, str) and item for item in manifests
+        ):
+            errors.append(f"{project_id}: cargo_manifests must be a list of paths")
+            continue
+        project_path = project.get("path")
+        if isinstance(project_path, str) and project_path:
+            own_manifest = f"{project_path}/Cargo.toml"
+            if (root / own_manifest).is_file() and own_manifest not in manifests:
+                errors.append(
+                    f"{project_id}: {own_manifest} exists, but cargo_manifests does not name it"
+                )
+        else:
+            project_path = ""
+        if not manifests:
+            continue
+        try:
+            closure = path_closure(root, manifests, reader)
+        except CargoGraphError as error:
+            errors.append(f"{project_id}: {error}")
+            continue
+        for path, reason in required_cargo_inputs(closure, project_path):
+            if not hashed_by(path, inputs):
+                errors.append(f"{project_id}: production_inputs miss {path} ({reason})")
+    return errors
 
 
 def run_registered_entry(
@@ -535,7 +812,9 @@ def run_build(
     revision, dirty = git_state(root)
     artifacts = collect_artifacts(root, project)
     current_verification = verification_fingerprint(root, project)
-    current_toolchain = toolchain(root)
+    production_digests = input_digests(root, production_input_patterns(registry, project))
+    verification_digests = input_digests(root, verification_input_patterns(root, project))
+    current_toolchain = toolchain(root, project)
     if production_fingerprint(root, registry, project) != started_from:
         raise ContractError(
             "production inputs changed while recording the build; "
@@ -559,6 +838,8 @@ def run_build(
         "build_commands": [command],
         "verify_commands": [],
         "toolchain": current_toolchain,
+        "production_input_digests": production_digests,
+        "verification_input_digests": verification_digests,
         "artifacts": artifacts,
     }
     path = manifest_path(root, project)
@@ -624,6 +905,9 @@ def run_verification(
         )
 
     manifest["verification_fingerprint"] = current_verification
+    manifest["verification_input_digests"] = input_digests(
+        root, verification_input_patterns(root, project)
+    )
     manifest["verified"] = True
     manifest["verified_at"] = utc_now()
     manifest["verify_commands"] = [command]
@@ -672,6 +956,13 @@ def parser() -> argparse.ArgumentParser:
     verify = subparsers.add_parser("run-verification")
     verify.add_argument("project")
 
+    check_inputs = subparsers.add_parser("check-inputs")
+    check_inputs.add_argument(
+        "--root",
+        type=Path,
+        help="repository the registry describes (default: two levels above it)",
+    )
+
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("project")
     status_parser.add_argument("--installed", action="append", default=[])
@@ -680,6 +971,23 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = parser().parse_args()
+    if args.command == "check-inputs":
+        try:
+            root, registry, _projects = load_registry(args.registry)
+            if args.root is not None:
+                root = args.root.resolve()
+            errors = input_contract_errors(root, registry)
+        except ContractError as error:
+            errors = [str(error)]
+        for error in errors:
+            print(f"{ERROR_PREFIX}{error}", file=sys.stderr)
+        if errors:
+            return 1
+        print(
+            "production inputs: every buildable project declares them, "
+            "with each Cargo path package its artifact links"
+        )
+        return 0
     try:
         root, registry, project = project_contract(args.registry, args.project)
         # The refusal leaves `check` alone: it only reads, and its callers are
@@ -718,6 +1026,8 @@ def main() -> int:
             raise AssertionError(args.command)
     except ContractError as error:
         print(f"{ERROR_PREFIX}{error}", file=sys.stderr)
+        for detail in error.details:
+            print(f"{ERROR_PREFIX}  {detail}", file=sys.stderr)
         return 1
     return 0
 

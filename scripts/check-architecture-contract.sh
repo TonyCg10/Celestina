@@ -600,6 +600,19 @@ check_dependency_direction() {
     fi
 }
 
+check_production_inputs() {
+    # A fingerprint hashes only what the registry declares, so an input the
+    # registry forgets is a fix that never reaches the installed binary. The
+    # rule and Cargo's view of each app's path packages live in
+    # production_artifact.py; this guard only runs it over the registry.
+    local output
+    if ! output=$(python3 "$script_dir/production_artifact.py" \
+        --registry "$registry_file" check-inputs --root "$repo_root" 2>&1); then
+        printf '%s\n' "$output" >&2
+        fail "a buildable project's production_inputs miss what its artifact is made from"
+    fi
+}
+
 load_registry_projects
 check_baseline_history
 check_modularity_debt
@@ -610,6 +623,7 @@ check_visual_contract
 check_shared_style_links
 check_local_control_ratchet
 check_dependency_direction
+check_production_inputs
 
 if ((failures)); then
     exit 1

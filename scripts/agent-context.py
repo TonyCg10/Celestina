@@ -18,6 +18,12 @@ from documentation_contract import (
     normalized_status,
     repository_root,
 )
+from production_artifact import (
+    ContractError,
+    expand_patterns,
+    hashed_by,
+    production_input_patterns,
+)
 from project_registry import HaltedProject, halted_projects
 
 
@@ -88,6 +94,46 @@ def projects_for_targets(
                 seen.add(identity)
                 result.append(project)
     return result
+
+
+def consumer_projects(
+    root: Path,
+    relatives: list[Path],
+    registry: dict[str, object],
+    errors: list[str],
+) -> list[dict[str, object]]:
+    """Every project whose production inputs hold a target, in registry order.
+
+    A target directory above an input, such as `celestina-rs/crates`, holds
+    that input too, so its consumers are listed as well.
+
+    A change to the target rebuilds each of their artifacts, as a change to a
+    shared crate rebuilds every app that links it. The production-input guard
+    proves those inputs hold each app's whole Cargo path-package closure, so
+    the registry answers without running Cargo here. An input that does not
+    exist is that guard's error to report; here it is skipped.
+    """
+    targets = [relative.as_posix() for relative in relatives if relative.parts]
+    projects = registry.get("projects", [])
+    if not isinstance(projects, list):
+        errors.append("projects: must be a list of tables in docs/projects.toml")
+        return []
+    consumers: list[dict[str, object]] = []
+    for project in projects:
+        if not isinstance(project, dict):
+            continue
+        inputs: list[str] = []
+        for pattern in production_input_patterns(registry, project):
+            try:
+                inputs.extend(logical for _disk, logical in expand_patterns(root, [pattern]))
+            except ContractError:
+                continue
+        if any(
+            hashed_by(target, inputs) or any(item.startswith(f"{target}/") for item in inputs)
+            for target in targets
+        ):
+            consumers.append(project)
+    return consumers
 
 
 def scope_matches(scope: str, projects: list[dict[str, object]]) -> bool:
@@ -320,6 +366,12 @@ def resolve_context(
     relative_targets = [target.relative_to(root) for target in targets]
     projects = projects_for_targets(relative_targets, registry)
     halted = halted_owners(registry, projects, errors)
+    owners = {id(project) for project in projects}
+    projects.extend(
+        project
+        for project in consumer_projects(root, relative_targets, registry, errors)
+        if id(project) not in owners
+    )
 
     result: list[Path] = []
     seen: set[Path] = set()

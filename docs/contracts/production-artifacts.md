@@ -82,6 +82,56 @@ unchanged interval. It does not prove that every command implemented inside that
 entrypoint is semantically sufficient; review and fixture coverage still own
 that contract.
 
+## Complete production inputs
+
+A fingerprint hashes only what the registry declares, so an input the registry
+forgets is a fix that never reaches the installed binary while `check` and
+`status` report it current. Three rules close that gap:
+
+- A buildable project declares a non-empty `production_inputs`. The runner
+  refuses `run-build` and `check` for one that does not, and the guard below
+  reports it.
+- A project declares in `cargo_manifests` every Cargo manifest its build
+  script compiles: its own `Cargo.toml`, which the guard requires whenever
+  the project directory holds one, and any other, such as Magnetita's
+  `magnetitad` or the `magnetita-mobile` library the Android APK packs. A
+  virtual workspace manifest stands for all of its members.
+- `python3 scripts/production_artifact.py check-inputs` asks
+  `cargo metadata --no-deps --offline` for each declared manifest's
+  workspace, follows every normal and build path dependency (renamed and
+  workspace-inherited keys included; development dependencies are not
+  linked), and requires the production inputs to hash: every path package
+  outside the project directory whole, since its build script, C++ sources
+  and included files reach the artifact too; the project's own packages by
+  manifest and by the source of each target a release build compiles; the
+  workspace manifest each package inherits from; the lockfile of each
+  declared manifest's workspace; and the nearest `rust-toolchain.toml` or
+  `rust-toolchain` above each declared manifest.
+  `scripts/check-architecture-contract.sh` runs it, so the architecture
+  guard fails in CI and at landing when a dependency is added without
+  registering it.
+
+The closure is guarded, not derived at fingerprint time. The fingerprint stays
+a pure function of the declared inputs: it never asks Cargo for the graph, so
+two runs over the same bytes always agree and `check`, deploy and status cost
+no metadata call, while the landing's affected-project matching and
+`agent-context.py` read the same list that the guard proves complete.
+Deriving the closure at fingerprint time would give those readers a second,
+invisible input set.
+
+The manifest records the toolchain probes (`cargo`, `rustc`, `cmake`, the C++
+compiler and Qt). rustup chooses the compiler by the directory Cargo runs in,
+so the Rust probes run in the directory of each declared Cargo manifest, or
+in the project directory when it declares none: Magnetita records its app's
+compiler in `magnetita/` and its daemon's, which `celestina-rs/` pins, as
+`rustc@magnetita` and `rustc@celestina-rs/crates/magnetitad`. Every probe
+has a timeout. `check` compares them: an artifact another compiler or Qt produced is stale
+and needs a rebuild, not a verification. The manifest also records one digest
+per expanded production and verification input. A failed `check` keeps its
+one-line error, which the landing reads, and prints on the following lines
+what changed: each new, removed or changed input, up to twenty, and each
+toolchain probe with its recorded and current value.
+
 ## Exact verification
 
 `verify-production.sh` receives or discovers the canonical manifest and:
