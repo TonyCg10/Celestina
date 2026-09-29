@@ -306,6 +306,56 @@ mod tests {
         assert!(directory.0.join("uno (editado).png").exists());
     }
 
+    /// Keeps what it is sent in `bin/`, so the originals can be found there.
+    struct KeepingBin(PathBuf);
+
+    impl Bin for KeepingBin {
+        fn send(&self, path: &Path, _cancellation: &CancellationToken) -> Result<PathBuf, OpError> {
+            let kept = self.0.join(path.file_name().unwrap_or_default());
+            std::fs::rename(path, &kept).map_err(|error| OpError::io(path, &error))?;
+            Ok(kept)
+        }
+    }
+
+    #[test]
+    fn a_batch_replacement_sends_every_original_to_the_bin() {
+        let directory = TestDir::new("replace");
+        let bin_directory = directory.0.join("bin");
+        std::fs::create_dir_all(&bin_directory).expect("the bin");
+        let items = vec![
+            directory.file("uno.png", b"first original"),
+            directory.file("dos.png", b"second original"),
+        ];
+        let mut replacing = request(&items, BatchOperation::Turn { clockwise: true });
+        replacing.choice = SaveChoice::Replace;
+
+        let progress = run(
+            &replacing,
+            &FakeRasteriser {
+                calls: RefCell::new(0),
+            },
+            &KeepingBin(bin_directory.clone()),
+            &measured,
+            &mut |_| {},
+            &CancellationToken::new(),
+        );
+
+        assert_eq!(progress.done, 2);
+        for (name, original) in [
+            ("uno.png", "first original"),
+            ("dos.png", "second original"),
+        ] {
+            assert_eq!(
+                std::fs::read(directory.0.join(name)).expect("the result"),
+                b"rendered".to_vec()
+            );
+            assert_eq!(
+                std::fs::read(bin_directory.join(name)).expect("the original, in the bin"),
+                original.as_bytes()
+            );
+        }
+    }
+
     #[test]
     fn a_run_stops_when_it_is_asked_to_and_says_it_stopped() {
         let directory = TestDir::new("cancel");

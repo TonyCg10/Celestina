@@ -540,8 +540,11 @@ impl qobject::FluoritaPlayer {
     }
 
     pub fn seek(self: core::pin::Pin<&mut Self>, seconds: f64) {
-        if seconds.is_finite() && seconds >= 0.0 {
-            self.send(PlaybackRequest::Seek(Duration::from_secs_f64(seconds)));
+        // QML hands over whatever the slider computed from a file-controlled
+        // duration; a value that is no duration is dropped, never converted
+        // by a call that would abort the process.
+        if let Ok(target) = fluorita_core::duration_from_seconds(seconds) {
+            self.send(PlaybackRequest::Seek(target));
         }
     }
 
@@ -830,7 +833,8 @@ impl qobject::FluoritaPlayer {
             return;
         }
 
-        let at = std::time::Duration::from_secs_f64(self.position_seconds().max(0.0));
+        let at = fluorita_core::duration_from_seconds(*self.position_seconds())
+            .unwrap_or(Duration::ZERO);
         self.as_mut().set_extracting_frame(true);
         self.as_mut().set_frame_notice(QString::default());
 

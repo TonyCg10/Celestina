@@ -262,9 +262,25 @@ pub(super) fn run_scan(
 
     // What was known last time, on screen before anything is walked — minus
     // anything belonging to a root that is no longer configured.
-    let mut catalogue = match store.as_deref().map(catalogue_store::load) {
-        Some(Ok(outcome)) => outcome.catalogue,
-        _ => Catalogue::new(),
+    let loaded = store.as_deref().map(catalogue_store::load);
+    let (mut catalogue, store) = match loaded {
+        Some(Ok(outcome)) => {
+            if let Some(aside) = &outcome.set_aside {
+                eprintln!(
+                    "fluorita: the stored catalogue could not be read and was kept at {}",
+                    aside.display()
+                );
+            }
+            (outcome.catalogue, store)
+        }
+        // A catalogue that could not be read *or* set aside is still at its
+        // name, so this run never saves over it: the library works from the
+        // scan, and the next launch tries again.
+        Some(Err(error)) => {
+            eprintln!("fluorita: the stored catalogue is left untouched: {error}");
+            (Catalogue::new(), None)
+        }
+        None => (Catalogue::new(), None),
     };
     catalogue.retain_configured(&sources);
     if !catalogue.is_empty() {

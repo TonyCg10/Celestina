@@ -97,11 +97,16 @@ pub fn extract(
     let bytes = outcome?;
 
     let destination = destination_for(request)?;
-    atomic_file::replace(&destination, &bytes).map_err(|source| EngineError::Io {
-        operation: "writing the extracted frame",
-        path: destination.clone(),
-        source,
-    })?;
+    // A person's file beside the film: it takes the film's permission bits, and
+    // a name that appeared since the free-name search is refused rather than
+    // overwritten. `Published` only says whether the directory sync held too.
+    let _published =
+        atomic_file::land_media(&destination, &bytes, request.source).map_err(|source| {
+            EngineError::Landing {
+                operation: "writing the extracted frame",
+                source,
+            }
+        })?;
 
     Ok(FrameExtracted {
         written: destination,

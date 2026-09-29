@@ -11,6 +11,7 @@
 //!   flight for the previous file is rejected instead of overwriting the new
 //!   one's position.
 
+use std::fmt;
 use std::time::Duration;
 
 use celestina_core::{Generation, GenerationClock, GenerationExhausted};
@@ -397,6 +398,60 @@ impl PlaybackSession {
     }
 }
 
+/// The longest duration or position this domain believes, in seconds: about
+/// 136 years. A real recording is nowhere near it, and keeping every accepted
+/// value under `u32::MAX` seconds means adding two of them can never overflow a
+/// [`Duration`], which would panic.
+pub const MAX_MEDIA_SECONDS: u64 = u32::MAX as u64;
+
+/// Why a number of seconds a file or a backend claimed is not a duration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DurationRejected {
+    /// NaN or an infinity.
+    NotFinite,
+    /// Below zero.
+    Negative,
+    /// Past [`MAX_MEDIA_SECONDS`].
+    TooLong,
+}
+
+impl fmt::Display for DurationRejected {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::NotFinite => "the claimed duration is not a finite number",
+            Self::Negative => "the claimed duration is negative",
+            Self::TooLong => "the claimed duration is longer than any real recording",
+        })
+    }
+}
+
+impl std::error::Error for DurationRejected {}
+
+/// Turns seconds a file, a backend or a surface claimed into a [`Duration`].
+///
+/// The one door every such `f64` goes through. `Duration::from_secs_f64`
+/// panics on a negative, non-finite or overlong value, and a container decides
+/// what its duration says: under the release profile's `panic = "abort"` a
+/// crafted file would take down Fluorita or Siderita's player. Zero is
+/// accepted; a caller for whom zero means "unknown" filters it.
+///
+/// # Errors
+///
+/// [`DurationRejected`] naming why the value is not a duration.
+pub fn duration_from_seconds(seconds: f64) -> Result<Duration, DurationRejected> {
+    if !seconds.is_finite() {
+        return Err(DurationRejected::NotFinite);
+    }
+    if seconds < 0.0 {
+        return Err(DurationRejected::Negative);
+    }
+    // Every u64 up to `u32::MAX` is exact in an f64, so the comparison is too.
+    if seconds > MAX_MEDIA_SECONDS as f64 {
+        return Err(DurationRejected::TooLong);
+    }
+    Duration::try_from_secs_f64(seconds).map_err(|_| DurationRejected::TooLong)
+}
+
 /// A seek beyond a known duration is clamped rather than sent as-is; with no
 /// duration reported yet the target is passed through untouched.
 fn clamp_seek(target: Duration, duration: Option<Duration>) -> Duration {
@@ -415,6 +470,49 @@ mod tests {
     use crate::media::{MediaId, MediaKind};
     use celestina_core::Generation;
     use std::time::Duration;
+
+    #[test]
+    fn a_duration_a_file_claims_is_a_typed_answer_and_never_a_panic() {
+        use super::{duration_from_seconds, DurationRejected, MAX_MEDIA_SECONDS};
+
+        assert_eq!(duration_from_seconds(0.0), Ok(Duration::ZERO));
+        assert_eq!(
+            duration_from_seconds(90.5),
+            Ok(Duration::from_millis(90_500))
+        );
+        assert_eq!(
+            duration_from_seconds(MAX_MEDIA_SECONDS as f64),
+            Ok(Duration::from_secs(MAX_MEDIA_SECONDS))
+        );
+
+        assert_eq!(
+            duration_from_seconds(f64::NAN),
+            Err(DurationRejected::NotFinite)
+        );
+        assert_eq!(
+            duration_from_seconds(f64::INFINITY),
+            Err(DurationRejected::NotFinite)
+        );
+        assert_eq!(duration_from_seconds(-0.5), Err(DurationRejected::Negative));
+        assert_eq!(
+            duration_from_seconds(f64::NEG_INFINITY),
+            Err(DurationRejected::NotFinite)
+        );
+        // The value `Duration::from_secs_f64` aborts the process on, and one
+        // just past the ceiling a sum of two positions could overflow at.
+        assert_eq!(
+            duration_from_seconds(f64::MAX),
+            Err(DurationRejected::TooLong)
+        );
+        assert_eq!(
+            duration_from_seconds(1.9e19),
+            Err(DurationRejected::TooLong)
+        );
+        assert_eq!(
+            duration_from_seconds(MAX_MEDIA_SECONDS as f64 + 1.0),
+            Err(DurationRejected::TooLong)
+        );
+    }
 
     fn session(kind: MediaKind) -> (PlaybackSession, Generation) {
         let mut session = PlaybackSession::new();

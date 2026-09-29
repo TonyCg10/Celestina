@@ -30,6 +30,55 @@ use std::path::Path;
 /// the engine makes from it.
 pub const MAX_TAG_CHARACTERS: usize = 512;
 
+/// Text a file claims about itself — a tag, a track title, a language — made
+/// safe to hold: control characters and invisible format characters removed,
+/// surrounding whitespace trimmed, and at most `limit` characters kept.
+///
+/// The format characters are the ones that can make a title display as
+/// something it does not say: the bidirectional embeddings, overrides and
+/// isolates (U+202A–U+202E, U+2066–U+2069), the directional marks, zero-width
+/// characters, word joiners and invisible operators, the byte-order mark, the
+/// soft hyphen and the Arabic letter mark.
+///
+/// The one sanitiser for every such string, because every one of them is
+/// attacker-sized. Only the kept characters are allocated, however long the
+/// claim was.
+#[must_use]
+pub fn claimed_text(value: &str, limit: usize) -> String {
+    let mut kept: String = value
+        .chars()
+        .filter(|character| !character.is_control() && !is_invisible_format(*character))
+        .skip_while(|character| character.is_whitespace())
+        .take(limit)
+        .collect();
+    kept.truncate(kept.trim_end().len());
+    kept
+}
+
+/// Whether `character` is one of the invisible format characters
+/// [`claimed_text`] removes.
+const fn is_invisible_format(character: char) -> bool {
+    matches!(
+        character,
+        '\u{00AD}'
+            | '\u{061C}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{FEFF}'
+    )
+}
+
+/// A tag value a file carries, as [`claimed_text`] bounded by
+/// [`MAX_TAG_CHARACTERS`] — the same ceiling a tag *write* accepts — or `None`
+/// when nothing printable is left.
+#[must_use]
+pub fn claimed_tag(value: &str) -> Option<String> {
+    Some(claimed_text(value, MAX_TAG_CHARACTERS)).filter(|text| !text.is_empty())
+}
+
 /// A metadata container this crate recognises by name.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum MetadataFormat {
@@ -379,6 +428,38 @@ mod tests {
     use crate::catalogue::MediaMetadata;
     use crate::media::MediaKind;
     use std::path::Path;
+
+    #[test]
+    fn a_tag_a_file_claims_is_stripped_of_controls_and_cut_to_the_cap() {
+        use super::{claimed_tag, claimed_text};
+
+        assert_eq!(
+            claimed_tag("  Pavane \u{0}for\ta\ndead princess  "),
+            Some("Pavane foradead princess".to_owned())
+        );
+        assert_eq!(claimed_tag("   "), None, "an empty tag is no tag");
+        assert_eq!(
+            claimed_tag("\u{7}\u{1b}"),
+            None,
+            "a tag of controls is no tag"
+        );
+
+        let huge = "\u{e9}".repeat(4 * 1024 * 1024);
+        let capped = claimed_tag(&huge).expect("a long title is still a title");
+        assert_eq!(capped.chars().count(), MAX_TAG_CHARACTERS);
+
+        assert_eq!(
+            claimed_tag("\u{202E}gpj.exe\u{202C} \u{2066}x\u{2069}\u{200B}\u{FEFF}"),
+            Some("gpj.exe x".to_owned()),
+            "bidirectional overrides and invisible characters cannot spoof a title"
+        );
+        assert_eq!(claimed_text("abcdef", 3), "abc");
+        assert_eq!(
+            claimed_text(" a\u{85}b ", 10),
+            "ab",
+            "a C1 control is a control too"
+        );
+    }
 
     fn track(name: &str) -> MetadataCapabilities {
         MetadataCapabilities::of(MediaKind::Audio, Path::new(name))

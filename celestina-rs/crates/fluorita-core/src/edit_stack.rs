@@ -295,12 +295,18 @@ impl Ink {
 }
 
 /// How a redaction hides what is under it.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+///
+/// Only one way, and it keeps nothing of what it covers. Pixelating or
+/// blurring a region keeps a function of its pixels, and for text — an
+/// address, a number on a screenshot — that function is recoverable with
+/// public tools (the Depix class of attacks). Recipes stored before this rule
+/// named `pixelate` or `blur`; they read back as [`Redaction::Solid`].
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum Redaction {
-    /// Replace the area with large blocks of its own average colour.
-    Pixelate,
-    /// Blur the area beyond recognition.
-    Blur,
+    /// Every pixel of the area becomes one opaque colour that does not depend
+    /// on the picture.
+    #[default]
+    Solid,
 }
 
 /// The outline of a closed shape.
@@ -1223,7 +1229,7 @@ mod tests {
     fn redaction(area: Area) -> Annotation {
         Annotation::Redact {
             area,
-            style: Redaction::Pixelate,
+            style: Redaction::Solid,
         }
     }
 

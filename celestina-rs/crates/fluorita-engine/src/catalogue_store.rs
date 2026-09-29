@@ -29,7 +29,7 @@ use std::time::{Duration, SystemTime};
 
 use celestina_core::{atomic_file, percent};
 use fluorita_core::{
-    Availability, Catalogue, MediaId, MediaKind, MediaMetadata, MediaRecord, SourceId,
+    claimed_tag, Availability, Catalogue, MediaId, MediaKind, MediaMetadata, MediaRecord, SourceId,
     SourceIdentity,
 };
 
@@ -56,48 +56,63 @@ pub struct LoadOutcome {
     /// catalogue that silently lost half its entries would look like a scan
     /// problem later.
     pub skipped: usize,
-    /// True when there was simply nothing stored yet — a first run.
+    /// True when there is no usable catalogue — a first run, or a stored file
+    /// this load could not use and set aside.
     pub absent: bool,
+    /// Where a stored file this version could not use was moved: past the read
+    /// budget, not UTF-8, not a regular file, unreadable, or written by a
+    /// format this version does not know. It is kept rather than left at the
+    /// catalogue's name, where the next save would destroy every tag it holds.
+    pub set_aside: Option<PathBuf>,
 }
 
 /// Reads the catalogue at `path`.
 ///
-/// A missing file, an unreadable one and an unrecognised version all mean the
-/// same thing to a caller: start empty and let the scan fill it in. None of
-/// them is an error, because none of them should stop the app from opening.
+/// A missing file means a first run. A file that exists but is not a
+/// catalogue this version can use is moved to the first free
+/// [`set_aside_path`] — never over an earlier one — and the load starts
+/// empty. Neither is an error, because neither
+/// should stop the app from opening.
+///
+/// # Errors
+///
+/// [`EngineError::Io`] when an unusable file could not be moved aside, and
+/// [`EngineError::UnusableSource`] when reading failed for a reason outside
+/// the file. The file is then still at `path`, and a caller must not save
+/// over it.
 pub fn load(path: &Path) -> EngineResult<LoadOutcome> {
-    let metadata = match std::fs::metadata(path) {
-        Ok(metadata) => metadata,
-        Err(_) => {
+    load_within(path, MAX_BYTES)
+}
+
+fn load_within(path: &Path, limit: u64) -> EngineResult<LoadOutcome> {
+    let text = match atomic_file::read_bounded(path, limit) {
+        Ok(None) => {
             return Ok(LoadOutcome {
                 absent: true,
                 ..LoadOutcome::default()
             })
         }
-    };
-    if metadata.len() > MAX_BYTES {
-        return Err(EngineError::UnusableSource {
-            path: path.to_path_buf(),
-            reason: "the stored catalogue is larger than the read budget",
-        });
-    }
-
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(_) => {
-            return Ok(LoadOutcome {
-                absent: true,
-                ..LoadOutcome::default()
+        Ok(Some(bytes)) => String::from_utf8(bytes).ok(),
+        // Past the budget, a FIFO or a directory: what is at the name can
+        // never be a catalogue, so it is kept aside.
+        Err(error) if is_malformed(&error) => None,
+        // A failed open or read (EMFILE, EIO, a permission) says nothing about
+        // the file; it stays where it is and the load fails, so the caller
+        // does not save over it.
+        Err(error) => {
+            return Err(EngineError::UnusableSource {
+                path: path.to_path_buf(),
+                reason: read_failure(&error),
             })
         }
     };
 
+    let Some(text) = text else {
+        return set_aside(path);
+    };
     let mut lines = text.lines();
     if lines.next() != Some(HEADER) {
-        return Ok(LoadOutcome {
-            absent: true,
-            ..LoadOutcome::default()
-        });
+        return set_aside(path);
     }
 
     let mut outcome = LoadOutcome::default();
@@ -113,6 +128,67 @@ pub fn load(path: &Path) -> EngineResult<LoadOutcome> {
         }
     }
     Ok(outcome)
+}
+
+/// Whether a refused read means the file itself is not a catalogue, as
+/// opposed to a read that failed for a reason outside it.
+fn is_malformed(error: &atomic_file::ReadError) -> bool {
+    matches!(
+        error,
+        atomic_file::ReadError::TooLarge { .. } | atomic_file::ReadError::NotRegular { .. }
+    )
+}
+
+fn read_failure(error: &atomic_file::ReadError) -> &'static str {
+    match error {
+        atomic_file::ReadError::Io { .. } => "the stored catalogue could not be read",
+        _ => "the stored catalogue is not a catalogue",
+    }
+}
+
+/// How many set-aside catalogues are kept. Past it, a new unusable file is
+/// left at its name and the load fails, rather than any earlier copy being
+/// overwritten or the disk filled.
+const MAX_SET_ASIDE: u32 = 16;
+
+/// Where the `index`th unusable catalogue is kept: `catalogue.tsv.unreadable`,
+/// then `catalogue.tsv.unreadable-1`, and so on.
+#[must_use]
+pub fn set_aside_path(path: &Path, index: u32) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".unreadable");
+    if index > 0 {
+        name.push(format!("-{index}"));
+    }
+    path.with_file_name(name)
+}
+
+/// Moves the unusable file at `path` to the first free set-aside name, never
+/// over an earlier one.
+fn set_aside(path: &Path) -> EngineResult<LoadOutcome> {
+    let mut last = None;
+    for index in 0..MAX_SET_ASIDE {
+        let aside = set_aside_path(path, index);
+        match atomic_file::publish_without_replacing(path, &aside) {
+            Ok(()) => {
+                return Ok(LoadOutcome {
+                    absent: true,
+                    set_aside: Some(aside),
+                    ..LoadOutcome::default()
+                })
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => last = Some(error),
+            Err(error) => {
+                last = Some(error);
+                break;
+            }
+        }
+    }
+    Err(EngineError::Io {
+        operation: "set aside a catalogue this version cannot read",
+        path: path.to_path_buf(),
+        source: last.unwrap_or_else(|| std::io::Error::from(std::io::ErrorKind::AlreadyExists)),
+    })
 }
 
 /// Writes the whole catalogue, atomically.
@@ -290,13 +366,16 @@ fn optional_text(value: Option<&str>) -> String {
     }
 }
 
+/// A stored tag, held to the same sanitiser and cap as a freshly probed one,
+/// so a catalogue written before the cap existed cannot bring an unbounded
+/// title back.
 fn text_of(field: &str) -> Option<String> {
     if field == "-" {
         return None;
     }
     let bytes = percent::decode_strict(field)?;
     let text = String::from_utf8(bytes).ok()?;
-    Some(text).filter(|text| !text.is_empty())
+    claimed_tag(&text)
 }
 
 fn optional_number(value: Option<u32>) -> String {
@@ -509,6 +588,98 @@ mod tests {
     }
 
     #[test]
+    fn a_catalogue_this_version_cannot_read_is_set_aside_before_anything_saves_over_it() {
+        let path = scratch("set-aside-version");
+        let newer = "fluorita-catalogue 99\nwhat a newer release wrote\n";
+        std::fs::write(&path, newer).expect("written");
+
+        let outcome = load(&path).expect("read");
+        assert!(outcome.absent);
+        let aside = outcome.set_aside.expect("the unreadable file was kept");
+        assert_eq!(
+            std::fs::read_to_string(&aside).expect("the kept file"),
+            newer
+        );
+
+        save(&path, &Catalogue::new()).expect("a fresh catalogue");
+        assert_eq!(
+            std::fs::read_to_string(&aside).expect("still kept"),
+            newer,
+            "saving the fresh catalogue must not destroy what could not be read"
+        );
+
+        // A second unusable catalogue is kept beside the first, not over it.
+        let second = "fluorita-catalogue 98\nanother\n";
+        std::fs::write(&path, second).expect("written");
+        let again = load(&path).expect("read").set_aside.expect("kept too");
+        assert_ne!(again, aside);
+        assert_eq!(std::fs::read_to_string(&aside).expect("first"), newer);
+        assert_eq!(std::fs::read_to_string(&again).expect("second"), second);
+    }
+
+    #[test]
+    fn only_a_malformed_file_is_set_aside_and_a_failed_read_leaves_it_alone() {
+        use celestina_core::atomic_file::ReadError;
+        use std::path::PathBuf;
+
+        let path = PathBuf::from("/x/catalogue.tsv");
+        assert!(super::is_malformed(&ReadError::TooLarge {
+            path: path.clone(),
+            limit: 1
+        }));
+        assert!(super::is_malformed(&ReadError::NotRegular {
+            path: path.clone()
+        }));
+        for kind in [
+            std::io::ErrorKind::PermissionDenied,
+            std::io::ErrorKind::Other,
+            std::io::ErrorKind::Interrupted,
+        ] {
+            assert!(!super::is_malformed(&ReadError::Io {
+                path: path.clone(),
+                source: std::io::Error::from(kind),
+            }));
+        }
+    }
+
+    #[test]
+    fn a_catalogue_past_the_read_budget_is_set_aside_rather_than_overwritten() {
+        let path = scratch("set-aside-budget");
+        let stored = format!("{HEADER}\n{}\n", "x".repeat(64));
+        std::fs::write(&path, &stored).expect("written");
+
+        let outcome = super::load_within(&path, 16).expect("read");
+
+        assert!(outcome.absent);
+        assert!(outcome.catalogue.is_empty());
+        let aside = outcome.set_aside.expect("kept");
+        assert_eq!(std::fs::read_to_string(&aside).expect("kept"), stored);
+        assert!(!path.exists(), "the name is free for a fresh catalogue");
+    }
+
+    #[test]
+    fn a_stored_tag_from_before_the_cap_comes_back_capped() {
+        let path = scratch("capped-tag");
+        let mut catalogue = Catalogue::new();
+        let long = MediaMetadata {
+            title: Some("t".repeat(fluorita_core::MAX_TAG_CHARACTERS * 4)),
+            ..MediaMetadata::default()
+        };
+        catalogue.upsert(record(9, "/m/long.flac", MediaKind::Audio).with_metadata(long));
+        save(&path, &catalogue).expect("saved");
+
+        let outcome = load(&path).expect("read");
+        let title = outcome
+            .catalogue
+            .records()
+            .next()
+            .and_then(|record| record.metadata().title.clone())
+            .expect("a title");
+        assert_eq!(title.chars().count(), fluorita_core::MAX_TAG_CHARACTERS);
+        assert!(outcome.set_aside.is_none());
+    }
+
+    #[test]
     fn a_field_cannot_smuggle_a_tab_or_a_newline_into_the_next_record() {
         let path = scratch("injection");
         let mut catalogue = Catalogue::new();
@@ -526,12 +697,14 @@ mod tests {
         // One header plus exactly one record line.
         assert_eq!(text.lines().count(), 2);
         assert_eq!(outcome.skipped, 0);
+        // The record survives whole; the controls do not, because a stored tag
+        // goes through the same sanitiser a probed one does.
         assert_eq!(
             outcome
                 .catalogue
                 .get(&MediaId::filesystem(66, 1))
                 .and_then(|record| record.metadata().title.clone()),
-            Some("titulo\tcon\ttabuladores\ny salto".to_owned())
+            Some("titulo\tcon\ttabuladores\ny salto".replace(['\t', '\n'], ""))
         );
     }
 

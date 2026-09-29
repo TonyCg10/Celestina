@@ -449,8 +449,7 @@ fn write_object(object: &Annotation) -> String {
             "O\tredact\t{}\t{}\n",
             write_area(*area),
             match style {
-                Redaction::Pixelate => "pixelate",
-                Redaction::Blur => "blur",
+                Redaction::Solid => "solid",
             }
         ),
     }
@@ -505,9 +504,10 @@ fn read_object(fields: &[&str]) -> Option<Annotation> {
         }),
         "redact" => Some(Annotation::Redact {
             area: read_area(fields.get(2..6)?)?,
+            // `pixelate` and `blur` are what recipes stored before the solid
+            // fill named; both were recoverable, so both read back solid.
             style: match *fields.get(6)? {
-                "pixelate" => Redaction::Pixelate,
-                "blur" => Redaction::Blur,
+                "solid" | "pixelate" | "blur" => Redaction::Solid,
                 _ => return None,
             },
         }),
@@ -598,7 +598,7 @@ mod tests {
                 },
                 Annotation::Redact {
                     area: Area::new(Point::new(9.0, 9.0), 60.0, 20.0),
-                    style: Redaction::Blur,
+                    style: Redaction::Solid,
                 },
             ],
         }

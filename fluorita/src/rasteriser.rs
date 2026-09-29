@@ -85,14 +85,7 @@ mod ffi {
             height: f32,
             rgba: u32,
         );
-        fn redact(
-            self: Pin<&mut FluoritaCanvas>,
-            x: f32,
-            y: f32,
-            width: f32,
-            height: f32,
-            blur: bool,
-        );
+        fn redact(self: Pin<&mut FluoritaCanvas>, x: f32, y: f32, width: f32, height: f32);
         #[cxx_name = "drawText"]
         #[allow(clippy::too_many_arguments)]
         fn draw_text(
@@ -249,13 +242,14 @@ fn draw(mut canvas: std::pin::Pin<&mut ffi::FluoritaCanvas>, object: &Annotation
             area.height,
             packed(*ink),
         ),
-        Annotation::Redact { area, style } => canvas.as_mut().redact(
-            area.origin.x,
-            area.origin.y,
-            area.width,
-            area.height,
-            matches!(style, Redaction::Blur),
-        ),
+        // One style, and the canvas draws it: a solid fill that keeps nothing
+        // of the pixels it covers.
+        Annotation::Redact {
+            area,
+            style: Redaction::Solid,
+        } => canvas
+            .as_mut()
+            .redact(area.origin.x, area.origin.y, area.width, area.height),
     }
 }
 
@@ -299,6 +293,11 @@ mod canvas_tests {
     /// beside it: BMP is the one format whose bytes are all header and pixels,
     /// so what the toolkit is being handed is visible here.
     fn bitmap() -> Vec<u8> {
+        bitmap_of(|_| 0x40)
+    }
+
+    /// The same 4×4 bitmap with each of its 48 colour bytes chosen by `byte`.
+    fn bitmap_of(byte: impl Fn(usize) -> u8) -> Vec<u8> {
         let width = 4i32;
         let height = 4i32;
         // Each row is padded to four bytes; 4 pixels × 3 bytes is already 12.
@@ -324,9 +323,8 @@ mod canvas_tests {
         out.extend_from_slice(&0u32.to_le_bytes());
         out.extend_from_slice(&0u32.to_le_bytes());
 
-        // Blue, green, red per pixel; the values do not matter, only that the
-        // reader accepts them.
-        out.extend(std::iter::repeat_n(0x40u8, pixels));
+        // Blue, green, red per pixel.
+        out.extend((0..pixels).map(byte));
         out
     }
 
@@ -361,7 +359,7 @@ mod canvas_tests {
             objects: vec![
                 Annotation::Redact {
                     area: Area::new(Point::new(0.0, 0.0), 1.0, 1.0),
-                    style: Redaction::Pixelate,
+                    style: Redaction::Solid,
                 },
                 Annotation::Shape {
                     kind: fluorita_core::ShapeKind::Rectangle,
@@ -379,6 +377,45 @@ mod canvas_tests {
 
         assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "the result is not a PNG");
         let _ = std::fs::remove_dir_all(path.parent().expect("the fixture directory"));
+    }
+
+    #[test]
+    fn a_redaction_keeps_nothing_of_the_pixels_it_covers() {
+        // Two different pictures, each redacted over its whole area. If the result depended on what was under the redaction in any
+        // way — pixelation, blur, a tint — the two encodings would differ.
+        let flat = fixture("redact-flat");
+        let busy = fixture("redact-busy");
+        std::fs::write(
+            &busy,
+            bitmap_of(|index| (index as u8).wrapping_mul(37).wrapping_add(11)),
+        )
+        .expect("the second picture");
+        let composition = Composition {
+            canvas: canvas(4, 4),
+            transforms: Vec::new(),
+            objects: vec![Annotation::Redact {
+                area: Area::new(Point::new(0.0, 0.0), 4.0, 4.0),
+                style: Redaction::Solid,
+            }],
+        };
+
+        let render = |path: &PathBuf| {
+            ToolkitRasteriser
+                .render(path, &composition, OutputFormat::Png, None)
+                .expect("the toolkit drew and encoded the result")
+        };
+        assert_ne!(
+            std::fs::read(&flat).expect("flat"),
+            std::fs::read(&busy).expect("busy")
+        );
+        assert_eq!(
+            render(&flat),
+            render(&busy),
+            "the redacted result still depends on what it covered"
+        );
+        for path in [flat, busy] {
+            let _ = std::fs::remove_dir_all(path.parent().expect("the fixture directory"));
+        }
     }
 
     #[test]

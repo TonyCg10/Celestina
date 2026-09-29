@@ -14,7 +14,8 @@ use std::time::Duration;
 
 use celestina_core::Generation;
 use fluorita_core::{
-    EngineReport, PlaybackRequest, PlaybackState, ReportKind, Speed, Stream, StreamKind,
+    duration_from_seconds, EngineReport, PlaybackRequest, PlaybackState, ReportKind, Speed, Stream,
+    StreamKind,
 };
 use libmpv2::events::{Event, PropertyData};
 use libmpv2::{mpv_end_file_reason, EndFileReason, Format, Mpv};
@@ -161,19 +162,23 @@ impl MpvSession {
 fn position_of(instance: &Instance) -> Duration {
     instance
         .optional_f64("time-pos")
-        .filter(|value| value.is_finite() && *value >= 0.0)
-        .map_or(Duration::ZERO, Duration::from_secs_f64)
+        .and_then(|seconds| duration_from_seconds(seconds).ok())
+        .unwrap_or(Duration::ZERO)
 }
 
 fn translate_property(name: &str, change: &PropertyData<'_>) -> Option<ReportKind> {
     {
         match (name, change) {
-            ("time-pos", PropertyData::Double(value)) if value.is_finite() && *value >= 0.0 => {
-                Some(ReportKind::Position(Duration::from_secs_f64(*value)))
+            // The file decides both numbers, so a value that is not a real
+            // duration is dropped rather than handed to a conversion that
+            // would abort the process.
+            ("time-pos", PropertyData::Double(value)) => {
+                duration_from_seconds(*value).ok().map(ReportKind::Position)
             }
-            ("duration", PropertyData::Double(value)) if value.is_finite() && *value > 0.0 => {
-                Some(ReportKind::Duration(Duration::from_secs_f64(*value)))
-            }
+            ("duration", PropertyData::Double(value)) => duration_from_seconds(*value)
+                .ok()
+                .filter(|duration| !duration.is_zero())
+                .map(ReportKind::Duration),
             ("pause", PropertyData::Flag(paused)) => Some(ReportKind::State(if *paused {
                 PlaybackState::Paused
             } else {
@@ -397,9 +402,40 @@ impl Drop for MpvSession {
 
 #[cfg(test)]
 mod tests {
-    use super::{end_of_file, VOLUME_SCALE};
+    use super::{end_of_file, translate_property, VOLUME_SCALE};
     use fluorita_core::{PlaybackState, ReportKind};
+    use libmpv2::events::PropertyData;
     use libmpv2::mpv_end_file_reason;
+    use std::time::Duration;
+
+    #[test]
+    fn a_crafted_position_or_duration_is_dropped_rather_than_fatal() {
+        for crafted in [f64::MAX, 1.9e19, f64::NAN, f64::INFINITY, -1.0] {
+            assert_eq!(
+                translate_property("duration", &PropertyData::Double(crafted)),
+                None,
+                "duration {crafted}"
+            );
+            assert_eq!(
+                translate_property("time-pos", &PropertyData::Double(crafted)),
+                None,
+                "position {crafted}"
+            );
+        }
+        assert_eq!(
+            translate_property("time-pos", &PropertyData::Double(1.5)),
+            Some(ReportKind::Position(Duration::from_millis(1500)))
+        );
+        assert_eq!(
+            translate_property("duration", &PropertyData::Double(0.0)),
+            None,
+            "a zero duration is not known"
+        );
+        assert_eq!(
+            translate_property("duration", &PropertyData::Double(61.0)),
+            Some(ReportKind::Duration(Duration::from_secs(61)))
+        );
+    }
 
     #[test]
     fn the_end_of_a_file_is_not_the_same_as_a_broken_file() {

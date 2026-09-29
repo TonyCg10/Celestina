@@ -8,6 +8,7 @@
 //! English under
 //! [ADR 0007](../../../docs/decisions/0007-spanish-product-copy.md).
 
+use celestina_core::atomic_file::WriteError;
 use fluorita_core::{EditClass, EditRejected};
 use fluorita_engine::{EngineError, Saved};
 
@@ -50,6 +51,13 @@ pub(super) fn failure(error: &EngineError) -> String {
         EngineError::Trash { .. } => {
             "Se guardó el resultado, pero el original sigue donde estaba".to_owned()
         }
+        EngineError::NotReplaced { .. } => {
+            "No se pudo enviar el original a la papelera, así que no se cambió nada".to_owned()
+        }
+        EngineError::Landing {
+            source: WriteError::TargetExists { .. },
+            ..
+        } => "Apareció otro archivo con ese nombre; no se ha sobrescrito".to_owned(),
         other => other.user_message(),
     }
 }

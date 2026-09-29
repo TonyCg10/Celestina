@@ -14,8 +14,10 @@
 //! are enforced here rather than trusted:
 //!
 //! - **The destination is confirmed before the source moves.** A replacement
-//!   writes the new file first and only then sends the original to the Trash,
-//!   through the suite's one Trash implementation. Nothing here unlinks.
+//!   stages and syncs the new file first and only then sends the original to
+//!   the Trash, through the suite's one Trash implementation — also when the
+//!   result keeps the original's name. Nothing here unlinks or overwrites; the
+//!   order lives in the `landing` module.
 //! - **A turn is a header change when it can be.** A JPEG whose whole edit is
 //!   an orientation change is rewritten by moving two bytes inside its EXIF
 //!   segment; the pixels are copied across untouched. Falling back to a
@@ -23,11 +25,12 @@
 
 use std::path::{Path, PathBuf};
 
-use celestina_core::{atomic_file, CancellationToken};
+use celestina_core::CancellationToken;
 use fluorita_core::{Composition, EditClass, Orientation, OutputFormat, SaveChoice};
 use siderita_ops::{next_available, NameShape, OpError};
 
 use crate::error::{EngineError, EngineResult};
+use crate::landing;
 
 /// The largest result the engine will write. A canvas is already bounded
 /// before an edit is composed; this bounds what the *encoder* produced from
@@ -129,8 +132,8 @@ pub struct Saved {
     /// lossless save that could not be performed losslessly reports
     /// [`EditClass::Raster`] here rather than claiming the original survived.
     pub class: EditClass,
-    /// Where the original went, when it was replaced. `None` for a copy, and
-    /// `None` when the result was written over the original's own path.
+    /// Where the original went. `Some` for every replacement — including one
+    /// whose result keeps the original's name — and `None` for a copy.
     pub trashed_original: Option<PathBuf>,
 }
 
@@ -140,8 +143,10 @@ pub struct Saved {
 ///
 /// Refuses a source that is not an absolute file, a result past
 /// [`MAX_OUTPUT_BYTES`], a rasteriser failure, any filesystem failure, and a
-/// cancellation. A failure never leaves the original moved: the Trash step is
-/// last and runs only after the destination exists.
+/// cancellation. The original moves only to the Trash, and only once the
+/// result is staged and synced beside it; the landing errors say what state a
+/// failure left (see [`EngineError::NotReplaced`],
+/// [`EngineError::ReplacementNotPublished`] and [`EngineError::Trash`]).
 pub fn save(
     request: &SaveRequest<'_>,
     rasteriser: &dyn Rasteriser,
@@ -171,33 +176,22 @@ pub fn save(
     }
 
     let destination = destination_for(request, class)?;
-    atomic_file::replace(&destination, &bytes).map_err(|source| EngineError::Io {
-        operation: "writing the edited image",
-        path: destination.clone(),
-        source,
-    })?;
-
-    // Only now, with the result on disk, may the original be moved. The order
-    // is the contract: a Trash step that ran first would leave a person with
-    // neither file if the write then failed.
-    let trashed_original = match request.choice {
-        SaveChoice::Copy => None,
-        SaveChoice::Replace if destination == request.source => None,
-        SaveChoice::Replace => {
-            Some(
-                bin.send(request.source, cancellation)
-                    .map_err(|source| EngineError::Trash {
-                        path: request.source.to_path_buf(),
-                        source,
-                    })?,
-            )
-        }
-    };
+    // The order of operations around the original — staged and synced first,
+    // the original to the Trash, never an overwrite — is `landing`'s.
+    let landed = landing::land(
+        request.source,
+        &destination,
+        &bytes,
+        request.choice,
+        bin,
+        cancellation,
+        "writing the edited image",
+    )?;
 
     Ok(Saved {
-        written: destination,
+        written: landed.written,
         class,
-        trashed_original,
+        trashed_original: landed.trashed_original,
     })
 }
 
@@ -557,6 +551,33 @@ mod tests {
         }
     }
 
+    /// A bin that keeps what it is sent in a directory, so a test can find
+    /// the original there afterwards, byte for byte.
+    struct KeepingBin {
+        directory: PathBuf,
+        kept: RefCell<Vec<PathBuf>>,
+    }
+
+    impl KeepingBin {
+        fn in_(directory: &Path) -> Self {
+            let directory = directory.join("bin");
+            std::fs::create_dir_all(&directory).expect("the bin");
+            Self {
+                directory,
+                kept: RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl Bin for KeepingBin {
+        fn send(&self, path: &Path, _cancellation: &CancellationToken) -> Result<PathBuf, OpError> {
+            let kept = self.directory.join(path.file_name().unwrap_or_default());
+            std::fs::rename(path, &kept).map_err(|error| OpError::io(path, &error))?;
+            self.kept.borrow_mut().push(kept.clone());
+            Ok(kept)
+        }
+    }
+
     struct RefusingBin;
 
     impl Bin for RefusingBin {
@@ -603,7 +624,7 @@ mod tests {
             transforms: Vec::new(),
             objects: vec![Annotation::Redact {
                 area: Area::new(Point::new(1.0, 1.0), 10.0, 10.0),
-                style: Redaction::Pixelate,
+                style: Redaction::Solid,
             }],
         }
     }
@@ -695,9 +716,11 @@ mod tests {
     #[test]
     fn a_turn_on_a_jpeg_is_written_losslessly_and_the_renderer_is_never_asked() {
         let directory = TestDir::new("lossless");
-        let source = directory.file("foto.jpg", &jpeg_with_orientation(1, b"pixels"));
+        let original = jpeg_with_orientation(1, b"pixels");
+        let source = directory.file("foto.jpg", &original);
         let composition = composition();
         let rasteriser = FakeRasteriser::new();
+        let bin = KeepingBin::in_(&directory.0);
 
         let saved = save(
             &request(
@@ -708,18 +731,109 @@ mod tests {
                 Some(quarter_turn()),
             ),
             &rasteriser,
-            &FakeBin::default(),
+            &bin,
             &CancellationToken::new(),
         )
         .expect("the save lands");
 
         assert_eq!(saved.class, EditClass::Lossless);
         assert_eq!(saved.written, source);
-        assert_eq!(saved.trashed_original, None, "it replaced its own path");
         assert_eq!(*rasteriser.calls.borrow(), 0, "no pixel was re-encoded");
         assert_eq!(
             jpeg_orientation(&std::fs::read(&source).expect("the file")),
             Some(quarter_turn())
+        );
+        // ADR 0009: a replacement sends the original to the Trash, even when
+        // the result takes the original's own name.
+        let trashed = saved
+            .trashed_original
+            .expect("a same-format replacement still trashes its original");
+        assert_eq!(
+            std::fs::read(&trashed).expect("the original, in the bin"),
+            original
+        );
+    }
+
+    #[test]
+    fn a_same_format_replacement_keeps_the_originals_mode_and_trashes_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = TestDir::new("replace-in-place");
+        let source = directory.file("foto.jpg", b"the original photograph");
+        std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o600))
+            .expect("a private photograph");
+        let composition = composition();
+        let bin = KeepingBin::in_(&directory.0);
+
+        let saved = save(
+            &request(
+                &source,
+                &composition,
+                SaveChoice::Replace,
+                OutputFormat::Jpeg,
+                None,
+            ),
+            &FakeRasteriser::new(),
+            &bin,
+            &CancellationToken::new(),
+        )
+        .expect("the save lands");
+
+        assert_eq!(saved.written, source);
+        assert_eq!(
+            std::fs::read(&source).expect("the result"),
+            b"rendered".to_vec()
+        );
+        assert_eq!(
+            std::fs::metadata(&source)
+                .expect("the result")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600,
+            "a private photograph must not come back readable by others"
+        );
+        assert_eq!(
+            std::fs::read(bin.kept.borrow()[0].as_path()).expect("the original, in the bin"),
+            b"the original photograph".to_vec()
+        );
+        assert_eq!(saved.trashed_original.as_ref(), bin.kept.borrow().first());
+    }
+
+    #[test]
+    fn a_same_format_replacement_the_trash_refuses_changes_nothing() {
+        let directory = TestDir::new("replace-in-place-refused");
+        let source = directory.file("foto.jpg", b"the original photograph");
+        let composition = composition();
+
+        let failure = save(
+            &request(
+                &source,
+                &composition,
+                SaveChoice::Replace,
+                OutputFormat::Jpeg,
+                None,
+            ),
+            &FakeRasteriser::new(),
+            &RefusingBin,
+            &CancellationToken::new(),
+        )
+        .expect_err("the Trash refused");
+
+        assert!(matches!(failure, EngineError::NotReplaced { .. }));
+        assert_eq!(
+            std::fs::read(&source).expect("the original"),
+            b"the original photograph".to_vec(),
+            "an original that could not reach the Trash is not overwritten"
+        );
+        let names: Vec<_> = std::fs::read_dir(&directory.0)
+            .expect("the directory")
+            .map(|entry| entry.expect("an entry").file_name())
+            .collect();
+        assert_eq!(
+            names.len(),
+            1,
+            "no staged sibling is left behind: {names:?}"
         );
     }
 

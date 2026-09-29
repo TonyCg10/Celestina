@@ -50,27 +50,11 @@ QPen penFor(::std::uint32_t rgba, float width)
     return pen;
 }
 
-// Blurring by shrinking and growing again. Qt has no blur outside the graphics
-// effects framework, which needs a scene; a smooth downscale followed by a
-// smooth upscale is what that framework does to approximate one anyway, and it
-// is genuinely irreversible, which is the property a redaction needs.
-QImage blurred(const QImage &area)
-{
-    const int width = std::max(1, area.width() / 24);
-    const int height = std::max(1, area.height() / 24);
-    return area.scaled(width, height, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
-        .scaled(area.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-}
-
-// Pixelating by shrinking smoothly and growing with nearest-neighbour, which is
-// what produces visible blocks rather than a soft smear.
-QImage pixelated(const QImage &area)
-{
-    const int width = std::max(1, area.width() / 16);
-    const int height = std::max(1, area.height() / 16);
-    return area.scaled(width, height, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
-        .scaled(area.size(), Qt::IgnoreAspectRatio, Qt::FastTransformation);
-}
+// The colour a redaction leaves. Fixed, opaque and independent of the picture:
+// a pixelated or blurred region keeps a function of the pixels it covers, and
+// for text that function is recoverable (the Depix class of attacks), so the
+// only fill that keeps nothing is one that reads nothing.
+constexpr QRgb redactionColour = qRgba(0, 0, 0, 255);
 
 // A read-only descriptor closed on scope exit unless a QFile adopted it. The
 // same seam `imageprobe.cpp` uses, for the same reason: `open` on raw bytes is
@@ -275,20 +259,23 @@ void FluoritaCanvas::drawHighlight(float x,
     painter.fillRect(rectangleFrom(x, y, width, height), colourFrom(rgba));
 }
 
-void FluoritaCanvas::redact(float x, float y, float width, float height, bool blur)
+void FluoritaCanvas::redact(float x, float y, float width, float height)
 {
     if (m_image.isNull()) {
         return;
     }
-    const QRect area = rectangleFrom(x, y, width, height).toRect().intersected(m_image.rect());
+    // Aligned outwards, so a pixel the area only partly covers is covered
+    // whole rather than left half-readable at the edge.
+    const QRect area =
+        rectangleFrom(x, y, width, height).toAlignedRect().intersected(m_image.rect());
     if (area.isEmpty()) {
         return;
     }
-    const QImage patch = m_image.copy(area);
-    const QImage hidden = blur ? blurred(patch) : pixelated(patch);
-
+    // Source mode writes the colour as it is, alpha included, instead of
+    // blending it with what was there.
     QPainter painter(&m_image);
-    painter.drawImage(area, hidden);
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.fillRect(area, QColor::fromRgba(redactionColour));
 }
 
 void FluoritaCanvas::drawText(float x,

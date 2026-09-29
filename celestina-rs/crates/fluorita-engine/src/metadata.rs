@@ -21,13 +21,14 @@
 
 use std::path::{Path, PathBuf};
 
-use celestina_core::{atomic_file, CancellationToken};
+use celestina_core::CancellationToken;
 use fluorita_core::{
     MetadataFormat, MetadataRejected, PrivateFact, SaveChoice, TagChange, TagField,
 };
 
 use crate::edit::Bin;
 use crate::error::{EngineError, EngineResult};
+use crate::landing;
 
 /// The largest file this will read whole in order to rewrite its header.
 ///
@@ -66,8 +67,8 @@ pub struct MetadataRequest<'a> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MetadataWritten {
     pub written: PathBuf,
-    /// Where the original went, when it was replaced and the result did not
-    /// take its own path.
+    /// Where the original went: `Some` for every replacement, `None` for a
+    /// copy.
     pub trashed_original: Option<PathBuf>,
     /// The media stream that was carried across, in bytes. Recorded because it
     /// is the number a caller can compare against the source to see that
@@ -81,8 +82,9 @@ pub struct MetadataWritten {
 ///
 /// Refuses a relative source, a container this suite does not write, a file
 /// past [`MAX_CONTAINER_BYTES`], a malformed container, a cancellation, and any
-/// filesystem failure. The destination is written before the original is moved,
-/// exactly as an edit's save is.
+/// filesystem failure. The result lands exactly as an edit's save does: staged
+/// and synced before the original moves to the Trash, and never over a name
+/// that appeared meanwhile.
 pub fn write(
     request: &MetadataRequest<'_>,
     bin: &dyn Bin,
@@ -140,29 +142,19 @@ pub fn write(
         SaveChoice::Copy => beside(request.source, request.copy_marker)?,
         SaveChoice::Replace => request.source.to_path_buf(),
     };
-    atomic_file::replace(&destination, &rewritten.bytes).map_err(|source| EngineError::Io {
-        operation: "writing the retagged file",
-        path: destination.clone(),
-        source,
-    })?;
-
-    let trashed_original = match request.choice {
-        SaveChoice::Copy => None,
-        SaveChoice::Replace if destination == request.source => None,
-        SaveChoice::Replace => {
-            Some(
-                bin.send(request.source, cancellation)
-                    .map_err(|source| EngineError::Trash {
-                        path: request.source.to_path_buf(),
-                        source,
-                    })?,
-            )
-        }
-    };
+    let landed = landing::land(
+        request.source,
+        &destination,
+        &rewritten.bytes,
+        request.choice,
+        bin,
+        cancellation,
+        "writing the retagged file",
+    )?;
 
     Ok(MetadataWritten {
-        written: destination,
-        trashed_original,
+        written: landed.written,
+        trashed_original: landed.trashed_original,
         stream_bytes: rewritten.stream_bytes,
     })
 }
@@ -401,40 +393,201 @@ fn read_u32_le(bytes: &[u8], offset: usize) -> Option<u32> {
 
 /// The facts a photograph is carrying, out of the ones a person is offered.
 ///
-/// Absent EXIF answers an empty list, which is what lets a surface say "this
-/// picture carries nothing" instead of offering a removal that would do
+/// Read from every place a JPEG keeps them: the EXIF IFDs, the XMP packets
+/// (standard and extended), and the secondary images a multi-picture file
+/// appends after the primary one, which carry their own. A picture that
+/// carries none of them answers an empty list, which is what lets a surface say
+/// "this picture carries nothing" instead of offering a removal that would do
 /// nothing.
 #[must_use]
 pub fn private_facts(bytes: &[u8]) -> Vec<PrivateFact> {
     let mut found = Vec::new();
-    let Some((exif, endian)) = jpeg_exif_start(bytes) else {
-        return found;
-    };
-    for tag in ifd_tags(bytes, exif, endian) {
-        let fact = match tag {
-            // GPS IFD pointer.
-            0x8825 => PrivateFact::Location,
-            // Make, Model, and the lens/software that recorded it.
-            0x010F | 0x0110 | 0x0131 => PrivateFact::Camera,
-            // DateTime, DateTimeOriginal, DateTimeDigitized.
-            0x0132 | 0x9003 | 0x9004 => PrivateFact::Timestamp,
-            _ => continue,
-        };
-        if !found.contains(&fact) {
-            found.push(fact);
+    image_facts(bytes, &mut found);
+    if let Some(primary_end) = headers(bytes).and_then(|(_, scan)| image_end(bytes, scan)) {
+        let mut cursor = primary_end;
+        for _ in 0..MAX_TRAILING_IMAGES {
+            let Some(offset) = find(&bytes[cursor..], &[0xFF, 0xD8, 0xFF]) else {
+                break;
+            };
+            let start = cursor + offset;
+            image_facts(&bytes[start..], &mut found);
+            cursor = start + 3;
         }
     }
     found
 }
 
-/// Removes a JPEG's EXIF, copying every other segment and the entropy-coded
-/// data across untouched.
+/// How many images appended after the primary one are read for facts. A phone
+/// writes one or two; the bound is what keeps a hostile file from turning the
+/// search into a walk over every byte pattern it can plant.
+const MAX_TRAILING_IMAGES: usize = 16;
+
+/// The facts in one image's header segments: its EXIF and its XMP.
+fn image_facts(bytes: &[u8], found: &mut Vec<PrivateFact>) {
+    let mut note = |fact| {
+        if !found.contains(&fact) {
+            found.push(fact);
+        }
+    };
+    if let Some((exif, endian)) = jpeg_exif_start(bytes) {
+        for tag in ifd_tags(bytes, exif, endian) {
+            match tag {
+                // GPS IFD pointer.
+                0x8825 => note(PrivateFact::Location),
+                // Make, Model, and the lens/software that recorded it.
+                0x010F | 0x0110 | 0x0131 => note(PrivateFact::Camera),
+                // DateTime, DateTimeOriginal, DateTimeDigitized.
+                0x0132 | 0x9003 | 0x9004 => note(PrivateFact::Timestamp),
+                _ => {}
+            }
+        }
+    }
+    let Some((segments, _)) = headers(bytes) else {
+        return;
+    };
+    for packet in xmp_packets(bytes, &segments) {
+        for (fact, keys) in XMP_KEYS {
+            if keys.iter().any(|key| find(&packet, key).is_some()) {
+                note(*fact);
+            }
+        }
+    }
+}
+
+const XMP_STANDARD: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
+const XMP_EXTENDED: &[u8] = b"http://ns.adobe.com/xmp/extension/\0";
+/// An extended-XMP chunk's header after its namespace: a 32-byte GUID, the
+/// full packet's length and this chunk's offset in it.
+const XMP_EXTENDED_HEADER: usize = 32 + 4 + 4;
+
+/// Every XMP packet in `segments`, whole: each standard packet as it is, and
+/// each extended packet reassembled from its chunks (grouped by GUID, ordered
+/// by offset), so a key split across two chunks is still found. The result is
+/// bounded by the segments it copies from.
+fn xmp_packets(bytes: &[u8], segments: &[Segment]) -> Vec<Vec<u8>> {
+    let mut packets = Vec::new();
+    // GUID, declared full length, offset, data.
+    let mut extended: Vec<(&[u8], u32, u32, &[u8])> = Vec::new();
+    for segment in segments
+        .iter()
+        .filter(|segment| segment.kind == SegmentKind::Xmp)
+    {
+        let body = &bytes[segment.body.clone()];
+        if let Some(packet) = body.strip_prefix(XMP_STANDARD) {
+            packets.push(packet.to_vec());
+        } else if let Some(chunk) = body.strip_prefix(XMP_EXTENDED) {
+            match (
+                chunk.get(..32),
+                chunk.get(32..36),
+                chunk.get(36..40),
+                chunk.get(XMP_EXTENDED_HEADER..),
+            ) {
+                (Some(guid), Some(full), Some(offset), Some(data)) => {
+                    let full = u32::from_be_bytes([full[0], full[1], full[2], full[3]]);
+                    let offset = u32::from_be_bytes([offset[0], offset[1], offset[2], offset[3]]);
+                    extended.push((guid, full, offset, data));
+                }
+                // A chunk too short for its header is still scanned as it
+                // is: a malformed packet is no reason to report nothing.
+                _ => packets.push(chunk.to_vec()),
+            }
+        }
+    }
+    extended.sort_by(|left, right| left.0.cmp(right.0).then(left.2.cmp(&right.2)));
+    // GUID, the most this packet may grow to, chunks joined, the packet.
+    let mut current: Option<(&[u8], usize, usize, Vec<u8>)> = None;
+    for (guid, full, offset, data) in extended {
+        if current.as_ref().is_none_or(|(held, ..)| *held != guid) {
+            if let Some((.., packet)) = current.take() {
+                packets.push(packet);
+            }
+            let declared = usize::try_from(full).unwrap_or(usize::MAX);
+            current = Some((guid, declared.min(MAX_EXTENDED_XMP_BYTES), 0, Vec::new()));
+        }
+        let Some((_, limit, joined, packet)) = current.as_mut() else {
+            continue;
+        };
+        // Past the declared length, the byte cap or the chunk cap a chunk is
+        // not read for facts; it is still an XMP segment, so the strip still
+        // removes it.
+        let within = usize::try_from(offset).is_ok_and(|offset| offset < *limit);
+        if !within || *joined >= MAX_EXTENDED_XMP_CHUNKS {
+            continue;
+        }
+        let room = limit.saturating_sub(packet.len());
+        packet.extend_from_slice(&data[..data.len().min(room)]);
+        *joined += 1;
+    }
+    if let Some((.., packet)) = current {
+        packets.push(packet);
+    }
+    packets
+}
+
+/// The most of one extended-XMP packet that is joined for facts: 64 chunks of
+/// a JPEG segment's 64 KiB. A packet may declare any length; this, and the
+/// length it declares, bound what is allocated.
+const MAX_EXTENDED_XMP_BYTES: usize = 64 * 64 * 1024;
+/// The most chunks of one extended-XMP packet that are joined.
+const MAX_EXTENDED_XMP_CHUNKS: usize = 64;
+
+/// The XMP properties that say where, with what and when a picture was taken,
+/// as they appear in a packet. `:GPS` covers every EXIF GPS property under any
+/// namespace prefix a writer chose.
+const XMP_KEYS: &[(PrivateFact, &[&[u8]])] = &[
+    (
+        PrivateFact::Location,
+        &[
+            b":GPS",
+            b"Iptc4xmpCore:Location",
+            b"Iptc4xmpExt:LocationCreated",
+            b"Iptc4xmpExt:LocationShown",
+            b"photoshop:City",
+            b"photoshop:State",
+            b"photoshop:Country",
+        ],
+    ),
+    (
+        PrivateFact::Camera,
+        &[
+            b"tiff:Make",
+            b"tiff:Model",
+            b"aux:Lens",
+            b"exifEX:LensModel",
+            b"xmp:CreatorTool",
+        ],
+    ),
+    (
+        PrivateFact::Timestamp,
+        &[
+            b"xmp:CreateDate",
+            b"xmp:ModifyDate",
+            b"xmp:MetadataDate",
+            b"exif:DateTimeOriginal",
+            b"exif:DateTimeDigitized",
+            b"photoshop:DateCreated",
+        ],
+    ),
+];
+
+/// Removes what a photograph says about where, with what and when it was
+/// taken, copying every other segment and the primary picture's scans across
+/// untouched.
 ///
-/// The whole APP1 segment goes, not the individual tags: rewriting an IFD means
-/// correcting every offset inside it, and a photograph whose camera fields were
-/// surgically removed but whose GPS pointer still resolves is worse than one
-/// that simply carries no EXIF. `facts` therefore selects *whether* to strip,
-/// not which bytes — an empty list changes nothing.
+/// Whole segments go, not individual tags: rewriting an IFD means correcting
+/// every offset inside it, and a photograph whose camera fields were surgically
+/// removed but whose GPS pointer still resolves is worse than one that simply
+/// carries no EXIF. So the EXIF segment, every XMP packet (standard and
+/// extended) and the multi-picture index go, and so does everything after the
+/// primary picture's end-of-image marker — the secondary images a phone
+/// appends each carry their own EXIF, and a Motion Photo's MP4 goes with the
+/// XMP that pointed at it.
+///
+/// Segments between the scans of a progressive picture (tables, restart
+/// intervals) are copied through and not read: cameras and editors write
+/// their APP metadata before the first start-of-scan, which is where this
+/// looks. `facts` therefore selects *whether* to
+/// strip, not which bytes — an empty list changes nothing.
 #[must_use]
 pub fn strip_jpeg_exif(bytes: &[u8], facts: &[PrivateFact]) -> Option<Vec<u8>> {
     strip_exif(bytes, facts).map(|rewritten| rewritten.bytes)
@@ -451,7 +604,69 @@ fn strip_exif(bytes: &[u8], facts: &[PrivateFact]) -> Option<Rewritten> {
         });
     }
 
+    let (segments, scan) = headers(bytes)?;
+    let end = image_end(bytes, scan)?;
     let mut out: Vec<u8> = vec![0xFF, 0xD8];
+    for segment in &segments {
+        if !segment.kind.carries_private_facts() {
+            out.extend_from_slice(&bytes[segment.start..segment.body.end]);
+        }
+    }
+    // Start of scan: everything from here to the primary EOI is the picture.
+    let stream = &bytes[scan..end];
+    out.extend_from_slice(stream);
+    Some(Rewritten {
+        bytes: out,
+        stream_bytes: stream.len() as u64,
+    })
+}
+
+/// One header segment of a JPEG: where its marker starts, where its body lies
+/// and what it holds.
+struct Segment {
+    start: usize,
+    body: std::ops::Range<usize>,
+    kind: SegmentKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SegmentKind {
+    Exif,
+    Xmp,
+    MultiPicture,
+    Other,
+}
+
+impl SegmentKind {
+    const fn carries_private_facts(self) -> bool {
+        !matches!(self, Self::Other)
+    }
+}
+
+impl SegmentKind {
+    fn of(marker: u8, body: &[u8]) -> Self {
+        match marker {
+            0xE1 if body.starts_with(b"Exif\0\0") => Self::Exif,
+            0xE1 if body.starts_with(b"http://ns.adobe.com/xap/1.0/\0")
+                || body.starts_with(b"http://ns.adobe.com/xmp/extension/\0") =>
+            {
+                Self::Xmp
+            }
+            0xE2 if body.starts_with(b"MPF\0") => Self::MultiPicture,
+            _ => Self::Other,
+        }
+    }
+}
+
+/// The header segments of the JPEG at the start of `bytes`, and the offset of
+/// its first start-of-scan marker. `None` for anything that is not a JPEG or
+/// whose lengths do not fit the slice. Every length is checked against the
+/// slice, never trusted.
+fn headers(bytes: &[u8]) -> Option<(Vec<Segment>, usize)> {
+    if bytes.get(0..2)? != [0xFF, 0xD8] {
+        return None;
+    }
+    let mut segments = Vec::new();
     let mut cursor = 2usize;
     loop {
         let header = bytes.get(cursor..cursor + 4)?;
@@ -460,8 +675,7 @@ fn strip_exif(bytes: &[u8], facts: &[PrivateFact]) -> Option<Rewritten> {
         }
         let marker = header[1];
         if marker == 0xDA {
-            // Start of scan: everything from here is the picture itself.
-            break;
+            return Some((segments, cursor));
         }
         let length = u16::from_be_bytes([header[2], header[3]]) as usize;
         if length < 2 {
@@ -471,19 +685,77 @@ fn strip_exif(bytes: &[u8], facts: &[PrivateFact]) -> Option<Rewritten> {
         if end > bytes.len() {
             return None;
         }
-        let is_exif = marker == 0xE1 && bytes.get(cursor + 4..cursor + 10) == Some(b"Exif\0\0");
-        if !is_exif {
-            out.extend_from_slice(bytes.get(cursor..end)?);
-        }
+        segments.push(Segment {
+            start: cursor,
+            body: cursor + 4..end,
+            kind: SegmentKind::of(marker, &bytes[cursor + 4..end]),
+        });
         cursor = end;
     }
+}
 
-    let stream = bytes.get(cursor..)?;
-    out.extend_from_slice(stream);
-    Some(Rewritten {
-        bytes: out,
-        stream_bytes: stream.len() as u64,
-    })
+/// Where the image whose first start-of-scan is at `scan` ends: just past its
+/// EOI marker, or the end of `bytes` when the file stops before one.
+///
+/// Walks the scans and the segments between them (a progressive JPEG has
+/// several). Inside a scan, `FF 00` is a stuffed data byte, `FF D0`–`FF D7` a
+/// restart marker and a run of `FF` fill before a marker; only another marker
+/// ends the scan. A segment whose length does not fit the slice is refused.
+fn image_end(bytes: &[u8], scan: usize) -> Option<usize> {
+    let mut cursor = scan;
+    loop {
+        // Fill bytes may precede any marker.
+        while bytes.get(cursor + 1) == Some(&0xFF) {
+            cursor += 1;
+        }
+        let Some(marker) = bytes.get(cursor..cursor + 2) else {
+            return Some(bytes.len());
+        };
+        if marker[0] != 0xFF {
+            return None;
+        }
+        if marker[1] == 0xD9 {
+            return Some(cursor + 2);
+        }
+        let length = u16::from_be_bytes([*bytes.get(cursor + 2)?, *bytes.get(cursor + 3)?]);
+        if length < 2 {
+            return None;
+        }
+        let end = (cursor + 2).checked_add(usize::from(length))?;
+        if end > bytes.len() {
+            return None;
+        }
+        cursor = end;
+        if marker[1] == 0xDA {
+            cursor = scan_end(bytes, cursor);
+        }
+    }
+}
+
+/// The offset of the marker that ends the entropy-coded data starting at
+/// `cursor`, or the end of `bytes`.
+fn scan_end(bytes: &[u8], mut cursor: usize) -> usize {
+    while let Some(offset) = bytes.get(cursor..).and_then(|rest| find(rest, &[0xFF])) {
+        let at = cursor + offset;
+        match bytes.get(at + 1) {
+            // Stuffed data byte, restart marker, or fill before a marker.
+            Some(0x00 | 0xD0..=0xD7) => cursor = at + 2,
+            Some(0xFF) => cursor = at + 1,
+            Some(_) => return at,
+            None => return bytes.len(),
+        }
+    }
+    bytes.len()
+}
+
+/// The first offset of `needle` in `haystack`.
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return None;
+    }
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -735,16 +1007,40 @@ mod tests {
         &bytes[start..]
     }
 
+    /// Records what it was sent and keeps it in `keep_in`, when one is given,
+    /// so a test can find the original there afterwards.
     #[derive(Default)]
     struct FakeBin {
         asked_for: RefCell<Vec<PathBuf>>,
+        keep_in: Option<PathBuf>,
+    }
+
+    impl FakeBin {
+        fn keeping(directory: &Path) -> Self {
+            let keep_in = directory.join("bin");
+            std::fs::create_dir_all(&keep_in).expect("the bin");
+            Self {
+                keep_in: Some(keep_in),
+                ..Self::default()
+            }
+        }
     }
 
     impl Bin for FakeBin {
         fn send(&self, path: &Path, _cancellation: &CancellationToken) -> Result<PathBuf, OpError> {
             self.asked_for.borrow_mut().push(path.to_path_buf());
-            std::fs::remove_file(path).map_err(|error| OpError::io(path, &error))?;
-            Ok(PathBuf::from("/trash").join(path.file_name().unwrap_or_default()))
+            let name = path.file_name().unwrap_or_default();
+            match &self.keep_in {
+                Some(directory) => {
+                    let kept = directory.join(name);
+                    std::fs::rename(path, &kept).map_err(|error| OpError::io(path, &error))?;
+                    Ok(kept)
+                }
+                None => {
+                    std::fs::remove_file(path).map_err(|error| OpError::io(path, &error))?;
+                    Ok(PathBuf::from("/trash").join(name))
+                }
+            }
         }
     }
 
@@ -918,10 +1214,205 @@ mod tests {
         out.extend_from_slice(&((comment.len() + 2) as u16).to_be_bytes());
         out.extend_from_slice(comment);
 
-        out.extend_from_slice(&[0xFF, 0xDA]);
+        // A start-of-scan header with its length, as every real JPEG has: the
+        // strip walks the scan to find where the primary picture ends.
+        out.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00]);
         out.extend_from_slice(b"entropy-coded-picture-data");
         out.extend_from_slice(&[0xFF, 0xD9]);
         out
+    }
+
+    /// A JPEG from its header segments, one scan of `entropy` bytes and an
+    /// EOI, followed by `trailing` bytes.
+    fn jpeg(segments: &[(u8, Vec<u8>)], entropy: &[u8], trailing: &[u8]) -> Vec<u8> {
+        let mut out = vec![0xFF, 0xD8];
+        for (marker, body) in segments {
+            out.extend_from_slice(&[0xFF, *marker]);
+            out.extend_from_slice(&((body.len() + 2) as u16).to_be_bytes());
+            out.extend_from_slice(body);
+        }
+        // A start-of-scan header with one component, then the scan itself.
+        out.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00]);
+        out.extend_from_slice(entropy);
+        out.extend_from_slice(&[0xFF, 0xD9]);
+        out.extend_from_slice(trailing);
+        out
+    }
+
+    fn xmp(body: &str) -> (u8, Vec<u8>) {
+        let mut segment = b"http://ns.adobe.com/xap/1.0/\0".to_vec();
+        segment.extend_from_slice(body.as_bytes());
+        (0xE1, segment)
+    }
+
+    fn extended_xmp(body: &str) -> (u8, Vec<u8>) {
+        let mut segment = b"http://ns.adobe.com/xmp/extension/\0".to_vec();
+        segment.extend_from_slice(&[b'0'; 32]);
+        segment.extend_from_slice(&[0, 0, 0, 64, 0, 0, 0, 0]);
+        segment.extend_from_slice(body.as_bytes());
+        (0xE1, segment)
+    }
+
+    fn comment() -> (u8, Vec<u8>) {
+        (0xFE, b"made by the author".to_vec())
+    }
+
+    const GPS_XMP: &str = "<x:xmpmeta><rdf:Description exif:GPSLatitude=\"40,25.1N\" \
+                           exif:GPSLongitude=\"3,42.2W\"/></x:xmpmeta>";
+
+    /// Entropy-coded bytes a naive scan would misread: a stuffed `FF 00`, a
+    /// restart marker, and fill bytes before one.
+    const TRICKY_SCAN: &[u8] = b"scan\xFF\x00data\xFF\xD0more\xFF\xFF\xD1end";
+
+    fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+        haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
+    }
+
+    #[test]
+    fn a_location_carried_only_in_xmp_is_reported() {
+        let photo = jpeg(&[xmp(GPS_XMP), comment()], b"pixels", b"");
+        assert_eq!(private_facts(&photo), vec![PrivateFact::Location]);
+
+        let dated = jpeg(
+            &[xmp(
+                "<rdf:Description xmp:CreateDate=\"2026\" tiff:Model=\"X\"/>",
+            )],
+            b"pixels",
+            b"",
+        );
+        let facts = private_facts(&dated);
+        assert!(facts.contains(&PrivateFact::Timestamp));
+        assert!(facts.contains(&PrivateFact::Camera));
+        assert!(!facts.contains(&PrivateFact::Location));
+    }
+
+    #[test]
+    fn removing_a_location_strips_xmp_and_extended_xmp_and_keeps_the_picture() {
+        let photo = jpeg(
+            &[
+                xmp(GPS_XMP),
+                extended_xmp("<exif:GPSLatitude>40,25.1N</exif:GPSLatitude>"),
+                comment(),
+            ],
+            TRICKY_SCAN,
+            b"",
+        );
+
+        let stripped = strip_jpeg_exif(&photo, &[PrivateFact::Location]).expect("stripped");
+
+        assert!(private_facts(&stripped).is_empty());
+        assert!(!contains(&stripped, b"GPS"), "no GPS key survives");
+        assert!(
+            !contains(&stripped, b"ns.adobe.com"),
+            "no XMP packet survives"
+        );
+        assert!(contains(&stripped, b"made by the author"));
+        assert!(
+            stripped.ends_with(&[TRICKY_SCAN, &[0xFF, 0xD9][..]].concat()),
+            "the scan is copied across byte for byte"
+        );
+    }
+
+    #[test]
+    fn a_gps_key_split_across_extended_xmp_chunks_is_still_found() {
+        let chunk = |offset: u32, text: &str| {
+            let mut segment = b"http://ns.adobe.com/xmp/extension/\0".to_vec();
+            segment.extend_from_slice(&[b'A'; 32]);
+            segment.extend_from_slice(&64u32.to_be_bytes());
+            segment.extend_from_slice(&offset.to_be_bytes());
+            segment.extend_from_slice(text.as_bytes());
+            (0xE1, segment)
+        };
+        // Written out of order, and the key cut in the middle.
+        let photo = jpeg(
+            &[chunk(12, "SLatitude=\"40N\""), chunk(0, "<rdf exif:GP")],
+            b"pixels",
+            b"",
+        );
+        assert_eq!(private_facts(&photo), vec![PrivateFact::Location]);
+        let stripped = strip_jpeg_exif(&photo, &private_facts(&photo)).expect("stripped");
+        assert!(!contains(&stripped, b"Latitude"));
+    }
+
+    #[test]
+    fn an_extended_xmp_packet_is_joined_only_as_far_as_it_is_bounded() {
+        let chunk = |full: u32, offset: u32, text: &str| {
+            let mut segment = b"http://ns.adobe.com/xmp/extension/\0".to_vec();
+            segment.extend_from_slice(&[b'B'; 32]);
+            segment.extend_from_slice(&full.to_be_bytes());
+            segment.extend_from_slice(&offset.to_be_bytes());
+            segment.extend_from_slice(text.as_bytes());
+            (0xE1, segment)
+        };
+
+        // A packet that declares 8 bytes: the chunk past them is not read.
+        let short = jpeg(
+            &[chunk(8, 0, "<rdf abc"), chunk(8, 8, "exif:GPSLatitude")],
+            b"pixels",
+            b"",
+        );
+        assert!(private_facts(&short).is_empty());
+        let stripped = strip_jpeg_exif(&short, &[PrivateFact::Location]).expect("stripped");
+        assert!(
+            !contains(&stripped, b"GPSLatitude"),
+            "a chunk not read is still stripped"
+        );
+
+        // A packet that declares far more than it holds, in more chunks than
+        // are joined: what is joined stays bounded.
+        let many: Vec<(u8, Vec<u8>)> = (0..100u32)
+            .map(|index| chunk(u32::MAX, index * 4, "abcd"))
+            .collect();
+        let photo = jpeg(&many, b"pixels", b"");
+        let (segments, _) = super::headers(&photo).expect("headers");
+        let packets = super::xmp_packets(&photo, &segments);
+        assert_eq!(packets.len(), 1);
+        assert_eq!(packets[0].len(), super::MAX_EXTENDED_XMP_CHUNKS * 4);
+    }
+
+    #[test]
+    fn secondary_images_after_the_primary_are_reported_and_dropped() {
+        // A phone's multi-picture file: an MPF index in the primary, and a
+        // second JPEG after the primary's EOI that carries its own location.
+        let secondary = jpeg(&[xmp(GPS_XMP)], b"secondary pixels", b"");
+        let mut mpf = b"MPF\0".to_vec();
+        mpf.extend_from_slice(b"II*\0index");
+        let photo = jpeg(&[(0xE2, mpf), comment()], TRICKY_SCAN, &secondary);
+
+        assert_eq!(
+            private_facts(&photo),
+            vec![PrivateFact::Location],
+            "the secondary image's location is reported"
+        );
+
+        let stripped = strip_jpeg_exif(&photo, &[PrivateFact::Location]).expect("stripped");
+        assert!(!contains(&stripped, b"secondary pixels"));
+        assert!(!contains(&stripped, b"MPF\0"));
+        assert!(!contains(&stripped, b"GPS"));
+        assert!(stripped.ends_with(&[TRICKY_SCAN, &[0xFF, 0xD9][..]].concat()));
+        assert!(private_facts(&stripped).is_empty());
+    }
+
+    #[test]
+    fn every_scan_of_a_progressive_primary_survives_the_strip() {
+        // Two scans with a table segment between them, then the EOI.
+        let mut photo = jpeg(&[xmp(GPS_XMP)], b"first scan", b"");
+        photo.truncate(photo.len() - 2);
+        photo.extend_from_slice(&[0xFF, 0xC4, 0x00, 0x05, 0x10, 0x20, 0x30]);
+        photo.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3F, 0x00]);
+        photo.extend_from_slice(b"second scan");
+        photo.extend_from_slice(&[0xFF, 0xD9]);
+        photo.extend_from_slice(b"trailing");
+
+        let stripped = strip_jpeg_exif(&photo, &[PrivateFact::Location]).expect("stripped");
+        assert!(contains(&stripped, b"first scan"));
+        assert!(contains(
+            &stripped,
+            &[0xFF, 0xC4, 0x00, 0x05, 0x10, 0x20, 0x30]
+        ));
+        assert!(stripped.ends_with(b"second scan\xFF\xD9"));
     }
 
     fn cover<'a>(bytes: &'a [u8]) -> super::Cover<'a> {
@@ -1017,9 +1508,10 @@ mod tests {
     #[test]
     fn a_copy_lands_beside_the_original_and_a_replacement_takes_its_place() {
         let directory = TestDir::new("write");
-        let source = directory.file("pista.flac", &flac(Some(&[("TITLE", "Pavana")])));
+        let original = flac(Some(&[("TITLE", "Pavana")]));
+        let source = directory.file("pista.flac", &original);
         let tags = change(TagField::Artist, "Ravel");
-        let bin = FakeBin::default();
+        let bin = FakeBin::keeping(&directory.0);
 
         let copy = write(
             &MetadataRequest {
@@ -1059,11 +1551,19 @@ mod tests {
         .expect("the replacement lands");
 
         assert_eq!(replacement.written, source);
+        // ADR 0009: the original reaches the Trash even though the result
+        // keeps its name, so a retag can always be undone.
+        let trashed = replacement
+            .trashed_original
+            .expect("a replacement trashes its original");
         assert_eq!(
-            replacement.trashed_original, None,
-            "a replacement that keeps the name has nothing to trash"
+            bin.asked_for.borrow().as_slice(),
+            std::slice::from_ref(&source)
         );
-        assert!(bin.asked_for.borrow().is_empty());
+        assert_eq!(
+            std::fs::read(&trashed).expect("the original, in the bin"),
+            original
+        );
         assert_eq!(
             tags_of(&std::fs::read(&source).expect("the file")),
             vec![
@@ -1071,6 +1571,46 @@ mod tests {
                 (TagField::Artist, "Ravel".to_owned())
             ]
         );
+    }
+
+    #[test]
+    fn removing_a_location_in_place_keeps_a_private_photographs_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = TestDir::new("strip-in-place");
+        let original = photograph(true);
+        let source = directory.file("foto.jpg", &original);
+        std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o600))
+            .expect("a private photograph");
+        let bin = FakeBin::keeping(&directory.0);
+
+        let written = write(
+            &MetadataRequest {
+                source: &source,
+                tags: &TagChange::new(),
+                strip: &[PrivateFact::Location],
+                cover: None,
+                choice: SaveChoice::Replace,
+                copy_marker: "editado",
+            },
+            &bin,
+            &CancellationToken::new(),
+        )
+        .expect("the replacement lands");
+
+        assert_eq!(written.written, source);
+        assert!(private_facts(&std::fs::read(&source).expect("the result")).is_empty());
+        assert_eq!(
+            std::fs::metadata(&source)
+                .expect("the result")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600,
+            "removing a location must not make the photograph readable by others"
+        );
+        let trashed = written.trashed_original.expect("the original is trashed");
+        assert_eq!(std::fs::read(trashed).expect("the original"), original);
     }
 
     #[test]

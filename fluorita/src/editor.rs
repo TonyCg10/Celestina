@@ -105,8 +105,7 @@ pub mod qobject {
         /// Handles as text, one of `text`/`stroke`/`line`/`shape`/`highlight`/
         /// `redact`, the geometry as comma-separated canvas pixels, the ink as
         /// `#rrggbbaa`, the stroke width, and what is left: the words for a
-        /// text, `rect`/`ellipse` for a shape, `blur`/`pixelate` for a
-        /// redaction.
+        /// text, `rect`/`ellipse` for a shape, `solid` for a redaction.
         #[qproperty(QStringList, object_ids)]
         #[qproperty(QStringList, object_kinds)]
         #[qproperty(QStringList, object_geometry)]
@@ -194,10 +193,10 @@ pub mod qobject {
         #[qinvokable]
         fn add_highlight(self: Pin<&mut FluoritaEditor>, area: &QString, ink: &QString);
 
-        /// Covers an area so what is under it cannot be recovered from the
-        /// result.
+        /// Covers an area with a solid fill, so nothing of what is under it
+        /// is in the result.
         #[qinvokable]
-        fn add_redaction(self: Pin<&mut FluoritaEditor>, area: &QString, blur: bool);
+        fn add_redaction(self: Pin<&mut FluoritaEditor>, area: &QString);
 
         /// Selects one object, or `0` to select none.
         #[qinvokable]
@@ -540,7 +539,7 @@ impl qobject::FluoritaEditor {
         self.as_mut().place(annotation);
     }
 
-    pub fn add_redaction(mut self: std::pin::Pin<&mut Self>, area: &QString, blur: bool) {
+    pub fn add_redaction(mut self: std::pin::Pin<&mut Self>, area: &QString) {
         let Some(area) = parse_area(area) else {
             self.as_mut()
                 .refuse(copy::rejected(EditRejected::InvalidGeometry));
@@ -548,11 +547,7 @@ impl qobject::FluoritaEditor {
         };
         let annotation = Annotation::Redact {
             area,
-            style: if blur {
-                Redaction::Blur
-            } else {
-                Redaction::Pixelate
-            },
+            style: Redaction::Solid,
         };
         self.as_mut().place(annotation);
     }
@@ -1093,8 +1088,7 @@ fn describe(annotation: &Annotation) -> Row {
             ink: String::new(),
             width: String::new(),
             detail: match style {
-                Redaction::Pixelate => "pixelate",
-                Redaction::Blur => "blur",
+                Redaction::Solid => "solid",
             }
             .to_owned(),
         },
@@ -1152,7 +1146,7 @@ mod tests {
     fn redaction() -> Annotation {
         Annotation::Redact {
             area: Area::new(Point::new(10.0, 20.0), 30.0, 40.0),
-            style: Redaction::Pixelate,
+            style: Redaction::Solid,
         }
     }
 

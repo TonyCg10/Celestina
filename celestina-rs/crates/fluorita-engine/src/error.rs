@@ -8,6 +8,8 @@ use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
 
+use celestina_core::atomic_file::WriteError;
+
 #[derive(Debug)]
 pub enum EngineError {
     /// The backend could not be created at all — no libmpv, or a rejected
@@ -50,6 +52,29 @@ pub enum EngineError {
         path: PathBuf,
         source: siderita_ops::OpError,
     },
+    /// A replacement that takes its original's own name could not send the
+    /// original to the Trash, so nothing was written: `path` is exactly as it
+    /// was, and the staged result was removed.
+    NotReplaced {
+        path: PathBuf,
+        source: siderita_ops::OpError,
+    },
+    /// New bytes could not be staged beside `path`'s source, or could not take
+    /// their name — [`WriteError::TargetExists`] when a file appeared under it
+    /// meanwhile, which is refused rather than overwritten. Nothing moved.
+    Landing {
+        operation: &'static str,
+        source: WriteError,
+    },
+    /// A replacement sent its original to the Trash (at `trashed`, where it can
+    /// be restored), and then the result could not take the original's name
+    /// `path`. Nothing is lost: the result is kept, synced, at `kept`.
+    ReplacementNotPublished {
+        path: PathBuf,
+        trashed: PathBuf,
+        kept: PathBuf,
+        source: std::io::Error,
+    },
     /// The worker thread is gone, so no further job can be accepted.
     WorkerStopped,
 }
@@ -84,6 +109,26 @@ impl fmt::Display for EngineError {
             Self::Trash { path, .. } => {
                 write!(formatter, "cannot send {} to the Trash", path.display())
             }
+            Self::NotReplaced { path, .. } => write!(
+                formatter,
+                "cannot send {} to the Trash, so it was not replaced",
+                path.display()
+            ),
+            Self::Landing { operation, source } => {
+                write!(formatter, "{operation} did not land: {source}")
+            }
+            Self::ReplacementNotPublished {
+                path,
+                trashed,
+                kept,
+                ..
+            } => write!(
+                formatter,
+                "the original of {} is in the Trash at {}; the result could not take its name and is kept at {}",
+                path.display(),
+                trashed.display(),
+                kept.display()
+            ),
             Self::WorkerStopped => formatter.write_str("the engine worker is no longer running"),
         }
     }
@@ -94,7 +139,9 @@ impl Error for EngineError {
         match self {
             Self::BackendUnavailable { source } | Self::Backend { source, .. } => Some(source),
             Self::Io { source, .. } => Some(source),
-            Self::Trash { source, .. } => Some(source),
+            Self::Trash { source, .. } | Self::NotReplaced { source, .. } => Some(source),
+            Self::Landing { source, .. } => Some(source),
+            Self::ReplacementNotPublished { source, .. } => Some(source),
             _ => None,
         }
     }
@@ -125,7 +172,13 @@ impl EngineError {
             // write here; the wording that tells a person the original is still
             // there belongs to the host, which is the one that knows a save was
             // what failed.
-            Self::Io { .. } | Self::Trash { .. } => "No se pudo escribir el resultado".to_owned(),
+            // Where the result went is the one thing a person must learn from
+            // this, on every surface that shows it, so its words are shared.
+            Self::ReplacementNotPublished { kept, .. } => crate::copy::replacement_kept(kept),
+            Self::Io { .. }
+            | Self::Trash { .. }
+            | Self::NotReplaced { .. }
+            | Self::Landing { .. } => "No se pudo escribir el resultado".to_owned(),
             Self::WorkerStopped => "El motor multimedia se detuvo".to_owned(),
         }
     }

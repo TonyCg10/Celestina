@@ -303,7 +303,7 @@ Item {
             surface.editor.addHighlight(area, surface.highlightInk)
             break
         case "redact":
-            surface.editor.addRedaction(area, false)
+            surface.editor.addRedaction(area)
             break
         case "text":
             textPrompt.ask(area)

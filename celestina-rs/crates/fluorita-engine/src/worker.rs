@@ -6,10 +6,11 @@
 //! same staleness discipline the rest of the suite uses.
 //!
 //! Shutdown is deterministic: dropping the worker closes the queue, cancels the
-//! job in flight and joins the thread. No detached thread outlives its host.
+//! job in flight and every queued one, and joins the thread. No detached thread
+//! outlives its host.
 
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -96,15 +97,37 @@ impl JobOutcome {
 /// was dropped": a host that cloned the sender would otherwise leave the thread
 /// blocked in `recv` forever and turn `Drop` into a hang.
 enum Message {
-    Work(Box<Job>),
+    /// A job with the token it runs under and its place in [`Outstanding`].
+    Work {
+        job: Box<Job>,
+        token: CancellationToken,
+        ticket: u64,
+    },
     Shutdown,
+}
+
+/// The tokens of every job submitted and not yet finished, in queue order.
+///
+/// A job's token exists from the moment it is submitted, not from the moment
+/// the thread dequeues it, so a cancel that arrives in between reaches the job
+/// it followed instead of the one before it.
+#[derive(Default)]
+struct Outstanding {
+    next_ticket: u64,
+    tokens: Vec<(u64, CancellationToken)>,
+}
+
+/// Only cheap token bookkeeping ever runs under this lock, so a poisoned lock
+/// still holds consistent data and is used as it is.
+fn lock(outstanding: &Mutex<Outstanding>) -> MutexGuard<'_, Outstanding> {
+    outstanding.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// A bounded, joinable engine worker.
 pub struct EngineWorker {
     jobs: Option<Sender<Message>>,
     outcomes: Receiver<JobOutcome>,
-    current: Arc<Mutex<CancellationToken>>,
+    outstanding: Arc<Mutex<Outstanding>>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -122,19 +145,12 @@ impl EngineWorker {
     {
         let (job_sender, job_receiver) = mpsc::channel::<Message>();
         let (outcome_sender, outcome_receiver) = mpsc::channel::<JobOutcome>();
-        let current = Arc::new(Mutex::new(CancellationToken::new()));
-        let worker_cancellation = Arc::clone(&current);
+        let outstanding = Arc::new(Mutex::new(Outstanding::default()));
+        let worker_outstanding = Arc::clone(&outstanding);
 
         let thread = std::thread::Builder::new()
             .name("fluorita-engine".to_owned())
-            .spawn(move || {
-                run(
-                    &engine,
-                    &job_receiver,
-                    &outcome_sender,
-                    &worker_cancellation,
-                )
-            })
+            .spawn(move || run(&engine, &job_receiver, &outcome_sender, &worker_outstanding))
             .map_err(|source| EngineError::Io {
                 operation: "start the engine worker",
                 path: std::path::PathBuf::from("<thread>"),
@@ -144,7 +160,7 @@ impl EngineWorker {
         Ok(Self {
             jobs: Some(job_sender),
             outcomes: outcome_receiver,
-            current,
+            outstanding,
             thread: Some(thread),
         })
     }
@@ -152,11 +168,25 @@ impl EngineWorker {
     /// Queues a job. The queue is FIFO; superseding is the caller's decision,
     /// expressed by cancelling and enqueuing a newer generation.
     pub fn submit(&self, job: Job) -> EngineResult<()> {
-        self.jobs
-            .as_ref()
-            .ok_or(EngineError::WorkerStopped)?
-            .send(Message::Work(Box::new(job)))
-            .map_err(|_| EngineError::WorkerStopped)
+        let sender = self.jobs.as_ref().ok_or(EngineError::WorkerStopped)?;
+        let token = CancellationToken::new();
+        // The token is registered and the job sent under one lock, so the
+        // worker can never finish the job before it is registered, and a cancel
+        // can never fall between the two.
+        let mut outstanding = lock(&self.outstanding);
+        let ticket = outstanding.next_ticket;
+        outstanding.next_ticket = ticket.wrapping_add(1);
+        outstanding.tokens.push((ticket, token.clone()));
+        let sent = sender.send(Message::Work {
+            job: Box::new(job),
+            token,
+            ticket,
+        });
+        if sent.is_err() {
+            outstanding.tokens.retain(|(held, _)| *held != ticket);
+            return Err(EngineError::WorkerStopped);
+        }
+        Ok(())
     }
 
     /// Cancels the job in flight, tells the thread to leave and joins it.
@@ -174,12 +204,11 @@ impl EngineWorker {
         }
     }
 
-    /// Cancels whatever is running now. Queued jobs still run; a host that
-    /// wants them gone drops their results by generation.
+    /// Cancels the job running now and every job already queued behind it:
+    /// each one still reports, as [`EngineError::Cancelled`], and a queued one
+    /// never reaches the engine. A job submitted after this call runs.
     pub fn cancel_current(&self) {
-        // The lock is only ever held to swap a cheap token, and no user code
-        // runs while it is held, so it cannot stay poisoned by a panic here.
-        if let Ok(token) = self.current.lock() {
+        for (_, token) in &lock(&self.outstanding).tokens {
             token.cancel();
         }
     }
@@ -202,60 +231,91 @@ fn run<E: MediaEngine>(
     engine: &E,
     jobs: &Receiver<Message>,
     outcomes: &Sender<JobOutcome>,
-    current: &Arc<Mutex<CancellationToken>>,
+    outstanding: &Mutex<Outstanding>,
 ) {
     while let Ok(message) = jobs.recv() {
-        let job = match message {
-            Message::Work(job) => *job,
+        let (job, token, ticket) = match message {
+            Message::Work { job, token, ticket } => (*job, token, ticket),
             Message::Shutdown => return,
         };
-        let token = CancellationToken::new();
-        if let Ok(mut slot) = current.lock() {
-            *slot = token.clone();
-        }
 
-        let outcome = match job {
-            Job::Probe {
-                generation,
-                path,
-                budget,
-            } => {
-                let result = engine.probe(&path, budget, &token);
-                JobOutcome::Probed {
-                    generation,
-                    path,
-                    result,
-                }
-            }
-            Job::Scan {
-                generation,
-                sources,
-                limits,
-            } => JobOutcome::Scanned {
-                generation,
-                result: crate::library::scan(&sources, limits, &token),
-            },
-            Job::Artwork { generation, job } => {
-                let mut request = *job;
-                request.cancellation = token.clone();
-                JobOutcome::Artwork {
-                    generation,
-                    result: engine.publish_artwork(&request),
-                }
-            }
-            Job::Trailer { generation, job } => {
-                let mut request = *job;
-                request.cancellation = token.clone();
-                JobOutcome::Trailer {
-                    generation,
-                    result: engine.produce_trailer(&request),
-                }
-            }
+        let outcome = if token.is_cancel_requested() {
+            cancelled(job)
+        } else {
+            perform(engine, job, &token)
         };
+        lock(outstanding).tokens.retain(|(held, _)| *held != ticket);
 
         if outcomes.send(outcome).is_err() {
             return; // the host is gone; nothing left to report to
         }
+    }
+}
+
+fn perform<E: MediaEngine>(engine: &E, job: Job, token: &CancellationToken) -> JobOutcome {
+    match job {
+        Job::Probe {
+            generation,
+            path,
+            budget,
+        } => {
+            let result = engine.probe(&path, budget, token);
+            JobOutcome::Probed {
+                generation,
+                path,
+                result,
+            }
+        }
+        Job::Scan {
+            generation,
+            sources,
+            limits,
+        } => JobOutcome::Scanned {
+            generation,
+            result: crate::library::scan(&sources, limits, token),
+        },
+        Job::Artwork { generation, job } => {
+            let mut request = *job;
+            request.cancellation = token.clone();
+            JobOutcome::Artwork {
+                generation,
+                result: engine.publish_artwork(&request),
+            }
+        }
+        Job::Trailer { generation, job } => {
+            let mut request = *job;
+            request.cancellation = token.clone();
+            JobOutcome::Trailer {
+                generation,
+                result: engine.produce_trailer(&request),
+            }
+        }
+    }
+}
+
+/// The outcome of a job cancelled before it started: it reports, so a host
+/// waiting on it is answered, and the engine never sees it.
+fn cancelled(job: Job) -> JobOutcome {
+    match job {
+        Job::Probe {
+            generation, path, ..
+        } => JobOutcome::Probed {
+            generation,
+            path,
+            result: Err(EngineError::Cancelled),
+        },
+        Job::Scan { generation, .. } => JobOutcome::Scanned {
+            generation,
+            result: Err(EngineError::Cancelled),
+        },
+        Job::Artwork { generation, .. } => JobOutcome::Artwork {
+            generation,
+            result: Err(EngineError::Cancelled),
+        },
+        Job::Trailer { generation, .. } => JobOutcome::Trailer {
+            generation,
+            result: Err(EngineError::Cancelled),
+        },
     }
 }
 
@@ -363,6 +423,75 @@ mod tests {
             JobOutcome::Probed { result, .. } => {
                 assert!(matches!(result, Err(EngineError::Cancelled)));
             }
+            _ => panic!("wrong outcome kind"),
+        }
+    }
+
+    #[test]
+    fn a_cancel_right_after_submit_reaches_the_job_it_followed() {
+        // The race this pins: the worker used to create a job's token only
+        // when it dequeued the job, so a cancel that arrived first cancelled
+        // the previous token and the new job ran to its end. Run many times,
+        // because the window is a thread switch wide.
+        for _ in 0..200 {
+            let engine = CountingEngine::default();
+            engine.block.store(1, Ordering::SeqCst);
+            let worker = EngineWorker::with_engine(engine.clone()).expect("worker starts");
+
+            worker
+                .submit(probe_job(Generation::INITIAL, "/m/slow.mkv"))
+                .expect("queued");
+            worker.cancel_current();
+
+            let outcome = worker
+                .poll(Duration::from_secs(5))
+                .expect("a cancelled job still reports, and promptly");
+            match outcome {
+                JobOutcome::Probed { result, .. } => {
+                    assert!(matches!(result, Err(EngineError::Cancelled)));
+                }
+                _ => panic!("wrong outcome kind"),
+            }
+        }
+    }
+
+    #[test]
+    fn cancelling_reaches_a_queued_job_and_spares_a_later_one() {
+        let engine = CountingEngine::default();
+        engine.block.store(1, Ordering::SeqCst);
+        let worker = EngineWorker::with_engine(engine.clone()).expect("worker starts");
+
+        worker
+            .submit(probe_job(Generation::INITIAL, "/m/running.mkv"))
+            .expect("queued");
+        while engine.runs.load(Ordering::SeqCst) == 0 {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        worker
+            .submit(probe_job(Generation::INITIAL, "/m/queued.mkv"))
+            .expect("queued");
+        worker.cancel_current();
+
+        for _ in 0..2 {
+            match worker.poll(Duration::from_secs(5)).expect("an outcome") {
+                JobOutcome::Probed { result, .. } => {
+                    assert!(matches!(result, Err(EngineError::Cancelled)));
+                }
+                _ => panic!("wrong outcome kind"),
+            }
+        }
+        assert_eq!(
+            engine.runs.load(Ordering::SeqCst),
+            1,
+            "the queued job was cancelled before it reached the engine"
+        );
+
+        engine.block.store(0, Ordering::SeqCst);
+        worker
+            .submit(probe_job(Generation::INITIAL, "/m/later.mkv"))
+            .expect("queued");
+        match worker.poll(Duration::from_secs(5)).expect("an outcome") {
+            JobOutcome::Probed { result, .. } => assert!(result.is_ok(), "a later job runs"),
             _ => panic!("wrong outcome kind"),
         }
     }

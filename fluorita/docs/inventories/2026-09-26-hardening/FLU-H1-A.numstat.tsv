@@ -1,0 +1,75 @@
+# FLU-H1-A exact change inventory
+
+Base revision	70d2d71456aeac70bc5d193fce251e3f35717561
+Pathspec	celestina-rs/crates/fluorita-core/src/edit_stack.rs
+Pathspec	celestina-rs/crates/fluorita-core/src/lib.rs
+Pathspec	celestina-rs/crates/fluorita-core/src/metadata.rs
+Pathspec	celestina-rs/crates/fluorita-core/src/playback.rs
+Pathspec	celestina-rs/crates/fluorita-core/src/streams.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/batch.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/catalogue_store.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/copy.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/edit.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/edit_store.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/error.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/frame.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/landing.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/lib.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/metadata.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/probe.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/session.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/worker.rs
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/cpp/fluorita/imagecanvas.h
+Pathspec	fluorita/cpp/imagecanvas.cpp
+Pathspec	fluorita/docs/evidence/2026-09-26-replace-and-privacy.md
+Pathspec	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-A.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	fluorita/qml/components/EditObjectLayer.qml
+Pathspec	fluorita/qml/components/EditSurface.qml
+Pathspec	fluorita/src/editor.rs
+Pathspec	fluorita/src/editor/copy.rs
+Pathspec	fluorita/src/library/work.rs
+Pathspec	fluorita/src/player.rs
+Pathspec	fluorita/src/rasteriser.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	6	375067e9b5005f09db5918b07c324a0df28df5b7bf8044b2aa13b8ade096dad6	celestina-rs/crates/fluorita-core/src/edit_stack.rs
+4	4	9e1b1de87bbce52dedfc7ca6c105359fc701babdd95ef6decae2924c6324a639	celestina-rs/crates/fluorita-core/src/lib.rs
+81	0	67ebfd3fd25b87fd50ff795ccbd747e2808e9b939254001fc67a02f92b939119	celestina-rs/crates/fluorita-core/src/metadata.rs
+98	0	4cb41444a74edbd75331d31f3f0516865d8f7cde640891858c6ed2f6af4d83dd	celestina-rs/crates/fluorita-core/src/playback.rs
+1	6	1654aea7ef41a641f721bc979b66c2fbdac96e77ee95e4d5b11cc9f399ccc453	celestina-rs/crates/fluorita-core/src/streams.rs
+50	0	b243ddc243ed2cf51277c085c9538fda9c29ae484aef6296cd1222f29d66d00f	celestina-rs/crates/fluorita-engine/src/batch.rs
+201	28	745a2de893b0732a37dbb128fdcd77113807ddb2f615e424381fffc5aadf131b	celestina-rs/crates/fluorita-engine/src/catalogue_store.rs
+38	0	3dd4c6ffa5adc83ff43630266121a6e922969c580b078d3584af0759842be203	celestina-rs/crates/fluorita-engine/src/copy.rs
+149	35	1a3f4afdca2a6d85e22e24a710d9cc981f65dfbd4d28db78c5f6b1b112a916d3	celestina-rs/crates/fluorita-engine/src/edit.rs
+5	5	eb9f25d67040e28868692cffdd31a7bbb81b6e7ea343153d2358f0a1a943bd3e	celestina-rs/crates/fluorita-engine/src/edit_store.rs
+55	2	e814e86cae05a350588f134e33334966b021aa10df7f0f9dbfe5c1294a9f2178	celestina-rs/crates/fluorita-engine/src/error.rs
+10	5	67ffeaadb4c99d7e6fda1e41f7a056c1966782a04885ef27233f77d452c6b496	celestina-rs/crates/fluorita-engine/src/frame.rs
+560	0	261d78cc187e15748cf60e3e1972a29d7422827c4cb7a5a9a545eedac9941b74	celestina-rs/crates/fluorita-engine/src/landing.rs
+2	0	7ab738541c1b3582b9d03b4addfd792f2feb6b58f00749c62c09380f2a435d85	celestina-rs/crates/fluorita-engine/src/lib.rs
+608	68	ae7b5c4a9d5f16e6ecca771092a0ae19d72aaad084fa89101c2cfb51eec849f4	celestina-rs/crates/fluorita-engine/src/metadata.rs
+33	7	5753882af93c8b7312d939ad9811e00fe89073255b4a4f63f7c4fd8e5ccbdb77	celestina-rs/crates/fluorita-engine/src/probe.rs
+45	9	3a60f110d4f4c7beff5b45bf8a5916037b698b9260fae7741c70d3100977b2a3	celestina-rs/crates/fluorita-engine/src/session.rs
+195	66	4f0197737c30383897d7e170e64393e6802d6a96d57031f97696cf2262c0e337	celestina-rs/crates/fluorita-engine/src/worker.rs
+1	0	1c01358ed23c957e0ce324ae77fe1142da9c3fb0267886a4b9bc1491a96a6960	docs/version-history.tsv
+1	1	15706b3dd110a4371a24b793c5215c4f324bd4ff52860b922c0cb498e45a1a28	fluorita/Cargo.lock
+1	1	54fde0d8f3c74ab465f98798369aea75185b67be41a9b929f197b82a8f7c84de	fluorita/Cargo.toml
+2	1	39a24b39a8be8fa0a839e3d21f6bb6700519e824a76c27651f2e2e92dbab46a4	fluorita/STATUS.md
+1	1	ba0952edba03e3f93047aa96681b7e0c965a5c6ebc013e432f34669c035e0fc0	fluorita/cpp/fluorita/imagecanvas.h
+14	27	be87ceb702135a2969f9d670d8035dca71c5545ccf913fcbe86dc13f9c4a8179	fluorita/cpp/imagecanvas.cpp
+269	0	a6729d6d2473610704bc221377e3a7c2356cd671a02b0428dfcbd6be51ba75c0	fluorita/docs/evidence/2026-09-26-replace-and-privacy.md
+75	0	self	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-A.numstat.tsv
+1	1	d6cda2b4d8031041e458fd35dea2142c97ccacc2b11ca84d9aec9d92c2588622	fluorita/docs/plans/active/2026-09-26-hardening.md
+3	3	7563211b34658e45f37584e34ea6f2319fac0b3d46db05fccc656dcb26c8c0ca	fluorita/qml/components/EditObjectLayer.qml
+1	1	7cd6e0d40fed0ecd79f947fc48bb2622ca60ad94afa97e50009082e73b8b0a0b	fluorita/qml/components/EditSurface.qml
+8	14	953049f693c2cee383348fc64786b303f9ccc741a728cfee5297d8ed1cc2cbe9	fluorita/src/editor.rs
+8	0	325981b2c13f6535f32d6684e4bbf7b0aec466070a86143cf2be4431012a7ca1	fluorita/src/editor/copy.rs
+19	3	e331d5dd2f63d0b8cfd9ee7a487f52877ba4c0396f97ff889e4f770b96eec2e3	fluorita/src/library/work.rs
+7	3	d3edf552256a011265103ab361fd72a62407dc958051c8d48e33ff74df0f0303	fluorita/src/player.rs
+56	19	c6628a907128d7ebe1c28a36f001b8432bc7c76e5e2b0bbeb3897ca91aec6e0a	fluorita/src/rasteriser.rs

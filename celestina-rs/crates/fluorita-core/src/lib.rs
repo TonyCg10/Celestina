@@ -54,14 +54,14 @@ pub use edit_stack::{
 pub use gallery::{gallery, GalleryFilter, GalleryItem, GalleryOrder};
 pub use media::{ArtworkOrigin, MediaCapabilities, MediaId, MediaKind};
 pub use metadata::{
-    CoverBudget, MetadataCapabilities, MetadataFormat, MetadataRejected, PrivateFact, TagChange,
-    TagField, MAX_TAG_CHARACTERS,
+    claimed_tag, claimed_text, CoverBudget, MetadataCapabilities, MetadataFormat, MetadataRejected,
+    PrivateFact, TagChange, TagField, MAX_TAG_CHARACTERS,
 };
 pub use music::{Album, Artist, MusicLibrary, Track};
 pub use pacing::{PacingCapture, PacingSample, PacingSummary, Verdict};
 pub use playback::{
-    EngineReport, PendingRequest, PlaybackRequest, PlaybackSession, PlaybackState, ReportKind,
-    ReportOutcome, RequestRejected,
+    duration_from_seconds, DurationRejected, EngineReport, PendingRequest, PlaybackRequest,
+    PlaybackSession, PlaybackState, ReportKind, ReportOutcome, RequestRejected, MAX_MEDIA_SECONDS,
 };
 pub use preview::{
     StaticArtworkRequest, TrailerBudget, TrailerHost, TrailerLease, TrailerRejected,

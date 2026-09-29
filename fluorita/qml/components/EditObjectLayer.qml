@@ -9,9 +9,9 @@ import org.celestina.fluorita 1.0
 // This is a *preview*, not the result: the bytes are produced by the toolkit
 // when the edit is saved, and what is drawn here only has to show the person
 // where their marks are. Two consequences are deliberate. A redaction is drawn
-// as a plate rather than as a real pixelation, because approximating the
-// irreversibility here would invite trusting it — the real one happens on the
-// way to disk. And every geometry comes from the editor's published rows, so
+// as a marked plate rather than as the solid fill it becomes, so it is not
+// mistaken for a shape — the fill itself happens on the way to disk. And every
+// geometry comes from the editor's published rows, so
 // nothing on screen was computed twice.
 //
 // Coordinates arrive in canvas pixels and are scaled by `scaleFactor`, which is

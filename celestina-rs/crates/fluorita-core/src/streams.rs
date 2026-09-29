@@ -78,12 +78,7 @@ impl Stream {
 }
 
 fn bounded(value: &str) -> String {
-    value
-        .trim()
-        .chars()
-        .filter(|character| !character.is_control())
-        .take(MAX_LABEL_CHARACTERS)
-        .collect()
+    crate::metadata::claimed_text(value, MAX_LABEL_CHARACTERS)
 }
 
 /// The tracks one file offers and which of them is in use.

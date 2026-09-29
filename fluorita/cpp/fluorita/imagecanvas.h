@@ -61,7 +61,7 @@ public:
                    bool filled,
                    ::std::uint32_t fillRgba);
     void drawHighlight(float x, float y, float width, float height, ::std::uint32_t rgba);
-    void redact(float x, float y, float width, float height, bool blur);
+    void redact(float x, float y, float width, float height);
     void drawText(float x,
                   float y,
                   float width,

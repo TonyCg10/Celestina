@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use celestina_core::CancellationToken;
-use fluorita_core::MediaMetadata;
+use fluorita_core::{claimed_tag, duration_from_seconds, MediaMetadata};
 
 use crate::backend::{ProbeBudget, ProbeReport};
 use crate::error::{EngineError, EngineResult};
@@ -75,15 +75,31 @@ fn metadata(instance: &Instance) -> MediaMetadata {
         track_number: tag(instance, "track").as_deref().and_then(parse_index),
         disc_number: tag(instance, "disc").as_deref().and_then(parse_index),
         year: tag(instance, "date").as_deref().and_then(parse_year),
-        duration: instance
-            .optional_f64("duration")
-            .filter(|seconds| seconds.is_finite() && *seconds > 0.0)
-            .map(Duration::from_secs_f64),
+        duration: instance.optional_f64("duration").and_then(known_duration),
     }
 }
 
+/// A container's claimed length, or `None` when it claims none that is real.
+/// Zero, like a missing value, means "not known".
+fn known_duration(seconds: f64) -> Option<Duration> {
+    duration_from_seconds(seconds)
+        .ok()
+        .filter(|duration| !duration.is_zero())
+}
+
+/// A tag as the file spells it, sanitised and cut to what the catalogue holds.
+/// The raw value is attacker-sized: a crafted ID3 or Vorbis title can be
+/// megabytes, and it would flow into every projection and the stored catalogue.
+///
+/// The cap applies after `libmpv2` copies the string out of the backend: its
+/// safe property API has no bounded read, and the backend already holds the
+/// whole value in memory, so the one copy is the cost of staying without
+/// `unsafe`. Nothing past the cap outlives this function.
 fn tag(instance: &Instance, key: &str) -> Option<String> {
-    instance.optional_string(&format!("metadata/by-key/{key}"))
+    instance
+        .optional_string(&format!("metadata/by-key/{key}"))
+        .as_deref()
+        .and_then(claimed_tag)
 }
 
 /// Track numbers are often `3/12`, and a date is often a full timestamp.
@@ -142,7 +158,17 @@ fn track_summary(instance: &Instance) -> TrackSummary {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_index, parse_year};
+    use super::{known_duration, parse_index, parse_year};
+    use std::time::Duration;
+
+    #[test]
+    fn a_crafted_duration_is_unknown_rather_than_fatal() {
+        assert_eq!(known_duration(2.5), Some(Duration::from_millis(2500)));
+        assert_eq!(known_duration(0.0), None);
+        assert_eq!(known_duration(f64::MAX), None);
+        assert_eq!(known_duration(f64::NAN), None);
+        assert_eq!(known_duration(-1.0), None);
+    }
 
     #[test]
     fn a_track_number_survives_the_common_spellings() {
