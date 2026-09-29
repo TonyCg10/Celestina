@@ -55,19 +55,20 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
   lands where the keyframes are.
 
 Static image thumbnails, video posters and embedded covers use the freedesktop
-PNG cache. Live video trailers are separate, bounded and cancelable; normal
-navigation never starts the decoder merely to show a row.
+PNG cache, and carry the spec's `Thumb::URI` and `Thumb::MTime` keys. A hover
+preview is a live, silent, bounded session, never a file; normal navigation
+never starts the decoder merely to show a row.
 
 ## Architecture
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth and generation-stamped resource contracts; no Qt/decode |
-| `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue, metadata, artwork, trailers and libmpv playback |
+| `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth, the session/surface handshake and generation-stamped resource contracts; no Qt/decode |
+| `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue and edit recipes, metadata, artwork and the libmpv playback session loop |
 | `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv |
 | `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, activation and MPRIS2 |
 | `qml/` | Source sidebar, Gallery, Music and complete player composition |
-| `cpp/` | The narrow toolkit image-probe seam unavailable through CXX-Qt |
+| `cpp/` | The narrow toolkit seams unavailable through CXX-Qt: the image probe and the edit canvas that draws and encodes a picture |
 | `../siderita/src/media.rs`, `../siderita/qml/dialogs/` | Separate thin adapter and minimal embedded player |
 | `../celestina-style` | Canonical visual tokens, controls and assets |
 

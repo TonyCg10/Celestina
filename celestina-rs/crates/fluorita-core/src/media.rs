@@ -140,9 +140,9 @@ impl MediaKind {
     }
 }
 
-/// How a static PNG thumbnail is produced for a kind. A live trailer is a
-/// different thing entirely and is never published under these names — see
-/// [`crate::preview`].
+/// How a static PNG thumbnail is produced for a kind. A live hover preview is
+/// a different thing entirely — a playback session, never a file — and is
+/// never published under these names.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArtworkOrigin {
     /// A scaled read of the image itself; the toolkit can already do this.

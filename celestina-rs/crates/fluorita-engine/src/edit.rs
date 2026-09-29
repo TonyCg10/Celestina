@@ -121,6 +121,19 @@ pub struct SaveRequest<'a> {
     /// The word a copy's name is marked with — product copy, so the host owns
     /// it and the engine only places it.
     pub copy_marker: &'a str,
+    /// The file the result lands beside, or replaces, when that is not
+    /// `source`. An edited copy reopened from its recipe renders from its
+    /// original, but it is the copy the person opened: a new copy belongs
+    /// next to it, and a replacement sends *it* to the Trash — never the
+    /// original the recipe reads. `None` for everything else.
+    pub target: Option<&'a Path>,
+}
+
+impl SaveRequest<'_> {
+    /// The file a copy lands beside and a replacement replaces.
+    fn landing_on(&self) -> &Path {
+        self.target.unwrap_or(self.source)
+    }
 }
 
 /// What a save actually did.
@@ -156,11 +169,13 @@ pub fn save(
     if cancellation.is_cancelled() {
         return Err(EngineError::Cancelled);
     }
-    if !request.source.is_absolute() {
-        return Err(EngineError::UnusableSource {
-            path: request.source.to_path_buf(),
-            reason: "an edit is saved over an absolute path",
-        });
+    for path in [request.source, request.landing_on()] {
+        if !path.is_absolute() {
+            return Err(EngineError::UnusableSource {
+                path: path.to_path_buf(),
+                reason: "an edit is saved over an absolute path",
+            });
+        }
     }
 
     let (bytes, class) = compose_bytes(request, rasteriser)?;
@@ -179,7 +194,7 @@ pub fn save(
     // The order of operations around the original — staged and synced first,
     // the original to the Trash, never an overwrite — is `landing`'s.
     let landed = landing::land(
-        request.source,
+        request.landing_on(),
         &destination,
         &bytes,
         request.choice,
@@ -238,18 +253,17 @@ fn read_source(path: &Path) -> EngineResult<Vec<u8>> {
 /// name with the new extension when it has — in which case the original is
 /// still a different file, and is still trashed.
 fn destination_for(request: &SaveRequest<'_>, _class: EditClass) -> EngineResult<PathBuf> {
-    let directory = request
-        .source
+    let landing_on = request.landing_on();
+    let directory = landing_on
         .parent()
         .ok_or_else(|| EngineError::UnusableSource {
-            path: request.source.to_path_buf(),
+            path: landing_on.to_path_buf(),
             reason: "a file to edit has a parent directory",
         })?;
-    let name = request
-        .source
+    let name = landing_on
         .file_name()
         .ok_or_else(|| EngineError::UnusableSource {
-            path: request.source.to_path_buf(),
+            path: landing_on.to_path_buf(),
             reason: "a file to edit has a name",
         })?;
     let extension = request.format.extension();
@@ -271,13 +285,12 @@ fn destination_for(request: &SaveRequest<'_>, _class: EditClass) -> EngineResult
     match request.choice {
         SaveChoice::Copy => Ok(free(directory)),
         SaveChoice::Replace => {
-            let same_extension = request
-                .source
+            let same_extension = landing_on
                 .extension()
                 .and_then(|value| value.to_str())
                 .is_some_and(|value| value.eq_ignore_ascii_case(extension));
             if same_extension {
-                return Ok(request.source.to_path_buf());
+                return Ok(landing_on.to_path_buf());
             }
             // The container changed, so the result is a different file. It
             // takes the original's name under the new extension when that is
@@ -643,6 +656,7 @@ mod tests {
             format,
             choice,
             copy_marker: "editado",
+            target: None,
         }
     }
 
@@ -1091,5 +1105,85 @@ mod tests {
         )
         .expect_err("refused");
         assert!(matches!(failure, EngineError::UnusableSource { .. }));
+    }
+
+    #[test]
+    fn a_reopened_copy_saved_again_as_a_copy_lands_beside_itself() {
+        // The copy renders from its original through the recipe; the new copy
+        // belongs next to the file the person opened, and the original is not
+        // touched.
+        let directory = TestDir::new("reopened-copy");
+        let original = directory.file("foto.jpg", b"the original photograph");
+        let reopened = directory.file("foto (editado).jpg", b"the first copy");
+        let composition = composition();
+
+        let mut asked = request(
+            &original,
+            &composition,
+            SaveChoice::Copy,
+            OutputFormat::Jpeg,
+            None,
+        );
+        asked.target = Some(&reopened);
+        let saved = save(
+            &asked,
+            &FakeRasteriser::new(),
+            &FakeBin::default(),
+            &CancellationToken::new(),
+        )
+        .expect("the save lands");
+
+        assert_eq!(
+            saved.written,
+            directory.0.join("foto (editado) (editado).jpg")
+        );
+        assert_eq!(saved.trashed_original, None);
+        assert_eq!(
+            std::fs::read(&original).expect("the original"),
+            b"the original photograph".to_vec()
+        );
+        assert_eq!(
+            std::fs::read(&reopened).expect("the first copy"),
+            b"the first copy".to_vec()
+        );
+    }
+
+    #[test]
+    fn a_reopened_copy_replaced_sends_itself_to_the_bin_and_never_its_original() {
+        let directory = TestDir::new("reopened-replace");
+        let original = directory.file("foto.jpg", b"the original photograph");
+        let reopened = directory.file("foto (editado).jpg", b"the first copy");
+        let composition = composition();
+        let bin = KeepingBin::in_(&directory.0);
+
+        let mut asked = request(
+            &original,
+            &composition,
+            SaveChoice::Replace,
+            OutputFormat::Jpeg,
+            None,
+        );
+        asked.target = Some(&reopened);
+        let saved = save(
+            &asked,
+            &FakeRasteriser::new(),
+            &bin,
+            &CancellationToken::new(),
+        )
+        .expect("the save lands");
+
+        assert_eq!(saved.written, reopened);
+        assert_eq!(
+            std::fs::read(&reopened).expect("the result"),
+            b"rendered".to_vec()
+        );
+        assert_eq!(
+            std::fs::read(bin.kept.borrow()[0].as_path()).expect("the first copy, in the bin"),
+            b"the first copy".to_vec()
+        );
+        assert_eq!(
+            std::fs::read(&original).expect("the original stays"),
+            b"the original photograph".to_vec()
+        );
     }
 }

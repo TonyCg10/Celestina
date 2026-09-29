@@ -5,6 +5,7 @@
 //! the library *is* lives in `fluorita-core`.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use fluorita_core::{
     gallery, Catalogue, GalleryFilter, GalleryOrder, MediaKind, MusicLibrary, Query, SourceScope,
@@ -16,6 +17,11 @@ use super::work::{thumbnail_cache_root, MAX_ARTWORK_PER_PASS};
 use celestina_core::pathkey;
 
 /// Everything one publication produces, already shaped for QML.
+///
+/// Built on a worker, never on the GUI thread: resolving a thumbnail is a
+/// `stat()` per row and counting pending artwork another per video or track,
+/// which on a library of tens of thousands — or one mapped over a network —
+/// is a frozen window.
 #[derive(Default)]
 pub(super) struct LibrarySnapshot {
     /// `stored` while showing what was read back and the walk is still
@@ -36,8 +42,13 @@ pub(super) struct LibrarySnapshot {
     /// handle, label and the root as display text.
     pub(super) sources: Vec<[String; 3]>,
     /// What the projection was made from, kept so an explicit artwork pass has
-    /// something to work on without re-walking the disk.
-    pub(super) catalogue: Catalogue,
+    /// something to work on without re-walking the disk. Shared, never
+    /// copied: the host keeps this very handle, and every later projection,
+    /// search and artwork pass reads it from there.
+    pub(super) catalogue: Arc<Catalogue>,
+    /// The root the rows describe. A publication made for a scope the person
+    /// has since left is projected again rather than shown.
+    pub(super) scope: SourceScope,
     /// The configuration the rows were projected under, so the host answers a
     /// later add or remove from what it published rather than from a set the
     /// worker may have replaced since.
@@ -53,7 +64,7 @@ pub(super) struct LibrarySnapshot {
 /// whole library while one folder was open would be describing something the
 /// user cannot see.
 pub(super) fn project(
-    catalogue: &Catalogue,
+    catalogue: &Arc<Catalogue>,
     configured: &SourceSet,
     scope: SourceScope,
     truncated: bool,
@@ -75,7 +86,7 @@ pub(super) fn project(
 /// rule — accents folded, case ignored — and a grid that re-implemented it in
 /// JavaScript would be a second answer to the same question.
 pub(super) fn project_matching(
-    catalogue: &Catalogue,
+    catalogue: &Arc<Catalogue>,
     configured: &SourceSet,
     scope: SourceScope,
     truncated: bool,
@@ -182,7 +193,8 @@ pub(super) fn project_matching(
 
     LibrarySnapshot {
         state,
-        catalogue: catalogue.clone(),
+        catalogue: Arc::clone(catalogue),
+        scope,
         configured: configured.clone(),
         sources: source_rows,
         artwork_pending,
@@ -456,6 +468,7 @@ mod tests {
         use fluorita_core::SourceScope;
 
         let (catalogue, configured, _, _) = catalogue_with_a_name_that_is_not_utf8();
+        let catalogue = std::sync::Arc::new(catalogue);
         let snapshot = project(&catalogue, &configured, SourceScope::All, false, "ready");
         assert_eq!(
             super::census(&catalogue, SourceScope::All),
@@ -470,6 +483,7 @@ mod tests {
         use fluorita_core::SourceScope;
 
         let (catalogue, configured, picture, track) = catalogue_with_a_name_that_is_not_utf8();
+        let catalogue = std::sync::Arc::new(catalogue);
 
         let snapshot = project(&catalogue, &configured, SourceScope::All, false, "ready");
 

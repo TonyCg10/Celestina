@@ -29,19 +29,19 @@ pub mod metadata;
 pub mod music;
 pub mod pacing;
 pub mod playback;
-pub mod preview;
 pub mod search;
 pub mod source;
 pub mod streams;
+pub mod surface;
 
 pub use artwork::{
-    cache_key, file_uri, large_thumbnail_path, ArtworkPublication, ArtworkValidity, ThumbnailSize,
-    LARGE_THUMBNAIL_PIXELS,
+    cache_key, file_uri, large_thumbnail_path, thumbnail_keys, with_thumbnail_keys,
+    ArtworkPublication, ArtworkValidity, ThumbnailKeys, ThumbnailSize, LARGE_THUMBNAIL_PIXELS,
 };
 pub use batch::{BatchOperation, BatchProgress, ItemOutcome};
 pub use catalogue::{
     AbsorbSummary, Availability, Catalogue, MediaMetadata, MediaRecord, ReconcileSummary,
-    SourceIdentity,
+    ScanCoverage, SourceIdentity,
 };
 pub use continuation::Continuation;
 pub use edit::{
@@ -54,8 +54,9 @@ pub use edit_stack::{
 pub use gallery::{gallery, GalleryFilter, GalleryItem, GalleryOrder};
 pub use media::{ArtworkOrigin, MediaCapabilities, MediaId, MediaKind};
 pub use metadata::{
-    claimed_tag, claimed_text, CoverBudget, MetadataCapabilities, MetadataFormat, MetadataRejected,
-    PrivateFact, TagChange, TagField, MAX_TAG_CHARACTERS,
+    claimed_tag, claimed_text, displayed_name, displayed_stem, CoverBudget, MetadataCapabilities,
+    MetadataFormat, MetadataRejected, PrivateFact, TagChange, TagField, MAX_NAME_CHARACTERS,
+    MAX_TAG_CHARACTERS,
 };
 pub use music::{Album, Artist, MusicLibrary, Track};
 pub use pacing::{PacingCapture, PacingSample, PacingSummary, Verdict};
@@ -63,12 +64,9 @@ pub use playback::{
     duration_from_seconds, DurationRejected, EngineReport, PendingRequest, PlaybackRequest,
     PlaybackSession, PlaybackState, ReportKind, ReportOutcome, RequestRejected, MAX_MEDIA_SECONDS,
 };
-pub use preview::{
-    StaticArtworkRequest, TrailerBudget, TrailerHost, TrailerLease, TrailerRejected,
-    TrailerRequest, MAX_TRAILERS_PER_HOST,
-};
 pub use search::{Query, MAX_QUERY_CHARACTERS};
 pub use source::{
     KindSet, MediaSource, SourceId, SourceRejected, SourceScope, SourceSet, XdgMediaDirs,
 };
 pub use streams::{Speed, Stream, StreamKind, StreamSet, MAX_STREAMS};
+pub use surface::{CloseStep, OpenStep, ReleaseStep, SurfaceHandshake};

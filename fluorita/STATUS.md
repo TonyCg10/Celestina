@@ -1,10 +1,12 @@
 # Fluorita status
 
-- **Updated:** 2026-09-26
+- **Updated:** 2026-09-27
 - **Implementation:** checkpoints F0-F15 are closed and delivered; `FLU-H1`,
   the hardening that follows the 2026-09-26 monorepo audit, is the active
   checkpoint: `FLU-H1-A` (a Replace that trashes its original, bounded file
-  claims) is prepared on its branch for landing and `FLU-H1-B` is planned
+  claims) and `FLU-H1-B` (a true library off the GUI thread, reopenable
+  copies, one owner for the playback handshake, threads that end) are each
+  prepared on their branch for landing
   ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Author validation:** the version-1 playback and interaction pass is closed;
   `VAL-FLU-SOURCES`, `VAL-FLU-IMMERSIVE`, `VAL-FLU-TEARDOWN`, `VAL-FLU-BYTES`,
@@ -36,14 +38,19 @@
   unit: the inventory's 61 files are what actually landed.
 - Two of those capabilities shipped with no way to reach them — a frame could
   be extracted and a pacing capture could be taken, and nothing in the
-  interface called either. Both now have a trigger: a button in the transport
-  for the frame, `Ctrl+Shift+P` and `Ctrl+Shift+S` for the capture. Compiled,
-  linted and smoke-tested; not yet committed.
-- Nothing else is in flight. The roadmap names no active checkpoint.
+  interface called either. Both have had a trigger since `2ff8738`: a button
+  in the transport for the frame, `Ctrl+Shift+P` and `Ctrl+Shift+S` for the
+  capture.
+- The engine no longer carries the unused H.264 encode path that produced
+  trailers into a file; the hover preview F14 delivered is a live, silent,
+  looping session, and ADR 0009's "no encoder in the closure" is now true of
+  the code as well as of the product.
 
 ## Active work
 
-None. F7-F15 are delivered and the roadmap names no active checkpoint.
+`FLU-H1`, the post-audit hardening; its two units are prepared on their
+branches and land in program order
+([plan](docs/plans/active/2026-09-26-hardening.md)).
 
 What the products now do beyond playing and browsing is in the
 [user contract](README.md); why editing stops where it does is
@@ -62,10 +69,11 @@ Three things wait on the author rather than on work:
 
 ## Conditional work, not active debt
 
-- Trailer-on-hover needs a demonstrated interaction and resource budget before
-  it becomes work.
-- Subtitle/track selection, playback speed, queues/playlists and shell MPRIS
-  UI require separate accepted checkpoints and real product need.
+- The hover preview (F14), stream selection and playback speed (F11) and
+  end-of-item continuation (F12) are delivered, not conditional; what remains
+  conditional is a queue or playlist beyond the folder, and a shell MPRIS
+  surface, each of which needs its own accepted checkpoint and real product
+  need.
 - A frame-presentation change requires measured judder; the previously tested
   premature swap report made pacing worse and remains rejected.
 

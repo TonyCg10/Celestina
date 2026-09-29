@@ -79,6 +79,32 @@ pub fn claimed_tag(value: &str) -> Option<String> {
     Some(claimed_text(value, MAX_TAG_CHARACTERS)).filter(|text| !text.is_empty())
 }
 
+/// The most characters of a file name a surface shows. `NAME_MAX` is 255
+/// bytes, so no real name is cut; a longer claim is not a name.
+pub const MAX_NAME_CHARACTERS: usize = 255;
+
+/// A file's name as a person reads it — in a notice, a title, a panel:
+/// lossy for a name that is not UTF-8, and put through [`claimed_text`],
+/// because a name is something a file claims about itself as much as a tag
+/// is. A control character in it would break the sentence it sits in, and a
+/// bidirectional override would make it read as a different name.
+///
+/// Display only: nothing is ever reopened from this. A path with no final
+/// component shows whole, the way a root does.
+#[must_use]
+pub fn displayed_name(path: &Path) -> String {
+    let name = path.file_name().unwrap_or(path.as_os_str());
+    claimed_text(&name.to_string_lossy(), MAX_NAME_CHARACTERS)
+}
+
+/// [`displayed_name`] without the extension: the label a surface shows for a
+/// file nothing tagged — a grid card, a track, a panel's "now playing".
+#[must_use]
+pub fn displayed_stem(path: &Path) -> String {
+    let stem = path.file_stem().unwrap_or(path.as_os_str());
+    claimed_text(&stem.to_string_lossy(), MAX_NAME_CHARACTERS)
+}
+
 /// A metadata container this crate recognises by name.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum MetadataFormat {
@@ -428,6 +454,46 @@ mod tests {
     use crate::catalogue::MediaMetadata;
     use crate::media::MediaKind;
     use std::path::Path;
+
+    #[test]
+    fn a_file_name_is_shown_without_what_could_disguise_it() {
+        use super::{displayed_name, MAX_NAME_CHARACTERS};
+
+        // A newline would break a notice across lines, and a right-to-left
+        // override would make `gpj.exe` read as something else.
+        assert_eq!(
+            displayed_name(Path::new("/m/foto\n\u{202E}gpj.png")),
+            "fotogpj.png"
+        );
+        assert_eq!(displayed_name(Path::new("/m/clip.mkv")), "clip.mkv");
+        let long = format!("/m/{}.png", "a".repeat(400));
+        assert_eq!(
+            displayed_name(Path::new(&long)).chars().count(),
+            MAX_NAME_CHARACTERS
+        );
+    }
+
+    #[test]
+    fn a_stem_is_shown_by_the_same_rule_as_a_name() {
+        use super::displayed_stem;
+
+        assert_eq!(
+            displayed_stem(Path::new("/m/pi\u{202E}sta\t1.flac")),
+            "pista1"
+        );
+        assert_eq!(displayed_stem(Path::new("/m/clip.mkv")), "clip");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_file_name_that_is_not_utf8_is_shown_lossily() {
+        use super::displayed_name;
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let name = displayed_name(Path::new(OsStr::from_bytes(b"/m/na\xffme.png")));
+        assert_eq!(name, "na\u{FFFD}me.png");
+    }
 
     #[test]
     fn a_tag_a_file_claims_is_stripped_of_controls_and_cut_to_the_cap() {

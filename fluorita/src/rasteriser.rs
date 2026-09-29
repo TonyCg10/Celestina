@@ -22,6 +22,45 @@ use fluorita_engine::{RasterFailure, Rasteriser};
 
 #[cxx::bridge]
 mod ffi {
+    /// A straight line in canvas pixels, with an arrow head at its far end or
+    /// not. `rgba` is packed `0xRRGGBBAA`.
+    struct LineOrder {
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        width: f32,
+        rgba: u32,
+        arrow: bool,
+    }
+
+    /// A rectangle or an ellipse in its box, outlined and optionally filled.
+    struct ShapeOrder {
+        ellipse: bool,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        stroke: f32,
+        rgba: u32,
+        filled: bool,
+        fill_rgba: u32,
+    }
+
+    /// The box, size, colours and turns of a text; its words travel beside it,
+    /// because a `QString` is not a shared value.
+    struct TextOrder {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        size: f32,
+        rgba: u32,
+        has_backdrop: bool,
+        backdrop_rgba: u32,
+        quarters: i32,
+    }
+
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
@@ -51,31 +90,9 @@ mod ffi {
         #[cxx_name = "drawStroke"]
         fn draw_stroke(self: Pin<&mut FluoritaCanvas>, points: &[f32], width: f32, rgba: u32);
         #[cxx_name = "drawLine"]
-        #[allow(clippy::too_many_arguments)]
-        fn draw_line(
-            self: Pin<&mut FluoritaCanvas>,
-            x1: f32,
-            y1: f32,
-            x2: f32,
-            y2: f32,
-            width: f32,
-            rgba: u32,
-            arrow: bool,
-        );
+        fn draw_line(self: Pin<&mut FluoritaCanvas>, line: &LineOrder);
         #[cxx_name = "drawShape"]
-        #[allow(clippy::too_many_arguments)]
-        fn draw_shape(
-            self: Pin<&mut FluoritaCanvas>,
-            ellipse: bool,
-            x: f32,
-            y: f32,
-            width: f32,
-            height: f32,
-            stroke: f32,
-            rgba: u32,
-            filled: bool,
-            fill_rgba: u32,
-        );
+        fn draw_shape(self: Pin<&mut FluoritaCanvas>, shape: &ShapeOrder);
         #[cxx_name = "drawHighlight"]
         fn draw_highlight(
             self: Pin<&mut FluoritaCanvas>,
@@ -87,20 +104,7 @@ mod ffi {
         );
         fn redact(self: Pin<&mut FluoritaCanvas>, x: f32, y: f32, width: f32, height: f32);
         #[cxx_name = "drawText"]
-        #[allow(clippy::too_many_arguments)]
-        fn draw_text(
-            self: Pin<&mut FluoritaCanvas>,
-            x: f32,
-            y: f32,
-            width: f32,
-            height: f32,
-            size: f32,
-            rgba: u32,
-            has_backdrop: bool,
-            backdrop_rgba: u32,
-            quarters: i32,
-            text: &QString,
-        );
+        fn draw_text(self: Pin<&mut FluoritaCanvas>, order: &TextOrder, text: &QString);
 
         fn encode(self: &FluoritaCanvas, format: &QString, quality: i32) -> QByteArray;
     }
@@ -192,15 +196,17 @@ fn draw(mut canvas: std::pin::Pin<&mut ffi::FluoritaCanvas>, object: &Annotation
             backdrop,
             quarters,
         } => canvas.as_mut().draw_text(
-            area.origin.x,
-            area.origin.y,
-            area.width,
-            area.height,
-            *size,
-            packed(*ink),
-            backdrop.is_some(),
-            backdrop.map_or(0, packed),
-            i32::from(*quarters),
+            &ffi::TextOrder {
+                x: area.origin.x,
+                y: area.origin.y,
+                width: area.width,
+                height: area.height,
+                size: *size,
+                rgba: packed(*ink),
+                has_backdrop: backdrop.is_some(),
+                backdrop_rgba: backdrop.map_or(0, packed),
+                quarters: i32::from(*quarters),
+            },
             &QString::from(text),
         ),
         Annotation::Stroke { points, width, ink } => {
@@ -215,26 +221,32 @@ fn draw(mut canvas: std::pin::Pin<&mut ffi::FluoritaCanvas>, object: &Annotation
             width,
             ink,
             arrow,
-        } => canvas
-            .as_mut()
-            .draw_line(from.x, from.y, to.x, to.y, *width, packed(*ink), *arrow),
+        } => canvas.as_mut().draw_line(&ffi::LineOrder {
+            x1: from.x,
+            y1: from.y,
+            x2: to.x,
+            y2: to.y,
+            width: *width,
+            rgba: packed(*ink),
+            arrow: *arrow,
+        }),
         Annotation::Shape {
             kind,
             area,
             width,
             ink,
             fill,
-        } => canvas.as_mut().draw_shape(
-            matches!(kind, ShapeKind::Ellipse),
-            area.origin.x,
-            area.origin.y,
-            area.width,
-            area.height,
-            *width,
-            packed(*ink),
-            fill.is_some(),
-            fill.map_or(0, packed),
-        ),
+        } => canvas.as_mut().draw_shape(&ffi::ShapeOrder {
+            ellipse: matches!(kind, ShapeKind::Ellipse),
+            x: area.origin.x,
+            y: area.origin.y,
+            width: area.width,
+            height: area.height,
+            stroke: *width,
+            rgba: packed(*ink),
+            filled: fill.is_some(),
+            fill_rgba: fill.map_or(0, packed),
+        }),
         Annotation::Highlight { area, ink } => canvas.as_mut().draw_highlight(
             area.origin.x,
             area.origin.y,

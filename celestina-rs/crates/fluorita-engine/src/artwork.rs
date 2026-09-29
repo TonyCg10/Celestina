@@ -9,8 +9,14 @@
 //! filesystem, and the entry is only renamed into place once the complete PNG
 //! exists. A reader therefore sees either the previous entry or the new one,
 //! never half of either.
+//!
+//! The backend's PNG carries no text, so before it is published it is given
+//! the two keys the freedesktop spec requires — `Thumb::URI` and
+//! `Thumb::MTime` — and an entry is judged by the spec's rule, the recorded
+//! mtime against the source's, rather than by the cache file's own date.
 
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use fluorita_core::{ArtworkOrigin, ArtworkPublication};
@@ -27,6 +33,15 @@ const SCALE_FILTER: &str =
 /// A quarter in is far enough past titles and fades to be representative, and
 /// cheap because the backend seeks there instead of decoding up to it.
 const POSTER_POSITION: &str = "25%";
+
+/// The most of a rendered frame that is read back to be keyed. A 256-pixel
+/// PNG is a few hundred kilobytes at worst; anything past this is not the
+/// frame this module asked for.
+const MAX_RENDERED_BYTES: u64 = 8 * 1024 * 1024;
+
+/// How much of a cache entry is read to find its keys. They sit ahead of the
+/// image data, a few hundred bytes in for every writer that follows the spec.
+const KEYS_PREFIX_BYTES: u64 = 4 * 1024;
 
 pub fn publish(job: &ArtworkJob) -> EngineResult<PathBuf> {
     if job.cancellation.is_cancelled() {
@@ -150,34 +165,41 @@ fn wait_for_frame(
     })
 }
 
-/// Moves the rendered frame onto the cache entry: restrict, then rename.
+/// Keys the rendered frame and moves it onto the cache entry: write the keyed
+/// PNG to the entry's unique sibling, owner-only from its first byte, then
+/// rename.
 fn install(plan: &ArtworkPublication, rendered: &Path) -> EngineResult<()> {
     fs::create_dir_all(plan.parent_directory()).map_err(|source| EngineError::Io {
         operation: "create the cache directory",
         path: plan.parent_directory().to_path_buf(),
         source,
     })?;
-    fs::rename(rendered, &plan.temporary_path).map_err(|source| EngineError::Io {
-        operation: "stage the thumbnail",
-        path: plan.temporary_path.clone(),
-        source,
-    })?;
+    let keyed = keyed_frame(plan, rendered)?;
+    // The sibling's name is this producer's own; one left by a pass that died
+    // half-way is debris, not someone else's file.
+    let _ = fs::remove_file(&plan.temporary_path);
 
     // A thumbnail can disclose the content of a private file, so it is
-    // owner-only before it becomes visible under its final name.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        if let Err(source) =
-            fs::set_permissions(&plan.temporary_path, fs::Permissions::from_mode(plan.mode))
+    // owner-only before it holds anything, let alone before it becomes
+    // visible under its final name.
+    let written = (|| {
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
         {
-            let _ = fs::remove_file(&plan.temporary_path);
-            return Err(EngineError::Io {
-                operation: "restrict the thumbnail",
-                path: plan.temporary_path.clone(),
-                source,
-            });
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(plan.mode);
         }
+        let mut file = options.open(&plan.temporary_path)?;
+        file.write_all(&keyed)
+    })();
+    if let Err(source) = written {
+        let _ = fs::remove_file(&plan.temporary_path);
+        return Err(EngineError::Io {
+            operation: "stage the thumbnail",
+            path: plan.temporary_path.clone(),
+            source,
+        });
     }
 
     fs::rename(&plan.temporary_path, &plan.final_path).map_err(|source| {
@@ -188,6 +210,46 @@ fn install(plan: &ArtworkPublication, rendered: &Path) -> EngineResult<()> {
             source,
         }
     })
+}
+
+/// The rendered frame with the spec keys in it, read within a bound.
+fn keyed_frame(plan: &ArtworkPublication, rendered: &Path) -> EngineResult<Vec<u8>> {
+    let mut bytes = Vec::new();
+    fs::File::open(rendered)
+        .and_then(|file| file.take(MAX_RENDERED_BYTES + 1).read_to_end(&mut bytes))
+        .map_err(|source| EngineError::Io {
+            operation: "read the rendered thumbnail",
+            path: rendered.to_path_buf(),
+            source,
+        })?;
+    if bytes.len() as u64 > MAX_RENDERED_BYTES {
+        return Err(EngineError::OverBudget {
+            what: "the rendered thumbnail",
+            limit: MAX_RENDERED_BYTES,
+            actual: bytes.len() as u64,
+        });
+    }
+    fluorita_core::with_thumbnail_keys(&bytes, &plan.thumb_uri, plan.thumb_mtime_seconds)
+        .ok_or_else(|| EngineError::Undecodable {
+            path: rendered.to_path_buf(),
+            detail: "the backend's frame is not a PNG".to_owned(),
+        })
+}
+
+/// The keys a cache entry records, `None` when there is no entry. An entry
+/// that cannot be read, or is not a PNG, records nothing and is produced
+/// again.
+fn recorded_keys(entry: &Path) -> Option<fluorita_core::ThumbnailKeys> {
+    let file = fs::File::open(entry).ok()?;
+    let mut prefix = Vec::new();
+    if file
+        .take(KEYS_PREFIX_BYTES)
+        .read_to_end(&mut prefix)
+        .is_err()
+    {
+        return Some(fluorita_core::ThumbnailKeys::default());
+    }
+    Some(fluorita_core::thumbnail_keys(&prefix).unwrap_or_default())
 }
 
 /// A private directory beside the entry, so the final step is a same-filesystem
@@ -296,10 +358,10 @@ pub struct PendingArtwork {
 
 /// Which catalogued items would need a thumbnail produced.
 ///
-/// This only ever `stat`s: it asks the shared cache whether an entry exists and
-/// whether it is at least as new as its source, using the core's frozen
-/// validity rule. Deciding *what* to generate must never cost a decode, or the
-/// decision would be as expensive as the work.
+/// This never decodes: it reads the first few kilobytes of an entry, where the
+/// spec's keys are, and judges them with the core's validity rule. Deciding
+/// *what* to generate must never cost a decode, or the decision would be as
+/// expensive as the work — and it runs on a worker, never on the GUI thread.
 ///
 /// Images are excluded on purpose. The toolkit already produces those, and
 /// Siderita already does; routing them through the media backend is the cost
@@ -323,10 +385,8 @@ pub fn pending(
             let Some(entry) = fluorita_core::large_thumbnail_path(cache_root, record.path()) else {
                 return false;
             };
-            let cached = std::fs::metadata(&entry)
-                .and_then(|metadata| metadata.modified())
-                .ok();
-            fluorita_core::ArtworkValidity::evaluate(record.identity().modified, cached)
+            let cached = recorded_keys(&entry);
+            fluorita_core::ArtworkValidity::evaluate(record.identity().modified, cached.as_ref())
                 .needs_generation()
         })
         .take(limit)
@@ -365,14 +425,28 @@ mod pending_tests {
         )
     }
 
-    /// Writes a cache entry for `source` with the given mtime.
-    fn cache_entry(cache_root: &Path, source: &str, seconds: u64) {
+    /// The smallest PNG a decoder accepts.
+    const TINY_PNG: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0xfd,
+        0xd4, 0x9a, 0x73, 0x00, 0x00, 0x00, 0x13, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8,
+        0xcf, 0xc0, 0xf0, 0x9f, 0x01, 0x8c, 0xff, 0x33, 0x30, 0x00, 0x00, 0x1f, 0xee, 0x03, 0xfd,
+        0x35, 0x1b, 0x00, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60,
+        0x82,
+    ];
+
+    /// Writes a cache entry for `source` that records `recorded` as the
+    /// source's mtime, with the cache file itself stamped `stamped`.
+    fn cache_entry(cache_root: &Path, source: &str, recorded: i64, stamped: u64) {
         let entry =
             fluorita_core::large_thumbnail_path(cache_root, Path::new(source)).expect("cache path");
         std::fs::create_dir_all(entry.parent().expect("parent")).expect("cache dir");
-        std::fs::write(&entry, b"png").expect("entry");
+        let uri = fluorita_core::file_uri(Path::new(source)).expect("a uri");
+        let keyed =
+            fluorita_core::with_thumbnail_keys(TINY_PNG, &uri, Some(recorded)).expect("a PNG");
+        std::fs::write(&entry, keyed).expect("entry");
         let stamp = std::fs::FileTimes::new()
-            .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(seconds));
+            .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(stamped));
         let file = std::fs::File::options()
             .write(true)
             .open(&entry)
@@ -404,9 +478,34 @@ mod pending_tests {
         let cache_root = scratch("fresh");
         let mut catalogue = Catalogue::new();
         catalogue.upsert(record(1, "/m/clip.mkv", MediaKind::Video, 100));
-        cache_entry(&cache_root, "/m/clip.mkv", 200);
+        cache_entry(&cache_root, "/m/clip.mkv", 100, 200);
 
         assert!(pending(&catalogue, &cache_root, 100).is_empty());
+    }
+
+    #[test]
+    fn an_entry_recorded_for_another_mtime_is_pending_even_when_newer() {
+        // The source was restored from a backup with an older mtime: the
+        // cache file is newer than it and still shows the other bytes.
+        let cache_root = scratch("restored");
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(record(1, "/m/clip.mkv", MediaKind::Video, 100));
+        cache_entry(&cache_root, "/m/clip.mkv", 150, 200);
+
+        assert_eq!(pending(&catalogue, &cache_root, 100).len(), 1);
+    }
+
+    #[test]
+    fn an_entry_with_no_spec_keys_is_produced_again() {
+        let cache_root = scratch("unkeyed");
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(record(1, "/m/clip.mkv", MediaKind::Video, 100));
+        let entry = fluorita_core::large_thumbnail_path(&cache_root, Path::new("/m/clip.mkv"))
+            .expect("cache path");
+        std::fs::create_dir_all(entry.parent().expect("parent")).expect("cache dir");
+        std::fs::write(&entry, TINY_PNG).expect("entry");
+
+        assert_eq!(pending(&catalogue, &cache_root, 100).len(), 1);
     }
 
     #[test]
@@ -414,7 +513,7 @@ mod pending_tests {
         let cache_root = scratch("stale");
         let mut catalogue = Catalogue::new();
         catalogue.upsert(record(1, "/m/clip.mkv", MediaKind::Video, 300));
-        cache_entry(&cache_root, "/m/clip.mkv", 100);
+        cache_entry(&cache_root, "/m/clip.mkv", 100, 100);
 
         assert_eq!(pending(&catalogue, &cache_root, 100).len(), 1);
     }

@@ -17,6 +17,12 @@ import org.celestina.fluorita 1.0
 // Coordinates arrive in canvas pixels and are scaled by `scaleFactor`, which is
 // what keeps a mark on the same part of the photograph at any zoom and on any
 // display scale.
+//
+// Every mark is an accessible object with a role, a name that says what it is
+// — the words themselves for a text — and whether it is the selected one, and
+// pressing it selects it. The keyboard reaches the same marks through the
+// editor's `selectNextObject`, which the surface binds and announces through
+// `describeObject`, since focus stays on the canvas where its shortcuts live.
 Item {
     id: objectLayer
 
@@ -53,6 +59,36 @@ Item {
         return text.split(",").map(parseFloat)
     }
 
+    // What an assistive technology announces for a mark: its kind in the
+    // toolbar's own words, and for a text the words it carries.
+    function describe(row) {
+        const fields = row.detail.split(objectLayer.separator)
+        switch (row.kind) {
+        case "text":
+            return qsTr("Texto: %1").arg(fields.slice(1).join(""))
+        case "stroke":
+            return qsTr("Trazo")
+        case "line":
+            return row.detail === "arrow" ? qsTr("Flecha") : qsTr("Línea")
+        case "shape":
+            return fields[0] === "ellipse" ? qsTr("Elipse") : qsTr("Rectángulo")
+        case "highlight":
+            return qsTr("Resaltado")
+        case "redact":
+            return qsTr("Zona ocultada")
+        }
+        return qsTr("Marca")
+    }
+
+    // The name of the mark with this handle, or empty when there is none —
+    // what the surface announces when the keyboard selects it, because a
+    // selection changing on an object without focus is not something a
+    // screen reader speaks on its own.
+    function describeObject(id) {
+        const row = objectLayer.rows.find(candidate => candidate.id === id)
+        return row ? objectLayer.describe(row) : ""
+    }
+
     Repeater {
         model: objectLayer.rows
 
@@ -72,6 +108,12 @@ Item {
             width: object.box[2] * object.scaled
             height: object.box[3] * object.scaled
             visible: object.modelData.kind !== "stroke" && object.modelData.kind !== "line"
+
+            Accessible.role: Accessible.Graphic
+            Accessible.name: objectLayer.describe(object.modelData)
+            Accessible.selectable: true
+            Accessible.selected: object.selected
+            Accessible.onPressAction: objectLayer.objectPicked(object.modelData.id)
 
             Rectangle {
                 anchors.fill: parent
@@ -152,6 +194,12 @@ Item {
 
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer
+
+            Accessible.role: Accessible.Graphic
+            Accessible.name: objectLayer.describe(drawn.modelData)
+            Accessible.selectable: true
+            Accessible.selected: objectLayer.editor.selected === drawn.modelData.id
+            Accessible.onPressAction: objectLayer.objectPicked(drawn.modelData.id)
 
             readonly property var points: drawn.modelData.kind === "stroke"
                 ? drawn.modelData.geometry.split(";").map(pair => objectLayer.numbers(pair))

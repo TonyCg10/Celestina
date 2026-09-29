@@ -26,6 +26,12 @@
 #include <cxx-qt-lib/qstring.h>
 #include <rust/cxx.h>
 
+// Defined by the bridge in `src/rasteriser.rs`: an order is a typed value, so
+// a call cannot pass eleven numbers in the wrong order and still compile.
+struct LineOrder;
+struct ShapeOrder;
+struct TextOrder;
+
 class FluoritaCanvas
 {
 public:
@@ -44,34 +50,11 @@ public:
     // Annotations. `rgba` is packed 0xRRGGBBAA, which is how the Rust side
     // already carries an `Ink`.
     void drawStroke(::rust::Slice<const float> points, float width, ::std::uint32_t rgba);
-    void drawLine(float x1,
-                  float y1,
-                  float x2,
-                  float y2,
-                  float width,
-                  ::std::uint32_t rgba,
-                  bool arrow);
-    void drawShape(bool ellipse,
-                   float x,
-                   float y,
-                   float width,
-                   float height,
-                   float stroke,
-                   ::std::uint32_t rgba,
-                   bool filled,
-                   ::std::uint32_t fillRgba);
+    void drawLine(const LineOrder &line);
+    void drawShape(const ShapeOrder &shape);
     void drawHighlight(float x, float y, float width, float height, ::std::uint32_t rgba);
     void redact(float x, float y, float width, float height);
-    void drawText(float x,
-                  float y,
-                  float width,
-                  float height,
-                  float size,
-                  ::std::uint32_t rgba,
-                  bool hasBackdrop,
-                  ::std::uint32_t backdropRgba,
-                  ::std::int32_t quarters,
-                  const QString &text);
+    void drawText(const TextOrder &order, const QString &text);
 
     QByteArray encode(const QString &format, ::std::int32_t quality) const;
 

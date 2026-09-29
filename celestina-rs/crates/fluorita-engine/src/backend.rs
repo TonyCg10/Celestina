@@ -83,13 +83,6 @@ pub trait MediaEngine: Send + Sync {
     /// never needed it.
     fn publish_artwork(&self, request: &ArtworkJob) -> EngineResult<std::path::PathBuf>;
 
-    /// Produces one bounded live preview into Fluorita's own cache.
-    ///
-    /// A trailer is never published as a freedesktop thumbnail: it is a
-    /// different resource with a different lifetime, and the type system keeps
-    /// them apart precisely so no host can confuse them.
-    fn produce_trailer(&self, job: &TrailerJob) -> EngineResult<TrailerOutcome>;
-
     /// Opens a playback session for one item.
     fn open_session(&self, request: SessionRequest) -> EngineResult<Box<dyn EngineSession>>;
 }
@@ -165,50 +158,6 @@ pub struct ArtworkJob {
     pub uniquifier: u64,
     pub deadline: Duration,
     pub cancellation: CancellationToken,
-}
-
-/// Everything one trailer job needs.
-#[derive(Clone, Debug)]
-pub struct TrailerJob {
-    pub source: std::path::PathBuf,
-    /// Fluorita's own cache root — never the freedesktop thumbnail root.
-    pub cache_root: std::path::PathBuf,
-    pub budget: fluorita_core::TrailerBudget,
-    pub uniquifier: u64,
-    pub deadline: Duration,
-    pub cancellation: CancellationToken,
-}
-
-impl TrailerJob {
-    /// Builds the job for a request the core already validated — only video
-    /// reaches this point, and the budget and cancellation come from there.
-    #[must_use]
-    pub fn for_request(
-        request: &fluorita_core::TrailerRequest,
-        cache_root: std::path::PathBuf,
-        uniquifier: u64,
-        deadline: Duration,
-    ) -> Self {
-        Self {
-            source: request.source().to_path_buf(),
-            cache_root,
-            budget: request.budget(),
-            uniquifier,
-            deadline,
-            cancellation: request.cancellation().clone(),
-        }
-    }
-}
-
-/// A produced trailer, measured rather than assumed: these numbers come from
-/// decoding the encode back, not from what was requested.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TrailerOutcome {
-    pub path: std::path::PathBuf,
-    pub bytes: u64,
-    pub duration: Duration,
-    pub width: u32,
-    pub height: u32,
 }
 
 /// Where a session's picture goes.

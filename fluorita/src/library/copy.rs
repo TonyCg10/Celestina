@@ -36,6 +36,11 @@ pub(super) const CHOOSER_UNAVAILABLE: &str = "El escritorio no ofreció un selec
 pub(super) const ITEM_GONE: &str = "Ese elemento ya no está en la biblioteca";
 pub(super) const TRASH_NOT_STARTED: &str = "No se pudo iniciar el envío a la papelera";
 pub(super) const TRASH_FAILED: &str = "No se pudo mover a la papelera";
+/// A move into a Trash on another disk copies first; a file that changed
+/// while it was being copied is kept where it was rather than deleted
+/// half-read, and the person is told it did not go.
+pub(super) const TRASH_LEFT_BEHIND: &str =
+    "El archivo cambió mientras se copiaba a la papelera y sigue en su carpeta";
 pub(super) const FILE_MISSING: &str =
     "Este archivo no está donde la biblioteca lo vio por última vez";
 

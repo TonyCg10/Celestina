@@ -21,6 +21,15 @@
 //! they are not symmetric: a copy keeps the base, so its recipe is remembered
 //! and it reopens with its objects; a replacement removes the base, so the
 //! result is flattened and its recipe is forgotten.
+//!
+//! **Opening measures on a worker.** Deciding what to open is a `stat`, a
+//! header read and, for a copy, a look in the recipe store — all of it file
+//! IO that on a mapped network folder is a frozen window. The answer arrives
+//! through the queue under a generation, so a slow file cannot open over one
+//! chosen after it. A copy with a usable recipe opens as the document that
+//! produced it: rendered from its original, its objects selectable again and
+//! its steps undoable, and saved beside — or over — the copy itself, never
+//! the original.
 
 use std::path::PathBuf;
 use std::thread::JoinHandle;
@@ -34,10 +43,11 @@ use fluorita_core::{
     EditRejected, Ink, MediaKind, ObjectId, Point, Quarter, Redaction, SaveChoice, ShapeKind,
     Transform,
 };
-use fluorita_engine::{edit_store, DesktopTrash, SaveRequest, Saved};
+use fluorita_engine::{DesktopTrash, SaveRequest};
 
 use crate::image;
 use crate::rasteriser::ToolkitRasteriser;
+use crate::recipes;
 
 mod copy;
 
@@ -202,6 +212,12 @@ pub mod qobject {
         #[qinvokable]
         fn select_object(self: Pin<&mut FluoritaEditor>, id: i32);
 
+        /// Selects the next object in drawing order, or the previous one, and
+        /// wraps around. What a keyboard uses to reach a mark placed earlier,
+        /// so it can be moved or removed without a pointer.
+        #[qinvokable]
+        fn select_next_object(self: Pin<&mut FluoritaEditor>, forward: bool);
+
         /// Moves one object by a delta in canvas pixels.
         #[qinvokable]
         fn move_object(self: Pin<&mut FluoritaEditor>, id: i32, dx: f32, dy: f32);
@@ -260,12 +276,35 @@ pub struct EditorRust {
     object_widths: QStringList,
     object_details: QStringList,
 
-    /// The picture being edited, byte-exact. Never published: the key is.
+    /// The picture the document renders from, byte-exact. Never published:
+    /// the key is. For a copy reopened from its recipe this is the copy's
+    /// original, because that is the frame the recipe is in.
     source: Option<PathBuf>,
+    /// The file the person opened, when it is not `source`: a reopened copy.
+    /// A save lands beside it or replaces it; the original is never touched.
+    target: Option<PathBuf>,
     document: Option<EditDocument>,
     capabilities: Option<EditCapabilities>,
     worker: Option<JoinHandle<()>>,
     cancellation: CancellationToken,
+    /// The measurement in flight, if any, and which open it answers. A newer
+    /// open or a close bumps the generation, and an answer to an older one is
+    /// dropped when it lands.
+    opener: Option<JoinHandle<()>>,
+    opening: u64,
+    /// An open asked for while a measurement was still running. Started as
+    /// soon as that one lands, so no second thread is ever left unjoined.
+    waiting: Option<QString>,
+}
+
+/// What opening a picture found, measured on the opener's thread.
+struct Prepared {
+    /// What the document renders from.
+    source: PathBuf,
+    /// The copy the person opened, when its recipe was used.
+    target: Option<PathBuf>,
+    document: EditDocument,
+    capabilities: EditCapabilities,
 }
 
 impl Default for EditorRust {
@@ -298,10 +337,14 @@ impl Default for EditorRust {
             object_widths: QStringList::default(),
             object_details: QStringList::default(),
             source: None,
+            target: None,
             document: None,
             capabilities: None,
             worker: None,
             cancellation: CancellationToken::new(),
+            opener: None,
+            opening: 0,
+            waiting: None,
         }
     }
 }
@@ -311,6 +354,11 @@ impl Drop for EditorRust {
         self.cancellation.cancel();
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
+        }
+        // A measurement is one `stat`, one header and one store read; it
+        // finishes, and its answer finds no one to deliver to.
+        if let Some(opener) = self.opener.take() {
+            let _ = opener.join();
         }
     }
 }
@@ -334,40 +382,68 @@ impl qobject::FluoritaEditor {
             return;
         }
 
-        // The same probe the viewer uses, so the canvas is the picture as it is
-        // shown — orientation applied — and the budget is judged on what would
-        // actually be allocated.
-        let probed = crate::player::qobject::probe_image(key);
-        let bytes = std::fs::metadata(&path).map(|it| it.len()).unwrap_or(0);
-        let dimensions = (probed.width() > 0 && probed.height() > 0).then(|| {
-            (
-                u32::try_from(probed.width()).unwrap_or(u32::MAX),
-                u32::try_from(probed.height()).unwrap_or(u32::MAX),
-            )
-        });
-        let decision = image::ImageDecision::judge(bytes, dimensions);
-        let Some(canvas) = (match decision {
-            image::ImageDecision::Show { width, height } => Canvas::new(width, height),
-            image::ImageDecision::Unreadable | image::ImageDecision::TooLarge { .. } => None,
-        }) else {
-            self.as_mut().refuse(&decision.message());
+        // Whatever an earlier measurement finds is no longer wanted.
+        let generation = self.rust().opening.wrapping_add(1);
+        self.as_mut().rust_mut().opening = generation;
+        if self.rust().opener.is_some() {
+            // One measurement at a time; this one starts when that lands.
+            self.as_mut().rust_mut().waiting = Some(key.clone());
             return;
-        };
+        }
 
-        let document = EditDocument::new(canvas, EditLimits::new(image::MAX_PIXELS));
+        let qt_thread = self.qt_thread();
+        let published = key.clone().to_string();
+        let opener = std::thread::Builder::new()
+            .name("fluorita-editor-open".to_owned())
+            .spawn(move || {
+                let prepared = prepare(&path, capabilities);
+                let _ = qt_thread.queue(move |editor| {
+                    editor.opened(generation, &QString::from(&published), prepared);
+                });
+            });
+        match opener {
+            Ok(handle) => self.as_mut().rust_mut().opener = Some(handle),
+            Err(error) => {
+                eprintln!("fluorita: could not start measuring the picture: {error}");
+                self.as_mut().refuse(crate::copy::WORKER_NOT_STARTED);
+            }
+        }
+    }
+
+    /// A measurement landed. Runs on the GUI thread, through the queue.
+    fn opened(
+        mut self: std::pin::Pin<&mut Self>,
+        generation: u64,
+        key: &QString,
+        prepared: Result<Prepared, String>,
+    ) {
+        if let Some(opener) = self.as_mut().rust_mut().opener.take() {
+            let _ = opener.join();
+        }
+        // Asked for while this one ran: that is what the person wants now.
+        if let Some(next) = self.as_mut().rust_mut().waiting.take() {
+            self.open_item(&next);
+            return;
+        }
+        if generation != self.rust().opening || *self.saving() {
+            return;
+        }
+        let prepared = match prepared {
+            Ok(prepared) => prepared,
+            Err(message) => {
+                self.as_mut().refuse(&message);
+                return;
+            }
+        };
+        let url = fluorita_core::file_uri(&prepared.source).unwrap_or_default();
         {
             let mut editor = self.as_mut().rust_mut();
-            editor.source = Some(path);
-            editor.document = Some(document);
-            editor.capabilities = Some(capabilities);
+            editor.source = Some(prepared.source);
+            editor.target = prepared.target;
+            editor.document = Some(prepared.document);
+            editor.capabilities = Some(prepared.capabilities);
             editor.selected = 0;
         }
-        let url = self
-            .rust()
-            .source
-            .as_deref()
-            .and_then(fluorita_core::file_uri)
-            .unwrap_or_default();
         self.as_mut().set_source_url(QString::from(&url));
         self.as_mut().set_key(key.clone());
         self.as_mut().set_open(true);
@@ -388,7 +464,11 @@ impl qobject::FluoritaEditor {
         self.as_mut().cancel_worker();
         {
             let mut editor = self.as_mut().rust_mut();
+            // A measurement still running opens nothing once it lands.
+            editor.opening = editor.opening.wrapping_add(1);
+            editor.waiting = None;
             editor.source = None;
+            editor.target = None;
             editor.document = None;
             editor.capabilities = None;
             editor.selected = 0;
@@ -565,6 +645,24 @@ impl qobject::FluoritaEditor {
         }
     }
 
+    pub fn select_next_object(mut self: std::pin::Pin<&mut Self>, forward: bool) {
+        let handles: Vec<u64> = self
+            .rust()
+            .document
+            .as_ref()
+            .map(|document| {
+                document
+                    .objects()
+                    .iter()
+                    .map(|(id, _)| id.value())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let current = u64::try_from(*self.selected()).unwrap_or(0);
+        let next = step_selection(&handles, current, forward);
+        self.as_mut().set_selected(i32::try_from(next).unwrap_or(0));
+    }
+
     pub fn move_object(mut self: std::pin::Pin<&mut Self>, id: i32, dx: f32, dy: f32) {
         self.as_mut().rewrite(id, |annotation| {
             shift(annotation, dx, dy);
@@ -646,6 +744,7 @@ impl qobject::FluoritaEditor {
         ) else {
             return;
         };
+        let target = self.rust().target.clone();
         if !document.is_edited() {
             self.as_mut()
                 .set_notice(QString::from(copy::NOTHING_TO_SAVE));
@@ -667,46 +766,119 @@ impl qobject::FluoritaEditor {
         };
         let cancellation = self.rust().cancellation.clone();
         let qt_thread = self.qt_thread();
-        let worker = std::thread::spawn(move || {
-            let composition = document.composition();
-            let request = SaveRequest {
-                source: &source,
-                composition: &composition,
-                orientation: document.orientation_only(),
-                format,
-                choice,
-                copy_marker: copy::COPY_MARKER,
-            };
-            let outcome = fluorita_engine::save_edit(
-                &request,
-                &ToolkitRasteriser,
-                &DesktopTrash,
-                &cancellation,
-            );
-            let remembered = match (&outcome, choice) {
-                (Ok(saved), SaveChoice::Copy) => {
-                    remember(&source, saved, document.base(), &composition)
-                }
-                _ => false,
-            };
-            let message = match &outcome {
-                Ok(saved) => copy::saved(saved, remembered),
-                Err(error) => copy::failure(error),
-            };
-            let landed = outcome.is_ok();
-            let _ = qt_thread.queue(move |mut editor| {
-                editor.as_mut().set_saving(false);
-                editor.as_mut().set_notice(QString::from(&message));
-                if landed {
-                    // A replacement flattened the result and the copy is a
-                    // different file: either way the document that produced it
-                    // is no longer the document for what is now on disk.
-                    editor.close();
-                }
+        let worker = std::thread::Builder::new()
+            .name("fluorita-editor-save".to_owned())
+            .spawn(move || {
+                let composition = document.composition();
+                let request = SaveRequest {
+                    source: &source,
+                    composition: &composition,
+                    orientation: document.orientation_only(),
+                    format,
+                    choice,
+                    copy_marker: copy::COPY_MARKER,
+                    target: target.as_deref(),
+                };
+                // Measured before the save, while the name still holds the file a
+                // replacement is about to send to the Trash.
+                let replaced = recipes::identity_at(target.as_deref().unwrap_or(&source));
+                let outcome = fluorita_engine::save_edit(
+                    &request,
+                    &ToolkitRasteriser,
+                    &DesktopTrash,
+                    &cancellation,
+                );
+                let remembered = match (&outcome, choice) {
+                    (Ok(saved), SaveChoice::Copy) => {
+                        recipes::remember(&source, &saved.written, document.base(), &composition)
+                    }
+                    // A replacement flattened the result, and the file it replaced
+                    // is in the Trash: whatever recipe it had describes nothing now.
+                    (Ok(_), SaveChoice::Replace) => {
+                        if let Some(replaced) = replaced.as_ref() {
+                            recipes::forget(replaced);
+                        }
+                        false
+                    }
+                    _ => false,
+                };
+                let message = match &outcome {
+                    Ok(saved) => copy::saved(saved, remembered),
+                    Err(error) => copy::failure(error),
+                };
+                let landed = outcome.is_ok();
+                let _ = qt_thread.queue(move |mut editor| {
+                    editor.as_mut().set_saving(false);
+                    editor.as_mut().set_notice(QString::from(&message));
+                    if landed {
+                        // A replacement flattened the result and the copy is a
+                        // different file: either way the document that produced it
+                        // is no longer the document for what is now on disk.
+                        editor.close();
+                    }
+                });
             });
-        });
-        self.as_mut().rust_mut().worker = Some(worker);
+        match worker {
+            Ok(handle) => self.as_mut().rust_mut().worker = Some(handle),
+            // The system refused a thread: nothing was written, and the editor
+            // says so instead of staying "saving" for ever.
+            Err(error) => {
+                eprintln!("fluorita: could not start the save: {error}");
+                self.as_mut().set_saving(false);
+                self.as_mut().refuse(crate::copy::WORKER_NOT_STARTED);
+            }
+        }
     }
+}
+
+/// Measures a picture to open and looks for the recipe behind it. Runs on the
+/// opener's thread: every step here touches a file.
+///
+/// A copy whose recipe is still usable opens as the document that produced
+/// it; everything else opens as the picture it is, measured by the same probe
+/// the viewer uses, so the canvas is the picture as it is shown — orientation
+/// applied — and the budget is judged on what would actually be allocated.
+fn prepare(path: &std::path::Path, capabilities: EditCapabilities) -> Result<Prepared, String> {
+    let limits = EditLimits::new(image::MAX_PIXELS);
+    if let Some(reopened) = recipes::reopen(path, limits) {
+        return Ok(Prepared {
+            source: reopened.base,
+            target: Some(path.to_path_buf()),
+            document: reopened.document,
+            capabilities: reopened.capabilities,
+        });
+    }
+    let decision = image::ImageDecision::measure(path, crate::player::probe_still);
+    let canvas = match decision {
+        image::ImageDecision::Show { width, height } => Canvas::new(width, height),
+        image::ImageDecision::Unreadable | image::ImageDecision::TooLarge { .. } => None,
+    };
+    let Some(canvas) = canvas else {
+        return Err(decision.message());
+    };
+    Ok(Prepared {
+        source: path.to_path_buf(),
+        target: None,
+        document: EditDocument::new(canvas, limits),
+        capabilities,
+    })
+}
+
+/// The handle after `current` in drawing order, or before it, wrapping
+/// around; the first (or last) when nothing is selected, and `0` when there
+/// is nothing to select.
+fn step_selection(handles: &[u64], current: u64, forward: bool) -> u64 {
+    let Some(last) = handles.len().checked_sub(1) else {
+        return 0;
+    };
+    let next = match handles.iter().position(|handle| *handle == current) {
+        None if forward => 0,
+        None => last,
+        Some(index) if forward => (index + 1) % handles.len(),
+        Some(0) => last,
+        Some(index) => index - 1,
+    };
+    handles[next]
 }
 
 /// Everything the object lists and the derived properties are rebuilt from.
@@ -893,63 +1065,6 @@ impl qobject::FluoritaEditor {
         let revision = self.revision().wrapping_add(1);
         self.as_mut().set_revision(revision);
     }
-}
-
-/// Writes the recipe down, so the copy just written reopens with its objects.
-///
-/// Returns whether it was remembered. A failure is not a failed save — the
-/// picture is on disk either way — so it is reported as "saved, but it will
-/// reopen flat" rather than as an error.
-fn remember(
-    source: &std::path::Path,
-    saved: &Saved,
-    base: Canvas,
-    composition: &fluorita_core::Composition,
-) -> bool {
-    let Some(store_path) = edit_store::default_path() else {
-        return false;
-    };
-    let (Ok(base_metadata), Ok(result_metadata)) =
-        (std::fs::metadata(source), std::fs::metadata(&saved.written))
-    else {
-        return false;
-    };
-    let Some(identity) = identity_of(&base_metadata) else {
-        return false;
-    };
-    let Some(result_id) = media_id_of(&result_metadata) else {
-        return false;
-    };
-
-    let mut store = edit_store::load(&store_path)
-        .map(|loaded| loaded.store)
-        .unwrap_or_default();
-    store.remember(
-        result_id,
-        edit_store::StoredEdit {
-            base: source.to_path_buf(),
-            base_identity: identity,
-            base_canvas: base,
-            transforms: composition.transforms.clone(),
-            objects: composition.objects.clone(),
-        },
-    );
-    edit_store::save(&store_path, &store).is_ok()
-}
-
-fn identity_of(metadata: &std::fs::Metadata) -> Option<fluorita_core::SourceIdentity> {
-    Some(fluorita_core::SourceIdentity::new(
-        metadata.len(),
-        metadata.modified().ok()?,
-    ))
-}
-
-fn media_id_of(metadata: &std::fs::Metadata) -> Option<fluorita_core::MediaId> {
-    use std::os::unix::fs::MetadataExt;
-    Some(fluorita_core::MediaId::filesystem(
-        metadata.dev(),
-        metadata.ino(),
-    ))
 }
 
 /// The ink used when a surface hands over a colour that is not one. Opaque
@@ -1140,7 +1255,7 @@ fn reshape(annotation: &mut Annotation, width: f32, height: f32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_ink, parse_points, reshape, shift, write_ink};
+    use super::{parse_ink, parse_points, reshape, shift, step_selection, write_ink};
     use fluorita_core::{Annotation, Area, Ink, Point, Redaction};
 
     fn redaction() -> Annotation {
@@ -1214,5 +1329,21 @@ mod tests {
             }
             other => panic!("unexpected: {other:?}"),
         }
+    }
+
+    #[test]
+    fn the_keyboard_reaches_every_mark_in_drawing_order_and_wraps() {
+        let handles = [4, 7, 9];
+        // Nothing selected: forward starts at the first mark, back at the last.
+        assert_eq!(step_selection(&handles, 0, true), 4);
+        assert_eq!(step_selection(&handles, 0, false), 9);
+        assert_eq!(step_selection(&handles, 4, true), 7);
+        assert_eq!(step_selection(&handles, 9, true), 4);
+        assert_eq!(step_selection(&handles, 4, false), 9);
+        assert_eq!(step_selection(&handles, 7, false), 4);
+        // A selection that no longer exists starts over.
+        assert_eq!(step_selection(&handles, 5, true), 4);
+        // Nothing on the canvas selects nothing.
+        assert_eq!(step_selection(&[], 0, true), 0);
     }
 }

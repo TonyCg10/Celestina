@@ -204,10 +204,7 @@ impl qobject::FluoritaMetadata {
         // folder can be a phone over sshfs — the suite mounts them — and four
         // megabytes across a link like that is a frozen window, not a header
         // read.
-        let label = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let label = fluorita_core::displayed_name(&path);
         {
             let mut object = self.as_mut().rust_mut();
             object.source = Some(path.clone());
@@ -242,51 +239,53 @@ impl qobject::FluoritaMetadata {
         self.as_mut().cancel_worker();
 
         let qt_thread = self.qt_thread();
-        let worker = std::thread::spawn(move || {
-            let bytes = read_prefix(&path);
-            let tags = if capabilities.shows_tags() {
-                engine::read_flac_tags(&bytes).unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-            let carried = if capabilities.strips_private_facts() {
-                engine::private_facts(&bytes)
-            } else {
-                Vec::new()
-            };
-            let value = |field: TagField| {
-                tags.iter()
-                    .find(|(candidate, _)| *candidate == field)
-                    .map(|(_, value)| value.clone())
-                    .unwrap_or_default()
-            };
-            let read = (
-                value(TagField::Title),
-                value(TagField::Artist),
-                value(TagField::Album),
-                value(TagField::AlbumArtist),
-            );
-            let _ = qt_thread.queue(move |mut object| {
-                // The panel may have moved on to another file, or closed,
-                // while this was reading. An answer to a question nobody is
-                // asking any more is dropped rather than published.
-                if !*object.open() || object.rust().source.as_deref() != Some(path.as_path()) {
-                    return;
-                }
-                let mut facts = QStringList::default();
-                for fact in &carried {
-                    facts.append(QString::from(copy::private_fact(*fact)));
-                }
-                object.as_mut().rust_mut().carried = carried;
-                object.as_mut().set_title(QString::from(&read.0));
-                object.as_mut().set_artist(QString::from(&read.1));
-                object.as_mut().set_album(QString::from(&read.2));
-                object.as_mut().set_album_artist(QString::from(&read.3));
-                object.as_mut().set_private_facts(facts);
-                object.as_mut().set_busy(false);
+        let worker = std::thread::Builder::new()
+            .name("fluorita-metadata".to_owned())
+            .spawn(move || {
+                let bytes = read_prefix(&path);
+                let tags = if capabilities.shows_tags() {
+                    engine::read_flac_tags(&bytes).unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+                let carried = if capabilities.strips_private_facts() {
+                    engine::private_facts(&bytes)
+                } else {
+                    Vec::new()
+                };
+                let value = |field: TagField| {
+                    tags.iter()
+                        .find(|(candidate, _)| *candidate == field)
+                        .map(|(_, value)| value.clone())
+                        .unwrap_or_default()
+                };
+                let read = (
+                    value(TagField::Title),
+                    value(TagField::Artist),
+                    value(TagField::Album),
+                    value(TagField::AlbumArtist),
+                );
+                let _ = qt_thread.queue(move |mut object| {
+                    // The panel may have moved on to another file, or closed,
+                    // while this was reading. An answer to a question nobody is
+                    // asking any more is dropped rather than published.
+                    if !*object.open() || object.rust().source.as_deref() != Some(path.as_path()) {
+                        return;
+                    }
+                    let mut facts = QStringList::default();
+                    for fact in &carried {
+                        facts.append(QString::from(copy::private_fact(*fact)));
+                    }
+                    object.as_mut().rust_mut().carried = carried;
+                    object.as_mut().set_title(QString::from(&read.0));
+                    object.as_mut().set_artist(QString::from(&read.1));
+                    object.as_mut().set_album(QString::from(&read.2));
+                    object.as_mut().set_album_artist(QString::from(&read.3));
+                    object.as_mut().set_private_facts(facts);
+                    object.as_mut().set_busy(false);
+                });
             });
-        });
-        self.as_mut().rust_mut().worker = Some(worker);
+        self.adopt_worker(worker);
     }
 
     #[must_use]
@@ -378,40 +377,45 @@ impl qobject::FluoritaMetadata {
         };
         let cancellation = self.rust().cancellation.clone();
         let qt_thread = self.qt_thread();
-        let worker = std::thread::spawn(move || {
-            let message = match chosen_cover() {
-                Ok(Some(chosen)) => {
-                    let request = MetadataRequest {
-                        source: &source,
-                        tags: &TagChange::new(),
-                        strip: &[],
-                        cover: Some(fluorita_engine::Cover {
-                            bytes: &chosen.bytes,
-                            mime: chosen.mime,
-                            width: chosen.width,
-                            height: chosen.height,
-                        }),
-                        choice,
-                        copy_marker: copy::COPY_MARKER,
-                    };
-                    match engine::write(&request, &DesktopTrash, &cancellation) {
-                        Ok(written) => Some(copy::written(&written)),
-                        Err(error) => Some(error.user_message()),
+        let worker = std::thread::Builder::new()
+            .name("fluorita-cover".to_owned())
+            .spawn(move || {
+                // The panel's own token: closing it while the chooser is open
+                // withdraws the dialog, and the join in `cancel_worker` waits one
+                // receive slice rather than for the person.
+                let message = match chosen_cover(&cancellation) {
+                    Ok(Some(chosen)) => {
+                        let request = MetadataRequest {
+                            source: &source,
+                            tags: &TagChange::new(),
+                            strip: &[],
+                            cover: Some(fluorita_engine::Cover {
+                                bytes: &chosen.bytes,
+                                mime: chosen.mime,
+                                width: chosen.width,
+                                height: chosen.height,
+                            }),
+                            choice,
+                            copy_marker: copy::COPY_MARKER,
+                        };
+                        match engine::write(&request, &DesktopTrash, &cancellation) {
+                            Ok(written) => Some(copy::written(&written)),
+                            Err(error) => Some(error.user_message()),
+                        }
                     }
-                }
-                // A dismissed dialog is not a failure and says nothing.
-                Ok(None) => None,
-                Err(message) => Some(message),
-            };
-            let _ = qt_thread.queue(move |mut object| {
-                object.as_mut().set_busy(false);
-                if let Some(message) = message {
-                    object.as_mut().set_notice(QString::from(&message));
-                    object.as_mut().set_open(false);
-                }
+                    // A dismissed dialog is not a failure and says nothing.
+                    Ok(None) => None,
+                    Err(message) => Some(message),
+                };
+                let _ = qt_thread.queue(move |mut object| {
+                    object.as_mut().set_busy(false);
+                    if let Some(message) = message {
+                        object.as_mut().set_notice(QString::from(&message));
+                        object.as_mut().set_open(false);
+                    }
+                });
             });
-        });
-        self.as_mut().rust_mut().worker = Some(worker);
+        self.adopt_worker(worker);
     }
 
     fn write(
@@ -444,38 +448,58 @@ impl qobject::FluoritaMetadata {
         };
         let cancellation = self.rust().cancellation.clone();
         let qt_thread = self.qt_thread();
-        let worker = std::thread::spawn(move || {
-            let cover = chosen.as_ref().map(|chosen| fluorita_engine::Cover {
-                bytes: &chosen.bytes,
-                mime: chosen.mime,
-                width: chosen.width,
-                height: chosen.height,
+        let worker = std::thread::Builder::new()
+            .name("fluorita-metadata-write".to_owned())
+            .spawn(move || {
+                let cover = chosen.as_ref().map(|chosen| fluorita_engine::Cover {
+                    bytes: &chosen.bytes,
+                    mime: chosen.mime,
+                    width: chosen.width,
+                    height: chosen.height,
+                });
+                let request = MetadataRequest {
+                    source: &source,
+                    tags: &change,
+                    strip: &strip,
+                    cover,
+                    choice,
+                    copy_marker: copy::COPY_MARKER,
+                };
+                let outcome = engine::write(&request, &DesktopTrash, &cancellation);
+                let message = match &outcome {
+                    Ok(written) => copy::written(written),
+                    Err(error) => error.user_message(),
+                };
+                let landed = outcome.is_ok();
+                let _ = qt_thread.queue(move |mut object| {
+                    object.as_mut().set_busy(false);
+                    object.as_mut().set_notice(QString::from(&message));
+                    if landed {
+                        // The file on disk is no longer the file this panel read,
+                        // so it is closed rather than left showing stale values.
+                        object.as_mut().set_open(false);
+                    }
+                });
             });
-            let request = MetadataRequest {
-                source: &source,
-                tags: &change,
-                strip: &strip,
-                cover,
-                choice,
-                copy_marker: copy::COPY_MARKER,
-            };
-            let outcome = engine::write(&request, &DesktopTrash, &cancellation);
-            let message = match &outcome {
-                Ok(written) => copy::written(written),
-                Err(error) => error.user_message(),
-            };
-            let landed = outcome.is_ok();
-            let _ = qt_thread.queue(move |mut object| {
-                object.as_mut().set_busy(false);
-                object.as_mut().set_notice(QString::from(&message));
-                if landed {
-                    // The file on disk is no longer the file this panel read,
-                    // so it is closed rather than left showing stale values.
-                    object.as_mut().set_open(false);
-                }
-            });
-        });
-        self.as_mut().rust_mut().worker = Some(worker);
+        self.adopt_worker(worker);
+    }
+
+    /// Keeps a started worker so it can be joined, or says why none started:
+    /// the system refused a thread, nothing ran, and the panel is not left
+    /// busy for ever.
+    fn adopt_worker(
+        mut self: std::pin::Pin<&mut Self>,
+        worker: std::io::Result<std::thread::JoinHandle<()>>,
+    ) {
+        match worker {
+            Ok(handle) => self.as_mut().rust_mut().worker = Some(handle),
+            Err(error) => {
+                eprintln!("fluorita: could not start the metadata worker: {error}");
+                self.as_mut().set_busy(false);
+                self.as_mut()
+                    .set_notice(QString::from(crate::copy::WORKER_NOT_STARTED));
+            }
+        }
     }
 
     fn cancel_worker(mut self: std::pin::Pin<&mut Self>) {
@@ -498,24 +522,23 @@ struct ChosenCover {
 
 /// Asks the desktop for a picture, then reads and judges it.
 ///
-/// `Ok(None)` is a dismissed dialog, which is not a failure. Every refusal
-/// carries the words for it, because a chooser that closes and does nothing is
-/// the interaction this exists to avoid.
-fn chosen_cover() -> Result<Option<ChosenCover>, String> {
-    let path = match crate::folders::choose_picture(copy::COVER_TITLE, copy::COVER_FILTER) {
-        crate::folders::FolderChoice::Chosen(path) => path,
-        crate::folders::FolderChoice::Cancelled => return Ok(None),
-        crate::folders::FolderChoice::Unavailable(reason) => return Err(reason),
-    };
+/// `Ok(None)` is a dismissed dialog, which is not a failure, and so is a
+/// request withdrawn because the panel closed. Every refusal carries the words
+/// for it, because a chooser that closes and does nothing is the interaction
+/// this exists to avoid.
+fn chosen_cover(cancellation: &CancellationToken) -> Result<Option<ChosenCover>, String> {
+    let path =
+        match crate::folders::choose_picture(copy::COVER_TITLE, copy::COVER_FILTER, cancellation) {
+            crate::folders::FolderChoice::Chosen(path) => path,
+            crate::folders::FolderChoice::Cancelled => return Ok(None),
+            crate::folders::FolderChoice::Unavailable(reason) => return Err(reason),
+        };
 
     let bytes = std::fs::metadata(&path).map(|it| it.len()).unwrap_or(0);
     // The same probe the viewer uses, so a cover is measured the way every
     // other picture in this application is.
-    let key = QString::from(&pathkey::encode(&path));
-    let measured = crate::player::qobject::probe_image(&key);
-    let pixels = (measured.width() > 0 && measured.height() > 0).then(|| {
-        u64::try_from(measured.width()).unwrap_or(0) * u64::try_from(measured.height()).unwrap_or(0)
-    });
+    let measured = crate::player::probe_still(&path);
+    let pixels = measured.map(|(width, height)| u64::from(width) * u64::from(height));
     fluorita_core::CoverBudget::DEFAULT
         .accepts(&path, bytes, pixels)
         .map_err(|rejected| copy::rejected(rejected).to_owned())?;
@@ -535,8 +558,8 @@ fn chosen_cover() -> Result<Option<ChosenCover>, String> {
     Ok(Some(ChosenCover {
         bytes: std::fs::read(&path).map_err(|error| error.to_string())?,
         mime,
-        width: u32::try_from(measured.width()).unwrap_or(0),
-        height: u32::try_from(measured.height()).unwrap_or(0),
+        width: measured.map_or(0, |(width, _)| width),
+        height: measured.map_or(0, |(_, height)| height),
     }))
 }
 

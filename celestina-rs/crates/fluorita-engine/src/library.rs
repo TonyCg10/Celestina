@@ -9,18 +9,21 @@
 //! Four bounds keep a scan from becoming an incident: a file ceiling, a depth
 //! ceiling, a deadline and a cancellation token checked between entries. A
 //! truncated scan says so rather than pretending it saw everything, because a
-//! caller that believed it would then mark every unvisited file as missing.
+//! caller that believed it would then mark every unvisited file as missing —
+//! and it says *where*: which roots the walk reached the end of, and which
+//! directories it knew about and did not read, so one bound reached in one
+//! place does not stop every other root from being judged
+//! ([`ScanCoverage`]).
 //!
 //! Symlinks are not followed. A library that follows them can be walked in a
 //! circle by one `ln -s`, and the same file would arrive under two names.
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use celestina_core::CancellationToken;
 use fluorita_core::{
-    MediaId, MediaKind, MediaRecord, MediaSource, SourceId, SourceIdentity, SourceSet,
+    MediaId, MediaKind, MediaRecord, MediaSource, ScanCoverage, SourceIdentity, SourceSet,
 };
 
 use crate::error::{EngineError, EngineResult};
@@ -54,32 +57,39 @@ impl Default for ScanLimits {
     }
 }
 
-/// The result of one complete pass over the configured roots.
+/// Directories one root may leave unexplored before the pass stops judging
+/// that root at all. Each is remembered so what lives under it is kept as it
+/// was; past this many, a root is closer to "not walked" than to "walked with
+/// a few gaps", and treating it so keeps the set bounded.
+pub const MAX_UNEXPLORED_PER_ROOT: usize = 1_024;
+
+/// The result of one pass over the configured roots.
 #[derive(Clone, Debug, Default)]
 pub struct ScanOutcome {
     pub records: Vec<MediaRecord>,
-    /// A bound was reached, so this is *not* the whole library. Reconciliation
-    /// must not mark anything missing from a truncated pass.
+    /// A bound was reached somewhere, so the records are *not* the whole
+    /// library. Said on screen; what may be concluded from the pass is
+    /// [`ScanOutcome::coverage`]'s to answer, per root and per directory.
     pub truncated: bool,
     pub directories_visited: usize,
     /// Entries that could not be read at all — a permission, a broken mount.
     /// Counted rather than dropped silently, so a scan that saw half a library
     /// can say so.
     pub unreadable: usize,
-    /// The roots that actually answered. A root missing from this set was not
-    /// read — an unplugged drive, a share that is down, a directory the user
-    /// cannot open — so nothing may be concluded about the files under it.
-    /// A root that is here and complete is the only case where "the scan did
-    /// not see it" means "it is gone".
-    pub reached: BTreeSet<SourceId>,
+    /// Which roots the walk reached the end of, which of them answered, and
+    /// which directories it did not read. A root that is walked and reached is
+    /// the only case where "the scan did not see it" means "it is gone".
+    pub coverage: ScanCoverage,
 }
 
-impl ScanOutcome {
-    /// Whether this pass may be used to decide that a file has disappeared.
-    #[must_use]
-    pub const fn is_complete(&self) -> bool {
-        !self.truncated
-    }
+/// Where one root's walk stands.
+#[derive(Default)]
+struct RootWalk {
+    /// Directories noted as unexplored under this root so far.
+    unexplored: usize,
+    /// More than [`MAX_UNEXPLORED_PER_ROOT`] were needed, so the root is not
+    /// judged.
+    overflowed: bool,
 }
 
 /// Walks every configured root and returns the media it found.
@@ -91,8 +101,11 @@ pub fn scan(
     let started = Instant::now();
     let mut outcome = ScanOutcome::default();
 
+    let mut stopped = false;
     for source in sources.sources() {
-        if outcome.truncated {
+        // A ceiling or a deadline ends the whole pass; the roots after it
+        // were never looked at, so none of them is judged.
+        if stopped {
             break;
         }
         // Asked before walking, and separately from it: `walk` reports a
@@ -100,132 +113,161 @@ pub fn scan(
         // needs to know about *this root* specifically before it is allowed to
         // conclude that anything under it was deleted.
         if std::fs::read_dir(source.root()).is_ok() {
-            outcome.reached.insert(source.id());
+            outcome.coverage.reached(source.id());
         }
-        walk(
+        let mut root = RootWalk::default();
+        let mut walk = Walk {
             source,
-            source.root(),
-            0,
-            &limits,
+            limits: &limits,
             started,
             cancellation,
-            &mut outcome,
-        )?;
+            outcome: &mut outcome,
+            root: &mut root,
+            stopped: false,
+        };
+        walk.directory(source.root(), 0)?;
+        stopped = walk.stopped;
+        if !stopped && !root.overflowed {
+            outcome.coverage.walked(source.id());
+        }
     }
     Ok(outcome)
 }
 
-fn walk(
-    source: &MediaSource,
-    directory: &Path,
-    depth: usize,
-    limits: &ScanLimits,
+/// One root's walk: what it may spend and where it reports.
+struct Walk<'a> {
+    source: &'a MediaSource,
+    limits: &'a ScanLimits,
     started: Instant,
-    cancellation: &CancellationToken,
-    outcome: &mut ScanOutcome,
-) -> EngineResult<()> {
-    if cancellation.is_cancelled() {
-        return Err(EngineError::Cancelled);
-    }
-    if depth > limits.max_depth {
-        outcome.truncated = true;
-        return Ok(());
+    cancellation: &'a CancellationToken,
+    outcome: &'a mut ScanOutcome,
+    root: &'a mut RootWalk,
+    /// A ceiling or the deadline ended the pass inside this root.
+    stopped: bool,
+}
+
+impl Walk<'_> {
+    /// Stops the whole pass: nothing after this point is looked at.
+    fn stop(&mut self) {
+        self.stopped = true;
+        self.outcome.truncated = true;
     }
 
-    let entries = match std::fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(_) => {
-            // A root that is not mounted, or a directory the user cannot read,
-            // is not a failed scan: it is a gap, and the count says so.
-            outcome.unreadable += 1;
-            return Ok(());
+    /// Remembers a directory the walk knew about and did not read.
+    fn leave_unexplored(&mut self, directory: &Path) {
+        if self.root.unexplored >= MAX_UNEXPLORED_PER_ROOT {
+            self.root.overflowed = true;
+            return;
         }
-    };
-    outcome.directories_visited += 1;
+        self.root.unexplored += 1;
+        self.outcome.coverage.unexplored(directory.to_path_buf());
+    }
 
-    let mut subdirectories: Vec<PathBuf> = Vec::new();
-    for entry in entries {
-        if cancellation.is_cancelled() {
+    fn directory(&mut self, directory: &Path, depth: usize) -> EngineResult<()> {
+        if self.cancellation.is_cancelled() {
             return Err(EngineError::Cancelled);
         }
-        if started.elapsed() > limits.deadline {
-            outcome.truncated = true;
+        if depth > self.limits.max_depth {
+            // Not read, and so neither seen nor missing: the grid is not the
+            // whole library, but nothing under here is judged either.
+            self.outcome.truncated = true;
+            self.leave_unexplored(directory);
             return Ok(());
         }
-        let Ok(entry) = entry else {
-            outcome.unreadable += 1;
-            continue;
+
+        let entries = match std::fs::read_dir(directory) {
+            Ok(entries) => entries,
+            Err(_) => {
+                // A root that is not mounted, or a directory the user cannot
+                // read, is not a failed scan: it is a gap, and the count says
+                // so. A gap below the root is also left unjudged — a folder
+                // whose permissions changed has not had its files deleted. The
+                // root itself is the case `reached` already answers.
+                self.outcome.unreadable += 1;
+                if depth > 0 {
+                    self.leave_unexplored(directory);
+                }
+                return Ok(());
+            }
         };
-        let name = entry.file_name();
-        // A dotfile is configuration, a cache or a trash can — never a library
-        // item the user put there to look at.
-        if name.to_string_lossy().starts_with('.') {
-            continue;
-        }
-        let Ok(kind) = entry.file_type() else {
-            outcome.unreadable += 1;
-            continue;
-        };
-        if kind.is_symlink() {
-            continue;
-        }
-        if kind.is_dir() {
-            subdirectories.push(entry.path());
-            continue;
-        }
-        if !kind.is_file() {
-            continue;
+        self.outcome.directories_visited += 1;
+
+        let mut subdirectories: Vec<PathBuf> = Vec::new();
+        for entry in entries {
+            if self.cancellation.is_cancelled() {
+                return Err(EngineError::Cancelled);
+            }
+            if self.started.elapsed() > self.limits.deadline {
+                self.stop();
+                return Ok(());
+            }
+            let Ok(entry) = entry else {
+                self.outcome.unreadable += 1;
+                continue;
+            };
+            let name = entry.file_name();
+            // A dotfile is configuration, a cache or a trash can — never a
+            // library item the user put there to look at.
+            if name.to_string_lossy().starts_with('.') {
+                continue;
+            }
+            let Ok(kind) = entry.file_type() else {
+                self.outcome.unreadable += 1;
+                continue;
+            };
+            if kind.is_symlink() {
+                continue;
+            }
+            if kind.is_dir() {
+                subdirectories.push(entry.path());
+                continue;
+            }
+            if !kind.is_file() {
+                continue;
+            }
+
+            let path = entry.path();
+            let Some(media_kind) = MediaKind::classify_path(&path) else {
+                continue;
+            };
+            if !self.source.kinds().contains(media_kind) {
+                continue;
+            }
+            let Ok(metadata) = entry.metadata() else {
+                self.outcome.unreadable += 1;
+                continue;
+            };
+
+            self.outcome.records.push(MediaRecord::new(
+                identity_of(&metadata, &path),
+                self.source.id(),
+                path,
+                media_kind,
+                SourceIdentity::new(
+                    metadata.len(),
+                    metadata
+                        .modified()
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+                ),
+            ));
+
+            if self.outcome.records.len() >= self.limits.max_files {
+                self.stop();
+                return Ok(());
+            }
         }
 
-        let path = entry.path();
-        let Some(media_kind) = MediaKind::classify_path(&path) else {
-            continue;
-        };
-        if !source.kinds().contains(media_kind) {
-            continue;
+        // Depth-first, but after the current directory's files: a shallow
+        // library fills the grid before a deep one is walked.
+        subdirectories.sort();
+        for subdirectory in subdirectories {
+            if self.stopped {
+                return Ok(());
+            }
+            self.directory(&subdirectory, depth + 1)?;
         }
-        let Ok(metadata) = entry.metadata() else {
-            outcome.unreadable += 1;
-            continue;
-        };
-
-        outcome.records.push(MediaRecord::new(
-            identity_of(&metadata, &path),
-            source.id(),
-            path,
-            media_kind,
-            SourceIdentity::new(
-                metadata.len(),
-                metadata
-                    .modified()
-                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-            ),
-        ));
-
-        if outcome.records.len() >= limits.max_files {
-            outcome.truncated = true;
-            return Ok(());
-        }
+        Ok(())
     }
-
-    // Depth-first, but after the current directory's files: a shallow library
-    // fills the grid before a deep one is walked.
-    subdirectories.sort();
-    for subdirectory in subdirectories {
-        if outcome.truncated {
-            return Ok(());
-        }
-        walk(
-            source,
-            &subdirectory,
-            depth + 1,
-            limits,
-            started,
-            cancellation,
-            outcome,
-        )?;
-    }
-    Ok(())
 }
 
 #[cfg(unix)]
@@ -243,8 +285,15 @@ fn identity_of(_metadata: &std::fs::Metadata, path: &Path) -> MediaId {
 mod tests {
     use super::{scan, ScanLimits};
     use celestina_core::CancellationToken;
-    use fluorita_core::{KindSet, MediaKind, MediaRecord, SourceSet};
+    use fluorita_core::{
+        KindSet, MediaId, MediaKind, MediaRecord, SourceId, SourceIdentity, SourceSet,
+    };
     use std::path::{Path, PathBuf};
+
+    /// The handle of the one root [`sources`] configures for `root`.
+    fn only_root(root: &Path) -> SourceId {
+        sources(root, KindSet::all()).sources()[0].id()
+    }
 
     /// Builds a throwaway tree. Empty files are enough: a scan classifies by
     /// name and never opens anything, which is the property under test.
@@ -309,7 +358,8 @@ mod tests {
             names(&outcome.records),
             vec!["cancion.flac", "clip.mkv", "foto.png", "otra.jpg"]
         );
-        assert!(outcome.is_complete());
+        assert!(!outcome.truncated);
+        assert!(outcome.coverage.is_walked(only_root(&root)));
         assert_eq!(outcome.directories_visited, 2);
     }
 
@@ -393,8 +443,8 @@ mod tests {
         assert_eq!(outcome.records.len(), 5);
         assert!(outcome.truncated);
         assert!(
-            !outcome.is_complete(),
-            "a truncated pass must never decide that a file disappeared"
+            !outcome.coverage.is_walked(only_root(&root)),
+            "a pass stopped by its ceiling must never decide that a file disappeared"
         );
     }
 
@@ -413,7 +463,111 @@ mod tests {
         .expect("the scan stops descending");
 
         assert_eq!(names(&outcome.records), vec!["arriba.png"]);
+        // The grid is not the whole library, and says so; but the root was
+        // still walked to its end, so what is above the bound can be judged.
         assert!(outcome.truncated);
+        assert!(outcome.coverage.is_walked(only_root(&root)));
+    }
+
+    #[test]
+    fn one_deep_root_does_not_stop_another_from_being_judged() {
+        let deep = tree("per-root-deep", &["a/b/c/d/hondo.png", "arriba.png"]);
+        let shallow = tree("per-root-shallow", &["plano.png"]);
+        let mut set = SourceSet::new();
+        let deep_id = set
+            .add(deep.clone(), KindSet::all())
+            .expect("absolute root");
+        let shallow_id = set
+            .add(shallow.clone(), KindSet::all())
+            .expect("a second root");
+
+        let outcome = scan(
+            &set,
+            ScanLimits {
+                max_depth: 1,
+                ..ScanLimits::conservative()
+            },
+            &CancellationToken::new(),
+        )
+        .expect("the scan completes");
+
+        assert!(outcome.coverage.is_walked(deep_id));
+        assert!(outcome.coverage.is_walked(shallow_id));
+        // Below the bound is neither seen nor missing; beside it is judged.
+        let below = MediaRecord::new(
+            MediaId::filesystem(1, 1),
+            deep_id,
+            deep.join("a/b/c/d/hondo.png"),
+            MediaKind::Image,
+            SourceIdentity::new(0, std::time::UNIX_EPOCH),
+        );
+        let beside = MediaRecord::new(
+            MediaId::filesystem(1, 2),
+            deep_id,
+            deep.join("gone.png"),
+            MediaKind::Image,
+            SourceIdentity::new(0, std::time::UNIX_EPOCH),
+        );
+        assert!(!outcome.coverage.judges(&below));
+        assert!(outcome.coverage.proves_gone(&beside));
+    }
+
+    #[test]
+    fn a_ceiling_reached_in_one_root_leaves_the_roots_after_it_unjudged() {
+        let files: Vec<String> = (0..20).map(|index| format!("clip{index}.mkv")).collect();
+        let first = tree(
+            "ceiling-first",
+            &files.iter().map(String::as_str).collect::<Vec<_>>(),
+        );
+        let second = tree("ceiling-second", &["otro.png"]);
+        let mut set = SourceSet::new();
+        let first_id = set.add(first, KindSet::all()).expect("absolute root");
+        let second_id = set.add(second, KindSet::all()).expect("a second root");
+
+        let outcome = scan(
+            &set,
+            ScanLimits {
+                max_files: 5,
+                ..ScanLimits::conservative()
+            },
+            &CancellationToken::new(),
+        )
+        .expect("the scan stops at its ceiling");
+
+        assert!(!outcome.coverage.is_walked(first_id));
+        assert!(!outcome.coverage.is_walked(second_id));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_folder_inside_a_root_is_a_gap_not_a_deletion() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tree("unreadable-inside", &["cerrada/dentro.png", "fuera.png"]);
+        let closed = root.join("cerrada");
+        std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o000))
+            .expect("close the folder");
+        let readable = std::fs::read_dir(&closed).is_ok();
+        let set = sources(&root, KindSet::all());
+        let outcome = scan(&set, ScanLimits::conservative(), &CancellationToken::new())
+            .expect("the scan completes");
+        std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o755))
+            .expect("reopen the folder");
+        if readable {
+            // Running as root: permissions do not close anything, so there is
+            // no gap to observe here.
+            return;
+        }
+
+        let inside = MediaRecord::new(
+            MediaId::filesystem(1, 1),
+            only_root(&root),
+            closed.join("dentro.png"),
+            MediaKind::Image,
+            SourceIdentity::new(0, std::time::UNIX_EPOCH),
+        );
+        assert!(outcome.coverage.is_walked(only_root(&root)));
+        assert!(!outcome.coverage.judges(&inside));
     }
 
     #[test]

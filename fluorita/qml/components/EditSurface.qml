@@ -537,9 +537,12 @@ Item {
         }
     }
 
-    // The keyboard reaches everything the pointer does. Delete acts on the
-    // selection, Escape leaves the tool before it leaves the editor, and the
-    // two save outcomes are the two the toolbar offers.
+    // The keyboard reaches everything the pointer does. `]` and `[` step the
+    // selection through the marks in drawing order, so one placed earlier can
+    // be reached without a pointer; Delete acts on the selection, the arrows
+    // move it, Escape leaves the tool before it leaves the editor, and the two
+    // save outcomes are the two the toolbar offers. Tab is left to move focus
+    // between the controls, where a keyboard user expects it.
     Keys.onPressed: function(event) {
         if (surface.editor.saving) {
             return
@@ -551,6 +554,16 @@ Item {
                 surface.editor.selectObject(0)
             } else {
                 surface.closed()
+            }
+            event.accepted = true
+        } else if (event.key === Qt.Key_BracketRight || event.key === Qt.Key_BracketLeft) {
+            surface.editor.selectNextObject(event.key === Qt.Key_BracketRight)
+            // Focus stays here, where the arrows, Delete and `[`/`]` work, so
+            // the selected mark would change silently for a screen reader; the
+            // surface says which one it is.
+            const selected = objects.describeObject(surface.editor.selected)
+            if (selected.length > 0) {
+                Accessible.announce(qsTr("Seleccionado: %1").arg(selected))
             }
             event.accepted = true
         } else if (event.key === Qt.Key_Delete || event.key === Qt.Key_Backspace) {

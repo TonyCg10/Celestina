@@ -10,12 +10,11 @@ use std::path::{Path, PathBuf};
 use celestina_core::CancellationToken;
 
 use crate::backend::{
-    ArtworkJob, EngineSession, MediaEngine, ProbeBudget, ProbeReport, SessionRequest, TrailerJob,
-    TrailerOutcome,
+    ArtworkJob, EngineSession, MediaEngine, ProbeBudget, ProbeReport, SessionRequest,
 };
 use crate::error::EngineResult;
 use crate::session::MpvSession;
-use crate::{artwork, probe, trailer};
+use crate::{artwork, probe};
 
 /// The engine every host talks to. Cheap to create and to clone by reference:
 /// it holds no backend state of its own.
@@ -41,10 +40,6 @@ impl MediaEngine for MpvEngine {
 
     fn publish_artwork(&self, request: &ArtworkJob) -> EngineResult<PathBuf> {
         artwork::publish(request)
-    }
-
-    fn produce_trailer(&self, job: &TrailerJob) -> EngineResult<TrailerOutcome> {
-        trailer::produce(job)
     }
 
     fn open_session(&self, request: SessionRequest) -> EngineResult<Box<dyn EngineSession>> {

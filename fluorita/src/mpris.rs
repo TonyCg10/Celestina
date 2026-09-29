@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use fluorita_core::{PlaybackRequest, PlaybackState};
+use fluorita_core::{PlaybackRequest, PlaybackState, Speed};
 use zbus::zvariant::{ObjectPath, Value};
 
 /// The well-known name the desktop looks for. The suffix must be a valid bus
@@ -37,10 +37,23 @@ pub struct NowPlaying {
     pub position: Duration,
     pub duration: Option<Duration>,
     pub volume: f64,
+    /// The playback rate the engine confirmed.
+    pub rate: f64,
     pub seekable: bool,
 }
 
 impl NowPlaying {
+    /// The rate MPRIS publishes: what the engine confirmed, or the normal rate
+    /// before anything was — the spec forbids zero and a negative rate, and
+    /// a panel dividing by one would show nonsense.
+    fn published_rate(&self) -> f64 {
+        if self.rate.is_finite() && self.rate > 0.0 {
+            self.rate
+        } else {
+            Speed::NORMAL.rate()
+        }
+    }
+
     /// The MPRIS word for the confirmed state. `Opening` is deliberately
     /// reported as stopped: nothing is playing yet, and saying otherwise would
     /// put a phone's lock screen into a state the engine never confirmed.
@@ -102,6 +115,22 @@ fn microseconds(duration: Duration) -> i64 {
 
 /// What a bus client asked for, translated into the player's own vocabulary.
 type Control = Arc<dyn Fn(PlaybackRequest) + Send + Sync>;
+
+/// What a `Rate` write asks the player for.
+///
+/// The spec says a client should not set zero and that a player receiving it
+/// acts as if `Pause` was called; any other rate is the same request the speed
+/// menu makes, clamped by the domain to the rates this player offers. A value
+/// that is no number asks for nothing.
+fn rate_request(rate: f64) -> Option<PlaybackRequest> {
+    if rate.is_nan() {
+        None
+    } else if rate <= 0.0 {
+        Some(PlaybackRequest::Pause)
+    } else {
+        Some(PlaybackRequest::SetSpeed(Speed::new(rate)))
+    }
+}
 
 /// A position that moved by more than this between two confirmed reports did
 /// not get there by playing: reports arrive several times a second, so the only
@@ -178,6 +207,9 @@ fn announce(
     }
     if (before.volume - after.volume).abs() > f64::EPSILON {
         let _ = zbus::block_on(interface.volume_changed(emitter));
+    }
+    if (before.published_rate() - after.published_rate()).abs() > f64::EPSILON {
+        let _ = zbus::block_on(interface.rate_changed(emitter));
     }
     // `Position` is deliberately not a change-notified property in the spec:
     // a player emitting it per frame would be a broadcast storm. A jump is the
@@ -379,19 +411,28 @@ impl Player {
         self.ask(PlaybackRequest::SetVolume(volume.clamp(0.0, 1.0)));
     }
 
+    /// The rate the engine confirmed, never the one last asked for.
     #[zbus(property)]
     fn rate(&self) -> f64 {
-        1.0
+        self.snapshot().published_rate()
     }
 
     #[zbus(property)]
+    fn set_rate(&self, rate: f64) {
+        if let Some(request) = rate_request(rate) {
+            self.ask(request);
+        }
+    }
+
+    /// The domain's bounds, which are the rates the speed menu offers.
+    #[zbus(property)]
     fn minimum_rate(&self) -> f64 {
-        1.0
+        Speed::SLOWEST
     }
 
     #[zbus(property)]
     fn maximum_rate(&self) -> f64 {
-        1.0
+        Speed::FASTEST
     }
 
     #[zbus(property)]
@@ -429,8 +470,8 @@ impl Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_seek, microseconds, NowPlaying, Value, BUS_NAME, OBJECT_PATH};
-    use fluorita_core::PlaybackState;
+    use super::{is_seek, microseconds, rate_request, NowPlaying, Value, BUS_NAME, OBJECT_PATH};
+    use fluorita_core::{PlaybackRequest, PlaybackState, Speed};
     use std::path::PathBuf;
     use std::time::Duration;
 
@@ -525,5 +566,37 @@ mod tests {
         assert!(BUS_NAME.starts_with("org.mpris.MediaPlayer2."));
         assert_eq!(OBJECT_PATH, "/org/mpris/MediaPlayer2");
         assert_eq!(microseconds(Duration::from_millis(1_500)), 1_500_000);
+    }
+
+    #[test]
+    fn the_rate_published_is_the_one_the_engine_confirmed() {
+        let faster = NowPlaying {
+            rate: 1.5,
+            ..NowPlaying::default()
+        };
+        assert!((faster.published_rate() - 1.5).abs() < f64::EPSILON);
+        // Before any report the rate is the normal one, never zero.
+        assert!((NowPlaying::default().published_rate() - 1.0).abs() < f64::EPSILON);
+        let nonsense = NowPlaying {
+            rate: f64::NAN,
+            ..NowPlaying::default()
+        };
+        assert!((nonsense.published_rate() - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn a_rate_written_over_the_bus_is_the_speed_menus_request() {
+        assert_eq!(
+            rate_request(2.0),
+            Some(PlaybackRequest::SetSpeed(Speed::new(2.0)))
+        );
+        // Out of range is clamped by the domain, exactly as the menu is.
+        assert_eq!(
+            rate_request(100.0),
+            Some(PlaybackRequest::SetSpeed(Speed::new(Speed::FASTEST)))
+        );
+        // Zero is the spec's way of saying pause.
+        assert_eq!(rate_request(0.0), Some(PlaybackRequest::Pause));
+        assert_eq!(rate_request(f64::NAN), None);
     }
 }

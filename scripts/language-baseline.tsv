@@ -63,7 +63,7 @@
 3	fluorita/src/image.rs
 3	fluorita/src/library/work.rs
 2	fluorita/src/mpris.rs
-2	fluorita/src/player.rs
+1	fluorita/src/player.rs
 2	grafita/build.rs
 1	grafita/qml/Main.qml
 3	grafita/qml/components/FindBar.qml

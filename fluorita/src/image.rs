@@ -64,6 +64,25 @@ impl ImageDecision {
         Self::Show { width, height }
     }
 
+    /// Measures a still and judges it: one `stat`, then — only for a file
+    /// within the byte budget — the header read `probe` performs.
+    ///
+    /// Both touch the file, and on a folder mapped over a network either can
+    /// take seconds, so this runs on a worker and never on the GUI thread. The
+    /// viewer and the editor both ask it, which is what keeps them agreeing
+    /// on what a picture measures.
+    #[must_use]
+    pub fn measure(
+        path: &std::path::Path,
+        probe: impl FnOnce(&std::path::Path) -> Option<(u32, u32)>,
+    ) -> Self {
+        let bytes = std::fs::metadata(path).map_or(0, |metadata| metadata.len());
+        if bytes > MAX_BYTES {
+            return Self::judge(bytes, None);
+        }
+        Self::judge(bytes, probe(path))
+    }
+
     /// The Spanish sentence the viewer shows, or empty when there is nothing
     /// to say because the image is fine.
     #[must_use]
@@ -143,6 +162,45 @@ mod tests {
             }
         ));
         assert!(decision.message().contains("megapíxeles"));
+    }
+
+    #[test]
+    fn measuring_reads_the_size_and_asks_the_probe_for_the_rest() {
+        let path = std::env::temp_dir().join(format!("fluorita-measure-{}", std::process::id()));
+        std::fs::write(&path, [0u8; 64]).expect("fixture");
+
+        let decision = ImageDecision::measure(&path, |probed| {
+            assert_eq!(probed, path.as_path());
+            Some((3, 2))
+        });
+
+        assert_eq!(
+            decision,
+            ImageDecision::Show {
+                width: 3,
+                height: 2
+            }
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_file_past_the_byte_budget_is_never_probed() {
+        let path =
+            std::env::temp_dir().join(format!("fluorita-measure-big-{}", std::process::id()));
+        let file = std::fs::File::create(&path).expect("fixture");
+        file.set_len(MAX_BYTES + 1)
+            .expect("a sparse file past the budget");
+
+        let decision = ImageDecision::measure(&path, |_| panic!("the header was read"));
+
+        assert!(matches!(
+            decision,
+            ImageDecision::TooLarge {
+                reason: TooLarge::Bytes { .. }
+            }
+        ));
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

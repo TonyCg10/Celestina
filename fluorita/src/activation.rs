@@ -13,7 +13,7 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use celestina_core::percent;
+use celestina_core::file_uri::{self, FileUriError};
 use fluorita_core::MediaKind;
 
 /// The item named on the command line, if any.
@@ -74,38 +74,31 @@ fn describe(argument: &OsString) -> RequestedMedia {
     RequestedMedia { path, label, kind }
 }
 
-/// Turns one argument into a local path: a `file://` URI is decoded with the
-/// suite's canonical percent codec, anything else is taken as a path as-is.
+/// Turns one argument into a local path: a `file://` URI is read by the
+/// suite's one strict parser, anything else is taken as a path as-is.
 ///
-/// A URI with a host other than the local machine is refused: Fluorita's
-/// library is local, and quietly reading `file://otherhost/...` as a local path
-/// would open the wrong file.
+/// A URI with a host other than the local machine is refused, and so is one
+/// that is malformed — an escape that is not one, a query, a NUL: Fluorita's
+/// library is local, and quietly reading either as a local path would open
+/// the wrong file.
 #[must_use]
 pub fn local_path(argument: &OsString) -> Option<PathBuf> {
-    let text = argument.to_str();
-    match text {
-        Some(text) if text.starts_with("file://") => {
-            let rest = text.trim_start_matches("file://");
-            let path = match rest.find('/') {
-                Some(0) => rest,
-                // `file://host/path` — only an empty or `localhost` authority
-                // names this machine.
-                Some(index) if matches!(&rest[..index], "localhost") => &rest[index..],
-                _ => return None,
-            };
-            Some(percent::path_from_bytes(&percent::decode(path)))
-        }
-        // Not a URI: the argument is the path, bytes and all.
-        _ => Some(PathBuf::from(argument)),
+    // Not text, so not a URI: the argument is the path, bytes and all.
+    let Some(text) = argument.to_str() else {
+        return Some(PathBuf::from(argument));
+    };
+    match file_uri::to_path(text) {
+        Ok(path) => Some(path),
+        // Not a URI: the argument is the path.
+        Err(FileUriError::NotFileScheme) => Some(PathBuf::from(argument)),
+        Err(_) => None,
     }
 }
 
-/// A human-readable name for the window title. Lossy by design.
+/// A human-readable name for the window title. Lossy by design, and bounded
+/// and stripped like every name a file claims.
 fn display_label(path: &Path) -> String {
-    path.file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .into_owned()
+    fluorita_core::displayed_name(path)
 }
 
 #[cfg(test)]
@@ -141,6 +134,15 @@ mod tests {
             local_path(&OsString::from("file://otherhost/etc/x.mp4")),
             None
         );
+    }
+
+    #[test]
+    fn a_malformed_uri_is_refused_rather_than_guessed_at() {
+        // The folder chooser already refused these; the command line now
+        // reads a URI the same way.
+        assert_eq!(local_path(&OsString::from("file:///m/half%2")), None);
+        assert_eq!(local_path(&OsString::from("file:///m/x.mp4?t=3")), None);
+        assert_eq!(local_path(&OsString::from("file:///m/a%00b.mp4")), None);
     }
 
     #[cfg(unix)]

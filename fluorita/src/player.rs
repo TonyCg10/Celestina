@@ -13,28 +13,34 @@
 //! - **The surface releases before the backend does.** The video item builds a
 //!   render context from the backend handle on Qt's render thread, so closing
 //!   clears the handle first and waits for the item to confirm the context is
-//!   gone before the session may be dropped.
+//!   gone before the session may be dropped. That protocol is
+//!   [`SurfaceHandshake`]'s and the session loop is
+//!   [`fluorita_engine::run_session`]; this file only carries out their steps,
+//!   which is what keeps Siderita's embedded player able to share both.
+//! - **A still is measured off the GUI thread.** Its size and header are file
+//!   IO; the answer arrives through the queue under the session's generation.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use celestina_core::CancellationToken;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 
 use fluorita_core::{
-    Continuation, MediaKind, PlaybackRequest, PlaybackSession, PlaybackState, ReportOutcome, Speed,
-    StreamKind,
+    CloseStep, Continuation, MediaKind, OpenStep, PlaybackRequest, PlaybackState, ReleaseStep,
+    Speed, StreamKind, SurfaceHandshake,
 };
 
 use crate::image::ImageDecision;
-use fluorita_engine::backend::{MediaEngine, SessionRequest};
-use fluorita_engine::MpvEngine;
-
-/// How long the worker waits for a backend report before looking at its inbox.
-/// Short enough that a pause feels immediate, long enough not to spin.
-const POLL_TIMEOUT: Duration = Duration::from_millis(50);
+use fluorita_engine::backend::{FrameStats, SessionRequest};
+use fluorita_engine::{
+    run_session, MpvEngine, SessionCommand, SessionHost, SessionPlan, SessionSnapshot,
+};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -252,46 +258,13 @@ pub mod qobject {
     impl cxx_qt::Constructor<()> for FluoritaPlayer {}
 }
 
-/// What the worker thread is told to do.
-enum Command {
-    /// Load the media and begin. Sent once, when there is somewhere to render.
-    Start,
-    Transport(PlaybackRequest),
-    /// Close the session and leave. The worker acknowledges by exiting.
-    Stop,
-}
-
-/// One report, already reduced to what Qt needs.
-struct Snapshot {
-    state: PlaybackState,
-    position: Option<Duration>,
-    duration: Option<Duration>,
-    /// The confirmed output level. Carried because the bus publishes it, and a
-    /// panel that showed a volume the engine never confirmed would be lying in
-    /// the same way a transport would.
-    volume: Option<f64>,
-    pending: bool,
-    error: Option<String>,
-    /// What the file holds, and what is playing out of it. Carried on the
-    /// snapshot like everything else: the surface never reads the session.
-    streams: Vec<fluorita_core::Stream>,
-    audio: Option<i64>,
-    subtitle: Option<i64>,
-    speed: f64,
-}
-
 #[derive(Default)]
 pub struct PlayerRust {
     state: QString,
     render_handle: u64,
-    /// An item asked for while a surface was still rendering the previous one.
-    /// It starts once that surface confirms it has let go.
-    /// Which session the player is on. A worker publishes its render handle
-    /// asynchronously, so a close that lands in that window would otherwise be
-    /// overtaken by the handle of the session it just destroyed — leaving a
-    /// live-looking address for an `mpv_handle` that is gone.
-    generation: u64,
-    pending_open: Option<PathBuf>,
+    /// The session/surface protocol: which session is current, whether a
+    /// close is waiting for the surface, and the item asked for meanwhile.
+    handshake: SurfaceHandshake<PathBuf>,
     position_seconds: f64,
     duration_seconds: f64,
     seekable: bool,
@@ -336,11 +309,17 @@ pub struct PlayerRust {
     /// The extraction in flight, if any. One at a time: two decoders started
     /// from the same window would compete for the same name on disk.
     frame_worker: Option<JoinHandle<()>>,
+    /// Cancels that extraction when the player goes away, so the join in
+    /// `Drop` waits for the backend to notice rather than for its deadline.
+    frame_cancellation: CancellationToken,
 
-    commands: Option<Sender<Command>>,
+    /// The still being measured, if any, and one asked for meanwhile — only
+    /// the newest, started as soon as the running one lands.
+    still: Option<JoinHandle<()>>,
+    still_waiting: Option<(PathBuf, u64)>,
+
+    commands: Option<Sender<SessionCommand>>,
     worker: Option<JoinHandle<()>>,
-    /// Set while a close is waiting for the surface to release its context.
-    closing: bool,
 
     /// What the rest of the desktop reads. Created with the first session and
     /// kept for the process: a panel that saw the player once should not lose
@@ -348,7 +327,7 @@ pub struct PlayerRust {
     mpris: Option<crate::mpris::Mpris>,
     /// The inbox a bus request is delivered into. Shared because the D-Bus
     /// thread reaches it while the GUI thread swaps it per session.
-    remote: std::sync::Arc<std::sync::Mutex<Option<Sender<Command>>>>,
+    remote: std::sync::Arc<std::sync::Mutex<Option<Sender<SessionCommand>>>>,
     /// What is playing, as MPRIS describes it. Kept beside the QObject's own
     /// properties because the bus wants the path and the title, which the
     /// interface does not show.
@@ -399,23 +378,19 @@ impl qobject::FluoritaPlayer {
                 return;
             }
         };
-        match decide_open(*self.render_handle() != 0, self.closing()) {
-            OpenAction::Begin => self.begin(path),
-            OpenAction::CloseFirst => {
-                self.as_mut().rust_mut().pending_open = Some(path);
-                self.close();
-            }
-            // A close is already in flight and the handle is already zero, so
-            // the old gate — "is anything rendering?" — read this as an idle
-            // player and went straight to tearing the session down under a
-            // context that may not be free yet. Waiting is the only correct
-            // answer: `surface_released` starts what is left here.
-            OpenAction::Wait => self.as_mut().rust_mut().pending_open = Some(path),
+        match self.as_mut().rust_mut().handshake.open(path) {
+            OpenStep::Begin { item, generation } => self.begin(item, generation),
+            // Something is rendering: the handle goes back first, and the item
+            // starts when the surface confirms it let go.
+            OpenStep::ClearHandle => self.as_mut().set_render_handle(0),
+            // A close is already waiting for the surface; the item starts
+            // after it.
+            OpenStep::Wait => {}
         }
     }
 
     /// The half of opening that assumes nothing is rendering any more.
-    fn begin(mut self: core::pin::Pin<&mut Self>, path: PathBuf) {
+    fn begin(mut self: core::pin::Pin<&mut Self>, path: PathBuf, generation: u64) {
         self.as_mut().stop_worker();
         self.as_mut().reset_for(&path);
 
@@ -424,7 +399,6 @@ impl qobject::FluoritaPlayer {
         // nothing, and showing it as "opening" would be a state that never
         // resolves.
         let Some(kind) = MediaKind::classify_path(&path) else {
-            // Falls through to the refusal below.
             self.as_mut().set_state(QString::from("error"));
             self.as_mut()
                 .set_error_message(QString::from(crate::copy::UNKNOWN_KIND));
@@ -435,14 +409,20 @@ impl qobject::FluoritaPlayer {
         // promise that looking at a photograph costs nothing from the media
         // stack: no session, no handle, no decoder thread.
         if kind == MediaKind::Image {
-            self.show_image(path.as_path());
+            self.show_image(path, generation);
             return;
         }
 
-        let (sender, receiver) = mpsc::channel::<Command>();
-        let qt_thread = self.qt_thread();
-        let generation = self.rust().generation.wrapping_add(1);
-        self.as_mut().rust_mut().generation = generation;
+        let (sender, receiver) = mpsc::channel::<SessionCommand>();
+        let host = PlayerHost {
+            qt_thread: self.qt_thread(),
+            generation,
+            pacing_on: Arc::clone(&self.rust().pacing_on),
+            // The environment variable still turns the sampler on for a
+            // headless run; the shared flag is what the window toggles.
+            forced: std::env::var_os("FLUORITA_PACING").is_some(),
+        };
+        let previewing = *self.previewing();
 
         let worker = std::thread::Builder::new()
             .name("fluorita-player".to_owned())
@@ -450,12 +430,18 @@ impl qobject::FluoritaPlayer {
                 // The publisher needs the path too, and the worker takes it by
                 // value; one clone is cheaper than making the session borrow.
                 let path = path.clone();
-                let previewing = *self.previewing();
-                let pacing_on = std::sync::Arc::clone(&self.rust().pacing_on);
                 move || {
+                    let shape = |request: SessionRequest| shaped(request, previewing);
                     run_session(
-                        &path, kind, generation, previewing, &pacing_on, &receiver, &qt_thread,
-                    )
+                        &MpvEngine::new(),
+                        &SessionPlan {
+                            path: &path,
+                            kind,
+                            shape: &shape,
+                        },
+                        &receiver,
+                        &host,
+                    );
                 }
             });
 
@@ -468,9 +454,12 @@ impl qobject::FluoritaPlayer {
                 self.as_mut().start_publishing(&path, kind);
                 self.as_mut().rust_mut().worker = Some(handle);
             }
+            // The system refused a thread. The reason is a developer's; the
+            // person reads the sentence every other refused worker says.
             Err(error) => {
+                eprintln!("fluorita: could not start the playback session: {error}");
                 self.as_mut()
-                    .set_error_message(QString::from(&format!("{error}")));
+                    .set_error_message(QString::from(crate::copy::WORKER_NOT_STARTED));
                 self.as_mut().set_state(QString::from("error"));
             }
         }
@@ -479,28 +468,63 @@ impl qobject::FluoritaPlayer {
     /// The surface has a render context: the session may load now.
     pub fn surface_ready(self: core::pin::Pin<&mut Self>) {
         if let Some(sender) = self.rust().commands.as_ref() {
-            let _ = sender.send(Command::Start);
+            let _ = sender.send(SessionCommand::Start);
         }
     }
 
-    /// Judges a still against its budget and hands it to the toolkit.
-    fn show_image(mut self: core::pin::Pin<&mut Self>, path: &std::path::Path) {
-        let bytes = std::fs::metadata(path).map(|data| data.len()).unwrap_or(0);
-        // The probe is addressed by path key, not by the path: it opens the
-        // file by descriptor on the decoded bytes, so a name this side cannot
-        // spell is still measured — and measured on itself, never on whatever
-        // file a lossy spelling would have hit.
-        let probed = {
-            let measured = qobject::probe_image(&QString::from(
-                celestina_core::pathkey::encode(path).as_str(),
-            ));
-            let (width, height) = (measured.width(), measured.height());
-            (width > 0 && height > 0)
-                .then(|| (u32::try_from(width).ok(), u32::try_from(height).ok()))
-                .and_then(|(width, height)| Some((width?, height?)))
-        };
+    /// Measures a still on a worker and hands it to the toolkit when it lands.
+    ///
+    /// A `stat` and a header read are file IO, and a picture on a mapped
+    /// network folder turned every filmstrip step into a frozen window.
+    fn show_image(mut self: core::pin::Pin<&mut Self>, path: PathBuf, generation: u64) {
+        if self.rust().still.is_some() {
+            // One measurement at a time; only the newest one asked for waits.
+            self.as_mut().rust_mut().still_waiting = Some((path, generation));
+            return;
+        }
+        self.start_still(path, generation);
+    }
 
-        match ImageDecision::judge(bytes, probed) {
+    fn start_still(mut self: core::pin::Pin<&mut Self>, path: PathBuf, generation: u64) {
+        let qt_thread = self.qt_thread();
+        let still = std::thread::Builder::new()
+            .name("fluorita-still".to_owned())
+            .spawn(move || {
+                let decision = ImageDecision::measure(&path, probe_still);
+                let _ = qt_thread.queue(move |player| {
+                    player.still_measured(generation, &path, &decision);
+                });
+            });
+        match still {
+            Ok(handle) => self.as_mut().rust_mut().still = Some(handle),
+            Err(error) => {
+                eprintln!("fluorita: could not start measuring the picture: {error}");
+                self.as_mut().set_state(QString::from("error"));
+                self.as_mut()
+                    .set_error_message(QString::from(crate::copy::WORKER_NOT_STARTED));
+            }
+        }
+    }
+
+    /// A still was measured. Runs on the GUI thread, through the queue; an
+    /// answer for an item the player has since left is dropped.
+    fn still_measured(
+        mut self: core::pin::Pin<&mut Self>,
+        generation: u64,
+        path: &std::path::Path,
+        decision: &ImageDecision,
+    ) {
+        if let Some(still) = self.as_mut().rust_mut().still.take() {
+            let _ = still.join();
+        }
+        if let Some((next, next_generation)) = self.as_mut().rust_mut().still_waiting.take() {
+            self.start_still(next, next_generation);
+            return;
+        }
+        if generation != self.rust().handshake.generation() || !self.rust().handshake.is_live() {
+            return;
+        }
+        match decision {
             // The URL is the suite's frozen `file://` spelling, so a name with
             // spaces or a non-ASCII character reaches the toolkit intact.
             ImageDecision::Show { .. } => match fluorita_core::file_uri(path) {
@@ -691,37 +715,17 @@ impl qobject::FluoritaPlayer {
     /// The handle goes first: the surface must stop rendering before anything
     /// it renders from can be destroyed.
     pub fn close(mut self: core::pin::Pin<&mut Self>) {
-        if self.worker().is_none() {
-            // Nothing to close. An activation parked while a close was in
-            // flight still has to go somewhere: leaving it here is what turned
-            // a stale handle into a player that answered nothing for the rest
-            // of the session.
-            if let Some(path) = self.as_mut().rust_mut().pending_open.take() {
-                self.as_mut().rust_mut().closing = false;
-                self.as_mut().set_render_handle(0);
-                self.begin(path);
-            }
-            return;
+        match self.as_mut().rust_mut().handshake.close() {
+            CloseStep::Nothing => {}
+            // Nothing was ever handed to a surface — audio, which needs none,
+            // or a film that failed before its handle arrived — so no
+            // acknowledgement will come, and none is waited for.
+            CloseStep::StopNow => self.settle(),
+            // A surface with no renderer answers on the next turn of the event
+            // loop; one that has a context answers from the render thread.
+            // Either way `surface_released` finishes the close.
+            CloseStep::ClearHandle => self.as_mut().set_render_handle(0),
         }
-        if self.closing() {
-            return;
-        }
-        // Marked before the handle is cleared, not after. A surface with no
-        // renderer answers `contextReleased` synchronously from inside the
-        // property write, and the acknowledgement would arrive at a player that
-        // did not yet know it was closing — leaving the flag set for ever.
-        self.as_mut().rust_mut().closing = true;
-        if *self.render_handle() == 0 {
-            // Nothing was ever handed to a surface — audio, which needs none —
-            // so clearing the handle would change nothing and no acknowledgement
-            // would ever come back. Settling here is what keeps a track from
-            // leaving the player permanently mid-close.
-            self.surface_released();
-            return;
-        }
-        self.as_mut().set_render_handle(0);
-        // A surface that never had a context answers immediately; one that did
-        // answers from the render thread. Either way `surface_released` runs.
     }
 
     /// The surface could not render. Sound, position and transport are still
@@ -734,34 +738,27 @@ impl qobject::FluoritaPlayer {
     }
 
     pub fn surface_released(mut self: core::pin::Pin<&mut Self>) {
-        // Also the guard against stopping a worker twice: the flag is the one
-        // record of "this session is being closed", and a second release —
-        // which the surface may legitimately send, since the render thread and
-        // the immediate path can both answer — must not reach the worker of
-        // whatever session started in the meantime.
-        if !self.closing() {
+        // A release that arrives when nothing is closing — a repeat, or a late
+        // one — is ignored by the handshake, so it can never stop the worker
+        // of whatever session started in the meantime.
+        let ReleaseStep::Stop { next } = self.as_mut().rust_mut().handshake.released() else {
             return;
+        };
+        self.as_mut().settle();
+        // Someone asked for the next item while this one was still rendering.
+        // Now that the surface has let go, it is safe to start.
+        if let Some((path, generation)) = next {
+            self.begin(path, generation);
         }
-        self.as_mut().rust_mut().closing = false;
+    }
+
+    /// Stops the worker and publishes the idle state it leaves behind.
+    fn settle(mut self: core::pin::Pin<&mut Self>) {
         self.as_mut().stop_worker();
         self.as_mut().set_state(QString::from("inactivo"));
         self.as_mut().set_position_seconds(0.0);
         self.as_mut().set_duration_seconds(0.0);
         self.as_mut().set_pending(false);
-        // Someone asked for the next item while this one was still rendering.
-        // Now that the surface has let go, it is safe to start.
-        let waiting = self.as_mut().rust_mut().pending_open.take();
-        if let Some(path) = waiting {
-            self.begin(path);
-        }
-    }
-
-    fn closing(&self) -> bool {
-        self.rust().closing
-    }
-
-    fn worker(&self) -> Option<&JoinHandle<()>> {
-        self.rust().worker.as_ref()
     }
 
     /// Turns a menu position into the backend's own identifier.
@@ -795,7 +792,7 @@ impl qobject::FluoritaPlayer {
         if let Some(sender) = this.as_mut().rust().commands.as_ref() {
             // A worker that already exited is not an error the user can act on:
             // the state it left behind is still the honest one.
-            let _ = sender.send(Command::Transport(request));
+            let _ = sender.send(SessionCommand::Transport(request));
         }
         this.set_pending(true);
     }
@@ -804,7 +801,7 @@ impl qobject::FluoritaPlayer {
     fn stop_worker(mut self: core::pin::Pin<&mut Self>) {
         let sender = self.as_mut().rust_mut().commands.take();
         if let Some(sender) = sender {
-            let _ = sender.send(Command::Stop);
+            let _ = sender.send(SessionCommand::Stop);
         }
         let worker = self.as_mut().rust_mut().worker.take();
         if let Some(worker) = worker {
@@ -833,32 +830,49 @@ impl qobject::FluoritaPlayer {
             return;
         }
 
+        // The generated getter hands out a reference; the value is copied.
         let at = fluorita_core::duration_from_seconds(*self.position_seconds())
             .unwrap_or(Duration::ZERO);
+        // The previous extraction reported before this one could be asked for;
+        // its thread is done and is joined here rather than left behind.
+        if let Some(finished) = self.as_mut().rust_mut().frame_worker.take() {
+            let _ = finished.join();
+        }
         self.as_mut().set_extracting_frame(true);
         self.as_mut().set_frame_notice(QString::default());
 
+        // The player's own token, so closing the window stops a decode that
+        // would otherwise run to its deadline while `Drop` waits on it.
+        let cancellation = CancellationToken::new();
+        self.as_mut().rust_mut().frame_cancellation = cancellation.clone();
         let qt_thread = self.qt_thread();
-        let worker = std::thread::spawn(move || {
-            let request = fluorita_engine::FrameRequest {
-                source: &path,
-                at,
-                marker: crate::copy::FRAME_MARKER,
-                deadline: fluorita_engine::FRAME_DEADLINE,
-            };
-            let message = match fluorita_engine::extract_frame(
-                &request,
-                &celestina_core::CancellationToken::new(),
-            ) {
-                Ok(kept) => crate::copy::frame_kept(&kept),
-                Err(error) => error.user_message(),
-            };
-            let _ = qt_thread.queue(move |mut player| {
-                player.as_mut().set_extracting_frame(false);
-                player.as_mut().set_frame_notice(QString::from(&message));
+        let worker = std::thread::Builder::new()
+            .name("fluorita-frame".to_owned())
+            .spawn(move || {
+                let request = fluorita_engine::FrameRequest {
+                    source: &path,
+                    at,
+                    marker: crate::copy::FRAME_MARKER,
+                    deadline: fluorita_engine::FRAME_DEADLINE,
+                };
+                let message = match fluorita_engine::extract_frame(&request, &cancellation) {
+                    Ok(kept) => crate::copy::frame_kept(&kept),
+                    Err(error) => error.user_message(),
+                };
+                let _ = qt_thread.queue(move |mut player| {
+                    player.as_mut().set_extracting_frame(false);
+                    player.as_mut().set_frame_notice(QString::from(&message));
+                });
             });
-        });
-        self.as_mut().rust_mut().frame_worker = Some(worker);
+        match worker {
+            Ok(handle) => self.as_mut().rust_mut().frame_worker = Some(handle),
+            Err(error) => {
+                eprintln!("fluorita: could not start the frame extraction: {error}");
+                self.as_mut().set_extracting_frame(false);
+                self.as_mut()
+                    .set_frame_notice(QString::from(crate::copy::WORKER_NOT_STARTED));
+            }
+        }
     }
 
     fn reset_for(mut self: core::pin::Pin<&mut Self>, path: &std::path::Path) {
@@ -905,7 +919,7 @@ impl qobject::FluoritaPlayer {
                 move |request: fluorita_core::PlaybackRequest| {
                     if let Ok(remote) = remote.lock() {
                         if let Some(sender) = remote.as_ref() {
-                            let _ = sender.send(Command::Transport(request));
+                            let _ = sender.send(SessionCommand::Transport(request));
                         }
                     }
                 },
@@ -916,12 +930,14 @@ impl qobject::FluoritaPlayer {
         let now = crate::mpris::NowPlaying {
             state: PlaybackState::Opening,
             path: Some(path.to_path_buf()),
-            title: path
-                .file_stem()
-                .map(|stem| stem.to_string_lossy().into_owned()),
+            // What a panel, a lock screen or a phone shows: bounded and
+            // stripped by the same rule as every name a file claims, the stem
+            // as the library shows it rather than the name with its extension.
+            title: Some(fluorita_core::displayed_stem(path)),
             position: Duration::ZERO,
             duration: None,
             volume: 1.0,
+            rate: Speed::NORMAL.rate(),
             seekable: kind.capabilities().seekable,
         };
         self.as_mut().rust_mut().now_playing = now.clone();
@@ -931,9 +947,10 @@ impl qobject::FluoritaPlayer {
     }
 
     /// Mirrors one confirmed report onto the bus.
-    fn publish_now_playing(mut self: core::pin::Pin<&mut Self>, snapshot: &Snapshot) {
+    fn publish_now_playing(mut self: core::pin::Pin<&mut Self>, snapshot: &SessionSnapshot) {
         let mut now = self.rust().now_playing.clone();
         now.state = snapshot.state;
+        now.rate = snapshot.speed;
         if let Some(position) = snapshot.position {
             now.position = position;
         }
@@ -949,7 +966,7 @@ impl qobject::FluoritaPlayer {
         }
     }
 
-    fn apply(mut self: core::pin::Pin<&mut Self>, snapshot: &Snapshot) {
+    fn apply(mut self: core::pin::Pin<&mut Self>, snapshot: &SessionSnapshot) {
         self.as_mut().publish_now_playing(snapshot);
         self.as_mut()
             .set_state(QString::from(state_label(snapshot.state)));
@@ -974,7 +991,7 @@ impl qobject::FluoritaPlayer {
     /// The label is built here and not in QML because what a stream is called
     /// is three optional fields and a fallback, and a surface rebuilding that
     /// rule would drift from the one the domain bounded.
-    fn publish_streams(mut self: core::pin::Pin<&mut Self>, snapshot: &Snapshot) {
+    fn publish_streams(mut self: core::pin::Pin<&mut Self>, snapshot: &SessionSnapshot) {
         let label = |stream: &fluorita_core::Stream, position: usize| {
             if stream.is_anonymous() {
                 crate::copy::stream_position(position)
@@ -1026,30 +1043,6 @@ impl qobject::FluoritaPlayer {
     }
 }
 
-/// What opening an item must do, given what the surface is doing right now.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OpenAction {
-    /// Nothing is rendering and nothing is being torn down: start at once.
-    Begin,
-    /// Something is rendering: hand the handle back and wait for the surface.
-    CloseFirst,
-    /// A close is already in flight: the handle is gone but the render context
-    /// may not be, so the request waits for the same acknowledgement.
-    Wait,
-}
-
-/// Kept apart from the QObject so the rule can be read and tested on its own;
-/// the pinned method it drives cannot be constructed without a Qt application.
-const fn decide_open(rendering: bool, closing: bool) -> OpenAction {
-    if closing {
-        OpenAction::Wait
-    } else if rendering {
-        OpenAction::CloseFirst
-    } else {
-        OpenAction::Begin
-    }
-}
-
 /// Stops and joins the worker when the player itself goes away.
 ///
 /// Quitting with a video playing used to run the backend's destruction beside
@@ -1060,14 +1053,111 @@ impl Drop for PlayerRust {
         if let Some(sender) = self.commands.take() {
             // A worker that already left is not an error; the join below is
             // what makes the shutdown deterministic either way.
-            let _ = sender.send(Command::Stop);
+            let _ = sender.send(SessionCommand::Stop);
         }
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        // Cancelled first, so the join waits for the backend to notice rather
+        // than for a whole extraction deadline.
+        self.frame_cancellation.cancel();
         if let Some(worker) = self.frame_worker.take() {
             let _ = worker.join();
         }
+        // One `stat` and one header read; it finishes, and its answer finds
+        // no one to deliver to.
+        if let Some(still) = self.still.take() {
+            let _ = still.join();
+        }
+    }
+}
+
+/// The toolkit's header probe for a still, addressed by path key: it opens the
+/// file by descriptor on the decoded bytes, so a name this side cannot spell
+/// is still measured — and measured on itself, never on whatever file a lossy
+/// spelling would have hit. File IO, so callers run it on a worker; the probe
+/// is a free function over `QImageReader`, which may be used from any thread.
+pub(crate) fn probe_still(path: &std::path::Path) -> Option<(u32, u32)> {
+    let measured = qobject::probe_image(&QString::from(
+        celestina_core::pathkey::encode(path).as_str(),
+    ));
+    let (width, height) = (measured.width(), measured.height());
+    // Qt spells an unknown size -1x-1, which is why this gates on a positive
+    // pair rather than on zero.
+    Some((u32::try_from(width).ok()?, u32::try_from(height).ok()?))
+        .filter(|(width, height)| *width > 0 && *height > 0)
+}
+
+/// The request a session opens with, shaped for a hover preview when that is
+/// what this player is showing.
+fn shaped(mut request: SessionRequest, previewing: bool) -> SessionRequest {
+    if previewing {
+        // A preview is a glance, not a session: no sound, no hardware context
+        // for a picture the size of a card, and it starts where the film is
+        // rather than in its titles. It loops because a frozen last frame
+        // under the pointer reads as a hang.
+        request = request.silent();
+        request.hardware_decoding = false;
+        request.looping = true;
+        request.start_at = Some(PREVIEW_START);
+    }
+    request
+}
+
+/// Where a session's output goes: the player, on the GUI thread, through the
+/// queue — and only while the session that produced it is still the current
+/// one, because a queued closure can outlive the worker that queued it.
+struct PlayerHost {
+    qt_thread: cxx_qt::CxxQtThread<qobject::FluoritaPlayer>,
+    generation: u64,
+    pacing_on: Arc<AtomicBool>,
+    forced: bool,
+}
+
+impl SessionHost for PlayerHost {
+    fn render_handle(&self, address: u64) {
+        let generation = self.generation;
+        let _ = self.qt_thread.queue(move |mut player| {
+            // The close that ended this session may already have run: it joins
+            // the worker and destroys the instance, and this closure was
+            // queued before either. The handshake refuses a handle from any
+            // session but the current one, and from one that is closing.
+            if player.as_mut().rust_mut().handshake.publishes(generation) {
+                player.as_mut().set_render_handle(address);
+            }
+        });
+    }
+
+    fn snapshot(&self, snapshot: SessionSnapshot) {
+        let generation = self.generation;
+        let _ = self.qt_thread.queue(move |player| {
+            if player.rust().handshake.generation() == generation {
+                player.apply(&snapshot);
+            }
+        });
+    }
+
+    fn failed(&self, message: String) {
+        let generation = self.generation;
+        let _ = self.qt_thread.queue(move |mut player| {
+            if player.rust().handshake.generation() == generation {
+                player.as_mut().set_state(QString::from("error"));
+                player.as_mut().set_error_message(QString::from(&message));
+            }
+        });
+    }
+
+    fn wants_frame_stats(&self) -> bool {
+        self.forced || self.pacing_on.load(Ordering::Relaxed)
+    }
+
+    fn frame_stats(&self, stats: FrameStats) {
+        if self.forced {
+            report_pacing(&stats);
+        }
+        let _ = self
+            .qt_thread
+            .queue(move |player| player.record_pacing(&stats));
     }
 }
 
@@ -1081,133 +1171,6 @@ fn state_label(state: PlaybackState) -> &'static str {
         PlaybackState::Ended => "terminado",
         PlaybackState::Failed => "error",
     }
-}
-
-/// The worker: owns the session, applies commands, forwards confirmed state.
-fn run_session(
-    path: &std::path::Path,
-    kind: MediaKind,
-    session_generation: u64,
-    previewing: bool,
-    pacing_on: &std::sync::atomic::AtomicBool,
-    commands: &mpsc::Receiver<Command>,
-    qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaPlayer>,
-) {
-    let mut truth = PlaybackSession::new();
-    let media = fluorita_core::MediaId::from_path(path);
-    let Ok(generation) = truth.select(media, kind) else {
-        publish_failure(qt_thread, "no se pudo iniciar la sesión");
-        return;
-    };
-
-    let mut request = SessionRequest::new(path.to_path_buf(), generation);
-    // Only a moving picture needs a surface; audio would pay for a GL context
-    // and a render context it never draws into.
-    if kind.capabilities().has_video {
-        request = request.embedded_video();
-    }
-    if previewing {
-        // A preview is a glance, not a session: no sound, no hardware context
-        // for a picture the size of a card, and it starts where the film is
-        // rather than in its titles. It loops because a frozen last frame
-        // under the pointer reads as a hang.
-        request = request.silent();
-        request.hardware_decoding = false;
-        request.looping = true;
-        request.start_at = Some(PREVIEW_START);
-    }
-
-    let mut session = match MpvEngine::new().open_session(request) {
-        Ok(session) => session,
-        Err(error) => {
-            publish_failure(qt_thread, &error.user_message());
-            return;
-        }
-    };
-
-    // Audio has no surface to wait for, so it starts here. Video waits for the
-    // surface to report a render context, which arrives as `Command::Start`.
-    let presenting = kind.capabilities().has_video;
-    if !presenting {
-        if let Err(error) = session.start() {
-            publish_failure(qt_thread, &error.user_message());
-            return;
-        }
-    }
-
-    if let Some(handle) = session.render_handle() {
-        let address = handle.value();
-        let _ = qt_thread.queue(move |mut player| {
-            // The close that ended this session may already have run: it joins
-            // the worker and destroys the instance, and this closure was queued
-            // before either. Publishing now would hand the surface the address
-            // of a freed `mpv_handle`, and leave the player holding a handle
-            // with no worker — a state in which every later activation is a
-            // silent no-op.
-            if player.rust().generation == session_generation {
-                player.as_mut().set_render_handle(address);
-            }
-        });
-    }
-
-    // The environment variable still turns the sampler on for a headless run;
-    // the shared flag is what the window toggles while something is playing.
-    let forced = std::env::var_os("FLUORITA_PACING").is_some();
-    let mut last_pacing = std::time::Instant::now();
-
-    loop {
-        match commands.try_recv() {
-            Ok(Command::Start) => {
-                if let Err(error) = session.start() {
-                    publish_failure(qt_thread, &error.user_message());
-                    break;
-                }
-            }
-            Ok(Command::Transport(action)) => {
-                if truth.request(action).is_ok() {
-                    let _ = session.request(action);
-                }
-            }
-            Ok(Command::Stop) | Err(mpsc::TryRecvError::Disconnected) => break,
-            Err(mpsc::TryRecvError::Empty) => {}
-        }
-
-        let sampling = forced || pacing_on.load(std::sync::atomic::Ordering::Relaxed);
-        if sampling && last_pacing.elapsed() >= PACING_INTERVAL {
-            let stats = session.frame_stats();
-            if forced {
-                report_pacing(&stats);
-            }
-            let taken = std::time::Instant::now();
-            let _ = qt_thread.queue(move |player| player.record_pacing(&stats));
-            last_pacing = taken;
-        }
-
-        if let Some(report) = session.poll(POLL_TIMEOUT) {
-            if truth.apply(&report) == ReportOutcome::Applied {
-                let streams = truth.streams();
-                let snapshot = Snapshot {
-                    state: truth.state(),
-                    position: truth.position(),
-                    duration: truth.duration(),
-                    volume: truth.volume(),
-                    pending: truth.pending_transport().is_some() || truth.is_seeking(),
-                    error: truth.error().map(str::to_owned),
-                    streams: streams
-                        .of(StreamKind::Audio)
-                        .chain(streams.of(StreamKind::Subtitle))
-                        .cloned()
-                        .collect(),
-                    audio: streams.selected(StreamKind::Audio),
-                    subtitle: streams.selected(StreamKind::Subtitle),
-                    speed: truth.speed().rate(),
-                };
-                let _ = qt_thread.queue(move |player| player.apply(&snapshot));
-            }
-        }
-    }
-
-    session.close();
 }
 
 /// Where a hover preview begins. Far enough in to be past titles and black,
@@ -1298,9 +1261,6 @@ fn render_pacing_report(
     out
 }
 
-/// How often the pacing sampler prints, when it is on.
-const PACING_INTERVAL: Duration = Duration::from_secs(1);
-
 /// Prints what the backend measured about presentation, when asked to.
 ///
 /// Behind an environment variable because it is a measurement, not a feature:
@@ -1327,17 +1287,9 @@ fn report_pacing(stats: &fluorita_engine::backend::FrameStats) {
     );
 }
 
-fn publish_failure(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaPlayer>, message: &str) {
-    let message = message.to_owned();
-    let _ = qt_thread.queue(move |mut player| {
-        player.as_mut().set_state(QString::from("error"));
-        player.as_mut().set_error_message(QString::from(&message));
-    });
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{decide_open, state_label, OpenAction};
+    use super::{shaped, state_label};
     use cxx_qt_lib::QString;
     use fluorita_core::PlaybackState;
     use std::ffi::OsString;
@@ -1394,36 +1346,6 @@ mod tests {
         (size.width(), size.height())
     }
 
-    /// A handle published by a session the player has already left must be
-    /// dropped. The address it carries belongs to an `mpv_handle` that
-    /// `stop_worker` has destroyed, and accepting it leaves the player holding
-    /// a handle with no worker — the state in which `decide_open` routes every
-    /// later activation to a close that returns immediately.
-    #[test]
-    fn a_handle_from_a_session_already_left_is_not_published() {
-        // The guard the queued closure applies, stated as the rule it is.
-        fn publishes(current: u64, published_by: u64) -> bool {
-            current == published_by
-        }
-        assert!(publishes(7, 7));
-        assert!(!publishes(8, 7), "a close bumped past this session");
-        // The counter wraps rather than overflowing, and a wrap is still a
-        // different session.
-        assert!(!publishes(0, u64::MAX));
-    }
-
-    /// The other half: a close that finds no worker still has to resolve an
-    /// activation parked while the previous one was closing.
-    #[test]
-    fn an_activation_parked_during_a_close_is_not_stranded() {
-        // Parking happens on `Wait`, which is what `closing` produces.
-        assert_eq!(decide_open(false, true), OpenAction::Wait);
-        assert_eq!(decide_open(true, true), OpenAction::Wait);
-        // And a player still holding a handle routes through the close that
-        // now has to honour what was parked.
-        assert_eq!(decide_open(true, false), OpenAction::CloseFirst);
-    }
-
     #[test]
     fn an_image_whose_name_is_not_utf8_is_measured_on_itself() {
         let fixture = Fixture::new("nonutf8");
@@ -1460,22 +1382,25 @@ mod tests {
     }
 
     #[test]
-    fn an_idle_player_opens_straight_away() {
-        assert_eq!(decide_open(false, false), OpenAction::Begin);
-    }
+    fn a_hover_preview_is_silent_looping_and_starts_inside_the_film() {
+        use fluorita_engine::backend::AudioOutput;
+        let request = || {
+            fluorita_engine::backend::SessionRequest::new(
+                std::path::PathBuf::from("/m/clip.mkv"),
+                celestina_core::Generation::INITIAL,
+            )
+        };
 
-    #[test]
-    fn a_rendering_player_hands_the_surface_back_first() {
-        assert_eq!(decide_open(true, false), OpenAction::CloseFirst);
-    }
+        let preview = shaped(request(), true);
+        assert_eq!(preview.audio_output, AudioOutput::Silent);
+        assert!(preview.looping);
+        assert!(!preview.hardware_decoding);
+        assert_eq!(preview.start_at, Some(super::PREVIEW_START));
 
-    #[test]
-    fn a_close_in_flight_is_waited_for_rather_than_raced() {
-        // The handle is already zero here, which is exactly why gating on it
-        // alone let a new session start on top of a context that was still
-        // being freed — and left the acknowledgement to kill the new worker.
-        assert_eq!(decide_open(false, true), OpenAction::Wait);
-        assert_eq!(decide_open(true, true), OpenAction::Wait);
+        let chosen = shaped(request(), false);
+        assert_eq!(chosen.audio_output, AudioOutput::System);
+        assert!(!chosen.looping);
+        assert_eq!(chosen.start_at, None);
     }
 
     #[test]

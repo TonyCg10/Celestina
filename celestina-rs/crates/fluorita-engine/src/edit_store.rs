@@ -22,25 +22,38 @@
 //! The format follows `catalogue_store`: one header line, one record per line,
 //! tab-separated, with every free-form field percent-encoded so a path that is
 //! not valid UTF-8 survives and no field can smuggle a separator into the next
-//! record.
+//! record. Records are written oldest first, which is how the store's recency
+//! survives a restart.
+//!
+//! **Bounded, and never reset.** The store keeps the newest [`MAX_ENTRIES`]
+//! recipes and never writes more than [`MAX_BYTES`]: the oldest go first,
+//! which costs a copy made long ago its layers, not the whole store. A file
+//! that cannot be read is reported to the caller, who leaves it alone rather
+//! than saving an empty store over it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use celestina_core::{atomic_file, percent};
 use fluorita_core::{
-    Annotation, Area, Axis, Canvas, Ink, MediaId, Point, Quarter, Redaction, ShapeKind,
-    SourceIdentity, Transform,
+    Annotation, Area, Axis, Canvas, EditCapabilities, EditDocument, EditLimits, EditRejected, Ink,
+    MediaId, Point, Quarter, Redaction, ShapeKind, SourceIdentity, Transform,
 };
 
 use crate::error::{EngineError, EngineResult};
 
 const HEADER: &str = "fluorita-edits 1";
 
-/// A ceiling on what will be read into memory. Far past any plausible number
-/// of edited pictures, and a bound a corrupted file cannot argue with.
-const MAX_BYTES: u64 = 16 * 1024 * 1024;
+/// A ceiling on what will be read into memory, and on what is written. Far
+/// past any plausible number of edited pictures, and a bound a corrupted file
+/// cannot argue with.
+pub const MAX_BYTES: u64 = 16 * 1024 * 1024;
+
+/// How many recipes are kept. Each edited copy a person saved is one; past
+/// this many, the oldest copy reopens flat, as any copy made before recipes
+/// existed does.
+pub const MAX_ENTRIES: usize = 512;
 
 /// The recipe that produced one saved file.
 #[derive(Clone, Debug, PartialEq)]
@@ -58,10 +71,41 @@ pub struct StoredEdit {
     pub objects: Vec<Annotation>,
 }
 
+impl StoredEdit {
+    /// The document this recipe describes, rebuilt over its base: every
+    /// transformation, then every object, each one a step that can be undone.
+    ///
+    /// Replayed through the document rather than restored around it, so a
+    /// recipe the current rules would not admit — a limit that tightened, a
+    /// file edited into a canvas past the budget — is refused with the
+    /// document's own reason instead of being opened in a state no edit could
+    /// have produced.
+    ///
+    /// # Errors
+    ///
+    /// Whatever the document refuses while replaying.
+    pub fn reopen(
+        &self,
+        limits: EditLimits,
+        capabilities: &EditCapabilities,
+    ) -> Result<EditDocument, EditRejected> {
+        let mut document = EditDocument::new(self.base_canvas, limits);
+        for transform in &self.transforms {
+            document.transform(*transform, capabilities)?;
+        }
+        for object in &self.objects {
+            document.annotate(object.clone(), capabilities)?;
+        }
+        Ok(document)
+    }
+}
+
 /// Every recipe this host knows, keyed by the identity of the file it produced.
 #[derive(Clone, Debug, Default)]
 pub struct EditStore {
     entries: BTreeMap<MediaId, StoredEdit>,
+    /// The same keys, oldest first. What goes when the store is full.
+    order: VecDeque<MediaId>,
 }
 
 impl EditStore {
@@ -70,14 +114,24 @@ impl EditStore {
         Self::default()
     }
 
-    /// Remembers the recipe behind `result`, replacing any earlier one.
+    /// Remembers the recipe behind `result`, replacing any earlier one and
+    /// making it the newest. Past [`MAX_ENTRIES`] the oldest is let go.
     pub fn remember(&mut self, result: MediaId, edit: StoredEdit) {
+        self.order.retain(|known| known != &result);
+        self.order.push_back(result.clone());
         self.entries.insert(result, edit);
+        while self.entries.len() > MAX_ENTRIES {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            self.entries.remove(&oldest);
+        }
     }
 
     /// Forgets a recipe — after the file it describes is trashed, or after a
     /// replacement flattened it.
     pub fn forget(&mut self, result: &MediaId) {
+        self.order.retain(|known| known != result);
         self.entries.remove(result);
     }
 
@@ -93,11 +147,18 @@ impl EditStore {
     /// `current` is what the caller measured just now; `None` means the base is
     /// gone. Either way the answer is `None` rather than a recipe applied to
     /// bytes it does not describe.
+    ///
+    /// Compared at the precision the store keeps — whole seconds — because a
+    /// recipe read back from disk no longer carries the nanoseconds the base
+    /// was measured with, and comparing those would refuse every recipe the
+    /// moment it had been written down.
     #[must_use]
     pub fn usable(&self, result: &MediaId, current: Option<SourceIdentity>) -> Option<&StoredEdit> {
         let edit = self.entries.get(result)?;
         current
-            .is_some_and(|current| edit.base_identity.still_describes(current))
+            .is_some_and(|current| {
+                as_stored(edit.base_identity).still_describes(as_stored(current))
+            })
             .then_some(edit)
     }
 
@@ -132,18 +193,34 @@ pub struct EditLoad {
 
 /// Reads the recipes at `path`.
 ///
-/// A missing, unreadable or unrecognised file means "no recipes yet", not an
-/// error: none of them should stop a picture from opening.
+/// Only a file that is not there, or is empty, means "no recipes yet". A file
+/// that is there and cannot be read — a permission, an I/O error, bytes that
+/// are not text — or that is in a format this build does not know is an
+/// error: reading it as an empty store would let the next write replace every
+/// recipe in it with one. A caller that gets an error opens the picture flat
+/// and leaves the file alone.
 ///
 /// # Errors
 ///
-/// Only a file past [`MAX_BYTES`], which is refused rather than read.
+/// A file past [`MAX_BYTES`], one that cannot be read, and one whose header
+/// is not this format's.
 pub fn load(path: &Path) -> EngineResult<EditLoad> {
-    let Ok(metadata) = std::fs::metadata(path) else {
-        return Ok(EditLoad {
+    let absent = || {
+        Ok(EditLoad {
             absent: true,
             ..EditLoad::default()
-        });
+        })
+    };
+    let metadata = match std::fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return absent(),
+        Err(source) => {
+            return Err(EngineError::Io {
+                operation: "inspecting the stored edits",
+                path: path.to_path_buf(),
+                source,
+            })
+        }
     };
     if metadata.len() > MAX_BYTES {
         return Err(EngineError::OverBudget {
@@ -152,18 +229,20 @@ pub fn load(path: &Path) -> EngineResult<EditLoad> {
             actual: metadata.len(),
         });
     }
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Ok(EditLoad {
-            absent: true,
-            ..EditLoad::default()
-        });
-    };
+    let text = std::fs::read_to_string(path).map_err(|source| EngineError::Io {
+        operation: "reading the stored edits",
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if text.is_empty() {
+        return absent();
+    }
 
     let mut lines = text.lines();
     if lines.next() != Some(HEADER) {
-        return Ok(EditLoad {
-            absent: true,
-            ..EditLoad::default()
+        return Err(EngineError::UnusableSource {
+            path: path.to_path_buf(),
+            reason: "the stored edits are in a format this build does not read",
         });
     }
 
@@ -205,35 +284,14 @@ pub fn load(path: &Path) -> EngineResult<EditLoad> {
     })
 }
 
-/// Writes every recipe to `path`, replacing what was there atomically.
+/// Writes the newest recipes to `path`, as many as fit in [`MAX_BYTES`],
+/// replacing what was there atomically.
 ///
 /// # Errors
 ///
 /// Any failure to create the directory or land the file.
 pub fn save(path: &Path, store: &EditStore) -> EngineResult<()> {
-    let mut text = String::from(HEADER);
-    text.push('\n');
-    for (id, edit) in &store.entries {
-        let Some((device, inode)) = id.filesystem_parts() else {
-            // A path-keyed identity does not survive a rename, so a recipe
-            // stored under one would attach itself to whatever took the name.
-            continue;
-        };
-        text.push_str(&format!(
-            "E\t{device}\t{inode}\t{}\t{}\t{}\t{}\t{}\n",
-            percent::encode(&percent::path_bytes(&edit.base)),
-            seconds(edit.base_identity.modified),
-            edit.base_identity.size,
-            edit.base_canvas.width(),
-            edit.base_canvas.height(),
-        ));
-        for transform in &edit.transforms {
-            text.push_str(&write_transform(*transform));
-        }
-        for object in &edit.objects {
-            text.push_str(&write_object(object));
-        }
-    }
+    let text = encode(store, MAX_BYTES);
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|source| EngineError::Io {
@@ -247,6 +305,67 @@ pub fn save(path: &Path, store: &EditStore) -> EngineResult<()> {
         path: path.to_path_buf(),
         source,
     })
+}
+
+/// The store as text, newest recipes first in priority and oldest first on
+/// the page, never longer than `budget` bytes.
+///
+/// A recipe that does not fit is dropped whole, with everything older than
+/// it: a store past its budget loses the copies made longest ago, never a
+/// part of one.
+fn encode(store: &EditStore, budget: u64) -> String {
+    let header = format!("{HEADER}\n");
+    let mut room = budget.saturating_sub(header.len() as u64);
+    let mut kept: Vec<String> = Vec::new();
+    for id in store.order.iter().rev() {
+        let Some(edit) = store.entries.get(id) else {
+            continue;
+        };
+        let Some(record) = encode_entry(id, edit) else {
+            continue;
+        };
+        let size = record.len() as u64;
+        if size > room {
+            break;
+        }
+        room -= size;
+        kept.push(record);
+    }
+    let mut text = header;
+    for record in kept.iter().rev() {
+        text.push_str(record);
+    }
+    text
+}
+
+/// One recipe as its lines, or `None` for one that must not be written.
+fn encode_entry(id: &MediaId, edit: &StoredEdit) -> Option<String> {
+    // A path-keyed identity does not survive a rename, so a recipe stored
+    // under one would attach itself to whatever took the name.
+    let (device, inode) = id.filesystem_parts()?;
+    let mut text = format!(
+        "E\t{device}\t{inode}\t{}\t{}\t{}\t{}\t{}\n",
+        percent::encode(&percent::path_bytes(&edit.base)),
+        seconds(edit.base_identity.modified),
+        edit.base_identity.size,
+        edit.base_canvas.width(),
+        edit.base_canvas.height(),
+    );
+    for transform in &edit.transforms {
+        text.push_str(&write_transform(*transform));
+    }
+    for object in &edit.objects {
+        text.push_str(&write_object(object));
+    }
+    Some(text)
+}
+
+/// An identity at the precision the store writes it with.
+fn as_stored(identity: SourceIdentity) -> SourceIdentity {
+    SourceIdentity::new(
+        identity.size,
+        SystemTime::UNIX_EPOCH + Duration::from_secs(seconds(identity.modified)),
+    )
 }
 
 fn seconds(time: SystemTime) -> u64 {
@@ -530,7 +649,7 @@ mod tests {
         SourceIdentity, Transform,
     };
 
-    use super::{load, save, EditStore, StoredEdit};
+    use super::{encode, load, save, EditStore, StoredEdit, MAX_ENTRIES};
 
     fn directory(label: &str) -> PathBuf {
         let nonce = SystemTime::now()
@@ -692,6 +811,45 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_file_is_nothing_stored_yet() {
+        let directory = directory("empty");
+        let path = directory.join("edits");
+        std::fs::write(&path, b"").expect("the file");
+
+        let loaded = load(&path).expect("an empty store reads");
+        assert!(loaded.absent);
+        assert!(loaded.store.is_empty());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_store_in_a_format_this_build_does_not_read_is_an_error_not_an_empty_store() {
+        // Read as "nothing stored", the next remember would write a store of
+        // one recipe over every recipe in it.
+        let directory = directory("header");
+        let path = directory.join("edits");
+        std::fs::write(&path, "fluorita-edits 9\nE\t66\t1\n").expect("the file");
+
+        assert!(load(&path).is_err());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_store_that_cannot_be_read_is_an_error_not_an_empty_store() {
+        let directory = directory("unreadable");
+        let path = directory.join("edits");
+        // Not UTF-8: the read fails, and the recipes in it are not "none".
+        std::fs::write(&path, b"fluorita-edits 1\n\xff\xfe\n").expect("the file");
+        assert!(load(&path).is_err());
+
+        // A directory where the file should be cannot be read either.
+        let folder = directory.join("folder");
+        std::fs::create_dir_all(&folder).expect("a folder");
+        assert!(load(&folder).is_err());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
     fn a_corrupted_record_is_skipped_and_counted_rather_than_taken() {
         let directory = directory("corrupt");
         let path = directory.join("edits");
@@ -761,5 +919,135 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn a_recipe_read_back_is_usable_for_the_very_base_it_was_written_for() {
+        // Measured the way the editor measures a base: to the nanosecond. The
+        // file keeps whole seconds, and the recipe must still be recognised
+        // as describing these bytes after the round trip.
+        let directory = directory("precision");
+        let path = directory.join("edits");
+        let id = MediaId::filesystem(66, 7);
+        let measured =
+            SourceIdentity::new(4096, UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789));
+        let mut edit = full_edit("/fotos/original.jpg");
+        edit.base_identity = measured;
+        let mut store = EditStore::new();
+        store.remember(id.clone(), edit);
+        save(&path, &store).expect("the store lands");
+
+        let loaded = load(&path).expect("the store reads").store;
+
+        assert!(loaded.usable(&id, Some(measured)).is_some());
+        // A base that really changed is still refused.
+        let edited = SourceIdentity::new(4096, UNIX_EPOCH + Duration::new(1_700_000_001, 0));
+        assert!(loaded.usable(&id, Some(edited)).is_none());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn the_store_keeps_the_newest_recipes_and_lets_the_oldest_go() {
+        let mut store = EditStore::new();
+        let count = u64::try_from(MAX_ENTRIES).expect("a small bound") + 1;
+        for inode in 0..count {
+            store.remember(MediaId::filesystem(1, inode), full_edit("/fotos/a.jpg"));
+        }
+
+        assert_eq!(store.len(), MAX_ENTRIES);
+        assert!(store.get(&MediaId::filesystem(1, 0)).is_none());
+        assert!(store.get(&MediaId::filesystem(1, count - 1)).is_some());
+
+        // Remembering an old one again makes it the newest, so the next to go
+        // is the one after it.
+        store.remember(MediaId::filesystem(1, 1), full_edit("/fotos/b.jpg"));
+        store.remember(MediaId::filesystem(2, 0), full_edit("/fotos/c.jpg"));
+        assert!(store.get(&MediaId::filesystem(1, 1)).is_some());
+        assert!(store.get(&MediaId::filesystem(1, 2)).is_none());
+    }
+
+    #[test]
+    fn recency_survives_being_written_down() {
+        let directory = directory("recency");
+        let path = directory.join("edits");
+        let mut store = EditStore::new();
+        store.remember(MediaId::filesystem(1, 1), full_edit("/fotos/a.jpg"));
+        store.remember(MediaId::filesystem(1, 2), full_edit("/fotos/b.jpg"));
+        store.remember(MediaId::filesystem(1, 1), full_edit("/fotos/a.jpg"));
+        save(&path, &store).expect("the store lands");
+
+        let mut loaded = load(&path).expect("the store reads").store;
+        for inode in 10..(10 + u64::try_from(MAX_ENTRIES).expect("a small bound") - 1) {
+            loaded.remember(MediaId::filesystem(9, inode), full_edit("/fotos/z.jpg"));
+        }
+
+        // Inode 2 was the older of the two, so it is the one that went.
+        assert!(loaded.get(&MediaId::filesystem(1, 2)).is_none());
+        assert!(loaded.get(&MediaId::filesystem(1, 1)).is_some());
+        std::fs::remove_dir_all(&directory).ok();
+    }
+
+    #[test]
+    fn what_is_written_never_passes_the_byte_budget_and_keeps_the_newest() {
+        let mut store = EditStore::new();
+        for inode in 0..10 {
+            store.remember(MediaId::filesystem(1, inode), full_edit("/fotos/a.jpg"));
+        }
+        let whole = encode(&store, u64::MAX);
+        let one = whole.len() / 10;
+        let budget = u64::try_from(one * 3).expect("a small budget");
+
+        let bounded = encode(&store, budget);
+
+        assert!(u64::try_from(bounded.len()).expect("small") <= budget);
+        assert!(
+            bounded.contains("E\t1\t9\t"),
+            "the newest recipe was dropped"
+        );
+        assert!(!bounded.contains("E\t1\t0\t"), "the oldest recipe was kept");
+    }
+
+    #[test]
+    fn a_reopened_recipe_is_the_same_edit_with_its_history_to_undo() {
+        use fluorita_core::{EditCapabilities, EditDocument, EditLimits, MediaKind};
+        use std::path::Path;
+
+        let base = Canvas::new(400, 300).expect("a canvas");
+        let capabilities = EditCapabilities::of(MediaKind::Image, Path::new("/fotos/a.png"));
+        let limits = EditLimits::new(100_000_000);
+        let mut original = EditDocument::new(base, limits);
+        original
+            .transform(
+                Transform::Crop(Area::new(Point::new(10.0, 10.0), 200.0, 100.0)),
+                &capabilities,
+            )
+            .expect("a crop inside the canvas");
+        original
+            .annotate(
+                Annotation::Redact {
+                    area: Area::new(Point::new(5.0, 5.0), 20.0, 10.0),
+                    style: Redaction::Solid,
+                },
+                &capabilities,
+            )
+            .expect("a mark inside the canvas");
+        let composition = original.composition();
+        let stored = StoredEdit {
+            base: PathBuf::from("/fotos/a.png"),
+            base_identity: identity(),
+            base_canvas: base,
+            transforms: composition.transforms.clone(),
+            objects: composition.objects.clone(),
+        };
+
+        let mut reopened = stored
+            .reopen(limits, &capabilities)
+            .expect("the recipe replays");
+
+        assert_eq!(reopened.composition(), composition);
+        assert_eq!(reopened.objects().len(), 1, "the mark is an object again");
+        // The crop can still be undone, which is what "reopenable" promises.
+        while reopened.undo() {}
+        assert_eq!(reopened.canvas(), base);
     }
 }

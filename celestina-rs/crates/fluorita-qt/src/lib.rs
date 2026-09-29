@@ -68,22 +68,9 @@ pub fn rerun_paths() -> [&'static str; 2] {
     cpp_sources()
 }
 
-/// The QML module the item registers itself into.
-///
-/// Deliberately its own namespace rather than an application's: a CXX-Qt module
-/// owns its URI, and Qt 6 refuses a `qmlRegisterType` into a namespace a module
-/// already claimed.
-pub const QML_MODULE: &str = "org.celestina.fluorita.render";
-
-/// The QML type name the hosts instantiate.
-pub const QML_TYPE: &str = "MpvVideo";
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        cpp_sources, include_dir, rerun_paths, QML_MODULE, QML_TYPE, VIDEO_ITEM_HEADER,
-        VIDEO_ITEM_SOURCE,
-    };
+    use super::{cpp_sources, include_dir, rerun_paths, VIDEO_ITEM_HEADER, VIDEO_ITEM_SOURCE};
     use std::path::Path;
 
     #[test]
@@ -108,12 +95,36 @@ mod tests {
     }
 
     #[test]
-    fn the_qml_identity_is_not_an_application_namespace() {
-        assert_eq!(QML_TYPE, "MpvVideo");
-        assert!(QML_MODULE.starts_with("org.celestina.fluorita"));
-        assert_ne!(
-            QML_MODULE, "org.celestina.fluorita",
-            "a CXX-Qt module owns its own URI; this type needs a separate one"
+    fn the_item_registers_under_a_namespace_no_application_module_owns() {
+        // Read from the C++ that actually registers it, which is what the QML
+        // of every host imports: a CXX-Qt module owns its URI, and Qt 6
+        // refuses a `qmlRegisterType` into a namespace a module already
+        // claimed.
+        let source = std::fs::read_to_string(VIDEO_ITEM_SOURCE).expect("the item's source");
+        assert!(
+            source.contains(
+                r#"qmlRegisterType<MpvVideoItem>("org.celestina.fluorita.render", 1, 0, "MpvVideo")"#
+            ),
+            "the registration the hosts import has changed"
         );
+    }
+
+    #[test]
+    fn nothing_outside_synchronize_holds_the_item() {
+        // The renderer and libmpv's callback reach the item only through the
+        // shared render state; a raw item pointer in either is the
+        // use-after-free this seam exists to rule out.
+        let source = std::fs::read_to_string(VIDEO_ITEM_SOURCE).expect("the item's source");
+        let renderer = source
+            .split("class MpvRenderer")
+            .nth(1)
+            .and_then(|rest| rest.split("} // namespace").next())
+            .expect("the renderer's definition");
+        assert!(
+            !renderer.contains("MpvVideoItem *m_item"),
+            "the renderer keeps its item"
+        );
+        assert!(renderer.contains("QSharedPointer<MpvRenderState> m_state"));
+        assert!(source.contains("static_cast<MpvRenderState *>(context)"));
     }
 }

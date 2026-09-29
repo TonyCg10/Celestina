@@ -3,9 +3,13 @@
 //! Siderita is the authority here, because it is the consumer that must not
 //! change: it derives its cache entry as
 //! `md5(QUrl::fromLocalFile(absolutePath).toEncoded())`, lowercase hex, under
-//! `<cache root>/large/<key>.png`, and reuses any entry at least as new as its
-//! source. Fluorita becomes the producer for video posters and audio covers, so
-//! the derivation is frozen here with golden vectors measured from Qt 6 itself.
+//! `<cache root>/large/<key>.png`. Fluorita becomes the producer for video
+//! posters and audio covers, so the derivation is frozen here with golden
+//! vectors measured from Qt 6 itself. What Fluorita writes carries the two
+//! keys the spec requires, `Thumb::URI` and `Thumb::MTime`, and Fluorita
+//! judges an entry by the spec's rule — the recorded mtime equals the
+//! source's — so other desktop thumbnailers accept its entries and it does
+//! not keep one a restored file has outlived.
 //!
 //! Everything in this module is a decision, not IO: the caller opens files,
 //! writes bytes and renames.
@@ -90,22 +94,29 @@ pub fn thumbnail_path(cache_root: &Path, source: &Path, size: ThumbnailSize) -> 
 pub enum ArtworkValidity {
     /// Nothing cached for this key yet.
     Missing,
-    /// Cached, but older than the file it depicts.
+    /// Cached, but recorded for bytes the source no longer has.
     Stale,
-    /// Cached and at least as new as its source.
+    /// Cached for exactly the source's current modification time.
     Fresh,
 }
 
 impl ArtworkValidity {
-    /// A thumbnail is always written after its source, so an edit that pushes
-    /// the source mtime past the cache entry is exactly what forces a
-    /// regenerate. This keys off filesystem mtimes, like Siderita, and therefore
-    /// also honours entries other producers wrote.
+    /// The freedesktop rule: an entry is valid while the `Thumb::MTime` it
+    /// records equals the source's modification time, in whole seconds.
+    ///
+    /// Equality, not "at least as new": a file restored from a backup goes
+    /// back to an older mtime while the cache entry keeps a newer one, and
+    /// only the recorded key says the picture describes other bytes. An entry
+    /// that recorded no mtime cannot be trusted and is produced again, which
+    /// is also how entries written before the keys existed get them.
+    /// `cached` is `None` when there is no entry at all.
     #[must_use]
-    pub fn evaluate(source_mtime: SystemTime, cache_mtime: Option<SystemTime>) -> Self {
-        match cache_mtime {
+    pub fn evaluate(source_mtime: SystemTime, cached: Option<&ThumbnailKeys>) -> Self {
+        match cached {
             None => Self::Missing,
-            Some(cached) if cached >= source_mtime => Self::Fresh,
+            Some(keys) if keys.mtime.is_some() && keys.mtime == unix_seconds(source_mtime) => {
+                Self::Fresh
+            }
             Some(_) => Self::Stale,
         }
     }
@@ -172,6 +183,137 @@ impl ArtworkPublication {
     }
 }
 
+/// The two keys the freedesktop thumbnail spec requires an entry to carry.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ThumbnailKeys {
+    /// `Thumb::URI`: the URI the entry's name is the hash of.
+    pub uri: Option<String>,
+    /// `Thumb::MTime`: the source's modification time, in whole seconds.
+    pub mtime: Option<i64>,
+}
+
+const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+const URI_KEY: &[u8] = b"Thumb::URI";
+const MTIME_KEY: &[u8] = b"Thumb::MTime";
+
+/// The PNG CRC-32 (ISO 3309, reflected, polynomial `0xEDB88320`) over a
+/// chunk's type and data. Bitwise rather than table-driven: it runs over a
+/// few dozen bytes per thumbnail.
+#[must_use]
+pub fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = (crc & 1).wrapping_neg();
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+/// One chunk of a PNG: where its type starts and how long its data is.
+struct Chunk {
+    kind: [u8; 4],
+    data: std::ops::Range<usize>,
+    /// Where the next chunk starts.
+    next: usize,
+}
+
+/// The chunk at `at`, or `None` when the bytes do not hold a whole one.
+fn chunk_at(png: &[u8], at: usize) -> Option<Chunk> {
+    let length = usize::try_from(u32::from_be_bytes(png.get(at..at + 4)?.try_into().ok()?)).ok()?;
+    let kind: [u8; 4] = png.get(at + 4..at + 8)?.try_into().ok()?;
+    let start = at + 8;
+    let end = start.checked_add(length)?;
+    let next = end.checked_add(4)?;
+    // The CRC is part of the chunk; a prefix that stops before it does not
+    // hold the chunk.
+    png.get(start..next)?;
+    Some(Chunk {
+        kind,
+        data: start..end,
+        next,
+    })
+}
+
+/// The spec keys a thumbnail records, read from a prefix of its file.
+///
+/// The keys are text chunks ahead of the image data, so a bounded prefix is
+/// enough; reading stops at the first `IDAT`, at `IEND`, or where the prefix
+/// ends, and a chunk that claims more than is there ends the reading rather
+/// than being trusted. Only uncompressed `tEXt` is read: the keys are short
+/// Latin-1, and inflating a hostile `zTXt` is not a cost a validity check
+/// should pay. `None` when the bytes are not a PNG at all.
+#[must_use]
+pub fn thumbnail_keys(prefix: &[u8]) -> Option<ThumbnailKeys> {
+    if !prefix.starts_with(PNG_SIGNATURE) {
+        return None;
+    }
+    let mut keys = ThumbnailKeys::default();
+    let mut at = PNG_SIGNATURE.len();
+    while let Some(chunk) = chunk_at(prefix, at) {
+        match &chunk.kind {
+            b"IDAT" | b"IEND" => break,
+            b"tEXt" => {
+                let data = &prefix[chunk.data.clone()];
+                if let Some(split) = data.iter().position(|byte| *byte == 0) {
+                    let (key, value) = (&data[..split], &data[split + 1..]);
+                    // Latin-1 by the PNG spec; both keys are ASCII in practice.
+                    let text: String = value.iter().map(|byte| char::from(*byte)).collect();
+                    if key == URI_KEY {
+                        keys.uri = Some(text);
+                    } else if key == MTIME_KEY {
+                        keys.mtime = text.trim().parse().ok();
+                    }
+                }
+            }
+            _ => {}
+        }
+        at = chunk.next;
+    }
+    Some(keys)
+}
+
+/// `png` with the spec keys added as `tEXt` chunks right after its header,
+/// every other byte kept as it was. `mtime` is left out when the source's
+/// timestamp cannot be spelled (before the epoch), which readers then treat
+/// as stale rather than as a wrong match.
+///
+/// `None` when `png` does not start with a whole `IHDR`: nothing is keyed
+/// that a reader could not parse.
+#[must_use]
+pub fn with_thumbnail_keys(png: &[u8], uri: &str, mtime: Option<i64>) -> Option<Vec<u8>> {
+    if !png.starts_with(PNG_SIGNATURE) {
+        return None;
+    }
+    let header = chunk_at(png, PNG_SIGNATURE.len())?;
+    if &header.kind != b"IHDR" {
+        return None;
+    }
+    let mut keyed = Vec::with_capacity(png.len() + uri.len() + 64);
+    keyed.extend_from_slice(&png[..header.next]);
+    push_text(&mut keyed, URI_KEY, uri.as_bytes());
+    if let Some(mtime) = mtime {
+        push_text(&mut keyed, MTIME_KEY, mtime.to_string().as_bytes());
+    }
+    keyed.extend_from_slice(&png[header.next..]);
+    Some(keyed)
+}
+
+fn push_text(out: &mut Vec<u8>, key: &[u8], value: &[u8]) {
+    let mut body = Vec::with_capacity(4 + key.len() + 1 + value.len());
+    body.extend_from_slice(b"tEXt");
+    body.extend_from_slice(key);
+    body.push(0);
+    body.extend_from_slice(value);
+    // A key and a URI are far below 4 GiB; a chunk length is a u32.
+    let length = u32::try_from(body.len() - 4).unwrap_or(u32::MAX);
+    out.extend_from_slice(&length.to_be_bytes());
+    out.extend_from_slice(&body);
+    out.extend_from_slice(&crc32(&body).to_be_bytes());
+}
+
 /// Whole seconds since the Unix epoch, or `None` for a timestamp before it.
 #[must_use]
 pub fn unix_seconds(time: SystemTime) -> Option<i64> {
@@ -183,8 +325,9 @@ pub fn unix_seconds(time: SystemTime) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::{
-        cache_key, file_uri, large_thumbnail_path, unix_seconds, ArtworkPublication,
-        ArtworkValidity, ThumbnailSize, LARGE_THUMBNAIL_PIXELS,
+        cache_key, crc32, file_uri, large_thumbnail_path, thumbnail_keys, unix_seconds,
+        with_thumbnail_keys, ArtworkPublication, ArtworkValidity, ThumbnailKeys, ThumbnailSize,
+        LARGE_THUMBNAIL_PIXELS,
     };
     use std::path::{Path, PathBuf};
     use std::time::{Duration, SystemTime};
@@ -327,30 +470,108 @@ mod tests {
     }
 
     #[test]
-    fn validity_regenerates_only_when_the_source_moved_ahead() {
+    fn validity_follows_the_recorded_mtime_not_the_cache_files_own() {
         let source = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000);
-        let older = SystemTime::UNIX_EPOCH + Duration::from_secs(999);
-        let newer = SystemTime::UNIX_EPOCH + Duration::from_secs(1_001);
+        let recorded = |mtime: Option<i64>| ThumbnailKeys {
+            uri: Some("file:///m/clip.mp4".to_owned()),
+            mtime,
+        };
 
         assert_eq!(
             ArtworkValidity::evaluate(source, None),
             ArtworkValidity::Missing
         );
         assert_eq!(
-            ArtworkValidity::evaluate(source, Some(older)),
+            ArtworkValidity::evaluate(source, Some(&recorded(Some(1_000)))),
+            ArtworkValidity::Fresh
+        );
+        // The source moved ahead of the thumbnail: an ordinary edit.
+        assert_eq!(
+            ArtworkValidity::evaluate(source, Some(&recorded(Some(999)))),
             ArtworkValidity::Stale
         );
+        // The source went *back* — restored from a backup with its older
+        // mtime. The cache file is newer than it, and still describes other
+        // bytes; only the recorded key can tell.
         assert_eq!(
-            ArtworkValidity::evaluate(source, Some(source)),
-            ArtworkValidity::Fresh
+            ArtworkValidity::evaluate(source, Some(&recorded(Some(1_001)))),
+            ArtworkValidity::Stale
         );
+        // An entry that never recorded one cannot be trusted either.
         assert_eq!(
-            ArtworkValidity::evaluate(source, Some(newer)),
-            ArtworkValidity::Fresh
+            ArtworkValidity::evaluate(source, Some(&recorded(None))),
+            ArtworkValidity::Stale
         );
         assert!(ArtworkValidity::Missing.needs_generation());
         assert!(ArtworkValidity::Stale.needs_generation());
         assert!(!ArtworkValidity::Fresh.needs_generation());
+    }
+
+    /// The smallest PNG a decoder accepts: signature, IHDR, one IDAT, IEND.
+    fn tiny_png() -> Vec<u8> {
+        vec![
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0xfd, 0xd4, 0x9a, 0x73, 0x00, 0x00, 0x00, 0x13, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x9f, 0x01, 0x8c, 0xff, 0x33, 0x30, 0x00, 0x00,
+            0x1f, 0xee, 0x03, 0xfd, 0x35, 0x1b, 0x00, 0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+            0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ]
+    }
+
+    #[test]
+    fn the_spec_keys_are_written_after_the_header_and_read_back() {
+        let keyed =
+            with_thumbnail_keys(&tiny_png(), "file:///m/clip%20one.mp4", Some(1_700_000_000))
+                .expect("a PNG to key");
+
+        let keys = thumbnail_keys(&keyed).expect("a PNG");
+        assert_eq!(keys.uri.as_deref(), Some("file:///m/clip%20one.mp4"));
+        assert_eq!(keys.mtime, Some(1_700_000_000));
+        // Nothing of the picture moved: the tail is byte for byte the same.
+        let original = tiny_png();
+        assert!(keyed.ends_with(&original[33..]));
+        // Every chunk the writer added carries a CRC a strict reader accepts.
+        let mut at = 8;
+        while at < keyed.len() {
+            let length = u32::from_be_bytes(keyed[at..at + 4].try_into().expect("length")) as usize;
+            let end = at + 8 + length;
+            let stored = u32::from_be_bytes(keyed[end..end + 4].try_into().expect("crc"));
+            assert_eq!(crc32(&keyed[at + 4..end]), stored, "chunk at {at}");
+            at = end + 4;
+        }
+    }
+
+    #[test]
+    fn the_crc_is_the_png_one() {
+        // The IEND chunk's CRC, as every PNG carries it.
+        assert_eq!(crc32(b"IEND"), 0xae42_6082);
+        assert_eq!(crc32(b""), 0);
+    }
+
+    #[test]
+    fn a_picture_with_no_keys_reads_as_none_recorded() {
+        let keys = thumbnail_keys(&tiny_png()).expect("a PNG");
+        assert_eq!(keys, ThumbnailKeys::default());
+    }
+
+    #[test]
+    fn what_is_not_a_png_is_refused_without_reading_past_it() {
+        assert_eq!(thumbnail_keys(b"not a png at all"), None);
+        assert_eq!(
+            with_thumbnail_keys(b"not a png", "file:///m/a", Some(1)),
+            None
+        );
+        // A chunk that claims more than the prefix holds stops the reading.
+        let mut lying = tiny_png();
+        lying[8..12].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert_eq!(thumbnail_keys(&lying), Some(ThumbnailKeys::default()));
+        assert_eq!(with_thumbnail_keys(&lying, "file:///m/a", Some(1)), None);
+        // A prefix cut inside the first chunk is simply what it is.
+        assert_eq!(
+            thumbnail_keys(&tiny_png()[..20]),
+            Some(ThumbnailKeys::default())
+        );
     }
 
     #[test]

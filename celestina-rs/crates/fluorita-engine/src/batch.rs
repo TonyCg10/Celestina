@@ -146,6 +146,7 @@ fn turn(
         format,
         choice: request.choice,
         copy_marker: request.copy_marker,
+        target: None,
     };
     match crate::edit::save(&save, rasteriser, bin, cancellation) {
         Ok(_) => ItemOutcome::Done,

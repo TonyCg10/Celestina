@@ -16,9 +16,7 @@ use std::time::Duration;
 
 use celestina_core::{CancellationToken, Generation};
 
-use crate::backend::{
-    ArtworkJob, MediaEngine, ProbeBudget, ProbeReport, TrailerJob, TrailerOutcome,
-};
+use crate::backend::{ArtworkJob, MediaEngine, ProbeBudget, ProbeReport};
 use crate::engine::MpvEngine;
 use crate::error::{EngineError, EngineResult};
 use crate::library::{ScanLimits, ScanOutcome};
@@ -35,10 +33,6 @@ pub enum Job {
         generation: Generation,
         job: Box<ArtworkJob>,
     },
-    Trailer {
-        generation: Generation,
-        job: Box<TrailerJob>,
-    },
     /// Walk the configured roots. The heaviest job the worker takes, and the
     /// one that most obviously cannot run on a GUI thread.
     Scan {
@@ -54,7 +48,6 @@ impl Job {
         match self {
             Self::Probe { generation, .. }
             | Self::Artwork { generation, .. }
-            | Self::Trailer { generation, .. }
             | Self::Scan { generation, .. } => *generation,
         }
     }
@@ -71,10 +64,6 @@ pub enum JobOutcome {
         generation: Generation,
         result: EngineResult<std::path::PathBuf>,
     },
-    Trailer {
-        generation: Generation,
-        result: EngineResult<TrailerOutcome>,
-    },
     Scanned {
         generation: Generation,
         result: EngineResult<ScanOutcome>,
@@ -87,7 +76,6 @@ impl JobOutcome {
         match self {
             Self::Probed { generation, .. }
             | Self::Artwork { generation, .. }
-            | Self::Trailer { generation, .. }
             | Self::Scanned { generation, .. } => *generation,
         }
     }
@@ -282,14 +270,6 @@ fn perform<E: MediaEngine>(engine: &E, job: Job, token: &CancellationToken) -> J
                 result: engine.publish_artwork(&request),
             }
         }
-        Job::Trailer { generation, job } => {
-            let mut request = *job;
-            request.cancellation = token.clone();
-            JobOutcome::Trailer {
-                generation,
-                result: engine.produce_trailer(&request),
-            }
-        }
     }
 }
 
@@ -312,10 +292,6 @@ fn cancelled(job: Job) -> JobOutcome {
             generation,
             result: Err(EngineError::Cancelled),
         },
-        Job::Trailer { generation, .. } => JobOutcome::Trailer {
-            generation,
-            result: Err(EngineError::Cancelled),
-        },
     }
 }
 
@@ -324,7 +300,6 @@ mod tests {
     use super::{EngineWorker, Job, JobOutcome};
     use crate::backend::{
         ArtworkJob, EngineSession, MediaEngine, ProbeBudget, ProbeReport, SessionRequest,
-        TrailerJob, TrailerOutcome,
     };
     use crate::error::{EngineError, EngineResult};
     use celestina_core::{CancellationToken, Generation, GenerationClock};
@@ -359,10 +334,6 @@ mod tests {
         }
 
         fn publish_artwork(&self, _request: &ArtworkJob) -> EngineResult<PathBuf> {
-            Err(EngineError::Cancelled)
-        }
-
-        fn produce_trailer(&self, _job: &TrailerJob) -> EngineResult<TrailerOutcome> {
             Err(EngineError::Cancelled)
         }
 

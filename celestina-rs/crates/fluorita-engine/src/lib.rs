@@ -40,16 +40,15 @@ pub mod library;
 pub mod metadata;
 pub mod probe;
 pub mod session;
+pub mod session_worker;
 pub mod source;
 pub mod source_store;
-pub mod trailer;
 pub mod watch;
 pub mod worker;
 
 pub use artwork::{pending as pending_artwork, PendingArtwork};
 pub use backend::{
     ArtworkJob, AudioOutput, EngineSession, MediaEngine, ProbeBudget, ProbeReport, SessionRequest,
-    TrailerJob, TrailerOutcome,
 };
 pub use batch::{run as run_batch, BatchRequest};
 pub use catalogue_store::{load as load_catalogue, save as save_catalogue, LoadOutcome};
@@ -63,13 +62,16 @@ pub use error::{EngineError, EngineResult};
 pub use frame::{
     extract as extract_frame, FrameExtracted, FrameRequest, DEFAULT_DEADLINE as FRAME_DEADLINE,
 };
-pub use library::{scan, ScanLimits, ScanOutcome};
+pub use library::{scan, ScanLimits, ScanOutcome, MAX_UNEXPLORED_PER_ROOT};
 pub use metadata::{
     embed_flac_cover, judge as judge_metadata, private_facts, read_flac_tags, strip_jpeg_exif,
     write as write_metadata, write_flac_tags, Cover, MetadataRequest, MetadataWritten,
     MAX_CONTAINER_BYTES,
 };
 pub use session::MpvSession;
+pub use session_worker::{
+    run_session, SessionCommand, SessionHost, SessionPlan, SessionSnapshot, PACING_INTERVAL,
+};
 pub use source::SourceHandle;
 pub use source_store::{load as load_sources, save as save_sources, SourceLoad};
 pub use watch::{LibraryChange, LibraryWatcher, ResyncReason};

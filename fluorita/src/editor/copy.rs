@@ -31,11 +31,7 @@ pub(super) fn container_change(extension: &str) -> String {
 }
 
 pub(super) fn saved(saved: &Saved, remembered: bool) -> String {
-    let name = saved
-        .written
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let name = fluorita_core::displayed_name(&saved.written);
     match (saved.trashed_original.is_some(), remembered) {
         (true, _) => format!("Guardado en {name}; el original está en la papelera"),
         (false, true) => format!("Guardado en {name}"),

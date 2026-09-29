@@ -33,13 +33,14 @@ pub(crate) const NO_FRAME: &str = "Esto no tiene imagen de la que guardar un fot
 /// What a kept frame says. The name is what a person then looks for in the
 /// folder, so it is what the sentence carries.
 pub(crate) fn frame_kept(kept: &fluorita_engine::FrameExtracted) -> String {
-    let name = kept
-        .written
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let name = fluorita_core::displayed_name(&kept.written);
     format!("Fotograma guardado en {name}")
 }
+
+/// The system refused a thread for work that must not run where the window
+/// does. Said rather than aborting the process, which is what spawning a
+/// thread without asking used to do.
+pub(crate) const WORKER_NOT_STARTED: &str = "No se pudo iniciar el trabajo en segundo plano";
 
 /// A still whose path could not be expressed as a URL for the toolkit.
 pub(crate) const UNRESOLVED_IMAGE: &str = "No se pudo resolver la ruta de la imagen";

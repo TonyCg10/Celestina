@@ -6,15 +6,19 @@
 //! half in `library.rs` never blocks on any of it.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use celestina_core::CancellationToken;
-use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
-use fluorita_core::{Catalogue, MediaKind, MediaSource, SourceScope, SourceSet, XdgMediaDirs};
+use fluorita_core::{
+    Catalogue, MediaId, MediaKind, MediaRecord, MediaSource, SourceScope, SourceSet, XdgMediaDirs,
+};
 use fluorita_engine::backend::ArtworkJob;
 use fluorita_engine::worker::{EngineWorker, Job, JobOutcome};
-use fluorita_engine::{catalogue_store, source_store, LibraryChange, LibraryWatcher, ScanLimits};
+use fluorita_engine::{
+    catalogue_store, source_store, EngineError, LibraryChange, LibraryWatcher, ScanLimits,
+};
 
 use crate::folders::{self, FolderChoice};
 use celestina_core::pathkey;
@@ -31,6 +35,12 @@ pub(super) const SCAN_TIMEOUT: Duration = Duration::from_secs(180);
 /// so a first run over a large music library is bounded and simply finishes
 /// the rest next time — which is what the stored catalogue makes possible.
 pub(super) const MAX_PROBES_PER_RUN: usize = 500;
+
+/// Tag reads per watch batch. A retagged track, or an album copied in, is
+/// read as it lands, so Music sorts it under what its tags now say; a batch
+/// that brings more than this finishes on the next change or the next launch,
+/// and the watch goes back to listening within seconds rather than minutes.
+pub(super) const MAX_PROBES_PER_BATCH: usize = 32;
 
 /// A probe that takes longer than this is a file that will not answer.
 pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -175,8 +185,15 @@ pub(super) fn run_artwork(
 /// The key rather than the path: the portal returns raw bytes and this crosses
 /// a `QString`, so a folder whose name is not UTF-8 would otherwise be mapped
 /// under its lossy spelling and scanned as a root that does not exist.
-pub(super) fn run_folder_choice(qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>) {
-    let (key, notice) = match folders::choose(copy::CHOOSE_FOLDER) {
+///
+/// `cancellation` is the host's: a window closing while the dialog is open
+/// withdraws the request and returns within one receive slice, so the host
+/// can join this thread instead of waiting on the person.
+pub(super) fn run_folder_choice(
+    qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
+    cancellation: &CancellationToken,
+) {
+    let (key, notice) = match folders::choose(copy::CHOOSE_FOLDER, cancellation) {
         FolderChoice::Chosen(path) => (pathkey::encode(&path), String::new()),
         FolderChoice::Cancelled => (String::new(), String::new()),
         FolderChoice::Unavailable(reason) => (
@@ -198,8 +215,21 @@ pub(super) fn run_folder_choice(qt_thread: &cxx_qt::CxxQtThread<qobject::Fluorit
 pub(super) fn run_trash(path: &Path, qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>) {
     let cancellation = CancellationToken::new();
     let mut progress = |_progress| {};
+    // The recipe that reopens an edited copy dies with the copy; asked for
+    // before the move, while the path still names the file it describes.
+    let identity = crate::recipes::identity_at(path);
     let notice = match siderita_ops::trash(path, &cancellation, &mut progress) {
-        Ok(_) => String::new(),
+        // A move into a Trash on another filesystem is a copy, and a file
+        // that changed while it was being copied stays where it was rather
+        // than being deleted half-read. The catalogue must not forget a file
+        // that is still there, and the person must hear that it is.
+        Ok(_) if std::fs::symlink_metadata(path).is_ok() => copy::TRASH_LEFT_BEHIND.to_owned(),
+        Ok(_) => {
+            if let Some(identity) = identity {
+                crate::recipes::forget(&identity);
+            }
+            String::new()
+        }
         // The reason matters: "permission denied" and "it is already gone" call
         // for different things from the person reading it.
         Err(error) => format!("{}: {error}", copy::TRASH_FAILED),
@@ -284,7 +314,7 @@ pub(super) fn run_scan(
     };
     catalogue.retain_configured(&sources);
     if !catalogue.is_empty() {
-        let stored = project(&catalogue, &sources, scope, false, "stored");
+        let stored = project(&shared(&catalogue), &sources, scope, false, "stored");
         let _ = qt_thread.queue(move |library| library.apply(stored));
     }
 
@@ -335,16 +365,7 @@ pub(super) fn run_scan(
     };
 
     let truncated = outcome.truncated;
-    let complete = outcome.is_complete();
-    let reached = outcome.reached.clone();
-    catalogue.absorb(outcome.records, complete);
-    // A file the walk did not find under a root that answered is deleted, not
-    // merely absent, and the library stops showing it. Only a complete pass may
-    // conclude this, and only for the roots that actually answered — a drive
-    // that is not plugged in keeps everything it holds.
-    if complete {
-        catalogue.forget_vanished(&reached);
-    }
+    fold_scan(&mut catalogue, outcome);
     // A root that is no longer configured keeps no records: the scan cannot
     // refresh what it does not walk, and a stale entry would read as a file
     // that went missing.
@@ -352,7 +373,8 @@ pub(super) fn run_scan(
 
     // Tags are the expensive part, and the only reason this catalogue is worth
     // storing: what is read here is not read again unless the file changes.
-    let learned = learn_tags(&worker, &mut catalogue, cancellation);
+    let pending = untagged_audio(&catalogue, |_| true, MAX_PROBES_PER_RUN);
+    learn_tags(&worker, &mut catalogue, cancellation, pending);
     if cancellation.is_cancelled() {
         return;
     }
@@ -363,31 +385,52 @@ pub(super) fn run_scan(
         let _ = catalogue_store::save(path, &catalogue);
     }
 
-    let refreshed = project(&catalogue, &sources, scope, truncated, "ready");
+    let refreshed = project(&shared(&catalogue), &sources, scope, truncated, "ready");
     let _ = qt_thread.queue(move |library| library.apply(refreshed));
-    let _ = learned;
 
     // From here the library keeps itself up to date without walking again.
     watch_library(
         &sources,
         catalogue,
         store.as_deref(),
+        &worker,
         qt_thread,
         cancellation,
     );
+}
+
+/// Folds one finished pass into the catalogue.
+///
+/// A file the walk did not find is marked missing only where the pass may
+/// judge it, and forgotten only where that root also answered — so a deleted
+/// file disappears, a drive that is not plugged in keeps everything it holds,
+/// and a subtree the depth bound kept the walk out of is left exactly as it
+/// was, in that root and no other.
+fn fold_scan(catalogue: &mut Catalogue, outcome: fluorita_engine::ScanOutcome) {
+    catalogue.absorb(outcome.records, &outcome.coverage);
+    catalogue.forget_vanished(&outcome.coverage);
+}
+
+/// The catalogue as a publication hands it out: one copy, on this thread,
+/// shared by every projection and verb that reads it afterwards.
+fn shared(catalogue: &Catalogue) -> Arc<Catalogue> {
+    Arc::new(catalogue.clone())
 }
 
 /// Folds changes in as they happen, until the host goes away.
 ///
 /// This is the whole point of watching: a file dropped into a watched folder
 /// appears without anyone asking, and one that goes away says so — without
-/// re-walking roots that did not change. A burst, or a watcher that lost
-/// events, asks for a full scan instead, because folding in what you did not
-/// see is guessing.
+/// re-walking roots that did not change. A burst, a folder moved in, or a
+/// watcher that lost events asks for a walk instead, because folding in what
+/// you did not see is guessing. Audio that arrived or changed is probed here
+/// too, a bounded handful per batch: a retagged track must sort under what its
+/// tags now say, not under "unknown artist" until the next launch.
 pub(super) fn watch_library(
     sources: &SourceSet,
     mut catalogue: Catalogue,
     store: Option<&Path>,
+    worker: &EngineWorker,
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
     cancellation: &CancellationToken,
 ) {
@@ -415,41 +458,31 @@ pub(super) fn watch_library(
             continue;
         };
 
-        let mut changed = false;
-        for change in batch {
-            match change {
-                LibraryChange::Touched(path) => {
-                    changed |= absorb_one(&mut catalogue, sources, &path);
-                }
-                LibraryChange::Removed(path) => {
-                    // The watcher saw this exact file go, in a root it is
-                    // watching right now, so the root plainly answers. That is
-                    // the same evidence a completed scan gives, so the record
-                    // goes rather than lingering as a permanently missing row.
-                    let id = catalogue
-                        .find_by_path(&path)
-                        .map(|record| record.id().clone());
-                    if let Some(id) = id {
-                        changed |= catalogue.forget(&id).is_some();
-                    }
-                }
-                LibraryChange::Resync(_) => {
-                    let Ok(outcome) = fluorita_engine::scan(
-                        sources,
-                        ScanLimits::conservative(),
-                        &celestina_core::CancellationToken::new(),
-                    ) else {
-                        continue;
-                    };
-                    let complete = outcome.is_complete();
-                    let reached = outcome.reached.clone();
-                    catalogue.absorb(outcome.records, complete);
-                    if complete {
-                        catalogue.forget_vanished(&reached);
-                    }
-                    changed = true;
-                }
-            }
+        let walk = || fluorita_engine::scan(sources, ScanLimits::conservative(), cancellation);
+        let Ok(folded) = fold_batch(&mut catalogue, sources, batch, || watcher.drain(), walk)
+        else {
+            return;
+        };
+        let Folded {
+            mut changed,
+            touched,
+            rewalked,
+        } = folded;
+
+        // A walk may have brought in a whole folder of music; otherwise only
+        // what this batch touched is read again.
+        let pending = if rewalked {
+            untagged_audio(&catalogue, |_| true, MAX_PROBES_PER_BATCH)
+        } else {
+            untagged_audio(
+                &catalogue,
+                |record| touched.iter().any(|path| path == record.path()),
+                MAX_PROBES_PER_BATCH,
+            )
+        };
+        changed |= learn_tags(worker, &mut catalogue, cancellation, pending) > 0;
+        if cancellation.is_cancelled() {
+            return;
         }
 
         if !changed {
@@ -458,23 +491,139 @@ pub(super) fn watch_library(
         if let Some(path) = store {
             let _ = catalogue_store::save(path, &catalogue);
         }
-        // Projected on the GUI thread, under the scope selected *now*. The scan
-        // that started this watch captured one when it began, and a folder the
-        // user has selected since would be overwritten by the previous one's
-        // content the next time a file moved.
-        let published = catalogue.clone();
+        // Projected by the host under the scope selected *then*, on its own
+        // worker: the scan that started this watch captured a scope when it
+        // began, and a folder the user has selected since would otherwise be
+        // overwritten by the previous one's content the next time a file
+        // moved. The copy is made here, off the GUI thread, once per batch.
+        let published = shared(&catalogue);
         let configured = sources.clone();
         if qt_thread
-            .queue(move |library| {
-                let scope = library.rust().scope();
-                let refreshed = project(&published, &configured, scope, false, "ready");
-                library.apply(refreshed);
-            })
+            .queue(move |library| library.catalogue_changed(published, configured))
             .is_err()
         {
             return;
         }
     }
+}
+
+/// What folding one batch changed.
+pub(super) struct Folded {
+    pub(super) changed: bool,
+    /// Paths the batch said appeared or changed, whose tags may need reading.
+    pub(super) touched: Vec<PathBuf>,
+    /// Whether a walk ran, which may have brought in untagged audio anywhere.
+    pub(super) rewalked: bool,
+}
+
+/// A walk was cancelled; the host is going away or asked for another one.
+#[derive(Debug)]
+pub(super) struct Cancelled;
+
+/// Folds one batch of watch changes into the catalogue.
+///
+/// A resync walks, through `walk`, after taking the batches already queued
+/// behind it from `drain`: the walk answers their resyncs. The individual
+/// changes among them are applied after the walk, each checked against the
+/// disk again, because a walk does not judge every file — a ceiling or a
+/// deadline stops it, the depth bound and unreadable folders keep it out, a
+/// root may not answer — and dropping them would leave a deleted file on
+/// screen and never add a new one.
+pub(super) fn fold_batch(
+    catalogue: &mut Catalogue,
+    sources: &SourceSet,
+    batch: Vec<LibraryChange>,
+    mut drain: impl FnMut() -> Vec<Vec<LibraryChange>>,
+    mut walk: impl FnMut() -> fluorita_engine::EngineResult<fluorita_engine::ScanOutcome>,
+) -> Result<Folded, Cancelled> {
+    let mut folded = Folded {
+        changed: false,
+        touched: Vec::new(),
+        rewalked: false,
+    };
+    for change in batch {
+        match change {
+            LibraryChange::Touched(path) => {
+                folded.changed |= absorb_one(catalogue, sources, &path);
+                folded.touched.push(path);
+            }
+            LibraryChange::Removed(path) => {
+                // The watcher saw this exact file go, in a root it is
+                // watching right now, so the root plainly answers. That is
+                // the same evidence a completed scan gives, so the record
+                // goes rather than lingering as a permanently missing row.
+                folded.changed |= forget_at(catalogue, &path);
+            }
+            LibraryChange::RemovedTree(path) => {
+                // A folder left with everything in it, on the same evidence
+                // as a single file going.
+                folded.changed |= catalogue.forget_under(&path) > 0;
+            }
+            LibraryChange::Resync(_) => {
+                // A run of these queued while a copy went on would each walk
+                // the whole library; the walk about to happen answers every
+                // one of them.
+                let deferred: Vec<LibraryChange> = drain()
+                    .into_iter()
+                    .flatten()
+                    .filter(|queued| !matches!(queued, LibraryChange::Resync(_)))
+                    .collect();
+                // Under the host's token: this walk can take as long as the
+                // launch scan, and the host joins this thread from the GUI
+                // when a folder is added or removed or the window closes.
+                match walk() {
+                    Ok(outcome) => {
+                        fold_scan(catalogue, outcome);
+                        folded.changed = true;
+                        folded.rewalked = true;
+                    }
+                    Err(EngineError::Cancelled) => return Err(Cancelled),
+                    // A walk that failed changes nothing it did not see; the
+                    // next change asks again.
+                    Err(_) => {}
+                }
+                for queued in deferred {
+                    reapply(catalogue, sources, queued, &mut folded);
+                }
+            }
+        }
+    }
+    Ok(folded)
+}
+
+/// Applies a change that waited behind a walk, checked against the disk as
+/// it is now: a file that is back is not forgotten, and one that is gone is
+/// not added.
+fn reapply(
+    catalogue: &mut Catalogue,
+    sources: &SourceSet,
+    change: LibraryChange,
+    folded: &mut Folded,
+) {
+    let gone = |path: &Path| std::fs::symlink_metadata(path).is_err();
+    match change {
+        LibraryChange::Touched(path) => {
+            // `absorb_one` stats the file itself and does nothing for one
+            // that is not there.
+            folded.changed |= absorb_one(catalogue, sources, &path);
+            folded.touched.push(path);
+        }
+        LibraryChange::Removed(path) if gone(&path) => {
+            folded.changed |= forget_at(catalogue, &path);
+        }
+        LibraryChange::RemovedTree(path) if gone(&path) => {
+            folded.changed |= catalogue.forget_under(&path) > 0;
+        }
+        LibraryChange::Removed(_) | LibraryChange::RemovedTree(_) | LibraryChange::Resync(_) => {}
+    }
+}
+
+/// Forgets the record whose file lived at `path`. Returns whether one went.
+fn forget_at(catalogue: &mut Catalogue, path: &Path) -> bool {
+    let id = catalogue
+        .find_by_path(path)
+        .map(|record| record.id().clone());
+    id.is_some_and(|id| catalogue.forget(&id).is_some())
 }
 
 /// Stats one changed path and folds it in. Returns whether anything moved.
@@ -510,9 +659,10 @@ pub(super) fn absorb_one(catalogue: &mut Catalogue, sources: &SourceSet, path: &
         ),
     );
 
-    // `complete: false` is the whole difference from a scan: only this file is
-    // judged, and nothing else may be concluded to have disappeared.
-    let summary = catalogue.absorb([record], false);
+    // Only this file is judged, and nothing else may be concluded to have
+    // disappeared — except a record at this very path under another identity,
+    // which is the file this one replaced.
+    let summary = catalogue.absorb_changed(record);
     summary.added + summary.replaced > 0
 }
 
@@ -531,24 +681,34 @@ pub(super) fn sources_owner(
     sources.owner_of(path, kind).map(MediaSource::id)
 }
 
-/// Reads tags for audio the catalogue has never probed.
+/// Audio the catalogue has never probed, among the records `wanted` accepts,
+/// at most `cap` of them.
 ///
 /// Only audio, and only what has no duration yet: a video's tags are not what
 /// Gallery shows, and a track that was probed before keeps what it learned
 /// because its size and mtime say the bytes are the same.
+pub(super) fn untagged_audio(
+    catalogue: &Catalogue,
+    wanted: impl Fn(&MediaRecord) -> bool,
+    cap: usize,
+) -> Vec<(PathBuf, MediaId)> {
+    catalogue
+        .records()
+        .filter(|record| record.kind() == MediaKind::Audio)
+        .filter(|record| record.is_available() && record.metadata().duration.is_none())
+        .filter(|record| wanted(record))
+        .take(cap)
+        .map(|record| (record.path().to_path_buf(), record.id().clone()))
+        .collect()
+}
+
+/// Reads tags for `pending`, returning how many were learned.
 pub(super) fn learn_tags(
     worker: &EngineWorker,
     catalogue: &mut Catalogue,
     cancellation: &CancellationToken,
+    pending: Vec<(PathBuf, MediaId)>,
 ) -> usize {
-    let pending: Vec<(PathBuf, fluorita_core::MediaId)> = catalogue
-        .records()
-        .filter(|record| record.kind() == MediaKind::Audio)
-        .filter(|record| record.is_available() && record.metadata().duration.is_none())
-        .take(MAX_PROBES_PER_RUN)
-        .map(|record| (record.path().to_path_buf(), record.id().clone()))
-        .collect();
-
     let mut learned = 0;
     for (path, id) in pending {
         // Five hundred probes of up to fifteen seconds each is minutes of work
@@ -597,7 +757,7 @@ pub(super) fn publish_failure(
     scope: SourceScope,
     message: &str,
 ) {
-    let mut snapshot = project(catalogue, sources, scope, false, "error");
+    let mut snapshot = project(&shared(catalogue), sources, scope, false, "error");
     snapshot.summary = message.to_owned();
     let _ = qt_thread.queue(move |library| library.apply(snapshot));
 }
@@ -630,7 +790,7 @@ pub(super) fn media_directories() -> XdgMediaDirs {
 
 #[cfg(test)]
 mod tests {
-    use super::{await_outcome, sources_owner, Waited, CANCEL_POLL};
+    use super::{await_outcome, fold_batch, sources_owner, Waited, CANCEL_POLL};
     use celestina_core::CancellationToken;
     use fluorita_core::{KindSet, MediaKind, SourceSet};
     use std::path::{Path, PathBuf};
@@ -734,5 +894,113 @@ mod tests {
                 .all(|slice| *slice <= Duration::from_millis(100)),
             "a slice outran the chunk, so the token would go unread that long"
         );
+    }
+
+    #[test]
+    fn changes_queued_behind_a_walk_still_apply_where_the_walk_cannot_judge() {
+        use fluorita_core::{Catalogue, MediaId, MediaRecord, SourceIdentity};
+        use fluorita_engine::{LibraryChange, ResyncReason, ScanLimits};
+
+        let scratch =
+            std::env::temp_dir().join(format!("fluorita-fold-batch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&scratch);
+        let (crowded, quiet) = (scratch.join("crowded"), scratch.join("quiet"));
+        std::fs::create_dir_all(&crowded).expect("first root");
+        std::fs::create_dir_all(&quiet).expect("second root");
+        for index in 0..4 {
+            std::fs::write(crowded.join(format!("{index}.png")), b"").expect("fixture");
+        }
+        let arrived = quiet.join("arrived.png");
+        std::fs::write(&arrived, b"").expect("fixture");
+        let deleted = quiet.join("deleted.png");
+
+        let mut sources = SourceSet::new();
+        sources
+            .add(crowded.clone(), KindSet::all())
+            .expect("an absolute root");
+        let second = sources
+            .add(quiet.clone(), KindSet::all())
+            .expect("a second root");
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(MediaRecord::new(
+            MediaId::filesystem(1, 1),
+            second,
+            deleted.clone(),
+            MediaKind::Image,
+            SourceIdentity::new(0, std::time::UNIX_EPOCH),
+        ));
+
+        // The file ceiling stops the walk in the first root, so it judges
+        // nothing in the second: only the queued changes can say that one
+        // file there went and another arrived.
+        let queued = vec![vec![
+            LibraryChange::Removed(deleted.clone()),
+            LibraryChange::Touched(arrived.clone()),
+        ]];
+        let mut drained = Some(queued);
+        let folded = fold_batch(
+            &mut catalogue,
+            &sources,
+            vec![LibraryChange::Resync(ResyncReason::Burst)],
+            || drained.take().unwrap_or_default(),
+            || {
+                fluorita_engine::scan(
+                    &sources,
+                    ScanLimits {
+                        max_files: 2,
+                        ..ScanLimits::conservative()
+                    },
+                    &CancellationToken::new(),
+                )
+            },
+        )
+        .expect("not cancelled");
+
+        assert!(folded.changed);
+        assert!(
+            catalogue.find_by_path(&deleted).is_none(),
+            "the deleted file stayed"
+        );
+        assert!(
+            catalogue.find_by_path(&arrived).is_some(),
+            "the new file never came"
+        );
+        let _ = std::fs::remove_dir_all(&scratch);
+    }
+
+    #[test]
+    fn a_queued_removal_of_a_file_that_is_back_is_not_applied() {
+        use fluorita_core::{Catalogue, MediaId, MediaRecord, SourceIdentity};
+        use fluorita_engine::{LibraryChange, ResyncReason, ScanOutcome};
+
+        let root = std::env::temp_dir().join(format!("fluorita-fold-back-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("root");
+        let back = root.join("back.png");
+        std::fs::write(&back, b"").expect("fixture");
+        let mut sources = SourceSet::new();
+        let only = sources.add(root.clone(), KindSet::all()).expect("a root");
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(MediaRecord::new(
+            MediaId::filesystem(1, 1),
+            only,
+            back.clone(),
+            MediaKind::Image,
+            SourceIdentity::new(0, std::time::UNIX_EPOCH),
+        ));
+
+        let mut drained = Some(vec![vec![LibraryChange::Removed(back.clone())]]);
+        fold_batch(
+            &mut catalogue,
+            &sources,
+            vec![LibraryChange::Resync(ResyncReason::Burst)],
+            || drained.take().unwrap_or_default(),
+            // A walk that failed: nothing it did not see changes.
+            || Err::<ScanOutcome, _>(fluorita_engine::EngineError::WorkerStopped),
+        )
+        .expect("not cancelled");
+
+        assert!(catalogue.find_by_path(&back).is_some());
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

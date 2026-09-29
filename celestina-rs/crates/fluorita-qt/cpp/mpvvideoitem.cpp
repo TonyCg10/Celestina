@@ -8,6 +8,7 @@
 #include <QtQuick/QQuickWindow>
 
 #include <clocale>
+#include <utility>
 
 #include <mpv/client.h>
 #include <mpv/render_gl.h>
@@ -27,20 +28,23 @@ void *getProcAddress(void *context, const char *name)
 }
 
 // Fires on whichever thread the backend feels like; it must do nothing but ask
-// the item — on the GUI thread — for a new frame.
+// the item — on the GUI thread — for a new frame. `context` is the shared
+// render state, which the renderer keeps alive for as long as the render
+// context this callback belongs to exists: freeing that context is what
+// unregisters the callback, and the renderer frees it before letting go.
 void onMpvUpdate(void *context)
 {
-    QMetaObject::invokeMethod(static_cast<MpvVideoItem *>(context), "requestFrame",
-                              Qt::QueuedConnection);
+    static_cast<MpvRenderState *>(context)->notify("requestFrame");
 }
 
 // The renderer lives on Qt's render thread. Every mpv render-API call below
 // happens there, with the GL context current, which is the API's requirement.
+// It never holds its item: what it shares with it is `m_state`.
 class MpvRenderer final : public QQuickFramebufferObject::Renderer
 {
 public:
-    explicit MpvRenderer(MpvVideoItem *item)
-        : m_item(item)
+    explicit MpvRenderer(QSharedPointer<MpvRenderState> state)
+        : m_state(std::move(state))
     {
     }
 
@@ -69,7 +73,7 @@ public:
         // while this renderer is already committed to answering.
         if (m_handle != 0 && !m_claimed) {
             m_claimed = true;
-            item->claimRenderContext();
+            m_state->claim();
         }
     }
 
@@ -139,11 +143,11 @@ private:
         auto *mpv = reinterpret_cast<mpv_handle *>(m_handle);
 
         mpv_opengl_init_params gl{getProcAddress, nullptr};
-        // Advanced control hands the *timing* to the backend: it says when a
-        // new frame is due instead of the host redrawing whatever is current
-        // whenever Qt feels like it. On a 165 Hz display showing 60 fps
-        // content — every frame living for about 2.75 refreshes — that
-        // difference is the whole of judder.
+        // No advanced control: the host redraws when libmpv's update callback
+        // asks, and Qt decides when that frame reaches the screen. Handing the
+        // timing to the backend was tried and removed (see the roadmap history
+        // through 2026-08-03); what the picture actually does is what the
+        // pacing capture measures.
         mpv_render_param params[]{
             {MPV_RENDER_PARAM_API_TYPE, const_cast<char *>(MPV_RENDER_API_TYPE_OPENGL)},
             {MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, &gl},
@@ -157,12 +161,12 @@ private:
             // "opening" for ever, because the load only starts on
             // `contextCreated` and that will never arrive now.
             m_context = nullptr;
-            QMetaObject::invokeMethod(m_item, "notifyContextFailed", Qt::QueuedConnection);
+            m_state->notify("notifyContextFailed");
             return;
         }
-        mpv_render_context_set_update_callback(m_context, onMpvUpdate, m_item);
+        mpv_render_context_set_update_callback(m_context, onMpvUpdate, m_state.data());
         // The player may load now: there is somewhere for the frames to go.
-        QMetaObject::invokeMethod(m_item, "notifyContextCreated", Qt::QueuedConnection);
+        m_state->notify("notifyContextCreated");
     }
 
     // Frees the context, if one was built, and settles the claim either way.
@@ -187,12 +191,14 @@ private:
         // while this thread still holds a context built from it.
         //
         // Queued *before* the claim is dropped, so the GUI thread can never
-        // observe a settled claim with no answer on its way.
-        QMetaObject::invokeMethod(m_item, "notifyContextReleased", Qt::QueuedConnection);
-        m_item->settleRenderContext();
+        // observe a settled claim with no answer on its way. When the item is
+        // already gone — this runs from the destructor at window teardown —
+        // there is no one to answer, and the state drops the notification.
+        m_state->notify("notifyContextReleased");
+        m_state->settle();
     }
 
-    MpvVideoItem *m_item = nullptr;
+    QSharedPointer<MpvRenderState> m_state;
     QQuickWindow *m_window = nullptr;
     mpv_render_context *m_context = nullptr;
     qulonglong m_handle = 0;
@@ -203,18 +209,64 @@ private:
 
 } // namespace
 
+void MpvRenderState::attach(MpvVideoItem *item)
+{
+    const QMutexLocker lock(&m_mutex);
+    m_item = item;
+}
+
+void MpvRenderState::detach()
+{
+    const QMutexLocker lock(&m_mutex);
+    m_item = nullptr;
+}
+
+void MpvRenderState::notify(const char *method)
+{
+    // Held across the queueing, so the item cannot finish `detach` — and so
+    // cannot be destroyed — between the check and the call. Once queued, Qt
+    // owns the call: it is dropped if the item is destroyed first.
+    const QMutexLocker lock(&m_mutex);
+    if (m_item) {
+        QMetaObject::invokeMethod(m_item, method, Qt::QueuedConnection);
+    }
+}
+
+void MpvRenderState::claim()
+{
+    m_claims.ref();
+    notify("notifyRendererLiveChanged");
+}
+
+void MpvRenderState::settle()
+{
+    m_claims.deref();
+    notify("notifyRendererLiveChanged");
+}
+
 MpvVideoItem::MpvVideoItem(QQuickItem *parent)
     : QQuickFramebufferObject(parent)
+    , m_state(QSharedPointer<MpvRenderState>::create())
 {
+    m_state->attach(this);
     // Qt's default: the FBO is composited as-is. Correct orientation is
     // achieved by not asking mpv to flip either (see FLIP_Y below) — mirroring
     // here as well would cancel that out and be flipped again.
     setMirrorVertically(false);
 }
 
+MpvVideoItem::~MpvVideoItem()
+{
+    // First, before anything of the item is torn down: from here on a
+    // renderer or a libmpv callback that still runs finds no item to notify.
+    m_state->detach();
+}
+
 QQuickFramebufferObject::Renderer *MpvVideoItem::createRenderer() const
 {
-    return new MpvRenderer(const_cast<MpvVideoItem *>(this));
+    // Called on the render thread while the GUI thread is blocked, so reading
+    // the item here is legal; the renderer keeps only the state.
+    return new MpvRenderer(renderState());
 }
 
 void MpvVideoItem::setHandle(qulonglong handle)
@@ -235,21 +287,14 @@ void MpvVideoItem::setHandle(qulonglong handle)
     // not drawing can still own a live render context, and reading "no
     // renderer" from "not visible" is what let the mpv core be destroyed
     // underneath one.
-    if (handle == 0 && hadHandle && m_claims.loadAcquire() == 0) {
-        Q_EMIT contextReleased();
+    //
+    // Queued, never emitted from inside this write: the write is how a host
+    // closes, and an answer delivered while the host is still inside its own
+    // call re-entered it with a second mutable handle on the same object. The
+    // host's handshake takes the answer whenever it lands, once.
+    if (handle == 0 && hadHandle && m_state->claims() == 0) {
+        QMetaObject::invokeMethod(this, "notifyContextReleased", Qt::QueuedConnection);
     }
-}
-
-void MpvVideoItem::claimRenderContext()
-{
-    m_claims.ref();
-    QMetaObject::invokeMethod(this, "notifyRendererLiveChanged", Qt::QueuedConnection);
-}
-
-void MpvVideoItem::settleRenderContext()
-{
-    m_claims.deref();
-    QMetaObject::invokeMethod(this, "notifyRendererLiveChanged", Qt::QueuedConnection);
 }
 
 void MpvVideoItem::notifyContextReleased()

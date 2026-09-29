@@ -34,11 +34,7 @@ pub(super) fn private_fact(fact: PrivateFact) -> &'static str {
 }
 
 pub(super) fn written(written: &MetadataWritten) -> String {
-    let name = written
-        .written
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
+    let name = fluorita_core::displayed_name(&written.written);
     if written.trashed_original.is_some() {
         format!("Guardado en {name}; el original está en la papelera")
     } else {

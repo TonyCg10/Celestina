@@ -55,7 +55,7 @@ mod work;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
-use project::{census, project, project_matching, LibrarySnapshot};
+use project::{census, project_matching, LibrarySnapshot};
 use work::{run_artwork, run_folder_choice, run_scan, run_trash};
 
 use fluorita_core::{Catalogue, Query, SourceId, SourceScope, SourceSet};
@@ -290,9 +290,9 @@ pub struct LibraryRust {
     cancellation: CancellationToken,
     /// The catalogue as last published, so an artwork pass and a change of
     /// selection both work from it without walking anything again. Shared
-    /// rather than owned: the search worker and the artwork pass each take a
-    /// handle, and cloning fifty thousand records to hand one out was part of
-    /// the per-keystroke cost recorded as FLU-P1.
+    /// rather than owned: the projection worker and the artwork pass each take
+    /// a handle, and cloning fifty thousand records to hand one out was part
+    /// of the per-keystroke cost recorded as FLU-P1.
     catalogue: Arc<Catalogue>,
     /// The configuration as last published, so an add or a remove is applied to
     /// what the user is looking at.
@@ -300,15 +300,21 @@ pub struct LibraryRust {
     /// The trash move in flight, if any. One at a time: two answers racing to
     /// change the same catalogue would publish whichever finished last.
     trash_worker: Option<JoinHandle<()>>,
-    /// Whether a search worker is projecting right now, and the query typed
-    /// while it was. One in flight at a time; the pending one always holds
-    /// only the newest text, so a burst of keystrokes projects twice, not
-    /// once per keystroke.
-    search_in_flight: bool,
-    search_pending: Option<String>,
+    /// The projection in flight, if any. One at a time: a burst of keystrokes
+    /// or clicks projects at most twice — the one running, then one over
+    /// whatever is current when it lands — never once per event.
+    projection: Option<JoinHandle<()>>,
+    /// Bumped by everything a projection must reflect: a selection, a query,
+    /// a catalogue. A result that carries an older ticket describes a library
+    /// nobody is looking at any more, and is projected again instead.
+    projection_ticket: u64,
     /// The folder chooser in flight, if any. One at a time: a second dialog
     /// would let two answers race to configure the same library.
     folder_worker: Option<JoinHandle<()>>,
+    /// Withdraws the chooser's request when this object goes away, so the
+    /// join in `Drop` waits for one receive slice rather than for a person
+    /// who may have left the dialog open.
+    folder_cancellation: CancellationToken,
     artwork_worker: Option<JoinHandle<()>>,
     artwork_cancellation: CancellationToken,
 }
@@ -364,9 +370,10 @@ impl Default for LibraryRust {
             cancellation: CancellationToken::new(),
             catalogue: Arc::new(Catalogue::new()),
             configured: SourceSet::new(),
-            search_in_flight: false,
-            search_pending: None,
+            projection: None,
+            projection_ticket: 0,
             folder_worker: None,
+            folder_cancellation: CancellationToken::new(),
             trash_worker: None,
             artwork_worker: None,
             artwork_cancellation: CancellationToken::new(),
@@ -388,20 +395,37 @@ impl qobject::FluoritaLibrary {
         self.as_mut().close();
         self.as_mut().set_state(QString::from("scanning"));
         self.as_mut().set_summary(QString::from(copy::SCANNING));
+        // A projection still running describes the library as it was before
+        // this walk — under the previous configuration and as "ready" — and
+        // publishing it would overwrite "scanning" and drop a selection that
+        // names the folder just added. Moving the ticket makes it stale; the
+        // one that replaces it projects from what this object holds now.
+        let ticket = self.rust().projection_ticket.wrapping_add(1);
+        self.as_mut().rust_mut().projection_ticket = ticket;
 
         let cancellation = CancellationToken::new();
         self.as_mut().rust_mut().cancellation = cancellation.clone();
         let scope = self.rust().scope();
 
         let qt_thread = self.qt_thread();
+        let walked = configured.clone();
         let worker = std::thread::Builder::new()
             .name("fluorita-library".to_owned())
             .spawn(move || {
-                run_scan(&qt_thread, configured, scope, &cancellation);
+                run_scan(&qt_thread, walked, scope, &cancellation);
             });
 
         match worker {
-            Ok(handle) => self.as_mut().rust_mut().worker = Some(handle),
+            Ok(handle) => {
+                self.as_mut().rust_mut().worker = Some(handle);
+                // The worker stores this set before it walks anything, so it
+                // is already the configuration; a projection made meanwhile —
+                // a query typed while the walk runs — keeps the selection
+                // that names the new folder instead of resetting it.
+                if let Some(configured) = configured {
+                    self.as_mut().rust_mut().configured = configured;
+                }
+            }
             Err(_) => {
                 self.as_mut().set_state(QString::from("error"));
                 self.as_mut()
@@ -427,18 +451,9 @@ impl qobject::FluoritaLibrary {
         self.as_mut().set_selected_source(source);
         // Everything needed is already here: this is the same catalogue, read
         // through a different scope. Walking again to change folders would make
-        // navigation cost what a scan costs.
-        let catalogue = self.rust().catalogue.clone();
-        let configured = self.rust().configured.clone();
-        let scope = self.rust().scope();
-        let truncated = *self.truncated();
-        let state = if catalogue.is_empty() {
-            "empty"
-        } else {
-            "ready"
-        };
-        let snapshot = project(&catalogue, &configured, scope, truncated, state);
-        self.apply(snapshot);
+        // navigation cost what a scan costs — and projecting here would make it
+        // cost a `stat()` per row on the GUI thread.
+        self.request_projection();
     }
 
     pub fn add_folder(mut self: core::pin::Pin<&mut Self>) {
@@ -448,10 +463,12 @@ impl qobject::FluoritaLibrary {
         self.as_mut().set_choosing_folder(true);
         self.as_mut().set_folder_notice(QString::default());
 
+        let cancellation = CancellationToken::new();
+        self.as_mut().rust_mut().folder_cancellation = cancellation.clone();
         let qt_thread = self.qt_thread();
         let worker = std::thread::Builder::new()
             .name("fluorita-folder".to_owned())
-            .spawn(move || run_folder_choice(&qt_thread));
+            .spawn(move || run_folder_choice(&qt_thread, &cancellation));
         match worker {
             Ok(handle) => self.as_mut().rust_mut().folder_worker = Some(handle),
             Err(_) => {
@@ -571,6 +588,8 @@ impl qobject::FluoritaLibrary {
             let _ = handle.join();
         }
         self.as_mut().set_item_notice(notice.clone());
+        // Any notice means the file is still where it was — a failure, or a
+        // move that left it in place — so the record stays with it.
         if !notice.to_string().is_empty() {
             return;
         }
@@ -592,86 +611,105 @@ impl qobject::FluoritaLibrary {
         if self.rust().described.as_deref() == Some(moved.as_path()) {
             self.as_mut().set_detail_open(false);
         }
-        let catalogue = self.rust().catalogue.clone();
-        let configured = self.rust().configured.clone();
-        let scope = self.rust().scope();
-        let refreshed = project(&catalogue, &configured, scope, *self.truncated(), "ready");
-        self.apply(refreshed);
+        self.request_projection();
     }
 
     /// Shows only what matches `text`, or everything again when it is empty.
     ///
-    /// Re-projects from the catalogue already in memory: no scan, no disk. The
-    /// projection itself runs on a worker, because resolving a thumbnail per
-    /// item is a `stat()` per item and this used to do it — twice — on the GUI
-    /// thread on every keystroke pause (FLU-P1,
-    /// docs/evidence/2026-09-02-apps-performance-audit.md). The surface
-    /// debounces the keystrokes; this does the filtering, because what matches
-    /// is a rule the domain owns.
+    /// Re-projects from the catalogue already in memory: no scan, no disk
+    /// beyond the thumbnails the projection resolves, and those on a worker
+    /// (FLU-P1, docs/evidence/2026-09-02-apps-performance-audit.md). The
+    /// surface debounces the keystrokes; this does the filtering, because what
+    /// matches is a rule the domain owns.
     pub fn search(mut self: core::pin::Pin<&mut Self>, text: &QString) {
         self.as_mut().set_query(text.clone());
-        let text = text.to_string();
-        if self.rust().search_in_flight {
-            // Superseded before it ran: the newest text wins and the older
-            // pending one is simply never projected.
-            self.as_mut().rust_mut().search_pending = Some(text);
-            return;
-        }
-        self.start_search(text);
+        self.request_projection();
     }
 
-    fn start_search(mut self: core::pin::Pin<&mut Self>, text: String) {
-        self.as_mut().rust_mut().search_in_flight = true;
-        let catalogue = self.rust().catalogue.clone();
+    /// Asks for the content to be projected again from what this object holds
+    /// now. Returns at once; the rows arrive through the queue.
+    ///
+    /// Every re-projection comes through here — a selection, a query, a trash,
+    /// new artwork, a change the watch folded in — because every one of them
+    /// resolves a thumbnail per row and counts pending artwork, which is a
+    /// `stat()` per item and a frozen window on a large or remote library.
+    fn request_projection(mut self: core::pin::Pin<&mut Self>) {
+        let ticket = self.rust().projection_ticket.wrapping_add(1);
+        self.as_mut().rust_mut().projection_ticket = ticket;
+        // One in flight at a time. The one running finds its ticket stale when
+        // it lands and starts again from whatever is current then, so the
+        // newest request always wins and none waits behind a queue.
+        if self.rust().projection.is_none() {
+            self.start_projection();
+        }
+    }
+
+    fn start_projection(mut self: core::pin::Pin<&mut Self>) {
+        let ticket = self.rust().projection_ticket;
+        let catalogue = Arc::clone(&self.rust().catalogue);
         let configured = self.rust().configured.clone();
         let scope = self.rust().scope();
         let truncated = *self.truncated();
-        // What the worker projected is only valid against the publication it
-        // read. The revision says which one that was.
-        let expected = *self.revision();
+        let state = self.rust().state_token();
+        let text = self.query().to_string();
         let qt_thread = self.qt_thread();
         let worker = std::thread::Builder::new()
-            .name("fluorita-search".to_owned())
+            .name("fluorita-projection".to_owned())
             .spawn(move || {
                 let query = Query::new(&text);
                 let matching =
-                    project_matching(&catalogue, &configured, scope, truncated, "ready", &query);
+                    project_matching(&catalogue, &configured, scope, truncated, state, &query);
                 let total = census(&catalogue, scope);
                 let _ = qt_thread.queue(move |library| {
-                    library.finish_search(expected, matching, total);
+                    library.finish_projection(ticket, matching, total);
                 });
             });
-        if worker.is_err() {
-            // The projection already on screen stays; only the filter did not
-            // run. The stored query still says what the person asked for.
-            self.as_mut().rust_mut().search_in_flight = false;
+        match worker {
+            Ok(handle) => self.as_mut().rust_mut().projection = Some(handle),
+            // The rows already on screen stay; only the new projection did not
+            // run. The stored query and selection still say what was asked.
+            Err(error) => eprintln!("fluorita: could not start a projection: {error}"),
         }
     }
 
-    /// Publishes a finished search on the Qt thread — unless it is already
-    /// stale, in which case the current state is projected again instead:
-    /// a newer query was typed, or a scan or artwork pass republished the
-    /// catalogue while the worker read the old one.
-    fn finish_search(
+    /// Publishes a finished projection on the Qt thread — unless something it
+    /// had to reflect changed while it ran, in which case the current state is
+    /// projected again instead.
+    fn finish_projection(
         mut self: core::pin::Pin<&mut Self>,
-        expected: i32,
+        ticket: u64,
         matching: LibrarySnapshot,
         total: usize,
     ) {
-        self.as_mut().rust_mut().search_in_flight = false;
-        if let Some(next) = self.as_mut().rust_mut().search_pending.take() {
-            self.start_search(next);
-            return;
+        if let Some(handle) = self.as_mut().rust_mut().projection.take() {
+            let _ = handle.join();
         }
-        if *self.revision() != expected {
-            let text = self.query().to_string();
-            self.start_search(text);
+        if ticket != self.rust().projection_ticket {
+            // While a walk runs, its own publication is what comes next, and
+            // it asks for a projection itself if a query or a selection needs
+            // one; projecting the old catalogue again meanwhile would only
+            // replace "scanning" with rows that are about to change.
+            if self.rust().state_token() != "scanning" {
+                self.start_projection();
+            }
             return;
         }
         let shown = matching.gallery.len() + matching.music.len();
         self.as_mut()
             .set_hidden_by_query(i32::try_from(total.saturating_sub(shown)).unwrap_or(0));
-        self.apply(matching);
+        self.publish(matching);
+    }
+
+    /// The watch folded changes into the catalogue. Runs on the GUI thread,
+    /// through the queue; the copy it carries was made on the watch thread.
+    fn catalogue_changed(
+        mut self: core::pin::Pin<&mut Self>,
+        catalogue: Arc<Catalogue>,
+        configured: SourceSet,
+    ) {
+        self.as_mut().rust_mut().catalogue = catalogue;
+        self.as_mut().rust_mut().configured = configured;
+        self.request_projection();
     }
 
     /// Starts the explicit artwork pass.
@@ -750,16 +788,30 @@ impl qobject::FluoritaLibrary {
             let _ = handle.join();
         }
         if produced > 0 {
-            let catalogue = self.rust().catalogue.clone();
-            let configured = self.rust().configured.clone();
-            let scope = self.rust().scope();
-            let refreshed = project(&catalogue, &configured, scope, *self.truncated(), "ready");
-            self.apply(refreshed);
+            self.request_projection();
         }
     }
 
-    /// Publishes a finished projection. Runs on the GUI thread.
+    /// Publishes what the scan worker projected. Runs on the GUI thread.
+    ///
+    /// The scan projected unfiltered, under the scope selected when it began.
+    /// If the person has typed a query or picked another folder since, or a
+    /// projection over the previous catalogue is still running, the new
+    /// catalogue is projected again under what is current now.
     fn apply(mut self: core::pin::Pin<&mut Self>, snapshot: LibrarySnapshot) {
+        let reproject = !self.query().to_string().is_empty()
+            || snapshot.scope != self.rust().scope()
+            || self.rust().projection.is_some();
+        self.as_mut().set_hidden_by_query(0);
+        self.as_mut().publish(snapshot);
+        if reproject {
+            self.request_projection();
+        }
+    }
+
+    /// Puts one finished projection on screen. Runs on the GUI thread and
+    /// touches no file.
+    fn publish(mut self: core::pin::Pin<&mut Self>, snapshot: LibrarySnapshot) {
         self.as_mut().set_summary(QString::from(&snapshot.summary));
         self.as_mut().set_truncated(snapshot.truncated);
         self.as_mut().set_image_count(snapshot.image_count);
@@ -787,7 +839,7 @@ impl qobject::FluoritaLibrary {
         self.as_mut().set_music_thumbnails(music[5].clone());
 
         self.as_mut().set_artwork_pending(snapshot.artwork_pending);
-        self.as_mut().rust_mut().catalogue = Arc::new(snapshot.catalogue);
+        self.as_mut().rust_mut().catalogue = snapshot.catalogue;
         self.as_mut().rust_mut().configured = snapshot.configured;
         // A selection whose root is gone would scope the content to nothing
         // while the sidebar shows no row selected.
@@ -808,6 +860,18 @@ impl qobject::FluoritaLibrary {
 }
 
 impl LibraryRust {
+    /// The published state as the token a projection carries, so re-projecting
+    /// while a scan is still running does not announce the library as ready.
+    fn state_token(&self) -> &'static str {
+        match self.state.to_string().as_str() {
+            "scanning" => "scanning",
+            "stored" => "stored",
+            "error" => "error",
+            "empty" => "empty",
+            _ => "ready",
+        }
+    }
+
     /// The scope the content is projected under. `EVERY_SOURCE` is negative,
     /// so the conversion failing is exactly the "everything" case.
     fn scope(&self) -> SourceScope {
@@ -826,9 +890,16 @@ impl Drop for LibraryRust {
             let _ = handle.join();
         }
         // A folder chooser can outlive the window: the person may still have
-        // the dialog open. Joining it is the only way its thread cannot report
-        // into an object that is going away.
+        // the dialog open. Cancelling withdraws the request from the desktop,
+        // and the worker returns within one receive slice; joining it is what
+        // stops its thread from reporting into an object that is going away.
+        self.folder_cancellation.cancel();
         if let Some(handle) = self.folder_worker.take() {
+            let _ = handle.join();
+        }
+        // A projection is bounded work with no token; it finishes and its
+        // answer finds no one to deliver to.
+        if let Some(handle) = self.projection.take() {
             let _ = handle.join();
         }
         // A cross-filesystem trash move is a real copy. Joining it is what

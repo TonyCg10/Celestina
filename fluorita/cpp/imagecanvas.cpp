@@ -1,5 +1,10 @@
 #include "fluorita/imagecanvas.h"
 
+// The bridge's shared structs — `LineOrder`, `ShapeOrder`, `TextOrder` — are
+// defined by the header CXX generates from `src/rasteriser.rs`; the canvas
+// header only names them, so the one definition stays the bridge's.
+#include "fluorita/src/rasteriser.cxx.h"
+
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -184,24 +189,22 @@ void FluoritaCanvas::drawStroke(::rust::Slice<const float> points,
     painter.strokePath(path, penFor(rgba, width));
 }
 
-void FluoritaCanvas::drawLine(float x1,
-                              float y1,
-                              float x2,
-                              float y2,
-                              float width,
-                              ::std::uint32_t rgba,
-                              bool arrow)
+void FluoritaCanvas::drawLine(const LineOrder &line)
 {
     if (m_image.isNull()) {
         return;
     }
+    const float x1 = line.x1;
+    const float y1 = line.y1;
+    const float x2 = line.x2;
+    const float y2 = line.y2;
     QPainter painter(&m_image);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    const QPen pen = penFor(rgba, width);
+    const QPen pen = penFor(line.rgba, line.width);
     painter.setPen(pen);
     painter.drawLine(QPointF(x1, y1), QPointF(x2, y2));
 
-    if (!arrow) {
+    if (!line.arrow) {
         return;
     }
     // The head is sized from the line's own width, so a thick arrow does not
@@ -214,29 +217,21 @@ void FluoritaCanvas::drawLine(float x1,
           << QPointF(x2 - head * std::cos(angle - spread), y2 - head * std::sin(angle - spread))
           << QPointF(x2 - head * std::cos(angle + spread), y2 - head * std::sin(angle + spread));
     painter.setPen(Qt::NoPen);
-    painter.setBrush(QBrush(colourFrom(rgba)));
+    painter.setBrush(QBrush(colourFrom(line.rgba)));
     painter.drawPolygon(wings);
 }
 
-void FluoritaCanvas::drawShape(bool ellipse,
-                               float x,
-                               float y,
-                               float width,
-                               float height,
-                               float stroke,
-                               ::std::uint32_t rgba,
-                               bool filled,
-                               ::std::uint32_t fillRgba)
+void FluoritaCanvas::drawShape(const ShapeOrder &shape)
 {
     if (m_image.isNull()) {
         return;
     }
-    const QRectF area = rectangleFrom(x, y, width, height);
+    const QRectF area = rectangleFrom(shape.x, shape.y, shape.width, shape.height);
     QPainter painter(&m_image);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setPen(penFor(rgba, stroke));
-    painter.setBrush(filled ? QBrush(colourFrom(fillRgba)) : QBrush(Qt::NoBrush));
-    if (ellipse) {
+    painter.setPen(penFor(shape.rgba, shape.stroke));
+    painter.setBrush(shape.filled ? QBrush(colourFrom(shape.fill_rgba)) : QBrush(Qt::NoBrush));
+    if (shape.ellipse) {
         painter.drawEllipse(area);
     } else {
         painter.drawRect(area);
@@ -278,16 +273,7 @@ void FluoritaCanvas::redact(float x, float y, float width, float height)
     painter.fillRect(area, QColor::fromRgba(redactionColour));
 }
 
-void FluoritaCanvas::drawText(float x,
-                              float y,
-                              float width,
-                              float height,
-                              float size,
-                              ::std::uint32_t rgba,
-                              bool hasBackdrop,
-                              ::std::uint32_t backdropRgba,
-                              ::std::int32_t quarters,
-                              const QString &text)
+void FluoritaCanvas::drawText(const TextOrder &order, const QString &text)
 {
     if (m_image.isNull() || text.isEmpty()) {
         return;
@@ -299,22 +285,22 @@ void FluoritaCanvas::drawText(float x,
     // The box is stored axis-aligned in canvas coordinates; the turns it
     // accumulated from canvas rotations are applied around its own centre, so
     // the word reads the way it did when it was written.
-    const QRectF box = rectangleFrom(x, y, width, height);
-    const int turns = ((quarters % 4) + 4) % 4;
+    const QRectF box = rectangleFrom(order.x, order.y, order.width, order.height);
+    const int turns = ((order.quarters % 4) + 4) % 4;
     painter.translate(box.center());
     painter.rotate(90.0 * turns);
     const QRectF local = (turns % 2 == 0)
         ? QRectF(-box.width() / 2.0, -box.height() / 2.0, box.width(), box.height())
         : QRectF(-box.height() / 2.0, -box.width() / 2.0, box.height(), box.width());
 
-    if (hasBackdrop) {
-        painter.fillRect(local, colourFrom(backdropRgba));
+    if (order.has_backdrop) {
+        painter.fillRect(local, colourFrom(order.backdrop_rgba));
     }
 
     QFont font = painter.font();
-    font.setPixelSize(std::max(1, static_cast<int>(std::lround(size))));
+    font.setPixelSize(std::max(1, static_cast<int>(std::lround(order.size))));
     painter.setFont(font);
-    painter.setPen(QPen(colourFrom(rgba)));
+    painter.setPen(QPen(colourFrom(order.rgba)));
     painter.drawText(local, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, text);
 }
 

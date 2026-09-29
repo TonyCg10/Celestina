@@ -83,6 +83,27 @@ which cannot reach any of it: the defect was an ordering between two teardown
 paths on real GPU state. A failure records the observation here and opens a
 linked corrective unit.
 
+`FLU-H1-B` adds three things to look for on the same pass: switch from one
+playing video straight to another several times, and close the window while
+a video is playing inside the filmstrip — the render seam now shares a state
+object with its renderer instead of a raw item pointer, and the surface's
+release arrives queued; open the folder chooser from the sidebar's add button and the
+cover chooser, and close the window with each still open — the window must go
+within about a second and the desktop's dialog with it; and keep a frame of a
+long film, then close the window at once — it must not wait for the
+extraction. See the
+[catalogue and player evidence](docs/evidence/2026-09-26-catalogue-and-player.md).
+
+One more path to watch, recorded by the `FLU-H1-B` review and not changed by
+it: returning to the library from a playing video (`Main.qml`'s
+`libraryReached`) closes the player and then tests `renderHandle === 0`,
+which is always true right after `close()`, so the frame is dismantled at
+once. A hidden item is never synchronised again, and the surface's release
+may then never arrive — the player would stay closing and the next item not
+open. Return to the library from a playing video, then open another; a
+player that no longer opens anything is this, and gets its own corrective
+unit.
+
 ## VAL-FLU-IMMERSIVE — the item as a movement, and a catalogue that forgets
 
 - **Status:** pending
@@ -113,6 +134,13 @@ construction in the
 cannot prove perceived motion, ambient light or what a real removable drive
 reports. A failure records the observation here and opens a linked corrective
 unit; it does not reopen F6.
+
+Since `FLU-H1-B`, the same session should also: move a whole folder of
+pictures into a mapped folder with the file manager and see it appear without
+a rescan, move it out again and see its items leave; map a folder that holds
+one tree deeper than twelve levels, delete a picture elsewhere in the library,
+and see the deleted picture disappear; and click through the sidebar on a
+large library, or one mapped over sshfs, without the window freezing.
 
 ## VAL-FLU-SOURCES — the source-first library in a real session
 
@@ -172,6 +200,17 @@ what the desktop's Trash really holds, or how coordinates survive a real
 display scale — the one place an annotation editor fails invisibly. A failure
 records the observation here and opens a linked corrective unit.
 
+`FLU-H1-B` makes the reopened copy real — until then a copy always reopened
+flat — and adds, for the same pass: with the copy reopened, step through its
+marks with `]` and `[` and move one with the arrows and delete another, all
+without the pointer, and check that Orca speaks each mark as `]` or `[`
+selects it — its kind, a text's words, and that it is selected — although
+focus stays on the canvas (the surface announces the selection; a mark that
+changed state silently would fail this); then save the reopened copy as a
+replacement and check that the *copy* is in the Trash and the original it was
+drawn from is untouched; and open a picture on a mapped network folder and
+check the window stays responsive while it is measured.
+
 ## VAL-FLU-METADATA — correcting what a file says, on real files
 
 - **Status:** pending
@@ -199,6 +238,12 @@ The agent lane can prove the container round trip, the byte-identical media
 stream and the refusals. It cannot prove what another application reads back,
 which is the only test that says whether the write was really lossless. A
 failure records the observation here and opens a linked corrective unit.
+
+Since `FLU-H1-B` the track must re-sort under its corrected name *before* the
+restart as well — the watch now drops the replaced record and reads the new
+tags — and the playback speed a panel shows over MPRIS (`playerctl
+--player=fluorita metadata`, or the shell's panel) must follow the speed
+menu.
 
 ## VAL-FLU-PACING — the two triggers, and what a stutter looks like
 

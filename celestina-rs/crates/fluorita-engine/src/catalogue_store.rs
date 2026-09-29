@@ -788,7 +788,10 @@ mod fidelity_tests {
             MediaKind::Audio,
             identity,
         );
-        let summary = reloaded.absorb([rescanned], true);
+        let mut coverage = fluorita_core::ScanCoverage::new();
+        coverage.walked(SourceId::from_value(1));
+        coverage.reached(SourceId::from_value(1));
+        let summary = reloaded.absorb([rescanned], &coverage);
 
         assert_eq!(summary.unchanged, 1, "el archivo no ha cambiado");
         assert_eq!(summary.replaced, 0);

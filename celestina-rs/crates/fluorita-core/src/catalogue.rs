@@ -178,17 +178,13 @@ impl MediaRecord {
     }
 
     /// The label a host shows when nothing is tagged: the filename without its
-    /// extension. Lossy only for display — never rebuild a path from it.
+    /// extension, bounded and stripped the way every name a file claims is
+    /// ([`crate::displayed_stem`]). Lossy only for display — never rebuild a
+    /// path from it.
     #[must_use]
     pub fn display_name(&self) -> String {
         self.metadata.track_title().map_or_else(
-            || {
-                self.path
-                    .file_stem()
-                    .unwrap_or(self.path.as_os_str())
-                    .to_string_lossy()
-                    .into_owned()
-            },
+            || crate::metadata::displayed_stem(&self.path),
             str::to_owned,
         )
     }
@@ -216,6 +212,94 @@ pub struct AbsorbSummary {
     pub unchanged: usize,
     pub marked_missing: usize,
     pub restored: usize,
+}
+
+/// What one scan may be trusted to say about the records it did *not* see.
+///
+/// A scan is bounded, so "not seen" can mean three different things: the
+/// file is gone, the walk was stopped before it got there, or the walk was
+/// never allowed to look. Only the first may change a record, and which case
+/// applies is a property of each root and each directory, not of the pass as
+/// a whole. A single "truncated" flag for everything meant one photo export
+/// twelve levels deep switched forgetting off in every root, for good.
+///
+/// - A root is **walked** when the pass reached its end: a ceiling or a
+///   deadline did not stop it there. A record under a walked root that the
+///   pass did not see is marked missing.
+/// - A root is **reached** when it answered at all. A missing record under a
+///   root that was walked *and* reached is gone, and is forgotten; one under a
+///   root that did not answer — a drive that is not plugged in — is kept.
+/// - A directory is **unexplored** when the walk knew it was there and did
+///   not read it: below the depth bound, or unreadable. What lives under it
+///   was neither seen nor missed, so it is not judged at all.
+///
+/// The default judges nothing, which is exactly what an incremental update
+/// that looked at one file may conclude about the rest.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ScanCoverage {
+    walked: BTreeSet<SourceId>,
+    reached: BTreeSet<SourceId>,
+    unexplored: BTreeSet<PathBuf>,
+}
+
+impl ScanCoverage {
+    /// Coverage that judges nothing.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Records that the pass reached the end of `root`.
+    pub fn walked(&mut self, root: SourceId) {
+        self.walked.insert(root);
+    }
+
+    /// Records that `root` answered.
+    pub fn reached(&mut self, root: SourceId) {
+        self.reached.insert(root);
+    }
+
+    /// Records a directory the walk did not read. Everything under it keeps
+    /// the state it had.
+    pub fn unexplored(&mut self, directory: PathBuf) {
+        self.unexplored.insert(directory);
+    }
+
+    /// Whether the pass reached the end of `root`.
+    #[must_use]
+    pub fn is_walked(&self, root: SourceId) -> bool {
+        self.walked.contains(&root)
+    }
+
+    /// Whether `root` answered.
+    #[must_use]
+    pub fn is_reached(&self, root: SourceId) -> bool {
+        self.reached.contains(&root)
+    }
+
+    /// Whether the pass may conclude anything about `record` from not having
+    /// seen it: its root was walked to the end and no unexplored directory
+    /// holds it.
+    ///
+    /// The unexplored set is asked once per ancestor rather than scanned once
+    /// per directory, so fifty thousand records against thousands of capped
+    /// directories stays a few lookups each.
+    #[must_use]
+    pub fn judges(&self, record: &MediaRecord) -> bool {
+        self.walked.contains(&record.source)
+            && !record
+                .path
+                .ancestors()
+                .skip(1)
+                .any(|ancestor| self.unexplored.contains(ancestor))
+    }
+
+    /// Whether not having seen `record` proves it was deleted: the pass judges
+    /// it, and its root answered.
+    #[must_use]
+    pub fn proves_gone(&self, record: &MediaRecord) -> bool {
+        self.judges(record) && self.reached.contains(&record.source)
+    }
 }
 
 /// The catalogue itself: identity-keyed, deterministically ordered.
@@ -295,8 +379,8 @@ impl Catalogue {
         before - self.records.len()
     }
 
-    /// Drops every missing record whose root actually answered, returning how
-    /// many went.
+    /// Drops every missing record the pass proves gone, returning how many
+    /// went.
     ///
     /// This is the difference between a file that is gone and a library that
     /// could not be read. Keeping a missing record is right when the root is a
@@ -307,14 +391,30 @@ impl Catalogue {
     /// showing what the user deleted, even from the Trash, is not being
     /// careful, it is being wrong.
     ///
-    /// `reached` must come from a *complete* pass. A truncated or cancelled
-    /// scan proves nothing about what is missing, which is the same rule
-    /// [`Catalogue::reconcile`] already obeys.
-    pub fn forget_vanished(&mut self, reached: &BTreeSet<SourceId>) -> usize {
+    /// What "walked successfully" means is [`ScanCoverage::proves_gone`]: per
+    /// root and per directory, so a bound reached in one place proves nothing
+    /// there and still lets every other root forget.
+    pub fn forget_vanished(&mut self, coverage: &ScanCoverage) -> usize {
         let before = self.records.len();
         self.records.retain(|_, record| {
-            record.availability == Availability::Available || !reached.contains(&record.source)
+            record.availability == Availability::Available || !coverage.proves_gone(record)
         });
+        before - self.records.len()
+    }
+
+    /// Drops every record whose file lived under `directory`, returning how
+    /// many went.
+    ///
+    /// What a watch concludes when a whole folder leaves a root: moved out,
+    /// moved to another disk, or deleted with everything in it. The root
+    /// plainly answers — the watch saw the folder go — so the records go
+    /// rather than lingering as rows that render and then fail. Compared by
+    /// path component, so `album-2` is not under `album`. Not one file is
+    /// touched.
+    pub fn forget_under(&mut self, directory: &Path) -> usize {
+        let before = self.records.len();
+        self.records
+            .retain(|_, record| !record.path.starts_with(directory));
         before - self.records.len()
     }
 
@@ -342,12 +442,14 @@ impl Catalogue {
     /// file that changed underneath loses that metadata, because it now
     /// describes bytes that are gone.
     ///
-    /// `complete` must be false for a truncated or cancelled scan: only a pass
-    /// that actually finished may conclude that a file has disappeared.
+    /// `coverage` says which records the pass may judge from not having seen
+    /// them; only those are marked missing or restored. A cancelled pass is
+    /// never absorbed at all, and an incremental one passes
+    /// [`ScanCoverage::new`], which judges nothing.
     pub fn absorb(
         &mut self,
         scanned: impl IntoIterator<Item = MediaRecord>,
-        complete: bool,
+        coverage: &ScanCoverage,
     ) -> AbsorbSummary {
         let mut summary = AbsorbSummary::default();
         let mut seen: BTreeSet<MediaId> = BTreeSet::new();
@@ -375,12 +477,29 @@ impl Catalogue {
             }
         }
 
-        if complete {
-            let reconciled = self.reconcile(&seen);
-            summary.marked_missing = reconciled.marked_missing;
-            summary.restored = reconciled.restored;
-        }
+        let reconciled = self.reconcile_where(&seen, |record| coverage.judges(record));
+        summary.marked_missing = reconciled.marked_missing;
+        summary.restored = reconciled.restored;
         summary
+    }
+
+    /// Folds in one file an update just looked at, and nothing else.
+    ///
+    /// A record already at the same path under a different identity is the
+    /// same name holding new bytes — a rename-over write, which is how every
+    /// replacement lands — and it goes: no removal is ever reported for a path
+    /// that never stopped existing, so keeping it would show the old file and
+    /// the new one side by side until the next launch.
+    pub fn absorb_changed(&mut self, record: MediaRecord) -> AbsorbSummary {
+        let stale = self
+            .records
+            .values()
+            .find(|known| known.path == record.path && known.id != record.id)
+            .map(|known| known.id.clone());
+        if let Some(stale) = stale {
+            self.records.remove(&stale);
+        }
+        self.absorb([record], &ScanCoverage::new())
     }
 
     /// Applies the result of a completed scan: everything in `seen` is
@@ -389,8 +508,21 @@ impl Catalogue {
     /// Only call this with the ids of a *complete* pass — a cancelled scan would
     /// mark every unvisited file missing.
     pub fn reconcile(&mut self, seen: &BTreeSet<MediaId>) -> ReconcileSummary {
+        self.reconcile_where(seen, |_| true)
+    }
+
+    /// [`Catalogue::reconcile`], restricted to the records `judged` accepts.
+    /// The one place a record's availability follows a pass.
+    fn reconcile_where(
+        &mut self,
+        seen: &BTreeSet<MediaId>,
+        judged: impl Fn(&MediaRecord) -> bool,
+    ) -> ReconcileSummary {
         let mut summary = ReconcileSummary::default();
         for (id, record) in &mut self.records {
+            if !judged(record) {
+                continue;
+            }
             match (seen.contains(id), record.availability) {
                 (true, Availability::Missing) => {
                     record.availability = Availability::Available;
@@ -410,7 +542,8 @@ impl Catalogue {
 #[cfg(test)]
 mod tests {
     use super::{
-        Availability, Catalogue, MediaMetadata, MediaRecord, ReconcileSummary, SourceIdentity,
+        Availability, Catalogue, MediaMetadata, MediaRecord, ReconcileSummary, ScanCoverage,
+        SourceIdentity,
     };
     use crate::media::{MediaId, MediaKind};
     use crate::source::{KindSet, SourceSet};
@@ -464,9 +597,12 @@ mod tests {
         // drive: it saw only the file that is still there.
         let seen = BTreeSet::from([MediaId::filesystem(66, 1)]);
         catalogue.reconcile(&seen);
-        let reached = BTreeSet::from([pictures]);
+        let mut coverage = ScanCoverage::new();
+        coverage.walked(pictures);
+        coverage.walked(removable);
+        coverage.reached(pictures);
 
-        assert_eq!(catalogue.forget_vanished(&reached), 1);
+        assert_eq!(catalogue.forget_vanished(&coverage), 1);
         assert_eq!(catalogue.len(), 2);
         // The deleted file is gone for good; the one on the unplugged drive is
         // kept, because nothing was ever learned about it this pass.
@@ -497,9 +633,11 @@ mod tests {
         ));
         catalogue.reconcile(&BTreeSet::new());
 
-        // An empty `reached` set is exactly the unplugged case: forgetting here
-        // would be the library eating a drive's contents.
-        assert_eq!(catalogue.forget_vanished(&BTreeSet::new()), 0);
+        // A root walked but never reached is exactly the unplugged case:
+        // forgetting here would be the library eating a drive's contents.
+        let mut coverage = ScanCoverage::new();
+        coverage.walked(removable);
+        assert_eq!(catalogue.forget_vanished(&coverage), 0);
         assert_eq!(catalogue.len(), 1);
     }
 
@@ -676,7 +814,8 @@ mod tests {
 #[cfg(test)]
 mod absorb_tests {
     use super::{
-        AbsorbSummary, Availability, Catalogue, MediaMetadata, MediaRecord, SourceIdentity,
+        AbsorbSummary, Availability, Catalogue, MediaMetadata, MediaRecord, ScanCoverage,
+        SourceIdentity,
     };
     use crate::media::{MediaId, MediaKind};
     use crate::source::SourceId;
@@ -693,6 +832,14 @@ mod absorb_tests {
         )
     }
 
+    /// A pass that walked the one root these records live under to its end.
+    fn complete() -> ScanCoverage {
+        let mut coverage = ScanCoverage::new();
+        coverage.walked(SourceId::from_value(0));
+        coverage.reached(SourceId::from_value(0));
+        coverage
+    }
+
     fn tagged(title: &str) -> MediaMetadata {
         MediaMetadata {
             title: Some(title.to_owned()),
@@ -705,7 +852,7 @@ mod absorb_tests {
         let mut catalogue = Catalogue::new();
         catalogue.upsert(record(1, "/m/a.flac", 100).with_metadata(tagged("Conocida")));
 
-        let summary = catalogue.absorb([record(1, "/m/a.flac", 100)], true);
+        let summary = catalogue.absorb([record(1, "/m/a.flac", 100)], &complete());
 
         assert_eq!(
             summary,
@@ -728,7 +875,7 @@ mod absorb_tests {
         let mut catalogue = Catalogue::new();
         catalogue.upsert(record(1, "/m/antes.flac", 100).with_metadata(tagged("Conocida")));
 
-        catalogue.absorb([record(1, "/m/después.flac", 100)], true);
+        catalogue.absorb([record(1, "/m/después.flac", 100)], &complete());
 
         let found = catalogue.get(&MediaId::filesystem(66, 1)).expect("record");
         assert_eq!(found.path(), PathBuf::from("/m/después.flac"));
@@ -740,7 +887,7 @@ mod absorb_tests {
         let mut catalogue = Catalogue::new();
         catalogue.upsert(record(1, "/m/a.flac", 100).with_metadata(tagged("Antigua")));
 
-        let summary = catalogue.absorb([record(1, "/m/a.flac", 200)], true);
+        let summary = catalogue.absorb([record(1, "/m/a.flac", 200)], &complete());
 
         assert_eq!(summary.replaced, 1);
         assert_eq!(
@@ -757,13 +904,13 @@ mod absorb_tests {
         catalogue.upsert(record(1, "/m/a.flac", 100));
         catalogue.upsert(record(2, "/m/b.flac", 100));
 
-        let truncated = catalogue.absorb([record(1, "/m/a.flac", 100)], false);
+        let truncated = catalogue.absorb([record(1, "/m/a.flac", 100)], &ScanCoverage::new());
         assert_eq!(truncated.marked_missing, 0);
         assert!(catalogue
             .get(&MediaId::filesystem(66, 2))
             .is_some_and(MediaRecord::is_available));
 
-        let complete = catalogue.absorb([record(1, "/m/a.flac", 100)], true);
+        let complete = catalogue.absorb([record(1, "/m/a.flac", 100)], &complete());
         assert_eq!(complete.marked_missing, 1);
         assert_eq!(
             catalogue
@@ -782,7 +929,7 @@ mod absorb_tests {
                 .with_availability(Availability::Missing),
         );
 
-        let summary = catalogue.absorb([record(1, "/mnt/externo/a.flac", 100)], true);
+        let summary = catalogue.absorb([record(1, "/mnt/externo/a.flac", 100)], &complete());
 
         assert_eq!(summary.unchanged, 1);
         assert!(catalogue
@@ -800,7 +947,7 @@ mod absorb_tests {
     fn a_new_file_is_added() {
         let mut catalogue = Catalogue::new();
 
-        let summary = catalogue.absorb([record(9, "/m/nueva.flac", 100)], true);
+        let summary = catalogue.absorb([record(9, "/m/nueva.flac", 100)], &complete());
 
         assert_eq!(summary.added, 1);
         assert_eq!(catalogue.len(), 1);
@@ -870,5 +1017,162 @@ mod incremental_tests {
         assert!(catalogue.mark_missing(&MediaId::filesystem(66, 1)));
         assert!(!catalogue.mark_missing(&MediaId::filesystem(66, 1)));
         assert!(!catalogue.mark_missing(&MediaId::filesystem(66, 9)));
+    }
+}
+
+#[cfg(test)]
+mod coverage_tests {
+    use super::{Availability, Catalogue, MediaRecord, ScanCoverage, SourceIdentity};
+    use crate::media::{MediaId, MediaKind};
+    use crate::source::SourceId;
+    use std::path::{Path, PathBuf};
+    use std::time::{Duration, SystemTime};
+
+    fn record(inode: u64, source: u32, path: &str) -> MediaRecord {
+        MediaRecord::new(
+            MediaId::filesystem(66, inode),
+            SourceId::from_value(source),
+            PathBuf::from(path),
+            MediaKind::Image,
+            SourceIdentity::new(1, SystemTime::UNIX_EPOCH + Duration::from_secs(10)),
+        )
+    }
+
+    fn availability(catalogue: &Catalogue, path: &str) -> Option<Availability> {
+        catalogue
+            .find_by_path(Path::new(path))
+            .map(MediaRecord::availability)
+    }
+
+    /// One root holds a subtree deeper than the walk may go; the other is
+    /// shallow. Both were walked to the end, and both answered.
+    fn deep_and_shallow() -> (Catalogue, ScanCoverage) {
+        let mut catalogue = Catalogue::new();
+        for (inode, source, path) in [
+            (1, 0, "/deep/top.png"),
+            (2, 0, "/deep/a/b/c/below-the-bound.png"),
+            (3, 0, "/deep/deleted.png"),
+            (4, 1, "/shallow/kept.png"),
+            (5, 1, "/shallow/deleted.png"),
+        ] {
+            catalogue.upsert(record(inode, source, path));
+        }
+        let mut coverage = ScanCoverage::new();
+        for root in [0, 1] {
+            coverage.walked(SourceId::from_value(root));
+            coverage.reached(SourceId::from_value(root));
+        }
+        coverage.unexplored(PathBuf::from("/deep/a/b"));
+        (catalogue, coverage)
+    }
+
+    #[test]
+    fn a_depth_capped_subtree_is_neither_seen_nor_missing_and_every_root_still_forgets() {
+        let (mut catalogue, coverage) = deep_and_shallow();
+        // The pass saw what is still there and not below the bound.
+        let seen = [
+            record(1, 0, "/deep/top.png"),
+            record(4, 1, "/shallow/kept.png"),
+        ];
+
+        let summary = catalogue.absorb(seen, &coverage);
+        assert_eq!(summary.marked_missing, 2);
+        assert_eq!(catalogue.forget_vanished(&coverage), 2);
+
+        // Deleted files go from both roots: one deep subtree no longer turns
+        // forgetting off for the whole library.
+        assert_eq!(availability(&catalogue, "/deep/deleted.png"), None);
+        assert_eq!(availability(&catalogue, "/shallow/deleted.png"), None);
+        // What the walk was not allowed to look at is kept as it was.
+        assert_eq!(
+            availability(&catalogue, "/deep/a/b/c/below-the-bound.png"),
+            Some(Availability::Available)
+        );
+    }
+
+    #[test]
+    fn a_root_the_walk_did_not_finish_judges_nothing() {
+        let (mut catalogue, _) = deep_and_shallow();
+        // A file ceiling or a deadline stopped the pass inside the first
+        // root, so only the second was walked to the end.
+        let mut coverage = ScanCoverage::new();
+        coverage.walked(SourceId::from_value(1));
+        coverage.reached(SourceId::from_value(0));
+        coverage.reached(SourceId::from_value(1));
+
+        catalogue.absorb([record(4, 1, "/shallow/kept.png")], &coverage);
+        catalogue.forget_vanished(&coverage);
+
+        assert_eq!(
+            availability(&catalogue, "/deep/deleted.png"),
+            Some(Availability::Available)
+        );
+        assert_eq!(availability(&catalogue, "/shallow/deleted.png"), None);
+    }
+
+    #[test]
+    fn a_walked_root_that_did_not_answer_marks_missing_but_forgets_nothing() {
+        let (mut catalogue, _) = deep_and_shallow();
+        let mut coverage = ScanCoverage::new();
+        coverage.walked(SourceId::from_value(1));
+
+        catalogue.absorb([], &coverage);
+        assert_eq!(catalogue.forget_vanished(&coverage), 0);
+        assert_eq!(
+            availability(&catalogue, "/shallow/deleted.png"),
+            Some(Availability::Missing)
+        );
+    }
+
+    #[test]
+    fn an_incremental_update_judges_nothing_it_did_not_look_at() {
+        let (mut catalogue, _) = deep_and_shallow();
+        let summary = catalogue.absorb([record(9, 1, "/shallow/new.png")], &ScanCoverage::new());
+
+        assert_eq!(summary.added, 1);
+        assert_eq!(summary.marked_missing, 0);
+        assert_eq!(catalogue.forget_vanished(&ScanCoverage::new()), 0);
+    }
+
+    #[test]
+    fn a_file_replaced_in_place_leaves_one_record_not_two() {
+        // A rename-over write: the same name, a new inode, and no removal
+        // event for a path that never stopped existing.
+        let mut catalogue = Catalogue::new();
+        catalogue.upsert(record(1, 0, "/m/photo.jpg"));
+        catalogue.upsert(record(2, 0, "/m/other.jpg"));
+
+        let summary = catalogue.absorb_changed(record(7, 0, "/m/photo.jpg"));
+
+        assert_eq!(summary.added, 1);
+        assert_eq!(catalogue.len(), 2);
+        assert_eq!(
+            catalogue
+                .find_by_path(Path::new("/m/photo.jpg"))
+                .map(MediaRecord::id),
+            Some(&MediaId::filesystem(66, 7))
+        );
+        assert!(catalogue.get(&MediaId::filesystem(66, 1)).is_none());
+    }
+
+    #[test]
+    fn forgetting_a_tree_takes_what_is_under_it_and_nothing_beside_it() {
+        let mut catalogue = Catalogue::new();
+        for (inode, path) in [
+            (1, "/m/album/one.png"),
+            (2, "/m/album/disc/two.png"),
+            (3, "/m/album-2/three.png"),
+            (4, "/m/four.png"),
+        ] {
+            catalogue.upsert(record(inode, 0, path));
+        }
+
+        assert_eq!(catalogue.forget_under(Path::new("/m/album")), 2);
+        // A sibling whose name merely starts the same way is another folder.
+        assert!(catalogue
+            .find_by_path(Path::new("/m/album-2/three.png"))
+            .is_some());
+        assert!(catalogue.find_by_path(Path::new("/m/four.png")).is_some());
+        assert_eq!(catalogue.forget_under(Path::new("/m/album")), 0);
     }
 }

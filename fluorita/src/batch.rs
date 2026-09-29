@@ -157,42 +157,56 @@ impl qobject::FluoritaBatch {
         let qt_thread = self.qt_thread();
         let reporting = self.qt_thread();
 
-        let worker = std::thread::spawn(move || {
-            let request = BatchRequest {
-                items: &items,
-                operation,
-                choice,
-                copy_marker: copy::COPY_MARKER,
-                max_canvas_pixels: image::MAX_PIXELS,
-            };
-            let mut report = |progress: BatchProgress| {
-                let _ = reporting.queue(move |mut batch| {
-                    batch
-                        .as_mut()
-                        .set_done(i32::try_from(progress.done).unwrap_or(i32::MAX));
-                    batch
-                        .as_mut()
-                        .set_skipped(i32::try_from(progress.skipped).unwrap_or(i32::MAX));
-                    batch
-                        .as_mut()
-                        .set_failed(i32::try_from(progress.failed).unwrap_or(i32::MAX));
+        let worker = std::thread::Builder::new()
+            .name("fluorita-batch".to_owned())
+            .spawn(move || {
+                let request = BatchRequest {
+                    items: &items,
+                    operation,
+                    choice,
+                    copy_marker: copy::COPY_MARKER,
+                    max_canvas_pixels: image::MAX_PIXELS,
+                };
+                let mut report = |progress: BatchProgress| {
+                    let _ = reporting.queue(move |mut batch| {
+                        batch
+                            .as_mut()
+                            .set_done(i32::try_from(progress.done).unwrap_or(i32::MAX));
+                        batch
+                            .as_mut()
+                            .set_skipped(i32::try_from(progress.skipped).unwrap_or(i32::MAX));
+                        batch
+                            .as_mut()
+                            .set_failed(i32::try_from(progress.failed).unwrap_or(i32::MAX));
+                    });
+                };
+                let progress = fluorita_engine::run_batch(
+                    &request,
+                    &ToolkitRasteriser,
+                    &DesktopTrash,
+                    // The same probe the viewer uses, so a batch judges a file
+                    // exactly as opening it would.
+                    &crate::player::probe_still,
+                    &mut report,
+                    &cancellation,
+                );
+                let message = copy::finished(progress);
+                let _ = qt_thread.queue(move |mut batch| {
+                    batch.as_mut().set_running(false);
+                    batch.as_mut().set_notice(QString::from(&message));
                 });
-            };
-            let progress = fluorita_engine::run_batch(
-                &request,
-                &ToolkitRasteriser,
-                &DesktopTrash,
-                &measure,
-                &mut report,
-                &cancellation,
-            );
-            let message = copy::finished(progress);
-            let _ = qt_thread.queue(move |mut batch| {
-                batch.as_mut().set_running(false);
-                batch.as_mut().set_notice(QString::from(&message));
             });
-        });
-        self.as_mut().rust_mut().worker = Some(worker);
+        match worker {
+            Ok(handle) => self.as_mut().rust_mut().worker = Some(handle),
+            // The system refused a thread: nothing ran, and the run says so
+            // rather than taking the window down with it.
+            Err(error) => {
+                eprintln!("fluorita: could not start the batch: {error}");
+                self.as_mut().set_running(false);
+                self.as_mut()
+                    .set_notice(QString::from(crate::copy::WORKER_NOT_STARTED));
+            }
+        }
     }
 
     pub fn cancel(self: std::pin::Pin<&mut Self>) {
@@ -209,19 +223,6 @@ impl qobject::FluoritaBatch {
                 .is_some_and(|kind| operation.admits(kind, path))
         })
     }
-}
-
-/// Measures a picture with the same probe the viewer uses, so a batch judges a
-/// file exactly as opening it would.
-fn measure(path: &std::path::Path) -> Option<(u32, u32)> {
-    let key = QString::from(&pathkey::encode(path));
-    let measured = crate::player::qobject::probe_image(&key);
-    (measured.width() > 0 && measured.height() > 0).then(|| {
-        (
-            u32::try_from(measured.width()).unwrap_or(u32::MAX),
-            u32::try_from(measured.height()).unwrap_or(u32::MAX),
-        )
-    })
 }
 
 fn decode(keys: &QStringList) -> Vec<PathBuf> {
