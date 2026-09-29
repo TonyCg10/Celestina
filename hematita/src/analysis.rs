@@ -506,7 +506,9 @@ impl qobject::HematitaAnalysis {
     /// The folder handed on the command line or through D-Bus `Open`. The
     /// one `is_dir` check is a single `stat` on the Qt thread, once per
     /// request, the same cost `browse` pays to name its folder; the listing
-    /// itself runs on the browse thread.
+    /// itself runs on the browse thread. The path is kept as handed: a scan
+    /// resolves its links on the scan thread, and the tree and every
+    /// deletion bounded by it use the resolved path.
     pub fn open_path(mut self: Pin<&mut Self>, path: &QString) {
         let path = PathBuf::from(path.to_string());
         if !path.is_dir() {

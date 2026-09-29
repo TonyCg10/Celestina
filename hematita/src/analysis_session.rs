@@ -330,7 +330,7 @@ impl Session {
     }
 
     /// The outermost selected entries as the action workers take them,
-    /// each with the device and inode the scan recorded.
+    /// each with the device, inode and kind the scan recorded.
     pub fn action_items(&self) -> Vec<Item> {
         let Some(tree) = self.tree.as_ref() else {
             return Vec::new();
@@ -344,6 +344,7 @@ impl Session {
                     allocated: node.allocated,
                     dev: node.dev,
                     ino: node.ino,
+                    kind: node.kind,
                 })
             })
             .collect()
@@ -382,8 +383,10 @@ impl Session {
         if !row.verified || row.unreadable {
             return false;
         }
+        // One set of what is chosen, not a scan of the selection per copy.
+        let mut chosen: HashSet<NodeId> = self.selection.iter().copied().collect();
         for id in analysis_view::all_but_one(&row.nodes) {
-            if !self.selection.contains(&id) {
+            if chosen.insert(id) {
                 self.selection.push(id);
             }
         }
@@ -398,10 +401,7 @@ impl Session {
         let Some(tree) = self.tree.as_mut() else {
             return;
         };
-        let tree = Arc::make_mut(tree);
-        for id in removed {
-            tree.prune(*id);
-        }
+        Arc::make_mut(tree).prune_many(removed);
         self.forget(removed);
     }
 

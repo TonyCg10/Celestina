@@ -172,3 +172,4 @@ hematita	1.2.1	bug	S3-B	Fix the storage tiles all sharing one colour
 siderita	1.7.2	bug	SID-U1-C	Fix the occupation tiles all sharing one colour
 hematita	1.2.2	bug	S3-C	Fix the storage analysis resetting on a section change and show the details by default
 celestina-style	1.9.2	bug	STYLE-G7-N	Add swatch tokens with their guards and control tests
+hematita	1.2.3	bug	HEM-H1-A	Harden the storage walk and deletion against mounts and unbounded input

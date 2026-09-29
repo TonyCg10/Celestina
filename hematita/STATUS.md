@@ -2,8 +2,15 @@
 
 - **Updated:** 2026-09-26
 - **Active checkpoint:** `HEM-H1`, the hardening that follows the 2026-09-26
-  monorepo audit, with every unit planned
-  ([plan](docs/plans/active/2026-09-26-hardening.md))
+  monorepo audit ([plan](docs/plans/active/2026-09-26-hardening.md)):
+  `HEM-H1-A` active — the storage walk, the permanent deletion and the
+  trash admission tell a mount by its mount id (a bind mount reached
+  through a link included), the walk resolves its root on the scan thread
+  and stops at ten million entries, duplicates are keyed by size and read
+  only from the regular file the scan recorded, and the core tests pass as
+  root and as a user; not landed
+  ([evidence](docs/evidence/2026-09-26-mount-and-delete-safety.md));
+  `HEM-H1-B` planned
 - **Delivered as 1.2.2:** `S3-C` — a section change no longer resets the
   storage analysis: `open()` runs only when the section is shown on the
   locations zone, so the folder, scan, filters, selection and cursor survive;
