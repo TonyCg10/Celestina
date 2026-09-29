@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use celestina_core::{CancellationToken, Generation};
 
 use crate::encoding::Encoding;
-use crate::import::Imported;
+use crate::import::{ImportError, Imported};
 use crate::probe::{classify, BinaryReason, Classification, DEFAULT_PROBE_BYTES};
 use crate::target::Target;
 
@@ -77,7 +77,10 @@ pub enum OpenRefusal {
     /// The content is text in an encoding that cannot be mapped back, so it may
     /// be shown but never advertised as safely editable.
     UnsupportedEncoding { detail: String },
-    /// The file is larger than the configured ceiling.
+    /// The file, or the content a container unpacks to, is larger than the
+    /// configured ceiling. `size` is the file's length, or, when reading
+    /// stopped at the ceiling, the first length known to pass it: a lower
+    /// bound, because the rest was never read.
     TooLarge { size: u64, limit: u64 },
     /// The file kept changing while it was being read.
     ChangedWhileReading { path: PathBuf },
@@ -115,7 +118,7 @@ impl fmt::Display for OpenRefusal {
             ),
             Self::TooLarge { size, limit } => write!(
                 formatter,
-                "this file has {size} bytes and the editor accepts up to {limit}"
+                "this document has at least {size} bytes and the editor accepts up to {limit}"
             ),
             Self::ChangedWhileReading { path } => write!(
                 formatter,
@@ -224,13 +227,20 @@ pub fn open(
         // came to be refused before anything tried to read it.
         let encoding = match classify(bytes, true) {
             Classification::ImportedDocument => {
-                return match Imported::open(bytes.to_vec()) {
+                return match Imported::open(bytes.to_vec(), limits.max_bytes, cancellation) {
                     Ok(imported) => {
                         let text = imported.text().to_owned();
                         Ok((Encoding::Utf8, text, Some(imported)))
                     }
-                    Err(source) => Err(OpenRefusal::NotImportable {
-                        detail: source.to_string(),
+                    Err(ImportError::Cancelled) => Err(OpenRefusal::Cancelled),
+                    Err(source) => Err(match source.exceeded_limit() {
+                        Some(limit) => OpenRefusal::TooLarge {
+                            size: limit.saturating_add(1),
+                            limit,
+                        },
+                        None => OpenRefusal::NotImportable {
+                            detail: source.to_string(),
+                        },
                     }),
                 }
             }
@@ -273,7 +283,15 @@ fn read_document(
             });
         }
 
-        let bytes = fs::read(target.resolved()).map_err(|error| OpenRefusal::io(path, &error))?;
+        // The `stat` above is only a first answer: the file can grow before
+        // it is read, so the read itself stops one byte past the ceiling.
+        let mut bytes = Vec::new();
+        fs::File::open(target.resolved())
+            .and_then(|file| {
+                file.take(limits.max_bytes.saturating_add(1))
+                    .read_to_end(&mut bytes)
+            })
+            .map_err(|error| OpenRefusal::io(path, &error))?;
         if cancellation.is_cancelled() {
             return Err(OpenRefusal::Cancelled);
         }

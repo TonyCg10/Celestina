@@ -4,6 +4,13 @@
 use std::io::Write;
 
 use grafita_core::container::{Container, ContainerError};
+use grafita_core::inflate::Budget;
+use grafita_core::open::DEFAULT_MAX_BYTES;
+
+/// What one read may unpack: the document ceiling a host would set.
+fn budget() -> Budget {
+    Budget::new(DEFAULT_MAX_BYTES)
+}
 
 const DOCUMENT: &str = concat!(
     r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
@@ -51,15 +58,15 @@ fn a_container_gives_back_the_parts_it_was_given() {
         vec!["[Content_Types].xml", "_rels/.rels", "word/document.xml"]
     );
     assert_eq!(
-        container.read("word/document.xml"),
+        container.read("word/document.xml", &mut budget()),
         Ok(DOCUMENT.as_bytes().to_vec())
     );
     assert_eq!(
-        container.read("_rels/.rels"),
+        container.read("_rels/.rels", &mut budget()),
         Ok(b"<Relationships/>".to_vec())
     );
     assert_eq!(
-        container.read("word/settings.xml"),
+        container.read("word/settings.xml", &mut budget()),
         Err(ContainerError::NoSuchMember {
             name: "word/settings.xml".to_owned()
         })
@@ -89,15 +96,18 @@ fn replacing_one_part_leaves_every_other_part_exactly_as_it_was() {
     let container = Container::parse(rewritten.clone()).expect("still a container");
 
     assert_eq!(container.names(), original.names());
-    assert_eq!(container.read("word/document.xml"), Ok(edited.into_bytes()));
+    assert_eq!(
+        container.read("word/document.xml", &mut budget()),
+        Ok(edited.into_bytes())
+    );
     // Untouched members come back identical, and so does the compression they
     // were stored with: the stored one was not deflated on the way out.
     assert_eq!(
-        container.read("[Content_Types].xml"),
+        container.read("[Content_Types].xml", &mut budget()),
         Ok(CONTENT_TYPES.as_bytes().to_vec())
     );
     assert_eq!(
-        container.read("_rels/.rels"),
+        container.read("_rels/.rels", &mut budget()),
         Ok(b"<Relationships/>".to_vec())
     );
 
@@ -131,7 +141,7 @@ fn what_is_not_a_container_this_crate_edits_is_refused_by_name() {
     bytes[record + 16] ^= 0xFF;
     let container = Container::parse(bytes).expect("the structure still parses");
     assert!(matches!(
-        container.read("[Content_Types].xml"),
+        container.read("[Content_Types].xml", &mut budget()),
         Err(ContainerError::Corrupt { .. })
     ));
 }

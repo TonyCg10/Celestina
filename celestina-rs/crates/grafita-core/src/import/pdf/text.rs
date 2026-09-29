@@ -10,12 +10,28 @@
 //! Nothing here lays anything out. Text is collected in the order the page
 //! draws it, which is the order it was written in.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
-use super::file::Pdf;
+use celestina_core::CancellationToken;
+
+use super::file::{ObjectKey, Pdf};
 use super::glyphs;
 use super::object::{Dictionary, Lexer, Object, PdfError};
 use crate::encoding::{Encoding, SingleByte};
+
+/// What one font map entry costs on the work budget: about what it occupies
+/// in memory, so the maps a document builds are bounded like its bytes.
+const ENTRY_COST: usize = 48;
+
+/// How many entries one `ToUnicode` map may write, overwrites included.
+///
+/// A code is at most two bytes wide in the fonts this reader decodes, so a
+/// map holds at most 65 536 distinct entries; twice that allows every code to
+/// be restated once. A `bfrange` line writes up to 65 536 entries from a
+/// dozen bytes, and a file repeating one was the fastest way to spend minutes
+/// or gigabytes on one font.
+const MAX_MAP_WRITES: usize = 2 * 65_536;
 
 /// Where one drawn string lives, so an edit can find its way back.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -37,19 +53,50 @@ pub struct Extraction {
     pub text: String,
     pub placements: Vec<Placement>,
     /// Every font any placement was drawn with, in the order they were met.
-    pub fonts: Vec<Font>,
+    /// Shared rather than copied: a content stream may select the same font
+    /// thousands of times, and its map is read once.
+    pub fonts: Vec<Arc<Font>>,
     /// A line break the page asked for, held until text follows it. Moving the
     /// pen before drawing anything is not a blank line, and a document that
     /// began with one would grow a line nobody wrote.
     pending_break: bool,
 }
 
-/// Reads every page's text, in page order.
-pub fn extract(pdf: &Pdf) -> Result<Extraction, PdfError> {
+/// Reads every page's text, in page order, until `cancellation` says stop.
+///
+/// The whole reading is one walk under [`Pdf::walk_budget`]: every lookup,
+/// decode and font map counts against it, and the token is checked at each.
+pub fn extract(pdf: &Pdf, cancellation: &CancellationToken) -> Result<Extraction, PdfError> {
+    pdf.within(pdf.walk_budget(), cancellation, || read_pages(pdf))
+}
+
+fn read_pages(pdf: &Pdf) -> Result<Extraction, PdfError> {
     let mut out = Extraction::default();
+    // Index zero is always the fallback font, so a string drawn before any
+    // `Tf`, or with a font the page does not name, still names one.
+    out.fonts.push(Arc::new(Font::default()));
+    let mut reader = Reader {
+        pdf,
+        fonts: BTreeMap::new(),
+        font_sets: BTreeMap::new(),
+    };
     for page in pages(pdf)? {
-        let fonts = page_fonts(pdf, &page)?;
-        for stream in page_streams(pdf, &page)? {
+        // A page is read when its turn comes and dropped after it, so what
+        // extraction holds is one page at a time, not the whole tree.
+        pdf.checkpoint()?;
+        let object;
+        let dictionary = match &page.source {
+            Source::Inline(dictionary) => dictionary,
+            Source::Object(number) => {
+                object = pdf.object(*number)?;
+                match object.as_dictionary() {
+                    Some(dictionary) => dictionary,
+                    None => continue,
+                }
+            }
+        };
+        let fonts = reader.page_fonts(dictionary, page.inherited.as_deref())?;
+        for stream in page_streams(pdf, dictionary)? {
             let content = pdf.stream_data(&pdf.object(stream)?)?;
             read_stream(&content, stream, &fonts, &mut out);
         }
@@ -61,48 +108,239 @@ pub fn extract(pdf: &Pdf) -> Result<Extraction, PdfError> {
     Ok(out)
 }
 
-/// Every page dictionary, in reading order.
-fn pages(pdf: &Pdf) -> Result<Vec<Dictionary>, PdfError> {
+/// Where a page's fonts were found, so a set shared by every page is read
+/// once: the page's `/Resources` by reference, or its `/Font` dictionary.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum FontSet {
+    Resources(ObjectKey),
+    Font(ObjectKey),
+}
+
+type Fonts = Arc<BTreeMap<String, Arc<Font>>>;
+
+/// Extraction's memory of what it has already read. Keyed by the bytes an
+/// object reads rather than by its number, so a file that gives one font a
+/// thousand numbers still has it read once.
+struct Reader<'a> {
+    pdf: &'a Pdf,
+    /// Each font object, read once however many pages name it.
+    fonts: BTreeMap<ObjectKey, Arc<Font>>,
+    /// Each shared set of fonts, read once however many pages share it.
+    font_sets: BTreeMap<FontSet, Fonts>,
+}
+
+impl Reader<'_> {
+    fn key(&self, object: &Object) -> Result<Option<ObjectKey>, PdfError> {
+        match object.as_reference() {
+            Some(number) => self.pdf.key(number),
+            None => Ok(None),
+        }
+    }
+
+    /// One entry per font name the page uses: how its bytes become characters.
+    fn page_fonts(
+        &mut self,
+        page: &Dictionary,
+        inherited: Option<&Object>,
+    ) -> Result<Fonts, PdfError> {
+        let pdf = self.pdf;
+        let Some(resources_entry) = page.get("Resources").or(inherited) else {
+            return Ok(Fonts::default());
+        };
+        let resources_key = self.key(resources_entry)?.map(FontSet::Resources);
+        if let Some(known) = resources_key.and_then(|key| self.font_sets.get(&key)) {
+            return Ok(Arc::clone(known));
+        }
+        // Inherited resources written inline are read where they are: a copy
+        // per page would cost pages × resources before anything was counted.
+        let resolved;
+        let resources = if resources_entry.as_reference().is_some() {
+            resolved = pdf.resolve(resources_entry)?;
+            &resolved
+        } else {
+            resources_entry
+        };
+        let Some(resources_dictionary) = resources.as_dictionary() else {
+            return Ok(Fonts::default());
+        };
+        let font_key = match resources_dictionary.get("Font") {
+            Some(entry) => self.key(entry)?.map(FontSet::Font),
+            None => None,
+        };
+        let set = match font_key.and_then(|key| self.font_sets.get(&key)) {
+            Some(known) => Arc::clone(known),
+            None => {
+                let fonts = pdf.entry(resources_dictionary, "Font")?;
+                let mut out = BTreeMap::new();
+                if let Some(fonts) = fonts.as_dictionary() {
+                    // Listing a font costs something even when it is known,
+                    // or a page could name the same font a million times.
+                    pdf.spend(entry_cost(fonts.len()))?;
+                    for (name, reference) in fonts {
+                        if let Some(font) = self.font(reference)? {
+                            out.insert(name.clone(), font);
+                        }
+                    }
+                }
+                let set = Arc::new(out);
+                if let Some(key) = font_key {
+                    self.font_sets.insert(key, Arc::clone(&set));
+                }
+                set
+            }
+        };
+        if let Some(key) = resources_key {
+            self.font_sets.insert(key, Arc::clone(&set));
+        }
+        Ok(set)
+    }
+
+    /// The font `reference` names, read once per font object.
+    fn font(&mut self, reference: &Object) -> Result<Option<Arc<Font>>, PdfError> {
+        let key = self.key(reference)?;
+        if let Some(known) = key.and_then(|key| self.fonts.get(&key)) {
+            return Ok(Some(Arc::clone(known)));
+        }
+        let font = self.pdf.resolve(reference)?;
+        let Some(dictionary) = font.as_dictionary() else {
+            return Ok(None);
+        };
+        let font = Arc::new(Font::read(self.pdf, dictionary)?);
+        if let Some(key) = key {
+            self.fonts.insert(key, Arc::clone(&font));
+        }
+        Ok(Some(font))
+    }
+}
+
+/// What `entries` font map entries cost on the work counter.
+fn entry_cost(entries: usize) -> usize {
+    entries.saturating_mul(ENTRY_COST)
+}
+
+/// Where a page's dictionary is: an object of its own, read when the page's
+/// turn comes, or written inline in its parent's `/Kids`.
+enum Source {
+    Object(u32),
+    Inline(Dictionary),
+}
+
+/// A page, and the resources it inherits from the nodes above it when it has
+/// none of its own. Shared, because every page under a node inherits the same
+/// ones and copying them per page would cost pages × resources.
+struct Page {
+    source: Source,
+    inherited: Option<Arc<Object>>,
+}
+
+/// The objects a page-tree walk has met, by number and by the bytes they
+/// read.
+#[derive(Default)]
+struct Visited {
+    numbers: BTreeSet<u32>,
+    keys: BTreeSet<ObjectKey>,
+}
+
+impl Visited {
+    /// Whether the walk should read object `number`: not when it has already
+    /// met that number. Meeting the same object under another number is not
+    /// a tree at all, and refused.
+    fn first_visit(&mut self, pdf: &Pdf, number: u32) -> Result<bool, PdfError> {
+        if !self.numbers.insert(number) {
+            return Ok(false);
+        }
+        if let Some(key) = pdf.key(number)? {
+            if !self.keys.insert(key) {
+                return Err(PdfError::Malformed {
+                    detail: format!(
+                        "the page tree names one object under two numbers, {number} among them"
+                    ),
+                });
+            }
+        }
+        Ok(true)
+    }
+}
+
+/// Every page, in reading order. A page that is an object of its own is kept
+/// as its number; only inline pages are kept as dictionaries.
+fn pages(pdf: &Pdf) -> Result<Vec<Page>, PdfError> {
     let root = pdf.entry(pdf.trailer(), "Root")?;
     let catalogue = root.as_dictionary().cloned().ok_or(PdfError::Malformed {
         detail: "the file has no catalogue".to_owned(),
     })?;
+    let mut visited = Visited::default();
+    let reference = catalogue.get("Pages").and_then(Object::as_reference);
+    if let Some(number) = reference {
+        visited.first_visit(pdf, number)?;
+    }
     let tree = pdf.entry(&catalogue, "Pages")?;
     let mut found = Vec::new();
     if let Some(node) = tree.as_dictionary() {
-        walk(pdf, node, &mut found, 0)?;
+        if pdf.entry(node, "Type")?.as_name() == Some("Page") {
+            let source = match reference {
+                Some(number) => Source::Object(number),
+                None => Source::Inline(node.clone()),
+            };
+            found.push(Page {
+                source,
+                inherited: None,
+            });
+        } else {
+            walk(pdf, node, None, &mut found, 0, &mut visited)?;
+        }
     }
     Ok(found)
 }
 
+/// Collects the pages under the page-tree node `node`.
+///
+/// A page tree is a tree: every node has one parent. A file that names a node
+/// twice would otherwise be walked once per path to it, and forty levels of
+/// "both kids are the next node" is 2^40 pages from a few hundred bytes. A
+/// node already visited is therefore not visited again.
 fn walk(
     pdf: &Pdf,
     node: &Dictionary,
-    found: &mut Vec<Dictionary>,
+    inherited: Option<Arc<Object>>,
+    found: &mut Vec<Page>,
     depth: usize,
+    visited: &mut Visited,
 ) -> Result<(), PdfError> {
     if depth > 64 {
         return Err(PdfError::Malformed {
             detail: "the page tree is deeper than any document".to_owned(),
         });
     }
-    if pdf.entry(node, "Type")?.as_name() == Some("Page") {
-        found.push(node.clone());
-        return Ok(());
-    }
+    // A page inherits its resources from the nearest node above it that has
+    // them, which is where a shared font usually lives.
+    let inherited = match node.get("Resources") {
+        Some(own) => Some(Arc::new(own.clone())),
+        None => inherited,
+    };
     let kids = pdf.entry(node, "Kids")?;
     for kid in kids.as_array().unwrap_or(&[]) {
-        let kid = pdf.resolve(kid)?;
-        if let Some(child) = kid.as_dictionary() {
-            // A page inherits its resources from the node above it, which is
-            // where a shared font usually lives.
-            let mut child = child.clone();
-            if !child.contains_key("Resources") {
-                if let Some(inherited) = node.get("Resources") {
-                    child.insert("Resources".to_owned(), inherited.clone());
-                }
+        let number = kid.as_reference();
+        if let Some(number) = number {
+            if !visited.first_visit(pdf, number)? {
+                continue;
             }
-            walk(pdf, &child, found, depth + 1)?;
+        }
+        let resolved = pdf.resolve(kid)?;
+        let Some(child) = resolved.as_dictionary() else {
+            continue;
+        };
+        if pdf.entry(child, "Type")?.as_name() == Some("Page") {
+            let source = match number {
+                Some(number) => Source::Object(number),
+                None => Source::Inline(child.clone()),
+            };
+            found.push(Page {
+                source,
+                inherited: inherited.clone(),
+            });
+        } else {
+            walk(pdf, child, inherited.clone(), found, depth + 1, visited)?;
         }
     }
     Ok(())
@@ -127,27 +365,6 @@ fn page_streams(pdf: &Pdf, page: &Dictionary) -> Result<Vec<u32>, PdfError> {
     Ok(streams)
 }
 
-/// One entry per font name the page uses: how its bytes become characters.
-fn page_fonts(pdf: &Pdf, page: &Dictionary) -> Result<BTreeMap<String, Font>, PdfError> {
-    let resources = pdf.entry(page, "Resources")?;
-    let Some(resources) = resources.as_dictionary() else {
-        return Ok(BTreeMap::new());
-    };
-    let fonts = pdf.entry(resources, "Font")?;
-    let Some(fonts) = fonts.as_dictionary() else {
-        return Ok(BTreeMap::new());
-    };
-    let mut out = BTreeMap::new();
-    for (name, reference) in fonts {
-        let font = pdf.resolve(reference)?;
-        let Some(dictionary) = font.as_dictionary() else {
-            continue;
-        };
-        out.insert(name.clone(), Font::read(pdf, dictionary)?);
-    }
-    Ok(out)
-}
-
 /// How one font's bytes become characters, and back.
 #[derive(Clone, Debug, Default)]
 pub struct Font {
@@ -168,9 +385,15 @@ impl Font {
         let mut map = BTreeMap::new();
         if let Ok(stream @ Object::Stream { .. }) = pdf.entry(dictionary, "ToUnicode") {
             let content = pdf.stream_data(&stream)?;
-            map = read_to_unicode(&content);
+            // The widest code this font's strings are read in; a map entry
+            // past it can never be looked up.
+            let widest = if wide { 0xFFFF } else { 0xFF };
+            let (read, written) = read_to_unicode(&content, widest)?;
+            pdf.spend(entry_cost(written))?;
+            map = read;
         }
         let encoded = read_encoding(pdf, dictionary)?;
+        pdf.spend(entry_cost(encoded.len()))?;
         Ok(Self { map, encoded, wide })
     }
 
@@ -317,9 +540,30 @@ fn read_encoding(pdf: &Pdf, dictionary: &Dictionary) -> Result<BTreeMap<u32, cha
     Ok(out)
 }
 
-/// Reads the `bfchar` and `bfrange` sections of a `ToUnicode` map.
-fn read_to_unicode(content: &[u8]) -> BTreeMap<u32, String> {
+/// Reads the `bfchar` and `bfrange` sections of a `ToUnicode` map, and how
+/// many entries it wrote.
+///
+/// Codes past `widest` are never looked up by the font that owns the map, so
+/// they are not stored; and the writes, overwrites included, stop at
+/// [`MAX_MAP_WRITES`] with a refusal.
+fn read_to_unicode(
+    content: &[u8],
+    widest: u32,
+) -> Result<(BTreeMap<u32, String>, usize), PdfError> {
     let mut map = BTreeMap::new();
+    let mut writes = 0usize;
+    let mut write = |map: &mut BTreeMap<u32, String>, code: u32, text: String| {
+        writes += 1;
+        if writes > MAX_MAP_WRITES {
+            return Err(PdfError::Malformed {
+                detail: "a font's ToUnicode map is larger than any font".to_owned(),
+            });
+        }
+        if code <= widest {
+            map.insert(code, text);
+        }
+        Ok(())
+    };
     let mut lexer = Lexer::new(content, 0);
     let mut pending: Vec<Object> = Vec::new();
     while lexer.cursor < content.len() {
@@ -355,7 +599,7 @@ fn read_to_unicode(content: &[u8]) -> BTreeMap<u32, String> {
             "endbfchar" => {
                 for pair in pending.chunks(2) {
                     if let [Object::String(code), Object::String(value)] = pair {
-                        map.insert(number(code), utf16_be(value));
+                        write(&mut map, number(code), utf16_be(value))?;
                     }
                 }
                 pending.clear();
@@ -367,18 +611,28 @@ fn read_to_unicode(content: &[u8]) -> BTreeMap<u32, String> {
                             let (low, high) = (number(low), number(high));
                             let text = utf16_be(value);
                             let first = text.chars().next().unwrap_or('\u{FFFD}') as u32;
-                            for (offset, code) in (low..=high.min(low + 0xFFFF)).enumerate() {
-                                let point = first.saturating_add(offset as u32);
+                            // One line is at most 65 536 codes, and none past
+                            // what the font can draw.
+                            let last = high.min(low.saturating_add(0xFFFF)).min(widest);
+                            for (offset, code) in (low..=last).enumerate() {
+                                let offset = u32::try_from(offset).unwrap_or(u32::MAX);
+                                let point = first.saturating_add(offset);
                                 if let Some(character) = char::from_u32(point) {
-                                    map.insert(code, character.to_string());
+                                    write(&mut map, code, character.to_string())?;
                                 }
                             }
                         }
                         [Object::String(low), Object::String(_high), Object::Array(values)] => {
                             let low = number(low);
                             for (offset, value) in values.iter().enumerate() {
+                                let code = u32::try_from(offset)
+                                    .ok()
+                                    .and_then(|offset| low.checked_add(offset));
+                                let Some(code) = code else {
+                                    break;
+                                };
                                 if let Object::String(value) = value {
-                                    map.insert(low + offset as u32, utf16_be(value));
+                                    write(&mut map, code, utf16_be(value))?;
                                 }
                             }
                         }
@@ -391,7 +645,7 @@ fn read_to_unicode(content: &[u8]) -> BTreeMap<u32, String> {
             _ => pending.clear(),
         }
     }
-    map
+    Ok((map, writes))
 }
 
 fn number(bytes: &[u8]) -> u32 {
@@ -423,15 +677,23 @@ fn utf16_be(bytes: &[u8]) -> String {
 const WORD_GAP: f64 = -150.0;
 
 /// Walks one content stream, collecting what it draws.
-fn read_stream(content: &[u8], stream: u32, fonts: &BTreeMap<String, Font>, out: &mut Extraction) {
+///
+/// `out.fonts` starts with the fallback font at index zero. A font the stream
+/// selects is added once per stream and selected again by index, however many
+/// `Tf` operators name it.
+fn read_stream(
+    content: &[u8],
+    stream: u32,
+    fonts: &BTreeMap<String, Arc<Font>>,
+    out: &mut Extraction,
+) {
     let mut lexer = Lexer::new(content, 0);
     let mut operands: Vec<(Object, (usize, usize))> = Vec::new();
-    let mut font = Font::default();
-    // Index zero is always the fallback font, so a string drawn before any
-    // `Tf` still names one.
     if out.fonts.is_empty() {
-        out.fonts.push(Font::default());
+        out.fonts.push(Arc::new(Font::default()));
     }
+    let mut selected: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut font = out.fonts.first().map(Arc::clone).unwrap_or_default();
     let mut current = 0usize;
 
     while lexer.cursor < content.len() {
@@ -471,9 +733,19 @@ fn read_stream(content: &[u8], stream: u32, fonts: &BTreeMap<String, Font>, out:
         match operator {
             "Tf" => {
                 if let Some((Object::Name(name), _)) = operands.first() {
-                    font = fonts.get(name).cloned().unwrap_or_default();
-                    current = out.fonts.len();
-                    out.fonts.push(font.clone());
+                    current = match (selected.get(name.as_str()), fonts.get_key_value(name)) {
+                        (Some(index), _) => *index,
+                        (None, Some((key, chosen))) => {
+                            out.fonts.push(Arc::clone(chosen));
+                            let index = out.fonts.len() - 1;
+                            selected.insert(key.as_str(), index);
+                            index
+                        }
+                        // A name the page does not list draws with the
+                        // fallback, as it always did.
+                        (None, None) => 0,
+                    };
+                    font = out.fonts.get(current).map(Arc::clone).unwrap_or_default();
                 }
             }
             "Tj" | "'" | "\"" => {

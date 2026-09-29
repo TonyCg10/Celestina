@@ -8,14 +8,18 @@ fn main() {
     for path in arguments {
         let bytes = std::fs::read(&path).expect("read");
         let size = bytes.len();
-        let pdf = match Pdf::parse(bytes) {
+        let pdf = match Pdf::parse(
+            bytes,
+            grafita_core::open::DEFAULT_MAX_BYTES,
+            &celestina_core::CancellationToken::new(),
+        ) {
             Ok(pdf) => pdf,
             Err(error) => {
                 println!("{path} ({size} B): REFUSED {error}");
                 continue;
             }
         };
-        let extraction = match text::extract(&pdf) {
+        let extraction = match text::extract(&pdf, &celestina_core::CancellationToken::new()) {
             Ok(extraction) => extraction,
             Err(error) => {
                 println!("{path} ({size} B): parsed, no text: {error}");
@@ -92,8 +96,14 @@ fn main() {
                 }
                 let grew = written.len() - size;
                 let prefix_intact = written.starts_with(pdf.bytes());
-                let reread = Pdf::parse(written).ok().and_then(|pdf| {
-                    text::extract(&pdf)
+                let reread = Pdf::parse(
+                    written,
+                    grafita_core::open::DEFAULT_MAX_BYTES,
+                    &celestina_core::CancellationToken::new(),
+                )
+                .ok()
+                .and_then(|pdf| {
+                    text::extract(&pdf, &celestina_core::CancellationToken::new())
                         .ok()
                         .map(|again| (again.text.contains("REDACTED"), again.text.contains(&word)))
                 });

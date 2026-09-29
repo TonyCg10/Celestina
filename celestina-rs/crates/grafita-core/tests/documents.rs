@@ -558,6 +558,18 @@ fn a_save_that_cannot_create_its_temporary_leaves_the_original_intact() {
         .expect("insert");
 
     fs::set_permissions(&root, Permissions::from_mode(0o500)).expect("seal the directory");
+    // A process with `CAP_DAC_OVERRIDE`, root in a container for instance,
+    // writes into a mode-0500 directory anyway, so the refusal this test is
+    // about cannot be provoked there. That is a fact about the environment,
+    // not about the save, and the precondition is checked rather than assumed.
+    let probe = root.join("probe-write");
+    if fs::write(&probe, b"").is_ok() {
+        let _ = fs::remove_file(&probe);
+        fs::set_permissions(&root, Permissions::from_mode(0o700)).expect("unseal the directory");
+        let _ = fs::remove_dir_all(root);
+        eprintln!("skipped: this process can write into a mode-0500 directory");
+        return;
+    }
     let refusal = perform(
         &document
             .save_request()

@@ -105,6 +105,11 @@ pub enum PdfError {
     Encrypted,
     /// The document holds no text a reader can extract — a scan, most likely.
     NoText,
+    /// A stream, or the document's streams together, unpack past the ceiling
+    /// on a document, or reading it would cost more than the ceiling allows.
+    TooLarge { limit: u64 },
+    /// The host stopped the read.
+    Cancelled,
 }
 
 impl fmt::Display for PdfError {
@@ -119,22 +124,49 @@ impl fmt::Display for PdfError {
             Self::NoText => formatter.write_str(
                 "this PDF holds no text to edit; it is probably a scan, and Grafita does not read images",
             ),
+            Self::TooLarge { limit } => write!(
+                formatter,
+                "this PDF unpacks past the {limit}-byte ceiling on a document"
+            ),
+            Self::Cancelled => formatter.write_str("reading this PDF was cancelled"),
         }
     }
 }
 
 impl std::error::Error for PdfError {}
 
+/// How deeply arrays and dictionaries may nest inside one another.
+///
+/// Reading an object recurses once per level, on whatever thread the host
+/// opened the document on, and a stack overflow is not an error anybody can
+/// catch: it aborts the process. Real documents nest a handful of levels —
+/// a page's resources, a font inside them, an array inside that.
+pub const MAX_NESTING: usize = 64;
+
 /// A reader over a PDF's bytes.
 pub struct Lexer<'a> {
     pub bytes: &'a [u8],
     pub cursor: usize,
+    /// How many arrays and dictionaries the read is inside right now.
+    depth: usize,
 }
 
 impl<'a> Lexer<'a> {
     #[must_use]
     pub const fn new(bytes: &'a [u8], cursor: usize) -> Self {
-        Self { bytes, cursor }
+        Self {
+            bytes,
+            cursor,
+            depth: 0,
+        }
+    }
+
+    /// Whether the bytes at the cursor begin with `prefix`. A cursor past the
+    /// end — an offset the file made up — begins with nothing.
+    fn at(&self, prefix: &[u8]) -> bool {
+        self.bytes
+            .get(self.cursor..)
+            .is_some_and(|rest| rest.starts_with(prefix))
     }
 
     /// Steps over whitespace and comments, which may appear between any two
@@ -158,7 +190,7 @@ impl<'a> Lexer<'a> {
     /// Whether the bytes at the cursor are this keyword, stepping over it if so.
     pub fn eat(&mut self, keyword: &[u8]) -> bool {
         self.skip_space();
-        if self.bytes[self.cursor..].starts_with(keyword) {
+        if self.at(keyword) {
             self.cursor += keyword.len();
             return true;
         }
@@ -176,24 +208,12 @@ impl<'a> Lexer<'a> {
             b'(' => self.literal_string(),
             b'<' => {
                 if self.bytes.get(self.cursor + 1) == Some(&b'<') {
-                    self.dictionary_or_stream()
+                    self.nested(Self::dictionary_or_stream)
                 } else {
                     self.hex_string()
                 }
             }
-            b'[' => {
-                self.cursor += 1;
-                let mut items = Vec::new();
-                loop {
-                    self.skip_space();
-                    if self.bytes.get(self.cursor) == Some(&b']') {
-                        self.cursor += 1;
-                        break;
-                    }
-                    items.push(self.object()?);
-                }
-                Ok(Object::Array(items))
-            }
+            b'[' => self.nested(Self::array),
             b't' if self.eat(b"true") => Ok(Object::Boolean(true)),
             b'f' if self.eat(b"false") => Ok(Object::Boolean(false)),
             b'n' if self.eat(b"null") => Ok(Object::Null),
@@ -204,6 +224,37 @@ impl<'a> Lexer<'a> {
                 detail: format!("byte {byte:#04X} begins no object"),
             }),
         }
+    }
+
+    /// Reads an array or a dictionary one level deeper, refusing to go past
+    /// [`MAX_NESTING`].
+    fn nested(
+        &mut self,
+        read: fn(&mut Self) -> Result<Object, PdfError>,
+    ) -> Result<Object, PdfError> {
+        if self.depth >= MAX_NESTING {
+            return Err(PdfError::Malformed {
+                detail: format!("objects nest more than {MAX_NESTING} levels deep"),
+            });
+        }
+        self.depth += 1;
+        let object = read(self);
+        self.depth -= 1;
+        object
+    }
+
+    fn array(&mut self) -> Result<Object, PdfError> {
+        self.cursor += 1;
+        let mut items = Vec::new();
+        loop {
+            self.skip_space();
+            if self.bytes.get(self.cursor) == Some(&b']') {
+                self.cursor += 1;
+                break;
+            }
+            items.push(self.object()?);
+        }
+        Ok(Object::Array(items))
     }
 
     fn name(&mut self) -> Result<Object, PdfError> {
@@ -322,7 +373,7 @@ impl<'a> Lexer<'a> {
         let mut dictionary = Dictionary::new();
         loop {
             self.skip_space();
-            if self.bytes[self.cursor..].starts_with(b">>") {
+            if self.at(b">>") {
                 self.cursor += 2;
                 break;
             }
@@ -335,7 +386,7 @@ impl<'a> Lexer<'a> {
             dictionary.insert(key, value);
         }
         self.skip_space();
-        if self.bytes[self.cursor..].starts_with(b"stream") {
+        if self.at(b"stream") {
             self.cursor += b"stream".len();
             // The data begins after the end-of-line that follows the keyword.
             if self.bytes.get(self.cursor) == Some(&b'\r') {
@@ -365,7 +416,11 @@ impl<'a> Lexer<'a> {
         {
             self.cursor += 1;
         }
-        let text = std::str::from_utf8(&self.bytes[start..self.cursor]).unwrap_or("");
+        let text = self
+            .bytes
+            .get(start..self.cursor)
+            .and_then(|digits| std::str::from_utf8(digits).ok())
+            .unwrap_or("");
         let value = text.parse::<f64>().map_err(|_| PdfError::Malformed {
             detail: format!("'{text}' is not a number"),
         })?;
@@ -386,8 +441,10 @@ impl<'a> Lexer<'a> {
                 probe.cursor += 1;
             }
             if probe.cursor > generation_start {
-                let generation = std::str::from_utf8(&self.bytes[generation_start..probe.cursor])
-                    .ok()
+                let generation = self
+                    .bytes
+                    .get(generation_start..probe.cursor)
+                    .and_then(|digits| std::str::from_utf8(digits).ok())
                     .and_then(|text| text.parse::<u16>().ok());
                 probe.skip_space();
                 if let (Some(generation), Some(b'R')) =

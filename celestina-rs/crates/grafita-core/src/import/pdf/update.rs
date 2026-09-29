@@ -44,7 +44,10 @@ pub fn append(pdf: &Pdf, replacements: &[(u32, Vec<u8>)]) -> Result<Vec<u8>, Pdf
     let size = pdf
         .last_object()
         .max(written.last().map_or(0, |(number, _)| *number))
-        + 1;
+        .checked_add(1)
+        .ok_or_else(|| PdfError::Unsupported {
+            detail: "the file already uses the last object number".to_owned(),
+        })?;
     let xref_offset = out.len();
 
     // The kind of cross-reference matches the file's own. Appending a table to
@@ -130,7 +133,10 @@ fn write_xref_stream(
         .collect::<Vec<_>>()
         .join(" ");
     let mut dictionary = trailer_entries(pdf);
-    dictionary.push(format!("/Size {}", number + 1));
+    let size = number.checked_add(1).ok_or_else(|| PdfError::Unsupported {
+        detail: "the file already uses the last object number".to_owned(),
+    })?;
+    dictionary.push(format!("/Size {size}"));
     dictionary.push(format!("/Prev {previous}"));
     dictionary.push("/Type /XRef".to_owned());
     dictionary.push("/W [1 4 2]".to_owned());

@@ -10,13 +10,14 @@
 //! between the two contracts.
 
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::Write;
 
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
 use crate::encoding::Encoding;
+use crate::inflate::{Budget, InflateError};
 use crate::probe::{classify, Classification};
 
 /// Why a compressed file did not become text.
@@ -30,6 +31,8 @@ pub enum GzipError {
     NotText,
     /// The text inside is in an encoding this crate cannot write back.
     Unsupported { detail: String },
+    /// What is inside unpacks past the ceiling on a document.
+    TooLarge { limit: u64 },
 }
 
 impl fmt::Display for GzipError {
@@ -41,6 +44,10 @@ impl fmt::Display for GzipError {
             Self::Unsupported { detail } => write!(
                 formatter,
                 "the text inside cannot be written back: {detail}"
+            ),
+            Self::TooLarge { limit } => write!(
+                formatter,
+                "what is inside unpacks past the {limit}-byte ceiling on a document"
             ),
         }
     }
@@ -62,15 +69,20 @@ impl Compressed {
         bytes.starts_with(&[0x1F, 0x8B])
     }
 
-    /// Reads the text inside.
-    pub fn open(bytes: &[u8]) -> Result<Self, GzipError> {
+    /// Reads the text inside, unpacking no more than `budget` allows.
+    pub fn open(bytes: &[u8], budget: &mut Budget) -> Result<Self, GzipError> {
         if !Self::looks_like_gzip(bytes) {
             return Err(GzipError::NotGzip);
         }
-        let mut inside = Vec::new();
-        GzDecoder::new(bytes)
-            .read_to_end(&mut inside)
-            .map_err(|_| GzipError::Corrupt)?;
+        // The wrapper's own size field is the length modulo 4 GiB and sits
+        // after the data, so there is nothing to believe before reading; the
+        // budget is the only bound.
+        let inside = budget
+            .inflate(GzDecoder::new(bytes))
+            .map_err(|error| match error {
+                InflateError::TooLarge { limit } => GzipError::TooLarge { limit },
+                InflateError::Corrupt => GzipError::Corrupt,
+            })?;
 
         // The same question the editor asks of any file, asked of what came
         // out: a `.gz` holding a photograph is not a document.

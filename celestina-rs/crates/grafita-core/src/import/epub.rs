@@ -5,14 +5,22 @@
 //! the archive happens to store them would present a book in an order nobody
 //! wrote, so the spine is read even though it means two more lookups.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::container::Container;
+use crate::inflate::Budget;
 
 use super::ImportError;
 
 /// The reading order: every content document of the spine, in its order.
-pub(super) fn reading_order(container: &Container) -> Result<Vec<String>, ImportError> {
+///
+/// The two descriptions it reads are charged to `budget` like the chapters.
+pub(super) fn reading_order(
+    container: &Container,
+    budget: &mut Budget,
+) -> Result<Vec<String>, ImportError> {
     let container_xml = container
-        .read("META-INF/container.xml")
+        .read("META-INF/container.xml", budget)
         .map_err(ImportError::Container)?;
     let container_xml = String::from_utf8(container_xml).map_err(|_| ImportError::Incomplete {
         detail: "its container description is not UTF-8".to_owned(),
@@ -24,7 +32,7 @@ pub(super) fn reading_order(container: &Container) -> Result<Vec<String>, Import
     })?;
 
     let package = container
-        .read(&package_path)
+        .read(&package_path, budget)
         .map_err(ImportError::Container)?;
     let package = String::from_utf8(package).map_err(|_| ImportError::Incomplete {
         detail: "its package document is not UTF-8".to_owned(),
@@ -33,13 +41,18 @@ pub(super) fn reading_order(container: &Container) -> Result<Vec<String>, Import
         .rsplit_once('/')
         .map_or("", |(directory, _)| directory);
 
-    let manifest = manifest(&package);
+    // Looked up by identifier and by member name rather than searched, so a
+    // package of n items and a spine of m references costs n + m, not n × m.
+    // The first item with an identifier wins, as it did when it was a search.
+    let mut manifest: BTreeMap<&str, &str> = BTreeMap::new();
+    for (id, href) in self::manifest(&package) {
+        manifest.entry(id).or_insert(href);
+    }
+    let members: BTreeSet<&str> = container.names().into_iter().collect();
     let mut order = Vec::new();
+    let mut listed = BTreeSet::new();
     for reference in spine(&package) {
-        let Some(href) = manifest
-            .iter()
-            .find_map(|(id, href)| (*id == reference).then(|| (*href).to_owned()))
-        else {
+        let Some(href) = manifest.get(reference).map(|href| (*href).to_owned()) else {
             return Err(ImportError::Incomplete {
                 detail: format!("its spine names '{reference}', which the manifest does not hold"),
             });
@@ -52,7 +65,9 @@ pub(super) fn reading_order(container: &Container) -> Result<Vec<String>, Import
         // A spine also carries covers and navigation documents; the ones this
         // editor shows are the ones that hold text, and a missing member is the
         // book's problem rather than a reason to refuse it.
-        if container.names().contains(&path.as_str()) {
+        // A document the spine names twice is still one part: reading and
+        // writing it twice would make one chapter two editable copies.
+        if members.contains(path.as_str()) && listed.insert(path.clone()) {
             order.push(path);
         }
     }

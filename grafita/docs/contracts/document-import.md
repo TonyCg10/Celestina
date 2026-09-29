@@ -50,6 +50,24 @@ temporary, reproduced metadata, synchronisation, identity revalidation and an
 atomic rename. An imported document is not a second way to write a file, only a
 second way to produce its bytes.
 
+## What an imported document refuses to unpack
+
+The ceiling a host puts on a document (`Limits::max_bytes`, 64 MiB by default)
+is a ceiling on the document, not only on the file. A container's content
+counts against it as it is unpacked: every ZIP member a document reads and
+every filter of a PDF stream draw on the same budget, and each decoder is read
+only one byte past what is left. A container that would pass the ceiling is
+refused as too large before the excess is held. A size a header declares bounds
+the read and is checked against the result, but it never sizes an allocation.
+
+A PDF's structure is read with the same suspicion, because Grafita and
+Siderita's preview both run this reader in-process under `panic = "abort"`.
+Objects nested past 64 levels, an offset, length or field width the file
+cannot hold, and a count its own data cannot contain are refusals; a page or
+field tree that names a node twice is walked once. The hostile cases, each a
+refusal that must arrive promptly, are the tests in
+`celestina-rs/crates/grafita-core/tests/hostile.rs`.
+
 ## What every container checkpoint must prove
 
 Open a real document, save it, and compare the result with the input. A

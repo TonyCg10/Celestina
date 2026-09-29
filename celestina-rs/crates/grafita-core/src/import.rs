@@ -49,7 +49,10 @@ const PART_BREAK: &str = "\n\n";
 
 use std::fmt;
 
+use celestina_core::CancellationToken;
+
 use crate::container::{Container, ContainerError};
+use crate::inflate::Budget;
 use part::{Part, PartError, Rules};
 
 /// The container formats an imported document can be.
@@ -176,6 +179,8 @@ pub enum ImportError {
     /// A container with no part this crate knows how to read — a `.xlsx`, a
     /// `.jar`, an ordinary zip.
     UnknownFormat,
+    /// The host stopped the read.
+    Cancelled,
 }
 
 impl fmt::Display for ImportError {
@@ -193,11 +198,27 @@ impl fmt::Display for ImportError {
             Self::UnknownFormat => {
                 formatter.write_str("this container holds no document Grafita reads")
             }
+            Self::Cancelled => formatter.write_str("reading this container was cancelled"),
         }
     }
 }
 
 impl std::error::Error for ImportError {}
+
+impl ImportError {
+    /// The ceiling a document's content went past, when that is why it was
+    /// refused. A host tells the author "too large" rather than "damaged" for
+    /// these, because nothing is wrong with the file except its size.
+    #[must_use]
+    pub const fn exceeded_limit(&self) -> Option<u64> {
+        match self {
+            Self::Container(ContainerError::TooLarge { limit, .. })
+            | Self::Pdf(pdf::object::PdfError::TooLarge { limit })
+            | Self::Gzip(gzip::GzipError::TooLarge { limit }) => Some(*limit),
+            _ => None,
+        }
+    }
+}
 
 impl Imported {
     /// Whether these bytes could be a container at all, by their first bytes.
@@ -214,18 +235,36 @@ impl Imported {
 
     /// Reads a container into a document, deciding the format by what is in it
     /// rather than by the name it was given.
-    pub fn open(bytes: Vec<u8>) -> Result<Self, ImportError> {
+    ///
+    /// `limit` is the ceiling on the document, and it applies to what the
+    /// container unpacks as well as to the file: every member and every
+    /// filter draws on it, and a container that would pass it is refused
+    /// before the excess is ever held.
+    ///
+    /// `cancellation` is consulted between pages and between members, so a
+    /// host that closes the document stops a long read without waiting for it.
+    pub fn open(
+        bytes: Vec<u8>,
+        limit: u64,
+        cancellation: &CancellationToken,
+    ) -> Result<Self, ImportError> {
+        let mut budget = Budget::new(limit);
         if gzip::Compressed::looks_like_gzip(&bytes) {
-            let compressed = gzip::Compressed::open(&bytes).map_err(ImportError::Gzip)?;
+            let compressed =
+                gzip::Compressed::open(&bytes, &mut budget).map_err(ImportError::Gzip)?;
             return Ok(Self {
                 format: Format::Gzip,
                 body: Body::Gzip(Box::new(compressed)),
             });
         }
         if bytes.starts_with(b"%PDF-") {
-            let file = pdf::file::Pdf::parse(bytes).map_err(ImportError::Pdf)?;
-            let extraction = pdf::text::extract(&file).map_err(ImportError::Pdf)?;
-            let fields = pdf::form::fields(&file).map_err(ImportError::Pdf)?;
+            let from_pdf = |error| match error {
+                pdf::object::PdfError::Cancelled => ImportError::Cancelled,
+                other => ImportError::Pdf(other),
+            };
+            let file = pdf::file::Pdf::parse(bytes, limit, cancellation).map_err(from_pdf)?;
+            let extraction = pdf::text::extract(&file, cancellation).map_err(from_pdf)?;
+            let fields = pdf::form::fields(&file, cancellation).map_err(from_pdf)?;
             return Ok(Self {
                 format: Format::Pdf,
                 body: Body::Pdf {
@@ -249,12 +288,17 @@ impl Imported {
             .ok_or(ImportError::UnknownFormat)?;
         let names = match format {
             Format::Docx | Format::Odt => vec![format.marker().to_owned()],
-            Format::Epub => epub::reading_order(&container)?,
+            Format::Epub => epub::reading_order(&container, &mut budget)?,
             Format::Rtf | Format::Pdf | Format::Gzip => return Err(ImportError::UnknownFormat),
         };
         let mut parts = Vec::with_capacity(names.len());
         for name in names {
-            let bytes = container.read(&name).map_err(ImportError::Container)?;
+            if cancellation.is_cancelled() {
+                return Err(ImportError::Cancelled);
+            }
+            let bytes = container
+                .read(&name, &mut budget)
+                .map_err(ImportError::Container)?;
             match Part::parse(bytes, format.rules()) {
                 Ok(part) => parts.push((name, part)),
                 // A part with no text is not a broken document. A book's cover

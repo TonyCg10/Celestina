@@ -14,11 +14,13 @@
 //! edited is compressed at all.
 
 use std::fmt;
-use std::io::{Read, Write};
+use std::io::Write;
 
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
+
+use crate::inflate::{Budget, InflateError};
 
 const LOCAL_HEADER: [u8; 4] = [0x50, 0x4B, 0x03, 0x04];
 const CENTRAL_HEADER: [u8; 4] = [0x50, 0x4B, 0x01, 0x02];
@@ -30,6 +32,10 @@ const DEFLATED: u16 = 8;
 
 /// The largest end-of-central-directory comment a scan will look behind.
 const MAX_COMMENT: usize = u16::MAX as usize;
+
+/// The fixed part of a central directory record, and so the least room each
+/// member the end record counts must take up.
+const CENTRAL_RECORD: usize = 46;
 
 /// Why a byte stream is not a container this crate will touch.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,6 +50,9 @@ pub enum ContainerError {
     Corrupt { name: String },
     /// The archive has no member by that name.
     NoSuchMember { name: String },
+    /// A member unpacks past what the document may hold, alone or together
+    /// with the members read before it.
+    TooLarge { name: String, limit: u64 },
 }
 
 impl fmt::Display for ContainerError {
@@ -59,6 +68,10 @@ impl fmt::Display for ContainerError {
             Self::Malformed { detail } => write!(formatter, "this container is damaged: {detail}"),
             Self::Corrupt { name } => write!(formatter, "'{name}' could not be decompressed"),
             Self::NoSuchMember { name } => write!(formatter, "this container has no '{name}'"),
+            Self::TooLarge { name, limit } => write!(
+                formatter,
+                "'{name}' unpacks past the {limit}-byte ceiling on a document"
+            ),
         }
     }
 }
@@ -77,6 +90,8 @@ struct Member {
     /// The member's record in the central directory, copied the same way.
     central_span: (usize, usize),
     crc: u32,
+    /// What the directory says the member unpacks to. A bound on the read and
+    /// a check on its result, never a size to allocate.
     uncompressed_size: u32,
 }
 
@@ -99,22 +114,29 @@ impl Container {
                 detail: "it uses the zip64 extensions".to_owned(),
             });
         }
-        let count = read_u16(&bytes, end + 10)? as usize;
-        let directory_offset = read_u32(&bytes, end + 16)? as usize;
-        let comment_length = read_u16(&bytes, end + 20)? as usize;
-        if end + 22 + comment_length != bytes.len() {
+        let count = read_u16(&bytes, position(end, 10)?)? as usize;
+        let directory_offset = read_u32(&bytes, position(end, 16)?)? as usize;
+        let comment_length = read_u16(&bytes, position(end, 20)?)? as usize;
+        let comment_start = position(end, 22)?;
+        if position(comment_start, comment_length)? != bytes.len() {
             return Err(ContainerError::Malformed {
                 detail: "trailing bytes after the end record".to_owned(),
             });
         }
 
-        let mut members = Vec::with_capacity(count);
+        // The count is the file's claim; the file's length bounds it.
+        let mut members = Vec::with_capacity(count.min(bytes.len() / CENTRAL_RECORD));
         let mut cursor = directory_offset;
         for _ in 0..count {
             let member = read_central_record(&bytes, &mut cursor)?;
             members.push(member);
         }
-        let comment = bytes[end + 22..].to_vec();
+        let comment = bytes
+            .get(comment_start..)
+            .ok_or_else(|| ContainerError::Malformed {
+                detail: "the end record runs past the end of the file".to_owned(),
+            })?
+            .to_vec();
         Ok(Self {
             bytes,
             members,
@@ -131,8 +153,13 @@ impl Container {
             .collect()
     }
 
-    /// The decompressed content of one member.
-    pub fn read(&self, name: &str) -> Result<Vec<u8>, ContainerError> {
+    /// The decompressed content of one member, charged to `budget`.
+    ///
+    /// Every member a document reads draws on the same budget, so the ceiling
+    /// is on the document and not on each of its parts. The size the
+    /// directory declares bounds the read but sizes nothing: content that
+    /// disagrees with it is refused as corrupt.
+    pub fn read(&self, name: &str, budget: &mut Budget) -> Result<Vec<u8>, ContainerError> {
         let member = self
             .members
             .iter()
@@ -140,18 +167,30 @@ impl Container {
             .ok_or_else(|| ContainerError::NoSuchMember {
                 name: name.to_owned(),
             })?;
-        let data = &self.bytes[member.data_span.0..member.data_span.1];
+        let data = self
+            .bytes
+            .get(member.data_span.0..member.data_span.1)
+            .ok_or_else(|| ContainerError::Malformed {
+                detail: format!("'{name}' lies outside the file"),
+            })?;
+        let refused = |error: InflateError| match error {
+            InflateError::TooLarge { limit } => ContainerError::TooLarge {
+                name: name.to_owned(),
+                limit,
+            },
+            InflateError::Corrupt => ContainerError::Corrupt {
+                name: name.to_owned(),
+            },
+        };
+        let declared = u64::from(member.uncompressed_size);
         let content = match member.method {
-            STORED => data.to_vec(),
-            DEFLATED => {
-                let mut out = Vec::with_capacity(member.uncompressed_size as usize);
-                DeflateDecoder::new(data)
-                    .read_to_end(&mut out)
-                    .map_err(|_| ContainerError::Corrupt {
-                        name: name.to_owned(),
-                    })?;
-                out
+            STORED => {
+                budget.charge(data.len()).map_err(refused)?;
+                data.to_vec()
             }
+            DEFLATED => budget
+                .inflate_at_most(DeflateDecoder::new(data), declared)
+                .map_err(refused)?,
             other => {
                 return Err(ContainerError::Unsupported {
                     detail: format!("'{name}' uses compression method {other}"),
@@ -161,7 +200,7 @@ impl Container {
         // The directory says what this member should check out as. Reading a
         // document whose bytes disagree with its own archive is the one case
         // where continuing would edit something nobody wrote.
-        if crc32(&content) != member.crc {
+        if u64::try_from(content.len()).ok() != Some(declared) || crc32(&content) != member.crc {
             return Err(ContainerError::Corrupt {
                 name: name.to_owned(),
             });
@@ -193,10 +232,10 @@ impl Container {
                 .iter()
                 .find(|(name, _)| *name == member.name)
                 .map(|(_, content)| content);
-            let central = &self.bytes[member.central_span.0..member.central_span.1];
+            let central = span(&self.bytes, member.central_span)?;
             match replacement {
                 None => {
-                    out.extend_from_slice(&self.bytes[member.local_span.0..member.local_span.1]);
+                    out.extend_from_slice(span(&self.bytes, member.local_span)?);
                     let start = directory.len();
                     directory.extend_from_slice(central);
                     write_u32_at(&mut directory, start + 42, offset);
@@ -210,9 +249,11 @@ impl Container {
                             detail: "the replacement would pass four gigabytes".to_owned(),
                         });
                     };
-                    let header_end =
-                        member.local_span.0 + local_header_length(&self.bytes, member)?;
-                    let mut header = self.bytes[member.local_span.0..header_end].to_vec();
+                    let header_end = position(
+                        member.local_span.0,
+                        local_header_length(&self.bytes, member)?,
+                    )?;
+                    let mut header = span(&self.bytes, (member.local_span.0, header_end))?.to_vec();
                     // The header keeps this member's name, extra field and
                     // timestamp; only what the new content changes is written.
                     write_u16_at(&mut header, 8, method);
@@ -287,57 +328,63 @@ fn compress(content: &[u8], method: u16) -> (u16, Vec<u8>) {
 
 fn local_header_length(bytes: &[u8], member: &Member) -> Result<usize, ContainerError> {
     let start = member.local_span.0;
-    let name_length = read_u16(bytes, start + 26)? as usize;
-    let extra_length = read_u16(bytes, start + 28)? as usize;
-    Ok(30 + name_length + extra_length)
+    let name_length = read_u16(bytes, position(start, 26)?)? as usize;
+    let extra_length = read_u16(bytes, position(start, 28)?)? as usize;
+    position(position(30, name_length)?, extra_length)
 }
 
 fn read_central_record(bytes: &[u8], cursor: &mut usize) -> Result<Member, ContainerError> {
     let start = *cursor;
-    if bytes.get(start..start + 4) != Some(&CENTRAL_HEADER) {
+    if bytes.get(start..position(start, 4)?) != Some(&CENTRAL_HEADER) {
         return Err(ContainerError::Malformed {
             detail: "a central directory record is missing its signature".to_owned(),
         });
     }
-    let flags = read_u16(bytes, start + 8)?;
+    let flags = read_u16(bytes, position(start, 8)?)?;
     if flags & 0x0001 != 0 {
         return Err(ContainerError::Unsupported {
             detail: "it is encrypted".to_owned(),
         });
     }
-    let method = read_u16(bytes, start + 10)?;
-    let crc = read_u32(bytes, start + 16)?;
-    let compressed_size = read_u32(bytes, start + 20)? as usize;
-    let uncompressed_size = read_u32(bytes, start + 24)?;
-    let name_length = read_u16(bytes, start + 28)? as usize;
-    let extra_length = read_u16(bytes, start + 30)? as usize;
-    let comment_length = read_u16(bytes, start + 32)? as usize;
-    let local_offset = read_u32(bytes, start + 42)? as usize;
-    let name_start = start + 46;
+    let method = read_u16(bytes, position(start, 10)?)?;
+    let crc = read_u32(bytes, position(start, 16)?)?;
+    let compressed_size = read_u32(bytes, position(start, 20)?)? as usize;
+    let uncompressed_size = read_u32(bytes, position(start, 24)?)?;
+    let name_length = read_u16(bytes, position(start, 28)?)? as usize;
+    let extra_length = read_u16(bytes, position(start, 30)?)? as usize;
+    let comment_length = read_u16(bytes, position(start, 32)?)? as usize;
+    let local_offset = read_u32(bytes, position(start, 42)?)? as usize;
+    let name_start = position(start, CENTRAL_RECORD)?;
     let name = bytes
-        .get(name_start..name_start + name_length)
+        .get(name_start..position(name_start, name_length)?)
         .ok_or_else(|| ContainerError::Malformed {
             detail: "a member name runs past the end of the file".to_owned(),
         })?;
     let name = String::from_utf8(name.to_vec()).map_err(|_| ContainerError::Unsupported {
         detail: "a member name is not UTF-8".to_owned(),
     })?;
-    let record_end = name_start + name_length + extra_length + comment_length;
+    let record_end = position(
+        position(position(name_start, name_length)?, extra_length)?,
+        comment_length,
+    )?;
     if record_end > bytes.len() {
         return Err(ContainerError::Malformed {
             detail: "a directory record runs past the end of the file".to_owned(),
         });
     }
 
-    if bytes.get(local_offset..local_offset + 4) != Some(&LOCAL_HEADER) {
+    if bytes.get(local_offset..position(local_offset, 4)?) != Some(&LOCAL_HEADER) {
         return Err(ContainerError::Malformed {
             detail: format!("'{name}' does not start with a local header"),
         });
     }
-    let local_name_length = read_u16(bytes, local_offset + 26)? as usize;
-    let local_extra_length = read_u16(bytes, local_offset + 28)? as usize;
-    let data_start = local_offset + 30 + local_name_length + local_extra_length;
-    let data_end = data_start + compressed_size;
+    let local_name_length = read_u16(bytes, position(local_offset, 26)?)? as usize;
+    let local_extra_length = read_u16(bytes, position(local_offset, 28)?)? as usize;
+    let data_start = position(
+        position(position(local_offset, 30)?, local_name_length)?,
+        local_extra_length,
+    )?;
+    let data_end = position(data_start, compressed_size)?;
     if data_end > bytes.len() {
         return Err(ContainerError::Malformed {
             detail: format!("'{name}' claims more data than the file holds"),
@@ -367,9 +414,12 @@ fn read_central_record(bytes: &[u8], cursor: &mut usize) -> Result<Member, Conta
 /// carries the optional signature that most writers include.
 fn descriptor_end(bytes: &[u8], data_end: usize) -> usize {
     const DESCRIPTOR: [u8; 4] = [0x50, 0x4B, 0x07, 0x08];
-    let signed = bytes.get(data_end..data_end + 4) == Some(&DESCRIPTOR);
+    let signed = data_end
+        .checked_add(4)
+        .and_then(|end| bytes.get(data_end..end))
+        == Some(&DESCRIPTOR);
     let length = if signed { 16 } else { 12 };
-    (data_end + length).min(bytes.len())
+    data_end.saturating_add(length).min(bytes.len())
 }
 
 fn find_end_of_central_directory(bytes: &[u8]) -> Result<usize, ContainerError> {
@@ -379,7 +429,7 @@ fn find_end_of_central_directory(bytes: &[u8]) -> Result<usize, ContainerError> 
     let earliest = bytes.len().saturating_sub(22 + MAX_COMMENT);
     let mut index = bytes.len() - 22;
     loop {
-        if bytes[index..index + 4] == END_OF_CENTRAL {
+        if bytes.get(index..index + 4) == Some(&END_OF_CENTRAL) {
             return Ok(index);
         }
         if index == earliest {
@@ -393,9 +443,28 @@ fn find_signature(bytes: &[u8], signature: &[u8; 4]) -> Option<usize> {
     bytes.windows(4).position(|window| window == signature)
 }
 
+/// The bytes a parsed span covers. Every span was checked against the file
+/// when it was read; this keeps a rebuild from trusting that check blindly.
+fn span(bytes: &[u8], (start, end): (usize, usize)) -> Result<&[u8], ContainerError> {
+    bytes
+        .get(start..end)
+        .ok_or_else(|| ContainerError::Malformed {
+            detail: "a member lies outside the file".to_owned(),
+        })
+}
+
+/// `base + length` as a position in the file, or a refusal when a header's
+/// numbers do not add up to one.
+fn position(base: usize, length: usize) -> Result<usize, ContainerError> {
+    base.checked_add(length)
+        .ok_or_else(|| ContainerError::Malformed {
+            detail: "a header points past any file".to_owned(),
+        })
+}
+
 fn read_u16(bytes: &[u8], at: usize) -> Result<u16, ContainerError> {
     bytes
-        .get(at..at + 2)
+        .get(at..position(at, 2)?)
         .and_then(|slice| slice.try_into().ok())
         .map(u16::from_le_bytes)
         .ok_or_else(|| ContainerError::Malformed {
@@ -405,7 +474,7 @@ fn read_u16(bytes: &[u8], at: usize) -> Result<u16, ContainerError> {
 
 fn read_u32(bytes: &[u8], at: usize) -> Result<u32, ContainerError> {
     bytes
-        .get(at..at + 4)
+        .get(at..position(at, 4)?)
         .and_then(|slice| slice.try_into().ok())
         .map(u32::from_le_bytes)
         .ok_or_else(|| ContainerError::Malformed {

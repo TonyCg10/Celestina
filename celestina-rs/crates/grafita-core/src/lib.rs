@@ -30,6 +30,7 @@ pub mod highlight;
 pub mod history;
 pub mod import;
 pub mod indent;
+pub mod inflate;
 pub mod metadata;
 pub mod newline;
 pub mod open;

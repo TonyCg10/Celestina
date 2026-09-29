@@ -11,7 +11,11 @@
 //! honours; otherwise a filled field would show its old text until something
 //! else redrew it.
 
-use super::file::Pdf;
+use std::collections::{BTreeMap, BTreeSet};
+
+use celestina_core::CancellationToken;
+
+use super::file::{ObjectKey, Pdf};
 use super::object::{Dictionary, Object, PdfError};
 use super::update;
 
@@ -27,73 +31,161 @@ pub struct Field {
 }
 
 /// Every field of the document's form, in the order it declares them.
-pub fn fields(pdf: &Pdf) -> Result<Vec<Field>, PdfError> {
+///
+/// One walk under [`Pdf::walk_budget`], stopped by `cancellation`.
+pub fn fields(pdf: &Pdf, cancellation: &CancellationToken) -> Result<Vec<Field>, PdfError> {
+    pdf.within(pdf.walk_budget(), cancellation, || read_fields(pdf))
+}
+
+fn read_fields(pdf: &Pdf) -> Result<Vec<Field>, PdfError> {
     let Some(form) = acroform(pdf)? else {
         return Ok(Vec::new());
     };
     let roots = pdf.entry(&form, "Fields")?;
-    let mut found = Vec::new();
+    let mut walker = Walker {
+        pdf,
+        visited: BTreeSet::new(),
+        facts: BTreeMap::new(),
+        found: Vec::new(),
+    };
+    // Roots are told apart by the bytes they read before anything is read,
+    // and nothing read is kept: each is read here for its facts and again
+    // when its turn in the walk comes.
+    let mut seen = BTreeSet::new();
+    let mut tops = Vec::new();
+    let mut children = Vec::new();
     for reference in roots.as_array().unwrap_or(&[]) {
-        walk(pdf, reference, "", &mut found, 0)?;
+        let Some(number) = reference.as_reference() else {
+            continue;
+        };
+        let Some(key) = pdf.key(number)? else {
+            continue;
+        };
+        if !seen.insert(key) {
+            continue;
+        }
+        // A field is named by its path from the top. A writer that lists a
+        // child in `/Fields` beside its parent would otherwise have it walked
+        // first, and named without the parent's part, depending only on the
+        // order; so the fields that have a parent are walked after every true
+        // root, and only if their parent did not already reach them.
+        match walker.facts(number)? {
+            Some(facts) if facts.has_parent => children.push(number),
+            _ => tops.push(number),
+        }
     }
-    Ok(found)
+    for number in tops.into_iter().chain(children) {
+        walker.walk(number, "", 0)?;
+    }
+    Ok(walker.found)
 }
 
-fn walk(
-    pdf: &Pdf,
-    reference: &Object,
-    prefix: &str,
-    found: &mut Vec<Field>,
-    depth: usize,
-) -> Result<(), PdfError> {
-    if depth > 32 {
-        return Ok(());
-    }
-    let Some(object) = reference.as_reference() else {
-        return Ok(());
-    };
-    let resolved = pdf.object(object)?;
-    let Some(dictionary) = resolved.as_dictionary() else {
-        return Ok(());
-    };
-    let own = match pdf.entry(dictionary, "T")? {
-        Object::String(bytes) => text_of(&bytes),
-        _ => String::new(),
-    };
-    let name = if prefix.is_empty() {
-        own.clone()
-    } else if own.is_empty() {
-        prefix.to_owned()
-    } else {
-        format!("{prefix}.{own}")
-    };
+/// What the walk needs to know about a field before walking it.
+#[derive(Clone, Copy, Debug)]
+struct Facts {
+    /// It has a name of its own, which makes the node above it a group.
+    named: bool,
+    /// It names a parent.
+    has_parent: bool,
+}
 
-    let kids = pdf.entry(dictionary, "Kids")?;
-    let children = kids.as_array().unwrap_or(&[]).to_vec();
-    // A node with named children is a group; a node with widget children is
-    // still one field, drawn in several places.
-    let named_children = children.iter().any(|kid| {
-        kid.as_reference()
-            .and_then(|number| pdf.object(number).ok())
-            .and_then(|object| object.as_dictionary().cloned())
-            .is_some_and(|child| child.contains_key("T"))
-    });
-    if named_children {
-        for kid in &children {
-            walk(pdf, kid, &name, found, depth + 1)?;
+/// One walk over the field tree.
+///
+/// Like the page tree, the field tree gives each node one parent. A node met
+/// a second time, under the same number or another one pointing at the same
+/// bytes, is skipped; and what a node is (named, parented) is read once per
+/// object however many parents list it, so a kid shared by thousands of
+/// fields is read twice in all, not once per parent.
+struct Walker<'a> {
+    pdf: &'a Pdf,
+    visited: BTreeSet<ObjectKey>,
+    facts: BTreeMap<ObjectKey, Facts>,
+    found: Vec<Field>,
+}
+
+impl Walker<'_> {
+    /// The facts of object `number`, read once per object. `None` for an
+    /// object the file does not locate, which reads as null.
+    fn facts(&mut self, number: u32) -> Result<Option<Facts>, PdfError> {
+        let Some(key) = self.pdf.key(number)? else {
+            return Ok(None);
+        };
+        if let Some(facts) = self.facts.get(&key) {
+            return Ok(Some(*facts));
         }
-        return Ok(());
+        let object = self.pdf.object(number)?;
+        let dictionary = object.as_dictionary();
+        let facts = Facts {
+            named: dictionary.is_some_and(|field| field.contains_key("T")),
+            has_parent: dictionary.is_some_and(|field| field.contains_key("Parent")),
+        };
+        self.facts.insert(key, facts);
+        Ok(Some(facts))
     }
 
-    // Only a node that has a field type is a field; the rest are structure.
-    if dictionary.contains_key("FT") || dictionary.contains_key("V") {
-        found.push(Field {
-            object,
-            name,
-            value: value_of(pdf, dictionary)?,
-        });
+    /// Collects the fields under object `number`, reading it when its turn
+    /// comes and not keeping it after.
+    fn walk(&mut self, number: u32, prefix: &str, depth: usize) -> Result<(), PdfError> {
+        if depth > 32 {
+            return Ok(());
+        }
+        let Some(key) = self.pdf.key(number)? else {
+            return Ok(());
+        };
+        if !self.visited.insert(key) {
+            return Ok(());
+        }
+        let pdf = self.pdf;
+        let resolved = pdf.object(number)?;
+        let Some(dictionary) = resolved.as_dictionary() else {
+            return Ok(());
+        };
+        let own = match pdf.entry(dictionary, "T")? {
+            Object::String(bytes) => text_of(&bytes),
+            _ => String::new(),
+        };
+        let name = if prefix.is_empty() {
+            own.clone()
+        } else if own.is_empty() {
+            prefix.to_owned()
+        } else {
+            format!("{prefix}.{own}")
+        };
+
+        let kids = pdf.entry(dictionary, "Kids")?;
+        let kids: Vec<u32> = kids
+            .as_array()
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(Object::as_reference)
+            .collect();
+        // A node with named children is a group; a node with widget children
+        // is still one field, drawn in several places.
+        let mut named_children = false;
+        for kid in &kids {
+            if self.facts(*kid)?.is_some_and(|facts| facts.named) {
+                named_children = true;
+                break;
+            }
+        }
+        if named_children {
+            for kid in kids {
+                self.walk(kid, &name, depth + 1)?;
+            }
+            return Ok(());
+        }
+
+        // Only a node that has a field type is a field; the rest are
+        // structure.
+        if dictionary.contains_key("FT") || dictionary.contains_key("V") {
+            self.found.push(Field {
+                object: number,
+                name,
+                value: value_of(pdf, dictionary)?,
+            });
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 fn value_of(pdf: &Pdf, dictionary: &Dictionary) -> Result<String, PdfError> {

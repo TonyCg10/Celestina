@@ -3,7 +3,8 @@
 - **Updated:** 2026-09-26
 - **Implementation:** checkpoints G0-G13 are present and delivered; `GRA-H1`,
   the hardening that follows the 2026-09-26 monorepo audit, is the active
-  checkpoint with every unit planned
+  checkpoint: `GRA-H1-A` (the importer refuses hostile input) is written and
+  tested, awaiting its landing, and `GRA-H1-B` is planned
   ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Author validation:** the version-1 interaction pass is closed; `VAL-G7`,
   `VAL-GRA-SAVEAS`, `VAL-G8` and `VAL-G9` are requested and intentionally
@@ -75,6 +76,12 @@
   author did not edit is written back as the bytes it already was. The contract
   is [document import](docs/contracts/document-import.md); the two never
   share a save path.
+- A container's content counts against the document ceiling as it is
+  unpacked, across every ZIP member and PDF filter, and a PDF's structure is
+  read with bounded nesting and checked offsets, so a hostile document is a
+  typed refusal rather than an abort in Grafita or in Siderita's preview.
+  Written under unit `GRA-H1-A`, covered by `grafita-core`'s `hostile` tests,
+  not yet built or deployed.
 - An imported document never creates structure: adding or removing a paragraph
   is refused, a character the font cannot draw is refused, and a PDF is never
   re-laid-out. A PDF correction is appended as an incremental update, so the

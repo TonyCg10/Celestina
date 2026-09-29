@@ -1,0 +1,55 @@
+# GRA-H1-A exact change inventory
+
+Base revision	f7d80aa47f240b5f831b70fd177363efc880b865
+Pathspec	celestina-rs/crates/grafita-core/examples/pdfprobe.rs
+Pathspec	celestina-rs/crates/grafita-core/src/container.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/epub.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/gzip.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/file.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/form.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/object.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/text.rs
+Pathspec	celestina-rs/crates/grafita-core/src/import/pdf/update.rs
+Pathspec	celestina-rs/crates/grafita-core/src/inflate.rs
+Pathspec	celestina-rs/crates/grafita-core/src/lib.rs
+Pathspec	celestina-rs/crates/grafita-core/src/open.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/containers.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/documents.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/hostile.rs
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/docs/contracts/document-import.md
+Pathspec	grafita/docs/evidence/2026-09-26-importer-hardening.md
+Pathspec	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-A.numstat.tsv
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+14	4	d120a9f25a634702eb2573ac6d7cb0bb1d5911b29d094b5a0c3dbe1763aa97d8	celestina-rs/crates/grafita-core/examples/pdfprobe.rs
+120	51	4c6eef4e0bb59674ecc57b9f1c7128fe688bb01ca4f366bcae265b6f8bd2daa6	celestina-rs/crates/grafita-core/src/container.rs
+51	7	f75dd0485cc080e8e1119874a482a91c11ab8cd9b0eaa94d6c3df91f0819e688	celestina-rs/crates/grafita-core/src/import.rs
+24	9	fb71b911af899dd17fe415638d881e21fb26c280401ee06a502bfc080b2032ba	celestina-rs/crates/grafita-core/src/import/epub.rs
+19	7	51bb02798ef0ddfcfee54237629d8f4bc3fccd7996658b1a060e459162a62b4f	celestina-rs/crates/grafita-core/src/import/gzip.rs
+712	103	b5dc93edbfcb788d522e5da817501e8ade4c64e44e97e03fa26a1c934cc975ca	celestina-rs/crates/grafita-core/src/import/pdf/file.rs
+147	55	c78ca6d2f2d8f76b0652f39e868b84d489f6d91a64393ffdb2ad6435143a602e	celestina-rs/crates/grafita-core/src/import/pdf/form.rs
+78	21	7e473a6553ccd8ace06c7f63d267a876989051b76c56ddb107a22d57fd63d905	celestina-rs/crates/grafita-core/src/import/pdf/object.rs
+335	63	d5abfdeacb0bbb2661a6c52b863681227f13e035ef1f629058a5f2afe8dcfaa1	celestina-rs/crates/grafita-core/src/import/pdf/text.rs
+8	2	8876595922ea98767123c4afbc571ea8113b84bd66dad6ec9503f5ba729765f1	celestina-rs/crates/grafita-core/src/import/pdf/update.rs
+228	0	43234987ad7b7a85890d452950c67022a19bff86f3b3abb61573cbfcc551e7e1	celestina-rs/crates/grafita-core/src/inflate.rs
+1	0	e4c4030c9284da13631025d1760ad620654fa3147552ece59c560ce9401cc21a	celestina-rs/crates/grafita-core/src/lib.rs
+25	7	053ea35febf3670719fc561912598466bd1bac02fa5ad9b10e158aba40622756	celestina-rs/crates/grafita-core/src/open.rs
+17	7	949e0ac03ec5e166463dc86f8211f837775f19fdecc9cbc00cd18d93ed5dfdbb	celestina-rs/crates/grafita-core/tests/containers.rs
+12	0	0f739966863c7088e3574cbab0c109d614f50c49c02fe096e154323ac9d872c1	celestina-rs/crates/grafita-core/tests/documents.rs
+1670	0	9f4876027c618b4c28b178233bae09888cc2b31e27f756eb0a6b9d2c0c9221c2	celestina-rs/crates/grafita-core/tests/hostile.rs
+1	0	847b84a212b5ec8409cd91fcbae26c023c9bf2489717d194a05cc35f1ae65eb3	docs/version-history.tsv
+1	1	a6b666b43f0961ef081b6e6b24c181ac8151923a27cd17e9685c4cbc34977203	grafita/Cargo.lock
+1	1	13e2f4f73d156c79b6fcc41e0cb29c974e6c8d3b94e4331a24fb4381057227de	grafita/Cargo.toml
+8	1	506480bf36f16471b0862b9c3eb89712693f2e143426bb8808c1a743636a954f	grafita/STATUS.md
+18	0	123d008ccc2b7be02a02ca0f5cb170c1469d75be75248815c9268457d4d7b4cf	grafita/docs/contracts/document-import.md
+382	0	8cbbf044a89d65cbe0450a322cbc75e5de50b034855971f45d31c4b58d512fdc	grafita/docs/evidence/2026-09-26-importer-hardening.md
+55	0	self	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-A.numstat.tsv
+1	1	1b24bef43eee19b9f35a2176b2b8248a57e5848ff0c86e04aefa3f7211f54a12	grafita/docs/plans/active/2026-09-26-hardening.md
