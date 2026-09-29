@@ -23,9 +23,11 @@ bash "$suite_root/scripts/check-architecture-contract.sh"
 (cd "$suite_root/celestina-rs" && cargo fmt --all --check)
 (cd "$suite_root/celestina-rs" && cargo clippy --locked \
     -p celestina-core -p magnetita-core -p magnetita-net -p magnetitad \
+    -p magnetita-proto -p magnetita-link -p magnetita-mobile -p magnetita-peer \
     --all-targets -- -D warnings)
 (cd "$suite_root/celestina-rs" && cargo test --locked \
-    -p celestina-core -p magnetita-core -p magnetita-net -p magnetitad)
+    -p celestina-core -p magnetita-core -p magnetita-net -p magnetitad \
+    -p magnetita-proto -p magnetita-link -p magnetita-mobile -p magnetita-peer)
 "$suite_root/scripts/qmllint-cxxqt.sh" "$project_root"
 "$project_root/scripts/smoke.sh" --binary "$binary"
 

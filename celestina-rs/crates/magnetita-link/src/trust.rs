@@ -23,6 +23,14 @@ pub fn fingerprint_text(fp: &Fingerprint) -> String {
         .join(":")
 }
 
+/// The device id a certificate names: the first eight bytes of its
+/// fingerprint in lowercase hex. A phone calls itself this in its hello, and
+/// the desktop pins a phone under no other id, so one certificate cannot
+/// claim another device's id.
+pub fn device_id_of(fp: &Fingerprint) -> String {
+    fp[..8].iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// The store, seen from the link.
 pub struct Trust<'a>(pub &'a TrustStore);
 
@@ -50,6 +58,14 @@ mod tests {
             fingerprint_text(&fingerprint_of(&der)),
             fingerprint_der(&der)
         );
+    }
+
+    #[test]
+    fn the_device_id_is_the_fingerprint_prefix() {
+        let mut fp = [0u8; 32];
+        fp[..8].copy_from_slice(&[0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02, 0x0a]);
+        fp[8] = 0xff;
+        assert_eq!(device_id_of(&fp), "deadbeef0001020a");
     }
 
     #[test]

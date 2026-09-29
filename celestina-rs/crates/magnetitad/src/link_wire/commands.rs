@@ -20,6 +20,8 @@ use crate::subprocess::{self, GroupPolicy};
 
 /// How long one run may take before its whole process group is terminated.
 const RUN_BUDGET: Duration = Duration::from_secs(60);
+/// The most `commands.json` may hold; a few hundred bytes per command.
+const MAX_FILE_BYTES: u64 = 1024 * 1024;
 
 /// One registered command, as the author wrote it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,7 +33,10 @@ pub(crate) struct Registered {
     pub(crate) args: Vec<String>,
 }
 
-/// The registry, persisted as JSON next to the settings.
+/// The registry, persisted as JSON next to the settings: owner-only, since
+/// a command line may carry anything, and replaced whole through a synced
+/// sibling, so a crash or a full disk mid-save leaves the previous file. A
+/// change reaches memory only once the file holds it.
 pub(crate) struct CommandStore {
     path: Option<PathBuf>,
     entries: Mutex<BTreeMap<u32, Registered>>,
@@ -41,11 +46,16 @@ impl CommandStore {
     /// Loads `commands.json` from the daemon's configuration directory; an
     /// absent or corrupt file is an empty registry.
     pub(crate) fn load() -> Self {
-        let path =
-            celestina_core::xdg::config_home().map(|d| d.join("magnetita").join("commands.json"));
+        Self::load_from(
+            celestina_core::xdg::config_home().map(|d| d.join("magnetita").join("commands.json")),
+        )
+    }
+
+    fn load_from(path: Option<PathBuf>) -> Self {
         let entries = path
             .as_ref()
-            .and_then(|p| std::fs::read(p).ok())
+            .and_then(|p| celestina_core::atomic_file::read_bounded(p, MAX_FILE_BYTES).ok())
+            .flatten()
             .and_then(|bytes| serde_json::from_slice::<Vec<Registered>>(&bytes).ok())
             .unwrap_or_default()
             .into_iter()
@@ -86,7 +96,8 @@ impl CommandStore {
         } else {
             id
         };
-        entries.insert(
+        let mut next = entries.clone();
+        next.insert(
             id,
             Registered {
                 id,
@@ -95,14 +106,17 @@ impl CommandStore {
                 args,
             },
         );
-        self.persist(&entries)?;
+        self.persist(&next)?;
+        *entries = next;
         Ok(id)
     }
 
     pub(crate) fn remove(&self, id: u32) -> Result<bool, String> {
         let mut entries = self.entries.lock_ok();
-        let removed = entries.remove(&id).is_some();
-        self.persist(&entries)?;
+        let mut next = entries.clone();
+        let removed = next.remove(&id).is_some();
+        self.persist(&next)?;
+        *entries = next;
         Ok(removed)
     }
 
@@ -112,10 +126,9 @@ impl CommandStore {
         };
         let list: Vec<&Registered> = entries.values().collect();
         let bytes = serde_json::to_vec_pretty(&list).map_err(|e| e.to_string())?;
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        }
-        std::fs::write(path, bytes).map_err(|e| e.to_string())
+        celestina_core::atomic_file::replace_private(path, &bytes)
+            .map(drop)
+            .map_err(|e| e.to_string())
     }
 
     /// The list the phone sees: ids and names only.
@@ -170,6 +183,46 @@ pub(crate) fn store() -> &'static CommandStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_save_changes_nothing_and_a_save_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("mag-commands-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let blocker = root.join("blocker");
+        std::fs::write(&blocker, b"not a directory").unwrap();
+
+        let broken = CommandStore::load_from(Some(blocker.join("commands.json")));
+        assert!(broken.set(0, "Say hi", "true", vec![]).is_err());
+        assert!(
+            broken.list().is_empty(),
+            "memory changes only once the file has"
+        );
+
+        let path = root.join("magnetita").join("commands.json");
+        let store = CommandStore::load_from(Some(path.clone()));
+        let id = store.set(0, "Say hi", "true", vec!["-n".into()]).unwrap();
+        let mode =
+            |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            mode(&path),
+            0o600,
+            "the command lines are the owner's alone"
+        );
+        assert_eq!(mode(path.parent().unwrap()), 0o700);
+        assert_eq!(
+            CommandStore::load_from(Some(path.clone())).list(),
+            store.list()
+        );
+
+        // A remove that cannot be saved leaves the command registered.
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(store.remove(id).is_err());
+        assert_eq!(store.list().len(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn the_registry_numbers_publishes_names_only_and_runs_by_id() {

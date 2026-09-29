@@ -9,7 +9,7 @@
 //! posting, and a daemon without a session bus simply shows nothing.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
 use magnetita_proto::daily::notifications::NotificationPosted;
@@ -40,7 +40,33 @@ pub(crate) trait NotificationServer: Send + Sync {
 }
 
 /// The session's `org.freedesktop.Notifications`.
-pub(crate) struct DbusServer(pub(crate) Connection);
+pub(crate) struct DbusServer {
+    connection: Connection,
+    /// The server's `body-markup` answer, asked once it could be asked.
+    markup: OnceLock<bool>,
+}
+
+impl DbusServer {
+    pub(crate) fn new(connection: Connection) -> Self {
+        Self {
+            connection,
+            markup: OnceLock::new(),
+        }
+    }
+
+    /// Whether bodies must be escaped. A server that cannot be asked yet is
+    /// treated as one that parses markup: a stray `&amp;` on screen is
+    /// better than the phone's text read as markup.
+    fn parses_markup(&self) -> bool {
+        if let Some(known) = self.markup.get() {
+            return *known;
+        }
+        match crate::notify::parses_body_markup(&self.connection) {
+            Some(known) => *self.markup.get_or_init(|| known),
+            None => true,
+        }
+    }
+}
 
 impl NotificationServer for DbusServer {
     fn post(
@@ -52,11 +78,20 @@ impl NotificationServer for DbusServer {
         buttons: &[String],
         replyable: bool,
     ) -> Option<u32> {
-        crate::notify::post_with(&self.0, app, replaces, summary, body, buttons, replyable)
+        let body = crate::notify::plain_body(body, self.parses_markup());
+        crate::notify::post_with(
+            &self.connection,
+            app,
+            replaces,
+            summary,
+            &body,
+            buttons,
+            replyable,
+        )
     }
 
     fn close(&self, id: u32) {
-        crate::notify::close(&self.0, id);
+        crate::notify::close(&self.connection, id);
     }
 }
 

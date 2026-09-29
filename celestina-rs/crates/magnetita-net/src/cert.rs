@@ -17,7 +17,7 @@
 //! [`fingerprint`]: DeviceCert::fingerprint
 
 use std::fs;
-use std::io::{self, BufReader, Write};
+use std::io::{self, BufReader};
 use std::path::Path;
 
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -39,8 +39,13 @@ pub struct DeviceCert {
 impl DeviceCert {
     /// Load the certificate at `dir`, or generate and persist a fresh one there
     /// if absent. `device_id` becomes the certificate's Common Name, the way
-    /// KDE Connect binds the id to the key. The directory is created if missing;
-    /// the private key is written owner-only.
+    /// KDE Connect binds the id to the key. A missing directory is created
+    /// `0700`, and both files are written owner-only through
+    /// [`celestina_core::atomic_file::replace_private`], whose sibling is
+    /// `0600` from its creation: the private key is never readable by another
+    /// local user, not even for the moment between its write and its rename,
+    /// and an interrupted write leaves the previous key, or none, never a
+    /// truncated one.
     pub fn ensure(dir: &Path, device_id: &str) -> io::Result<DeviceCert> {
         let cert_path = dir.join(CERT_FILE);
         let key_path = dir.join(KEY_FILE);
@@ -50,10 +55,12 @@ impl DeviceCert {
                 key_pem: fs::read_to_string(&key_path)?,
             });
         }
-        create_private_dir(dir)?;
         let fresh = DeviceCert::generate(device_id);
-        write_private(&key_path, &fresh.key_pem)?;
-        celestina_core::atomic_file::replace(&cert_path, fresh.cert_pem.as_bytes())?;
+        for (path, pem) in [(&key_path, &fresh.key_pem), (&cert_path, &fresh.cert_pem)] {
+            celestina_core::atomic_file::replace_private(path, pem.as_bytes())
+                .map(drop)
+                .map_err(io::Error::other)?;
+        }
         Ok(fresh)
     }
 
@@ -120,59 +127,6 @@ pub fn fingerprint_der(der: &CertificateDer<'_>) -> String {
         out.push_str(&format!("{byte:02x}"));
     }
     out
-}
-
-#[cfg(unix)]
-fn create_private_dir(dir: &Path) -> io::Result<()> {
-    use std::os::unix::fs::DirBuilderExt;
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(dir)
-}
-
-#[cfg(not(unix))]
-fn create_private_dir(dir: &Path) -> io::Result<()> {
-    fs::create_dir_all(dir)
-}
-
-/// Publish the private key atomically and owner-only.
-///
-/// The mode is part of the *creation*, not a repair afterwards: a plain write
-/// followed by `set_permissions` leaves a window in which `privateKey.pem` is
-/// world-readable, and this is the one file in the suite whose disclosure is
-/// total. The atomic sibling-then-rename shape is the suite's, but
-/// [`celestina_core::atomic_file::replace`] cannot be reused here because its
-/// temporary is created at the process umask, which is exactly the window this
-/// closes. The rename means an interrupted write leaves the previous key —
-/// or no key — never a truncated PEM the daemon can never start from again.
-fn write_private(path: &Path, pem: &str) -> io::Result<()> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let temporary = parent.join(format!(".{KEY_FILE}.{}.tmp", std::process::id()));
-    let _ = fs::remove_file(&temporary);
-    let result = (|| {
-        let mut file = private_file(&temporary)?;
-        file.write_all(pem.as_bytes())?;
-        file.sync_all()?;
-        drop(file);
-        fs::rename(&temporary, path)?;
-        fs::File::open(parent)?.sync_all()
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
-}
-
-fn private_file(path: &Path) -> io::Result<fs::File> {
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path)
 }
 
 #[cfg(test)]

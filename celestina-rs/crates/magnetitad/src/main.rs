@@ -10,7 +10,6 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::error::Error;
-use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -81,7 +80,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let dir = xdg::config_home()
         .ok_or("no XDG config home to store the device identity")?
         .join("magnetita");
-    fs::create_dir_all(&dir)?;
+    xdg::ensure_private_dir(&dir)?;
     if let Err(error) = artwork::sweep() {
         log("artwork", &format!("cache unavailable: {error}"));
     }

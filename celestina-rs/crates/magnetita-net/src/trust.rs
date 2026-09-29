@@ -16,7 +16,6 @@
 //! [`fingerprint`]: crate::cert::fingerprint_der
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -60,6 +59,10 @@ struct PeerRecord {
     fingerprint: String,
 }
 
+/// The most a trust file may hold. A few hundred bytes per pin; the bound
+/// only keeps a broken or planted file from being read without end.
+const MAX_STORE_BYTES: u64 = 1024 * 1024;
+
 #[derive(Serialize, Deserialize, Default)]
 struct StoreFile {
     peers: BTreeMap<String, PeerRecord>,
@@ -70,14 +73,14 @@ impl TrustStore {
     /// file is absent. A file that exists but does not parse is an error, not a
     /// silent reset — silently dropping trust would unpair every device.
     pub fn load(path: &Path) -> io::Result<TrustStore> {
-        let peers = match fs::read_to_string(path) {
-            Ok(text) => {
-                serde_json::from_str::<StoreFile>(&text)
+        let peers = match celestina_core::atomic_file::read_bounded(path, MAX_STORE_BYTES) {
+            Ok(Some(bytes)) => {
+                serde_json::from_slice::<StoreFile>(&bytes)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
                     .peers
             }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => BTreeMap::new(),
-            Err(e) => return Err(e),
+            Ok(None) => BTreeMap::new(),
+            Err(e) => return Err(io::Error::new(io::ErrorKind::InvalidData, e)),
         };
         Ok(TrustStore {
             peers,
@@ -151,21 +154,22 @@ impl TrustStore {
         })
     }
 
-    /// Writes the store to its file, creating the parent directory. A no-op for
-    /// an in-memory store.
+    /// Writes the store to its file, owner-only (`0600`, a missing parent
+    /// `0700`): who this device trusts is nobody else's to read. A no-op for
+    /// an in-memory store. Once the rename has happened the pins are on disk,
+    /// so a failed directory sync after it is not a failed write.
     fn persist(&self) -> io::Result<()> {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
         let file = StoreFile {
             peers: self.peers.clone(),
         };
         let text = serde_json::to_string_pretty(&file)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        celestina_core::atomic_file::replace(path, text.as_bytes())
+        celestina_core::atomic_file::replace_private(path, text.as_bytes())
+            .map(drop)
+            .map_err(io::Error::other)
     }
 }
 
@@ -173,7 +177,7 @@ impl TrustStore {
 mod tests {
     use std::fs;
 
-    use super::{TrustCheck, TrustStore, TrustedPeer};
+    use super::{TrustCheck, TrustStore, TrustedPeer, MAX_STORE_BYTES};
 
     fn peer(id: &str, fp: &str) -> TrustedPeer {
         TrustedPeer {
@@ -250,6 +254,24 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_persisted_store_is_readable_by_its_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode =
+            |path: &std::path::Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let root = std::env::temp_dir().join(format!("mag-trust-mode-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let path = root.join("magnetita").join("trust.json");
+
+        let mut s = TrustStore::load(&path).unwrap();
+        s.pin(peer("phone", "aa:bb")).unwrap();
+
+        assert_eq!(mode(&path), 0o600, "the pins are the owner's alone");
+        assert_eq!(mode(path.parent().unwrap()), 0o700);
+        fs::remove_dir_all(&root).unwrap();
+    }
+
     #[test]
     fn a_missing_file_loads_empty_but_a_corrupt_one_errors() {
         let missing = std::env::temp_dir().join("mag-trust-does-not-exist-xyz.json");
@@ -261,5 +283,14 @@ mod tests {
         std::fs::write(&corrupt, "{ not json").unwrap();
         assert!(TrustStore::load(&corrupt).is_err());
         std::fs::remove_file(&corrupt).unwrap();
+
+        let huge = std::env::temp_dir().join(format!("mag-trust-huge-{}.json", std::process::id()));
+        let file = std::fs::File::create(&huge).unwrap();
+        file.set_len(MAX_STORE_BYTES + 1).unwrap();
+        assert!(
+            TrustStore::load(&huge).is_err(),
+            "an oversized file is refused"
+        );
+        std::fs::remove_file(&huge).unwrap();
     }
 }

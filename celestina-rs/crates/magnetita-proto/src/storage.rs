@@ -12,6 +12,12 @@ use crate::error::DecodeError;
 /// less room for the request id, the path and the map itself.
 pub const MAX_RANGE: usize = MAX_BYTES - 8192;
 
+/// The [`Done`] error a phone answers to a [`Delete`] of a directory that
+/// still has entries. The delete removes nothing, and the desktop reports
+/// `ENOTEMPTY`, as `rmdir` of a non-empty directory does anywhere else. Any
+/// other error text is free prose for the log.
+pub const ERROR_NOT_EMPTY: &str = "not empty";
+
 /// Phone → desktop: whether a root is shared at all. Kind 1.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StorageState {
@@ -112,7 +118,8 @@ pub struct Rename {
     pub to: String,
 }
 
-/// Desktop → phone: remove a file or an empty directory. Kind 12.
+/// Desktop → phone: remove a file or an empty directory; a directory with
+/// entries is refused with [`ERROR_NOT_EMPTY`]. Kind 12.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Delete {
     pub request: u32,

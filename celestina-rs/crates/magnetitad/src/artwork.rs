@@ -34,15 +34,9 @@ pub fn clear_device(device_id: &str) {
 }
 
 fn root_dir() -> io::Result<PathBuf> {
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .map(|path| path.join("magnetita").join("artwork"))
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "XDG_RUNTIME_DIR is unavailable for the album-art cache",
-            )
-        })
+    crate::runtime::runtime_base()
+        .map(|base| base.join("artwork"))
+        .map_err(io::Error::other)
 }
 
 fn device_dir(device_id: &str) -> io::Result<PathBuf> {

@@ -125,6 +125,12 @@ impl Drop for MirrorWorker {
 /// The worker's inbox, for the own link's mirror to ask for the screen.
 static COMMANDS: Mutex<Option<Sender<MirrorCommand>>> = Mutex::new(None);
 
+/// Held by every test that starts a worker or makes the link mirror ask one
+/// for the screen: the inbox above is one slot for the whole process, so a
+/// screen request from one test would otherwise reach another test's worker.
+#[cfg(test)]
+pub(crate) static TEST_INBOX: Mutex<()> = Mutex::new(());
+
 /// Asks the adb worker to turn the phone's screen off or back on; `host`
 /// is the phone's address as the link sees it.
 pub(crate) fn request_screen_off(on: bool, host: Option<std::net::IpAddr>) {
@@ -564,10 +570,9 @@ fn load_endpoint(path: &Path) -> Option<MirrorEndpoint> {
 }
 
 fn save_endpoint(endpoint: &MirrorEndpoint, path: &Path) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    celestina_core::atomic_file::replace(path, endpoint.serial().as_bytes())
+    celestina_core::atomic_file::replace_private(path, endpoint.serial().as_bytes())
+        .map(drop)
+        .map_err(std::io::Error::other)
 }
 
 /// Loads the stored options, falling back to defaults for a missing or corrupt
@@ -580,12 +585,11 @@ fn load_options(path: &Path) -> MirrorOptions {
 }
 
 fn save_options(options: &MirrorOptions, path: &Path) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let text = serde_json::to_string_pretty(options)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    celestina_core::atomic_file::replace(path, text.as_bytes())
+    celestina_core::atomic_file::replace_private(path, text.as_bytes())
+        .map(drop)
+        .map_err(std::io::Error::other)
 }
 
 /// The contract's state names. Language-neutral, like the packet types: the
@@ -995,6 +999,7 @@ mod tests {
 
     #[test]
     fn the_worker_starts_and_joins_deterministically() {
+        let _inbox = TEST_INBOX.lock().unwrap_or_else(|e| e.into_inner());
         let (mirror, mut worker) = start(
             PathBuf::from("/nonexistent/mirror.json"),
             PathBuf::from("/nonexistent/mirror-endpoint"),
@@ -1007,6 +1012,7 @@ mod tests {
 
     #[test]
     fn a_stopped_worker_refuses_commands_instead_of_panicking() {
+        let _inbox = TEST_INBOX.lock().unwrap_or_else(|e| e.into_inner());
         let (mirror, mut worker) = start(
             PathBuf::from("/nonexistent/mirror.json"),
             PathBuf::from("/nonexistent/mirror-endpoint"),
@@ -1022,8 +1028,18 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("magnetita-mirror-{}", std::process::id()));
         let path = dir.join("mirror-endpoint");
         let endpoint = MirrorEndpoint::parse("10.0.0.190", u32::from(FIXED_PORT)).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
         save_endpoint(&endpoint, &path).expect("save");
         assert_eq!(load_endpoint(&path), Some(endpoint));
+        save_options(&MirrorOptions::default(), &dir.join("mirror.json")).expect("save");
+        for file in ["mirror-endpoint", "mirror.json"] {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(dir.join(file))
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600, "{file} is the owner's alone");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

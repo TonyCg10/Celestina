@@ -276,8 +276,12 @@ const WATCH_INTERVAL: Duration = Duration::from_millis(400);
 /// own frame timing: the render surface presents on the host's schedule,
 /// and the untimed and latency-hack modes left the output unconfigured
 /// under it (the first frame never reached the surface).
-fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
-    vec![
+///
+/// The engine's log goes beside the FIFO the daemon named, in the daemon's
+/// private runtime directory; a FIFO path with no directory means no log,
+/// never a log under `/tmp`.
+fn engine_options(codec: &str, video: &std::path::Path) -> Vec<(&'static str, String)> {
+    let mut options = vec![
         ("vo", "libmpv".into()),
         // Software decoding on purpose: the picture is a phone's, which the
         // CPU decodes with time to spare, and a hardware surface the OpenGL
@@ -314,21 +318,14 @@ fn engine_options(codec: &str) -> Vec<(&'static str, String)> {
         // The picture fills the surface whatever its shape: the window is
         // the compositor's to size, and a band would only hide the phone.
         ("keepaspect", "no".into()),
-        // The engine's own log, complete, beside the FIFOs: the one place
-        // that says what the demuxer and the decoder did with each unit.
-        (
-            "log-file",
-            std::env::var_os("XDG_RUNTIME_DIR")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(std::env::temp_dir)
-                .join(format!(
-                    "magnetita/mirror-window-{}.log",
-                    std::process::id()
-                ))
-                .to_string_lossy()
-                .into_owned(),
-        ),
-    ]
+    ];
+    // The engine's own log, complete, beside the FIFOs: the one place that
+    // says what the demuxer and the decoder did with each unit.
+    if let Some(dir) = video.parent().filter(|dir| dir.is_absolute()) {
+        let log = dir.join(format!("mirror-window-{}.log", std::process::id()));
+        options.push(("log-file", log.to_string_lossy().into_owned()));
+    }
+    options
 }
 
 impl qobject::MirrorView {
@@ -451,7 +448,7 @@ impl qobject::MirrorView {
         } else {
             "hevc"
         };
-        let options = engine_options(codec);
+        let options = engine_options(codec, std::path::Path::new(&video));
         let borrowed: Vec<(&str, &str)> = options
             .iter()
             .map(|(name, value)| (*name, value.as_str()))
@@ -737,7 +734,7 @@ mod probe {
             // Keep the writer open so the stream looks live.
             std::thread::sleep(std::time::Duration::from_secs(6));
         });
-        let mut options = super::engine_options("hevc");
+        let mut options = super::engine_options("hevc", &fifo);
         for (name, value) in options.iter_mut() {
             if *name == "vo" {
                 *value = "null".into();

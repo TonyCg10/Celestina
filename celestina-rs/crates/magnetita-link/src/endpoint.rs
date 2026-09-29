@@ -6,9 +6,24 @@
 //! exchanged, and only then does a session exist — all inside one absolute
 //! deadline. An unpinned peer that is not pairing is closed before it can
 //! send a single envelope.
+//!
+//! Accepting does not wait for any of that. [`Endpoint::accept`] hands back
+//! a [`Pending`] attempt as soon as a peer's first packet arrives, and the
+//! caller runs [`Pending::handshake`] in a task of its own, so one peer that
+//! sends an Initial and falls silent holds its own deadline and nobody
+//! else's. What bounds those tasks is a handshake slot: at most
+//! [`MAX_HANDSHAKES`] attempts are in flight at once, at most
+//! [`MAX_HANDSHAKES_PER_ADDRESS`] of them from one address, and an attempt
+//! beyond either is refused on arrival. A slot lasts until the attempt is
+//! admitted, refused or dropped. Once half the slots are taken, a source
+//! that has not yet shown it can receive what is sent to its address is
+//! answered with a QUIC Retry instead of a slot: a real peer answers it at
+//! once and comes back validated, while a spoofed source never does, so
+//! forged Initials cannot fill the rest.
 
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use magnetita_proto::pair::Fingerprint;
@@ -27,18 +42,97 @@ pub struct EndpointConfig {
     pub hello: Hello,
 }
 
+/// How many handshakes may be in flight at once, from every address.
+pub const MAX_HANDSHAKES: usize = 16;
+/// How many of them one address may hold. A phone that redials while its
+/// last attempt is still ending needs two; a host that stalls on purpose
+/// gets no more than this.
+pub const MAX_HANDSHAKES_PER_ADDRESS: usize = 4;
+
 /// Both roles on one UDP socket.
 pub struct Endpoint {
     inner: quinn::Endpoint,
     hello: Hello,
+    slots: Arc<Slots>,
+}
+
+/// The handshakes in flight: how many in all and from each address.
+#[derive(Default)]
+struct Slots {
+    held: Mutex<SlotCount>,
+}
+
+#[derive(Default)]
+struct SlotCount {
+    total: usize,
+    by_address: HashMap<IpAddr, usize>,
+}
+
+/// One handshake's place in [`Slots`], given back when it is dropped.
+struct Slot {
+    slots: Arc<Slots>,
+    address: IpAddr,
+}
+
+impl Slots {
+    /// Whether half the slots or more are taken.
+    fn under_pressure(&self) -> bool {
+        self.held
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .total
+            >= MAX_HANDSHAKES / 2
+    }
+
+    /// A slot for one more handshake from `address`, or `None` when either
+    /// bound is reached.
+    fn claim(self: &Arc<Self>, address: IpAddr) -> Option<Slot> {
+        let mut held = self.held.lock().unwrap_or_else(PoisonError::into_inner);
+        let from_address = held.by_address.get(&address).copied().unwrap_or(0);
+        if held.total >= MAX_HANDSHAKES || from_address >= MAX_HANDSHAKES_PER_ADDRESS {
+            return None;
+        }
+        held.total += 1;
+        held.by_address.insert(address, from_address + 1);
+        Some(Slot {
+            slots: Arc::clone(self),
+            address,
+        })
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        let mut held = self
+            .slots
+            .held
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        held.total = held.total.saturating_sub(1);
+        if let Some(count) = held.by_address.get_mut(&self.address) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                held.by_address.remove(&self.address);
+            }
+        }
+    }
+}
+
+/// A peer's first packet, let in under a handshake slot and not yet through
+/// TLS. Run [`Pending::handshake`] in a task of its own.
+pub struct Pending {
+    incoming: quinn::Incoming,
+    started: Instant,
+    slot: Slot,
 }
 
 /// A connection that has passed TLS and the pin check but not yet the hello:
-/// the caller decides whether to admit it.
+/// the caller decides whether to admit it. It still holds its handshake slot.
 pub struct Incoming {
     conn: quinn::Connection,
     peer_fingerprint: Fingerprint,
     started: Instant,
+    _slot: Slot,
 }
 
 /// Who a peer must be for a connection to proceed.
@@ -80,6 +174,7 @@ impl Endpoint {
         Ok(Self {
             inner,
             hello: config.hello,
+            slots: Arc::default(),
         })
     }
 
@@ -113,24 +208,35 @@ impl Endpoint {
         Ok((session, theirs))
     }
 
-    /// Waits for the next connection to pass TLS. `None` when the endpoint
-    /// is closed.
-    pub async fn accept(&self) -> Option<Result<Incoming, LinkError>> {
-        let incoming = self.inner.accept().await?;
-        let started = Instant::now();
-        Some(
-            async move {
-                let connecting = incoming.accept()?;
-                let conn = deadline(started, connecting).await??;
-                let peer_fingerprint = peer_certificate(&conn)?;
-                Ok(Incoming {
-                    conn,
-                    peer_fingerprint,
-                    started,
-                })
+    /// Waits for the next peer to knock and returns at once with its
+    /// attempt, before any TLS. An attempt beyond [`MAX_HANDSHAKES`] or
+    /// [`MAX_HANDSHAKES_PER_ADDRESS`] is refused here and never returned, and
+    /// under pressure an unvalidated one is sent a Retry. `None` when the
+    /// endpoint is closed.
+    pub async fn accept(&self) -> Option<Pending> {
+        loop {
+            let incoming = self.inner.accept().await?;
+            if !incoming.remote_address_validated()
+                && incoming.may_retry()
+                && self.slots.under_pressure()
+            {
+                if let Err(refused) = incoming.retry() {
+                    refused.into_incoming().refuse();
+                }
+                continue;
             }
-            .await,
-        )
+            let started = Instant::now();
+            match self.slots.claim(incoming.remote_address().ip()) {
+                Some(slot) => {
+                    return Some(Pending {
+                        incoming,
+                        started,
+                        slot,
+                    })
+                }
+                None => incoming.refuse(),
+            }
+        }
     }
 
     /// Admits an accepted connection under `expect`, exchanges hellos.
@@ -143,6 +249,7 @@ impl Endpoint {
             conn,
             peer_fingerprint,
             started,
+            _slot,
         } = incoming;
         if let Err(e) = check(&expect, &peer_fingerprint) {
             conn.close(1u32.into(), b"untrusted");
@@ -161,6 +268,31 @@ impl Endpoint {
 
     pub async fn wait_idle(&self) {
         self.inner.wait_idle().await;
+    }
+}
+
+impl Pending {
+    pub fn remote_address(&self) -> SocketAddr {
+        self.incoming.remote_address()
+    }
+
+    /// Runs TLS within what remains of the handshake budget, which began
+    /// when the attempt arrived.
+    pub async fn handshake(self) -> Result<Incoming, LinkError> {
+        let Self {
+            incoming,
+            started,
+            slot,
+        } = self;
+        let connecting = incoming.accept()?;
+        let conn = deadline(started, connecting).await??;
+        let peer_fingerprint = peer_certificate(&conn)?;
+        Ok(Incoming {
+            conn,
+            peer_fingerprint,
+            started,
+            _slot: slot,
+        })
     }
 }
 
@@ -221,6 +353,10 @@ mod tests {
     }
 
     fn endpoint(name: &str, kind: DeviceKind) -> (Endpoint, Fingerprint) {
+        endpoint_at(name, kind, "127.0.0.1:0")
+    }
+
+    fn endpoint_at(name: &str, kind: DeviceKind, bind: &str) -> (Endpoint, Fingerprint) {
         let cert = DeviceCert::generate(name);
         let fp = fingerprint_of(&cert.chain().unwrap()[0]);
         let ep = Endpoint::bind(
@@ -228,7 +364,7 @@ mod tests {
                 cert,
                 hello: hello(name, kind),
             },
-            "127.0.0.1:0".parse().unwrap(),
+            bind.parse().unwrap(),
         )
         .unwrap();
         (ep, fp)
@@ -254,7 +390,7 @@ mod tests {
         let phone_trust = pinned(&desktop_fp, "desktop");
         let addr = desktop.local_addr().unwrap();
         let accept = async {
-            let incoming = desktop.accept().await.unwrap().unwrap();
+            let incoming = desktop.accept().await.unwrap().handshake().await.unwrap();
             assert_eq!(incoming.peer_fingerprint(), phone_fp);
             desktop
                 .admit(incoming, Expect::Trusted(&desktop_trust))
@@ -308,7 +444,7 @@ mod tests {
         let empty = TrustStore::in_memory();
         let addr = desktop.local_addr().unwrap();
         let accept = async {
-            let incoming = desktop.accept().await.unwrap().unwrap();
+            let incoming = desktop.accept().await.unwrap().handshake().await.unwrap();
             desktop.admit(incoming, Expect::Trusted(&empty)).await
         };
         let dial = stranger.connect(addr, Expect::Trusted(&empty));
@@ -332,7 +468,7 @@ mod tests {
         let uri = payload.to_uri();
 
         let desktop_side = async {
-            let incoming = desktop.accept().await.unwrap().unwrap();
+            let incoming = desktop.accept().await.unwrap().handshake().await.unwrap();
             let peer = incoming.peer_fingerprint();
             // Pairing: any certificate may come in; the proof decides.
             let (session, _hello) = desktop
@@ -400,7 +536,7 @@ mod tests {
         let addr = desktop.local_addr().unwrap();
         let (server, client) = tokio::join!(
             async {
-                let i = desktop.accept().await.unwrap().unwrap();
+                let i = desktop.accept().await.unwrap().handshake().await.unwrap();
                 desktop
                     .admit(i, Expect::Trusted(&desktop_trust))
                     .await
@@ -440,7 +576,7 @@ mod tests {
         let addr = desktop.local_addr().unwrap();
         let (server, client) = tokio::join!(
             async {
-                let i = desktop.accept().await.unwrap().unwrap();
+                let i = desktop.accept().await.unwrap().handshake().await.unwrap();
                 desktop
                     .admit(i, Expect::Trusted(&desktop_trust))
                     .await
@@ -462,6 +598,158 @@ mod tests {
             server.0.recv().await,
             Err(LinkError::FrameTooLarge(u32::MAX))
         ));
+    }
+
+    /// A UDP relay that hands `target` the dialler's first datagram (its
+    /// QUIC Initial) and drops everything after it, so the handshake it
+    /// starts never finishes. `bind` picks the address the endpoint sees.
+    async fn stalling_relay(bind: &str, target: SocketAddr) -> SocketAddr {
+        let socket = tokio::net::UdpSocket::bind(bind).await.unwrap();
+        let relay = socket.local_addr().unwrap();
+        tokio::spawn(async move {
+            let mut buf = vec![0u8; 65_536];
+            let Ok((n, _)) = socket.recv_from(&mut buf).await else {
+                return;
+            };
+            let _ = socket.send_to(&buf[..n], target).await;
+            while socket.recv_from(&mut buf).await.is_ok() {}
+        });
+        relay
+    }
+
+    /// Starts a dial through a stalling relay bound on `bind`.
+    async fn stall(bind: &str, target: SocketAddr, expect: Fingerprint) {
+        let relay = stalling_relay(bind, target).await;
+        let (staller, _) = endpoint("staller", DeviceKind::Phone);
+        tokio::spawn(async move {
+            let _ = staller.connect(relay, Expect::Fingerprint(expect)).await;
+        });
+    }
+
+    #[tokio::test]
+    async fn a_stalled_handshake_does_not_hold_the_next_accept() {
+        let (desktop, desktop_fp) = endpoint("desktop", DeviceKind::Desktop);
+        let (phone, phone_fp) = endpoint("phone", DeviceKind::Phone);
+        let addr = desktop.local_addr().unwrap();
+        stall("127.0.0.1:0", addr, desktop_fp).await;
+        let stalled = desktop.accept().await.unwrap();
+        let stalled = tokio::spawn(stalled.handshake());
+
+        let desktop_trust = pinned(&phone_fp, "phone");
+        let phone_trust = pinned(&desktop_fp, "desktop");
+        let started = Instant::now();
+        let accept = async {
+            let incoming = desktop.accept().await.unwrap().handshake().await.unwrap();
+            desktop
+                .admit(incoming, Expect::Trusted(&desktop_trust))
+                .await
+                .unwrap()
+        };
+        let dial = async { phone.connect(addr, Expect::Trusted(&phone_trust)).await };
+        let (_, dialled) = tokio::join!(accept, dial);
+        assert!(dialled.is_ok());
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "the second peer was served while the first still stalls"
+        );
+        assert!(
+            !stalled.is_finished(),
+            "the stalled handshake is still pending"
+        );
+        stalled.abort();
+    }
+
+    #[tokio::test]
+    async fn one_address_holds_a_bounded_number_of_handshakes() {
+        let (desktop, desktop_fp) = endpoint("desktop", DeviceKind::Desktop);
+        let addr = desktop.local_addr().unwrap();
+        let mut held = Vec::new();
+        for _ in 0..MAX_HANDSHAKES_PER_ADDRESS {
+            stall("127.0.0.1:0", addr, desktop_fp).await;
+            held.push(desktop.accept().await.unwrap());
+        }
+        // One more from the same address is refused on arrival: the next
+        // accept skips it and returns a dialler from another address.
+        let (crowded, _) = endpoint("crowded", DeviceKind::Phone);
+        let crowded = tokio::spawn(async move {
+            crowded
+                .connect(addr, Expect::Fingerprint(desktop_fp))
+                .await
+                .map(|_| ())
+        });
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        stall("127.0.0.2:0", addr, desktop_fp).await;
+        let other = desktop.accept().await.unwrap();
+        assert_eq!(other.remote_address().ip(), IpAddr::from([127, 0, 0, 2]));
+        let refused = tokio::time::timeout(Duration::from_secs(3), crowded)
+            .await
+            .expect("a refused dial ends at once")
+            .unwrap();
+        assert!(refused.is_err());
+
+        // Dropping an attempt gives its slot back.
+        drop(held.pop());
+        stall("127.0.0.1:0", addr, desktop_fp).await;
+        let again = desktop.accept().await.unwrap();
+        assert_eq!(again.remote_address().ip(), IpAddr::from([127, 0, 0, 1]));
+    }
+
+    #[tokio::test]
+    async fn under_pressure_an_unvalidated_address_must_prove_it_can_answer() {
+        let (desktop, desktop_fp) = endpoint("desktop", DeviceKind::Desktop);
+        let addr = desktop.local_addr().unwrap();
+        // Half the slots are taken by hosts that never answer.
+        let mut held = Vec::new();
+        for n in 0..MAX_HANDSHAKES / 2 {
+            let host = format!("127.0.0.{}:0", 1 + n / MAX_HANDSHAKES_PER_ADDRESS);
+            stall(&host, addr, desktop_fp).await;
+            held.push(desktop.accept().await.unwrap());
+        }
+        // A spoofed-looking source that cannot receive the Retry takes no
+        // slot; a real peer answers the Retry and is let in.
+        stall("127.0.0.20:0", addr, desktop_fp).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (phone, _) = endpoint_at("phone", DeviceKind::Phone, "127.0.0.3:0");
+        let dial = tokio::spawn(async move {
+            let _ = phone.connect(addr, Expect::Fingerprint(desktop_fp)).await;
+        });
+        let next = tokio::time::timeout(Duration::from_secs(3), desktop.accept())
+            .await
+            .expect("the real peer is let in")
+            .unwrap();
+        assert_eq!(next.remote_address().ip(), IpAddr::from([127, 0, 0, 3]));
+        assert!(next.incoming.remote_address_validated());
+        assert_eq!(
+            desktop.slots.held.lock().unwrap().total,
+            MAX_HANDSHAKES / 2 + 1,
+            "the silent source holds nothing"
+        );
+        dial.abort();
+    }
+
+    #[test]
+    fn the_slots_bound_the_total_and_each_address() {
+        let slots = Arc::new(Slots::default());
+        let address = |n: u8| IpAddr::from([10, 0, 0, n]);
+        let mut held: Vec<Slot> = (0..MAX_HANDSHAKES)
+            .map(|n| slots.claim(address(n as u8)).unwrap())
+            .collect();
+        assert!(slots.claim(address(200)).is_none(), "the total is bounded");
+        held.pop();
+        let one = slots.claim(address(200)).unwrap();
+        drop(held);
+        let more: Vec<Slot> = (1..MAX_HANDSHAKES_PER_ADDRESS)
+            .map(|_| slots.claim(address(200)).unwrap())
+            .collect();
+        assert!(
+            slots.claim(address(200)).is_none(),
+            "one address is bounded"
+        );
+        assert!(slots.claim(address(201)).is_some());
+        drop((one, more));
+        let held = slots.held.lock().unwrap();
+        assert_eq!(held.total, 0);
+        assert!(held.by_address.is_empty(), "released slots leave no entry");
     }
 
     #[test]

@@ -3,6 +3,33 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-16 — Wire admission, private state and bounds on the real session
+
+- **Status:** pending
+- **Related implementation:** `MAG-D1-D` (P-11), recorded in
+  [the wire admission evidence](docs/evidence/2026-09-26-wire-admission.md)
+- **Requires:** the landed daemon and application deployed, the S25U with
+  the own application (and `AND-6-D` for the delete check), a second device
+  on the LAN, a notification server that announces `body-markup` (any other
+  than the suite's own), Siderita
+- **Procedure:** arm pairing in the application; while the QR shows, let a
+  second device connect to UDP 1760 and leave (or send a wrong proof), then
+  scan the QR with the phone; after pairing, run `stat -c '%a %n'` on
+  `~/.config/magnetita` and every file in it; list
+  `$XDG_RUNTIME_DIR/magnetita` while the phone shares its folder and while
+  the mirror streams; in Siderita, delete a phone folder that holds files,
+  and `rmdir` it from a terminal; under the markup server, receive an SMS or
+  notification whose text contains `<b>` and `&`; restart `magnetitad` while
+  the phone is connected and time the reconnection
+- **Pass condition:** the phone pairs on the first scan despite the other
+  device; the directory is `700` and every file in it `600`; the mount and
+  the `mirror-*.video` FIFOs are under `$XDG_RUNTIME_DIR/magnetita` (`700`)
+  and nothing Magnetita's is under `/tmp`; the folder and its files survive
+  and `rmdir` answers "Directory not empty"; the notification shows the
+  literal `<b>` and `&`; the phone reconnects within seconds
+- **Result:** not run
+- **Evidence:** none yet
+
 ## VAL-MAG-15 — The phone's files in Siderita over the own wire
 
 - **Status:** passed

@@ -6,7 +6,13 @@
 //! the phone-id→server-id map so a later update *replaces* and a cancel
 //! *withdraws* the right one. Best-effort: no notification server just means no
 //! mirror, never an error.
+//!
+//! The phone's text is shown as plain text (ADR 0001 §11) whatever the server:
+//! a server that announces `body-markup` would read `<a>`, `<img>` or a stray
+//! `&` in an SMS as markup, so for such a server the body is escaped first
+//! ([`plain_body`]). The summary is never markup under the specification.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
@@ -61,6 +67,32 @@ pub fn post_with(
     Some(id)
 }
 
+/// Whether the server interprets markup in a notification's body: the
+/// `body-markup` capability. `None` when the server could not be asked.
+pub fn parses_body_markup(connection: &Connection) -> Option<bool> {
+    let proxy = Proxy::new(connection, SERVICE, OBJECT, INTERFACE).ok()?;
+    let capabilities: Vec<String> = proxy.call("GetCapabilities", &()).ok()?;
+    Some(capabilities.iter().any(|c| c == "body-markup"))
+}
+
+/// `body` as a server that parses markup must receive it to show the text
+/// itself: `&`, `<` and `>` escaped. A server without markup gets it as is.
+pub fn plain_body(body: &str, server_parses_markup: bool) -> Cow<'_, str> {
+    if !server_parses_markup || !body.contains(['&', '<', '>']) {
+        return Cow::Borrowed(body);
+    }
+    let mut escaped = String::with_capacity(body.len() + 16);
+    for character in body.chars() {
+        match character {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            other => escaped.push(other),
+        }
+    }
+    Cow::Owned(escaped)
+}
+
 /// Withdraw a notification by the server id [`post`] returned.
 pub fn close(connection: &Connection, id: u32) {
     if let Ok(proxy) = Proxy::new(connection, SERVICE, OBJECT, INTERFACE) {
@@ -96,4 +128,27 @@ impl Mirror {
 /// either part, so no pair of device and notification ids can collide.
 fn key(device_id: &str, notification_id: &str) -> String {
     format!("{device_id}\u{0}{notification_id}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plain_body;
+
+    #[test]
+    fn phone_text_reaches_a_markup_server_as_plain_text() {
+        let text = "<b>50%</b> off & <a href=\"x\">more</a>";
+        assert_eq!(
+            plain_body(text, true),
+            "&lt;b&gt;50%&lt;/b&gt; off &amp; &lt;a href=\"x\"&gt;more&lt;/a&gt;"
+        );
+        assert_eq!(
+            plain_body(text, false),
+            text,
+            "a plain server shows it as is"
+        );
+        assert!(matches!(
+            plain_body("nothing to escape", true),
+            std::borrow::Cow::Borrowed(_)
+        ));
+    }
 }

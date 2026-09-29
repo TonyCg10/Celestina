@@ -53,13 +53,11 @@ pub(crate) fn video_fifo() -> Option<std::path::PathBuf> {
     VIDEO_PATH.lock_ok().clone()
 }
 
-fn next_video_fifo() -> std::path::PathBuf {
+/// The next FIFO name, in the daemon's private runtime directory; without
+/// one there is no picture rather than a FIFO under `/tmp`.
+fn next_video_fifo() -> Result<std::path::PathBuf, celestina_core::xdg::PrivateDirError> {
     let n = VIDEO_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
-        .join("magnetita")
-        .join(format!("mirror-{n}.video"))
+    Ok(crate::runtime::private_runtime_base()?.join(format!("mirror-{n}.video")))
 }
 
 /// The picture as a FIFO the application's window reads. Bytes queue
@@ -88,10 +86,13 @@ impl MirrorPlayer for FifoPlayer {
             started.codec,
         )));
         let feed_units = std::sync::Arc::clone(&units);
-        let path = next_video_fifo();
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
+        let path = match next_video_fifo() {
+            Ok(path) => path,
+            Err(e) => {
+                log("mirror", &format!("video fifo: {e}"));
+                return None;
+            }
+        };
         let _ = std::fs::remove_file(&path);
         if let Err(e) = rustix::fs::mknodat(
             rustix::fs::CWD,

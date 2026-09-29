@@ -25,7 +25,9 @@ pub(crate) fn ensure(dir: &Path) -> io::Result<String> {
             "kernel UUID did not produce a KDE Connect device id",
         ));
     }
-    celestina_core::atomic_file::replace(&path, id.as_bytes())?;
+    celestina_core::atomic_file::replace_private(&path, id.as_bytes())
+        .map(drop)
+        .map_err(io::Error::other)?;
     Ok(id)
 }
 
@@ -35,7 +37,25 @@ fn valid(id: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::valid;
+    use super::{ensure, valid};
+
+    #[test]
+    fn a_new_identity_is_readable_by_its_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("mag-identity-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("magnetita");
+
+        let id = ensure(&dir).unwrap();
+        assert_eq!(ensure(&dir).unwrap(), id, "the identity is stable");
+
+        let mode = std::fs::metadata(dir.join("device_id"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn device_ids_are_exactly_32_hex_characters() {

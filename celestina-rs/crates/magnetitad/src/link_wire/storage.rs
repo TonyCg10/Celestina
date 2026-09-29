@@ -573,7 +573,7 @@ impl Filesystem for PhoneFs {
                 self.forget_dir(parent.0);
                 reply.ok();
             }
-            Err(_) => reply.error(fuser::Errno::EIO),
+            Err(error) => reply.error(delete_errno(&error)),
         }
     }
 
@@ -780,9 +780,27 @@ pub(crate) fn mount(
     fuser::spawn_mount(PhoneFs::new(client, handle), mountpoint, &config)
 }
 
+/// The errno a refused delete answers: `ENOTEMPTY` for a directory that
+/// still has entries, so `rmdir` and file managers see what they would on
+/// any other file system, and `EIO` for everything else.
+fn delete_errno(error: &str) -> fuser::Errno {
+    if error == magnetita_proto::storage::ERROR_NOT_EMPTY {
+        fuser::Errno::ENOTEMPTY
+    } else {
+        fuser::Errno::EIO
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_directory_that_is_not_empty_answers_enotempty() {
+        assert_eq!(delete_errno("not empty"), fuser::Errno::ENOTEMPTY);
+        assert_eq!(delete_errno("not deleted"), fuser::Errno::EIO);
+        assert_eq!(delete_errno("the phone did not answer"), fuser::Errno::EIO);
+    }
 
     #[test]
     fn inodes_follow_a_rename_with_their_children() {

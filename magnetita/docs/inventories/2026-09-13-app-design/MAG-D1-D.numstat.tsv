@@ -1,0 +1,83 @@
+# MAG-D1-D exact change inventory
+
+Base revision	e2f96faa4dbc638424be987329531a60d0db3d6f
+Pathspec	celestina-rs/crates/magnetita-link/src/endpoint.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-link/src/trust.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/phone.rs
+Pathspec	celestina-rs/crates/magnetita-mobile/src/storage.rs
+Pathspec	celestina-rs/crates/magnetita-net/Cargo.toml
+Pathspec	celestina-rs/crates/magnetita-net/src/cert.rs
+Pathspec	celestina-rs/crates/magnetita-net/src/trust.rs
+Pathspec	celestina-rs/crates/magnetita-peer/src/lib.rs
+Pathspec	celestina-rs/crates/magnetita-proto/src/storage.rs
+Pathspec	celestina-rs/crates/magnetitad/src/artwork.rs
+Pathspec	celestina-rs/crates/magnetitad/src/device_identity.rs
+Pathspec	celestina-rs/crates/magnetitad/src/incoming_file.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/admission.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/admission_tests.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/commands.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mirror.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/notifications.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/share.rs
+Pathspec	celestina-rs/crates/magnetitad/src/link_wire/storage.rs
+Pathspec	celestina-rs/crates/magnetitad/src/main.rs
+Pathspec	celestina-rs/crates/magnetitad/src/mirror.rs
+Pathspec	celestina-rs/crates/magnetitad/src/mount.rs
+Pathspec	celestina-rs/crates/magnetitad/src/notify.rs
+Pathspec	celestina-rs/crates/magnetitad/src/runtime.rs
+Pathspec	celestina-rs/crates/magnetitad/src/settings.rs
+Pathspec	docs/version-history.tsv
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/docs/evidence/2026-09-26-wire-admission.md
+Pathspec	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-D.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-13-app-design.md
+Pathspec	magnetita/docs/protocol.md
+Pathspec	magnetita/scripts/verify-production.sh
+Pathspec	magnetita/src/mirror_view.rs
+Pathspec	scripts/architecture-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+315	27	40063bdaf9053f4d87e09ebb3cc0d8461700dc1d3e2277715a19d8f40b204d13	celestina-rs/crates/magnetita-link/src/endpoint.rs
+6	4	93a0bc28ae5f4a73c305f0dec6c1edc36481633a2f3dc6fee0e6ea62b72fbf9e	celestina-rs/crates/magnetita-link/src/lib.rs
+16	0	58f3b1cf751ffbd2bea5d1ea6e9bab6beb7fd339b1d85d6b81f899aa1db89cf6	celestina-rs/crates/magnetita-link/src/trust.rs
+3	6	1c30d404da511dac480f0a175821be3767c87a861ab88f26e33838cbf20835ce	celestina-rs/crates/magnetita-mobile/src/phone.rs
+17	2	fed470f2f9fc915f4e89a2fe2f9fa868373b685d36ccb0ad3a1197e9becd08f8	celestina-rs/crates/magnetita-mobile/src/storage.rs
+2	1	7fd74ddd54b97d0fe9ef031b1273c038d933370a204d646fa081041eb53055b5	celestina-rs/crates/magnetita-net/Cargo.toml
+13	59	eeb9bea180c6ab7253a021e80ad8eb9583dd76fff1414475aed53256f12fa552	celestina-rs/crates/magnetita-net/src/cert.rs
+44	13	04b17b5bf0111021c273d1e17af575a84da5b8731c653aa240a217c592bcf815	celestina-rs/crates/magnetita-net/src/trust.rs
+1	1	0171810d2365e1982f90b5a72228d4f2cdb344282b7da085b4c81e0180b044e5	celestina-rs/crates/magnetita-peer/src/lib.rs
+8	1	73582be46c61b3d0900debfb4589d5d2a1db2d60d46e443e944759591b7dd763	celestina-rs/crates/magnetita-proto/src/storage.rs
+3	9	eab75a449807ffb651feea20e96bedda025706d5f128d87efdae3d3cd531b649	celestina-rs/crates/magnetitad/src/artwork.rs
+22	2	8540fd4f66cda4f6229ba848ac643eb40476a6b0e43780f10993ebbb27654b65	celestina-rs/crates/magnetitad/src/device_identity.rs
+76	10	673bf13f46a8aac6e64276bf928f829f2900185a7f50605e4a089c91334068e5	celestina-rs/crates/magnetitad/src/incoming_file.rs
+360	0	64dcb60cedb99b7b9f67cf5367339f0c0025b6e24e47e6b84c4539d8c733c06d	celestina-rs/crates/magnetitad/src/link_wire/admission.rs
+429	0	364841abc7f7d323d5dffee025dbb992cf6028739f3b5b59b25fb7d5d1afba5d	celestina-rs/crates/magnetitad/src/link_wire/admission_tests.rs
+65	12	e6f22455f5f1c9611bec699788668aad6729074d08f23467b3462cfd4e7fb8cd	celestina-rs/crates/magnetitad/src/link_wire/commands.rs
+11	10	bee6ea28401df2e997f3d497874fb3db3b2173541d0ea63c78670ac360e72d86	celestina-rs/crates/magnetitad/src/link_wire/mirror.rs
+265	145	7a505ca06e8517ef4b01a711793154405d092ca9b8c91cd4de4536adb5f9fa4a	celestina-rs/crates/magnetitad/src/link_wire/mod.rs
+39	4	7cb53e45c894486a02fd72457f70b80c9cf19468d0d49ae1e8f18e05a07414ee	celestina-rs/crates/magnetitad/src/link_wire/notifications.rs
+130	7	543bde10865f33ce2937a148a791569f414a6d8f76fe331bc11506cc4a17d204	celestina-rs/crates/magnetitad/src/link_wire/share.rs
+19	1	292aa1bc0043ea10106b0afe62a7546f676b890b89d82c6e57291e266c2c8e74	celestina-rs/crates/magnetitad/src/link_wire/storage.rs
+1	2	ff4e6906b10a8231ace83bda589bc7c0676482d6d1bd9f64b45403827503d029	celestina-rs/crates/magnetitad/src/main.rs
+24	8	7af68784cdb01dca0d444aa92cea9c1f865f1a3c8fbc59e3db07d001df04793c	celestina-rs/crates/magnetitad/src/mirror.rs
+44	17	a8efd42dc5dc458298ccadad2c997609e9e5195111925323f4752a3988685d7b	celestina-rs/crates/magnetitad/src/mount.rs
+55	0	6a57a7382ca0a5f083d4234f13a7180cd156b010345ae9548696738e06b19fb2	celestina-rs/crates/magnetitad/src/notify.rs
+37	1	d591e76adbaa3cf0fa9f422ee177f8c2302330a84f70004eab243d45772c87ae	celestina-rs/crates/magnetitad/src/runtime.rs
+20	5	65114acf9820ae7e1527c14f57958b42380e4e4b8405b14f7e641d3dad3a6601	celestina-rs/crates/magnetitad/src/settings.rs
+1	0	91652c4ab5a1d65b97b164a61494adcb05cb0e7473d3dddee54bbb637ee0231d	docs/version-history.tsv
+1	1	a30f2aa68dfe0dc04948f6ab7200acd24d83b31e64c3a8169290905ee4b38782	magnetita/Cargo.lock
+1	1	2bb263ff95bbb22282ee83d1d51fda993a0b9a32d0a752ce606c21ddd45339d8	magnetita/Cargo.toml
+27	0	2bc68d9013ed5ffbcca093c060e011bfb313fb60368aa374ab89c9539ec5043a	magnetita/VALIDATION.md
+239	0	0628749a14e3b7e04dc50206db11dc9354e7ad147b7769bf9c2bd3a6f66fd118	magnetita/docs/evidence/2026-09-26-wire-admission.md
+83	0	self	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-D.numstat.tsv
+1	1	0911b6de96db2bee8a7ccbab8418f9af2b6d624e6ecf81b6ea8f5ce2d52c5266	magnetita/docs/plans/active/2026-09-13-app-design.md
+1	1	2ee4ae06d79a1d6121c3a82eaf55d3db3c605fd8d063a7b0beee31b76e1c5757	magnetita/docs/protocol.md
+3	1	74204f9fa925c4910ca33c769b2327b06966a56b14547df35a810e5ce99d18fc	magnetita/scripts/verify-production.sh
+16	19	781ffb869c1e9588d2830720b3cbb5669b0f236618aee81000a047115983496b	magnetita/src/mirror_view.rs
+1	1	28708a9b51be6df8cc3617a57c757f3ff0f45438d55b197e6276e8c65011ad37	scripts/architecture-baseline.tsv

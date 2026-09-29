@@ -15,7 +15,13 @@
 //! secret and returns the QR text; for two minutes an unpinned phone may
 //! connect, and it is admitted only under the certificate it presents and
 //! only until it proves the secret. Everything else unpinned is refused
-//! before its first envelope.
+//! before its first envelope. Who may become a session, and under which id,
+//! is `admission`'s: a session runs under the id its certificate is pinned
+//! under, and only a verified proof closes the pairing window.
+//!
+//! Every handshake runs in a task of its own: the accept loop only lets an
+//! attempt in, under the link's bounded handshake slots, so a peer that
+//! stalls its TLS never keeps the next one waiting.
 
 use std::net::{IpAddr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,15 +44,15 @@ use magnetita_proto::daily::notifications::{
     NotificationAction, NotificationDismissed, NotificationPosted, NotificationReply,
 };
 use magnetita_proto::mirror::{MirrorStarted, MirrorStop};
-use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing, QrPayload};
+use magnetita_proto::pair::{kind as pair_kind, Fingerprint, QrPairing};
 use magnetita_proto::phone::contacts::ContactsSync;
 use magnetita_proto::phone::sms::{SmsConversations, SmsReceived, SmsThread};
 use magnetita_proto::phone::telephony::{CallEvent, CallState};
 use magnetita_proto::storage::StorageState;
 use magnetita_proto::{capability, CapabilityVersion, DeviceKind, Hello};
-use rand_core::{OsRng, RngCore};
 
 use crate::devices::{command_channel, Command, DeviceEntry};
+mod admission;
 pub(crate) mod commands;
 pub(crate) mod discovery;
 pub(crate) mod input;
@@ -62,10 +68,9 @@ use crate::lock::LockOk;
 use crate::runtime::log;
 use crate::session_registration::SessionRegistration;
 use crate::{ui_log, Daemon};
+pub(crate) use admission::PairingArm;
 use discovery::Advertisement;
 
-/// How long an armed pairing stays open.
-const PAIRING_WINDOW: Duration = Duration::from_secs(120);
 /// How often the dialer asks Avahi who is around.
 const BROWSE_INTERVAL: Duration = Duration::from_secs(5);
 /// How often a session checks the revocation barrier and its command queue.
@@ -73,58 +78,6 @@ const TICK: Duration = Duration::from_secs(1);
 /// How long a newer session of the same phone waits for the older one to
 /// leave: a tick to notice the order, and the cleanup after it.
 const SUPERSEDE_WAIT: Duration = Duration::from_secs(5);
-
-struct Armed {
-    secret: [u8; 32],
-    until: Instant,
-}
-
-/// The pairing window, shared between the served interface (which arms it)
-/// and the link thread (which consumes it).
-#[derive(Clone, Default)]
-pub(crate) struct PairingArm(Arc<Mutex<Option<Armed>>>);
-
-impl PairingArm {
-    /// Draws a fresh secret and returns the text the QR shows.
-    pub(crate) fn arm(
-        &self,
-        device_id: &str,
-        fingerprint: Fingerprint,
-        addresses: Vec<String>,
-    ) -> String {
-        let mut secret = [0u8; 32];
-        OsRng.fill_bytes(&mut secret);
-        *self.0.lock_ok() = Some(Armed {
-            secret,
-            until: Instant::now() + PAIRING_WINDOW,
-        });
-        QrPayload {
-            device_id: device_id.to_owned(),
-            fingerprint,
-            secret,
-            addresses,
-        }
-        .to_uri()
-    }
-
-    /// The secret, if a window is open; taking it closes the window, so one
-    /// QR admits one phone.
-    fn take_live(&self) -> Option<[u8; 32]> {
-        let mut g = self.0.lock_ok();
-        match g.take() {
-            Some(a) if a.until > Instant::now() => Some(a.secret),
-            _ => None,
-        }
-    }
-
-    #[cfg(test)]
-    fn is_armed(&self) -> bool {
-        self.0
-            .lock_ok()
-            .as_ref()
-            .is_some_and(|a| a.until > Instant::now())
-    }
-}
 
 /// The running wire: stop it and join it.
 pub(crate) struct LinkWire {
@@ -272,12 +225,12 @@ pub(crate) fn install(
     pairing: PairingArm,
 ) -> Option<LinkWire> {
     let server: NotificationServer = match &daemon.dbus {
-        Some(connection) => Arc::new(notifications::DbusServer(connection.clone())),
+        Some(connection) => Arc::new(notifications::DbusServer::new(connection.clone())),
         None => Arc::new(notifications::NoServer),
     };
     let bridge = Arc::new(notifications::Bridge::default());
     notifications::spawn_signal_watch(Arc::clone(&bridge), Arc::clone(&daemon));
-    match spawn(
+    match open_wire(
         daemon,
         cert,
         device_id,
@@ -303,6 +256,31 @@ pub(crate) fn install(
             None
         }
     }
+}
+
+/// [`spawn`], then the sweep of the partials a previous run left in the
+/// downloads directory. The sweep comes only once the port is bound: a second
+/// daemon started by hand fails to bind and must not delete the live one's
+/// transfers on its way out.
+fn open_wire(
+    daemon: Arc<Daemon>,
+    cert: DeviceCert,
+    device_id: String,
+    pairing: PairingArm,
+    bind: SocketAddr,
+    advertise: bool,
+    adapters: Adapters,
+) -> Result<(LinkWire, SocketAddr), LinkError> {
+    let download_dir = adapters.download_dir.clone();
+    let opened = spawn(daemon, cert, device_id, pairing, bind, advertise, adapters)?;
+    let swept = crate::incoming_file::sweep_partials(&download_dir);
+    if swept > 0 {
+        log(
+            "link",
+            &format!("removed {swept} partial file(s) a previous run left"),
+        );
+    }
+    Ok(opened)
 }
 
 /// Starts the wire on its own thread. `bind` is `0.0.0.0:1760` in the
@@ -366,6 +344,9 @@ pub(crate) fn spawn(
                 endpoint,
                 my_fingerprint,
                 pairing,
+                pairing_attempts: Arc::new(tokio::sync::Semaphore::new(
+                    admission::MAX_PAIRING_ATTEMPTS,
+                )),
                 adapters,
                 stop,
             });
@@ -393,6 +374,8 @@ struct Wire {
     endpoint: Endpoint,
     my_fingerprint: Fingerprint,
     pairing: PairingArm,
+    /// Unpinned connections waiting for their proof hold one of these.
+    pairing_attempts: Arc<tokio::sync::Semaphore>,
     adapters: Adapters,
     stop: Arc<AtomicBool>,
 }
@@ -404,22 +387,24 @@ impl Wire {
         tokio::join!(accepter.accept_loop(), dialer.dial_loop());
     }
 
+    /// Lets each attempt in and hands it to a task of its own at once: the
+    /// TLS handshake, the pin check and the hello all run there, inside the
+    /// handshake budget, never here.
     async fn accept_loop(self: Arc<Self>) {
         loop {
             let next = tokio::select! {
-                incoming = self.endpoint.accept() => incoming,
+                pending = self.endpoint.accept() => pending,
                 _ = self.stopped() => return,
             };
-            let Some(incoming) = next else { return };
-            let incoming = match incoming {
-                Ok(i) => i,
-                Err(e) => {
-                    log("link", &format!("accept: {e}"));
-                    continue;
-                }
-            };
+            let Some(pending) = next else { return };
             let wire = Arc::clone(&self);
-            tokio::spawn(async move { wire.admit(incoming).await });
+            tokio::spawn(async move {
+                let address = pending.remote_address();
+                match pending.handshake().await {
+                    Ok(incoming) => wire.admit(incoming).await,
+                    Err(e) => log("link", &format!("{address}: handshake: {e}")),
+                }
+            });
         }
     }
 
@@ -441,7 +426,7 @@ impl Wire {
             }
             return;
         }
-        let Some(secret) = self.pairing.take_live() else {
+        let Some(secret) = self.pairing.live_secret() else {
             log(
                 "link",
                 &format!("{address}: unpinned and no pairing armed; refused"),
@@ -449,21 +434,53 @@ impl Wire {
             incoming.refuse();
             return;
         };
+        if self.pairing.refuses(address.ip()) {
+            log(
+                "link",
+                &format!("{address}: refused for the rest of this window after wrong proofs"),
+            );
+            incoming.refuse();
+            return;
+        }
+        let Ok(attempt) = Arc::clone(&self.pairing_attempts).try_acquire_owned() else {
+            log(
+                "link",
+                &format!("{address}: too many pairing attempts at once; refused"),
+            );
+            incoming.refuse();
+            return;
+        };
         match self.endpoint.admit(incoming, Expect::Fingerprint(fp)).await {
-            Ok((session, hello)) => self.pair_then_run(session, hello, secret, fp).await,
+            Ok((session, hello)) => {
+                self.pair_then_run(session, hello, secret, fp, attempt)
+                    .await;
+            }
             Err(e) => log("link", &format!("{address}: pairing admit: {e}")),
         }
     }
 
     /// The desktop half of the QR path over a fresh session; on success the
-    /// phone is pinned and the session continues as a trusted one.
+    /// phone is pinned and the session continues as a trusted one. The
+    /// window closes only once the proof verifies. `attempt` is the pairing
+    /// attempt this connection holds; it is given back once the phone is
+    /// pinned, so a paired session never keeps another phone from pairing.
     async fn pair_then_run(
         &self,
         session: Session,
         hello: Hello,
         secret: [u8; 32],
         fp: Fingerprint,
+        attempt: tokio::sync::OwnedSemaphorePermit,
     ) {
+        let identity = admission::pairing_id(&self.daemon.trust.lock_ok(), &fp, &hello.device_id);
+        if let Err(e) = identity {
+            log(
+                "link",
+                &format!("{}: pairing refused: {e}", hello.device_name),
+            );
+            session.close("identity");
+            return;
+        }
         let mut pairing = QrPairing::desktop(secret, self.my_fingerprint, fp);
         let proof =
             match tokio::time::timeout(magnetita_link::HANDSHAKE_BUDGET, session.recv()).await {
@@ -484,6 +501,7 @@ impl Wire {
         let (reply, pinned) = match pairing.accept_proof(&proof.body) {
             Ok(r) => r,
             Err(e) => {
+                self.pairing.failed(&secret, session.remote_address().ip());
                 log(
                     "link",
                     &format!("{}: pairing refused: {e}", hello.device_name),
@@ -498,19 +516,34 @@ impl Wire {
                 return;
             }
         };
-        let peer = TrustedPeer {
-            device_id: hello.device_id.clone(),
-            device_name: hello.device_name.clone(),
-            fingerprint: fingerprint_text(&pinned.peer_fingerprint),
-        };
-        if let Err(e) = self.daemon.trust.lock_ok().pin(peer) {
+        if !self.pairing.consume(&secret) {
             log(
                 "link",
-                &format!("{}: cannot persist the pin: {e}", hello.device_name),
+                &format!("{}: the pairing window closed first", hello.device_name),
             );
+            session.close("window closed");
+            return;
+        }
+        let pin = {
+            let mut trust = self.daemon.trust.lock_ok();
+            admission::pairing_id(&trust, &pinned.peer_fingerprint, &hello.device_id)
+                .map_err(|e| e.to_string())
+                .and_then(|device_id| {
+                    trust
+                        .pin(TrustedPeer {
+                            device_id,
+                            device_name: hello.device_name.clone(),
+                            fingerprint: fingerprint_text(&pinned.peer_fingerprint),
+                        })
+                        .map_err(|e| format!("cannot persist the pin: {e}"))
+                })
+        };
+        if let Err(e) = pin {
+            log("link", &format!("{}: {e}", hello.device_name));
             session.close("cannot pin");
             return;
         }
+        drop(attempt);
         if let Err(e) = session
             .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
             .await
@@ -580,15 +613,28 @@ impl Wire {
         }
     }
 
-    /// One pinned session, from publication to cleanup.
+    /// One pinned session, from publication to cleanup. It runs under the id
+    /// its certificate is pinned under; a hello naming another is refused.
     async fn run_session(&self, session: Session, hello: Hello, how: &str) {
+        let pinned = admission::session_id(
+            &self.daemon.trust.lock_ok(),
+            &session.peer_fingerprint(),
+            &hello.device_id,
+        );
+        let device_id = match pinned {
+            Ok(id) => id,
+            Err(e) => {
+                log("link", &format!("{}: refused: {e}", hello.device_name));
+                session.close("identity");
+                return;
+            }
+        };
         // Shared with the reader tasks: `select!` drops a losing branch's
         // future, and a control-stream read dropped mid-frame desynchronises
         // the stream, so the reads live in tasks of their own and the loop
         // receives from channels, which is cancel-safe.
         let session = Arc::new(session);
         let daemon = &self.daemon;
-        let device_id = hello.device_id.clone();
         let name = hello.device_name.clone();
         let device_type = match hello.device_kind {
             DeviceKind::Phone => "phone",
@@ -880,6 +926,7 @@ impl Wire {
                     }
                 }
                 _ = tick.tick() => {
+                    shares.expire(Instant::now());
                     for env in mirror::own().tick(&device_id, &shares_outbox) {
                         if let Err(e) = session.send_message(env.capability, env.kind, env.body).await {
                             log("link", &format!("{name}: mirror: {e}"));
@@ -1142,9 +1189,10 @@ impl Wire {
 
     /// A phone that forgot this desktop while the desktop still pins it is
     /// admitted as trusted, yet it sends a QR proof: answer it from the armed
-    /// window so the phone can pin again, and keep the session.
+    /// window so the phone can pin again, and keep the session. As for a
+    /// first pairing, only a proof that verifies closes the window.
     async fn prove_again(&self, session: &Session, name: &str, proof: &[u8]) {
-        let Some(secret) = self.pairing.take_live() else {
+        let Some(secret) = self.pairing.live_secret() else {
             log(
                 "link",
                 &format!("{name}: proof without an armed pairing; ignored"),
@@ -1156,10 +1204,15 @@ impl Wire {
         let reply = match pairing.accept_proof(proof) {
             Ok((reply, _)) => reply,
             Err(e) => {
+                self.pairing.failed(&secret, session.remote_address().ip());
                 log("link", &format!("{name}: pairing again refused: {e}"));
                 return;
             }
         };
+        if !self.pairing.consume(&secret) {
+            log("link", &format!("{name}: the pairing window closed first"));
+            return;
+        }
         match session
             .send_message(capability::PAIRING, pair_kind::QR_REPLY, reply)
             .await
@@ -1351,15 +1404,19 @@ impl Wire {
 }
 
 #[cfg(test)]
+mod admission_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::devices::{Commands, Log, Registry};
     use crate::revocation::Revocations;
     use crate::settings::Settings;
     use magnetita_link::endpoint::Expect as PeerExpect;
+    use magnetita_proto::pair::QrPayload;
     use std::collections::{BTreeMap, HashMap, VecDeque};
 
-    fn test_daemon(_cert: &DeviceCert) -> Arc<Daemon> {
+    pub(super) fn test_daemon(_cert: &DeviceCert) -> Arc<Daemon> {
         Arc::new(Daemon {
             trust: Arc::new(Mutex::new(TrustStore::in_memory())),
             settings: Arc::new(Mutex::new(Settings::default())),
@@ -1375,11 +1432,12 @@ mod tests {
         })
     }
 
-    fn phone(name: &str) -> (Endpoint, Fingerprint) {
+    pub(super) fn phone(name: &str) -> (Endpoint, Fingerprint) {
         let cert = DeviceCert::generate(name);
         let fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let hello = Hello {
-            device_id: name.into(),
+            // The id a phone gives itself: its certificate's.
+            device_id: magnetita_link::device_id_of(&fp),
             device_name: name.into(),
             device_kind: DeviceKind::Phone,
             capabilities: vec![CapabilityVersion {
@@ -1397,24 +1455,12 @@ mod tests {
         )
     }
 
-    #[test]
-    fn a_pairing_window_admits_one_phone_and_expires() {
-        let arm = PairingArm::default();
-        assert!(arm.take_live().is_none());
-        let uri = arm.arm("desk", [1u8; 32], vec!["10.0.0.1:1760".into()]);
-        assert!(uri.starts_with("magnetita://pair?v=1&id=desk&fp=0101"));
-        assert!(arm.is_armed());
-        assert!(arm.take_live().is_some());
-        assert!(arm.take_live().is_none(), "one QR admits one phone");
-        *arm.0.lock_ok() = Some(Armed {
-            secret: [0; 32],
-            until: Instant::now() - Duration::from_secs(1),
-        });
-        assert!(arm.take_live().is_none(), "an expired window admits nobody");
-    }
-
     /// The phone half of the QR path: connect to the QR's address, prove, accept the reply.
-    async fn prove(phone: &Endpoint, phone_fp: Fingerprint, uri: &str) -> (Session, Fingerprint) {
+    pub(super) async fn prove(
+        phone: &Endpoint,
+        phone_fp: Fingerprint,
+        uri: &str,
+    ) -> (Session, Fingerprint) {
         let scanned = QrPayload::parse_uri(uri).unwrap();
         let target: SocketAddr = scanned.addresses[0].parse().unwrap();
         let (session, _hello) = phone
@@ -1476,6 +1522,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone3") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
 
@@ -1521,7 +1568,7 @@ mod tests {
         // Desktop to phone: the shared slot drains into this session.
         daemon
             .pending_clipboards
-            .replace_for(["phone3".to_owned()], "copied on the desk".into());
+            .replace_for([id.clone()], "copied on the desk".into());
         let env = rt.block_on(async {
             loop {
                 let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
@@ -1676,6 +1723,65 @@ mod tests {
     }
 
     #[test]
+    fn an_offer_larger_than_any_payload_is_refused_before_a_byte() {
+        use magnetita_proto::daily::share::{ShareOffer, ShareReject};
+        let cert = DeviceCert::generate("desktop");
+        let daemon = test_daemon(&cert);
+        let arm = PairingArm::default();
+        let downloads =
+            std::env::temp_dir().join(format!("magnetita-share-cap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&downloads);
+        let (wire, addr) = spawn(
+            Arc::clone(&daemon),
+            cert.clone(),
+            "desktop".into(),
+            arm.clone(),
+            "127.0.0.1:0".parse().unwrap(),
+            false,
+            Adapters {
+                download_dir: downloads.clone(),
+                ..test_adapters()
+            },
+        )
+        .unwrap();
+        let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (phone, phone_fp) = rt.block_on(async { phone("share-cap") });
+        let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
+        let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
+
+        let offer = ShareOffer {
+            transfer: 3,
+            name: "endless.bin".into(),
+            size: magnetita_net::MAX_PAYLOAD_SIZE as u64 + 1,
+            mime: String::new(),
+        };
+        rt.block_on(session.send_message(capability::SHARE, ShareOffer::KIND, offer.encode()))
+            .unwrap();
+        let answer = rt.block_on(async {
+            loop {
+                let env = tokio::time::timeout(Duration::from_secs(5), session.recv())
+                    .await
+                    .expect("an answer in time")
+                    .unwrap();
+                if env.capability == capability::SHARE {
+                    break env;
+                }
+            }
+        });
+        assert_eq!(answer.kind, ShareReject::KIND, "the offer is refused");
+        assert_eq!(ShareReject::decode(&answer.body).unwrap().transfer, 3);
+        let partials = std::fs::read_dir(&downloads).map_or(0, |dir| dir.count());
+        assert_eq!(partials, 0, "no partial is created for it");
+        assert!(
+            daemon.payloads.try_acquire().is_some(),
+            "no payload permit is held for it"
+        );
+        session.close("done");
+        drop(wire);
+    }
+
+    #[test]
     fn a_file_resumes_after_a_broken_stream_and_flows_both_ways() {
         use magnetita_proto::daily::share::{ShareAccept, ShareDone, ShareOffer};
         use std::io::Write;
@@ -1706,6 +1812,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone5") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
         let payload: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
@@ -1745,7 +1852,7 @@ mod tests {
         session.close("wifi dropped");
         drop(half);
         let deadline = Instant::now() + Duration::from_secs(5);
-        while daemon.devices.lock_ok().contains_key("phone5") {
+        while daemon.devices.lock_ok().contains_key(&id) {
             assert!(Instant::now() < deadline, "the broken session never left");
             thread::sleep(Duration::from_millis(50));
         }
@@ -1795,7 +1902,7 @@ mod tests {
         daemon
             .commands
             .lock_ok()
-            .get("phone5")
+            .get(&id)
             .unwrap()
             .try_send(Command::SendFile(outgoing.clone()))
             .unwrap();
@@ -1860,6 +1967,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone6") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
 
@@ -1900,7 +2008,7 @@ mod tests {
         .unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            let entry = daemon.devices.lock_ok().get("phone6").cloned();
+            let entry = daemon.devices.lock_ok().get(&id).cloned();
             if let Some(e) = entry.filter(|e| e.media_player == "YT Music") {
                 assert_eq!(
                     (e.media_title.as_str(), e.media_now_playing.as_str()),
@@ -1920,7 +2028,7 @@ mod tests {
         daemon
             .commands
             .lock_ok()
-            .get("phone6")
+            .get(&id)
             .unwrap()
             .try_send(Command::Media(magnetita_core::MediaAction::Next))
             .unwrap();
@@ -1975,6 +2083,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone7") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
         let next_of = |cap: u16, kind: u16| {
@@ -2040,7 +2149,7 @@ mod tests {
         let shown = recorder.posted.lock_ok()[0].clone();
         assert_eq!((shown.app.as_str(), shown.summary.as_str()), ("SMS", "Ana"));
         assert!(shown.replyable);
-        assert_eq!(phone::store().conversations("phone7").len(), 1);
+        assert_eq!(phone::store().conversations(&id).len(), 1);
 
         // Replying on that notification sends in the thread.
         let (device, command) = bridge
@@ -2074,7 +2183,7 @@ mod tests {
         .unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            let entry = daemon.devices.lock_ok().get("phone7").cloned();
+            let entry = daemon.devices.lock_ok().get(&id).cloned();
             if let Some(e) = entry.filter(|e| e.call_state == "ringing") {
                 assert_eq!(e.call_name, "Ana");
                 break;
@@ -2132,10 +2241,7 @@ mod tests {
             );
             thread::sleep(Duration::from_millis(50));
         }
-        assert_eq!(
-            daemon.devices.lock_ok().get("phone7").unwrap().call_state,
-            ""
-        );
+        assert_eq!(daemon.devices.lock_ok().get(&id).unwrap().call_state, "");
         session.close("done");
         drop(wire);
     }
@@ -2169,6 +2275,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone8") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
         let next_of = |cap: u16, kind: u16| {
@@ -2189,13 +2296,13 @@ mod tests {
         // the daemon's one store, so the test registers and cleans up its own.
         let published = next_of(capability::COMMANDS, CommandList::KIND);
         let before = CommandList::decode(&published.body).unwrap().commands.len();
-        let id = commands::store()
+        let command = commands::store()
             .set(0, "Loopback true", "true", vec![])
             .unwrap();
         daemon
             .commands
             .lock_ok()
-            .get("phone8")
+            .get(&id)
             .unwrap()
             .try_send(Command::CommandsChanged)
             .unwrap();
@@ -2205,18 +2312,18 @@ mod tests {
         assert!(list
             .commands
             .iter()
-            .any(|c| c.id == id && c.name == "Loopback true"));
+            .any(|c| c.id == command && c.name == "Loopback true"));
 
         rt.block_on(session.send_message(
             capability::COMMANDS,
             CommandRun::KIND,
-            CommandRun { id }.encode(),
+            CommandRun { id: command }.encode(),
         ))
         .unwrap();
         let result =
             CommandResult::decode(&next_of(capability::COMMANDS, CommandResult::KIND).body)
                 .unwrap();
-        assert!(result.ok && result.id == id);
+        assert!(result.ok && result.id == command);
         rt.block_on(session.send_message(
             capability::COMMANDS,
             CommandRun::KIND,
@@ -2227,7 +2334,7 @@ mod tests {
             CommandResult::decode(&next_of(capability::COMMANDS, CommandResult::KIND).body)
                 .unwrap();
         assert!(!result.ok, "an unknown id runs nothing");
-        commands::store().remove(id).unwrap();
+        commands::store().remove(command).unwrap();
 
         // Input: a key and a text on the stream, motion as a datagram.
         rt.block_on(async {
@@ -2280,6 +2387,9 @@ mod tests {
 
     #[test]
     fn the_link_mirror_starts_streams_into_the_window_and_stops() {
+        let _inbox = crate::mirror::TEST_INBOX
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         use magnetita_proto::mirror::{Codec, MirrorStart, MirrorTouch, TouchAction};
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -2306,6 +2416,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone9") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
         let next_of = |cap: u16, kind: u16| {
@@ -2324,7 +2435,7 @@ mod tests {
 
         // The desktop wants the mirror: the tick sends the start.
         mirror::own().request_start_from(
-            "phone9",
+            &id,
             MirrorStart {
                 max_size: 1440,
                 fps: 60,
@@ -2430,7 +2541,7 @@ mod tests {
         })
     }
 
-    fn test_adapters() -> Adapters {
+    pub(super) fn test_adapters() -> Adapters {
         Adapters {
             clipboard_sink: Arc::new(|_: &str| true),
             notification_server: Arc::new(notifications::NoServer),
@@ -2469,6 +2580,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone10") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
         let session = Arc::new(session);
@@ -2477,7 +2589,7 @@ mod tests {
 
         let deadline = Instant::now() + Duration::from_secs(5);
         let client = loop {
-            if let Some(c) = storage::clients().lock_ok().get("phone10").cloned() {
+            if let Some(c) = storage::clients().lock_ok().get(&id).cloned() {
                 break c;
             }
             assert!(Instant::now() < deadline, "the client never registered");
@@ -2508,6 +2620,13 @@ mod tests {
                 std::fs::read(root.join("Music/new.txt")).unwrap(),
                 b"from the desktop"
             );
+            // A directory with entries is not deleted: the phone answers
+            // that it is not empty, and nothing under it is lost.
+            assert_eq!(
+                client.delete("DCIM").await,
+                Err(magnetita_proto::storage::ERROR_NOT_EMPTY.into())
+            );
+            assert!(root.join("DCIM/one.jpg").exists());
             client.delete("Music/new.txt").await.unwrap();
             client.delete("Music").await.unwrap();
             assert!(client.delete("Music").await.is_err());
@@ -2526,6 +2645,12 @@ mod tests {
         let runtime_dir =
             std::env::temp_dir().join(format!("magnetita-xdg-{}", std::process::id()));
         std::fs::create_dir_all(&runtime_dir).unwrap();
+        // The runtime directory the spec requires, or the daemon mounts nothing.
+        std::fs::set_permissions(
+            &runtime_dir,
+            std::os::unix::fs::PermissionsExt::from_mode(0o700),
+        )
+        .unwrap();
         std::env::set_var("XDG_RUNTIME_DIR", &runtime_dir);
         let cert = DeviceCert::generate("desktop");
         let daemon = test_daemon(&cert);
@@ -2543,6 +2668,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone11") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (session, _) = rt.block_on(prove(&phone, phone_fp, &uri));
         let session = Arc::new(session);
@@ -2554,7 +2680,7 @@ mod tests {
             let path = daemon
                 .devices
                 .lock_ok()
-                .get("phone11")
+                .get(&id)
                 .filter(|d| d.mounted)
                 .map(|d| d.mount_path.clone());
             if let Some(path) = path {
@@ -2605,12 +2731,7 @@ mod tests {
         session.close("done");
         let _ = rt.block_on(server);
         let deadline = Instant::now() + Duration::from_secs(10);
-        while daemon
-            .devices
-            .lock_ok()
-            .get("phone11")
-            .is_some_and(|d| d.mounted)
-        {
+        while daemon.devices.lock_ok().get(&id).is_some_and(|d| d.mounted) {
             assert!(Instant::now() < deadline, "the mount never released");
             thread::sleep(Duration::from_millis(50));
         }
@@ -2642,10 +2763,11 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone12") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
         let (first, _) = rt.block_on(prove(&phone, phone_fp, &uri));
         let deadline = Instant::now() + Duration::from_secs(5);
-        while !daemon.devices.lock_ok().contains_key("phone12") {
+        while !daemon.devices.lock_ok().contains_key(&id) {
             assert!(Instant::now() < deadline);
             thread::sleep(Duration::from_millis(20));
         }
@@ -2682,7 +2804,7 @@ mod tests {
             if daemon
                 .devices
                 .lock_ok()
-                .get("phone12")
+                .get(&id)
                 .is_some_and(|d| d.connected)
             {
                 break;
@@ -2722,6 +2844,7 @@ mod tests {
         let desktop_fp = magnetita_link::fingerprint_of(&cert.chain().unwrap()[0]);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone2") });
+        let id = magnetita_link::device_id_of(&phone_fp);
 
         // First pairing, then the phone drops its session (and, in life, its pin).
         let uri = arm.arm("desktop", desktop_fp, vec![addr.to_string()]);
@@ -2729,12 +2852,12 @@ mod tests {
         assert_eq!(fp, desktop_fp);
         first.close("phone forgets");
         let deadline = Instant::now() + Duration::from_secs(5);
-        while daemon.devices.lock_ok().contains_key("phone2") {
+        while daemon.devices.lock_ok().contains_key(&id) {
             assert!(Instant::now() < deadline, "the first session never left");
             thread::sleep(Duration::from_millis(50));
         }
         assert!(
-            daemon.trust.lock_ok().is_trusted("phone2"),
+            daemon.trust.lock_ok().is_trusted(&id),
             "the desktop still pins it"
         );
 
@@ -2759,7 +2882,7 @@ mod tests {
         });
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            let entry = daemon.devices.lock_ok().get("phone2").cloned();
+            let entry = daemon.devices.lock_ok().get(&id).cloned();
             if entry.filter(|e| e.battery == 20).is_some() {
                 break;
             }
@@ -2801,6 +2924,7 @@ mod tests {
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (phone, phone_fp) = rt.block_on(async { phone("phone1") });
+        let id = magnetita_link::device_id_of(&phone_fp);
         let session = rt.block_on(async {
             let scanned = QrPayload::parse_uri(&uri).unwrap();
             let target: SocketAddr = scanned.addresses[0].parse().unwrap();
@@ -2843,7 +2967,7 @@ mod tests {
         // The pin is durable in the shared store, the entry is published, the battery lands.
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            let entry = daemon.devices.lock_ok().get("phone1").cloned();
+            let entry = daemon.devices.lock_ok().get(&id).cloned();
             if let Some(e) = entry.filter(|e| e.battery == 61) {
                 assert!(e.paired && e.connected && e.charging);
                 assert_eq!(e.fingerprint, fingerprint_text(&phone_fp));
@@ -2855,13 +2979,13 @@ mod tests {
             );
             thread::sleep(Duration::from_millis(50));
         }
-        assert!(daemon.trust.lock_ok().is_trusted("phone1"));
+        assert!(daemon.trust.lock_ok().is_trusted(&id));
 
         // A Ring command reaches the phone as a FindRing envelope.
         daemon
             .commands
             .lock_ok()
-            .get("phone1")
+            .get(&id)
             .unwrap()
             .try_send(Command::Ring)
             .unwrap();
@@ -2881,11 +3005,7 @@ mod tests {
         // Forget: the trust is gone and the session is cut within the tick.
         daemon
             .revocations
-            .request_if_and_apply(
-                "phone1",
-                || true,
-                || daemon.trust.lock_ok().forget("phone1"),
-            )
+            .request_if_and_apply(&id, || true, || daemon.trust.lock_ok().forget(&id))
             .unwrap();
         let closed = rt
             .block_on(async { tokio::time::timeout(Duration::from_secs(5), session.recv()).await });
@@ -2894,14 +3014,14 @@ mod tests {
             "the daemon closes the session on Forget"
         );
         let deadline = Instant::now() + Duration::from_secs(5);
-        while daemon.devices.lock_ok().contains_key("phone1") {
+        while daemon.devices.lock_ok().contains_key(&id) {
             assert!(
                 Instant::now() < deadline,
                 "the entry never left the registry"
             );
             thread::sleep(Duration::from_millis(50));
         }
-        assert!(!daemon.trust.lock_ok().is_trusted("phone1"));
+        assert!(!daemon.trust.lock_ok().is_trusted(&id));
 
         // Once forgotten, the same certificate is refused: no window is armed.
         let refused = rt.block_on(async {

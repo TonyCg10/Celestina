@@ -87,7 +87,7 @@ mod tests {
         let phone = Phone::open(&tmp.join("phone"), "headless").unwrap();
         let phone_fp = phone.fingerprint;
         let desktop_side = async {
-            let incoming = desktop.accept().await.unwrap().unwrap();
+            let incoming = desktop.accept().await.unwrap().handshake().await.unwrap();
             let fp = incoming.peer_fingerprint();
             let (session, hello) = desktop
                 .admit(incoming, Expect::Fingerprint(fp))

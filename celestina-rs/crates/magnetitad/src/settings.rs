@@ -81,14 +81,13 @@ impl Settings {
         }
     }
 
-    /// Persist to `path`, creating the parent directory.
+    /// Persist to `path`, owner-only, creating a missing parent `0700`.
     pub fn save(&self, path: &Path) -> io::Result<()> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        celestina_core::atomic_file::replace(path, text.as_bytes())
+        celestina_core::atomic_file::replace_private(path, text.as_bytes())
+            .map(drop)
+            .map_err(io::Error::other)
     }
 
     /// Set the flag named `plugin`; returns whether the name was a known plugin.
@@ -203,6 +202,22 @@ mod tests {
 
         assert_eq!(Settings::load(&path), settings);
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn saved_settings_are_readable_by_their_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode =
+            |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let root = std::env::temp_dir().join(format!("mag-settings-mode-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let path = root.join("magnetita").join("settings.json");
+
+        Settings::default().save(&path).unwrap();
+
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(mode(path.parent().unwrap()), 0o700);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

@@ -14,6 +14,7 @@ use std::io::SeekFrom;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use magnetita_link::{RecvStream, Transfers};
 use magnetita_net::PayloadPermit;
@@ -30,6 +31,14 @@ use crate::{ui_log, Daemon};
 
 /// One read or write on a bulk stream.
 const CHUNK: usize = 64 * 1024;
+/// The largest file either side may offer: the payload limit the link
+/// shares. An offer past it is refused before a partial or a permit exists.
+const MAX_OFFER: u64 = magnetita_net::MAX_PAYLOAD_SIZE.unsigned_abs();
+/// How long an offer may wait for the other side: the phone to answer the
+/// desktop's offer, or to open the stream of one the desktop accepted. Past
+/// it the offer is dropped with its payload permit, so an unanswered offer
+/// cannot hold one of the few transfer slots for the rest of the session.
+const OFFER_TTL: Duration = Duration::from_secs(5 * 60);
 
 /// Partials that outlive a session: (device id, name, size) → the hidden
 /// file holding the bytes received so far. Bounded by the limiter while
@@ -56,6 +65,44 @@ struct Incoming {
     permit: PayloadPermit,
 }
 
+/// Offers waiting on the other side, by transfer id, with when each began
+/// to wait.
+struct Waiting<T> {
+    entries: HashMap<u32, (Instant, T)>,
+}
+
+impl<T> Default for Waiting<T> {
+    fn default() -> Self {
+        Self {
+            entries: HashMap::new(),
+        }
+    }
+}
+
+impl<T> Waiting<T> {
+    fn insert(&mut self, transfer: u32, value: T, now: Instant) {
+        self.entries.insert(transfer, (now, value));
+    }
+
+    fn take(&mut self, transfer: u32) -> Option<T> {
+        self.entries.remove(&transfer).map(|(_, value)| value)
+    }
+
+    /// Removes and returns every offer that has waited [`OFFER_TTL`] by `now`.
+    fn expire(&mut self, now: Instant) -> Vec<(u32, T)> {
+        let stale: Vec<u32> = self
+            .entries
+            .iter()
+            .filter(|(_, (since, _))| now.saturating_duration_since(*since) >= OFFER_TTL)
+            .map(|(transfer, _)| *transfer)
+            .collect();
+        stale
+            .into_iter()
+            .filter_map(|transfer| self.take(transfer).map(|value| (transfer, value)))
+            .collect()
+    }
+}
+
 /// The share state of one session: what is offered, what is accepted, and
 /// the outbox the transfer tasks answer through.
 pub(crate) struct SessionShare {
@@ -67,8 +114,8 @@ pub(crate) struct SessionShare {
     download_dir: PathBuf,
     outbox: UnboundedSender<Envelope>,
     next_transfer: AtomicU32,
-    outgoing: Mutex<HashMap<u32, Outgoing>>,
-    incoming: Mutex<HashMap<u32, Incoming>>,
+    outgoing: Mutex<Waiting<Outgoing>>,
+    incoming: Mutex<Waiting<Incoming>>,
 }
 
 impl SessionShare {
@@ -90,8 +137,8 @@ impl SessionShare {
             download_dir,
             outbox,
             next_transfer: AtomicU32::new(1),
-            outgoing: Mutex::new(HashMap::new()),
-            incoming: Mutex::new(HashMap::new()),
+            outgoing: Mutex::new(Waiting::default()),
+            incoming: Mutex::new(Waiting::default()),
         })
     }
 
@@ -110,6 +157,9 @@ impl SessionShare {
         if !meta.is_file() {
             return Err("not a regular file".into());
         }
+        if meta.len() > MAX_OFFER {
+            return Err("larger than any transfer may be".into());
+        }
         let name = incoming_file::safe_filename(&path.to_string_lossy());
         let Some(permit) = self.daemon.payloads.try_acquire() else {
             return Err("too many transfers active".into());
@@ -123,6 +173,7 @@ impl SessionShare {
                 size: meta.len(),
                 _permit: permit,
             },
+            Instant::now(),
         );
         Ok(Self::envelope(
             capability::SHARE,
@@ -152,13 +203,14 @@ impl SessionShare {
             }
             ShareAccept::KIND => {
                 let accept = ShareAccept::decode(&env.body).ok()?;
-                let job = self.outgoing.lock_ok().remove(&accept.transfer)?;
+                let job = self.outgoing.lock_ok().take(accept.transfer)?;
                 self.spawn_send(accept.transfer, job, accept.offset);
                 None
             }
             ShareReject::KIND => {
                 let reject = ShareReject::decode(&env.body).ok()?;
-                if let Some(job) = self.outgoing.lock_ok().remove(&reject.transfer) {
+                let job = self.outgoing.lock_ok().take(reject.transfer);
+                if let Some(job) = job {
                     ui_log(
                         &self.daemon,
                         &self.device_name,
@@ -200,6 +252,15 @@ impl SessionShare {
             .encode(),
         );
         if !self.daemon.settings.lock_ok().share {
+            return reject;
+        }
+        if offer.size > MAX_OFFER {
+            ui_log(
+                &self.daemon,
+                &self.device_name,
+                "archivo rechazado: demasiado grande",
+                true,
+            );
             return reject;
         }
         let Some(permit) = self.daemon.payloads.try_acquire() else {
@@ -255,6 +316,7 @@ impl SessionShare {
                 offset,
                 permit,
             },
+            Instant::now(),
         );
         Self::envelope(
             capability::SHARE,
@@ -269,7 +331,8 @@ impl SessionShare {
 
     /// A bulk stream arrived: the accepted transfer it names starts receiving.
     pub(crate) fn stream_arrived(self: &Arc<Self>, transfer: u32, stream: RecvStream) {
-        let Some(job) = self.incoming.lock_ok().remove(&transfer) else {
+        let job = self.incoming.lock_ok().take(transfer);
+        let Some(job) = job else {
             log(
                 "link",
                 &format!(
@@ -281,6 +344,41 @@ impl SessionShare {
         };
         let this = Arc::clone(self);
         tokio::spawn(async move { this.receive(transfer, job, stream).await });
+    }
+
+    /// Drops every offer that has waited [`OFFER_TTL`] by `now`, and with it
+    /// its payload permit. A partial stays in the store, so the same file
+    /// offered again resumes. Called from the session's tick.
+    pub(crate) fn expire(&self, now: Instant) {
+        let unanswered = self.outgoing.lock_ok().expire(now);
+        for (transfer, job) in unanswered {
+            log(
+                "link",
+                &format!(
+                    "{}: offer {transfer} of {} unanswered; dropped",
+                    self.device_name, job.name
+                ),
+            );
+            ui_log(
+                &self.daemon,
+                &self.device_name,
+                &format!(
+                    "el m\u{f3}vil no respondi\u{f3} al env\u{ed}o: {}",
+                    job.name
+                ),
+                true,
+            );
+        }
+        let unstarted = self.incoming.lock_ok().expire(now);
+        for (transfer, job) in unstarted {
+            log(
+                "link",
+                &format!(
+                    "{}: transfer {transfer} of {} never started; dropped",
+                    self.device_name, job.name
+                ),
+            );
+        }
     }
 
     async fn receive(self: Arc<Self>, transfer: u32, job: Incoming, mut stream: RecvStream) {
@@ -446,5 +544,30 @@ impl SessionShare {
             return Err(std::io::Error::other("the file shrank while sending"));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_offer_left_unanswered_expires_and_gives_its_permit_back() {
+        let limiter = magnetita_net::PayloadLimiter::new();
+        let mut waiting = Waiting::default();
+        let start = Instant::now();
+        waiting.insert(1, limiter.try_acquire().unwrap(), start);
+        waiting.insert(2, limiter.try_acquire().unwrap(), start + OFFER_TTL / 2);
+        assert!(waiting.expire(start + OFFER_TTL / 2).is_empty());
+
+        let expired = waiting.expire(start + OFFER_TTL);
+        assert_eq!(expired.len(), 1);
+        assert_eq!(expired[0].0, 1);
+        drop(expired);
+        assert!(waiting.take(1).is_none(), "an expired offer is gone");
+        assert!(waiting.take(2).is_some(), "a younger offer still waits");
+        for _ in 0..4 {
+            std::mem::forget(limiter.try_acquire().expect("every permit is back"));
+        }
     }
 }

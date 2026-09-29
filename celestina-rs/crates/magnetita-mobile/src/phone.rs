@@ -11,8 +11,8 @@ use std::time::Duration;
 use magnetita_link::endpoint::Expect;
 use magnetita_link::trust::fingerprint_text;
 use magnetita_link::{
-    fingerprint_of, DeviceCert, Endpoint, EndpointConfig, LinkError, SendStream, Session,
-    Transfers, TrustStore, TrustedPeer,
+    device_id_of, fingerprint_of, DeviceCert, Endpoint, EndpointConfig, LinkError, SendStream,
+    Session, Transfers, TrustStore, TrustedPeer,
 };
 use magnetita_proto::control::commands::{CommandList, CommandResult, CommandRun};
 use magnetita_proto::control::input::{Button, Key, PointerButton, PointerMove, Scroll, Text};
@@ -119,10 +119,7 @@ impl Phone {
         std::fs::create_dir_all(dir)?;
         let cert = DeviceCert::ensure(dir, name)?;
         let fingerprint = fingerprint_of(&cert.chain()?[0]);
-        let device_id = fingerprint[..8]
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>();
+        let device_id = device_id_of(&fingerprint);
         let trust = TrustStore::load(&dir.join("trust.json"))?;
         let hello = Hello {
             device_id: device_id.clone(),

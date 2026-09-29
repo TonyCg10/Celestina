@@ -10,7 +10,7 @@ use magnetita_proto::bound::MAX_LIST;
 use magnetita_proto::capability;
 use magnetita_proto::storage::{
     Data, Delete, Done, Entry, List, Listing, Mkdir, Read, Rename, Stat, StatReply, StorageState,
-    Write,
+    Write, ERROR_NOT_EMPTY,
 };
 use magnetita_proto::Envelope;
 
@@ -142,7 +142,12 @@ pub fn serve(root: &Path, request: &StorageRequest) -> Envelope {
             } else {
                 std::fs::remove_file(&path)
             };
-            outcome(m.request, result)
+            match result {
+                Err(e) if e.kind() == std::io::ErrorKind::DirectoryNotEmpty => {
+                    done(m.request, false, ERROR_NOT_EMPTY)
+                }
+                other => outcome(m.request, other),
+            }
         }
     }
 }
@@ -311,6 +316,16 @@ mod tests {
         let reply = serve(&root, &request(&envelope(Delete::KIND, delete.encode())));
         assert!(Done::decode(&reply.body).unwrap().ok);
         assert!(!root.join("c.txt").exists());
+
+        let full = Delete {
+            request: 8,
+            path: "photos".into(),
+        };
+        let reply = serve(&root, &request(&envelope(Delete::KIND, full.encode())));
+        let done = Done::decode(&reply.body).unwrap();
+        assert!(!done.ok);
+        assert_eq!(done.error, ERROR_NOT_EMPTY);
+        assert!(root.join("photos/a.jpg").exists());
 
         let missing = Stat {
             request: 7,
