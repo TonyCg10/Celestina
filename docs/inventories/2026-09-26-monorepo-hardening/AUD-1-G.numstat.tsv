@@ -1,0 +1,23 @@
+# AUD-1-G exact change inventory
+
+Base revision	4b380772de3b24305bedc2bbc21169beef815a17
+Pathspec	celestina-rs/scripts/build-production.sh
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/evidence/2026-09-29-one-owner-per-artifact.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-G.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/projects.toml
+Pathspec	scripts/documentation_contract.py
+Pathspec	scripts/test-documentation-contract.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+5	1	735370a272b715ef6553f5ed1df06bc2f9c82446ebe800e53d5ee68ef5005d44	celestina-rs/scripts/build-production.sh
+5	0	9e614be94c5ef4a9cacdaf75e4bbab2a0243f04f87469d23d1a8641ac4ada372	docs/contracts/production-artifacts.md
+80	0	6d445669416a10a49b99f44bbd8fbeb43ef576b51805edcfade47c658484da95	docs/evidence/2026-09-29-one-owner-per-artifact.md
+23	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-G.numstat.tsv
+4	0	031f05fdcbc0f5e81e6d1c7357e1c13b88e89c7b83ddf2bc27f2332d414a7c35	docs/plans/active/2026-09-26-monorepo-hardening.md
+1	1	7264fdfa9cbf9bb4eb87b27986c7c537d00128f98ad0b500af6965740fde955d	docs/projects.toml
+19	0	38c1c02a6636bf54cb041be73655e8bbc1b86797d04ca06c8c87315d2edb327b	scripts/documentation_contract.py
+22	0	5796508653bdad193c57586c631ee56bda4623bbf89b754114be592fc25181ce	scripts/test-documentation-contract.sh

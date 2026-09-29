@@ -66,6 +66,28 @@ elif ! grep -F 'must live exactly at `app/docs/inventories/2026-08-03-app/APP-1B
     fail "the incorrect inventory root produced no stable diagnostic"
 fi
 
+shared_artifact=$temporary/shared-artifact
+cp -R "$valid" "$shared_artifact"
+sed -i 's|artifact_paths = \["core/target/release"\]|artifact_paths = ["app/target/release/app"]|' \
+    "$shared_artifact/docs/projects.toml"
+if python3 "$checker" --root "$shared_artifact" --quiet \
+    > "$temporary/shared-artifact.out" 2>&1; then
+    fail "the registry accepted one artifact path registered by two projects"
+elif ! grep -F 'artifact path app/target/release/app is registered by both `app` and `core`' \
+    "$temporary/shared-artifact.out" >/dev/null; then
+    fail "the shared artifact path produced no stable diagnostic"
+fi
+# A halted project builds nothing, so its registered path overwrites nothing.
+sed -i '/^commit_prefix = "app"$/a halted = "2026-09-27"' \
+    "$shared_artifact/docs/projects.toml"
+if python3 "$checker" --root "$shared_artifact" --quiet \
+    > "$temporary/shared-halted-artifact.out" 2>&1 \
+    && ! grep -F 'is registered by both' "$temporary/shared-halted-artifact.out" >/dev/null; then
+    :
+elif grep -F 'is registered by both' "$temporary/shared-halted-artifact.out" >/dev/null; then
+    fail "the registry refused an artifact path a halted project also registers"
+fi
+
 nonboolean_suite=$temporary/nonboolean-suite
 cp -R "$valid" "$nonboolean_suite"
 sed -i 's/allow_all_commit_paths = true/allow_all_commit_paths = "false"/' \

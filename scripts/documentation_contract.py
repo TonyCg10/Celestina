@@ -564,6 +564,9 @@ class DocumentationContract:
 
         seen_ids: set[str] = set()
         seen_prefixes: set[str] = set(self.prefixes)
+        # One artifact path, one project: two builds that write the same file
+        # overwrite each other's recorded bytes, so neither can deploy them.
+        artifact_owners: dict[str, str] = {}
         projects = self.registry["projects"]
         assert isinstance(projects, list)
         if not projects:
@@ -717,6 +720,22 @@ class DocumentationContract:
             for field in ("production_role", "artifact_manifest", "artifact_paths"):
                 if field not in project:
                     self.error("docs/projects.toml", f"{label}.{field} is required")
+            # A halted project is never built (AGENTS.md "Halted projects"), so
+            # it writes nothing that another build could overwrite.
+            artifact_paths = [] if "halted" in project else project.get("artifact_paths", [])
+            if not isinstance(artifact_paths, list):
+                self.error("docs/projects.toml", f"{label}.artifact_paths must be a list")
+                artifact_paths = []
+            for artifact in artifact_paths:
+                if not isinstance(artifact, str):
+                    continue
+                claimant = artifact_owners.setdefault(artifact, owner_id)
+                if claimant != owner_id:
+                    self.error(
+                        "docs/projects.toml",
+                        f"artifact path {artifact} is registered by both `{claimant}` and "
+                        f"`{owner_id}`; each build must write its own file",
+                    )
             self.require_script(project.get("build_script"), f"{label}.build_script")
             self.require_script(project.get("verify_script"), f"{label}.verify_script")
             self.require_script(project.get("status_script"), f"{label}.status_script")

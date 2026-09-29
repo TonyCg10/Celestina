@@ -37,6 +37,11 @@ the author's binary.
 - Build all binaries deployed by the project as one unit without starting
   processes or reloading services.
 - Write the ignored manifest at the registry-declared path.
+- Register each artifact path for one project only. A workspace build that
+  also produces a binary a deployable project builds with other Cargo features
+  writes to its own target directory, so neither build overwrites the bytes
+  the other one recorded; the documentation contract refuses a path that two
+  projects register.
 
 The manifest records at least project, profile, artifact paths and digests, Git
 revision, dirty state, production and verification fingerprints, relevant
