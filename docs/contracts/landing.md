@@ -506,6 +506,10 @@ unit changed on `main` after the dependency landed differs from `main` on
 the branch, so under another prefix it stops the scope check at
 `preflight`; merge `origin/main` into the stacked branch in its session
 worktree, keeping `main`'s side of the dependency's files, then land again.
+The hooks accept that merge: an inventory it brings with exactly the bytes
+a merged commit holds was sealed on that side, so the documentation contract
+judges it at the commit that delivered it and the staged-unit guard does not
+count it as a closure the merge makes.
 
 ## Stops and resumption
 

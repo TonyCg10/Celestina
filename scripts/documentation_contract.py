@@ -1682,6 +1682,33 @@ class DocumentationContract:
             records.append((commit.decode("ascii").strip(), fields))
         return records
 
+    def merged_inventory_endpoint(self, inventory: str) -> str | None:
+        """The commit that delivered `inventory` on the side a merge in progress brings.
+
+        While a merge is being committed, an inventory the merged side already
+        committed is new to HEAD, yet the merge does not close its unit. When
+        the index holds exactly a merged commit's bytes, the inventory is
+        judged like any committed one, at the newest commit of that side's
+        history that changed it. Outside a merge, or for other bytes, None.
+        """
+        try:
+            heads = repo_git.merge_heads(self.root)
+        except GitError:
+            return None
+        staged = self.git_command("rev-parse", "-q", "--verify", f":{inventory}")
+        if staged is None or staged.returncode != 0:
+            return None
+        for head in heads:
+            theirs = self.git_command("rev-parse", "-q", "--verify", f"{head}:{inventory}")
+            if theirs is None or theirs.returncode != 0 or theirs.stdout != staged.stdout:
+                continue
+            log = self.git_command(
+                "--literal-pathspecs", "log", "-1", "--format=%H", head, "--", inventory
+            )
+            if log is not None and log.returncode == 0 and log.stdout.strip():
+                return log.stdout.decode("ascii").strip()
+        return None
+
     def last_change(self, inventory: str) -> str | None:
         """The newest commit that touches `inventory`, as `git log -1 -- PATH` names it.
 
@@ -2063,7 +2090,10 @@ class DocumentationContract:
         inventory_is_tracked = inventory_relative in tracked
         inventory_is_dirty = not inventory_is_tracked or inventory_relative in dirty
 
-        if inventory_is_dirty:
+        merged_endpoint = (
+            self.merged_inventory_endpoint(inventory_relative) if inventory_is_dirty else None
+        )
+        if inventory_is_dirty and merged_endpoint is None:
             if plan_relative not in row_paths:
                 self.error(
                     inventory_path,
@@ -2085,7 +2115,7 @@ class DocumentationContract:
                 )
                 return
         else:
-            endpoint = self.last_change(inventory_relative)
+            endpoint = merged_endpoint or self.last_change(inventory_relative)
             if endpoint is None:
                 self.error(inventory_path, "could not resolve the historical inventory commit")
                 return

@@ -144,6 +144,23 @@ def index_bytes(root: Path, path: str) -> bytes | None:
     return process.stdout if process.returncode == 0 else None
 
 
+def merged_in(root: Path, path: str) -> bool:
+    """A merge in progress brings `path` unchanged from the merged side.
+
+    The index then holds exactly the bytes a merged commit holds, so the path
+    was delivered on that side, by its own commit; the merge does not close
+    it. Outside a merge nothing is merged in.
+    """
+    staged = index_bytes(root, path)
+    if staged is None:
+        return False
+    for head in repo_git.merge_heads(root):
+        theirs = git_run(root, "show", f"{head}:{path}")
+        if theirs.returncode == 0 and theirs.stdout == staged:
+            return True
+    return False
+
+
 def path_exists_at_head(root: Path, path: str) -> bool:
     return git_run(root, "cat-file", "-e", f"HEAD:{path}").returncode == 0
 
@@ -558,8 +575,12 @@ def validate_batch(
             + ", ".join(missing_references)
         )
 
+    # An inventory a merge brings unchanged was sealed on the merged side; the
+    # merge carries that delivery, it does not close one of its own.
     all_staged_inventories = {
-        path for path in staged_paths if is_inventory(path, inventory_dirs)
+        path
+        for path in staged_paths
+        if is_inventory(path, inventory_dirs) and not merged_in(root, path)
     }
     deleted_plans = sorted(
         path

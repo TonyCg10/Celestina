@@ -59,6 +59,39 @@ def output(root: Path, *args: str, allowed: Iterable[int] = (0,), **options: obj
     return result.stdout
 
 
+def merge_heads(root: Path) -> tuple[str, ...]:
+    """The commits a merge in progress brings in, or none outside a merge.
+
+    Git writes `MERGE_HEAD` when a merge stops and before `commit-msg` runs.
+    During an automatic merge's `pre-merge-commit` it has not written it yet,
+    and passes each merged commit as a `GITHEAD_<object id>` variable instead.
+    """
+    located = run(root, "rev-parse", "--git-path", "MERGE_HEAD")
+    candidates: list[str] = []
+    if located.returncode == 0:
+        path = Path(decode(located.stdout).strip())
+        if not path.is_absolute():
+            path = root / path
+        try:
+            candidates = path.read_text(encoding="ascii").split()
+        except (OSError, UnicodeDecodeError):
+            candidates = []
+    if not candidates:
+        candidates = [
+            key[len("GITHEAD_") :]
+            for key in sorted(os.environ)
+            if key.startswith("GITHEAD_")
+            and len(key) in (len("GITHEAD_") + 40, len("GITHEAD_") + 64)
+            and all(character in "0123456789abcdef" for character in key[len("GITHEAD_") :])
+        ]
+    heads = []
+    for candidate in candidates:
+        verified = run(root, "rev-parse", "-q", "--verify", f"{candidate}^{{commit}}")
+        if verified.returncode == 0:
+            heads.append(decode(verified.stdout).strip())
+    return tuple(heads)
+
+
 def decode(raw: bytes) -> str:
     """Git's bytes as text; a path that is not UTF-8 survives the round trip."""
     return raw.decode("utf-8", "surrogateescape")

@@ -1,0 +1,23 @@
+# AUD-1-H exact change inventory
+
+Base revision	63eb24e5471ed7ebc6d5d6a9bdb5b9287b6efcfe
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/evidence/2026-09-29-merged-in-inventories.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-H.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	scripts/check-staged-units.py
+Pathspec	scripts/documentation_contract.py
+Pathspec	scripts/repo_git.py
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	0	5ef4790ef946021b6c56158ffbc8e13065b607ef2fe22c7248fa75b13b4df4e6	docs/contracts/landing.md
+94	0	4a4577c44c76b034e97ad182456fc60296007ec61c548f04e9f526f8d019cfab	docs/evidence/2026-09-29-merged-in-inventories.md
+23	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-H.numstat.tsv
+3	0	29fdf3ef87fcf8b3ed7e105ee27d2a7330db00f99e78358fe20d2a41c031fef2	docs/plans/active/2026-09-26-monorepo-hardening.md
+22	1	52b5320718f8a158a58dc1e9dae32e32e330e0e20c902eb1c81af9fbee289f42	scripts/check-staged-units.py
+32	2	8737555e35dbf35927ab10ec24af89f020ecac33048e76a7883a27faff0a617e	scripts/documentation_contract.py
+33	0	864a77fcbfe17c066e7eefc8f607ffba2a14ad10101db3d4ac1c44717bb22f9c	scripts/repo_git.py
+43	0	5acf91a8bcc78f8427e64f3ac47d2b9115f29892b9b5627a077db239d05a0672	scripts/test-land-unit.py

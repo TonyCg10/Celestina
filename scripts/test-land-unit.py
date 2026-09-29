@@ -3547,6 +3547,49 @@ class RealGuardLanding(unittest.TestCase):
         self.assertFalse((self.top / "Celestina.worktrees" / ".landing").exists())
         self.assertEqual(self.git(self.repo, "status", "--porcelain"), "")
 
+        # A branch that still has the old main merges the landed unit through
+        # the same hooks, as a stacked branch does before its own landing: the
+        # sealed inventory arrives already committed on the merged side.
+        side = self.top / "Celestina.worktrees" / "side"
+        self.git(self.repo, "worktree", "add", "--quiet", "-b", "side", str(side), before)
+        # The side has moved on, so its HEAD is not the inventory's base.
+        notes = side / "docs/evidence/README.md"
+        notes.write_text(
+            notes.read_text(encoding="utf-8") + "\nA side branch records this note.\n",
+            encoding="utf-8",
+        )
+        self.git(side, "add", "docs/evidence/README.md")
+        self.git(side, "commit", "--quiet", "-m", "suite-maintenance: Record a side note")
+        merged = subprocess.run(
+            ["git", "merge", "--no-ff", "--no-edit", "origin/main"],
+            cwd=side,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=self.environment,
+        )
+        self.assertEqual(merged.returncode, 0, msg=described(merged))
+        self.assertEqual(self.git(side, "rev-parse", "HEAD^2").strip(), head)
+
+        # A merge committed by hand runs pre-commit instead, with MERGE_HEAD
+        # written, which is the path a conflict resolution takes.
+        self.git(side, "reset", "--quiet", "--hard", "HEAD^")
+        self.git(side, "merge", "--quiet", "--no-ff", "--no-commit", "origin/main")
+        committed = subprocess.run(
+            ["git", "commit", "--no-edit"],
+            cwd=side,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=self.environment,
+        )
+        self.assertEqual(committed.returncode, 0, msg=described(committed))
+        self.assertEqual(self.git(side, "rev-parse", "HEAD^2").strip(), head)
+
 
 if __name__ == "__main__":
     unittest.main()
