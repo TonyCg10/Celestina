@@ -20,9 +20,11 @@ pub enum ArchiveError {
     NotWritable { format: &'static str },
     /// The container is damaged or truncated.
     Malformed { path: PathBuf, reason: String },
-    /// A member's stored name escapes the extraction root (absolute path, `..`,
-    /// or an escaping symlink target). The extraction refuses it rather than
-    /// writing outside the folder the person chose.
+    /// A member's stored name escapes the extraction root: an absolute path,
+    /// `..`, a link whose target resolves outside (directly or through other
+    /// links), a hard link to a file outside, or a member that would be written
+    /// through a link. The extraction refuses it rather than writing outside
+    /// the folder the person chose.
     UnsafeMember { name: String },
     /// A name that only a byte-oriented container can carry was asked of one
     /// that stores text (zip). Reported instead of mangling the name.

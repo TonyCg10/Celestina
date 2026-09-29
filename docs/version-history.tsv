@@ -174,3 +174,4 @@ hematita	1.2.2	bug	S3-C	Fix the storage analysis resetting on a section change a
 celestina-style	1.9.2	bug	STYLE-G7-N	Add swatch tokens with their guards and control tests
 hematita	1.2.3	bug	HEM-H1-A	Harden the storage walk and deletion against mounts and unbounded input
 magnetita-android	1.0.2	bug	AND-6-D	Require consent before pairing and gate desktop input
+siderita	1.7.3	bug	SID-H1-A	Fix archive extraction escaping its root and the password on argv

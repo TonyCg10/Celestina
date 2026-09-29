@@ -35,8 +35,12 @@ pub(crate) fn safe_relative(raw: &Path) -> Option<PathBuf> {
 /// Whether a symlink's `target`, resolved textually against the link's own
 /// parent inside the archive, still lands inside the extraction root.
 ///
-/// Purely lexical on purpose: it is answered before anything is written, and the
-/// root does not exist yet to be resolved against.
+/// Purely lexical on purpose: it is answered the moment the member is read, so
+/// an obviously escaping link fails the extraction before any more is written.
+/// It is a first filter and never the whole answer — text cannot see that a
+/// component is itself a link, which is how a chain of links that each look
+/// inside still leaves. The link is created only after
+/// [`crate::contain::Root::link_stays_inside`] resolves it on the real tree.
 pub(crate) fn target_stays_inside(link: &Path, target: &Path) -> bool {
     if target.is_absolute() {
         return false;

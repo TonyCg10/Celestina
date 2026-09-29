@@ -555,3 +555,488 @@ fn progress_counts_every_member_and_every_byte() {
     assert_eq!(last.bytes, 10);
     assert_eq!(last.items, 5);
 }
+
+/// One tar member spelled byte for byte, as a hostile writer spells it: the
+/// `tar` crate's own builder refuses `..` and absolute names, which is exactly
+/// what these archives need to carry.
+enum Raw<'a> {
+    Dir(&'a str),
+    File(&'a str, &'a [u8]),
+    Symlink(&'a str, &'a str),
+    Hardlink(&'a str, &'a str),
+}
+
+/// Writes `members` into a plain `.tar` at `path`, in the order given.
+fn hostile_tar(path: &Path, members: &[Raw<'_>]) {
+    let file = fs::File::create(path).expect("create tar");
+    let mut builder = tar::Builder::new(file);
+    for member in members {
+        let (name, kind, data, link): (&str, tar::EntryType, &[u8], &str) = match member {
+            Raw::Dir(name) => (name, tar::EntryType::Directory, b"", ""),
+            Raw::File(name, data) => (name, tar::EntryType::Regular, data, ""),
+            Raw::Symlink(name, target) => (name, tar::EntryType::Symlink, b"", target),
+            Raw::Hardlink(name, target) => (name, tar::EntryType::Link, b"", target),
+        };
+        let mut header = tar::Header::new_ustar();
+        {
+            let raw = header.as_old_mut();
+            assert!(name.len() < raw.name.len() && link.len() < raw.linkname.len());
+            raw.name[..name.len()].copy_from_slice(name.as_bytes());
+            raw.linkname[..link.len()].copy_from_slice(link.as_bytes());
+        }
+        header.set_entry_type(kind);
+        header.set_size(data.len() as u64);
+        header.set_mode(if kind.is_dir() { 0o755 } else { 0o644 });
+        header.set_mtime(1_600_000_000);
+        header.set_cksum();
+        builder.append(&header, data).expect("append member");
+    }
+    builder.into_inner().expect("finish tar");
+}
+
+/// Extracts `archive` into a fresh `destination` folder beside it and returns that
+/// folder with the outcome.
+fn extract_beside(
+    dir: &Path,
+    archive: &Path,
+) -> (PathBuf, Result<siderita_archive::Extracted, ArchiveError>) {
+    let into = dir.join("destination");
+    fs::create_dir(&into).expect("mk destination");
+    let outcome = extract(
+        archive,
+        &into,
+        &ExtractOptions::new(&Utc, "extracted"),
+        &live(),
+        &mut ignore,
+    );
+    (into, outcome)
+}
+
+/// Asserts the refusal every hostile archive must earn: a typed
+/// [`ArchiveError::UnsafeMember`] and a destination left exactly as it was.
+fn assert_refused(into: &Path, outcome: Result<siderita_archive::Extracted, ArchiveError>) {
+    match outcome {
+        Err(ArchiveError::UnsafeMember { .. }) => {}
+        other => panic!("expected an unsafe-member refusal, got {other:?}"),
+    }
+    assert_eq!(
+        fs::read_dir(into).expect("read destination").count(),
+        0,
+        "a refused extraction must leave nothing in the destination"
+    );
+}
+
+/// The auditor's proof of concept for SID-1, byte for byte: `d/up -> ..` looks
+/// inside, `esc -> d/up/..` looks inside, and a file written through `esc`
+/// landed beside the extraction folder while `extract` answered `Ok`.
+#[test]
+fn a_chain_of_links_that_each_look_inside_cannot_carry_a_write_out() {
+    let dir = TestDir::new("chain-poc");
+    let archive = dir.path().join("evil.tar");
+    hostile_tar(
+        &archive,
+        &[
+            Raw::Dir("d/"),
+            Raw::Symlink("d/up", ".."),
+            Raw::Symlink("esc", "d/up/.."),
+            Raw::File("esc/pwned.txt", b"pwned"),
+        ],
+    );
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+
+    assert!(
+        !into.join("pwned.txt").exists(),
+        "the write escaped the extraction root"
+    );
+    assert!(!dir.path().join("pwned.txt").exists());
+    assert_refused(&into, outcome);
+}
+
+/// The same chain with no file behind it, in both orders: a link that resolves
+/// out of the root is refused even when nothing is written through it, and even
+/// when the link that makes it escape arrives after it.
+#[test]
+fn a_chain_of_links_that_resolves_outside_is_refused_in_either_order() {
+    let forward: &[Raw<'_>] = &[
+        Raw::Dir("d/"),
+        Raw::Symlink("d/up", ".."),
+        Raw::Symlink("esc", "d/up/.."),
+    ];
+    let backward: &[Raw<'_>] = &[
+        Raw::Symlink("esc", "d/up/.."),
+        Raw::Dir("d/"),
+        Raw::Symlink("d/up", ".."),
+    ];
+    for (label, members) in [("forward", forward), ("backward", backward)] {
+        let dir = TestDir::new(&format!("chain-{label}"));
+        let archive = dir.path().join("evil.tar");
+        hostile_tar(&archive, members);
+
+        let (into, outcome) = extract_beside(dir.path(), &archive);
+
+        assert_refused(&into, outcome);
+    }
+}
+
+#[test]
+fn an_absolute_member_is_refused() {
+    let dir = TestDir::new("absolute");
+    let outside = dir.path().join("outside-absolute.txt");
+    let archive = dir.path().join("evil.tar");
+    let name = outside.to_str().expect("utf-8 temp path");
+    hostile_tar(&archive, &[Raw::File(name, b"escaped")]);
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+
+    assert!(!outside.exists());
+    assert_refused(&into, outcome);
+}
+
+#[test]
+fn a_parent_member_in_a_tar_is_refused() {
+    let dir = TestDir::new("dotdot");
+    let archive = dir.path().join("evil.tar");
+    hostile_tar(
+        &archive,
+        &[Raw::Dir("a/"), Raw::File("a/../../outside.txt", b"escaped")],
+    );
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+
+    assert!(!dir.path().join("outside.txt").exists());
+    assert_refused(&into, outcome);
+}
+
+/// A hard link names its target from the archive's root. One that names a file
+/// outside it — relatively or absolutely — would make the extracted entry *be*
+/// that file, so a later write to it rewrites the original.
+#[test]
+fn a_hard_link_to_a_file_outside_is_refused() {
+    let dir = TestDir::new("hardlink-out");
+    let secret = dir.path().join("secret.txt");
+    fs::write(&secret, b"do not touch").expect("write secret");
+    let absolute = secret.to_str().expect("utf-8 temp path").to_owned();
+    for (label, target) in [
+        ("relative", "../secret.txt"),
+        ("absolute", absolute.as_str()),
+    ] {
+        let archive = dir.path().join(format!("evil-{label}.tar"));
+        hostile_tar(
+            &archive,
+            &[
+                Raw::Hardlink("hard", target),
+                Raw::File("hard", b"overwritten"),
+            ],
+        );
+
+        let into = dir.path().join(format!("destination-{label}"));
+        fs::create_dir(&into).expect("mk destination");
+        let outcome = extract(
+            &archive,
+            &into,
+            &ExtractOptions::new(&Utc, "extracted"),
+            &live(),
+            &mut ignore,
+        );
+
+        assert_refused(&into, outcome);
+        assert_eq!(fs::read(&secret).expect("secret"), b"do not touch");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(fs::metadata(&secret).expect("stat").nlink(), 1, "{label}");
+        }
+    }
+}
+
+/// A symlink stored before a file whose path runs through it: even when the
+/// link points inside, the file must not be written through it.
+#[test]
+fn a_file_is_never_written_through_a_link_the_archive_made() {
+    let dir = TestDir::new("through-link");
+    let archive = dir.path().join("evil.tar");
+    hostile_tar(
+        &archive,
+        &[
+            Raw::Dir("sub/"),
+            Raw::Symlink("link", "sub"),
+            Raw::File("link/note.txt", b"through the link"),
+        ],
+    );
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+
+    assert_refused(&into, outcome);
+}
+
+/// The honest counterpart: links that stay inside are still extracted, the
+/// symlink as a symlink and the hard link as a second name for the same file.
+#[test]
+fn links_that_stay_inside_are_extracted() {
+    let dir = TestDir::new("honest-links");
+    let archive = dir.path().join("links.tar");
+    hostile_tar(
+        &archive,
+        &[
+            Raw::Dir("data/"),
+            Raw::File("data/one.txt", b"one"),
+            Raw::Symlink("data/soft", "one.txt"),
+            Raw::Hardlink("data/hard", "data/one.txt"),
+            Raw::Dir("data/inside/"),
+            Raw::Symlink("data/inside/upward", "../one.txt"),
+        ],
+    );
+
+    let (_into, outcome) = extract_beside(dir.path(), &archive);
+    let extracted = outcome.expect("an honest archive extracts");
+
+    assert!(extracted.skipped.is_empty(), "{:?}", extracted.skipped);
+    let root = extracted.root;
+    assert_eq!(
+        fs::read_link(root.join("soft")).expect("symlink"),
+        PathBuf::from("one.txt")
+    );
+    assert_eq!(
+        fs::read(root.join("inside/upward")).expect("through link"),
+        b"one"
+    );
+    assert_eq!(fs::read(root.join("hard")).expect("hard link"), b"one");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let original = fs::metadata(root.join("one.txt")).expect("stat");
+        let second = fs::symlink_metadata(root.join("hard")).expect("stat");
+        assert_eq!(original.ino(), second.ino());
+        assert!(second.file_type().is_file());
+    }
+}
+
+/// An archive with one top folder is extracted *as* that folder, which moves
+/// the tree one level up. A link that climbed to the wrapper would then point
+/// at the folder the person was looking at, so such a tree keeps its wrapper.
+#[test]
+fn lifting_the_archives_own_folder_never_lets_a_link_reach_past_it() {
+    let dir = TestDir::new("lift-link");
+    let archive = dir.path().join("wrapped.tar");
+    hostile_tar(
+        &archive,
+        &[
+            Raw::Dir("top/"),
+            Raw::File("top/one.txt", b"one"),
+            Raw::Symlink("top/upward", ".."),
+        ],
+    );
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+    let extracted = outcome.expect("the link stays inside the extraction");
+
+    let root = fs::canonicalize(&extracted.root).expect("root");
+    // Wherever the tree landed — lifted or still wrapped — the link is in it.
+    let link = [root.join("upward"), root.join("top/upward")]
+        .into_iter()
+        .find(|path| fs::symlink_metadata(path).is_ok())
+        .expect("the link was extracted");
+    let reached = fs::canonicalize(link).expect("resolve link");
+    assert!(
+        reached.starts_with(&root),
+        "{} resolves outside {}",
+        reached.display(),
+        root.display()
+    );
+    assert_ne!(reached, fs::canonicalize(&into).expect("destination"));
+}
+
+/// A process running beside the extraction swaps a folder it is filling for a
+/// link to somewhere else, over and over. Whatever the timing, no write may
+/// follow the link: each member is created through the folder that was
+/// checked, never through its name looked up again.
+#[cfg(unix)]
+#[test]
+fn a_folder_swapped_for_a_link_during_extraction_never_carries_a_write_out() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    let dir = TestDir::new("race");
+    let outside = dir.path().join("outside");
+    fs::create_dir(&outside).expect("mk outside");
+    let archive = dir.path().join("race.tar");
+    let names: Vec<String> = (0..2000).map(|i| format!("sub/f{i:04}.txt")).collect();
+    let mut members = vec![Raw::Dir("sub/")];
+    members.extend(names.iter().map(|name| Raw::File(name, b"x")));
+    hostile_tar(&archive, &members);
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut trials = 0;
+    while trials < 500 && Instant::now() < deadline {
+        trials += 1;
+        let into = dir.path().join(format!("destination-{trials}"));
+        fs::create_dir(&into).expect("mk destination");
+        let stop = Arc::new(AtomicBool::new(false));
+        let racer = {
+            let stop = Arc::clone(&stop);
+            let sub = into.join("race/sub");
+            let aside = into.join("race/sub-aside");
+            let outside = outside.clone();
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    if fs::rename(&sub, &aside).is_ok() {
+                        let _ = std::os::unix::fs::symlink(&outside, &sub);
+                        let _ = fs::remove_file(&sub);
+                        let _ = fs::rename(&aside, &sub);
+                    } else {
+                        std::thread::yield_now();
+                    }
+                }
+            })
+        };
+        let _ = extract(
+            &archive,
+            &into,
+            &ExtractOptions::new(&Utc, "extracted"),
+            &live(),
+            &mut ignore,
+        );
+        stop.store(true, Ordering::Relaxed);
+        racer.join().expect("racer thread");
+
+        let landed = fs::read_dir(&outside).expect("read outside").count();
+        assert_eq!(
+            landed, 0,
+            "trial {trials}: {landed} member(s) written outside"
+        );
+        let _ = fs::remove_dir_all(&into);
+    }
+}
+
+/// A link with an absolute target, followed by a member under it: refused at
+/// the link, before anything could be written through it.
+#[test]
+fn an_absolute_link_then_a_member_under_it_is_refused() {
+    let dir = TestDir::new("absolute-link");
+    let outside = dir.path().join("outside");
+    fs::create_dir(&outside).expect("mk outside");
+    let archive = dir.path().join("evil.tar");
+    let target = outside.to_str().expect("utf-8 temp path");
+    hostile_tar(
+        &archive,
+        &[Raw::Symlink("a", target), Raw::File("a/x", b"escaped")],
+    );
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+
+    assert!(!outside.join("x").exists());
+    assert_refused(&into, outcome);
+}
+
+/// A folder the archive filled, then a link of the same name: placing the
+/// link would make what was written under the folder reachable through it.
+#[test]
+fn a_folder_replaced_by_a_link_is_refused() {
+    let dir = TestDir::new("folder-then-link");
+    let archive = dir.path().join("evil.tar");
+    hostile_tar(
+        &archive,
+        &[
+            Raw::Dir("sub/"),
+            Raw::Dir("d/"),
+            Raw::File("d/f.txt", b"f"),
+            Raw::Symlink("d", "sub"),
+        ],
+    );
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+
+    assert_refused(&into, outcome);
+}
+
+/// A hard link to anything but a file this archive wrote — a symlink member, a
+/// folder, a name that does not exist — is left out and reported, never made.
+#[test]
+fn a_hard_link_to_a_link_a_folder_or_nothing_is_skipped() {
+    let dir = TestDir::new("hardlink-kinds");
+    let archive = dir.path().join("links.tar");
+    hostile_tar(
+        &archive,
+        &[
+            Raw::File("one.txt", b"one"),
+            Raw::Symlink("soft", "one.txt"),
+            Raw::Dir("folder/"),
+            Raw::Hardlink("to-link", "soft"),
+            Raw::Hardlink("to-folder", "folder"),
+            Raw::Hardlink("to-nothing", "nothing"),
+        ],
+    );
+
+    let (_into, outcome) = extract_beside(dir.path(), &archive);
+    let extracted = outcome.expect("the rest extracts");
+
+    let mut skipped: Vec<_> = extracted
+        .skipped
+        .iter()
+        .map(|skip| (skip.name.clone(), skip.reason))
+        .collect();
+    skipped.sort_by(|one, other| one.0.cmp(&other.0));
+    assert_eq!(
+        skipped,
+        [
+            (
+                PathBuf::from("to-folder"),
+                siderita_archive::SkipReason::UnsupportedKind
+            ),
+            (
+                PathBuf::from("to-link"),
+                siderita_archive::SkipReason::UnsupportedKind
+            ),
+            (
+                PathBuf::from("to-nothing"),
+                siderita_archive::SkipReason::UnsupportedKind
+            ),
+        ]
+    );
+    for name in ["to-link", "to-folder", "to-nothing"] {
+        assert!(
+            fs::symlink_metadata(extracted.root.join(name)).is_err(),
+            "{name}"
+        );
+    }
+    assert!(fs::symlink_metadata(extracted.root.join("soft"))
+        .expect("symlink kept")
+        .file_type()
+        .is_symlink());
+}
+
+#[test]
+fn a_loop_of_links_is_refused() {
+    let dir = TestDir::new("loop");
+    let archive = dir.path().join("evil.tar");
+    hostile_tar(&archive, &[Raw::Symlink("a", "b"), Raw::Symlink("b", "a")]);
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+
+    assert_refused(&into, outcome);
+}
+
+/// An archive whose only member is `top -> .` carries no folder of its own: a
+/// link is never lifted out of the wrapper as if it were one.
+#[test]
+fn a_single_link_to_itself_is_not_lifted() {
+    let dir = TestDir::new("lift-self-link");
+    let archive = dir.path().join("wrapped.tar");
+    hostile_tar(&archive, &[Raw::Symlink("top", ".")]);
+
+    let (into, outcome) = extract_beside(dir.path(), &archive);
+    let extracted = outcome.expect("a link to its own folder stays inside");
+
+    assert_eq!(extracted.root, into.join("wrapped"));
+    let link = extracted.root.join("top");
+    assert!(fs::symlink_metadata(&link)
+        .expect("link kept")
+        .file_type()
+        .is_symlink());
+    assert_eq!(
+        fs::canonicalize(&link).expect("resolve"),
+        fs::canonicalize(&extracted.root).expect("root")
+    );
+}

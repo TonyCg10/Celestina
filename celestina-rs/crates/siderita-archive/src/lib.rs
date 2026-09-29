@@ -24,10 +24,12 @@
 //! [`extract`] writes it into a folder, and [`create`] packs entries into a new
 //! `.zip` or `.tar.gz`.
 
+mod contain;
 mod create;
 mod error;
 mod extract;
 mod format;
+mod listing;
 mod member;
 mod read;
 mod stamp;

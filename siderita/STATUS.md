@@ -4,7 +4,8 @@
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4`, `SID-B1`, `SID-U1`, `SID-U1-B` and `SID-U1-C` are closed and archived;
   `SID-H1`, the hardening that follows the 2026-09-26 monorepo audit, is the
-  active checkpoint with every unit planned
+  active checkpoint: `SID-H1-A` contains archive extraction to its root and
+  the other units are planned
   ([plan](docs/plans/active/2026-09-26-hardening.md)); the portal-parenting one
   remains planned
 - **Author validation:** mixed; current manual queue is in
@@ -12,6 +13,19 @@
 
 ## Current checkout truth
 
+- `SID-H1-A` (P-4 of the 2026-09-26 audit): a crafted archive no longer
+  steers extraction outside the folder it creates. The tar the audit used to
+  reach outside through a chain of links (SID-1) is now a regression test and
+  is refused. Every member is written through a folder held open, so no write
+  follows a link, not even one another program swaps in mid-extraction. Links
+  are created last and only when they resolve inside. A RAR or 7z is refused
+  from the tool's own listing before the tool writes, and its result is
+  checked again afterwards; what the tool writes that its listing did not
+  declare is caught only after the run. The tool's password travels on its
+  stdin instead of its command line, the tool runs without a controlling
+  terminal when `setsid` is installed, its output is kept bounded, and the
+  measurement can be cancelled (SID-17). The real tools are `VAL-SID-16`. See
+  [the evidence](docs/evidence/2026-09-26-archive-extraction.md).
 - Delivered as `1.7.2`: `SID-U1-C`. Each row of the occupation section and
   its tile in the map now share one of the six `CelestinaTheme.usagePalette`
   tones, rotating by size rank; a row with unreadable folders below stays

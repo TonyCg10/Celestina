@@ -449,8 +449,8 @@ fn attempt(
     }
     // Asked before the work starts, from the archive's own index: one cheap pass
     // over headers, and the difference between a ring that turns and one that
-    // fills.
-    let expected = siderita_archive::measure(archive, &options).unwrap_or(0);
+    // fills. Cancelling the job stops it too.
+    let expected = siderita_archive::measure(archive, &options, token).unwrap_or(0);
     let mut on_progress = throttled(qt, job, "extraídos", expected);
     siderita_archive::extract(archive, into, &options, token, &mut on_progress)
 }

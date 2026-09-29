@@ -43,6 +43,39 @@ corrective implementation unit.
 - **Evidence:** the totals beside `du`, what the thread list showed, and what
   the screen reader said
 
+## VAL-SID-16 — Delegated 7z and RAR: password on stdin, hostile links, a terminal launch
+
+- **Status:** pending
+- **Related implementation:** `SID-H1-A`, recorded in
+  [the evidence](docs/evidence/2026-09-26-archive-extraction.md)
+- **Requires:** the deployed Siderita, the installed `7z`/`7zz` and `unrar`,
+  `setsid` (util-linux), and: one encrypted `.7z` (with encrypted headers), one
+  encrypted `.rar`, one `.7z` without a password, one `.7z` made with
+  `7z a -snl` from a disposable tree holding `d/up -> ..` and
+  `esc -> d/up/..`, and an honest `.7z` (made with `-snl`) and `.rar` (made
+  with `rar a -ol`) of a folder holding a file and a symlink to it
+- **Procedure:** first, from a terminal, save the raw listings of the honest
+  archives with links: `7z l -slt honest.7z > 7z-slt.txt` and
+  `unrar lt -c- honest.rar > unrar-lt.txt`. Then, started from the desktop,
+  extract each archive from the entry menu; for the encrypted ones first answer a wrong password, then the right
+  one. While an encrypted extraction runs, look at
+  `ps -o args= -C 7z,7zz,unrar` from a terminal. Then quit Siderita, start it
+  from a terminal and extract the two encrypted archives again, then extract
+  one and cancel it while the ring still turns
+- **Pass condition:** the unencrypted archive extracts without a question; each
+  encrypted one asks, reads a wrong password as wrong, and extracts with the
+  right one, the ring filling against the listed total; the tool's command line
+  never shows the password. The link archive is refused with nothing written
+  beside the destination; the honest archives with a link extract, the link
+  kept as a link (no false refusal). Launched from a terminal, nothing asks for a
+  password on that terminal, the same dialogs appear, and the cancelled run
+  stops promptly with no folder left behind
+- **Result:** not run by hand
+- **Evidence:** the tool versions (`7z i`, `unrar`), the two saved raw
+  listings (attach them: they confirm or correct the field names the
+  pre-flight check reads), the `ps` line, what the terminal showed, and the
+  outcome of each archive
+
 ## VAL-SID-15 — The bottom bar, and what a running action says
 
 - **Status:** passed

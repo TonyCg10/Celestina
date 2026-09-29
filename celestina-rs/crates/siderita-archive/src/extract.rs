@@ -6,8 +6,10 @@
 //! taken, and that name is taken atomically before a byte is written. Nothing
 //! half-written is left claiming to be complete: a failed or cancelled run
 //! removes the folder it created, whole. And nothing is written outside the
-//! destination: a member whose stored name or symlink target escapes the root
-//! fails the extraction.
+//! destination: a member whose stored name or link target escapes the root
+//! fails the extraction, no member is written through a link, and every link
+//! is created last, only once its target is proven to resolve inside the root
+//! on the real filesystem (see [`crate::contain`]).
 //!
 //! The folder it writes into is the **visible destination**, not a hidden
 //! staging directory. A 40 GB archive takes an hour, and for that hour a person
@@ -24,6 +26,7 @@ use std::path::{Path, PathBuf};
 use celestina_core::CancellationToken;
 use siderita_ops::{next_available, NameShape, OpError, Progress};
 
+use crate::contain::{unsafe_member, Placed, Root};
 use crate::error::ArchiveError;
 use crate::format::{sniff, Format};
 use crate::member::{safe_relative, target_stays_inside};
@@ -33,6 +36,11 @@ use crate::tool::Tool;
 /// Bytes written per step, and so the cancellation granularity inside one large
 /// member. Matches the copy verb's chunk.
 const CHUNK: usize = 64 * 1024;
+
+/// The longest link target a member may store, as Linux's `PATH_MAX`. A zip
+/// keeps a symlink's target as the member's *data*, so without this bound a
+/// crafted member could ask for gigabytes to be read into memory as a path.
+const LINK_MAX: u64 = 4096;
 
 /// A member that was not written, and why.
 ///
@@ -50,8 +58,9 @@ pub struct Skipped {
 /// Why a member was not written.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SkipReason {
-    /// A hard link, device node, fifo or socket: an archive may carry them, a
-    /// loss-free extraction does not invent them.
+    /// A device node, fifo or socket, or a hard link to something that is not
+    /// a file this archive wrote: an archive may carry them, a loss-free
+    /// extraction does not invent them.
     UnsupportedKind,
     /// A symlink member whose stored target is missing, so there is nothing to
     /// point at.
@@ -117,8 +126,14 @@ impl<'a> ExtractOptions<'a> {
 /// asks its tool, which needs the password when the headers are encrypted.
 ///
 /// `None` is a normal answer, not a failure: the extraction then reports
-/// progress without a total, exactly as before.
-pub fn measure(archive: &Path, options: &ExtractOptions<'_>) -> Option<u64> {
+/// progress without a total, exactly as before. A delegated tool is stopped
+/// when `cancellation` fires or when it has not answered within a minute, and
+/// the answer is then `None` too.
+pub fn measure(
+    archive: &Path,
+    options: &ExtractOptions<'_>,
+    cancellation: &CancellationToken,
+) -> Option<u64> {
     match sniff(archive)? {
         Format::Zip | Format::Tar | Format::TarGz => Some(
             crate::read::list(archive)
@@ -129,7 +144,7 @@ pub fn measure(archive: &Path, options: &ExtractOptions<'_>) -> Option<u64> {
                 .sum(),
         ),
         format @ (Format::Rar | Format::SevenZip) => {
-            Tool::for_format(format)?.total_bytes(archive, options.password)
+            Tool::for_format(format)?.total_bytes(archive, options.password, cancellation)
         }
     }
 }
@@ -233,6 +248,12 @@ fn make_destination(
 /// steps aside, its one folder takes the free name, and the empty wrapper goes.
 /// A failed step leaves the wrapper exactly as it was, which is still the whole
 /// extraction under a correct name.
+///
+/// Lifting moves the tree one level up, so a link inside it that climbs to the
+/// wrapper would afterwards point at the folder the person was looking at. The
+/// inner folder is lifted only when every link in it stays inside *it*;
+/// otherwise the wrapper stays, and with it the root those links were checked
+/// against.
 fn unwrap_own_folder(destination: &Path, marker: &str) -> Result<PathBuf, ArchiveError> {
     let Some(inner) = own_folder(destination)? else {
         return Ok(destination.to_path_buf());
@@ -240,6 +261,12 @@ fn unwrap_own_folder(destination: &Path, marker: &str) -> Result<PathBuf, Archiv
     let Some(into_dir) = destination.parent() else {
         return Ok(destination.to_path_buf());
     };
+    if Root::open(&destination.join(&inner))?
+        .verify_tree()
+        .is_err()
+    {
+        return Ok(destination.to_path_buf());
+    }
 
     // The wrapper is holding the name the inner folder may want, so it steps
     // aside first, under a name nothing else is using.
@@ -356,25 +383,32 @@ fn write_all(
     progress: &mut dyn FnMut(Progress),
 ) -> Result<Written, ArchiveError> {
     let mut state = Writing {
-        root: root.to_path_buf(),
+        root: Root::open(root)?,
         cancellation,
         progress,
         total: Progress::default(),
         skipped: Vec::new(),
+        symlinks: Vec::new(),
+        hard_links: Vec::new(),
     };
     match format {
-        Format::Zip => write_zip(archive, options, &mut state)?,
+        Format::Zip => {
+            write_zip(archive, options, &mut state)?;
+            state.finish_links()?;
+        }
         Format::Tar => {
             let reader = io::BufReader::new(
                 File::open(archive).map_err(|error| OpError::io(archive, &error))?,
             );
             write_tar(archive, reader, &mut state)?;
+            state.finish_links()?;
         }
         Format::TarGz => {
             let reader = io::BufReader::new(
                 File::open(archive).map_err(|error| OpError::io(archive, &error))?,
             );
             write_tar(archive, flate2::read::GzDecoder::new(reader), &mut state)?;
+            state.finish_links()?;
         }
         Format::Rar | Format::SevenZip => {
             let tool = Tool::for_format(format).ok_or(ArchiveError::ToolMissing {
@@ -389,6 +423,10 @@ fn write_all(
             // it is finished: an archive whose first member is 26 GB would
             // otherwise report nothing for half an hour. Only the growth since
             // the last look is added, so the total stays the truth.
+            // The archive's own index is checked before the tool may write
+            // anything: a hostile name or link refuses it with nothing on disk.
+            tool.check_listing(archive, options.password, cancellation)?;
+            let staging = state.root.path().to_path_buf();
             {
                 let state = &mut state;
                 let mut counted: u64 = 0;
@@ -404,9 +442,17 @@ fn write_all(
                         counted = size;
                     }
                 };
-                tool.extract_into(archive, root, options.password, cancellation, &mut observe)?;
+                tool.extract_into(
+                    archive,
+                    &staging,
+                    options.password,
+                    cancellation,
+                    &mut observe,
+                )?;
             }
-            crate::tool::no_symlink_escapes(root)?;
+            // The tool wrote the tree itself, so the member-by-member guard did
+            // not run on it; the same rule is applied to its result instead.
+            state.root.verify_tree()?;
         }
     }
     Ok(Written {
@@ -415,14 +461,24 @@ fn write_all(
     })
 }
 
-/// The running state of one extraction: where it writes, how it reports and what
-/// it refused.
+/// The running state of one extraction: where it writes, how it reports, what
+/// it refused and which links wait for the end.
 struct Writing<'a> {
-    root: PathBuf,
+    root: Root,
     cancellation: &'a CancellationToken,
     progress: &'a mut dyn FnMut(Progress),
     total: Progress,
     skipped: Vec<Skipped>,
+    /// Link members held back until every other member is written, as
+    /// `(name, target)`. A link created as it is met is a path the next member
+    /// can be written through; created last, there is nothing left to write
+    /// through it. GNU tar delays its links for the same reason.
+    ///
+    /// A symlink's target is stored as the archive holds it, relative to the
+    /// link's own folder.
+    symlinks: Vec<(PathBuf, PathBuf)>,
+    /// A hard link's target is a member name, relative to the archive's root.
+    hard_links: Vec<(PathBuf, PathBuf)>,
 }
 
 impl Writing<'_> {
@@ -443,13 +499,177 @@ impl Writing<'_> {
         (self.progress)(self.total);
     }
 
-    /// The absolute path a validated member name takes, creating its parents.
-    fn place(&self, name: &Path) -> Result<PathBuf, ArchiveError> {
-        let target = self.root.join(name);
-        if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent).map_err(|error| OpError::io(parent, &error))?;
+    /// A directory member: made, with every folder above it, through real
+    /// folders only.
+    fn directory(&mut self, name: &Path) -> Result<(), ArchiveError> {
+        self.root.make_dirs(name, name)?;
+        self.finished_item();
+        Ok(())
+    }
+
+    /// A regular member: its bytes streamed into a file that did not exist,
+    /// then its mode and date applied through the same open handle.
+    fn file<R: Read>(
+        &mut self,
+        name: &Path,
+        source: &mut R,
+        mode: Option<u32>,
+        stamp: Option<std::time::SystemTime>,
+    ) -> Result<(), ArchiveError> {
+        let target = self.root.place(name)?;
+        let file = create_member_file(&target, name)?;
+        let file = copy_member(self, source, file, &target.shown())?;
+        apply_mode(&file, mode);
+        apply_stamp(&file, stamp);
+        self.finished_item();
+        Ok(())
+    }
+
+    /// Holds a symlink member back for [`Writing::finish_links`], refusing at
+    /// once a target that leaves the root even as text.
+    fn defer_symlink(&mut self, name: PathBuf, target: PathBuf) -> Result<(), ArchiveError> {
+        if !target_stays_inside(&name, &target) {
+            return Err(unsafe_member(&name));
         }
-        Ok(target)
+        self.symlinks.push((name, target));
+        Ok(())
+    }
+
+    /// Holds a hard link member back, refusing at once a target that is not an
+    /// ordinary relative name inside the archive.
+    fn defer_hard_link(&mut self, name: PathBuf, target: &Path) -> Result<(), ArchiveError> {
+        let Some(target) = safe_relative(target) else {
+            return Err(unsafe_member(&name));
+        };
+        self.hard_links.push((name, target));
+        Ok(())
+    }
+
+    /// Creates the links held back, once every other member is on disk.
+    ///
+    /// Hard links first: with no symlink created yet, the file one names is
+    /// reached through real folders only. Then symlinks, each only after its
+    /// target is resolved on the real tree and found inside. And then every
+    /// symlink again, on the finished tree: a link created later can change
+    /// what an earlier one resolves to, and only the final state is what a
+    /// person will open.
+    fn finish_links(&mut self) -> Result<(), ArchiveError> {
+        for (name, target) in std::mem::take(&mut self.hard_links) {
+            self.check()?;
+            self.hard_link(&name, &target)?;
+        }
+        let symlinks = std::mem::take(&mut self.symlinks);
+        for (name, target) in &symlinks {
+            self.check()?;
+            self.symlink(name, target)?;
+        }
+        for (name, target) in &symlinks {
+            if !self.root.link_stays_inside(name, target) {
+                return Err(unsafe_member(name));
+            }
+        }
+        Ok(())
+    }
+
+    /// Makes a hard link member: a second name for a file this extraction
+    /// wrote.
+    ///
+    /// Duplicate names differ on purpose from regular files. A regular member
+    /// that repeats a name replaces the earlier file, as tar does with an
+    /// appended archive, because the later bytes are the newer ones. A hard
+    /// link is made after every file, so a name already taken belongs to a
+    /// member that was written in full; replacing it would silently drop that
+    /// content, and it is refused instead. A link naming its own target, which
+    /// GNU tar writes when one file is added twice, is already in place.
+    fn hard_link(&mut self, name: &Path, target: &Path) -> Result<(), ArchiveError> {
+        let Some((source, found)) = self.root.existing_file(target, name)? else {
+            self.skipped.push(Skipped {
+                name: name.to_path_buf(),
+                reason: SkipReason::UnsupportedKind,
+            });
+            return Ok(());
+        };
+        let at = self.root.place(name)?;
+        if !at.same_entry(&source)? {
+            fs::hard_link(source.path(), at.path()).map_err(|error| match error.kind() {
+                io::ErrorKind::AlreadyExists => unsafe_member(name),
+                _ => OpError::io(&at.shown(), &error).into(),
+            })?;
+            // `link` does not follow the source's final name, so a source
+            // swapped for a symlink since it was checked would be copied as a
+            // symlink. The new name must be the very file that was approved.
+            let made = fs::symlink_metadata(at.path())
+                .map_err(|error| OpError::io(&at.shown(), &error))?;
+            if !made.file_type().is_file() || !same_file(&made, &found) {
+                let _ = fs::remove_file(at.path());
+                return Err(unsafe_member(name));
+            }
+        }
+        self.finished_item();
+        Ok(())
+    }
+
+    fn symlink(&mut self, name: &Path, target: &Path) -> Result<(), ArchiveError> {
+        let at = self.root.place(name)?;
+        if !self.root.link_stays_inside(name, target) {
+            return Err(unsafe_member(name));
+        }
+        symlink(target, &at.path()).map_err(|error| match error.kind() {
+            // Something already stands at the link's name — typically a folder
+            // a later member made by writing "through" the link. Placing the
+            // link now would make those members reachable through it.
+            io::ErrorKind::AlreadyExists => unsafe_member(name),
+            _ => OpError::io(&at.shown(), &error).into(),
+        })?;
+        self.finished_item();
+        Ok(())
+    }
+}
+
+/// Whether two `lstat` answers describe the same file.
+#[cfg(unix)]
+fn same_file(one: &fs::Metadata, other: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    one.dev() == other.dev() && one.ino() == other.ino()
+}
+
+#[cfg(not(unix))]
+fn same_file(_one: &fs::Metadata, _other: &fs::Metadata) -> bool {
+    false
+}
+
+/// Opens a member's file, which must not exist, without following anything.
+///
+/// `create_new` is `O_CREAT | O_EXCL`, which fails on an existing name even
+/// when it is a link, so the open itself cannot be redirected; and the name is
+/// reached through its folder held open, so no folder above it can be swapped
+/// either. The one name it may find taken is an earlier member of the same
+/// name in this very extraction — a tar appended to keeps both — and, as in
+/// tar, the later one wins: the earlier regular file is removed and the open
+/// tried once more.
+fn create_member_file(target: &Placed, name: &Path) -> Result<File, ArchiveError> {
+    let path = target.path();
+    let open = || {
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+    };
+    match open() {
+        Ok(file) => Ok(file),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            let data = fs::symlink_metadata(&path)
+                .map_err(|error| OpError::io(&target.shown(), &error))?;
+            if data.file_type().is_symlink() {
+                return Err(unsafe_member(name));
+            }
+            if !data.file_type().is_file() {
+                return Err(OpError::io(&target.shown(), &error).into());
+            }
+            fs::remove_file(&path).map_err(|error| OpError::io(&target.shown(), &error))?;
+            open().map_err(|error| OpError::io(&target.shown(), &error).into())
+        }
+        Err(error) => Err(OpError::io(&target.shown(), &error).into()),
     }
 }
 
@@ -476,26 +696,27 @@ fn write_zip(
         let mode = entry.unix_mode();
 
         if entry.is_dir() {
-            let target = state.place(&name)?;
-            fs::create_dir_all(&target).map_err(|error| OpError::io(&target, &error))?;
-            state.finished_item();
+            state.directory(&name)?;
             continue;
         }
         if is_symlink_mode(mode) {
             let mut target = Vec::new();
-            entry
+            (&mut entry)
+                .take(LINK_MAX + 1)
                 .read_to_end(&mut target)
                 .map_err(|error| ArchiveError::malformed(archive, error))?;
+            if target.len() as u64 > LINK_MAX {
+                return Err(ArchiveError::malformed(
+                    archive,
+                    "a link target is too long",
+                ));
+            }
             let link_target = crate::tarname::path_from_bytes(&target);
-            write_symlink(state, &name, &link_target)?;
+            state.defer_symlink(name, link_target)?;
             continue;
         }
         let stamp = zip_stamp(options.zone, &entry);
-        let target = state.place(&name)?;
-        copy_member(state, &mut entry, &target)?;
-        apply_mode(&target, mode);
-        apply_stamp(&target, stamp);
-        state.finished_item();
+        state.file(&name, &mut entry, mode, stamp)?;
     }
     Ok(())
 }
@@ -575,9 +796,7 @@ fn write_tar<R: Read>(
         let mode = entry.header().mode().ok().map(|mode| mode & 0o7777);
 
         if kind.is_dir() {
-            let target = state.place(&name)?;
-            fs::create_dir_all(&target).map_err(|error| OpError::io(&target, &error))?;
-            state.finished_item();
+            state.directory(&name)?;
         } else if kind.is_symlink() {
             let Some(link_target) = crate::tarname::link_target_of(&entry) else {
                 state.skipped.push(Skipped {
@@ -586,18 +805,23 @@ fn write_tar<R: Read>(
                 });
                 continue;
             };
-            write_symlink(state, &name, &link_target)?;
+            state.defer_symlink(name, link_target)?;
+        } else if kind.is_hard_link() {
+            let Some(link_target) = crate::tarname::link_target_of(&entry) else {
+                state.skipped.push(Skipped {
+                    name: name.clone(),
+                    reason: SkipReason::UnsupportedKind,
+                });
+                continue;
+            };
+            state.defer_hard_link(name, &link_target)?;
         } else if kind.is_file() {
             let stamp = entry
                 .header()
                 .mtime()
                 .ok()
                 .and_then(|seconds| crate::stamp::from_epoch_seconds(seconds as i64));
-            let target = state.place(&name)?;
-            copy_member(state, &mut entry, &target)?;
-            apply_mode(&target, mode);
-            apply_stamp(&target, stamp);
-            state.finished_item();
+            state.file(&name, &mut entry, mode, stamp)?;
         } else {
             state.skipped.push(Skipped {
                 name: name.clone(),
@@ -608,43 +832,24 @@ fn write_tar<R: Read>(
     Ok(())
 }
 
-/// Creates one symlink, after proving its target cannot leave the root.
-fn write_symlink(
-    state: &mut Writing<'_>,
-    name: &Path,
-    link_target: &Path,
-) -> Result<(), ArchiveError> {
-    if !target_stays_inside(name, link_target) {
-        return Err(ArchiveError::UnsafeMember {
-            name: name.display().to_string(),
-        });
-    }
-    let target = state.place(name)?;
-    symlink(link_target, &target)?;
-    state.finished_item();
-    Ok(())
-}
-
 #[cfg(unix)]
-fn symlink(link_target: &Path, at: &Path) -> Result<(), ArchiveError> {
-    std::os::unix::fs::symlink(link_target, at).map_err(|error| OpError::io(at, &error).into())
+fn symlink(link_target: &Path, at: &Path) -> io::Result<()> {
+    std::os::unix::fs::symlink(link_target, at)
 }
 
 #[cfg(not(unix))]
-fn symlink(_link_target: &Path, at: &Path) -> Result<(), ArchiveError> {
-    Err(OpError::UnsupportedFileType {
-        path: at.to_path_buf(),
-    }
-    .into())
+fn symlink(_link_target: &Path, _at: &Path) -> io::Result<()> {
+    Err(io::Error::from(io::ErrorKind::Unsupported))
 }
 
-/// Streams one member's bytes onto `target`, cancellable every chunk.
+/// Streams one member's bytes into `file`, cancellable every chunk, and hands
+/// the file back for its mode and date.
 fn copy_member<R: Read>(
     state: &mut Writing<'_>,
     source: &mut R,
+    mut file: File,
     target: &Path,
-) -> Result<(), ArchiveError> {
-    let mut file = File::create(target).map_err(|error| OpError::io(target, &error))?;
+) -> Result<File, ArchiveError> {
     let mut buffer = vec![0u8; CHUNK];
     loop {
         state.check()?;
@@ -659,22 +864,22 @@ fn copy_member<R: Read>(
         state.wrote(read as u64);
     }
     file.flush().map_err(|error| OpError::io(target, &error))?;
-    Ok(())
+    Ok(file)
 }
 
 /// Applies a stored permission bit set, keeping the owner able to read and write
 /// what was just extracted. A missing or nonsensical mode leaves the umask's.
-fn apply_mode(target: &Path, mode: Option<u32>) {
+fn apply_mode(file: &File, mode: Option<u32>) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let Some(mode) = mode else { return };
         let mode = (mode & 0o777) | 0o600;
-        let _ = fs::set_permissions(target, fs::Permissions::from_mode(mode));
+        let _ = file.set_permissions(fs::Permissions::from_mode(mode));
     }
     #[cfg(not(unix))]
     {
-        let _ = (target, mode);
+        let _ = (file, mode);
     }
 }
 
@@ -683,11 +888,11 @@ fn apply_mode(target: &Path, mode: Option<u32>) {
 /// Best effort by design: a filesystem that will not take the date is not a
 /// reason to fail an extraction whose bytes are already correct. Only files are
 /// stamped — a directory's date changes again as its own members are written.
-fn apply_stamp(target: &Path, stamp: Option<std::time::SystemTime>) {
+/// Applied through the handle the bytes were written with, so no path is
+/// looked up again.
+fn apply_stamp(file: &File, stamp: Option<std::time::SystemTime>) {
     let Some(stamp) = stamp else { return };
-    if let Ok(file) = fs::OpenOptions::new().write(true).open(target) {
-        let _ = file.set_times(fs::FileTimes::new().set_modified(stamp));
-    }
+    let _ = file.set_times(fs::FileTimes::new().set_modified(stamp));
 }
 
 /// Whether a zip member's stored unix mode says "symlink".
