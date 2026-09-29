@@ -15,9 +15,15 @@
 //! - **A save refuses rather than destroys.** Every refusal before the rename
 //!   leaves the original file exactly as it was.
 //!
-//! IO lives in [`open`] and [`save`] as plain blocking functions. They are
-//! meant to run on a host-owned worker; the crate embeds no runtime and starts
-//! no threads of its own.
+//! IO lives in [`open`], [`save`], [`recent::change`], [`recent::list`] and
+//! [`preferences::Preferences::store`] as plain blocking functions, and none of
+//! them may run on a host's GUI thread. They run on threads a host owns: the
+//! [`worker::DocumentWorker`] a session's jobs go to, joined when the host drops
+//! it, and the [`preferences::PreferenceWriter`] that writes preferences once
+//! they stop changing, which a drop waits for only up to a bound. The one
+//! thread the crate starts for itself is [`recent`]'s existence prober, which
+//! holds nothing and is never joined, so a `stat` hung on a dead mount strands
+//! it alone. The crate embeds no runtime.
 
 #![forbid(unsafe_code)]
 

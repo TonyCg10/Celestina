@@ -576,8 +576,9 @@ dependencies = [
 
 [[package]]
 name = "grafita"
-version = "1.2.5"
+version = "1.2.6"
 dependencies = [
+ "celestina-core",
  "cxx",
  "cxx-gen",
  "cxx-qt",

@@ -1,0 +1,55 @@
+# GRA-H1-B exact change inventory
+
+Base revision	862b2bc0dbc1c3f21477b0759421058bf8d153f3
+Pathspec	celestina-rs/crates/grafita-core/src/highlight.rs
+Pathspec	celestina-rs/crates/grafita-core/src/lib.rs
+Pathspec	celestina-rs/crates/grafita-core/src/preferences.rs
+Pathspec	celestina-rs/crates/grafita-core/src/recent.rs
+Pathspec	celestina-rs/crates/grafita-core/src/session.rs
+Pathspec	celestina-rs/crates/grafita-core/src/worker.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/sessions.rs
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/cpp/highlighter.cpp
+Pathspec	grafita/cpp/highlighter.h
+Pathspec	grafita/docs/evidence/2026-09-26-app-responsiveness.md
+Pathspec	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-B.numstat.tsv
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	grafita/qml/Main.qml
+Pathspec	grafita/qml/components/DocumentView.qml
+Pathspec	grafita/src/activation.rs
+Pathspec	grafita/src/main.rs
+Pathspec	grafita/src/preferences.rs
+Pathspec	grafita/src/session.rs
+Pathspec	grafita/src/syntax.rs
+Pathspec	grafita/src/url.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+164	1	4e81657798df5f08ee7cfb2f406e2669668f5027a723097c8a9cda1e7094cef8	celestina-rs/crates/grafita-core/src/highlight.rs
+9	3	3ee7ef335acc4cd13b3b27bac985efd8d6d2c9a55eb0af712412b7887fc4f4df	celestina-rs/crates/grafita-core/src/lib.rs
+289	11	2bed6bb6a794a70805efa6f70b237fba0af694270244ce56542bf8e72230ebf6	celestina-rs/crates/grafita-core/src/preferences.rs
+463	37	fe6d839a073bc4f9fe6b20cc9f0ac369136c22637f22faf1fd1d00a224336c6a	celestina-rs/crates/grafita-core/src/recent.rs
+70	19	81cfae0540e0cd0be2674864fe13d76aab18afa11f5f3934a45bed893048b299	celestina-rs/crates/grafita-core/src/session.rs
+153	6	3379f2ddcd09a3482bf2e56e6b907317d7ff3e757bdb0f697badf6ed44b0c132	celestina-rs/crates/grafita-core/src/worker.rs
+185	18	c9f41f278ab710b92915c196c9baa38825aa115d44ad382037df8a303afe67e9	celestina-rs/crates/grafita-core/tests/sessions.rs
+1	0	646cc0c3f6c0a2bb22914a407bb3075e6e6aecd0eb281d5ed3dfc8db666249cf	docs/version-history.tsv
+2	1	cb3a3e9e29bb72a0c05527083ea6d11f6ceda7fb7331592efa2fef9fc4e1d83e	grafita/Cargo.lock
+6	1	d9e3288f1288994a860e7d71366a2c2692e5c4a989e208e630c30af1616a45f9	grafita/Cargo.toml
+25	3	411fe994aab5c47d3aa4b3a4881275413f2e5cd3f0e4279a8b6aa573ee971e91	grafita/STATUS.md
+50	24	c50fac03cc07d27fc8d40922ea4b8173c57c55fc26944123abed7fa002da10bf	grafita/cpp/highlighter.cpp
+15	3	a1efcbb729d9b07f6cdd79652b57cd9f6f84b2feb36f6eb66b20d917e94f152d	grafita/cpp/highlighter.h
+254	0	086ba15ab925157c826cc6c4bc965ab2732f3d31687cdc37705b45f3a6fee792	grafita/docs/evidence/2026-09-26-app-responsiveness.md
+55	0	self	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-B.numstat.tsv
+1	1	08c1109520bdf68c5d8347eddf102700224346c75f2303fc62e35a6ffdff18d7	grafita/docs/plans/active/2026-09-26-hardening.md
+3	1	5ff30bb60e070722aa7de561c2d95a6415d022566694cee64c17a0223e8681d7	grafita/qml/Main.qml
+7	5	64aefcda0c935d84412ae266a99b35350b7bf6aec7c225fd7253586940d58ed6	grafita/qml/components/DocumentView.qml
+7	1	2520265edf41e385d3871d2d00937b9eff129b2870102599b16ef86853fe760c	grafita/src/activation.rs
+15	8	220540d2db6874743de42e18f373b96fa643cc6fcd65e1305b7a5d74bde52751	grafita/src/main.rs
+23	6	4f9e6ac799ec81e57c7b5a53a80d54c3cf22b7cfec76d2cb10f1b5a29f21fdc2	grafita/src/preferences.rs
+110	26	a13e29ce8341c2e386a08fc5df8beab271befb11dd7541c822d63da197b967a1	grafita/src/session.rs
+54	8	d590639d714ff4663c65dbff8248fbccf6fa0f8d4fee777ddd2ec6b4c5350066	grafita/src/syntax.rs
+105	40	9c45d549495c052db5ed0bf384ad85e4be276ea6b8b462e401c0664db116813b	grafita/src/url.rs

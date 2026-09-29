@@ -38,7 +38,9 @@ pub mod qobject {
     #[auto_cxx_name]
     extern "RustQt" {
         // active        — a document is open
-        // path / name   — the resolved file and its display name
+        // path / name   — the resolved file, in the form `openPath` reads
+        //                 back (a `file://` URI for a name that is not
+        //                 UTF-8), and its display name
         // windowTitle   — what the compositor shows, dirty marker included
         // encodingLabel — the encoding the document is written back in
         // dirty / busy  — differs from disk / the worker is reading or writing
@@ -98,6 +100,10 @@ pub mod qobject {
         #[qproperty(i32, caret_column)]
         // The numeric language the syntax highlighter colours by.
         #[qproperty(i32, language_id)]
+        // recentDocuments — the documents opened most recently that still
+        //                   existed when the worker last looked, newest first.
+        //                   Each entry is what `openPath` accepts back.
+        #[qproperty(QStringList, recent_documents)]
         type GrafitaSession = super::GrafitaSessionRust;
 
         /// Reports where the widget's caret now is, as the UTF-16 offset Qt
@@ -183,10 +189,13 @@ pub mod qobject {
         #[qsignal]
         fn destination_needed(self: Pin<&mut GrafitaSession>);
 
-        /// The documents opened most recently that still exist, newest first.
-        /// Read on demand: another window may have opened something since.
+        /// Asks the worker to read the recent documents again; the answer
+        /// arrives in `recentDocuments`. Asked for whenever the list is about
+        /// to be shown, because another window may have opened something
+        /// since. Reading it is the worker's: a `stat` of a path on a dead
+        /// network mount must not freeze the window.
         #[qinvokable]
-        fn recent_documents(self: &GrafitaSession) -> QStringList;
+        fn refresh_recent(self: Pin<&mut GrafitaSession>);
 
         /// The UTF-16 offset of `line`'s first character — what the gutter
         /// hands the widget's `positionToRectangle`. Answered from the
@@ -219,7 +228,9 @@ pub mod qobject {
         fn cancel_save_as(self: Pin<&mut GrafitaSession>);
 
         /// Opens a document by path. Whether it can be edited is decided by its
-        /// bytes, never by its name or its MIME entry.
+        /// bytes, never by its name or its MIME entry. A `file://` URI is
+        /// accepted too: it is how a name that is not UTF-8 reaches here
+        /// intact, since a QString cannot carry its bytes.
         #[qinvokable]
         fn open_path(self: Pin<&mut GrafitaSession>, path: &QString);
 
@@ -290,6 +301,7 @@ pub struct GrafitaSessionRust {
     caret_line: i32,
     caret_column: i32,
     language_id: i32,
+    recent_documents: cxx_qt_lib::QStringList,
 
     /// The caret the widget last reported, kept so an edit can re-answer it
     /// without the widget having to report it again.
@@ -334,6 +346,7 @@ impl Default for GrafitaSessionRust {
             caret_line: 1,
             caret_column: 1,
             language_id: 0,
+            recent_documents: cxx_qt_lib::QStringList::default(),
             caret_offset: 0,
             pending_error: None,
             session: DocumentSession::new(Limits::default()),
@@ -344,10 +357,15 @@ impl Default for GrafitaSessionRust {
 }
 
 impl qobject::GrafitaSession {
-    pub fn open_path(mut self: Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
-        let outcome = self.as_mut().rust_mut().get_mut().session.open(&path);
-        self.dispatch(outcome);
+    /// A plain path or a `file://` URI, read by the same rule as a URL: the
+    /// recent list, the command line and another launch all hand over plain
+    /// paths, and a URI only for a name a QString would have mangled.
+    pub fn open_path(self: Pin<&mut Self>, path: &QString) {
+        // Nothing to open, as before: an empty path is not a refusal.
+        if path.is_empty() {
+            return;
+        }
+        self.open_url(path);
     }
 
     /// Accepts the `file://` form a desktop handler passes.
@@ -390,11 +408,9 @@ impl qobject::GrafitaSession {
         i32::try_from(self.rust().session.line_start_utf16(line)).unwrap_or(i32::MAX)
     }
 
-    pub fn recent_documents(&self) -> cxx_qt_lib::QStringList {
-        DocumentSession::recent_documents()
-            .iter()
-            .map(|path| QString::from(path.to_string_lossy().as_ref()))
-            .collect()
+    pub fn refresh_recent(self: Pin<&mut Self>) {
+        let outcome = self.rust().session.refresh_recent();
+        self.dispatch(outcome);
     }
 
     pub fn new_document(mut self: Pin<&mut Self>) {
@@ -581,13 +597,9 @@ impl qobject::GrafitaSession {
                 // encoding nothing in it declares. Held so the chooser has
                 // something to retry; a refusal for any other reason clears it,
                 // because naming an encoding cannot make a missing file appear.
-                let retry = match reason {
-                    DeclineReason::UnsupportedEncoding | DeclineReason::NotText => {
-                        QString::from(path.to_string_lossy().as_ref())
-                    }
-                    _ => QString::default(),
-                };
-                self.as_mut().set_encoding_retry(retry);
+                let retry = retry_argument(&path, reason);
+                self.as_mut()
+                    .set_encoding_retry(QString::from(retry.as_str()));
             }
             Some(Event::Select { start, end }) => {
                 let start = i32::try_from(start).unwrap_or(i32::MAX);
@@ -678,14 +690,14 @@ impl qobject::GrafitaSession {
                 .get_mut()
                 .session
                 .reopen_with(encoding)
-        } else if retry.is_empty() {
-            return;
-        } else {
+        } else if let Some(path) = retry_path(&retry) {
             self.as_mut()
                 .rust_mut()
                 .get_mut()
                 .session
-                .open_with(Path::new(&retry), encoding)
+                .open_with(&path, encoding)
+        } else {
+            return;
         };
         self.as_mut().set_encoding_retry(QString::default());
         self.dispatch(outcome);
@@ -716,7 +728,7 @@ impl qobject::GrafitaSession {
         self.as_mut().set_can_redo(state.can_redo);
         self.as_mut().set_close_prompt(state.close_prompt);
         self.as_mut()
-            .set_path(QString::from(state.path.to_string_lossy().as_ref()));
+            .set_path(QString::from(path_argument(&state.path).as_str()));
         self.as_mut().set_name(QString::from(state.name.as_str()));
         self.as_mut().set_encoding_label(QString::from(
             state
@@ -798,6 +810,15 @@ impl qobject::GrafitaSession {
             .set_indentation_label(QString::from(indentation.unwrap_or("")));
         let language = crate::syntax::language_code(self.rust().session.language());
         self.as_mut().set_language_id(i32::from(language));
+        let recent: cxx_qt_lib::QStringList = self
+            .rust()
+            .session
+            .recent_documents()
+            .iter()
+            .filter_map(|path| crate::url::qml_argument(path))
+            .map(|argument| QString::from(argument.as_str()))
+            .collect();
+        self.as_mut().set_recent_documents(recent);
         // The same offset can be a different line after an edit, an undo or an
         // open, so the readout is re-derived here rather than waiting for the
         // widget to report a caret that did not itself move.
@@ -825,6 +846,36 @@ fn encoding_names() -> cxx_qt_lib::QStringList {
         .iter()
         .map(|encoding| QString::from(encoding.label()))
         .collect()
+}
+
+/// The file a refusal leaves waiting for an encoding, in the form it is held
+/// in `encodingRetry`, or empty when naming an encoding cannot help.
+///
+/// A refusal for what the bytes are may still be text in an encoding nothing
+/// in it declares; a refusal for any other reason cannot be answered by naming
+/// one, because an encoding cannot make a missing file appear. The path is
+/// held in [`crate::url::qml_argument`]'s form so that a name that is not
+/// UTF-8 is retried as itself, not as a lossy look-alike.
+fn retry_argument(path: &Path, reason: DeclineReason) -> String {
+    match reason {
+        DeclineReason::UnsupportedEncoding | DeclineReason::NotText => {
+            crate::url::qml_argument(path).unwrap_or_default()
+        }
+        DeclineReason::Unreadable => String::new(),
+    }
+}
+
+/// The file `encodingRetry` holds, read back by the same rule it was written.
+fn retry_path(retry: &str) -> Option<PathBuf> {
+    crate::url::local_path(retry)
+}
+
+/// The document's path as QML sees it: the form `openPath` reads back, so a
+/// window comparing it with a path it was asked to open compares like with
+/// like. A relative name that is not UTF-8 has no such form and is shown
+/// lossily; the resolved path of an open document is always absolute.
+fn path_argument(path: &Path) -> String {
+    crate::url::qml_argument(path).unwrap_or_else(|| path.to_string_lossy().into_owned())
 }
 
 fn display_name(path: &std::path::Path) -> String {
@@ -903,5 +954,38 @@ const fn conflict_text(conflict: &Conflict) -> &'static str {
         Conflict::ChangedUnderneath => "Otro programa cambió este archivo desde que se abrió",
         Conflict::Retargeted { .. } => "La ruta ahora lleva a otro archivo",
         Conflict::Missing => "El archivo ya no existe",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::Path;
+
+    use grafita_core::session::DeclineReason;
+
+    use super::{path_argument, retry_argument, retry_path};
+
+    #[test]
+    fn a_name_that_is_not_utf8_is_retried_as_itself() {
+        let path = Path::new(OsStr::from_bytes(b"/home/toni/\xFFlatin1.txt"));
+
+        for reason in [DeclineReason::UnsupportedEncoding, DeclineReason::NotText] {
+            let retry = retry_argument(path, reason);
+            assert_eq!(retry_path(&retry).as_deref(), Some(path), "{reason:?}");
+        }
+        assert_eq!(retry_argument(path, DeclineReason::Unreadable), "");
+        assert_eq!(retry_path(""), None);
+    }
+
+    #[test]
+    fn the_published_path_is_the_form_an_open_request_arrives_in() {
+        let utf8 = Path::new("/home/toni/nota.txt");
+        let bytes = Path::new(OsStr::from_bytes(b"/home/toni/\xFF.txt"));
+
+        for path in [utf8, bytes] {
+            assert_eq!(Some(path_argument(path)), crate::url::qml_argument(path));
+        }
     }
 }

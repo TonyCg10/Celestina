@@ -5,12 +5,15 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use celestina_core::{CancellationToken, Generation, GenerationClock};
 use grafita_core::open::{open, open_with, probe, Limits, OpenRefusal};
+use grafita_core::recent::{self, RecentChange};
 use grafita_core::save::perform;
 use grafita_core::session::{DeclineReason, DocumentSession, Event, Failure};
-use grafita_core::worker::{Completion, Job};
+use grafita_core::worker::{Completion, DocumentWorker, Job};
 use grafita_core::{Encoding, SingleByte};
 
 static NEXT_SCRATCH: AtomicU64 = AtomicU64::new(1);
@@ -26,12 +29,30 @@ fn scratch(label: &str) -> PathBuf {
     path
 }
 
+/// A session that keeps no recent-documents list, so a test never writes the
+/// history of whoever runs it.
+fn new_session() -> DocumentSession {
+    DocumentSession::new(Limits::default()).with_recent_store(None)
+}
+
 /// Runs a session's job inline, the way a worker would, and hands the
 /// answer back. No threads: the session is a state machine and the point of
 /// the split is that it can be tested as one.
 fn pump(session: &mut DocumentSession, job: Job) -> Option<Event> {
+    let outcome = session.receive(complete(job));
+    let event = outcome.event;
+    match outcome.job {
+        // An answer can carry both an event and follow-up work (an open that
+        // must also be remembered); the event is the one a host acts on.
+        Some(next) => pump(session, next).or(event),
+        None => event,
+    }
+}
+
+/// What the worker would answer for `job`.
+fn complete(job: Job) -> Completion {
     let cancellation = CancellationToken::new();
-    let completion = match job {
+    match job {
         Job::Probe {
             path,
             generation,
@@ -86,16 +107,18 @@ fn pump(session: &mut DocumentSession, job: Job) -> Option<Event> {
             revision: request.revision(),
             result: Box::new(perform(&request, &cancellation)),
         },
-    };
-    let outcome = session.receive(completion);
-    if let Some(next) = outcome.job {
-        return pump(session, next);
+        Job::RecentChange { store, change } => {
+            recent::change(&store, &change);
+            Completion::RecentChanged
+        }
+        Job::RecentList { store } => Completion::RecentListed {
+            paths: recent::list(&store, &cancellation),
+        },
     }
-    outcome.event
 }
 
 fn open_session(path: &std::path::Path) -> (DocumentSession, Option<Event>) {
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let outcome = session.open(path);
     let job = outcome.job.expect("a probe job");
     let event = pump(&mut session, job);
@@ -249,7 +272,7 @@ fn an_answer_older_than_the_newest_question_is_dropped() {
     fs::write(&first, b"primero\n").expect("write");
     fs::write(&second, b"segundo\n").expect("write");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let stale = session.open(&first).job.expect("a probe job");
     let fresh = session.open(&second).job.expect("a probe job");
 
@@ -401,7 +424,7 @@ fn classify_answers_without_opening_anything() {
     fs::write(&text, b"esto es texto\n").expect("write");
     fs::write(&binary, b"\x7fELF\x02\x01\x01\x00\x00\x00").expect("write");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
 
     for (path, editable) in [(&text, true), (&binary, false)] {
         let outcome = session.classify(path);
@@ -479,7 +502,7 @@ fn a_new_document_asks_where_it_goes_and_then_belongs_there() {
     let root = scratch("new-document");
     let destination = root.join("recien.txt");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let outcome = session.new_document();
 
     assert_eq!(
@@ -537,7 +560,7 @@ fn save_as_over_an_existing_file_keeps_its_permissions() {
     fs::write(&destination, b"antes\n").expect("write");
     fs::set_permissions(&destination, fs::Permissions::from_mode(0o600)).expect("chmod");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let _ = session.new_document();
     let _ = session.apply_display_text("despues\n");
     let outcome = session.save_as(&destination);
@@ -560,7 +583,7 @@ fn a_refused_save_as_leaves_the_document_unbound() {
     let root = scratch("save-as-refused");
     let impossible = root.join("no-existe").join("archivo.txt");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let _ = session.new_document();
     let _ = session.apply_display_text("contenido\n");
 
@@ -582,7 +605,7 @@ fn editing_during_a_save_as_leaves_the_document_dirty() {
     let root = scratch("save-as-raced");
     let destination = root.join("carrera.txt");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let _ = session.new_document();
     let _ = session.apply_display_text("primera\n");
 
@@ -615,7 +638,7 @@ fn a_save_as_that_left_work_behind_does_not_close_the_document() {
     let root = scratch("save-as-raced-close");
     let destination = root.join("cierre.txt");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let _ = session.new_document();
     let _ = session.apply_display_text("primera\n");
     let _ = session.request_close();
@@ -705,7 +728,7 @@ fn a_classify_answer_survives_an_open_asked_for_after_it() {
     fs::write(&asked, b"esto es texto\n").expect("write");
     fs::write(&opened, b"otra cosa\n").expect("write");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let classify = session.classify(&asked).job.expect("a probe job");
     let open = session.open(&opened).job.expect("a probe job");
 
@@ -822,7 +845,7 @@ fn a_save_as_onto_a_symlink_writes_through_it() {
     fs::write(&real, b"antes\n").expect("write");
     std::os::unix::fs::symlink(&real, &link).expect("symlink");
 
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let _ = session.new_document();
     let _ = session.apply_display_text("despues\n");
     let job = session.save_as(&link).job.expect("a save-as job");
@@ -845,7 +868,7 @@ fn a_save_as_onto_a_symlink_writes_through_it() {
 /// shortcut left it with no way to acquire a name at all.
 #[test]
 fn an_untouched_new_document_can_still_be_given_a_destination() {
-    let mut session = DocumentSession::new(Limits::default());
+    let mut session = new_session();
     let outcome = session.new_document();
     assert!(matches!(outcome.event, Some(Event::PushText { .. })));
     assert!(!session.state().dirty, "a new document starts clean");
@@ -963,4 +986,148 @@ fn gzip_bytes(text: &str) -> Vec<u8> {
     let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     encoder.write_all(text.as_bytes()).expect("compress");
     encoder.finish().expect("compress")
+}
+
+/// Runs one job on a real worker and waits for its answer.
+fn on_worker(job: Job) -> Completion {
+    let (sender, receiver) = mpsc::channel();
+    let worker = DocumentWorker::new(move |completion| {
+        let _ = sender.send(completion);
+    })
+    .expect("start the worker");
+    worker.submit(job).expect("submit");
+    let completion = receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("a completion");
+    drop(worker);
+    completion
+}
+
+#[test]
+fn an_open_is_remembered_by_a_worker_job_and_receiving_it_touches_no_disk() {
+    let root = scratch("recent-record");
+    let store = root.join("datos").join("recent");
+    let path = root.join("nota.txt");
+    fs::write(&path, b"hola\n").expect("write");
+
+    let mut session =
+        DocumentSession::new(Limits::default()).with_recent_store(Some(store.clone()));
+    let probe = session.open(&path).job.expect("a probe job");
+    let open = session.receive(complete(probe)).job.expect("an open job");
+    let outcome = session.receive(complete(open));
+
+    assert!(matches!(outcome.event, Some(Event::PushText { .. })));
+    assert!(
+        !store.exists() && !store.parent().expect("a parent").exists(),
+        "receiving the answer on the host's thread must not write the list"
+    );
+    let resolved = session.state().path.clone();
+    let job = outcome.job.expect("remembering the document is a job");
+    assert!(
+        matches!(&job, Job::RecentChange { change: RecentChange::Record(recorded), .. } if *recorded == resolved),
+        "{job:?}"
+    );
+    assert!(session.recent_documents().is_empty());
+
+    let outcome = session.receive(on_worker(job));
+    assert!(outcome.job.is_none() && outcome.event.is_none());
+    assert!(
+        session.recent_documents().is_empty(),
+        "recording reads nothing back"
+    );
+    assert!(store.is_file());
+
+    let refresh = session.refresh_recent().job.expect("a list job");
+    let _ = session.receive(on_worker(refresh));
+    assert_eq!(session.recent_documents(), [resolved]);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_document_that_no_longer_opens_is_forgotten_by_a_worker_job() {
+    let root = scratch("recent-forget");
+    let store = root.join("recent");
+    let path = root.join("efimero.txt");
+    fs::write(&path, b"pronto no estara\n").expect("write");
+
+    let mut session =
+        DocumentSession::new(Limits::default()).with_recent_store(Some(store.clone()));
+    let probe = session.open(&path).job.expect("a probe job");
+    let open = session.receive(complete(probe)).job.expect("an open job");
+    let Job::Open { path: resolved, .. } = &open else {
+        panic!("expected an open job, got {open:?}");
+    };
+    recent::change(&store, &RecentChange::Record(resolved.clone()));
+    // The file disappears between the probe and the read.
+    fs::remove_file(&path).expect("remove");
+    let written = fs::read(&store).expect("the seeded list");
+
+    let outcome = session.receive(complete(open));
+
+    assert!(matches!(outcome.event, Some(Event::Declined { .. })));
+    assert_eq!(
+        fs::read(&store).expect("the list"),
+        written,
+        "the refusal is decided here and written by the worker"
+    );
+    let job = outcome.job.expect("forgetting the document is a job");
+    assert!(
+        matches!(
+            &job,
+            Job::RecentChange {
+                change: RecentChange::Forget(_),
+                ..
+            }
+        ),
+        "{job:?}"
+    );
+    let _ = session.receive(on_worker(job));
+    assert!(session.recent_documents().is_empty());
+    assert!(fs::read_to_string(&store).expect("the list").is_empty());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_recent_list_is_read_on_the_worker_and_published_by_receive() {
+    let root = scratch("recent-refresh");
+    let store = root.join("recent");
+    let kept = root.join("sigue.txt");
+    fs::write(&kept, b"x").expect("write");
+    recent::change(&store, &RecentChange::Record(root.join("borrado.txt")));
+    recent::change(&store, &RecentChange::Record(kept.clone()));
+
+    let mut session = DocumentSession::new(Limits::default()).with_recent_store(Some(store));
+    let job = session
+        .refresh_recent()
+        .job
+        .expect("reading the list is a job");
+    assert!(matches!(job, Job::RecentList { .. }), "{job:?}");
+    assert!(
+        session.recent_documents().is_empty(),
+        "nothing is read here"
+    );
+
+    let _ = session.receive(on_worker(job));
+    assert_eq!(session.recent_documents(), [kept]);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_session_that_keeps_no_list_asks_no_recent_work() {
+    let root = scratch("recent-none");
+    let path = root.join("nota.txt");
+    fs::write(&path, b"hola\n").expect("write");
+
+    let mut session = new_session();
+    assert!(session.refresh_recent().job.is_none());
+    let probe = session.open(&path).job.expect("a probe job");
+    let open = session.receive(complete(probe)).job.expect("an open job");
+    let outcome = session.receive(complete(open));
+    assert!(outcome.job.is_none());
+    assert!(matches!(outcome.event, Some(Event::PushText { .. })));
+
+    let _ = fs::remove_dir_all(root);
 }

@@ -7,7 +7,8 @@
 //! writing the staleness rules twice, so it lives here and each host keeps only
 //! its Qt marshalling.
 //!
-//! Nothing here performs IO or owns a thread. A method returns the [`Job`] its
+//! Nothing here performs IO or owns a thread, the recent-documents list
+//! included. A method returns the [`Job`] its
 //! host should hand to a [`crate::worker::DocumentWorker`] and the [`Event`] its
 //! host should act on; state is mirrored from [`SessionState`]. That is what
 //! makes the whole state machine testable without a worker, a toolkit or a
@@ -27,7 +28,7 @@ use crate::history::Revision;
 use crate::open::{Limits, OpenRefusal, OpenedFile, ProbeOutcome};
 use crate::position::PositionError;
 use crate::probe::Classification;
-use crate::recent::Recent;
+use crate::recent::{self, RecentChange};
 use crate::save::{Durability, SaveRefusal, SaveReport};
 use crate::search::LiveSearch;
 use crate::worker::{Completion, Job};
@@ -171,6 +172,11 @@ pub struct DocumentSession {
     /// A list rather than one slot: activating two files in quick succession is
     /// two questions, and answering only the last would leave a file unopened.
     pending_classify: Vec<Generation>,
+    /// Where the recent-documents list is kept, or `None` to keep none.
+    recent_store: Option<PathBuf>,
+    /// The remembered documents that still existed when the worker last
+    /// looked, newest first.
+    recent: Vec<PathBuf>,
 }
 
 impl DocumentSession {
@@ -186,7 +192,18 @@ impl DocumentSession {
             in_flight: None,
             search: LiveSearch::default(),
             pending_classify: Vec::new(),
+            recent_store: recent::storage(),
+            recent: Vec::new(),
         }
+    }
+
+    /// Keeps the recent-documents list in `store` instead of the user's data
+    /// directory, or keeps none with `None`. For a host that must not share
+    /// the user's history, and for tests that must not write it.
+    #[must_use]
+    pub fn with_recent_store(mut self, store: Option<PathBuf>) -> Self {
+        self.recent_store = store;
+        self
     }
 
     /// Starts a document that belongs to no file yet.
@@ -213,13 +230,38 @@ impl DocumentSession {
         Outcome::event(Event::PushText { text, caret: 0 })
     }
 
-    /// The documents opened most recently that still exist, newest first.
-    ///
-    /// Read on demand rather than held: another Grafita window may have opened
-    /// something since, and a stale list is the one thing a history must not be.
+    /// The documents opened most recently that still existed when the worker
+    /// last looked, newest first. Empty until the first answer to
+    /// [`DocumentSession::refresh_recent`] arrives; opening a document records
+    /// it without reading the list back.
     #[must_use]
-    pub fn recent_documents() -> Vec<PathBuf> {
-        Recent::load().existing()
+    pub fn recent_documents(&self) -> &[PathBuf] {
+        &self.recent
+    }
+
+    /// Asks the worker to read the recent-documents list again.
+    ///
+    /// Asked for whenever a host is about to show the list rather than held:
+    /// another Grafita window may have opened something since, and a stale list
+    /// is the one thing a history must not be. The answer arrives through
+    /// [`DocumentSession::receive`] and is read with
+    /// [`DocumentSession::recent_documents`].
+    pub fn refresh_recent(&self) -> Outcome {
+        Outcome {
+            job: self.recent_store.as_ref().map(|store| Job::RecentList {
+                store: store.clone(),
+            }),
+            event: None,
+        }
+    }
+
+    /// The worker job that applies `change` to the recent-documents list, or
+    /// nothing when this session keeps none.
+    fn recent_change(&self, change: RecentChange) -> Option<Job> {
+        self.recent_store.as_ref().map(|store| Job::RecentChange {
+            store: store.clone(),
+            change,
+        })
     }
 
     /// Whether the open document already knows where it is saved.
@@ -681,6 +723,11 @@ impl DocumentSession {
                 self.in_flight = None;
                 self.receive_save(*result)
             }
+            Completion::RecentChanged => Outcome::nothing(),
+            Completion::RecentListed { paths } => {
+                self.recent = paths;
+                Outcome::nothing()
+            }
         }
     }
 
@@ -773,11 +820,12 @@ impl DocumentSession {
                 self.search = LiveSearch::default();
                 self.refresh();
                 // Remembered only once it actually opened: a file that refused
-                // has no business in a list of things you can reopen.
-                let mut recent = Recent::load();
-                recent.record(&self.state.path);
-                recent.store();
-                Outcome::event(Event::PushText { text, caret: 0 })
+                // has no business in a list of things you can reopen. The
+                // write is the worker's; this thread only decides it.
+                Outcome {
+                    job: self.recent_change(RecentChange::Record(self.state.path.clone())),
+                    event: Some(Event::PushText { text, caret: 0 }),
+                }
             }
             Err(refusal) => {
                 let path = refusal_path(&refusal);
@@ -785,13 +833,16 @@ impl DocumentSession {
                 // A remembered document that no longer opens stops being
                 // offered: a recent list that leads nowhere is worse than a
                 // short one.
-                if !path.as_os_str().is_empty() {
-                    let mut recent = Recent::load();
-                    recent.forget(&path);
-                    recent.store();
-                }
+                let job = if path.as_os_str().is_empty() {
+                    None
+                } else {
+                    self.recent_change(RecentChange::Forget(path.clone()))
+                };
                 self.state.failure = Some(Failure::Open(refusal));
-                Outcome::event(Event::Declined { path, reason })
+                Outcome {
+                    job,
+                    event: Some(Event::Declined { path, reason }),
+                }
             }
         }
     }

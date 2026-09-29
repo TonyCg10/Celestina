@@ -40,6 +40,22 @@ pub struct Span {
     pub token: Token,
 }
 
+/// A run of one kind of token, measured in the UTF-16 code units a Qt text
+/// block counts in rather than in bytes.
+///
+/// A host that paints a Qt document needs exactly this, and deriving it on the
+/// host side would mean a second owner of the byte-to-UTF-16 rule, one that
+/// re-decoded the line's prefix for every run: quadratic on the long single
+/// lines minified code is made of.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Utf16Run {
+    /// UTF-16 offset of the run's first character within the line.
+    pub start: usize,
+    /// How many UTF-16 code units the run covers; never zero.
+    pub len: usize,
+    pub token: Token,
+}
+
 /// What a line leaves behind for the next one.
 ///
 /// Only block comments survive a line break here. Multi-line string literals —
@@ -406,11 +422,66 @@ pub fn line(text: &str, language: Language, incoming: LineState) -> (Vec<Span>, 
     (spans, state)
 }
 
+/// Colours one line, with the runs measured in UTF-16 code units.
+///
+/// The same runs as [`line()`], converted in one forward pass: the runs are in
+/// order and never overlap, so each boundary is reached by counting only the
+/// characters since the previous one. The cost is linear in the line however
+/// many runs it has.
+#[must_use]
+pub fn line_utf16(
+    text: &str,
+    language: Language,
+    incoming: LineState,
+) -> (Vec<Utf16Run>, LineState) {
+    let (spans, state) = line(text, language, incoming);
+    let mut cursor = Utf16Cursor {
+        text,
+        byte: 0,
+        unit: 0,
+    };
+    let runs = spans
+        .iter()
+        .filter_map(|span| {
+            let start = cursor.advance_to(span.start)?;
+            let end = cursor.advance_to(span.end)?;
+            (end > start).then_some(Utf16Run {
+                start,
+                len: end - start,
+                token: span.token,
+            })
+        })
+        .collect();
+    (runs, state)
+}
+
+/// A position in a line, known both as a byte offset and as a UTF-16 offset.
+struct Utf16Cursor<'a> {
+    text: &'a str,
+    byte: usize,
+    unit: usize,
+}
+
+impl Utf16Cursor<'_> {
+    /// Moves forward to byte offset `byte` and answers its UTF-16 offset.
+    ///
+    /// `None` for an offset behind the cursor or off a character boundary.
+    /// [`line()`] produces neither, but a run that did would be dropped rather
+    /// than painted over the wrong characters.
+    fn advance_to(&mut self, byte: usize) -> Option<usize> {
+        let step = self.text.get(self.byte..byte)?;
+        self.unit += step.chars().map(char::len_utf16).sum::<usize>();
+        self.byte = byte;
+        Some(self.unit)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+    use std::time::{Duration, Instant};
 
-    use super::{line, Language, LineState, Span, Token};
+    use super::{line, line_utf16, Language, LineState, Span, Token};
 
     fn colour(text: &str, language: Language) -> Vec<Span> {
         line(text, language, LineState::Normal).0
@@ -598,5 +669,97 @@ mod tests {
             }
             state = next;
         }
+    }
+
+    /// The runs a Qt block is painted with, read back through the units Qt
+    /// counts, so the assertion speaks the host's language rather than bytes.
+    fn utf16_slices(text: &str, language: Language) -> Vec<(String, Token)> {
+        let units: Vec<u16> = text.encode_utf16().collect();
+        line_utf16(text, language, LineState::Normal)
+            .0
+            .iter()
+            .map(|run| {
+                let slice = &units[run.start..run.start + run.len];
+                (
+                    String::from_utf16(slice).expect("a run on unit boundaries"),
+                    run.token,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn utf16_runs_count_the_code_units_qt_counts_not_bytes() {
+        // `ø` is two bytes and one unit; `😀` is four bytes and two units, so a
+        // run after either sits at a different offset in each counting.
+        let text = "ø😀 let x = \"😀\"; // ß";
+
+        assert_eq!(
+            utf16_slices(text, Language::Rust),
+            vec![
+                ("let".to_owned(), Token::Keyword),
+                ("\"😀\"".to_owned(), Token::Text),
+                ("// ß".to_owned(), Token::Comment),
+            ]
+        );
+    }
+
+    #[test]
+    fn utf16_runs_match_the_byte_spans_on_ragged_input() {
+        let awkward = [
+            "",
+            "\"",
+            "/*",
+            "*/",
+            "//",
+            "'",
+            "\\",
+            "42.",
+            "0x",
+            "ø\"ø",
+            "/*/",
+            "😀/*😀*/😀 fn",
+            "'😀' \"ø\" 7 // 😀",
+        ];
+        for text in awkward {
+            let (spans, _) = line(text, Language::QmlJs, LineState::Normal);
+            let (runs, _) = line_utf16(text, Language::QmlJs, LineState::Normal);
+            let expected: Vec<(usize, usize, Token)> = spans
+                .iter()
+                .filter(|span| span.end > span.start)
+                .map(|span| {
+                    let start = text[..span.start].encode_utf16().count();
+                    let end = text[..span.end].encode_utf16().count();
+                    (start, end - start, span.token)
+                })
+                .collect();
+            let actual: Vec<(usize, usize, Token)> = runs
+                .iter()
+                .map(|run| (run.start, run.len, run.token))
+                .collect();
+            assert_eq!(actual, expected, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_five_megabyte_single_line_is_coloured_in_linear_time() {
+        // Minified code: one line, hundreds of thousands of runs, non-ASCII
+        // throughout. Mapping each run by re-decoding the line's prefix, as the
+        // C++ side used to, is about 10^12 steps here and never finishes.
+        let piece = "a=\"ø\",b=42,/*😀*/c=null;";
+        let text = piece.repeat(5 * 1024 * 1024 / piece.len() + 1);
+
+        let started = Instant::now();
+        let (runs, state) = line_utf16(&text, Language::QmlJs, LineState::Normal);
+        let elapsed = started.elapsed();
+
+        assert!(runs.len() > 700_000, "{} runs", runs.len());
+        assert_eq!(state, LineState::Normal);
+        let last = runs.last().expect("a last run");
+        assert_eq!(last.start + last.len, text.encode_utf16().count() - 1);
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "colouring a 5 MB line took {elapsed:?}"
+        );
     }
 }

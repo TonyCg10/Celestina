@@ -180,3 +180,4 @@ fluorita	1.3.6	bug	FLU-H1-A	Harden Replace to trash its original and bound what 
 siderita	1.7.4	bug	SID-H1-B	Keep copy, move, Trash and restore from deleting what they did not create
 hematita	1.2.4	bug	HEM-H1-B	Harden the storage page, the services and the kernel readers
 magnetita	2.0.1	bug	MAG-D1-D	Harden own-wire admission and session identity
+grafita	1.2.6	bug	GRA-H1-B	Move highlight, recent and preference work off the GUI thread

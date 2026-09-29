@@ -375,12 +375,14 @@ Item {
         saveDialog.open()
     }
 
-    // The documents this window could pick up again. Re-read whenever the empty
-    // state appears rather than held: another window may have opened something
-    // since, and a stale history is the one thing a history must not be.
-    property var recentPaths: []
+    // The documents this window could pick up again. Asked for again whenever
+    // the empty state appears rather than held: another window may have opened
+    // something since, and a stale history is the one thing a history must not
+    // be. The session's worker reads it and the list arrives through the
+    // property, so a path on a dead mount never stalls this window.
+    readonly property var recentPaths: root.session.recentDocuments
     function refreshRecent() {
-        root.recentPaths = root.session.recentDocuments()
+        root.session.refreshRecent()
     }
     onVisibleChanged: if (visible) root.refreshRecent()
     Connections {

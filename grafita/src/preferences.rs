@@ -4,14 +4,17 @@
 //! the user reads, not of which document is in front. `Main.qml` owns it and
 //! hands it down to every tab's surface.
 //!
-//! Every change is written through immediately rather than on exit — Grafita
-//! can be closed by the compositor, and a preference only saved at quit is a
-//! preference that does not survive the way people actually stop programs.
+//! Every change is written as soon as the changes stop rather than on exit —
+//! Grafita can be closed by the compositor, and a preference only saved at quit
+//! is a preference that does not survive the way people actually stop programs.
+//! The write is a [`PreferenceWriter`]'s, on its own thread: a Ctrl wheel asks
+//! for a new size on every notch, and each write syncs the file and its folder,
+//! which the GUI thread must never wait for.
 
 use std::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use grafita_core::preferences::Preferences;
+use grafita_core::preferences::{self, PreferenceWriter, Preferences, STORE_QUIET};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -52,6 +55,10 @@ pub struct GrafitaPreferencesRust {
     font_size: i32,
     wrap: bool,
     stored: Preferences,
+    /// `None` when there is nowhere to keep preferences or the writer's
+    /// thread could not start: the window still works, it just forgets.
+    /// Dropped with the window, which writes what is still waiting.
+    writer: Option<PreferenceWriter>,
 }
 
 impl Default for GrafitaPreferencesRust {
@@ -59,11 +66,19 @@ impl Default for GrafitaPreferencesRust {
         // Read at construction: the first window paints the way the user left
         // it, with no flash of the shipped defaults.
         let stored = Preferences::load();
+        let writer = preferences::storage().and_then(|store| {
+            PreferenceWriter::new(store, STORE_QUIET)
+                .map_err(|error| {
+                    eprintln!("Grafita: preferences will not be remembered: {error}");
+                })
+                .ok()
+        });
         Self {
             font_size: i32::try_from(stored.font_size())
                 .unwrap_or(grafita_core::preferences::DEFAULT_FONT_SIZE as i32),
             wrap: stored.wrap(),
             stored,
+            writer,
         }
     }
 }
@@ -90,7 +105,7 @@ impl qobject::GrafitaPreferences {
         self.as_mut().adopt(stored);
     }
 
-    /// Publishes and writes through a changed set.
+    /// Publishes a changed set and hands it to the writer.
     ///
     /// An action that changes nothing — a size keypress at a limit — neither
     /// notifies QML nor rewrites the file: holding Ctrl − at the smallest size
@@ -104,6 +119,8 @@ impl qobject::GrafitaPreferences {
         self.as_mut().rust_mut().get_mut().stored = stored;
         self.as_mut().set_font_size(size);
         self.as_mut().set_wrap(wrap);
-        stored.store();
+        if let Some(writer) = self.rust().writer.as_ref() {
+            writer.submit(stored);
+        }
     }
 }

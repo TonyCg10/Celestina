@@ -1,20 +1,9 @@
 #include "highlighter.h"
 
+#include <limits>
+
 #include <QtQml/QQmlEngine>
 #include "syntax.cxx.h"
-
-namespace {
-
-// Qt formats a block in UTF-16 units; the lexer answers in UTF-8 byte offsets.
-// Converting through the prefix is exact and cheap at a line's length, and
-// keeps the two sides free to disagree about how they count.
-int utf16Offset(const QByteArray &utf8, quint32 byteOffset)
-{
-    const int clamped = qMin<int>(static_cast<int>(byteOffset), utf8.size());
-    return QString::fromUtf8(utf8.constData(), clamped).size();
-}
-
-} // namespace
 
 GrafitaHighlighter::GrafitaHighlighter(QObject *parent)
     : QSyntaxHighlighter(parent)
@@ -25,7 +14,16 @@ void GrafitaHighlighter::setTarget(QQuickTextDocument *target)
 {
     if (m_target == target)
         return;
+    QObject::disconnect(m_targetDestroyed);
     m_target = target;
+    if (target) {
+        // By the time `destroyed` is emitted the QPointer already reads null,
+        // so a binding that re-reads `target` on this signal gets null rather
+        // than a freed object. The QTextDocument itself is guarded by
+        // QSyntaxHighlighter's own pointer.
+        m_targetDestroyed = connect(target, &QObject::destroyed, this,
+                                    [this]() { Q_EMIT targetChanged(); });
+    }
     // Attaching re-highlights the whole document once; after that Qt only
     // re-runs the blocks that actually changed, which is what makes this cheap
     // while typing.
@@ -39,6 +37,9 @@ void GrafitaHighlighter::setLanguage(int language)
         return;
     m_language = language;
     Q_EMIT languageChanged();
+    // At once rather than coalesced: a language arrives once per document,
+    // and deferring it would leave the new text painted with the old
+    // language's colours for a turn of the event loop.
     rehighlight();
 }
 
@@ -46,28 +47,48 @@ void GrafitaHighlighter::setCommentColor(const QColor &colour)
 {
     m_comment.setForeground(colour);
     Q_EMIT paletteChanged();
-    rehighlight();
+    scheduleRehighlight();
 }
 
 void GrafitaHighlighter::setStringColor(const QColor &colour)
 {
     m_string.setForeground(colour);
     Q_EMIT paletteChanged();
-    rehighlight();
+    scheduleRehighlight();
 }
 
 void GrafitaHighlighter::setNumberColor(const QColor &colour)
 {
     m_number.setForeground(colour);
     Q_EMIT paletteChanged();
-    rehighlight();
+    scheduleRehighlight();
 }
 
 void GrafitaHighlighter::setKeywordColor(const QColor &colour)
 {
     m_keyword.setForeground(colour);
     Q_EMIT paletteChanged();
-    rehighlight();
+    scheduleRehighlight();
+}
+
+void GrafitaHighlighter::scheduleRehighlight()
+{
+    if (m_rehighlightQueued)
+        return;
+    m_rehighlightQueued = true;
+    // Queued on this object, so it runs on this object's thread and never after
+    // the object is gone: a pending queued call dies with its receiver.
+    QMetaObject::invokeMethod(this, &GrafitaHighlighter::flushRehighlight,
+                              Qt::QueuedConnection);
+}
+
+void GrafitaHighlighter::flushRehighlight()
+{
+    m_rehighlightQueued = false;
+    // Without a document there is nothing to colour; attaching one later
+    // colours it then.
+    if (document())
+        rehighlight();
 }
 
 void GrafitaHighlighter::highlightBlock(const QString &text)
@@ -83,23 +104,28 @@ void GrafitaHighlighter::highlightBlock(const QString &text)
     const Coloured coloured =
         grafita_colour_line(line, static_cast<quint8>(m_language), static_cast<quint8>(incoming));
 
+    // The runs arrive in the UTF-16 units `setFormat` takes, so they are
+    // painted as given; the offset rule lives in grafita-core alone.
+    // `setFormat` itself ignores a run that starts past the block and trims
+    // one that runs over its end.
+    constexpr quint32 largest = static_cast<quint32>(std::numeric_limits<int>::max());
     for (const Run &run : coloured.runs) {
-        const int start = utf16Offset(utf8, run.start);
-        const int end = utf16Offset(utf8, run.end);
-        if (end <= start)
+        if (run.length == 0 || run.start > largest)
             continue;
+        const int start = static_cast<int>(run.start);
+        const int length = static_cast<int>(qMin(run.length, largest));
         switch (run.token) {
         case 0:
-            setFormat(start, end - start, m_comment);
+            setFormat(start, length, m_comment);
             break;
         case 1:
-            setFormat(start, end - start, m_string);
+            setFormat(start, length, m_string);
             break;
         case 2:
-            setFormat(start, end - start, m_number);
+            setFormat(start, length, m_number);
             break;
         case 3:
-            setFormat(start, end - start, m_keyword);
+            setFormat(start, length, m_keyword);
             break;
         default:
             break;

@@ -1,6 +1,6 @@
 [package]
 name = "grafita"
-version = "1.2.5"
+version = "1.2.6"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -22,6 +22,11 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # machine and the bounded worker. This app adds a window and nothing else, so it
 # shares the crate with Siderita's embedded surface rather than restating it.
 grafita-core = { path = "../celestina-rs/crates/grafita-core" }
+# The suite's one reading of a `file://` URI. A file chooser, a desktop `%u`
+# and another launch hand Grafita URIs, and the rule for which of them name a
+# local file, byte for byte, belongs to the suite rather than to each app.
+# Already linked through grafita-core, so it adds no code to the build.
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 # Single-instance activation: a second `grafita RUTA` hands its document to the
 # running window instead of mapping another one. The session bus is how the rest
 # of the suite talks between processes, so this earns zbus rather than inventing

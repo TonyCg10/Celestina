@@ -11,6 +11,11 @@
 //! express, so the subclass lives in `cpp/highlighter.cpp` and calls back into
 //! this bridge for the actual lexing. No colouring rule lives in C++: it asks
 //! what the runs are and paints them.
+//!
+//! The runs cross already measured in the UTF-16 code units a Qt block counts
+//! in, converted by `grafita-core` in one pass over the line. The C++ side
+//! used to map each run's byte offsets by re-decoding the line's prefix, which
+//! made a long minified line quadratic and gave the UTF-16 rule a second owner.
 
 use grafita_core::highlight::{self, Language, LineState, Token};
 
@@ -18,10 +23,11 @@ pub use ffi::register_highlighter;
 
 #[cxx::bridge]
 mod ffi {
-    /// One coloured run, flattened for the C++ side.
+    /// One coloured run, flattened for the C++ side, in the UTF-16 code units
+    /// `QSyntaxHighlighter::setFormat` takes.
     struct Run {
         start: u32,
-        end: u32,
+        length: u32,
         token: u8,
     }
 
@@ -97,14 +103,18 @@ fn grafita_colour_line(text: &str, language: u8, state: u8) -> ffi::Coloured {
         1 => LineState::InBlockComment,
         _ => LineState::Normal,
     };
-    let (spans, outgoing) = highlight::line(text, language_from_code(language), incoming);
+    let (runs, outgoing) = highlight::line_utf16(text, language_from_code(language), incoming);
     ffi::Coloured {
-        runs: spans
+        runs: runs
             .into_iter()
-            .map(|span| ffi::Run {
-                start: u32::try_from(span.start).unwrap_or(u32::MAX),
-                end: u32::try_from(span.end).unwrap_or(u32::MAX),
-                token: token_code(span.token),
+            // A Qt block cannot hold 2^32 units, so a run that does not fit is
+            // one no block could have produced; it is skipped, not clamped.
+            .filter_map(|run| {
+                Some(ffi::Run {
+                    start: u32::try_from(run.start).ok()?,
+                    length: u32::try_from(run.len).ok()?,
+                    token: token_code(run.token),
+                })
             })
             .collect(),
         state: u8::from(outgoing == LineState::InBlockComment),
@@ -118,6 +128,8 @@ fn grafita_language_for_path(path: &str) -> u8 {
 #[cfg(test)]
 mod tests {
     use grafita_core::highlight::Language;
+
+    use std::time::{Duration, Instant};
 
     use super::{grafita_colour_line, grafita_language_for_path, language_code};
 
@@ -170,5 +182,39 @@ mod tests {
 
         let closed = grafita_colour_line("cierra */", rust, 1);
         assert_eq!(closed.state, 0);
+    }
+
+    #[test]
+    fn runs_cross_the_bridge_in_utf16_units() {
+        let rust = grafita_language_for_path("x.rs");
+        // `ø` and `ß` are two bytes and one unit each; `😀` is four and two.
+        let coloured = grafita_colour_line("øß😀 fn", rust, 0);
+
+        assert_eq!(coloured.runs.len(), 1);
+        assert_eq!(coloured.runs[0].start, 5, "1 + 1 + 2 units, then a space");
+        assert_eq!(coloured.runs[0].length, 2);
+        assert_eq!(coloured.runs[0].token, 3);
+    }
+
+    #[test]
+    fn a_five_megabyte_single_line_colours_within_a_time_bound() {
+        // Minified JavaScript: one line, hundreds of thousands of runs. The
+        // highlighter runs this on the GUI thread, so it must stay linear.
+        let piece = "var a=\"ø\",b=42;/*😀*/if(a)b=null;";
+        let line = piece.repeat(5 * 1024 * 1024 / piece.len() + 1);
+        let js = grafita_language_for_path("app.min.js");
+
+        let started = Instant::now();
+        let coloured = grafita_colour_line(&line, js, 0);
+        let elapsed = started.elapsed();
+
+        assert!(coloured.runs.len() > 500_000, "{}", coloured.runs.len());
+        let last = coloured.runs.last().expect("a last run");
+        let units = line.encode_utf16().count();
+        assert_eq!((last.start + last.length) as usize, units - 1);
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "colouring a 5 MB line took {elapsed:?}"
+        );
     }
 }

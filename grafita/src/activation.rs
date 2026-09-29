@@ -121,7 +121,13 @@ pub fn hand_off(path: &Path) -> bool {
     // An absolute path: the running instance has its own working directory, and
     // a relative one would resolve against the wrong place.
     let absolute = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    // The argument is a D-Bus string, so a name that is not UTF-8 travels as
+    // its `file://` URI, which the window's `openPath` reads back byte for
+    // byte; every other name travels as the plain path it always did.
+    let Some(argument) = crate::url::qml_argument(&absolute) else {
+        return false;
+    };
     proxy
-        .call::<_, _, ()>("OpenDocument", &(absolute.to_string_lossy().as_ref(),))
+        .call::<_, _, ()>("OpenDocument", &(argument.as_str(),))
         .is_ok()
 }

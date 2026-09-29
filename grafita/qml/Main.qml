@@ -45,7 +45,9 @@ ApplicationWindow {
     ListModel { id: tabsModel }
 
     /// Opens `path` in a new tab, or focuses the tab that already has it —
-    /// asking twice for the same document should not give you it twice.
+    /// asking twice for the same document should not give you it twice. A
+    /// session publishes its path in the same form an open request carries,
+    /// so a name that is not UTF-8 compares as its `file://` URI on both sides.
     function openTab(path) {
         const wanted = path === undefined || path === null ? "" : path
         if (wanted.length > 0) {

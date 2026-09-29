@@ -81,14 +81,18 @@ fn main() {
     }
 }
 
-/// The first argument that names a local file, or an empty string.
+/// The first argument that names a local file, in the form the window's
+/// `openPath` reads back unchanged, or an empty string.
 ///
-/// Options are skipped rather than treated as filenames, and only the first
-/// document is taken: Grafita opens one document, so silently ignoring the
-/// rest would be worse than a window the user can see is showing one file.
+/// A name that is not UTF-8 is made absolute first, because only an absolute
+/// path has the `file://` form that carries its bytes through a QString.
 fn initial_path() -> String {
     initial_path_buf()
-        .map(|path| path.to_string_lossy().into_owned())
+        .map(|path| match std::env::current_dir() {
+            Ok(directory) if path.is_relative() => directory.join(path),
+            _ => path,
+        })
+        .and_then(|path| url::qml_argument(&path))
         .unwrap_or_default()
 }
 
@@ -97,9 +101,12 @@ fn initial_path() -> String {
 /// Options are skipped rather than treated as filenames, and only the first
 /// document is taken: Grafita opens one document per launch, and silently
 /// ignoring the rest would be worse than a window the user can see.
+///
+/// Read as `OsString`s: `std::env::args` panics on an argument that is not
+/// UTF-8, and a file name that is not UTF-8 is still a file Grafita can edit.
 fn initial_path_buf() -> Option<std::path::PathBuf> {
-    std::env::args()
+    std::env::args_os()
         .skip(1)
-        .find(|argument| !argument.starts_with('-'))
-        .and_then(|argument| url::local_path(&argument))
+        .find(|argument| !argument.as_encoded_bytes().starts_with(b"-"))
+        .and_then(|argument| url::local_path_os(&argument))
 }

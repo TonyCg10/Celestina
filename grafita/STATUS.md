@@ -1,10 +1,11 @@
 # Grafita status
 
-- **Updated:** 2026-09-26
+- **Updated:** 2026-09-28
 - **Implementation:** checkpoints G0-G13 are present and delivered; `GRA-H1`,
   the hardening that follows the 2026-09-26 monorepo audit, is the active
   checkpoint: `GRA-H1-A` (the importer refuses hostile input) is written and
-  tested, awaiting its landing, and `GRA-H1-B` is planned
+  tested, awaiting its landing, and so is `GRA-H1-B` (the editor stops
+  doing quadratic or disk work on its GUI thread)
   ([plan](docs/plans/active/2026-09-26-hardening.md))
 - **Author validation:** the version-1 interaction pass is closed; `VAL-G7`,
   `VAL-GRA-SAVEAS`, `VAL-G8` and `VAL-G9` are requested and intentionally
@@ -29,7 +30,10 @@
   under the pointer. The encoding button and the empty page's two verbs keep
   their words behind a leading glyph. The encoding chooser's current row and
   hovered row now differ. Hand check: `VAL-GRA-FEEDBACK`.
-- Grafita is 1.2.0 and installed; Siderita carries the same verified core.
+- The version is the one in `Cargo.toml`, and
+  [the version history](../docs/version-history.tsv) records each delivered
+  one; this file does not repeat it, so it cannot fall behind. Siderita
+  carries the same core.
 - `G8-A` touches `siderita/src/editor.rs`, because a new `SaveRefusal` variant
   stops the other host compiling until it presents it. The author chose two
   consecutive commits over widening the unit, so one revision in between does
@@ -82,6 +86,24 @@
   typed refusal rather than an abort in Grafita or in Siderita's preview.
   Written under unit `GRA-H1-A`, covered by `grafita-core`'s `hostile` tests,
   not yet built or deployed.
+- The highlighter paints runs `grafita-core` has already measured in UTF-16
+  code units, converted in one pass over the line, so a 5 MB minified line
+  colours in linear time and the C++ side no longer owns a second copy of the
+  offset rule. Setting the four palette colours re-colours the document once,
+  and the highlighter's `target` reads null once the `TextEdit` that owns it
+  is gone. The recent-documents list is written by the document worker
+  (`Job::RecentChange`, which never `stat`s) and read by it (`Job::RecentList`,
+  whose existence checks run on a detached prober and wait at most a second;
+  while that prober is stuck on a dead mount the stored list is offered
+  unchecked),
+  and preferences by a `PreferenceWriter` thread once the changes stop. Grafita's GUI thread therefore writes
+  neither, and Siderita's embedded editor no longer writes the recent list
+  on its GUI thread either; Siderita's preference adapter still stores there
+  and is Siderita's to move. A `file://` URI is read by
+  `celestina_core::file_uri`, so a name that is not UTF-8 opens byte for byte
+  from a chooser, the command line or another launch. Written under unit
+  `GRA-H1-B`, covered by `grafita-core` tests and a stubbed type-check of the
+  application crate, not yet built or deployed.
 - An imported document never creates structure: adding or removing a paragraph
   is refused, a character the font cannot draw is refused, and a PDF is never
   re-laid-out. A PDF correction is appended as an incremental update, so the

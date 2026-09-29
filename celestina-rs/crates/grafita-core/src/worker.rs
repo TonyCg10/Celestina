@@ -9,7 +9,10 @@
 //! present*: a newer one makes the older one worthless, so submitting one
 //! cancels and replaces any that has not started. Saves are *work already
 //! promised to the user*: they queue in order and are never dropped, and only
-//! shutdown cancels one.
+//! shutdown cancels one. The recent-documents list is small bookkeeping that
+//! queues in order like a save, so a change to it is never lost to a newer
+//! question; reading it is bounded (see [`crate::recent`]) and gives way to
+//! cancellation, so it never keeps a dropped worker from being joined.
 
 use std::collections::VecDeque;
 use std::error::Error;
@@ -23,6 +26,7 @@ use celestina_core::{CancellationToken, Generation};
 use crate::encoding::Encoding;
 use crate::history::Revision;
 use crate::open::{open, open_with, probe, Limits, OpenRefusal, OpenedFile, ProbeOutcome};
+use crate::recent::{self, Prober, RecentChange};
 use crate::save::{perform, CreatedFile, SaveRefusal, SaveReport, SaveRequest};
 
 /// A piece of blocking work for the document worker.
@@ -79,6 +83,19 @@ pub enum Job {
         request: Box<SaveRequest>,
         generation: Generation,
     },
+    /// Apply `change` to the recent-documents list kept in `store`.
+    ///
+    /// Never superseded: a later question must not drop the record of a
+    /// document that did open. It runs here rather than where the session
+    /// decides it because it reads and syncs; it never asks whether any
+    /// document exists.
+    RecentChange {
+        store: PathBuf,
+        change: RecentChange,
+    },
+    /// Report which documents remembered in `store` still exist, waiting at
+    /// most [`recent::PROBE_WAIT`] for the answer.
+    RecentList { store: PathBuf },
 }
 
 impl Job {
@@ -117,6 +134,13 @@ pub enum Completion {
         revision: Revision,
         result: Box<Result<CreatedFile, SaveRefusal>>,
     },
+    /// [`Job::RecentChange`] ran. There is nothing to report: the list is
+    /// read only when a host is about to show it.
+    RecentChanged,
+    /// The answer to [`Job::RecentList`]: the remembered documents that still
+    /// exist, newest first. Jobs run in the order they were queued, so the
+    /// last of these a session receives is the newest list.
+    RecentListed { paths: Vec<PathBuf> },
 }
 
 #[derive(Debug)]
@@ -155,6 +179,11 @@ pub struct DocumentWorker {
     thread: Option<JoinHandle<()>>,
 }
 
+/// What a running job may use besides its own fields.
+struct Context {
+    prober: Prober,
+}
+
 impl fmt::Debug for DocumentWorker {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -170,6 +199,24 @@ impl DocumentWorker {
     /// Returns the error the thread could not be created with rather than
     /// panicking, so a host can degrade instead of dying at startup.
     pub fn new(publish: impl Fn(Completion) + Send + 'static) -> Result<Self, std::io::Error> {
+        Self::start(publish, Prober::shared())
+    }
+
+    /// A worker whose recent-list checks go to `prober`, so a test can make
+    /// them hang.
+    #[cfg(test)]
+    pub(crate) fn with_prober(
+        publish: impl Fn(Completion) + Send + 'static,
+        prober: Prober,
+    ) -> Result<Self, std::io::Error> {
+        Self::start(publish, prober)
+    }
+
+    fn start(
+        publish: impl Fn(Completion) + Send + 'static,
+        prober: Prober,
+    ) -> Result<Self, std::io::Error> {
+        let context = Context { prober };
         let shared = Arc::new(Shared {
             state: Mutex::new(WorkerState {
                 pending: VecDeque::new(),
@@ -181,7 +228,7 @@ impl DocumentWorker {
         let worker_shared = Arc::clone(&shared);
         let thread = thread::Builder::new()
             .name("grafita-document".to_owned())
-            .spawn(move || worker_loop(&worker_shared, &publish))?;
+            .spawn(move || worker_loop(&worker_shared, &context, &publish))?;
 
         Ok(Self {
             shared,
@@ -267,7 +314,7 @@ impl fmt::Display for WorkerStopped {
 
 impl Error for WorkerStopped {}
 
-fn worker_loop(shared: &Shared, publish: &impl Fn(Completion)) {
+fn worker_loop(shared: &Shared, context: &Context, publish: &impl Fn(Completion)) {
     loop {
         let queued = {
             let mut state = lock(&shared.state);
@@ -290,7 +337,7 @@ fn worker_loop(shared: &Shared, publish: &impl Fn(Completion)) {
             queued
         };
 
-        let completion = run(&queued);
+        let completion = run(&queued, context);
         let publishable = {
             let mut state = lock(&shared.state);
             state.running = None;
@@ -302,7 +349,7 @@ fn worker_loop(shared: &Shared, publish: &impl Fn(Completion)) {
     }
 }
 
-fn run(queued: &Queued) -> Completion {
+fn run(queued: &Queued, context: &Context) -> Completion {
     let cancellation = &queued.cancellation;
     match &queued.job {
         Job::Probe {
@@ -359,6 +406,13 @@ fn run(queued: &Queued) -> Completion {
             revision: request.revision(),
             result: Box::new(perform(request, cancellation)),
         },
+        Job::RecentChange { store, change } => {
+            recent::change(store, change);
+            Completion::RecentChanged
+        }
+        Job::RecentList { store } => Completion::RecentListed {
+            paths: recent::list_with(store, &context.prober, cancellation),
+        },
     }
 }
 
@@ -370,12 +424,13 @@ fn lock(mutex: &Mutex<WorkerState>) -> MutexGuard<'_, WorkerState> {
 mod tests {
     use std::fs;
     use std::sync::mpsc;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use celestina_core::{Generation, GenerationClock};
 
     use super::{Completion, DocumentWorker, Job};
     use crate::open::Limits;
+    use crate::recent::{Prober, RecentChange};
     use crate::testing::scratch_directory;
 
     fn generation(value: u64) -> Generation {
@@ -530,6 +585,98 @@ mod tests {
         assert_eq!(fs::read(&path).expect("read back"), b"antes\ndespues\n");
 
         drop(worker);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_recent_change_is_not_dropped_by_a_newer_question() {
+        let root = scratch_directory("worker-recent");
+        let store = root.join("recent");
+        let path = root.join("nota.txt");
+        fs::write(&path, b"texto\n").expect("write");
+
+        let (sender, receiver) = mpsc::channel();
+        let worker = DocumentWorker::new(move |completion| {
+            let _ = sender.send(completion);
+        })
+        .expect("start the worker");
+
+        worker
+            .submit(Job::RecentChange {
+                store: store.clone(),
+                change: RecentChange::Record(path.clone()),
+            })
+            .expect("submit");
+        worker
+            .submit(Job::Open {
+                path: path.clone(),
+                generation: generation(1),
+                limits: Limits::default(),
+            })
+            .expect("submit");
+
+        let mut remembered = false;
+        let mut opened = false;
+        for _ in 0..2 {
+            match receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("a completion")
+            {
+                Completion::RecentChanged => remembered = true,
+                Completion::Opened { .. } => opened = true,
+                other => panic!("unexpected completion: {other:?}"),
+            }
+        }
+        assert!(remembered && opened);
+        assert_eq!(crate::Recent::load_from(&store).paths(), [path]);
+
+        drop(worker);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_worker_listing_behind_a_hung_check_is_dropped_promptly() {
+        fn hangs(_path: &std::path::Path) -> bool {
+            std::thread::sleep(Duration::from_secs(30));
+            true
+        }
+        let root = scratch_directory("worker-recent-hung");
+        let store = root.join("recent");
+        crate::recent::change(
+            &store,
+            &RecentChange::Record(root.join("en-un-montaje-muerto.txt")),
+        );
+
+        let (sender, receiver) = mpsc::channel();
+        let worker = DocumentWorker::with_prober(
+            move |completion| {
+                let _ = sender.send(completion);
+            },
+            Prober::new(hangs),
+        )
+        .expect("start the worker");
+        worker
+            .submit(Job::RecentList {
+                store: store.clone(),
+            })
+            .expect("submit");
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Another tab records what it opened while this one is waiting.
+        let started = Instant::now();
+        crate::recent::change(&store, &RecentChange::Record(root.join("otra.txt")));
+        assert!(started.elapsed() < Duration::from_millis(500));
+
+        // Closing the window drops the worker on the GUI thread.
+        let started = Instant::now();
+        drop(worker);
+        let dropped = started.elapsed();
+        assert!(dropped < Duration::from_millis(300), "{dropped:?}");
+        assert!(
+            receiver.try_recv().is_err(),
+            "a dropped worker publishes nothing"
+        );
+
         let _ = fs::remove_dir_all(root);
     }
 
