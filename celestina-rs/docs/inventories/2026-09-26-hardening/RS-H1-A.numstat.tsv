@@ -1,0 +1,31 @@
+# RS-H1-A exact change inventory
+
+Base revision	babdd55c45367a8becd7dc63996c729b55145632
+Pathspec	celestina-rs/AGENTS.md
+Pathspec	celestina-rs/README.md
+Pathspec	celestina-rs/STATUS.md
+Pathspec	celestina-rs/crates/celestina-core/src/atomic_file.rs
+Pathspec	celestina-rs/crates/celestina-core/src/desktop_entry.rs
+Pathspec	celestina-rs/crates/celestina-core/src/file_uri.rs
+Pathspec	celestina-rs/crates/celestina-core/src/image.rs
+Pathspec	celestina-rs/crates/celestina-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-core/src/xdg.rs
+Pathspec	celestina-rs/docs/evidence/2026-09-26-shared-owners.md
+Pathspec	celestina-rs/docs/inventories/2026-09-26-hardening/RS-H1-A.numstat.tsv
+Pathspec	celestina-rs/docs/plans/active/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+10	2	50b6b2e6805d2e6d2b2d182b0dd5ed3a36fc4a0f9b96b6aff21d4702184621ec	celestina-rs/AGENTS.md
+20	7	10c52a473d963fbe7a22fa7adf5771dedc1d6da35d1061d8323ba7db8a526de1	celestina-rs/README.md
+11	1	c6d89c36582fe9f550b7d3a61992e470074e667d46c76cc49796fc0b28ec7447	celestina-rs/STATUS.md
+914	19	cd66c2db0f4ec4384069892703afc09b11d02e041a8e8343023c821d3c0e2f81	celestina-rs/crates/celestina-core/src/atomic_file.rs
+641	18	e53d968ce40b982a0c5edeb54b9da198ee17be18bd3764473a27b31353dc5be3	celestina-rs/crates/celestina-core/src/desktop_entry.rs
+278	0	9c0a94506249441d68fe50cfd2c2f73ada70e2beaf850fdae61ed306c570ee73	celestina-rs/crates/celestina-core/src/file_uri.rs
+7	5	8e90534167ed9834dc58f0d22849117149358aa479f5ce08ba3c8acd26125f01	celestina-rs/crates/celestina-core/src/image.rs
+121	1	6bb214fe50fc37eb521a247185c5394d64c4a0988efe8a15a8417c569445aa57	celestina-rs/crates/celestina-core/src/lib.rs
+477	7	bf2f31c7d129b7f632fc62bfb54ccb7bbfc5071a7f845d069e1f318e937e908c	celestina-rs/crates/celestina-core/src/xdg.rs
+245	0	30480eb27ae87b7b3737dc9bb36ff599a1a1bc14922822c17c8d9e5be77422bc	celestina-rs/docs/evidence/2026-09-26-shared-owners.md
+31	0	self	celestina-rs/docs/inventories/2026-09-26-hardening/RS-H1-A.numstat.tsv
+1	1	4938848580b48582b9bc1636fbe51c6d21e34f7acd986e99ce9b6653c706ac74	celestina-rs/docs/plans/active/2026-09-26-hardening.md

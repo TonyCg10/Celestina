@@ -1,11 +1,47 @@
-//! Freedesktop base directories.
+//! Freedesktop base directories, and the private directories the suite keeps
+//! under them.
 //!
-//! Each returns the environment variable when it holds an absolute path, and
-//! otherwise the spec's `$HOME`-relative fallback. `siderita-ops` (the home
-//! Trash) and the app (every config and data file it reads) both resolve these,
-//! so they live here once instead of being copied into each module.
+//! Each `*_home` returns the environment variable when it holds an absolute
+//! path, and otherwise the spec's `$HOME`-relative fallback. `siderita-ops` (the
+//! home Trash) and the app (every config and data file it reads) both resolve
+//! these, so they live here once instead of being copied into each module.
+//!
+//! [`runtime_dir`] is different on purpose: the spec gives
+//! `$XDG_RUNTIME_DIR` no fallback, and the fallback the suite's copies used,
+//! the world-writable `/tmp`, is exactly where another local account can
+//! pre-create a predictable name (a symlink, or a directory it owns) and
+//! capture a mount point, a FIFO or a lock. It therefore answers an error, never
+//! a substitute, and it checks what the spec requires of the directory: absolute,
+//! a directory itself rather than a symlink, owned by this user, and mode
+//! `0700`. A caller that gets an error degrades the feature that needed the
+//! directory.
+//!
+//! [`ensure_private_dir`] creates or checks a directory the suite owns under one
+//! of these bases (`$XDG_RUNTIME_DIR/magnetita`, the shell's style import root,
+//! `$XDG_STATE_HOME/celestina`): created `0700`, refused when it is a symlink or
+//! another user's, and tightened to `0700` when it is this user's own directory
+//! from an older release that created it wider.
+//!
+//! # Adoption
+//!
+//! No consumer calls [`runtime_dir`] or [`ensure_private_dir`] yet (ruling R-A3
+//! keeps the unit that introduced them purely additive). The ad-hoc
+//! `XDG_RUNTIME_DIR` lookups move here in their owners' bug units: magnetitad's
+//! mounts, mirror FIFOs and artwork cache and the Magnetita app's mirror view
+//! (`MAG-D1-D`, P-11), and the shell's DDC lock, Melibea socket and style
+//! import root (`SURF-1-E`, P-10).
+//!
+//! [`effective_uid`] has one existing copy with a different answer:
+//! `siderita-ops/src/volume.rs` reads the owner of `/proc/self`, which is root
+//! for a process that is not dumpable, and falls back to uid 0 when it cannot
+//! read it, so a volume's `.Trash-$uid` could become `.Trash-0`. It moves here
+//! in `SID-H1-B` (P-8), whose findings already cover getting the uid safely.
 
-use std::path::PathBuf;
+use std::error::Error;
+use std::ffi::OsString;
+use std::fmt;
+use std::io::{self, Read};
+use std::path::{Path, PathBuf};
 
 fn home() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -53,10 +89,444 @@ pub fn state_home() -> Option<PathBuf> {
         .or_else(|| home().map(|dir| dir.join(".local").join("state")))
 }
 
+/// Why a private directory — the runtime directory, or one the suite keeps
+/// under a base directory — cannot be used.
+#[derive(Debug)]
+pub enum PrivateDirError {
+    /// `$XDG_RUNTIME_DIR` is unset or empty.
+    Unset,
+    /// The path is relative, so it would resolve against the working directory.
+    NotAbsolute { path: PathBuf },
+    /// A filesystem call on `path` failed.
+    Io {
+        operation: &'static str,
+        path: PathBuf,
+        source: io::Error,
+    },
+    /// The path is not a directory, or is a symlink (even to a directory):
+    /// a private directory is checked where it is, not where a link points.
+    NotADirectory { path: PathBuf },
+    /// The directory belongs to another user.
+    NotOwned {
+        path: PathBuf,
+        owner: u32,
+        user: u32,
+    },
+    /// The runtime directory grants its group or other users some access.
+    Shared { path: PathBuf, mode: u32 },
+    /// The runtime directory lacks read, write or search for its owner, so it
+    /// is not the `0700` directory the spec requires.
+    NotOwnerAccessible { path: PathBuf, mode: u32 },
+    /// This process's effective user id could not be read.
+    UnknownUser { source: io::Error },
+}
+
+impl fmt::Display for PrivateDirError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unset => formatter.write_str("XDG_RUNTIME_DIR is not set"),
+            Self::NotAbsolute { path } => {
+                write!(formatter, "{} is not an absolute path", path.display())
+            }
+            Self::Io {
+                operation,
+                path,
+                source,
+            } => write!(formatter, "{operation} {}: {source}", path.display()),
+            Self::NotADirectory { path } => {
+                write!(formatter, "{} is not a directory", path.display())
+            }
+            Self::NotOwned { path, owner, user } => write!(
+                formatter,
+                "{} belongs to uid {owner}, not to uid {user}",
+                path.display()
+            ),
+            Self::Shared { path, mode } => write!(
+                formatter,
+                "{} has mode {mode:04o}; a private directory is 0700",
+                path.display()
+            ),
+            Self::NotOwnerAccessible { path, mode } => write!(
+                formatter,
+                "{} has mode {mode:04o}; the runtime directory is 0700",
+                path.display()
+            ),
+            Self::UnknownUser { source } => {
+                write!(formatter, "cannot read the effective user id: {source}")
+            }
+        }
+    }
+}
+
+impl Error for PrivateDirError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Io { source, .. } | Self::UnknownUser { source } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+/// `$XDG_RUNTIME_DIR`, only when it is what the spec says it must be: an
+/// absolute path to a directory owned by this user whose permission bits are
+/// exactly `0700`. There is no fallback.
+///
+/// The final component must be the directory itself, not a symlink to one: a
+/// link is only as private as the directory holding it, which this check does
+/// not see. The sticky and set-id bits are not part of that rule and are not
+/// examined.
+///
+/// The check reads the directory's metadata, so it belongs on a worker or in
+/// start-up code, not in a Qt-thread invokable.
+///
+/// # Errors
+///
+/// [`PrivateDirError::Unset`] when the variable is unset or empty, and the
+/// variant naming the broken requirement otherwise.
+pub fn runtime_dir() -> Result<PathBuf, PrivateDirError> {
+    let user = effective_uid().map_err(|source| PrivateDirError::UnknownUser { source })?;
+    checked_runtime_dir(std::env::var_os("XDG_RUNTIME_DIR"), user)
+}
+
+fn checked_runtime_dir(value: Option<OsString>, user: u32) -> Result<PathBuf, PrivateDirError> {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    let path = value
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or(PrivateDirError::Unset)?;
+    if !path.is_absolute() {
+        return Err(PrivateDirError::NotAbsolute { path });
+    }
+    let metadata = match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(source) => {
+            return Err(PrivateDirError::Io {
+                operation: "reading the metadata of",
+                path,
+                source,
+            })
+        }
+    };
+    if !metadata.file_type().is_dir() {
+        return Err(PrivateDirError::NotADirectory { path });
+    }
+    if metadata.uid() != user {
+        return Err(PrivateDirError::NotOwned {
+            path,
+            owner: metadata.uid(),
+            user,
+        });
+    }
+    let mode = metadata.permissions().mode() & 0o7777;
+    if mode & 0o077 != 0 {
+        return Err(PrivateDirError::Shared { path, mode });
+    }
+    if mode & 0o700 != 0o700 {
+        return Err(PrivateDirError::NotOwnerAccessible { path, mode });
+    }
+    Ok(path)
+}
+
+/// Creates `path` and any missing parents with mode `0700`, or checks the
+/// directory that is already there.
+///
+/// An existing directory must be a real directory (not a symlink to one) owned
+/// by this user. If it grants its group or other users any access it is
+/// tightened to `0700`: only its owner could have created it, so this is an
+/// older release's directory, not someone else's trap. Existing parents are
+/// left as they are; they are the user's (`~/.local/state`) or the session's.
+///
+/// # Errors
+///
+/// The [`PrivateDirError`] naming the requirement `path` breaks, or the
+/// filesystem call that failed.
+pub fn ensure_private_dir(path: &Path) -> Result<(), PrivateDirError> {
+    let user = effective_uid().map_err(|source| PrivateDirError::UnknownUser { source })?;
+    ensure_private_dir_for(path, user)
+}
+
+fn ensure_private_dir_for(path: &Path, user: u32) -> Result<(), PrivateDirError> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+
+    if !path.is_absolute() {
+        return Err(PrivateDirError::NotAbsolute {
+            path: path.to_path_buf(),
+        });
+    }
+    match std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+    {
+        Ok(()) => {}
+        // Something that is not a directory holds the name; the inspection
+        // below names it.
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(source) => {
+            return Err(PrivateDirError::Io {
+                operation: "creating",
+                path: path.to_path_buf(),
+                source,
+            })
+        }
+    }
+    let metadata = std::fs::symlink_metadata(path).map_err(|source| PrivateDirError::Io {
+        operation: "reading the metadata of",
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if !metadata.file_type().is_dir() {
+        return Err(PrivateDirError::NotADirectory {
+            path: path.to_path_buf(),
+        });
+    }
+    if metadata.uid() != user {
+        return Err(PrivateDirError::NotOwned {
+            path: path.to_path_buf(),
+            owner: metadata.uid(),
+            user,
+        });
+    }
+    if metadata.permissions().mode() & 0o077 != 0 {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).map_err(
+            |source| PrivateDirError::Io {
+                operation: "restricting the mode of",
+                path: path.to_path_buf(),
+                source,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// The largest `/proc/self/status` this reads. The file is a few kilobytes;
+/// the bound only keeps a broken procfs from being read without end.
+const MAX_STATUS_BYTES: u64 = 64 * 1024;
+
+/// This process's effective user id, from `/proc/self/status`.
+///
+/// `std` exposes no `geteuid`, and this crate takes no dependency and no
+/// `unsafe` to call it; the status file states the same four ids the kernel
+/// keeps, in a documented, stable format. It is public so the other readers of
+/// the user id (`siderita-ops`'s Trash, which reads the owner of `/proc/self`
+/// and falls back to root) can use this one instead.
+///
+/// The file is read as bytes: its `Name:` line is the kernel's copy of the
+/// executable name, which need not be UTF-8 (a Latin-1 file name, or a cut at
+/// fifteen bytes inside a multi-byte character).
+///
+/// # Errors
+///
+/// The error of opening or reading the file, or `InvalidData` when it has no
+/// parseable `Uid:` line (a procfs that is not Linux's).
+pub fn effective_uid() -> io::Result<u32> {
+    let mut status = Vec::new();
+    std::fs::File::open("/proc/self/status")?
+        .take(MAX_STATUS_BYTES)
+        .read_to_end(&mut status)?;
+    effective_uid_in(&status).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "/proc/self/status has no readable Uid line",
+        )
+    })
+}
+
+/// The second field of the `Uid:` line: real, effective, saved, filesystem.
+fn effective_uid_in(status: &[u8]) -> Option<u32> {
+    let ids = status
+        .split(|&byte| byte == b'\n')
+        .find_map(|line| line.strip_prefix(b"Uid:"))?;
+    let ids = std::str::from_utf8(ids).ok()?;
+    ids.split_whitespace().nth(1)?.parse().ok()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{cache_home, state_home};
+    use super::{
+        cache_home, checked_runtime_dir, effective_uid, effective_uid_in, ensure_private_dir_for,
+        state_home, PrivateDirError,
+    };
+    use crate::scratch::Scratch;
+    use std::ffi::OsString;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
     use std::path::PathBuf;
+
+    fn mode_of(path: &std::path::Path) -> u32 {
+        std::fs::symlink_metadata(path)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o7777
+    }
+
+    fn owner_of(path: &std::path::Path) -> u32 {
+        std::fs::symlink_metadata(path).expect("metadata").uid()
+    }
+
+    #[test]
+    fn the_effective_uid_is_the_second_id_of_the_uid_line() {
+        let status = "Name:\tcat\nUmask:\t0022\nUid:\t1000\t1001\t1002\t1003\nGid:\t5\t5\t5\t5\n";
+        assert_eq!(effective_uid_in(status.as_bytes()), Some(1001));
+        assert_eq!(effective_uid_in(b"Name:\tcat\n"), None);
+        assert_eq!(effective_uid_in(b"Uid:\t1000\n"), None);
+    }
+
+    #[test]
+    fn a_name_that_is_not_utf8_does_not_hide_the_uid() {
+        // A Latin-1 executable name, and a UTF-8 name cut inside a character
+        // at the kernel's fifteen-byte limit.
+        let latin1 = b"Name:\tcaf\xe9\nUid:\t1000\t1001\t1002\t1003\n";
+        let cut = b"Name:\tabcdefghijklmn\xc3\nUid:\t7\t8\t9\t10\n";
+        assert_eq!(effective_uid_in(latin1), Some(1001));
+        assert_eq!(effective_uid_in(cut), Some(8));
+    }
+
+    #[test]
+    fn the_effective_uid_owns_what_this_process_creates() {
+        let scratch = Scratch::new("euid");
+        assert_eq!(
+            effective_uid().expect("an effective uid"),
+            owner_of(scratch.path())
+        );
+    }
+
+    #[test]
+    fn an_unset_or_empty_runtime_dir_has_no_fallback() {
+        assert!(matches!(
+            checked_runtime_dir(None, 0),
+            Err(PrivateDirError::Unset)
+        ));
+        assert!(matches!(
+            checked_runtime_dir(Some(OsString::new()), 0),
+            Err(PrivateDirError::Unset)
+        ));
+    }
+
+    #[test]
+    fn a_relative_runtime_dir_is_refused() {
+        assert!(matches!(
+            checked_runtime_dir(Some("run/user/1000".into()), 0),
+            Err(PrivateDirError::NotAbsolute { .. })
+        ));
+    }
+
+    #[test]
+    fn the_runtime_dir_must_be_a_private_directory_of_this_user() {
+        let scratch = Scratch::new("runtime");
+        let runtime = scratch.path().join("runtime");
+        std::fs::create_dir(&runtime).expect("runtime dir");
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700)).expect("chmod");
+        let user = owner_of(&runtime);
+
+        assert_eq!(
+            checked_runtime_dir(Some(runtime.clone().into()), user).expect("private"),
+            runtime
+        );
+        assert!(matches!(
+            checked_runtime_dir(Some(runtime.clone().into()), user.wrapping_add(1)),
+            Err(PrivateDirError::NotOwned { .. })
+        ));
+
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        assert!(matches!(
+            checked_runtime_dir(Some(runtime.clone().into()), user),
+            Err(PrivateDirError::Shared { mode: 0o755, .. })
+        ));
+
+        let file = scratch.path().join("file");
+        std::fs::write(&file, b"").expect("file");
+        assert!(matches!(
+            checked_runtime_dir(Some(file.into()), user),
+            Err(PrivateDirError::NotADirectory { .. })
+        ));
+
+        // Owner-only but not the spec's 0700: refused. Sticky 01700 is 0700.
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o500)).expect("chmod");
+        assert!(matches!(
+            checked_runtime_dir(Some(runtime.clone().into()), user),
+            Err(PrivateDirError::NotOwnerAccessible { mode: 0o500, .. })
+        ));
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o1700)).expect("chmod");
+        assert_eq!(
+            checked_runtime_dir(Some(runtime.clone().into()), user).expect("sticky 0700"),
+            runtime
+        );
+
+        // A symlink to a private directory is not the private directory.
+        std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700)).expect("chmod");
+        let link = scratch.path().join("link");
+        std::os::unix::fs::symlink(&runtime, &link).expect("symlink");
+        assert!(matches!(
+            checked_runtime_dir(Some(link.into()), user),
+            Err(PrivateDirError::NotADirectory { .. })
+        ));
+        assert!(matches!(
+            checked_runtime_dir(Some(scratch.path().join("missing").into()), user),
+            Err(PrivateDirError::Io { .. })
+        ));
+    }
+
+    #[test]
+    fn a_private_dir_and_its_missing_parents_are_created_0700() {
+        let scratch = Scratch::new("private-create");
+        let user = owner_of(scratch.path());
+        let parent = scratch.path().join("state");
+        let leaf = parent.join("celestina");
+
+        ensure_private_dir_for(&leaf, user).expect("created");
+
+        assert_eq!(mode_of(&parent), 0o700);
+        assert_eq!(mode_of(&leaf), 0o700);
+        // Asking again is a check, not an error.
+        ensure_private_dir_for(&leaf, user).expect("already private");
+    }
+
+    #[test]
+    fn an_own_wider_directory_is_tightened_and_a_foreign_one_refused() {
+        let scratch = Scratch::new("private-existing");
+        let user = owner_of(scratch.path());
+        let wide = scratch.path().join("wide");
+        std::fs::create_dir(&wide).expect("dir");
+        std::fs::set_permissions(&wide, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+
+        ensure_private_dir_for(&wide, user).expect("tightened");
+        assert_eq!(mode_of(&wide), 0o700);
+
+        std::fs::set_permissions(&wide, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        assert!(matches!(
+            ensure_private_dir_for(&wide, user.wrapping_add(1)),
+            Err(PrivateDirError::NotOwned { .. })
+        ));
+        // A foreign directory is not repaired, only refused.
+        assert_eq!(mode_of(&wide), 0o755);
+    }
+
+    #[test]
+    fn a_symlink_or_a_file_is_not_a_private_dir() {
+        let scratch = Scratch::new("private-symlink");
+        let user = owner_of(scratch.path());
+        let target = scratch.path().join("target");
+        std::fs::create_dir(&target).expect("dir");
+        let link = scratch.path().join("link");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+        let file = scratch.path().join("file");
+        std::fs::write(&file, b"").expect("file");
+
+        assert!(matches!(
+            ensure_private_dir_for(&link, user),
+            Err(PrivateDirError::NotADirectory { .. })
+        ));
+        assert!(matches!(
+            ensure_private_dir_for(&file, user),
+            Err(PrivateDirError::NotADirectory { .. })
+        ));
+        assert!(matches!(
+            ensure_private_dir_for(std::path::Path::new("relative"), user),
+            Err(PrivateDirError::NotAbsolute { .. })
+        ));
+    }
 
     /// The environment is process-wide, so every base directory that falls
     /// back to `$HOME` shares this one test rather than racing another test
