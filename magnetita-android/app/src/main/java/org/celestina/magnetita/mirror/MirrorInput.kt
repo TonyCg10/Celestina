@@ -21,7 +21,7 @@ import android.view.accessibility.AccessibilityEvent
  * field (a character appended, Backspace removing one, Enter the field's
  * action), and back, home and recents are the global actions.
  */
-class MirrorInput : AccessibilityService() {
+class MirrorInput : AccessibilityService(), MirrorSink {
     private class Finger(var x: Float, var y: Float) {
         var stroke: GestureDescription.StrokeDescription? = null
         /** The press is held back this long: a lift inside it is a tap. */
@@ -190,8 +190,13 @@ class MirrorInput : AccessibilityService() {
         }
     }
 
-    /** An Android key code on the focused field, the way accessibility allows. */
-    fun key(keycode: Int, pressed: Boolean) {
+    /** Lifts every finger still down; the stream that carried them ended. Any thread. */
+    fun releaseAll() {
+        main.post { fingers.entries.toList().forEach { (pointer, finger) -> release(pointer, finger) } }
+    }
+
+    /** An Android key code on the focused field, the way accessibility allows; [MirrorControl] gates it. */
+    override fun key(keycode: Int, pressed: Boolean) {
         if (!pressed) return
         val focused = rootInActiveWindow?.findFocus(android.view.accessibility.AccessibilityNodeInfo.FOCUS_INPUT) ?: return
         if (!focused.isEditable) return
@@ -212,8 +217,8 @@ class MirrorInput : AccessibilityService() {
         focused.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
     }
 
-    /** 0 back, 1 home, 2 recents. */
-    fun global(action: Int) {
+    /** 0 back, 1 home, 2 recents; [MirrorControl] gates it. */
+    override fun global(action: Int) {
         val which = when (action) {
             0 -> GLOBAL_ACTION_BACK
             1 -> GLOBAL_ACTION_HOME

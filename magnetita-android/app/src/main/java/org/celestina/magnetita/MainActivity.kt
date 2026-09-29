@@ -25,8 +25,11 @@ import kotlinx.coroutines.withContext
 import org.celestina.magnetita.core.Core
 import org.celestina.magnetita.link.LinkService
 import org.celestina.magnetita.link.LinkState
+import org.celestina.magnetita.link.LocalAddresses
 import org.celestina.magnetita.link.MediaCommand
 import org.celestina.magnetita.link.Outbound
+import org.celestina.magnetita.link.PairingConsent
+import org.celestina.magnetita.link.PairingState
 import org.celestina.magnetita.notifications.PhoneNotifications
 import org.celestina.magnetita.phone.PhonePermissions
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,6 +38,7 @@ import org.celestina.magnetita.ui.screens.ControlScreen
 import org.celestina.magnetita.ui.screens.DeviceScreen
 import org.celestina.magnetita.ui.screens.Remote
 import org.celestina.magnetita.ui.screens.DeviceShown
+import org.celestina.magnetita.ui.screens.PairConfirmScreen
 import org.celestina.magnetita.ui.screens.ScanScreen
 import org.celestina.magnetita.ui.screens.SettingsScreen
 import org.celestina.magnetita.ui.theme.MagnetitaTheme
@@ -49,7 +53,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         LinkService.start(this)
-        offerPairing(intent)
+        // A recreated activity (rotation, process restore) gets its old intent back; it was offered already.
+        if (savedInstanceState == null) offerPairing(intent)
         setContent {
             MagnetitaTheme {
                 var scanning by remember { mutableStateOf(false) }
@@ -60,6 +65,7 @@ class MainActivity : ComponentActivity() {
                 val link by LinkService.state.collectAsState()
                 val ringing by LinkService.ringing.collectAsState()
                 val clipboardNote by LinkService.clipboardNote.collectAsState()
+                val consent by pairing.state.collectAsState()
                 val desktopMedia by LinkService.desktopMedia.collectAsState()
                 var phoneGranted by remember { mutableStateOf(PhonePermissions.allGranted(this)) }
                 val mirrorInput = remember(link, phoneGranted) { org.celestina.magnetita.mirror.MirrorInput.enabled(this) }
@@ -92,9 +98,35 @@ class MainActivity : ComponentActivity() {
                 val preferences = remember { org.celestina.magnetita.settings.Preferences(this) }
                 var mediaNotifications by remember { mutableStateOf(preferences.mediaNotifications) }
                 BackHandler(enabled = scanning) { scanning = false }
-                if (scanning) {
+                if (consent !is PairingState.Idle) {
+                    // Pairing waits for the person: the only way to it is the confirm button.
+                    BackHandler { pairing.dismiss() }
+                    if (consent is PairingState.Confirming) {
+                        // The offer ends on its own once its time is up.
+                        LaunchedEffect(consent) {
+                            while (pairing.state.value == consent) {
+                                val left = pairing.remainingMs()
+                                if (left == 0L) {
+                                    pairing.expire()
+                                    break
+                                }
+                                kotlinx.coroutines.delay(left)
+                            }
+                        }
+                        // No other app's overlay may sit over the confirm button (tapjacking).
+                        androidx.compose.runtime.DisposableEffect(Unit) {
+                            window.setHideOverlayWindows(true)
+                            onDispose { window.setHideOverlayWindows(false) }
+                        }
+                    }
+                    PairConfirmScreen(
+                        state = consent,
+                        onPair = { offer -> pairing.confirm(offer)?.let { uri -> LinkService.pair(this, uri) } },
+                        onDismiss = { pairing.dismiss() },
+                    )
+                } else if (scanning) {
                     ScanScreen(
-                        onLink = { uri -> LinkService.pair(this, uri); scanning = false },
+                        onLink = { uri -> offerLink(uri); scanning = false },
                         onBack = { scanning = false },
                     )
                 } else {
@@ -153,6 +185,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        pairing.screenStarted()
+    }
+
+    /** Leaving the foreground drops a waiting offer; a planted link must not wait for a genuine scan. */
+    override fun onStop() {
+        pairing.screenStopped(isChangingConfigurations)
+        super.onStop()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) LinkService.focused(this) else LinkService.blurred(this)
@@ -182,11 +225,27 @@ class MainActivity : ComponentActivity() {
         return (if (level >= 0 && scale > 0) level * 100 / scale else 0) to (plugged != 0)
     }
 
-    /** A `magnetita://pair` link, from the system camera or a test, pairs. */
+    /**
+     * A `magnetita://pair` link, from the system camera or any other app,
+     * is only offered: the consent screen shows the desktop it names and
+     * nothing pairs until the person confirms it there.
+     */
     private fun offerPairing(intent: Intent?) {
         val data = intent?.data ?: return
-        if (intent.action == Intent.ACTION_VIEW && data.scheme == "magnetita" && data.host == "pair") {
-            LinkService.pair(this, data.toString())
-        }
+        if (intent.action != Intent.ACTION_VIEW || data.scheme != "magnetita" || data.host != "pair") return
+        // Recents replays the intent that opened the task; that is not a new request.
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+        offerLink(data.toString())
+    }
+
+    private fun offerLink(uri: String) {
+        if (!pairing.offer(uri, LocalAddresses.of(this))) android.util.Log.i(TAG, "pairing link ignored: a conflict or the same link is on screen")
+    }
+
+    companion object {
+        private const val TAG = "magnetita-main"
+
+        /** Outlives the activity's recreation; the process's death drops a waiting offer, which is the safe side. */
+        private val pairing = PairingConsent { android.os.SystemClock.elapsedRealtime() }
     }
 }

@@ -1,0 +1,57 @@
+# AND-6-D exact change inventory
+
+Base revision	bee6e0cea9bbefc2a284b8b203f3829adb4840ba
+Pathspec	docs/version-history.tsv
+Pathspec	magnetita-android/README.md
+Pathspec	magnetita-android/STATUS.md
+Pathspec	magnetita-android/VALIDATION.md
+Pathspec	magnetita-android/app/build.gradle.kts
+Pathspec	magnetita-android/app/src/main/AndroidManifest.xml
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LocalAddresses.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/link/PairingConsent.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorControl.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorInput.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorService.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/DeleteRule.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+Pathspec	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/PairConfirmScreen.kt
+Pathspec	magnetita-android/app/src/main/res/values/strings.xml
+Pathspec	magnetita-android/app/src/main/res/xml/backup_rules.xml
+Pathspec	magnetita-android/app/src/main/res/xml/data_extraction_rules.xml
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/link/PairingConsentTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/mirror/MirrorControlTest.kt
+Pathspec	magnetita-android/app/src/test/java/org/celestina/magnetita/storage/DeleteRuleTest.kt
+Pathspec	magnetita-android/docs/evidence/2026-09-26-pairing-consent.md
+Pathspec	magnetita-android/docs/inventories/2026-09-13-app-design/AND-6-D.numstat.tsv
+Pathspec	magnetita-android/docs/plans/active/2026-09-13-app-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	2a3eaf7120dfafb893cacb58319c44a12081246267796c9a3f432802745dadf3	docs/version-history.tsv
+7	0	3244b153d5f7823f98966e982f35cb3c7740541e753a12160ee4330c4e126be6	magnetita-android/README.md
+10	5	8ced75f9fc0684f49d54148582e713a53751437b097a3a188fc8c9ab1c9a58e2	magnetita-android/STATUS.md
+29	0	c9d7e76c8232241bc69aaef9d97659532c3a869948a01aeaa90454b3970d6081	magnetita-android/VALIDATION.md
+1	1	d7b95ec5628e7eeaa34c0499bda3526e467660a5bf4f8f61dffcdaf8029195a9	magnetita-android/app/build.gradle.kts
+2	0	196920b5ef82d0e02ec5fac2f2f256aa2d63c8112a4253f04e9b34f74d078c0e	magnetita-android/app/src/main/AndroidManifest.xml
+66	7	a846d7e429d0ccab8379e7240b10a944e0a0b35e152766785cacf6feb72ab60a	magnetita-android/app/src/main/java/org/celestina/magnetita/MainActivity.kt
+6	3	b5ca07381387909966208be0100b64abba14d3d96bc1965805f70c6d6b2e3303	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LinkService.kt
+30	0	21f920190704d899596b00bd44eb5462c74e8d15525654dbe6ab9ea63c166f79	magnetita-android/app/src/main/java/org/celestina/magnetita/link/LocalAddresses.kt
+324	0	42ea65ad48c7ca4d4f118a4d758871193412ca863779827989e3d52067d15b0b	magnetita-android/app/src/main/java/org/celestina/magnetita/link/PairingConsent.kt
+30	0	504eaccf65219a7e2cd2ecc1d35dc32ddb61ff6d98b4e9e6c867f482123fe732	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorControl.kt
+10	5	86cb63f4c92ef960305da35f612b05df5e8403a93c507c34dd245629742fc68f	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorInput.kt
+9	0	65aad8bb66c0e415e1c3a9c89c56957e11bfdee6cee65d6080326d0e71c237cb	magnetita-android/app/src/main/java/org/celestina/magnetita/mirror/MirrorService.kt
+28	0	c65da6e78a6064fe93c83f06004d1be45b2fe4ff05b8d27cbb3ae090bb64acbb	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/DeleteRule.kt
+19	0	6085ca5f915b369a0abcb29e701e1d816b0d4c341aa48ffd9c8296e92868e43e	magnetita-android/app/src/main/java/org/celestina/magnetita/storage/PhoneStorage.kt
+110	0	fbc48a221295cbf3b43d687f6724196581de2610e49d7fc4c8dfb7285cc77df9	magnetita-android/app/src/main/java/org/celestina/magnetita/ui/screens/PairConfirmScreen.kt
+11	0	5326bae9757d594e266acd48db7ef4c2a4eee43e0ba114efa5b006579d2d754d	magnetita-android/app/src/main/res/values/strings.xml
+6	12	6d641ba365a983b810c098c6f48efdcfe5e7f44627180080d148d7173a961e5e	magnetita-android/app/src/main/res/xml/backup_rules.xml
+9	14	f3cc81bdb5451d88bac06a968e96d041785c8e9c85fdf985bcaa0f6608bbda9c	magnetita-android/app/src/main/res/xml/data_extraction_rules.xml
+225	0	b797e9380338beb8ba84291aaa31f0a6014d68526b7a99ff2f43125d56091da6	magnetita-android/app/src/test/java/org/celestina/magnetita/link/PairingConsentTest.kt
+43	0	a84ee18f78332681a28c5bbda815160788789c8689dfc4121f8a9c602a580723	magnetita-android/app/src/test/java/org/celestina/magnetita/mirror/MirrorControlTest.kt
+37	0	dd49430af867a091181bcfe2a24a7978b527602700a5c6748e7702834f9a76d5	magnetita-android/app/src/test/java/org/celestina/magnetita/storage/DeleteRuleTest.kt
+241	0	b540602a2e96c0d6db945c4960258090a605033dce12bacc88856ffff66cf99f	magnetita-android/docs/evidence/2026-09-26-pairing-consent.md
+57	0	self	magnetita-android/docs/inventories/2026-09-13-app-design/AND-6-D.numstat.tsv
+1	1	4af27abeabe36bfece4a68faad7308dd2b9acb9acce31d8722add8891d13feff	magnetita-android/docs/plans/active/2026-09-13-app-design.md
