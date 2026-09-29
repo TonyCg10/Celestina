@@ -113,13 +113,15 @@ TestCase {
         }
     }
 
-    // La opacidad es del tono, no de la receta.
+    // Opacity belongs to the tone, not to the recipe. The alpha is a theme
+    // token because the style guard refuses a literal one.
     function test_alpha_survives() {
+        const alpha = CelestinaTheme.unavailableContentOpacity
         const translucent = CelestinaTheme.withAlpha(
-                                CelestinaTheme.glyphDirectory, 0.4)
-        fuzzyCompare(CelestinaTheme.iconGradientTop(translucent).a, 0.4, 0.02)
-        fuzzyCompare(CelestinaTheme.iconGradientBottom(translucent).a, 0.4, 0.02)
-        fuzzyCompare(CelestinaTheme.iconBackdropTone(translucent).a, 0.4, 0.02)
+                                CelestinaTheme.glyphDirectory, alpha)
+        fuzzyCompare(CelestinaTheme.iconGradientTop(translucent).a, alpha, 0.02)
+        fuzzyCompare(CelestinaTheme.iconGradientBottom(translucent).a, alpha, 0.02)
+        fuzzyCompare(CelestinaTheme.iconBackdropTone(translucent).a, alpha, 0.02)
     }
 
     // El componente deriva solo: dar un tono basta, y los tres colores del

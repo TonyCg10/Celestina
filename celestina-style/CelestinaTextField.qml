@@ -48,6 +48,7 @@ TextField {
         border.color: CelestinaTheme.inputBorder
 
         CelestinaFocusRing {
+            objectName: "textFieldFocusRing"
             target: parent
             cornerRadius: parent.radius
             shown: field.visualFocus

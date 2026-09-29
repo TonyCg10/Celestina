@@ -224,6 +224,10 @@ QtObject {
     readonly property real accentPressedWashOpacity: 0.26
     readonly property real accentDisabledInkOpacity: 0.75
 
+    // A colour swatch's outline: a faint ring of the text ink, so a swatch as
+    // dark as the menu behind it still reads as a disc.
+    readonly property real swatchOutlineOpacity: 0.24
+
     // The panel body's balance: roughly half elevated tint, half of whatever
     // the surface sits on. One dial for every panel, menu section and context
     // menu — they held three identical copies of it before.
@@ -330,6 +334,8 @@ QtObject {
         required property color accentSoft
         required property color accentSoftBorder
         required property color successSoft
+        // Outline of a menu colour swatch (GlassMenuItem).
+        required property color swatchOutline
         // A primary action that remains identifiable while disabled.
         required property color accentDisabledFill
         required property color accentDisabledInk
@@ -456,6 +462,8 @@ QtObject {
                                               theme.accentLinkMix),
                               theme.accentSoftBorderOpacity)
         successSoft: "#1c59dc9e"
+        swatchOutline: theme.withAlpha(theme.ref.textHi,
+                                       theme.swatchOutlineOpacity)
         accentDisabledFill: theme.withAlpha(theme.ref.accent,
                                             theme.accentSelectedOpacity)
         accentDisabledInk: theme.withAlpha(theme.ref.accent,
@@ -568,6 +576,7 @@ QtObject {
     readonly property color accentSoft: scheme.accentSoft
     readonly property color accentSoftBorder: scheme.accentSoftBorder
     readonly property color successSoft: scheme.successSoft
+    readonly property color swatchOutline: scheme.swatchOutline
     readonly property color accentDisabledFill: scheme.accentDisabledFill
     readonly property color accentDisabledInk: scheme.accentDisabledInk
     readonly property color mediaScrim: scheme.mediaScrim
@@ -902,6 +911,10 @@ QtObject {
     readonly property int compMenuWidth: 232
     readonly property int compMenuPadding: 6
     readonly property int compMenuMargins: 24
+    // A menu row's colour swatch: the disc, and the slash an automatic
+    // (no colour chosen) swatch draws across it.
+    readonly property int compMenuSwatchSize: 14
+    readonly property int compMenuSwatchSlash: 11
     // Edge-attached glass scales only its vertical travel from the stable menu
     // width. The owner span, body landing and elastic tension depend on real
     // shell placement geometry and deliberately remain with that host.

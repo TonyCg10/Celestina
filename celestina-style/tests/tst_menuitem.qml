@@ -30,6 +30,8 @@ TestCase {
         CelestinaTheme.reducedMotion = true
         item.current = false
         item.highlighted = false
+        item.showSwatch = false
+        item.automaticSwatch = false
         wait(0)
     }
 
@@ -67,5 +69,27 @@ TestCase {
         wait(0)
         verify(Qt.colorEqual(item.background.color, highlighted),
                "the current row overrode the cursor's fill")
+    }
+
+    // The swatch's whole anatomy comes from the theme: its size, the slash an
+    // automatic swatch draws and the outline of a chosen colour. A literal
+    // here is invisible to the style guard, which is how it drifted before.
+    function test_the_swatch_anatomy_comes_from_tokens() {
+        item.showSwatch = true
+        item.swatchColor = CelestinaTheme.accent
+        wait(0)
+        const swatch = findChild(item, "glassMenuSwatch")
+        verify(swatch, "no swatch was painted")
+        compare(swatch.width, CelestinaTheme.compMenuSwatchSize)
+        compare(swatch.height, CelestinaTheme.compMenuSwatchSize)
+        verify(Qt.colorEqual(swatch.border.color, CelestinaTheme.swatchOutline),
+               "a chosen colour is not outlined by the swatch token")
+
+        item.automaticSwatch = true
+        wait(0)
+        verify(Qt.colorEqual(swatch.border.color, CelestinaTheme.textMuted))
+        const slash = swatch.children[0]
+        verify(slash.visible, "an automatic swatch draws no slash")
+        compare(slash.width, CelestinaTheme.compMenuSwatchSlash)
     }
 }

@@ -1,0 +1,43 @@
+# STYLE-G7-N exact change inventory
+
+Base revision	ddad9c00a5d5399dc016170d7577011aa54a0c3a
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaScrollBar.qml
+Pathspec	celestina-style/CelestinaSwitch.qml
+Pathspec	celestina-style/CelestinaTextField.qml
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/GlassMenuItem.qml
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/docs/evidence/2026-09-26-tokens-and-lock-contrast.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-N.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/scripts/check-style-contract.sh
+Pathspec	celestina-style/tests/tst_icongradient.qml
+Pathspec	celestina-style/tests/tst_menuitem.qml
+Pathspec	celestina-style/tests/tst_scrollbar.qml
+Pathspec	celestina-style/tests/tst_switch.qml
+Pathspec	celestina-style/tests/tst_textfield.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	1ed13873abff5cbe86e6f286073815cfaf50d6f6374bb3397c559ba379aaf419	celestina-style/CMakeLists.txt
+4	1	bdbe62a0a8be9d02a8eccba00431a81a65617543b152fc1f8c88789215105bfa	celestina-style/CelestinaScrollBar.qml
+2	0	48f3535b8fd17cfd4dcb8b79b1b6923e949b1c913b6b268ae9b1ff369a658d8f	celestina-style/CelestinaSwitch.qml
+1	0	3db93bc1af37f262508cdadb695788707fe4a0b31dc3ff2edb61c05dc5206c36	celestina-style/CelestinaTextField.qml
+13	0	6d3792a1a1086b84ee0c2e47a58eb2960dabf6d2b99fc43f17867c1641c9f5b5	celestina-style/CelestinaTheme.qml
+14	3	dce5620d0f618c93c27e898cb304f768e1e52d5baed6cb150486466b08cb711a	celestina-style/DESIGN.md
+5	5	4f870f2839de4f5f1fe3382c7f3c1eeb56ba70e6b2afc318b239b9d39fefd099	celestina-style/GlassMenuItem.qml
+9	1	396ff9b05e20788dcd7791560013aa55fc20d5c95b2c8f46a9094a8f1a85654b	celestina-style/STATUS.md
+196	0	cd42dc636c8503c7857b4b9ce1f65ad5edfd32de8fab58e0269e0683918a7a82	celestina-style/docs/evidence/2026-09-26-tokens-and-lock-contrast.md
+43	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-N.numstat.tsv
+9	4	e3a9f13191064cf1d98ac63bbf9b2a002797ff018d6d1e351a2a071c5c39c81e	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+69	0	62059a6639c7accaccc6d08fa9e206d1790fe71a11f975c10ff57947969a28f6	celestina-style/scripts/check-style-contract.sh
+7	5	87ef8e2477d82723e32bd45935cb15329fd18045ea43da434f36ee992b838312	celestina-style/tests/tst_icongradient.qml
+24	0	ffc91f89f8a6a19fae9069f153a189165cc545d4d81e4e270cf369366de1968d	celestina-style/tests/tst_menuitem.qml
+26	0	4d58873925e02659213932b55728497950952bf4e1483f4b724f32d5d5d951af	celestina-style/tests/tst_scrollbar.qml
+178	0	cec002ad3b502fc70c55af1e551f6b45be848e15f8bb7cd8dbaf3d0dd36c229b	celestina-style/tests/tst_switch.qml
+171	0	79c55c653a6f786b654dcc143bf171731b717ce06a00c3b5144ba66bf8eb9db7	celestina-style/tests/tst_textfield.qml
+1	0	9cd359e94146cfd4e810f19ed39b289a1be3c2feb31172612a67c8fdcf4820a4	docs/version-history.tsv
