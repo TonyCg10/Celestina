@@ -45,6 +45,7 @@ TestCase {
         controller: controllerStub
         backdrop: backdropStub
         maxNoticeWidth: 400
+        outsideParent: testCase
         x: 180
         y: 400 - implicitHeight
     }
@@ -143,4 +144,62 @@ TestCase {
             return testCase.dismissed.indexOf("10") >= 0
         }, 2000, "the notice dismisses by its own id")
     }
+
+    function oneJob() {
+        controllerStub.opRunning = true
+        controllerStub.opIds = ["1"]
+        controllerStub.opLabels = ["Extracting"]
+        controllerStub.opIcons = ["file-archive"]
+        controllerStub.opCurrents = ["Tropical.rar"]
+        controllerStub.opDetails = ["7.0 GiB of 8.2 GiB"]
+        controllerStub.opPercents = ["85"]
+        controllerStub.opSteps = ["2"]
+        controllerStub.opPaused = ["0"]
+    }
+
+    // ── The catcher that lives in the wrong parent ────────────────────
+    //
+    // The author's recording: opening a ring's callout moved the rings, the
+    // error pill behind them stopped stacking above and overlapped instead,
+    // and pressing anywhere outside the column did not close the callout.
+    // All three are one thing: the dock reparents its outside catcher to
+    // `dock.parent` and fills it — and since the dock lives in this column,
+    // that parent is the positioner itself, not the folder.
+
+    function test_f_opening_a_callout_does_not_move_the_column_children() {
+        oneJob()
+        controllerStub.opError = "Room_404.rar: needs a password"
+        tryVerify(function() { return stack.dock.visible
+                                      && stack.errorNotice.item !== null }, 1000)
+        tryVerify(function() { return stack.dock.y > stack.errorNotice.y }, 1000,
+                  "the error should stack above the rings before anything opens")
+        // Let the pill measure its text first: a Text has no implicitWidth
+        // until its first render, and a width read before that is not a
+        // baseline, it is a half-laid-out one.
+        wait(50)
+        const dockYBefore = stack.dock.y
+        const errorYBefore = stack.errorNotice.y
+        const widthBefore = stack.implicitWidth
+        stack.dock.openId = "1"            // the one ring's callout
+        wait(50)
+        compare(stack.dock.y, dockYBefore,
+                "opening the callout moved the rings")
+        compare(stack.errorNotice.y, errorYBefore,
+                "opening the callout moved the error pill")
+        verify(stack.dock.y > stack.errorNotice.y,
+               "the error pill and the rings overlap once the callout is open")
+        compare(stack.implicitWidth, widthBefore,
+                "opening the callout changed the column's width")
+    }
+
+    function test_g_pressing_outside_the_column_closes_the_callout() {
+        oneJob()
+        tryVerify(function() { return stack.dock.visible }, 1000)
+        mouseClick(stack.dock, 20, 20)
+        tryVerify(function() { return stack.dock.openId.length > 0 }, 1000)
+        mouseClick(testCase, 20, 20)      // far from the column, over the folder
+        tryVerify(function() { return stack.dock.openId.length === 0 }, 1000,
+                  "a press over the folder, outside the column, left the callout open")
+    }
+
 }

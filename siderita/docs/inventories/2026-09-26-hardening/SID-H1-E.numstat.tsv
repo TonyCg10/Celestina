@@ -1,0 +1,27 @@
+# SID-H1-E exact change inventory
+
+Base revision	e459c328fc074a4afd688dad9f6e32b0f2838a2a
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-09-29-the-catcher-in-the-column.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-E.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/folder/ActivityStack.qml
+Pathspec	siderita/qml/components/folder/FolderBottomStatus.qml
+Pathspec	siderita/qml/components/folder/OperationsDock.qml
+Pathspec	siderita/tests/qml/tst_activity_stack.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	a06ecfacf14ec20baeefd3ae1d840879be26c1e4febd4f78be83e7b1b7b62e30	docs/version-history.tsv
+1	1	80b6e5277c83aad8678a8e59a0a7182cd633e9fd413507f12348805fb43e3b65	siderita/Cargo.lock
+1	1	04d6e0a645338abdc7c96a88cde49989311b5d7b286593c852fecd5de5fafe5d	siderita/Cargo.toml
+105	0	34cf7ad1279568a7807cd2bacdf833798c72419f5eb68f1fd3ab23a13b7c6fd0	siderita/docs/evidence/2026-09-29-the-catcher-in-the-column.md
+27	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-E.numstat.tsv
+1	0	c78be98686ac171e16978eea3c3cf893b3faea6f5acb975c8b694d7e1c5bea91	siderita/docs/plans/active/2026-09-26-hardening.md
+5	0	a32e5e3bc7260c74aa79c3a5b9a8e8d22aa44fa0e8aeb7a72457b4f307429acf	siderita/qml/components/folder/ActivityStack.qml
+3	0	9ab264af9fbb997d29371e76d2803a9f82be2400fdd323d923e518bf3f0ff97f	siderita/qml/components/folder/FolderBottomStatus.qml
+10	1	d5411e430e13162d54315eafbfc72ecb687e643206e3874bda40747c3b32ac73	siderita/qml/components/folder/OperationsDock.qml
+59	0	daf65639a36ae79d24e0f158056eec5fd011e0822b3dc4ece8f7ff64114eca29	siderita/tests/qml/tst_activity_stack.qml

@@ -186,3 +186,4 @@ siderita	1.7.5	bug	SID-H1-C	Fix unbounded reads, detached write workers and stal
 magnetita	2.0.2	bug	MAG-D1-E	Read the phone's control stream from one task and keep the daemon off blocking calls
 magnetita	2.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's rules from Rust
 magnetita-android	1.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's rules from Rust
+siderita	1.7.6	bug	SID-H1-E	Fix the operations dock moving, overlapping and not closing inside the transient column

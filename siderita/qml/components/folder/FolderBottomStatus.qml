@@ -21,6 +21,9 @@ Item {
     ActivityStack {
         controller: root.controller
         backdrop: root.bottomView
+        // This item fills the folder, so a press anywhere over the rows
+        // reaches the dock's catcher and closes an open callout.
+        outsideParent: root
         // The widest a notice may be: the frame minus the capsule and the two
         // gaps around it.
         maxNoticeWidth: Math.max(

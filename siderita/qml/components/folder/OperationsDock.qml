@@ -22,6 +22,15 @@ Item {
     // The item the glass samples, and whether there is anything behind it.
     property Item backdrop
     property bool floating: true
+    // What the outside catcher covers: the whole folder, injected by whoever
+    // places the dock. It used to be `dock.parent`, which was right while the
+    // dock sat in a plain item and wrong the day it moved into the transient
+    // column — a child with `anchors.fill` inside a positioner makes Qt refuse
+    // to lay the positioner out at all ("Column will not function"), which put
+    // the error pill under the rings, moved the rings on the first press, and
+    // left the catcher covering only the column, so a press over the folder
+    // did not close the callout.
+    property Item outsideParent: dock.parent
 
     readonly property var jobIds: dock.controller.opIds ?? []
     readonly property int ringSize: 40
@@ -85,7 +94,7 @@ Item {
     // hover, so nothing of that press — or of the cursor — reaches the folder.
     Item {
         id: outsideCatcher
-        parent: dock.parent
+        parent: dock.outsideParent
         anchors.fill: parent
         z: dock.z - 1
         visible: dock.openId.length > 0 || dock.expanded

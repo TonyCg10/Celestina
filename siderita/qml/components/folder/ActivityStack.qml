@@ -27,6 +27,10 @@ Item {
     // The widest a notice may be: the content frame minus the bottom capsule
     // and the gaps either side of it.
     required property real maxNoticeWidth
+    // The item the dock's outside catcher covers — the whole folder, not this
+    // column. A positioner cannot hold an anchored child, so it is handed
+    // through rather than taken from a parent.
+    required property Item outsideParent
 
     // Read by the placement and the tests rather than reached into. The error
     // aliases are the loaders, so a caller can ask where they sit as well as
@@ -159,6 +163,7 @@ Item {
             x: column.width - width
             controller: stack.controller
             backdrop: stack.backdrop
+            outsideParent: stack.outsideParent
             // Always floating: the column sits over the content by definition,
             // and switching the glass off at the end of the list left it flat
             // and opaque.
