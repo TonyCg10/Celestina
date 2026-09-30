@@ -7,8 +7,10 @@
 - **Out of scope:** the halted `celestina` shell (its `ContentSurface` and
   `ContextualVeil` roles keep compiling and lose only the edge layers every
   role loses); `magnetita-android`, which is the reference and does not change
-- **Proposed units:** `STYLE-G8` in `celestina-style/ROADMAP.md`, then one
-  unit per application in its own roadmap, in the order of §6
+- **Proposed units:** `STYLE-G7-O` and `STYLE-G7-P` in the active style plan
+  and `AUD-1-I` in the active suite plan (see §6 for why the style prefix
+  cannot own the guard), then one unit per application in its own roadmap,
+  in the order of §6
 
 ## 1. The problem, as the author demonstrated it
 
@@ -71,7 +73,7 @@ stacks an image grid and a music list in one page depending on the folder.
    nesting, plus gallery screenshots, plus a validation row per application
    for what only a real session shows (blur and grain).
 
-## 3. Style module: `STYLE-G8`
+## 3. Style module: `STYLE-G7-O`, `AUD-1-I`, `STYLE-G7-P`
 
 ### 3.1 The Haze recipe in `GlassSurface`
 
@@ -81,7 +83,7 @@ stacks an image grid and a music list in one page depending on the folder.
 | Blur | `blur 1.0`, `blurMax 32`, `blurMultiplier 3.0` | `blur 1.0`, `blurMax 24`, `blurMultiplier 1.0` | gallery reference, see below |
 | Desaturation | `glassSaturation -0.03` | `0` | token |
 | Tint | `glassTint #991a1e25`, `glassTintStrong #bd1a1e25` | one value: `canvas` at 0.70 (`#b3050608`); `glassTintStrong` becomes an alias of it | `check-contrast-contract.py`, composited over black and white as today |
-| Grain | `icons/glass-noise.png` at `glassNoiseOpacity 0.025` | Haze's own noise texture, vendored under `icons/` with its Apache-2.0 notice, at `0.15` | same file, same alpha as the Android side |
+| Grain | `icons/glass-noise.png` at `glassNoiseOpacity 0.025`, over the tint | Haze's own noise texture (`haze_noise.webp`, 1.6.10, converted to PNG), vendored under `icons/` with its Apache-2.0 notice, at `0.15`, **under** the tint: Haze composes blur, then noise, then tints | same file, same alpha, same order as the Android side; a test asserts the order |
 | Dark outline | 1 px `glassOutline` | removed; `celestina-glass-outline` and `celestina-glass-silhouette-outline` no longer exist | `tst_glasssurface.qml` asserts the object names are absent |
 | Lit top edge | `Shape` gradient ring | removed; `celestina-glass-lit-edge` and the silhouette lit edge no longer exist | same test |
 | Shadow | `CelestinaShadow` at `elevation 2` | unchanged; the Android pill carries `shadowElevation 8.dp` | unchanged test |
@@ -102,9 +104,14 @@ signal keep their names and types. `Density.Strong` paints identically to
 `Regular`. `ContentSurface` keeps its `0.64` strength and `ContextualVeil`
 its `0.12`; both simply have no edge layers left to suppress, so
 `materialEdgesVisible` is removed as a public property. The tokens
-`glassOutline`, `glassBorder`, `glassHighlight`, `glassEdge*`,
-`glassSaturation` and `glassBlurMultiplier` are deleted from the theme; the
-style guard already refuses a consumer that names a token the theme lacks.
+`glassOutline`, `glassBorder` and `glassEdge*` are deleted from the theme;
+the style guard already refuses a consumer that names a token the theme
+lacks. `glassHighlight` stays because it is the veil role's tint and the
+halted shell reads it. `glassSaturation` and `glassBlurMultiplier` stay as
+names with the Haze values (`0` and `1.0`) because Magnetita's media card and
+Fluorita's ambient light read them for blurs of their own. A new
+`glassFallback` names the opaque canvas the surface paints when it cannot
+blur.
 
 ### 3.2 Token scale
 
@@ -134,8 +141,11 @@ New tokens:
 | `spaceCardInset` | 8 | from a card's edge to its rows or tiles |
 | `topBarHeight` | 48 | the fixed top bar |
 | `compSegmentHeight` | 32 | segmented control, 8 px of air inside the bar |
-| `compTopBarButtonSize` | 32 | icon button circle in the bar |
+| `glassFallback` | `canvas` | what glass paints when it cannot blur |
 | `cornerInset(radius)` | `Math.ceil(radius * 0.3)` | minimum inset for text or a glyph that touches a corner |
+
+The bar's icon buttons are ordinary `CelestinaIconButton`s at their
+`controlHeightXs` circle with `iconSize: iconMd`; no separate size token.
 
 `cornerInset` is the horizontal reach of a circular corner at the height
 where a cap-height glyph starts (`r(1 − 1/√2) ≈ 0.29r`), rounded up. With this
@@ -150,12 +160,12 @@ takes `spaceCardInset` between its card and its rows.
 
 ### 3.3 The radius guard
 
-`scripts/check-style-contract.sh` gains a rule, implemented in a Python
-module beside `architecture_scanners.py` so it can be unit-tested, that walks
-every QML root the registry declares (applications and the style module) and,
-for each object whose `radius`/`cornerRadius` is a theme token
-(`CelestinaTheme.radius*`, `CelestinaSurface.radius`,
-`GlassSurface.cornerRadius`):
+`scripts/check-architecture-contract.sh` gains a rule, `scripts/radius_contract.py`,
+a Python module beside `architecture_scanners.py` with its own hermetic
+tests, that walks every QML root the registry declares (applications and the
+style module) and, for each object whose `radius`/`cornerRadius` is a theme
+token (`CelestinaTheme.radius*`), including a rounded `background:` object of
+a control:
 
 - **Inset rule.** A direct child whose `padding`, `anchors.margins`,
   `leftPadding`/`rightPadding`, `anchors.leftMargin`/`rightMargin` or `x`
@@ -171,11 +181,14 @@ for each object whose `radius`/`cornerRadius` is a theme token
   properties above is refused, the way a numeric alpha already is; the
   message names the token ladder.
 
-Failures print `path:line: rule: detail`. Files listed in a new
-`scripts/radius-baseline.tsv` are tolerated, the way `qmllint-baseline.tsv`
-works, so `STYLE-G8` can land with the five applications' current debt
-recorded and each application's unit empties its rows. The baseline shrinks
-only; the guard refuses a baseline row that no longer fails.
+Failures print `path:line: rule: detail`. Findings are counted per project
+against a new `scripts/radius-baseline.tsv` (`findings<TAB>project`), the
+shape `qmllint-baseline.tsv` has, registered in `docs/projects.toml` as a
+shared ratchet file so every application prefix may lower its own row in the
+commit that pays the debt. `STYLE-G7-O` therefore lands with the five
+applications' current debt recorded, and each application's unit takes its
+row to zero. The baseline shrinks only; the guard refuses a baseline row that
+exceeds what it finds.
 
 ### 3.4 New exported components
 
@@ -193,9 +206,8 @@ width above sidebar and content. Three slots:
   `fontRowSecondary` 12 in `textMuted`, left-aligned after `leading`, eliding
   right. Never centred, never uppercased.
 - `trailing` (alias `trailingData`): icon-only actions, right-aligned,
-  `spaceXs` apart, each a `CelestinaIconButton` of `compTopBarButtonSize`
-  with `iconMd`. A `CelestinaButton` inside `trailing` fails the style
-  guard.
+  `spaceXs` apart, each a `CelestinaIconButton` with `iconSize: iconMd`. A
+  `CelestinaButton` inside `trailingData` fails the style guard.
 
 Side margins `windowMargin`. The bar exposes `Accessible.role: ToolBar` and
 takes no keyboard focus of its own; each button remains its own Tab stop in
@@ -325,13 +337,27 @@ From one column in implementation order to sidebar plus content.
 
 ## 6. Order and dependencies
 
-1. `STYLE-G8` (§3). Lands alone; every application changes glass and scale
-   at once and inherits its baseline rows.
-2. Grafita, then Hematita, then Fluorita, then Magnetita, then Siderita:
-   smallest surface first, the largest QML tree last. Each unit depends only
-   on `STYLE-G8` and can be prepared in parallel worktrees; they land in this
-   order so the segmented control and the bar are proven on the simplest
+The brainstorming label `STYLE-G8` became three ledger units, because the
+`celestina-style:` commit prefix may touch only `celestina-style/` and the
+guard's ratchet baseline must live under root `scripts/` and be registered in
+`docs/projects.toml`, which only `suite:` may edit. The active style
+checkpoint `STYLE-G7` explicitly extends with demonstrated consumers, so no
+new checkpoint is opened.
+
+1. `STYLE-G7-O` (style, milestone, §3.1, §3.2, the glass part of §3.5).
+   Lands alone; every application changes glass and scale at once.
+2. `AUD-1-I` (suite, maintenance, §3.3), stacked on it: the radius guard and
+   the baseline that records the applications' debt.
+3. `STYLE-G7-P` (style, milestone, §3.4 and the rest of §3.5), stacked on
+   the guard: the top bar and the segmented control.
+4. Grafita, then Hematita, then Fluorita, then Magnetita, then Siderita:
+   smallest surface first, the largest QML tree last. Each depends on the
+   three units above and can be prepared in parallel worktrees; they land in
+   this order so the segmented control and the bar are proven on the simplest
    host before Magnetita's reorganisation and Siderita's 127 files.
+
+The implementation plan for the three style-side units is
+[2026-09-30-style-haze-desktop-scale.md](../plans/2026-09-30-style-haze-desktop-scale.md).
 
 ## 7. Risks the author accepted
 
