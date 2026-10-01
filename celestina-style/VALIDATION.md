@@ -4,6 +4,20 @@ This queue contains only checks that need the author's real compositor,
 perception, input devices or assistive-technology stack. It does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-STYLE-08 — The bar reads as one frame
+
+- **Status:** pending
+- **Related implementation:** `STYLE-G7-P`, recorded in
+  [the evidence](docs/evidence/2026-09-30-top-bar-and-segments.md)
+- **Requires:** the gallery on the real session
+- **Procedure:** Tab through the three bars; resize the gallery window under
+  700 px
+- **Pass condition:** the title elides before any action leaves the bar;
+  focus visits segments then actions in reading order; the selected
+  segment's plate is concentric with the control at 1× and 2× scale
+- **Result:** not run by hand
+- **Evidence:** what the author sees
+
 ## VAL-STYLE-07 — The same glass as the phone
 
 - **Status:** pending

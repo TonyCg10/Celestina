@@ -29,6 +29,8 @@ The adaptation follows five rules:
 
 1. Reachability patterns do not transfer blindly. Dialogs are centred; bottom
    sheets, bottom search and floating back buttons are not desktop defaults.
+   Floating pills, centred page titles and loose circular actions are not
+   desktop defaults either; a window wears one fixed top bar.
 2. Pointer interaction is first-class. Every interactive surface has a defined
    hover and pressed state.
 3. Keyboard interaction is first-class. Focus visibility, order, containment
@@ -328,6 +330,8 @@ compatibility policy changes that contract.
 | `CelestinaSlider` | Shared track/fill/thumb/focus/keyboard/wheel anatomy with hover and pressed states, plus a separate requested-but-unconfirmed mark |
 | `CelestinaSwitch` | Desktop-tuned 44×26 pill, shared inset/thumb/track tokens, white thumb and accent track when on |
 | `ListSection` | Grouped-card list anatomy; row data/actions remain with the host |
+| `CelestinaTopBar` | The fixed application bar: `topBarHeight` canvas strip spanning sidebar and content; `leadingData` (navigation), left-aligned eliding `title`/`subtitle` at `fontTitle`/`fontRowSecondary`, `trailingData` of `CelestinaIconButton`s at `iconMd`; `ToolBar` role, no focus of its own; a `CelestinaButton` in `trailingData` fails the style guard |
+| `CelestinaSegmentedControl` | Peer destinations in one `radiusButton` plate on `card`, `compSegmentHeight` tall; the current segment wears `surfaceSelected` at `radiusButton − spaceXs`, concentric; icon plus label or `iconOnly`; one Tab stop, Left/Right/Home/End emit `activated(index)`, the host owns `currentIndex`; `PageTabList` of `PageTab`s with `selected` (and `checked`) state, named by their labels |
 | `CelestinaInputShield` | Floating surface owns pointer hover/buttons/drag over its own box; wheel deliberately remains available to content unless the host overrides it; a hover-enabled host control opts out of the hover block or reads the shield's own `hovered` |
 | `CelestinaModalLayer` | Scrim, input shielding, focus containment/restoration and modal accessibility floor |
 | `CelestinaFolderIcon` | Filled in-tree folder shape with semantic tone and contrast-safe internal ink |
@@ -351,7 +355,6 @@ consumer evidence in the same checkpoint.
 |---|---|
 | `CollapsingHeader` | Page-owned 34→21 hierarchy; compact windows start collapsed and scroll owns the transition |
 | `CelestinaDialog` | Centred, approximately 360 px wide, `radiusLg`, modal scrim, contained/restored focus and explicit primary/cancel semantics |
-| `TabPills` | Floating pill strip for peer destinations; not a substitute for document-tab lifecycle |
 | `Toast` | Brief non-modal status, readable without focus theft and announced when semantically important |
 | `Tooltip` | Not part of the language. A label that floats over the window after the pointer lands covers the control it describes; a glyph carries its name through `helpText` for assistive technology and through the shape itself for everyone else. Removed by the author from every surface that had one |
 

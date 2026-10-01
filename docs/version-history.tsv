@@ -188,3 +188,4 @@ magnetita	2.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's r
 magnetita-android	1.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's rules from Rust
 siderita	1.7.6	bug	SID-H1-E	Fix the operations dock moving, overlapping and not closing inside the transient column
 celestina-style	1.10.0	milestone	STYLE-G7-O	Add the Haze glass recipe and the desktop token ladder
+celestina-style	1.11.0	milestone	STYLE-G7-P	Add the top bar and the segmented control

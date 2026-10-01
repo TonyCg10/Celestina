@@ -236,6 +236,74 @@ else
     failures=1
 fi
 
+# A top bar's trailing slot carries glyphs, never words (DESIGN §6.1). This
+# reads each `trailingData: [ ... ]` list as a whole, and the single-child
+# `trailingData: CelestinaButton { ... }` form, and refuses a CelestinaButton
+# in either; CelestinaIconButton is the accepted child.
+if trailing_hits=$(python3 - "${contract_files[@]}" <<'PY'
+import re
+import sys
+
+SLOT = re.compile(r"\btrailingData\s*:\s*\[")
+TEXT_BUTTON = re.compile(r"(?<![\w.])CelestinaButton\s*\{")
+SINGLE = re.compile(r"\btrailingData\s*:\s*CelestinaButton\s*\{")
+OPENERS = {"(": ")", "[": "]", "{": "}"}
+
+
+def list_body(text, start):
+    depth = 1
+    quote = ""
+    index = start
+    while index < len(text):
+        char = text[index]
+        if quote:
+            if char == "\\":
+                index += 2
+                continue
+            if char == quote:
+                quote = ""
+        elif char in "\"'`":
+            quote = char
+        elif char in OPENERS:
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index]
+        index += 1
+    return text[start:]
+
+
+status = 0
+for path in sys.argv[1:]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+    except (OSError, UnicodeDecodeError) as error:
+        print(f"{path}: {error}", file=sys.stderr)
+        status = 2
+        continue
+    for slot in SLOT.finditer(text):
+        body = list_body(text, slot.end())
+        for hit in TEXT_BUTTON.finditer(body):
+            line = text.count("\n", 0, slot.end() + hit.start()) + 1
+            print(f"{path}:{line}:CelestinaButton inside a top bar's trailing slot")
+    for hit in SINGLE.finditer(text):
+        line = text.count("\n", 0, hit.start()) + 1
+        print(f"{path}:{line}:CelestinaButton inside a top bar's trailing slot")
+sys.exit(status)
+PY
+); then
+    if [[ -n $trailing_hits ]]; then
+        printf '%s\n' "$trailing_hits"
+        printf 'ERROR: a top bar carries icon-only actions; move the words to a dialog\n\n' >&2
+        failures=1
+    fi
+else
+    printf 'ERROR: could not complete the trailing-slot check.\n\n' >&2
+    failures=1
+fi
+
 if ! python3 celestina-style/scripts/check-contrast-contract.py; then
     failures=1
 fi

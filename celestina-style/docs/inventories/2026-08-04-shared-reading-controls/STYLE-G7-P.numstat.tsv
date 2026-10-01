@@ -1,0 +1,37 @@
+# STYLE-G7-P exact change inventory
+
+Base revision	6cdc2f97ed4cc8f4f3c96dc9475a433854ba2f18
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaSegmentedControl.qml
+Pathspec	celestina-style/CelestinaTopBar.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/VALIDATION.md
+Pathspec	celestina-style/docs/evidence/2026-09-30-top-bar-and-segments.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-P.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/gallery/Gallery.qml
+Pathspec	celestina-style/qmldir
+Pathspec	celestina-style/scripts/check-style-contract.sh
+Pathspec	celestina-style/tests/tst_segmented.qml
+Pathspec	celestina-style/tests/tst_topbar.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	1	40c1eb15fd1f7f5ae7134fc7b2bcac83cda39256675e902133bd314c95f1862b	celestina-style/CMakeLists.txt
+183	0	8cdbf0799907e77be74986ac8ffd190b00bddf957f7244e0b7c2d6d6ceeed4f1	celestina-style/CelestinaSegmentedControl.qml
+95	0	cd3f6ce9ec3d447fa30dae7c8df9e7ac767c60343262c45d5ceecb9a4b20e8c0	celestina-style/CelestinaTopBar.qml
+4	1	02b7d1c4c19a4bf621f817e2359916e56c35f89c0e39f7f36816c9c168f9b3ff	celestina-style/DESIGN.md
+5	1	b6473310bffcbea588718310a02b88a78715f919fa406487da628fff8db7e3e3	celestina-style/STATUS.md
+14	0	b9491a849b204ded0931b6fd85547bcde118a1845edc747f617e2ed824117bf6	celestina-style/VALIDATION.md
+146	0	41294cff2976cf14b4e6b9f6a353143a2eff5b605d9def4a497c32352be6f317	celestina-style/docs/evidence/2026-09-30-top-bar-and-segments.md
+37	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-P.numstat.tsv
+1	0	f9d8e87ef765ce6b7fe5bb022acec2ceceb88b13c8dced2d40678ef72a1cbafa	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+63	0	ef534b9faa5c22a54d47885ac05fe193d390bb085ef62c767a7fc33913e4b215	celestina-style/gallery/Gallery.qml
+2	0	cb5b8d1348d0478da1247807e62f66fa68fd2a7ad1da4c1dab62393f45166b23	celestina-style/qmldir
+68	0	719a00d23c0054907552345788edc3d1c5b1f6a3db408f715e4c7321fc1545dc	celestina-style/scripts/check-style-contract.sh
+141	0	f464ebf945e2a238a339c4fce94a81bd2459d1b8b3ebc25c8df846d2503820e2	celestina-style/tests/tst_segmented.qml
+103	0	176c4dea6cd867eab3637c5956584f20ecbdd53bb4e9751f84df93148a48507c	celestina-style/tests/tst_topbar.qml
+1	0	26c6107151c934b9e8b8b69cb20ba0119677e6fe4d70bd9bc6d73fc39bb5c98c	docs/version-history.tsv

@@ -288,6 +288,69 @@ Window {
                 }
             }
 
+            // ── Top bar and segments ───────────────────────────────────────
+            Section {
+                heading: "TOP BAR AND SEGMENTS — THE DESKTOP FRAME"
+                Column {
+                    width: sheet.width
+                    spacing: CelestinaTheme.spaceMd
+
+                    CelestinaTopBar {
+                        width: parent.width
+                        title: "Procesador"
+                        subtitle: "AMD Ryzen 7 9800X3D 8-Core Processor"
+                        leadingData: [
+                            CelestinaSegmentedControl {
+                                helpText: "Secciones"
+                                currentIndex: 0
+                                model: [
+                                    { key: "performance", icon: "gauge", label: "Rendimiento" },
+                                    { key: "processes", icon: "view-list", label: "Procesos" },
+                                    { key: "sensors", icon: "cpu", label: "Sensores" }
+                                ]
+                                onActivated: function(index) { currentIndex = index }
+                            }
+                        ]
+                        trailingData: [
+                            CelestinaIconButton { iconName: "search"; helpText: "Buscar"; role: CelestinaButton.Ghost; iconSize: CelestinaTheme.iconMd },
+                            CelestinaIconButton { iconName: "view-grid"; helpText: "Vista"; role: CelestinaButton.Ghost; iconSize: CelestinaTheme.iconMd },
+                            CelestinaIconButton { iconName: "view-refresh"; helpText: "Actualizar"; role: CelestinaButton.Ghost; iconSize: CelestinaTheme.iconMd }
+                        ]
+                    }
+
+                    CelestinaTopBar {
+                        width: parent.width
+                        title: "Descargas"
+                        leadingData: [
+                            CelestinaIconButton { iconName: "go-previous"; helpText: "Volver"; role: CelestinaButton.Ghost; iconSize: CelestinaTheme.iconMd }
+                        ]
+                        trailingData: [
+                            CelestinaIconButton { iconName: "search"; helpText: "Buscar"; role: CelestinaButton.Ghost; iconSize: CelestinaTheme.iconMd }
+                        ]
+                    }
+
+                    CelestinaTopBar {
+                        width: parent.width
+                        title: qsTr("Un título tan largo que la barra lo tiene que recortar por la derecha para que las acciones sigan cabiendo")
+                        subtitle: qsTr("sin navegación a la izquierda")
+                        trailingData: [
+                            CelestinaIconButton { iconName: "x"; helpText: "Cerrar"; role: CelestinaButton.Ghost; iconSize: CelestinaTheme.iconMd }
+                        ]
+                    }
+
+                    CelestinaSegmentedControl {
+                        helpText: "Vistas"
+                        iconOnly: true
+                        model: [
+                            { key: "grid", icon: "view-grid", label: qsTr("Cuadrícula") },
+                            { key: "list", icon: "view-list", label: "Lista" },
+                            { key: "details", icon: "view-details", label: "Detalles" }
+                        ]
+                        onActivated: function(index) { currentIndex = index }
+                    }
+                }
+            }
+
             // ── Content icons ──────────────────────────────────────────────
             Section {
                 heading: "CONTENT ICONS — LA CARPETA DE LA SUITE"

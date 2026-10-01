@@ -2,7 +2,7 @@
 
 - **Updated:** 2026-09-30
 - **Implementation:** the shared source contract is at 1.9.2 with
-  `STYLE-G7-O` active, with the
+  `STYLE-G7-O` and `STYLE-G7-P` active, with the
   reading controls, the shared treemap and usage list, the glass material
   roles and the vendored icon catalogue published; `STYLE-G7-J` and
   `STYLE-G7-K` remain `active`, `STYLE-G7` stays active and `STYLE-M1`
@@ -12,6 +12,10 @@
 
 ## Current checkout truth
 
+- `STYLE-G7-P` publishes `CelestinaTopBar` and `CelestinaSegmentedControl`,
+  the two types every application's fixed top bar needs; the style guard keeps
+  a bar's trailing slot free of text buttons. See
+  [the record](docs/evidence/2026-09-30-top-bar-and-segments.md).
 - `STYLE-G7-O` paints the phone's Haze recipe in `GlassSurface` — σ ≈ 12 px
   blur, Haze's grain at 0.15 under the canvas tint at 0.70, an opaque canvas
   fallback, no outline and no lit edge — and moves the theme to the desktop
