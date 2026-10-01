@@ -1,0 +1,11 @@
+# Radius-contract debt ratchet. A row may only fall, and it falls in the
+# same commit that earns the reduction. Registered in docs/projects.toml as
+# a shared ratchet file so every project prefix may lower its own row.
+# findings<TAB>project
+9	celestina
+0	celestina-style
+0	fluorita
+0	grafita
+0	hematita
+0	magnetita
+7	siderita

@@ -477,6 +477,22 @@ check_visual_contract() {
     if ! bash celestina-style/scripts/check-style-contract.sh; then
         fail "the celestina-style visual guard failed"
     fi
+
+    # The radius contract (spec 2026-09-30 §3.3): glyphs out of the corner's
+    # curve, concentric nesting and no margin literals inside rounded surfaces,
+    # against the per-project ratchet in scripts/radius-baseline.tsv.
+    radius_roots=()
+    while IFS=$'\t' read -r role identifier _path qml_root; do
+        case $role in
+            application | shell | style) radius_roots+=("$identifier=$qml_root") ;;
+        esac
+    done < <(python3 scripts/architecture_scanners.py registry-qml-projects "$registry_file")
+    if ! python3 scripts/radius_contract.py \
+        --theme celestina-style/CelestinaTheme.qml \
+        --baseline scripts/radius-baseline.tsv \
+        "${radius_roots[@]}"; then
+        fail "the radius contract failed"
+    fi
 }
 
 check_shared_style_links() {

@@ -41,6 +41,9 @@ shared_ratchet_files = [
   # that removes a warning is the commit that must lower its floor, or the
   # revision it publishes is already red.
   "scripts/qmllint-baseline.tsv",
+  # The radius ratchet moves for the same reason: the application unit that
+  # takes its rows off the corner's curve is the one that lowers its floor.
+  "scripts/radius-baseline.tsv",
 ]
 
 [version_policy]

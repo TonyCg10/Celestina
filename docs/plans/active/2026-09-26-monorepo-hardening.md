@@ -148,6 +148,7 @@ plans; a pending author validation never keeps this checkpoint open.
 | HALT-SHELL | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/HALT-SHELL.numstat.tsv) | 22 files, +691/-54 | Halt the Celestina shell | [evidence](../../evidence/2026-09-28-halt-shell.md) | None |
 | AUD-1-G | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-G.numstat.tsv) | 8 files, +159/-2 | Make each registered artifact path belong to one project | [evidence](../../evidence/2026-09-29-one-owner-per-artifact.md) | None |
 | AUD-1-H | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-H.numstat.tsv) | 8 files, +254/-3 | Fix merging main into a stacked branch through the hooks | [evidence](../../evidence/2026-09-29-merged-in-inventories.md) | None |
+| AUD-1-I | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-I.numstat.tsv) | 8 files, +888/-0 | Add the radius guard the 2026-09-30 design specifies: a bounded QML scanner that refuses text or a glyph closer to a rounded corner than `cornerInset`, a nested token radius that is not concentric with its parent, and a numeric margin literal inside a rounded surface, with a shrink-only per-project baseline registered as a shared ratchet so each application lowers it in the unit that pays the debt | [evidence](../../evidence/2026-09-30-radius-guard.md) | None |
 
 `AUD-1-E` lands as `suite-bug` bumping Magnetita and Magnetita Android;
 `scripts/land-unit.py` refuses a `suite-bug`, so the author records both

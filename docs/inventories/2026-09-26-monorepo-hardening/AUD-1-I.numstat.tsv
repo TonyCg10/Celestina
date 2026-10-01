@@ -1,0 +1,23 @@
+# AUD-1-I exact change inventory
+
+Base revision	72c3b340ee89b3987c695ae42894581d3c49c058
+Pathspec	docs/evidence/2026-09-30-radius-guard.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-I.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/projects.toml
+Pathspec	scripts/check-architecture-contract.sh
+Pathspec	scripts/radius-baseline.tsv
+Pathspec	scripts/radius_contract.py
+Pathspec	scripts/test-radius-contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+103	0	e3324ac205eb6ddaf08cc31504f3f47ddfc5f33e7981d0fbbeb30387ec3381a2	docs/evidence/2026-09-30-radius-guard.md
+23	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-I.numstat.tsv
+1	0	52b33c2270e48c17488d1fb58aca40fc83ec6fb6a9b8f4438320c6068ab4090c	docs/plans/active/2026-09-26-monorepo-hardening.md
+3	0	4afbffdb2277041f54ed324c27273254edb7b2df37991e309c3f0d2596fb438b	docs/projects.toml
+16	0	34f9f2f5091f8e63a4137147758194fc3fc3549c350e71ef00d54e38f551882f	scripts/check-architecture-contract.sh
+11	0	03901038b27ca3040d1bc021458d5e6f2286947a38a1a42c21f6c96620067468	scripts/radius-baseline.tsv
+384	0	d7205e750d39ca8fb8e2b51c87deaed7047d79460309a4c4810738f56c9ec8bc	scripts/radius_contract.py
+347	0	686a6164663fe67d445f35153d17202df538513cbb9f5f6323977d9d739fb271	scripts/test-radius-contract.py
