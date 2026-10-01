@@ -26,12 +26,8 @@
   `spaceCardGap`, `spaceCardInset`, `topBarHeight`, `compSegmentHeight` and
   `cornerInset()` new. Every application inherits the values through its
   symlinks and carries its layout debt in the radius ratchet until its own
-  unit. See [the record](docs/evidence/2026-09-30-haze-recipe-and-desktop-scale.md).
-  The design spec (`docs/superpowers/specs/2026-09-30-desktop-glass-design.md`)
-  lives on the controller's separate `design/desktop-glass` checkout, not yet
-  on this branch or `main`; it is named here by path rather than linked
-  because the documentation contract requires every local link to resolve in
-  the worktree that carries it.
+  unit. See [the record](docs/evidence/2026-09-30-haze-recipe-and-desktop-scale.md)
+  and [the design](../docs/superpowers/specs/2026-09-30-desktop-glass-design.md).
 
 - `STYLE-G7-N` closes the 2026-09-26 audit's style findings.
   `CelestinaScrollBar` names itself in Spanish through `qsTr`; the
