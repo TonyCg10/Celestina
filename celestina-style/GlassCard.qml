@@ -12,7 +12,7 @@ import QtQuick
 GlassSurface {
     id: glassCard
 
-    cornerRadius: CelestinaTheme.radiusMd
+    cornerRadius: CelestinaTheme.radiusLg
     density: GlassSurface.Strong
     captureEnabled: visible
     // A modal can be scrolled under, so track the backdrop live rather than

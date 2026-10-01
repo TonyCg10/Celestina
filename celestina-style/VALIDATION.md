@@ -4,6 +4,24 @@ This queue contains only checks that need the author's real compositor,
 perception, input devices or assistive-technology stack. It does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-STYLE-07 — The same glass as the phone
+
+- **Status:** pending
+- **Related implementation:** `STYLE-G7-O`, recorded in
+  [the evidence](docs/evidence/2026-09-30-haze-recipe-and-desktop-scale.md)
+- **Requires:** the deployed Siderita and Fluorita on the real session, the
+  phone with Magnetita open on its tab pill, the gallery's glass page
+- **Procedure:** open a context menu over a folder grid in Siderita and the
+  floating dock over a bright photograph in Fluorita; hold the phone's pill
+  beside them; then compare the gallery's live panel with its σ = 12 reference
+- **Pass condition:** menu, dock and pill read as one material — the same
+  softness of blur, the same visible grain, the same darkness of tint — with no
+  hairline and no lit top edge on the desktop; the gallery's two panels match
+  at arm's length
+- **Result:** not run by hand
+- **Evidence:** which of blur, grain or tint differs, if any, and the
+  `glassBlurMax` the author prefers
+
 ## VAL-STYLE-06 — Two families of plate, one hue in the middle
 
 - **Status:** pending

@@ -1,7 +1,8 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-09-26
-- **Implementation:** the shared source contract is at 1.9.1, with the
+- **Updated:** 2026-09-30
+- **Implementation:** the shared source contract is at 1.9.2 with
+  `STYLE-G7-O` active, with the
   reading controls, the shared treemap and usage list, the glass material
   roles and the vendored icon catalogue published; `STYLE-G7-J` and
   `STYLE-G7-K` remain `active`, `STYLE-G7` stays active and `STYLE-M1`
@@ -10,6 +11,23 @@
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- `STYLE-G7-O` paints the phone's Haze recipe in `GlassSurface` — σ ≈ 12 px
+  blur, Haze's grain at 0.15 under the canvas tint at 0.70, an opaque canvas
+  fallback, no outline and no lit edge — and moves the theme to the desktop
+  ladder behind the existing token names: `radiusLg` 20, `radiusMd` 12,
+  `radiusSm` 8, `radiusButton` 10, `radiusInput` 12 (multi-line input areas;
+  a single-line search field is a pill), `rowHeight` 40,
+  `rowHeightLg` 52, `windowMargin` 16, `iconMd` 20, with `iconLg`,
+  `spaceCardGap`, `spaceCardInset`, `topBarHeight`, `compSegmentHeight` and
+  `cornerInset()` new. Every application inherits the values through its
+  symlinks and carries its layout debt in the radius ratchet until its own
+  unit. See [the record](docs/evidence/2026-09-30-haze-recipe-and-desktop-scale.md).
+  The design spec (`docs/superpowers/specs/2026-09-30-desktop-glass-design.md`)
+  lives on the controller's separate `design/desktop-glass` checkout, not yet
+  on this branch or `main`; it is named here by path rather than linked
+  because the documentation contract requires every local link to resolve in
+  the worktree that carries it.
 
 - `STYLE-G7-N` closes the 2026-09-26 audit's style findings.
   `CelestinaScrollBar` names itself in Spanish through `qsTr`; the
@@ -123,9 +141,9 @@
   shared. Recorded under `STYLE-G7-K`.
 - The 1.4.0 milestone prototype leaves that rounded default unchanged and adds
   `GlassSurface.silhouettePath` only for an explicitly shaped external
-  backdrop. The path paints the same semantic tint and edge vocabulary without
-  a rectangular shaped-surface shadow, while the optional
-  `silhouetteEdgePath` can omit an edge that must remain visually open. The
+  backdrop. The path paints the same semantic tint without a rectangular
+  shaped-surface shadow; `silhouetteEdgePath` is retained public API that no
+  stroke reads since the outline and lit edge were removed. The
   semantic `ContextualVeil` role suppresses both outline and lit edge on
   rounded and shaped paths without adding a mutable content-surface switch. The
   current Celestina composition reuses the existing `ContextualVeil` role for

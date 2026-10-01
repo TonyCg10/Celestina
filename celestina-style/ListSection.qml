@@ -2,7 +2,7 @@ import QtQuick
 
 // ─── ListSection ──────────────────────────────────────────────────────────────
 // The One UI signature: a grouped rounded card ("focus block"). Rows are grouped
-// into one 26-radius card floating on the window background — separation by
+// into one radiusLg card floating on the window background — separation by
 // grouping, not by hairlines between cards (DESIGN §2/§6.8). An optional section
 // header (uppercase caption) sits above. The consumer's rows are the default
 // children; they stack inside the card.
@@ -24,14 +24,17 @@ Column {
 
     CelestinaSurface {
         width: section.width
-        implicitHeight: rowHolder.implicitHeight + CelestinaTheme.spaceXs * 2
+        implicitHeight: rowHolder.implicitHeight + CelestinaTheme.spaceCardInset * 2
         height: implicitHeight
         role: CelestinaSurface.Grouped
 
+        // Rows sit spaceCardInset inside the radiusLg card, so a radiusMd row
+        // is concentric with it (12 + 8 = 20) and nothing reaches the corner.
         Column {
             id: rowHolder
-            width: parent.width
-            y: CelestinaTheme.spaceXs
+            x: CelestinaTheme.spaceCardInset
+            y: CelestinaTheme.spaceCardInset
+            width: parent.width - CelestinaTheme.spaceCardInset * 2
         }
     }
 }

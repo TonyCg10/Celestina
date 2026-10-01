@@ -158,8 +158,13 @@ TestCase {
     function test_the_shape_is_a_closed_role() {
         compare(field.shape, CelestinaTextField.Standard)
         compare(field.background.radius, CelestinaTheme.radiusSm)
-        compare(search.background.radius, CelestinaTheme.radiusInput)
-        compare(ring(search).cornerRadius, CelestinaTheme.radiusInput)
+        compare(search.background.radius, CelestinaTheme.radiusPill)
+        compare(ring(search).cornerRadius, CelestinaTheme.radiusPill)
+    }
+
+    function test_search_field_is_a_pill_and_input_areas_are_not() {
+        compare(search.fieldRadius, CelestinaTheme.radiusPill)
+        compare(CelestinaTheme.radiusInput, CelestinaTheme.radiusMd)
     }
 
     function test_a_disabled_field_is_skipped_by_tab() {

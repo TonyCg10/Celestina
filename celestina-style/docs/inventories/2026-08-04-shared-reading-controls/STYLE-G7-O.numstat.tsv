@@ -1,0 +1,59 @@
+# STYLE-G7-O exact change inventory
+
+Base revision	8be101e4580acb2e83cafffc7e88d8cbffdd6fe7
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaTextField.qml
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/GlassCard.qml
+Pathspec	celestina-style/GlassSurface.qml
+Pathspec	celestina-style/ListSection.qml
+Pathspec	celestina-style/ROADMAP.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/VALIDATION.md
+Pathspec	celestina-style/docs/evidence/2026-09-30-haze-recipe-and-desktop-scale.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-O.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/gallery/Gallery.qml
+Pathspec	celestina-style/gallery/reference/backdrop.png
+Pathspec	celestina-style/gallery/reference/haze.png
+Pathspec	celestina-style/icons.qrc
+Pathspec	celestina-style/icons/LICENSE-haze.txt
+Pathspec	celestina-style/icons/glass-noise.png
+Pathspec	celestina-style/icons/haze-noise.png
+Pathspec	celestina-style/scripts/check-contrast-contract.py
+Pathspec	celestina-style/scripts/glass-reference.py
+Pathspec	celestina-style/tests/tst_glasssurface.qml
+Pathspec	celestina-style/tests/tst_listsection.qml
+Pathspec	celestina-style/tests/tst_textfield.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	2	b5b8abda4f76d9830cd2a5986fdbe7244e57eebe533ee09940b9f9b06583dd64	celestina-style/CMakeLists.txt
+1	1	73d563bcebbcb52ed1f7d079fe93119242e7c51e3d534bf2654a7411c584333a	celestina-style/CelestinaTextField.qml
+58	44	4d9a96d4dc3284986cf690b2bee8c011fabaf036a280a49089c186390569c7ec	celestina-style/CelestinaTheme.qml
+44	36	9b25bc32b200bb11cfc8bc47e3884f39cc11321ecf0701d53861c671e45f8bc8	celestina-style/DESIGN.md
+1	1	1c409fa86c1ee2e7b512402de19fa003c6097dc6708b7aad856b88c9ef5368d9	celestina-style/GlassCard.qml
+57	165	6a9371e724d077a9c49ea119504e567e6da11ca7204c9c0b4f73b1c47cfe5392	celestina-style/GlassSurface.qml
+7	4	f550bb41954ea18cd08891c36890c42e999a80c57c5fa291bd25559f0f83ac47	celestina-style/ListSection.qml
+7	0	4fb15348bd0bbd85306fb41a8fc232968f07029acb33070e7396d7cbc088f6e0	celestina-style/ROADMAP.md
+23	5	409b4b375b97f1edb0e5c17796d3ecb87648cdb756053f22876348830bc782ec	celestina-style/STATUS.md
+18	0	7e82fc64dbb2db88ac35b9eefa52d397de0df6d2ef93501d1c37aea0d7472de7	celestina-style/VALIDATION.md
+323	0	cb7d277ca29373277c049fb6aefc9cc7b6450a016f10166015bc0271709b9ec6	celestina-style/docs/evidence/2026-09-30-haze-recipe-and-desktop-scale.md
+59	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-O.numstat.tsv
+1	0	a188dd2a37b2e9923815c615e5eefa90ec335bd525b5f18e69c6109892104640	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+23	10	19559a1912660c52fe5c0d2c7e2cfb175f24652df6cf05d6f3bbf7f6998c5004	celestina-style/gallery/Gallery.qml
+-	-	cbfdf9deb8920359900eace8e2b712924f728987702626c94e98348dd16e168f	celestina-style/gallery/reference/backdrop.png
+-	-	77d6c074188ae309db2b97642b550828268fb68af348d73944f16f6b15504d54	celestina-style/gallery/reference/haze.png
+1	1	d4ccfb12dad1682a44a7d52b6a3c1589b4941b445fa1ed7efe46341620123673	celestina-style/icons.qrc
+206	0	66129e5eb40353c552aa973818e6c5527f67f8808589fd989a1e9e9f5047b2cd	celestina-style/icons/LICENSE-haze.txt
+-	-	deleted	celestina-style/icons/glass-noise.png
+-	-	c7ed1673fb4fb59ec15df0d2bb5b5c24dd9958c8b7feefa8deff13d89109bcc0	celestina-style/icons/haze-noise.png
+13	0	a23d6f848873164834be4a4984dfa70f9540516239549ac36e9fb53526d813a6	celestina-style/scripts/check-contrast-contract.py
+85	0	9678b34a2bf18f34a819ed73dfd1f31f49be983b44dc41913e5e640e66b9bf8d	celestina-style/scripts/glass-reference.py
+67	30	8083bf72115c859762aba2364347eb90f73ae3eae8601ab79ae3c2f5c45d34d7	celestina-style/tests/tst_glasssurface.qml
+37	0	8ae89a9c8cecf16a2bc1e600e3dbfdbd88b8ddfd983261e26165831b361189d7	celestina-style/tests/tst_listsection.qml
+7	2	2ed4f974a533797a152a914ed01b1fb8f9700f9a1fce8c547443abc0fd524f93	celestina-style/tests/tst_textfield.qml
+1	0	92f3f0030b0bfbedd7c12e206e01e2a558424e69187aeeea3dfb29d76a57ceab	docs/version-history.tsv

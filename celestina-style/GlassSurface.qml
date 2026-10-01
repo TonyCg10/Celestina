@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
@@ -9,12 +11,14 @@ import QtQuick.Shapes
 // Wayland client is not part of this scene — and renders the same material over
 // the host-provided blur or fallback instead.
 //
-// Recipe (One UI 8.5, DESIGN §6.5): bounded capture → pyramid blur → *slight
-// desaturation* + tint/dim → a thin dark outline for definition → the lit
-// top-edge glow. ContextualVeil deliberately stops before those edge layers:
-// it is a carrier, not another outlined card. `elevation > 0` adds the L2 drop
-// shadow (a floating layer stops pasting and starts floating). The shadow lives
-// outside the clipped body, so the root itself does not clip.
+// Recipe (Haze 1.6, the phone's glass; DESIGN §5.3): bounded capture at full
+// resolution → blur of σ ≈ 12 px → Haze's grain at 0.15 → the canvas tint at
+// 0.70. Nothing else: no desaturation, no outline, no lit edge. A role only
+// scales the grain and the tint (`materialStrength`). `elevation > 0` adds the
+// L2 drop shadow, which is the phone pill's `shadowElevation`. When the surface
+// cannot blur it paints the opaque canvas, which is what Haze's
+// `backgroundColor` does. The shadow lives outside the clipped body, so the
+// root itself does not clip.
 // ──────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
@@ -53,9 +57,8 @@ Item {
     // byte-for-byte. The host still owns compositor geometry; this path changes
     // only how this component paints its canonical semantic material.
     property string silhouettePath: ""
-    // A screen-edge silhouette can omit its upper mouth from the painted
-    // strokes so the pane appears to continue beyond the viewport instead of
-    // wearing a hairline cap at y=0. Empty reuses the complete silhouette.
+    // Retained public API; no stroke reads them since the outline and lit
+    // edge were removed.
     property string silhouetteEdgePath: ""
     readonly property bool usesSilhouette: silhouettePath.length > 0
     readonly property string effectiveSilhouetteEdgePath:
@@ -74,7 +77,7 @@ Item {
     default property alias contentData: foreground.data
 
     // Consumers may supply a semantic, state-derived tint while the component
-    // remains the sole owner of material ordering, noise, outline and lit edge.
+    // remains the sole owner of material ordering and grain.
     property color materialTint:
             materialRole === GlassSurface.ContentSurface
             ? CelestinaTheme.canvas
@@ -90,12 +93,6 @@ Item {
             : materialRole === GlassSurface.ContextualVeil
               ? CelestinaTheme.glassContextualVeilStrength
               : 1
-    // A contextual carrier must not acquire a second card boundary. At its low
-    // material strength even a hairline outline reads as an exterior shadow,
-    // especially around a narrow connector. Dense and default glass retain the
-    // complete dark-outline plus lit-edge recipe.
-    readonly property bool materialEdgesVisible:
-            materialRole !== GlassSurface.ContextualVeil
 
     readonly property bool captureActive:
             backdropMode === GlassSurface.InSceneCapture
@@ -180,7 +177,7 @@ Item {
             radius: root.cornerRadius
             color: root.backdropMode === GlassSurface.ExternalBackdrop
                    ? CelestinaTheme.clear
-                   : CelestinaTheme.surfaceStrong
+                   : CelestinaTheme.glassFallback
         }
 
         Item {
@@ -230,12 +227,49 @@ Item {
                 blur: CelestinaTheme.glassBlur
                 blurMax: CelestinaTheme.glassBlurMax
                 blurMultiplier: CelestinaTheme.glassBlurMultiplier
-                // Slight desaturation of the backdrop — the 8.5 recipe, not the
-                // earlier saturation boost (a negative value here desaturates).
-                saturation: CelestinaTheme.glassSaturation
                 autoPaddingEnabled: false
                 maskEnabled: true
                 maskSource: roundedMask
+            }
+        }
+
+        // Haze's grain, drawn over the blur and under the tint: its texture
+        // tiled with alpha 0.15 (times the role's strength). The order is
+        // Haze's — blur, noise, then tints — and it is what the phone shows.
+        // The grain is masked to the same rounded corners as the tint and blur.
+        Item {
+            id: noiseMask
+            anchors.fill: parent
+            visible: false
+            layer.enabled: true
+
+            Rectangle {
+                anchors.fill: parent
+                radius: root.cornerRadius
+                color: CelestinaTheme.opaqueMask
+            }
+        }
+
+        Item {
+            objectName: "celestina-glass-noise-mask"
+            anchors.fill: parent
+            visible: root.active && !root.usesSilhouette
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                maskEnabled: true
+                maskSource: noiseMask
+            }
+
+            Image {
+                objectName: "celestina-glass-noise"
+                anchors.fill: parent
+                visible: root.active && !root.usesSilhouette
+                source: Qt.resolvedUrl(".").toString().startsWith("file:")
+                        ? Qt.resolvedUrl("icons/haze-noise.png")
+                        : "qrc:/qt/qml/CelestinaStyle/icons/haze-noise.png"
+                fillMode: Image.Tile
+                opacity: CelestinaTheme.glassNoiseOpacity * root.materialStrength
+                smooth: false
             }
         }
 
@@ -244,24 +278,10 @@ Item {
             anchors.fill: parent
             visible: !root.usesSilhouette
             radius: root.cornerRadius
-            color: root.active ? root.materialTint : CelestinaTheme.surfaceStrong
+            color: root.active ? root.materialTint : CelestinaTheme.glassFallback
             opacity: root.active
                      ? root.materialOpacity * root.materialStrength
                      : 1
-        }
-
-        // Fine noise dither over the blur — breaks the banding the downsample
-        // pyramid leaves. Tiled at a low opacity; the body clip keeps it inside.
-        Image {
-            objectName: "celestina-glass-noise"
-            anchors.fill: parent
-            visible: root.active && !root.usesSilhouette
-            source: Qt.resolvedUrl(".").toString().startsWith("file:")
-                    ? Qt.resolvedUrl("icons/glass-noise.png")
-                    : "qrc:/qt/qml/CelestinaStyle/icons/glass-noise.png"
-            fillMode: Image.Tile
-            opacity: CelestinaTheme.glassNoiseOpacity * root.materialStrength
-            smooth: false
         }
 
         Shape {
@@ -273,7 +293,7 @@ Item {
                 strokeWidth: 0
                 fillColor: root.backdropMode === GlassSurface.ExternalBackdrop
                            ? CelestinaTheme.clear
-                           : CelestinaTheme.surfaceStrong
+                           : CelestinaTheme.glassFallback
                 PathSvg { path: root.silhouettePath }
             }
         }
@@ -290,136 +310,8 @@ Item {
                 strokeWidth: 0
                 fillColor: root.active
                            ? root.materialTint
-                           : CelestinaTheme.surfaceStrong
+                           : CelestinaTheme.glassFallback
                 PathSvg { path: root.silhouettePath }
-            }
-        }
-
-        // A thin dark outline (dark outside) — gives the pane an edge against a
-        // light backdrop where the lit glow alone would wash out. One UI's glass
-        // wears both: a dark hairline and the lit top edge.
-        Rectangle {
-            objectName: "celestina-glass-outline"
-            anchors.fill: parent
-            radius: root.cornerRadius
-            visible: root.materialEdgesVisible && !root.usesSilhouette
-            color: CelestinaTheme.clear
-            border.width: CelestinaTheme.borderHairline
-            border.color: root.active
-                          ? CelestinaTheme.multiplyAlpha(
-                                CelestinaTheme.glassOutline,
-                                root.materialStrength)
-                          : CelestinaTheme.glassOutline
-        }
-
-        // The lit glass edge: a rounded-rect gradient stroke, brightest along the
-        // top and fading to nothing at the bottom, so the pane catches light like
-        // real glass instead of wearing a flat box border. A GPU Shape
-        // (CurveRenderer) fills a ~1.3px ring — two rounded PathRectangles under
-        // an odd-even fill — with a vertical gradient. Replaces the CPU Canvas,
-        // which re-rastered the whole edge on every resize (DESIGN §6.5).
-        Shape {
-            objectName: "celestina-glass-lit-edge"
-            anchors.fill: parent
-            visible: root.active && root.materialEdgesVisible
-                     && !root.usesSilhouette
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                fillRule: ShapePath.OddEvenFill
-                strokeWidth: 0
-                fillColor: CelestinaTheme.clear
-                fillGradient: LinearGradient {
-                    x1: 0
-                    y1: 0
-                    x2: 0
-                    y2: root.height
-                    GradientStop {
-                        position: 0
-                        color: CelestinaTheme.multiplyAlpha(
-                                   CelestinaTheme.glassBorder,
-                                   root.materialStrength)
-                    }
-                    GradientStop {
-                        position: CelestinaTheme.glassEdgeMidPosition
-                        color: CelestinaTheme.multiplyAlpha(
-                                   CelestinaTheme.glassBorder,
-                                   CelestinaTheme.glassEdgeMidOpacity
-                                   * root.materialStrength)
-                    }
-                    GradientStop {
-                        position: CelestinaTheme.glassEdgeLowPosition
-                        color: CelestinaTheme.multiplyAlpha(
-                                   CelestinaTheme.glassBorder,
-                                   CelestinaTheme.glassEdgeLowOpacity
-                                   * root.materialStrength)
-                    }
-                    GradientStop {
-                        position: 1
-                        color: CelestinaTheme.clear
-                    }
-                }
-                PathRectangle {
-                    x: 0
-                    y: 0
-                    width: root.width
-                    height: root.height
-                    radius: root.cornerRadius
-                }
-                PathRectangle {
-                    x: CelestinaTheme.glassEdgeWidth
-                    y: CelestinaTheme.glassEdgeWidth
-                    width: root.width - CelestinaTheme.glassEdgeWidth * 2
-                    height: root.height - CelestinaTheme.glassEdgeWidth * 2
-                    radius: Math.max(0, root.cornerRadius
-                                        - CelestinaTheme.glassEdgeWidth)
-                }
-            }
-        }
-
-        // No seam treatment rides the silhouette. The finite blur behind a
-        // shaped surface is a pixel region whose boundary cannot be
-        // antialiased; two attempts to cover it in paint — a stroke in the
-        // material's tint, then the same band blurred into a shadow — both
-        // read as a border the author rejected outright. What remains against
-        // the staircase is geometry alone: the host samples the region at
-        // curve-following density and tucks it one pixel inside the painted
-        // silhouette.
-
-        // The opt-in silhouette keeps the same dark definition and lit-glass
-        // vocabulary. A generic path cannot derive a mathematically inset ring
-        // without changing the host's geometry, so these strokes are clipped
-        // with the material and remain entirely inside its finite silhouette.
-        Shape {
-            objectName: "celestina-glass-silhouette-outline"
-            anchors.fill: parent
-            visible: root.materialEdgesVisible && root.usesSilhouette
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                strokeWidth: CelestinaTheme.borderHairline * 2
-                strokeColor: root.active
-                             ? CelestinaTheme.multiplyAlpha(
-                                   CelestinaTheme.glassOutline,
-                                   root.materialStrength)
-                             : CelestinaTheme.glassOutline
-                fillColor: CelestinaTheme.clear
-                PathSvg { path: root.effectiveSilhouetteEdgePath }
-            }
-        }
-
-        Shape {
-            objectName: "celestina-glass-silhouette-lit-edge"
-            anchors.fill: parent
-            visible: root.active && root.materialEdgesVisible
-                     && root.usesSilhouette
-            preferredRendererType: Shape.CurveRenderer
-            ShapePath {
-                strokeWidth: CelestinaTheme.glassEdgeWidth * 2
-                strokeColor: CelestinaTheme.multiplyAlpha(
-                                 CelestinaTheme.glassBorder,
-                                 CelestinaTheme.glassEdgeLowOpacity
-                                 * root.materialStrength)
-                fillColor: CelestinaTheme.clear
-                PathSvg { path: root.effectiveSilhouetteEdgePath }
             }
         }
 

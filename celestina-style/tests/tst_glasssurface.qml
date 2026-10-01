@@ -89,6 +89,7 @@ TestCase {
 
     function init() {
         capturedGlass.captureEnabled = true
+        capturedGlass.density = GlassSurface.Regular
         externalGlass.externalBackdropReady = true
         contentGlass.externalBackdropReady = true
         contextualGlass.externalBackdropReady = true
@@ -133,7 +134,7 @@ TestCase {
         return null
     }
 
-    function test_semantic_roles_preserve_the_default_and_separate_material_jobs() {
+    function test_semantic_roles_keep_their_strength_without_edge_layers() {
         compare(externalGlass.materialRole, GlassSurface.StandardMaterial)
         compare(externalGlass.materialStrength, 1)
 
@@ -147,8 +148,6 @@ TestCase {
         compare(contextualGlass.materialStrength,
                 CelestinaTheme.glassContextualVeilStrength)
         verify(contextualGlass.materialStrength < contentGlass.materialStrength)
-        verify(contentGlass.materialEdgesVisible)
-        verify(!contextualGlass.materialEdgesVisible)
 
         compare(contentGlass.captureActive, false)
         compare(contextualGlass.captureActive, false)
@@ -174,14 +173,60 @@ TestCase {
         compare(contextualNoise.opacity,
                 CelestinaTheme.glassNoiseOpacity
                 * CelestinaTheme.glassContextualVeilStrength)
-        verify(findByObjectName(
-                   contentGlass, "celestina-glass-outline").visible)
-        verify(findByObjectName(
-                   contentGlass, "celestina-glass-lit-edge").visible)
-        verify(!findByObjectName(
-                   contextualGlass, "celestina-glass-outline").visible)
-        verify(!findByObjectName(
-                   contextualGlass, "celestina-glass-lit-edge").visible)
+
+        // Haze has no outline and no lit edge; neither does any role now.
+        for (const surface of [externalGlass, contentGlass, contextualGlass]) {
+            compare(findByObjectName(surface, "celestina-glass-outline"), null)
+            compare(findByObjectName(surface, "celestina-glass-lit-edge"), null)
+        }
+    }
+
+    function test_grain_lies_under_the_tint() {
+        const noise = findByObjectName(capturedGlass, "celestina-glass-noise")
+        const tint = findByObjectName(capturedGlass, "celestina-glass-material-tint")
+        const wrapper = findByObjectName(capturedGlass, "celestina-glass-noise-mask")
+        verify(noise && tint && wrapper)
+        compare(noise.parent, wrapper)
+        compare(wrapper.parent, tint.parent)
+        const siblings = wrapper.parent.children
+        let noiseIndex = -1
+        let tintIndex = -1
+        for (let index = 0; index < siblings.length; ++index) {
+            if (siblings[index] === wrapper) noiseIndex = index
+            if (siblings[index] === tint) tintIndex = index
+        }
+        verify(noiseIndex >= 0 && tintIndex >= 0)
+        verify(noiseIndex < tintIndex, "Haze composes blur, then grain, then tint")
+        compare(noise.opacity, CelestinaTheme.glassNoiseOpacity)
+    }
+
+    function test_grain_is_clipped_to_the_corners() {
+        const mask = findByObjectName(capturedGlass, "celestina-glass-noise-mask")
+        verify(mask)
+        verify(mask.layer.enabled)
+        verify(mask.layer.effect !== null)
+    }
+
+    function test_grain_is_visible_while_active() {
+        const noise = findByObjectName(capturedGlass, "celestina-glass-noise")
+        verify(noise)
+        verify(noise.visible)
+        compare(noise.opacity, CelestinaTheme.glassNoiseOpacity)
+    }
+
+    function test_fallback_is_the_opaque_canvas() {
+        capturedGlass.captureEnabled = false
+        verify(!capturedGlass.active)
+        const tint = findByObjectName(capturedGlass, "celestina-glass-material-tint")
+        compare(tint.color, CelestinaTheme.glassFallback)
+        compare(tint.opacity, 1)
+        compare(CelestinaTheme.glassFallback, CelestinaTheme.canvas)
+    }
+
+    function test_strong_density_paints_the_same_material() {
+        compare(CelestinaTheme.glassTintStrong, CelestinaTheme.glassTint)
+        capturedGlass.density = GlassSurface.Strong
+        compare(capturedGlass.materialTint, CelestinaTheme.glassTint)
     }
 
     function test_silhouette_is_opt_in_and_keeps_the_semantic_material() {
@@ -197,32 +242,24 @@ TestCase {
             silhouetteGlass, "celestina-glass-silhouette-material-tint")
         verify(silhouetteTint.visible)
         compare(silhouetteTint.opacity, silhouetteGlass.materialStrength)
-        verify(findByObjectName(
-                   silhouetteGlass,
-                   "celestina-glass-silhouette-outline").visible)
-        verify(findByObjectName(
-                   silhouetteGlass,
-                   "celestina-glass-silhouette-lit-edge").visible)
-        verify(!findByObjectName(
-                   silhouetteGlass,
-                   "celestina-glass-outline").visible)
-        verify(!findByObjectName(
-                   silhouetteGlass,
-                   "celestina-glass-lit-edge").visible)
+        compare(findByObjectName(
+                    silhouetteGlass, "celestina-glass-silhouette-outline"), null)
+        compare(findByObjectName(
+                    silhouetteGlass, "celestina-glass-silhouette-lit-edge"), null)
         verify(!findByObjectName(
                    silhouetteGlass,
                    "celestina-glass-shadow").visible)
 
         silhouetteGlass.materialRole = GlassSurface.ContextualVeil
-        verify(!silhouetteGlass.materialEdgesVisible)
         verify(silhouetteTint.visible)
         compare(silhouetteTint.opacity,
                 CelestinaTheme.glassContextualVeilStrength)
-        verify(!findByObjectName(
-                   silhouetteGlass,
-                   "celestina-glass-silhouette-outline").visible)
-        verify(!findByObjectName(
-                   silhouetteGlass,
-                   "celestina-glass-silhouette-lit-edge").visible)
+    }
+
+    function test_grain_is_the_haze_texture() {
+        const noise = findByObjectName(capturedGlass, "celestina-glass-noise")
+        verify(noise)
+        verify(noise.source.toString().endsWith("/haze-noise.png"),
+               "grain must be Haze's texture: " + noise.source)
     }
 }

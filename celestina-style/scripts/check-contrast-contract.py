@@ -227,6 +227,19 @@ try:
                     f"{tint_name}/{backdrop_name}/{ink_name}", ink, surface, 4.5
                 )
 
+    # In-scene glass (the Haze recipe: canvas at 0.70 over the blur) sits over
+    # the suite's own near-black canvas in every application, and over a
+    # photograph only in Fluorita's floating dock. Primary text must therefore
+    # read over both extremes; secondary text and the focus ring are required
+    # only over black, because no in-scene glass carries them over a light image.
+    glass_tint = literal("glassTint")
+    for backdrop_name, backdrop in extremes():
+        surface = composite(glass_tint, backdrop)
+        require(f"glassTint/{backdrop_name}/text", text_hi, surface, 4.5)
+    glass_on_black = composite(glass_tint, (0, 0, 0, 1))
+    require("glassTint/black/secondary text", text_lo, glass_on_black, 4.5)
+    require("glassTint/black/outer focus", focus_ring, glass_on_black, 3.0)
+
     media_scrim = literal("mediaScrim")
     progress = literal("mediaProgress")
     progress_track = literal("mediaProgressTrack")

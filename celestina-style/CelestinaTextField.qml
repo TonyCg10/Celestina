@@ -20,7 +20,7 @@ TextField {
 
     property int shape: CelestinaTextField.Standard
     readonly property real fieldRadius: shape === CelestinaTextField.Search
-                                        ? CelestinaTheme.radiusInput
+                                        ? CelestinaTheme.radiusPill
                                         : CelestinaTheme.radiusSm
     // Unlike Control-derived buttons, Qt's TextField is a TextInput template
     // and does not expose `visualFocus`. Mirror Qt Controls' definition so a

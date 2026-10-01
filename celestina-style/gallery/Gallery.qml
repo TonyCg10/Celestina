@@ -376,10 +376,10 @@ Window {
 
             // ── Glass (needs a real GPU session) ───────────────────────────
             Section {
-                heading: "GLASS — L2 ELEVATION (real session only)"
+                heading: "GLASS — THE HAZE RECIPE (real session only)"
                 Item {
                     width: sheet.width; height: 180
-                    // A colourful backdrop so the blur + desaturation read.
+                    // The same three colours the reference backdrop carries.
                     Rectangle {
                         id: glassBackdrop
                         anchors.fill: parent
@@ -393,7 +393,7 @@ Window {
                     }
                     Row {
                         anchors.centerIn: parent
-                        spacing: 24
+                        spacing: CelestinaTheme.space2xl
 
                         GlassSurface {
                             width: 300; height: 130
@@ -401,16 +401,29 @@ Window {
                             liveCapture: true
                             elevation: 2
                             cornerRadius: CelestinaTheme.radiusLg
-                            Text { anchors.centerIn: parent; text: "Regular"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.iconSm; font.weight: CelestinaTheme.weightDemiBold }
+                            Text { anchors.centerIn: parent; text: "Live GlassSurface"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.iconSm; font.weight: CelestinaTheme.weightDemiBold }
                         }
 
-                        GlassSurface {
+                        // scripts/glass-reference.py: Pillow, σ = 12.05, grain
+                        // 0.15, canvas at 0.70. The blur width is calibrated by
+                        // the profile-std criterion (met at 20/24/28); the
+                        // residual ≈ 7/255 blue offset is tint, not blur — do
+                        // not chase it with glassBlurMax (evidence 2026-09-30).
+                        Item {
                             width: 300; height: 130
-                            backdropSource: glassBackdrop
-                            liveCapture: true
-                            density: GlassSurface.Strong
-                            cornerRadius: CelestinaTheme.radiusLg
-                            Text { anchors.centerIn: parent; text: "Strong"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.iconSm; font.weight: CelestinaTheme.weightDemiBold }
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: CelestinaTheme.radiusLg
+                                color: CelestinaTheme.glassFallback
+                                clip: true
+                                layer.enabled: true
+                                Image {
+                                    anchors.fill: parent
+                                    source: Qt.resolvedUrl("reference/haze.png")
+                                    fillMode: Image.Stretch
+                                }
+                            }
+                            Text { anchors.centerIn: parent; text: "σ = 12 reference"; color: CelestinaTheme.text; font.family: win.sans; font.pixelSize: CelestinaTheme.iconSm; font.weight: CelestinaTheme.weightDemiBold }
                         }
                     }
                 }

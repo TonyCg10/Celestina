@@ -187,3 +187,4 @@ magnetita	2.0.2	bug	MAG-D1-E	Read the phone's control stream from one task and k
 magnetita	2.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's rules from Rust
 magnetita-android	1.0.3	bug	AUD-1-E	Add negotiated capabilities and export the phone's rules from Rust
 siderita	1.7.6	bug	SID-H1-E	Fix the operations dock moving, overlapping and not closing inside the transient column
+celestina-style	1.10.0	milestone	STYLE-G7-O	Add the Haze glass recipe and the desktop token ladder

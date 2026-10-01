@@ -113,6 +113,6 @@
     <file alias="unlink.svg">icons/unlink.svg</file>
     <file alias="whole-word.svg">icons/whole-word.svg</file>
     <file alias="zoom-in.svg">icons/zoom-in.svg</file>
-    <file alias="glass-noise.png">icons/glass-noise.png</file>
+    <file alias="haze-noise.png">icons/haze-noise.png</file>
   </qresource>
 </RCC>

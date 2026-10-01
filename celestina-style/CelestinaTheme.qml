@@ -30,7 +30,8 @@ QtObject {
 
     // Colour recipes live here rather than in consumers. `withAlpha` creates a
     // semantic wash from a base colour; `multiplyAlpha` preserves the alpha of
-    // an existing colour (the lit glass edge uses it); `mixColors` derives a
+    // an existing colour (kept for consumers that scale a translucent token);
+    // `mixColors` derives a
     // tint while keeping the base accent as the only hue dial.
     function withAlpha(value, alpha) {
         return Qt.rgba(value.r, value.g, value.b,
@@ -379,7 +380,7 @@ QtObject {
         required property color gradientMid
         required property color gradientEnd
         // Glass: regular floating tint, stronger modal tint, a lighter tint for
-        // compositor-owned blur, restrained lit edge and a dark outline.
+        // compositor-owned blur.
         // The opaque panel body every surface fills with: the elevated role at
         // the One UI balance — roughly half tint, half colour summary. It is a
         // scheme role rather than a per-file Qt.rgba so the balance is dialled
@@ -389,9 +390,7 @@ QtObject {
         required property color glassTintStrong
         required property color compositorGlassTint
         required property color compositorGlassFallback
-        required property color glassBorder
         required property color glassHighlight
-        required property color glassOutline
         // Elevation — the drop shadow under floating layers (L2). Soft and light
         // per the depth doctrine; on near-black it reads as a faint dark halo.
         required property color shadow
@@ -511,16 +510,17 @@ QtObject {
         // reference's pink/green backdrop colour to remain visible through the
         // blur. Strong is reserved for modal readability.
         panelTint: theme.withAlpha(theme.ref.elevated, theme.panelTintOpacity)
-        glassTint: "#991a1e25"
-        glassTintStrong: "#bd1a1e25"
+        // Haze's tint: the background colour at 0.70 over the blur. One value;
+        // `glassTintStrong` survives as a name for GlassCard's Strong density
+        // and paints the same material.
+        glassTint: "#b3050608"
+        glassTintStrong: "#b3050608"
         // Wallpaper is untrusted visual input. Even with compositor blur the
         // tint must provide a contrast floor; the fallback is denser when the
         // host cannot arm blur at all.
         compositorGlassTint: "#e61a1e25"
         compositorGlassFallback: "#f51a1e25"
-        glassBorder: "#24ffffff"
         glassHighlight: "#2effffff"
-        glassOutline: "#4d000000"
         shadow: "#a6000000"
     }
 
@@ -615,9 +615,7 @@ QtObject {
     readonly property color glassTintStrong: scheme.glassTintStrong
     readonly property color compositorGlassTint: scheme.compositorGlassTint
     readonly property color compositorGlassFallback: scheme.compositorGlassFallback
-    readonly property color glassBorder: scheme.glassBorder
     readonly property color glassHighlight: scheme.glassHighlight
-    readonly property color glassOutline: scheme.glassOutline
     readonly property color shadow: scheme.shadow
     // Compositing constants are scheme invariant; keeping them here prevents
     // visual implementations from spelling ad-hoc colour literals.
@@ -700,30 +698,33 @@ QtObject {
     readonly property int weightMedium: Font.Medium     // 500 — kept until components settle to 400/600 (S4)
     readonly property int weightDemiBold: Font.DemiBold // 600 — titles
 
-    // ── Radius scale ───────────────────────────────────────────────────────────
-    // One UI's generous rounding: radius scales down with element size.
-    // radiusButton/radiusInput are ready for CelestinaButton/TextField to adopt in
-    // S4 (the button-emphasis + input-anatomy work); S1 leaves them defined.
-    readonly property int radiusNone: 0      // edge-to-edge surfaces with no exposed corner
-    readonly property int radiusSm: 12       // controls, chips, glyph tiles, rows, banners
-    readonly property int radiusXs: 3        // selection marquee / tiny indicators
-    readonly property int radiusMd: 20       // glass menus / floating surfaces
-    readonly property int radiusButton: 18   // ready — filled/tonal buttons (S4)
-    readonly property int radiusInput: 22    // ready — search/text field (S4)
-    readonly property int radiusLg: 26       // dialogs, popup menus, grouped cards
     // The window corner the compositor draws — Celestina's own
     // `geometry-corner-radius`, which is what a window in this session is
     // rounded by. It is not a radius to copy onto anything: it is the outer
     // curve that `concentricRadius` measures inwards from.
     readonly property int radiusWindow: 14
+    readonly property int radiusPill: 9999   // full capsule
+
+    // ── Radius scale ───────────────────────────────────────────────────────────
+    // The desktop ladder (spec 2026-09-30 §3.2). Nested corners are concentric
+    // by construction: a radiusLg card inset spaceCardInset holds radiusMd rows
+    // (12 + 8 = 20); a radiusMd row or tile inset spaceXs holds radiusSm
+    // thumbnails (8 + 4 = 12). `cornerInset` is the least a glyph or text may
+    // sit from a corner without the arc clipping it.
+    readonly property int radiusNone: 0      // edge-to-edge surfaces with no exposed corner
+    readonly property int radiusXs: 3        // selection marquee / tiny indicators
+    readonly property int radiusSm: 8        // chips, thumbnails, small indicators
+    readonly property int radiusMd: 12       // rows, tiles, content surfaces
+    readonly property int radiusButton: 10   // text buttons (dialogs only)
+    readonly property int radiusLg: 20       // grouped cards, sidebars, dialogs, menus
+    readonly property int radiusInput: radiusMd  // multi-line input areas; a single-line field is a pill (CelestinaTextField)
 
     // The gap every first-level box keeps from the window edge: the sidebar,
     // the item-info box and the content box alike. One number, because boxes
     // that share an edge have to share the distance to it — the content box
     // used to sit 8 px further in and 12 px higher, which is why it lined up
     // with nothing.
-    readonly property int windowMargin: 14
-    readonly property int radiusPill: 9999   // full capsule
+    readonly property int windowMargin: 16
 
     // The radius a box takes when it sits inside the window.
     //
@@ -741,6 +742,14 @@ QtObject {
         return inset >= radiusWindow ? own : Math.max(radiusXs, radiusWindow - inset)
     }
 
+    // The horizontal reach of a circular corner at the height where a
+    // cap-height glyph starts: r(1 - 1/sqrt 2) ≈ 0.29 r, rounded up. Text or
+    // a glyph closer than this to a corner is clipped by the arc. The radius
+    // guard (scripts/radius_contract.py) computes the same value.
+    function cornerInset(radius) {
+        return Math.ceil(radius * 0.3)
+    }
+
     // ── Spacing scale (4-based) ──────────────────────────────────────────────
     readonly property int spaceXs: 4
     readonly property int spaceSm: 8
@@ -749,6 +758,9 @@ QtObject {
     readonly property int spaceXl: 20
     readonly property int space2xl: 24
     readonly property int space3xl: 32
+    // Between sibling cards, and from a card's edge to its rows or tiles.
+    readonly property int spaceCardGap: 12
+    readonly property int spaceCardInset: 8
 
     // ── Control metrics ──────────────────────────────────────────────────────
     readonly property int controlHeightXs: 30
@@ -756,12 +768,17 @@ QtObject {
     readonly property int controlHeight: 38
     readonly property int controlHeightLg: 42
     readonly property int controlHeightXl: 52
-    readonly property int rowHeight: 54
-    readonly property int rowHeightLg: 66
+    readonly property int rowHeight: 40
+    readonly property int rowHeightLg: 52
     readonly property int glyphTile: 34
     readonly property int glyphTileLg: 56
     readonly property int iconSm: 18
-    readonly property int iconMd: 19
+    readonly property int iconMd: 20
+    readonly property int iconLg: 24         // navigation glyphs: sidebar rows, segments
+    // The fixed top bar every application wears, and the segmented control
+    // that sits in its leading slot with spaceSm of air above and below.
+    readonly property int topBarHeight: 48
+    readonly property int compSegmentHeight: 32
     readonly property int borderHairline: 1
     readonly property int borderFocus: 2
     readonly property real disabledOpacity: 0.5
@@ -826,16 +843,17 @@ QtObject {
     readonly property real overshoot: 1.15
 
     // ── Glass parameters (scalars) ─────────────────────────────────────────────
-    // Backdrop-blur knobs for GlassSurface (colours live in the scheme). The 8.5
-    // recipe pairs blur with a *slight desaturation* of the backdrop (negative
-    // saturation) — the earlier boost was half the recipe (audit §5.4). Keep
-    // the four-pass pyramid at 32 and increase its reach with blurMultiplier;
-    // this disperses text without stacking another effect pass.
+    // The Haze recipe (spec 2026-09-30 §3.1): a 20 dp blur is a Gaussian of
+    // σ ≈ 12 px, the capture is sampled at full resolution so the downsample no
+    // longer widens it, and there is no desaturation. `glassBlurMax` is
+    // calibrated against the σ = 12 reference the gallery renders with
+    // scripts/glass-reference.py; the value below is the one recorded in the
+    // 2026-09-30 evidence.
     readonly property real glassBlur: 1.0
-    readonly property int glassBlurMax: 32
-    readonly property real glassBlurMultiplier: 3.0
-    readonly property real glassSaturation: -0.03
-    readonly property real glassSampleScale: 0.55
+    readonly property int glassBlurMax: 24
+    readonly property real glassBlurMultiplier: 1.0
+    readonly property real glassSaturation: 0
+    readonly property real glassSampleScale: 1.0
 
     // Ambient light: a blurred copy of the content lighting the space around
     // it. Both values pull it back from the picture it sits behind — at full
@@ -845,19 +863,15 @@ QtObject {
     readonly property real ambientSaturation: -0.20
     readonly property int glassSampleMargin:
             Math.ceil(glassBlurMax * (1 + glassBlurMultiplier))
-    // Fine noise dither over the blur — kills the banding the downsample pyramid
-    // leaves behind (DESIGN §4/§6.5). Tiled texture at a low opacity.
-    readonly property real glassNoiseOpacity: 0.025
-    readonly property real glassEdgeWidth: 1.3
-    readonly property real glassEdgeMidPosition: 0.35
-    readonly property real glassEdgeLowPosition: 0.70
-    readonly property real glassEdgeMidOpacity: 0.45
-    readonly property real glassEdgeLowOpacity: 0.15
+    // Haze's grain: its texture drawn under the tint with alpha 0.15.
+    readonly property real glassNoiseOpacity: 0.15
+    // What Haze paints when it cannot blur: the opaque background colour.
+    readonly property color glassFallback: canvas
     // Opt-in semantic strengths for compositor-backed shell surfaces. Samsung
     // does not publish numeric One UI 8.5 glass opacities; the content value is
     // measured from the supplied reference crop (roughly 0.63 neutral dim),
     // while the veil remains only an organizing trace. GlassSurface applies
-    // each value to tint, noise, outline and lit edge as one material.
+    // each value to tint and noise as one material.
     readonly property real glassContentSurfaceStrength: 0.64
     readonly property real glassContextualVeilStrength: 0.12
 

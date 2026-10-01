@@ -46,8 +46,9 @@ application never consumes this table as raw literals.
 
 ### Shape and structure
 
-- Master radius: 26 for dialogs, menus and grouped list cards.
-- Buttons: 18; search/input: 22; medium surfaces: 20; small items: 12.
+- Master radius: 20 for dialogs, menus, sidebars and grouped list cards.
+- Rows, tiles and content surfaces: 12; chips and thumbnails: 8; text buttons:
+  10; search fields are pills; multi-line input areas take 12.
 - Pills are reserved for switches, chips and floating tab/navigation strips.
 - In-app corners are circular. Squircle/superellipse belongs only to app icons.
 - Grouped rounded-card lists are the primary settings/list pattern. Hierarchy
@@ -76,9 +77,9 @@ implemented.
 - Reference type: variable grotesque, weights 400 for body and 600 for titles;
   expanded header 34→21, row title 17, secondary 13, dialog title 17, body 14,
   buttons 15 and toast 14.
-- Glass: backdrop blur, slight desaturation and dim, tint, restrained noise, a
-  thin dark outline and a top-edge inner glow. It is frosted/matte, not an
-  Apple-style refractive lens.
+- Glass: the phone's Haze recipe, exactly — a σ ≈ 12 px blur, Haze's grain at
+  0.15 under the tint, the canvas colour at 0.70 over it. No desaturation, no
+  outline, no lit edge. Frosted and matte, not a refractive lens.
 - Samsung's current visual-depth guidance treats blur and dim as restrained
   hierarchy tools rather than decoration to apply everywhere. Celestina follows
   that boundary with two opt-in shell roles: dense matte material only for
@@ -103,8 +104,8 @@ floor.
 
 - A layer-shell host may request real compositor glass through
   `ext-background-effect-v1` and render `GlassSurface.ExternalBackdrop` above
-  that result. `GlassSurface` owns the shared tint, noise, outline, lit edge and
-  fallback; the host remains the sole owner of the compositor effect and its
+  that result. `GlassSurface` owns the shared tint, grain and fallback; the
+  host remains the sole owner of the compositor effect and its
   region.
 - Application windows cannot sample other clients. They use bounded in-scene
   capture instead; an external-backdrop surface must never invent a
@@ -117,7 +118,7 @@ floor.
   resampling is prohibited for an idle always-on surface.
 - `RectangularShadow` is the Qt 6.9 floor for soft elevation. Shape paths and
   gradient strokes use GPU-backed `Shape` where available; CPU `Canvas` is not
-  the shared lit-edge implementation.
+  the shared silhouette implementation.
 - Inter Variable and `font.features` provide typography and tabular numerics.
   On Wayland, use Qt/curve text rendering where fractional scaling would make
   native hinting unstable.
@@ -169,12 +170,19 @@ and its own accepted checkpoint.
 
 ### 5.1 Shape
 
-`radiusLg 26` · `radiusMd 20` · `radiusButton 18` · `radiusInput 22` ·
-`radiusSm 12` · `radiusPill 9999`. Radius scales down with element size.
-Nested corners are concentric: an outer radius equals the inner radius plus
-the inset between them, so a panel holding `radiusSm` rows or tiles `spaceSm`
-inside its edge takes `radiusMd` (12 + 8 = 20). Content stays out of that
-inset; only a focus ring may enter it, and nothing crosses the panel edge.
+`radiusLg 20` · `radiusMd 12` · `radiusSm 8` · `radiusButton 10` ·
+`radiusInput 12` (multi-line input areas; a single-line search field is a
+pill) · `radiusXs 3` · `radiusPill 9999`. Radius scales
+down with element size. Nested corners are concentric: an outer radius equals
+the inner radius plus the inset between them, so a `radiusLg` card holding
+`radiusMd` rows insets them `spaceCardInset` (12 + 8 = 20) and a `radiusMd`
+tile holding a `radiusSm` thumbnail insets it `spaceXs` (8 + 4 = 12). Text or
+a glyph that touches a corner sits at least `cornerInset(radius)` from it,
+`ceil(0.3 × radius)`, or the arc clips it. Only a focus ring may enter that
+inset, and nothing crosses the panel edge. The radius guard
+(`scripts/radius_contract.py`) refuses the three violations: an inset below
+`cornerInset`, a non-concentric nested radius, and a numeric margin literal
+inside a rounded surface.
 
 ### 5.2 Elevation and surfaces
 
@@ -182,10 +190,10 @@ inset; only a focus ring may enter it, and nothing crosses the panel edge.
 |---|---|---|
 | L0 | Window canvas | Opaque `canvas` and the canonical subtle `CelestinaBackdrop` gradient |
 | L1 | Grouped/content card | Opaque semantic surface, whitespace and one quiet outline; no shadow |
-| L2 | Menu, tab pills, toast | Regular glass plus soft shadow |
-| L3 | Dialog/modal | Strong glass plus scrim; no simultaneous depth shadow |
+| L2 | Menu, tab pills, toast | Regular glass (the Haze recipe) plus soft shadow |
+| L3 | Dialog/modal | The same glass plus scrim; no simultaneous depth shadow |
 | Shell content card / panel capsule | Layer-shell surface | One host-owned compositor blur region, or one region shared by the complete menu, with dense shadowless `ContentSurface` material |
-| Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent `ContextualVeil`; no shadow, outline, lit edge or apparent edge halo, plus a readable fallback |
+| Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent `ContextualVeil`; no shadow and no apparent edge halo, plus a readable fallback |
 
 `CelestinaSurface` owns L0/L1 fill, ink, radius and quiet outline. Consumers
 choose a semantic role (`Canvas`, `Panel`, `Grouped`, `Content`, `Tonal`,
@@ -198,31 +206,31 @@ it is hostile input. They are checked after compositing over black and white.
 One host region may support several `GlassSurface.ContentSurface` sections;
 those sections and panel capsules use the same dense matte material without
 multiplying compositor regions or capturing their own window. The menu's
-`ContextualVeil` attenuates tint and noise but suppresses outline and lit-edge
-layers entirely, including on an opt-in silhouette, so the outer field remains
+`ContextualVeil` attenuates tint and noise, including on an opt-in
+silhouette, so the outer field remains
 only an organizing trace without an apparent border or halo. Both shell roles
 have zero elevation; the general-purpose default material remains compatible
-for every other suite consumer. `ContextualVeil` suppresses its outline and
-lit edge by semantic role without changing tint, noise or compositor
+for every other suite consumer. `ContextualVeil` applies its attenuation by
+semantic role without changing tint, noise or compositor
 ownership. Dense `ContentSurface` cards and panel capsules do not change
 silhouette or material when a contextual surface attaches. A real session is
 still required to prove that blur itself is active.
 
 ### 5.3 Glass
 
-For `InSceneCapture`, the accepted order is bounded capture (approximately
-0.5× texture), pyramid blur, slight desaturation and scheme-tuned dim,
-Regular/Strong tint, ±1–2/255 noise, 1 px exterior outline and restrained
-top-edge glow. `ExternalBackdrop` omits only the capture and blur passes because
-the compositor supplies them; it retains the same material ordering before a
-semantic role applies its narrower layer policy. Failure to capture or supply
-an external backdrop degrades to a readable translucent tint.
+For `InSceneCapture`, the order is Haze's: bounded capture at full resolution,
+a blur calibrated to a Gaussian of σ ≈ 12 px (the 20 dp Haze default),
+Haze's grain texture at 0.15, then the canvas colour at 0.70. `ExternalBackdrop`
+omits only the capture and blur passes because the compositor supplies them;
+it retains grain and tint before a semantic role applies its strength. There
+is one density: `Strong` is a compatible name that paints the same material.
+Failure to capture or supply an external backdrop degrades to the opaque
+canvas, which is what Haze paints when it cannot blur.
 
-`StandardMaterial` preserves that existing full-strength recipe.
-`ContentSurface` applies the reference-derived `0.64` strength to the complete
-decorative stack and pairs its neutral material polarity with the host's
-foreground polarity. `ContextualVeil` applies `0.12` to tint and noise only and
-disables outline and lit-edge layers; because its normal highlight tint is
+`StandardMaterial` is the full-strength recipe. `ContentSurface` applies
+`0.64` to grain and tint and pairs its neutral material polarity with the
+host's foreground polarity. `ContextualVeil` applies `0.12` to tint and noise
+only; because its normal highlight tint is
 itself translucent, the usual visible tint is approximately two percent. These
 values describe Celestina's adaptation of the supplied One UI 8.5 image, not a
 claim about Samsung's private implementation.
@@ -324,7 +332,7 @@ compatibility policy changes that contract.
 | `CelestinaModalLayer` | Scrim, input shielding, focus containment/restoration and modal accessibility floor |
 | `CelestinaFolderIcon` | Filled in-tree folder shape with semantic tone and contrast-safe internal ink |
 | `CelestinaFileIcon` | Filled semantic file-type shape with stroke fallback |
-| `GlassSurface` | Regular/Strong material over bounded in-scene capture or an explicit compositor-supplied backdrop, with a readable fallback |
+| `GlassSurface` | One Haze material over bounded in-scene capture or an explicit compositor-supplied backdrop, with an opaque canvas fallback |
 | `GlassCard` | Glass surface with shared card anatomy/elevation, no application state |
 | `GlassContextMenu` | Floating menu container with focus/input ownership and event-driven recapture |
 | `GlassMenuItem` | Keyboard/pointer-operable menu row with role/name/state and semantic ink; its colour swatch is `compMenuSwatchSize` with a `swatchOutline` ring, and an automatic swatch draws a `compMenuSwatchSlash` slash in `textMuted` |
@@ -342,7 +350,7 @@ consumer evidence in the same checkpoint.
 | Component | Accepted specification |
 |---|---|
 | `CollapsingHeader` | Page-owned 34→21 hierarchy; compact windows start collapsed and scroll owns the transition |
-| `CelestinaDialog` | Centred, approximately 360 px wide, radius 26, modal scrim, contained/restored focus and explicit primary/cancel semantics |
+| `CelestinaDialog` | Centred, approximately 360 px wide, `radiusLg`, modal scrim, contained/restored focus and explicit primary/cancel semantics |
 | `TabPills` | Floating pill strip for peer destinations; not a substitute for document-tab lifecycle |
 | `Toast` | Brief non-modal status, readable without focus theft and announced when semantically important |
 | `Tooltip` | Not part of the language. A label that floats over the window after the pointer lands covers the control it describes; a glyph carries its name through `helpText` for assistive technology and through the shape itself for everyone else. Removed by the author from every surface that had one |

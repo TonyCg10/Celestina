@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.9.2 LANGUAGES CXX)
+project(celestina-style VERSION 1.10.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -175,7 +175,7 @@ qt_add_qml_module(celestina-style
         icons/unlink.svg
         icons/whole-word.svg
         icons/zoom-in.svg
-        icons/glass-noise.png
+        icons/haze-noise.png
         fonts/InterVariable.ttf
 )
 

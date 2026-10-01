@@ -71,6 +71,13 @@ then reports the deployment current and verified without session activation.
 The immutable delivery record, commit and author-visible consumer validation
 remain pending.
 
+`STYLE-G7-O` and `STYLE-G7-P` carry the 2026-09-30 design: the phone's Haze
+recipe as the one glass material, the desktop token ladder, and the two
+components every application's fixed top bar needs, `CelestinaTopBar` and
+`CelestinaSegmentedControl`. The radius guard that verifies the ladder's
+concentric rule is the suite's `AUD-1-I`, because its baseline is a shared
+ratchet every application prefix lowers.
+
 The plan is
 [Shared reading controls](docs/plans/active/2026-08-04-shared-reading-controls.md).
 It excludes any further gutter content — diff or breakpoint markers, folding, a
