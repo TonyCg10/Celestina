@@ -190,9 +190,9 @@ inside a rounded surface.
 
 | Level | Surface | Treatment |
 |---|---|---|
-| L0 | Window canvas | Opaque `canvas` and the canonical subtle `CelestinaBackdrop` gradient |
-| L1 | Grouped/content card | Opaque semantic surface, whitespace and one quiet outline; no shadow |
-| L2 | Menu, tab pills, toast | Regular glass (the Haze recipe) plus soft shadow |
+| L0 | Window canvas | Compositor glass: the window is transparent, the compositor blurs what lies behind it, and `CelestinaBackdrop` paints the Haze material over that blur (`glassTint`, canvas at 0.70, grain at `glassCanvasNoiseOpacity`) |
+| L1 | Grouped/content card | Opaque `card`, the black a Haze-tinted bar shows over the canvas (`#0b0c10`), whitespace and one quiet outline; no shadow |
+| L2 | Menu, tab pills, toast | Regular glass (the Haze recipe) plus soft shadow; a pill is glass at rest as well, with `controlFill` as its Haze tint |
 | L3 | Dialog/modal | The same glass plus scrim; no simultaneous depth shadow |
 | Shell content card / panel capsule | Layer-shell surface | One host-owned compositor blur region, or one region shared by the complete menu, with dense shadowless `ContentSurface` material |
 | Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent `ContextualVeil`; no shadow and no apparent edge halo, plus a readable fallback |

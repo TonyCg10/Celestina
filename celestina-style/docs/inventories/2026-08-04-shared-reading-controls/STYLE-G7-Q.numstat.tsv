@@ -1,0 +1,29 @@
+# STYLE-G7-Q exact change inventory
+
+Base revision	12319f617cd80e12be8811e0d7e5f26cafcdb303
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaBackdrop.qml
+Pathspec	celestina-style/CelestinaModalLayer.qml
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/GlassContextMenu.qml
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/docs/evidence/2026-10-05-glass-canvas.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-Q.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	2a040625beffa696c01894a817a9e475c70462f7313df14278234bdba80dbc6d	celestina-style/CMakeLists.txt
+14	8	d34426a449b31bc30014737fc1edf7fc05a97c07e4908740b28713af59bf750c	celestina-style/CelestinaBackdrop.qml
+13	5	9e1d38076a351022bb0fd46da879d6e8f6fe8cfddbe39f04a3621733fde95aa7	celestina-style/CelestinaModalLayer.qml
+9	2	50958a44f10d1045200c64c76a58210c5110f41539a0a604752d8591000a1465	celestina-style/CelestinaTheme.qml
+3	3	6381892920b2be3240ba8ed23fd77b237f3f83c1260b96596808d69101cec667	celestina-style/DESIGN.md
+29	1	6c3dbbcaade5baa26e73b3f069094f1323ac87f4c197efda9c15abcb5585c0f3	celestina-style/GlassContextMenu.qml
+11	1	5db2d7ce1c00e89452b6d709cdef50b58a239a9db9139716419ec1faab06eea0	celestina-style/STATUS.md
+64	0	dde6994453b27c68c94c84fbfeb8cd3d5c2ae5912b5be447bdeae3d299271dbd	celestina-style/docs/evidence/2026-10-05-glass-canvas.md
+29	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-Q.numstat.tsv
+1	0	2dab581fd60b909bd238677ea629c4295d6dc531a32ff13a00ddf6f751286926	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+1	0	2b998d8f38d44fdfcb607e279e8dfe043351cd2d1c2b6e6d9365059867d9ca71	docs/version-history.tsv

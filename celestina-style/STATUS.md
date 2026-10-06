@@ -1,6 +1,6 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-09-30
+- **Updated:** 2026-10-05
 - **Implementation:** the shared source contract is at 1.9.2 with
   `STYLE-G7-O` and `STYLE-G7-P` active, with the
   reading controls, the shared treemap and usage list, the glass material
@@ -12,6 +12,16 @@
 
 ## Current checkout truth
 
+- `STYLE-G7-Q` makes the window canvas compositor glass: applications set a
+  transparent window, Niri blurs what lies behind it, and `CelestinaBackdrop`
+  paints the Haze material over that blur with a lighter grain
+  (`glassCanvasNoiseOpacity` 0.05). Cards take the opaque black a Haze-tinted
+  bar shows over that canvas (`card` `#0b0c10`) and pills wear the Haze tint
+  at rest (`controlFill`). Two shared fixes ride with it: a modal's opening
+  focus placement is no longer a keyboard reason, so no focus ring lights on
+  show, and `GlassContextMenu` is modeless behind its own pointer shield, so
+  the wheel keeps scrolling the view under an open menu. See
+  [the record](docs/evidence/2026-10-05-glass-canvas.md).
 - `STYLE-G7-P` publishes `CelestinaTopBar` and `CelestinaSegmentedControl`,
   the two types every application's fixed top bar needs; the style guard keeps
   a bar's trailing slot free of text buttons. See

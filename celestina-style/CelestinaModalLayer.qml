@@ -58,7 +58,9 @@ FocusScope {
             appendFocusable(item.children[index], result)
     }
 
-    function focusInside(forward) {
+    // `reason` defaults to the keyboard reasons Tab travel deserves; the
+    // opening placement passes PopupFocusReason so no ring lights on show.
+    function focusInside(forward, reason) {
         const window = layer.Window.window
         const current = window ? window.activeFocusItem : null
         const focusable = []
@@ -80,7 +82,8 @@ FocusScope {
                           : (currentIndex + (forward ? 1 : -1)
                              + focusable.length) % focusable.length
         focusable[nextIndex].forceActiveFocus(
-                    forward ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+                    reason !== undefined ? reason
+                    : forward ? Qt.TabFocusReason : Qt.BacktabFocusReason)
     }
 
     function keepFocusInside() {
@@ -108,12 +111,17 @@ FocusScope {
         const backward = previousIndex === 0
         const target = backward ? focusable[focusable.length - 1]
                                 : focusable[0]
+        // The first placement on show is not a keystroke: it must not light
+        // the focus ring. Only a wrap after real Tab travel keeps a keyboard
+        // reason, so the ring follows the key and never the opening.
+        const reason = lastOwnedFocusItem === null
+                       ? Qt.PopupFocusReason
+                       : (backward ? Qt.BacktabFocusReason : Qt.TabFocusReason)
         Qt.callLater(function() {
             const activeWindow = layer.Window.window
             if (layer.shown && (!activeWindow
                                 || !layer.ownsItem(activeWindow.activeFocusItem)))
-                target.forceActiveFocus(backward ? Qt.BacktabFocusReason
-                                                 : Qt.TabFocusReason)
+                target.forceActiveFocus(reason)
         })
     }
 
@@ -138,7 +146,7 @@ FocusScope {
                 const activeWindow = layer.Window.window
                 if (layer.shown && (!activeWindow
                                     || !layer.ownsItem(activeWindow.activeFocusItem)))
-                    layer.focusInside(true)
+                    layer.focusInside(true, Qt.PopupFocusReason)
             })
             return
         }

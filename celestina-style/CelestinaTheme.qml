@@ -242,7 +242,9 @@ QtObject {
         // steps the SESL table does not name but the surfaces need.
         readonly property color night: "#050608"      // window / canvas
         readonly property color d1: "#090b0f"         // input / backdrop floor
-        readonly property color card: "#14171c"       // grouped tonal block
+        // The black a Haze-tinted bar shows over the glass canvas, made
+        // opaque: cards sit flat on the canvas in that same black.
+        readonly property color card: "#0b0c10"       // grouped card / box
         readonly property color d2: "#1a1e25"         // strong tonal surface
         readonly property color elevated: "#222831"   // elevated surface
         readonly property color divider: "#16ffffff"  // quiet hairline
@@ -447,7 +449,9 @@ QtObject {
         inputFill: "#8c14171c"
         inputFillFocus: "#b31a1e25"
         inputBorder: "#16ffffff"
-        controlFill: "#0effffff"
+        // A floating pill wears the Haze tint over its own glass capture,
+        // the same material as the bar and the menus.
+        controlFill: "#b3050608"
         badgeFill: "#0effffff"
         // Current/selected row wash: accent-tinted (alpha nudged up — blue reads
         // lighter than the old white at the same opacity).
@@ -865,6 +869,9 @@ QtObject {
             Math.ceil(glassBlurMax * (1 + glassBlurMultiplier))
     // Haze's grain: its texture drawn under the tint with alpha 0.15.
     readonly property real glassNoiseOpacity: 0.15
+    // The canvas is one glass pane the size of the window: at 0.15 the
+    // grain reads as texture, so the backdrop takes a third of it.
+    readonly property real glassCanvasNoiseOpacity: 0.05
     // What Haze paints when it cannot blur: the opaque background colour.
     readonly property color glassFallback: canvas
     // Opt-in semantic strengths for compositor-backed shell surfaces. Samsung

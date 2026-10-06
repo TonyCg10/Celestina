@@ -18,11 +18,39 @@ Menu {
     // that dismisses it also lands on whatever was underneath — a file gets
     // opened, a drag starts, a row lights up. `dim: false` keeps the look as it
     // was; only the input barrier is new.
-    modal: true
+    // Not modal: a modal popup's overlay swallows the wheel as well as the
+    // click, and the view behind a menu must keep scrolling. The pointer is
+    // still owned while open — by the shield below, which takes every press
+    // (closing the menu) and lets wheel events fall through to the content.
+    modal: false
     dim: false
     popupType: Popup.Item
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     transformOrigin: Item.TopLeft
+
+    property Item pointerShield: null
+
+    Component {
+        id: shieldComponent
+        MouseArea {
+            anchors.fill: parent
+            z: -1
+            acceptedButtons: Qt.AllButtons
+            onPressed: function(mouse) { mouse.accepted = true; root.close() }
+            onWheel: function(wheel) { wheel.accepted = false }
+        }
+    }
+
+    onOpened: {
+        if (!pointerShield && root.Overlay.overlay)
+            pointerShield = shieldComponent.createObject(root.Overlay.overlay)
+    }
+    onClosed: {
+        if (pointerShield) {
+            pointerShield.destroy()
+            pointerShield = null
+        }
+    }
 
     // A nested Menu is represented inside its parent by the parent's delegate.
     // Styling the delegate here keeps cascaded menus in the same glass language
