@@ -26,14 +26,12 @@ Rectangle {
         backdropSource: glassPill.backdrop
         // Sólo se captura cuando hay contenido detrás que desenfocar: al
         // final de la lista no hay nada bajo el pie y el cristal se apaga.
-        captureEnabled: glassPill.floating
+        // The pill is glass at rest too, like the bar; only the
+        // shadow follows whether it floats over scrollable content.
+        captureEnabled: true
         liveCapture: true
         cornerRadius: glassPill.radius
         elevation: glassPill.floating ? 2 : 0
-        opacity: glassPill.floating ? 1 : 0
-        Behavior on opacity {
-            NumberAnimation { duration: CelestinaTheme.motionNormal }
-        }
     }
 
     Rectangle {

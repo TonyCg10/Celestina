@@ -17,7 +17,9 @@ ApplicationWindow {
     // first tab exists — so the window never flashes at the default size and
     // then jumps.
     visible: false
-    color: CelestinaTheme.canvas
+    // Transparent: the compositor blurs what lies behind the window and
+    // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
+    color: CelestinaTheme.clear
     title: "Siderita"
 
     // ── Session ──────────────────────────────────────────────────────────

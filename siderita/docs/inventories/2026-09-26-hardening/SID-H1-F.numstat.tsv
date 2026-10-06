@@ -1,0 +1,25 @@
+# SID-H1-F exact change inventory
+
+Base revision	8021d53bb668a0d4117d6cd75fb664de0e691106
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-10-05-glass-canvas.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-F.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/Main.qml
+Pathspec	siderita/qml/components/chrome/GlassPill.qml
+Pathspec	siderita/qml/dialogs/FolderUsage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	a37e65b278100aec458a1371ac3a5fb3f43a3b4616d702931b47de9b4b77ab7d	docs/version-history.tsv
+1	1	2495147954e63db68c49dc4c9495752c276b0affa0f99604d0659d402449e883	siderita/Cargo.lock
+1	1	eed04dd8fdfe188a0666f9cb2de37fef50bda91c509a495a036fec07f068e20d	siderita/Cargo.toml
+51	0	2e6d7de038068d761bad67b4541752a13e9db8c20dff0130f9692dc03bb92642	siderita/docs/evidence/2026-10-05-glass-canvas.md
+25	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-F.numstat.tsv
+1	0	73b1f25ee44bcba2680103b3fb1e63d4718d476894f26aafa14683290c076d43	siderita/docs/plans/active/2026-09-26-hardening.md
+3	1	095fab7f3b45d2237eb1602009c2123dd0e73ae8f3415d5d509fed0cc89c446e	siderita/qml/Main.qml
+3	5	0b322822dd080fe9ada29ceb8d3fa1d1702ecba6b22b9807c6d2778a9292f2b0	siderita/qml/components/chrome/GlassPill.qml
+3	0	549c1015a204f7d9674dfcae49d9c17b5d5db1cd91f031df184d040ea7f8ee66	siderita/qml/dialogs/FolderUsage.qml

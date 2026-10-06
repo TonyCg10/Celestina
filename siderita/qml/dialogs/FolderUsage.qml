@@ -186,6 +186,9 @@ FocusScope {
                         CelestinaButton {
                             objectName: "crumb" + crumb.index
                             role: CelestinaButton.Ghost
+                            // Pointer-only: the crumbs take no keyboard focus,
+                            // so opening the dialog never lights a ring here.
+                            focusPolicy: Qt.NoFocus
                             text: section.usage.crumbs[crumb.index]
                             helpText: text
                             font.weight: crumb.index === section.usage.crumbs.length - 1
