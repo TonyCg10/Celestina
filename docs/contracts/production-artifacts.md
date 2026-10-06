@@ -32,7 +32,10 @@ the author's binary.
 ## Single build
 
 - Use the release profile and options for the distributed artifact.
-- Reuse `target/` and `build/`; do not run `clean` by default.
+- Reuse `target/` and `build/` between a build and its deploy; do not run
+  `clean`. After a landing deployed and checked its artifacts, its `prune`
+  step reduces the build trees as [Pruning after deploy](#pruning-after-deploy)
+  says.
 - Do not create an agent-only target when the canonical target can be deployed.
 - Build all binaries deployed by the project as one unit without starting
   processes or reloading services.
@@ -177,6 +180,33 @@ for missing or different copies.
 Desktop databases, icon caches, and D-Bus reload belong to deploy, not build or
 verify. Magnetita stops and restarts `magnetitad` only when it was already
 active; deploy never enables an inactive service.
+
+## Pruning after deploy
+
+A build tree holds far more than the artifact: debug and test builds,
+dependency objects and incremental state, tens of gigabytes per application,
+none of which the installed copy uses. `scripts/build_trees.py prune`
+removes everything under the build roots except what the registry names:
+
+- the build roots are the first `target` or `build` directory of each
+  `artifact_paths` entry and `artifact_manifest` of every project that is not
+  halted; a halted project's own tree is never touched;
+- every project's `artifact_paths` and `artifact_manifest`, halted ones
+  included, are kept, so `check`, `deploy-production.sh` and
+  `status-production.sh` keep judging the same bytes, and an artifact that is
+  still current is not rebuilt;
+- each pruned project gets a mark, `<artifact_manifest>.pruned`. The
+  artifact stays current, but a verification alone would lack the generated
+  sources it reads, such as the release QML module `qmllint-cxxqt.sh` lints.
+  The landing therefore builds a marked project whose check reports only the
+  verification errors, instead of verifying it alone, and clears the mark
+  after that build.
+
+`--dry-run` lists what would go and how much it frees without removing
+anything. The tool refuses to run in a session worktree, whose builds use the
+shared session target instead; `scripts/worktree.sh close` removes that
+target when it closes the last session. The landing runs the prune as its
+last step; see [the landing contract](landing.md).
 
 ## Shell special case
 

@@ -302,8 +302,12 @@ bumps. `maintenance` changes do neither. See
 [docs/contracts/versioning.md](docs/contracts/versioning.md).
 
 Do not use a parallel Cargo/CMake build as final evidence when it leaves a
-different deployable binary. Do not run `clean`; production targets and caches
-are reusable monorepo resources. See
+different deployable binary. Do not run `clean`: between a build and its
+deploy, production targets and caches are reusable monorepo resources. Once a
+landing has deployed and checked its artifacts, its last step prunes every
+build tree to the registered artifacts and their manifests
+(`scripts/build_trees.py`), because the rest is a cache the next build
+regenerates. See
 [docs/contracts/production-artifacts.md](docs/contracts/production-artifacts.md).
 
 ## Minimum evidence

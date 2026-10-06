@@ -8,7 +8,7 @@
 
 The steps follow docs/contracts/landing.md: preflight, unbump, rebase,
 bump_version, checkout_canonical, pre_guards, build_if_stale, seal,
-run_guards, commit_and_push, deploy. The rebase happens in a
+run_guards, commit_and_push, deploy, prune. The rebase happens in a
 landing worktree at <parent>/<basename>.worktrees/.landing/, which also holds
 the resumable state in .land-state.toml. Commits made there are temporary: the
 only commit that reaches main is the sealed one, created in the canonical
@@ -67,6 +67,7 @@ from landing import (
     unbumped_files,
     verification_only,
 )
+from build_trees import PruneError, clear_mark, is_pruned, prune as prune_build_trees
 from production_artifact import session_worktree_marker
 
 
@@ -892,7 +893,9 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None, b
 
     When the check fails only because the artifact is not verified for the
     current tests and rules, the verification runs alone: the verify_script.
-    Otherwise the project runs its build_script, then its verify_script. A
+    Otherwise, or when the prune step of an earlier landing left the
+    project's build tree without the generated sources a verification reads,
+    the project runs its build_script, then its verify_script. A
     deployable project is not deployed here: its deploy_script and
     status_script, the rest of what its complete_script runs, wait for the
     push, so a unit that a later guard, a hook or a lost push race stops is
@@ -916,7 +919,7 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None, b
         registered_entries(project, ("deploy_script", "status_script"))
     if checked.returncode == 0:
         return check, None, deployable
-    if verification_only(checked.stderr):
+    if verification_only(checked.stderr) and not is_pruned(ctx.root, project):
         label = "verify"
         keys: tuple[str, ...] = ("verify_script",)
     else:
@@ -929,6 +932,8 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None, b
             raise LandingStop(
                 "build_if_stale", f"{entry} failed with exit {built.returncode}", entry
             )
+    if label == "build":
+        clear_mark(ctx.root, project)
     rechecked = artifact_check(ctx, project_id)
     if rechecked.returncode != 0:
         detail = (rechecked.stdout + rechecked.stderr).strip()
@@ -1177,6 +1182,23 @@ def deploy(ctx: LandContext) -> None:
                 )
         state.deploy = " ".join(item for item in state.deploy.split() if item != project_id)
         save_state(ctx)
+
+
+def prune(ctx: LandContext) -> None:
+    """Prune every build tree to its registered artifacts, then remove the landing worktree.
+
+    The unit is on main and its artifacts are deployed and checked, so what
+    the builds left besides those artifacts and their manifests is a cache the
+    next build regenerates. A failure only warns: the unit has landed.
+    """
+    registry = registry_at(ctx, ctx.state.sealed or "HEAD")
+    try:
+        report = prune_build_trees(ctx.root, registry)
+    except (PruneError, OSError) as error:
+        say(f"warning: the build trees were not pruned: {error}")
+    else:
+        gib = report.freed_bytes / 1024**3
+        print(f"land-unit: pruned the build trees to their artifacts; freed {gib:.1f} GiB")
     remove_landing(ctx)
 
 
@@ -1273,6 +1295,7 @@ STEP_FUNCTIONS = (
     run_guards,
     commit_and_push,
     deploy,
+    prune,
 )
 STEPS = tuple(function.__name__ for function in STEP_FUNCTIONS)
 

@@ -1,0 +1,35 @@
+# AUD-1-J exact change inventory
+
+Base revision	52805376be2f375fa0f6e327d7f7eaf9393ef2af
+Pathspec	.github/workflows/contracts.yml
+Pathspec	AGENTS.md
+Pathspec	CONTRIBUTING.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/evidence/2026-10-06-prune-build-trees.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-J.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	scripts/build_trees.py
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/test-build-trees.py
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-worktree.sh
+Pathspec	scripts/worktree.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	223dd45cdf216e96ef5283563652981c524ad66c7d20bda0a2bab131d4eaf9b1	.github/workflows/contracts.yml
+6	2	e96c13146872f25d6c7298e65d0c952c7a016b7f77dd4fb051303e08183b4ec1	AGENTS.md
+2	1	68b8826d38f022e089c03b5d1f924cb61dc64ed34e58c1f96c047d986d46352e	CONTRIBUTING.md
+25	8	e6640d50c6424370cb4e4e1e853b291d169370c7156742c5c0e17a7b94ef34e5	docs/contracts/landing.md
+31	1	9c3918206601ac20c2019d9f13165af3eabbbd70c22192caf5237e7acfd48d22	docs/contracts/production-artifacts.md
+90	0	73cbbdfff43c37564281ab8ccaa86140d02073a528105a447b7906a8869bbeaf	docs/evidence/2026-10-06-prune-build-trees.md
+35	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-J.numstat.tsv
+4	0	a5743b777258606ad7e230637afd95ffb0070c6cc3a07e988b1f62d3d764a593	docs/plans/active/2026-09-26-monorepo-hardening.md
+252	0	5d8f22cb5ea0fe4834665d92e7bd7c9d89281d240373cbfcd8b17890e1cac3f1	scripts/build_trees.py
+26	3	a4e1b921087f181c48926ee62df8e1befaee51af24bb8dea74f8e195ea83bce6	scripts/land-unit.py
+250	0	3a843450cf52955b1a6850a531a290bf9accb879aa5288c9d8a26ea3546ef5e9	scripts/test-build-trees.py
+45	0	b27003fb159d77e32eda2b770625b19543fa3fb49bfc9aac72eac85244ecbf62	scripts/test-land-unit.py
+20	0	358f554ca9b51eb4063caf1a1e712b73845b65d965f890f740b78b2a68cceb0a	scripts/test-worktree.sh
+12	1	7908570dbb13dfda4e71d37d869af217375680c5aae307a84d0fe61cc8dca059	scripts/worktree.sh

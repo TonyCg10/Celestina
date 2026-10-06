@@ -123,6 +123,26 @@ if git -C "$repo" show-ref --verify --quiet refs/heads/unit/app/APP-1; then
 fi
 printf 'ok %s\n' "close refuses unpublished work and removes a published unit"
 
+# 4b. Closing the last session removes the shared session Cargo target, and
+#     the landing worktree does not count as a session.
+mkdir -p "$worktrees/.cargo-target/debug" "$worktrees/.landing"
+printf 'cache\n' > "$worktrees/.cargo-target/debug/cache.rlib"
+run_entry open app APP-7
+expect_status 0 "open app APP-7"
+run_entry open app APP-8
+expect_status 0 "open app APP-8"
+run_entry close app APP-7
+expect_status 0 "close app APP-7 while APP-8 is open"
+[ -f "$worktrees/.cargo-target/debug/cache.rlib" ] \
+    || fail "close app APP-7: removed the Cargo target another session uses"
+run_entry close app APP-8
+expect_status 0 "close app APP-8, the last session"
+[ ! -e "$worktrees/.cargo-target" ] \
+    || fail "close app APP-8: the last session left the shared Cargo target"
+[ -d "$worktrees/.landing" ] || fail "close app APP-8: removed the landing worktree"
+rmdir -- "$worktrees/.landing"
+printf 'ok %s\n' "closing the last session removes the shared Cargo target"
+
 # 5. The suite is a valid project id.
 run_entry open suite LND-9
 expect_status 0 "open suite LND-9"

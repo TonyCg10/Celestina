@@ -22,7 +22,9 @@ set -eu
 #       commit, so after a landing only its inventory proves the unit landed);
 #       also refuse while the branch holds a commit made after the landing
 #       commit that added that inventory, which the landing never saw;
-#       then remove the worktree and delete the branch.
+#       then remove the worktree and delete the branch. When no other session
+#       worktree remains, also remove the shared session Cargo target, a cache
+#       the next session's first build regenerates.
 #
 # A fetch that takes longer than CELESTINA_NETWORK_TIMEOUT seconds (300 by
 # default) is a refusal, not a hang.
@@ -228,3 +230,12 @@ if [ -d "$unit_dir" ]; then
 fi
 git -C "$repo_root" branch --quiet -D "$branch" \
     || refuse "cannot delete the branch $branch"
+
+# The shared Cargo target serves open sessions only; the landing worktree
+# never builds, so it does not keep the cache alive.
+session=$(find "$worktrees" -mindepth 1 -maxdepth 1 ! -name .cargo-target \
+    ! -name .landing -print 2>/dev/null | head -n 1)
+if [ -z "$session" ] && [ -d "$worktrees/.cargo-target" ]; then
+    rm -rf -- "$worktrees/.cargo-target" \
+        || refuse "cannot remove the session Cargo target $worktrees/.cargo-target"
+fi

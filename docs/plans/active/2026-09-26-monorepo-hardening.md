@@ -65,6 +65,9 @@ one owner on both ends, and the hooks judge the index with committed rules.
   `magnetitad` Magnetita deploys.
 - `AUD-1-H` — the hooks accept the merge of `origin/main` into a stacked
   branch that the landing contract prescribes.
+- `AUD-1-J` — at the author's request of 2026-10-06, prune every build tree
+  to its registered artifacts at the end of each landing, and remove the
+  shared session Cargo target when the last session closes.
 - `HALT-SHELL` — record the author's halt of the Celestina shell
   (2026-09-27) in the root contract, the registry and the shell's documents,
   and make the guards and the landing honour it.
@@ -149,6 +152,7 @@ plans; a pending author validation never keeps this checkpoint open.
 | AUD-1-G | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-G.numstat.tsv) | 8 files, +159/-2 | Make each registered artifact path belong to one project | [evidence](../../evidence/2026-09-29-one-owner-per-artifact.md) | None |
 | AUD-1-H | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-H.numstat.tsv) | 8 files, +254/-3 | Fix merging main into a stacked branch through the hooks | [evidence](../../evidence/2026-09-29-merged-in-inventories.md) | None |
 | AUD-1-I | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-I.numstat.tsv) | 8 files, +888/-0 | Add the radius guard the 2026-09-30 design specifies: a bounded QML scanner that refuses text or a glyph closer to a rounded corner than `cornerInset`, a nested token radius that is not concentric with its parent, and a numeric margin literal inside a rounded surface, with a shrink-only per-project baseline registered as a shared ratchet so each application lowers it in the unit that pays the debt | [evidence](../../evidence/2026-09-30-radius-guard.md) | None |
+| AUD-1-J | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-J.numstat.tsv) | 14 files, +799/-16 | Add the prune of every build tree to its registered artifacts after each landing deploys | [evidence](../../evidence/2026-10-06-prune-build-trees.md) | None |
 
 `AUD-1-E` lands as `suite-bug` bumping Magnetita and Magnetita Android;
 `scripts/land-unit.py` refuses a `suite-bug`, so the author records both

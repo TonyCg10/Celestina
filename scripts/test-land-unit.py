@@ -1119,6 +1119,7 @@ COPIED_SCRIPTS = (
     "cargo_closure.py",
     "complete-production.py",
     "landing.py",
+    "build_trees.py",
     "land-unit.py",
 )
 PYTHON_GUARDS = (
@@ -3065,6 +3066,50 @@ class LandUnitFixture(unittest.TestCase):
             r"- \*\*Deploy:\*\* after the push: app: deploy-production\.sh, "
             r"status-production\.sh\n$",
         )
+
+    def test_a_landing_prunes_the_build_trees_to_their_artifacts(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        self.write(self.repo, "app/target/debug/deps/cache.rlib", "cache\n")
+        self.write(self.repo, "lib/target/release/deps/cache.rlib", "cache\n")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertIn("land-unit: prune", result.stdout)
+        self.assertIn("land-unit: pruned the build trees to their artifacts", result.stdout)
+        self.assertFalse((self.repo / "app/target/debug").exists())
+        self.assertFalse((self.repo / "lib/target/release/deps").exists())
+        self.assertTrue((self.repo / "app/target/release/app").is_file())
+        self.assertTrue((self.repo / "app/target/production-artifact.toml").is_file())
+        self.assertTrue((self.repo / "app/target/production-artifact.toml.pruned").is_file())
+        self.assertFalse(self.landing_dir.exists())
+        # The deployed copy still matches the kept artifact.
+        status = subprocess.run(
+            ["sh", "app/scripts/status-production.sh"],
+            cwd=self.repo,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=self.environment,
+        )
+        self.assertEqual(status.returncode, 0, msg=status.stdout + status.stderr)
+
+    def test_a_pruned_project_builds_before_it_verifies(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write(worktree, "app/tests/case.txt", "case\nanother case\n")
+        self.write_unit(worktree, "FX-A", touch_source=False)
+        self.build_main()
+        self.write(self.repo, "app/target/production-artifact.toml.pruned", "pruned\n")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertEqual(len(self.records_of(".builds-ran")), 1)
+        self.assertEqual(self.records_of(".app-entries-ran"), ["verify", "deploy", "status"])
+        self.assertRegex(self.show_main(EVIDENCE), r"- \*\*Build:\*\* app build: ")
 
     def test_missing_registered_input_stops_at_the_build(self) -> None:
         def register_a_missing_input(worktree: Path) -> None:
