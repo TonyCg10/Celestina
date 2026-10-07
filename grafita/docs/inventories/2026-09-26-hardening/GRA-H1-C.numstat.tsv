@@ -1,0 +1,29 @@
+# GRA-H1-C exact change inventory
+
+Base revision	e008b7d754af2cb440df5bf41bc5d4359cae3888
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/docs/evidence/2026-10-07-glass-canvas.md
+Pathspec	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-C.numstat.tsv
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	grafita/qml/Main.qml
+Pathspec	grafita/qml/components/DocumentView.qml
+Pathspec	grafita/qml/components/FindBar.qml
+Pathspec	grafita/qml/components/TabStrip.qml
+Pathspec	scripts/glass-canvas-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	d3c9950f1d5b7c45f44f4a0e33eda0a11dce3c5cfe79494e49a31ad3653ecda5	docs/version-history.tsv
+1	1	e87e84ea8a5edad15acf04ca739c332df4b8518b42eef67c977da9bc513d449c	grafita/Cargo.lock
+1	1	7551270d2a7dab719bb0b2fbeab9d9dd9169f158863adb52cf3b44f747b84803	grafita/Cargo.toml
+48	0	3a40ca2560f1348943f752207a55e742185ab433c47275d7a694602aacd7bbba	grafita/docs/evidence/2026-10-07-glass-canvas.md
+29	0	self	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-C.numstat.tsv
+1	0	cc8bd08462d1dd945144c98bad65f216180cbc77e3fbbee378774ac9e80ff5f6	grafita/docs/plans/active/2026-09-26-hardening.md
+9	1	472cb3a3aa6e85a6e40917c6403bb7022f6fb93fc01db1ace12384799afa4f6f	grafita/qml/Main.qml
+3	1	080db64936d46ea56efd0b497a7904ff96e7f2d3bb61a6fdb0f199ca7d752216	grafita/qml/components/DocumentView.qml
+3	3	e28e3d643e65a273eef1f800538cd9f06566dd5526a676c1df2ac1d46f04c773	grafita/qml/components/FindBar.qml
+3	3	1e5d81cdf1794154f1be17c6ea95f9e1c4c09377b2a0cd188100fba3317947ab	grafita/qml/components/TabStrip.qml
+1	1	689ee842bd6f87e84352425240343ed0a6de259df1c7ab2617dfa1a2952b30f6	scripts/glass-canvas-baseline.tsv

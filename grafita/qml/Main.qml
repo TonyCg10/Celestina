@@ -22,7 +22,9 @@ ApplicationWindow {
     minimumWidth: 480
     minimumHeight: 320
     visible: true
-    color: CelestinaTheme.canvas
+    // Transparent: the compositor blurs what lies behind the window and
+    // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
+    color: CelestinaTheme.clear
     title: activeSession ? activeSession.windowTitle : "Grafita"
 
     // ── Tabs ─────────────────────────────────────────────────────────────
@@ -267,6 +269,12 @@ ApplicationWindow {
         sequences: ["Ctrl+E"]
         onActivated: if (activeView && activeView.encodingChoosable)
                          window.chooseEncoding()
+    }
+
+    // Under everything the window holds: the tab strip, the documents and
+    // the dialogs all paint over the Haze canvas.
+    CelestinaBackdrop {
+        anchors.fill: parent
     }
 
     TabStrip {

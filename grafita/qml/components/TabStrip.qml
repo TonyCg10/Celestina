@@ -51,11 +51,11 @@ Item {
 
     implicitHeight: viewport.height + CelestinaTheme.spaceSm
 
+    // A bar on the glass canvas wears the Haze tint, like Siderita's bars,
+    // with no outline: the spec's pure Haze has no lit edge.
     Rectangle {
         anchors.fill: parent
-        color: CelestinaTheme.surface
-        border.width: CelestinaTheme.borderHairline
-        border.color: CelestinaTheme.divider
+        color: CelestinaTheme.pillFill
     }
 
     // The close button is the Compact icon button, so the room a tab reserves

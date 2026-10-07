@@ -34,11 +34,11 @@ Item {
 
     onShownChanged: if (!shown) root.session.setSearch("", false, false)
 
+    // A bar on the glass canvas wears the Haze tint, like Siderita's bars,
+    // with no outline: the spec's pure Haze has no lit edge.
     Rectangle {
         anchors.fill: parent
-        color: CelestinaTheme.surface
-        border.width: CelestinaTheme.borderHairline
-        border.color: CelestinaTheme.divider
+        color: CelestinaTheme.pillFill
     }
 
     Keys.onPressed: function(event) {

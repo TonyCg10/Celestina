@@ -83,7 +83,9 @@ Item {
         anchors.bottomMargin: CelestinaTheme.spaceSm
         visible: root.session.active
         enabled: !root.blocked
-        color: CelestinaTheme.inputFill
+        // A box on the glass canvas is opaque, in the bar's black: the text
+        // must never sit over whatever the compositor shows behind the window.
+        color: CelestinaTheme.card
         radius: CelestinaTheme.radiusInput
         border.width: CelestinaTheme.borderHairline
         border.color: CelestinaTheme.inputBorder

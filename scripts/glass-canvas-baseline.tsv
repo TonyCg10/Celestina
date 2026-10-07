@@ -3,7 +3,7 @@
 # a shared ratchet file so every project prefix may lower its own row.
 # findings<TAB>project
 1	fluorita
-2	grafita
+0	grafita
 2	hematita
 1	magnetita
 0	siderita
