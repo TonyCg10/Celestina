@@ -1,0 +1,21 @@
+# SID-H1-L exact change inventory
+
+Base revision	a327003e975dc0c1ec706d949abeab590aa14d33
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-10-07-picker-glass-canvas.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-L.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/PickerWindow.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	522519d49c08fc7e1c6e5ba1c1ee8a27f3e86ad6c703f3d4b9aa995466a3226e	docs/version-history.tsv
+1	1	5fcc8daa58c2a3a636a48ac5a8dfe6569167a1811b88370d3db1e22d525736de	siderita/Cargo.lock
+1	1	2abdf67358fe3ba4d8ca34c64ed0628c0bbda4ba0a7e50b3533eed634f3f7908	siderita/Cargo.toml
+46	0	a0c183e71bfe488c66cde4a63c5c39e0c392ed04f23bea2cd2773abe13cf1ba3	siderita/docs/evidence/2026-10-07-picker-glass-canvas.md
+21	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-L.numstat.tsv
+1	0	c0955d274dc7fd57deb32f3e0a149bfe5d3fe518721d97b332c204dc19a64d85	siderita/docs/plans/active/2026-09-26-hardening.md
+9	1	93036f1383f8eb1fa9f0eb099bc76626b39ceed558aca646c157a7bdd2362f1e	siderita/qml/PickerWindow.qml

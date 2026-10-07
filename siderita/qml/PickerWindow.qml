@@ -74,7 +74,9 @@ Window {
     minimumWidth: 520
     minimumHeight: 380
     visible: true
-    color: CelestinaTheme.canvas
+    // Transparent: the compositor blurs what lies behind the window and
+    // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
+    color: CelestinaTheme.clear
     title: requestTitle.length > 0 ? requestTitle
            : saving ? "Guardar archivo" : "Abrir archivo"
     // A picker belongs to the application that asked for it, so it is a dialog,
@@ -487,6 +489,12 @@ Window {
     // parece a la aplicación que lo sirve es un diálogo prestado.
     Item {
         anchors.fill: parent
+
+        // The picker is Siderita: the same Haze canvas under its sidebar,
+        // listing and bars as the main window.
+        CelestinaBackdrop {
+            anchors.fill: parent
+        }
 
         // Read-only navigation, not the full write-capable Sidebar — see
         // PickerSidebar.qml's header for why.
