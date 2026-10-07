@@ -1,0 +1,19 @@
+# STYLE-G7-T exact change inventory
+
+Base revision	5b3d7b5dcbe54311ffda272ac17e787eaef34e6a
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaModalLayer.qml
+Pathspec	celestina-style/docs/evidence/2026-10-06-modal-fade.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-T.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	6fc12a27149fe25009738ebc87ba7844bc57673f77643a4075a3388f116c17c7	celestina-style/CMakeLists.txt
+6	0	7815bdfe7cb9bd394a6c086f7d8d5ea6263b76be1ea042abd12ddcec58baa8c4	celestina-style/CelestinaModalLayer.qml
+42	0	bea59a873a4ae77ec8a1fdbc9831d76a8caa528914304a005bfd3a865ed23bf3	celestina-style/docs/evidence/2026-10-06-modal-fade.md
+19	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-T.numstat.tsv
+1	0	cd81fa8c1336afe0813c66704fec4de57098f99a2a5649a6ea53de11bcb1de00	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+1	0	1230ab0afb552e51f17fd51442e84c3092f7d7ebaba4d833abd0a8f8d255bcac	docs/version-history.tsv

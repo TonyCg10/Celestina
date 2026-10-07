@@ -191,6 +191,12 @@ FocusScope {
 
         anchors.fill: parent
         enabled: layer.shown
+        // The dialog fades as one image. With per-item opacity the card's
+        // tint went transparent while its text was still readable and the
+        // content behind showed through it mid-fade, which the author saw as
+        // the dialog breaking rather than fading. A layer only while the fade
+        // runs; at rest the card paints straight to the window.
+        layer.enabled: contentHost.parent.opacity > 0 && contentHost.parent.opacity < 1
     }
 
     // ── Input shield ─────────────────────────────────────────────────────
