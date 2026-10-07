@@ -1,0 +1,23 @@
+# SID-H1-I exact change inventory
+
+Base revision	3af07002f771341e5761bc4ce6ba5ff41860d297
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-10-06-wheel-glide.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-I.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/folder/FolderWheelHandler.qml
+Pathspec	siderita/qml/components/folder/HeadingScroll.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	f21cf99002aadf9c42a74e224360289c11eac1f309bf1f435fbc0c9a65c3fa49	docs/version-history.tsv
+1	1	437b597b2b45853f2975aecc59710bab66b9dd1a9bbf6f39ea5561072fd23a95	siderita/Cargo.lock
+1	1	193c03efb1259af3155e88ea6c619e409c6edb0258bdd4c0e1ec4c17bde60da2	siderita/Cargo.toml
+51	0	453da8814700218ddadf230d81e131c29acb65d71d7a6160f82ea9e473d1f44b	siderita/docs/evidence/2026-10-06-wheel-glide.md
+23	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-I.numstat.tsv
+1	0	656ed48e22bc04aa5271ab9331a18a4d4fdb66716d7c68dae6ab6158be1b302f	siderita/docs/plans/active/2026-09-26-hardening.md
+59	22	7cf1c1495d59170532f99873ae6a8906925d2c36b4a007f72cf0cec2301e26d7	siderita/qml/components/folder/FolderWheelHandler.qml
+40	15	525225e89d78e485f584379e8f645ce902b7d2b0e83974f901acd119cbbca482	siderita/qml/components/folder/HeadingScroll.qml

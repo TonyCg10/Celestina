@@ -47,7 +47,7 @@ WheelHandler {
     }
 
     function resetTarget() {
-        wheelAnimation.stop()
+        settleGlide()
         targetContentY = boundedY(view.contentY)
         if (Math.abs(view.contentY - targetContentY) > 0.01)
             view.contentY = targetContentY
@@ -66,11 +66,8 @@ WheelHandler {
         if (Math.abs(bounded - targetContentY) < 0.01)
             return
         targetContentY = bounded
-        if (wheelAnimation.running) {
-            wheelAnimation.stop()
-            wheelAnimation.from = view.contentY
-            wheelAnimation.to = bounded
-            wheelAnimation.start()
+        if (gliding) {
+            glideToTarget()
             return
         }
         if (Math.abs(view.contentY - bounded) > 0.01)
@@ -79,7 +76,7 @@ WheelHandler {
 
     Component.onCompleted: resetTarget()
     onActiveChanged: {
-        if (active && !wheelAnimation.running)
+        if (active && !gliding)
             targetContentY = boundedY(view.contentY)
     }
 
@@ -103,15 +100,58 @@ WheelHandler {
         }
     }
 
-    property NumberAnimation wheelAnimation: NumberAnimation {
-        id: wheelAnimation
-        target: root.view
-        property: "contentY"
-        // Reduced motion jumps to the destination: the same distance, no
-        // glide.
-        duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
-        easing.type: CelestinaTheme.easeStandard
-        onFinished: root.targetContentY = root.boundedY(root.view.contentY)
+    // The listing glides at the heading's `wheelVelocity`. The glide is a
+    // Behavior on a private `glideY` that the view follows while `gliding`:
+    // a notch that lands while the previous one is still travelling re-aims
+    // the animation and keeps its speed, instead of restarting a 200 ms eased
+    // tween from wherever the rows were — the restart made every fast scroll
+    // jump and brake once per notch, out of step with the heading. The view
+    // is driven, not bound: a drag or a touchpad stream writes `contentY`
+    // itself, and must not pass through the Behavior. Reduced motion jumps to
+    // the destination: the same distance, no glide.
+    property bool gliding: false
+    property real glideY: 0
+    Behavior on glideY {
+        enabled: root.gliding
+        SmoothedAnimation {
+            id: wheelAnimation
+            reversingMode: SmoothedAnimation.Immediate
+            velocity: root.heading.wheelVelocity
+            maximumEasingTime: CelestinaTheme.motionNormal
+        }
+    }
+    // Arrival, not `running`: a Behavior restarts its animation on every
+    // re-aim, and `running` flips false and true inside that restart.
+    onGlideYChanged: {
+        if (!gliding)
+            return
+        view.contentY = glideY
+        if (Math.abs(glideY - targetContentY) < 0.01) {
+            gliding = false
+            targetContentY = boundedY(view.contentY)
+        }
+    }
+
+    // Ends a glide in flight: a disabled Behavior stops its animation on the
+    // next direct write of `glideY` (the animation itself cannot be stopped
+    // from outside).
+    function settleGlide() {
+        gliding = false
+        glideY = view.contentY
+    }
+
+    // Aims the listing at `targetContentY`, carrying a running glide over.
+    function glideToTarget() {
+        if (CelestinaTheme.reducedMotion) {
+            settleGlide()
+            view.contentY = targetContentY
+            return
+        }
+        if (!gliding) {
+            glideY = view.contentY
+            gliding = true
+        }
+        glideY = targetContentY
     }
 
     onWheel: function(event) {
@@ -151,19 +191,16 @@ WheelHandler {
         if (pixelBased) {
             // Touchpads already deliver a smooth stream of pixel deltas. A
             // second tween here would add latency and make the gesture gummy.
-            wheelAnimation.stop()
+            settleGlide()
             targetContentY = boundedY(view.contentY - delta)
             view.contentY = targetContentY
         } else {
             // Accumulate the destination while the previous tween is still
             // settling so rapid wheel input never loses distance.
-            if (!wheelAnimation.running)
+            if (!gliding)
                 targetContentY = boundedY(view.contentY)
             targetContentY = boundedY(targetContentY - delta)
-            wheelAnimation.stop()
-            wheelAnimation.from = view.contentY
-            wheelAnimation.to = targetContentY
-            wheelAnimation.start()
+            glideToTarget()
         }
         event.accepted = true
     }
