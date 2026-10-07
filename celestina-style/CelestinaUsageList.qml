@@ -95,6 +95,8 @@ CelestinaSurface {
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Contenido por tamaño")
 
+            CelestinaWheelScroll { view: list }
+
             onCurrentIndexChanged: {
                 if (list.currentIndex >= 0)
                     list.positionViewAtIndex(list.currentIndex, ListView.Contain)

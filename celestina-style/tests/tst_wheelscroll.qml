@@ -72,6 +72,24 @@ TestCase {
         }
     }
 
+    // A plain Flickable with a scroller, flicked the way a touch drag-flick
+    // leaves it, for the idle-write case.
+    Flickable {
+        id: plain
+
+        parent: testWindow.contentItem
+        width: 100
+        height: 100
+        contentWidth: 100
+        contentHeight: 5000
+        boundsBehavior: Flickable.StopAtBounds
+
+        CelestinaWheelScroll {
+            id: plainWheel
+            view: plain
+        }
+    }
+
     SignalSpy {
         id: steppedSpy
         target: wheel
@@ -185,5 +203,16 @@ TestCase {
         wheel.retarget()
         compare(list.contentY, list.originY - list.topMargin)
         list.model = 2000
+    }
+
+    function test_h_idle_retarget_leaves_a_running_flick_alone() {
+        plain.contentY = 0
+        plain.flick(0, -2000)
+        verify(plain.flicking)
+        plain.contentHeight = 5001
+        plainWheel.retarget()
+        verify(plain.flicking, "an in-bounds idle retarget ended the flick")
+        plain.cancelFlick()
+        plain.contentHeight = 5000
     }
 }

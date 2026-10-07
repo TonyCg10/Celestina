@@ -8,7 +8,10 @@ import QtQuick
 // that loses most of a fast burst), which is what the author felt as a
 // brake. Touchpad pixel deltas go straight through. At a bound the event is
 // left for an outer scroller, and so is a touchpad swipe that is mostly
-// horizontal, which belongs to whatever scrolls sideways.
+// horizontal, which belongs to whatever scrolls sideways, but only when the
+// view can scroll sideways itself (contentWidth > width); on any other view
+// that swipe counts as vertical (its y part is applied and `stepped` emitted)
+// so rows never move without the signal.
 //
 // It is a MouseArea, not a WheelHandler: a WheelHandler decides whether the
 // event goes on before its `wheel` signal runs (`blocking`), so it cannot
@@ -48,8 +51,13 @@ MouseArea {
     function put(y) { root.written = y; root.view.contentY = y }
     function retarget() {
         root.targetY = root.clampY(root.targetY)
-        if (!glide.running)
-            root.put(root.clampY(root.view.contentY))
+        // Idle: write only when the clamp really moves the view, because
+        // Qt's setContentY ends a running flick even for an unchanged value.
+        if (!glide.running) {
+            const y = root.clampY(root.view.contentY)
+            if (Math.abs(y - root.view.contentY) > 0.01)
+                root.put(y)
+        }
     }
 
     onWheel: function(event) {
@@ -57,7 +65,8 @@ MouseArea {
             event.accepted = false
             return
         }
-        if (Math.abs(event.pixelDelta.x) > Math.abs(event.pixelDelta.y)) {
+        if (Math.abs(event.pixelDelta.x) > Math.abs(event.pixelDelta.y)
+                && root.view.contentWidth > root.view.width) {
             event.accepted = false
             return
         }
