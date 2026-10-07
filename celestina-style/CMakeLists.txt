@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.12.7 LANGUAGES CXX)
+project(celestina-style VERSION 1.12.8 LANGUAGES CXX)
 
 include(CTest)
 
@@ -57,10 +57,12 @@ qt_add_qml_module(celestina-style
         CelestinaFileIcon.qml
         CelestinaIconShapes.qml
         CelestinaModalLayer.qml
+        CelestinaWheelScroll.qml
         GlassSurface.qml
         GlassCard.qml
         GlassContextMenu.qml
         GlassMenuItem.qml
+        GlassMenuSection.qml
     RESOURCES
         icons/archive-compress.svg
         icons/archive-extract.svg

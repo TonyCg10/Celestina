@@ -1,0 +1,33 @@
+# STYLE-G7-Y exact change inventory
+
+Base revision	00ca996edf033f72d780588fb68d1d90233c0fe1
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/CelestinaWheelScroll.qml
+Pathspec	celestina-style/GlassContextMenu.qml
+Pathspec	celestina-style/GlassMenuItem.qml
+Pathspec	celestina-style/GlassMenuSection.qml
+Pathspec	celestina-style/docs/evidence/2026-10-07-wheel-and-sections.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-Y.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/qmldir
+Pathspec	celestina-style/tests/tst_contextmenu.qml
+Pathspec	celestina-style/tests/tst_wheelscroll.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	1	8ec7e0bcd492467ea60dcd62637d54aa0264af692e270773bdcb0acaac2c5bc0	celestina-style/CMakeLists.txt
+5	0	777bac9ebe9cec4bf496475cb108ea390d0bd8e44d1333d7a781e5ce9926d377	celestina-style/CelestinaTheme.qml
+111	0	46b7cb2844115e9fda7f7719434bc588ed9f7c57b7c56707baf18c60842a49d5	celestina-style/CelestinaWheelScroll.qml
+33	8	9aa60b0de5b53353af7d83cc3c16afda947c8ac96023511e03bae2cbb0951291	celestina-style/GlassContextMenu.qml
+3	1	59491d2d5de1a72e46eb79738f05b6d03d9dcbc03d77c5ced7c09314b44b1e2e	celestina-style/GlassMenuItem.qml
+28	0	dd83f62771b2cd87c307f2fa5c5d0a15978e83e4955f376c30b37fe0ebfa766e	celestina-style/GlassMenuSection.qml
+106	0	0db68341521a4f4a5fd46bfd867a9674e1a1ac227f20833cf3616d5a57ec32a2	celestina-style/docs/evidence/2026-10-07-wheel-and-sections.md
+33	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-Y.numstat.tsv
+1	0	f70d8d1655c86b165eb6df3710dad715886c632d06e45dbff17452574e58aa1d	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+2	0	6e63e50052725d5d4b3b00e15ff76868f189a38283b21c3111b2534ed1da7755	celestina-style/qmldir
+162	0	e86ad104fd23db343f9abae28e3c4a978ec563b96e426e5883f314f8deed290f	celestina-style/tests/tst_contextmenu.qml
+189	0	2887b0eb0dcb0b4c61edb604f7a046ed3272845c6c09d4484650e2da8e04fdba	celestina-style/tests/tst_wheelscroll.qml
+1	0	96de43339b1a827fcfc23ede8786c0811004d5ab6691886ac7ef6724a4ab75be	docs/version-history.tsv

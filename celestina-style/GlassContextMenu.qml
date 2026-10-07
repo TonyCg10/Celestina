@@ -48,34 +48,59 @@ Menu {
             pointerShield = shieldComponent.createObject(root.Overlay.overlay)
     }
     onClosed: {
+        root.besideAnchor = null
         if (pointerShield) {
             pointerShield.destroy()
             pointerShield = null
         }
     }
 
+    // The control the open menu was placed beside, kept while it is open so
+    // the menu can be placed again when its height changes.
+    property Item besideAnchor: null
+    property bool besideAbove: false
+
     // Opens the menu beside the control that asked for it, never over it:
     // below, or above when preferred or when only above has room. The room is
     // the window's (the overlay), not the menu's parent, which is often a
     // small bar or card; the window edges are kept `margins` clear. The height
     // is the menu's implicit one — `height` is 0 until a first open, which is
-    // how menus opened from a button used to land on top of the button.
+    // how menus opened from a button used to land on top of the button — and
+    // the menu is placed again whenever that height changes while it is open.
     // `popup(x, y)` stays parent-relative, so the point is mapped back.
-    function popupBeside(anchorItem, preferAbove) {
+    function besidePoint() {
         const ov = root.Overlay.overlay
-        const box = anchorItem.mapToItem(ov, 0, 0)
+        const anchor = root.besideAnchor
+        const box = anchor.mapToItem(ov, 0, 0)
         const gap = CelestinaTheme.spaceSm
         const edge = root.margins
         const menuHeight = root.implicitHeight
-        const below = box.y + anchorItem.height + gap
+        const below = box.y + anchor.height + gap
         const above = box.y - gap - menuHeight
         const fitsBelow = below + menuHeight <= ov.height - edge
         const fitsAbove = above >= edge
-        const goAbove = preferAbove ? (fitsAbove || !fitsBelow)
-                                    : (!fitsBelow && fitsAbove)
+        const goAbove = root.besideAbove ? (fitsAbove || !fitsBelow)
+                                         : (!fitsBelow && fitsAbove)
         const x = Math.max(edge, Math.min(box.x, ov.width - edge - root.width))
-        const p = ov.mapToItem(root.parent, x, goAbove ? above : below)
-        root.popup(p.x, p.y)
+        return ov.mapToItem(root.parent, x, goAbove ? above : below)
+    }
+
+    function popupBeside(anchorItem, preferAbove) {
+        root.besideAnchor = anchorItem
+        root.besideAbove = !!preferAbove
+        const point = root.besidePoint()
+        root.popup(point.x, point.y)
+    }
+
+    // A menu whose rows arrive from a Repeater or Instantiator learns its
+    // real height a frame after it opens: re-place it then, or it opened
+    // where a shorter menu would have fit and covered its button.
+    onImplicitHeightChanged: {
+        if (root.visible && root.besideAnchor) {
+            const point = root.besidePoint()
+            root.x = point.x
+            root.y = point.y
+        }
     }
 
     // A nested Menu is represented inside its parent by the parent's delegate.

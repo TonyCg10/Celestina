@@ -35,7 +35,9 @@ CelestinaFolderIcon 1.0 CelestinaFolderIcon.qml
 CelestinaFileIcon 1.0 CelestinaFileIcon.qml
 singleton CelestinaIconShapes 1.0 CelestinaIconShapes.qml
 CelestinaModalLayer 1.0 CelestinaModalLayer.qml
+CelestinaWheelScroll 1.0 CelestinaWheelScroll.qml
 GlassSurface 1.0 GlassSurface.qml
 GlassCard 1.0 GlassCard.qml
 GlassContextMenu 1.0 GlassContextMenu.qml
 GlassMenuItem 1.0 GlassMenuItem.qml
+GlassMenuSection 1.0 GlassMenuSection.qml

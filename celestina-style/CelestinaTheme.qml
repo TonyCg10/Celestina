@@ -960,6 +960,11 @@ QtObject {
     // A discrete mouse-wheel notch advances two standard rows. Touchpads keep
     // their native pixel delta and do not consume this metric.
     readonly property int compWheelStep: rowHeight * 2
+    // How quickly wheel scrolling (CelestinaWheelScroll) closes on its
+    // destination: every frame covers 1 - exp(-frame / wheelFollowMs) of the
+    // remaining distance, so a notch moves on the next frame, is 90 % there in
+    // about 60 ms and has no tail, and a burst of notches adds up exactly.
+    readonly property int wheelFollowMs: 25
 
     // Compatibility entry point for controls that expose `icon.source`.
     // Resolution itself belongs to the closed Lucide catalogue.

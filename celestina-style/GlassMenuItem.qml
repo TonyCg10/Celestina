@@ -23,7 +23,9 @@ MenuItem {
     Accessible.checked: choice ? current : checked
 
     implicitWidth: CelestinaTheme.compMenuWidth - CelestinaTheme.compMenuPadding * 2
-    implicitHeight: CelestinaTheme.controlHeight
+    // Qt's Menu lays its rows out in a ListView, which keeps an invisible
+    // item's height: a hidden row left a blank gap. Hidden, it takes no room.
+    implicitHeight: visible ? CelestinaTheme.controlHeight : 0
     leftPadding: CelestinaTheme.spaceMd
     rightPadding: CelestinaTheme.spaceMd
     topPadding: CelestinaTheme.spaceSm

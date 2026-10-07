@@ -53,6 +53,18 @@ TestCase {
                 }
             }
             Component {
+                id: hiddenRowMenuComponent
+                GlassContextMenu {
+                    readonly property alias hiddenRow: hiddenRow
+                    readonly property alias firstRow: firstRow
+                    readonly property alias lastRow: lastRow
+                    backdropSource: stage
+                    GlassMenuItem { id: firstRow; text: "one" }
+                    GlassMenuItem { id: hiddenRow; visible: false; text: "two" }
+                    GlassMenuItem { id: lastRow; text: "three" }
+                }
+            }
+            Component {
                 id: repeaterMenuComponent
                 GlassContextMenu {
                     property int rows: 1
@@ -64,6 +76,141 @@ TestCase {
                 }
             }
         }
+    }
+
+    // A window tall enough for a menu built like Fluorita's stream menu: two
+    // section headers, each followed by rows an Instantiator inserts after it,
+    // plus a hidden header and a hidden row. Its rows arrive after the open,
+    // so its real height is only known a frame later.
+    Window {
+        id: tallWindow
+
+        width: 900
+        height: 600
+        visible: true
+
+        Item {
+            id: tallStage
+            anchors.fill: parent
+
+            Item {
+                id: streamBar
+                x: 0; y: 540; width: 900; height: 60
+                Button { id: streamButton; x: 820; y: 14; width: 32; height: 32; text: "s" }
+            }
+
+            Component {
+                id: streamMenuComponent
+                GlassContextMenu {
+                    id: streamMenu
+
+                    property bool timed: false
+                    property bool choosableAudio: false
+                    property bool choosableSubtitles: false
+                    readonly property alias audioHeader: audioHeader
+                    readonly property alias subtitleHeader: subtitleHeader
+                    readonly property alias noSubtitles: noSubtitles
+                    readonly property alias endHeader: endHeader
+                    readonly property alias speedHeader: speedHeader
+
+                    function slotAfter(anchor, offset) {
+                        for (let i = 0; i < streamMenu.count; ++i) {
+                            if (streamMenu.itemAt(i) === anchor)
+                                return i + 1 + offset
+                        }
+                        return streamMenu.count
+                    }
+
+                    backdropSource: tallStage
+
+                    GlassMenuSection { id: audioHeader; visible: streamMenu.choosableAudio; text: "Audio" }
+                    GlassMenuSection { id: subtitleHeader; visible: streamMenu.choosableSubtitles; text: "Subtitles" }
+                    GlassMenuItem {
+                        id: noSubtitles
+                        visible: streamMenu.choosableSubtitles
+                        implicitHeight: visible ? CelestinaTheme.controlHeight : 0
+                        text: "No subtitles"
+                    }
+                    GlassMenuSection { id: endHeader; visible: streamMenu.timed; text: "When done" }
+                    GlassMenuSection { id: speedHeader; visible: streamMenu.timed; text: "Speed" }
+
+                    Instantiator {
+                        model: streamMenu.choosableAudio ? ["a1", "a2"] : []
+                        delegate: GlassMenuItem { required property string modelData; text: modelData }
+                        onObjectAdded: (i, o) => streamMenu.insertItem(streamMenu.slotAfter(audioHeader, i), o)
+                        onObjectRemoved: (i, o) => streamMenu.removeItem(o)
+                    }
+                    Instantiator {
+                        model: streamMenu.choosableSubtitles ? ["s1"] : []
+                        delegate: GlassMenuItem { required property string modelData; text: modelData }
+                        onObjectAdded: (i, o) => streamMenu.insertItem(streamMenu.slotAfter(noSubtitles, i), o)
+                        onObjectRemoved: (i, o) => streamMenu.removeItem(o)
+                    }
+                    Instantiator {
+                        model: streamMenu.timed ? ["stop", "next", "repeat"] : []
+                        delegate: GlassMenuItem { required property string modelData; text: modelData }
+                        onObjectAdded: (i, o) => streamMenu.insertItem(streamMenu.slotAfter(endHeader, i), o)
+                        onObjectRemoved: (i, o) => streamMenu.removeItem(o)
+                    }
+                    Instantiator {
+                        model: streamMenu.timed ? ["0.5", "0.75", "1", "1.25", "1.5", "2"] : []
+                        delegate: GlassMenuItem { required property string modelData; text: modelData }
+                        onObjectAdded: (i, o) => streamMenu.insertItem(streamMenu.slotAfter(speedHeader, i), o)
+                        onObjectRemoved: (i, o) => streamMenu.removeItem(o)
+                    }
+                }
+            }
+        }
+    }
+
+    function test_sections_keep_their_groups_and_menu_clears_button() {
+        const menu = createTemporaryObject(streamMenuComponent, streamBar)
+        verify(menu)
+        const opened = createTemporaryObject(openedSpy, testCase, { target: menu })
+        // The model changes right before the open, as a stream menu's does.
+        menu.timed = true
+        menu.choosableAudio = true
+        menu.popupBeside(streamButton, true)
+        opened.wait()
+
+        const box = streamButton.mapToItem(null, 0, 0)
+        const bottom = function() {
+            return menu.background.mapToItem(null, 0, 0).y + menu.background.height
+        }
+        tryVerify(function() { return menu.background.height > 300 }, 1000,
+                  "the menu grew to its real height")
+        tryVerify(function() { return bottom() <= box.y - CelestinaTheme.spaceSm + 0.5 }, 1000,
+                  "menu bottom " + bottom() + " vs button top " + box.y)
+        verify(menu.background.mapToItem(null, 0, 0).y >= menu.margins - 0.5)
+
+        // Content order: each header directly before its own rows.
+        const texts = []
+        for (let i = 0; i < menu.count; ++i)
+            texts.push(menu.itemAt(i).text)
+        compare(texts.join("|"),
+                "Audio|a1|a2|Subtitles|No subtitles|When done|stop|next|repeat"
+                + "|Speed|0.5|0.75|1|1.25|1.5|2")
+
+        // Hidden rows take no room.
+        compare(menu.subtitleHeader.height, 0)
+        compare(menu.noSubtitles.height, 0)
+        verify(menu.audioHeader.height > 0)
+
+        // On screen: every visible row starts where the previous one ends,
+        // so a header sits right above the first row of its group.
+        let previous = null
+        for (let i = 0; i < menu.count; ++i) {
+            const item = menu.itemAt(i)
+            if (!item.visible)
+                continue
+            const y = item.mapToItem(null, 0, 0).y
+            if (previous)
+                fuzzyCompare(y, previous.y + previous.h, 0.5, item.text + " follows the row above")
+            previous = { y: y, h: item.height }
+        }
+        const audioBottom = menu.audioHeader.mapToItem(null, 0, 0).y + menu.audioHeader.height
+        fuzzyCompare(menu.itemAt(1).mapToItem(null, 0, 0).y, audioBottom, 0.5)
+        menu.close()
     }
 
     function init() {
@@ -120,6 +267,21 @@ TestCase {
         verify(r.y + r.h <= r.box.y - CelestinaTheme.spaceSm + 0.5,
                "bottom " + (r.y + r.h) + " vs button top " + r.box.y)
         verify(!overlaps(r, bottomButton, r.box))
+        r.menu.close()
+    }
+
+    function test_hidden_item_takes_no_room() {
+        const r = openBeside(topButton, false, stage, hiddenRowMenuComponent)
+        compare(r.menu.hiddenRow.height, 0)
+        verify(r.menu.firstRow.height > 0)
+        // The menu's ListView lays the rows out again a frame after they
+        // become visible on the open.
+        const gap = function() {
+            return r.menu.lastRow.mapToItem(null, 0, 0).y
+                - (r.menu.firstRow.mapToItem(null, 0, 0).y + r.menu.firstRow.height)
+        }
+        tryVerify(function() { return Math.abs(gap()) < 0.5 }, 1000,
+                  "the row after the hidden one sits right under the visible one, gap " + gap())
         r.menu.close()
     }
 
