@@ -89,6 +89,73 @@ target_directory() {
     fi
 }
 
+locate_module() {
+    # Sets uri, module_relative and generated_module for the application at
+    # $1, or reports why its release QML module is missing and returns 1.
+    app_root=$1
+    # The module is the application's own, found by the URI its build.rs declares
+    # and the package that built it. Every session and application shares one
+    # Cargo target directory, so the newest module under it may be another
+    # application's, and linting against its types proves nothing (TOOL-10).
+    uri=$(sed -n 's/.*QmlModule::new("\([^"]*\)").*/\1/p' "$app_root/build.rs" 2>/dev/null | head -1)
+    if [ -z "$uri" ]; then
+        echo "qmllint-production: $app_root/build.rs declares no QmlModule::new(\"<uri>\")" >&2
+        return 1
+    fi
+    package=$(awk '
+        /^\[/ { section = $0 }
+        section == "[package]" && $1 == "name" {
+            value = $0; sub(/^[^=]*=[ \t]*"/, "", value); sub(/".*$/, "", value); print value; exit
+        }
+    ' "$app_root/Cargo.toml" 2>/dev/null)
+    if [ -z "$package" ]; then
+        echo "qmllint-production: $app_root/Cargo.toml names no [package]" >&2
+        return 1
+    fi
+    module_relative=$(printf '%s' "$uri" | tr . /)
+    build_root=$(target_directory "$app_root")/release/build
+    # Cargo names a package's build directory <package>-<16 hex digits>; a
+    # rebuild with other settings leaves the older one, so the newest wins.
+    generated_module=$(
+        find "$build_root" -mindepth 1 -maxdepth 1 -type d -name "$package-*" \
+            -printf '%f %p\n' 2>/dev/null \
+        | awk -v package="$package" '
+            { name = $1; sub(/^[^ ]* /, "") }
+            name ~ ("^" package "-[0-9a-f]+$") && length(name) == length(package) + 17 { print }
+        ' \
+        | while IFS= read -r directory; do
+            candidate=$directory/out/qt-build-utils/qml_modules/$module_relative
+            if [ -f "$candidate/qmldir" ] && grep -qx "module $uri" "$candidate/qmldir"; then
+                printf '%s %s\n' "$(stat -c %Y "$candidate/qmldir")" "$candidate"
+            fi
+        done \
+        | sort -nr \
+        | sed -n '1s/^[^ ]* //p'
+    )
+
+    if [ -z "$generated_module" ]; then
+        echo "qmllint-production: the release QML module $uri of $package is missing under" \
+            "$build_root; run build-production.sh" >&2
+        return 1
+    fi
+    if [ ! -f "$generated_module/plugin.qmltypes" ]; then
+        echo "qmllint-production: qmldir/plugin.qmltypes are missing for $uri" >&2
+        return 1
+    fi
+}
+
+# Internal entry point for scripts/qml-dev.sh, which lays out the same module
+# with the source QML: prints the URI and the generated module directory.
+if [ "${1-}" = '--print-module' ]; then
+    if [ "$#" -ne 2 ]; then
+        echo "usage: scripts/qmllint-cxxqt.sh --print-module PROJECT_PATH" >&2
+        exit 2
+    fi
+    locate_module "$(CDPATH= cd -- "$2" && pwd)" || exit 1
+    printf '%s\t%s\n' "$uri" "$generated_module"
+    exit 0
+fi
+
 # Internal entry point so the ratchet can be tested without a release build.
 if [ "${1-}" = '--check-warning-ratchet' ]; then
     if [ "$#" -ne 3 ]; then
@@ -117,56 +184,7 @@ fi
 app_root=$(CDPATH= cd -- "$1" && pwd)
 project=$(basename -- "$app_root")
 qml_root=$app_root/qml
-
-# The module is the application's own, found by the URI its build.rs declares
-# and the package that built it. Every session and application shares one
-# Cargo target directory, so the newest module under it may be another
-# application's, and linting against its types proves nothing (TOOL-10).
-uri=$(sed -n 's/.*QmlModule::new("\([^"]*\)").*/\1/p' "$app_root/build.rs" 2>/dev/null | head -1)
-if [ -z "$uri" ]; then
-    echo "qmllint-production: $app_root/build.rs declares no QmlModule::new(\"<uri>\")" >&2
-    exit 1
-fi
-package=$(awk '
-    /^\[/ { section = $0 }
-    section == "[package]" && $1 == "name" {
-        value = $0; sub(/^[^=]*=[ \t]*"/, "", value); sub(/".*$/, "", value); print value; exit
-    }
-' "$app_root/Cargo.toml" 2>/dev/null)
-if [ -z "$package" ]; then
-    echo "qmllint-production: $app_root/Cargo.toml names no [package]" >&2
-    exit 1
-fi
-module_relative=$(printf '%s' "$uri" | tr . /)
-build_root=$(target_directory "$app_root")/release/build
-# Cargo names a package's build directory <package>-<16 hex digits>; a
-# rebuild with other settings leaves the older one, so the newest wins.
-generated_module=$(
-    find "$build_root" -mindepth 1 -maxdepth 1 -type d -name "$package-*" \
-        -printf '%f %p\n' 2>/dev/null \
-    | awk -v package="$package" '
-        { name = $1; sub(/^[^ ]* /, "") }
-        name ~ ("^" package "-[0-9a-f]+$") && length(name) == length(package) + 17 { print }
-    ' \
-    | while IFS= read -r directory; do
-        candidate=$directory/out/qt-build-utils/qml_modules/$module_relative
-        if [ -f "$candidate/qmldir" ] && grep -qx "module $uri" "$candidate/qmldir"; then
-            printf '%s %s\n' "$(stat -c %Y "$candidate/qmldir")" "$candidate"
-        fi
-    done \
-    | sort -nr \
-    | sed -n '1s/^[^ ]* //p'
-)
-
-if [ -z "$generated_module" ]; then
-    echo "qmllint-production: the release QML module $uri of $package is missing under" \
-        "$build_root; run build-production.sh" >&2
-    exit 1
-fi
-if [ ! -f "$generated_module/plugin.qmltypes" ]; then
-    echo "qmllint-production: qmldir/plugin.qmltypes are missing for $uri" >&2
-    exit 1
-fi
+locate_module "$app_root" || exit 1
 
 linter=${QMLLINT:-}
 if [ -z "$linter" ]; then

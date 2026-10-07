@@ -144,6 +144,16 @@ removes the debug builds from the build trees only after deploying. Shell
 completion updates its bundle but activation remains separate. See
 [production-artifacts.md](docs/contracts/production-artifacts.md).
 
+An application's QML is compiled into its binary, so changing it, even a
+colour in `CelestinaTheme`, needs a build before the installed application
+shows it. While iterating on QML, run the application with
+`scripts/qml-dev.sh <app>` instead: it lays the source QML out as an import
+tree and starts the installed binary on it, so each change needs only a
+restart. It reads the module the last release build generated and is never a
+delivery path; Rust or C++ changes, and a new QML file, image or font, still
+need a build. See
+[Development QML](docs/contracts/production-artifacts.md#development-qml).
+
 ## Git and commits
 
 Do not commit or push without an explicit request. When requested:

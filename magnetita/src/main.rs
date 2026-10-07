@@ -53,9 +53,17 @@ fn main() {
         );
         initial_properties.insert(QString::from("mirrorOnly"), QVariant::from(&mirror_only));
         engine.as_mut().set_initial_properties(&initial_properties);
-        engine.load(&QUrl::from(
-            "qrc:/qt/qml/org/celestina/magnetita/qml/Main.qml",
-        ));
+        // Development only: scripts/qml-dev.sh lays the source QML out as an
+        // import tree, so a QML change needs a restart instead of a build.
+        // The tree goes first, ahead of the module compiled in.
+        if let Some(import) = std::env::var_os("CELESTINA_QML_DEV_IMPORT") {
+            engine
+                .as_mut()
+                .add_import_path(&QString::from(import.to_string_lossy().as_ref()));
+        }
+        let main = std::env::var("CELESTINA_QML_DEV_MAIN")
+            .unwrap_or_else(|_| "qrc:/qt/qml/org/celestina/magnetita/qml/Main.qml".to_owned());
+        engine.load(&QUrl::from(&QString::from(main.as_str())));
     }
 
     if let Some(app) = app.as_mut() {

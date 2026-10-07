@@ -71,6 +71,9 @@ one owner on both ends, and the hooks judge the index with committed rules.
 - `AUD-1-K` — at the author's request of 2026-10-06, keep the release cache
   in the prune and remove only the debug builds, so a small change rebuilds
   incrementally.
+- `AUD-1-L` — at the author's request of 2026-10-06, let every application
+  load its QML from the source tree in development, so a QML change such as a
+  colour needs a restart instead of a build.
 - `HALT-SHELL` — record the author's halt of the Celestina shell
   (2026-09-27) in the root contract, the registry and the shell's documents,
   and make the guards and the landing honour it.
@@ -157,6 +160,7 @@ plans; a pending author validation never keeps this checkpoint open.
 | AUD-1-I | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-I.numstat.tsv) | 8 files, +888/-0 | Add the radius guard the 2026-09-30 design specifies: a bounded QML scanner that refuses text or a glyph closer to a rounded corner than `cornerInset`, a nested token radius that is not concentric with its parent, and a numeric margin literal inside a rounded surface, with a shrink-only per-project baseline registered as a shared ratchet so each application lowers it in the unit that pays the debt | [evidence](../../evidence/2026-09-30-radius-guard.md) | None |
 | AUD-1-J | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-J.numstat.tsv) | 14 files, +799/-16 | Add the prune of every build tree to its registered artifacts after each landing deploys | [evidence](../../evidence/2026-10-06-prune-build-trees.md) | None |
 | AUD-1-K | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-K.numstat.tsv) | 11 files, +256/-217 | Keep the release cache when pruning the build trees | [evidence](../../evidence/2026-10-06-prune-keeps-release-cache.md) | None |
+| AUD-1-L | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-L.numstat.tsv) | 14 files, +464/-65 | Add a development mode that loads the QML from the source tree | [evidence](../../evidence/2026-10-06-qml-dev-mode.md) | None |
 
 `AUD-1-E` lands as `suite-bug` bumping Magnetita and Magnetita Android;
 `scripts/land-unit.py` refuses a `suite-bug`, so the author records both

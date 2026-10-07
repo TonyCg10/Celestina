@@ -209,6 +209,29 @@ shared session target instead; `scripts/worktree.sh close` removes that
 target when it closes the last session. The landing runs the prune as its
 last step; see [the landing contract](landing.md).
 
+## Development QML
+
+Each application compiles its QML module into the binary (`QmlModule` in
+`build.rs`) and loads `Main.qml` from `qrc:`, so a QML change reaches the
+installed application only through a build. For iteration,
+`scripts/qml-dev.sh APP [--binary PATH] [-- ARGUMENTS...]` runs a binary,
+by default the installed `~/.local/bin/APP`, on the repository's QML:
+
+- `scripts/qmllint-cxxqt.sh --print-module` locates the release module the
+  last build generated, the same module the lint reads;
+- the script lays out `$XDG_RUNTIME_DIR/celestina-qml-dev/APP/<uri path>/`
+  with that module's `qmldir`, without its `prefer` line, its
+  `plugin.qmltypes`, and `qml` linked to `APP/qml`;
+- it starts the binary with `CELESTINA_QML_DEV_IMPORT`, which the
+  application puts first among its import paths, and
+  `CELESTINA_QML_DEV_MAIN`, the file URL of the `Main.qml` it loads instead of
+  the compiled one.
+
+Without those variables an application loads exactly what it always did.
+The tree is never an artifact: no build, verification, deploy or landing reads
+it, and it cannot add a QML file, image or font the build did not register,
+or a Rust or C++ type the binary lacks.
+
 ## Shell special case
 
 Running the shell activates a real surface, so it has a separate activation

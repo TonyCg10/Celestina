@@ -1,0 +1,35 @@
+# AUD-1-L exact change inventory
+
+Base revision	7794550d9b1ab9de623e3120ffe5354b0f2b3d15
+Pathspec	.github/workflows/contracts.yml
+Pathspec	CONTRIBUTING.md
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/evidence/2026-10-06-qml-dev-mode.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-L.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	fluorita/src/main.rs
+Pathspec	grafita/src/main.rs
+Pathspec	hematita/src/main.rs
+Pathspec	magnetita/src/main.rs
+Pathspec	scripts/qml-dev.sh
+Pathspec	scripts/qmllint-cxxqt.sh
+Pathspec	scripts/test-qml-dev.sh
+Pathspec	siderita/src/main.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	079053bdd3ae6c0ae7b6938db71361c74dd236836316a54eee608a84b7a0a1b5	.github/workflows/contracts.yml
+10	0	8b538cc33421627aa92bedcb6b711183a79564c59ed7f53032cca9b2d7a7855d	CONTRIBUTING.md
+23	0	a0ec2775de8495eb01c8c40b16429cd85110c2c4025f5669cf2e5f23c6bed96c	docs/contracts/production-artifacts.md
+96	0	d2042050e775edd2840145e2c42b09e7130be42d3327d200110b9ea94e0f3564	docs/evidence/2026-10-06-qml-dev-mode.md
+35	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-L.numstat.tsv
+4	0	e2a0a38dd585e92c271a0a39c4b7efdf52b5a306c65cd8024403a78c6fe0f5e6	docs/plans/active/2026-09-26-monorepo-hardening.md
+11	3	b0aad839bf0497b9d91b289f6c3e2493646f92e5ae54beb6470cf73b3d5999a5	fluorita/src/main.rs
+11	3	750bf360a96a5fcdda8bdb008b11734d047d281a6eee36db53ce7da891578d0d	grafita/src/main.rs
+11	3	24174d29d73b50cdc6c77864b3dd82ae2db4fe2d5d6ab5c6508b89fe9c7b9ed0	hematita/src/main.rs
+11	3	09ee60761f83dc9591e44e6a0b53d55d9dbb26d819f0bc9aff807dd48adb3e33	magnetita/src/main.rs
+88	0	9c3b4c21b694a1b5fa3a7a6d60f968ba90186b37ca164a38b99aab597ba8965e	scripts/qml-dev.sh
+68	50	8061057a1ee643982fd7db50e9a79bae457c32348404ddaae5882c0a275bfc81	scripts/qmllint-cxxqt.sh
+84	0	c704f495f7b5809fd7b2e03621fe031f72115a23ec475ef7b5193efa10f9dc1b	scripts/test-qml-dev.sh
+11	3	b3dc9df86f19d5f1916500bafd0428b02bee3d4fa478b6043255b4f0274026cd	siderita/src/main.rs
