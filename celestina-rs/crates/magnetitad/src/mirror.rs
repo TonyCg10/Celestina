@@ -53,6 +53,11 @@ const ADB_BUDGET: Duration = Duration::from_secs(10);
 /// a successful connect. The author's script needed six one-second tries.
 const READY_TRIES: u32 = 8;
 
+/// How long a wanted screen off that could not reach the phone waits before
+/// it is tried again: pairing, or turning wireless debugging on, mid-mirror
+/// darkens the phone within this, with no press.
+const SCREEN_OFF_RETRY: Duration = Duration::from_secs(10);
+
 /// What the app can ask of the mirror.
 #[derive(Clone, Debug)]
 pub(crate) enum MirrorCommand {
@@ -187,6 +192,13 @@ struct Session {
     /// browsed for the phone's adb, so its pairing code can be entered and
     /// its endpoint found.
     screen_off_wanted: bool,
+    /// The phone's address as the link last saw it, kept for the retries.
+    screen_off_host: Option<std::net::IpAddr>,
+    /// When a failed screen off may be tried again; `None` means at once.
+    screen_off_retry_at: Option<Instant>,
+    /// The failure was already logged; the retries stay quiet until one
+    /// holds.
+    screen_off_failing: bool,
     seen_connect: Option<Advertisement>,
     seen_pairing: Option<Advertisement>,
     options: MirrorOptions,
@@ -213,6 +225,9 @@ impl Session {
             stopping,
             screen_off: None,
             screen_off_wanted: false,
+            screen_off_host: None,
+            screen_off_retry_at: None,
+            screen_off_failing: false,
             seen_connect: None,
             seen_pairing: None,
             options,
@@ -243,6 +258,10 @@ impl Session {
             if self.wants_discovery() {
                 self.poll_discovery();
             }
+            self.reap_screen_off();
+            if self.screen_off_due(Instant::now()) {
+                self.hold_screen_off();
+            }
         }
         self.kill_screen_off();
     }
@@ -253,28 +272,89 @@ impl Session {
     }
 
     /// The phone's screen off while the own link mirrors it, through a
-    /// control-only scrcpy over `adb`: the remembered fixed-port endpoint,
-    /// else the advertised one, is dialled first. Back on: that scrcpy is
-    /// killed, and it restores the screen as it leaves.
+    /// control-only scrcpy over `adb`. Back on: that scrcpy is killed, and it
+    /// restores the screen as it leaves. A screen off that cannot reach the
+    /// phone now stays wanted and is retried by the worker's loop.
     fn screen_off(&mut self, on: bool, host: Option<std::net::IpAddr>) {
         self.screen_off_wanted = on;
+        self.screen_off_retry_at = None;
+        self.screen_off_failing = false;
         if !on {
+            self.screen_off_host = None;
             self.kill_screen_off();
             return;
         }
-        if self.screen_off.is_some() {
-            return;
+        if host.is_some() {
+            self.screen_off_host = host;
         }
+        if self.screen_off.is_none() {
+            self.hold_screen_off();
+        }
+    }
+
+    /// Whether a wanted screen off is not held and may be tried now.
+    fn screen_off_due(&self, now: Instant) -> bool {
+        self.screen_off_wanted
+            && self.screen_off.is_none()
+            && self.screen_off_retry_at.is_none_or(|at| now >= at)
+    }
+
+    /// Schedules the next try of a screen off that did not hold.
+    fn screen_off_failed(&mut self, now: Instant) {
+        self.screen_off_retry_at = Some(now + SCREEN_OFF_RETRY);
+    }
+
+    /// Drops a holding scrcpy that exited on its own, so the loop dials again.
+    fn reap_screen_off(&mut self) {
+        let exited = self
+            .screen_off
+            .as_mut()
+            .is_some_and(|(child, _)| !matches!(child.try_wait(), Ok(None)));
+        if exited {
+            if let Some((mut child, group)) = self.screen_off.take() {
+                subprocess::terminate_group_and_reap(&mut child, group);
+            }
+            log(
+                "mirror",
+                "screen off: scrcpy exited; dialling the phone again",
+            );
+        }
+    }
+
+    /// One attempt: the phone where the link sees it at the fixed port, the
+    /// remembered endpoint, then the advertised one.
+    fn hold_screen_off(&mut self) {
         // Nothing was browsed while nothing wanted the screen off.
         self.poll_discovery();
+        match self.spawn_screen_off() {
+            Ok(()) => {
+                self.screen_off_retry_at = None;
+                self.screen_off_failing = false;
+            }
+            Err(reason) => {
+                if !self.screen_off_failing {
+                    log(
+                        "mirror",
+                        &format!(
+                            "screen off: {reason}; retrying every {}s",
+                            SCREEN_OFF_RETRY.as_secs()
+                        ),
+                    );
+                    self.screen_off_failing = true;
+                }
+                self.screen_off_failed(Instant::now());
+            }
+        }
+    }
+
+    fn spawn_screen_off(&mut self) -> Result<(), String> {
         if !tool_available("scrcpy") || !tool_available("adb") {
-            log("mirror", "screen off: scrcpy or adb is not installed");
-            return;
+            return Err("scrcpy or adb is not installed".into());
         }
         // Where to dial, in order: the phone where the link sees it, at
         // the fixed port; the remembered endpoint; the advertised one.
         let mut candidates: Vec<MirrorEndpoint> = Vec::new();
-        if let Some(host) = host {
+        if let Some(host) = self.screen_off_host {
             candidates.push(MirrorEndpoint {
                 host,
                 port: FIXED_PORT,
@@ -283,21 +363,15 @@ impl Session {
         candidates.extend(self.link.remembered());
         candidates.extend(self.seen_connect.as_ref().map(|seen| seen.endpoint));
         if candidates.is_empty() {
-            log(
-                "mirror",
-                "screen off: no adb endpoint is known for the phone",
-            );
-            return;
+            return Err("no adb endpoint is known for the phone".into());
         }
         let Some(reached) = candidates
             .into_iter()
             .find_map(|endpoint| self.connect(endpoint))
         else {
-            log(
-                "mirror",
-                "screen off: the phone's adb did not answer; is wireless debugging on?",
+            return Err(
+                "the phone's adb did not answer; is wireless debugging on and paired?".into(),
             );
-            return;
         };
         self.remember(reached);
         let serial = reached.serial();
@@ -309,16 +383,14 @@ impl Session {
             "--no-window",
             "--turn-screen-off",
         ];
-        match subprocess::spawn_grouped("scrcpy", &args, Stdio::null()) {
-            Ok((child, group)) => {
-                log(
-                    "mirror",
-                    &format!("screen off: scrcpy {} holds {serial} dark", child.id()),
-                );
-                self.screen_off = Some((child, group));
-            }
-            Err(error) => log("mirror", &format!("screen off: scrcpy: {error}")),
-        }
+        let (child, group) = subprocess::spawn_grouped("scrcpy", &args, Stdio::null())
+            .map_err(|error| format!("scrcpy: {error}"))?;
+        log(
+            "mirror",
+            &format!("screen off: scrcpy {} holds {serial} dark", child.id()),
+        );
+        self.screen_off = Some((child, group));
+        Ok(())
     }
 
     fn kill_screen_off(&mut self) {
@@ -1024,6 +1096,53 @@ mod tests {
         assert!(session.wants_discovery());
         session.screen_off(false, None);
         assert!(!session.wants_discovery());
+    }
+
+    fn idle_session(name: &str) -> Session {
+        let dir = std::env::temp_dir().join(format!("magnetita-{name}-{}", std::process::id()));
+        Session::new(
+            Arc::new(Mutex::new(snapshot_of(
+                &MirrorLink::new(),
+                &MirrorOptions::default(),
+            ))),
+            Arc::new(AtomicBool::new(false)),
+            MirrorOptions::default(),
+            dir.join("mirror.json"),
+            dir.join("mirror-endpoint"),
+        )
+    }
+
+    /// A screen off that could not reach the phone is tried again while it
+    /// is wanted, so pairing or turning wireless debugging on mid-mirror
+    /// darkens the phone with no press.
+    #[test]
+    fn a_failed_screen_off_is_retried_while_it_is_wanted() {
+        let mut session = idle_session("adb-retry");
+        let now = Instant::now();
+        assert!(!session.screen_off_due(now), "nothing wanted, nothing due");
+        session.screen_off_wanted = true;
+        assert!(session.screen_off_due(now), "a fresh want is due at once");
+        session.screen_off_failed(now);
+        assert!(!session.screen_off_due(now), "not hammered");
+        assert!(session.screen_off_due(now + SCREEN_OFF_RETRY));
+        session.screen_off(false, None);
+        assert!(!session.screen_off_due(now + SCREEN_OFF_RETRY));
+    }
+
+    /// A holding scrcpy that died (adb dropped, the network changed) is
+    /// noticed and the screen off is due again.
+    #[test]
+    fn a_dead_screen_off_scrcpy_is_noticed() {
+        let mut session = idle_session("adb-dead");
+        session.screen_off_wanted = true;
+        let (mut child, group) =
+            subprocess::spawn_grouped("true", &[], Stdio::null()).expect("spawn true");
+        let _ = child.wait();
+        session.screen_off = Some((child, group));
+        assert!(!session.screen_off_due(Instant::now()), "held");
+        session.reap_screen_off();
+        assert!(session.screen_off.is_none());
+        assert!(session.screen_off_due(Instant::now()));
     }
 
     #[test]
