@@ -1,0 +1,59 @@
+# FLU-H1-E exact change inventory
+
+Base revision	f549a18eaf87d5ab7b4fd5c14c119c7c67a42edc
+Pathspec	celestina-rs/crates/fluorita-engine/src/artwork.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/artwork_pass.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/lib.rs
+Pathspec	celestina-rs/crates/fluorita-qt/Cargo.toml
+Pathspec	celestina-rs/crates/fluorita-qt/cpp/fluorita/thumbnailprovider.h
+Pathspec	celestina-rs/crates/fluorita-qt/cpp/thumbnailprovider.cpp
+Pathspec	celestina-rs/crates/fluorita-qt/src/lib.rs
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/AGENTS.md
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/README.md
+Pathspec	fluorita/build.rs
+Pathspec	fluorita/docs/evidence/2026-10-07-automatic-thumbnails.md
+Pathspec	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-E.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	fluorita/qml/Main.qml
+Pathspec	fluorita/qml/components/ContentDock.qml
+Pathspec	fluorita/qml/components/GalleryGrid.qml
+Pathspec	fluorita/qml/components/LibraryView.qml
+Pathspec	fluorita/scripts/smoke.sh
+Pathspec	fluorita/src/library.rs
+Pathspec	fluorita/src/library/project.rs
+Pathspec	fluorita/src/library/work.rs
+Pathspec	fluorita/src/main.rs
+Pathspec	fluorita/src/thumbnails.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+44	3	56e232a10d05f30cc429ae38ff8dfd63395121a63543c891ae6f194543657eec	celestina-rs/crates/fluorita-engine/src/artwork.rs
+325	0	cded789836929fa1f9db760d42cc83397cfe885f58b63b4c9437218c3db8db00	celestina-rs/crates/fluorita-engine/src/artwork_pass.rs
+5	1	e67ba43e6d9e18e51220c200e4f638abf86f87e047b83ad82628966677b07a9f	celestina-rs/crates/fluorita-engine/src/lib.rs
+2	2	3f451536dfb0b0f03a8de928c2a258b4bbfd1872e88e5b926fa0551675dedf80	celestina-rs/crates/fluorita-qt/Cargo.toml
+91	0	3c173d7711423547dd02b2436ad5694b0307007c4b479dba19df0441e168e417	celestina-rs/crates/fluorita-qt/cpp/fluorita/thumbnailprovider.h
+441	0	d508da1a10ed74106207febbfcdca6527be844bb0dd4771eb80df0e8ec97b9ea	celestina-rs/crates/fluorita-qt/cpp/thumbnailprovider.cpp
+112	6	286c71ac7c9866abd4c9989ffcf5a0afce76ca3fb57dcd72a4fa98c77312df56	celestina-rs/crates/fluorita-qt/src/lib.rs
+1	0	cdc5024916c2e866480d21fa97630136dca876fec2ed20ff83be99de8fdd9764	docs/version-history.tsv
+9	4	d85dff813c8586deb6e07a506e9c431f042202b484f8925ce7124159f5264158	fluorita/AGENTS.md
+1	1	cd673dd7a0bece2f42b534e0ffb094f3763de3ba6fdf5c0f3b0ec186a56597df	fluorita/Cargo.lock
+1	1	b1b5c7507025385f8f4fd83c98a786ac04d17247180e0578ea566138a5a27c1f	fluorita/Cargo.toml
+6	4	4b374bdb8cb25b76b1ed335c875924c74220fad1eec4726e0776861a03b83fd0	fluorita/README.md
+7	0	3d438264c29a4fc4d2f06dc20036e7e065b7813782be10879d696b73c7075705	fluorita/build.rs
+82	0	1cbba0845fb08e5f03ca6075fbdae23e92423762ccb1b3a2350429c52d947298	fluorita/docs/evidence/2026-10-07-automatic-thumbnails.md
+59	0	self	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-E.numstat.tsv
+1	0	2498c96bace5a06e7a1a84791c10acc1f9c50d42534f2a43cc8ff3e8f118acda	fluorita/docs/plans/active/2026-09-26-hardening.md
+0	14	5ed9153f828eb86f5c3c8c2c7e560ba513f8ad29372a09c8decebd826b478ffc	fluorita/qml/Main.qml
+1	1	fef2f893cfd2e458c29640a46a4b43d6c22ece7d3c3d30bc2e9f9ae994ab8159	fluorita/qml/components/ContentDock.qml
+7	5	9b58ac534c87a52b9690c6f5724f4efdc460915b547c8a9d381dab3d389c9057	fluorita/qml/components/GalleryGrid.qml
+0	27	b52604ec4067c8dac3c787ec6195b163640221d6e53b600a6507b112cc4355f2	fluorita/qml/components/LibraryView.qml
+75	1	5248a759f866ec4d52248939cedfd1ba609c34cf8c62ba7c87cbd72696db4988	fluorita/scripts/smoke.sh
+60	52	720e008e1cf3b04af37e57c5faa312868f8c0af5323ce2e44065c9e9e6b20482	fluorita/src/library.rs
+57	21	a730e067aab2c5437dcd9625bd12b79a738a666dc5f903f9542f79d99e4535a6	fluorita/src/library/project.rs
+99	46	399f218532c600e1298ddccb72ece150b715f3904ab16aad9c48754fde36d8e9	fluorita/src/library/work.rs
+9	0	b2d4183808ad72a074066c125175bd4f77e06d609b5f45a864a4641398799fc9	fluorita/src/main.rs
+197	0	e9a13ca0ca2c2f6fcda98bce9bc5b33852c5172d1b2bb04ef0a2fd52f42e6118	fluorita/src/thumbnails.rs

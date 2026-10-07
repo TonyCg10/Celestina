@@ -640,20 +640,6 @@ ApplicationWindow {
         enabled: window.playing && !window.overlayOpen
         onActivated: mediaPlayer.setVolume(Math.max(0, mediaPlayer.volumeLevel - 0.05))
     }
-    // Generate the missing thumbnails without depending on the pointer or on
-    // the tab order.
-    Shortcut {
-        sequence: "Ctrl+G"
-        enabled: !window.playing && mediaLibrary.artworkPending > 0
-            && mediaLibrary.artworkState === "idle"
-        onActivated: mediaLibrary.generateArtwork()
-    }
-    Shortcut {
-        sequence: "Ctrl+Shift+G"
-        enabled: !window.playing && mediaLibrary.artworkState === "generating"
-        onActivated: mediaLibrary.cancelArtwork()
-    }
-
     // Back to the library: closes the session and gives the window back to the
     // content, without leaving the application.
     Shortcut {

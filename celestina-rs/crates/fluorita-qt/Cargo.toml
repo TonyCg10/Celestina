@@ -6,8 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 
 # No dependencies, and none are wanted: this crate owns *source*, not behaviour.
-# It carries the one hand-written C++ piece the media surface needs and tells a
-# consuming `build.rs` where it is. Depending on the engine here would make every
+# It carries the hand-written C++ pieces the media surfaces need and tells a
+# consuming `build.rs` where they are. Depending on the engine here would make every
 # consumer link libmpv just to ask for a path.
 
 [lints]

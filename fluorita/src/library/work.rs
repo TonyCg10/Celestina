@@ -1,23 +1,23 @@
 //! What the library does off the GUI thread.
 //!
-//! The scan, the tag pass, the artwork pass and the watch all live here because
+//! The scan, the tag pass, the poster pass and the watch all live here because
 //! they share one shape: they run on an owned thread, they are bounded, and the
 //! only thing they hand back is a finished snapshot through the queue. The Qt
 //! half in `library.rs` never blocks on any of it.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use celestina_core::CancellationToken;
 use cxx_qt_lib::QString;
 use fluorita_core::{
     Catalogue, MediaId, MediaKind, MediaRecord, MediaSource, SourceScope, SourceSet, XdgMediaDirs,
 };
-use fluorita_engine::backend::ArtworkJob;
 use fluorita_engine::worker::{EngineWorker, Job, JobOutcome};
 use fluorita_engine::{
-    catalogue_store, source_store, EngineError, LibraryChange, LibraryWatcher, ScanLimits,
+    catalogue_store, source_store, ArtworkAttempt, ArtworkPass, EngineError, LibraryChange,
+    LibraryWatcher, ScanLimits,
 };
 
 use crate::folders::{self, FolderChoice};
@@ -45,10 +45,13 @@ pub(super) const MAX_PROBES_PER_BATCH: usize = 32;
 /// A probe that takes longer than this is a file that will not answer.
 pub(super) const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// Posters and covers produced per explicit pass.
+/// Posters and covers asked for per background pass. Between two passes the
+/// grid is projected again, so a large library fills in by batches instead of
+/// all at once at the end.
 pub(super) const MAX_ARTWORK_PER_PASS: usize = 200;
 
-/// Extracting one frame is seconds of work at most.
+/// Extracting one frame is seconds of work at most. The pass waits twice this
+/// for an answer before it gives the item up.
 pub(super) const ARTWORK_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// How long the watch waits before checking that its host is still there.
@@ -118,60 +121,110 @@ fn await_job(
     waited
 }
 
-pub(super) fn run_artwork(
+/// The video and audio items the background poster pass has already asked the
+/// backend about this session, by path and modification time.
+///
+/// A clip that gives no frame and a track with no cover stay "pending" by the
+/// cache's rule for ever; without this the pass would ask about them again
+/// after every scan and every watched change, and — since the per-pass cap is
+/// taken after this filter — never reach the items behind them. A file that
+/// changes gets a new modification time, and so another try.
+pub(super) type Tried = std::sync::Mutex<std::collections::HashSet<(PathBuf, SystemTime)>>;
+
+/// Produces the missing video posters and audio covers, in the background.
+///
+/// Started by the host after a scan settles and after the watch folds in new
+/// items — the author's decision of 2026-10-07, which replaced the explicit
+/// "Generar miniaturas" button. Images never come through here: the shared
+/// thumbnail provider reads them with Qt's image reader.
+///
+/// Bounded the way the button's pass was: one backend job at a time, each
+/// within [`ARTWORK_TIMEOUT`], at most [`MAX_ARTWORK_PER_PASS`] per pass. The
+/// pass repeats until nothing is pending, publishing between two passes so
+/// posters appear as they are made. An item that fails or does not answer ends
+/// that item, not the batch. Cancellation — a rescan, a closing window — is
+/// read between items and in slices while one runs.
+///
+/// The engine is started only once something is pending, so a library with
+/// nothing to produce never starts the backend at all.
+pub(super) fn run_posters(
     catalogue: &Catalogue,
+    tried: &Tried,
+    cancellation: &CancellationToken,
+    qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
+) {
+    run_poster_passes(catalogue, tried, cancellation, qt_thread);
+    let _ = qt_thread.queue(|library| library.posters_finished());
+}
+
+fn run_poster_passes(
+    catalogue: &Catalogue,
+    tried: &Tried,
     cancellation: &CancellationToken,
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
 ) {
     let Some(cache_root) = thumbnail_cache_root() else {
-        let _ = qt_thread.queue(move |library| library.artwork_finished(0));
         return;
     };
-    let pending = fluorita_engine::pending_artwork(catalogue, &cache_root, MAX_ARTWORK_PER_PASS);
-    let total = i32::try_from(pending.len()).unwrap_or(i32::MAX);
-
-    let Ok(worker) = fluorita_engine::worker::EngineWorker::start() else {
-        let _ = qt_thread.queue(move |library| library.artwork_finished(0));
-        return;
+    let untried = |record: &MediaRecord| {
+        !lock_tried(tried).contains(&(record.path().to_path_buf(), record.identity().modified))
     };
-
-    let mut produced = 0;
-    for (index, item) in pending.into_iter().enumerate() {
-        if cancellation.is_cancelled() {
-            break;
-        }
-        let job = ArtworkJob {
-            source: item.source,
-            cache_root: cache_root.clone(),
-            origin: item.origin,
-            source_mtime: item.source_mtime,
-            // Two passes must never stage into the same temporary name.
-            uniquifier: index as u64 + 1,
-            deadline: ARTWORK_TIMEOUT,
-            cancellation: cancellation.clone(),
-        };
-        if worker
-            .submit(Job::Artwork {
-                generation: celestina_core::Generation::INITIAL,
-                job: Box::new(job),
-            })
-            .is_err()
-        {
-            break;
-        }
-        let Some(JobOutcome::Artwork { result, .. }) = worker.poll(ARTWORK_TIMEOUT * 2) else {
-            break;
-        };
-        // A file that will not give up a frame is a normal outcome — a broken
-        // clip, an audio file with no cover — and the grid keeps its glyph.
-        if result.is_ok() {
-            produced += 1;
-        }
-        let done = i32::try_from(index + 1).unwrap_or(i32::MAX);
-        let _ = qt_thread.queue(move |library| library.artwork_progress(done, total));
+    let mut pending = fluorita_engine::pending_artwork_where(
+        catalogue,
+        &cache_root,
+        MAX_ARTWORK_PER_PASS,
+        untried,
+    );
+    if pending.is_empty() || cancellation.is_cancelled() {
+        return;
     }
+    let Ok(worker) = EngineWorker::start() else {
+        return;
+    };
+    let mut pass = ArtworkPass::new(&worker);
+    while !pending.is_empty() {
+        let mut stopped = false;
+        let produced = pass.run(
+            pending,
+            &cache_root,
+            ARTWORK_TIMEOUT,
+            cancellation,
+            |item, attempt| match attempt {
+                // Produced is no longer pending by the cache's own rule.
+                ArtworkAttempt::Produced => {}
+                ArtworkAttempt::Failed | ArtworkAttempt::Unanswered => {
+                    lock_tried(tried).insert((item.source.clone(), item.source_mtime));
+                }
+                ArtworkAttempt::Cancelled | ArtworkAttempt::Stopped => stopped = true,
+            },
+        );
+        if produced > 0
+            && qt_thread
+                .queue(|library| library.posters_produced())
+                .is_err()
+        {
+            return;
+        }
+        if stopped || cancellation.is_cancelled() {
+            return;
+        }
+        pending = fluorita_engine::pending_artwork_where(
+            catalogue,
+            &cache_root,
+            MAX_ARTWORK_PER_PASS,
+            untried,
+        );
+    }
+}
 
-    let _ = qt_thread.queue(move |library| library.artwork_finished(produced));
+/// Only a set insert or lookup ever runs under this lock, so a poisoned one
+/// still holds consistent data and is used as it is.
+fn lock_tried(
+    tried: &Tried,
+) -> std::sync::MutexGuard<'_, std::collections::HashSet<(PathBuf, SystemTime)>> {
+    tried
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Asks the desktop for a folder and reports the answer through the queue.

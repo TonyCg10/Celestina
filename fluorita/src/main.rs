@@ -10,6 +10,7 @@ mod mpris;
 mod player;
 mod rasteriser;
 mod recipes;
+mod thumbnails;
 
 use cxx_qt_lib::{
     QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,
@@ -48,6 +49,9 @@ fn main() {
         // it loads, and it pins the scene graph to OpenGL, which libmpv's
         // render API requires.
         player::qobject::register_video_item(engine.as_mut());
+        // The grid and the dock name image thumbnails as `image://thumb/…`,
+        // so the provider must be on the engine before that QML loads.
+        thumbnails::ffi::register_thumbnail_provider(engine.as_mut());
         let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
         let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
         initial_properties.insert(
@@ -96,4 +100,9 @@ fn main() {
     if let Some(app) = app.as_mut() {
         app.exec();
     }
+
+    // Thumbnail decodes hold no half-written file — the cache entry is
+    // renamed into place whole — so they get a short wait: what is queued is
+    // dropped, and a read stuck on a dead mount is left to the exit.
+    thumbnails::ffi::thumbnail_shutdown(1000);
 }

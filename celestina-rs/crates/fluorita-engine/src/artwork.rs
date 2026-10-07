@@ -363,18 +363,34 @@ pub struct PendingArtwork {
 /// *what* to generate must never cost a decode, or the decision would be as
 /// expensive as the work — and it runs on a worker, never on the GUI thread.
 ///
-/// Images are excluded on purpose. The toolkit already produces those, and
-/// Siderita already does; routing them through the media backend is the cost
-/// the suite's contract keeps out.
+/// Images are excluded on purpose. Qt's image reader produces those, through
+/// the shared thumbnail provider in `fluorita-qt`; routing them through the
+/// media backend is the cost the suite's contract keeps out.
 #[must_use]
 pub fn pending(
     catalogue: &fluorita_core::Catalogue,
     cache_root: &Path,
     limit: usize,
 ) -> Vec<PendingArtwork> {
+    pending_where(catalogue, cache_root, limit, |_| true)
+}
+
+/// [`pending`], among the records `wanted` accepts.
+///
+/// The filter runs before the limit, so a background pass that remembers what
+/// it already tried — a broken clip, a track with no cover — reaches the next
+/// items instead of being handed the same failures every time.
+#[must_use]
+pub fn pending_where(
+    catalogue: &fluorita_core::Catalogue,
+    cache_root: &Path,
+    limit: usize,
+    wanted: impl Fn(&fluorita_core::MediaRecord) -> bool,
+) -> Vec<PendingArtwork> {
     catalogue
         .records()
         .filter(|record| record.is_available())
+        .filter(|record| wanted(record))
         .filter(|record| {
             matches!(
                 record.kind(),
@@ -544,5 +560,30 @@ mod pending_tests {
         }
 
         assert_eq!(pending(&catalogue, &cache_root, 3).len(), 3);
+    }
+
+    #[test]
+    fn what_was_already_tried_is_filtered_before_the_limit() {
+        // A background pass remembers the items that gave nothing; if the
+        // limit were taken first, three broken clips would be the whole of
+        // every later pass and the rest would never get a poster.
+        let cache_root = scratch("tried");
+        let mut catalogue = Catalogue::new();
+        for inode in 1..=6 {
+            catalogue.upsert(record(
+                inode,
+                &format!("/m/clip{inode}.mkv"),
+                MediaKind::Video,
+                100,
+            ));
+        }
+        let tried = |record: &MediaRecord| matches!(record.id().filesystem_parts(), Some((_, inode)) if inode <= 3);
+
+        let next = super::pending_where(&catalogue, &cache_root, 3, |record| !tried(record));
+
+        assert_eq!(next.len(), 3);
+        assert!(next
+            .iter()
+            .all(|item| !matches!(item.media.filesystem_parts(), Some((_, inode)) if inode <= 3)));
     }
 }

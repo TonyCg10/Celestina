@@ -96,33 +96,6 @@ Item {
                     Accessible.role: Accessible.StaticText
                     Accessible.name: text
                 }
-
-                // Generating artwork is the only thing here that starts the
-                // engine, so it is a decision by the user and not a side effect
-                // of opening the window. It disappears when there is nothing to
-                // generate.
-                CelestinaButton {
-                    activeFocusOnTab: visible
-                    visible: view.library.artworkPending > 0
-                        || view.library.artworkState !== "idle"
-                    text: view.library.artworkState === "idle"
-                        ? qsTr("Generar %1 miniaturas").arg(view.library.artworkPending)
-                        : view.library.artworkState === "cancelling"
-                            ? qsTr("Cancelando…")
-                            : qsTr("Generando %1 de %2 — cancelar")
-                                .arg(view.library.artworkDone)
-                                .arg(view.library.artworkTotal)
-                    role: view.library.artworkState === "generating"
-                        ? CelestinaButton.Selected
-                        : CelestinaButton.Tonal
-                    enabled: view.library.artworkState !== "cancelling"
-                    Accessible.name: text
-                    Accessible.description: qsTr(
-                        "Extrae el fotograma o la carátula que falta en la caché compartida. Ctrl+G")
-                    onClicked: view.library.artworkState === "generating"
-                        ? view.library.cancelArtwork()
-                        : view.library.generateArtwork()
-                }
             }
 
             GalleryGrid {

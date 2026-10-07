@@ -56,7 +56,7 @@ mod work;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use project::{census, project_matching, LibrarySnapshot};
-use work::{run_artwork, run_folder_choice, run_scan, run_trash};
+use work::{run_folder_choice, run_posters, run_scan, run_trash, Tried};
 
 use fluorita_core::{Catalogue, Query, SourceId, SourceScope, SourceSet};
 
@@ -90,14 +90,6 @@ pub mod qobject {
         #[qproperty(i32, image_count)]
         #[qproperty(i32, video_count)]
         #[qproperty(i32, track_count)]
-        /// How many items would need a thumbnail produced. Zero hides the
-        /// whole idea from the interface, because there is nothing to do.
-        #[qproperty(i32, artwork_pending)]
-        /// `idle`, `generating` or `cancelling`.
-        #[qproperty(QString, artwork_state)]
-        /// Produced so far in the running pass, and what it set out to do.
-        #[qproperty(i32, artwork_done)]
-        #[qproperty(i32, artwork_total)]
         /// Bumped once, after every list of a publication is in place. QML
         /// rebuilds its rows from this and never from the lists directly:
         /// publishing several lists one by one makes the bindings re-run
@@ -214,20 +206,10 @@ pub mod qobject {
         #[qinvokable]
         fn trash_item(self: Pin<&mut FluoritaLibrary>, key: &QString);
 
-        /// Produces the thumbnails the shared cache is missing, for video and
-        /// audio only. This is the one thing here that starts the media
-        /// backend, which is why nothing but an explicit request calls it.
         /// Shows only what matches, or everything again when the text is
         /// empty.
         #[qinvokable]
         fn search(self: Pin<&mut FluoritaLibrary>, text: &QString);
-
-        #[qinvokable]
-        fn generate_artwork(self: Pin<&mut FluoritaLibrary>);
-
-        /// Asks the running pass to stop at the next item.
-        #[qinvokable]
-        fn cancel_artwork(self: Pin<&mut FluoritaLibrary>);
     }
 
     impl cxx_qt::Threading for FluoritaLibrary {}
@@ -240,10 +222,6 @@ pub struct LibraryRust {
     image_count: i32,
     video_count: i32,
     track_count: i32,
-    artwork_pending: i32,
-    artwork_state: QString,
-    artwork_done: i32,
-    artwork_total: i32,
     revision: i32,
     query: QString,
     hidden_by_query: i32,
@@ -288,9 +266,9 @@ pub struct LibraryRust {
     /// it a second scan would join a thread that only ever returns when this
     /// object dies, which is a deadlock on the GUI thread.
     cancellation: CancellationToken,
-    /// The catalogue as last published, so an artwork pass and a change of
+    /// The catalogue as last published, so the poster pass and a change of
     /// selection both work from it without walking anything again. Shared
-    /// rather than owned: the projection worker and the artwork pass each take
+    /// rather than owned: the projection worker and the poster pass each take
     /// a handle, and cloning fifty thousand records to hand one out was part
     /// of the per-keystroke cost recorded as FLU-P1.
     catalogue: Arc<Catalogue>,
@@ -315,8 +293,18 @@ pub struct LibraryRust {
     /// join in `Drop` waits for one receive slice rather than for a person
     /// who may have left the dialog open.
     folder_cancellation: CancellationToken,
+    /// The background poster pass, if one is running. One at a time: it is
+    /// the only work here that drives the media backend, one job at a time.
     artwork_worker: Option<JoinHandle<()>>,
+    /// Stops the poster pass: a rescan replaces the catalogue it works from,
+    /// and a closing window must not wait for the file being rendered.
     artwork_cancellation: CancellationToken,
+    /// A pass was asked for while one was running; it starts again, over the
+    /// catalogue as it is then, when the running one finishes.
+    artwork_again: bool,
+    /// What the poster pass has already asked the backend about this session,
+    /// so a file that gives nothing is not asked again after every change.
+    artwork_tried: Arc<Tried>,
 }
 
 // Written out rather than derived: a default `QString` is empty, and an empty
@@ -333,10 +321,6 @@ impl Default for LibraryRust {
             image_count: 0,
             video_count: 0,
             track_count: 0,
-            artwork_pending: 0,
-            artwork_state: QString::from("idle"),
-            artwork_done: 0,
-            artwork_total: 0,
             revision: 0,
             source_ids: QStringList::default(),
             source_names: QStringList::default(),
@@ -377,6 +361,8 @@ impl Default for LibraryRust {
             trash_worker: None,
             artwork_worker: None,
             artwork_cancellation: CancellationToken::new(),
+            artwork_again: false,
+            artwork_tried: Arc::default(),
         }
     }
 }
@@ -393,6 +379,10 @@ impl qobject::FluoritaLibrary {
     /// worker then stores that set before walking it.
     fn start_scan(mut self: core::pin::Pin<&mut Self>, configured: Option<SourceSet>) {
         self.as_mut().close();
+        // The poster pass works from the catalogue this walk replaces. It is
+        // told to stop and not joined here — the backend may be in the middle
+        // of a file — and the walk's own publication starts the next one.
+        self.as_mut().cancel_posters();
         self.as_mut().set_state(QString::from("scanning"));
         self.as_mut().set_summary(QString::from(copy::SCANNING));
         // A projection still running describes the library as it was before
@@ -709,33 +699,46 @@ impl qobject::FluoritaLibrary {
     ) {
         self.as_mut().rust_mut().catalogue = catalogue;
         self.as_mut().rust_mut().configured = configured;
-        self.request_projection();
+        self.as_mut().request_projection();
+        // New items may have arrived, and a video or a track among them gets
+        // its poster the same way the scanned ones did.
+        self.request_posters();
     }
 
-    /// Starts the explicit artwork pass.
-    pub fn generate_artwork(mut self: core::pin::Pin<&mut Self>) {
-        if self.artwork_state() == &QString::from("generating") {
+    /// Asks for the background poster pass over the catalogue held now.
+    ///
+    /// Not a request the person makes: the scan's settled publication and the
+    /// watch's changes call this (the author's decision of 2026-10-07). If a
+    /// pass is already running, it runs again once that one finishes, so
+    /// items that arrived meanwhile are not left out.
+    fn request_posters(mut self: core::pin::Pin<&mut Self>) {
+        if self.rust().artwork_worker.is_some() {
+            self.as_mut().rust_mut().artwork_again = true;
             return;
         }
-        let catalogue = self.rust().catalogue.clone();
+        self.as_mut().rust_mut().artwork_again = false;
+        let catalogue = Arc::clone(&self.rust().catalogue);
+        let tried = Arc::clone(&self.rust().artwork_tried);
         let cancellation = CancellationToken::new();
         self.as_mut().rust_mut().artwork_cancellation = cancellation.clone();
-        self.as_mut().set_artwork_state(QString::from("generating"));
-        self.as_mut().set_artwork_done(0);
 
         let qt_thread = self.qt_thread();
         let worker = std::thread::Builder::new()
             .name("fluorita-artwork".to_owned())
-            .spawn(move || run_artwork(&catalogue, &cancellation, &qt_thread));
+            .spawn(move || run_posters(&catalogue, &tried, &cancellation, &qt_thread));
         match worker {
             Ok(handle) => self.as_mut().rust_mut().artwork_worker = Some(handle),
-            Err(_) => self.as_mut().set_artwork_state(QString::from("idle")),
+            // Posters are a nicety: the grid keeps its glyphs, and the next
+            // scan or change asks again.
+            Err(error) => eprintln!("fluorita: could not start the poster pass: {error}"),
         }
     }
 
-    pub fn cancel_artwork(mut self: core::pin::Pin<&mut Self>) {
+    /// Stops the running poster pass at its next look at the token, without
+    /// waiting for it. Its `posters_finished` still arrives and joins it.
+    fn cancel_posters(mut self: core::pin::Pin<&mut Self>) {
         self.rust().artwork_cancellation.cancel();
-        self.as_mut().set_artwork_state(QString::from("cancelling"));
+        self.as_mut().rust_mut().artwork_again = false;
     }
 
     /// The folder chooser answered. Runs on the GUI thread, through the queue.
@@ -775,20 +778,20 @@ impl qobject::FluoritaLibrary {
         }
     }
 
-    /// One produced thumbnail, reported from the pass.
-    fn artwork_progress(mut self: core::pin::Pin<&mut Self>, done: i32, total: i32) {
-        self.as_mut().set_artwork_done(done);
-        self.as_mut().set_artwork_total(total);
+    /// A poster pass put new entries in the cache: project again so they
+    /// appear. Runs on the GUI thread, through the queue.
+    fn posters_produced(self: core::pin::Pin<&mut Self>) {
+        self.request_projection();
     }
 
-    /// The pass finished: refresh the grid so the new thumbnails appear.
-    fn artwork_finished(mut self: core::pin::Pin<&mut Self>, produced: i32) {
-        self.as_mut().set_artwork_state(QString::from("idle"));
+    /// The poster pass ended, finished or cancelled. Its thread has nothing
+    /// left to do, so joining it here does not block.
+    fn posters_finished(mut self: core::pin::Pin<&mut Self>) {
         if let Some(handle) = self.as_mut().rust_mut().artwork_worker.take() {
             let _ = handle.join();
         }
-        if produced > 0 {
-            self.request_projection();
+        if self.rust().artwork_again {
+            self.request_posters();
         }
     }
 
@@ -802,10 +805,16 @@ impl qobject::FluoritaLibrary {
         let reproject = !self.query().to_string().is_empty()
             || snapshot.scope != self.rust().scope()
             || self.rust().projection.is_some();
+        // The walk has settled: what it found is the catalogue the posters
+        // are made for. A stored or failed publication is not that moment.
+        let settled = snapshot.state == "ready";
         self.as_mut().set_hidden_by_query(0);
         self.as_mut().publish(snapshot);
         if reproject {
-            self.request_projection();
+            self.as_mut().request_projection();
+        }
+        if settled {
+            self.request_posters();
         }
     }
 
@@ -838,7 +847,6 @@ impl qobject::FluoritaLibrary {
         self.as_mut().set_music_available(music[4].clone());
         self.as_mut().set_music_thumbnails(music[5].clone());
 
-        self.as_mut().set_artwork_pending(snapshot.artwork_pending);
         self.as_mut().rust_mut().catalogue = snapshot.catalogue;
         self.as_mut().rust_mut().configured = snapshot.configured;
         // A selection whose root is gone would scope the content to nothing
@@ -907,7 +915,7 @@ impl Drop for LibraryRust {
         if let Some(handle) = self.trash_worker.take() {
             let _ = handle.join();
         }
-        // Cancel before joining: an artwork pass would otherwise hold the
+        // Cancel before joining: the poster pass would otherwise hold the
         // window open for as long as the backend needs for the current file.
         self.artwork_cancellation.cancel();
         if let Some(handle) = self.artwork_worker.take() {

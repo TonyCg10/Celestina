@@ -25,6 +25,7 @@
 #![forbid(unsafe_code)]
 
 pub mod artwork;
+pub mod artwork_pass;
 pub mod backend;
 pub mod batch;
 pub mod catalogue_store;
@@ -46,7 +47,10 @@ pub mod source_store;
 pub mod watch;
 pub mod worker;
 
-pub use artwork::{pending as pending_artwork, PendingArtwork};
+pub use artwork::{
+    pending as pending_artwork, pending_where as pending_artwork_where, PendingArtwork,
+};
+pub use artwork_pass::{ArtworkAttempt, ArtworkPass};
 pub use backend::{
     ArtworkJob, AudioOutput, EngineSession, MediaEngine, ProbeBudget, ProbeReport, SessionRequest,
 };

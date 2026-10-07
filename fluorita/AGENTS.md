@@ -20,8 +20,9 @@ Fluorita constraints; it cannot relax the root or grant authority.
   capabilities, generations, and confirmed state; it contains no Qt or decode.
 - `fluorita-engine` owns scan, watch, metadata, persistence, artwork, trailers,
   and playback behind bounded contracts.
-- `fluorita-qt` is the shared C++/Qt Quick video-rendering seam. Manual C++
-  exists only for concrete CXX-Qt limitations.
+- `fluorita-qt` is the shared C++/Qt Quick seam: video rendering and the
+  freedesktop-thumbnail image provider. Manual C++ exists only for concrete
+  CXX-Qt limitations.
 - `src/` adapts to CXX-Qt; `qml/` composes Gallery, Music, and player. Siderita
   owns another adapter/modal; neither imports the other's QML or duplicates
   core/engine rules.
@@ -32,8 +33,12 @@ Fluorita constraints; it cannot relax the root or grant authority.
 
 - A freedesktop thumbnail is static PNG. A trailer is live, bounded,
   cancellable, and never published as a standard thumbnail.
-- Navigation does not initialize the heavy backend. Decode/playback begins only
-  on explicit request and its session closes deterministically.
+- Navigation does not initialize the playback backend. Playback begins only on
+  explicit request and its session closes deterministically. Images are
+  thumbnailed by the Qt image reader, never the media backend; the static
+  video/audio poster pass runs in the background after a scan settles and when
+  new items arrive, bounded and cancellable — the author's decision of
+  2026-10-07.
 - Scan, metadata, extraction, and playback never block the GUI thread. Every job
   validates generation and identity before publishing; discard stale responses.
 - Treat names, tags, dimensions, duration, and content as hostile. Byte, pixel,

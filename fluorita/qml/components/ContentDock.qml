@@ -190,7 +190,7 @@ Item {
                     }
                 }
 
-                // No cached thumbnail: the kind, said with the theme's icon.
+                // No thumbnail yet: the kind, said with the theme's icon.
                 CelestinaIcon {
                     anchors.centerIn: parent
                     visible: !poster.visible

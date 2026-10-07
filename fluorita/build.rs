@@ -116,6 +116,10 @@ fn main() {
         // The shared render seam, compiled from the crate that owns it.
         .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
         .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
+        // The shared thumbnail provider: image thumbnails through Qt's reader,
+        // into the freedesktop cache. No Q_OBJECT, so only compiled; its
+        // header is watched through `rerun_paths`.
+        .cpp_file(fluorita_qt::THUMBNAIL_PROVIDER_SOURCE)
         .files([
             "src/library.rs",
             "src/player.rs",
@@ -123,6 +127,9 @@ fn main() {
             "src/editor.rs",
             "src/metadata.rs",
             "src/rasteriser.rs",
+            // Registers the shared thumbnail provider and binds the helpers
+            // its tests reach it through; declares no QObject.
+            "src/thumbnails.rs",
         ]);
 
     // SAFETY: only adds an include directory for our own headers.

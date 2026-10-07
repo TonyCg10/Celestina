@@ -55,9 +55,11 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
   lands where the keyframes are.
 
 Static image thumbnails, video posters and embedded covers use the freedesktop
-PNG cache, and carry the spec's `Thumb::URI` and `Thumb::MTime` keys. A hover
-preview is a live, silent, bounded session, never a file; normal navigation
-never starts the decoder merely to show a row.
+PNG cache, and carry the spec's `Thumb::URI` and `Thumb::MTime` keys. Thumbnails
+are automatic: images go through the shared provider in `fluorita-qt` and Qt's
+image reader, and video posters and covers are produced by a bounded,
+cancellable background pass after each scan. A hover preview is a live, silent,
+bounded session, never a file; showing a row never starts playback.
 
 ## Architecture
 
@@ -65,7 +67,7 @@ never starts the decoder merely to show a row.
 |---|---|
 | `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth, the session/surface handshake and generation-stamped resource contracts; no Qt/decode |
 | `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue and edit recipes, metadata, artwork and the libmpv playback session loop |
-| `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv |
+| `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv and the freedesktop-thumbnail image provider |
 | `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, activation and MPRIS2 |
 | `qml/` | Source sidebar, Gallery, Music and complete player composition |
 | `cpp/` | The narrow toolkit seams unavailable through CXX-Qt: the image probe and the edit canvas that draws and encodes a picture |

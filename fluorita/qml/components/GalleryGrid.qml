@@ -6,10 +6,12 @@ import org.celestina.fluorita 1.0
 
 // Gallery: the images and video of the selected folder, together.
 //
-// Thumbnails come from the shared freedesktop cache *only if they already
-// exist*. Nothing generates one here: that would start a decoder per card,
-// which is exactly the cost browsing must not pay. No thumbnail means a glyph,
-// not a hole.
+// An image's thumbnail always comes, from the shared provider
+// (`image://thumb/<key>`): the freedesktop cache, or Qt's image reader on the
+// provider's own bounded pool. A video's poster or a track's cover appears
+// once the background poster pass has put it in the cache. Nothing here starts
+// a decoder per card. Until a thumbnail is ready the card shows a glyph, not a
+// hole.
 GridView {
     id: grid
 
@@ -213,7 +215,7 @@ GridView {
                     }
                 }
 
-                // No cached thumbnail: the kind, said with the theme's icon.
+                // No thumbnail yet: the kind, said with the theme's icon.
                 CelestinaIcon {
                     anchors.centerIn: thumbnail
                     visible: !thumbnail.visible

@@ -16,6 +16,14 @@ set -eu
 #  5) Arranque offscreen con una imagen: tampoco. Mirar una foto la decodifica
 #     el toolkit; que aquí aparezca un hilo del motor significa que la promesa
 #     de peso perezoso se rompió.
+#  6) Automatic thumbnails (the author's decision of 2026-10-07): a library
+#     holding only a photo gets its thumbnail from the shared provider with no
+#     engine thread; once a clip is added, the background pass gives it a
+#     poster without being asked.
+#
+# HOME points into the scratch directory too: the library seeds its roots from
+# $HOME/Pictures and friends, and a smoke that walked the real ones would
+# depend on — and, for posters, write about — whatever the machine holds.
 #
 # Dos aprendizajes de esta puerta, que explican por qué mira lo que mira:
 #   · medir `$!` de `timeout` inspeccionaba al proceso equivocado, así que la
@@ -90,6 +98,7 @@ threads_for() {
     log=$2
     argument=${3:-}
     if [ "$argument_mode" = "with-argument" ]; then
+        HOME=$scratch \
         XDG_CONFIG_HOME=$scratch/config \
         XDG_DATA_HOME=$scratch/data \
         XDG_CACHE_HOME=$scratch/cache \
@@ -100,6 +109,7 @@ threads_for() {
         QT_ASSUME_STDERR_HAS_CONSOLE=1 \
             "$bin" "$argument" >"$log" 2>&1 &
     else
+        HOME=$scratch \
         XDG_CONFIG_HOME=$scratch/config \
         XDG_DATA_HOME=$scratch/data \
         XDG_CACHE_HOME=$scratch/cache \
@@ -217,4 +227,68 @@ case "$still" in
         fail "una imagen arrancó el motor multimedia (hilos: $still)" "$scratch/imagen.log" ;;
 esac
 
-echo "smoke: OK — QML carga, un vídeo abre sesión fuera del hilo GUI, y ni la biblioteca ni una imagen ni un archivo desconocido arrancan el motor"
+# ── 6) Automatic thumbnails ─────────────────────────────────────────────────
+# The cache key the provider and the engine share: MD5 of the file:// URI as
+# Qt spells it (celestina_core::percent::encode_qt_path).
+cache_entry() {
+    python3 - "$1" "$scratch/cache/thumbnails/large" <<'KEY'
+import hashlib, sys, urllib.parse
+
+uri = "file://" + urllib.parse.quote(sys.argv[1], safe="/-._~!$&'()*+,;=:@")
+print(sys.argv[2] + "/" + hashlib.md5(uri.encode()).hexdigest() + ".png")
+KEY
+}
+
+# Starts the library with no argument and waits up to 20 s for every entry
+# named after the log, then reports the process's threads and stops it.
+library_until() {
+    log=$1
+    shift
+    HOME=$scratch \
+    XDG_CONFIG_HOME=$scratch/config \
+    XDG_DATA_HOME=$scratch/data \
+    XDG_CACHE_HOME=$scratch/cache \
+    XDG_STATE_HOME=$scratch/state \
+    XDG_RUNTIME_DIR=$scratch/run \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+    QT_QPA_PLATFORM=offscreen \
+    QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+        "$bin" >"$log" 2>&1 &
+    pid=$!
+    waited=0
+    while [ "$waited" -lt 40 ]; do
+        missing=0
+        for entry in "$@"; do
+            [ -s "$entry" ] || missing=1
+        done
+        [ "$missing" -eq 0 ] && break
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.5
+        waited=$((waited + 1))
+    done
+    seen=$(cat /proc/"$pid"/task/*/comm 2>/dev/null | sort -u | tr '\n' ' ')
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    for entry in "$@"; do
+        [ -s "$entry" ] || fail "no thumbnail appeared at $entry" "$log"
+    done
+    echo "$seen"
+}
+
+mv "$scratch/foto.png" "$scratch/Pictures/foto.png"
+photo_entry=$(cache_entry "$scratch/Pictures/foto.png")
+photos=$(library_until "$scratch/fotos.log" "$photo_entry")
+errores=$(qml_errors "$scratch/fotos.log")
+[ -z "$errores" ] || fail "QML errors in a library of photos: $errores"
+case "$photos" in
+    *core*|*fluorita-player*)
+        fail "a photo's thumbnail started the media engine (threads: $photos)" "$scratch/fotos.log" ;;
+esac
+
+cp "$media" "$scratch/Videos/clip.mp4"
+clip_entry=$(cache_entry "$scratch/Videos/clip.mp4")
+library_until "$scratch/poster.log" "$photo_entry" "$clip_entry" >/dev/null
+errores=$(qml_errors "$scratch/poster.log")
+[ -z "$errores" ] || fail "QML errors in a library with a clip: $errores"
+
+echo "smoke: OK — QML carga, un vídeo abre sesión fuera del hilo GUI, ni la biblioteca ni una imagen ni un archivo desconocido arrancan el motor, y las miniaturas llegan solas"

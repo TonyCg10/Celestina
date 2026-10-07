@@ -13,15 +13,14 @@ use fluorita_core::{
 };
 
 use super::copy;
-use super::work::{thumbnail_cache_root, MAX_ARTWORK_PER_PASS};
+use super::work::thumbnail_cache_root;
 use celestina_core::pathkey;
 
 /// Everything one publication produces, already shaped for QML.
 ///
-/// Built on a worker, never on the GUI thread: resolving a thumbnail is a
-/// `stat()` per row and counting pending artwork another per video or track,
-/// which on a library of tens of thousands — or one mapped over a network —
-/// is a frozen window.
+/// Built on a worker, never on the GUI thread: resolving a poster is a
+/// `stat()` per video or track, which on a library of tens of thousands — or
+/// one mapped over a network — is a frozen window.
 #[derive(Default)]
 pub(super) struct LibrarySnapshot {
     /// `stored` while showing what was read back and the walk is still
@@ -41,8 +40,8 @@ pub(super) struct LibrarySnapshot {
     /// The sidebar: one row per configured root, in configuration order —
     /// handle, label and the root as display text.
     pub(super) sources: Vec<[String; 3]>,
-    /// What the projection was made from, kept so an explicit artwork pass has
-    /// something to work on without re-walking the disk. Shared, never
+    /// What the projection was made from, kept so the background poster pass
+    /// has something to work on without re-walking the disk. Shared, never
     /// copied: the host keeps this very handle, and every later projection,
     /// search and artwork pass reads it from there.
     pub(super) catalogue: Arc<Catalogue>,
@@ -53,8 +52,6 @@ pub(super) struct LibrarySnapshot {
     /// later add or remove from what it published rather than from a set the
     /// worker may have replaced since.
     pub(super) configured: SourceSet,
-    /// How many items the shared cache has no usable thumbnail for.
-    pub(super) artwork_pending: i32,
 }
 
 /// Projects one publication: the sidebar, and the content of `scope` inside it.
@@ -121,7 +118,7 @@ pub(super) fn project_matching(
                 pathkey::encode(&item.path),
                 item.display_name.clone(),
                 kind_label(item.kind).to_owned(),
-                cached_thumbnail(cache_root.as_deref(), &item.path),
+                thumbnail(cache_root.as_deref(), item.kind, &item.path),
                 flag(item.available),
             ]
         })
@@ -170,11 +167,6 @@ pub(super) fn project_matching(
         })
         .collect();
 
-    let artwork_pending = cache_root.as_deref().map_or(0, |root| {
-        i32::try_from(fluorita_engine::pending_artwork(catalogue, root, MAX_ARTWORK_PER_PASS).len())
-            .unwrap_or(i32::MAX)
-    });
-
     let source_rows: Vec<[String; 3]> = configured
         .sources()
         .iter()
@@ -197,7 +189,6 @@ pub(super) fn project_matching(
         scope,
         configured: configured.clone(),
         sources: source_rows,
-        artwork_pending,
         summary: summarize(
             image_count,
             video_count,
@@ -237,12 +228,27 @@ pub(crate) const fn kind_label(kind: MediaKind) -> &'static str {
     }
 }
 
+/// What a gallery card shows for an item.
+///
+/// An image is always answered, by the shared thumbnail provider: the
+/// `image://thumb/` URL carries the item's path key, and the provider reads
+/// the shared cache or decodes the image with Qt's reader, on its own bounded
+/// pool — never the media backend (the author's decision of 2026-10-07).
+/// A video or a track shows the poster or cover the background artwork pass
+/// put in the cache, once it is there; until then the card keeps its glyph.
+pub(super) fn thumbnail(cache_root: Option<&Path>, kind: MediaKind, source: &Path) -> String {
+    match kind {
+        MediaKind::Image => format!("image://thumb/{}", pathkey::encode(source)),
+        MediaKind::Video | MediaKind::Audio => cached_thumbnail(cache_root, source),
+    }
+}
+
 /// The shared thumbnail entry for a file, but **only if it already exists**.
 ///
-/// Browsing never produces artwork: that would start the media backend for
-/// every card in a grid, which is exactly the cost the suite's contract keeps
-/// out of normal browsing. A missing thumbnail is an empty string and the
-/// delegate shows a themed glyph instead.
+/// Projecting never produces artwork: a poster is the background pass's job,
+/// and asking for one here would start the media backend for every card in a
+/// grid. A missing entry is an empty string and the delegate shows a themed
+/// glyph instead.
 pub(super) fn cached_thumbnail(cache_root: Option<&Path>, source: &Path) -> String {
     let Some(root) = cache_root else {
         return String::new();
@@ -332,7 +338,7 @@ pub(super) fn summarize(
 
 #[cfg(test)]
 mod tests {
-    use super::{cached_thumbnail, copy, kind_label, project, summarize};
+    use super::{cached_thumbnail, copy, kind_label, project, summarize, thumbnail};
     use celestina_core::pathkey;
     use fluorita_core::MediaKind;
     use std::path::Path;
@@ -415,6 +421,36 @@ mod tests {
         assert!(url.starts_with("file://"), "unexpected url: {url}");
         assert!(url.ends_with(".png"));
         std::fs::remove_file(&entry).ok();
+    }
+
+    #[test]
+    fn an_image_always_asks_the_provider_and_a_video_only_the_cache() {
+        // The author's decision of 2026-10-07: images are thumbnailed by the
+        // provider whether or not anything cached them before. A video still
+        // shows only what the poster pass put in the cache, so projecting a
+        // grid never starts the media backend.
+        let root = std::env::temp_dir().join("fluorita-library-tests/provider");
+        let photo = Path::new("/home/toni/my photos/caf\u{e9} #1.jpg");
+
+        let url = thumbnail(Some(&root), MediaKind::Image, photo);
+        assert_eq!(url, format!("image://thumb/{}", pathkey::encode(photo)));
+        assert_eq!(
+            pathkey::decode(url.trim_start_matches("image://thumb/")).expect("a key"),
+            photo
+        );
+        assert_eq!(
+            thumbnail(None, MediaKind::Image, photo),
+            url,
+            "an image needs no cache root to be asked for"
+        );
+        assert_eq!(
+            thumbnail(
+                Some(&root),
+                MediaKind::Video,
+                Path::new("/home/toni/clip.mkv")
+            ),
+            ""
+        );
     }
 
     /// A picture and a track whose names are not valid UTF-8, in a real
