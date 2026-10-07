@@ -7,6 +7,7 @@ const QML_FILES: &[&str] = &[
     // The suite's shared visual language, symlinked from ../celestina-style.
     "qml/CelestinaButton.qml",
     "qml/CelestinaFocusRing.qml",
+    "qml/CelestinaBackdrop.qml",
     "qml/CelestinaIcon.qml",
     "qml/CelestinaIconButton.qml",
     "qml/CelestinaCapsule.qml",

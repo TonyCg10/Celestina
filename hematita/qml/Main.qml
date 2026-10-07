@@ -27,7 +27,9 @@ ApplicationWindow {
     minimumWidth: 640
     minimumHeight: 420
     visible: true
-    color: CelestinaTheme.canvas
+    // Transparent: the compositor blurs what lies behind the window and
+    // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
+    color: CelestinaTheme.clear
     title: "Hematita"
 
     // The sections, in the order the strip shows them, each with the page
@@ -42,6 +44,12 @@ ApplicationWindow {
         { key: "storage", icon: "hard-drive", label: qsTr("Almacenamiento") }
     ]
     property int currentSection: 0
+
+    // Under the strip and every page: the Haze canvas over the compositor's
+    // blur. The pages' panels are CelestinaSurface and already paint `card`.
+    CelestinaBackdrop {
+        anchors.fill: parent
+    }
 
     ColumnLayout {
         anchors.fill: parent

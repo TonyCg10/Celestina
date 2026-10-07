@@ -1,0 +1,27 @@
+# HEM-H1-C exact change inventory
+
+Base revision	b7cbf7af1f39d4a7d5d470fae3842f596a50a630
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-10-07-glass-canvas.md
+Pathspec	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-C.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	hematita/qml/CelestinaBackdrop.qml
+Pathspec	hematita/qml/Main.qml
+Pathspec	scripts/glass-canvas-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	994453cea7cd7eaef2c8981224464aa3f6c149245de4ab5e194389716d00908b	docs/version-history.tsv
+1	1	101f59028d00cf58cc5ac0de85c604062c4ea309cbc28444d3c0b418400e0d55	hematita/Cargo.lock
+1	1	d1d78204e29d337413ef994dd3a692ae15e24dc9a73b74d5f4c372113b2bfa84	hematita/Cargo.toml
+1	0	3b9b78d8e98775962608f43a239ae6566c8282f72d66d5c92dd485bba62a985a	hematita/build.rs
+44	0	689acc2d062186acd6199360022f7ac1d86d5ae5fb786c616aa191e0dba50605	hematita/docs/evidence/2026-10-07-glass-canvas.md
+27	0	self	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-C.numstat.tsv
+1	0	b322624f5bed8daced5114c29f6458185f3142bcb0fdd95550fcafd12fbffe4e	hematita/docs/plans/active/2026-09-26-hardening.md
+1	0	3b62a769997026b56b2f32800802f4b94ab76a4313e997b73893242295a9e533	hematita/qml/CelestinaBackdrop.qml
+9	1	c10ab39142ef9772f18ed752a2e7ab12b02f8cba8ce8b1348fc71562d5549598	hematita/qml/Main.qml
+1	1	4f1b332dbc399214359a1edf4b53c82b609c7b7464ead500fc9ef47a30be14d3	scripts/glass-canvas-baseline.tsv

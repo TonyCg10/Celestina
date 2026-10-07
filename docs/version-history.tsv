@@ -203,3 +203,4 @@ siderita	1.9.4	bug	SID-H1-K	Remove the expanded heading and fix the scroll stall
 celestina-style	1.12.5	bug	STYLE-G7-V	Fix the modal exit fade to thin a frozen snapshot of the dialog
 celestina-style	1.12.6	bug	STYLE-G7-W	Fix the modal focus so nothing lights a ring on an open nobody tabbed into
 grafita	1.3.0	milestone	GRA-H1-C	Add the glass canvas to the window
+hematita	1.3.0	milestone	HEM-H1-C	Add the glass canvas to the window
