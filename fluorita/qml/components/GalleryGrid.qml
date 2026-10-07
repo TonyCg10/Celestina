@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import org.celestina.fluorita 1.0
 
 // Gallery: the images and video of the selected folder, together.
@@ -175,7 +176,6 @@ GridView {
                     id: thumbnail
 
                     anchors.fill: parent
-                    anchors.bottomMargin: CelestinaTheme.spaceLg
                     source: cell.modelData.thumbnail
                     visible: cell.modelData.thumbnail.length > 0
                         && thumbnail.status === Image.Ready
@@ -184,6 +184,33 @@ GridView {
                     fillMode: Image.PreserveAspectCrop
                     sourceSize.width: grid.cellWidth
                     sourceSize.height: grid.cellHeight
+
+                    // The surface rounds only its own background, so the
+                    // picture is cut to the card's corner here. Crop fills the
+                    // item, so the item's rectangle is the painted one.
+                    // Never bound to `status`: a scale change makes Qt reload
+                    // the picture while it walks the items, and a layer
+                    // switched off there deletes the effect beside this item
+                    // before Qt gets to it.
+                    layer.enabled: cell.modelData.thumbnail.length > 0
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: thumbMask
+                    }
+                }
+
+                Item {
+                    id: thumbMask
+
+                    anchors.fill: thumbnail
+                    visible: false
+                    layer.enabled: cell.modelData.thumbnail.length > 0
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: card.radius
+                        color: CelestinaTheme.opaqueMask
+                    }
                 }
 
                 // No cached thumbnail: the kind, said with the theme's icon.
@@ -195,18 +222,6 @@ GridView {
                     sourceSize: Qt.size(width, height)
                     name: cell.modelData.kind === "video" ? "file-video-camera" : "file-image"
                     fallbackName: "file"
-                }
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    text: cell.modelData.name
-                    color: CelestinaTheme.text
-                    font.family: CelestinaTheme.sansFamily
-                    font.pixelSize: CelestinaTheme.fontCaption
-                    elide: Text.ElideMiddle
-                    horizontalAlignment: Text.AlignHCenter
                 }
             }
         }

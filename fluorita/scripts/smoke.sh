@@ -55,6 +55,21 @@ if [ -n "$autos" ]; then
     exit 1
 fi
 
+# 1b) No layer may follow an Image's loading state. On a scale change (moving
+# the window to a monitor with another scale) Qt reloads every sized picture
+# while it walks the item tree; a `layer.enabled` that follows `status` (or a
+# `visible` built on it) switches off right there and deletes the effect it
+# placed beside the item, which the walk then visits: a segfault in
+# QQuickWindow::physicalDpiChanged. Offscreen never changes scale, so this is
+# caught by pattern, like the auto-bindings above.
+layers=$(grep -rnE 'layer\.enabled:.*([.]visible|[.]status|\bvisible\b|\bstatus\b)' \
+    "$root/qml" || true)
+if [ -n "$layers" ]; then
+    echo "smoke: layer.enabled follows visibility or loading state:" >&2
+    echo "$layers" >&2
+    exit 1
+fi
+
 [ -x "$bin" ] || fail "falta el binario indicado: $bin"
 [ -f "$media" ] || fail "falta el fixture de media: $media"
 

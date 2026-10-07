@@ -1,0 +1,31 @@
+# FLU-H1-D exact change inventory
+
+Base revision	cd017393f10dcd649b713907d1974a5513bdc9a7
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/docs/evidence/2026-10-07-cards-and-arrows.md
+Pathspec	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-D.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	fluorita/qml/Main.qml
+Pathspec	fluorita/qml/components/ContentDock.qml
+Pathspec	fluorita/qml/components/GalleryGrid.qml
+Pathspec	fluorita/qml/components/PlayerTransport.qml
+Pathspec	fluorita/scripts/smoke.sh
+Pathspec	scripts/qmllint-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	5db18352166f667c77e385e7c2efbabce970a090f07cf377479993558d6c1304	docs/version-history.tsv
+1	1	866b84bd9ee5b02a8d16d9fffa225e70b17c038c614b931719c3ae34cf51f6ca	fluorita/Cargo.lock
+1	1	1ec05be1e2ff215f5d98f34a1b9d87620c4d803ff9f40583eb72018740919318	fluorita/Cargo.toml
+50	0	f402dccb013a242ed02721f45df880c6f1c09e9c8a8f3dcd154314af9e5c4bfe	fluorita/docs/evidence/2026-10-07-cards-and-arrows.md
+31	0	self	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-D.numstat.tsv
+1	0	e0206870056283826a659e52bcadee604ea150fa902fe4c87b1a2c44b040e4bb	fluorita/docs/plans/active/2026-09-26-hardening.md
+71	6	4ce8d3152e525bd1e94cc1570eb483192520423c9f66b0dacc998aada4255a62	fluorita/qml/Main.qml
+28	0	81926b3f306cbb679a83e4adb5dd8d514acf1806b9b5c853fe30aa0df0878388	fluorita/qml/components/ContentDock.qml
+28	13	655892d8f3ba989a33bf53d9c62758f582c043da7b54ba4a81db3fb5fdcf224e	fluorita/qml/components/GalleryGrid.qml
+1	1	928decbf7fd4ddbf82f71802b98d5431051bb1f3dbe5d5c847d00ad60abfbff4	fluorita/qml/components/PlayerTransport.qml
+15	0	9231dda426ed778e7d44417ff263f28dce4551bf95d72487e1dbd404789d38b3	fluorita/scripts/smoke.sh
+1	1	8bd9b699742c85aaade96acd2acce6441bf678f80fe25a6b7f3e940d4d232f9c	scripts/qmllint-baseline.tsv

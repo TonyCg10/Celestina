@@ -81,7 +81,7 @@ RowLayout {
         // the truth and `checked` follows it.
         checkable: true
         checked: streams.visible
-        onClicked: streams.popup(streamsButton, 0, -streams.height)
+        onClicked: streams.popupBeside(streamsButton, true)
     }
 
     StreamMenu {

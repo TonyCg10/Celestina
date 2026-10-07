@@ -1,4 +1,7 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
+import QtQuick.Effects
 import org.celestina.fluorita 1.0
 
 // The rest of the selected folder, along the bottom of an open picture.
@@ -160,6 +163,31 @@ Item {
                     fillMode: Image.PreserveAspectCrop
                     sourceSize.width: frame.width
                     sourceSize.height: frame.height
+
+                    // Cut to the same corner as the ring around it.
+                    // Never bound to `status`: a scale change makes Qt reload
+                    // the picture while it walks the items, and a layer
+                    // switched off there deletes the effect beside this item
+                    // before Qt gets to it.
+                    layer.enabled: frame.modelData.thumbnail.length > 0
+                    layer.effect: MultiEffect {
+                        maskEnabled: true
+                        maskSource: posterMask
+                    }
+                }
+
+                Item {
+                    id: posterMask
+
+                    anchors.fill: poster
+                    visible: false
+                    layer.enabled: frame.modelData.thumbnail.length > 0
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: CelestinaTheme.radiusSm
+                        color: CelestinaTheme.opaqueMask
+                    }
                 }
 
                 // No cached thumbnail: the kind, said with the theme's icon.

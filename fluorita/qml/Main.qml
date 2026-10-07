@@ -1,5 +1,8 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import org.celestina.fluorita 1.0
 
@@ -164,6 +167,11 @@ ApplicationWindow {
     // never shows black while a decoder starts, and closing shrinks a picture
     // rather than the hole left by a session that was torn down first.
     property string openPoster: ""
+    // The poster stands in for the picture: while closing, and until the
+    // player presents one of its own. Deliberately blind to the poster's
+    // own loading state, which a scale change flips (see its layer).
+    readonly property bool posterTravelling: window.openPoster.length > 0
+        && (window.closing || !playerSurface.picturePresented)
     // What is open, as the classification token the library published. It
     // decides which way the folder is navigated: a picture gets the filmstrip,
     // a video or a track gets arrows.
@@ -344,9 +352,8 @@ ApplicationWindow {
             // jump exactly where the whole point is that there is none.
             anchors.bottomMargin: CelestinaTheme.spaceLg * 3
             source: window.openPoster
-            visible: window.openPoster.length > 0
+            visible: window.posterTravelling
                 && travellingPoster.status === Image.Ready
-                && (window.closing || !playerSurface.picturePresented)
             asynchronous: false
             autoTransform: true
             fillMode: Image.PreserveAspectFit
@@ -354,6 +361,47 @@ ApplicationWindow {
             // so growing does not turn the picture to mush on the way.
             sourceSize.width: window.width
             sourceSize.height: window.height
+
+            // Leaves the card with its corners: the mask follows the painted
+            // rectangle (the picture is fitted, so it can be smaller than the
+            // item) and squares off as the frame reaches the window. Window-
+            // sized, so the layer exists only while the poster is travelling.
+            // Never bound to `status`: a scale change makes Qt reload the
+            // picture while it walks the items, and a layer switched off
+            // there deletes the effect beside this item before Qt gets to it.
+            layer.enabled: window.posterTravelling
+            layer.effect: MultiEffect {
+                maskEnabled: true
+                maskSource: travellingMask
+            }
+        }
+
+        Item {
+            id: travellingMask
+
+            anchors.fill: travellingPoster
+            visible: false
+            layer.enabled: window.posterTravelling
+
+            Rectangle {
+                x: Math.round((parent.width - travellingPoster.paintedWidth) / 2)
+                y: Math.round((parent.height - travellingPoster.paintedHeight) / 2)
+                width: travellingPoster.paintedWidth
+                height: travellingPoster.paintedHeight
+                // The card's corner at the start, none once the frame fills the
+                // window: scaled by how far the animated width still has to go.
+                // The card it grows from was just opened, so it is Selected
+                // (CelestinaSurface's Selected role is radiusMd).
+                radius: {
+                    const span = window.width - window.openOrigin.width
+                    if (span <= 0) {
+                        return 0
+                    }
+                    const left = (window.width - playerFrame.width) / span
+                    return Math.round(CelestinaTheme.radiusMd * Math.max(0, Math.min(1, left)))
+                }
+                color: CelestinaTheme.opaqueMask
+            }
         }
 
         // Where the rest of the folder is, and where we are in it. One owner
@@ -544,10 +592,11 @@ ApplicationWindow {
     // keyboard moves the playhead by the same five seconds wherever it is
     // pressed.
     //
-    // Held back while a picture is open, because a picture has nothing to seek
-    // and its filmstrip owns Left/Right for stepping along the folder. A video
-    // or a track gets arrows rather than a filmstrip, so nothing else wants
-    // these keys.
+    // Held back while a picture is open, because a picture has nothing to seek;
+    // there Left/Right step along the folder through the two shortcuts after
+    // these (the filmstrip's selection follows the navigator, so it moves with
+    // them). A video or a track gets arrows rather than a filmstrip, so nothing
+    // else wants these keys.
     Shortcut {
         sequence: "Left"
         enabled: window.playing && mediaPlayer.timed && window.openKind !== "image"
@@ -561,6 +610,22 @@ ApplicationWindow {
             Math.min(mediaPlayer.durationSeconds,
                      mediaPlayer.positionSeconds + window.seekStep))
     }
+
+    // Zoomed pictures pan by dragging only, so the arrows are free to step; the
+    // editor and the metadata sheet keep the arrows for themselves.
+    Shortcut {
+        sequence: "Left"
+        enabled: window.playing && window.openKind === "image"
+            && !window.overlayOpen
+        onActivated: window.step(-1)
+    }
+    Shortcut {
+        sequence: "Right"
+        enabled: window.playing && window.openKind === "image"
+            && !window.overlayOpen
+        onActivated: window.step(1)
+    }
+
     // Volume everywhere in the window, not only while the volume slider
     // happens to have focus — the seek bar takes focus first when playback
     // starts, and Up/Down reaching it as a second Left/Right would step the
