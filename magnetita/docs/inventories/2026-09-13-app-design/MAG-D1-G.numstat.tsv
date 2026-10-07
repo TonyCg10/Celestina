@@ -1,0 +1,37 @@
+# MAG-D1-G exact change inventory
+
+Base revision	b8396f3d411bdddf7465ea6fe9fd1b07c69c6dd8
+Pathspec	docs/version-history.tsv
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/docs/evidence/2026-10-07-mirror-menu.md
+Pathspec	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-G.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-13-app-design.md
+Pathspec	magnetita/qml/CelestinaShadow.qml
+Pathspec	magnetita/qml/GlassContextMenu.qml
+Pathspec	magnetita/qml/GlassMenuItem.qml
+Pathspec	magnetita/qml/Main.qml
+Pathspec	magnetita/qml/components/DeviceControls.qml
+Pathspec	magnetita/qml/components/MirrorChoiceRow.qml
+Pathspec	magnetita/qml/components/MirrorSettingsSheet.qml
+Pathspec	magnetita/qml/pages/DevicesPage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	895e9b0d89736d338ed00c0ff2ff1024862608d4ac42ae99968a7cc2c07e2a93	docs/version-history.tsv
+1	1	7ad5992321fdc8c17a42aae35857236ea520831f68ab9d5ac95ab9674e9b1d88	magnetita/Cargo.lock
+1	1	2ea44cafdd27f19ac54629b61e4d8b9f7bfda755ba3a916a9bff8575ae48387f	magnetita/Cargo.toml
+3	2	2ea1a9f0bb6149d8c2312e6a6155119e9129ac33482f3222dadfc155b874b0f1	magnetita/build.rs
+41	0	d5e8c272dbf9a8b53ccb2f139f4fa7b8866550476fa2e4c06f98c301e6fef1d9	magnetita/docs/evidence/2026-10-07-mirror-menu.md
+37	0	self	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-G.numstat.tsv
+1	0	8eb5e0414d52c9bf4e2703afacaf402dbb6cbfd115e598d486088ff2758745db	magnetita/docs/plans/active/2026-09-13-app-design.md
+1	0	e1ef735ae9330fdf16ef374432c9c3e4d956eb3c8002a1f897182d6e6ee9aa4c	magnetita/qml/CelestinaShadow.qml
+1	0	ebf3b19c1bb1ddba600feff7e77cffe157001ce8b7f5071bc92d7dd7c173b4c3	magnetita/qml/GlassContextMenu.qml
+1	0	47b2fd86105f32aafe2dfb63013f2486a00e971575d108e54a644930011d211b	magnetita/qml/GlassMenuItem.qml
+1	0	e64e120aa65ea8a6cfc3a2e3f5be80a12c6c857aaefce963a063010e189666e9	magnetita/qml/Main.qml
+69	37	e97e2f9099264363d6235a4802b7b0fad5126b3f2e007538de10a82cca0f1355	magnetita/qml/components/DeviceControls.qml
+0	70	deleted	magnetita/qml/components/MirrorChoiceRow.qml
+0	68	deleted	magnetita/qml/components/MirrorSettingsSheet.qml
+2	0	1b971e8ee91eed4e3ee26c42c93ccc4bfd99b9eb587ac89ce0c20fdf1f4b5e4f	magnetita/qml/pages/DevicesPage.qml

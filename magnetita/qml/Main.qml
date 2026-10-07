@@ -124,6 +124,7 @@ ApplicationWindow {
                 width: parent.width
                 height: parent.height - y
                 devices: devicesModel
+                backdrop: appSurface
                 mediaIndex: window.mediaIndex
                 primaryIndex: window.primaryIndex
                 mediaControlIndex: window.mediaControlIndex

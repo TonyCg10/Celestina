@@ -14,6 +14,7 @@ ScrollPage {
     required property int mediaIndex
     required property int primaryIndex
     required property int mediaControlIndex
+    required property Item backdrop
 
     spacing: 10
 
@@ -168,6 +169,7 @@ ScrollPage {
         visible: root.devices.devicesAvailable && root.primaryIndex >= 0
         width: parent.width
         devices: root.devices
+        backdrop: root.backdrop
         primaryIndex: root.primaryIndex
         mediaIndex: root.mediaIndex
         mediaControlIndex: root.mediaControlIndex

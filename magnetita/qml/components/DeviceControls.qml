@@ -6,6 +6,9 @@ Item {
     id: root
 
     required property DevicesModel devices
+    // The item the menu blurs: the page surface, which is not an ancestor of
+    // the overlay the menu lives in, so the menu never captures itself.
+    required property Item backdrop
     required property int primaryIndex
     required property int mediaIndex
     required property int mediaControlIndex
@@ -51,13 +54,13 @@ Item {
     readonly property string mediaProgress: valueAt(devices.deviceMediaProgress,
                                                      mediaIndex, "unavailable")
 
-    // The mirror surfaces sit between the actions and the media, each taking
-    // no height at all while it has nothing to show.
+    // The mirror's status line lives in the options menu, so the page only
+    // keeps the pairing row between the actions and the media, which takes no
+    // height at all while it has nothing to show.
     readonly property bool mirrorSpeaks: root.devices.mirrorLabel.length > 0
                                          && root.devices.mirrorLabel !== "Listo para reflejar"
 
-    height: actionRow.height + mirrorLine.height + pairRow.height
-            + mirrorSettings.height + 10 + mediaCard.height
+    height: actionRow.height + pairRow.height + 10 + mediaCard.height
 
     // Icon-first: every action is its own glyph with the suite's uniform hover
     // circle, and the mirror pair — open it, configure it — sits together as
@@ -142,36 +145,16 @@ Item {
         }
 
         CelestinaIconButton {
+            id: settingsButton
             iconName: "settings"
             density: CelestinaButton.Prominent
             enabled: root.devices.mirrorAvailable
             role: CelestinaButton.Ghost
             checkable: true
-            checked: mirrorSettings.visible
+            checked: mirrorMenu.visible
             helpText: qsTr("Ajustes del espejo")
-            // The sheet is the single truth; re-bind after the click so the
-            // button never holds a `checked` of its own.
-            onClicked: {
-                checked = Qt.binding(function() { return mirrorSettings.visible })
-                mirrorSettings.visible = !mirrorSettings.visible
-            }
+            onClicked: mirrorMenu.popupBeside(settingsButton, false)
         }
-    }
-
-    // The mirror's own state, in words, under the row that owns it. Only when
-    // it has something to say the icon cannot: a failure, or work in progress.
-    Text {
-        id: mirrorLine
-        anchors.top: actionRow.bottom
-        anchors.topMargin: root.mirrorSpeaks ? CelestinaTheme.spaceXs : 0
-        width: parent.width
-        visible: root.mirrorSpeaks
-        height: visible ? implicitHeight : 0
-        text: root.devices.mirrorLabel
-        color: CelestinaTheme.textMuted
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontRowTitle
-        wrapMode: Text.WordWrap
     }
 
     // The pairing code, only while the phone is actually showing one: that is
@@ -179,7 +162,7 @@ Item {
     // clutter.
     RowLayout {
         id: pairRow
-        anchors.top: mirrorLine.bottom
+        anchors.top: actionRow.bottom
         anchors.topMargin: visible ? CelestinaTheme.spaceXs : 0
         width: parent.width
         visible: root.devices.mirrorCanPair
@@ -215,19 +198,68 @@ Item {
         }
     }
 
-    MirrorSettingsSheet {
-        id: mirrorSettings
-        anchors.top: pairRow.bottom
-        anchors.topMargin: visible ? CelestinaTheme.spaceSm : 0
-        width: parent.width
-        visible: false
-        height: visible ? implicitHeight : 0
-        devices: root.devices
+    // Everything about the mirror that is not start/stop: its status in words,
+    // where the sound plays and whether the phone's screen goes dark. Nothing is
+    // painted optimistically: the marks follow the daemon's confirmed values,
+    // and a press only asks. The blur samples the page surface, which holds the
+    // backdrop and the cards the menu floats over.
+    GlassContextMenu {
+        id: mirrorMenu
+        backdropSource: root.backdrop
+
+        // The phone's state moves on its own schedule; this is where failures
+        // and work in progress are said, since the icon cannot.
+        GlassMenuItem {
+            visible: root.mirrorSpeaks
+            enabled: false
+            height: visible ? implicitHeight : 0
+            text: root.devices.mirrorLabel
+        }
+
+        CelestinaSectionLabel { text: qsTr("Sonido") }
+
+        GlassMenuItem {
+            text: qsTr("En el móvil")
+            icon.name: root.devices.mirrorAudio === "phone" ? "check" : ""
+            icon.source: root.devices.mirrorAudio === "phone"
+                ? CelestinaTheme.fallbackIcon("check") : ""
+            Accessible.checked: root.devices.mirrorAudio === "phone"
+            onTriggered: root.devices.setMirrorOption("audio", "phone")
+        }
+
+        GlassMenuItem {
+            text: qsTr("En el PC")
+            icon.name: root.devices.mirrorAudio === "desktop" ? "check" : ""
+            icon.source: root.devices.mirrorAudio === "desktop"
+                ? CelestinaTheme.fallbackIcon("check") : ""
+            Accessible.checked: root.devices.mirrorAudio === "desktop"
+            onTriggered: root.devices.setMirrorOption("audio", "desktop")
+        }
+
+        GlassMenuItem {
+            text: qsTr("Apagar la pantalla del móvil")
+            icon.name: root.devices.mirrorScreenOff ? "check" : ""
+            icon.source: root.devices.mirrorScreenOff
+                ? CelestinaTheme.fallbackIcon("check") : ""
+            Accessible.checked: root.devices.mirrorScreenOff
+            onTriggered: root.devices.setMirrorOption(
+                             "screenOff",
+                             root.devices.mirrorScreenOff ? "false" : "true")
+        }
+
+        // scrcpy cannot be reconfigured mid-stream, so a change made while the
+        // mirror is up applies the next time it opens.
+        GlassMenuItem {
+            visible: root.devices.mirrorActive
+            enabled: false
+            height: visible ? implicitHeight : 0
+            text: qsTr("El espejo está abierto: los cambios se aplican la próxima vez.")
+        }
     }
 
     MediaCard {
         id: mediaCard
-        anchors.top: mirrorSettings.bottom
+        anchors.top: pairRow.bottom
         anchors.topMargin: 10
         width: parent.width
         hasMedia: root.hasMedia
