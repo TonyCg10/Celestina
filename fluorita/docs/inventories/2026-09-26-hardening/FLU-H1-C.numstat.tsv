@@ -1,0 +1,23 @@
+# FLU-H1-C exact change inventory
+
+Base revision	9b89a86196adbb98cd0b694a5d7fdcc2b83d631f
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/docs/evidence/2026-10-07-glass-canvas.md
+Pathspec	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-C.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	fluorita/qml/Main.qml
+Pathspec	scripts/glass-canvas-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	ffb512ae79183f915386abc32a02733658e94dd26e21d9a62a7f5d69e5497a38	docs/version-history.tsv
+1	1	05c65b464106f67a05a45a80b8d26a2a8deb55374ce6167f9b2228a2dcdad8c3	fluorita/Cargo.lock
+1	1	8b6f0186a1870d7ba7bdee1587a3436932655dea7b0760f97a7c0ae371fcfcb4	fluorita/Cargo.toml
+49	0	e813e4bb0de9803e7d668e2103a79f029f7b4c82891189bb97a5d202b5019d58	fluorita/docs/evidence/2026-10-07-glass-canvas.md
+23	0	self	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-C.numstat.tsv
+1	0	b00819388a4dd770ce649f5f60c2f16d274959948fe8a58bc4fbc1920499d9d7	fluorita/docs/plans/active/2026-09-26-hardening.md
+22	2	50cd5b16a36c4b05a2db8e6b200ed8258f6d386012fa3ebbdfb5223ab2408ae0	fluorita/qml/Main.qml
+1	1	7354fbb4771c15fc2d2afbd3804e427e564b58a4896b4505c8c6836c97a6d7a1	scripts/glass-canvas-baseline.tsv

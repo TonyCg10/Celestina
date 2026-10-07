@@ -204,3 +204,4 @@ celestina-style	1.12.5	bug	STYLE-G7-V	Fix the modal exit fade to thin a frozen s
 celestina-style	1.12.6	bug	STYLE-G7-W	Fix the modal focus so nothing lights a ring on an open nobody tabbed into
 grafita	1.3.0	milestone	GRA-H1-C	Add the glass canvas to the window
 hematita	1.3.0	milestone	HEM-H1-C	Add the glass canvas to the window
+fluorita	1.4.0	milestone	FLU-H1-C	Add the glass canvas to the library window

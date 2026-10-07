@@ -26,7 +26,9 @@ ApplicationWindow {
     minimumWidth: 420
     minimumHeight: 320
     visible: true
-    color: CelestinaTheme.canvas
+    // Transparent: the compositor blurs what lies behind the window and
+    // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
+    color: CelestinaTheme.clear
     title: window.openLabel.length > 0
         ? qsTr("Fluorita — %1").arg(window.openLabel)
         : qsTr("Fluorita")
@@ -197,9 +199,27 @@ ApplicationWindow {
         id: mediaBatch
     }
 
+    // A picture that fills the window is never shown over the desktop: once the
+    // player frame covers the whole window, a video or a still sits on the
+    // opaque canvas, so letterboxing stays black. While the frame is still
+    // growing out of a card or shrinking back to it, the library behind it
+    // keeps the Haze canvas below. `expanded` flips when the grow starts, so
+    // the frame's own animated geometry says when it actually covers the window.
+    readonly property bool pictureFillsWindow: window.expanded
+        && playerSurface.showsPicture
+        && playerFrame.x <= 0 && playerFrame.y <= 0
+        && playerFrame.width >= window.width
+        && playerFrame.height >= window.height
+
+    Rectangle {
+        anchors.fill: parent
+        visible: window.pictureFillsWindow
+        color: CelestinaTheme.canvas
+    }
+
     CelestinaBackdrop {
         anchors.fill: parent
-        visible: !window.playing || !playerSurface.showsPicture
+        visible: !window.pictureFillsWindow
     }
 
     LibraryView {
