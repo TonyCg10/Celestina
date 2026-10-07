@@ -68,6 +68,8 @@ CelestinaSurface {
             model: card.folderRows.length
             activeFocusOnTab: true
             keyNavigationEnabled: true
+
+            CelestinaWheelScroll { view: list }
             highlightFollowsCurrentItem: false
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Contenido de la carpeta")

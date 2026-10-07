@@ -483,6 +483,8 @@ Item {
                     model: table.entries.length
                     activeFocusOnTab: true
                     keyNavigationEnabled: true
+
+                    CelestinaWheelScroll { view: list }
                     Accessible.role: Accessible.List
                     Accessible.name: table.grouped ? qsTr("Aplicaciones") : qsTr("Procesos")
                     // The view moves only when the person moves the cursor:

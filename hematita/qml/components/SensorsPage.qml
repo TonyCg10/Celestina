@@ -186,6 +186,8 @@ Item {
         model: page.cards.length
         activeFocusOnTab: true
         keyNavigationEnabled: true
+
+        CelestinaWheelScroll { view: list }
         // Only the person's arrows move the view, never a rebuild.
         highlightFollowsCurrentItem: false
         Accessible.role: Accessible.List

@@ -411,6 +411,8 @@ Item {
                     model: page.rows.length
                     activeFocusOnTab: true
                     keyNavigationEnabled: true
+
+                    CelestinaWheelScroll { view: list }
                     Accessible.role: Accessible.List
                     Accessible.name: qsTr("Servicios")
                     // Only the person's own cursor moves the view; the

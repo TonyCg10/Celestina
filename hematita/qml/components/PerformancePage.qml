@@ -208,6 +208,9 @@ Item {
                     // are reached by moving the current index, which scrolls.
                     activeFocusOnTab: true
                     keyNavigationEnabled: true
+
+                    CelestinaWheelScroll { view: list }
+
                     currentIndex: page.indexOf(page.selectedKey)
                     onCurrentIndexChanged: {
                         if (currentIndex >= 0 && currentIndex < page.rows.length)

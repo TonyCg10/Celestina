@@ -63,6 +63,8 @@ CelestinaSurface {
             model: card.locationRows.length
             activeFocusOnTab: true
             keyNavigationEnabled: true
+
+            CelestinaWheelScroll { view: list }
             highlightFollowsCurrentItem: false
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Ubicaciones")

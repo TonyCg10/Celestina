@@ -75,6 +75,8 @@ CelestinaSurface {
             model: card.duplicateRows.length
             activeFocusOnTab: true
             keyNavigationEnabled: true
+
+            CelestinaWheelScroll { view: list }
             highlightFollowsCurrentItem: false
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Duplicados")

@@ -1,0 +1,37 @@
+# HEM-H1-E exact change inventory
+
+Base revision	c9741e9cd8b1e43c992a1625937830f47bace299
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/build.rs
+Pathspec	hematita/docs/evidence/2026-10-07-wheel.md
+Pathspec	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-E.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	hematita/qml/CelestinaWheelScroll.qml
+Pathspec	hematita/qml/components/DuplicateList.qml
+Pathspec	hematita/qml/components/FolderList.qml
+Pathspec	hematita/qml/components/LocationList.qml
+Pathspec	hematita/qml/components/PerformancePage.qml
+Pathspec	hematita/qml/components/ProcessTable.qml
+Pathspec	hematita/qml/components/SensorsPage.qml
+Pathspec	hematita/qml/components/ServicesPage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	0dcf735c319373d83414dacdabc423a599dca840d2d58af5af9d6e903e93a1a0	docs/version-history.tsv
+1	1	fe96e60bac98c1055a3e458c9f99200d6b1e865d993c681424978b34b272fa26	hematita/Cargo.lock
+1	1	df4e55d759be8ce35a18c85ea06a81f78341816c99d4177de36d05f86e79f941	hematita/Cargo.toml
+1	0	7ecf92251edbb14ac4906f4736754800c49b7472b8193146615653cb3a7c9e44	hematita/build.rs
+50	0	0ef50b29d630e5f5e15d7b2fb2dc29fface96526e6fcd249995b0e8c23ee430a	hematita/docs/evidence/2026-10-07-wheel.md
+37	0	self	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-E.numstat.tsv
+1	0	8b9fae66b59d90553aef30ee637a6e9187e47480f018bd11972de072df81d5b9	hematita/docs/plans/active/2026-09-26-hardening.md
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	hematita/qml/CelestinaWheelScroll.qml
+2	0	c33fea1835e360b73ce93006bd8fbac93feb45d2c26dfcb978ec985cad20b0df	hematita/qml/components/DuplicateList.qml
+2	0	c28ff59ebb9df1a9bff2208841dc2d0ecc685ffb4b54e70a18c0db626fb5a315	hematita/qml/components/FolderList.qml
+2	0	d3e30f955c8211e312244c48d71de67c83e0cfb662f72fe72805b799c254f44c	hematita/qml/components/LocationList.qml
+3	0	d5cbc8b10f7b950893da3ed612f9fd687596d0842e88bf3ff5d284c949af0be0	hematita/qml/components/PerformancePage.qml
+2	0	99cc7bcdcd652cf7777a8138ed8b78abc5ec82a282f515416f6ec8c162d560d8	hematita/qml/components/ProcessTable.qml
+2	0	7dd489094ba5efa8cc02e40ec4c1acde67b39e8c991ae18591a987e393897906	hematita/qml/components/SensorsPage.qml
+2	0	5080bf0c3eb5cf6101f1e30273135a33ad214796004f86a1fd7e646e6e6b5778	hematita/qml/components/ServicesPage.qml

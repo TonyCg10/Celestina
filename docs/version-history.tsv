@@ -216,3 +216,4 @@ fluorita	1.5.1	bug	FLU-H1-F	Fix the stream menu sections and add free wheel scro
 magnetita	2.2.0	milestone	MAG-D1-G	Add the mirror options to a context menu
 magnetita	2.2.1	bug	MAG-D1-H	Add free wheel scrolling and the menu section header
 grafita	1.3.1	bug	GRA-H1-D	Add free wheel scrolling
+hematita	1.3.2	bug	HEM-H1-E	Add free wheel scrolling

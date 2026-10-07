@@ -23,6 +23,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaUsageList.qml",
     "qml/ListSection.qml",
     "qml/GlassSurface.qml",
+    "qml/CelestinaWheelScroll.qml",
     "qml/GlassCard.qml",
     // Hematita's own composition: Main owns the window, the components own
     // one region each.
