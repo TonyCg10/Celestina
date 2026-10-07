@@ -1,0 +1,23 @@
+# MAG-D1-F exact change inventory
+
+Base revision	de803faf55b1f0ea22496d3e56f13d5e3f961102
+Pathspec	docs/version-history.tsv
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/docs/evidence/2026-10-07-glass-canvas.md
+Pathspec	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-F.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-13-app-design.md
+Pathspec	magnetita/qml/Main.qml
+Pathspec	scripts/glass-canvas-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	668f98ff24a607809b313bc6b94d7d8b9ba70ebfcc8070e12f5202a78e30b145	docs/version-history.tsv
+1	1	44b563ce56dff1fb6d960150194b6925e497e2ba00d3fda4a8e202856eb16da2	magnetita/Cargo.lock
+1	1	7b88b8f22b6b891f2a50834aa2002bbb44bebe4abf9bc39158321417167fc366	magnetita/Cargo.toml
+40	0	de145788888fb059fb95b5ac266f8233746ff351d2bdb2e53253df4aefbdc68b	magnetita/docs/evidence/2026-10-07-glass-canvas.md
+23	0	self	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-F.numstat.tsv
+1	0	94932264682594dc31988a3dc967dd048c0ad5915c7ba4b574c876797d4608d3	magnetita/docs/plans/active/2026-09-13-app-design.md
+5	1	29ad5990f475b9c7754212e46b90a11a692000ea4b1acd0edcd6952a63df0ced	magnetita/qml/Main.qml
+1	1	0d696c4d648fa7ab122586de407ebe511bd135636b0a8243e9e7216b49ee10f7	scripts/glass-canvas-baseline.tsv

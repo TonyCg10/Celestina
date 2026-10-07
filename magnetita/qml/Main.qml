@@ -17,7 +17,11 @@ ApplicationWindow {
     minimumWidth: 420
     minimumHeight: 480
     title: "Magnetita"
-    color: CelestinaTheme.canvas
+    // Transparent: the compositor blurs what lies behind the window and
+    // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
+    // The mirror is its own window and keeps the opaque canvas: it is sized
+    // to the phone's picture, and nothing of the desktop belongs around it.
+    color: CelestinaTheme.clear
 
     Component.onCompleted: CelestinaTheme.reducedMotion = reducedMotion
 
