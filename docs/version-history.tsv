@@ -200,3 +200,4 @@ siderita	1.9.2	bug	SID-H1-I	Fix the heading and listing glide on a fast wheel sc
 siderita	1.9.3	bug	SID-H1-J	Fix the wheel glide so it answers the wheel instead of running at one speed
 celestina-style	1.12.4	bug	STYLE-G7-U	Fix the modal fade to one image and keep the focus on the layer on show
 siderita	1.9.4	bug	SID-H1-K	Remove the expanded heading and fix the scroll stall while the heading returns
+celestina-style	1.12.5	bug	STYLE-G7-V	Fix the modal exit fade to thin a frozen snapshot of the dialog

@@ -1,0 +1,21 @@
+# STYLE-G7-V exact change inventory
+
+Base revision	bb21e966d4053e28bc2866fabb2951fd4bf213f1
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaModalLayer.qml
+Pathspec	celestina-style/docs/evidence/2026-10-06-modal-frozen-snapshot.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-V.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/tests/tst_modal.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	9d3ea94bccd0ea90d5a54757fd0f6e052bc33532a094578437987ca76cb4c9ac	celestina-style/CMakeLists.txt
+78	59	af3cc7bbc6d0364435eb85ae672d8a6c0e6718b7ee82745fab4f94122276fea2	celestina-style/CelestinaModalLayer.qml
+54	0	de4d19e95c080b7148c4bc1d995e1d366a33a3d2de2fc28e4ee6c1593dfbd12d	celestina-style/docs/evidence/2026-10-06-modal-frozen-snapshot.md
+21	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-V.numstat.tsv
+1	0	554e5e676e9c89dcda2720ae3f2ee0dce39b3af704494e02fa08a28852708247	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+14	0	a6cdeb50fa6fdbe3b743c50c6294eb3a13b7aecdf106bc45067bc93cf35b5010	celestina-style/tests/tst_modal.qml
+1	0	8ccd469fa59f1794e1acc7c131a2e172d4e41f88d7e9f281eaa5e2a4d5fed8ed	docs/version-history.tsv

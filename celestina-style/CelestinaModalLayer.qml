@@ -23,16 +23,11 @@ FocusScope {
     property Item lastOwnedFocusItem: null
     property color color: CelestinaTheme.scrim
     signal dismissRequested
+    // Whether the stage is being rendered live or as the frozen last frame.
+    readonly property alias snapshotLive: snapshot.live
 
     visible: shown || opacity > 0.01
     opacity: shown ? 1 : 0
-    // The whole layer — scrim and dialog — fades as one image. With per-item
-    // opacity the parts faded on their own clocks: the card's tint thinned
-    // while its text stayed readable, and the glass capture inside the card
-    // lagged the scrim above and below it, which the author recorded as the
-    // dialog breaking apart on close. A layer only while the fade runs; at
-    // rest everything paints straight to the window.
-    layer.enabled: opacity > 0 && opacity < 1
 
     function ownsItem(item) {
         let current = item
@@ -180,11 +175,6 @@ FocusScope {
         }
     }
 
-    Rectangle {
-        anchors.fill: parent
-        color: layer.color
-    }
-
     Connections {
         target: layer.Window.window
         function onActiveFocusItemChanged() {
@@ -193,62 +183,91 @@ FocusScope {
         }
     }
 
-    // Where the dialog's own content lives. Its `parent` chain still passes
-    // through the layer, so `ownsItem` and the focus walk see nothing new; it
-    // only adds the one switch a fading dialog needs. A disabled item is
-    // skipped for pointer delivery, so a click during the fade falls through
-    // to the scrim's MouseArea below, which already declines to act once
-    // `shown` is false.
+    // Everything the layer paints — scrim, dialog, shield — lives on this
+    // stage, and the stage is only ever seen through `snapshot` below. While
+    // the dialog is up the snapshot is live, so it is the stage frame by
+    // frame; the moment `shown` drops it freezes, and what fades out is the
+    // last complete picture of the dialog. That is the only way the fade is
+    // one image: a dialog closing also tears down its content (a controller
+    // clears its fields, a section folds, the glass stops capturing), and
+    // fading the live items let the author see the card shrink, the scrim
+    // cut out and the text outlast its tint. Per-item opacity never composes
+    // first; a frozen texture already has.
     Item {
-        id: contentHost
-
+        id: stage
         anchors.fill: parent
-        enabled: layer.shown
+
+        Rectangle {
+            anchors.fill: parent
+            color: layer.color
+        }
+
+        // Where the dialog's own content lives. Its `parent` chain still
+        // passes through the layer, so `ownsItem` and the focus walk see
+        // nothing new; it only adds the one switch a fading dialog needs. A
+        // disabled item is skipped for pointer delivery, so a click during
+        // the fade falls through to the scrim's MouseArea below, which
+        // already declines to act once `shown` is false.
+        Item {
+            id: contentHost
+
+            anchors.fill: parent
+            enabled: layer.shown
+        }
+
+        // ── Input shield ─────────────────────────────────────────────────────
+        // A scrim that only catches left clicks is not a modal layer. Two things
+        // leak through one: the other mouse buttons and hover, and — the one that
+        // actually bites — the *pointer handlers* of the surface below. A
+        // `DragHandler` down there takes a passive grab on the press and keeps
+        // reacting to the drag, so sweeping over an empty part of a dialog card
+        // dragged the file the card was covering.
+        //
+        // Hover and that drag claim are the shared `CelestinaInputShield`; the
+        // click side stays here because this layer does more than swallow — an
+        // outside click is its dismissal, and the wheel must not scroll a surface
+        // the dialog is blocking. Both sit at `z: -1`, below the dialog's own
+        // content: everything inside the layer is delivered first and stays fully
+        // interactive, and only what the dialog did not claim is absorbed.
+        Item {
+            anchors.fill: parent
+            z: -1
+            // Stay armed until the exit fade has left the scene, so the surface
+            // below cannot be poked through a dialog that is still painted.
+            enabled: layer.visible
+
+            CelestinaInputShield {
+                swallowClicks: false
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                // All three buttons: a right click landing on a file behind a
+                // dialog would open that file's menu, which is exactly the kind of
+                // surprise a modal exists to prevent.
+                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                hoverEnabled: true
+                preventStealing: true
+                // Closing is no longer an actionable outside click: it must not
+                // emit a second dismissal while `shown` is already false. Only the
+                // left button dismisses — the others are swallowed, not acted on.
+                onClicked: function(mouse) {
+                    if (mouse.button === Qt.LeftButton && layer.shown
+                            && layer.dismissOnOutsideClick)
+                        layer.dismissRequested()
+                }
+                onWheel: function(wheel) { wheel.accepted = true }
+            }
+        }
     }
 
-    // ── Input shield ─────────────────────────────────────────────────────
-    // A scrim that only catches left clicks is not a modal layer. Two things
-    // leak through one: the other mouse buttons and hover, and — the one that
-    // actually bites — the *pointer handlers* of the surface below. A
-    // `DragHandler` down there takes a passive grab on the press and keeps
-    // reacting to the drag, so sweeping over an empty part of a dialog card
-    // dragged the file the card was covering.
-    //
-    // Hover and that drag claim are the shared `CelestinaInputShield`; the
-    // click side stays here because this layer does more than swallow — an
-    // outside click is its dismissal, and the wheel must not scroll a surface
-    // the dialog is blocking. Both sit at `z: -1`, below the dialog's own
-    // content: everything inside the layer is delivered first and stays fully
-    // interactive, and only what the dialog did not claim is absorbed.
-    Item {
+    ShaderEffectSource {
+        id: snapshot
         anchors.fill: parent
-        z: -1
-        // Stay armed until the exit fade has left the scene, so the surface
-        // below cannot be poked through a dialog that is still painted.
-        enabled: layer.visible
-
-        CelestinaInputShield {
-            swallowClicks: false
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            // All three buttons: a right click landing on a file behind a
-            // dialog would open that file's menu, which is exactly the kind of
-            // surprise a modal exists to prevent.
-            acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-            hoverEnabled: true
-            preventStealing: true
-            // Closing is no longer an actionable outside click: it must not
-            // emit a second dismissal while `shown` is already false. Only the
-            // left button dismisses — the others are swallowed, not acted on.
-            onClicked: function(mouse) {
-                if (mouse.button === Qt.LeftButton && layer.shown
-                        && layer.dismissOnOutsideClick)
-                    layer.dismissRequested()
-            }
-            onWheel: function(wheel) { wheel.accepted = true }
-        }
+        sourceItem: stage
+        hideSource: true
+        live: layer.shown
+        smooth: true
     }
 
     Keys.priority: Keys.BeforeItem

@@ -247,6 +247,20 @@ TestCase {
         compare(lowerDragged, false)
     }
 
+    // The picture that fades is the last complete one: the stage renders
+    // through a snapshot that is live while shown and frozen from the moment
+    // `shown` drops, whatever the dialog's content does to itself on close.
+    function test_exit_fade_is_a_frozen_snapshot() {
+        CelestinaTheme.reducedMotion = false
+        openWithConsumerFocus()
+        tryCompare(modal, "opacity", 1)
+        verify(modal.snapshotLive, "the snapshot must be live while shown")
+        modal.shown = false
+        verify(!modal.snapshotLive, "the snapshot must freeze on close")
+        compare(modal.visible, true)
+        tryCompare(modal, "visible", false)
+    }
+
     function test_exit_fade_keeps_lower_surface_blocked() {
         CelestinaTheme.reducedMotion = false
         openWithConsumerFocus()
