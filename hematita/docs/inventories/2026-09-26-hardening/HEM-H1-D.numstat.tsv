@@ -1,0 +1,21 @@
+# HEM-H1-D exact change inventory
+
+Base revision	264db55e3748b3efcd9f54b95501a144fe183300
+Pathspec	docs/version-history.tsv
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/docs/evidence/2026-10-07-storage-rows.md
+Pathspec	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-D.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	hematita/qml/components/LocationList.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	e3a82180615559790a435d4a3497be8a8f3252b16ddb215ed76c0904d371245f	docs/version-history.tsv
+1	1	84419486fedb7124c541631331425fc08464de9dea5ffced0346c1b720323622	hematita/Cargo.lock
+1	1	ac64454c72a4ce7b0e11d99a4fc778cf97428614bbe22365756443f70382b213	hematita/Cargo.toml
+39	0	7cdc98ae452cfc42b8434ce2d0b92b5bc7b7daa22f59173456537050aec27a1e	hematita/docs/evidence/2026-10-07-storage-rows.md
+21	0	self	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-D.numstat.tsv
+1	0	71359f0097f395eb847fd5c196ae68fc8456556677971d5c4dd570a97afad010	hematita/docs/plans/active/2026-09-26-hardening.md
+3	1	4f376f14d96fc042378f2509d8edde258966ef9c39e41e0143ad9fd3fc8e9bb7	hematita/qml/components/LocationList.qml

@@ -208,3 +208,4 @@ fluorita	1.4.0	milestone	FLU-H1-C	Add the glass canvas to the library window
 magnetita	2.1.0	milestone	MAG-D1-F	Add the glass canvas to the main window
 siderita	1.9.5	bug	SID-H1-L	Fix the file picker so it paints the glass canvas
 celestina-style	1.12.7	bug	STYLE-G7-X	Add a menu placement beside the control that opens it
+hematita	1.3.1	bug	HEM-H1-D	Fix the storage rows so their two lines and bar fit

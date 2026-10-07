@@ -92,7 +92,9 @@ CelestinaSurface {
                                                ? card.locationRows[row.index] : card.emptyRow
 
                 width: list.width
-                implicitHeight: CelestinaTheme.rowHeight
+                // Two lines and a usage bar: the two-line row height. At the
+                // one-line height (40) the content spilled onto the next row.
+                implicitHeight: CelestinaTheme.rowHeightLg
                 hoverEnabled: true
                 // The list is the one Tab stop; the arrows move between rows.
                 focusPolicy: Qt.NoFocus
