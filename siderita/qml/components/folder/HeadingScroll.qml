@@ -55,21 +55,23 @@ QtObject {
     readonly property real travelCeiling: root.retireSpan + root.returnDelay
 
     // A notch of a wheel is a jump, and the listing that notch scrolls glides
-    // at `wheelVelocity` — so this glides at the same speed, or the two arrive
-    // at different times and the heading reads as snapping while the rows
-    // move. The glide is a Behavior with a SmoothedAnimation, not a restarted
-    // NumberAnimation: notches arrive faster than a 200 ms tween settles, and
-    // restarting an eased tween on every notch made the speed jump and brake
-    // each time, which is the stutter the author recorded on a fast scroll. A
-    // Behavior re-aims the running animation and carries its velocity over,
-    // so a burst of notches is one continuous motion. A touchpad already
-    // delivers a smooth stream and is applied straight through (`gliding`
-    // off).
+    // over `wheelGlide` ms — so this glides over the same time, or the two
+    // arrive at different times and the heading reads as snapping while the
+    // rows move. The glide is a Behavior with a SmoothedAnimation, not a
+    // restarted NumberAnimation: notches arrive faster than a 200 ms tween
+    // settles, and restarting an eased tween on every notch made the speed
+    // jump and brake each time, which is the stutter the author recorded on
+    // a fast scroll. A Behavior re-aims the running animation and carries
+    // its velocity over, so a burst of notches is one continuous motion. A
+    // touchpad already delivers a smooth stream and is applied straight
+    // through (`gliding` off).
     //
-    // The speed: one notch of the listing in `motionNormal`, as before, with
-    // the easing capped at that same time so a long run never crawls.
-    readonly property real wheelVelocity:
-            CelestinaTheme.compWheelStep * 1000 / CelestinaTheme.motionNormal
+    // A fixed time, not a fixed velocity: whatever is left to cover is
+    // covered in `wheelGlide`, so a burst of notches moves faster the more
+    // of them are pending and the scroll answers the wheel. A fixed velocity
+    // made every burst crawl at one speed, like a belt, which the author
+    // recorded after 1.9.2.
+    readonly property int wheelGlide: CelestinaTheme.motionNormal
     //
     // `Immediate`, not `Sync`: Sync snaps to the target the moment the
     // direction reverses — and the velocity it compares against survives a
@@ -81,8 +83,8 @@ QtObject {
         SmoothedAnimation {
             id: glide
             reversingMode: SmoothedAnimation.Immediate
-            velocity: root.wheelVelocity
-            maximumEasingTime: CelestinaTheme.motionNormal
+            velocity: -1
+            duration: root.wheelGlide
         }
     }
     // Arrival, not `running`: a Behavior restarts its animation on every

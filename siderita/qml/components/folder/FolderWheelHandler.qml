@@ -100,7 +100,7 @@ WheelHandler {
         }
     }
 
-    // The listing glides at the heading's `wheelVelocity`. The glide is a
+    // The listing glides over the heading's `wheelGlide`. The glide is a
     // Behavior on a private `glideY` that the view follows while `gliding`:
     // a notch that lands while the previous one is still travelling re-aims
     // the animation and keeps its speed, instead of restarting a 200 ms eased
@@ -116,8 +116,8 @@ WheelHandler {
         SmoothedAnimation {
             id: wheelAnimation
             reversingMode: SmoothedAnimation.Immediate
-            velocity: root.heading.wheelVelocity
-            maximumEasingTime: CelestinaTheme.motionNormal
+            velocity: -1
+            duration: root.heading.wheelGlide
         }
     }
     // Arrival, not `running`: a Behavior restarts its animation on every

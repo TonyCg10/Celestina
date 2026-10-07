@@ -197,3 +197,4 @@ celestina-style	1.12.2	bug	STYLE-G7-S	Fix the hover ladder and name the pill fil
 siderita	1.9.1	bug	SID-H1-H	Add the pill fill to the floating pills
 celestina-style	1.12.3	bug	STYLE-G7-T	Fix the modal fade so the dialog goes out as one image
 siderita	1.9.2	bug	SID-H1-I	Fix the heading and listing glide on a fast wheel scroll
+siderita	1.9.3	bug	SID-H1-J	Fix the wheel glide so it answers the wheel instead of running at one speed
