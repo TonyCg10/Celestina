@@ -1,0 +1,29 @@
+# AUD-1-K exact change inventory
+
+Base revision	5264566d1c727577f771a802d36491818cd9cc3d
+Pathspec	AGENTS.md
+Pathspec	CONTRIBUTING.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/evidence/2026-10-06-prune-keeps-release-cache.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-K.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	scripts/build_trees.py
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/test-build-trees.py
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	4	8d03ed0d5ca41183c9aee95f7208c8c3953a9ffc4d4796f50df6ec54cdfc2986	AGENTS.md
+1	1	545f1e40f65821c505481dfd5476c0af857734b4ffadfc4aa455186d6f430288	CONTRIBUTING.md
+11	15	5c9723196184f301e8b49cdbbbdba1dcbc683a4bb7e2e8f3d387daa33b62856f	docs/contracts/landing.md
+17	16	cbc6614519390aa25b91c92b48185a50fec133e95c51d45f3dab33bcc32dc51b	docs/contracts/production-artifacts.md
+75	0	b563803b0c5f825a8003d6ec1224a0f17ee81f1c6145f5c32bbacc23fda5b385	docs/evidence/2026-10-06-prune-keeps-release-cache.md
+29	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-K.numstat.tsv
+4	0	a63ddc3a48b0babfe5cd55dd31628ab3737e7e3f43444629a7b1419120aaedfd	docs/plans/active/2026-09-26-monorepo-hardening.md
+55	87	90d9390c3cc624189bc93cf850e2b0dae966cb512e208c67b7cc334b623063a1	scripts/build_trees.py
+9	12	de628acd8e6b845b71e417905b101a1aaa4169063fc3eaecb7f9eb1e7f1e8eb7	scripts/land-unit.py
+47	62	e67323fe7373e6de60fb7319a2e7e63ac2705ba4e83acd37767fc6856b1ee97d	scripts/test-build-trees.py
+4	20	f6112859b24c34c09a279fd3423973b8fceed71fd1a5d84e32a7ae478b392f78	scripts/test-land-unit.py

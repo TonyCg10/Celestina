@@ -34,8 +34,8 @@ the author's binary.
 - Use the release profile and options for the distributed artifact.
 - Reuse `target/` and `build/` between a build and its deploy; do not run
   `clean`. After a landing deployed and checked its artifacts, its `prune`
-  step reduces the build trees as [Pruning after deploy](#pruning-after-deploy)
-  says.
+  step removes the debug profiles as
+  [Pruning after deploy](#pruning-after-deploy) says.
 - Do not create an agent-only target when the canonical target can be deployed.
 - Build all binaries deployed by the project as one unit without starting
   processes or reloading services.
@@ -183,24 +183,25 @@ active; deploy never enables an inactive service.
 
 ## Pruning after deploy
 
-A build tree holds far more than the artifact: debug and test builds,
-dependency objects and incremental state, tens of gigabytes per application,
-none of which the installed copy uses. `scripts/build_trees.py prune`
-removes everything under the build roots except what the registry names:
+Most of a Cargo build tree is the debug profile that tests, clippy and quick
+runs build: tens of gigabytes per application, none of which the installed
+copy uses. The release profile is the incremental cache the next production
+build reuses: a small change, such as a colour in a QML file, recompiles the
+application crate and relinks instead of rebuilding every dependency.
+`scripts/build_trees.py prune` therefore removes only the debug profiles:
 
 - the build roots are the first `target` or `build` directory of each
   `artifact_paths` entry and `artifact_manifest` of every project that is not
   halted; a halted project's own tree is never touched;
-- every project's `artifact_paths` and `artifact_manifest`, halted ones
-  included, are kept, so `check`, `deploy-production.sh` and
-  `status-production.sh` keep judging the same bytes, and an artifact that is
-  still current is not rebuilt;
-- each pruned project gets a mark, `<artifact_manifest>.pruned`. The
-  artifact stays current, but a verification alone would lack the generated
-  sources it reads, such as the release QML module `qmllint-cxxqt.sh` lints.
-  The landing therefore builds a marked project whose check reports only the
-  verification errors, instead of verifying it alone, and clears the mark
-  after that build.
+- in each root it removes every `debug` directory directly under the root or
+  one level below it, which covers a target triple such as
+  `aarch64-linux-android/debug` and a nested target such as
+  `celestina-rs/target/workspace/debug`; it never follows a symbolic link;
+- everything else stays, release caches and CMake or Gradle trees included,
+  and so does any registered artifact or manifest, so `check`,
+  `deploy-production.sh` and `status-production.sh` keep judging the same
+  bytes and a verification still finds the generated sources it reads, such
+  as the release QML module `qmllint-cxxqt.sh` lints.
 
 `--dry-run` lists what would go and how much it frees without removing
 anything. The tool refuses to run in a session worktree, whose builds use the

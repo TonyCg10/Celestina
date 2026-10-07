@@ -230,8 +230,8 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    ```
 5. **`checkout_canonical`.** The canonical checkout checks out the rebased tip
    detached. Its `target/` and `build/` directories are the production
-   caches, so a build below reuses what the previous landing's `prune` step
-   kept.
+   caches, so a build below reuses them; the previous landing's `prune` step
+   removed only their debug profiles.
 6. **`pre_guards`.** On the rebased tip, before anything is built or deployed,
    the guards whose verdict does not depend on the seal, in order:
    `commit_scope.py --check <subject>` with the paths the unit changes on
@@ -278,11 +278,8 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    runs. When the check fails only with the verification errors
    (`artifact is not verified yet` or `tests or rules changed`), the
    production inputs and artifacts are unchanged, so only the registered
-   `verify_script` runs, unless a previous landing pruned the project's build
-   tree (its manifest has a `.pruned` mark): the verification would lack the
-   generated sources it reads, so the project builds first. Otherwise the
-   project runs its `build_script`, then its `verify_script`; a build clears
-   the project's mark. Nothing is deployed here: for a deployable project the
+   `verify_script` runs. Otherwise the project runs its `build_script`, then
+   its `verify_script`. Nothing is deployed here: for a deployable project the
    rest of what its `complete_script` runs, the `deploy_script` and the
    `status_script`, waits for the push (step 11), so a unit that a later
    guard, a hook or a lost push race stops is never installed. A non-zero exit
@@ -367,11 +364,10 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
     `--continue` deploys the projects still pending.
 12. **`prune`.** With every affected project deployed and checked, the tool
     runs `scripts/build_trees.py`'s prune over the canonical checkout with the
-    sealed commit's registry: every build tree of a project that is not
-    halted keeps only the registered artifacts and manifests, and each pruned
-    project gets its mark (see
+    sealed commit's registry: the Cargo debug profiles of every build tree of
+    a project that is not halted go, and the release caches stay (see
     [Pruning after deploy](production-artifacts.md#pruning-after-deploy)). It
-    prints `land-unit: pruned the build trees to their artifacts; freed <N> GiB`.
+    prints `land-unit: pruned the debug builds from the build trees; freed <N> GiB`.
     A failure only warns, since the unit has landed. Then the tool removes the
     landing worktree.
 
@@ -619,9 +615,9 @@ replaces them with doubles.
   that reaches `main`, and a hook failure fails the landing.
 - Build in a session worktree, deploy without running the project's verify
   entry first, deploy before the push has put the unit on `main`, rebuild a
-  project whose check reports only the verification errors unless a prune
-  marked it, or run any entry for a project whose artifact
-  `check --require-verified` already accepts.
+  project whose check reports only the verification errors, or run any entry
+  for a project whose artifact `check --require-verified` already accepts.
 - Prune before every affected project is deployed and checked, remove a
-  registered artifact or manifest, or touch a halted project's build tree.
+  release cache, a registered artifact or a manifest, or touch a halted
+  project's build tree.
 - Bump a product for a `suite` unit, or resolve a prose conflict.

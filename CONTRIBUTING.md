@@ -140,7 +140,7 @@ Each buildable project registers separate entries for:
 - for deployable apps, one `complete-production.sh` that chains the exit.
 
 Do not clean caches or rebuild release between verify and deploy; the landing
-prunes the build trees to their registered artifacts only after deploying. Shell
+removes the debug builds from the build trees only after deploying. Shell
 completion updates its bundle but activation remains separate. See
 [production-artifacts.md](docs/contracts/production-artifacts.md).
 

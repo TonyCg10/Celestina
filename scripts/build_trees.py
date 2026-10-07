@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
-"""Prune the production build trees once the landing deployed their artifacts.
+"""Prune the debug builds from the production build trees once the landing deployed.
 
     build_trees.py [--root DIR] [--registry PATH] prune [--dry-run]
 
 A registered project builds its release artifact into a Cargo `target/` or a
-CMake or Gradle `build/` directory. Once the landing has deployed and checked
-the installed copy, everything in those directories except the registered
-artifacts and their manifests is a cache the next build regenerates: debug and
-test builds, dependency objects, incremental state. Pruning keeps the
-registered artifact paths and the manifest of every project, halted ones
-included, so `check`, `deploy-production.sh` and `status-production.sh` keep
-judging the same bytes, and removes the rest.
+CMake or Gradle `build/` directory. Most of a Cargo target is the debug
+profile that tests, clippy and quick runs build: tens of gigabytes the
+installed copy never uses. The release profile is the incremental cache the
+next production build reuses, so a small change such as a colour recompiles
+one crate and relinks instead of rebuilding every dependency. Pruning
+therefore removes each Cargo `debug` profile directory directly under a build
+root or one level below it (a target triple, or a nested target such as
+`celestina-rs/target/workspace`), and keeps everything else. A registered
+artifact or manifest inside a debug directory is kept too, so `check`,
+`deploy-production.sh` and `status-production.sh` always judge the same bytes.
 
 The build roots are derived from the registry: the first `target` or `build`
 component of each artifact path or manifest of a project that is not halted.
 A halted project's own tree is never touched (AGENTS.md "Halted projects").
-
-A pruned project gets a mark beside its manifest. Its artifact stays current,
-but a verification alone would find the generated sources it lints, such as
-the release QML module, gone; scripts/land-unit.py therefore builds a marked
-project before verifying it and clears the mark after that build.
 
 Exit 0 on success, 1 when the tool refuses (a session worktree, a registry it
 cannot read, a path outside the checkout), 2 on usage errors.
@@ -40,7 +38,7 @@ from project_registry import load_registry
 
 
 BUILD_DIRECTORY_NAMES = ("target", "build")
-MARK_SUFFIX = ".pruned"
+PRUNED_PROFILE = "debug"
 # Written by scripts/worktree.sh at the root of every session worktree.
 WORKTREE_MARKER = ".celestina-worktree"
 
@@ -53,7 +51,6 @@ class PruneError(RuntimeError):
 class PruneReport:
     removed: list[str] = field(default_factory=list)
     freed_bytes: int = 0
-    marked: list[str] = field(default_factory=list)
 
 
 def relative_path(text: object, label: str) -> PurePosixPath:
@@ -88,19 +85,13 @@ def projects(registry: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in registry.get("projects", []) if isinstance(item, dict)]
 
 
-def project_roots(project: dict[str, Any]) -> set[str]:
-    return {root for path in registered_paths(project) if (root := build_root(path))}
-
-
 def build_roots(registry: dict[str, Any]) -> tuple[str, ...]:
     """The build directories of every project that is not halted, outermost only."""
     roots: set[str] = set()
     for project in projects(registry):
+        paths = registered_paths(project)
         if "halted" not in project:
-            roots |= project_roots(project)
-        else:
-            # A halted project's paths are still validated: they are kept.
-            registered_paths(project)
+            roots |= {root for path in paths if (root := build_root(path))}
     ordered = sorted(roots)
     return tuple(
         root
@@ -109,37 +100,31 @@ def build_roots(registry: dict[str, Any]) -> tuple[str, ...]:
     )
 
 
-def mark_path(root: Path, project: dict[str, Any]) -> Path | None:
-    manifest = project.get("artifact_manifest")
-    if not isinstance(manifest, str) or not manifest:
-        return None
-    return root / (manifest + MARK_SUFFIX)
-
-
-def is_pruned(root: Path, project: dict[str, Any]) -> bool:
-    """Whether `project`'s build tree was pruned since its last build."""
-    path = mark_path(root, project)
-    return path is not None and path.is_file()
-
-
-def clear_mark(root: Path, project: dict[str, Any]) -> None:
-    path = mark_path(root, project)
-    if path is not None:
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
-
-
 def kept_paths(registry: dict[str, Any]) -> set[str]:
-    kept: set[str] = set()
-    for project in projects(registry):
-        for path in registered_paths(project):
-            kept.add(path.as_posix())
-        manifest = project.get("artifact_manifest")
-        if isinstance(manifest, str) and manifest:
-            kept.add(manifest + MARK_SUFFIX)
-    return kept
+    return {path.as_posix() for project in projects(registry) for path in registered_paths(project)}
+
+
+def real_directory(path: Path) -> bool:
+    return path.is_dir() and not path.is_symlink()
+
+
+def debug_directories(root: Path, build: str) -> list[str]:
+    """The debug profile directories directly under `build` or one level below."""
+    base = root / build
+    if not real_directory(base):
+        return []
+    found = []
+    if real_directory(base / PRUNED_PROFILE):
+        found.append(f"{build}/{PRUNED_PROFILE}")
+    for entry in sorted(os.listdir(base)):
+        # A symlinked entry would lead the prune out of the build tree.
+        if (
+            entry != PRUNED_PROFILE
+            and real_directory(base / entry)
+            and real_directory(base / entry / PRUNED_PROFILE)
+        ):
+            found.append(f"{build}/{entry}/{PRUNED_PROFILE}")
+    return found
 
 
 def tree_size(path: Path) -> int:
@@ -159,7 +144,7 @@ def tree_size(path: Path) -> int:
 
 
 def remove(path: Path) -> None:
-    if path.is_dir() and not path.is_symlink():
+    if real_directory(path):
         shutil.rmtree(path)
     else:
         path.unlink()
@@ -168,44 +153,27 @@ def remove(path: Path) -> None:
 def prune_directory(
     root: Path, relative: str, kept: set[str], report: PruneReport, dry_run: bool
 ) -> None:
-    directory = root / relative
-    for entry in sorted(os.listdir(directory)):
-        child = f"{relative}/{entry}"
-        if child in kept:
-            continue
-        path = directory / entry
-        if path.is_dir() and not path.is_symlink() and any(
-            item.startswith(child + "/") for item in kept
-        ):
-            prune_directory(root, child, kept, report, dry_run)
-            continue
-        report.freed_bytes += tree_size(path)
-        report.removed.append(child)
-        if not dry_run:
-            remove(path)
+    """Remove `relative` whole, or, when it holds a kept path, everything else in it."""
+    path = root / relative
+    if real_directory(path) and any(item.startswith(relative + "/") for item in kept):
+        for entry in sorted(os.listdir(path)):
+            child = f"{relative}/{entry}"
+            if child not in kept:
+                prune_directory(root, child, kept, report, dry_run)
+        return
+    report.freed_bytes += tree_size(path)
+    report.removed.append(relative)
+    if not dry_run:
+        remove(path)
 
 
 def prune(root: Path, registry: dict[str, Any], *, dry_run: bool = False) -> PruneReport:
-    """Remove every file under the build roots that no project registers."""
+    """Remove every Cargo debug profile under the build roots, keeping registered paths."""
     report = PruneReport()
-    roots = build_roots(registry)
     kept = kept_paths(registry)
-    present = [item for item in roots if (root / item).is_dir() and not (root / item).is_symlink()]
-    for item in present:
-        prune_directory(root, item, kept, report, dry_run)
-    if dry_run:
-        return report
-    for project in projects(registry):
-        if "halted" in project:
-            continue
-        if not any(item in present for item in project_roots(project)):
-            continue
-        path = mark_path(root, project)
-        if path is None:
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("pruned; the next landing builds before it verifies\n", encoding="utf-8")
-        report.marked.append(str(project.get("id")))
+    for build in build_roots(registry):
+        for directory in debug_directories(root, build):
+            prune_directory(root, directory, kept, report, dry_run)
     return report
 
 

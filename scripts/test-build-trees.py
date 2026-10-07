@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Hermetic fixtures for the build-tree pruning the landing runs after a deploy."""
+"""Hermetic fixtures for the debug-build pruning the landing runs after a deploy."""
 
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -47,10 +48,12 @@ REGISTRY = {
         ),
         project(
             "halted-shell",
-            ["shell/build/shell", "style/build/libstyle.so"],
-            "shell/build/production-artifact.toml",
+            ["shell/target/release/shell", "style/build/libstyle.so"],
+            "shell/target/production-artifact.toml",
             halted="2026-09-27",
         ),
+        # An artifact registered inside a debug profile is still kept.
+        project("odd", ["odd/target/debug/odd"], "odd/target/production-artifact.toml"),
         # A project with nothing to build registers no artifact.
         {"id": "docs-only"},
     ],
@@ -70,27 +73,28 @@ class PruneTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         for relative in (
             "app/target/release/app",
-            "app/target/production-artifact.toml",
             "app/target/release/deps/libbig.rlib",
+            "app/target/release/.fingerprint/app-1/hash",
+            "app/target/release/build/app-1/out/qml/Main.qml",
+            "app/target/production-artifact.toml",
             "app/target/debug/app",
             "app/target/debug/incremental/state.bin",
+            "app/target/aarch64-linux-android/debug/libmobile.so",
+            "app/target/aarch64-linux-android/release/libmobile.so",
+            "app/target/cxxqt/generated.h",
             "host/target/release/host",
-            "host/target/production-artifact.toml",
             "host/target/debug/host",
             "lib/target/release/daemon",
-            "lib/target/release/deps/daemon-123",
             "lib/target/workspace/release/daemon",
-            "lib/target/workspace/release/build/out.rs",
-            "lib/target/production-artifact.toml",
+            "lib/target/workspace/debug/deps/test-binary",
             "lib/target/debug/deps/test-binary",
             "style/build/libstyle.so",
             "style/build/Style/qmldir",
-            "style/build/Style/Button.qml",
             "style/build/CMakeFiles/obj.o",
-            "style/build/production-artifact.toml",
-            "shell/build/shell",
-            "shell/build/CMakeFiles/obj.o",
-            "shell/build/production-artifact.toml",
+            "shell/target/release/shell",
+            "shell/target/debug/shell",
+            "odd/target/debug/odd",
+            "odd/target/debug/deps/cache.rlib",
             "app/src/main.rs",
         ):
             write(self.root, relative)
@@ -102,87 +106,71 @@ class PruneTests(unittest.TestCase):
         return os.path.lexists(self.root / relative)
 
     def test_build_roots_come_from_the_registered_artifacts(self) -> None:
-        roots = build_trees.build_roots(REGISTRY)
         self.assertEqual(
-            roots,
-            ("app/target", "host/target", "lib/target", "style/build"),
+            build_trees.build_roots(REGISTRY),
+            ("app/target", "host/target", "lib/target", "odd/target", "style/build"),
         )
 
-    def test_a_halted_project_keeps_its_own_tree(self) -> None:
+    def test_prune_removes_the_debug_profiles(self) -> None:
         build_trees.prune(self.root, REGISTRY)
-        self.assertTrue(self.exists("shell/build/CMakeFiles/obj.o"))
-        self.assertTrue(self.exists("shell/build/shell"))
+        for removed in (
+            "app/target/debug",
+            "app/target/aarch64-linux-android/debug",
+            "host/target/debug",
+            "lib/target/debug",
+            "lib/target/workspace/debug",
+            "odd/target/debug/deps",
+        ):
+            self.assertFalse(self.exists(removed), removed)
 
-    def test_prune_keeps_every_registered_artifact_and_manifest(self) -> None:
+    def test_prune_keeps_the_release_cache_and_everything_else(self) -> None:
         build_trees.prune(self.root, REGISTRY)
         for kept in (
             "app/target/release/app",
+            "app/target/release/deps/libbig.rlib",
+            "app/target/release/.fingerprint/app-1/hash",
+            "app/target/release/build/app-1/out/qml/Main.qml",
             "app/target/production-artifact.toml",
-            "host/target/release/host",
-            "host/target/production-artifact.toml",
+            "app/target/aarch64-linux-android/release/libmobile.so",
+            "app/target/cxxqt/generated.h",
             "lib/target/release/daemon",
             "lib/target/workspace/release/daemon",
-            "lib/target/production-artifact.toml",
-            "style/build/libstyle.so",
+            "style/build/CMakeFiles/obj.o",
             "style/build/Style/qmldir",
-            "style/build/Style/Button.qml",
-            "style/build/production-artifact.toml",
             "app/src/main.rs",
         ):
             self.assertTrue(self.exists(kept), kept)
 
-    def test_prune_removes_everything_else_under_the_roots(self) -> None:
+    def test_a_registered_artifact_inside_a_debug_profile_is_kept(self) -> None:
         build_trees.prune(self.root, REGISTRY)
-        for removed in (
-            "app/target/release/deps",
-            "app/target/debug",
-            "host/target/debug",
-            "lib/target/release/deps",
-            "lib/target/workspace/release/build",
-            "lib/target/debug",
-            "style/build/CMakeFiles",
-        ):
-            self.assertFalse(self.exists(removed), removed)
+        self.assertTrue(self.exists("odd/target/debug/odd"))
 
-    def test_a_shared_target_keeps_the_artifact_another_project_registers(self) -> None:
+    def test_a_halted_project_keeps_its_own_tree(self) -> None:
         build_trees.prune(self.root, REGISTRY)
-        # lib/target is lib's root, and daemon-host's artifact lives in it.
-        self.assertTrue(self.exists("lib/target/release/daemon"))
+        self.assertTrue(self.exists("shell/target/debug/shell"))
 
-    def test_prune_marks_each_pruned_project_and_reports_the_bytes(self) -> None:
+    def test_prune_reports_what_it_freed(self) -> None:
         report = build_trees.prune(self.root, REGISTRY)
         self.assertGreater(report.freed_bytes, 0)
-        for identifier in ("app", "daemon-host", "lib", "style"):
-            self.assertTrue(build_trees.is_pruned(self.root, REGISTRY_TABLES[identifier]))
-        self.assertFalse(build_trees.is_pruned(self.root, REGISTRY_TABLES["halted-shell"]))
+        self.assertIn("app/target/debug", report.removed)
 
     def test_dry_run_removes_nothing(self) -> None:
         report = build_trees.prune(self.root, REGISTRY, dry_run=True)
-        self.assertGreater(report.freed_bytes, 0)
         self.assertIn("app/target/debug", report.removed)
         self.assertTrue(self.exists("app/target/debug/app"))
-        self.assertFalse(build_trees.is_pruned(self.root, REGISTRY_TABLES["app"]))
 
     def test_a_missing_root_is_skipped(self) -> None:
-        import shutil
-
         shutil.rmtree(self.root / "app")
         report = build_trees.prune(self.root, REGISTRY)
-        self.assertNotIn("app/target", report.removed)
-        self.assertFalse(build_trees.is_pruned(self.root, REGISTRY_TABLES["app"]))
+        self.assertNotIn("app/target/debug", report.removed)
 
-    def test_a_symlink_is_removed_without_following_it(self) -> None:
-        outside = write(self.root, "outside/keep.txt")
+    def test_a_symlink_is_never_followed(self) -> None:
+        outside = write(self.root, "outside/debug/keep.txt")
+        (self.root / "app/target/linked").symlink_to(outside.parent.parent)
         (self.root / "app/target/debug/link").symlink_to(outside.parent)
         build_trees.prune(self.root, REGISTRY)
         self.assertTrue(outside.exists())
         self.assertFalse(self.exists("app/target/debug"))
-
-    def test_clear_mark_forgets_the_prune(self) -> None:
-        build_trees.prune(self.root, REGISTRY)
-        build_trees.clear_mark(self.root, REGISTRY_TABLES["app"])
-        self.assertFalse(build_trees.is_pruned(self.root, REGISTRY_TABLES["app"]))
-        self.assertTrue(build_trees.is_pruned(self.root, REGISTRY_TABLES["lib"]))
 
     def test_a_second_prune_frees_nothing(self) -> None:
         build_trees.prune(self.root, REGISTRY)
@@ -195,9 +183,6 @@ class PruneTests(unittest.TestCase):
         }
         with self.assertRaises(build_trees.PruneError):
             build_trees.build_roots(registry)
-
-
-REGISTRY_TABLES = {table["id"]: table for table in REGISTRY["projects"]}
 
 
 class CommandTests(unittest.TestCase):
@@ -228,7 +213,7 @@ class CommandTests(unittest.TestCase):
     def test_the_command_prunes_and_reports(self) -> None:
         ran = self.run_tool("prune")
         self.assertEqual(ran.returncode, 0, ran.stderr)
-        self.assertIn("app/target/debug", ran.stdout)
+        self.assertIn("removed app/target/debug", ran.stdout)
         self.assertFalse((self.root / "app/target/debug").exists())
         self.assertTrue((self.root / "app/target/release/app").exists())
 
