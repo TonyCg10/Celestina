@@ -31,7 +31,7 @@ and bounded in-place Grafita/Fluorita actions.
 | `src/editor.rs` | Siderita's Qt adapter over `grafita-core` |
 | `src/media.rs` | Siderita's minimal-player adapter over Fluorita contracts |
 | `src/portal.rs` | `org.freedesktop.impl.portal.FileChooser` backend and request lifecycle |
-| `cpp/` | CXX-Qt gaps such as the native model, clipboard and thumbnail provider |
+| `cpp/` | CXX-Qt gaps such as the native model, the clipboard and the own-picture hook on the shared `fluorita-qt` thumbnail provider |
 | `qml/Main.qml`, `qml/PickerWindow.qml`, `qml/views/` | Window and view coordinators |
 | `qml/components/`, `qml/dialogs/`, `qml/menus/` | Local presentation regions and modal/menu composition |
 | `../celestina-rs/crates/siderita-*` | Pure read models, loss-free operations and opaque view tokens |

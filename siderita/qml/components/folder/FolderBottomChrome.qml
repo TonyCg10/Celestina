@@ -12,7 +12,6 @@ Item {
     required property Item contentSurface
     required property Item bottomView
     required property bool bottomFloating
-    required property Item overlayParent
     required property var viewSortMenuItem
 
     Item {
@@ -34,7 +33,6 @@ Item {
         panel: root.panel
         bottomView: root.bottomView
         bottomFloating: root.bottomFloating
-        overlayParent: root.overlayParent
         viewSortMenu: root.viewSortMenuItem
         hostWindow: root.hostWindow
     }

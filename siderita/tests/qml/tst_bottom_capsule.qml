@@ -11,7 +11,7 @@ TestCase {
     id: testCase
     name: "BottomCapsule"
     width: 600
-    height: 400
+    height: 600
     visible: true
     when: windowShown
 
@@ -62,12 +62,11 @@ TestCase {
     BottomControls {
         id: capsule
         x: 10
-        y: 340
+        y: 540
         controller: controllerStub
         panel: panelStub
         bottomView: overlayStub
         bottomFloating: true
-        overlayParent: overlayStub
         viewSortMenu: menuStub
         hostWindow: testCase
     }
@@ -106,6 +105,29 @@ TestCase {
         compare(capsule.viewSortButton.iconName, "view-list")
         panelStub.viewMode = "details"
         compare(capsule.viewSortButton.iconName, "view-details")
+    }
+
+    function test_view_sort_menu_opens_above_its_button_without_covering_it() {
+        mouseClick(capsule.viewSortButton)
+        tryVerify(function() { return menuStub.opened }, 1000,
+                  "the middle icon opens the view-and-sort menu")
+        const button = capsule.viewSortButton.mapToItem(testCase, 0, 0)
+        // The menu's parent is the test case, so its y is in the same frame.
+        tryVerify(function() {
+            return menuStub.height > 0
+                   && menuStub.y + menuStub.height <= button.y
+        }, 1000, "the menu ends above the button that opened it: "
+                 + menuStub.y + " + " + menuStub.height + " vs " + button.y)
+    }
+
+    function test_view_sort_sections_keep_their_place_above_their_rows() {
+        const labels = []
+        for (let i = 0; i < menuStub.count; ++i)
+            labels.push(menuStub.itemAt(i).text)
+        compare(labels[0], "VISTA")
+        compare(labels.indexOf("ORDENAR POR"), 4)
+        compare(labels.indexOf("SENTIDO"), 9)
+        compare(labels.length, 11)
     }
 
     function test_sizes_popup_opens_inside_the_window_from_the_left() {

@@ -1,8 +1,11 @@
-//! The bridge that hands the C++ thumbnail provider a file's own picture.
+//! The bridge that hands the thumbnail provider a file's own picture.
 //!
-//! A separate bridge from `crate::thumbnails` because it points the other way:
-//! that one imports three C++ helpers for tests, this one exports two Rust
-//! functions — and imports the one call quitting makes to drain the pool. The
+//! The provider is the suite's shared one (`fluorita-qt`); Siderita's C++ glue
+//! (`cpp/thumbnailprovider.cpp`) fills its own-picture hook from the two Rust
+//! functions exported here. A separate bridge from `crate::thumbnails` because
+//! it points the other way: that one imports three C++ helpers for tests, this
+//! one exports two Rust functions — and imports the one call quitting makes to
+//! drain the shared pool. The
 //! parsing itself is `siderita-embedded`'s — a program's icon out of its
 //! resource section, an album cover out of a music tag, an app's launcher art
 //! out of its package — and none of it belongs to Qt.
@@ -21,11 +24,12 @@ pub(crate) mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("siderita/thumbnailprovider.h");
+        include!("fluorita/thumbnailprovider.h");
 
-        /// Drains the thumbnail pool on quit, waiting at most `milliseconds`
-        /// for the decodes still running.
-        fn siderita_thumbnail_shutdown(milliseconds: i32);
+        /// Drains the shared thumbnail pool on quit, waiting at most
+        /// `milliseconds` for the decodes still running.
+        #[rust_name = "thumbnail_shutdown"]
+        fn fluorita_thumbnail_shutdown(milliseconds: i32);
     }
 }
 

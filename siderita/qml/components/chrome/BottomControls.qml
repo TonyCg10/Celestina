@@ -19,7 +19,6 @@ GlassPill {
     required property var panel
     required property Item bottomView      // the view the glass samples
     required property bool bottomFloating
-    required property Item overlayParent   // where the menu anchors
     required property var viewSortMenu     // the view-and-sort menu
     required property var hostWindow       // the six scales the popup edits
 
@@ -80,14 +79,10 @@ GlassPill {
                       : root.panel.viewMode === "details"
                         ? "view-details" : "view-grid"
             helpText: qsTr("Vista y orden")
-            onClicked: {
-                // This control sits at the bottom, so its menu opens upward.
-                const menuHeight = root.viewSortMenu.height > 0
-                                 ? root.viewSortMenu.height : 300
-                const point = viewSortIcon.mapToItem(
-                                root.overlayParent, 0, -menuHeight - 6)
-                root.viewSortMenu.popup(root.overlayParent, point)
-            }
+            // This control sits at the bottom, so its menu prefers to open
+            // above it; the shared menu measures its own height and keeps
+            // clear of the button.
+            onClicked: root.viewSortMenu.popupBeside(viewSortIcon, true)
         }
 
         CelestinaIconButton {

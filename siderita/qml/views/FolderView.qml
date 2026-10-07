@@ -648,7 +648,6 @@ Item {
             contentSurface: contentFrame.surface
             bottomView: root.bottomView
             bottomFloating: root.bottomFloating
-            overlayParent: root.overlayParent
             viewSortMenuItem: folderActions.viewSortMenu
         }
     }

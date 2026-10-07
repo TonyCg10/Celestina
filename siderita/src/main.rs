@@ -109,5 +109,5 @@ fn main() {
     controller::jobs::shutdown(std::time::Duration::from_secs(10));
     // Thumbnail decodes hold no half-written file, so they get a short wait:
     // what is queued is dropped, and a read stuck on a dead mount is left.
-    embedded::ffi::siderita_thumbnail_shutdown(1000);
+    embedded::ffi::thumbnail_shutdown(1000);
 }

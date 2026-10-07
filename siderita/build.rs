@@ -34,6 +34,8 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaUsageList.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
+    // A menu's section header that keeps its place among the rows.
+    "qml/GlassMenuSection.qml",
     // Wheel scrolling for every list: a notch shows on the next frame and a
     // burst adds up; the folder views wrap it to carry the heading along.
     "qml/CelestinaWheelScroll.qml",
@@ -225,8 +227,11 @@ fn main() {
         // The native list model: the header is moc'd (Q_OBJECT), the .cpp compiled.
         .cpp_file("cpp/entrymodel.cpp")
         .cpp_file("cpp/siderita/entrymodel.h")
-        // The freedesktop-thumbnail image provider (no Q_OBJECT of its own — it
-        // only emits QQuickImageResponse's inherited signal — so just compiled).
+        // The suite's shared freedesktop-thumbnail image provider, compiled from
+        // the crate that owns it (no Q_OBJECT, so only compiled; its header is
+        // watched through `rerun_paths`), and Siderita's own-picture hook on
+        // top of it.
+        .cpp_file(fluorita_qt::THUMBNAIL_PROVIDER_SOURCE)
         .cpp_file("cpp/thumbnailprovider.cpp")
         // The transient-parent shim: `Q_OBJECT`, so the header is moc'd too.
         .cpp_file("cpp/windowparent.cpp")
@@ -244,8 +249,8 @@ fn main() {
             "src/media.rs",
             "src/portal.rs",
             "src/preferences.rs",
-            // Binds one C++ helper so a test can pin the thumbnail cache key to
-            // its Rust owner; it declares no QObject.
+            // Binds the shared provider's test helpers so a test can pin the
+            // thumbnail cache key to its Rust owner; it declares no QObject.
             "src/thumbnails.rs",
             "src/usage.rs",
         ]);

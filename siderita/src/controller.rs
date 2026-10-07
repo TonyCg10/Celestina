@@ -52,8 +52,8 @@ pub mod qobject {
         #[rust_name = "register_entry_model"]
         fn register_siderita_entry_model();
 
-        // The freedesktop-thumbnail image provider (see cpp/thumbnailprovider.cpp),
-        // added onto the engine before the QML loads.
+        // The shared thumbnail provider plus Siderita's own-picture hook (see
+        // cpp/thumbnailprovider.cpp), added onto the engine before the QML loads.
         include!("cxx-qt-lib/qqmlapplicationengine.h");
         type QQmlApplicationEngine = cxx_qt_lib::QQmlApplicationEngine;
 

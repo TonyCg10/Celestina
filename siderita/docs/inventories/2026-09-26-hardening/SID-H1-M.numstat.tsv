@@ -1,0 +1,53 @@
+# SID-H1-M exact change inventory
+
+Base revision	6b117d6a36eb6579fb1f4f38a1320357bd2173f5
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/README.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/cpp/siderita/thumbnailprovider.h
+Pathspec	siderita/cpp/thumbnailprovider.cpp
+Pathspec	siderita/docs/evidence/2026-10-07-shared-menus-and-thumbnails.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-M.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/GlassMenuSection.qml
+Pathspec	siderita/qml/components/chrome/BottomControls.qml
+Pathspec	siderita/qml/components/folder/FolderBottomChrome.qml
+Pathspec	siderita/qml/components/picker/PickerChrome.qml
+Pathspec	siderita/qml/menus/ViewSortMenu.qml
+Pathspec	siderita/qml/views/FolderView.qml
+Pathspec	siderita/scripts/smoke.sh
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/embedded.rs
+Pathspec	siderita/src/main.rs
+Pathspec	siderita/src/thumbnails.rs
+Pathspec	siderita/tests/qml/tst_bottom_capsule.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	0416a4f6b176cd53652a7643dfff83c8fcc1b50b90ce35699195a7b58b1f4757	docs/version-history.tsv
+1	1	2b9810cd87f60a3a8614c1d931c0b646b6ebd9c0964050295325fb0c834a6e29	scripts/architecture-baseline.tsv
+1	1	be93bee30f4343dc4decd6916c0b1562f6c9cd107e32e0f64fe96d0bc5b07432	siderita/Cargo.lock
+1	1	c50c3c42ba0b1d34f878ec1e2fe8e3058ff6e35ba1cedf70cda88b7d984465da	siderita/Cargo.toml
+1	1	a91804557bedb55bd2ecb38120b7b6a7511a0a45b9b8ff15100e020a9a7b4c46	siderita/README.md
+9	4	202d026489de1f961b154a10046c177fea1e79bcbf4309da8bd20692a42fb1f3	siderita/build.rs
+12	54	7b18e7d500983768cd43640d39544066a6b008c236691feecffb208a3b99f643	siderita/cpp/siderita/thumbnailprovider.h
+52	403	d6d1346c4e66ca9b1e3d6c28ad272208ec3e11673b5e6f638ef851daef9f5b14	siderita/cpp/thumbnailprovider.cpp
+62	0	d8b96744e878a7ddba670cd140c5daee769f91b2d6552df358c1a4c1157df06d	siderita/docs/evidence/2026-10-07-shared-menus-and-thumbnails.md
+53	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-M.numstat.tsv
+1	0	762bc1eb7755c69ec5af8400579c927c3295b6cea3e085680cfa825ed9a3e49f	siderita/docs/plans/active/2026-09-26-hardening.md
+1	0	ebad70e10dffc13de21ccf9e5a61be583fb1036a6e67e1393db04e0574a78775	siderita/qml/GlassMenuSection.qml
+4	9	c50c1557c55671cfc87e9e8c6a85082d2f528a399a23cf599b70bc39674cc5ce	siderita/qml/components/chrome/BottomControls.qml
+0	2	fe43e14ab3cd5d8a79e3583a0dc8eeecae26ea194ed1b29e3f8489f3e0169f1b	siderita/qml/components/folder/FolderBottomChrome.qml
+3	8	85e075984438758953f0deb20768e1616a8b2665872c448d9cef2ad04c34d3b9	siderita/qml/components/picker/PickerChrome.qml
+6	4	de445cc5c217dac0b919cba2574abd1987b463d402eeb260395467caf02dfbf5	siderita/qml/menus/ViewSortMenu.qml
+0	1	61870d19e43821351169741fcc45a68a5dca73a70e0f8a22725da7bb33f244c8	siderita/qml/views/FolderView.qml
+70	0	6cfbd9552ec9004335c0956edae5bf84838c5a43c598137904da01c634ef9a94	siderita/scripts/smoke.sh
+2	2	04cc5a00a16fb1e64f18495ddd3ef8b183adb7dacef9eed61b3579f460992628	siderita/src/controller.rs
+12	8	fd978e0895827cc4929639bb28fbf66a42a7163431b15fd6bedd3d0517502de4	siderita/src/embedded.rs
+1	1	7cbc0bd38a1c6d2069e916ebf8f4bf98e13f75b94498618eafcbed45c14f2a4d	siderita/src/main.rs
+21	18	7d60659857ec7a2141f660c0d3235a76d9644bd4305452cd84d7918451dfaf48	siderita/src/thumbnails.rs
+25	3	4435adfd470b7da4ebe8700fe8cb1f1d0ab547eebf951c2781427a9359bac2f9	siderita/tests/qml/tst_bottom_capsule.qml

@@ -7,7 +7,9 @@ import org.celestina.siderita 1.0
 // order. They are one question — how is this arranged — which is why they are
 // one menu behind one glyph rather than two pills. The panel owns the view
 // mode, the tab's controller owns the sorting; both arrive as properties and
-// this component reaches no id outside itself.
+// this component reaches no id outside itself. The headers are
+// GlassMenuSection items, so they take a row's place in the menu (and the arrow
+// keys skip them) instead of being plain labels among the rows.
 // ──────────────────────────────────────────────────────────────────────────────
 GlassContextMenu {
     id: root
@@ -22,7 +24,7 @@ GlassContextMenu {
         root.panel.persist()
     }
 
-    CelestinaSectionLabel {
+    GlassMenuSection {
         text: qsTr("VISTA")
     }
 
@@ -53,7 +55,7 @@ GlassContextMenu {
         onTriggered: root.chooseView("details")
     }
 
-    CelestinaSectionLabel {
+    GlassMenuSection {
         text: qsTr("ORDENAR POR")
     }
 
@@ -93,7 +95,7 @@ GlassContextMenu {
         onTriggered: root.controller.changeSortField(3)
     }
 
-    CelestinaSectionLabel {
+    GlassMenuSection {
         text: qsTr("SENTIDO")
     }
 

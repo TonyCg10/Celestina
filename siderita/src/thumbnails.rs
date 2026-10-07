@@ -1,9 +1,11 @@
-//! The thumbnail seam's one rule, and the test that keeps it true.
+//! The thumbnail seam's one rule, and the tests that keep it true.
 //!
-//! The provider itself is hand-written C++ (`cpp/thumbnailprovider.cpp`),
-//! because cxx-qt exposes no image-provider hook. Nothing in Rust computes a
-//! thumbnail, so this module binds exactly one of its functions: the
-//! freedesktop cache key.
+//! The provider is the suite's shared one, hand-written C++ in `fluorita-qt`
+//! (cxx-qt exposes no image-provider hook); Siderita only adds its own-picture
+//! hook on top (`cpp/thumbnailprovider.cpp`). Nothing in Rust computes a
+//! thumbnail, so this module binds exactly the provider's three test helpers:
+//! the freedesktop cache key, the path a published key resolves to, and the
+//! decode behind the guards.
 //!
 //! That key is not Qt plumbing but a shared spelling. The cache under
 //! `~/.cache/thumbnails/` is keyed on the MD5 of a `file://` URI, and every
@@ -13,8 +15,8 @@
 //! [`celestina_core::percent::encode_qt_path`]; the provider reproduces it over
 //! raw path bytes, since a name that is not valid UTF-8 has no QString to hand
 //! to `QUrl::fromLocalFile`. Two implementations of one rule are exactly what
-//! the reuse rule warns about, so the equality is asserted here rather than
-//! asserted in a comment.
+//! the reuse rule warns about, so the equality is asserted here, for the
+//! provider Siderita actually registers, rather than asserted in a comment.
 
 #[cxx_qt::bridge]
 pub mod ffi {
@@ -22,30 +24,31 @@ pub mod ffi {
         include!("cxx-qt-lib/qbytearray.h");
         type QByteArray = cxx_qt_lib::QByteArray;
 
-        include!("siderita/thumbnailprovider.h");
+        include!("fluorita/thumbnailprovider.h");
 
         include!("cxx-qt-lib/qsize.h");
         type QSize = cxx_qt_lib::QSize;
 
-        /// The cache key the C++ provider computes for these raw path bytes.
+        /// The cache key the shared provider computes for these raw path bytes.
         #[rust_name = "cache_uri"]
-        fn siderita_thumbnail_cache_uri(path_bytes: &QByteArray) -> QByteArray;
+        fn fluorita_thumbnail_cache_uri(path_bytes: &QByteArray) -> QByteArray;
 
-        /// The pixel size of the image at these raw path bytes, read through
-        /// the provider's own guards and descriptor. Invalid when they refuse.
-        #[rust_name = "source_size"]
-        fn siderita_thumbnail_source_size(path_bytes: &QByteArray) -> QSize;
+        /// The size of the thumbnail the provider would generate for the image
+        /// at these raw path bytes, read through its own guards and descriptor
+        /// without touching the shared cache. Invalid when they refuse.
+        #[rust_name = "generated_size"]
+        fn fluorita_thumbnail_generated_size(path_bytes: &QByteArray) -> QSize;
 
         /// The path bytes the provider resolves for a published key, reached
         /// through the same `image://thumb/<key>` URL a delegate writes.
         #[rust_name = "resolved_path"]
-        fn siderita_thumbnail_resolved_path(key: &QByteArray) -> QByteArray;
+        fn fluorita_thumbnail_resolved_path(key: &QByteArray) -> QByteArray;
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ffi::{cache_uri, resolved_path, source_size};
+    use super::ffi::{cache_uri, generated_size, resolved_path};
     use celestina_core::percent;
     use cxx_qt_lib::QByteArray;
     use std::ffi::OsString;
@@ -174,7 +177,7 @@ mod tests {
         // The name a QString cannot hold; its extension is ordinary.
         let path = fixture.write(b"na\xffme.png", TINY_PNG);
 
-        let size = source_size(&QByteArray::from(path.as_slice()));
+        let size = generated_size(&QByteArray::from(path.as_slice()));
         assert_eq!(
             (size.width(), size.height()),
             (2, 2),
@@ -195,7 +198,7 @@ mod tests {
             ("a file that is not there", missing),
             ("a relative path", b"relativo.png".to_vec()),
         ] {
-            let size = source_size(&QByteArray::from(bytes.as_slice()));
+            let size = generated_size(&QByteArray::from(bytes.as_slice()));
             assert!(!size.width().is_positive(), "{label} was accepted");
         }
     }

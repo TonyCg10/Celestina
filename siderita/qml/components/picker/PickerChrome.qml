@@ -123,14 +123,9 @@ Item {
                 backdrop: root.backdropView
                 floating: root.gridScrolls
                 active: filterMenu.visible
-                onClicked: {
-                    const menuHeight = root.filterRows.length
-                                     * CelestinaTheme.controlHeight
-                                     + CelestinaTheme.compMenuPadding * 2
-                    const point = filterButton.mapToItem(
-                                    root, 0, -menuHeight - CelestinaTheme.spaceSm)
-                    filterMenu.popup(root, point)
-                }
+                // The picker's bottom bar: the menu prefers to open above the
+                // button, and is placed again once its rows have arrived.
+                onClicked: filterMenu.popupBeside(filterButton, true)
             }
         }
 

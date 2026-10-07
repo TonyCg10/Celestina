@@ -1,5 +1,7 @@
 #include "siderita/thumbnailprovider.h"
 
+#include "fluorita/thumbnailprovider.h"
+
 // The Rust side of the same crate: the parsers that read a picture out of a
 // program, a music tag or a package. Declared through the generated header so
 // the signature stays the bridge's, not a hand-written copy of it.
@@ -9,182 +11,38 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <QtCore/QAtomicInt>
 #include <QtCore/QByteArray>
-#include <QtCore/QCryptographicHash>
-#include <QtCore/QDateTime>
-#include <QtCore/QDir>
 #include <QtCore/QFile>
-#include <QtCore/QFileInfo>
-#include <QtCore/QRunnable>
-#include <QtCore/QStandardPaths>
-#include <QtCore/QUrl>
-#include <QtCore/QThread>
-#include <QtCore/QThreadPool>
 #include <QtGui/QImage>
 #include <QtGui/QImageReader>
-#include <QtGui/QImageWriter>
 #include <QtQml/QQmlApplicationEngine>
-#include <QtQuick/QQuickAsyncImageProvider>
-#include <QtQuick/QQuickImageResponse>
-#include <QtQuick/QQuickTextureFactory>
 
 namespace {
 
-// The freedesktop shared thumbnail cache root ($XDG_CACHE_HOME/thumbnails).
-QString cacheRoot()
-{
-    return QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation) +
-           QStringLiteral("/thumbnails");
-}
-
-// The "large" (256 px) thumbnail size the spec defines; big enough for the grid
-// at a comfortable zoom, and the size most desktops already cache.
-constexpr int kThumbMax = 256;
-
-// The extension of the last component of `pathBytes`, lowercased.
-//
-// Derived from the bytes rather than from `QFileInfo::suffix()` because the
-// source path here is not a QString: a name that is not valid UTF-8 still
-// carries a perfectly ordinary extension, and it decides whether this file can
-// be decoded at all.
-QByteArray suffixOf(const QByteArray &pathBytes)
-{
-    const qsizetype slash = pathBytes.lastIndexOf('/');
-    const qsizetype dot = pathBytes.lastIndexOf('.');
-    if (dot < 0 || dot <= slash) {
-        return QByteArray();
-    }
-    return pathBytes.mid(dot + 1).toLower();
-}
-
-// Whether Siderita will *generate* a thumbnail for this file itself — only raster
-// images, which Qt decodes with no extra dependency. Video / audio thumbnails
-// (first frames, embedded covers) need a media stack, so those are only ever
-// reused from the shared cache when something else — the system, or Celestina's
-// media app — produced them; Siderita never decodes them here.
-bool generatableImage(const QByteArray &suffix)
-{
-    static const QList<QByteArray> kImage = {
-        QByteArrayLiteral("png"),  QByteArrayLiteral("jpg"),  QByteArrayLiteral("jpeg"),
-        QByteArrayLiteral("gif"),  QByteArrayLiteral("webp"), QByteArrayLiteral("bmp"),
-        QByteArrayLiteral("ico"),  QByteArrayLiteral("tif"),  QByteArrayLiteral("tiff"),
-        QByteArrayLiteral("avif"), QByteArrayLiteral("jxl"),  QByteArrayLiteral("heic"),
-        QByteArrayLiteral("heif"),
-    };
-    return kImage.contains(suffix);
-}
-
-// A read-only descriptor opened from raw path bytes, closed when this goes out
-// of scope unless a QFile has taken over the closing.
-//
-// The source file is addressed by descriptor because every Qt file API takes a
-// QString, and a QString cannot hold a name that is not valid UTF-8. `open` on
-// the bytes is the one call that can name such a file exactly.
-class ReadDescriptor
-{
-public:
-    explicit ReadDescriptor(const QByteArray &pathBytes)
-        : m_descriptor(::open(pathBytes.constData(), O_RDONLY | O_CLOEXEC))
-    {
-    }
-
-    ReadDescriptor(const ReadDescriptor &) = delete;
-    ReadDescriptor &operator=(const ReadDescriptor &) = delete;
-    ReadDescriptor(ReadDescriptor &&) = delete;
-    ReadDescriptor &operator=(ReadDescriptor &&) = delete;
-
-    ~ReadDescriptor()
-    {
-        if (m_descriptor >= 0) {
-            ::close(m_descriptor);
-        }
-    }
-
-    bool isValid() const { return m_descriptor >= 0; }
-
-    // Hands the descriptor to `file`, which closes it from here on. Returns
-    // false — and keeps ownership — when the QFile refuses it.
-    bool adoptInto(QFile &file)
-    {
-        if (m_descriptor < 0 ||
-            !file.open(m_descriptor, QIODevice::ReadOnly, QFileDevice::AutoCloseHandle)) {
-            return false;
-        }
-        m_descriptor = -1;
-        return true;
-    }
-
-private:
-    int m_descriptor;
-};
-
-// The modification time of the regular file at `pathBytes`, or an invalid
-// QDateTime when it is not a regular file this process may read.
-//
-// `stat` on the raw bytes rather than QFileInfo for the same reason the whole
-// data path here is a QByteArray: a QString cannot spell a name that is not
-// valid UTF-8, so QFileInfo would report a near miss as absent.
-QDateTime sourceModified(const QByteArray &pathBytes)
-{
-    // A published key is always absolute; a relative one would stat against
-    // this process's working directory and key the cache on a different URI.
-    if (!pathBytes.startsWith('/')) {
-        return QDateTime();
-    }
-    struct stat source = {};
-    if (::stat(pathBytes.constData(), &source) != 0 || !S_ISREG(source.st_mode)) {
-        return QDateTime();
-    }
-    return QDateTime::fromSecsSinceEpoch(source.st_mtime);
-}
-
-// The image at `pathBytes`, opened by descriptor and ready to decode, or a
-// closed file when it is not a source this process generates from.
-bool openGeneratableSource(const QByteArray &pathBytes, QFile &file, ReadDescriptor &descriptor)
-{
-    return sourceModified(pathBytes).isValid() && generatableImage(suffixOf(pathBytes)) &&
-           descriptor.adoptInto(file);
-}
-
-// Caches a produced thumbnail: write to a temp sibling then rename, so a reader
-// never sees a half-written PNG. Failure to cache is non-fatal — the thumbnail
-// still shows this session.
-void writeCache(const QString &largeDir, const QString &cachePath, const QImage &image,
-                const QByteArray &uri, const QDateTime &sourceMtime)
-{
-    QDir().mkpath(largeDir);
-    const QString temp =
-        cachePath + QStringLiteral(".tmp-") +
-        QString::number(reinterpret_cast<quintptr>(QThread::currentThreadId()), 16);
-    QImageWriter writer(temp, "png");
-    writer.setText(QStringLiteral("Thumb::URI"), QString::fromLatin1(uri));
-    writer.setText(QStringLiteral("Thumb::MTime"),
-                   QString::number(sourceMtime.toSecsSinceEpoch()));
-    if (writer.write(image)) {
-        QFile::setPermissions(temp, QFile::ReadOwner | QFile::WriteOwner);
-        QFile::remove(cachePath);
-        if (!QFile::rename(temp, cachePath)) {
-            QFile::remove(temp);
-        }
-    } else {
-        QFile::remove(temp);
-    }
-}
+using fluorita::kThumbnailEdge;
 
 // The icon file at `pathBytes` — one a launcher names, found in an icon theme —
 // decoded at thumbnail size. A scalable icon is rendered at that size rather
 // than at its nominal one, so a grid cell gets a crisp picture instead of a
 // 48-pixel stamp scaled up; a raster one is only ever scaled down.
+//
+// Opened by descriptor on the raw bytes, because a QString cannot spell a name
+// that is not valid UTF-8; checked with `stat` first, because `open` on a FIFO
+// blocks.
 QImage loadIconFile(const QByteArray &pathBytes)
 {
-    // Checked before anything is opened: `open` on a FIFO blocks.
-    if (!sourceModified(pathBytes).isValid()) {
+    struct stat icon = {};
+    if (!pathBytes.startsWith('/') || ::stat(pathBytes.constData(), &icon) != 0 ||
+        !S_ISREG(icon.st_mode)) {
         return QImage();
     }
-    ReadDescriptor descriptor(pathBytes);
+    const int descriptor = ::open(pathBytes.constData(), O_RDONLY | O_CLOEXEC);
+    if (descriptor < 0) {
+        return QImage();
+    }
     QFile file;
-    if (!descriptor.adoptInto(file)) {
+    if (!file.open(descriptor, QIODevice::ReadOnly, QFileDevice::AutoCloseHandle)) {
+        ::close(descriptor);
         return QImage();
     }
     QImageReader reader(&file);
@@ -192,266 +50,57 @@ QImage loadIconFile(const QByteArray &pathBytes)
     const QByteArray format = reader.format();
     const bool scalable = format == "svg" || format == "svgz";
     if (natural.isValid() &&
-        (scalable || natural.width() > kThumbMax || natural.height() > kThumbMax)) {
-        reader.setScaledSize(natural.scaled(kThumbMax, kThumbMax, Qt::KeepAspectRatio));
+        (scalable || natural.width() > kThumbnailEdge || natural.height() > kThumbnailEdge)) {
+        reader.setScaledSize(natural.scaled(kThumbnailEdge, kThumbnailEdge, Qt::KeepAspectRatio));
     }
     return reader.read();
 }
 
-// The provider's own pool, bounded.
-//
-// Thumbnails used to run on the global pool, unbounded: scrolling past a folder
-// of 5 000 images queued 5 000 decodes, and reads blocked on a slow mount held
-// the very threads QML's own asynchronous loaders use. This pool has a few
-// threads of its own, and a request the view no longer needs is taken back out
-// of its queue (`ThumbnailResponse::cancel`).
-//
-// Deliberately never destroyed: a QThreadPool's destructor waits for every
-// running task without a bound, and a read blocked on a mount that stopped
-// answering would then hold the quit open for ever. Quitting drains it instead,
-// with a bound (`siderita_thumbnail_shutdown`), and a task still blocked after
-// that is left to the process's exit.
-QThreadPool &thumbnailPool()
+// The hook: the picture a file carries or names inside itself. The shared
+// provider asks it on its pool, after the cache missed and before the image
+// reader — none of these files *is* an image, so the reader would refuse them,
+// and reading one costs a parse the cache spares.
+fluorita::OwnPicture siderita_own_picture(const QByteArray &pathBytes)
 {
-    static QThreadPool *const pool = [] {
-        auto *created = new QThreadPool();
-        created->setMaxThreadCount(qBound(2, QThread::idealThreadCount() / 2, 4));
-        return created;
-    }();
-    return *pool;
-}
+    const ::rust::Slice<const ::std::uint8_t> raw(
+        reinterpret_cast<const ::std::uint8_t *>(pathBytes.constData()),
+        static_cast<::std::size_t>(pathBytes.size()));
 
-// Loads a thumbnail for the file named by `pathBytes`: a valid cached one from
-// the shared cache, else a freshly generated + cached one. Returns a null image
-// for anything that is not a loadable image (the delegate then keeps its generic
-// glyph). Runs off-thread.
-QImage loadThumbnail(const QByteArray &pathBytes)
-{
-    const QDateTime sourceMtime = sourceModified(pathBytes);
-    if (!sourceMtime.isValid()) {
-        return QImage();
-    }
-
-    // The spec keys the cache on the canonical file:// URI; hashing the same URI
-    // other managers do lets us reuse (and contribute to) their cache.
-    const QByteArray uri = siderita_thumbnail_cache_uri(pathBytes);
-    const QString digest =
-        QString::fromLatin1(QCryptographicHash::hash(uri, QCryptographicHash::Md5).toHex());
-    const QString largeDir = cacheRoot() + QStringLiteral("/large");
-    const QString cachePath = largeDir + QLatin1Char('/') + digest + QStringLiteral(".png");
-
-    // Reuse a cached thumbnail while it is at least as new as the file it depicts
-    // — a thumbnail is always written after its source, so an edit (which bumps
-    // the source mtime past the cache) is what forces a regenerate. This keys off
-    // the filesystem, not the PNG's embedded `Thumb::MTime` (Qt mangles that key
-    // on write), and so also honours thumbnails other managers produced. The
-    // cache file itself is a hexadecimal digest, so it is addressable as a
-    // QString even when its source is not.
-    {
-        const QFileInfo cacheInfo(cachePath);
-        if (cacheInfo.exists() && cacheInfo.lastModified() >= sourceMtime) {
-            const QImage cached(cachePath);
-            if (!cached.isNull()) {
-                return cached;
-            }
-        }
-    }
-
-    // A file that carries its own picture is answered from that picture: a
-    // program's icon, an album cover, an app's launcher art. It is tried before
-    // the image reader because none of these files *is* an image — the reader
-    // would refuse them — and after the cache because reading one costs a parse.
-    {
-        const ::rust::Slice<const ::std::uint8_t> raw(
-            reinterpret_cast<const ::std::uint8_t *>(pathBytes.constData()),
-            static_cast<::std::size_t>(pathBytes.size()));
-
-        // A launcher does not hold its picture, it names one: the icon file an
-        // installed theme provides. Resolving that name reads the launcher and
-        // searches every theme directory, which is why it happens here, on
-        // this pool, and not in the delegate's binding on the Qt thread.
-        //
-        // It is not written to the shared cache: the picture belongs to the
-        // icon theme, not to the launcher file, so a cached copy would outlive
-        // a theme change — and the cache is shared with every other
-        // application, which draws launchers its own way.
-        const ::rust::Vec<::std::uint8_t> named = siderita_own_icon_path(raw);
-        if (!named.empty()) {
-            QImage icon = loadIconFile(QByteArray(reinterpret_cast<const char *>(named.data()),
-                                                  static_cast<qsizetype>(named.size())));
-            if (!icon.isNull()) {
-                return icon;
-            }
-        }
-
-        const ::rust::Vec<::std::uint8_t> carried = siderita_embedded_image(raw);
-        if (!carried.empty()) {
-            QImage embedded = QImage::fromData(QByteArray(
-                reinterpret_cast<const char *>(carried.data()),
-                static_cast<qsizetype>(carried.size())));
-            if (!embedded.isNull()) {
-                if (embedded.width() > kThumbMax || embedded.height() > kThumbMax) {
-                    embedded = embedded.scaled(kThumbMax, kThumbMax, Qt::KeepAspectRatio,
-                                               Qt::SmoothTransformation);
-                }
-                writeCache(largeDir, cachePath, embedded, uri, sourceMtime);
-                return embedded;
-            }
-        }
-    }
-
-    // Past here we would generate — but only for images. A video / audio file
-    // with no cached thumbnail keeps its themed glyph until a media producer
-    // fills the cache.
+    // A launcher does not hold its picture, it names one: the icon file an
+    // installed theme provides. Resolving that name reads the launcher and
+    // searches every theme directory, which is why it happens here, on the
+    // pool, and not in the delegate's binding on the Qt thread.
     //
-    // QImageReader decodes at a reduced size where the format allows (cheap for
-    // JPEG) and honours EXIF orientation. It reads a descriptor opened on the
-    // raw bytes, so it never has to spell the source path.
-    ReadDescriptor descriptor(pathBytes);
-    QFile file;
-    if (!openGeneratableSource(pathBytes, file, descriptor)) {
-        return QImage();
-    }
-    QImageReader reader(&file);
-    reader.setAutoTransform(true);
-    const QSize original = reader.size();
-    if (original.isValid() && (original.width() > kThumbMax || original.height() > kThumbMax)) {
-        reader.setScaledSize(original.scaled(kThumbMax, kThumbMax, Qt::KeepAspectRatio));
-    }
-    QImage image = reader.read();
-    if (image.isNull()) {
-        return QImage(); // not a decodable image
-    }
-    if (image.width() > kThumbMax || image.height() > kThumbMax) {
-        image = image.scaled(kThumbMax, kThumbMax, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    }
-
-    writeCache(largeDir, cachePath, image, uri, sourceMtime);
-    return image;
-}
-
-// The raw path bytes an image-provider id names.
-//
-// Split out so the test can reach exactly this, and reach it the way Qt does.
-// The seam that broke was never the decode itself: it was the assumption about
-// what the id already is by the time it arrives.
-QByteArray pathBytesForId(const QString &id)
-{
-    return QByteArray::fromPercentEncoding(id.toUtf8());
-}
-
-// One async request: does the work on the provider's bounded pool and hands
-// back the image when done.
-//
-// The engine owns the response and deletes it after `finished`; the pool never
-// does (`setAutoDelete(false)`), so a response taken back out of the queue by
-// `cancel` is simply never run.
-class ThumbnailResponse : public QQuickImageResponse, public QRunnable
-{
-public:
-    explicit ThumbnailResponse(const QByteArray &pathBytes)
-        : m_pathBytes(pathBytes)
-    {
-        setAutoDelete(false);
-        thumbnailPool().start(this);
-    }
-
-    QQuickTextureFactory *textureFactory() const override
-    {
-        return QQuickTextureFactory::textureFactoryForImage(m_image);
-    }
-
-    // The view scrolled past, or the delegate went away. A request still
-    // queued is taken out and never decoded; one already running skips the
-    // work if it has not reached it yet. Either way `finished` is emitted
-    // exactly once, which is what lets the engine clean the response up.
-    void cancel() override
-    {
-        m_cancelled.storeRelease(1);
-        if (thumbnailPool().tryTake(this)) {
-            Q_EMIT finished();
+    // Not cacheable: the picture belongs to the icon theme, not to the
+    // launcher file, so a cached copy would outlive a theme change — and the
+    // cache is shared with every other application, which draws launchers its
+    // own way.
+    const ::rust::Vec<::std::uint8_t> named = siderita_own_icon_path(raw);
+    if (!named.empty()) {
+        QImage icon = loadIconFile(QByteArray(reinterpret_cast<const char *>(named.data()),
+                                              static_cast<qsizetype>(named.size())));
+        if (!icon.isNull()) {
+            return {icon, false};
         }
     }
 
-    void run() override
-    {
-        if (!m_cancelled.loadAcquire()) {
-            m_image = loadThumbnail(m_pathBytes);
+    // A program's icon, an album cover, an app's launcher art: the file's own
+    // bytes, so the entry is keyed on it and cached like any thumbnail. The
+    // shared provider scales it to thumbnail size before caching.
+    const ::rust::Vec<::std::uint8_t> carried = siderita_embedded_image(raw);
+    if (!carried.empty()) {
+        const QImage embedded = QImage::fromData(QByteArray(
+            reinterpret_cast<const char *>(carried.data()), static_cast<qsizetype>(carried.size())));
+        if (!embedded.isNull()) {
+            return {embedded, true};
         }
-        Q_EMIT finished();
     }
-
-private:
-    QByteArray m_pathBytes;
-    QImage m_image;
-    QAtomicInt m_cancelled;
-};
-
-class ThumbnailProvider : public QQuickAsyncImageProvider
-{
-public:
-    QQuickImageResponse *requestImageResponse(const QString &id, const QSize &) override
-    {
-        // The id is the entry's path key (ADR 0008), handed over verbatim: the
-        // delegate must not re-encode it, or this would decode one layer and
-        // look for a file literally named "%FF".
-        //
-        // `toUtf8`, and the distinction is not cosmetic. Qt does not pass the
-        // key through: it derives this id with
-        // `url.toString(RemoveScheme | RemoveAuthority)`, whose PrettyDecoded
-        // formatting has already turned every escape that spells valid UTF-8
-        // back into its character. So an accented name arrives decoded, and
-        // `toLatin1` would flatten each of its characters to one byte where the
-        // file on disk holds two — breaking every ordinary name to serve the
-        // rare one. An escape Qt could not decode, which is exactly the
-        // not-valid-UTF-8 case this seam exists for, is still standing here as
-        // `%XX` and is decoded below.
-        //
-        // The decoded path then travels as QByteArray, not QString, for the
-        // whole data path: what a key decodes to is a raw byte string that a
-        // QString cannot hold.
-        return new ThumbnailResponse(pathBytesForId(id));
-    }
-};
+    return {};
+}
 
 } // namespace
 
-QByteArray siderita_thumbnail_cache_uri(const QByteArray &pathBytes)
-{
-    return QByteArrayLiteral("file://") + pathBytes.toPercentEncoding("!$&'()*+,;=:@/");
-}
-
-QSize siderita_thumbnail_source_size(const QByteArray &pathBytes)
-{
-    ReadDescriptor descriptor(pathBytes);
-    QFile file;
-    if (!openGeneratableSource(pathBytes, file, descriptor)) {
-        return QSize();
-    }
-    return QImageReader(&file).size();
-}
-
-QByteArray siderita_thumbnail_resolved_path(const QByteArray &key)
-{
-    // Exactly what a delegate writes, and exactly what Qt does with it before
-    // calling `requestImageResponse`. A key is ASCII, so spelling it back into
-    // a QString here loses nothing.
-    const QUrl url(QStringLiteral("image://thumb/") + QString::fromUtf8(key));
-    const QString id = url.toString(QUrl::RemoveScheme | QUrl::RemoveAuthority).mid(1);
-    return pathBytesForId(id);
-}
-
-void siderita_thumbnail_shutdown(::std::int32_t milliseconds)
-{
-    // Requests nobody started yet are dropped; the ones running get a bounded
-    // wait. Their responses still emit `finished`, into an engine that no
-    // longer listens.
-    thumbnailPool().clear();
-    thumbnailPool().waitForDone(milliseconds);
-}
-
 void register_siderita_thumbnail_provider(QQmlApplicationEngine &engine)
 {
-    // The engine takes ownership of the provider.
-    engine.addImageProvider(QStringLiteral("thumb"), new ThumbnailProvider());
+    register_fluorita_thumbnail_provider_with(engine, &siderita_own_picture);
 }
