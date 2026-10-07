@@ -69,6 +69,8 @@ Flickable {
         }
     }
 
+    CelestinaWheelScroll { view: root }
+
     Column {
         id: column
         width: root.width

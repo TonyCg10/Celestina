@@ -216,7 +216,7 @@ Item {
             text: root.devices.mirrorLabel
         }
 
-        CelestinaSectionLabel { text: qsTr("Sonido") }
+        GlassMenuSection { text: qsTr("Sonido") }
 
         GlassMenuItem {
             text: qsTr("En el móvil")

@@ -19,6 +19,8 @@ const QML_FILES: &[&str] = &[
     "qml/GlassSurface.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
+    "qml/GlassMenuSection.qml",
+    "qml/CelestinaWheelScroll.qml",
     "qml/CelestinaShadow.qml",
     "qml/ListSection.qml",
     // App composition: Main owns state/navigation; pages compose reusable pieces.

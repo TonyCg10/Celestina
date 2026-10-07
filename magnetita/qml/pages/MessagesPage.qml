@@ -117,6 +117,8 @@ Item {
             model: root.messages.messageBodies
             onCountChanged: positionViewAtEnd()
 
+            CelestinaWheelScroll { view: thread }
+
             delegate: MessageBubble {
                 required property int index
                 required property string modelData

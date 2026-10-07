@@ -53,6 +53,8 @@ CelestinaSurface {
         visible: root.devices.logAvailable
         model: root.devices.logLines
 
+        CelestinaWheelScroll { view: logList }
+
         delegate: Item {
             id: logRow
             required property int index

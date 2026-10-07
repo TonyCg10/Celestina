@@ -1,0 +1,33 @@
+# MAG-D1-H exact change inventory
+
+Base revision	562aace5fde4060ed0b10c863197efd40eda9679
+Pathspec	docs/version-history.tsv
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/docs/evidence/2026-10-07-wheel.md
+Pathspec	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-H.numstat.tsv
+Pathspec	magnetita/docs/plans/active/2026-09-13-app-design.md
+Pathspec	magnetita/qml/CelestinaWheelScroll.qml
+Pathspec	magnetita/qml/GlassMenuSection.qml
+Pathspec	magnetita/qml/components/ActivityLog.qml
+Pathspec	magnetita/qml/components/DeviceControls.qml
+Pathspec	magnetita/qml/components/ScrollPage.qml
+Pathspec	magnetita/qml/pages/MessagesPage.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	09bc1651ef0f034ea7520ce4e6088292f451c69a0b2350afa822692eea09990d	docs/version-history.tsv
+1	1	6dcad64296a982ac671ba8c985744a6b784bd1f9d13150b650544d5f62130599	magnetita/Cargo.lock
+1	1	97c95109c962c5cd5f1cd517f2eff849a513da3ebc460da2ec8adb82d1e62cd8	magnetita/Cargo.toml
+2	0	9bed5b10beb5acaa68e47eb67a12a60c27d658d04422710bcf1eef5ce490d0e5	magnetita/build.rs
+35	0	3e96e35708e5caf7aae0e3892fbc6a1fd1e79b58565809b80a58e60de616dddc	magnetita/docs/evidence/2026-10-07-wheel.md
+33	0	self	magnetita/docs/inventories/2026-09-13-app-design/MAG-D1-H.numstat.tsv
+1	0	1b23f35f7d1366f63736103ef4b2769420eb43bdf499f75bbafa4f575211013c	magnetita/docs/plans/active/2026-09-13-app-design.md
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	magnetita/qml/CelestinaWheelScroll.qml
+1	0	ebad70e10dffc13de21ccf9e5a61be583fb1036a6e67e1393db04e0574a78775	magnetita/qml/GlassMenuSection.qml
+2	0	2e50693cb8808448bcd78546869fc50e0ddcd8251a3b4e9845e08cb344d56568	magnetita/qml/components/ActivityLog.qml
+1	1	2b209917eda065f20f97d168d6fa7d2c960156415a3e121b6a5573ea55538462	magnetita/qml/components/DeviceControls.qml
+2	0	8849064cddd740ea5cc23566c471357b8bdfc42fedd6400b5acf7f59766c1270	magnetita/qml/components/ScrollPage.qml
+2	0	93ab0c73b88cbe91c2921ebce9a74ad8558ea55a78597694055dc7f035a3cbf5	magnetita/qml/pages/MessagesPage.qml
