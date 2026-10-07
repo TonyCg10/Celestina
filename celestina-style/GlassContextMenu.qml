@@ -54,6 +54,30 @@ Menu {
         }
     }
 
+    // Opens the menu beside the control that asked for it, never over it:
+    // below, or above when preferred or when only above has room. The room is
+    // the window's (the overlay), not the menu's parent, which is often a
+    // small bar or card; the window edges are kept `margins` clear. The height
+    // is the menu's implicit one — `height` is 0 until a first open, which is
+    // how menus opened from a button used to land on top of the button.
+    // `popup(x, y)` stays parent-relative, so the point is mapped back.
+    function popupBeside(anchorItem, preferAbove) {
+        const ov = root.Overlay.overlay
+        const box = anchorItem.mapToItem(ov, 0, 0)
+        const gap = CelestinaTheme.spaceSm
+        const edge = root.margins
+        const menuHeight = root.implicitHeight
+        const below = box.y + anchorItem.height + gap
+        const above = box.y - gap - menuHeight
+        const fitsBelow = below + menuHeight <= ov.height - edge
+        const fitsAbove = above >= edge
+        const goAbove = preferAbove ? (fitsAbove || !fitsBelow)
+                                    : (!fitsBelow && fitsAbove)
+        const x = Math.max(edge, Math.min(box.x, ov.width - edge - root.width))
+        const p = ov.mapToItem(root.parent, x, goAbove ? above : below)
+        root.popup(p.x, p.y)
+    }
+
     // A nested Menu is represented inside its parent by the parent's delegate.
     // Styling the delegate here keeps cascaded menus in the same glass language
     // instead of letting Qt inject a platform-looking proxy row.

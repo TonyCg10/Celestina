@@ -1,0 +1,21 @@
+# STYLE-G7-X exact change inventory
+
+Base revision	b5ad309990e9da0e81bd58af77746089adeb68e6
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/GlassContextMenu.qml
+Pathspec	celestina-style/docs/evidence/2026-10-07-menu-beside.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-X.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/tests/tst_contextmenu.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	a3c972c1a09f5b20d82d09677b55583cc086d2bdb345bd89574ba0e185ea24f9	celestina-style/CMakeLists.txt
+24	0	b43bc8baa64cb8a94ac030ce1bdf5feadf97e0e1fdf46e444d31faf40d73287b	celestina-style/GlassContextMenu.qml
+46	0	bbcdb552ca1406002d9a55ee3657820b119d42ea908d24de681e792747c89f37	celestina-style/docs/evidence/2026-10-07-menu-beside.md
+21	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-X.numstat.tsv
+1	0	1ba3f27e5315579abb79cd22c49aacfffffc8e5e335ae770708f6b4bfe202058	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+165	0	7d57db96456fbfbb298ca985d9e5006ce9d9bd253b5ea63b2cc9cfdeedc5f29c	celestina-style/tests/tst_contextmenu.qml
+1	0	f4869fc1ae045ef659da5f69014cd21d25a09cf8c306766d0f851ea0bc0d2185	docs/version-history.tsv
