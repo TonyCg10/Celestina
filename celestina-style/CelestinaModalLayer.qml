@@ -29,6 +29,23 @@ FocusScope {
     visible: shown || opacity > 0.01
     opacity: shown ? 1 : 0
 
+    // Where the layer parks the focus when nobody asked for a control: on
+    // show, and whenever the focused item vanishes (a list rebuilding its
+    // rows destroys the delegate that held it). A FocusScope given the focus
+    // hands it on to whatever descendant last held it — a list's cursor row,
+    // say — and that row lights its ring on an open nobody tabbed into. The
+    // sink is a plain item, so the focus stays on it until a Tab moves on.
+    Item {
+        id: focusSink
+        objectName: "celestina-modal-focus-sink"
+        width: 0
+        height: 0
+    }
+
+    function parkFocus() {
+        focusSink.forceActiveFocus(Qt.PopupFocusReason)
+    }
+
     function ownsItem(item) {
         let current = item
         while (current) {
@@ -68,7 +85,7 @@ FocusScope {
         const focusable = []
         appendFocusable(layer, focusable)
         if (focusable.length === 0) {
-            layer.forceActiveFocus(Qt.PopupFocusReason)
+            layer.parkFocus()
             return
         }
 
@@ -95,11 +112,17 @@ FocusScope {
             lastOwnedFocusItem = current
             return
         }
+        // No item at all holds the focus: the one that did has gone, not
+        // travelled. That is a rebuild, not a Tab, so nothing may light.
+        if (!current) {
+            layer.parkFocus()
+            return
+        }
 
         const focusable = []
         appendFocusable(layer, focusable)
         if (focusable.length === 0) {
-            layer.forceActiveFocus(Qt.PopupFocusReason)
+            layer.parkFocus()
             return
         }
 
@@ -144,16 +167,16 @@ FocusScope {
             lastOwnedFocusItem = null
             const window = layer.Window.window
             previousFocusItem = window ? window.activeFocusItem : null
-            // The layer itself takes the focus on show, not a control: a
-            // ring that lights on a field or a button nobody pressed, and then
-            // hops to the next one, is what the author saw on every open. Tab
-            // travel starts from here and reaches the first control; Escape
-            // works from here.
+            // The focus is parked on show, not placed on a control: a ring
+            // that lights on a field or a button nobody pressed, and then
+            // hops to the next one, is what the author saw on every open.
+            // Tab travel starts from the sink and reaches the first control;
+            // Escape works from there.
             Qt.callLater(function() {
                 const activeWindow = layer.Window.window
                 if (layer.shown && (!activeWindow
                                     || !layer.ownsItem(activeWindow.activeFocusItem)))
-                    layer.forceActiveFocus(Qt.PopupFocusReason)
+                    layer.parkFocus()
             })
             return
         }

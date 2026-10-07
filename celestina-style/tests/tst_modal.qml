@@ -104,6 +104,17 @@ TestCase {
                         text: "last"
                         onClicked: testCase.modalClicks += 1
                     }
+
+                    // A listing that fills in after the dialog is up, like the
+                    // usage section of the properties dialog: its rows arrive
+                    // from a scan, and the list puts a cursor on the first.
+                    CelestinaUsageList {
+                        id: lateList
+                        width: 180
+                        height: 60
+                        usageRows: []
+                        toneColors: ({})
+                    }
                 }
 
                 // The empty part of a dialog card. A card carries a MouseArea
@@ -187,10 +198,12 @@ TestCase {
         keyClick(Qt.Key_Tab)
         tryCompare(lastButton, "activeFocus", true)
         keyClick(Qt.Key_Tab)
+        tryCompare(lateList, "activeFocus", true)
+        keyClick(Qt.Key_Tab)
         tryCompare(firstField, "activeFocus", true)
 
         keyClick(Qt.Key_Backtab)
-        tryCompare(lastButton, "activeFocus", true)
+        tryCompare(lateList, "activeFocus", true)
         verify(!lowerButton.activeFocus)
     }
 
@@ -259,6 +272,30 @@ TestCase {
         verify(!modal.snapshotLive, "the snapshot must freeze on close")
         compare(modal.visible, true)
         tryCompare(modal, "visible", false)
+    }
+
+    // The author saw a ring light on a row of the usage section the moment
+    // the dialog opened, and hop to the close button. Rows arriving after the
+    // open must leave the focus where it was: on the layer, with no ring.
+    function test_rows_arriving_after_the_open_do_not_move_the_focus() {
+        openWithConsumerFocus()
+        lateList.reset(function() {
+            lateList.usageRows = [
+                { id: 1, name: "one", kind: "folder", tone: "a", share: 0.6,
+                  size: "6 MiB", percent: "60 %", detail: "" },
+                { id: 2, name: "two", kind: "file", tone: "b", share: 0.4,
+                  size: "4 MiB", percent: "40 %", detail: "" }]
+        })
+        wait(50)
+        lateList.reset(function() {
+            lateList.usageRows = [
+                { id: 3, name: "three", kind: "folder", tone: "a", share: 1,
+                  size: "1 MiB", percent: "100 %", detail: "" }]
+        })
+        wait(50)
+        verify(modal.activeFocus, "the layer lost the focus to the rows")
+        verify(!lastButton.activeFocus, "the focus hopped to the close button")
+        verify(!lastButton.visualFocus, "the close button lit its ring")
     }
 
     function test_exit_fade_keeps_lower_surface_blocked() {
