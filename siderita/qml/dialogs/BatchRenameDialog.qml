@@ -207,6 +207,8 @@ CelestinaModalLayer {
             spacing: 2
             boundsBehavior: Flickable.StopAtBounds
 
+            CelestinaWheelScroll { view: batchPreview }
+
             delegate: Item {
                 required property int index
                 width: batchPreview.width

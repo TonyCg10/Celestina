@@ -62,6 +62,8 @@ Item {
             contentHeight: column.height
             boundsBehavior: Flickable.StopAtBounds
 
+            CelestinaWheelScroll { view: scroll }
+
             Column {
                 id: column
                 width: parent.width

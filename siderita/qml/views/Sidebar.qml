@@ -137,6 +137,14 @@ Item {
             boundsBehavior: Flickable.StopAtBounds
             onMovementStarted: sidebarReturnAnimation.stop()
 
+            // The wheel moves the panel the way every list does; a notch also
+            // takes over from a return to a section still in flight, as a
+            // drag does.
+            CelestinaWheelScroll {
+                view: sidebarScroll
+                onStepped: sidebarReturnAnimation.stop()
+            }
+
             Column {
                 id: placesColumn
                 x: 8

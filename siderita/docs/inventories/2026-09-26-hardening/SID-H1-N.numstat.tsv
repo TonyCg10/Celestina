@@ -1,0 +1,47 @@
+# SID-H1-N exact change inventory
+
+Base revision	c374bfbf77a587af95306dc20b6250221a9d743e
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/build.rs
+Pathspec	siderita/docs/evidence/2026-10-07-wheel.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-N.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/CelestinaWheelScroll.qml
+Pathspec	siderita/qml/PickerWindow.qml
+Pathspec	siderita/qml/components/folder/FolderWheelHandler.qml
+Pathspec	siderita/qml/components/folder/HeadingScroll.qml
+Pathspec	siderita/qml/components/picker/PickerSidebar.qml
+Pathspec	siderita/qml/dialogs/BatchRenameDialog.qml
+Pathspec	siderita/qml/dialogs/GrafitaEditorDialog.qml
+Pathspec	siderita/qml/dialogs/IconPickerDialog.qml
+Pathspec	siderita/qml/dialogs/OpenWithDialog.qml
+Pathspec	siderita/qml/dialogs/PropertiesDialog.qml
+Pathspec	siderita/qml/dialogs/QuickLookView.qml
+Pathspec	siderita/qml/views/Sidebar.qml
+Pathspec	siderita/tests/qml/tst_heading_scroll.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	2933aad8e409b4eb60acb17b365ab6fbe6953177a88d67588de8c56696d457d3	docs/version-history.tsv
+1	1	e9755f803d6bda3bdb273716a58630daa203e03a21888c91467322cbadbc8170	siderita/Cargo.lock
+1	1	7d47a053bdd495840a41d7fa43953a5ee6503c38260e96a9bb3ad15bcefc06c9	siderita/Cargo.toml
+3	0	aae90a7bd68ffb0ecfe33563cc58917fc112386f109d6d2a9ecb64ce4cf3bab7	siderita/build.rs
+54	0	97f8089db7612d04f04fb39d65e602137e2f5720e390fad79e0079ae5a657e39	siderita/docs/evidence/2026-10-07-wheel.md
+47	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-N.numstat.tsv
+1	0	4689a3e4bb925c02edb9b7f8c5bc4f792d20667178d1e06ddcf232d0995fb4b5	siderita/docs/plans/active/2026-09-26-hardening.md
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	siderita/qml/CelestinaWheelScroll.qml
+2	0	d1a2dc2ff0c70bf68dc6660e210598d90d01c8e2ecb18ea7ab4188bac6f4eb68	siderita/qml/PickerWindow.qml
+25	136	7fb8779ad79484f43c76e5edad777338003ff1cea0b5a7ec22bab265779ee7aa	siderita/qml/components/folder/FolderWheelHandler.qml
+28	44	049518aed76a90aecd82cc9e71970694a7356d3c81e146c08b095e7a16b445c0	siderita/qml/components/folder/HeadingScroll.qml
+2	0	0ff93c72a43f9e891c38c23e60259d7027a2e363bc3727a7fdbe119d5869c06e	siderita/qml/components/picker/PickerSidebar.qml
+2	0	707a4ca17618c45ca1040ba03ac72d528d371cc331f74ae970d94180a56d8cc2	siderita/qml/dialogs/BatchRenameDialog.qml
+4	0	64a264af19a355fb888b396c7513d7b56d0eeb30ef6f99b0c8e015f0601a19e0	siderita/qml/dialogs/GrafitaEditorDialog.qml
+2	0	14501465cbc9dd9a1e4dd9ae622bac7004eb2d3fbaf6f28802372eaa6c96e5ad	siderita/qml/dialogs/IconPickerDialog.qml
+2	0	dd123dffc935d3e9c4639219d7b64e7a5c0b477e7376da408463107808d9d736	siderita/qml/dialogs/OpenWithDialog.qml
+2	0	9da98d6cb8e987d3f009af9f2e1da9d006ab79a4259cf0d6efe848054d9a0c00	siderita/qml/dialogs/PropertiesDialog.qml
+4	0	80b6405290d19617fce7c7d0af4aaf9b76d1c1898d174a48e02955663df44921	siderita/qml/dialogs/QuickLookView.qml
+8	0	944f1d3b7b93151fb215f657c20517d882638ff4eefaed69fc49cfcd0e85d448	siderita/qml/views/Sidebar.qml
+66	10	a636f9afbf964a486d6ad0c1a19a3afe4f182cb74d506d8d3ddc6ae1698d3be9	siderita/tests/qml/tst_heading_scroll.qml

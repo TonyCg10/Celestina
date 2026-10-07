@@ -34,6 +34,9 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaUsageList.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
+    // Wheel scrolling for every list: a notch shows on the next frame and a
+    // burst adds up; the folder views wrap it to carry the heading along.
+    "qml/CelestinaWheelScroll.qml",
     // Componentes de presentación de Siderita.
     "qml/components/chrome/GlassPill.qml",
     "qml/components/chrome/HistoryMouseArea.qml",

@@ -261,6 +261,10 @@ CelestinaModalLayer {
                     contentHeight: previewText.paintedHeight
                     boundsBehavior: Flickable.StopAtBounds
 
+                    // Vertical only: Shift and a sideways swipe are left to
+                    // the Flickable, which scrolls the long lines across.
+                    CelestinaWheelScroll { view: previewScroller }
+
                     TextEdit {
                         id: previewText
                         // Unwrapped, so the shape of code survives the peek;

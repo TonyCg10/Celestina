@@ -30,6 +30,9 @@ TestCase {
         anchors.fill: parent
         contentHeight: 4000
         contentWidth: width
+        // As the folder views: an overshoot that settled back must not pass
+        // for a listing that never moved.
+        boundsBehavior: Flickable.StopAtBounds
 
         FolderWheelHandler {
             id: handler
@@ -38,11 +41,32 @@ TestCase {
         }
     }
 
+    // What the first frame after a notch shows: the first value each of the
+    // two numbers took once the notch arrived.
+    property var firstRowsMove: NaN
+    property var firstHeadingMove: NaN
+    property bool recording: false
+    Connections {
+        target: view
+        function onContentYChanged() {
+            if (testCase.recording && isNaN(testCase.firstRowsMove))
+                testCase.firstRowsMove = view.contentY
+        }
+    }
+    Connections {
+        target: heading
+        function onTravelChanged() {
+            if (testCase.recording && isNaN(testCase.firstHeadingMove))
+                testCase.firstHeadingMove = heading.travel
+        }
+    }
+
     function init() {
         heading.moveTo(0, false)
+        handler.glide.stop()        // a glide left over from the last test
         view.topMargin = 0
         view.contentY = 0
-        handler.resetTarget()
+        handler.retarget()
     }
 
 
@@ -86,8 +110,9 @@ TestCase {
     function test_e_one_notch_moves_the_heading_and_the_listing() {
         const before = view.contentY
         mouseWheel(view, 200, 160, 0, -120)
-        // Both are tweened over the same duration, which is the point: they
-        // arrive together instead of one snapping while the other glides.
+        // Both follow their destinations by the same share every frame, which
+        // is the point: they arrive together instead of one snapping while the
+        // other glides.
         tryVerify(function() { return heading.travel > 0 }, 2000,
                   "the heading did not move")
         tryVerify(function() { return view.contentY > before }, 2000,
@@ -103,16 +128,19 @@ TestCase {
                   "the title never went away")
         tryVerify(function() { return view.contentY > 200 }, 2000,
                   "distance was lost to the detents")
+        tryVerify(function() {
+            return Math.abs(view.contentY - 4 * CelestinaTheme.compWheelStep) < 0.01
+        }, 2000, "the burst did not add up to four whole notches")
     }
 
     // Coming back up un-ramps it.
     // The author tested 1.6.0 and found the heading changing in hard steps.
-    // A notch of a wheel is a jump, and the listing it scrolls is tweened over
-    // `motionNormal` — so the heading has to be tweened over the same duration
-    // or the two arrive at different times, which is what reads as a snap.
+    // A notch of a wheel is a jump, and the listing it scrolls follows its
+    // destination over a few frames — so the heading has to follow the same
+    // way or the two arrive at different times, which is what reads as a snap.
     function test_h_a_wheel_notch_tweens_the_heading_as_it_tweens_the_listing() {
         mouseWheel(view, 200, 160, 0, -120)
-        verify(heading.travel < heading.retireSpan,
+        verify(heading.travel < CelestinaTheme.compWheelStep,
                "the notch put the heading at its destination at once")
         const started = heading.travel
         tryVerify(function() { return heading.travel > started }, 2000,
@@ -126,7 +154,7 @@ TestCase {
     // the destination legal must not touch the gesture at all.
     function test_o_geometry_moving_does_not_stop_the_gesture() {
         mouseWheel(view, 200, 160, 0, -120)
-        const asked = handler.targetContentY
+        const asked = handler.targetY
         verify(asked > 0, "the notch asked for nothing")
         for (let step = 0; step < 6; step++)
             view.topMargin = 10 * step        // the margin growing, frame by frame
@@ -162,8 +190,8 @@ TestCase {
     // rows no longer moves with a gesture, which is what a fast scroll jumped on.
     function test_t_a_push_up_at_the_top_does_nothing() {
         view.topMargin = 60
-        view.contentY = handler.minimumY()      // the top: rows below the chrome
-        handler.resetTarget()
+        view.contentY = handler.minY()          // the top: rows below the chrome
+        handler.retarget()
         const restingY = view.contentY
         mouseWheel(view, 200, 160, 0, 120)
         wait(300)
@@ -171,5 +199,33 @@ TestCase {
         compare(heading.destination, 0, "or was asked to")
         compare(view.contentY, restingY, "the listing moved past its origin")
         view.topMargin = 0
+    }
+
+    // The brake the author felt: a glide that starts from a standstill moves
+    // the rows two pixels on the first frame, so a notch reads as late. The
+    // follower covers a fixed fraction of what is left every frame, so the
+    // first frame already shows a good part of the notch — and the heading
+    // takes the same share, or the two would not arrive together.
+    function test_p_one_notch_shows_on_the_first_frame() {
+        const before = view.contentY
+        testCase.firstRowsMove = NaN
+        testCase.firstHeadingMove = NaN
+        testCase.recording = true
+        mouseWheel(view, 200, 160, 0, -120)
+        tryVerify(function() { return !isNaN(testCase.firstRowsMove) }, 2000,
+                  "the listing never moved")
+        tryVerify(function() { return !isNaN(testCase.firstHeadingMove) }, 2000,
+                  "the heading never moved")
+        testCase.recording = false
+        // A tenth of the notch: the share depends on the first frame time,
+        // and the old glide never reached even three pixels.
+        const visible = 0.1 * CelestinaTheme.compWheelStep
+        verify(testCase.firstRowsMove - before >= visible,
+               "the first frame moved the rows " + (testCase.firstRowsMove - before)
+               + " px of a " + CelestinaTheme.compWheelStep + " px notch")
+        verify(testCase.firstHeadingMove >= visible,
+               "the first frame moved the heading " + testCase.firstHeadingMove + " px")
+        verify(Math.abs(testCase.firstHeadingMove - (testCase.firstRowsMove - before)) < 1,
+               "the heading and the rows took different shares of the notch")
     }
 }

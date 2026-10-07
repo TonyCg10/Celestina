@@ -183,6 +183,10 @@ CelestinaModalLayer {
                     contentHeight: body.paintedHeight
                     boundsBehavior: Flickable.StopAtBounds
 
+                    // Plain wheel only, so Ctrl and the wheel still reach the
+                    // text size below.
+                    CelestinaWheelScroll { view: scroller }
+
                     // Ctrl and the wheel resize the text instead of scrolling
                     // it, accumulated to a full notch so a touchpad moves one
                     // step at a time rather than sweeping the whole range.

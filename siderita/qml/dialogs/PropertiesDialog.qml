@@ -120,6 +120,8 @@ CelestinaModalLayer {
             contentHeight: propertiesColumn.implicitHeight
             boundsBehavior: Flickable.StopAtBounds
 
+            CelestinaWheelScroll { view: propFlick }
+
             Column {
                 id: propertiesColumn
                 width: propFlick.width

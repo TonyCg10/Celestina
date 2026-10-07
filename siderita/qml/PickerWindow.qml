@@ -543,6 +543,8 @@ Window {
                 topMargin: picker.namingFile ? 116 : 70
                 bottomMargin: 72
 
+                CelestinaWheelScroll { view: entryGrid }
+
                 // One column: a narrow dialog is scanned by name and compared
                 // by date, while a thumbnail grid makes a linear reading task
                 // move in two directions. Retain a one-column GridView so the

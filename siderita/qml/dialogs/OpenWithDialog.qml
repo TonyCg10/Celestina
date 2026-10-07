@@ -92,6 +92,8 @@ CelestinaModalLayer {
             spacing: 2
             model: controller.openWithApps
 
+            CelestinaWheelScroll { view: openWithList }
+
             delegate: Item {
                 id: appRow
                 required property int index

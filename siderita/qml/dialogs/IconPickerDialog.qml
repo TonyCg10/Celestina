@@ -86,6 +86,8 @@ CelestinaModalLayer {
             cellHeight: 78
             model: iconPicker.options
 
+            CelestinaWheelScroll { view: iconGrid }
+
             delegate: Item {
                 id: iconOpt
                 required property string modelData

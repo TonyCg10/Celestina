@@ -34,7 +34,7 @@ QtObject {
     required property real returnDelay
 
     // Where the heading is, and where the gestures so far have asked it to be.
-    // They differ only while a tween is running.
+    // They differ only while the follower is closing on the destination.
     property real travel: 0
     property real destination: 0
 
@@ -45,51 +45,37 @@ QtObject {
     // Where the travel may run to: past the fade, into the credit above.
     readonly property real travelCeiling: root.retireSpan + root.returnDelay
 
-    // A notch of a wheel is a jump, and the listing that notch scrolls glides
-    // over `wheelGlide` ms — so this glides over the same time, or the two
-    // arrive at different times and the heading reads as snapping while the
-    // rows move. The glide is a Behavior with a SmoothedAnimation, not a
-    // restarted NumberAnimation: notches arrive faster than a 200 ms tween
-    // settles, and restarting an eased tween on every notch made the speed
-    // jump and brake each time, which is the stutter the author recorded on
-    // a fast scroll. A Behavior re-aims the running animation and carries
-    // its velocity over, so a burst of notches is one continuous motion. A
-    // touchpad already delivers a smooth stream and is applied straight
-    // through (`gliding` off).
-    //
-    // A fixed time, not a fixed velocity: whatever is left to cover is
-    // covered in `wheelGlide`, so a burst of notches moves faster the more
-    // of them are pending and the scroll answers the wheel. A fixed velocity
-    // made every burst crawl at one speed, like a belt, which the author
-    // recorded after 1.9.2.
-    readonly property int wheelGlide: CelestinaTheme.motionNormal
-    //
-    // `Immediate`, not `Sync`: Sync snaps to the target the moment the
-    // direction reverses — and the velocity it compares against survives a
-    // stopped glide, so the first notch after an instant move could land at
-    // once. A reversal here turns straight around from a standstill.
-    property bool gliding: false
-    Behavior on travel {
-        enabled: root.gliding
-        SmoothedAnimation {
-            id: glide
-            reversingMode: SmoothedAnimation.Immediate
-            velocity: -1
-            duration: root.wheelGlide
+    // A notch of a wheel is a jump, and the listing that notch scrolls follows
+    // its destination by a fixed share of what is left every frame
+    // (`CelestinaWheelScroll`, 1 - exp(-frame / wheelFollowMs)). The travel
+    // follows its own destination by the same share, or the two arrive at
+    // different times and the heading reads as snapping while the rows move.
+    // A notch that lands while the previous one is still travelling only moves
+    // the destination, so a burst of notches is one continuous motion, and the
+    // first frame already shows a good part of the notch: the SmoothedAnimation
+    // this replaces started every notch from a standstill, which read as a
+    // brake. A touchpad already delivers a smooth stream and is applied
+    // straight through, and so is anything under reduced motion.
+    property FrameAnimation follower: FrameAnimation {
+        onTriggered: {
+            const remaining = root.destination - root.travel
+            if (Math.abs(remaining) < 0.5) {
+                root.travel = root.destination
+                stop()
+                return
+            }
+            root.travel += remaining
+                    * (1 - Math.exp(-frameTime * 1000 / CelestinaTheme.wheelFollowMs))
         }
     }
-    // Arrival, not `running`: a Behavior restarts its animation on every
-    // re-aim, and `running` flips false and true inside that restart.
-    onTravelChanged: if (root.gliding && root.travel === root.destination)
-                         root.gliding = false
 
     // Moves the heading by a gesture's worth. Positive takes it away; the
     // travel never goes above zero, the title at rest.
     //
     // The amount is added to the destination, never to the drawn value: notches
-    // arrive faster than the tween settles, and accumulating on what is on
+    // arrive faster than the follower settles, and accumulating on what is on
     // screen would throw away everything the previous notch had not yet spent —
-    // the same reason the wheel handler keeps its own `targetContentY`.
+    // the same reason the wheel handler keeps its own `targetY`.
     function advance(amount, smoothed) {
         root.moveTo(Math.max(0, Math.min(root.travelCeiling,
                                          root.destination + amount)),
@@ -107,15 +93,13 @@ QtObject {
     // which is a context change rather than a gesture.
     function moveTo(value, smoothed) {
         root.destination = value
-        // A disabled Behavior writes the value directly and stops a glide
-        // still in flight (the animation cannot be stopped from outside: a
-        // `stop()` on it is refused as a non-root animation node).
+        // An outright move also ends a follow still in flight, so nothing
+        // drifts back toward an older destination afterwards.
         if (smoothed === false || CelestinaTheme.reducedMotion) {
-            root.gliding = false
+            root.follower.stop()
             root.travel = value
             return
         }
-        root.gliding = true
-        root.travel = value
+        root.follower.start()
     }
 }
