@@ -138,7 +138,7 @@ Item {
         anchors.fill: parent
         backdrop: dock.backdrop
         floating: dock.floating
-        fill: CelestinaTheme.controlFill
+        fill: CelestinaTheme.pillFill
     }
 
     Row {

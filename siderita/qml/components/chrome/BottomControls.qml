@@ -39,7 +39,7 @@ GlassPill {
     implicitHeight: CelestinaTheme.controlHeightSm
     backdrop: root.bottomView
     floating: root.bottomFloating
-    fill: CelestinaTheme.controlFill
+    fill: CelestinaTheme.pillFill
 
     Row {
         id: iconRow

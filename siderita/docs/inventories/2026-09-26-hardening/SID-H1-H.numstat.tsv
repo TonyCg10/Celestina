@@ -1,0 +1,25 @@
+# SID-H1-H exact change inventory
+
+Base revision	9fd3d9b5222197092ccb87c3dc32ffac865be828
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-10-06-pill-fill.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-H.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/chrome/BottomControls.qml
+Pathspec	siderita/qml/components/chrome/GlassPill.qml
+Pathspec	siderita/qml/components/folder/OperationsDock.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	6f8272882e9ee5c3b61024f14596b05974190baf7f1aeae3c847be8143f1826d	docs/version-history.tsv
+1	1	e4e20e777e760c733bc83e0babb33a967188743cfc37c527a9e46ae99d06c2a6	siderita/Cargo.lock
+1	1	c8aba1028b986cf75baa5f16cbdf66d06d860ff0144d19cba9e545fe77376c46	siderita/Cargo.toml
+41	0	0e671795d1fa9013c8dfd66aac926ea15fbe6e20e7593b1a06fed2fa9e09d9bc	siderita/docs/evidence/2026-10-06-pill-fill.md
+25	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-H.numstat.tsv
+1	0	efc03a67eda310f7d1b5007b33f2dcc80fb3e5d4b37ea7baefcf886baed384bd	siderita/docs/plans/active/2026-09-26-hardening.md
+1	1	2da3bec328a490cf2a11609f12198fa3f1da4edc8088415fbbafb3ae3cc9b35a	siderita/qml/components/chrome/BottomControls.qml
+1	1	cdf882ab52764d7928839b16e1fbe223004ba6d8f229b92af58cdfab29e97110	siderita/qml/components/chrome/GlassPill.qml
+1	1	b38c53af2ba7edcaa020244d39677471efa2bf762d1faf2189fb7e18aad6d3a7	siderita/qml/components/folder/OperationsDock.qml

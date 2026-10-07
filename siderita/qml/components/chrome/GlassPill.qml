@@ -12,7 +12,7 @@ Rectangle {
 
     property Item backdrop
     property bool floating: false
-    property color fill: CelestinaTheme.controlFill
+    property color fill: CelestinaTheme.pillFill
     // Standalone pills float above the file delegates, so they must also be
     // input surfaces.  A visual-only Rectangle lets hover and passive drag
     // handlers below it react through the glass.
