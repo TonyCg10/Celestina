@@ -34,6 +34,8 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaShadow.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
+    // Free wheel scrolling for the document and the encoding list.
+    "qml/CelestinaWheelScroll.qml",
     // Grafita's own composition: Main owns the window, the components own one
     // region each.
     "qml/components/DocumentView.qml",

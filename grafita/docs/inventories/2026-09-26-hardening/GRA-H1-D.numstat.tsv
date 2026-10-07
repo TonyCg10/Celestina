@@ -1,0 +1,27 @@
+# GRA-H1-D exact change inventory
+
+Base revision	adf7d71cb55cbfbf294790854eff3fae7f936cf6
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/build.rs
+Pathspec	grafita/docs/evidence/2026-10-07-wheel.md
+Pathspec	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-D.numstat.tsv
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	grafita/qml/CelestinaWheelScroll.qml
+Pathspec	grafita/qml/components/DocumentView.qml
+Pathspec	grafita/qml/components/EncodingDialog.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	a5e0826675b4dfb753b1fa2790edf756ccea33c4cc8046d9d63222ccf064f1e4	docs/version-history.tsv
+1	1	6bb2b7fcbc11cbf2a2c01f972332963512997a614c9354cbf7cdb5462d131690	grafita/Cargo.lock
+1	1	3b1b9904baf63d354ab0327b2625b129a43150be6fdccc753382c0357c10af32	grafita/Cargo.toml
+2	0	6cd36e0a537d93c013d6937e63014e4441ca4c572493df6b7e81801208a37dd6	grafita/build.rs
+35	0	33df91c727b2611b99ea71698b522da2028a719416699aadecf9c9c7d9816a10	grafita/docs/evidence/2026-10-07-wheel.md
+27	0	self	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-D.numstat.tsv
+1	0	955912b01420bb0e621f37968b1917d76ccc23f95b161a3ce6855384dc58ef40	grafita/docs/plans/active/2026-09-26-hardening.md
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	grafita/qml/CelestinaWheelScroll.qml
+4	0	8fba631c8e2980b791d669b735fc677fefa39440d9c2f57bd37e31cba8b1d9e8	grafita/qml/components/DocumentView.qml
+2	0	02aa36ba482b570081a04e12e794438d50fa930b055deaa59b1dc6bcf9440582	grafita/qml/components/EncodingDialog.qml

@@ -68,6 +68,8 @@ CelestinaModalLayer {
             currentIndex: 0
             keyNavigationEnabled: true
 
+            CelestinaWheelScroll { view: list }
+
             Accessible.role: Accessible.List
             Accessible.name: "Encodings"
 

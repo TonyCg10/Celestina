@@ -183,6 +183,10 @@ Item {
                 }
             }
 
+            // Plain wheel scrolls the document; Ctrl+wheel is left to the
+            // zoom handler above.
+            CelestinaWheelScroll { view: scroller }
+
             // Keep the caret on screen without animating the viewport, which
             // would be motion the user did not ask for.
             function revealCursor(rectangle) {
