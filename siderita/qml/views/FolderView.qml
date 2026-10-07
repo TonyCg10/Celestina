@@ -19,17 +19,15 @@ Item {
     readonly property bool contextualHeaderVisible:
             controller.searchActive || controller.searchRunning
             || controller.trashActive || controller.recentActive
-    // El marco sube tras la ruta compacta y baja bajo el encabezado grande.
-    readonly property real primaryChromeBottom: folderTabBar.visible
-            ? folderTabBar.y + folderTabBar.height : topBar.y + topBar.height
-    readonly property real chromeBottom: primaryChromeBottom
+    // The frame rises behind the path bar; the rows start below the chrome. The
+    // inset is a sum of heights, never a difference of positions: that difference
+    // flickered on every frame of the heading's return and stalled the wheel glide.
+    readonly property real contentFrameY: topBar.y - CelestinaTheme.compFloatingInset
+    readonly property real contentTopInset: topBar.height
+            + (folderTabBar.visible ? CelestinaTheme.compFloatingGap + folderTabBar.height : 0)
             + (contextualHeaderVisible
                ? CelestinaTheme.compFloatingGap + folderChrome.searchBar.height : 0)
-    readonly property real expandedFrameY: chromeBottom + CelestinaTheme.compFloatingGap
-    readonly property real compactFrameY: topBar.y - CelestinaTheme.compFloatingInset
-    readonly property real contentFrameY: expandedFrameY
-            + (compactFrameY - expandedFrameY) * folderHeading.compactProgress
-    readonly property real contentTopInset: Math.max(0, expandedFrameY - contentFrameY)
+            + CelestinaTheme.compFloatingGap + CelestinaTheme.compFloatingInset
     readonly property real contentBottomInset:
             CelestinaTheme.controlHeightSm + 2 * CelestinaTheme.compFloatingInset
     property Item ghost
@@ -44,7 +42,7 @@ Item {
     // Nombre distinto evita el auto-binding sombreado `x: x`.
     property alias viewTopBar: topBar
     signal requestNewTab(string path, bool foreground)
-    // Changing mode or location puts the metadata block away; see fold().
+    // Changing mode or location settles the heading; see fold().
     function foldHeading() { headingScroll.fold() }
     onActiveChanged: if (!active) foldHeading()
     SideritaController {
@@ -53,11 +51,9 @@ Item {
 
     HeadingScroll {
         id: headingScroll
-        // Scroll distances, not the heading's own pixels. Two and a half
-        // notches to open the metadata block, a notch and a half to fade the
-        // title, and two more the travel keeps once it is gone — so coming
-        // back up is asked for rather than stumbled into.
-        expandSpan: CelestinaTheme.compWheelStep * 2.5
+        // Scroll distances, not the heading's own pixels. A notch and a half
+        // to fade the title, and two more the travel keeps once it is gone —
+        // so coming back up is asked for rather than stumbled into.
         retireSpan: CelestinaTheme.compWheelStep * 1.5
         returnDelay: CelestinaTheme.compWheelStep * 2
     }
@@ -95,7 +91,7 @@ Item {
             if (samePlace)
                 view.contentY = savedY
             else
-                headingScroll.moveTo(0, false)   // a new folder shows its compact title
+                headingScroll.moveTo(0, false)   // a new folder shows its title
 
             routeReveal.revealPreparedRoute()
         }
@@ -664,7 +660,6 @@ Item {
         y: x * (1 - retiredProgress)
         width: root.width - 2 * x
         opacity: routeReveal.progress; scale: routeReveal.revealScale
-        compactProgress: headingScroll.compactProgress
         retiredProgress: headingScroll.retiredProgress
         controller: tabController
         hostWindow: root.hostWindow

@@ -1,21 +1,22 @@
 import QtQuick
 import org.celestina.siderita 1.0
 
-// Centered One UI heading. FolderView owns the reveal gesture; this component
-// only animates between the compact title and a complete metadata summary.
+// Centered One UI heading: the location's title, which the scroll retires.
+// FolderView owns the gesture; this component only draws how far it has gone.
+// It used to grow into a metadata summary on a push up at the top; the author
+// never reached for it, and the frame it moved under the rows was where a fast
+// scroll jumped, so the title is the whole heading now.
 Item {
     id: root
 
     required property var controller
     required property var hostWindow
     required property bool shortcutActive
-    // How far the heading has folded, and how far it has gone, 0…1 each. They
-    // arrive already interpolated from the scroll travel (`HeadingScroll`);
-    // this component only draws them. Compact — `compactProgress` at 1 with
-    // nothing retired — is what a folder shows at rest: the mistake that
-    // preceded all this made "compact" mean "gone", which left the window with
-    // no title at all and the rows sliding under the bars.
-    required property real compactProgress
+    // How far the heading has gone, 0…1. It arrives already interpolated from
+    // the scroll travel (`HeadingScroll`); this component only draws it. At
+    // rest, with nothing retired, a folder shows its title: the mistake that
+    // preceded all this left the window with no title at all and the rows
+    // sliding under the bars.
     required property real retiredProgress
     signal phoneMediaRequested(int index)
 
@@ -40,8 +41,8 @@ Item {
     readonly property bool phoneConnected:
             phoneInfo.length > 3 && phoneInfo[3] === "1"
 
-    // No Behavior on either: the gesture is the clock. An animation between
-    // two scroll-driven values would only run behind the finger.
+    // No Behavior on it: the gesture is the clock. An animation between two
+    // scroll-driven values would only run behind the finger.
 
     readonly property string locationName: {
         if (controller.trashActive)
@@ -60,76 +61,8 @@ Item {
         return controller.displayLocationName(controller.currentPathKey)
     }
 
-    readonly property string contextLabel: controller.trashActive
-                                                   ? "PAPELERA"
-                                           : controller.recentActive
-                                                   ? "ACTIVIDAD RECIENTE"
-                                           : controller.searchActive
-                                             || controller.searchRunning
-                                                   ? "BÚSQUEDA"
-                                           : root.phoneLocation ? "MÓVIL"
-                                                   : "UBICACIÓN"
-
-    readonly property bool virtualLocation:
-            controller.trashActive || controller.recentActive
-            || controller.searchActive || controller.searchRunning
-
-    function countLabel(value, singular, plural) {
-        return value + " " + (value === 1 ? singular : plural)
-    }
-
-    readonly property string primaryMetadata: {
-        if (controller.searchActive || controller.searchRunning)
-            return controller.searchSummary.length > 0
-                   ? controller.searchSummary.toUpperCase()
-                   : countLabel(controller.entryNames.length,
-                                "RESULTADO", "RESULTADOS")
-        if (controller.recentActive)
-            return countLabel(controller.recentCount, "ELEMENTO", "ELEMENTOS")
-        if (controller.trashActive)
-            return countLabel(controller.entryNames.length,
-                              "ELEMENTO", "ELEMENTOS")
-
-        const visible = controller.folderVisibleCount
-        const total = controller.folderTotalCount
-        const parts = []
-        if (visible === total) {
-            parts.push(countLabel(total, "ELEMENTO", "ELEMENTOS"))
-        } else {
-            parts.push(visible + " VISIBLES DE "
-                       + countLabel(total, "ELEMENTO", "ELEMENTOS"))
-        }
-        parts.push(countLabel(controller.folderDirectoryCount,
-                              "CARPETA", "CARPETAS"))
-        parts.push(countLabel(controller.folderFileCount,
-                              "ARCHIVO", "ARCHIVOS"))
-        if (controller.folderHiddenCount > 0)
-            parts.push(countLabel(controller.folderHiddenCount,
-                                  "OCULTO", "OCULTOS"))
-        if (controller.folderSize.length > 0)
-            parts.push("TAMAÑO DIRECTO " + controller.folderSize)
-        return parts.join("  ·  ")
-    }
-
-    readonly property string secondaryMetadata: {
-        if (virtualLocation)
-            return ""
-        const parts = []
-        if (controller.folderModified.length > 0)
-            parts.push("MODIFICADA " + controller.folderModified)
-        if (controller.folderAccessed.length > 0)
-            parts.push("ACCEDIDA " + controller.folderAccessed)
-        if (controller.folderCreated.length > 0)
-            parts.push("CREADA " + controller.folderCreated)
-        return parts.join("  ·  ")
-    }
-
-    readonly property real expandedHeight:
-            secondaryMetadata.length > 0 ? 116 : 98
-    readonly property real compactHeight: 60
-    height: Math.round((expandedHeight
-                        + (compactHeight - expandedHeight) * compactProgress)
-                       * (1 - retiredProgress))
+    readonly property real restingHeight: 60
+    height: Math.round(restingHeight * (1 - retiredProgress))
     opacity: 1 - retiredProgress
     visible: opacity > 0.01
     // Nothing may spill out of a band that is closing.
@@ -141,29 +74,12 @@ Item {
         width: root.phoneLocation
                ? Math.max(0, parent.width - mediaButton.width - 42)
                : Math.max(0, parent.width - 12)
-        spacing: Math.round(CelestinaTheme.spaceXs
-                            * (1 - root.compactProgress))
-
-        CelestinaSectionLabel {
-            width: parent.width
-            height: implicitHeight * (1 - root.compactProgress)
-            visible: opacity > 0.01
-            opacity: 1 - root.compactProgress
-            text: root.contextLabel
-            textScale: root.hostWindow.interfaceTextScale
-            horizontalAlignment: root.phoneLocation
-                                 ? Text.AlignLeft : Text.AlignHCenter
-        }
-
         Text {
             width: parent.width
             text: root.locationName.toUpperCase()
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round((CelestinaTheme.fontHeaderExpanded
-                                        + (CelestinaTheme.fontHeaderCollapsed
-                                           - CelestinaTheme.fontHeaderExpanded)
-                                          * root.compactProgress)
+            font.pixelSize: Math.round(CelestinaTheme.fontHeaderCollapsed
                                        * root.hostWindow.interfaceTextScale)
             font.weight: CelestinaTheme.weightDemiBold
             elide: Text.ElideMiddle
@@ -204,36 +120,6 @@ Item {
                                            * root.hostWindow.interfaceTextScale)
             }
         }
-
-        Text {
-            width: parent.width
-            height: implicitHeight * (1 - root.compactProgress)
-            visible: opacity > 0.01
-            opacity: 1 - root.compactProgress
-            text: root.primaryMetadata
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontCaption
-                                       * root.hostWindow.interfaceTextScale)
-            elide: Text.ElideRight
-            horizontalAlignment: root.phoneLocation
-                                 ? Text.AlignLeft : Text.AlignHCenter
-        }
-
-        Text {
-            width: parent.width
-            height: implicitHeight * (1 - root.compactProgress)
-            visible: opacity > 0.01 && text.length > 0
-            opacity: 1 - root.compactProgress
-            text: root.secondaryMetadata
-            color: CelestinaTheme.textFaint
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: Math.round(CelestinaTheme.fontMini
-                                       * root.hostWindow.interfaceTextScale)
-            elide: Text.ElideRight
-            horizontalAlignment: root.phoneLocation
-                                 ? Text.AlignLeft : Text.AlignHCenter
-        }
     }
 
     PhoneMediaButton {
@@ -242,10 +128,9 @@ Item {
         anchors.right: parent.right
         anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
-        // Present in both heading states — expanded and compact — and handed
-        // over to the path bar only once the heading itself is gone. It fades
-        // with the heading instead of vanishing under the pointer mid-scroll.
-        // Handed over halfway through the retirement, in both directions.
+        // Handed over to the path bar only once the heading itself is gone,
+        // halfway through the retirement in both directions. It fades with
+        // the heading instead of vanishing under the pointer mid-scroll.
         readonly property bool carried: root.retiredProgress < 0.5
         visible: root.phoneLocation
         enabled: root.phoneLocation && carried

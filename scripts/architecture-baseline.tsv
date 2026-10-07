@@ -6,7 +6,7 @@
 # Legacy daemon coordinator: delegate more responsibilities before it grows.
 lines	celestina-rs/crates/magnetitad/src/main.rs	237
 # QML coordinator with mixed responsibilities: its next change must extract.
-lines	siderita/qml/views/FolderView.qml	744
+lines	siderita/qml/views/FolderView.qml	739
 # CXX-Qt contract concentrated by the macro; logic remains in submodules.
 lines	siderita/src/controller.rs	753
 # Legacy local Qt controls may migrate to shared style but never grow.

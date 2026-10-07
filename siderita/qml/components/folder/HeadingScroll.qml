@@ -8,25 +8,20 @@ import org.celestina.siderita 1.0
 // folded the heading did not also scroll the listing, and neither did the one
 // that retired it — which is what read as needing a second scroll to catch up.
 //
-// Travel runs from `-expandSpan` (the metadata block fully open) through zero
-// (the compact title, and the resting position) to `+retireSpan` (nothing but
-// the listing). The two progresses the view interpolates on are a plain
-// function of it, so there is no state to be in and nothing to cross.
+// Travel runs from zero (the title, and the resting position) to
+// `+retireSpan` (nothing but the listing). The progress the view interpolates
+// on is a plain function of it, so there is no state to be in and nothing to
+// cross. There is no travel above zero: the metadata block that used to grow
+// there on a push up at the top is gone (the author never reached for it, and
+// its frame moving under the rows was where a fast scroll jumped), so a push
+// up at the top is simply nothing.
 //
-// It is fed by the gesture rather than by `contentY` on purpose: the list's top
-// margin follows `compactProgress`, and a heading that read the position it
-// helps decide would close a binding loop.
+// It is fed by the gesture rather than by `contentY` on purpose: a heading
+// that read the position it helps decide would close a binding loop.
 QtObject {
     id: root
 
-    // How much upward travel grows the metadata block. A scroll distance, not
-    // the block's height: tying it to the height made the whole phase shorter
-    // than one wheel notch (56px against 108), so a single notch blew through
-    // it, started retiring the title with what was left, and dragged the
-    // listing a full notch on the way. It is also why a folder without dates
-    // behaved differently from one with them.
-    required property real expandSpan
-    // And how much downward travel takes the compact title away.
+    // How much downward travel takes the title away.
     required property real retireSpan
     // What the travel keeps accumulating once the title is already gone.
     //
@@ -43,10 +38,6 @@ QtObject {
     property real travel: 0
     property real destination: 0
 
-    readonly property real compactProgress:
-            root.expandSpan > 0
-            ? Math.max(0, Math.min(1, 1 + root.travel / root.expandSpan))
-            : 1
     readonly property real retiredProgress:
             root.retireSpan > 0
             ? Math.max(0, Math.min(1, root.travel / root.retireSpan))
@@ -92,24 +83,20 @@ QtObject {
     onTravelChanged: if (root.gliding && root.travel === root.destination)
                          root.gliding = false
 
-    // Moves the heading by a gesture's worth. Positive takes it away.
+    // Moves the heading by a gesture's worth. Positive takes it away; the
+    // travel never goes above zero, the title at rest.
     //
     // The amount is added to the destination, never to the drawn value: notches
     // arrive faster than the tween settles, and accumulating on what is on
     // screen would throw away everything the previous notch had not yet spent —
     // the same reason the wheel handler keeps its own `targetContentY`.
-    //
-    // `atTop` is the one rule left from the old machine: growing the metadata
-    // block is still something asked for at the top of the listing, so away
-    // from it the travel stops at the compact title instead of going past it.
-    function advance(amount, atTop, smoothed) {
-        const floor = atTop ? -root.expandSpan : 0
-        root.moveTo(Math.max(floor, Math.min(root.travelCeiling,
-                                             root.destination + amount)),
+    function advance(amount, smoothed) {
+        root.moveTo(Math.max(0, Math.min(root.travelCeiling,
+                                         root.destination + amount)),
                     smoothed)
     }
 
-    // Puts the metadata block away without bringing back a title that was
+    // Settles a move in flight without bringing back a title that was
     // scrolled off: changing mode or folder should not undo that. Clamped on
     // the destination, like every other move.
     function fold() {

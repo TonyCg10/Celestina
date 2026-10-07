@@ -1,0 +1,33 @@
+# SID-H1-K exact change inventory
+
+Base revision	b59adc637b724bcbba37f0f57b21c9f3869e60b8
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-10-06-heading-without-expansion.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-K.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/folder/FolderHeading.qml
+Pathspec	siderita/qml/components/folder/FolderWheelHandler.qml
+Pathspec	siderita/qml/components/folder/HeadingScroll.qml
+Pathspec	siderita/qml/views/FolderView.qml
+Pathspec	siderita/tests/qml/tst_heading_scroll.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	53fdc1a0bbf4574101bf71b248279cf81a08ef33261d9b4b82959311148e93f1	docs/version-history.tsv
+1	1	b7937ce6b298778b13ea4bf17139ceb03314c3b4b55f9b4e47ad11b6165ef852	scripts/architecture-baseline.tsv
+0	1	226add137934c3de12eec34389029b769f34a6cab712885723df10d43ce6b2aa	scripts/language-baseline.tsv
+1	1	29c5890a69704cfb51445e604014131893070bfbd806c050fd67d5029fc4e956	siderita/Cargo.lock
+1	1	890830c2db0e85a3d6fa82f5bf5d4f76260422d7bd4c8d0087fc2043b3e51d8b	siderita/Cargo.toml
+67	0	453a20703813aac6ddc14d3b0930ef0cd954ace0358d33167ffd632d7cc48dec	siderita/docs/evidence/2026-10-06-heading-without-expansion.md
+33	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-K.numstat.tsv
+1	0	9cb1139bec05713386a4e86d25cfc7529a356ab1eeae00fad598b890e308521d	siderita/docs/plans/active/2026-09-26-hardening.md
+18	133	8952efae02be42be8ee6a3854466184fd2af2e0cc2cd17fab1c96be573307e13	siderita/qml/components/folder/FolderHeading.qml
+2	47	246ab4bdb8eec5d65a841148977eb732e80cfe4d927fbce31fe09282c59d4782	siderita/qml/components/folder/FolderWheelHandler.qml
+16	29	32dfe18afedc2269575998fb57de06f70bf1218d6e88967810e51a29839b89a4	siderita/qml/components/folder/HeadingScroll.qml
+12	17	61aaf2c8e483bbbe59189373beb897bd406330500373b356ad9559f0fa2ce3a5	siderita/qml/views/FolderView.qml
+32	143	680c21b62e6e27b67e2e0a9fb048a6d56e73755a1a7555b23fad7eecd9b7351c	siderita/tests/qml/tst_heading_scroll.qml
