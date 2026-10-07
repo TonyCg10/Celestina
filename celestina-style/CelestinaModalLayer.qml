@@ -26,6 +26,13 @@ FocusScope {
 
     visible: shown || opacity > 0.01
     opacity: shown ? 1 : 0
+    // The whole layer — scrim and dialog — fades as one image. With per-item
+    // opacity the parts faded on their own clocks: the card's tint thinned
+    // while its text stayed readable, and the glass capture inside the card
+    // lagged the scrim above and below it, which the author recorded as the
+    // dialog breaking apart on close. A layer only while the fade runs; at
+    // rest everything paints straight to the window.
+    layer.enabled: opacity > 0 && opacity < 1
 
     function ownsItem(item) {
         let current = item
@@ -142,11 +149,16 @@ FocusScope {
             lastOwnedFocusItem = null
             const window = layer.Window.window
             previousFocusItem = window ? window.activeFocusItem : null
+            // The layer itself takes the focus on show, not a control: a
+            // ring that lights on a field or a button nobody pressed, and then
+            // hops to the next one, is what the author saw on every open. Tab
+            // travel starts from here and reaches the first control; Escape
+            // works from here.
             Qt.callLater(function() {
                 const activeWindow = layer.Window.window
                 if (layer.shown && (!activeWindow
                                     || !layer.ownsItem(activeWindow.activeFocusItem)))
-                    layer.focusInside(true, Qt.PopupFocusReason)
+                    layer.forceActiveFocus(Qt.PopupFocusReason)
             })
             return
         }
@@ -159,10 +171,11 @@ FocusScope {
     }
     onVisibleChanged: if (!visible) restorePendingFocus()
 
+    // `motionNormal`, not `motionFast`: at 100 ms the fade read as a cut.
     Behavior on opacity {
         NumberAnimation {
             duration: CelestinaTheme.reducedMotion
-                      ? 0 : CelestinaTheme.motionFast
+                      ? 0 : CelestinaTheme.motionNormal
             easing.type: CelestinaTheme.easeStandard
         }
     }
@@ -191,12 +204,6 @@ FocusScope {
 
         anchors.fill: parent
         enabled: layer.shown
-        // The dialog fades as one image. With per-item opacity the card's
-        // tint went transparent while its text was still readable and the
-        // content behind showed through it mid-fade, which the author saw as
-        // the dialog breaking rather than fading. A layer only while the fade
-        // runs; at rest the card paints straight to the window.
-        layer.enabled: contentHost.parent.opacity > 0 && contentHost.parent.opacity < 1
     }
 
     // ── Input shield ─────────────────────────────────────────────────────

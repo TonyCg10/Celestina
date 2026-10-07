@@ -134,7 +134,7 @@ TestCase {
         compare(modal.shown, true)
         compare(modal.previousFocusItem, lowerButton)
         tryCompare(modal, "visible", true)
-        tryCompare(firstField, "activeFocus", true)
+        tryCompare(modal, "activeFocus", true)
     }
 
     function init() {
@@ -156,10 +156,15 @@ TestCase {
         wait(0)
     }
 
-    function test_enters_first_focusable_automatically() {
+    // The layer takes the focus on show; no control lights a ring nobody
+    // asked for. Tab travel then starts at the first control.
+    function test_takes_focus_itself_without_entering_a_control() {
         openWithConsumerFocus()
-        verify(firstField.activeFocus)
+        verify(modal.activeFocus)
+        verify(!firstField.activeFocus)
         verify(!lowerButton.activeFocus)
+        keyClick(Qt.Key_Tab)
+        tryCompare(firstField, "activeFocus", true)
     }
 
     function test_preserves_initial_focus_and_restores_it() {
@@ -173,6 +178,8 @@ TestCase {
     function test_tab_and_backtab_stay_inside() {
         openWithConsumerFocus()
 
+        keyClick(Qt.Key_Tab)
+        tryCompare(firstField, "activeFocus", true)
         keyClick(Qt.Key_Tab)
         tryCompare(middleCheck, "activeFocus", true)
         keyClick(Qt.Key_Tab)
