@@ -18,7 +18,7 @@ Item {
     property int spacing: 0
     // The rim between the glyph circles and the capsule's edge.
     property int inset: CelestinaTheme.spaceXs / 2
-    property color fill: CelestinaTheme.controlFill
+    property color fill: CelestinaTheme.pillFill
 
     implicitWidth: row.implicitWidth + inset * 2
     implicitHeight: row.implicitHeight + inset * 2

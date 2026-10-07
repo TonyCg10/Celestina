@@ -192,7 +192,7 @@ inside a rounded surface.
 |---|---|---|
 | L0 | Window canvas | Compositor glass: the window is transparent, the compositor blurs what lies behind it, and `CelestinaBackdrop` paints the Haze material over that blur (`glassTint`, canvas at 0.70, grain at `glassCanvasNoiseOpacity`) |
 | L1 | Grouped/content card | Opaque `card`, the black a Haze-tinted bar shows over the canvas (`#0b0c10`), whitespace and one quiet outline; no shadow |
-| L2 | Menu, tab pills, toast | Regular glass (the Haze recipe) plus soft shadow; a pill is glass at rest as well, with `controlFill` as its Haze tint |
+| L2 | Menu, tab pills, toast | Regular glass (the Haze recipe) plus soft shadow; a pill is glass at rest as well, with `pillFill` as its Haze tint |
 | L3 | Dialog/modal | The same glass plus scrim; no simultaneous depth shadow |
 | Shell content card / panel capsule | Layer-shell surface | One host-owned compositor blur region, or one region shared by the complete menu, with dense shadowless `ContentSurface` material |
 | Contextual menu carrier | Layer-shell surface | The same single host-owned compositor blur region with a nearly transparent `ContextualVeil`; no shadow and no apparent edge halo, plus a readable fallback |
@@ -370,7 +370,11 @@ keyboard focus uses the exterior focus ring.
 
 Interactive things fall in two families, and `CelestinaRowHighlight` names
 them. **Controls** — buttons, pills, sidebar rows, tabs, column titles — lift
-in the neutral `surfaceHover` under the pointer and sink on press. **Content**
+in the neutral `surfaceHover` under the pointer and sink on press; a tonal
+button rests on the `controlFill` plate and lifts to `controlHover`, one
+step above it, and `pillFill` is a floating pill's material, never a
+control's plate. The contrast guard refuses a plate darker than the card
+and a hover that does not lift above its rest. **Content**
 — the files, cards and choices in the middle of a window — never turns grey:
 its hover is the accent at `contentHover`, its press the accent at
 `pressedWash`, and its selection settles between the two, so hover, press and

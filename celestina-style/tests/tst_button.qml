@@ -16,7 +16,7 @@ TestCase {
         id: testWindow
 
         width: 320
-        height: 200
+        height: 220
         visible: true
 
         CelestinaButton {
@@ -32,6 +32,14 @@ TestCase {
             y: 80
             text: "Ocultos"
             checkable: true
+        }
+
+        CelestinaButton {
+            id: ghost
+            x: 20
+            y: 140
+            text: "Volver"
+            role: CelestinaButton.Ghost
         }
 
         CelestinaIconButton {
@@ -87,6 +95,36 @@ TestCase {
         mouseClick(toggle, toggle.width / 2, toggle.height / 2)
         tryCompare(toggle, "checked", false)
         compare(toggle.effectiveRole, CelestinaButton.Tonal)
+    }
+
+    // The neutral ladder: rest, hover and press are three visible steps, and
+    // the same two tokens lift every neutral control whatever its role.
+    function test_a_tonal_button_lifts_from_its_plate_under_the_pointer() {
+        mouseMove(testWindow, 300, 200)
+        tryCompare(plain, "hovered", false)
+        verify(Qt.colorEqual(plain.background.color, CelestinaTheme.controlFill))
+        mouseMove(plain, plain.width / 2, plain.height / 2)
+        tryCompare(plain, "hovered", true)
+        tryVerify(function() { return Qt.colorEqual(plain.background.color, CelestinaTheme.controlHover) })
+        mousePress(plain, plain.width / 2, plain.height / 2)
+        tryCompare(plain, "down", true)
+        tryVerify(function() { return Qt.colorEqual(plain.background.color, CelestinaTheme.pressedWash) })
+        mouseRelease(plain, plain.width / 2, plain.height / 2)
+        mouseMove(testWindow, 300, 200)
+    }
+
+    function test_a_ghost_button_lifts_from_clear_under_the_pointer() {
+        mouseMove(testWindow, 300, 200)
+        tryCompare(ghost, "hovered", false)
+        verify(Qt.colorEqual(ghost.background.color, CelestinaTheme.clear))
+        mouseMove(ghost, ghost.width / 2, ghost.height / 2)
+        tryCompare(ghost, "hovered", true)
+        tryVerify(function() { return Qt.colorEqual(ghost.background.color, CelestinaTheme.surfaceHover) })
+        mousePress(ghost, ghost.width / 2, ghost.height / 2)
+        tryCompare(ghost, "down", true)
+        tryVerify(function() { return Qt.colorEqual(ghost.background.color, CelestinaTheme.pressedWash) })
+        mouseRelease(ghost, ghost.width / 2, ghost.height / 2)
+        mouseMove(testWindow, 300, 200)
     }
 
     function test_an_icon_button_is_a_circle_at_every_density() {

@@ -152,12 +152,17 @@ Button {
             // steps a Control-family row makes, so a button and the sidebar
             // row beside it answer the hand in one language. A darker grey on
             // press was the old vocabulary, and it read as nothing happening.
+            // The one neutral ladder, shared with CelestinaRowHighlight's
+            // Control family: Ghost rests clear and lifts to surfaceHover;
+            // Tonal rests on the controlFill plate and lifts to controlHover,
+            // one step above it. The contrast guard refuses a plate darker
+            // than the card and a hover that does not lift above its rest.
             if (control.effectiveRole === CelestinaButton.Ghost)
                 return control.down ? CelestinaTheme.pressedWash
-                     : control.hovered ? CelestinaTheme.controlFill
+                     : control.hovered ? CelestinaTheme.surfaceHover
                      : CelestinaTheme.clear
             return control.down ? CelestinaTheme.pressedWash
-                 : control.hovered ? CelestinaTheme.surfaceHover
+                 : control.hovered ? CelestinaTheme.controlHover
                  : CelestinaTheme.controlFill
         }
         border.width: 0

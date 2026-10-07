@@ -355,6 +355,25 @@ try:
 
     require("destructive button/pressed", night, danger, 4.5)
     require("faint metadata/card", text_faint, card, 4.5)
+
+    # The neutral control ladder has to be seen: the plate a tonal button rests
+    # on lifts above the card, the hover lifts above the plate, and a ghost's
+    # hover lifts above the card. A plate darker than the card, or a hover equal
+    # to its rest, is the 2026-10-06 defect where `controlFill` became a dark
+    # tint and buttons stopped answering the pointer.
+    control_fill = literal("controlFill")
+    control_hover = literal("controlHover")
+    surface_hover = literal("surfaceHover")
+    plate = composite(control_fill, card)
+    lifted = composite(control_hover, card)
+    ghost_lifted = composite(surface_hover, card)
+    if relative_luminance(plate) <= relative_luminance(card):
+        failures.append("control plate/card: controlFill must be lighter than card")
+    if relative_luminance(lifted) <= relative_luminance(plate):
+        failures.append("control hover/plate: controlHover must be lighter than controlFill")
+    require("control plate/card", plate, card, 1.2)
+    require("control hover/plate", lifted, plate, 1.2)
+    require("ghost hover/card", ghost_lifted, card, 1.2)
 except (OSError, ValueError) as error:
     print(f"contrast: ERROR: {error}", file=sys.stderr)
     raise SystemExit(2) from error

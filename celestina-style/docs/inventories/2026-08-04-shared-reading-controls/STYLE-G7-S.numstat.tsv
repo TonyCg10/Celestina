@@ -1,0 +1,31 @@
+# STYLE-G7-S exact change inventory
+
+Base revision	4aea52e5a06ff23f55499488dffaaf5688463421
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaButton.qml
+Pathspec	celestina-style/CelestinaCapsule.qml
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/docs/evidence/2026-10-06-hover-ladder.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-S.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/scripts/check-contrast-contract.py
+Pathspec	celestina-style/tests/tst_button.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	c57da70f59049953b71d774fcbff031a70bb4a9bc1d163bcfc248c85bc8b7763	celestina-style/CMakeLists.txt
+7	2	c2d5d2ec48d775e676adecfa5db7c473e4138dd8504c47a67895feb265154b1a	celestina-style/CelestinaButton.qml
+1	1	9707fc7ae16d19c8734ae419a74197f780a2720fdf1e3c86ca963e1542e75abb	celestina-style/CelestinaCapsule.qml
+14	3	e28b15667ec73954c4043befa3a226270750bf188e586c1f24016956a6254fc2	celestina-style/CelestinaTheme.qml
+6	2	6d8429143ac58f92669561d2466df561fe3d3145f6d38ce682e5b488c52a549e	celestina-style/DESIGN.md
+7	0	579e829fac8fb256867881d1c05b54200063e182daad1c4535d70b08737937b8	celestina-style/STATUS.md
+60	0	ae600ed0c79d4fbb6a833c33ce8229bbab826ba6556d074847f3f4afaffb8a83	celestina-style/docs/evidence/2026-10-06-hover-ladder.md
+31	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-S.numstat.tsv
+1	0	69af32d64b1f0b0830e366b328c8c9a052077cb19d05fe75d2d5bd7e3c83585f	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+19	0	c652733fc11ab20375507016d19214a3377cf1710b767fb473905ed3807a1780	celestina-style/scripts/check-contrast-contract.py
+39	1	d2d9b362c7ce086b81a897c02f9cfc8c548910a08f7cdd3558bd41eea460aeee	celestina-style/tests/tst_button.qml
+1	0	4ad1945d0850fe5502118b1044698543f0cf627578b536909950865ea5d1f343	docs/version-history.tsv

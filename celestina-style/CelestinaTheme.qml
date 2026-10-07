@@ -332,6 +332,8 @@ QtObject {
         required property color inputFillFocus
         required property color inputBorder
         required property color controlFill
+        required property color controlHover
+        required property color pillFill
         required property color badgeFill
         required property color badgeAccentFill
         required property color accentSoft
@@ -436,7 +438,9 @@ QtObject {
         // opaque card/elevated roles through CelestinaSurface.
         surface: "#d914171c"
         surfaceStrong: "#f01a1e25"
-        surfaceHover: "#0dffffff"
+        // A pointer lift that is seen on the #0b0c10 card: 5 % white was
+        // 1.1:1 there, below any eye; 10 % is the step the guard enforces.
+        surfaceHover: "#1affffff"
         contentHover: theme.withAlpha(theme.ref.accent,
                                       theme.accentContentHoverOpacity)
         pressedWash: theme.withAlpha(theme.ref.accent,
@@ -449,9 +453,14 @@ QtObject {
         inputFill: "#8c14171c"
         inputFillFocus: "#b31a1e25"
         inputBorder: "#16ffffff"
+        // The neutral control plate: a tonal button at rest, a switch track,
+        // a disabled fill. `controlHover` is the lift the pointer gives it:
+        // one visible step above the plate, never the same value.
+        controlFill: "#1affffff"
+        controlHover: "#29ffffff"
         // A floating pill wears the Haze tint over its own glass capture,
-        // the same material as the bar and the menus.
-        controlFill: "#b3050608"
+        // the same material as the bar and the menus. Not a control plate.
+        pillFill: "#b3050608"
         badgeFill: "#0effffff"
         // Current/selected row wash: accent-tinted (alpha nudged up — blue reads
         // lighter than the old white at the same opacity).
@@ -575,6 +584,8 @@ QtObject {
     readonly property color inputFillFocus: scheme.inputFillFocus
     readonly property color inputBorder: scheme.inputBorder
     readonly property color controlFill: scheme.controlFill
+    readonly property color controlHover: scheme.controlHover
+    readonly property color pillFill: scheme.pillFill
     readonly property color badgeFill: scheme.badgeFill
     readonly property color badgeAccentFill: scheme.badgeAccentFill
     readonly property color accentSoft: scheme.accentSoft

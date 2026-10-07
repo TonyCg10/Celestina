@@ -12,6 +12,13 @@
 
 ## Current checkout truth
 
+- `STYLE-G7-S` repairs the hover vocabulary `STYLE-G7-Q` broke: `controlFill`
+  is the neutral control plate again (10 % white) with `controlHover` one
+  step above it (16 %), `surfaceHover` lifts to 10 % so a row or a ghost
+  button is seen on the `#0b0c10` card, and a floating pill's Haze tint is
+  now `pillFill`. The contrast guard refuses a plate darker than the card and
+  a hover that does not lift, and `tst_button.qml` walks both ladders under
+  the pointer. See [the record](docs/evidence/2026-10-06-hover-ladder.md).
 - `STYLE-G7-Q` makes the window canvas compositor glass: applications set a
   transparent window, Niri blurs what lies behind it, and `CelestinaBackdrop`
   paints the Haze material over that blur with a lighter grain

@@ -193,3 +193,4 @@ celestina-style	1.12.0	milestone	STYLE-G7-Q	Add the glass canvas and the bar's b
 celestina-style	1.12.1	bug	STYLE-G7-R	Fix the menu shield's unqualified access under qmllint
 siderita	1.8.0	milestone	SID-H1-F	Add the transparent glass canvas to the window
 siderita	1.9.0	milestone	SID-H1-G	Add the volume's free space to the properties dialog
+celestina-style	1.12.2	bug	STYLE-G7-S	Fix the hover ladder and name the pill fill
