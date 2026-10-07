@@ -1,6 +1,6 @@
 [package]
 name = "siderita"
-version = "1.8.0"
+version = "1.9.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -53,6 +53,10 @@ async-channel = "2"
 notify-debouncer-full = "0.5"
 # Local-time conversion (localtime_r) for the properties panel timestamps.
 libc = "0.2"
+# `rustix` for `statvfs`: the free and total space of the volume a path
+# lives on, which the properties dialog shows. Safe Rust, `fs` feature
+# only; already in the closure through `hematita-core`.
+rustix = { version = "1.1.4", default-features = false, features = ["std", "fs"] }
 
 [build-dependencies]
 # The shared render seam: the same hand-written video surface Fluorita's window

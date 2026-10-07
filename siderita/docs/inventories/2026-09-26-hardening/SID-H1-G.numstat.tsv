@@ -1,0 +1,35 @@
+# SID-H1-G exact change inventory
+
+Base revision	8754e6cd028f00f089dead97c29f35ebec1c1b47
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-10-06-properties-dialog.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-G.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/PropRow.qml
+Pathspec	siderita/qml/dialogs/PropertiesDialog.qml
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/controller/selection.rs
+Pathspec	siderita/src/controller/state.rs
+Pathspec	siderita/src/properties.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	5f69bbb911f5d1d30bd2902502b4ad7eeaf1ba88a79deb566d072de53bac1b69	docs/version-history.tsv
+1	2	272f88db33d3a17a48e564d9cc9ec27dc1ff23b68e676644735a6b929c808219	scripts/language-baseline.tsv
+1	1	f0612c046fd06f7df7a681bdb6beaedd542fb17e7eea858806b5a1eae1968a37	scripts/qmllint-baseline.tsv
+2	1	95f87c6c62bf422e8a2ccdaaa9192d1850926f5bf7a901a5bd9a34c02238cf34	siderita/Cargo.lock
+5	1	96d4b2de232b7890f0668c0f8f11620047c5222b921d1137984055b162d37e7b	siderita/Cargo.toml
+67	0	e3c985ef925da81311be12b50405a6c07c41f0b2124f815f75d3b96bf161d062	siderita/docs/evidence/2026-10-06-properties-dialog.md
+35	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-G.numstat.tsv
+1	0	4ce7cf2ab6f82216aace52c53361246ddf827aa3c3427bfe77392e9877d18947	siderita/docs/plans/active/2026-09-26-hardening.md
+31	11	9447bace7aa34d04ffd5fe7b618b61e8fd53370709904d237d9b9887d09566d6	siderita/qml/components/PropRow.qml
+98	50	9642113fc05d61e01273a5c2fa2e524b99c5032665a8fadecde9fa41021b8f7e	siderita/qml/dialogs/PropertiesDialog.qml
+2	2	4e4307302410230141521372ce42dc7403a90e1aaa9a747f9ce65653c4826570	siderita/src/controller.rs
+3	4	66d4d6d43a2d191d5dcb3eb2a971ade0a6c4ece4c073688bab889fd9efa1f641	siderita/src/controller/selection.rs
+5	4	69ac4cf6ee34c51192d1f901e03fe3af8bb11844a45b208ed2a856568d5bd7c2	siderita/src/controller/state.rs
+39	1	ac85794c19327699e19c3a60920ed9955343550b8b6e60c9503b37c03e618108	siderita/src/properties.rs

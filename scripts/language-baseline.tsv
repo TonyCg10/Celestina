@@ -89,7 +89,6 @@
 3	siderita/qml/CelestinaPlaceDefs.qml
 10	siderita/qml/Main.qml
 38	siderita/qml/PickerWindow.qml
-1	siderita/qml/components/PropRow.qml
 10	siderita/qml/components/chrome/DetailsHeader.qml
 4	siderita/qml/components/chrome/GlassPill.qml
 4	siderita/qml/components/chrome/InfoPill.qml
@@ -116,7 +115,7 @@
 19	siderita/qml/dialogs/MediaPreview.qml
 1	siderita/qml/dialogs/NamePromptDialog.qml
 5	siderita/qml/dialogs/PhoneMediaDialog.qml
-2	siderita/qml/dialogs/PropertiesDialog.qml
+1	siderita/qml/dialogs/PropertiesDialog.qml
 7	siderita/qml/dialogs/QuickLookView.qml
 13	siderita/qml/menus/EntryContextMenu.qml
 7	siderita/qml/menus/FolderMenu.qml

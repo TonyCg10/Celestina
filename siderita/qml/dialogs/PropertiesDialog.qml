@@ -12,14 +12,14 @@ CelestinaModalLayer {
     property var panel      // mainPanel: apariencia semántica y por ruta
     // SideritaUsage: a folder's occupation, scanned while the dialog is open.
     property var usage
-    readonly property string iconKind: controller.propIsDir
+    readonly property string iconKind: propertiesView.controller.propIsDir
                                                ? "directory"
-                                               : controller.propSymlink.length > 0
+                                               : propertiesView.controller.propSymlink.length > 0
                                                  ? "symlink" : "file"
     anchors.fill: parent
     z: 68
-    shown: controller.propertiesPending
-    onDismissRequested: controller.closeProperties()
+    shown: propertiesView.controller.propertiesPending
+    onDismissRequested: propertiesView.controller.closeProperties()
 
     // One scan per open folder, cancelled when the dialog closes, so no
     // thread keeps reading the disk behind a closed dialog.
@@ -52,10 +52,10 @@ CelestinaModalLayer {
 
     GlassCard {
         anchors.centerIn: parent
-        width: Math.min(propertiesView.controller.propIsDir ? 760 : 500, owner.width - 48)
-        height: Math.min(propertiesColumn.implicitHeight + propHeading.height + 90
+        width: Math.min(propertiesView.controller.propIsDir ? 760 : 500, propertiesView.owner.width - 48)
+        height: Math.min(propertiesColumn.implicitHeight + propHeading.height + propSubheading.height + 96
                          + (folderUsageSection.visible ? folderUsageSection.height + 12 : 0),
-                         owner.height - 64)
+                         propertiesView.owner.height - 64)
         backdropSource: propertiesView.backdrop
         // (not transform-scaled — a scale transform desynced the glass backdrop)
         Accessible.role: Accessible.Dialog
@@ -69,11 +69,11 @@ CelestinaModalLayer {
             y: 18
             width: CelestinaTheme.iconMd
             height: CelestinaTheme.iconMd
-            name: panel.icons.mediaIconName(propertiesView.iconKind, "",
-                                      controller.propPath)
-            fallbackName: controller.propIsDir ? "folder" : "file"
-            tone: panel.icons.entryIconTone(propertiesView.iconKind)
-            tintOverride: panel.icons.iconTint(controller.propPath)
+            name: propertiesView.panel.icons.mediaIconName(propertiesView.iconKind, "",
+                                      propertiesView.controller.propPath)
+            fallbackName: propertiesView.controller.propIsDir ? "folder" : "file"
+            tone: propertiesView.panel.icons.entryIconTone(propertiesView.iconKind)
+            tintOverride: propertiesView.panel.icons.iconTint(propertiesView.controller.propPath)
         }
 
         Text {
@@ -82,12 +82,27 @@ CelestinaModalLayer {
             anchors.leftMargin: 12
             anchors.right: parent.right
             anchors.rightMargin: 18
-            y: 20
-            text: controller.propName
+            y: 18
+            text: propertiesView.controller.propName
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontRowTitle
+            font.pixelSize: CelestinaTheme.fontTitle
             font.weight: CelestinaTheme.weightDemiBold
+            elide: Text.ElideMiddle
+        }
+
+        // What it is and where: the kind, then the path, in one quiet line.
+        Text {
+            id: propSubheading
+            anchors.left: propHeading.left
+            anchors.right: propHeading.right
+            anchors.top: propHeading.bottom
+            anchors.topMargin: CelestinaTheme.spaceXs
+            text: propertiesView.controller.propKind + " · " + propertiesView.controller.propPath
+            textFormat: Text.PlainText
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontRowSecondary
             elide: Text.ElideMiddle
         }
 
@@ -97,8 +112,8 @@ CelestinaModalLayer {
             anchors.right: parent.right
             anchors.leftMargin: 18
             anchors.rightMargin: 18
-            anchors.top: propIcon.bottom
-            anchors.topMargin: 14
+            anchors.top: propSubheading.bottom
+            anchors.topMargin: CelestinaTheme.spaceLg
             anchors.bottom: folderUsageSection.visible ? folderUsageSection.top : propButtons.top
             anchors.bottomMargin: 12
             clip: true
@@ -109,39 +124,72 @@ CelestinaModalLayer {
                 id: propertiesColumn
                 width: propFlick.width
 
-                PropRow { width: parent.width; label: "Ruta"; value: controller.propPath }
-                PropRow { width: parent.width; label: "Tipo"; value: controller.propKind }
-                PropRow {
+                // The facts a person opens this dialog for, in one quiet box:
+                // what it weighs, how much room is left, when it changed and
+                // who may touch it. Kind, MIME and access time are not here:
+                // the heading says what it is, and an access time changes the
+                // moment the dialog reads it.
+                CelestinaSurface {
                     width: parent.width
-                    label: "Enlace a"
-                    value: controller.propSymlink
-                }
-                PropRow { width: parent.width; label: "MIME"; value: controller.propMime }
-                PropRow {
-                    width: parent.width
-                    label: "Tamaño"
-                    value: propertiesView.controller.propIsDir ? propertiesView.folderSizeText
-                                                              : propertiesView.controller.propSize
-                }
-                PropRow {
-                    width: parent.width
-                    label: "Permisos"
-                    value: controller.propPermissions
-                }
-                PropRow {
-                    width: parent.width
-                    label: "Propietario"
-                    value: controller.propOwner
-                }
-                PropRow {
-                    width: parent.width
-                    label: "Modificado"
-                    value: controller.propModified
-                }
-                PropRow {
-                    width: parent.width
-                    label: "Accedido"
-                    value: controller.propAccessed
+                    role: CelestinaSurface.Content
+                    implicitHeight: propertyRows.implicitHeight
+
+                    Column {
+                        id: propertyRows
+                        width: parent.width
+
+                        PropRow {
+                            width: parent.width
+                            label: qsTr("Tamaño")
+                            value: propertiesView.controller.propIsDir ? propertiesView.folderSizeText
+                                                                      : propertiesView.controller.propSize
+                        }
+                        PropRow {
+                            width: parent.width
+                            label: qsTr("Espacio libre")
+                            value: propertiesView.controller.propVolumeTotal > 0
+                                   ? qsTr("%1 libres de %2")
+                                         .arg(folderUsageSection.bytesText(propertiesView.controller.propVolumeFree))
+                                         .arg(folderUsageSection.bytesText(propertiesView.controller.propVolumeTotal))
+                                   : ""
+
+                            // How full the volume is: a thin track, the used
+                            // share in the accent.
+                            Rectangle {
+                                width: parent.width
+                                height: CelestinaTheme.compLinearTrackHeight
+                                radius: CelestinaTheme.radiusPill
+                                color: CelestinaTheme.divider
+
+                                Rectangle {
+                                    width: propertiesView.controller.propVolumeTotal > 0
+                                           ? Math.round(parent.width * Math.max(0, Math.min(1,
+                                                 1 - propertiesView.controller.propVolumeFree / propertiesView.controller.propVolumeTotal)))
+                                           : 0
+                                    height: parent.height
+                                    radius: CelestinaTheme.radiusPill
+                                    color: CelestinaTheme.accent
+                                }
+                            }
+                        }
+                        PropRow {
+                            width: parent.width
+                            label: qsTr("Modificado")
+                            value: propertiesView.controller.propModified
+                        }
+                        PropRow {
+                            width: parent.width
+                            label: qsTr("Permisos")
+                            value: propertiesView.controller.propPermissions.length > 0
+                                   ? propertiesView.controller.propPermissions + " · " + propertiesView.controller.propOwner
+                                   : ""
+                        }
+                        PropRow {
+                            width: parent.width
+                            label: qsTr("Enlace a")
+                            value: propertiesView.controller.propSymlink
+                        }
+                    }
                 }
             }
         }
@@ -172,7 +220,7 @@ CelestinaModalLayer {
             CelestinaButton {
                 text: "Cerrar"
                 role: CelestinaButton.Primary
-                onClicked: controller.closeProperties()
+                onClicked: propertiesView.controller.closeProperties()
             }
         }
     }

@@ -25,6 +25,26 @@ pub struct Properties {
     pub accessed: String,
     pub symlink_target: Option<String>,
     pub is_dir: bool,
+    /// The volume the entry lives on; `None` when `statvfs` refuses the path.
+    pub volume: Option<Volume>,
+}
+
+/// Free and total bytes of the filesystem holding an entry, as `statvfs`
+/// reports them to this user (`f_bavail`, not the root-reserved `f_bfree`).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Volume {
+    pub free: u64,
+    pub total: u64,
+}
+
+/// Asks the filesystem holding `path` for its free and total space.
+pub fn volume(path: &Path) -> Option<Volume> {
+    let stat = rustix::fs::statvfs(path).ok()?;
+    let frsize = stat.f_frsize;
+    Some(Volume {
+        free: stat.f_bavail.saturating_mul(frsize),
+        total: stat.f_blocks.saturating_mul(frsize),
+    })
 }
 
 /// Reads the metadata of `path` (the link itself, not its target) and formats it
@@ -78,6 +98,7 @@ pub fn gather(path: &Path) -> Properties {
     props.owner = format_owner(meta.uid(), meta.gid());
     props.modified = format_time(meta.mtime());
     props.accessed = format_time(meta.atime());
+    props.volume = volume(path);
     props
 }
 
@@ -180,7 +201,24 @@ pub(crate) fn format_time_short(secs: i64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_owner, format_permissions, format_time, format_time_short, lookup_name};
+    use super::{
+        format_owner, format_permissions, format_time, format_time_short, lookup_name, volume,
+        Volume,
+    };
+    use std::path::Path;
+
+    #[test]
+    fn the_root_volume_reports_a_bounded_free_space() {
+        let volume = volume(Path::new("/")).expect("/ is always mounted");
+        assert!(volume.total > 0);
+        assert!(volume.free <= volume.total);
+    }
+
+    #[test]
+    fn a_path_that_does_not_exist_has_no_volume() {
+        assert_eq!(volume(Path::new("/definitely/not/here")), None);
+        let _ = Volume::default();
+    }
 
     #[test]
     fn permissions_format_the_rwx_triplets() {

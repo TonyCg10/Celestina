@@ -369,19 +369,18 @@ impl qobject::SideritaController {
         self.as_mut()
             .set_prop_kind(QString::from(props.kind.as_str()));
         self.as_mut()
-            .set_prop_mime(QString::from(props.mime.as_str()));
-        self.as_mut()
             .set_prop_permissions(QString::from(props.permissions.as_str()));
         self.as_mut()
             .set_prop_owner(QString::from(props.owner.as_str()));
         self.as_mut()
             .set_prop_modified(QString::from(props.modified.as_str()));
-        self.as_mut()
-            .set_prop_accessed(QString::from(props.accessed.as_str()));
         self.as_mut().set_prop_symlink(QString::from(
             props.symlink_target.unwrap_or_default().as_str(),
         ));
         self.as_mut().set_prop_is_dir(props.is_dir);
+        let volume = props.volume.unwrap_or_default();
+        self.as_mut().set_prop_volume_free(volume.free as f64);
+        self.as_mut().set_prop_volume_total(volume.total as f64);
         self.as_mut().set_prop_size(QString::from(
             props
                 .size
