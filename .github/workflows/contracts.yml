@@ -67,6 +67,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           python3 scripts/test-language-contract.py
+          python3 scripts/test-glass-canvas-contract.py
           python3 scripts/test-build-trees.py
           sh scripts/test-qml-dev.sh
           sh scripts/test-production-artifacts.sh

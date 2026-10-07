@@ -1,0 +1,9 @@
+# Glass-canvas debt ratchet. A row may only fall, and it falls in the
+# same commit that clears the window. Registered in docs/projects.toml as
+# a shared ratchet file so every project prefix may lower its own row.
+# findings<TAB>project
+1	fluorita
+2	grafita
+2	hematita
+1	magnetita
+0	siderita

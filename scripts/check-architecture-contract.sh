@@ -493,6 +493,21 @@ check_visual_contract() {
         "${radius_roots[@]}"; then
         fail "the radius contract failed"
     fi
+
+    # The glass-canvas contract (STYLE-G7-Q): every application window is
+    # transparent and paints the Haze canvas with CelestinaBackdrop, against
+    # the per-project ratchet in scripts/glass-canvas-baseline.tsv.
+    glass_roots=()
+    while IFS=$'\t' read -r role identifier _path qml_root; do
+        if [ "$role" = application ]; then
+            glass_roots+=("$identifier=$qml_root")
+        fi
+    done < <(python3 scripts/architecture_scanners.py registry-qml-projects "$registry_file")
+    if ! python3 scripts/glass_canvas_contract.py \
+        --baseline scripts/glass-canvas-baseline.tsv \
+        "${glass_roots[@]}"; then
+        fail "the glass-canvas contract failed"
+    fi
 }
 
 check_shared_style_links() {

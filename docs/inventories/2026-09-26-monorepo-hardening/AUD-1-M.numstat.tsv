@@ -1,0 +1,27 @@
+# AUD-1-M exact change inventory
+
+Base revision	5100e2332787531174e639a5a15e9991f0d728a3
+Pathspec	.github/workflows/contracts.yml
+Pathspec	docs/evidence/2026-10-07-glass-canvas-contract.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-M.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/projects.toml
+Pathspec	docs/superpowers/plans/2026-10-07-glass-canvas-carry-over.md
+Pathspec	scripts/check-architecture-contract.sh
+Pathspec	scripts/glass-canvas-baseline.tsv
+Pathspec	scripts/glass_canvas_contract.py
+Pathspec	scripts/test-glass-canvas-contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	06dc109b0d4cdaf94d59cf4707b726e00e2e6a80df5653529c0cbbcb1b8c4a17	.github/workflows/contracts.yml
+40	0	ebe65d94ff0b578fd132046c0f5e0c153342fa1361f18e6fe6c85e99cbe17e6e	docs/evidence/2026-10-07-glass-canvas-contract.md
+27	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-M.numstat.tsv
+5	0	0c71892cf952d40a39eded1c7efb80bb2056dcd6d46292066bbd2ec33cf45b55	docs/plans/active/2026-09-26-monorepo-hardening.md
+3	0	62bc28ec1a2474648cc082f53d6f33d4fc1f17f46f68ea354bc610c2d7dccbcf	docs/projects.toml
+937	0	1268e836745586a6b1bc05157303a512c0159fd2ab10ded5125f8e6a4f5ce9b2	docs/superpowers/plans/2026-10-07-glass-canvas-carry-over.md
+15	0	c2e8ee757d1818702d226209f9e1dd6868cc372cde2ba85ea021ccf00dd9311d	scripts/check-architecture-contract.sh
+9	0	8015101c6a997faeecb48a5ead70753bc8d5c8648dfc16017a355d54b04b7aab	scripts/glass-canvas-baseline.tsv
+145	0	4a10959b70ae1492dd83cebbe35c55c095f29337e960751a3fb56ea1696ced23	scripts/glass_canvas_contract.py
+137	0	639f23e77a87826dd268e0be7fcc1038602dfdb27de0b5b79fb34091d82d1c7c	scripts/test-glass-canvas-contract.py
