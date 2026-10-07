@@ -21,6 +21,9 @@ ListView {
     property var rows: []
     model: list.rows
 
+    // Free wheel scrolling: a notch moves at once and a burst adds up.
+    CelestinaWheelScroll { view: list }
+
     Connections {
         target: list.library
         function onRevisionChanged() { list.rows = list.weave(); }

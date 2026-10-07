@@ -1,0 +1,33 @@
+# FLU-H1-F exact change inventory
+
+Base revision	679e41d6f49cd3536474ef813828c2765dd5919b
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/build.rs
+Pathspec	fluorita/docs/evidence/2026-10-07-menu-sections-and-wheel.md
+Pathspec	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-F.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	fluorita/qml/CelestinaWheelScroll.qml
+Pathspec	fluorita/qml/GlassMenuSection.qml
+Pathspec	fluorita/qml/components/GalleryGrid.qml
+Pathspec	fluorita/qml/components/LibrarySidebar.qml
+Pathspec	fluorita/qml/components/MusicList.qml
+Pathspec	fluorita/qml/components/StreamMenu.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	e5b38fadb098ca8ed691dc37121878ed1d7696e992c12c59103f7b98084d8429	docs/version-history.tsv
+1	1	4fb01d4bc022fd85d46430ba6db8946faa5fec388ff81a400265748844466ed4	fluorita/Cargo.lock
+1	1	39977485ccb64c0c63fc51b17c38eab650f4f13f7fb18b6971903ea7e9f4ef08	fluorita/Cargo.toml
+2	0	f3b6bebd0fda4cf58ca152e6d34c5e3046e5091697494e67c5fdcac913e960f9	fluorita/build.rs
+45	0	351f8f3aa5392b118aaa1c26b299cbe832bdf663b3803f0ef1f453b7bb5ae2af	fluorita/docs/evidence/2026-10-07-menu-sections-and-wheel.md
+33	0	self	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-F.numstat.tsv
+1	0	4ac63cd3666555b4bfb0e563108ab480d582ff1319227216b93fd46d2319699d	fluorita/docs/plans/active/2026-09-26-hardening.md
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	fluorita/qml/CelestinaWheelScroll.qml
+1	0	ebad70e10dffc13de21ccf9e5a61be583fb1036a6e67e1393db04e0574a78775	fluorita/qml/GlassMenuSection.qml
+3	0	9db41464962fb9eecb3423a395f99fe2ada3a4c74a0cf3e0c3bebe2a97716b67	fluorita/qml/components/GalleryGrid.qml
+2	0	891297619f5ffff40582ec60370d3fe93d9ad151b2ee45bf731036473bd18124	fluorita/qml/components/LibrarySidebar.qml
+3	0	11cdc1b18a94df0667382926f62d967cdf79c840699dde9ad34c1cadbdd2e092	fluorita/qml/components/MusicList.qml
+35	8	1b066cebc27cc40f4ae2f3720e98f1e1a548a18384081ebb62165b6882f0807c	fluorita/qml/components/StreamMenu.qml

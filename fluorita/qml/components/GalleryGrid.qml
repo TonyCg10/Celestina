@@ -27,6 +27,9 @@ GridView {
     // Which card the pointer is dwelling on, or an empty key.
     property string previewKey: ""
 
+    // Free wheel scrolling: a notch moves at once and a burst adds up.
+    CelestinaWheelScroll { view: grid }
+
     // How long the pointer has to stay still before anything decodes. Long
     // enough that crossing the grid on the way somewhere else starts nothing —
     // which is the whole promise that browsing costs no decoder.

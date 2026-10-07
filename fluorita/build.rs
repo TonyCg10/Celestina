@@ -17,6 +17,8 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaShadow.qml",
     "qml/GlassContextMenu.qml",
     "qml/GlassMenuItem.qml",
+    "qml/GlassMenuSection.qml",
+    "qml/CelestinaWheelScroll.qml",
     "qml/GlassSurface.qml",
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaIcon.qml",

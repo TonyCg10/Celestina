@@ -112,6 +112,8 @@ Item {
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Carpetas mapeadas")
 
+            CelestinaWheelScroll { view: list }
+
             // The whole library is the first row rather than a header, so one
             // arrow key walks from it into the folders and back.
             delegate: SidebarRow {

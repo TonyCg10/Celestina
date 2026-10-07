@@ -22,12 +22,23 @@ GlassContextMenu {
     // so a surface cannot present a speed the model would clamp away.
     readonly property var rates: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
-    CelestinaSectionLabel {
+    // Where a section's rows go: right after its anchor. A Repeater put them
+    // at an unrelated index and the headers drifted to the end of the menu.
+    function slotAfter(anchor, offset) {
+        for (let index = 0; index < menu.count; ++index) {
+            if (menu.itemAt(index) === anchor)
+                return index + 1 + offset
+        }
+        return menu.count
+    }
+
+    GlassMenuSection {
+        id: hAudio
         visible: menu.player.choosableAudio
         text: qsTr("Audio")
     }
 
-    Repeater {
+    Instantiator {
         model: menu.player.choosableAudio ? menu.player.audioStreams : []
 
         delegate: GlassMenuItem {
@@ -41,15 +52,20 @@ GlassContextMenu {
             Accessible.checked: menu.player.audioStream === index
             onTriggered: menu.player.selectAudioStream(index)
         }
+
+        onObjectAdded: (index, object) => menu.insertItem(menu.slotAfter(hAudio, index), object)
+        onObjectRemoved: (index, object) => menu.removeItem(object)
     }
 
-    CelestinaSectionLabel {
+    GlassMenuSection {
+        id: hSubs
         visible: menu.player.choosableSubtitles
         text: qsTr("Subtítulos")
     }
 
     // Off is a row like any other, and it is the one most often wanted.
     GlassMenuItem {
+        id: noSubs
         visible: menu.player.choosableSubtitles
         text: qsTr("Sin subtítulos")
         icon.name: menu.player.subtitleStream === -1 ? "check" : ""
@@ -59,7 +75,7 @@ GlassContextMenu {
         onTriggered: menu.player.selectSubtitleStream(-1)
     }
 
-    Repeater {
+    Instantiator {
         model: menu.player.choosableSubtitles ? menu.player.subtitleStreams : []
 
         delegate: GlassMenuItem {
@@ -73,14 +89,18 @@ GlassContextMenu {
             Accessible.checked: menu.player.subtitleStream === index
             onTriggered: menu.player.selectSubtitleStream(index)
         }
+
+        onObjectAdded: (index, object) => menu.insertItem(menu.slotAfter(noSubs, index), object)
+        onObjectRemoved: (index, object) => menu.removeItem(object)
     }
 
-    CelestinaSectionLabel {
+    GlassMenuSection {
+        id: hTerm
         visible: menu.player.timed
         text: qsTr("Al terminar")
     }
 
-    Repeater {
+    Instantiator {
         // The order is the domain's list of modes, and the position *is* the
         // token: the words live here, the meaning lives there.
         model: menu.player.timed
@@ -98,14 +118,18 @@ GlassContextMenu {
             Accessible.checked: menu.player.continuation === index
             onTriggered: menu.player.setContinuationMode(index)
         }
+
+        onObjectAdded: (index, object) => menu.insertItem(menu.slotAfter(hTerm, index), object)
+        onObjectRemoved: (index, object) => menu.removeItem(object)
     }
 
-    CelestinaSectionLabel {
+    GlassMenuSection {
+        id: hVel
         visible: menu.player.timed
         text: qsTr("Velocidad")
     }
 
-    Repeater {
+    Instantiator {
         model: menu.player.timed ? menu.rates : []
 
         delegate: GlassMenuItem {
@@ -119,5 +143,8 @@ GlassContextMenu {
             Accessible.checked: inForce
             onTriggered: menu.player.playAt(modelData)
         }
+
+        onObjectAdded: (index, object) => menu.insertItem(menu.slotAfter(hVel, index), object)
+        onObjectRemoved: (index, object) => menu.removeItem(object)
     }
 }
