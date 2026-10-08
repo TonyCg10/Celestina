@@ -1064,14 +1064,21 @@ def numstat_rows(root: Path, base: str, paths: Iterable[str]) -> list[InventoryR
     rows = []
     for path in sorted(set(paths)):
         tracked = git_run(root, "cat-file", "-e", f"{base}:{path}").returncode == 0
+        disk = root / path
         if tracked:
             output = git_output(root, "diff", "--numstat", "--no-renames", base, "--", path)
+            added, deleted = numstat_values(output, path)
+        elif os.path.islink(disk):
+            # A new symbolic link is one line to Git (its target). `diff
+            # --no-index` would follow a link to a directory and compare the
+            # directory instead, reporting nothing, so the row is written
+            # without asking Git.
+            added, deleted = "1", "0"
         else:
             output = git_output(
                 root, "diff", "--no-index", "--numstat", os.devnull, path, allowed=(0, 1)
             )
-        added, deleted = numstat_values(output, path)
-        disk = root / path
+            added, deleted = numstat_values(output, path)
         content = final_digest(disk) if os.path.lexists(disk) else "deleted"
         rows.append(InventoryRow(added, deleted, content, path))
     return rows

@@ -1,0 +1,17 @@
+# AUD-1-Q exact change inventory
+
+Base revision	d1804c320a226decc8d14119e21d8e29d5560686
+Pathspec	docs/evidence/2026-10-08-inventory-symlinks.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-Q.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	scripts/landing.py
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+55	0	39463821b92b59fee4618de4583d207ee67ea21fcd86678bcfbba4291f682933	docs/evidence/2026-10-08-inventory-symlinks.md
+17	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-Q.numstat.tsv
+1	0	d31bd0385a0d7e4640726419c4296c53e71f19458562de518d939dcfbae453b9	docs/plans/active/2026-09-26-monorepo-hardening.md
+9	2	28248e36e212710fd9c5a9b4e2a7d5e7bc5ecdf98ba88132e282b7407834f0a4	scripts/landing.py
+5	2	dd50439491362d46d2a32d71cd8c35121148d219916dc3dcff183b79989b4e33	scripts/test-land-unit.py

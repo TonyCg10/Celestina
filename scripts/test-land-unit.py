@@ -951,6 +951,8 @@ class LandingFunctions(unittest.TestCase):
 
             (root / "run.sh").chmod(0o755)
             (root / "new-link").symlink_to("target/file")
+            (root / "shared").mkdir()
+            (root / "dir-link").symlink_to("shared")
             (root / "old-link").unlink()
             (root / "old-link").symlink_to("elsewhere")
             calls: list[dict] = []
@@ -961,17 +963,18 @@ class LandingFunctions(unittest.TestCase):
                 return real_run(*args, **kwargs)
 
             with mock.patch.object(landing.subprocess, "run", recording_run):
-                rows = landing.numstat_rows(root, base, ["run.sh", "new-link", "old-link"])
+                rows = landing.numstat_rows(root, base, ["run.sh", "new-link", "old-link", "dir-link"])
         self.assertEqual(
             rows,
             [
+                landing.InventoryRow("1", "0", hashlib.sha256(b"shared").hexdigest(), "dir-link"),
                 landing.InventoryRow("1", "0", hashlib.sha256(b"target/file").hexdigest(), "new-link"),
                 landing.InventoryRow("1", "1", hashlib.sha256(b"elsewhere").hexdigest(), "old-link"),
                 landing.InventoryRow("0", "0", hashlib.sha256(b"echo run\n").hexdigest(), "run.sh"),
             ],
         )
         # Every Git call, `cat-file -e` included, reads no terminal and keeps
-        # its diagnostics.
+        # its diagnostics; the two new links ask Git nothing beyond `cat-file`.
         self.assertEqual(len(calls), 6)
         for kwargs in calls:
             self.assertIs(kwargs.get("stdin"), subprocess.DEVNULL)
