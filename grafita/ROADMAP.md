@@ -79,9 +79,10 @@ ones, unmarked UTF-16 and UTF-32, opened by naming them and verified to write
 the file back byte for byte before anything may be edited. A save that would
 lose a character the encoding cannot carry is refused instead.
 
-Nothing is detected: the mark reader is unchanged and no byte pattern concludes
-an encoding. The author names one with `Ctrl + E` or the footer button that
-shows the document's current encoding.
+At G8 nothing was detected: the author named an encoding with `Ctrl + E` or
+the footer button. `GRA-H1-E` (2026-10-07) replaced that gesture: a file that
+is not UTF-8 is now guessed with `chardetng`, kept only when the guess writes
+the file back byte for byte, and the button, the chooser and `Ctrl + E` are gone.
 
 The unit is in the archived
 [plan](docs/plans/archive/2026-08-19-g8-text-already-refused.md); the

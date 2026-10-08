@@ -9,8 +9,13 @@
 //! is a table, and a table that maps distinct bytes to distinct characters is
 //! reversible by inspection. That is why they are generated rather than
 //! written, and why the generator refuses a table whose bytes collide. None of
-//! them is ever concluded from a file, because nothing in the bytes says which
-//! one it is; a caller names it.
+//! them is concluded from a file by a mere mark or byte pattern, because
+//! nothing in the bytes proves which one it is. Bytes that are not UTF-8 are
+//! the one exception, and only as a statistical guess ([`Encoding::detect`]),
+//! made by a guesser the host supplies ([`EncodingGuess`]),
+//! that is accepted solely when the guessed encoding reads the bytes and
+//! writes back exactly the same ones; a guess that cannot is discarded, so
+//! detection can pick the wrong language but never lose a byte.
 
 mod multibyte;
 mod tables;
@@ -24,6 +29,14 @@ pub use tables::SingleByte;
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 const UTF16LE_BOM: &[u8] = &[0xFF, 0xFE];
 const UTF16BE_BOM: &[u8] = &[0xFE, 0xFF];
+
+/// A host-supplied statistical guess at the encoding of bytes that are not
+/// UTF-8: the WHATWG name of the encoding, or `None` for no opinion.
+///
+/// `complete` is false when `bytes` is only a prefix of the file. The answer is
+/// advice, never authority: [`Encoding::detect`] maps it onto the catalogue and
+/// discards it unless that encoding writes the same bytes back.
+pub type EncodingGuess = fn(bytes: &[u8], complete: bool) -> Option<&'static str>;
 
 /// A reversible text encoding Grafita can both read and write.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -131,6 +144,37 @@ impl Encoding {
         }
     }
 
+    /// Guesses the legacy encoding of bytes that are not valid UTF-8.
+    ///
+    /// The host's `guess` names the WHATWG encoding it thinks the buffer is in
+    /// (Grafita supplies Mozilla's `chardetng`; this crate carries no detector,
+    /// so a host that supplies none never reaches here). The name is mapped onto
+    /// the catalogue ([`from_whatwg_name`]). The answer is kept only
+    /// when decoding with it and encoding the result gives back `bytes` exactly,
+    /// so a wrong guess shows the wrong letters but can never damage the file.
+    /// `None` means no catalogued encoding reproduces these bytes.
+    ///
+    /// `complete` is false for a prefix of a larger file: a multi-byte
+    /// character may be cut at the end, so up to three trailing bytes are
+    /// allowed to be dropped from the verification.
+    #[must_use]
+    pub fn detect(bytes: &[u8], complete: bool, guess: EncodingGuess) -> Option<Self> {
+        let candidate = from_whatwg_name(guess(bytes, complete)?)?;
+        let slack = if complete { 0 } else { 3 };
+        (0..=slack.min(bytes.len()))
+            .map(|cut| &bytes[..bytes.len() - cut])
+            .any(|body| candidate.reproduces(body))
+            .then_some(candidate)
+    }
+
+    /// Whether decoding `bytes` and encoding the text gives `bytes` back.
+    fn reproduces(self, bytes: &[u8]) -> bool {
+        self.decode(bytes)
+            .ok()
+            .and_then(|text| self.encode(&text).ok())
+            .is_some_and(|written| written == bytes)
+    }
+
     /// Decodes a complete file, byte-order mark included, into text.
     pub fn decode(self, bytes: &[u8]) -> Result<String, DecodeError> {
         let mark = self.byte_order_mark();
@@ -201,6 +245,49 @@ impl Encoding {
             Self::MultiByte(encoding) => encode_multi_byte(text, encoding),
         }
     }
+}
+
+/// Maps the WHATWG name `chardetng` answers with onto the catalogue.
+///
+/// Only encodings Grafita round-trips are listed. Anything else the detector
+/// can answer (`windows-874`, `EUC-JP`, `gb18030`, `x-user-defined`, ...) has
+/// no entry and is treated as "no encoding found". `windows-1252` is also what
+/// WHATWG calls Latin-1, so a Latin-1 file lands on the table that matches it
+/// whenever that table assigns all of its bytes.
+fn from_whatwg_name(name: &str) -> Option<Encoding> {
+    let table = match name {
+        "windows-1250" => SingleByte::Windows1250,
+        "windows-1251" => SingleByte::Windows1251,
+        "windows-1252" => SingleByte::Windows1252,
+        "windows-1253" => SingleByte::Windows1253,
+        "windows-1254" => SingleByte::Windows1254,
+        "windows-1255" => SingleByte::Windows1255,
+        "windows-1256" => SingleByte::Windows1256,
+        "windows-1257" => SingleByte::Windows1257,
+        "windows-1258" => SingleByte::Windows1258,
+        "ISO-8859-2" => SingleByte::Iso8859_2,
+        "ISO-8859-3" => SingleByte::Iso8859_3,
+        "ISO-8859-4" => SingleByte::Iso8859_4,
+        "ISO-8859-5" => SingleByte::Iso8859_5,
+        "ISO-8859-6" => SingleByte::Iso8859_6,
+        "ISO-8859-7" => SingleByte::Iso8859_7,
+        "ISO-8859-8" | "ISO-8859-8-I" => SingleByte::Iso8859_8,
+        "ISO-8859-10" => SingleByte::Iso8859_10,
+        "ISO-8859-13" => SingleByte::Iso8859_13,
+        "ISO-8859-14" => SingleByte::Iso8859_14,
+        "ISO-8859-15" => SingleByte::Iso8859_15,
+        "ISO-8859-16" => SingleByte::Iso8859_16,
+        "KOI8-R" => SingleByte::Koi8R,
+        "KOI8-U" => SingleByte::Koi8U,
+        "IBM866" => SingleByte::Cp866,
+        "macintosh" => SingleByte::MacRoman,
+        "Shift_JIS" => return Some(Encoding::MultiByte(MultiByte::ShiftJis)),
+        "GBK" => return Some(Encoding::MultiByte(MultiByte::Gbk)),
+        "EUC-KR" => return Some(Encoding::MultiByte(MultiByte::EucKr)),
+        "Big5" => return Some(Encoding::MultiByte(MultiByte::Big5)),
+        _ => return None,
+    };
+    Some(Encoding::SingleByte(table))
 }
 
 impl MultiByte {

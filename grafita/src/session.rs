@@ -24,7 +24,6 @@ use grafita_core::save::{Durability, SaveRefusal};
 use grafita_core::search::Query;
 use grafita_core::session::{DeclineReason, DocumentSession, Event, Failure, Outcome};
 use grafita_core::worker::{Completion, DocumentWorker, Job};
-use grafita_core::Encoding;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -42,7 +41,6 @@ pub mod qobject {
         //                 back (a `file://` URI for a name that is not
         //                 UTF-8), and its display name
         // windowTitle   — what the compositor shows, dirty marker included
-        // encodingLabel — the encoding the document is written back in
         // dirty / busy  — differs from disk / the worker is reading or writing
         // statusText    — a completed action, for the quiet status line
         // errorText     — why the last action was refused; empty when fine
@@ -54,22 +52,8 @@ pub mod qobject {
         #[qproperty(QString, path)]
         #[qproperty(QString, name)]
         #[qproperty(QString, window_title)]
-        #[qproperty(QString, encoding_label)]
-        // encodingNames  — every encoding a document may be read as, in order
-        // encodingIndex  — which of them this document uses, or -1
-        // encodingRetry  — the file a refusal left waiting for an encoding,
-        //                  empty when there is none
-        #[qproperty(QStringList, encoding_names)]
-        #[qproperty(i32, encoding_index)]
-        #[qproperty(QString, encoding_retry)]
-        // encodingPrompt — the chooser is up. Owned here for the same reason
-        //                  `closePrompt` is: the surface that asks belongs to
-        //                  one document, and the document is what knows whether
-        //                  there is anything to ask about.
-        #[qproperty(bool, encoding_prompt)]
         // imported / containerLabel — this document is the text inside a
-        //   container somebody else wrote, and which kind. An imported document
-        //   has no encoding to choose: its encoding belongs to the container.
+        //   container somebody else wrote, and which kind
         #[qproperty(bool, imported)]
         #[qproperty(QString, container_label)]
         #[qproperty(bool, dirty)]
@@ -149,26 +133,6 @@ pub mod qobject {
         /// Moves the caret to the start of a line, counting from 1.
         #[qinvokable]
         fn go_to_line(self: Pin<&mut GrafitaSession>, line_number: i32);
-
-        /// Asks which encoding this document should be read as, when there is
-        /// something to ask about: an open saved document, or a file a refusal
-        /// left waiting. Ignored otherwise, so a host may bind it to a key
-        /// without testing first.
-        #[qinvokable]
-        fn request_encoding_chooser(self: Pin<&mut GrafitaSession>);
-
-        /// Withdraws that question.
-        #[qinvokable]
-        fn cancel_encoding_chooser(self: Pin<&mut GrafitaSession>);
-
-        /// Reads a document as the encoding at `index` in `encodingNames`.
-        ///
-        /// Applies to the open document when there is one, and otherwise to the
-        /// file a refusal left in `encodingRetry`. A document with unsaved work
-        /// is left alone: re-reading the file is how this works, and there is
-        /// no way to re-read it and keep edits that were never written.
-        #[qinvokable]
-        fn choose_encoding(self: Pin<&mut GrafitaSession>, index: i32);
 
         /// The document closed. A host with tabs drops the tab; a host with one
         /// window shows its empty state.
@@ -278,19 +242,14 @@ pub struct GrafitaSessionRust {
     path: QString,
     name: QString,
     window_title: QString,
-    encoding_label: QString,
+    imported: bool,
+    container_label: QString,
     dirty: bool,
     busy: bool,
     can_undo: bool,
     can_redo: bool,
     status_text: QString,
     error_text: QString,
-    encoding_names: cxx_qt_lib::QStringList,
-    encoding_index: i32,
-    encoding_retry: QString,
-    encoding_prompt: bool,
-    imported: bool,
-    container_label: QString,
     conflict_text: QString,
     close_prompt: bool,
     search_matches: i32,
@@ -323,19 +282,14 @@ impl Default for GrafitaSessionRust {
             path: QString::default(),
             name: QString::default(),
             window_title: QString::from("Grafita"),
-            encoding_label: QString::default(),
+            imported: false,
+            container_label: QString::default(),
             dirty: false,
             busy: false,
             can_undo: false,
             can_redo: false,
             status_text: QString::default(),
             error_text: QString::default(),
-            encoding_names: encoding_names(),
-            encoding_index: -1,
-            encoding_retry: QString::default(),
-            encoding_prompt: false,
-            imported: false,
-            container_label: QString::default(),
             conflict_text: QString::default(),
             close_prompt: false,
             search_matches: 0,
@@ -349,7 +303,10 @@ impl Default for GrafitaSessionRust {
             recent_documents: cxx_qt_lib::QStringList::default(),
             caret_offset: 0,
             pending_error: None,
-            session: DocumentSession::new(Limits::default()),
+            session: DocumentSession::new(Limits {
+                guess: Some(crate::encoding::guess),
+                ..Limits::default()
+            }),
             worker: None,
             quitting: false,
         }
@@ -593,13 +550,6 @@ impl qobject::GrafitaSession {
                 // only one the user ever saw. The one naming the file wins.
                 let message = format!("{}: {}", display_name(&path), decline_text(reason));
                 self.as_mut().rust_mut().get_mut().pending_error = Some(message);
-                // A file refused for what its bytes are may still be text in an
-                // encoding nothing in it declares. Held so the chooser has
-                // something to retry; a refusal for any other reason clears it,
-                // because naming an encoding cannot make a missing file appear.
-                let retry = retry_argument(&path, reason);
-                self.as_mut()
-                    .set_encoding_retry(QString::from(retry.as_str()));
             }
             Some(Event::Select { start, end }) => {
                 let start = i32::try_from(start).unwrap_or(i32::MAX);
@@ -653,56 +603,6 @@ impl qobject::GrafitaSession {
         }
     }
 
-    pub fn request_encoding_chooser(mut self: Pin<&mut Self>) {
-        let session = &self.rust().session;
-        // An imported document's encoding is the container's business. There is
-        // nothing here for the author to choose, so the question is not asked.
-        if session.state().container.is_some() {
-            return;
-        }
-        let open_and_saved = session.state().active && !session.state().dirty;
-        let waiting = !self.rust().encoding_retry.is_empty();
-        if open_and_saved || waiting {
-            self.as_mut().set_encoding_prompt(true);
-        }
-    }
-
-    pub fn cancel_encoding_chooser(mut self: Pin<&mut Self>) {
-        self.as_mut().set_encoding_prompt(false);
-    }
-
-    /// Reads a document as the encoding at `index`, on the document that is
-    /// open or on the file a refusal left waiting.
-    pub fn choose_encoding(mut self: Pin<&mut Self>, index: i32) {
-        self.as_mut().set_encoding_prompt(false);
-        let catalogue = Encoding::catalogue();
-        let Some(encoding) = usize::try_from(index)
-            .ok()
-            .and_then(|index| catalogue.get(index))
-            .copied()
-        else {
-            return;
-        };
-        let retry = self.rust().encoding_retry.to_string();
-        let outcome = if self.rust().session.state().active {
-            self.as_mut()
-                .rust_mut()
-                .get_mut()
-                .session
-                .reopen_with(encoding)
-        } else if let Some(path) = retry_path(&retry) {
-            self.as_mut()
-                .rust_mut()
-                .get_mut()
-                .session
-                .open_with(&path, encoding)
-        } else {
-            return;
-        };
-        self.as_mut().set_encoding_retry(QString::default());
-        self.dispatch(outcome);
-    }
-
     fn receive(mut self: Pin<&mut Self>, completion: Completion) {
         let outcome = self
             .as_mut()
@@ -730,25 +630,9 @@ impl qobject::GrafitaSession {
         self.as_mut()
             .set_path(QString::from(path_argument(&state.path).as_str()));
         self.as_mut().set_name(QString::from(state.name.as_str()));
-        self.as_mut().set_encoding_label(QString::from(
-            state
-                .encoding
-                .map(|encoding| encoding.label())
-                .unwrap_or(""),
-        ));
         self.as_mut().set_imported(state.container.is_some());
         self.as_mut()
             .set_container_label(QString::from(state.container.map_or("", Format::label)));
-        let index = state
-            .encoding
-            .and_then(|encoding| {
-                Encoding::catalogue()
-                    .iter()
-                    .position(|item| *item == encoding)
-            })
-            .and_then(|index| i32::try_from(index).ok())
-            .unwrap_or(-1);
-        self.as_mut().set_encoding_index(index);
 
         let title = if state.active {
             let marker = if state.dirty { "• " } else { "" };
@@ -838,36 +722,6 @@ const fn indentation_label(indentation: grafita_core::Indentation) -> &'static s
         grafita_core::Indentation::Mixed => "Indentación mixta",
         grafita_core::Indentation::None => "",
     }
-}
-
-/// Every encoding a document may be read as, in the core's catalogue order.
-fn encoding_names() -> cxx_qt_lib::QStringList {
-    Encoding::catalogue()
-        .iter()
-        .map(|encoding| QString::from(encoding.label()))
-        .collect()
-}
-
-/// The file a refusal leaves waiting for an encoding, in the form it is held
-/// in `encodingRetry`, or empty when naming an encoding cannot help.
-///
-/// A refusal for what the bytes are may still be text in an encoding nothing
-/// in it declares; a refusal for any other reason cannot be answered by naming
-/// one, because an encoding cannot make a missing file appear. The path is
-/// held in [`crate::url::qml_argument`]'s form so that a name that is not
-/// UTF-8 is retried as itself, not as a lossy look-alike.
-fn retry_argument(path: &Path, reason: DeclineReason) -> String {
-    match reason {
-        DeclineReason::UnsupportedEncoding | DeclineReason::NotText => {
-            crate::url::qml_argument(path).unwrap_or_default()
-        }
-        DeclineReason::Unreadable => String::new(),
-    }
-}
-
-/// The file `encodingRetry` holds, read back by the same rule it was written.
-fn retry_path(retry: &str) -> Option<PathBuf> {
-    crate::url::local_path(retry)
 }
 
 /// The document's path as QML sees it: the form `openPath` reads back, so a
@@ -963,21 +817,7 @@ mod tests {
     use std::os::unix::ffi::OsStrExt;
     use std::path::Path;
 
-    use grafita_core::session::DeclineReason;
-
-    use super::{path_argument, retry_argument, retry_path};
-
-    #[test]
-    fn a_name_that_is_not_utf8_is_retried_as_itself() {
-        let path = Path::new(OsStr::from_bytes(b"/home/toni/\xFFlatin1.txt"));
-
-        for reason in [DeclineReason::UnsupportedEncoding, DeclineReason::NotText] {
-            let retry = retry_argument(path, reason);
-            assert_eq!(retry_path(&retry).as_deref(), Some(path), "{reason:?}");
-        }
-        assert_eq!(retry_argument(path, DeclineReason::Unreadable), "");
-        assert_eq!(retry_path(""), None);
-    }
+    use super::path_argument;
 
     #[test]
     fn the_published_path_is_the_form_an_open_request_arrives_in() {

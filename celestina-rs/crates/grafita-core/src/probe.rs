@@ -6,7 +6,7 @@
 //! three truths rather than a boolean, so a host can say "this is text I cannot
 //! safely map back" instead of pretending the file is binary.
 
-use crate::encoding::{DecodeError, Encoding};
+use crate::encoding::{DecodeError, Encoding, EncodingGuess};
 use crate::import::Imported;
 
 /// How much of a file [`classify`] needs to answer for the whole file.
@@ -76,6 +76,16 @@ const CONTROL_PERCENT_LIMIT: usize = 5;
 /// expected, in a complete file they are a genuine encoding failure.
 #[must_use]
 pub fn classify(bytes: &[u8], complete: bool) -> Classification {
+    classify_with(bytes, complete, None)
+}
+
+/// [`classify`] with an optional guesser for bytes that are not UTF-8.
+///
+/// Without one, such bytes are `UnsupportedEncoding`, exactly as in
+/// [`classify`]. With one, they may become text in a legacy encoding that
+/// reproduces them byte for byte.
+#[must_use]
+pub fn classify_with(bytes: &[u8], complete: bool, guess: Option<EncodingGuess>) -> Classification {
     // Asked before anything else, because every one of these formats would
     // otherwise be called binary by the very next check and never reach the
     // reader that understands it. The marks are the formats' own first bytes,
@@ -91,9 +101,10 @@ pub fn classify(bytes: &[u8], complete: bool) -> Classification {
         // NUL means binary before any decoding is attempted, which is also what
         // keeps unmarked UTF-16 from being silently reinterpreted.
         Some(encoding) => {
-            nul_check(bytes).unwrap_or_else(|| classify_utf8(bytes, encoding, complete))
+            nul_check(bytes).unwrap_or_else(|| classify_utf8(bytes, encoding, complete, guess))
         }
-        None => nul_check(bytes).unwrap_or_else(|| classify_utf8(bytes, Encoding::Utf8, complete)),
+        None => nul_check(bytes)
+            .unwrap_or_else(|| classify_utf8(bytes, Encoding::Utf8, complete, guess)),
     }
 }
 
@@ -106,7 +117,12 @@ fn nul_check(bytes: &[u8]) -> Option<Classification> {
         })
 }
 
-fn classify_utf8(bytes: &[u8], encoding: Encoding, complete: bool) -> Classification {
+fn classify_utf8(
+    bytes: &[u8],
+    encoding: Encoding,
+    complete: bool,
+    guess: Option<EncodingGuess>,
+) -> Classification {
     match encoding.decode(bytes) {
         Ok(text) => control_verdict(&text, encoding),
         Err(DecodeError::InvalidUtf8 {
@@ -119,6 +135,37 @@ fn classify_utf8(bytes: &[u8], encoding: Encoding, complete: bool) -> Classifica
                 Err(reason) => Classification::UnsupportedEncoding { reason },
             }
         }
+        // Not UTF-8, and not marked as anything else: a legacy 8-bit or CJK
+        // file. Only a plain file is guessed at; a file that announced UTF-8
+        // with a mark and then broke it is damaged, not legacy.
+        //
+        // A file that already proved itself UTF-8 is never reinterpreted: any
+        // non-ASCII byte before the first error means the author wrote UTF-8
+        // and something later broke it, and a cut-off final character of a
+        // complete file is the same damage. Both are refused as before.
+        Err(
+            reason @ DecodeError::InvalidUtf8 {
+                offset,
+                truncated: false,
+            },
+        ) if encoding == Encoding::Utf8 && bytes[..offset].is_ascii() => {
+            match guess.and_then(|guess| Encoding::detect(bytes, complete, guess)) {
+                Some(detected) => detected_verdict(bytes, detected, complete),
+                None => Classification::UnsupportedEncoding { reason },
+            }
+        }
+        Err(reason) => Classification::UnsupportedEncoding { reason },
+    }
+}
+
+/// The control-byte verdict for text read through a detected encoding.
+fn detected_verdict(bytes: &[u8], encoding: Encoding, complete: bool) -> Classification {
+    let usable = (0..=if complete { 0 } else { 3 })
+        .map(|cut| bytes.len().saturating_sub(cut))
+        .find(|end| encoding.decode(&bytes[..*end]).is_ok())
+        .unwrap_or(bytes.len());
+    match encoding.decode(&bytes[..usable]) {
+        Ok(text) => control_verdict(&text, encoding),
         Err(reason) => Classification::UnsupportedEncoding { reason },
     }
 }
@@ -181,8 +228,8 @@ fn is_stray_control(character: char) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{classify, BinaryReason, Classification};
-    use crate::encoding::{DecodeError, Encoding};
+    use super::{classify, classify_with, BinaryReason, Classification};
+    use crate::encoding::{DecodeError, Encoding, EncodingGuess, MultiByte, SingleByte};
 
     fn editable(bytes: &[u8]) -> Option<Encoding> {
         classify(bytes, true).encoding()
@@ -275,14 +322,21 @@ mod tests {
         ));
     }
 
+    /// EUC-JP text: not UTF-8, and the detector's answer for it is an encoding
+    /// Grafita has no reversible table for, so nothing can be concluded.
+    const EUC_JP: &[u8] = &[
+        0xa4, 0xb3, 0xa4, 0xf3, 0xa4, 0xcb, 0xa4, 0xc1, 0xa4, 0xcf, 0xa1, 0xa2, 0xc0, 0xa4, 0xb3,
+        0xa6, 0xa1, 0xa3, 0x0a,
+    ];
+
     #[test]
     fn malformed_bytes_are_unsupported_rather_than_editable_or_binary() {
-        let outcome = classify(&[b'h', b'o', b'l', b'a', 0xFF, 0xFE], true);
+        let outcome = classify(EUC_JP, true);
 
         assert!(matches!(
             outcome,
             Classification::UnsupportedEncoding {
-                reason: DecodeError::InvalidUtf8 { offset: 4, .. }
+                reason: DecodeError::InvalidUtf8 { offset: 0, .. }
             }
         ));
         assert!(!outcome.is_editable());
@@ -308,6 +362,29 @@ mod tests {
     }
 
     #[test]
+    fn valid_utf8_followed_by_a_stray_byte_is_refused_not_reinterpreted() {
+        let mut bytes = "se\u{f1}or Mu\u{f1}oz wrote this in UTF-8"
+            .as_bytes()
+            .to_vec();
+        bytes.push(0xFF);
+
+        assert!(matches!(
+            classify(&bytes, true),
+            Classification::UnsupportedEncoding {
+                reason: DecodeError::InvalidUtf8 {
+                    truncated: false,
+                    ..
+                }
+            }
+        ));
+        // A complete ASCII file that ends in half a character is damaged too.
+        assert!(matches!(
+            classify(b"plain ascii then \xC3", true),
+            Classification::UnsupportedEncoding { .. }
+        ));
+    }
+
+    #[test]
     fn a_prefix_that_cuts_a_surrogate_pair_is_still_text() {
         let complete = Encoding::Utf16Le.encode("hola 🜲");
         let complete = complete.expect("a Unicode encoding carries every character");
@@ -325,6 +402,147 @@ mod tests {
                 reason: DecodeError::UnpairedSurrogate { .. }
             }
         ));
+    }
+
+    /// Accented Latin prose, spelled with escapes so the fixture is pure ASCII
+    /// source: `\u{e9} \u{f1} \u{fc}` is "e acute, n tilde, u diaeresis".
+    const LATIN_NOTE: &str = "The caf\u{e9} served se\u{f1}or Mu\u{f1}oz a pingu\u{fc}ino \
+        cake, and the na\u{ef}ve waiter wrote \u{ab}fa\u{e7}ade\u{bb} on the bill. \
+        Quelle \u{e9}t\u{e9} \u{e0} Z\u{fc}rich: \u{bf}qu\u{e9} d\u{ed}a es hoy?\n";
+
+    // Test guessers: the statistical part lives in the host, so these stand in
+    // for it by naming the WHATWG encoding the fixture was written in. What is
+    // under test is the mapping and the byte-exact check, not the statistics.
+    fn says_1252(_: &[u8], _: bool) -> Option<&'static str> {
+        Some("windows-1252")
+    }
+    fn says_koi8_r(_: &[u8], _: bool) -> Option<&'static str> {
+        Some("KOI8-R")
+    }
+    fn says_shift_jis(_: &[u8], _: bool) -> Option<&'static str> {
+        Some("Shift_JIS")
+    }
+    fn says_gbk(_: &[u8], _: bool) -> Option<&'static str> {
+        Some("GBK")
+    }
+    fn says_euc_jp(_: &[u8], _: bool) -> Option<&'static str> {
+        Some("EUC-JP")
+    }
+    fn says_nothing(_: &[u8], _: bool) -> Option<&'static str> {
+        None
+    }
+
+    #[test]
+    fn a_windows_1252_note_is_detected_and_reproduces_its_bytes() {
+        let table = Encoding::SingleByte(SingleByte::Windows1252);
+        let bytes = table.encode(LATIN_NOTE).expect("1252 carries these");
+
+        let Classification::EditableText { encoding } =
+            classify_with(&bytes, true, Some(says_1252))
+        else {
+            panic!("a Latin note in Windows-1252 must be editable text");
+        };
+        let text = encoding.decode(&bytes).expect("detected encoding decodes");
+        assert!(text.contains("se\u{f1}or Mu\u{f1}oz"), "{text}");
+        assert!(!text.contains('\u{FFFD}'));
+        assert_eq!(encoding.encode(&text).expect("re-encodes"), bytes);
+    }
+
+    #[test]
+    fn a_short_latin_sample_with_accents_decodes_as_text_not_mojibake() {
+        let table = Encoding::SingleByte(SingleByte::Windows1252);
+        let sample =
+            "Test: \u{e9} \u{f1} \u{fc}, se\u{f1}or Mu\u{f1}oz, pingu\u{fc}ino, cami\u{f3}n.\n";
+        let bytes = table.encode(sample).expect("1252 carries these");
+
+        let encoding = classify_with(&bytes, true, Some(says_1252))
+            .encoding()
+            .expect("detected as editable");
+        assert_eq!(encoding.decode(&bytes).expect("decodes"), sample);
+        assert_eq!(encoding.encode(sample).expect("re-encodes"), bytes);
+    }
+
+    #[test]
+    fn utf8_and_marked_files_are_never_reinterpreted_by_detection() {
+        assert_eq!(editable(LATIN_NOTE.as_bytes()), Some(Encoding::Utf8));
+        let mut marked = b"\xEF\xBB\xBF".to_vec();
+        marked.extend_from_slice(LATIN_NOTE.as_bytes());
+        assert_eq!(editable(&marked), Some(Encoding::Utf8Bom));
+    }
+
+    #[test]
+    fn a_cyrillic_koi8_note_is_detected_without_losing_a_byte() {
+        let table = Encoding::SingleByte(SingleByte::Koi8R);
+        let note = "Привет, мир! Это небольшая заметка на русском языке.\n";
+        let bytes = table.encode(note).expect("KOI8-R carries these");
+
+        let encoding = classify_with(&bytes, true, Some(says_koi8_r))
+            .encoding()
+            .expect("editable");
+        assert_eq!(encoding, Encoding::SingleByte(SingleByte::Koi8R));
+        let text = encoding.decode(&bytes).expect("decodes");
+        assert_eq!(text, note);
+        assert_eq!(encoding.encode(&text).expect("re-encodes"), bytes);
+    }
+
+    #[test]
+    fn longer_shift_jis_and_gbk_notes_are_detected_as_themselves() {
+        let japanese = "\u{4eca}\u{65e5}\u{306f}\u{3044}\u{3044}\u{5929}\u{6c17}\u{3067}\u{3059}\u{306d}\u{3002}\
+            \u{660e}\u{65e5}\u{306f}\u{96e8}\u{304c}\u{964d}\u{308b}\u{305d}\u{3046}\u{3067}\u{3059}\u{3002}\
+            \u{65e5}\u{672c}\u{8a9e}\u{306e}\u{30e1}\u{30e2}\u{3092}\u{66f8}\u{3044}\u{3066}\u{3044}\u{307e}\u{3059}\u{3002}\n";
+        let chinese = "\u{4eca}\u{5929}\u{5929}\u{6c14}\u{5f88}\u{597d}\u{ff0c}\u{6211}\u{4eec}\u{4e00}\u{8d77}\u{53bb}\u{516c}\u{56ed}\u{6563}\u{6b65}\u{3002}\
+            \u{8fd9}\u{662f}\u{4e00}\u{4efd}\u{7528}\u{7b80}\u{4f53}\u{4e2d}\u{6587}\u{5199}\u{6210}\u{7684}\u{7b14}\u{8bb0}\u{3002}\n";
+        for (label, text, expected, guess) in [
+            (
+                "shift-jis",
+                japanese,
+                Encoding::MultiByte(MultiByte::ShiftJis),
+                says_shift_jis as EncodingGuess,
+            ),
+            (
+                "gbk",
+                chinese,
+                Encoding::MultiByte(MultiByte::Gbk),
+                says_gbk as EncodingGuess,
+            ),
+        ] {
+            let bytes = expected.encode(text).expect("the encoding carries these");
+            let found = classify_with(&bytes, true, Some(guess)).encoding();
+            assert_eq!(found, Some(expected), "{label}");
+            assert_eq!(expected.decode(&bytes).as_deref(), Ok(text), "{label}");
+        }
+    }
+
+    #[test]
+    fn without_a_guesser_or_without_a_usable_answer_nothing_is_concluded() {
+        let table = Encoding::SingleByte(SingleByte::Windows1252);
+        let bytes = table.encode(LATIN_NOTE).expect("1252 carries these");
+
+        // The pre-detection behaviour, exactly: this is what a host that
+        // supplies no guesser gets.
+        assert!(matches!(
+            classify(&bytes, true),
+            Classification::UnsupportedEncoding { .. }
+        ));
+        assert_eq!(
+            classify_with(&bytes, true, Some(says_nothing)),
+            classify(&bytes, true)
+        );
+        // An encoding with no reversible table, and EUC-JP bytes.
+        assert_eq!(
+            classify_with(EUC_JP, true, Some(says_euc_jp)),
+            classify(EUC_JP, true)
+        );
+    }
+
+    #[test]
+    fn a_guess_that_would_not_write_the_bytes_back_is_discarded() {
+        // 0x81 0x20 is not a valid Shift-JIS sequence, so this guess cannot
+        // read the bytes; a wrong guess must fall back to the refusal.
+        let bytes = [b'a', 0x81, 0x20, b'z'];
+        let refused = classify(&bytes, true);
+        let guessed = classify_with(&bytes, true, Some(says_shift_jis));
+        assert_eq!(guessed, refused);
     }
 
     #[test]

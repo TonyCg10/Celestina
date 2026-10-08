@@ -26,10 +26,6 @@ Item {
     // document happens to be in front.
     required property var reading
 
-    // The footer owns whether the encoding may be chosen; the window's
-    // shortcut reads it through here so both gates are the same rule.
-    readonly property alias encodingChoosable: footer.encodingChoosable
-
     // Called by the window when the document's text moved underneath the widget.
     function adopt(text, caret) {
         body.text = text

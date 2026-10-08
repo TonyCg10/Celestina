@@ -55,7 +55,7 @@ mod testing;
 
 pub use buffer::{Fragment, Line, Replacement, TextBuffer};
 pub use document::{Conflict, Document, EditOutcome, Freshness, SaveApplication, SaveIntent};
-pub use encoding::{DecodeError, EncodeError, Encoding, MultiByte, SingleByte};
+pub use encoding::{DecodeError, EncodeError, Encoding, EncodingGuess, MultiByte, SingleByte};
 pub use highlight::{Language, LineState, Span as HighlightSpan, Token};
 pub use history::{History, Revision};
 pub use indent::Indentation;

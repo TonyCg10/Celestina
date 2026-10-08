@@ -1,4 +1,5 @@
 mod activation;
+mod encoding;
 mod preferences;
 mod session;
 mod syntax;

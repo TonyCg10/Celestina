@@ -11,17 +11,6 @@ Item {
 
     implicitHeight: actions.height + CelestinaTheme.space2xl
 
-    // Whether the document may be re-read as another encoding right now. One
-    // owner for the rule: the button below and the window's Ctrl+E both read
-    // it, so the shortcut can never do what the button refuses.
-    //
-    // A document with unsaved work cannot be re-read without losing them, so
-    // the action is not offered rather than offered and refused. An imported
-    // document has no encoding to choose either: it says what container it
-    // came out of and stops there.
-    readonly property bool encodingChoosable: !root.session.dirty && !root.session.busy
-                                              && !root.session.imported
-
     // The caret's position, which is what a person quotes when they talk about
     // a place in a file. Both numbers come from the document rather than from
     // the widget: the column counts characters, so an accented letter is one
@@ -49,7 +38,7 @@ Item {
         id: status
         anchors.left: caret.visible ? caret.right : parent.left
         anchors.leftMargin: CelestinaTheme.spaceLg
-        anchors.right: actions.left
+        anchors.right: containerCaption.visible ? containerCaption.left : actions.left
         anchors.rightMargin: CelestinaTheme.spaceMd
         anchors.verticalCenter: actions.verticalCenter
         elide: Text.ElideRight
@@ -71,47 +60,22 @@ Item {
         Accessible.ignored: status.text.length === 0
     }
 
-    // Back in the footer because it now asks for something. G7 removed this
-    // label when it was only a statement about the document; naming the
-    // encoding is an action, and this is where the document's actions live.
-    CelestinaButton {
-        id: encodingButton
+    // What kind of container an imported document came out of. A statement, not
+    // an action: nothing here can be clicked.
+    Text {
+        id: containerCaption
         anchors.right: actions.left
-        anchors.rightMargin: CelestinaTheme.spaceSm
+        anchors.rightMargin: CelestinaTheme.spaceMd
         anchors.verticalCenter: actions.verticalCenter
-        visible: root.session.active || root.session.encodingRetry.length > 0
-        enabled: root.encodingChoosable
-        text: {
-            if (root.session.imported)
-                return root.session.containerLabel
-            return root.session.active
-                   ? root.session.encodingLabel : "Leer como…"
-        }
-        onClicked: root.session.requestEncodingChooser()
+        visible: root.session.imported
+        text: root.session.containerLabel
+        textFormat: Text.PlainText
+        color: CelestinaTheme.textMuted
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontCaption
 
-        Accessible.role: Accessible.Button
-        Accessible.name: "Read this document as another encoding"
-
-        // The encoding name is the information, so the label stays; the glyph
-        // in front says what kind of thing it names.
-        contentItem: Row {
-            spacing: CelestinaTheme.spaceXs
-
-            CelestinaIcon {
-                anchors.verticalCenter: parent.verticalCenter
-                name: "binary"
-                tone: encodingButton.enabled ? CelestinaIcon.Primary
-                                             : CelestinaIcon.Secondary
-            }
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: encodingButton.text
-                textFormat: Text.PlainText
-                font: encodingButton.font
-                color: encodingButton.enabled ? CelestinaTheme.text
-                                              : CelestinaTheme.textMuted
-            }
-        }
+        Accessible.role: Accessible.StaticText
+        Accessible.name: text
     }
 
     Row {

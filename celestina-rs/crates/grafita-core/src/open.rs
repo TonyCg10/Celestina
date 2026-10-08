@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 
 use celestina_core::{CancellationToken, Generation};
 
-use crate::encoding::Encoding;
+use crate::encoding::{Encoding, EncodingGuess};
 use crate::import::{ImportError, Imported};
-use crate::probe::{classify, BinaryReason, Classification, DEFAULT_PROBE_BYTES};
+use crate::probe::{classify_with, BinaryReason, Classification, DEFAULT_PROBE_BYTES};
 use crate::target::Target;
 
 /// The ceiling on a document Grafita will hold in memory. An editor is not the
@@ -26,12 +26,18 @@ pub const DEFAULT_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const READ_ATTEMPTS: u32 = 3;
 
 /// Bounds a host puts on reading. The defaults suit an interactive editor.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+// No `PartialEq`: comparing function pointers means nothing, and nothing
+// compares limits.
+#[derive(Clone, Copy, Debug)]
 pub struct Limits {
     /// The largest file that may become a document.
     pub max_bytes: u64,
     /// How much of a file the cheap probe inspects.
     pub probe_bytes: usize,
+    /// Guesses the encoding of bytes that are not UTF-8. `None` keeps the
+    /// refusal: this crate carries no detector, so a host that wants one (the
+    /// Grafita application does) supplies it.
+    pub guess: Option<EncodingGuess>,
 }
 
 impl Default for Limits {
@@ -39,6 +45,7 @@ impl Default for Limits {
         Self {
             max_bytes: DEFAULT_MAX_BYTES,
             probe_bytes: DEFAULT_PROBE_BYTES,
+            guess: None,
         }
     }
 }
@@ -167,7 +174,7 @@ pub fn probe(
     Ok(ProbeOutcome {
         generation,
         path: path.to_path_buf(),
-        classification: classify(&buffer, complete),
+        classification: classify_with(&buffer, complete, limits.guess),
         complete,
     })
 }
@@ -225,7 +232,7 @@ pub fn open(
         // file is, and they agree by asking the same function: a classify that
         // said "binary" while the reader knew better is exactly how a `.docx`
         // came to be refused before anything tried to read it.
-        let encoding = match classify(bytes, true) {
+        let encoding = match classify_with(bytes, true, limits.guess) {
             Classification::ImportedDocument => {
                 return match Imported::open(bytes.to_vec(), limits.max_bytes, cancellation) {
                     Ok(imported) => {

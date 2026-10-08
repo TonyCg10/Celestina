@@ -195,7 +195,12 @@ fn marked_encodings_survive_an_edit() {
 #[test]
 fn bytes_that_cannot_be_mapped_back_are_never_offered_as_editable() {
     let root = scratch("unsupported");
-    let raw = b"texto y luego \xff\xfe bytes crudos\n";
+    // EUC-JP: not UTF-8, and the detector names an encoding Grafita has no
+    // reversible table for, so there is nothing safe to conclude.
+    let raw: &[u8] = &[
+        0xa4, 0xb3, 0xa4, 0xf3, 0xa4, 0xcb, 0xa4, 0xc1, 0xa4, 0xcf, 0xa1, 0xa2, 0xc0, 0xa4, 0xb3,
+        0xa6, 0xa1, 0xa3, 0x0a,
+    ];
     let path = root.join("crudo");
     fs::write(&path, raw).expect("write the fixture");
 
@@ -804,12 +809,12 @@ fn a_named_encoding_opens_what_the_bytes_cannot_prove() {
     let path = root.join("note");
     fs::write(&path, &bytes).expect("write the fixture");
 
-    // Left to itself the file is refused: 0xE7 is not UTF-8 and nothing says
-    // which single-byte encoding it is.
-    assert!(matches!(
-        open(&path, first_generation(), Limits::default(), &live()),
-        Err(OpenRefusal::UnsupportedEncoding { .. })
-    ));
+    // Left to itself the file is read as the legacy text it resembles, and
+    // whichever table the detector picks must write the bytes back unchanged.
+    let detected = open(&path, first_generation(), guessing_1252(), &live())
+        .expect("detection reads a Latin note");
+    assert_eq!(detected.text, "façade\nnaïve\n");
+    assert_eq!(detected.encoding.encode(&detected.text), Ok(bytes.clone()));
 
     let opened = open_with(&path, latin, first_generation(), Limits::default(), &live())
         .expect("the named encoding reads it");
@@ -918,12 +923,12 @@ fn a_multi_byte_file_opens_named_and_saves_back_identically() {
     let path = root.join("nota");
     fs::write(&path, &bytes).expect("write the fixture");
 
-    // Those bytes are not UTF-8, and nothing in them says which encoding they
-    // are, so the file is refused until the author names one.
-    assert!(matches!(
-        open(&path, first_generation(), Limits::default(), &live()),
-        Err(OpenRefusal::UnsupportedEncoding { .. })
-    ));
+    // Those bytes are not UTF-8. Detection may or may not recognise so short
+    // a sample; what it may never do is open it as something that does not
+    // write the same bytes back.
+    if let Ok(detected) = open(&path, first_generation(), guessing_shift_jis(), &live()) {
+        assert_eq!(detected.encoding.encode(&detected.text), Ok(bytes.clone()));
+    }
 
     let opened = open_with(&path, shift, first_generation(), Limits::default(), &live())
         .expect("the named encoding reads it");
@@ -1002,5 +1007,58 @@ fn the_spliced_projection_matches_a_full_rebuild_through_edits_and_history() {
     while document.can_redo() {
         document.redo().expect("redo");
         checks(&document);
+    }
+}
+
+/// The case the author reported: a Windows-1252 file with accents is plain text
+/// from the first open, with no encoding to choose, and saving reproduces it.
+#[test]
+fn a_windows_1252_file_opens_as_text_and_saves_back_identically() {
+    let root = scratch("detected-1252");
+    let table = Encoding::SingleByte(SingleByte::Windows1252);
+    let note = "Test: \u{e9} \u{f1} \u{fc}, se\u{f1}or Mu\u{f1}oz, pingu\u{fc}ino, cami\u{f3}n.\n";
+    let bytes = table.encode(note).expect("1252 carries these");
+    let path = root.join("nota.txt");
+    fs::write(&path, &bytes).expect("write the fixture");
+
+    let opened = open(&path, first_generation(), guessing_1252(), &live())
+        .expect("a legacy text file opens by itself");
+
+    // Without a guesser (Siderita's editor supplies none) it is refused, as it
+    // always was.
+    assert!(matches!(
+        open(&path, first_generation(), Limits::default(), &live()),
+        Err(OpenRefusal::UnsupportedEncoding { .. })
+    ));
+    assert_eq!(opened.text, note);
+
+    let mut document = Document::from_opened(opened);
+    assert!(!document.is_dirty());
+    assert_eq!(document.to_bytes(), Ok(bytes.clone()));
+    save_now(&mut document);
+    assert_eq!(fs::read(&path).expect("read back"), bytes);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Limits for a host whose guesser always answers Windows-1252. The statistics
+/// live in the host; these tests are about what the core does with the answer.
+fn guessing_1252() -> Limits {
+    fn guess(_: &[u8], _: bool) -> Option<&'static str> {
+        Some("windows-1252")
+    }
+    Limits {
+        guess: Some(guess),
+        ..Limits::default()
+    }
+}
+
+fn guessing_shift_jis() -> Limits {
+    fn guess(_: &[u8], _: bool) -> Option<&'static str> {
+        Some("Shift_JIS")
+    }
+    Limits {
+        guess: Some(guess),
+        ..Limits::default()
     }
 }

@@ -12,13 +12,11 @@ This manual lane does not contain implementation and does not block
 - **Procedure:** hover a tab and cross onto its close glyph; press and hold a
   tab; open find (Ctrl+F), toggle case and whole word, step with the chevrons,
   open and close replace with its glyph and with Ctrl+H; undo, redo, save and
-  close from the footer; open the encoding chooser and
-  hover a row that is not the current one
+  close from the footer
 - **Pass condition:** the close glyph paints nothing at rest and one circle
   on hover while the tab stays lit; a held tab darkens and sinks; toggles read
   as Selected while on; the bar does not resize when replace opens; every
-  glyph is legible without a label and none paints a hover card; the current and hovered
-  encoding rows are two different fills
+  glyph is legible without a label and none paints a hover card
 - **Result:** not run by hand
 - **Evidence:** any glyph whose meaning was not clear from the glyph alone
 
@@ -55,39 +53,33 @@ This manual lane does not contain implementation and does not block
   which the synthetic-input tool cannot produce, and `Alt + Z`, which the
   author's compositor claims for itself
 
-## VAL-G8 — Naming the encoding a file does not declare
+## VAL-G8 — Legacy encodings, detected automatically
 
 - **Status:** pending
 - **Related implementation:** checkpoint G8, unit `G8-A` in the
-  [plan](docs/plans/archive/2026-08-19-g8-text-already-refused.md);
-  [evidence](docs/evidence/2026-08-19-encodings-a-file-cannot-declare.md)
-- **Requires:** the author's own compositor and keyboard layout, and a real
-  file in an encoding Grafita cannot conclude — a `windows-1252` note, a
-  subtitle file, or anything a Windows tool wrote
-- **Procedure:** open that file and read what the footer says; press `Ctrl + E`
-  and also click the footer's encoding button; move through the list with the
-  arrow keys and with the wheel, and choose one with `Enter` and with a click;
-  dismiss the list with `Escape` and by clicking outside; choose an encoding
-  that is wrong for the file; open a document, type into it, and try `Ctrl + E`
-  again; with the document read correctly, save it and compare the bytes with
-  a copy made before
-- **Pass condition:** the refusal names the file rather than saying only that
-  it is not text; the chooser reaches the author from both the key and the
-  button, and the current encoding carries its mark; arrow keys, `Enter`,
-  `Escape` and the click all do what they look like; a wrong encoding either
-  refuses or shows visibly wrong characters and never claims success quietly;
-  the button is not offered while there is unsaved work; a file saved after
-  being read correctly is byte-identical to the copy
-- **Scope:** Grafita's own window. Siderita's embedded editor gained no gesture
-  here and reads what the core decides
+  [plan](docs/plans/archive/2026-08-19-g8-text-already-refused.md), and unit
+  `GRA-H1-E` (the author's request to drop the encoding button);
+  [evidence](docs/evidence/2026-10-07-automatic-encoding.md)
+- **Requires:** the author's own compositor and a real file in a legacy
+  encoding — a `windows-1252` note, a subtitle file, or anything a Windows tool
+  wrote
+- **Procedure:** open that file; read the text; confirm the footer has no
+  encoding button and `Ctrl + E` does nothing; type into the document, save it
+  and compare the bytes with a copy made before the edit; open a file whose
+  language the guess may get wrong
+- **Pass condition:** accented letters read as letters rather than as
+  mojibake; a file saved after being opened and not edited is byte-identical to
+  the copy; a file the detector cannot map to a reversible encoding is refused
+  with the honest message instead of being opened lossily; a character the
+  encoding cannot carry is refused at save
+- **Scope:** Grafita's own window. Siderita's embedded editor reads what the
+  core decides
 - **Result:** pending
-- **Evidence:** the agent lane checked, headlessly and without a window: that a
-  `latin-1` file is refused alone and opens exactly once its encoding is named,
-  that saving it untouched reproduces every byte, that a wrong encoding which
-  cannot write the file back is refused, and that a dirty document is not
-  re-read. Not covered there: whether the key reaches the application from the
-  author's physical layout, whether the list reads well at the author's scale,
-  and what a wrong-but-valid encoding looks like on screen
+- **Evidence:** the agent lane checked, headlessly and without a window, that a
+  `windows-1252` note opens as text and re-encodes exactly, that UTF-8 and BOM
+  files are untouched, and that bytes no reversible encoding reproduces keep
+  being refused. Not covered there: what a wrong-but-valid guess looks like on
+  screen
 
 ## VAL-G9 — The documents Grafita used to refuse
 
@@ -98,12 +90,11 @@ This manual lane does not contain implementation and does not block
 - **Requires:** the author's own session, and their own documents — a real
   `.docx` or `.odt` with styles and images, an `.epub`, a `.rtf`, a PDF, and a
   PDF form if they have one
-- **Procedure:** open each one and read what the footer says; correct one word
+- **Procedure:** open each one and read what the footer says (the container's name, as a plain caption); correct one word
   and save; reopen the file in the application that made it and look at what is
   around the correction; in the PDF, correct a word and then try one that needs
   a letter the document never uses; in a form, change a field and reopen it in
-  a viewer; try adding a paragraph and read the refusal; open a document, type,
-  and check the encoding button is not offered
+  a viewer; try adding a paragraph and read the refusal
 - **Pass condition:** the text shown is the document's text, in order, with its
   paragraphs as lines; the original application opens the saved file without
   complaint and every style, image and property is where it was; the PDF shows

@@ -880,15 +880,20 @@ fn an_untouched_new_document_can_still_be_given_a_destination() {
     );
 }
 
-/// The whole gesture the window offers: a file nothing can classify is
-/// refused, the author names an encoding, and the same file becomes an
-/// ordinary document that saves back byte for byte.
+/// A file nothing can classify is refused, and an encoding named for it (the
+/// core still supports that, even though the window no longer offers it) makes
+/// it an ordinary document that saves back byte for byte.
 #[test]
 fn naming_an_encoding_opens_what_the_probe_refused() {
     let root = scratch("session-encoding");
     let path = root.join("nota");
-    let latin = Encoding::SingleByte(SingleByte::Iso8859_1);
-    let bytes = latin.encode("façade\n").expect("latin-1 carries these");
+    let named = Encoding::MultiByte(grafita_core::MultiByte::Gbk);
+    // EUC-JP text: detection has no reversible answer, and the bytes are also
+    // valid GBK, which is the encoding named below.
+    let bytes: Vec<u8> = vec![
+        0xa4, 0xb3, 0xa4, 0xf3, 0xa4, 0xcb, 0xa4, 0xc1, 0xa4, 0xcf, 0xa1, 0xa2, 0xc0, 0xa4, 0xb3,
+        0xa6, 0xa1, 0xa3, 0x0a,
+    ];
     fs::write(&path, &bytes).expect("write");
 
     let (mut session, event) = open_session(&path);
@@ -902,13 +907,13 @@ fn naming_an_encoding_opens_what_the_probe_refused() {
     assert!(!session.state().active);
 
     // What the chooser does with the file the refusal left behind.
-    let outcome = session.open_with(&path, latin);
+    let outcome = session.open_with(&path, named);
     let job = outcome.job.expect("an open job");
     let event = pump(&mut session, job);
 
     assert!(matches!(event, Some(Event::PushText { .. })));
     assert!(session.state().active);
-    assert_eq!(session.state().encoding, Some(latin));
+    assert_eq!(session.state().encoding, Some(named));
     assert!(!session.state().dirty);
     assert!(session.state().failure.is_none());
 

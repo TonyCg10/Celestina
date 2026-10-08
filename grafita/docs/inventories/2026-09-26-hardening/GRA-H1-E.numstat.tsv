@@ -1,0 +1,57 @@
+# GRA-H1-E exact change inventory
+
+Base revision	2f6004d9d580c5b7afe4bc0ee385abed7d055742
+Pathspec	celestina-rs/crates/grafita-core/src/encoding.rs
+Pathspec	celestina-rs/crates/grafita-core/src/lib.rs
+Pathspec	celestina-rs/crates/grafita-core/src/open.rs
+Pathspec	celestina-rs/crates/grafita-core/src/probe.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/documents.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/sessions.rs
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/README.md
+Pathspec	grafita/ROADMAP.md
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/VALIDATION.md
+Pathspec	grafita/build.rs
+Pathspec	grafita/docs/evidence/2026-10-07-automatic-encoding.md
+Pathspec	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-E.numstat.tsv
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	grafita/qml/Main.qml
+Pathspec	grafita/qml/components/DocumentFooter.qml
+Pathspec	grafita/qml/components/DocumentView.qml
+Pathspec	grafita/qml/components/EncodingDialog.qml
+Pathspec	grafita/src/encoding.rs
+Pathspec	grafita/src/main.rs
+Pathspec	grafita/src/session.rs
+Pathspec	scripts/qmllint-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+89	2	c7698051eb379aac5195d58df18d586639128676b42e74bdf37f394525ba0dc3	celestina-rs/crates/grafita-core/src/encoding.rs
+1	1	47a56ce3a4defb69b67ccb8f6e78e84cd0b05cb262a02e8cedae3966e2087bdb	celestina-rs/crates/grafita-core/src/lib.rs
+12	5	63d10b452109f5ea7be7cc0068f0a8a96b5d309ba083da8ba5723187c4f40018	celestina-rs/crates/grafita-core/src/open.rs
+226	8	f0ac51cbc60c3b12f5f22d3e2c8c336bb425fdb72a2081af12d2d1364711e6c2	celestina-rs/crates/grafita-core/src/probe.rs
+71	13	7813862de13f60807d49e456b89ae3d2911577ae3d89be0e19029fb22081be38	celestina-rs/crates/grafita-core/tests/documents.rs
+12	7	82ca63be928d3af355385ca07fba4f1463af45035dcc982bb1be5c9d1a756c85	celestina-rs/crates/grafita-core/tests/sessions.rs
+1	0	2df499d0042b79c1757b76cba01b8ecd16014136bf9cbccd4eaa5ba183abf47d	docs/version-history.tsv
+51	1	a33a22840249bba4e82b3b1257599741711be8133fd269a6524f9897649a0688	grafita/Cargo.lock
+8	1	6d9c0eed99f43c8bf4dde06c001a16252130840759caec1ecbfc1166346cfdf4	grafita/Cargo.toml
+5	1	eef081df0dbbb16c6b1e9527b1b49286f29109ff8e1564e9860ac60e787f202a	grafita/README.md
+4	3	f97faffb160c0f4a1098a309a612e0fb9aeb41ee26cf6b89b73e90a50c1d4ca3	grafita/ROADMAP.md
+11	8	00718dc4aa1529cde5f293a3060180464e628b00ac7bfbd3ef512738c814cb47	grafita/STATUS.md
+27	36	19d44d6daf1bf3957110075e549c6474eb96eeef7a26de1620b54741601abb5b	grafita/VALIDATION.md
+0	1	fc38aea23c7a15990743e24d01bf08efd2f9949fbbf271f44ec41abc1514c7fd	grafita/build.rs
+39	0	07c102dbccc9e36730979acd79819cddb5b6bb5c4e43b82995c4088b2c73676a	grafita/docs/evidence/2026-10-07-automatic-encoding.md
+57	0	self	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-E.numstat.tsv
+1	0	a26ee93d7ba2b38742d86beb5e2be36f6fd0dc1a6ad822b110e772acf8941c24	grafita/docs/plans/active/2026-09-26-hardening.md
+0	27	fbcf51e7a184cfe5458188ada980a92acb743f0df7989cff9297209acad8cd5a	grafita/qml/Main.qml
+14	50	7047e93d43349ec59a74020d7c578e1277d4b4d9c5f34a9655b73f03e9b394ed	grafita/qml/components/DocumentFooter.qml
+0	4	71e1288aa4a327cbf34ccef0482cef145784cf7deb602445cc81e4e5c1cb38fc	grafita/qml/components/DocumentView.qml
+0	155	deleted	grafita/qml/components/EncodingDialog.qml
+52	0	1c36aca2b541879f597923dc61a96eccd896077bd89181592a837736d7282cd1	grafita/src/encoding.rs
+1	0	5e38fa7c35f89b247b7a793d91a1ba0f47db01e3d99828cf2120486abe715015	grafita/src/main.rs
+10	170	9db2ef41559a764fab20790576721e6e4241ba6fe176106295ed3a823adba746	grafita/src/session.rs
+1	1	44c78c760029b54073d23f0b33b01069132d7a9f2e4444a1f76394d5198cc885	scripts/qmllint-baseline.tsv

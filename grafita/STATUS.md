@@ -110,16 +110,19 @@
   original file is the literal byte prefix of the saved one.
 - `grafita-core` carries thirty single-byte encodings and four multi-byte ones,
   generated from the standards' own mappings, plus unmarked UTF-16 and UTF-32.
-  None is ever concluded from bytes: `open_with` reads a file as the encoding a
-  caller names and refuses it unless re-encoding reproduces the file exactly.
+  Bytes that are not UTF-8 are guessed with `chardetng` (supplied by the application through `Limits::guess`; `grafita-core` maps the guess in `Encoding::detect`)
+  and the guess is kept only if re-encoding reproduces the file exactly;
+  `open_with` still reads a file as an encoding a caller names under the same
+  rule.
   A document's text can fail to become bytes, so `Document::save_request`
   answers with `SaveIntent` and both hosts present
-  `SaveRefusal::Unrepresentable`. In the application the encoding is a footer
-  button and `Ctrl + E`; a document with unsaved work is not offered the
-  choice, because choosing re-reads the file.
-- What this does not do is detect a wrong choice. The same bytes are often
-  valid in two encodings and both write back unchanged; the guarantee is that
-  no byte is lost, not that the author picked the right language.
+  `SaveRefusal::Unrepresentable`. In the application the encoding is detected
+  automatically; the footer button, the chooser and `Ctrl + E` were removed in
+  `GRA-H1-E`. An imported document still shows its container's name as a plain
+  footer caption.
+- What this does not do is guarantee the right language. The same bytes are
+  often valid in two encodings and both write back unchanged; the guarantee is
+  that no byte is lost, not that the guess matches what the author wrote.
 
 ## Conditional work, not active debt
 

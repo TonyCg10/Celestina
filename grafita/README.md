@@ -16,7 +16,11 @@ standalone application and a bounded editor embedded in Siderita.
   debugger, terminal, LSP or plugin platform.
 
 Supported editable encodings are UTF-8, UTF-8 with BOM and UTF-16 LE/BE with
-BOM. Unknown or malformed byte streams are reported honestly instead of being
+BOM, plus the legacy single-byte and multi-byte encodings the core can write
+back byte for byte. A file that is not UTF-8 is read through an automatic
+guess (Mozilla's `chardetng`, carried by the application and not by `grafita-core`) and accepted only if the guessed encoding
+reproduces the file exactly; there is no encoding picker. Anything the guess
+cannot map to a reversible encoding is reported honestly instead of being
 silently reinterpreted.
 
 ## Architecture

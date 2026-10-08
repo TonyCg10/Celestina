@@ -44,7 +44,6 @@ const QML_FILES: &[&str] = &[
     "qml/components/DocumentHeader.qml",
     "qml/components/DocumentFooter.qml",
     "qml/components/UnsavedDialog.qml",
-    "qml/components/EncodingDialog.qml",
     "qml/Main.qml",
 ];
 
