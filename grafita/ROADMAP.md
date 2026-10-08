@@ -30,6 +30,13 @@ The plan is
 thread, the shared `file_uri` owner and STATUS). The findings are in
 [the Hematita and Grafita audit record](../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md).
 
+`GRA-H1-G` (2026-10-07, the author's request) replaced the hand-written lexer
+the 2026-07-31 spike chose with KDE's KSyntaxHighlighting, so a `.kdl` or a
+`.desktop` file is coloured the way Kate and KWrite colour it, and added
+bracket matching beside the caret. The spike's objection — size and start-up
+for the Rust libraries it measured — does not carry over: the library is a
+shared system package, not code linked into the binary.
+
 ## G7 — reading comfort, closed 2026-08-19
 
 Its falsifiable problem was a surface that showed an encoding label nobody

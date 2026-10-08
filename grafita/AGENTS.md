@@ -24,6 +24,11 @@ Grafita constraints; it cannot relax the root or grant authority.
   the other's QML or reimplements core rules.
 - Extension and MIME assist discovery/highlighting but never decide whether a
   file is text. Canonical classification uses bytes and encoding.
+- Syntax colouring is KDE's KSyntaxHighlighting (`syntax-highlighting`
+  package, a build and run-time dependency) behind `cpp/highlighter.{h,cpp}`:
+  the definition comes from the file's name, then its first line; colours come
+  only from `CelestinaTheme` tokens injected from QML, never from a
+  KSyntaxHighlighting theme or a literal. Grafita does not grow its own lexer.
 - Grafita opens documents, not projects. Project trees, build runners,
   debuggers, LSP, terminals, and plugin platforms are out of scope.
 

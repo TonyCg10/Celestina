@@ -471,26 +471,29 @@ fn classifying_does_not_disturb_an_open_document() {
     let _ = fs::remove_dir_all(root);
 }
 
-/// The language follows the document, and a document Grafita cannot colour is
-/// still a document Grafita edits.
+/// The colouring follows the file the document writes to: its name, after
+/// links are followed, is what the host hands its syntax highlighter. A
+/// document with no file yet has no name to colour by.
 #[test]
-fn the_open_document_reports_its_language_and_colours_its_lines() {
-    let root = scratch("language");
-    let code = root.join("modulo.rs");
-    let unknown = root.join("notas.desconocido");
-    fs::write(&code, b"let x = 42; // nota\n").expect("write");
-    fs::write(&unknown, b"let x = 42; // nota\n").expect("write");
+fn the_open_document_names_the_file_it_is_coloured_by() {
+    let root = scratch("syntax-name");
+    let real = root.join("config.kdl");
+    let link = root.join("enlace");
+    fs::write(&real, b"node 1\n").expect("write");
+    std::os::unix::fs::symlink(&real, &link).expect("symlink");
 
-    let (session, _) = open_session(&code);
-    assert_eq!(session.language(), grafita_core::Language::Rust);
-    let (spans, _) = session.highlight_line(0, grafita_core::LineState::Normal);
-    assert_eq!(spans.len(), 3, "keyword, number and comment");
+    let (session, _) = open_session(&real);
+    assert_eq!(session.syntax_file_name(), "config.kdl");
 
-    let (session, _) = open_session(&unknown);
-    assert_eq!(session.language(), grafita_core::Language::Plain);
-    let (spans, _) = session.highlight_line(0, grafita_core::LineState::Normal);
-    assert!(spans.is_empty(), "plain text is coloured as nothing");
+    let (session, _) = open_session(&link);
+    assert_eq!(
+        session.syntax_file_name(),
+        "config.kdl",
+        "a link is coloured as the file it names"
+    );
     assert!(session.state().active, "and is still perfectly editable");
+
+    assert_eq!(new_session().syntax_file_name(), "");
 
     let _ = fs::remove_dir_all(root);
 }

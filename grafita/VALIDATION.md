@@ -81,6 +81,31 @@ This manual lane does not contain implementation and does not block
   being refused. Not covered there: what a wrong-but-valid guess looks like on
   screen
 
+## VAL-GRA-SYNTAX — Colour by file type and matching brackets
+
+- **Status:** pending
+- **Related implementation:** unit `GRA-H1-G` in the
+  [plan](docs/plans/active/2026-09-26-hardening.md);
+  [evidence](docs/evidence/2026-10-07-syntax-colouring.md)
+- **Requires:** the deployed Grafita on the author's session, and real files:
+  `~/.config/niri/config.kdl`, a `.desktop` entry, a Markdown note, a
+  `Cargo.toml`, a shell script without an extension
+- **Procedure:** open each one and read the colours; put the caret beside an
+  opening and a closing brace; switch the session between light and dark if
+  it offers both; "Guardar como" a plain `.txt` note as `.md`
+- **Pass condition:** each file is coloured as its language (the KDL node
+  names, strings, numbers and comments apart from each other); comments read
+  as quieter than code; a brace and its partner are boxed together and nothing
+  else is; the text never changes and undo has nothing new to undo; the
+  renamed note turns Markdown without reopening it
+- **Result:** not run by hand
+- **Evidence:** the agent lane checked, without a window, that `.kdl`,
+  `.desktop`, `Cargo.toml`, `README.md` and an extension-less shell script pick
+  their definitions and an unknown name stays plain, that brackets pair by
+  depth across lines and past quoted ones, and that the binary starts with a
+  `.kdl` file open. Not covered there: what the colours look like on screen
+- **Scope:** Grafita's own window. Siderita's embedded editor does not colour
+
 ## VAL-G9 — The documents Grafita used to refuse
 
 - **Status:** pending

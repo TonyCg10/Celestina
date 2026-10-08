@@ -86,12 +86,19 @@
   typed refusal rather than an abort in Grafita or in Siderita's preview.
   Written under unit `GRA-H1-A`, covered by `grafita-core`'s `hostile` tests,
   not yet built or deployed.
-- The highlighter paints runs `grafita-core` has already measured in UTF-16
-  code units, converted in one pass over the line, so a 5 MB minified line
-  colours in linear time and the C++ side no longer owns a second copy of the
-  offset rule. Setting the four palette colours re-colours the document once,
+- Syntax colouring is KDE's KSyntaxHighlighting (the `syntax-highlighting`
+  package, now a build and run-time dependency), the engine Kate and KWrite
+  use: a file is coloured by the definition its name selects — KDL, `.desktop`,
+  Markdown, TOML, JSON and several hundred more — then by its first line (a
+  shebang), and otherwise stays plain text. Every text style is painted from a
+  `CelestinaTheme` token injected from QML; no KSyntaxHighlighting theme is
+  loaded. The bracket beside the caret (`()`, `[]`, `{}`) and its partner,
+  looked for within 100 000 characters and skipping brackets inside strings and
+  comments, are boxed in `accentSoft` behind the text. The hand-written lexer
+  in `grafita-core` is gone. Setting the palette re-colours the document once,
   and the highlighter's `target` reads null once the `TextEdit` that owns it
-  is gone. The recent-documents list is written by the document worker
+  is gone. Written under unit `GRA-H1-G` at the author's request, covered by
+  Grafita's `syntax` tests and the smoke, not yet deployed. The recent-documents list is written by the document worker
   (`Job::RecentChange`, which never `stat`s) and read by it (`Job::RecentList`,
   whose existence checks run on a detached prober and wait at most a second;
   while that prober is stuck on a dead mount the stored list is offered

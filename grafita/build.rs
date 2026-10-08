@@ -1,4 +1,33 @@
+use std::path::{Path, PathBuf};
+
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
+
+/// Where KDE's KSyntaxHighlighting (the `syntax-highlighting` package) keeps
+/// its headers. The library ships a CMake package and no pkg-config file, so
+/// this reads the layout that package installs — `<prefix>/include/KF6/
+/// KSyntaxHighlighting` and `-lKF6SyntaxHighlighting` beside Qt's own — under
+/// `/usr` unless `KF6_PREFIX` names another prefix.
+fn syntax_highlighting_headers() -> PathBuf {
+    println!("cargo::rerun-if-env-changed=KF6_PREFIX");
+    let prefix =
+        std::env::var_os("KF6_PREFIX").map_or_else(|| PathBuf::from("/usr"), PathBuf::from);
+    let headers = prefix.join("include/KF6/KSyntaxHighlighting");
+    assert!(
+        headers
+            .join("KSyntaxHighlighting/SyntaxHighlighter")
+            .is_file(),
+        "KSyntaxHighlighting headers not found under {}; install the \
+         `syntax-highlighting` package (pacman -S syntax-highlighting) or set \
+         KF6_PREFIX",
+        headers.display()
+    );
+    let libraries = prefix.join("lib");
+    if prefix != Path::new("/usr") {
+        println!("cargo::rustc-link-search=native={}", libraries.display());
+    }
+    println!("cargo::rustc-link-lib=dylib=KF6SyntaxHighlighting");
+    headers
+}
 
 // Every QML file in one list, so it is both registered in the module and
 // watched for rebuilds — the discipline Siderita learned the hard way, where
@@ -88,9 +117,9 @@ fn main() {
         // typeface (the canonical fonts.qrc is a style symlink).
         .qrc("qml/fonts.qrc")
         // The syntax highlighter: hand-written C++ because colouring a Qt text
-        // document without rewriting its text means overriding
-        // QSyntaxHighlighter::highlightBlock, which CXX-Qt cannot express. The
-        // header is moc'd (Q_OBJECT); the .cpp is compiled.
+        // document without rewriting its text means subclassing
+        // KSyntaxHighlighting's QSyntaxHighlighter, which CXX-Qt cannot
+        // express. The header is moc'd (Q_OBJECT); the .cpp is compiled.
         .cpp_file("cpp/highlighter.cpp")
         .cpp_file("cpp/highlighter.h")
         .files([
@@ -100,10 +129,13 @@ fn main() {
             "src/syntax.rs",
         ]);
 
-    // SAFETY: only adds an include directory for our own headers.
+    let syntax_headers = syntax_highlighting_headers();
+    // SAFETY: only adds include directories: our own headers and
+    // KSyntaxHighlighting's.
     let builder = unsafe {
         builder.cc_builder(|cc| {
             cc.include("cpp");
+            cc.include(&syntax_headers);
         })
     };
     builder.build();

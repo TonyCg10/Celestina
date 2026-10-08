@@ -1,0 +1,55 @@
+# GRA-H1-G exact change inventory
+
+Base revision	edff0ef2d6128744c9a5da868a940fc79750a485
+Pathspec	celestina-rs/crates/grafita-core/src/document.rs
+Pathspec	celestina-rs/crates/grafita-core/src/highlight.rs
+Pathspec	celestina-rs/crates/grafita-core/src/lib.rs
+Pathspec	celestina-rs/crates/grafita-core/src/session.rs
+Pathspec	celestina-rs/crates/grafita-core/tests/sessions.rs
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/AGENTS.md
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/README.md
+Pathspec	grafita/ROADMAP.md
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/VALIDATION.md
+Pathspec	grafita/build.rs
+Pathspec	grafita/cpp/highlighter.cpp
+Pathspec	grafita/cpp/highlighter.h
+Pathspec	grafita/docs/evidence/2026-10-07-syntax-colouring.md
+Pathspec	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-G.numstat.tsv
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	grafita/qml/components/DocumentView.qml
+Pathspec	grafita/scripts/smoke.sh
+Pathspec	grafita/src/session.rs
+Pathspec	grafita/src/syntax.rs
+Pathspec	scripts/language-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+11	25	f6ee39ee2e783817d87473ac093c72a233a469e68796d23bc9df877bd7422bfa	celestina-rs/crates/grafita-core/src/document.rs
+0	765	deleted	celestina-rs/crates/grafita-core/src/highlight.rs
+0	2	f483dee3e10716e725bf81a0b28492885a50c068adcecf700185554c44b91056	celestina-rs/crates/grafita-core/src/lib.rs
+5	16	2c2a4ae436eafa45534b5b2f82da1a588fd254ebd396d8724321c0d7262fce5e	celestina-rs/crates/grafita-core/src/session.rs
+21	18	da6c25248e8b340791db17645dfd15bcd142dc45948aa4d783f0bc22598a33fe	celestina-rs/crates/grafita-core/tests/sessions.rs
+1	0	97ed5acfd42b99132ce9ee27ee0860a7e72103b20cdeaa2befd6102944e1ffd9	docs/version-history.tsv
+5	0	7668b42c5d863a010062f7518578505022957ec92fa07ba629debbf5f70e2c3b	grafita/AGENTS.md
+1	1	e89d7d9a195503fb1fce2fa76881b2411650fd7d729c1699e8e5fcd3452954c9	grafita/Cargo.lock
+1	1	f824e52384c674f23f069bc9de5096e11230f0bd690d386d9091546092a8b177	grafita/Cargo.toml
+9	3	75a7502bae285b21677a28ac3de79b5619c07d6c9f83449069b47c9ee4fa21b4	grafita/README.md
+7	0	16a9d609fadc7a30ca09cef52455392d38814699ab01704ce726069e4df54963	grafita/ROADMAP.md
+12	5	b0b3e4d17a3a91615bded8be55deda27358fc61d5c5221645f579ff5441d0134	grafita/STATUS.md
+25	0	a5fe1a5e9d107b2ebb53fa2865b2bf42c4df67da5a4bd354c62cf87aacc76d98	grafita/VALIDATION.md
+36	4	eeb1942924eeaa6c4b8a32e52aea3ba0f44efb2876e991f1933cec28d99f7a25	grafita/build.rs
+524	66	f2cc32d4877602342f1e356c4233cf7a009c9cddadfa5987ae47042440d65812	grafita/cpp/highlighter.cpp
+186	35	9f74fa45b012641baac6cfdd68a2164caaa6c0ec898fde769ef555044329272c	grafita/cpp/highlighter.h
+37	0	63c908cfc3de4e284bbfd47e243845059883dbd8b4c29a58c1b0161ca7c6c8c3	grafita/docs/evidence/2026-10-07-syntax-colouring.md
+55	0	self	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-G.numstat.tsv
+1	0	8ef1451c1357dc6bb6cf6912f4da98ae658223199a308ba9b1cb8349d93eae7d	grafita/docs/plans/active/2026-09-26-hardening.md
+69	6	f1b9c9ee0f800c45669cae09710553118c6842e32cbcd2dd8c9c0388b6d24313	grafita/qml/components/DocumentView.qml
+35	1	d34012194cb0061bb6c782a0e73c9f2b6779a2a7b468388bfd28c29133bb0fe5	grafita/scripts/smoke.sh
+17	6	1fc7b4b5d087cc7df8795439beaa2663d6034cf3ed4ff08089ff0ef359fc9666	grafita/src/session.rs
+142	172	5399a79ca4770d74a7865aa27019cd24c5c7d4376d968d850b3aeaf958355b02	grafita/src/syntax.rs
+0	1	7d2e80fafd5a2283f393e75b73a4f9de15867cd79b5f6ff13e1d97a7179c9114	scripts/language-baseline.tsv

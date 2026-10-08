@@ -27,8 +27,9 @@ silently reinterpreted.
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/grafita-core` | Text probing, byte/newline-preserving document, edit history, search/highlight, tabs/session outcomes and safe file IO; no Qt |
+| `../celestina-rs/crates/grafita-core` | Text probing, byte/newline-preserving document, edit history, search, tabs/session outcomes and safe file IO; no Qt |
 | `src/` | Standalone CXX-Qt adapter, activation, bounded workers and desktop integration |
+| `cpp/` | Syntax colouring through KDE's KSyntaxHighlighting, painted from `CelestinaTheme` colours, and bracket matching beside the caret |
 | `qml/` | Standalone window, document tabs and editor presentation |
 | `../siderita/src/editor.rs` | Thin Siderita adapter over the same core |
 | `../siderita/qml/dialogs/` | Bounded embedded editing surface |
@@ -42,8 +43,13 @@ are applied on the GUI thread.
 
 ## Build and use
 
-Grafita needs Rust and a compatible Qt 6 development environment visible to
-CXX-Qt. The canonical production workflow is:
+Grafita needs Rust, a compatible Qt 6 development environment visible to
+CXX-Qt, and KDE's KSyntaxHighlighting (KF6) for syntax colouring — on Arch and
+CachyOS the `syntax-highlighting` package (`pacman -S syntax-highlighting`),
+which provides the headers and the CMake package at build time and
+`libKF6SyntaxHighlighting.so.6` with its several hundred language definitions
+at run time. `build.rs` looks for it under `/usr`, or under `KF6_PREFIX` when
+that is set. The canonical production workflow is:
 
 ```sh
 scripts/build-production.sh

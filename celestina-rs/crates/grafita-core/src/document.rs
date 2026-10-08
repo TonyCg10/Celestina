@@ -14,7 +14,6 @@ use celestina_core::Generation;
 use crate::buffer::{Fragment, Replacement, TextBuffer};
 use crate::display::{self, LineMap};
 use crate::encoding::{EncodeError, Encoding};
-use crate::highlight::{self, Language, LineState, Span as HighlightSpan};
 use crate::history::{History, Revision};
 use crate::import::Imported;
 use crate::indent::{self, Indentation};
@@ -388,32 +387,19 @@ impl Document {
         result
     }
 
-    /// Which language this document is coloured as.
+    /// The name of the file this document is coloured by, empty when it has
+    /// none yet.
     ///
-    /// Chosen from the resolved file's name — the one place a name decides
-    /// anything, and it decides only colour. Whether the file could be opened
-    /// at all was settled by its bytes.
+    /// The resolved file's name — the one place a name decides anything, and
+    /// it decides only colour, which the host's highlighter picks from it.
+    /// Whether the file could be opened at all was settled by its bytes.
     #[must_use]
-    pub fn language(&self) -> Language {
-        self.target.as_ref().map_or(Language::Plain, |target| {
-            Language::for_path(target.resolved())
-        })
-    }
-
-    /// Colours one line of the projection, given what the previous line left.
-    ///
-    /// Line indices match the projection a widget holds, so a host can
-    /// re-colour just the lines that changed.
-    #[must_use]
-    pub fn highlight_line(
-        &self,
-        index: usize,
-        incoming: LineState,
-    ) -> (Vec<HighlightSpan>, LineState) {
-        match self.buffer.line(index) {
-            Some(line) => highlight::line(line.text(), self.language(), incoming),
-            None => (Vec::new(), LineState::Normal),
-        }
+    pub fn syntax_file_name(&self) -> String {
+        self.target
+            .as_ref()
+            .and_then(|target| target.resolved().file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
     }
 
     /// What this document indents with.

@@ -83,4 +83,38 @@ if ! cmp -s "$scratch/documento.txt" "$scratch/documento-original.txt"; then
     exit 1
 fi
 
-echo "smoke: OK — binario vivo 8 s, sin errores QML, sin auto-bindings"
+# A KDL document, so the start-up also loads KSyntaxHighlighting's repository,
+# picks a definition by the file's name and paints it, and places the bracket
+# pair beside the caret (which starts before the first `{`). A missing or
+# broken library shows up here as an exit or a QML error, not on the author's
+# first open.
+printf '// smoke\nnode {\n    child "a" key=1\n}\n' > "$scratch/config.kdl"
+cp "$scratch/config.kdl" "$scratch/config-original.kdl"
+log=$scratch/kdl.log
+XDG_CONFIG_HOME=$scratch/config \
+XDG_DATA_HOME=$scratch/data \
+XDG_CACHE_HOME=$scratch/cache \
+XDG_STATE_HOME=$scratch/state \
+XDG_RUNTIME_DIR=$scratch/run \
+DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+QT_QPA_PLATFORM=offscreen \
+QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+    timeout 8 "$bin" "$scratch/config.kdl" >"$log" 2>&1
+rc=$?
+if [ "$rc" -ne 124 ]; then
+    echo "smoke: the binary exited on its own with a KDL file (rc=$rc); last lines:" >&2
+    tail -20 "$log" >&2
+    exit 1
+fi
+errores=$(grep -E 'TypeError|ReferenceError|SyntaxError|Cannot create delegate|Cannot set properties on|Cannot assign|Unable to assign|Type [A-Za-z_][A-Za-z0-9_]* unavailable|is not a type|Binding loop detected' "$log" || true)
+if [ -n "$errores" ]; then
+    echo "smoke: QML errors at start-up with a KDL file:" >&2
+    echo "$errores" | sort | uniq -c | sort -rn >&2
+    exit 1
+fi
+if ! cmp -s "$scratch/config.kdl" "$scratch/config-original.kdl"; then
+    echo "smoke: colouring a KDL file changed its bytes" >&2
+    exit 1
+fi
+
+echo "smoke: OK — binario vivo 8 s (texto y KDL), sin errores QML, sin auto-bindings"

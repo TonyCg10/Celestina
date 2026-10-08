@@ -341,25 +341,14 @@ impl DocumentSession {
         })
     }
 
-    /// Which language the open document is coloured as.
+    /// The name of the file the open document is coloured by, empty when
+    /// there is no document or it has no file yet.
     #[must_use]
-    pub fn language(&self) -> crate::highlight::Language {
+    pub fn syntax_file_name(&self) -> String {
         self.document
             .as_ref()
-            .map_or(crate::highlight::Language::Plain, Document::language)
-    }
-
-    /// Colours one line of the open document.
-    #[must_use]
-    pub fn highlight_line(
-        &self,
-        index: usize,
-        incoming: crate::highlight::LineState,
-    ) -> (Vec<crate::highlight::Span>, crate::highlight::LineState) {
-        match self.document.as_ref() {
-            Some(document) => document.highlight_line(index, incoming),
-            None => (Vec::new(), crate::highlight::LineState::Normal),
-        }
+            .map(Document::syntax_file_name)
+            .unwrap_or_default()
     }
 
     /// What the open document indents with, so a host can show it.

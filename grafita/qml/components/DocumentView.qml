@@ -208,6 +208,23 @@ Item {
                 radius: CelestinaTheme.radiusXs
             }
 
+            // The matching pair of brackets around the caret, behind the text
+            // like the caret's line, and shown under the same rule: only while
+            // the text has the keyboard and nothing is selected.
+            Repeater {
+                model: body.bracketBoxes
+                delegate: Rectangle {
+                    required property rect modelData
+                    x: body.x + modelData.x
+                    y: body.y + modelData.y
+                    width: modelData.width
+                    height: modelData.height
+                    visible: body.activeFocus && !body.selectedText
+                    color: CelestinaTheme.accentSoft
+                    radius: CelestinaTheme.radiusXs
+                }
+            }
+
             // The viewport below a short document. It is inside the Flickable
             // rather than behind it because a scrollable Flickable takes every
             // press it receives, so nothing under it would ever see the click.
@@ -247,11 +264,46 @@ Item {
 
                 // The core is the document; this reports what the widget now
                 // holds and lets the core work out the edit.
-                onTextChanged: root.session.applyText(text)
+                // An edit can change the brackets beside a caret that did not
+                // move (Delete, an undo, a newly adopted text), so the pair is
+                // re-placed here too; beside no bracket that costs two
+                // character reads.
+                onTextChanged: {
+                    root.session.applyText(text)
+                    placeBrackets()
+                }
                 onCursorRectangleChanged: scroller.revealCursor(cursorRectangle)
                 // The widget knows where its caret is as a UTF-16 offset; only
                 // the document can say which line and column that is.
-                onCursorPositionChanged: root.session.setCaret(cursorPosition)
+                onCursorPositionChanged: {
+                    root.session.setCaret(cursorPosition)
+                    placeBrackets()
+                }
+                // Rewrapping or resizing the text moves every character.
+                onContentSizeChanged: placeBrackets()
+
+                // The bracket beside the caret and its partner, as boxes in
+                // this widget's coordinates; empty when there is no pair. The
+                // highlighter finds the pair by reading the document, so
+                // nothing here edits the text or its undo history.
+                property var bracketBoxes: []
+
+                function placeBrackets() {
+                    const pair = colouring.matchBracket(cursorPosition)
+                    const boxes = []
+                    for (let i = 0; i < pair.length; ++i) {
+                        const at = positionToRectangle(pair[i])
+                        boxes.push(Qt.rect(at.x, at.y,
+                                           bracketMetrics.advanceWidth(getText(pair[i], pair[i] + 1)),
+                                           at.height))
+                    }
+                    bracketBoxes = boxes
+                }
+
+                FontMetrics {
+                    id: bracketMetrics
+                    font: body.font
+                }
 
                 // The editing verbs, on the right button. The widget itself
                 // ignores that button, so the handler sees every press; the
@@ -271,14 +323,25 @@ Item {
                 // formats to the document's blocks and leaves the characters
                 // alone, so what this widget reports back is still exactly the
                 // core's projection — anything that rewrote the text as markup
-                // would break the reconciliation instead.
+                // would break the reconciliation instead. The definition is
+                // KSyntaxHighlighting's for the file's name (or first line);
+                // each colour is a theme token, one per role.
                 SyntaxHighlighter {
+                    id: colouring
                     target: body.textDocument
-                    language: root.session.languageId
-                    commentColor: CelestinaTheme.codeComment
-                    stringColor: CelestinaTheme.codeString
-                    numberColor: CelestinaTheme.codeNumber
+                    fileName: root.session.syntaxFileName
                     keywordColor: CelestinaTheme.codeKeyword
+                    functionColor: CelestinaTheme.glyphAccentBlue
+                    typeColor: CelestinaTheme.glyphAccentCyan
+                    builtInColor: CelestinaTheme.glyphAccentViolet
+                    attributeColor: CelestinaTheme.glyphAccentCoral
+                    stringColor: CelestinaTheme.codeString
+                    escapeColor: CelestinaTheme.glyphAccentAmber
+                    numberColor: CelestinaTheme.codeNumber
+                    commentColor: CelestinaTheme.codeComment
+                    operatorColor: CelestinaTheme.textMuted
+                    warningColor: CelestinaTheme.warning
+                    errorColor: CelestinaTheme.danger
                 }
             }
         }

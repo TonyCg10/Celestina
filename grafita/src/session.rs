@@ -82,8 +82,10 @@ pub mod qobject {
         //                           1, the column in characters
         #[qproperty(i32, caret_line)]
         #[qproperty(i32, caret_column)]
-        // The numeric language the syntax highlighter colours by.
-        #[qproperty(i32, language_id)]
+        // syntaxFileName — the name of the file the syntax highlighter picks
+        //                  its definition by, links followed; empty for a
+        //                  document with no file yet.
+        #[qproperty(QString, syntax_file_name)]
         // recentDocuments — the documents opened most recently that still
         //                   existed when the worker last looked, newest first.
         //                   Each entry is what `openPath` accepts back.
@@ -259,7 +261,7 @@ pub struct GrafitaSessionRust {
     indentation_label: QString,
     caret_line: i32,
     caret_column: i32,
-    language_id: i32,
+    syntax_file_name: QString,
     recent_documents: cxx_qt_lib::QStringList,
 
     /// The caret the widget last reported, kept so an edit can re-answer it
@@ -299,7 +301,7 @@ impl Default for GrafitaSessionRust {
             indentation_label: QString::default(),
             caret_line: 1,
             caret_column: 1,
-            language_id: 0,
+            syntax_file_name: QString::default(),
             recent_documents: cxx_qt_lib::QStringList::default(),
             caret_offset: 0,
             pending_error: None,
@@ -350,6 +352,12 @@ impl qobject::GrafitaSession {
         let offset = usize::try_from(offset).unwrap_or(0);
         self.as_mut().rust_mut().get_mut().caret_offset = offset;
         self.publish_caret();
+    }
+
+    /// The name of the file the highlighter picks its definition by.
+    fn publish_syntax_file_name(self: Pin<&mut Self>) {
+        let syntax = self.rust().session.syntax_file_name();
+        self.set_syntax_file_name(QString::from(syntax.as_str()));
     }
 
     fn publish_caret(mut self: Pin<&mut Self>) {
@@ -541,6 +549,10 @@ impl qobject::GrafitaSession {
         match outcome.event {
             Some(Event::PushText { text, caret }) => {
                 let caret = i32::try_from(caret).unwrap_or(i32::MAX);
+                // Named before the text arrives, so the highlighter colours the
+                // new text as it goes in instead of first painting it as the
+                // previous document's language.
+                self.as_mut().publish_syntax_file_name();
                 self.as_mut()
                     .document_reset(QString::from(text.as_str()), caret);
             }
@@ -692,8 +704,7 @@ impl qobject::GrafitaSession {
         let indentation = self.rust().session.indentation().map(indentation_label);
         self.as_mut()
             .set_indentation_label(QString::from(indentation.unwrap_or("")));
-        let language = crate::syntax::language_code(self.rust().session.language());
-        self.as_mut().set_language_id(i32::from(language));
+        self.as_mut().publish_syntax_file_name();
         let recent: cxx_qt_lib::QStringList = self
             .rust()
             .session
