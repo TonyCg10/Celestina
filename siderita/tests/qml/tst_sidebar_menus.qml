@@ -25,6 +25,10 @@ TestCase {
         property int phoneRevision: 0
         property var volumeNames: ["USB"]
         property var volumeMounts: ["/run/media/toni/USB"]
+        property var volumeDevices: ["/dev/sdb1", "/dev/sda2"]
+        property var volumeFsTypes: ["vfat", "exfat"]
+        property var volumeSystem: ["0", "1"]
+        function labelError(fs, label) { return fs === "vfat" || fs === "exfat" ? "" : "no" }
         property string currentPath: "/home/toni"
         property int hiddenDeviceCount: 0
 
@@ -160,6 +164,44 @@ TestCase {
         menus.openDevice("USB sin montar", "", Qt.point(10, 10))
         compare(menus.deviceCanOpenTab, false,
                 "ofrecería abrir una pestaña a ninguna parte")
+        menus.closeAll()
+    }
+
+    // Renaming is offered for a removable volume, never for a drive of the
+    // running system; formatting stays out until its dialog exists. Last in
+    // order: three menus opened back to back are still closing when the next
+    // case starts, and a closing modal menu takes that case's clicks.
+    function test_z_rename_and_format_entries_follow_the_volume() {
+        menus.openDevice("USB", "/run/media/toni/USB", Qt.point(10, 10), "/dev/sdb1")
+        compare(menus.deviceCanRename, true, "a removable volume cannot be renamed")
+        compare(menus.deviceCanFormat, false, "format is offered before its dialog")
+        menus.formatAvailable = true
+        compare(menus.deviceCanFormat, true)
+        // A hotplug reorders the lists while the menu is open: the entries
+        // still answer for the stick, now second, not for whatever is first.
+        controllerStub.volumeDevices = ["/dev/sda2", "/dev/sdb1"]
+        controllerStub.volumeSystem = ["1", "0"]
+        controllerStub.volumeFsTypes = ["exfat", "vfat"]
+        compare(menus.deviceCanRename, true, "the menu followed the row, not the device")
+        compare(menus.deviceCanFormat, true)
+        controllerStub.volumeDevices = ["/dev/sda2"]
+        controllerStub.volumeSystem = ["1"]
+        controllerStub.volumeFsTypes = ["exfat"]
+        compare(menus.deviceCanRename, false, "a stick that went away is still offered")
+        controllerStub.volumeDevices = ["/dev/sdb1", "/dev/sda2"]
+        controllerStub.volumeSystem = ["0", "1"]
+        controllerStub.volumeFsTypes = ["vfat", "exfat"]
+        menus.closeAll()
+
+        menus.openDevice("DATOS", "", Qt.point(10, 10), "/dev/sda2")
+        compare(menus.deviceCanRename, false, "a system drive offered a rename")
+        compare(menus.deviceCanFormat, false, "a system drive offered a format")
+        menus.formatAvailable = false
+        menus.closeAll()
+
+        // Without a device nothing is known about the volume: nothing offered.
+        menus.openDevice("USB", "/run/media/toni/USB", Qt.point(10, 10))
+        compare(menus.deviceCanRename, false)
         menus.closeAll()
     }
 }

@@ -89,10 +89,29 @@ impl qobject::SideritaController {
             .map(|volume| mount_key(&volume.mount_point))
             .collect();
 
+        // The per-volume details go out before the names: the sidebar's rows
+        // are made from the names and read these as they appear.
+        let column = |value: fn(&crate::volumes::Volume) -> String| -> QStringList {
+            volumes
+                .iter()
+                .map(|volume| QString::from(value(volume).as_str()))
+                .collect()
+        };
+        let labels = column(|volume| volume.label.clone());
+        let fs_types = column(|volume| volume.fs_type.clone());
+        let sizes = column(|volume| volume.size.to_string());
+        let system = column(|volume| if volume.system { "1" } else { "0" }.to_owned());
+        self.as_mut().set_volume_labels(labels);
+        self.as_mut().set_volume_fs_types(fs_types);
+        self.as_mut().set_volume_sizes(sizes);
+        self.as_mut().set_volume_system(system);
+
+        // The names go last: the sidebar rebuilds its rows when they change,
+        // and each new row must find its device and mount already current.
         self.as_mut().rust_mut().get_mut().volumes = volumes;
-        self.as_mut().set_volume_names(names);
         self.as_mut().set_volume_devices(devices);
         self.as_mut().set_volume_mounts(mounts);
+        self.as_mut().set_volume_names(names);
     }
 
     /// Subscribes this tab to the device model, once. The model starts its two

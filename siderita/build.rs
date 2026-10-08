@@ -58,6 +58,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/sidebar/SidebarPhoneSection.qml",
     "qml/components/sidebar/SidebarFavoriteRow.qml",
     "qml/components/sidebar/SidebarBookmarkRow.qml",
+    "qml/components/sidebar/SidebarVolumeRow.qml",
     "qml/components/sidebar/SidebarSavedSections.qml",
     "qml/components/sidebar/SidebarContextMenus.qml",
     "qml/components/sidebar/SidebarInfo.qml",

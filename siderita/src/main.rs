@@ -4,6 +4,7 @@ mod controller;
 mod dbus;
 mod devicemodel;
 mod devices;
+mod drives;
 mod editor;
 mod embedded;
 mod favorites;

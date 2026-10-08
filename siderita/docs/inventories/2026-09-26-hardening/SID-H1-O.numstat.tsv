@@ -1,0 +1,49 @@
+# SID-H1-O exact change inventory
+
+Base revision	7a06b94888e676a0f91c09df886e7a0475f82de6
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/docs/evidence/2026-10-07-drive-tools.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-O.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/sidebar/SidebarContextMenus.qml
+Pathspec	siderita/qml/components/sidebar/SidebarVolumeRow.qml
+Pathspec	siderita/qml/views/Sidebar.qml
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/controller/drives.rs
+Pathspec	siderita/src/controller/mounts.rs
+Pathspec	siderita/src/controller/state.rs
+Pathspec	siderita/src/drives.rs
+Pathspec	siderita/src/main.rs
+Pathspec	siderita/src/volumes.rs
+Pathspec	siderita/tests/qml/tst_sidebar_menus.qml
+Pathspec	siderita/tests/qml/tst_sidebar_volume_row.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	5e17ac6e912b04e58b7474e69342a644c859be2d39e91e65e4558c68f69cd76b	docs/version-history.tsv
+1	1	b7bc3929983839ead527bab6c62736bbc13d124ea7bc7d7b4c7a3a89085087f5	scripts/language-baseline.tsv
+1	1	e87eacff4388f0b3a31336d1518b570fdf96287628dc8fe1dc6376bba1356aa4	siderita/Cargo.lock
+1	1	3632c5bc59fffe312ef40767bb8de6eb542206999d669d3c578e78d92394a288	siderita/Cargo.toml
+28	0	37389713132905fc27aca0d76fae80b9382b4c912abd8788102e9c31b66b12a9	siderita/VALIDATION.md
+1	0	da2c3b27981b6936532ec2cc634efbea4abc8de5ae6c591a03abd6bd7904f54e	siderita/build.rs
+80	0	23ebcc61582808e270af490fcf9675a7731bcedd6c53d977d58a8198390bc79a	siderita/docs/evidence/2026-10-07-drive-tools.md
+49	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-O.numstat.tsv
+1	0	cdd3dbeef1fb7661bdcb958ea60f9adc149a01086761ac21b72a4f695d715558	siderita/docs/plans/active/2026-09-26-hardening.md
+47	1	b3739170a04befc418feb7bbf8c10bc8454337bf5ad5ca9c7ff4e7f4c5601aed	siderita/qml/components/sidebar/SidebarContextMenus.qml
+310	0	1b516e29394c5789e21ef8e530c451506430abd8e4c0b52ea0abc15ba75538e0	siderita/qml/components/sidebar/SidebarVolumeRow.qml
+38	130	cddb67840d64e289cc3049b67670a0d0a26e02d66d60361535a6d10bab43c24b	siderita/qml/views/Sidebar.qml
+24	24	8696c914e54dea64ec1be12c960fded01f49c274de5bb5f32ab4644666a14890	siderita/src/controller.rs
+209	0	facfb4718311b45c8d56a4a479667cae608bfda13a715e534b4efcebb6fc568e	siderita/src/controller/drives.rs
+20	1	3e12a6655a5ee5e55e8e6614accaf5e34093427994d554ef730b1feff30455f7	siderita/src/controller/mounts.rs
+8	0	f530ffb945c006d998ae968ff9fab7f50d67ae7b12746446cec9979f8a7d4939	siderita/src/controller/state.rs
+978	0	0f799c75abc6d52e46965e8b6e2595a729b55419b112010b3005b6ff181c1b85	siderita/src/drives.rs
+1	0	fe0780efc2f7eadfec6bf04e86571f803a624c30f5daf6dc9312f612a6e725de	siderita/src/main.rs
+21	5	b2662c565a3b74dfc9e4f01864e2f0f77a597efbfc593155a5c7173996056db8	siderita/src/volumes.rs
+42	0	673dae974dbcc22eba8c1473c9f20489e596391754c3e0c9c776cf6aa61a7832	siderita/tests/qml/tst_sidebar_menus.qml
+319	0	891e6e0ea100f6baab0a54055d28e4325d2cac7f6dc946307a31553e4e0a5058	siderita/tests/qml/tst_sidebar_volume_row.qml

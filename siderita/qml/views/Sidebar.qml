@@ -73,6 +73,15 @@ Item {
         // bindings on it, so a fold written to disk is the one drawn.
         readonly property bool placesCollapsed: sidebar.folded("places")
         readonly property bool devicesCollapsed: sidebar.folded("devices")
+        // The volume being renamed in place, by device node ("" for none),
+        // and what has been typed so far (null until something is): a rebuild
+        // of the list during the edit makes new rows, which carry both on.
+        property string renamingDevice: ""
+        property var renamingDraft: null
+        function renameVolume(device) {
+            sidebar.renamingDraft = null
+            sidebar.renamingDevice = device
+        }
 
         function folded(section) {
             const controller = root.hostWindow.activeController
@@ -476,142 +485,40 @@ Item {
                     model: (root.hostWindow.activeController && !sidebar.devicesCollapsed)
                            ? root.hostWindow.activeController.volumeNames : []
 
-                    delegate: Item {
-                        id: volumeRow
+                    delegate: SidebarVolumeRow {
                         required property int index
                         required property string modelData
-                        readonly property string mountPoint:
-                            (root.hostWindow.activeController
-                             && index < root.hostWindow.activeController.volumeMounts.length)
-                            ? root.hostWindow.activeController.volumeMounts[index] : ""
-                        readonly property bool mounted: mountPoint.length > 0
-                        readonly property bool current: mounted
-                            && mountPoint === (root.hostWindow.activeController
-                                               ? root.hostWindow.activeController.markedKey : "")
-
                         width: placesColumn.width
-                        height: root.hostWindow.sidebarRowHeight
-                        // The same keyboard path the phone rows have: Tab
-                        // reaches the row and Return opens it.
-                        activeFocusOnTab: true
-                        Accessible.role: Accessible.Button
-                        Accessible.name: volumeRow.modelData
-                                         + (volumeRow.mounted ? ", montado" : ", sin montar")
-                        Accessible.onPressAction: volumeRow.activate()
-
-                        function activate() {
-                            if (root.hostWindow.activeController)
-                                root.hostWindow.activeController.openVolume(volumeRow.index)
+                        hostWindow: root.hostWindow
+                        overlayParent: root.overlayParent
+                        rowIndex: index
+                        volumeName: modelData
+                        device: {
+                            const devices = root.hostWindow.activeController.volumeDevices
+                            return index < devices.length ? devices[index] : ""
                         }
-
-                        Keys.onPressed: function(event) {
-                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                                volumeRow.activate()
-                                event.accepted = true
-                            }
+                        editing: device.length > 0 && sidebar.renamingDevice === device
+                        draft: sidebar.renamingDraft
+                        onEditRequested: function(device) { sidebar.renameVolume(device) }
+                        onEditFinished: sidebar.renamingDevice = ""
+                        onDraftEdited: function(text) { sidebar.renamingDraft = text }
+                        onContextMenuRequested: function(device, name, mountPoint,
+                                                         popupX, popupY) {
+                            sidebarMenus.openDevice(name, mountPoint, Qt.point(popupX, popupY),
+                                                    device)
                         }
+                    }
+                }
 
-                        // The eject glyph is part of the row: the fill holds
-                        // while the pointer sits on it.
-                        CelestinaRowHighlight {
-                            anchors.fill: parent
-                            anchors.leftMargin: 2
-                            anchors.rightMargin: 2
-                            family: CelestinaRowHighlight.Content
-                            focused: volumeRow.activeFocus
-                            selected: volumeRow.current
-                            hovered: volumeMouse.containsMouse || ejectButton.hovered
-                            pressed: volumeMouse.pressed
-                        }
-
-                        Rectangle {
-                            visible: volumeRow.current
-                            x: 2
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: CelestinaTheme.compSelectionIndicatorWidth
-                            height: CelestinaTheme.compSelectionIndicatorHeight
-                            radius: width / 2
-                            color: CelestinaTheme.accent
-                        }
-
-                        CelestinaIcon {
-                            id: volumeIcon
-                            x: 12
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
-                            height: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
-                            name: "drive-removable-media"
-                            fallbackName: "folder"
-                            tone: volumeRow.current
-                                  ? CelestinaIcon.Accent : CelestinaIcon.Device
-                        }
-
-                        Text {
-                            x: volumeIcon.x + volumeIcon.width + 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: ejectButton.x - x - 6
-                            text: volumeRow.modelData
-                            color: volumeRow.current ? CelestinaTheme.accentLink
-                                                     : CelestinaTheme.text
-                            font.family: CelestinaTheme.sansFamily
-                            font.pixelSize: Math.round(CelestinaTheme.fontBody * root.hostWindow.sidebarTextScale)
-                            elide: Text.ElideRight
-                        }
-
-                        // Eject (unmount) when mounted; hidden otherwise. A ghost
-                        // icon button at the 30 px floor: the glyph keeps its size,
-                        // the hover circle and press recoil come with the button.
-                        CelestinaIconButton {
-                            id: ejectButton
-                            z: 3   // above the full-row open handler below
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.right: parent.right
-                            anchors.rightMargin: 4
-                            width: CelestinaTheme.controlHeightXs
-                            height: CelestinaTheme.controlHeightXs
-                            iconSize: Math.round(CelestinaTheme.iconSm * root.hostWindow.sidebarIconScale)
-                            visible: volumeRow.mounted
-                            role: CelestinaButton.Ghost
-                            density: CelestinaButton.Compact
-                            iconName: "media-eject"
-                            helpText: "Expulsar " + volumeRow.modelData
-                            onClicked: {
-                                if (root.hostWindow.activeController)
-                                    root.hostWindow.activeController.unmountVolume(
-                                        volumeRow.index)
-                            }
-                        }
-
-                        MouseArea {
-                            id: volumeMouse
-                            anchors.fill: parent
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                             | Qt.MiddleButton
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            // Left: open (mounting first if needed) — eject has its
-                            // own zone. Middle: a background tab, like every other
-                            // place in this sidebar. Right: the device menu.
-                            onClicked: function(mouse) {
-                                if (!root.hostWindow.activeController)
-                                    return
-                                if (mouse.button === Qt.RightButton) {
-                                    const point = volumeRow.mapToItem(
-                                                    root.overlayParent, mouse.x, mouse.y)
-                                    sidebarMenus.openDevice(volumeRow.modelData,
-                                                            volumeRow.mountPoint, point)
-                                } else if (mouse.button === Qt.MiddleButton) {
-                                    // Sin montar no hay ruta que abrir, y montarlo
-                                    // es asíncrono: ahí se deja el clic sin efecto
-                                    // en vez de abrir una pestaña a ninguna parte.
-                                    if (volumeRow.mounted)
-                                        root.hostWindow.openTab(volumeRow.mountPoint,
-                                                                false)
-                                } else {
-                                    volumeRow.activate()
-                                }
-                            }
-                        }
+                // A volume unplugged while it was being renamed ends the edit,
+                // so it does not reopen if the same device comes back.
+                Connections {
+                    target: root.hostWindow.activeController
+                    function onVolumeDevicesChanged() {
+                        const devices = root.hostWindow.activeController.volumeDevices
+                        if (sidebar.renamingDevice.length > 0
+                                && devices.indexOf(sidebar.renamingDevice) < 0)
+                            sidebar.renamingDevice = ""
                     }
                 }
 
@@ -757,5 +664,6 @@ Item {
         backdropSource: root.backdrop
         bookmarkCount: savedSections.bookmarkCount
         onEditBookmarkRequested: function(index) { savedSections.editBookmark(index) }
+        onRenameDeviceRequested: function(device) { sidebar.renameVolume(device) }
     }
 }

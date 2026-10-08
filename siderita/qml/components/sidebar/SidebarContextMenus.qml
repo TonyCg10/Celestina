@@ -10,12 +10,27 @@ Item {
     property int bookmarkCount: 0
 
     signal editBookmarkRequested(int index)
+    // Both name the volume by device node: the list's order changes on every
+    // hotplug, so a row position taken when the menu opened can be another
+    // drive by the time the entry is chosen.
+    signal renameDeviceRequested(string device)
+    signal formatDeviceRequested(string device)
+
+    // The format dialog arrives in a later unit; until then its entry stays
+    // out of the device menu.
+    property bool formatAvailable: false
 
     // El estado que gobierna "Abrir en pestaña nueva" de un dispositivo, visible
     // para quien lo prueba: sin montar no hay ruta y la acción no se ofrece.
     readonly property string deviceMountPoint: deviceMenu.mountPoint
     readonly property bool deviceCanOpenTab: deviceMenu.mountPoint.length > 0
     readonly property string phoneMountPath: phoneMenu.mountPath
+    // Renaming and formatting are offered only for a volume that is not part
+    // of the running system, and renaming only where its file system takes a
+    // name at all.
+    readonly property bool deviceCanRename: deviceMenu.modifiable
+        && root.hostWindow.activeController.labelError(deviceMenu.fsType, "") === ""
+    readonly property bool deviceCanFormat: root.formatAvailable && deviceMenu.modifiable
 
     // Qué ruta llevará "Propiedades" en cada menú, y por tanto si se ofrece. Un
     // lugar virtual —Recientes, Papelera— y un volumen sin montar no tienen
@@ -50,9 +65,10 @@ Item {
         favoriteMenu.popup(overlayParent, point)
     }
 
-    function openDevice(name, mountPoint, point) {
+    function openDevice(name, mountPoint, point, device) {
         deviceMenu.deviceName = name
         deviceMenu.mountPoint = mountPoint
+        deviceMenu.targetDevice = device === undefined ? "" : device
         deviceMenu.popup(overlayParent, point)
     }
 
@@ -218,6 +234,18 @@ Item {
         backdropSource: root.backdropSource
         property string deviceName: ""
         property string mountPoint: ""
+        property string targetDevice: ""
+        readonly property var controller: root.hostWindow.activeController
+        // Where the target sits in the lists now, read again on every change.
+        readonly property int at: controller && controller.volumeDevices && targetDevice.length > 0
+                                  ? controller.volumeDevices.indexOf(targetDevice) : -1
+        function column(name) {
+            const list = controller ? controller[name] : undefined
+            return list && at >= 0 && at < list.length ? list[at] : ""
+        }
+        readonly property string fsType: column("volumeFsTypes")
+        // An unknown answer counts as system: nothing destructive is offered.
+        readonly property bool modifiable: at >= 0 && column("volumeSystem") === "0"
 
         GlassMenuItem {
             text: "Abrir en pestaña nueva"
@@ -227,6 +255,24 @@ Item {
             icon.name: "tab-new"
             icon.source: CelestinaTheme.fallbackIcon("plus")
             onTriggered: root.hostWindow.openTab(deviceMenu.mountPoint, true)
+        }
+
+        GlassMenuItem {
+            text: qsTr("Cambiar nombre")
+            visible: root.deviceCanRename
+            height: visible ? implicitHeight : 0
+            icon.name: "edit-rename"
+            icon.source: CelestinaTheme.fallbackIcon("pencil")
+            onTriggered: root.renameDeviceRequested(deviceMenu.targetDevice)
+        }
+
+        GlassMenuItem {
+            text: qsTr("Formatear…")
+            visible: root.deviceCanFormat
+            height: visible ? implicitHeight : 0
+            icon.name: "eraser"
+            icon.source: CelestinaTheme.fallbackIcon("eraser")
+            onTriggered: root.formatDeviceRequested(deviceMenu.targetDevice)
         }
 
         GlassMenuItem {

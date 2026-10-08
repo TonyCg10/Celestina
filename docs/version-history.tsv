@@ -224,3 +224,4 @@ grafita	1.4.0	milestone	GRA-H1-E	Add automatic encoding detection and drop the e
 grafita	1.4.1	bug	GRA-H1-F	Add a longer scrolling recents list in an opaque box
 grafita	1.5.0	milestone	GRA-H1-G	Add syntax colouring for every language KSyntaxHighlighting knows
 celestina-style	1.13.0	milestone	STYLE-G7-AA	Add the pastel palette and livelier usage tiles
+siderita	1.10.0	milestone	SID-H1-O	Add renaming and formatting for external drives

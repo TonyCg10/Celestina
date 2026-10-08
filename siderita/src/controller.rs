@@ -146,6 +146,12 @@ pub mod qobject {
         #[qproperty(QStringList, volume_names)]
         #[qproperty(QStringList, volume_devices)]
         #[qproperty(QStringList, volume_mounts)]
+        // Per volume, parallel to the names: label, UDisks2 filesystem type,
+        // size in bytes, and "1" for a drive of the running system.
+        #[qproperty(QStringList, volume_labels)]
+        #[qproperty(QStringList, volume_fs_types)]
+        #[qproperty(QStringList, volume_sizes)]
+        #[qproperty(QStringList, volume_system)]
         #[qproperty(bool, volume_busy)]
         #[qproperty(i32, hidden_device_count)]
         // Phones from Magnetita; revision publishes one stable device snapshot.
@@ -201,25 +207,18 @@ pub mod qobject {
 
         #[qinvokable]
         fn start(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn start_at(self: Pin<&mut SideritaController>, location: &QString);
-
         #[qinvokable]
         fn reload_bookmarks(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn refresh(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn go_home(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn go_back(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn go_forward(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn go_up(self: Pin<&mut SideritaController>);
 
@@ -242,13 +241,10 @@ pub mod qobject {
 
         #[qinvokable]
         fn toggle_hidden(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn change_sort_field(self: Pin<&mut SideritaController>, field: i32);
-
         #[qinvokable]
         fn toggle_sort_direction(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn apply_query(self: Pin<&mut SideritaController>, query: &QString);
 
@@ -257,13 +253,10 @@ pub mod qobject {
         /// folders are never filtered.
         #[qinvokable]
         fn apply_name_filters(self: Pin<&mut SideritaController>, patterns: &QStringList);
-
         #[qinvokable]
         fn select_token(self: Pin<&mut SideritaController>, token: &QString);
-
         #[qinvokable]
         fn activate_token(self: Pin<&mut SideritaController>, token: &QString);
-
         #[qinvokable]
         fn entry_token(self: &SideritaController, index: i32) -> QString;
 
@@ -328,13 +321,10 @@ pub mod qobject {
         /// Reads `key`'s quick-look text sample into `preview_text`, off the Qt thread.
         #[qinvokable]
         fn request_preview_text(self: Pin<&mut SideritaController>, key: &QString);
-
         #[qinvokable]
         fn add_bookmark(self: Pin<&mut SideritaController>, path: &QString);
-
         #[qinvokable]
         fn remove_bookmark(self: Pin<&mut SideritaController>, index: i32);
-
         #[qinvokable]
         fn rename_bookmark(self: Pin<&mut SideritaController>, index: i32, name: &QString);
 
@@ -342,7 +332,6 @@ pub mod qobject {
         /// `to`, and persists the new order.
         #[qinvokable]
         fn move_bookmark(self: Pin<&mut SideritaController>, from: i32, to: i32);
-
         #[qinvokable]
         fn place_path(self: &SideritaController, key: &QString) -> QString;
 
@@ -362,10 +351,8 @@ pub mod qobject {
         /// Re-reads the persisted place order and hidden set.
         #[qinvokable]
         fn reload_places(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn new_folder(self: Pin<&mut SideritaController>, name: &QString);
-
         #[qinvokable]
         fn new_file(self: Pin<&mut SideritaController>, name: &QString);
 
@@ -549,19 +536,31 @@ pub mod qobject {
 
         #[qinvokable]
         fn load_volumes(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn mount_volume(self: Pin<&mut SideritaController>, index: i32);
-
         #[qinvokable]
         fn unmount_volume(self: Pin<&mut SideritaController>, index: i32);
-
         #[qinvokable]
         fn open_volume(self: Pin<&mut SideritaController>, index: i32);
-
+        /// Renames the volume with device node `device` (`SetLabel`) on a worker.
+        #[qinvokable]
+        fn rename_volume(self: Pin<&mut SideritaController>, device: &QString, label: &QString);
+        /// Formats the volume with device node `device` — or, with `whole_disk`,
+        /// its whole drive into one partition — on a worker. Never a system drive.
+        #[qinvokable]
+        fn format_volume(
+            self: Pin<&mut SideritaController>,
+            device: &QString,
+            fs: &QString,
+            label: &QString,
+            quick: bool,
+            whole_disk: bool,
+        );
+        /// Why `label` cannot name a `fs` filesystem; empty when it can.
+        #[qinvokable]
+        fn label_error(self: &SideritaController, fs: &QString, label: &QString) -> QString;
         #[qinvokable]
         fn load_phones(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn open_phone(self: Pin<&mut SideritaController>, index: i32);
         #[qinvokable]
@@ -715,6 +714,7 @@ pub mod qobject {
 mod actions;
 mod archive;
 mod display;
+mod drives;
 mod fileops;
 mod find;
 mod glyphs;

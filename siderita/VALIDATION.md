@@ -4,6 +4,34 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-18 — Renaming and formatting a spare USB stick
+
+- **Status:** pending
+- **Related implementation:** `SID-H1-O`, `SID-H1-P`
+- **Requires:** a verified Siderita artifact on the real Niri/Wayland session,
+  a spare USB stick whose contents may be lost, and a polkit agent running
+- **Procedure:** right-click the stick in DISPOSITIVOS and choose «Cambiar
+  nombre», type a new name and press Return; repeat with F2 on the focused row
+  and press Escape; on a FAT32 stick type a lowercase name, then a name of
+  twelve letters, pressing Return after each; rename an exFAT stick while it
+  is mounted; while renaming, plug a second stick whose name sorts first;
+  check that the internal disks offer neither «Cambiar nombre» nor
+  «Formatear…»; once SID-H1-P lands, format the stick as exFAT with a quick
+  format, then as FAT32 with the whole-disk option checked
+- **Pass condition:** polkit asks in its own window; the row shows the new
+  name after the rename, Escape leaves the old one; the lowercase FAT32 name
+  is stored in capitals, and the twelve-letter one keeps the field open with
+  the reason under it; the mounted exFAT stick is renamed (UDisks2 may
+  unmount and mount it again, and the new name may show only after that) or
+  the UDisks2 message says why not; the second stick does not take the edit
+  and the rename lands on the first; no internal disk offers either entry;
+  each format ends with the stick listed under its new name and file system,
+  FAT32 reported as `vfat` FAT32 by `lsblk -f`, readable on another machine;
+  a refusal or failure shows the UDisks2 message
+- **Result:** not run by hand
+- **Evidence:** `lsblk -f` of the stick before and after, `udisksctl info -b`
+  of its partition, and any failure text
+
 ## VAL-SID-17 — Replacing, moving to a stick, and restoring another tool's Trash
 
 - **Status:** pending

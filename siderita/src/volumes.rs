@@ -10,9 +10,9 @@ use std::collections::HashMap;
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::Value;
 
-const UDISKS: &str = "org.freedesktop.UDisks2";
-const IFACE_BLOCK: &str = "org.freedesktop.UDisks2.Block";
-const IFACE_FILESYSTEM: &str = "org.freedesktop.UDisks2.Filesystem";
+pub(crate) const UDISKS: &str = "org.freedesktop.UDisks2";
+pub(crate) const IFACE_BLOCK: &str = "org.freedesktop.UDisks2.Block";
+pub(crate) const IFACE_FILESYSTEM: &str = "org.freedesktop.UDisks2.Filesystem";
 const IFACE_DRIVE: &str = "org.freedesktop.UDisks2.Drive";
 
 /// A removable filesystem UDisks2 knows about.
@@ -26,6 +26,15 @@ pub struct Volume {
     pub device: String,
     /// Where it is mounted, or empty when it is not mounted.
     pub mount_point: String,
+    /// The filesystem label, empty when it has none.
+    pub label: String,
+    /// The filesystem type as UDisks2 names it (`vfat`, `exfat`, `ext4`…).
+    pub fs_type: String,
+    /// The block's size in bytes.
+    pub size: u64,
+    /// Whether its drive is part of the running system (see
+    /// [`crate::drives::backs_system`]): never renamed or formatted.
+    pub system: bool,
 }
 
 /// Lists the mountable removable filesystems UDisks2 reports, over the
@@ -43,6 +52,9 @@ pub fn list_volumes(connection: &Connection) -> Result<Vec<Volume>, String> {
         .get_managed_objects()
         .map_err(|error| format!("No se pudieron enumerar los volúmenes: {error}"))?;
 
+    // One look at the whole object tree answers the system-drive question for
+    // every volume in this listing.
+    let is_system = crate::drives::system_check(connection);
     let mut volumes = Vec::new();
     for (path, interfaces) in &objects {
         // Only objects that are a mountable filesystem block.
@@ -90,6 +102,10 @@ pub fn list_volumes(connection: &Connection) -> Result<Vec<Volume>, String> {
             name: display_name(&label, &device),
             device,
             mount_point,
+            fs_type: block.get_property::<String>("IdType").unwrap_or_default(),
+            size: block.get_property::<u64>("Size").unwrap_or(0),
+            system: is_system(path),
+            label,
         });
     }
 
@@ -170,7 +186,7 @@ pub fn unmount(object_path: &str) -> Result<(), String> {
         .map_err(udisks_error)
 }
 
-fn drive_is_removable(connection: &Connection, drive_path: &str) -> bool {
+pub(crate) fn drive_is_removable(connection: &Connection, drive_path: &str) -> bool {
     if drive_path.is_empty() || drive_path == "/" {
         return false;
     }
@@ -195,7 +211,7 @@ fn udisks_error(error: zbus::Error) -> String {
 }
 
 /// Decodes a UDisks2 NUL-terminated C string (device node / mount path).
-fn c_string(bytes: &[u8]) -> String {
+pub(crate) fn c_string(bytes: &[u8]) -> String {
     let end = bytes
         .iter()
         .position(|&byte| byte == 0)
