@@ -17,19 +17,29 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaScrollBar.qml",
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaShadow.qml",
+    "qml/CelestinaSlider.qml",
     "qml/CelestinaSurface.qml",
+    "qml/CelestinaSwitch.qml",
     "qml/CelestinaTextField.qml",
     "qml/CelestinaTreemap.qml",
     "qml/CelestinaUsageList.qml",
     "qml/CelestinaWheelScroll.qml",
     "qml/GlassCard.qml",
+    "qml/GlassContextMenu.qml",
+    "qml/GlassMenuItem.qml",
     "qml/GlassSurface.qml",
     "qml/ListSection.qml",
     // Cuprita's own composition: Main owns the window, the components own
     // one region each and the pages one section each.
+    "qml/components/DeviceRow.qml",
+    "qml/components/EndpointCard.qml",
     "qml/components/NavItem.qml",
     "qml/components/NavStrip.qml",
+    "qml/components/NetworkRow.qml",
+    "qml/components/NoticePill.qml",
+    "qml/components/SettingRow.qml",
     "qml/components/SectionShortcuts.qml",
+    "qml/components/StreamRow.qml",
     "qml/pages/AudioPage.qml",
     "qml/pages/BluetoothPage.qml",
     "qml/pages/NetworkPage.qml",
@@ -43,6 +53,9 @@ fn main() {
     // `..` in the qrc alias and break type resolution at run time).
     let module = QmlModule::new("org.celestina.cuprita")
         .version(1, 0)
+        // The list models derive from QAbstractListModel, which QtQml.Models
+        // describes; without the dependency qmllint cannot resolve them.
+        .depend("QtQml.Models")
         .qml_file(
             QmlFile::from("qml/CelestinaTheme.qml")
                 .version(1, 0)
@@ -76,6 +89,16 @@ fn main() {
         // Shared icon resources and Inter Variable, compiled in.
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
-        .files(["src/activation.rs", "src/controller.rs"])
+        .files([
+            "src/controller/activation.rs",
+            "src/controller/app.rs",
+            "src/controller/audio.rs",
+            "src/controller/bluetooth.rs",
+            "src/controller/device_model.rs",
+            "src/controller/endpoint_model.rs",
+            "src/controller/network.rs",
+            "src/controller/network_model.rs",
+            "src/controller/stream_model.rs",
+        ])
         .build();
 }

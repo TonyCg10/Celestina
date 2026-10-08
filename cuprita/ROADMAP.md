@@ -34,7 +34,7 @@ session and the author's live check is only the last mile.
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
 | CUP-1-A | active | none | crate stub, application skeleton, strip, scripts, documents | `scripts/smoke.sh`, guards |
-| CUP-1-B | planned | CUP-1-A | core models, traits, fakes; controllers over the fakes | `cargo test` |
+| CUP-1-B | active | CUP-1-A | core models, traits, fakes; controllers over the fakes | `cargo test` |
 | CUP-1-C | planned | CUP-1-B | NetworkManager client and the Red page | `scripts/verify-production.sh` |
 | CUP-1-D | planned | CUP-1-B | BlueZ client, pairing agent and the Bluetooth page | `scripts/verify-production.sh` |
 | CUP-1-E | planned | CUP-1-B | PipeWire client and the Audio page | `scripts/verify-production.sh` |

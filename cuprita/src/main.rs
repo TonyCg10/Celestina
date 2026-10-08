@@ -1,5 +1,6 @@
-mod activation;
+mod backend;
 mod controller;
+mod models;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
@@ -18,7 +19,7 @@ fn main() {
     // Claim the single-instance name before any window exists: the loser of
     // a race hands its launch to the winner and leaves here, so two launches
     // a moment apart never build two windows.
-    if let activation::Claim::HandedOff = activation::claim() {
+    if let controller::activation::Claim::HandedOff = controller::activation::claim() {
         return;
     }
 
