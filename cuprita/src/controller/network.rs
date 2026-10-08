@@ -72,8 +72,27 @@ pub struct NetworkControllerRust {
 impl cxx_qt::Initialize for qobject::NetworkController {
     fn initialize(mut self: Pin<&mut Self>) {
         let qt = self.qt_thread();
-        let worker = Worker::spawn(
-            backend::network(),
+        let notices = self.qt_thread();
+        // No poll: the backend's watcher asks for every re-read.
+        let worker = Worker::start(
+            move |refresh| {
+                backend::network(
+                    move || {
+                        refresh.request();
+                    },
+                    move |text| {
+                        let _ = notices.queue(
+                            move |controller: Pin<&mut qobject::NetworkController>| {
+                                controller.notice(
+                                    QString::from(NoticeKind::Error.token()),
+                                    QString::from(text.as_str()),
+                                );
+                            },
+                        );
+                    },
+                )
+            },
+            None,
             |backend: &mut Backend| backend.snapshot().map_err(|e| e.message_es()),
             move |report| {
                 let _ = qt.queue(move |controller: Pin<&mut qobject::NetworkController>| {

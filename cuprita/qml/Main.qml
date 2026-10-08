@@ -66,6 +66,7 @@ ApplicationWindow {
             NetworkPage {
                 controller: NetworkController
                 networks: NetworkModel { id: networkModel }
+                backdropSource: pages
             }
             BluetoothPage {
                 controller: BluetoothController

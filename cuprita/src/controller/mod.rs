@@ -1,8 +1,10 @@
 //! The section controllers: one QML singleton per section owning a worker
 //! thread over its backend trait. Every command runs on that worker; after it
-//! (and every few seconds) the worker re-reads the section's snapshot and
-//! queues it to the Qt thread, where the controller updates its properties
-//! and hands the snapshot on to the list models.
+//! the worker re-reads the section's snapshot, and again whenever the backend
+//! reports a change (or, for a backend without change signals yet, every few
+//! seconds), and queues it to the Qt thread, where the controller updates its
+//! properties and hands the snapshot on to the list models. The backend is
+//! built on the worker too: connecting to a bus is blocking IO.
 //!
 //! A worker thread is detached and never joined. When the window closes, the
 //! process exits around it: a real backend call still blocking at that moment
@@ -24,8 +26,8 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-/// How often an idle worker re-reads its snapshot. CUP-1-C replaces the poll
-/// with the backends' change signals.
+/// How often an idle worker re-reads its snapshot when its backend has no
+/// change signals of its own yet (Bluetooth and audio until CUP-1-D and E).
 const POLL: Duration = Duration::from_secs(5);
 
 /// What a worker reports to the Qt thread.
@@ -39,21 +41,59 @@ pub enum Report<S> {
 
 type Job<B> = Box<dyn FnOnce(&mut B) -> Result<(), String> + Send>;
 
+enum Message<B: ?Sized> {
+    Job(Job<B>),
+    /// The backend reported a change: re-read the snapshot.
+    Refresh,
+}
+
+/// Whatever must live as long as the worker's backend: a change watcher.
+pub type Keepalive = Box<dyn Send>;
+
+/// Asks a worker to re-read its snapshot; handed to a backend's watcher.
+pub struct Refresh<B: ?Sized> {
+    inbox: Sender<Message<B>>,
+}
+
+impl<B: ?Sized> Refresh<B> {
+    /// `false` when the worker is gone.
+    pub fn request(&self) -> bool {
+        self.inbox.send(Message::Refresh).is_ok()
+    }
+}
+
 /// The sending half of a section's worker thread.
 pub struct Worker<B: ?Sized> {
-    jobs: Sender<Job<B>>,
+    jobs: Sender<Message<B>>,
 }
 
 impl<B: ?Sized + Send + 'static> Worker<B> {
-    /// Starts the thread. `read` takes the snapshot; `report` is called on the
-    /// worker thread and must queue to the Qt thread itself.
-    pub fn spawn<S, R, F>(mut backend: Box<B>, read: R, report: F) -> Option<Self>
+    /// Starts a polled worker over a backend that has no change signals.
+    pub fn spawn<S, R, F>(backend: Box<B>, read: R, report: F) -> Option<Self>
     where
         S: Send + Sync + 'static,
         R: Fn(&mut B) -> Result<S, String> + Send + 'static,
         F: Fn(Report<S>) + Send + 'static,
     {
-        let (jobs, inbox) = mpsc::channel::<Job<B>>();
+        Self::start(move |_| (backend, None), Some(POLL), read, report)
+    }
+
+    /// Starts the thread. `make` builds the backend on it, given the handle
+    /// its watcher calls, and returns whatever keeps that watcher alive;
+    /// `poll`, when set, re-reads on a timer as well. `read` takes the
+    /// snapshot; `report` is called on the worker thread and must queue to
+    /// the Qt thread itself.
+    pub fn start<S, M, R, F>(make: M, poll: Option<Duration>, read: R, report: F) -> Option<Self>
+    where
+        S: Send + Sync + 'static,
+        M: FnOnce(Refresh<B>) -> (Box<B>, Option<Keepalive>) + Send + 'static,
+        R: Fn(&mut B) -> Result<S, String> + Send + 'static,
+        F: Fn(Report<S>) + Send + 'static,
+    {
+        let (jobs, inbox) = mpsc::channel::<Message<B>>();
+        let refresh = Refresh {
+            inbox: jobs.clone(),
+        };
         let mut read_failed = false;
         let mut publish = move |backend: &mut B, report: &F| match read(backend) {
             Ok(snapshot) => {
@@ -71,17 +111,24 @@ impl<B: ?Sized + Send + 'static> Worker<B> {
         std::thread::Builder::new()
             .name("cuprita-worker".to_owned())
             .spawn(move || {
+                let (mut backend, _keepalive) = make(refresh);
                 publish(&mut backend, &report);
                 loop {
-                    match inbox.recv_timeout(POLL) {
-                        Ok(job) => {
+                    let message = match poll {
+                        Some(every) => inbox.recv_timeout(every),
+                        None => inbox.recv().map_err(|_| RecvTimeoutError::Disconnected),
+                    };
+                    match message {
+                        Ok(Message::Job(job)) => {
                             if let Err(message) = job(&mut backend) {
                                 report(Report::Failed(message));
                             }
                             publish(&mut backend, &report);
                             report(Report::Done);
                         }
-                        Err(RecvTimeoutError::Timeout) => publish(&mut backend, &report),
+                        Ok(Message::Refresh) | Err(RecvTimeoutError::Timeout) => {
+                            publish(&mut backend, &report);
+                        }
                         Err(RecvTimeoutError::Disconnected) => break,
                     }
                 }
@@ -92,7 +139,7 @@ impl<B: ?Sized + Send + 'static> Worker<B> {
 
     /// Queues a command; `false` when the worker is gone.
     pub fn run(&self, job: impl FnOnce(&mut B) -> Result<(), String> + Send + 'static) -> bool {
-        self.jobs.send(Box::new(job)).is_ok()
+        self.jobs.send(Message::Job(Box::new(job))).is_ok()
     }
 }
 

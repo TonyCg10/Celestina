@@ -231,3 +231,4 @@ celestina-style	1.13.1	bug	STYLE-G7-AB	Fix the usage map errors when a folder ha
 siderita	1.11.0	milestone	SID-H1-R	Add D-Bus activation for the file manager interface
 cuprita	0.1.0	baseline	AUD-1-P	Adopt the Cuprita Cargo version as the verified baseline
 cuprita	0.2.0	milestone	CUP-1-B	Add the domain crate with its fakes and the three pages over them
+cuprita	0.3.0	milestone	CUP-1-C	Add the NetworkManager client and bring the network page live

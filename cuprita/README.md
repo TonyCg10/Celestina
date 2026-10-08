@@ -14,15 +14,15 @@ and audio in one window. It replaces nm-applet, Blueman and pavucontrol.
 - Cuprita is a window opened from the launcher or a key binding. It has no
   tray icon, no indicator and no daemon.
 
-The sections arrive in the CUP-1 units; the skeleton shows the three-section
-strip over empty pages. See the
+The sections arrive in the CUP-1 units: Red runs on NetworkManager; Bluetooth
+and Audio run over scripted fakes until CUP-1-D and CUP-1-E. See the
 [design](../docs/superpowers/specs/2026-10-08-cuprita-design.md).
 
 ## Architecture
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/cuprita-core` | Models, the three backend traits, fakes and pure logic; no Qt |
+| `../celestina-rs/crates/cuprita-core` | Models, the three backend traits, fakes and pure logic; no Qt. The NetworkManager client (`nm`, feature `nm`) is its one D-Bus module |
 | `src/` | The CXX-Qt controllers and models, worker threads, the real clients, single-instance activation |
 | `qml/` | The window, the pill navigation strip and the pages |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
@@ -33,8 +33,12 @@ for audio.
 
 ## Build and use
 
-Cuprita needs Rust and a Qt 6 development environment visible to CXX-Qt. The
-canonical production workflow is:
+Cuprita needs Rust and a Qt 6 development environment visible to CXX-Qt. At
+run time it needs NetworkManager on the system bus for the Red section
+(without it the section reports itself unavailable); joining or forgetting a
+network may ask polkit for authorisation. `cargo run -p cuprita-core
+--example snapshot` (in `celestina-rs/`) prints what NetworkManager reports
+on this machine. The canonical production workflow is:
 
 ```sh
 scripts/build-production.sh

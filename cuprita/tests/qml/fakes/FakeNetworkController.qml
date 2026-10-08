@@ -11,7 +11,11 @@ QtObject {
 
     property bool wifiEnabled: true
     property bool airplane: false
+    // Never busy: the stand-in answers every command at once.
+    property bool busy: false
     property var calls: []
+
+    signal notice(string kind, string text)
 
     property ListModel networks: ListModel { }
 
@@ -39,7 +43,8 @@ QtObject {
 
     function setWifiEnabled(on) { record("setWifiEnabled:" + on); fake.wifiEnabled = on; reload() }
     function setAirplane(on) { record("setAirplane:" + on); fake.airplane = on; reload() }
-    function connect(id, password) { record("connect:" + id) }
+    // The password is recorded so a test can see what the page passed on.
+    function connect(id, password) { record("connect:" + id + ":" + password) }
     function disconnect(id) { record("disconnect:" + id) }
     function forget(id) { record("forget:" + id) }
     function setVpnActive(id, on) { record("setVpnActive:" + id + ":" + on) }

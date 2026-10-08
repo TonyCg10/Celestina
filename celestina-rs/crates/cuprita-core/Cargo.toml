@@ -6,3 +6,19 @@ description = "Cuprita's domain: networks, Bluetooth devices and audio endpoints
 license = "MIT"
 
 [dependencies]
+# The NetworkManager client (`nm.rs`) and the `snapshot` example speak to
+# NetworkManager on the system bus. zbus is already the suite's D-Bus crate
+# (Siderita, Cuprita's single-instance service); its blocking API keeps the
+# client a plain call on Cuprita's worker threads. `async-io` is the runtime
+# zbus's blocking calls run on: zbus refuses to build without one runtime,
+# and this is the one the cuprita binary already carries. Behind the `nm`
+# feature so the trait layer and the fakes stay free of D-Bus.
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"], optional = true }
+
+[features]
+default = ["nm"]
+nm = ["dep:zbus"]
+
+[[example]]
+name = "snapshot"
+required-features = ["nm"]

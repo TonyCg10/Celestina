@@ -1,0 +1,57 @@
+# CUP-1-C exact change inventory
+
+Base revision	b78e1a457a09a5323778388ce4cb4c80a7af0d5a
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/cuprita-core/Cargo.toml
+Pathspec	celestina-rs/crates/cuprita-core/examples/snapshot.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/error.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/lib.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/nm/join.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/nm/mod.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/nm/watch.rs
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/README.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/docs/evidence/2026-10-08-network.md
+Pathspec	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-C.numstat.tsv
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/qml/Main.qml
+Pathspec	cuprita/qml/dialogs/WifiPasswordDialog.qml
+Pathspec	cuprita/qml/pages/NetworkPage.qml
+Pathspec	cuprita/src/backend.rs
+Pathspec	cuprita/src/controller/mod.rs
+Pathspec	cuprita/src/controller/network.rs
+Pathspec	cuprita/tests/qml/fakes/FakeNetworkController.qml
+Pathspec	cuprita/tests/qml/tst_network_page.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+156	0	1b911ad29cb07fbfcde9917d86975dd86b18c67a2b3561c4d56168b04d784801	celestina-rs/Cargo.lock
+16	0	71833b3d2f32966029ad06dfbecd1f2c2953762c86a1e3eafedbe07c0285e534	celestina-rs/crates/cuprita-core/Cargo.toml
+31	0	b433f071727f19476e12f9dca8f034188f0dd46c9a2a06aa8adb13b507ebb81c	celestina-rs/crates/cuprita-core/examples/snapshot.rs
+32	0	ae7d0e703d38cef2bd053aabcd04b00a0f8e15011e881296d9756d675d60fc93	celestina-rs/crates/cuprita-core/src/error.rs
+6	2	a7caad37aabdab384ca4105aedba280b02e920afa7247f8980f2c6e09440b331	celestina-rs/crates/cuprita-core/src/lib.rs
+196	0	a166921a8ecbfa4b0fcf72de58c17a5656bba41678e47acc8b8731737ea0a459	celestina-rs/crates/cuprita-core/src/nm/join.rs
+860	0	c5c771dc058bc21100cebea74f2449ff22a611bd8c2ce7a5af979547a678ef53	celestina-rs/crates/cuprita-core/src/nm/mod.rs
+157	0	70615beaa042c33e574492224aa11533eb05704a559c6d9961bc2f889f5bb2bd	celestina-rs/crates/cuprita-core/src/nm/watch.rs
+4	1	1a926cc628ff2f604332996173d09e9c704ba1d166a5715bfaff56de1954c63c	cuprita/Cargo.lock
+1	1	480b3c0239e8e34cbdab5cdab362763af9b9e7976061695df19a525383b095ac	cuprita/Cargo.toml
+9	5	e8c02df1d3cf83b32ae45ad8e5a91639d1dc8e0a8e68d9a85ec875745cd42774	cuprita/README.md
+12	6	b39e7554b2efc221fb06e6869f935f7b767a7c105b42ef30d3a1bddbd51a8e32	cuprita/STATUS.md
+1	0	5fe3b0e60e5ede5ed502caa57e808573d41ba2296e4437fa312d508f6a62387c	cuprita/build.rs
+202	0	e51f226c8d089db3fd815ce492d991cdfdb8919459bd7cde787d03fdc72ee9a2	cuprita/docs/evidence/2026-10-08-network.md
+57	0	self	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-C.numstat.tsv
+1	1	a4e596303914c7bfe3b81efafa8b19ef49cf11c6f914f1d298f84928b5047f6c	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+1	0	c81681db5b0228be0a3942f55d630328417f58b092e75e4e59ee0dcaae2d03da	cuprita/qml/Main.qml
+128	0	18bcd7e8688fc7c3af861e92f2430718b1bcb47fd98731b9f5053400d172ec3b	cuprita/qml/dialogs/WifiPasswordDialog.qml
+43	3	7d5b62b545badb1a2f713dfe85479480f83746581797f2e9a53ae7eb13ac1c92	cuprita/qml/pages/NetworkPage.qml
+28	6	0202df7e63c4966266cc1d3b4df6bae0f0637d53bc3e8c9d03d75c6f126be318	cuprita/src/backend.rs
+61	14	247788d82da3d19b04fd570d48f1f66791ae3663b9dd7d0048838f2dc53b25ba	cuprita/src/controller/mod.rs
+21	2	368624cfbcbf4b415dbafbe47207a8b9a800f013df6e2f7a74d493bb8f596383	cuprita/src/controller/network.rs
+6	1	79a4000ca555abf774d25a57eb972ee9a8571e25e59e1e850ab7efe4387e77bf	cuprita/tests/qml/fakes/FakeNetworkController.qml
+110	1	d101cc6434ea426266c9e620d62a98177333f3a2138d2c341e1b6851df072a26	cuprita/tests/qml/tst_network_page.qml
+1	0	2e5ec2927d2bd6e3084cd0958befc7154e6b9fbd72b2ee18462e75bd777694ed	docs/version-history.tsv

@@ -49,7 +49,7 @@ network, Bluetooth and audio.
 |---|---|---|---|---|---|---|---|
 | CUP-1-A | `cuprita:` | active | `cuprita/`, `celestina-rs/crates/cuprita-core/` | — | Application skeleton: window with the three-section strip and empty pages, scripts, smoke, the document set. Lands inside suite unit AUD-1-P. | [skeleton](../../evidence/2026-10-08-skeleton.md) | None |
 | CUP-1-B | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-B.numstat.tsv) | 61 files, +4722/-238 | Models, the three traits, fakes, pure logic; controllers and list models over the fakes; the three pages and the notice pill | [evidence](../../evidence/2026-10-08-domain.md) | None |
-| CUP-1-C | `cuprita:` | planned | `cuprita/src/`, `cuprita/qml/` | — | NetworkManager client and the Red page | `scripts/verify-production.sh` | `VAL-C` |
+| CUP-1-C | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-C.numstat.tsv) | 25 files, +2140/-43 | NetworkManager client (`nm.rs`) with its change watcher and `snapshot` example; the network worker driven by the watcher; the Wi-Fi password dialog; the Red page live | [evidence](../../evidence/2026-10-08-network.md) | `VAL-C` |
 | CUP-1-D | `cuprita:` | planned | `cuprita/src/`, `cuprita/qml/` | — | BlueZ client, pairing agent and the Bluetooth page | `scripts/verify-production.sh` | `VAL-D` |
 | CUP-1-E | `cuprita:` | planned | `cuprita/src/`, `cuprita/qml/` | — | Binding spike, PipeWire client and the Audio page | `scripts/verify-production.sh` | `VAL-E` |
 | CUP-1-F | `cuprita:` | planned | `cuprita/`, `docs/version-history.tsv` | — | Implementation exit, 1.0.0, status and roadmap closed, plan archived | `scripts/complete-production.sh` | `VAL-C`, `VAL-D`, `VAL-E` |

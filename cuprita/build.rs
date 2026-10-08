@@ -40,6 +40,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/SettingRow.qml",
     "qml/components/SectionShortcuts.qml",
     "qml/components/StreamRow.qml",
+    "qml/dialogs/WifiPasswordDialog.qml",
     "qml/pages/AudioPage.qml",
     "qml/pages/BluetoothPage.qml",
     "qml/pages/NetworkPage.qml",

@@ -43,3 +43,35 @@ macro_rules! section_error {
 section_error!(NetworkError, "La red");
 section_error!(BluetoothError, "El Bluetooth");
 section_error!(AudioError, "El sonido");
+
+impl NetworkError {
+    /// An 802.1X network: Cuprita joins only open and passphrase networks;
+    /// an enterprise profile is set up elsewhere.
+    #[must_use]
+    pub fn enterprise_unsupported() -> Self {
+        Self::Failed("las redes empresariales se configuran fuera de Cuprita".to_owned())
+    }
+
+    /// A protected network without a saved profile was asked to join with no
+    /// passphrase.
+    #[must_use]
+    pub fn password_required() -> Self {
+        Self::Failed("esta red necesita una contraseña".to_owned())
+    }
+}
+
+impl NetworkError {
+    /// A WEP-only network: its keys are not a WPA passphrase and Cuprita does
+    /// not offer them.
+    #[must_use]
+    pub fn wep_unsupported() -> Self {
+        Self::Failed("las redes WEP no se admiten".to_owned())
+    }
+}
+
+/// The notice for a join that NetworkManager gave up on: a wrong passphrase,
+/// or a network that went away.
+#[must_use]
+pub fn join_failed_message(name: &str) -> String {
+    format!("No se pudo conectar a «{name}»: contraseña incorrecta o red no disponible")
+}

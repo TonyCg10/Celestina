@@ -1,6 +1,8 @@
 //! Which backends the controllers drive: the scripted fakes when
-//! `CUPRITA_FAKE=1`, the real clients otherwise. Until CUP-1-C..E land the
-//! real clients, they answer `Unavailable` to everything.
+//! `CUPRITA_FAKE=1`, the real clients otherwise. The network is
+//! NetworkManager's; until CUP-1-D and E land the Bluetooth and audio clients,
+//! those answer `Unavailable` to everything, as does the network when the
+//! system bus cannot be reached.
 
 use cuprita_core::audio::Audio;
 use cuprita_core::bluetooth::Bluetooth;
@@ -8,16 +10,36 @@ use cuprita_core::error::{AudioError, BluetoothError, NetworkError};
 use cuprita_core::fake::{FakeAudio, FakeBluetooth, FakeNetwork};
 use cuprita_core::model::{AudioSnapshot, BluetoothSnapshot, NetworkSnapshot};
 use cuprita_core::network::Network;
+use cuprita_core::nm::{self, NmNetwork};
+
+use crate::controller::Keepalive;
 
 fn fake() -> bool {
     std::env::var_os("CUPRITA_FAKE").is_some_and(|value| value == "1")
 }
 
-pub fn network() -> Box<dyn Network> {
+/// The network backend and the watcher that calls `on_change` when
+/// NetworkManager reports a change; `on_notice` receives what the client has
+/// to say outside a command (a join that failed after its call returned).
+/// Blocking: call it on the worker. The fake has no watcher; it only changes
+/// through commands, which re-read anyway.
+pub fn network(
+    on_change: impl Fn() + Send + 'static,
+    on_notice: impl Fn(String) + Send + Sync + 'static,
+) -> (Box<dyn Network>, Option<Keepalive>) {
     if fake() {
-        Box::new(FakeNetwork::scripted())
-    } else {
-        Box::new(Offline)
+        return (Box::new(FakeNetwork::scripted()), None);
+    }
+    match NmNetwork::connect_system() {
+        Ok(mut client) => {
+            client.set_notify(on_notice);
+            // Without the watcher the page still updates after each command.
+            let watcher = nm::watch(on_change)
+                .ok()
+                .map(|handle| Box::new(handle) as Keepalive);
+            (Box::new(client), watcher)
+        }
+        Err(_) => (Box::new(Offline), None),
     }
 }
 
