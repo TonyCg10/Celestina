@@ -221,3 +221,4 @@ siderita	1.9.6	bug	SID-H1-N	Add free wheel scrolling to every list and the headi
 celestina-style	1.12.9	bug	STYLE-G7-Z	Fix the wheel scroller's idle writes and wire it into the usage list
 siderita	1.9.7	bug	SID-H1-M	Fix the bottom menus and reuse the shared thumbnail provider
 grafita	1.4.0	milestone	GRA-H1-E	Add automatic encoding detection and drop the encoding button
+grafita	1.4.1	bug	GRA-H1-F	Add a longer scrolling recents list in an opaque box

@@ -1,0 +1,23 @@
+# GRA-H1-F exact change inventory
+
+Base revision	7037d280c0b737c9a1186ea393181bc38a34cc22
+Pathspec	celestina-rs/crates/grafita-core/src/recent.rs
+Pathspec	docs/version-history.tsv
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/docs/evidence/2026-10-07-recents.md
+Pathspec	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-F.numstat.tsv
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	grafita/qml/components/DocumentView.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	3	cc4f16269e2b1f3faa8d2f4bd453af60ad244f69c68dabcf3380840936e2b1d7	celestina-rs/crates/grafita-core/src/recent.rs
+1	0	cc0a74575a08f20d38e50d7bed1ec65759e193661cc0378fec5fd7e08a57aee2	docs/version-history.tsv
+1	1	9dd502249a63ed85cb836e85f43bbf50a9fa08bed9c3bf7eb647b2ee3d8424e5	grafita/Cargo.lock
+1	1	8174f3d83dd51a354c9e286dba508aa371e67c3cb201980f44b4126c78c01a71	grafita/Cargo.toml
+36	0	b8de7cb144d1c7f644f485efe92715bd486359942738791d53d4ce17447e353f	grafita/docs/evidence/2026-10-07-recents.md
+23	0	self	grafita/docs/inventories/2026-09-26-hardening/GRA-H1-F.numstat.tsv
+1	0	89a77f63dcbdb5504ff06406dba756d84438f154956c4c55a016a47576b8a293	grafita/docs/plans/active/2026-09-26-hardening.md
+148	62	e87dded78bc546211f3813a636355df70659d44b6aeb469fe008ed00a84a9c56	grafita/qml/components/DocumentView.qml

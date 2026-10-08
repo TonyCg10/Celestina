@@ -40,9 +40,9 @@ use std::time::{Duration, Instant};
 
 use celestina_core::{atomic_file, xdg, CancellationToken};
 
-/// How many documents are remembered. Enough to cover "the thing I was just in",
-/// short enough that the list stays scannable.
-const LIMIT: usize = 12;
+/// How many documents are remembered. The empty screen shows them in a scrolling
+/// box, so the history can be long without crowding the page.
+const LIMIT: usize = 50;
 
 /// The recently opened documents, newest first.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

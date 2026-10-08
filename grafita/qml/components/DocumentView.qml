@@ -425,69 +425,166 @@ Item {
 
     // Nothing open: say so, offer the way in, and say what went wrong if
     // something did. An editor with no document and no button is a dead end.
-    Column {
-        anchors.centerIn: parent
-        width: Math.min(420, parent.width - CelestinaTheme.space3xl)
-        spacing: CelestinaTheme.spaceSm
+    Item {
+        id: emptyState
+        anchors.fill: parent
         visible: !root.session.active
 
-        Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            text: "Grafita abre un documento de texto."
-            color: CelestinaTheme.textMuted
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontBody
+        // The invitation keeps to its 420 pixel column; the recents box takes
+        // the same width so the two read as one centred stack.
+        readonly property real columnWidth: Math.min(420, emptyState.width - CelestinaTheme.space3xl)
 
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
-        }
+        // Group geometry. The area ends where the page box ends, above the footer.
+        readonly property real areaHeight: Math.max(0, footer.y - CelestinaTheme.spaceSm)
+        readonly property real boxWanted: recentsBox.padding * 2 + recentsLabel.height
+                                          + CelestinaTheme.spaceXs + recentsList.contentHeight
+        readonly property real boxRoom: Math.max(0, emptyState.areaHeight - CelestinaTheme.space3xl
+                                                    - invitation.height - CelestinaTheme.spaceLg)
+        // Room for the label and at least one row, or no box at all.
+        readonly property bool hasBox: root.recentPaths.length > 0
+                                       && emptyState.boxRoom >= recentsBox.padding * 2
+                                          + recentsLabel.height + CelestinaTheme.spaceXs
+                                          + CelestinaTheme.controlHeight
+        readonly property real boxHeight: Math.min(emptyState.boxWanted, emptyState.boxRoom)
+        readonly property bool fits: !emptyState.hasBox || emptyState.boxWanted <= emptyState.boxRoom
+        readonly property real groupHeight: invitation.height + (emptyState.hasBox
+                                            ? CelestinaTheme.spaceLg + emptyState.boxHeight : 0)
 
-        Item {
-            width: parent.width
-            height: openButton.height
+        Column {
+            id: invitation
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: emptyState.columnWidth
+            spacing: CelestinaTheme.spaceSm
+            // The invitation and the recents box are one group. It is centred
+            // in the empty area while it fits, and sits `space3xl` from the top
+            // only when the box has to take all the height there is. A move
+            // (recents arrive after start) is a glide, never a jump.
+            y: emptyState.fits
+               ? Math.round((emptyState.areaHeight - emptyState.groupHeight) / 2)
+               : CelestinaTheme.space3xl
 
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: CelestinaTheme.spaceSm
-
-                // The page's two verbs keep their words: a glyph in front says
-                // what each opens, the text says it in the user's language.
-                CelestinaButton {
-                    id: openButton
-                    text: "Abrir archivo…"
-                    role: CelestinaButton.Primary
-                    enabled: !root.session.busy
-                    onClicked: openDialog.open()
-                    contentItem: VerbLabel { owner: openButton; glyph: "folder-open" }
+            // The first placement is instant: the glide is enabled only once
+            // the area has a height and one frame has laid the group out.
+            property bool placed: false
+            Connections {
+                target: emptyState
+                function onAreaHeightChanged() {
+                    if (emptyState.areaHeight > 0 && !invitation.placed)
+                        Qt.callLater(function() { invitation.placed = true })
                 }
+            }
+            Component.onCompleted: if (emptyState.areaHeight > 0)
+                Qt.callLater(function() { invitation.placed = true })
 
-                CelestinaButton {
-                    id: newButton
-                    text: "Documento nuevo"
-                    enabled: !root.session.busy
-                    onClicked: root.session.newDocument()
-                    contentItem: VerbLabel { owner: newButton; glyph: "file-plus" }
+            Behavior on y {
+                enabled: invitation.placed
+                NumberAnimation {
+                    duration: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
+                    easing.type: CelestinaTheme.easeStandard
                 }
+            }
+
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: "Grafita abre un documento de texto."
+                color: CelestinaTheme.textMuted
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontBody
+
+                Accessible.role: Accessible.StaticText
+                Accessible.name: text
+            }
+
+            Item {
+                width: parent.width
+                height: openButton.height
+
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: CelestinaTheme.spaceSm
+
+                    // The page's two verbs keep their words: a glyph in front says
+                    // what each opens, the text says it in the user's language.
+                    CelestinaButton {
+                        id: openButton
+                        text: "Abrir archivo…"
+                        role: CelestinaButton.Primary
+                        enabled: !root.session.busy
+                        onClicked: openDialog.open()
+                        contentItem: VerbLabel { owner: openButton; glyph: "folder-open" }
+                    }
+
+                    CelestinaButton {
+                        id: newButton
+                        text: "Documento nuevo"
+                        enabled: !root.session.busy
+                        onClicked: root.session.newDocument()
+                        contentItem: VerbLabel { owner: newButton; glyph: "file-plus" }
+                    }
+                }
+            }
+
+            Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                visible: root.session.errorText.length > 0
+                text: root.session.errorText
+                color: CelestinaTheme.danger
+                font.family: CelestinaTheme.sansFamily
+                font.pixelSize: CelestinaTheme.fontCaption
+
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: "Error: " + text
             }
         }
 
         // Recent documents, if there are any. A new tab that remembers what you
-        // were working on beats a new tab that makes you go find it again.
-        Column {
-            width: parent.width
-            spacing: CelestinaTheme.spaceXs
-            visible: root.recentPaths.length > 0
-
-            Item { width: 1; height: CelestinaTheme.spaceMd }
+        // were working on beats a new tab that makes you go find it again. The
+        // box is an opaque `card`, like the document page, so the names never sit
+        // over the glass; it takes the height left under the buttons and the list
+        // scrolls inside it, which is what lets the history be long.
+        CelestinaSurface {
+            id: recentsBox
+            role: CelestinaSurface.Panel
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: invitation.bottom
+            anchors.topMargin: CelestinaTheme.spaceLg
+            height: emptyState.boxHeight
+            width: emptyState.columnWidth
+            // Inset from the rounded corners by the surface's own padding, so
+            // neither the label nor a row's text meets the curve.
+            padding: CelestinaTheme.spaceLg
+            visible: emptyState.hasBox
 
             CelestinaSectionLabel {
+                id: recentsLabel
                 text: "Recientes"
             }
 
-            Repeater {
+            ListView {
+                id: recentsList
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: recentsLabel.bottom
+                anchors.topMargin: CelestinaTheme.spaceXs
+                anchors.bottom: parent.bottom
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
                 model: root.recentPaths
+                // Every row exists, so Tab can reach one that is out of view.
+                cacheBuffer: CelestinaTheme.controlHeight * 64
+
+                CelestinaWheelScroll { view: recentsList }
+
+                CelestinaScrollBar {
+                    surface: recentsList
+                    anchors.right: recentsList.right
+                    anchors.top: recentsList.top
+                    anchors.bottom: recentsList.bottom
+                }
 
                 // The shared button rather than a hand-rolled row: it brings
                 // Tab focus, Return and Space, the focus ring and the pressed
@@ -496,8 +593,9 @@ Item {
                 delegate: CelestinaButton {
                     id: entry
                     required property string modelData
+                    required property int index
 
-                    width: parent.width
+                    width: recentsList.width
                     height: CelestinaTheme.controlHeight
                     role: CelestinaButton.Ghost
                     leftPadding: CelestinaTheme.spaceSm
@@ -506,6 +604,8 @@ Item {
                     // files of the same name apart.
                     text: root.baseName(entry.modelData)
                     onClicked: root.session.openPath(entry.modelData)
+                    onActiveFocusChanged: if (entry.activeFocus)
+                        recentsList.positionViewAtIndex(entry.index, ListView.Contain)
 
                     Accessible.name: "Abrir " + root.baseName(entry.modelData)
                     Accessible.description: entry.modelData
@@ -527,20 +627,6 @@ Item {
                     }
                 }
             }
-        }
-
-        Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            visible: root.session.errorText.length > 0
-            text: root.session.errorText
-            color: CelestinaTheme.danger
-            font.family: CelestinaTheme.sansFamily
-            font.pixelSize: CelestinaTheme.fontCaption
-
-            Accessible.role: Accessible.AlertMessage
-            Accessible.name: "Error: " + text
         }
     }
 
