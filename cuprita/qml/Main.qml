@@ -71,6 +71,7 @@ ApplicationWindow {
             BluetoothPage {
                 controller: BluetoothController
                 devices: DeviceModel { id: deviceModel }
+                backdropSource: pages
             }
             AudioPage {
                 controller: AudioController

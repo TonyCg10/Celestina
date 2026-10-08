@@ -15,8 +15,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use zbus::blocking::{Connection, Proxy};
 use zbus::proxy::CacheProperties;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
-use zbus::DBusError;
 
+use crate::bus;
 use crate::error::NetworkError;
 use crate::model::{Network as NetworkEntry, NetworkKind, NetworkSnapshot, NetworkState, Security};
 use crate::network::Network;
@@ -138,35 +138,14 @@ fn wifi_id(ssid: &[u8]) -> String {
     format!("wifi:{hex}")
 }
 
-/// A D-Bus error name and its detail as the section's error. NetworkManager
-/// names a polkit refusal `org.freedesktop.NetworkManager.PermissionDenied`.
-fn map_error_name(name: &str, detail: Option<String>) -> NetworkError {
-    if name.ends_with("PermissionDenied") || name.ends_with("AccessDenied") {
-        NetworkError::Denied
-    } else if name.ends_with("ServiceUnknown") || name.ends_with("NameHasNoOwner") {
-        NetworkError::Unavailable
-    } else {
-        NetworkError::Failed(detail.unwrap_or_else(|| name.to_owned()))
-    }
-}
-
+/// A D-Bus failure as the section's error; the classification is shared with
+/// the BlueZ client (`bus.rs`).
 fn map_error(error: zbus::Error) -> NetworkError {
-    match error {
-        zbus::Error::FDO(inner) => map_fdo(*inner),
-        zbus::Error::MethodError(name, detail, _) => map_error_name(name.as_str(), detail),
-        zbus::Error::InputOutput(_) | zbus::Error::Address(_) => NetworkError::Unavailable,
-        other => NetworkError::Failed(other.to_string()),
-    }
+    bus::fault(error).into()
 }
 
 fn map_fdo(error: zbus::fdo::Error) -> NetworkError {
-    match error {
-        zbus::fdo::Error::ZBus(inner) => map_error(inner),
-        other => {
-            let detail = other.description().map(str::to_owned);
-            map_error_name(other.name().as_str(), detail)
-        }
-    }
+    bus::fdo_fault(error).into()
 }
 
 /// What a row's id leads back to when a command names it. Rebuilt with every
@@ -836,22 +815,7 @@ mod tests {
     }
 
     #[test]
-    fn error_names_map_to_the_section_errors() {
-        assert_eq!(
-            map_error_name("org.freedesktop.NetworkManager.PermissionDenied", None),
-            NetworkError::Denied
-        );
-        assert_eq!(
-            map_error_name("org.freedesktop.DBus.Error.ServiceUnknown", None),
-            NetworkError::Unavailable
-        );
-        assert_eq!(
-            map_error_name(
-                "org.freedesktop.NetworkManager.UnknownConnection",
-                Some("no such profile".to_owned())
-            ),
-            NetworkError::Failed("no such profile".to_owned())
-        );
+    fn a_polkit_refusal_is_denied() {
         assert_eq!(
             map_fdo(zbus::fdo::Error::AccessDenied("polkit".to_owned())),
             NetworkError::Denied

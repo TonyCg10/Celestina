@@ -1,3 +1,4 @@
+mod agent;
 mod backend;
 mod controller;
 mod models;

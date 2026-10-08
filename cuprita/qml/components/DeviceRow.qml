@@ -4,7 +4,8 @@ import QtQuick
 import org.celestina.cuprita 1.0
 
 // One Bluetooth device: kind, name, state and battery, then its actions — pair
-// a stranger, connect or disconnect a paired one, forget it.
+// a stranger, connect or disconnect a paired one, and a menu that forgets it
+// (the page owns the menu; the row says where to open it).
 Item {
     id: row
 
@@ -15,7 +16,7 @@ Item {
     signal pairRequested(string address)
     signal connectRequested(string address)
     signal disconnectRequested(string address)
-    signal forgetRequested(string address)
+    signal menuRequested(string address, Item anchor)
 
     implicitHeight: CelestinaTheme.rowHeight
     Accessible.role: Accessible.ListItem
@@ -28,6 +29,7 @@ Item {
         width: CelestinaTheme.iconMd
         height: CelestinaTheme.iconMd
         name: row.model.kind === "audio" ? "media-volume"
+              : row.model.kind === "input" ? "gamepad-2"
               : row.model.kind === "phone" ? "phone"
               : row.model.kind === "computer" ? "monitor" : "bluetooth"
     }
@@ -100,12 +102,13 @@ Item {
         }
 
         CelestinaIconButton {
-            objectName: "forgetButton"
+            id: more
+            objectName: "menuButton"
             visible: row.model.paired
             role: CelestinaButton.Ghost
-            iconName: "user-trash"
-            helpText: qsTr("Olvidar")
-            onClicked: row.forgetRequested(row.model.address)
+            iconName: "chevron-down"
+            helpText: qsTr("Más opciones")
+            onClicked: row.menuRequested(row.model.address, more)
         }
     }
 }

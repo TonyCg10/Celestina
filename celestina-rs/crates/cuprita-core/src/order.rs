@@ -1,8 +1,9 @@
-//! How the network list reads: ordering, signal bars, security keys.
+//! How the network and device lists read: ordering, signal bars, security
+//! keys.
 
 use std::cmp::Reverse;
 
-use crate::model::{Network, NetworkState, Security};
+use crate::model::{BluetoothDevice, Network, NetworkState, Security};
 
 /// Connected first, then the known ones, then the strongest, then by name.
 // The plan fixes this signature; a slice would do as well.
@@ -18,6 +19,17 @@ fn key(n: &Network) -> (bool, bool, Reverse<u8>, &str) {
         Reverse(n.signal.unwrap_or(0)),
         n.name.as_str(),
     )
+}
+
+/// Connected devices first, then the paired ones, then by name.
+pub fn order_devices(devices: &mut [BluetoothDevice]) {
+    devices.sort_by(|a, b| {
+        (!a.connected, !a.paired, a.name.to_lowercase()).cmp(&(
+            !b.connected,
+            !b.paired,
+            b.name.to_lowercase(),
+        ))
+    });
 }
 
 /// The 0..=4 bars a signal strength draws as.

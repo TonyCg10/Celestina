@@ -133,6 +133,9 @@ impl qobject::NetworkController {
 
     fn set_airplane_value(mut self: Pin<&mut Self>, on: bool) {
         if self.rust().airplane != on {
+            if !super::bluetooth::set_airplane(on) {
+                eprintln!("Cuprita: airplane mode: the Bluetooth section is not running");
+            }
             self.as_mut().rust_mut().airplane = on;
             self.airplane_changed();
         }
@@ -170,7 +173,15 @@ impl qobject::NetworkController {
         self.dispatch(move |b| b.set_wifi_enabled(on));
     }
 
+    /// Airplane mode turns every radio off: NetworkManager's Wi-Fi through
+    /// this section's backend, the Bluetooth adapter through the Bluetooth
+    /// section's (`bluetooth::set_airplane`, told at once on the way on and
+    /// again by every snapshot whose flag changes). Turning it off brings
+    /// Wi-Fi back and leaves Bluetooth off until the person switches it on.
     pub fn set_airplane(self: Pin<&mut Self>, on: bool) {
+        if on && !super::bluetooth::set_airplane(true) {
+            eprintln!("Cuprita: airplane mode: the Bluetooth section is not running");
+        }
         self.dispatch(move |b| b.set_airplane(on));
     }
 

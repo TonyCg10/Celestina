@@ -1,11 +1,15 @@
 //! Which backends the controllers drive: the scripted fakes when
 //! `CUPRITA_FAKE=1`, the real clients otherwise. The network is
-//! NetworkManager's; until CUP-1-D and E land the Bluetooth and audio clients,
-//! those answer `Unavailable` to everything, as does the network when the
-//! system bus cannot be reached.
+//! NetworkManager's and Bluetooth is BlueZ's (with Cuprita's pairing agent);
+//! until CUP-1-E lands the audio client, audio answers `Unavailable` to
+//! everything, as does a section whose service the system bus cannot reach.
 
 use cuprita_core::audio::Audio;
+use std::sync::mpsc::{Receiver, Sender};
+
+use cuprita_core::agent::{AgentAnswer, AgentRequest};
 use cuprita_core::bluetooth::Bluetooth;
+use cuprita_core::bluez::{self, BluezBluetooth};
 use cuprita_core::error::{AudioError, BluetoothError, NetworkError};
 use cuprita_core::fake::{FakeAudio, FakeBluetooth, FakeNetwork};
 use cuprita_core::model::{AudioSnapshot, BluetoothSnapshot, NetworkSnapshot};
@@ -43,11 +47,57 @@ pub fn network(
     }
 }
 
-pub fn bluetooth() -> Box<dyn Bluetooth> {
+/// The Bluetooth backend and the watcher that calls `on_change` when BlueZ
+/// reports a change. Blocking: call it on the worker. The fake has no
+/// watcher; it only changes through commands, which re-read anyway.
+pub fn bluetooth(on_change: impl Fn() + Send + 'static) -> (Box<dyn Bluetooth>, Option<Keepalive>) {
     if fake() {
-        Box::new(FakeBluetooth::scripted())
-    } else {
-        Box::new(Offline)
+        return (Box::new(FakeBluetooth::scripted()), None);
+    }
+    match BluezBluetooth::connect_system() {
+        Ok(client) => {
+            // Without the watcher the page still updates after each command.
+            let watcher = bluez::watch(on_change)
+                .ok()
+                .map(|handle| Box::new(handle) as Keepalive);
+            (Box::new(client), watcher)
+        }
+        Err(_) => (Box::new(Offline), None),
+    }
+}
+
+/// Abandons the pairing under way with `address` on a thread of its own (the
+/// Bluetooth worker is blocked inside it). Best effort: a failure is logged.
+/// Nothing to abandon under the fakes.
+pub fn cancel_pairing(address: String) {
+    if fake() {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("cuprita-cancel-pairing".to_owned())
+        .spawn(move || {
+            if let Err(error) = bluez::cancel_pairing(&address) {
+                eprintln!("Cuprita: the pairing with {address} could not be cancelled: {error}");
+            }
+        });
+    if let Err(error) = spawned {
+        eprintln!("Cuprita: the pairing could not be cancelled: {error}");
+    }
+}
+
+/// The pairing agent, exported and registered with BlueZ, or `None` under
+/// the fakes or when BlueZ refuses it (pairing then fails with BlueZ's own
+/// error instead of asking). Blocking: call it off the Qt thread.
+pub fn agent(requests: Sender<AgentRequest>, answers: Receiver<AgentAnswer>) -> Option<Keepalive> {
+    if fake() {
+        return None;
+    }
+    match bluez::serve_agent(requests, answers) {
+        Ok(handle) => Some(Box::new(handle)),
+        Err(error) => {
+            eprintln!("Cuprita: the pairing agent could not be registered: {error}");
+            None
+        }
     }
 }
 

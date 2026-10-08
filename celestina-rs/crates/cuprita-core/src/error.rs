@@ -69,6 +69,22 @@ impl NetworkError {
     }
 }
 
+impl BluetoothError {
+    /// The device or the person cancelled or refused the pairing
+    /// (`org.bluez.Error.AuthenticationCanceled` or `…Rejected`).
+    #[must_use]
+    pub fn pairing_cancelled() -> Self {
+        Self::Failed("emparejamiento cancelado".to_owned())
+    }
+}
+
+/// The notice for an adapter switched on while airplane mode keeps every
+/// radio off.
+#[must_use]
+pub fn airplane_mode_message() -> String {
+    "Modo avión activado".to_owned()
+}
+
 /// The notice for a join that NetworkManager gave up on: a wrong passphrase,
 /// or a network that went away.
 #[must_use]

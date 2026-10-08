@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 /// How often an idle worker re-reads its snapshot when its backend has no
-/// change signals of its own yet (Bluetooth and audio until CUP-1-D and E).
+/// change signals of its own yet (audio until CUP-1-E).
 const POLL: Duration = Duration::from_secs(5);
 
 /// What a worker reports to the Qt thread.
@@ -43,6 +43,10 @@ type Job<B> = Box<dyn FnOnce(&mut B) -> Result<(), String> + Send>;
 
 enum Message<B: ?Sized> {
     Job(Job<B>),
+    /// A command another section asked for (airplane mode powering the
+    /// Bluetooth adapter off): run and re-read like a job, but not counted
+    /// in this section's `busy`, so it reports no `Done`.
+    Quiet(Job<B>),
     /// The backend reported a change: re-read the snapshot.
     Refresh,
 }
@@ -65,6 +69,14 @@ impl<B: ?Sized> Refresh<B> {
 /// The sending half of a section's worker thread.
 pub struct Worker<B: ?Sized> {
     jobs: Sender<Message<B>>,
+}
+
+impl<B: ?Sized> Clone for Worker<B> {
+    fn clone(&self) -> Self {
+        Self {
+            jobs: self.jobs.clone(),
+        }
+    }
 }
 
 impl<B: ?Sized + Send + 'static> Worker<B> {
@@ -126,6 +138,12 @@ impl<B: ?Sized + Send + 'static> Worker<B> {
                             publish(&mut backend, &report);
                             report(Report::Done);
                         }
+                        Ok(Message::Quiet(job)) => {
+                            if let Err(message) = job(&mut backend) {
+                                report(Report::Failed(message));
+                            }
+                            publish(&mut backend, &report);
+                        }
                         Ok(Message::Refresh) | Err(RecvTimeoutError::Timeout) => {
                             publish(&mut backend, &report);
                         }
@@ -140,6 +158,15 @@ impl<B: ?Sized + Send + 'static> Worker<B> {
     /// Queues a command; `false` when the worker is gone.
     pub fn run(&self, job: impl FnOnce(&mut B) -> Result<(), String> + Send + 'static) -> bool {
         self.jobs.send(Message::Job(Box::new(job))).is_ok()
+    }
+
+    /// Queues a command that another section asked for: it reports a failure
+    /// and the snapshot after it, but no `Done`.
+    pub fn run_quiet(
+        &self,
+        job: impl FnOnce(&mut B) -> Result<(), String> + Send + 'static,
+    ) -> bool {
+        self.jobs.send(Message::Quiet(Box::new(job))).is_ok()
     }
 }
 

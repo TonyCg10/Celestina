@@ -1,0 +1,77 @@
+# CUP-1-D exact change inventory
+
+Base revision	b0f0fcdcd53d794f17706f1239d7137c54982575
+Pathspec	celestina-rs/crates/cuprita-core/Cargo.toml
+Pathspec	celestina-rs/crates/cuprita-core/examples/snapshot.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/agent.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/bluez/agent.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/bluez/mod.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/bluez/watch.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/bus.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/error.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/lib.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/nm/mod.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/nm/watch.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/order.rs
+Pathspec	celestina-rs/crates/cuprita-core/tests/agent.rs
+Pathspec	celestina-rs/crates/cuprita-core/tests/order.rs
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/README.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/docs/evidence/2026-10-08-bluetooth.md
+Pathspec	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-D.numstat.tsv
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/qml/Main.qml
+Pathspec	cuprita/qml/components/DeviceRow.qml
+Pathspec	cuprita/qml/dialogs/PairingDialog.qml
+Pathspec	cuprita/qml/pages/BluetoothPage.qml
+Pathspec	cuprita/src/agent.rs
+Pathspec	cuprita/src/backend.rs
+Pathspec	cuprita/src/controller/bluetooth.rs
+Pathspec	cuprita/src/controller/mod.rs
+Pathspec	cuprita/src/controller/network.rs
+Pathspec	cuprita/src/main.rs
+Pathspec	cuprita/tests/qml/fakes/FakeBluetoothController.qml
+Pathspec	cuprita/tests/qml/tst_bluetooth_page.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+7	5	a69bef247b32326e7f933bed3d489f360be165c6d487dceeb89a20d3e2ed6d6c	celestina-rs/crates/cuprita-core/Cargo.toml
+75	17	628d2e96c89d6dd00a5ffaa233802636de35a327cdb73e954d6dfb16849bb965	celestina-rs/crates/cuprita-core/examples/snapshot.rs
+46	2	2f2dc30fdb3557d2956a0f6290687d115f53354e70bbd7f403cf9959c4234298	celestina-rs/crates/cuprita-core/src/agent.rs
+474	0	d8d2dcce6530cc3cf3571f88f80cc6fa9a547ef4b64ed0cd271a3d8ac8ec2312	celestina-rs/crates/cuprita-core/src/bluez/agent.rs
+514	0	e0de7db509b70a5cccd9e47f029800ac157ef5d253fca7b8f8054e419d9f6682	celestina-rs/crates/cuprita-core/src/bluez/mod.rs
+89	0	3af0d3a6a0cd27954cc862ec73ee07374dfd8ddf1e14f4897f8230dd5fd0ceaf	celestina-rs/crates/cuprita-core/src/bluez/watch.rs
+232	0	12d98803c37790e3750d3680f4a7850fd82c00475200e0f9034f692513617127	celestina-rs/crates/cuprita-core/src/bus.rs
+16	0	c8b72b06f9fc935c5731ef498e710761de939fdd0b0a80d4a35a7cd6a3a3da58	celestina-rs/crates/cuprita-core/src/error.rs
+6	1	980507f2e0d8864b39ec5b2a11f97e6c5bb8624bc613265e9a9cce4403138ad7	celestina-rs/crates/cuprita-core/src/lib.rs
+6	42	0e5bf066a6ef055c60d54b6dab3847cfe76f23fb9c5308349d9c865d394a9147	celestina-rs/crates/cuprita-core/src/nm/mod.rs
+15	100	8e9cb08c30454cd18f1f376f88d99e664c92e012b2a5165572c7eb70afe65106	celestina-rs/crates/cuprita-core/src/nm/watch.rs
+14	2	03e2e10616c2b3bacedb41fd6e029fe16543d233249127063f65727598362b16	celestina-rs/crates/cuprita-core/src/order.rs
+54	0	45a6842f9c5046f6e4cc42eb444038711b86ea815540cb511b79249516255e99	celestina-rs/crates/cuprita-core/tests/agent.rs
+27	1	013890916cdfc88ed7aa01c941bb95811f5f743ac7dc2d7af5ff37eb7dea3452	celestina-rs/crates/cuprita-core/tests/order.rs
+1	1	783440dc826806d2f9e60ebdb24464ac3eb70d23f0726a9cf82060404f9cf9ec	cuprita/Cargo.lock
+1	1	709ccd8684f80eb789608c647896bbe8c45261427bce452a5970a2ed0f37f0f5	cuprita/Cargo.toml
+10	8	49f64a086f3d4ed2744fca516e2b51407cfea83b5bec36fea7e03ad32330f0ee	cuprita/README.md
+23	12	8fbb168955f1e65cc5ac44ce6bfacaa4faaabcab0e951547a22d4cbe959ba9b9	cuprita/STATUS.md
+1	0	92a11ab1f5ee651b05bec7665b6e55744bbf1753e1366964287f259fc94f3ce5	cuprita/build.rs
+213	0	e02938830af36be57de3a7994bf2fe30d90cd4734f0955ca5a05e08f9461695a	cuprita/docs/evidence/2026-10-08-bluetooth.md
+77	0	self	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-D.numstat.tsv
+1	1	8c070864523d2f902754820b0f7b88a43c8d50b175435f5f17de35a7bfa47fc6	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+1	0	b54a62a77344f7aa602b43301e964915bd34c53d377784b93b77ce2a77bd0a7e	cuprita/qml/Main.qml
+9	6	00e235f32bbff027ce6e391d262130133965cef356db3ca0bd43826e165b8e41	cuprita/qml/components/DeviceRow.qml
+168	0	d7fa965c7b4a090f165b5ef21db87eee95979d1576944e6a2877f730fce920b3	cuprita/qml/dialogs/PairingDialog.qml
+67	3	cc0b26258aa67d21a87bb010fa5fc98659507644249de90e4229e92248fc85d7	cuprita/qml/pages/BluetoothPage.qml
+44	0	e950f2e44aa14fac1343b0a728be05a838187faf9c485c49af39da8688211c20	cuprita/src/agent.rs
+57	7	e360ac9111b1375872705028a00e57358e4b629efd41a5f79a21c911309077a4	cuprita/src/backend.rs
+249	30	123b5631e1eca84f8c87235fdc6dc2fcb62c7bac3d11a0ceaa7b216186bc94fa	cuprita/src/controller/bluetooth.rs
+28	1	ffa2100e5e7e2892063d57ef4111eb362ff839608c400d86db255f7a2cc84346	cuprita/src/controller/mod.rs
+11	0	330ce36c380168ed98d40c93e42f3374ca84dcc45541a8b184d63a2b576386a8	cuprita/src/controller/network.rs
+1	0	35acb1176d1fe48cd35b7bfbb25224f47abb18d80d41a5f2f7bc21dc4b2656f1	cuprita/src/main.rs
+7	1	094619912f8f11535e7e71f792695bd3e0413c64d50a462d2e5483f303dc9122	cuprita/tests/qml/fakes/FakeBluetoothController.qml
+113	1	5e1172efd54b6a21f8cdca574fdb6c508d3e9fc56bd009e96f19eb17281e3571	cuprita/tests/qml/tst_bluetooth_page.qml
+1	0	e8a16670622233b6fc0b665b3488205a379eb32341d8dbd6c28de0ba62b07bc0	docs/version-history.tsv
