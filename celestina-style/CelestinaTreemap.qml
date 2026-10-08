@@ -26,6 +26,10 @@ CelestinaSurface {
     property var markedIds: []
     property var dimmedIds: []
 
+    // Stands in for a delegate that outlives a shorter `tiles` for a moment.
+    readonly property var emptyTile: ({ id: -1, x: 0, y: 0, w: 0, h: 0,
+                                        name: "", kind: "", tone: "" })
+
     signal entered(int id)
     signal chosen(int id)
     signal upRequested()
@@ -99,7 +103,8 @@ CelestinaSurface {
 
                 required property int index
 
-                readonly property var tileData: map.tiles[tile.index]
+                readonly property var tileData: tile.index >= 0 && tile.index < map.tiles.length
+                                                ? map.tiles[tile.index] : map.emptyTile
                 readonly property bool remainder: tile.tileData.id < 0
                 readonly property bool marked: map.markedIds.indexOf(tile.tileData.id) >= 0
                 readonly property bool current: !tile.remainder && tile.tileData.id === map.currentId
@@ -115,7 +120,8 @@ CelestinaSurface {
                                     - CelestinaTheme.spaceSm)
                 hoverEnabled: true
                 focusPolicy: Qt.NoFocus
-                enabled: !tile.remainder
+                visible: tile.index < map.tiles.length
+                enabled: !tile.remainder && tile.visible
                 opacity: map.dimmedIds.indexOf(tile.tileData.id) >= 0 ? CelestinaTheme.unavailableContentOpacity : 1
 
                 Accessible.role: Accessible.Button

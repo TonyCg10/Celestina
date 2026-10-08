@@ -143,4 +143,27 @@ TestCase {
         for (let index = 0; index < 6; ++index)
             compare(CelestinaTheme.usagePalette[index], expected[index], "entry " + index)
     }
+
+    function test_shrinking_the_tiles_logs_no_errors() {
+        const original = map.tiles
+        const make = function(count) {
+            const list = []
+            for (let index = 0; index < count; ++index)
+                list.push({ id: 20 + index, x: index / count, y: 0, w: 1 / count, h: 1,
+                            name: "t" + index, kind: "file", tone: "file" })
+            return list
+        }
+        failOnWarning(/TypeError/)
+        map.tiles = make(6)
+        wait(0)
+        map.tiles = make(2)
+        wait(0)
+        map.tiles = []
+        wait(0)
+        map.tiles = make(3)
+        wait(0)
+        map.tiles = original
+        wait(0)
+        verify(tileWithId(10) !== null)
+    }
 }

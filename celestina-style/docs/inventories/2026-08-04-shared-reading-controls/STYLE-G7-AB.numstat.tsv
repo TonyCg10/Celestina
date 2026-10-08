@@ -1,0 +1,23 @@
+# STYLE-G7-AB exact change inventory
+
+Base revision	f54940067aad7cbbb82c16031e12b98c08e1f4d4
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaTreemap.qml
+Pathspec	celestina-style/docs/evidence/2026-10-08-treemap-shrink.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AB.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/tests/tst_treemap.qml
+Pathspec	celestina-style/tests/tst_usagelist.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	c75dc34e89f7accac1ce93070968320fbed9ee707abb9024f3422eba230978a4	celestina-style/CMakeLists.txt
+8	2	4e43e8247e56d469d6b322e3b8143065e988ab018aee2c9f0c21fcc34a4d4294	celestina-style/CelestinaTreemap.qml
+53	0	a4a2e054d9e5e3da8f08296fdb44cfc402057e3ed9b0beb1f924e15198d07f27	celestina-style/docs/evidence/2026-10-08-treemap-shrink.md
+23	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AB.numstat.tsv
+1	0	e65a311da42941105065b11165af3f8b84aa1ca18ecc16f40bc774ce21fe2597	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+23	0	6dcaebe39b894ec2f90afe1798676da6610f99db31b6a04ab7990bde972e8037	celestina-style/tests/tst_treemap.qml
+12	0	3ee3b560b462ca84bba5423f510876c53681ed5525ffd8b574b465b834fcd3b4	celestina-style/tests/tst_usagelist.qml
+1	0	6e47ff7a3c99f89af54bc0c83f756816dbf6200a17bfc7e51afd5adf41363535	docs/version-history.tsv

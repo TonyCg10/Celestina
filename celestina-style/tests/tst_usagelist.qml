@@ -120,4 +120,16 @@ TestCase {
         verify(!size.truncated, "the size is cut")
         verify(size.contentWidth <= size.width, "the size overflows its column")
     }
+
+    function test_shrinking_the_rows_logs_no_errors() {
+        failOnWarning(/TypeError/)
+        list.usageRows = testCase.threeRows
+        wait(0)
+        list.usageRows = [testCase.threeRows[0]]
+        wait(0)
+        list.usageRows = []
+        wait(0)
+        list.usageRows = testCase.threeRows
+        wait(0)
+    }
 }
