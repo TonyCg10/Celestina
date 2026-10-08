@@ -406,9 +406,10 @@ name = "Cuprita"
 path = "cuprita"
 kind = "cxx-qt-application"
 commit_prefix = "cuprita"
-# Registered unversioned first so the registry commit carries no history row;
-# the baseline commit that follows the skeleton declares the Cargo source.
-versioned = false
+version_source = { kind = "cargo-package", path = "cuprita/Cargo.toml", package = "cuprita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "cuprita/Cargo.lock", package = "cuprita" },
+]
 agents = "cuprita/AGENTS.md"
 readme = "cuprita/README.md"
 status = "cuprita/STATUS.md"
@@ -431,8 +432,7 @@ artifact_manifest = "cuprita/target/production-artifact.toml"
 artifact_paths = ["cuprita/target/release/cuprita"]
 cargo_manifests = ["cuprita/Cargo.toml"]
 production_inputs = ["cuprita/Cargo.toml", "cuprita/Cargo.lock", "cuprita/build.rs", "cuprita/src", "cuprita/qml", "cuprita/org.celestina.Cuprita.desktop", "celestina-style/icons/apps/org.celestina.Cuprita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/cuprita-core"]
-# cuprita-core gains tests/ in CUP-1-B; this list gains that path then.
-verification_inputs = ["cuprita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+verification_inputs = ["cuprita/scripts/smoke.sh", "celestina-rs/crates/cuprita-core/tests", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "cuprita-core", roots = ["celestina-rs/crates/cuprita-core/"], include_workspace_manifests = true },
 ]

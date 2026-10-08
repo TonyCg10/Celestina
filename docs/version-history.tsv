@@ -229,3 +229,4 @@ siderita	1.10.1	bug	SID-H1-P	Add the format dialog for external drives
 siderita	1.10.2	bug	SID-H1-Q	Add the volume's file system to the properties dialog
 celestina-style	1.13.1	bug	STYLE-G7-AB	Fix the usage map errors when a folder has fewer entries
 siderita	1.11.0	milestone	SID-H1-R	Add D-Bus activation for the file manager interface
+cuprita	0.1.0	baseline	AUD-1-P	Adopt the Cuprita Cargo version as the verified baseline
