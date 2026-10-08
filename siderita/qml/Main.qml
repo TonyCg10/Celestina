@@ -177,10 +177,42 @@ ApplicationWindow {
 
     FileManager1Service {
         id: fileManager1
-        Component.onCompleted: fileManager1.start()
+        // A `--portal` process never shows its main window, so a "show in
+        // folder" it answered would fail silently, and owning the name would
+        // stop the bus from activating a Siderita that can show it.
+        Component.onCompleted: {
+            if (!portalService.portalMode())
+                fileManager1.start()
+        }
         onOpenFolderRequested: function(path) {
+            // D-Bus activated (`--file-manager`): the hidden window still holds
+            // only its start tab, which the requested folder replaces before
+            // the window is first shown.
+            // The window starts with exactly one tab (see onCompleted, which
+            // never restores saved tabs), so after the append it holds two.
+            const firstShow = !window.visible && fileManager1.fileManagerMode()
             window.openTab(path, true)
+            if (firstShow && window.tabsModel.count === 2) {
+                window.closeTab(0)
+                window.visible = true
+            }
             window.requestActivate()
+        }
+        // Activated for a request that named no local folder: nothing to
+        // show, and holding the name hidden would stop any later activation.
+        onRequestWithoutFolder: function() {
+            if (fileManager1.fileManagerMode() && !window.visible) {
+                console.warn("Siderita: FileManager1 request named no local folder; quitting")
+                Qt.quit()
+            }
+        }
+        // Activated for the name but another file manager owns it: nothing
+        // to serve and no window to show, so leave.
+        onServiceUnavailable: function(reason) {
+            if (fileManager1.fileManagerMode() && !window.visible) {
+                console.warn("Siderita: FileManager1 unavailable (" + reason + "); quitting")
+                Qt.quit()
+            }
         }
     }
 
@@ -598,8 +630,9 @@ ApplicationWindow {
         tabsModel.append({ initialPath: "", title: "…" })
         window.currentTabIndex = 0
         // Activated by the portal to serve a file chooser: this process has no
-        // main window, only the pickers it is asked for.
-        window.visible = !portalService.portalMode()
+        // main window, only the pickers it is asked for. Activated for
+        // FileManager1, it stays hidden until the request names a folder.
+        window.visible = !portalService.portalMode() && !fileManager1.fileManagerMode()
     }
 
 }

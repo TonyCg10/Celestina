@@ -474,7 +474,13 @@ fn serve(
 /// `--portal` anywhere in the arguments: the D-Bus service file passes it when
 /// xdg-desktop-portal activates this process to answer a request.
 pub fn portal_mode() -> bool {
-    std::env::args_os().any(|arg| arg == "--portal")
+    has_flag("--portal")
+}
+
+/// Whether `flag` appears anywhere in the process arguments: how a D-Bus
+/// service file tells an activated Siderita which name it was started for.
+pub fn has_flag(flag: &str) -> bool {
+    std::env::args_os().any(|arg| arg == flag)
 }
 
 /// Whether the answer grants write access to what was chosen.

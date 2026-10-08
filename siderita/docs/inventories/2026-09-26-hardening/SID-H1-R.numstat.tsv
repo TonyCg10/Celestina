@@ -1,0 +1,31 @@
+# SID-H1-R exact change inventory
+
+Base revision	2f06c10c740da563f198657aa840c2dd5da370f4
+Pathspec	docs/version-history.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/README.md
+Pathspec	siderita/docs/evidence/2026-10-08-filemanager1-activation.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-R.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/portal/org.freedesktop.FileManager1.service
+Pathspec	siderita/qml/Main.qml
+Pathspec	siderita/scripts/deploy-production.sh
+Pathspec	siderita/src/dbus.rs
+Pathspec	siderita/src/portal.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	b1d3f8176d045b87cea7b5ca1a1730278834665a752ca0d10c5ef4aa462ee8cf	docs/version-history.tsv
+1	1	089b71b520a9950c1abbc9758281129fdf543bd5628c380e2ba774a5ce8cfcf4	siderita/Cargo.lock
+1	1	1d24611f23cb46eb959cfa117b2ab4b50abd776e0644235a7965a7e284737896	siderita/Cargo.toml
+7	2	eaaee6c5b108fd2c86a37f7d94fa6bc986933ee7765a49c6ef503c9c2c8d3ee9	siderita/README.md
+99	0	2e312a3c9eacbcacca8825dd3fde40031b9a915f07e048aaf600f01e48110938	siderita/docs/evidence/2026-10-08-filemanager1-activation.md
+31	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-R.numstat.tsv
+1	0	eff95f7549457ff9f87401ea277100a1baeac9b1e17033ce33a1874942fe96c1	siderita/docs/plans/active/2026-09-26-hardening.md
+3	0	1abe912c4159043afebe7584583f2bab56b41c8b71b424153e6ba90de7d6fb7d	siderita/portal/org.freedesktop.FileManager1.service
+36	3	b33767d411899199efbe593c4d0c5ffef645782c0009cc5f227fe2b56766f093	siderita/qml/Main.qml
+4	0	bcf3ed76650bafa15de8503815e681522d9042f29a18b1531ad2e61eb1c85b36	siderita/scripts/deploy-production.sh
+87	14	aa9941c0d9c83686d116a1efd7d57ff552ad5ca140fd9ce25a2137471e763978	siderita/src/dbus.rs
+7	1	b021f2c762f191aef85da2f893d439ac3b57fce061a9ae918011a84012171d62	siderita/src/portal.rs

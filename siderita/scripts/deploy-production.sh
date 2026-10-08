@@ -26,6 +26,10 @@ production_install_template \
     "$project_root/portal/org.freedesktop.impl.portal.desktop.celestina.service" \
     "$prefix/share/dbus-1/services/org.freedesktop.impl.portal.desktop.celestina.service" \
     '@BIN@' "$prefix/bin/siderita"
+production_install_template \
+    "$project_root/portal/org.freedesktop.FileManager1.service" \
+    "$prefix/share/dbus-1/services/org.freedesktop.FileManager1.service" \
+    '@BIN@' "$prefix/bin/siderita"
 if [ "$prefix" = "$default_prefix" ] && command -v busctl >/dev/null 2>&1; then
     busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
         org.freedesktop.DBus ReloadConfig >/dev/null 2>&1 || true

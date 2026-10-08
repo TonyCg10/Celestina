@@ -55,8 +55,13 @@ Build creates the release artifact once; verify tests that exact artifact
 without touching `~/.local`, D-Bus activation or portal configuration; status
 reports whether the verification seal still matches the current inputs; deploy
 installs the already verified binary, desktop entry, icons and portal files
-without recompiling. `scripts/run.sh` remains a human convenience, not the
-canonical agent verification entry.
+without recompiling. Deploy also installs two D-Bus service files and reloads
+the session bus: `org.freedesktop.impl.portal.desktop.celestina.service`
+starts `siderita --portal` for the file chooser, and
+`org.freedesktop.FileManager1.service` starts `siderita --file-manager` when
+an application asks to show a folder and no Siderita is running; that window
+stays hidden until the request opens its folder. `scripts/run.sh` remains a
+human convenience, not the canonical agent verification entry.
 
 After completion, launch `siderita [PATH]` or use the desktop entry. An already
 running process must be reopened. Portal routing remains an explicit
