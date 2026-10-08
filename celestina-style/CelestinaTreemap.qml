@@ -133,7 +133,7 @@ CelestinaSurface {
                         anchors.fill: parent
                         radius: CelestinaTheme.radiusSm
                         color: tile.remainder ? CelestinaTheme.card : map.toneColors[tile.tileData.tone] || CelestinaTheme.textFaint
-                        opacity: tile.remainder ? 1 : CelestinaTheme.accentSoftOpacity
+                        opacity: tile.remainder ? 1 : CelestinaTheme.usageTileOpacity
                     }
 
                     Rectangle {

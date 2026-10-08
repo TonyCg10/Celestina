@@ -127,6 +127,14 @@ TestCase {
         compare(right.x - (left.x + left.width), CelestinaTheme.spaceSm)
     }
 
+    function test_tiles_fill_at_the_usage_tile_opacity() {
+        const fill = tileWithId(10).background.children[0]
+        compare(fill.color, CelestinaTheme.glyphAccentBlue)
+        compare(fill.opacity, CelestinaTheme.usageTileOpacity)
+        compare(CelestinaTheme.usageTileOpacity, 0.48)
+        compare(tileWithId(-1).background.children[0].opacity, 1)
+    }
+
     function test_usage_palette_has_six_entries() {
         compare(CelestinaTheme.usagePalette.length, 6)
         const expected = [CelestinaTheme.glyphAccentBlue, CelestinaTheme.glyphAccentViolet,

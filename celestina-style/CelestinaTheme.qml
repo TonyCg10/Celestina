@@ -262,17 +262,17 @@ QtObject {
         readonly property color accentLift: "#fcfcff"
         // Semantic ramp (SESL dark).
         readonly property color danger: "#ff746d"
-        readonly property color success: "#59dc9e"
-        readonly property color warning: "#fc864c"
+        readonly property color success: "#8ee0b4"
+        readonly property color warning: "#f7b27f"
         // The one warm exception, spent on the star a favourite wears.
-        readonly property color favorite: "#f2c55c"
+        readonly property color favorite: "#f3cf8e"
         // Code colours. Muted on purpose: an editor is read for minutes at a
         // time, and four saturated hues fighting each other is what makes
         // syntax highlighting tiring. Each clears 4.5:1 on the input fill.
-        readonly property color codeComment: "#8d9bab"
-        readonly property color codeString: "#8fd3ac"
-        readonly property color codeNumber: "#f0b083"
-        readonly property color codeKeyword: "#b9a6f0"
+        readonly property color codeComment: "#95a3b3"
+        readonly property color codeString: "#9ee0b8"
+        readonly property color codeNumber: "#f3cf8e"
+        readonly property color codeKeyword: "#c4b5fd"
     }
     readonly property RefPalette ref: RefPalette {}
 
@@ -473,7 +473,7 @@ QtObject {
                                               theme.ref.accentLift,
                                               theme.accentLinkMix),
                               theme.accentSoftBorderOpacity)
-        successSoft: "#1c59dc9e"
+        successSoft: "#1c8ee0b4"
         swatchOutline: theme.withAlpha(theme.ref.textHi,
                                        theme.swatchOutlineOpacity)
         accentDisabledFill: theme.withAlpha(theme.ref.accent,
@@ -500,16 +500,16 @@ QtObject {
         glyphDirectory: theme.mixColors(theme.ref.accent,
                                         theme.ref.accentLift,
                                         theme.accentLinkMix)
-        glyphFile: "#a9b5c5"
-        glyphSymlink: "#a391e2"
-        glyphNavigation: "#8fa3bb"
-        glyphDevice: "#68c3d4"
-        glyphAccentBlue: "#6ea8ff"
-        glyphAccentCyan: "#68c3d4"
-        glyphAccentGreen: "#72cfa3"
-        glyphAccentViolet: "#a391e2"
-        glyphAccentCoral: "#e88d82"
-        glyphAccentAmber: "#dcb36a"
+        glyphFile: "#b4c1d3"
+        glyphSymlink: "#c4b5fd"
+        glyphNavigation: "#9fb3cc"
+        glyphDevice: "#8dd8e3"
+        glyphAccentBlue: "#8bb8ff"
+        glyphAccentCyan: "#8dd8e3"
+        glyphAccentGreen: "#9ee0b8"
+        glyphAccentViolet: "#c4b5fd"
+        glyphAccentCoral: "#f5a8a0"
+        glyphAccentAmber: "#f3cf8e"
         favorite: theme.ref.favorite
         favoriteBadgeFill: "#b3090b0f"
         // Danger banner re-tinted around the new danger red.
@@ -644,6 +644,14 @@ QtObject {
         glyphAccentBlue, glyphAccentViolet, glyphAccentCyan,
         glyphAccentGreen, glyphAccentAmber, glyphAccentCoral
     ]
+
+    // How strongly a usage tile (treemap) fills with its rank colour. A tile is
+    // a share at a glance, not a selection wash: at the accent's soft 0.14 the
+    // six pastels sank into the black card and the map read as one grey field.
+    // At 0.48 each hue is plainly itself while the light 11 px caption keeps
+    // 4.5:1 on all six (amber, the lightest, measures 4.97:1 on the card).
+    // Separate from `accentSoftOpacity`, which other surfaces keep at 0.14.
+    readonly property real usageTileOpacity: 0.48
 
     // Stable keys are persisted by Siderita; colours remain tokens so a later
     // palette retune updates every customized item without rewriting config.

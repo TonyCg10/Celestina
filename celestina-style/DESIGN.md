@@ -157,7 +157,18 @@ informational content glyphs, but it never colours surfaces, labels, thumbnails
 or selection state. The same six glyph accents, in the order of
 `usagePalette` (blue, violet, cyan, green, amber, coral), are the rank palette
 for share visualizations: position i uses entry i mod 6. That is the one place
-they fill an area, and they do so at `accentSoftOpacity` under the ink.
+they fill an area: a treemap tile fills at `usageTileOpacity` (0.48, so the
+light 11 px `text` caption keeps 4.5:1 on every hue), and a usage bar paints
+its tone solid.
+
+The palette is pastel (2026-10-08): the six hues are blue `#8bb8ff`, violet
+`#c4b5fd`, cyan `#8dd8e3`, green `#9ee0b8`, amber `#f3cf8e` and coral
+`#f5a8a0`; `glyphSymlink` and `glyphDevice` reuse the violet and the cyan, and
+`glyphFile` `#b4c1d3` / `glyphNavigation` `#9fb3cc` stay neutral silver-blue.
+Success, warning and favourite soften with them (`#8ee0b4`, `#f7b27f`,
+`#f3cf8e`), and so do the code colours (string `#9ee0b8`, number `#f3cf8e`,
+keyword `#c4b5fd`, comment `#95a3b3`). The sealed accent `#3e91ff` and danger
+`#ff746d`, the cards, the canvas and the glass are unchanged.
 
 Wallpaper and artwork are hostile input, so the washes laid over them are
 roles with a measured floor rather than a generic dim. `mediaScrim` keeps
@@ -323,7 +334,7 @@ compatibility policy changes that contract.
 | `CelestinaRowHighlight` | The one hover/press/selected/drag fill behind list rows, grid cells and column titles; the host reports states, it paints them and holds no pointer |
 | `CelestinaIcon` | One name/fallback/tone API for Lucide-style UI glyphs |
 | `CelestinaSectionLabel` | Semantic section heading with shared type/spacing, not product navigation state |
-| `CelestinaTreemap` | A folder's children as rectangles laid out by the consumer (0..1 of the field); a `radiusMd` panel whose field is inset `spaceSm` (concentric with `radiusSm` tiles); outer tiles meet the field edges and neighbours stand `spaceSm` apart; a label, padded `spaceSm`, only on tiles wider than 4 and taller than 2 caption sizes; anatomy from `accentSoftOpacity`, `surfaceSelected`, `contentHover` and `unavailableContentOpacity`; one Tab stop whose arrows walk tiles in reading order, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host; tone colours, current, marked and dimmed ids come from the consumer; no selection or action semantics of its own |
+| `CelestinaTreemap` | A folder's children as rectangles laid out by the consumer (0..1 of the field); a `radiusMd` panel whose field is inset `spaceSm` (concentric with `radiusSm` tiles); outer tiles meet the field edges and neighbours stand `spaceSm` apart; a label, padded `spaceSm`, only on tiles wider than 4 and taller than 2 caption sizes; anatomy from `usageTileOpacity`, `surfaceSelected`, `contentHover` and `unavailableContentOpacity`; one Tab stop whose arrows walk tiles in reading order, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host; tone colours, current, marked and dimmed ids come from the consumer; no selection or action semantics of its own |
 | `CelestinaUsageList` | A folder's children as rows with a share bar, size, percentage and optional detail; a `radiusMd` panel whose list is inset `spaceSm` (concentric with `radiusSm` rows); names elide right and the numbers column has one probed width ("8.888,8 GiB", tabular; the size never elides) so every name column matches; anatomy from `rowHeight`, `badgeFill`, `CelestinaRowHighlight` and the type tokens; one Tab stop whose Up/Down move, Enter enters, Backspace asks to go up; Space and Delete stay unaccepted for the host (the focused row is a plain slot, not the button, so no click steals Space); tone colours and marked ids come from the consumer; no selection or action semantics of its own |
 | `CelestinaFocusRing` | Reusable 2 px exterior ring shown for `visualFocus`, never merely for pointer focus |
 | `CelestinaTextField` | Radius-22 search/input anatomy, clear focus/error/disabled states and accessible naming |
