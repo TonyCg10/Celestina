@@ -1,0 +1,17 @@
+# AUD-1-N exact change inventory
+
+Base revision	99b3548449d91abfbb6bcd514592c28052690baa
+Pathspec	docs/evidence/2026-10-08-qmllint-order.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-N.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	scripts/qmllint-cxxqt.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+55	0	b4a1294c4b5d1c06193436fe0c767dd75fe0a300c4ce09c1414c40131fb04920	docs/evidence/2026-10-08-qmllint-order.md
+17	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-N.numstat.tsv
+1	0	f74762ba0292282af0c553e013117f48c0d3c2b9cd55b0a8fde642831f39131b	docs/plans/active/2026-09-26-monorepo-hardening.md
+3	1	d11ec4229c7d97880c273fab043811b00022afc5c93747920c0ab76f76c12bb9	scripts/qmllint-baseline.tsv
+9	0	e2fa37e54971ee7841ec9cd7e4af42418c27063221c8d5187a4af3623fd97613	scripts/qmllint-cxxqt.sh

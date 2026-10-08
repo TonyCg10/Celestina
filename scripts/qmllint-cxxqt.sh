@@ -232,6 +232,15 @@ if [ ! -s "$sources" ]; then
     exit 1
 fi
 
+# Sort the list. qmllint's import diagnostics depend on the order it receives
+# the files, and `find` reports directory order, so the warning count followed
+# the inode order of the checkout (Siderita read 239 or 241). Sorted order
+# makes the count the same in every checkout.
+if ! sort -z "$sources" -o "$sources"; then
+    echo "qmllint-production: could not sort the QML under $qml_root" >&2
+    exit 1
+fi
+
 # Keep the batched invocation — qmllint's diagnostics depend on seeing the
 # whole set at once — but stop reading the verdict out of `$?`. Once the list
 # is long enough for xargs to split it, that status describes one batch. Each
