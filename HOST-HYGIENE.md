@@ -326,7 +326,8 @@ LocalSearch, GNOME desktop libraries, and related adapters. Removing this portal
 would not remove GTK 4 or libadwaita by itself: explicit Baobab, File Roller,
 Mission Center, Zenity, Pavucontrol, Shelly, and other retained consumers also
 use that stack. Baobab, File Roller and Mission Center are gone as of
-2026-10-08; Zenity and Pavucontrol remain.
+2026-10-08; Zenity remains, and Pavucontrol remains until the author retires
+it after Cuprita 1.0 (see "Transitional shell authorities").
 
 Session authority: `org.freedesktop.impl.portal.desktop.gnome` is active. The
 audit did not mutate the portal to expose an authoritative per-interface routing
@@ -486,7 +487,19 @@ Rollback: Current packages and Niri startup lines are already the rollback.
 Missing evidence: The corresponding Celestina live validation and explicit
 handover decisions.
 
-Decision: pending
+Decision: pending for Noctalia (the shell is halted by the author's decision of
+2026-09-27, so no handover is scheduled). Superseded on 2026-10-08 for Blueman
+and `nm-applet`, and for Pavucontrol: Cuprita 1.0 (`cuprita/`, registered in
+AUD-1-P and closed in CUP-1-F) holds the network, Bluetooth and audio control
+surfaces — Wi-Fi join with password, forget, airplane and saved VPNs over
+NetworkManager; power, discovery, pairing with its own agent, connect and
+forget over BlueZ; default output and input, volume and mute per device and per
+application, card profiles over WirePlumber's `wpctl`. The roles each applet
+held and what stays outside Cuprita's scope are tabled in
+`cuprita/docs/evidence/2026-10-08-exit.md` (the exit evidence). Removing the
+three packages and their autostart lines is the author's action, after the
+live checks VAL-C, VAL-D and VAL-E in `cuprita/VALIDATION.md`; this audit
+grants no authority to remove them.
 
 #### Chosen native integration services
 

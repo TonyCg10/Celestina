@@ -1,0 +1,15 @@
+# AUD-1-R exact change inventory
+
+Base revision	2e885fe223c446a4bff2049cf5d8f015d58cd9ad
+Pathspec	HOST-HYGIENE.md
+Pathspec	docs/evidence/2026-10-08-cuprita-handover.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-R.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+15	2	83cf149e400b72a472272d5229210ef2297fb5b5ea40bc335ef7d93b8691a101	HOST-HYGIENE.md
+36	0	745416188a2d6f22ad073c1901326aa57fbe755e47f12d1a0afe2ade8b4e58c5	docs/evidence/2026-10-08-cuprita-handover.md
+15	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-R.numstat.tsv
+1	0	5efdfc9a2a7ad47a54aa5af55b9a773b3f0a11dc4c5b7211c92edc1d53c57d80	docs/plans/active/2026-09-26-monorepo-hardening.md
