@@ -325,7 +325,8 @@ Native dependency closure: Nautilus is 13.7 MiB directly and brings GVFS,
 LocalSearch, GNOME desktop libraries, and related adapters. Removing this portal
 would not remove GTK 4 or libadwaita by itself: explicit Baobab, File Roller,
 Mission Center, Zenity, Pavucontrol, Shelly, and other retained consumers also
-use that stack.
+use that stack. Baobab, File Roller and Mission Center are gone as of
+2026-10-08; Zenity and Pavucontrol remain.
 
 Session authority: `org.freedesktop.impl.portal.desktop.gnome` is active. The
 audit did not mutate the portal to expose an authoritative per-interface routing
@@ -353,7 +354,16 @@ in an explicitly authorized maintenance window.
 Missing evidence: Effective per-interface routing and real application portal
 tests.
 
-Decision: pending
+Decision: resolved on 2026-10-08 — the GNOME backend and the Nautilus closure
+are no longer installed; routing is unchanged (gtk default, wlr for capture,
+Celestina for FileChooser).
+
+Outcome: the removal happened before this record, so the matrix above was not
+run as a precondition. `nautilus`, `xdg-desktop-portal-gnome`, `file-roller`,
+`baobab` and `mission-center` are absent from `pacman -Q`. The installed
+backends are gtk, wlr, gnome-keyring and kwallet, and
+`~/.config/xdg-desktop-portal/*.conf` still routes FileChooser to Celestina,
+ScreenCast and Screenshot to wlr, and everything else to gtk.
 
 #### File-manager D-Bus activation
 
@@ -394,7 +404,14 @@ state.
 Missing evidence: Packaging design, cold activation test, multi-call behavior,
 and live rollback validation.
 
-Decision: pending
+Decision: resolved on 2026-10-08 by SID-H1-R (Siderita 1.11, landed as
+`siderita-milestone: Add D-Bus activation for the file manager interface`).
+Siderita installs `~/.local/share/dbus-1/services/org.freedesktop.FileManager1.service`
+(`Exec=~/.local/bin/siderita --file-manager`). The process starts hidden and
+shows the requested folder; a `--portal` process no longer serves the name; a
+request naming no local folder makes the hidden process quit. Cold activation
+was tested live with two `ShowFolders` calls served by one process. Evidence:
+`siderita/docs/evidence/2026-10-08-filemanager1-activation.md`.
 
 #### Piri Niri extension
 
@@ -688,17 +705,65 @@ Rollback: Restore the previous MIME entry or remove the new explicit default.
 Missing evidence: Author's preferred image-opening application and one live
 open test.
 
-Decision: pending
+Decision: accepted by the author on 2026-10-08: Fluorita. `~/.config/mimeapps.list`
+`[Default Applications]` pins `image/png`, `image/jpeg`, `image/gif`,
+`image/webp`, `image/bmp`, `image/tiff`, `image/avif`, `image/jxl` and
+`image/heif` to `org.celestina.Fluorita.desktop`, and
+`xdg-mime query default image/png` reports Fluorita. G'MIC 4.0.5 stays
+installed as the Krita plugin and is no longer the effective default.
+
+#### Text MIME handler
+
+Component: `text/plain`, `text/x-csrc`, `text/x-python3`, `text/css`,
+`application/json`, and the other text types Grafita declares
+
+Observed role: These types were pinned to `dev.zed.Zed.desktop`, Zed's own
+"Added Associations", so Grafita owned Markdown but not plain text.
+
+Installed because: Zed registered its associations in `mimeapps.list` itself;
+no deliberate single text workflow had been chosen.
+
+Native dependency closure: Not applicable to the choice of handler.
+
+Session authority: Zed was the effective default for plain text, C, Python,
+CSS and JSON files opened through the MIME default.
+
+Flatpak containment: Not applicable.
+
+Current consumers: Any application opening a text file through the MIME
+default.
+
+Classification: Competing desktop authority.
+
+Proposal: Pin every type Grafita's desktop entry declares, plus
+`text/x-python3` and `text/css`, to `org.celestina.Grafita.desktop`.
+
+Risk: Source files open in the editor of a Celestina application rather than
+the IDE; Zed is still launched explicitly.
+
+Rollback: Restore the previous `mimeapps.list` (a backup was kept outside the
+repository) or remove the new pins.
+
+Missing evidence: None beyond the author's choice.
+
+Decision: accepted by the author on 2026-10-08: Grafita for all text. Zed stays
+installed as the author's IDE.
+
+The same session removed a dead association: `application/zip` was pinned to
+`org.gnome.FileRoller.desktop`, a desktop entry that no longer exists, and the
+entry was deleted from both `mimeapps.list` sections. No handler is assigned;
+Siderita compresses and extracts as file operations and deliberately has no
+archive VFS. Decision: accepted by the author on 2026-10-08.
 
 ### Proposed decision order
 
 1. Decide the two dependency orphans and the dormant `iwd`/`netctl` pair.
 2. Decide the intended image handler; this is an observed wrong authority, not
-   a disk-space preference.
+   a disk-space preference. (resolved 2026-10-08: Fluorita)
 3. Design and verify Siderita cold D-Bus activation before changing Nautilus or
-   the GNOME portal closure.
+   the GNOME portal closure. (resolved 2026-10-08 by SID-H1-R)
 4. Run the portal interface matrix, then decide whether the GNOME backend is a
-   retained exception or removable closure.
+   retained exception or removable closure. (resolved 2026-10-08: removed)
 5. Decide whether Waydroid needs an always-running container.
 6. Test Flatpak permission reductions one application at a time, beginning with
    VSCodium.
@@ -706,8 +771,8 @@ Decision: pending
 8. Keep Noctalia, Piri, applets, and named services until their explicit
    workflow or handover conditions change.
 
-Every item remains `pending`. This audit grants no authority to execute any of
-the proposals.
+Items 2, 3 and 4 are resolved; every other item remains `pending`. This audit
+grants no authority to execute any of the remaining proposals.
 
 ## Host change record — 2026-09-08, Android toolchain for Magnetita
 
@@ -801,3 +866,97 @@ which this host grants through the `uaccess` udev rule Solaar installed
 that rule, add one: `KERNEL=="uinput", TAG+="uaccess"` in
 `/etc/udev/rules.d/`. The daemon logs `input: /dev/uinput unavailable`
 once and drops input when the grant is missing.
+
+## Host change record — 2026-10-08, desktop handlers and the file-manager activation
+
+The author changed these on 2026-10-08 while closing the pending decisions
+above. The `mimeapps.list` changes are hand edits of the author's
+configuration; the D-Bus activation file is installed by Siderita's deploy, so
+it is a repo-owned file, not a hand change. A backup of the previous
+`mimeapps.list` was kept outside the repository.
+
+Component: `~/.config/mimeapps.list`, image types
+
+Observed role: `[Default Applications]` pins `image/png`, `image/jpeg`,
+`image/gif`, `image/webp`, `image/bmp`, `image/tiff`, `image/avif`,
+`image/jxl` and `image/heif` to `org.celestina.Fluorita.desktop`.
+
+Installed because: The image MIME handler decision above.
+
+Native dependency closure: None; G'MIC 4.0.5 stays as the Krita plugin.
+
+Session authority: Fluorita is the effective image handler.
+
+Flatpak containment: Not applicable.
+
+Current consumers: Any application opening an image through the MIME default.
+
+Classification: Celestina platform.
+
+Decision: accepted by the author on 2026-10-08.
+
+Component: `~/.config/mimeapps.list`, text types
+
+Observed role: Every type Grafita's desktop entry declares, plus
+`text/x-python3` and `text/css`, is pinned to `org.celestina.Grafita.desktop`,
+replacing the `dev.zed.Zed.desktop` pins of `text/plain`, `text/x-csrc`,
+`text/x-python3`, `text/css` and `application/json`.
+
+Installed because: The text MIME handler decision above.
+
+Native dependency closure: None; Zed stays installed as the author's IDE.
+
+Session authority: Grafita is the effective text handler.
+
+Flatpak containment: Not applicable.
+
+Current consumers: Any application opening a text file through the MIME
+default.
+
+Classification: Celestina platform.
+
+Decision: accepted by the author on 2026-10-08.
+
+Component: `~/.config/mimeapps.list`, `application/zip`
+
+Observed role: The dead association with `org.gnome.FileRoller.desktop` was
+removed from both sections. No handler is assigned.
+
+Installed because: File Roller was uninstalled; its desktop entry no longer
+exists.
+
+Native dependency closure: None.
+
+Session authority: None.
+
+Flatpak containment: Not applicable.
+
+Current consumers: None; Siderita handles archives as file operations.
+
+Classification: Unowned residue, removed.
+
+Decision: accepted by the author on 2026-10-08.
+
+Component: `~/.local/share/dbus-1/services/org.freedesktop.FileManager1.service`
+
+Observed role: Activates `~/.local/bin/siderita --file-manager` for the
+`org.freedesktop.FileManager1` name; the process starts hidden and shows the
+requested folder.
+
+Installed because: Siderita 1.11 (SID-H1-R) installs it from its deploy; it is
+owned by the repository, not a hand change.
+
+Native dependency closure: None.
+
+Session authority: Siderita owns the file-manager name on activation; a
+`--portal` process no longer serves it.
+
+Flatpak containment: Flatpaks allowed to talk to the name now reach Siderita.
+
+Current consumers: Applications that reveal files through the freedesktop
+interface.
+
+Classification: Celestina platform.
+
+Decision: accepted by the author on 2026-10-08. Evidence:
+`siderita/docs/evidence/2026-10-08-filemanager1-activation.md`.

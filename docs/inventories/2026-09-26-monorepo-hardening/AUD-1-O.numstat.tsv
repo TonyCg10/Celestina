@@ -1,0 +1,15 @@
+# AUD-1-O exact change inventory
+
+Base revision	bbc3dc6f7e450a99ec9c0e6b8312661887c832d7
+Pathspec	HOST-HYGIENE.md
+Pathspec	docs/evidence/2026-10-08-host-hygiene-decisions.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-O.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+168	9	de53f86f04bc3bc82eb66837669eb8e3cd2d1362d760c29574ac481dbc0543b0	HOST-HYGIENE.md
+42	0	a7b0cd8b27db2456420e2d30b9d4a6ff3e6912fc35949e7069648cc0e1f40ecd	docs/evidence/2026-10-08-host-hygiene-decisions.md
+15	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-O.numstat.tsv
+5	0	bf80989057d4e5ce6f3e413fe00ac0d834df6a18c0ee7850c4d72d0324a8e3ea	docs/plans/active/2026-09-26-monorepo-hardening.md
