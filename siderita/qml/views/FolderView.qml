@@ -44,6 +44,7 @@ Item {
     signal requestNewTab(string path, bool foreground)
     // Changing mode or location settles the heading; see fold().
     function foldHeading() { headingScroll.fold() }
+    function openFormat(device) { folderActions.openFormat(device) }
     onActiveChanged: if (!active) foldHeading()
     SideritaController {
         id: controller
@@ -114,7 +115,6 @@ Item {
         else
             folderListView.forceActiveFocus()
     }
-
     function quickLookStep(delta) {
         var n = controller.entryNames.length
         if (n === 0)

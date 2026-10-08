@@ -146,11 +146,14 @@ pub mod qobject {
         #[qproperty(QStringList, volume_names)]
         #[qproperty(QStringList, volume_devices)]
         #[qproperty(QStringList, volume_mounts)]
-        // Per volume, parallel to the names: label, UDisks2 filesystem type,
-        // size in bytes, and "1" for a drive of the running system.
+        // Per volume, parallel to the names: label, UDisks2 filesystem type and
+        // UUID, size in bytes, whole-disk device and its size, "1" for system.
         #[qproperty(QStringList, volume_labels)]
         #[qproperty(QStringList, volume_fs_types)]
+        #[qproperty(QStringList, volume_uuids)]
         #[qproperty(QStringList, volume_sizes)]
+        #[qproperty(QStringList, volume_disks)]
+        #[qproperty(QStringList, volume_disk_sizes)]
         #[qproperty(QStringList, volume_system)]
         #[qproperty(bool, volume_busy)]
         #[qproperty(i32, hidden_device_count)]
@@ -521,16 +524,12 @@ pub mod qobject {
         /// than a position.
         #[qinvokable]
         fn purge_trash(self: Pin<&mut SideritaController>, trashed: &QString);
-
         #[qinvokable]
         fn empty_trash(self: Pin<&mut SideritaController>);
-
         #[qinvokable]
         fn open_with(self: Pin<&mut SideritaController>, path: &QString);
-
         #[qinvokable]
         fn open_with_app(self: Pin<&mut SideritaController>, index: i32, set_default: bool);
-
         #[qinvokable]
         fn cancel_open_with(self: Pin<&mut SideritaController>);
 
@@ -545,12 +544,13 @@ pub mod qobject {
         /// Renames the volume with device node `device` (`SetLabel`) on a worker.
         #[qinvokable]
         fn rename_volume(self: Pin<&mut SideritaController>, device: &QString, label: &QString);
-        /// Formats the volume with device node `device` — or, with `whole_disk`,
-        /// its whole drive into one partition — on a worker. Never a system drive.
+        /// Formats the volume with device node `device` and filesystem `uuid` — or,
+        /// with `whole_disk`, its whole drive — on a worker. Never a system drive.
         #[qinvokable]
         fn format_volume(
             self: Pin<&mut SideritaController>,
             device: &QString,
+            uuid: &QString,
             fs: &QString,
             label: &QString,
             quick: bool,

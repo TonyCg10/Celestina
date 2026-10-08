@@ -16,9 +16,9 @@ Item {
     signal renameDeviceRequested(string device)
     signal formatDeviceRequested(string device)
 
-    // The format dialog arrives in a later unit; until then its entry stays
-    // out of the device menu.
-    property bool formatAvailable: false
+    // Whether the host offers the format dialog; a host without one keeps
+    // the entry out of the device menu.
+    property bool formatAvailable: true
 
     // El estado que gobierna "Abrir en pestaña nueva" de un dispositivo, visible
     // para quien lo prueba: sin montar no hay ruta y la acción no se ofrece.

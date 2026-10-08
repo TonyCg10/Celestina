@@ -168,15 +168,17 @@ TestCase {
     }
 
     // Renaming is offered for a removable volume, never for a drive of the
-    // running system; formatting stays out until its dialog exists. Last in
+    // running system, and so is formatting, unless the host has no format
+    // dialog to open. Last in
     // order: three menus opened back to back are still closing when the next
     // case starts, and a closing modal menu takes that case's clicks.
     function test_z_rename_and_format_entries_follow_the_volume() {
         menus.openDevice("USB", "/run/media/toni/USB", Qt.point(10, 10), "/dev/sdb1")
         compare(menus.deviceCanRename, true, "a removable volume cannot be renamed")
-        compare(menus.deviceCanFormat, false, "format is offered before its dialog")
+        compare(menus.deviceCanFormat, true, "a removable volume cannot be formatted")
+        menus.formatAvailable = false
+        compare(menus.deviceCanFormat, false, "format offered by a host without the dialog")
         menus.formatAvailable = true
-        compare(menus.deviceCanFormat, true)
         // A hotplug reorders the lists while the menu is open: the entries
         // still answer for the stick, now second, not for whatever is first.
         controllerStub.volumeDevices = ["/dev/sda2", "/dev/sdb1"]
@@ -196,7 +198,6 @@ TestCase {
         menus.openDevice("DATOS", "", Qt.point(10, 10), "/dev/sda2")
         compare(menus.deviceCanRename, false, "a system drive offered a rename")
         compare(menus.deviceCanFormat, false, "a system drive offered a format")
-        menus.formatAvailable = false
         menus.closeAll()
 
         // Without a device nothing is known about the volume: nothing offered.

@@ -14,6 +14,8 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
     "qml/CelestinaSlider.qml",
+    // The format dialog's two toggles.
+    "qml/CelestinaSwitch.qml",
     // Shared with Grafita: the quick look reads a file the same way the
     // editor does, so it numbers and scrolls with the same two components.
     "qml/CelestinaScrollBar.qml",
@@ -113,6 +115,7 @@ const QML_FILES: &[&str] = &[
     "qml/dialogs/FolderUsage.qml",
     "qml/dialogs/GrafitaEditorDialog.qml",
     "qml/dialogs/PhoneMediaDialog.qml",
+    "qml/dialogs/FormatDialog.qml",
     // Menús y popups.
     "qml/menus/ViewSortMenu.qml",
     "qml/menus/PathMenu.qml",

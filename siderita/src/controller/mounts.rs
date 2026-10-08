@@ -99,11 +99,17 @@ impl qobject::SideritaController {
         };
         let labels = column(|volume| volume.label.clone());
         let fs_types = column(|volume| volume.fs_type.clone());
+        let uuids = column(|volume| volume.uuid.clone());
         let sizes = column(|volume| volume.size.to_string());
+        let disks = column(|volume| volume.disk.clone());
+        let disk_sizes = column(|volume| volume.disk_size.to_string());
         let system = column(|volume| if volume.system { "1" } else { "0" }.to_owned());
         self.as_mut().set_volume_labels(labels);
         self.as_mut().set_volume_fs_types(fs_types);
+        self.as_mut().set_volume_uuids(uuids);
         self.as_mut().set_volume_sizes(sizes);
+        self.as_mut().set_volume_disks(disks);
+        self.as_mut().set_volume_disk_sizes(disk_sizes);
         self.as_mut().set_volume_system(system);
 
         // The names go last: the sidebar rebuilds its rows when they change,

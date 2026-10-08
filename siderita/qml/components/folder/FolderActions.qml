@@ -24,6 +24,7 @@ Item {
             || quickLookDialog.shown || quickLookDialog.visible
             || grafitaEditorDialog.shown || grafitaEditorDialog.visible
             || phoneMediaDialog.shown || phoneMediaDialog.visible
+            || formatDialog.shown || formatDialog.visible
     readonly property bool navigationBlocked:
             viewSortMenuItem.visible || entryContextMenu.visible
             || breadcrumbMenu.visible || folderContextMenu.visible
@@ -33,6 +34,11 @@ Item {
 
     function openPhoneMedia(index) {
         phoneMediaDialog.openPhone(index)
+    }
+
+    // The sidebar's "Formatear…" on the removable volume `device`.
+    function openFormat(device) {
+        formatDialog.openFor(device)
     }
 
     // Space asks the document core — by content, never by filename — whether
@@ -205,6 +211,13 @@ Item {
 
     PhoneMediaDialog {
         id: phoneMediaDialog
+        controller: root.controller
+        owner: root.owner
+        backdrop: root.panel
+    }
+
+    FormatDialog {
+        id: formatDialog
         controller: root.controller
         owner: root.owner
         backdrop: root.panel

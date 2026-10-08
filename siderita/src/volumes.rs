@@ -30,8 +30,17 @@ pub struct Volume {
     pub label: String,
     /// The filesystem type as UDisks2 names it (`vfat`, `exfat`, `ext4`…).
     pub fs_type: String,
+    /// The filesystem's UUID (`IdUUID`), empty when it has none. It names
+    /// the content, so a stick reformatted elsewhere under the same device
+    /// node no longer matches.
+    pub uuid: String,
     /// The block's size in bytes.
     pub size: u64,
+    /// The device node of the whole disk under it (`/dev/sdb` for
+    /// `/dev/sdb1`), and that disk's size: what a whole-disk format erases.
+    /// Empty and 0 when it cannot be told.
+    pub disk: String,
+    pub disk_size: u64,
     /// Whether its drive is part of the running system (see
     /// [`crate::drives::backs_system`]): never renamed or formatted.
     pub system: bool,
@@ -54,7 +63,7 @@ pub fn list_volumes(connection: &Connection) -> Result<Vec<Volume>, String> {
 
     // One look at the whole object tree answers the system-drive question for
     // every volume in this listing.
-    let is_system = crate::drives::system_check(connection);
+    let listing = crate::drives::Listing::read(connection);
     let mut volumes = Vec::new();
     for (path, interfaces) in &objects {
         // Only objects that are a mountable filesystem block.
@@ -97,14 +106,18 @@ pub fn list_volumes(connection: &Connection) -> Result<Vec<Volume>, String> {
             .map(|bytes| c_string(&bytes))
             .unwrap_or_default();
 
+        let (disk, disk_size) = listing.disk(path);
         volumes.push(Volume {
             object_path: path.to_owned(),
             name: display_name(&label, &device),
             device,
             mount_point,
             fs_type: block.get_property::<String>("IdType").unwrap_or_default(),
+            uuid: block.get_property::<String>("IdUUID").unwrap_or_default(),
             size: block.get_property::<u64>("Size").unwrap_or(0),
-            system: is_system(path),
+            disk,
+            disk_size,
+            system: listing.is_system(path),
             label,
         });
     }

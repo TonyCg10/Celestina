@@ -26,6 +26,7 @@ use crate::volumes::Volume;
 enum DriveWork {
     Rename(String),
     Format {
+        uuid: String,
         fstype: String,
         label: String,
         quick: bool,
@@ -51,10 +52,14 @@ impl qobject::SideritaController {
 
     /// Formats the volume whose device node is `device` as `fs` — or, with
     /// `whole_disk`, wipes its whole drive into one new partition. `quick`
-    /// false overwrites with zeros.
+    /// false overwrites with zeros. `uuid` is the filesystem UUID the volume
+    /// had when the person chose it: a volume that no longer has it (the stick
+    /// was swapped or reformatted under the same device node) is refused here
+    /// and again on the worker.
     pub fn format_volume(
         self: Pin<&mut Self>,
         device: &QString,
+        uuid: &QString,
         fs: &QString,
         label: &QString,
         quick: bool,
@@ -63,6 +68,7 @@ impl qobject::SideritaController {
         self.run_drive_work(
             &device.to_string(),
             DriveWork::Format {
+                uuid: uuid.to_string(),
                 fstype: fs.to_string(),
                 label: label.to_string(),
                 quick,
@@ -89,6 +95,13 @@ impl qobject::SideritaController {
                 .set_op_error(QString::from("El dispositivo ya no está conectado"));
             return;
         };
+        if matches!(&work, DriveWork::Format { uuid, .. }
+            if !crate::drives::same_content(uuid, Some(&volume.uuid)))
+        {
+            self.as_mut()
+                .set_op_error(QString::from(crate::drives::CHANGED));
+            return;
+        }
         if volume.system {
             self.as_mut()
                 .set_op_error(QString::from("Siderita no modifica los discos del sistema"));
@@ -137,17 +150,21 @@ impl qobject::SideritaController {
             let result = match work {
                 DriveWork::Rename(label) => crate::drives::set_label(&path, &device, &label),
                 DriveWork::Format {
+                    uuid,
                     fstype,
                     label,
                     quick,
                     whole_disk: false,
-                } => crate::drives::format_partition(&path, &device, &fstype, &label, quick),
+                } => crate::drives::format_partition(&path, &device, &uuid, &fstype, &label, quick),
                 DriveWork::Format {
+                    uuid,
                     fstype,
                     label,
                     quick,
                     whole_disk: true,
-                } => crate::drives::format_whole_disk(&path, &device, &fstype, &label, quick),
+                } => {
+                    crate::drives::format_whole_disk(&path, &device, &uuid, &fstype, &label, quick)
+                }
             };
             drop(claim);
             let _ = qt.queue(move |mut controller| {
@@ -184,7 +201,10 @@ mod tests {
             mount_point: String::new(),
             label: name.to_owned(),
             fs_type: "vfat".to_owned(),
+            uuid: String::new(),
             size: 0,
+            disk: String::new(),
+            disk_size: 0,
             system: false,
         }
     }

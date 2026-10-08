@@ -665,5 +665,11 @@ Item {
         bookmarkCount: savedSections.bookmarkCount
         onEditBookmarkRequested: function(index) { savedSections.editBookmark(index) }
         onRenameDeviceRequested: function(device) { sidebar.renameVolume(device) }
+        // The dialog belongs to the active document, like every other modal,
+        // so it dims and blocks the sidebar the same way.
+        onFormatDeviceRequested: function(device) {
+            if (root.hostWindow.activeDocument)
+                root.hostWindow.activeDocument.openFormat(device)
+        }
     }
 }

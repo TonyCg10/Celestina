@@ -179,6 +179,8 @@ pub struct BlockFacts {
     /// Whether it carries a partition table (a whole disk, including a hybrid
     /// ISO image that is a filesystem and a table at once).
     pub table: bool,
+    /// Its size in bytes (`Size`).
+    pub size: u64,
 }
 
 /// The drives `path` ultimately lies on, following backing devices.
@@ -261,6 +263,17 @@ pub fn whole_disk_of<'a>(blocks: &'a [BlockFacts], drive: &str) -> Result<&'a Bl
         [whole] => Ok(whole),
         _ => Err("No se encontró el disco de este volumen".to_owned()),
     }
+}
+
+/// The whole-disk block under the volume at `path`: what a whole-disk format
+/// of it would erase. `None` unless the volume lies on exactly one drive and
+/// that drive has exactly one whole-disk block.
+pub fn disk_of<'a>(blocks: &'a [BlockFacts], path: &str) -> Option<&'a BlockFacts> {
+    let drives = drives_of(blocks, path);
+    let [drive] = drives.iter().collect::<Vec<_>>()[..] else {
+        return None;
+    };
+    whole_disk_of(blocks, drive).ok()
 }
 
 /// The paths in `/proc/swaps`' first column (the header line skipped), with the
@@ -353,6 +366,7 @@ pub fn block_facts(connection: &Connection) -> Result<Vec<BlockFacts>, String> {
             usage: text("IdUsage"),
             partition: interfaces.contains_key(IFACE_PARTITION),
             table: interfaces.contains_key(IFACE_PARTITION_TABLE),
+            size: block.get_property::<u64>("Size").unwrap_or(0),
         });
     }
 
@@ -381,14 +395,34 @@ pub fn block_facts(connection: &Connection) -> Result<Vec<BlockFacts>, String> {
     Ok(blocks)
 }
 
-/// The system-drive verdict for every drive at once, for a listing: a closure
-/// that answers for one block path. When the facts cannot be read, every
-/// answer is "system" — a volume that cannot be checked is not offered.
-pub fn system_check(connection: &Connection) -> impl Fn(&str) -> bool {
-    let facts = block_facts(connection).and_then(|blocks| Ok((blocks, active_swaps()?)));
-    move |path: &str| match &facts {
-        Ok((blocks, swaps)) => block_is_system(blocks, swaps, path),
-        Err(_) => true,
+/// One look at the whole object tree, for a listing: it answers the
+/// system-drive question and names the disk under every volume listed.
+pub struct Listing(Result<(Vec<BlockFacts>, Vec<String>), String>);
+
+impl Listing {
+    pub fn read(connection: &Connection) -> Self {
+        Self(block_facts(connection).and_then(|blocks| Ok((blocks, active_swaps()?))))
+    }
+
+    /// Whether the block at `path` is part of the running system. When the
+    /// facts cannot be read, every answer is "system" — a volume that cannot be
+    /// checked is not offered.
+    pub fn is_system(&self, path: &str) -> bool {
+        match &self.0 {
+            Ok((blocks, swaps)) => block_is_system(blocks, swaps, path),
+            Err(_) => true,
+        }
+    }
+
+    /// The device node and size of the disk under the block at `path` (see
+    /// [`disk_of`]); empty and 0 when it cannot be told.
+    pub fn disk(&self, path: &str) -> (String, u64) {
+        match &self.0 {
+            Ok((blocks, _)) => disk_of(blocks, path)
+                .map(|disk| (disk.device.clone(), disk.size))
+                .unwrap_or_default(),
+            Err(_) => (String::new(), 0),
+        }
     }
 }
 
@@ -447,7 +481,7 @@ impl Drop for Claim {
 /// unmounted, renamed and mounted again.
 pub fn set_label(object_path: &str, device: &str, label: &str) -> Result<(), String> {
     let connection = system_bus()?;
-    guard(&connection, object_path, device)?;
+    guard(&connection, object_path, device, None)?;
     let block = Proxy::new(&connection, UDISKS, object_path, IFACE_BLOCK)
         .map_err(|error| format!("UDisks2: {error}"))?;
     let fstype = block.get_property::<String>("IdType").unwrap_or_default();
@@ -479,19 +513,21 @@ pub fn set_label(object_path: &str, device: &str, label: &str) -> Result<(), Str
     }
 }
 
-/// Formats the volume at `object_path` (still `device`) in place as `fstype`,
-/// unmounting it first. `quick` false overwrites it with zeros. A volume that
+/// Formats the volume at `object_path` (still `device`, still holding the
+/// filesystem `uuid` the person chose) in place as `fstype`, unmounting it
+/// first. `quick` false overwrites it with zeros. A volume that
 /// is a whole disk with a partition table of its own (a hybrid ISO image) is
 /// formatted as a whole disk instead. May prompt for authorization.
 pub fn format_partition(
     object_path: &str,
     device: &str,
+    uuid: &str,
     fstype: &str,
     label: &str,
     quick: bool,
 ) -> Result<(), String> {
     let connection = system_bus()?;
-    guard(&connection, object_path, device)?;
+    guard(&connection, object_path, device, Some(uuid))?;
     check_format(fstype, label)?;
     let blocks = block_facts(&connection)?;
     if blocks
@@ -522,20 +558,21 @@ pub fn format_partition(
         .map_err(|error| failure(error, refused))
 }
 
-/// Erases the whole drive the volume at `object_path` (still `device`) lives
-/// on and creates one partition formatted as `fstype` across it, from 1 MiB: a
+/// Erases the whole drive the volume at `object_path` (still `device`, still
+/// holding `uuid`) lives on and creates one partition formatted as `fstype` across it, from 1 MiB: a
 /// new `dos` table up to 2 TiB, a `gpt` table above. Every filesystem on the
 /// drive is unmounted first. `quick` false overwrites the whole disk with
 /// zeros. May prompt for authorization.
 pub fn format_whole_disk(
     object_path: &str,
     device: &str,
+    uuid: &str,
     fstype: &str,
     label: &str,
     quick: bool,
 ) -> Result<(), String> {
     let connection = system_bus()?;
-    guard(&connection, object_path, device)?;
+    guard(&connection, object_path, device, Some(uuid))?;
     check_format(fstype, label)?;
     let blocks = block_facts(&connection)?;
     wipe_disk(&connection, &blocks, object_path, fstype, label, quick)
@@ -616,10 +653,17 @@ fn wipe_disk(
     created
 }
 
-/// Refuses any change unless `object_path` still is `device`, UDisks2 does not
-/// hint it as system or ignored, its drive is removable, and that drive is not
-/// part of the running system — whatever the caller believed when it asked.
-fn guard(connection: &Connection, object_path: &str, device: &str) -> Result<(), String> {
+/// Refuses any change unless `object_path` still is `device` — and, when the
+/// caller names one, still holds the filesystem `uuid` (see [`same_content`]) —
+/// UDisks2 does not hint it as system or ignored, its drive is removable, and
+/// that drive is not part of the running system — whatever the caller believed
+/// when it asked.
+fn guard(
+    connection: &Connection,
+    object_path: &str,
+    device: &str,
+    uuid: Option<&str>,
+) -> Result<(), String> {
     let block = Proxy::new(connection, UDISKS, object_path, IFACE_BLOCK)
         .map_err(|_| "El dispositivo ya no está conectado".to_owned())?;
     let current = block
@@ -628,6 +672,12 @@ fn guard(connection: &Connection, object_path: &str, device: &str) -> Result<(),
         .unwrap_or_default();
     if device.is_empty() || current != device {
         return Err("El dispositivo ya no está conectado".to_owned());
+    }
+    if let Some(uuid) = uuid {
+        let now = block.get_property::<String>("IdUUID").ok();
+        if !same_content(uuid, now.as_deref()) {
+            return Err(CHANGED.to_owned());
+        }
     }
     let refused = Err("Siderita no modifica los discos del sistema".to_owned());
     // A hint that cannot be read counts as set.
@@ -644,6 +694,16 @@ fn guard(connection: &Connection, object_path: &str, device: &str) -> Result<(),
         return refused;
     }
     Ok(())
+}
+
+/// Why a format is refused when the volume under the device node is no longer
+/// the one the person chose.
+pub const CHANGED: &str = "La unidad ha cambiado desde que se eligió; vuelve a abrir Formatear";
+
+/// Whether the filesystem UUID read now (`None`: unreadable) is still the
+/// `chosen` one. A volume with no UUID matches only one that still has none.
+pub fn same_content(chosen: &str, now: Option<&str>) -> bool {
+    now == Some(chosen)
 }
 
 fn check_format(fstype: &str, label: &str) -> Result<(), String> {
@@ -727,9 +787,9 @@ fn failure(error: zbus::Error, refused: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        backs_system, claim, drives_of, label_error, mkfs_args, normalize_label, parse_swaps,
-        partition_table_for, partition_type, size_error, whole_disk_of, BlockFacts, CP850_HIGH,
-        MIB,
+        backs_system, claim, disk_of, drives_of, label_error, mkfs_args, normalize_label,
+        parse_swaps, partition_table_for, partition_type, same_content, size_error, whole_disk_of,
+        BlockFacts, CP850_HIGH, MIB,
     };
 
     fn block(path: &str, device: &str, drive: &str, mounts: &[&str]) -> BlockFacts {
@@ -875,6 +935,46 @@ mod tests {
         second.path = "/b/sdb-again".to_owned();
         twice.push(second);
         assert!(whole_disk_of(&twice, "/d/usb").is_err(), "two candidates");
+    }
+
+    #[test]
+    fn the_disk_of_a_volume_is_its_drive_whole_disk_block() {
+        let mut disk = block("/b/sdb", "/dev/sdb", "/d/usb", &[]);
+        disk.partition = false;
+        disk.table = true;
+        disk.size = 16 * 1024 * MIB;
+        let mut stick = block("/b/sdc", "/dev/sdc", "/d/stick", &[]);
+        stick.partition = false;
+        let mut cleartext = block("/b/dm0", "/dev/dm-0", "/", &[]);
+        cleartext.partition = false;
+        cleartext.backing = vec!["/b/sdb2".to_owned()];
+        let blocks = vec![
+            disk.clone(),
+            block("/b/sdb1", "/dev/sdb1", "/d/usb", &[]),
+            block("/b/sdb2", "/dev/sdb2", "/d/usb", &[]),
+            cleartext,
+            stick.clone(),
+        ];
+        assert_eq!(disk_of(&blocks, "/b/sdb1"), Some(&disk));
+        // An unlocked LUKS volume reaches its disk through the backing device.
+        assert_eq!(disk_of(&blocks, "/b/dm0"), Some(&disk));
+        // A stick formatted without a table is its own disk.
+        assert_eq!(disk_of(&blocks, "/b/sdc"), Some(&stick));
+        assert_eq!(disk_of(&blocks, "/b/missing"), None);
+    }
+
+    #[test]
+    fn a_format_follows_the_filesystem_uuid_chosen() {
+        assert!(same_content("1234-ABCD", Some("1234-ABCD")));
+        // Reformatted elsewhere under the same device node.
+        assert!(!same_content("1234-ABCD", Some("9999-0000")));
+        assert!(!same_content("1234-ABCD", Some("")));
+        assert!(
+            !same_content("1234-ABCD", None),
+            "an unread UUID is refused"
+        );
+        assert!(same_content("", Some("")));
+        assert!(!same_content("", Some("1234-ABCD")));
     }
 
     #[test]

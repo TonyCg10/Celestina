@@ -16,8 +16,15 @@ corrective implementation unit.
   twelve letters, pressing Return after each; rename an exFAT stick while it
   is mounted; while renaming, plug a second stick whose name sorts first;
   check that the internal disks offer neither «Cambiar nombre» nor
-  «Formatear…»; once SID-H1-P lands, format the stick as exFAT with a quick
-  format, then as FAT32 with the whole-disk option checked
+  «Formatear…»; choose «Formatear…» on the stick and check the dialog: its
+  title names the stick, the capacity matches `lsblk`, exFAT, the quick-format
+  switch on, the whole-disk switch off and the current name are preselected,
+  and the warning names the partition (`/dev/sdX1`) and its size; turn the
+  whole-disk switch on and off and watch the warning name the drive
+  (`/dev/sdX`) and its size; choose FAT32 and type a lowercase name, then a
+  twelve-letter one; press Escape; open it again and unplug the stick with
+  the dialog up; plug it back, format it as exFAT with a quick format, then as
+  FAT32 with the whole-disk switch on
 - **Pass condition:** polkit asks in its own window; the row shows the new
   name after the rename, Escape leaves the old one; the lowercase FAT32 name
   is stored in capitals, and the twelve-letter one keeps the field open with
@@ -25,7 +32,12 @@ corrective implementation unit.
   unmount and mount it again, and the new name may show only after that) or
   the UDisks2 message says why not; the second stick does not take the edit
   and the rename lands on the first; no internal disk offers either entry;
-  each format ends with the stick listed under its new name and file system,
+  the FAT32 name turns to capitals as it is typed and the twelve-letter one
+  shows the reason under the field with «Formatear» disabled; Escape closes
+  the dialog and nothing is formatted; unplugging the stick replaces the
+  warning with the not-connected notice and disables «Formatear»; the dialog
+  closes when «Formatear» is pressed and the running notice shows until the
+  format ends; each format ends with the stick listed under its new name and file system,
   FAT32 reported as `vfat` FAT32 by `lsblk -f`, readable on another machine;
   a refusal or failure shows the UDisks2 message
 - **Result:** not run by hand
