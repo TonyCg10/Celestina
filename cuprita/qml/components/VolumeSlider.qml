@@ -35,6 +35,38 @@ CelestinaSlider {
             slider.flush()
     }
 
+    // Shift with an arrow moves 5 %. The style's slider handles the arrow in
+    // its own Keys handler, which runs before any handler here and accepts
+    // the key, so `Keys.priority` cannot put this one first. Instead a key
+    // step is held until the event is over: the style's +1 % lands in
+    // `keyTarget`, the Shift handler below (same event) replaces it with the
+    // 5 % target, and one value is emitted.
+    property real keyTarget: -1
+
+    function moveTo(target) {
+        if (!slider.enabled || slider.span <= 0)
+            return
+        slider.keyTarget = Math.max(slider.from, Math.min(slider.to, target))
+        Qt.callLater(slider.emitKeyTarget)
+    }
+
+    function emitKeyTarget() {
+        if (slider.keyTarget < 0)
+            return
+        const target = slider.keyTarget
+        slider.keyTarget = -1
+        slider.moved(target)
+    }
+
+    Keys.onLeftPressed: function(event) {
+        if (event.modifiers & Qt.ShiftModifier)
+            slider.moveTo(slider.value - 5)
+    }
+    Keys.onRightPressed: function(event) {
+        if (event.modifiers & Qt.ShiftModifier)
+            slider.moveTo(slider.value + 5)
+    }
+
     Timer {
         id: throttle
         // The write rate, not an animation: `motionFast` is the suite's 100 ms.

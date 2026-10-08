@@ -143,11 +143,23 @@ Item {
             model: page.streams
             boundsBehavior: Flickable.StopAtBounds
             CelestinaWheelScroll { view: list }
+            // Keyboard: Tab enters the list once, the arrows walk it, Enter runs
+            // the current row's primary action.
+            activeFocusOnTab: true
+            keyNavigationEnabled: true
+            Keys.onReturnPressed: function(event) { list.primary(); event.accepted = true }
+            Keys.onEnterPressed: function(event) { list.primary(); event.accepted = true }
+
+            function primary() {
+                if (list.currentItem)
+                    (list.currentItem as StreamRow).primaryAction()
+            }
             Accessible.role: Accessible.List
             Accessible.name: qsTr("Aplicaciones")
 
             delegate: StreamRow {
                 width: ListView.view.width
+                focused: list.activeFocus && ListView.isCurrentItem
                 onVolumeRequested: function(id, volume) { page.controller.setVolume(id, volume) }
                 onMuteRequested: function(id, muted) { page.controller.setMuted(id, muted) }
             }

@@ -68,12 +68,29 @@ CelestinaSurface {
         model: page.networks
         boundsBehavior: Flickable.StopAtBounds
         CelestinaWheelScroll { view: list }
+        // Keyboard: Tab enters the list once, the arrows walk it, Enter runs
+        // the current row's primary action and Space switches a VPN.
+        activeFocusOnTab: true
+        keyNavigationEnabled: true
+        Keys.onReturnPressed: function(event) { list.primary(); event.accepted = true }
+        Keys.onEnterPressed: function(event) { list.primary(); event.accepted = true }
+        Keys.onSpacePressed: function(event) {
+            if (list.currentItem)
+                (list.currentItem as NetworkRow).toggle()
+            event.accepted = true
+        }
+
+        function primary() {
+            if (list.currentItem)
+                (list.currentItem as NetworkRow).primaryAction()
+        }
         Accessible.role: Accessible.List
         Accessible.name: qsTr("Redes")
 
         delegate: NetworkRow {
             id: networkRow
             width: ListView.view.width
+            focused: list.activeFocus && ListView.isCurrentItem
             onConnectRequested: function(id) {
                 if (networkRow.model.state === "connecting" || page.joiningId === id)
                     return

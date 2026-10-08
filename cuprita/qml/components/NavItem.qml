@@ -17,7 +17,8 @@ AbstractButton {
     implicitHeight: CelestinaTheme.controlHeightXl + CelestinaTheme.spaceSm
 
     hoverEnabled: true
-    focusPolicy: Qt.TabFocus
+    // Only the current item is a Tab stop; the strip's arrows reach the rest.
+    focusPolicy: item.current ? Qt.TabFocus : Qt.NoFocus
 
     Accessible.role: Accessible.PageTab
     Accessible.name: item.label

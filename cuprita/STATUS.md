@@ -1,17 +1,29 @@
 # Cuprita status
 
 - **Updated:** 2026-10-08
-- **Implementation:** CUP-1-A, CUP-1-C, CUP-1-D and CUP-1-E are active; Red
+- **Implementation:** only CUP-1-F is open; its landing closes it and
+  publishes 1.0.0. Red
   runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
   agent, and Audio on PipeWire through WirePlumber's `wpctl`;
   `CUPRITA_FAKE=1` runs all three over the scripted backends
-- **Author validation:** `VAL-C`, `VAL-D` and `VAL-E` not yet requested
+- **Author validation:** `VAL-C`, `VAL-D` and `VAL-E` pending: the live
+  network, Bluetooth and audio checks in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
-- Version 0.1.0. The project is registered and builds a release binary. The
-  window shows the pill strip with Red, Bluetooth and Audio; Ctrl+1, Ctrl+2 and
-  Ctrl+3 jump between them.
+- The landing of CUP-1-F publishes 1.0.0 (the history row is the landing's). The
+  project is registered and builds a release binary. The window shows the
+  pill strip with Red, Bluetooth and Audio; Ctrl+1, Ctrl+2 and Ctrl+3 jump
+  between them.
+- Keyboard: the strip is one Tab stop (Left and Right walk it), Tab then
+  reaches the page's switches, buttons and list; the arrows walk a list,
+  Enter runs the current row's primary action (join or leave a network,
+  switch a VPN, pair, connect or disconnect a device, mute an application),
+  Space switches a VPN row and any focused switch, Menu or Shift+F10
+  opens a device row's menu, Left/Right move a focused volume slider by
+  1 % (Shift: 5 %), Esc closes the dialogs and menus. For a screen reader every row is a list item named by kind,
+  name and state (and the bars of four, the battery or the volume), the
+  switches are check boxes, and the dialogs announce their title.
 - `cuprita-core` holds the models, the `Network`, `Bluetooth` and `Audio`
   traits with typed errors, the scripted fakes, the network ordering and
   signal bars, the device ordering, the pairing-agent state machine and its
@@ -40,7 +52,9 @@
   against the live NetworkManager (`VAL-C`) and pairing and forgetting
   against the live BlueZ (`VAL-D`), and switching output, muting an
   application and changing a profile against the live PipeWire (`VAL-E`),
-  await the author's check.
+  await the author's check. Until they pass, nm-applet, Blueman and
+  pavucontrol stay installed; their removal is the author's action (see the
+  [exit evidence](docs/evidence/2026-10-08-exit.md)).
 
 ## Blockers
 

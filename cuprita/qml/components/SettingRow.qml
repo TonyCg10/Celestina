@@ -32,6 +32,7 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         checked: root.checked
+        Accessible.role: Accessible.CheckBox
         Accessible.name: root.label
         onToggled: {
             root.toggled(toggle.checked)

@@ -19,10 +19,49 @@ Item {
     signal vpnRequested(string id, bool on)
 
     readonly property bool connected: row.model.state === "connected"
+    // Set by the list: this row is current and the list holds the focus.
+    property bool focused: false
 
     implicitHeight: CelestinaTheme.rowHeight
     Accessible.role: Accessible.ListItem
-    Accessible.name: row.model.name + ", " + stateText.text
+    // Kind, name, state and, for Wi-Fi, security and bars of four.
+    Accessible.name: row.model.kind === "wifi"
+                     ? [row.kindLabel(row.model.kind), row.model.name,
+                        row.stateLabel(row.model.state), row.securityLabel(row.model.security),
+                        qsTr("%1 de 4 barras").arg(row.model.bars)].join(", ")
+                     : [row.kindLabel(row.model.kind), row.model.name, stateText.text].join(", ")
+
+    // Enter: a VPN is switched, any other network joined or left.
+    function primaryAction() {
+        if (row.model.kind === "vpn")
+            row.vpnRequested(row.model.id, !row.connected)
+        else if (row.connected)
+            row.disconnectRequested(row.model.id)
+        else
+            row.connectRequested(row.model.id)
+    }
+
+    // Space: only a VPN row has a switch to toggle.
+    function toggle() {
+        if (row.model.kind === "vpn")
+            row.vpnRequested(row.model.id, !row.connected)
+    }
+
+    function kindLabel(kind) {
+        switch (kind) {
+        case "wifi": return qsTr("Red Wi-Fi")
+        case "vpn": return qsTr("VPN")
+        default: return qsTr("Red por cable")
+        }
+    }
+
+    // The keyboard's place in the list: the list says which row is current
+    // and whether it holds the focus; the plate draws the ring.
+    CelestinaRowHighlight {
+        anchors.fill: parent
+        family: CelestinaRowHighlight.Content
+        focused: row.focused
+    }
 
     function stateLabel(state) {
         switch (state) {
@@ -95,6 +134,7 @@ Item {
             visible: row.model.kind === "vpn"
             anchors.verticalCenter: parent.verticalCenter
             checked: row.connected
+            Accessible.role: Accessible.CheckBox
             Accessible.name: qsTr("Activar %1").arg(row.model.name)
             onToggled: row.vpnRequested(row.model.id, checked)
         }

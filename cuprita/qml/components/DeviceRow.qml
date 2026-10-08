@@ -18,9 +18,52 @@ Item {
     signal disconnectRequested(string address)
     signal menuRequested(string address, Item anchor)
 
+    // Set by the list: this row is current and the list holds the focus.
+    property bool focused: false
+
     implicitHeight: CelestinaTheme.rowHeight
     Accessible.role: Accessible.ListItem
-    Accessible.name: row.model.name + ", " + stateText.text
+    // Kind, name, state and, when the device reports it, the battery.
+    Accessible.name: {
+        const parts = [row.kindLabel(row.model.kind), row.model.name, stateText.text]
+        if (row.model.battery >= 0)
+            parts.push(qsTr("batería al %1 %").arg(row.model.battery))
+        return parts.join(", ")
+    }
+
+    // Enter: pair a stranger, connect or disconnect a paired device.
+    function primaryAction() {
+        if (!row.model.paired)
+            row.pairRequested(row.model.address)
+        else if (row.model.connected)
+            row.disconnectRequested(row.model.address)
+        else
+            row.connectRequested(row.model.address)
+    }
+
+    // Menu or Shift+F10: a paired device's menu opens beside its button.
+    function openMenu() {
+        if (row.model.paired)
+            row.menuRequested(row.model.address, more)
+    }
+
+    function kindLabel(kind) {
+        switch (kind) {
+        case "audio": return qsTr("Dispositivo de audio")
+        case "input": return qsTr("Dispositivo de entrada")
+        case "phone": return qsTr("Teléfono")
+        case "computer": return qsTr("Ordenador")
+        default: return qsTr("Dispositivo")
+        }
+    }
+
+    // The keyboard's place in the list: the list says which row is current
+    // and whether it holds the focus; the plate draws the ring.
+    CelestinaRowHighlight {
+        anchors.fill: parent
+        family: CelestinaRowHighlight.Content
+        focused: row.focused
+    }
 
     CelestinaIcon {
         id: glyph

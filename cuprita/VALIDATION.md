@@ -7,10 +7,14 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Status:** pending
 - **Related implementation:** CUP-1-C
 - **Requires:** the deployed Cuprita on the real session
-- **Procedure:** open Cuprita, join a Wi-Fi network that asks for a password,
-  check the connection, then forget it
-- **Pass condition:** the network joins with the password typed once, shows as
-  connected, and disappears from the saved list after forgetting it
+- **Procedure:** open Cuprita on Red; join a protected Wi-Fi network that has
+  no saved profile with a wrong password first, then with the right one
+  (polkit may prompt); disconnect and reconnect it; forget it with
+  «Olvidar»; switch Wi-Fi off and on
+- **Pass condition:** the wrong password shows a notice, the row reads «Error
+  al conectar» and nothing is saved; the right one is typed once and the row
+  reads «Conectado»; after forgetting, the row loses «Olvidar»; the Wi-Fi rows
+  leave with the switch and return with it
 - **Result:** not run
 - **Evidence:** none
 
@@ -19,10 +23,13 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Status:** pending
 - **Related implementation:** CUP-1-D
 - **Requires:** the deployed Cuprita and a device to pair
-- **Procedure:** search, pair the headphones or the phone through Cuprita's
-  dialog, connect, then forget the device
-- **Pass condition:** the device pairs with the code entered in Cuprita and
-  connects, and forgetting it removes it
+- **Procedure:** open Cuprita on Bluetooth with Blueman's applet closed;
+  press «Buscar», pair the headphones or the phone with its «+» (confirm the
+  passkey with «Coincide» or type the PIN in Cuprita's dialog), connect it,
+  then choose «Olvidar» in its menu
+- **Pass condition:** the pairing dialog is Cuprita's, the device pairs and
+  reads «Conectado», and after «Olvidar» it leaves the list (or returns as
+  «No emparejado» while searching)
 - **Result:** not run
 - **Evidence:** none
 
@@ -31,8 +38,10 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Status:** pending
 - **Related implementation:** CUP-1-E
 - **Requires:** the deployed Cuprita on the real session
-- **Procedure:** switch the output to HDMI and back, mute one application,
-  then change a sound card's profile and back
+- **Procedure:** open Cuprita on Audio; choose the HDMI output in the
+  «Salida» selector and then the first output again; while two applications
+  play, mute one with its row's button and unmute it; in a sound card's
+  «Perfil» card choose another profile and then the first one
 - **Pass condition:** sound follows the selected output, only the muted
   application goes silent, and the card plays again on its first profile
 - **Result:** not run

@@ -94,11 +94,36 @@ CelestinaSurface {
         model: page.devices
         boundsBehavior: Flickable.StopAtBounds
         CelestinaWheelScroll { view: list }
+        // Keyboard: Tab enters the list once, the arrows walk it, Enter runs
+        // the current row's primary action.
+        activeFocusOnTab: true
+        keyNavigationEnabled: true
+        Keys.onReturnPressed: function(event) { list.primary(); event.accepted = true }
+        Keys.onEnterPressed: function(event) { list.primary(); event.accepted = true }
+        // Menu or Shift+F10 opens the current row's menu beside its button.
+        Keys.onPressed: function(event) {
+            if (event.key === Qt.Key_Menu
+                    || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
+                if (list.currentItem) {
+                    // A wheel-scrolled current row may sit clipped: show it
+                    // first, so the menu opens beside a visible button.
+                    list.positionViewAtIndex(list.currentIndex, ListView.Contain);
+                    (list.currentItem as DeviceRow).openMenu()
+                }
+                event.accepted = true
+            }
+        }
+
+        function primary() {
+            if (list.currentItem)
+                (list.currentItem as DeviceRow).primaryAction()
+        }
         Accessible.role: Accessible.List
         Accessible.name: qsTr("Dispositivos")
 
         delegate: DeviceRow {
             width: ListView.view.width
+            focused: list.activeFocus && ListView.isCurrentItem
             onPairRequested: function(address) { page.controller.pair(address) }
             onConnectRequested: function(address) { page.controller.connect(address) }
             onDisconnectRequested: function(address) { page.controller.disconnect(address) }

@@ -14,9 +14,28 @@ Item {
     signal volumeRequested(int id, real volume)
     signal muteRequested(int id, bool muted)
 
+    // Set by the list: this row is current and the list holds the focus.
+    property bool focused: false
+
     implicitHeight: CelestinaTheme.rowHeight
     Accessible.role: Accessible.ListItem
-    Accessible.name: row.model.appName
+    // Kind, name, volume and whether it is muted.
+    Accessible.name: [qsTr("Aplicación"), row.model.appName,
+                      qsTr("volumen %1 %").arg(row.model.percent)]
+                     .concat(row.model.muted ? [qsTr("silenciada")] : []).join(", ")
+
+    // Enter: mute or unmute the application.
+    function primaryAction() {
+        row.muteRequested(row.model.id, !row.model.muted)
+    }
+
+    // The keyboard's place in the list: the list says which row is current
+    // and whether it holds the focus; the plate draws the ring.
+    CelestinaRowHighlight {
+        anchors.fill: parent
+        family: CelestinaRowHighlight.Content
+        focused: row.focused
+    }
 
     CelestinaIcon {
         id: glyph

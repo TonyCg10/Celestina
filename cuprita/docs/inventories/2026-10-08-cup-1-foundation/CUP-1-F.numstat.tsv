@@ -1,0 +1,45 @@
+# CUP-1-F exact change inventory
+
+Base revision	57ed1d5ccf6c7fc9cb61aaa9c5f0d70797f789ff
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/ROADMAP.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/VALIDATION.md
+Pathspec	cuprita/docs/evidence/2026-10-08-exit.md
+Pathspec	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-F.numstat.tsv
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/qml/components/DeviceRow.qml
+Pathspec	cuprita/qml/components/NavItem.qml
+Pathspec	cuprita/qml/components/NetworkRow.qml
+Pathspec	cuprita/qml/components/SettingRow.qml
+Pathspec	cuprita/qml/components/StreamRow.qml
+Pathspec	cuprita/qml/components/VolumeSlider.qml
+Pathspec	cuprita/qml/pages/AudioPage.qml
+Pathspec	cuprita/qml/pages/BluetoothPage.qml
+Pathspec	cuprita/qml/pages/NetworkPage.qml
+Pathspec	cuprita/tests/qml/tst_keyboard.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	40179e041f5f97fa511c98a3ccbe5117ad8f8859342289366bd142fd6c6e5107	cuprita/Cargo.lock
+1	1	f13004e915983a0cb80268ced70e2123cbf04a6ce2847e62ce2af6d1b3fa1fc1	cuprita/Cargo.toml
+31	8	214fd516ba5fcc63904fda7358c1bafb50d1fef23062d873668109908407cc81	cuprita/ROADMAP.md
+20	6	7aa5635579b846198b88cb28aa7111a6d537ce966848674fb7840f6625e2f344	cuprita/STATUS.md
+19	10	9696247c99cc0b7acc2706b00c2cc6f4a36a212cd9826fe632604c768f1b269d	cuprita/VALIDATION.md
+155	0	3e325d5d79e0908c73c2120772f0e59d1f09c3177a2432248bf6cb6aa61a49bf	cuprita/docs/evidence/2026-10-08-exit.md
+45	0	self	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-F.numstat.tsv
+6	2	9a54da3ef8d30417e5e43c555e55f3e4d7c4066f710b5bd28b733ef9a779ce16	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+44	1	07dec5692874baef114f7ee737b8c829bfb4f67820f6795b2e7de6bef1d3e1f1	cuprita/qml/components/DeviceRow.qml
+2	1	70b58e2c45d106ea64cdc2b0b10549ea39c5ec84176b35f88120c5a97d443921	cuprita/qml/components/NavItem.qml
+41	1	8619005625b9cb9a940c8ab4ab6e23f673cd0707da5e20fa2d045622b6248bda	cuprita/qml/components/NetworkRow.qml
+1	0	398f7f2f2e087a27ce9b770070b78820876367354afae5ec63416b401a8b2d9f	cuprita/qml/components/SettingRow.qml
+20	1	c58e9272e18b0983c32e68b26a3857805de52cafa070b60e0f05007677b52465	cuprita/qml/components/StreamRow.qml
+32	0	47d4875bb29c19d5d5de3dece8fcadf4d788af87dce37f3d5f4581a219fe34e4	cuprita/qml/components/VolumeSlider.qml
+12	0	0cd040cbcd36aaf2305a27c06c2581b7d1189469f2e309c671cf4b14c3fe166f	cuprita/qml/pages/AudioPage.qml
+25	0	94e0622a4595299efac972ed941198a514f94776cfc0627c95f4e32931d3a402	cuprita/qml/pages/BluetoothPage.qml
+17	0	234baa06f8eed563b1dc9a2f5cf556cb4585481ff86e91d25bc4f4e634dcf851	cuprita/qml/pages/NetworkPage.qml
+139	0	14e9ad96bb08a903a8c575a037e005c685894d5b7ca3b6b347b16e9c4dce7051	cuprita/tests/qml/tst_keyboard.qml
+1	0	1aaf687e8ed9278e8ca10ad92e364252739b685dff3271d325522a23b8d46050	docs/version-history.tsv
