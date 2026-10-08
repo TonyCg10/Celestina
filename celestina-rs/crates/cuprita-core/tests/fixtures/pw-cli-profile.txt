@@ -1,0 +1,28 @@
+  Object: size 472, type Spa:Pod:Object:Param:Profile (262151), id Spa:Enum:ParamId:Profile (9)
+    Prop: key Spa:Pod:Object:Param:Profile:index (1), flags 00000000
+      Int 1
+    Prop: key Spa:Pod:Object:Param:Profile:name (2), flags 00000000
+      String "output:analog-stereo+input:mono-fallback"
+    Prop: key Spa:Pod:Object:Param:Profile:description (3), flags 00000000
+      String "Analog Stereo Output + Mono Input"
+    Prop: key Spa:Pod:Object:Param:Profile:priority (4), flags 00000000
+      Int 6501
+    Prop: key Spa:Pod:Object:Param:Profile:available (5), flags 00000000
+      Id 0        (Spa:Enum:ParamAvailability:unknown)
+    Prop: key Spa:Pod:Object:Param:Profile:classes (7), flags 00000000
+      Struct: size 224
+        Int 2
+        Struct: size 96
+          String "Audio/Source"
+          Int 1
+          String "card.profile.devices"
+          Array: child.size 4, child.type Spa:Int
+            Int 2
+        Struct: size 96
+          String "Audio/Sink"
+          Int 1
+          String "card.profile.devices"
+          Array: child.size 4, child.type Spa:Int
+            Int 3
+    Prop: key Spa:Pod:Object:Param:Profile:save (8), flags 00000000
+      Bool false

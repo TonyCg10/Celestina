@@ -17,10 +17,14 @@ license = "MIT"
 zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"], optional = true }
 
 [features]
-default = ["nm", "bluez"]
+default = ["nm", "bluez", "wpctl"]
+# The audio client (`wpctl`) drives WirePlumber's `wpctl` and PipeWire's
+# `pw-cli` and `pw-mon` as processes: no crate dependency (the binding spike
+# in the CUP-1-E evidence turned the `pipewire` crate down).
+wpctl = []
 nm = ["dep:zbus"]
 bluez = ["dep:zbus"]
 
 [[example]]
 name = "snapshot"
-required-features = ["nm", "bluez"]
+required-features = ["nm", "bluez", "wpctl"]

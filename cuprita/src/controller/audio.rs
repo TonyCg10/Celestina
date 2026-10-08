@@ -84,8 +84,14 @@ impl Default for AudioControllerRust {
 impl cxx_qt::Initialize for qobject::AudioController {
     fn initialize(mut self: Pin<&mut Self>) {
         let qt = self.qt_thread();
-        let worker = Worker::spawn(
-            backend::audio(),
+        // No poll: the backend's watcher asks for every re-read.
+        let worker = Worker::start(
+            move |refresh| {
+                backend::audio(move || {
+                    refresh.request();
+                })
+            },
+            None,
             |backend: &mut Backend| backend.snapshot().map_err(|e| e.message_es()),
             move |report| {
                 let _ = qt.queue(move |controller: Pin<&mut qobject::AudioController>| {
@@ -157,14 +163,24 @@ impl qobject::AudioController {
     }
 
     fn dispatch(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         job: impl FnOnce(&mut Backend) -> Result<(), AudioError> + Send + 'static,
     ) {
-        let queued = self
-            .rust()
-            .worker
-            .as_ref()
-            .is_some_and(|w| w.run(move |b| job(b).map_err(|e| e.message_es())));
+        self.dispatch_keyed(None, job);
+    }
+
+    /// `key`, when set, lets a later command with the same key replace this
+    /// one while both still wait (a slider's writes).
+    fn dispatch_keyed(
+        mut self: Pin<&mut Self>,
+        key: Option<String>,
+        job: impl FnOnce(&mut Backend) -> Result<(), AudioError> + Send + 'static,
+    ) {
+        let job = move |b: &mut Backend| job(b).map_err(|e| e.message_es());
+        let queued = self.rust().worker.as_ref().is_some_and(|w| match key {
+            Some(key) => w.run_keyed(key, job),
+            None => w.run(job),
+        });
         if queued {
             let pending = self.rust().pending + 1;
             self.as_mut().rust_mut().pending = pending;
@@ -185,7 +201,9 @@ impl qobject::AudioController {
         // f64 from QML narrowed to the domain's f32, then clamped.
         #[allow(clippy::cast_possible_truncation)]
         let volume = clamp_volume(volume as f32);
-        self.dispatch(move |b| b.set_volume(id, volume));
+        self.dispatch_keyed(Some(format!("volume:{id}")), move |b| {
+            b.set_volume(id, volume)
+        });
     }
 
     pub fn set_muted(self: Pin<&mut Self>, id: u32, muted: bool) {

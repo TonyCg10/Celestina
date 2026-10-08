@@ -41,17 +41,15 @@ Item {
         font.pixelSize: CelestinaTheme.fontRowTitle
     }
 
-    CelestinaSlider {
+    VolumeSlider {
         anchors.left: label.right
         anchors.leftMargin: CelestinaTheme.spaceMd
         anchors.right: percent.left
         anchors.rightMargin: CelestinaTheme.spaceMd
         anchors.verticalCenter: parent.verticalCenter
         value: row.model.percent
-        to: 150
-        step: 5
         Accessible.name: qsTr("Volumen de %1").arg(row.model.appName)
-        onMoved: function(value) { row.volumeRequested(row.model.id, value / 100) }
+        onRequested: function(value) { row.volumeRequested(row.model.id, value / 100) }
     }
 
     Text {

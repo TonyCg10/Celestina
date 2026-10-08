@@ -5,7 +5,7 @@ import org.celestina.cuprita 1.0
 import "../components"
 
 // The Audio section: the output and input cards, the applications playing,
-// and the sound card's profile when it has more than one.
+// and a profile card for each sound card that has more than one profile.
 Item {
     id: page
 
@@ -51,57 +51,76 @@ Item {
             onMuteRequested: function(id, muted) { page.controller.setMuted(id, muted) }
         }
 
-        CelestinaSurface {
-            objectName: "profileCard"
-            width: parent.width
-            height: CelestinaTheme.rowHeight + CelestinaTheme.spaceCardInset * 2
-            visible: page.controller.profiles.length > 0
-            role: CelestinaSurface.Grouped
-
-            CelestinaSectionLabel {
-                anchors.left: parent.left
-                anchors.leftMargin: CelestinaTheme.spaceCardInset
-                anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Perfil")
+        // One profile card per sound card that has more than one profile
+        // (the controller lists only those).
+        Repeater {
+            model: {
+                const ids = []
+                const list = page.controller.profiles
+                for (let i = 0; i < list.length; ++i)
+                    if (ids.indexOf(list[i].cardId) < 0)
+                        ids.push(list[i].cardId)
+                return ids
             }
 
-            CelestinaButton {
-                id: profileSelector
-                anchors.right: parent.right
-                anchors.rightMargin: CelestinaTheme.spaceCardInset
-                anchors.verticalCenter: parent.verticalCenter
-                role: CelestinaButton.Ghost
-                text: {
-                    const list = page.controller.profiles
-                    for (let i = 0; i < list.length; ++i)
-                        if (list[i].active)
-                            return list[i].description
-                    return ""
+            delegate: CelestinaSurface {
+                id: profileCard
+                objectName: "profileCard"
+
+                required property int modelData
+                readonly property var choices: page.controller.profiles.filter(
+                    p => p.cardId === profileCard.modelData)
+
+                width: cards.width
+                height: CelestinaTheme.rowHeight + CelestinaTheme.spaceCardInset * 2
+                role: CelestinaSurface.Grouped
+
+                CelestinaSectionLabel {
+                    anchors.left: parent.left
+                    anchors.leftMargin: CelestinaTheme.spaceCardInset
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Perfil")
                 }
-                helpText: qsTr("Elegir perfil")
-                onClicked: profileMenu.popupBeside(profileSelector, false)
-            }
 
-            GlassContextMenu {
-                id: profileMenu
-                backdropSource: page.backdropSource
-
-                Instantiator {
-                    model: page.controller.profiles
-
-                    delegate: GlassMenuItem {
-                        id: profileChoice
-
-                        required property var modelData
-                        text: profileChoice.modelData.description
-                        choice: true
-                        current: profileChoice.modelData.active
-                        onTriggered: page.controller.setProfile(profileChoice.modelData.cardId,
-                                                                profileChoice.modelData.id)
+                CelestinaButton {
+                    id: profileSelector
+                    objectName: "profileSelector"
+                    anchors.right: parent.right
+                    anchors.rightMargin: CelestinaTheme.spaceCardInset
+                    anchors.verticalCenter: parent.verticalCenter
+                    role: CelestinaButton.Ghost
+                    text: {
+                        const list = profileCard.choices
+                        for (let i = 0; i < list.length; ++i)
+                            if (list[i].active)
+                                return list[i].description
+                        return ""
                     }
+                    helpText: qsTr("Elegir perfil")
+                    onClicked: profileMenu.popupBeside(profileSelector, false)
+                }
 
-                    onObjectAdded: function(index, object) { profileMenu.insertItem(index, object) }
-                    onObjectRemoved: function(index, object) { profileMenu.removeItem(object) }
+                GlassContextMenu {
+                    id: profileMenu
+                    backdropSource: page.backdropSource
+
+                    Instantiator {
+                        model: profileCard.choices
+
+                        delegate: GlassMenuItem {
+                            id: profileChoice
+
+                            required property var modelData
+                            text: profileChoice.modelData.description
+                            choice: true
+                            current: profileChoice.modelData.active
+                            onTriggered: page.controller.setProfile(profileChoice.modelData.cardId,
+                                                                    profileChoice.modelData.id)
+                        }
+
+                        onObjectAdded: function(index, object) { profileMenu.insertItem(index, object) }
+                        onObjectRemoved: function(index, object) { profileMenu.removeItem(object) }
+                    }
                 }
             }
         }

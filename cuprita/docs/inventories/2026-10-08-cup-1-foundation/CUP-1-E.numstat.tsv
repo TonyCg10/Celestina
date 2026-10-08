@@ -1,0 +1,61 @@
+# CUP-1-E exact change inventory
+
+Base revision	5c628483be4c6e4f02e8b44e1b0566bb48752492
+Pathspec	celestina-rs/crates/cuprita-core/Cargo.toml
+Pathspec	celestina-rs/crates/cuprita-core/examples/snapshot.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/lib.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/wpctl.rs
+Pathspec	celestina-rs/crates/cuprita-core/tests/fixtures/pw-cli-enum-profile.txt
+Pathspec	celestina-rs/crates/cuprita-core/tests/fixtures/pw-cli-profile.txt
+Pathspec	celestina-rs/crates/cuprita-core/tests/fixtures/wpctl-status.txt
+Pathspec	celestina-rs/crates/cuprita-core/tests/wpctl.rs
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/README.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/VALIDATION.md
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/docs/evidence/2026-10-08-audio.md
+Pathspec	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-E.numstat.tsv
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/qml/components/EndpointCard.qml
+Pathspec	cuprita/qml/components/StreamRow.qml
+Pathspec	cuprita/qml/components/VolumeSlider.qml
+Pathspec	cuprita/qml/pages/AudioPage.qml
+Pathspec	cuprita/src/backend.rs
+Pathspec	cuprita/src/controller/audio.rs
+Pathspec	cuprita/src/controller/mod.rs
+Pathspec	cuprita/src/main.rs
+Pathspec	cuprita/tests/qml/tst_audio_page.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	2	9deeea802faf3bd4cf29cc284d9c6879b1941dd27133d04c130caf68338443dc	celestina-rs/crates/cuprita-core/Cargo.toml
+23	5	490d79dbd297efd73bf606ecdccb0f1598087c70943dc3f24819e9aa64c91125	celestina-rs/crates/cuprita-core/examples/snapshot.rs
+5	2	c7a526f69bd28cddfeaa3b428529218e4eb0607fd1e703e7ca2f2585925c4748	celestina-rs/crates/cuprita-core/src/lib.rs
+957	0	4d8c91dec25b191453eca2a92031ce31bf94167b255cb73aa62e2ca376fcafb1	celestina-rs/crates/cuprita-core/src/wpctl.rs
+198	0	1142fce0660669c4e2880890da6da791ababcc8ae8021d5993aafee996bbe6c3	celestina-rs/crates/cuprita-core/tests/fixtures/pw-cli-enum-profile.txt
+28	0	b19fb723558c7d767bb6865549039da6683c36c2b733640f3fa6ea936e0c5af8	celestina-rs/crates/cuprita-core/tests/fixtures/pw-cli-profile.txt
+60	0	3030c2931b11595f66808290f7aca2a91a8f10f87a9f5e9ea5acb11df46382d2	celestina-rs/crates/cuprita-core/tests/fixtures/wpctl-status.txt
+183	0	78e2ac3026342464baaf11fe68e37f71461c28bd424d6564e09e77cd85685420	celestina-rs/crates/cuprita-core/tests/wpctl.rs
+1	1	c1ad7c40064dbbc806e29f79bf880d611271fb8948bb5aebe047366e63d7ad73	cuprita/Cargo.lock
+1	1	f374bdfed4920e0e806dd26a4130e5cd69b4b32a37842b9eb5f9166b51294c58	cuprita/Cargo.toml
+9	7	cd3ab3a91e369f720021fce5cd25313afa41a43774e2670b418a1a4b2e1e1a90	cuprita/README.md
+13	10	8bf94e00448c3edcd5b422d576aceea34a479d77ac387c9ef3facad48ff99938	cuprita/STATUS.md
+4	3	18acb22346cb364b7a572758c8f0248fb1cb0329142842b8c96207374c695ef8	cuprita/VALIDATION.md
+1	0	ea49011cb9a3a18034d11326043b821221c731190a1c7df2a9f6a5bf5574dab2	cuprita/build.rs
+230	0	8f78e77e78a98d523284e78737c15cf16e0a62de63f9a09cebb46d1b14631e16	cuprita/docs/evidence/2026-10-08-audio.md
+61	0	self	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-E.numstat.tsv
+1	1	95152aa2b0248b66266e2c3ca814390fd30c9e1e7d6a0d66c4e7c79c55c6b788	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+2	4	c02888501f78ae43d2c4a27ef9e2a48aaab779123600ed18588e0b1ab063fa96	cuprita/qml/components/EndpointCard.qml
+2	4	14f00f99e9a432317e0ae53d2928a34a86f5c44131dead468fe1cad033c465ee	cuprita/qml/components/StreamRow.qml
+57	0	236f4d866159808e5e24a9afd22d06609b94a8342689610726bd266f9a0214b0	cuprita/qml/components/VolumeSlider.qml
+63	44	edfa96bae13faa0373147f33b9e08a546104d0c18b4dc047172522e9eaec8418	cuprita/qml/pages/AudioPage.qml
+129	22	fc008d5e6573a98bfc71cffc8b8352f15950ecf4fd9581977e548d44953ea51a	cuprita/src/backend.rs
+26	8	1c5718da10d924c449144faade7cea461fbc4ee0a6ac4824d08e838836559f72	cuprita/src/controller/audio.rs
+126	29	0bdd96f409bd5a338f82c3bb5e224208480243bdae9abc1f34e4234b8f0fd21b	cuprita/src/controller/mod.rs
+1	0	ea7c1d71cc374aca299a8bde955b3d25aa42e0f9b3cc7346af8d5d7aaf45989f	cuprita/src/main.rs
+56	0	c6cab5933921e32d5f05bb1cd1b115dd16b65e2ea548e09214c229980277fc40	cuprita/tests/qml/tst_audio_page.qml
+1	0	8c04cea8eb3eaf6b27555b530f8682d4813326e3fe97341e8546d6ecf283c09a	docs/version-history.tsv

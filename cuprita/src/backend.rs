@@ -1,11 +1,13 @@
 //! Which backends the controllers drive: the scripted fakes when
 //! `CUPRITA_FAKE=1`, the real clients otherwise. The network is
 //! NetworkManager's and Bluetooth is BlueZ's (with Cuprita's pairing agent);
-//! until CUP-1-E lands the audio client, audio answers `Unavailable` to
-//! everything, as does a section whose service the system bus cannot reach.
+//! audio is PipeWire's, through WirePlumber's `wpctl`. A section whose
+//! service cannot be reached answers `Unavailable` to everything.
 
 use cuprita_core::audio::Audio;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
+use std::time::Duration;
 
 use cuprita_core::agent::{AgentAnswer, AgentRequest};
 use cuprita_core::bluetooth::Bluetooth;
@@ -15,6 +17,7 @@ use cuprita_core::fake::{FakeAudio, FakeBluetooth, FakeNetwork};
 use cuprita_core::model::{AudioSnapshot, BluetoothSnapshot, NetworkSnapshot};
 use cuprita_core::network::Network;
 use cuprita_core::nm::{self, NmNetwork};
+use cuprita_core::wpctl::{self, WpctlAudio};
 
 use crate::controller::Keepalive;
 
@@ -101,15 +104,111 @@ pub fn agent(requests: Sender<AgentRequest>, answers: Receiver<AgentAnswer>) -> 
     }
 }
 
-pub fn audio() -> Box<dyn Audio> {
+/// How often a missing PipeWire session is looked for again.
+const AUDIO_RETRY: Duration = Duration::from_secs(2);
+
+/// The audio backend and the watcher that calls `on_change` when the
+/// PipeWire graph changes. Blocking: call it on the worker. The fake has no
+/// watcher; it only changes through commands, which re-read anyway. When
+/// PipeWire is not there yet, the backend answers `Unavailable` and a thread
+/// looks for it every 2 s; once found it asks for a re-read, and that read
+/// connects the real client and its watcher, without a restart.
+pub fn audio(on_change: impl Fn() + Send + Sync + 'static) -> (Box<dyn Audio>, Option<Keepalive>) {
     if fake() {
-        Box::new(FakeAudio::scripted())
-    } else {
-        Box::new(Offline)
+        return (Box::new(FakeAudio::scripted()), None);
+    }
+    let on_change: Arc<dyn Fn() + Send + Sync> = Arc::new(on_change);
+    let watcher_change = Arc::clone(&on_change);
+    let mut backend = Reconnecting::new(move || {
+        let client = WpctlAudio::connect_session()?;
+        let change = Arc::clone(&watcher_change);
+        // Without the watcher the page still updates after each command.
+        let watcher = wpctl::watch(move || change())
+            .ok()
+            .map(|handle| Box::new(handle) as Keepalive);
+        Ok((Box::new(client) as Box<dyn Audio>, watcher))
+    });
+    if !backend.connect() {
+        let spawned = std::thread::Builder::new()
+            .name("cuprita-audio-retry".to_owned())
+            .spawn(move || loop {
+                std::thread::sleep(AUDIO_RETRY);
+                if WpctlAudio::connect_session().is_ok() {
+                    on_change();
+                    break;
+                }
+            });
+        if let Err(error) = spawned {
+            eprintln!("Cuprita: PipeWire will not be looked for again: {error}");
+        }
+    }
+    (Box::new(backend), None)
+}
+
+/// Ends what outlives the window: the audio watcher's `pw-mon`.
+pub fn shutdown() {
+    if !fake() {
+        wpctl::stop_monitors();
     }
 }
 
-/// The stand-in for a real client that does not exist yet.
+type Connect = Box<dyn FnMut() -> Result<(Box<dyn Audio>, Option<Keepalive>), AudioError> + Send>;
+
+/// An audio backend that connects on demand: until `connect` succeeds every
+/// call answers `Unavailable`, and each snapshot tries again.
+pub struct Reconnecting {
+    connect: Connect,
+    live: Option<(Box<dyn Audio>, Option<Keepalive>)>,
+}
+
+impl Reconnecting {
+    pub fn new(
+        connect: impl FnMut() -> Result<(Box<dyn Audio>, Option<Keepalive>), AudioError>
+            + Send
+            + 'static,
+    ) -> Self {
+        Self {
+            connect: Box::new(connect),
+            live: None,
+        }
+    }
+
+    /// Connects if not yet connected; `true` once connected.
+    pub fn connect(&mut self) -> bool {
+        if self.live.is_none() {
+            self.live = (self.connect)().ok();
+        }
+        self.live.is_some()
+    }
+
+    fn client(&mut self) -> Result<&mut Box<dyn Audio>, AudioError> {
+        self.live
+            .as_mut()
+            .map(|(client, _)| client)
+            .ok_or(AudioError::Unavailable)
+    }
+}
+
+impl Audio for Reconnecting {
+    fn snapshot(&mut self) -> Result<AudioSnapshot, AudioError> {
+        self.connect();
+        self.client()?.snapshot()
+    }
+    fn set_default(&mut self, id: u32) -> Result<(), AudioError> {
+        self.client()?.set_default(id)
+    }
+    fn set_volume(&mut self, id: u32, volume: f32) -> Result<(), AudioError> {
+        self.client()?.set_volume(id, volume)
+    }
+    fn set_muted(&mut self, id: u32, muted: bool) -> Result<(), AudioError> {
+        self.client()?.set_muted(id, muted)
+    }
+    fn set_profile(&mut self, card_id: u32, profile: &str) -> Result<(), AudioError> {
+        self.client()?.set_profile(card_id, profile)
+    }
+}
+
+/// The stand-in for a service that cannot be reached.
 struct Offline;
 
 impl Network for Offline {
@@ -160,20 +259,28 @@ impl Bluetooth for Offline {
     }
 }
 
-impl Audio for Offline {
-    fn snapshot(&mut self) -> Result<AudioSnapshot, AudioError> {
-        Err(AudioError::Unavailable)
-    }
-    fn set_default(&mut self, _id: u32) -> Result<(), AudioError> {
-        Err(AudioError::Unavailable)
-    }
-    fn set_volume(&mut self, _id: u32, _volume: f32) -> Result<(), AudioError> {
-        Err(AudioError::Unavailable)
-    }
-    fn set_muted(&mut self, _id: u32, _muted: bool) -> Result<(), AudioError> {
-        Err(AudioError::Unavailable)
-    }
-    fn set_profile(&mut self, _card_id: u32, _profile: &str) -> Result<(), AudioError> {
-        Err(AudioError::Unavailable)
+#[cfg(test)]
+mod tests {
+    use super::Reconnecting;
+    use cuprita_core::audio::Audio;
+    use cuprita_core::error::AudioError;
+    use cuprita_core::fake::FakeAudio;
+
+    #[test]
+    fn audio_connects_once_pipewire_appears() {
+        let mut attempts = 0;
+        let mut backend = Reconnecting::new(move || {
+            attempts += 1;
+            if attempts < 3 {
+                Err(AudioError::Unavailable)
+            } else {
+                Ok((Box::new(FakeAudio::scripted()) as Box<dyn Audio>, None))
+            }
+        });
+        assert!(!backend.connect());
+        assert_eq!(backend.snapshot(), Err(AudioError::Unavailable));
+        assert_eq!(backend.set_muted(40, true), Err(AudioError::Unavailable));
+        assert_eq!(backend.snapshot().map(|s| s.endpoints.len()), Ok(3));
+        assert_eq!(backend.set_muted(40, true), Ok(()));
     }
 }

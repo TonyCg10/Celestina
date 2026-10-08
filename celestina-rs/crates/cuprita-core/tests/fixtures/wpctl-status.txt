@@ -1,0 +1,60 @@
+PipeWire 'pipewire-0' [1.6.9, toni@cachyos, cookie:1200239385]
+ └─ Clients:
+        32. WirePlumber                         [1.6.9, toni@cachyos, pid:1751]
+        33. pipewire                            [1.6.9, toni@cachyos, pid:1752]
+        47. WirePlumber [client]                [1.6.9, toni@cachyos, pid:1751]
+        65. Zen                                 [1.6.9, toni@cachyos, pid:3542668]
+        78. xdg-desktop-portal-wlr              [1.6.9, toni@cachyos, pid:3097761]
+        83. noctalia                            [1.6.9, toni@cachyos, pid:3097391]
+        94. wpctl                               [1.6.9, toni@cachyos, pid:3597604]
+       107. xdg-desktop-portal                  [1.6.9, toni@cachyos, pid:3097557]
+       115. speech-dispatcher-dummy             [1.6.9, toni@cachyos, pid:12257]
+       120. noctalia                            [1.6.9, toni@cachyos, pid:3097391]
+       128. Claude                              [1.6.9, toni@cachyos, pid:3098609]
+       140. Blueman                             [1.6.9, toni@cachyos, pid:3097389]
+
+Audio
+ ├─ Devices:
+ │      55. Navi 48 HDMI/DP Audio Controller    [alsa]
+ │      56. Brio 100                            [alsa]
+ │      57. USB2.0 Device                       [alsa]
+ │      58. Ryzen HD Audio Controller           [alsa]
+ │  
+ ├─ Sinks:
+ │  *   46. USB2.0 Device Analog Stereo       [vol: 0.00 MUTED]
+ │      92. Navi 48 HDMI/DP Audio Controller Digital Stereo (HDMI) [LG ULTRAGEAR+] [vol: 0.75]
+ │  
+ ├─ Sources:
+ │  *   34. Brio 100 Mono                       [vol: 0.00 MUTED]
+ │      45. USB2.0 Device Mono                  [vol: 0.00 MUTED]
+ │  
+ ├─ Filters:
+ │  
+ └─ Streams:
+       116. speech-dispatcher-dummy                                     
+            117. output_FL       > USB2.0 Device:playback_FL	[init]
+            118. output_FR       > USB2.0 Device:playback_FR	[init]
+       137. Noctalia Spectrum                                           
+             84. monitor_FL     
+             93. input_FL        < USB2.0 Device:monitor_FL	[paused]
+             99. input_FR        < USB2.0 Device:monitor_FR	[paused]
+            110. monitor_FR     
+
+Video
+ ├─ Devices:
+ │      69. Brio 100                            [v4l2]
+ │      70. Brio 100                            [v4l2]
+ │  
+ ├─ Sinks:
+ │  
+ ├─ Sources:
+ │  *   87. Brio 100 (V4L2)                    
+ │  
+ ├─ Filters:
+ │  
+ └─ Streams:
+
+Settings
+ └─ Default Configured Devices:
+         0. Audio/Sink    bluez_output.5C_D3_3D_49_38_BD.1
+         1. Audio/Source  alsa_input.usb-046d_Brio_100_2504APK4LDG8-02.mono-fallback

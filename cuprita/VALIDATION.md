@@ -31,8 +31,9 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Status:** pending
 - **Related implementation:** CUP-1-E
 - **Requires:** the deployed Cuprita on the real session
-- **Procedure:** switch the output to HDMI and back, then mute one application
-- **Pass condition:** sound follows the selected output, and only the muted
-  application goes silent
+- **Procedure:** switch the output to HDMI and back, mute one application,
+  then change a sound card's profile and back
+- **Pass condition:** sound follows the selected output, only the muted
+  application goes silent, and the card plays again on its first profile
 - **Result:** not run
 - **Evidence:** none

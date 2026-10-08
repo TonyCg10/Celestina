@@ -3,8 +3,9 @@
 //! fakes of those traits, and the pure logic the pages lean on. No Qt here,
 //! and no D-Bus in the traits: the NetworkManager client (`nm`, feature `nm`)
 //! and the BlueZ client (`bluez`, feature `bluez`) are the modules that speak
-//! to the bus, over the mechanics they share in `bus`; the adapter lives in
-//! `cuprita/src`.
+//! to the bus, over the mechanics they share in `bus`; the audio client
+//! (`wpctl`, feature `wpctl`) drives WirePlumber's command line. The adapter
+//! lives in `cuprita/src`.
 
 pub mod agent;
 pub mod audio;
@@ -21,3 +22,5 @@ pub mod network;
 pub mod nm;
 pub mod order;
 pub mod volume;
+#[cfg(feature = "wpctl")]
+pub mod wpctl;

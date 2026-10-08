@@ -1,10 +1,10 @@
 //! Prints what the real backends read on this machine, so a client can be
 //! checked against the live system without the window: the network first,
-//! then Bluetooth; audio joins as its client lands.
+//! then Bluetooth, then audio.
 //!
 //! `cargo run -p cuprita-core --example snapshot [-- FLAGS]`:
-//! - `--watch` then prints a line for every coalesced NetworkManager and
-//!   BlueZ change until interrupted;
+//! - `--watch` then prints a line for every coalesced NetworkManager, BlueZ
+//!   and PipeWire change until interrupted;
 //! - `--discover` runs a five-second Bluetooth search and prints the devices
 //!   it leaves;
 //! - `--agent` registers the pairing agent, prints that it did and
@@ -12,14 +12,17 @@
 
 use std::time::Duration;
 
+use cuprita_core::audio::Audio;
 use cuprita_core::bluetooth::Bluetooth;
 use cuprita_core::bluez::{self, BluezBluetooth};
 use cuprita_core::network::Network;
 use cuprita_core::nm::{self, NmNetwork};
+use cuprita_core::wpctl::{self, WpctlAudio};
 
 enum Change {
     Network,
     Bluetooth,
+    Audio,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,6 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:#?}", network.snapshot()?);
     let mut bluetooth = BluezBluetooth::connect_system()?;
     println!("{:#?}", bluetooth.snapshot()?);
+    let mut audio = WpctlAudio::connect_session()?;
+    println!("{:#?}", audio.snapshot()?);
 
     if flag("--discover") {
         bluetooth.set_discovering(true)?;
@@ -59,10 +64,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _network = nm::watch(move || {
             let _ = to_network.send(Change::Network);
         })?;
+        let to_bluetooth = tx.clone();
         let _bluetooth = bluez::watch(move || {
-            let _ = tx.send(Change::Bluetooth);
+            let _ = to_bluetooth.send(Change::Bluetooth);
         })?;
-        println!("watching NetworkManager and BlueZ; Ctrl+C to stop");
+        let _audio = wpctl::watch(move || {
+            let _ = tx.send(Change::Audio);
+        })?;
+        println!("watching NetworkManager, BlueZ and PipeWire; Ctrl+C to stop");
         for change in rx {
             match change {
                 Change::Network => {
@@ -80,6 +89,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         snapshot.powered,
                         snapshot.discovering,
                         snapshot.devices.len()
+                    );
+                }
+                Change::Audio => {
+                    let snapshot = audio.snapshot()?;
+                    println!(
+                        "audio change: endpoints={} streams={} profiles={}",
+                        snapshot.endpoints.len(),
+                        snapshot.streams.len(),
+                        snapshot.profiles.len()
                     );
                 }
             }

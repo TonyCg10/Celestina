@@ -58,4 +58,5 @@ fn main() {
     if let Some(app) = app.as_mut() {
         app.exec();
     }
+    backend::shutdown();
 }

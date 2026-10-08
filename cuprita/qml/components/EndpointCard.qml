@@ -69,17 +69,15 @@ CelestinaSurface {
                 onClicked: card.muteRequested(card.endpoints.defaultId, !card.endpoints.defaultMuted)
             }
 
-            CelestinaSlider {
+            VolumeSlider {
                 anchors.left: mute.right
                 anchors.leftMargin: CelestinaTheme.spaceMd
                 anchors.right: percent.left
                 anchors.rightMargin: CelestinaTheme.spaceMd
                 anchors.verticalCenter: parent.verticalCenter
                 value: card.endpoints.defaultPercent
-                to: 150
-                step: 5
                 Accessible.name: qsTr("Volumen: %1").arg(card.title)
-                onMoved: function(value) {
+                onRequested: function(value) {
                     card.volumeRequested(card.endpoints.defaultId, value / 100)
                 }
             }

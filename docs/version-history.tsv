@@ -233,3 +233,4 @@ cuprita	0.1.0	baseline	AUD-1-P	Adopt the Cuprita Cargo version as the verified b
 cuprita	0.2.0	milestone	CUP-1-B	Add the domain crate with its fakes and the three pages over them
 cuprita	0.3.0	milestone	CUP-1-C	Add the NetworkManager client and bring the network page live
 cuprita	0.4.0	milestone	CUP-1-D	Add the BlueZ client with the pairing agent and bring the Bluetooth page live
+cuprita	0.5.0	milestone	CUP-1-E	Add the PipeWire client and bring the audio page live

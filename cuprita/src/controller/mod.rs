@@ -26,10 +26,6 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-/// How often an idle worker re-reads its snapshot when its backend has no
-/// change signals of its own yet (audio until CUP-1-E).
-const POLL: Duration = Duration::from_secs(5);
-
 /// What a worker reports to the Qt thread.
 pub enum Report<S> {
     Snapshot(Arc<S>),
@@ -47,8 +43,40 @@ enum Message<B: ?Sized> {
     /// Bluetooth adapter off): run and re-read like a job, but not counted
     /// in this section's `busy`, so it reports no `Done`.
     Quiet(Job<B>),
+    /// A command that a later one with the same key supersedes (a volume
+    /// slider's writes): of those queued together, only the last runs.
+    Keyed(String, Job<B>),
     /// The backend reported a change: re-read the snapshot.
     Refresh,
+}
+
+/// What a batch of queued messages comes to: the jobs to run in order (and
+/// whether each reports `Done`), and how many superseded jobs report `Done`
+/// without running. Refreshes collapse into the one re-read after the batch.
+fn plan<B: ?Sized>(batch: Vec<Message<B>>) -> (Vec<(Job<B>, bool)>, usize) {
+    let mut last = std::collections::HashMap::new();
+    for (index, message) in batch.iter().enumerate() {
+        if let Message::Keyed(key, _) = message {
+            last.insert(key.clone(), index);
+        }
+    }
+    let mut jobs = Vec::new();
+    let mut superseded = 0;
+    for (index, message) in batch.into_iter().enumerate() {
+        match message {
+            Message::Job(job) => jobs.push((job, true)),
+            Message::Quiet(job) => jobs.push((job, false)),
+            Message::Keyed(key, job) => {
+                if last.get(&key) == Some(&index) {
+                    jobs.push((job, true));
+                } else {
+                    superseded += 1;
+                }
+            }
+            Message::Refresh => {}
+        }
+    }
+    (jobs, superseded)
 }
 
 /// Whatever must live as long as the worker's backend: a change watcher.
@@ -80,16 +108,6 @@ impl<B: ?Sized> Clone for Worker<B> {
 }
 
 impl<B: ?Sized + Send + 'static> Worker<B> {
-    /// Starts a polled worker over a backend that has no change signals.
-    pub fn spawn<S, R, F>(backend: Box<B>, read: R, report: F) -> Option<Self>
-    where
-        S: Send + Sync + 'static,
-        R: Fn(&mut B) -> Result<S, String> + Send + 'static,
-        F: Fn(Report<S>) + Send + 'static,
-    {
-        Self::start(move |_| (backend, None), Some(POLL), read, report)
-    }
-
     /// Starts the thread. `make` builds the backend on it, given the handle
     /// its watcher calls, and returns whatever keeps that watcher alive;
     /// `poll`, when set, re-reads on a timer as well. `read` takes the
@@ -130,24 +148,30 @@ impl<B: ?Sized + Send + 'static> Worker<B> {
                         Some(every) => inbox.recv_timeout(every),
                         None => inbox.recv().map_err(|_| RecvTimeoutError::Disconnected),
                     };
-                    match message {
-                        Ok(Message::Job(job)) => {
-                            if let Err(message) = job(&mut backend) {
-                                report(Report::Failed(message));
-                            }
+                    let first = match message {
+                        Ok(message) => message,
+                        Err(RecvTimeoutError::Timeout) => {
                             publish(&mut backend, &report);
-                            report(Report::Done);
-                        }
-                        Ok(Message::Quiet(job)) => {
-                            if let Err(message) = job(&mut backend) {
-                                report(Report::Failed(message));
-                            }
-                            publish(&mut backend, &report);
-                        }
-                        Ok(Message::Refresh) | Err(RecvTimeoutError::Timeout) => {
-                            publish(&mut backend, &report);
+                            continue;
                         }
                         Err(RecvTimeoutError::Disconnected) => break,
+                    };
+                    // Everything already queued is handled as one batch, read
+                    // once at its end: a dragged slider or a burst of changes
+                    // costs one re-read, not one per message.
+                    let mut batch = vec![first];
+                    batch.extend(inbox.try_iter());
+                    let (run, superseded) = plan(batch);
+                    let mut done = superseded;
+                    for (job, counted) in run {
+                        if let Err(message) = job(&mut backend) {
+                            report(Report::Failed(message));
+                        }
+                        done += usize::from(counted);
+                    }
+                    publish(&mut backend, &report);
+                    for _ in 0..done {
+                        report(Report::Done);
                     }
                 }
             })
@@ -158,6 +182,16 @@ impl<B: ?Sized + Send + 'static> Worker<B> {
     /// Queues a command; `false` when the worker is gone.
     pub fn run(&self, job: impl FnOnce(&mut B) -> Result<(), String> + Send + 'static) -> bool {
         self.jobs.send(Message::Job(Box::new(job))).is_ok()
+    }
+
+    /// Queues a command that a later one with the same `key` supersedes
+    /// while both wait; `false` when the worker is gone.
+    pub fn run_keyed(
+        &self,
+        key: String,
+        job: impl FnOnce(&mut B) -> Result<(), String> + Send + 'static,
+    ) -> bool {
+        self.jobs.send(Message::Keyed(key, Box::new(job))).is_ok()
     }
 
     /// Queues a command that another section asked for: it reports a failure
@@ -213,5 +247,68 @@ impl<S> Hub<S> {
         state
             .subscribers
             .retain(|deliver| deliver(snapshot.clone()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
+
+    use super::{Report, Worker};
+
+    struct Volumes {
+        writes: Arc<Mutex<Vec<f32>>>,
+    }
+
+    #[test]
+    fn queued_volume_writes_coalesce_into_the_last() {
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let backend_writes = Arc::clone(&writes);
+        let (open, gate) = mpsc::channel::<()>();
+        let (reports, received) = mpsc::channel::<&'static str>();
+        let worker = Worker::<Volumes>::start(
+            move |_| {
+                // Hold the worker until all three writes are queued.
+                let _ = gate.recv();
+                (
+                    Box::new(Volumes {
+                        writes: backend_writes,
+                    }),
+                    None,
+                )
+            },
+            None,
+            |_: &mut Volumes| Ok(()),
+            move |report: Report<()>| {
+                let _ = reports.send(match report {
+                    Report::Snapshot(_) => "snapshot",
+                    Report::Failed(_) => "failed",
+                    Report::Done => "done",
+                });
+            },
+        )
+        .expect("worker thread");
+        for volume in [0.2_f32, 0.5, 0.9] {
+            assert!(
+                worker.run_keyed("volume:40".to_owned(), move |b: &mut Volumes| {
+                    b.writes.lock().expect("lock").push(volume);
+                    Ok(())
+                })
+            );
+        }
+        open.send(()).expect("gate");
+        let seen: Vec<&str> = (0..5)
+            .map(|_| {
+                received
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("report")
+            })
+            .collect();
+        // The first read, one read after the batch, and every command done.
+        assert_eq!(seen, ["snapshot", "snapshot", "done", "done", "done"]);
+        assert_eq!(*writes.lock().expect("lock"), [0.9]);
+        assert!(received.recv_timeout(Duration::from_millis(100)).is_err());
     }
 }

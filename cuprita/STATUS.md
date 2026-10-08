@@ -1,9 +1,9 @@
 # Cuprita status
 
 - **Updated:** 2026-10-08
-- **Implementation:** CUP-1-A, CUP-1-C and CUP-1-D are active; Red runs on
-  NetworkManager and Bluetooth on BlueZ with Cuprita as the pairing agent;
-  Audio reports itself unavailable until CUP-1-E brings its client;
+- **Implementation:** CUP-1-A, CUP-1-C, CUP-1-D and CUP-1-E are active; Red
+  runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
+  agent, and Audio on PipeWire through WirePlumber's `wpctl`;
   `CUPRITA_FAKE=1` runs all three over the scripted backends
 - **Author validation:** `VAL-C`, `VAL-D` and `VAL-E` not yet requested
 
@@ -17,12 +17,12 @@
   signal bars, the device ordering, the pairing-agent state machine and its
   dialog tokens, volume clamping, the NetworkManager client `nm` with its
   change watcher and join follower, and the BlueZ client `bluez` with its
-  change watcher and the exported `org.bluez.Agent1` pairing agent; the two
-  clients share the error classification and the debounced watcher in `bus`
-  (46 tests).
+  change watcher and the exported `org.bluez.Agent1` pairing agent (the two
+  share the error classification and the debounced watcher in `bus`), and
+  the audio client `wpctl` over `wpctl` and `pw-cli` with a watcher that
+  polls every 2 s and wakes on `pw-mon` events (64 tests).
 - `src/controller/` holds the three section controllers (worker thread per
-  section; the network and Bluetooth workers re-read on their service's
-  coalesced change signals, audio still polls every 5 s) and four
+  section, each re-reading when its client's watcher reports a change) and four
   `QAbstractListModel`s that reconcile snapshots by key; the window shows
   their notices in a pill. `src/agent.rs` carries BlueZ's pairing requests
   to `BluetoothController` and the answers back. Airplane mode turns Wi-Fi
@@ -31,13 +31,16 @@
   airplane mode ends.
 - The pages: Wi-Fi and airplane switches with the network list; the adapter
   switch, search and the device list; output and input cards with a default
-  selector, volume and mute, the application streams and the card profile.
+  selector, volume (0–150 % in 1 % steps, a tick at 100 %) and mute, the
+  application streams, and a profile card per sound card with a choice.
   Joining a protected Wi-Fi network without a saved profile asks for its
   passphrase in a dialog; pairing asks in `PairingDialog` (a PIN to type, a
   passkey to confirm, or one to type on the device). «Buscar» spins while the
   adapter searches; a paired device's menu forgets it. Joining and forgetting
   against the live NetworkManager (`VAL-C`) and pairing and forgetting
-  against the live BlueZ (`VAL-D`) await the author's check.
+  against the live BlueZ (`VAL-D`), and switching output, muting an
+  application and changing a profile against the live PipeWire (`VAL-E`),
+  await the author's check.
 
 ## Blockers
 
