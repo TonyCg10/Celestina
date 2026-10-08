@@ -226,3 +226,4 @@ grafita	1.5.0	milestone	GRA-H1-G	Add syntax colouring for every language KSyntax
 celestina-style	1.13.0	milestone	STYLE-G7-AA	Add the pastel palette and livelier usage tiles
 siderita	1.10.0	milestone	SID-H1-O	Add renaming and formatting for external drives
 siderita	1.10.1	bug	SID-H1-P	Add the format dialog for external drives
+siderita	1.10.2	bug	SID-H1-Q	Add the volume's file system to the properties dialog

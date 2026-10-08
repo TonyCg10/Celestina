@@ -14,7 +14,8 @@ use siderita_core::{NavigationHistory, ScanExecutor};
 
 use super::display::display_name;
 use super::qobject;
-use super::{launch_argument, PendingNav};
+use super::session::launch_argument;
+use super::PendingNav;
 use crate::pathkey;
 
 impl qobject::SideritaController {

@@ -76,6 +76,9 @@ pub struct SideritaControllerRust {
     // Bytes of the volume the entry lives on; 0 when `statvfs` refused.
     pub(super) prop_volume_free: f64,
     pub(super) prop_volume_total: f64,
+    pub(super) prop_volume_format: QString,
+    /// Which volume-format lookup is still wanted.
+    pub(super) volume_formats: siderita_core::Latest,
     pub(super) preview_text: QString,
     pub(super) archive_suggestion: QString,
     /// Which compress-name suggestion is still wanted.
@@ -261,6 +264,8 @@ impl Default for SideritaControllerRust {
             prop_is_dir: false,
             prop_volume_free: 0.0,
             prop_volume_total: 0.0,
+            prop_volume_format: QString::default(),
+            volume_formats: siderita_core::Latest::new(),
             preview_text: QString::default(),
             archive_suggestion: QString::default(),
             archive_suggestions: siderita_core::Latest::new(),

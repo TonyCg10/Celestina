@@ -10,6 +10,7 @@ mod embedded;
 mod favorites;
 mod folder_views;
 mod format;
+mod fsformat;
 mod icons;
 mod localzone;
 mod media;

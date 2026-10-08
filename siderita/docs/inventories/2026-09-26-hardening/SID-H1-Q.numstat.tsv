@@ -1,0 +1,37 @@
+# SID-H1-Q exact change inventory
+
+Base revision	2ae8e359c302fea1ec354add4b6a5841ceaacdea
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/docs/evidence/2026-10-08-volume-format.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-Q.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/dialogs/PropertiesDialog.qml
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/controller/navigation.rs
+Pathspec	siderita/src/controller/selection.rs
+Pathspec	siderita/src/controller/session.rs
+Pathspec	siderita/src/controller/state.rs
+Pathspec	siderita/src/fsformat.rs
+Pathspec	siderita/src/main.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	4808bd92897128af83c81b7ef1bbf45d8496dbede09c63c6d0b03e70dbf98621	docs/version-history.tsv
+1	1	dd9e1dab77a58fd5f661aee9f24e6c4e72dfdcfe77a60bf0e4dc72210b67fa47	scripts/architecture-baseline.tsv
+1	1	fe75bafddd2a93b715b0b9b76b9c93debf583ec319a778c9158913097d7eb870	siderita/Cargo.lock
+1	1	9e637fce6aac3b6671beedae6b39ee2b2eaca02f51c993f6d9023e93eafd372a	siderita/Cargo.toml
+48	0	2d1047b8a84184710c982f104550f244d52586d5bf058c6ee8c0abfc54de3691	siderita/docs/evidence/2026-10-08-volume-format.md
+37	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-Q.numstat.tsv
+1	0	69d6b8a911b3df70c20ad91ffd2b12ff3f690dc2596071635a733199e3a41fb0	siderita/docs/plans/active/2026-09-26-hardening.md
+5	0	1134e98d472ca264ac0c7ceeae07b1079d3aacc52890bf9e527914ca9b92ea85	siderita/qml/dialogs/PropertiesDialog.qml
+1	8	f58a1a7359584346eccd1b22446d33ccac8cd2df3d6e0c13ae631fc097f463e6	siderita/src/controller.rs
+2	1	956b227fd5d1c1a45b78d371cfa3016a5d906ec3f5d57a5227d0fc00b26289ff	siderita/src/controller/navigation.rs
+29	1	1dd4a17cfbcf6e5da4c3c7b9c2a22faf9cf3032f23d37b902130c87c16de013b	siderita/src/controller/selection.rs
+8	1	ea97c049ffd381d072dc73d208207b85207d73812684b211325cf6dea6d039a7	siderita/src/controller/session.rs
+5	0	2d07c3bd7f96ae567254399c51cbd77b621c82db4f137f9e8b2d2a1918c179da	siderita/src/controller/state.rs
+403	0	989c1c57811995192b8beadf798d09c30607d8ef5143119e5e42aa730e6c458a	siderita/src/fsformat.rs
+1	0	0bc3f3398d1e9530406a351407f402516eca94357b8798ba2e25f3548686bacc	siderita/src/main.rs

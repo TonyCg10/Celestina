@@ -176,6 +176,11 @@ CelestinaModalLayer {
                         }
                         PropRow {
                             width: parent.width
+                            label: qsTr("Formato")
+                            value: propertiesView.controller.propVolumeFormat
+                        }
+                        PropRow {
+                            width: parent.width
                             label: qsTr("Modificado")
                             value: propertiesView.controller.propModified
                         }

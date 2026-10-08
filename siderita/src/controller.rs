@@ -197,6 +197,7 @@ pub mod qobject {
         #[qproperty(bool, prop_is_dir)]
         #[qproperty(f64, prop_volume_free)]
         #[qproperty(f64, prop_volume_total)]
+        #[qproperty(QString, prop_volume_format)]
         #[qproperty(QString, preview_text)]
         #[qproperty(QString, archive_suggestion)]
         #[qproperty(bool, search_active)]
@@ -743,11 +744,3 @@ pub(crate) use paste::{PasteOutcome, PendingPaste};
 pub(crate) use pendingnav::PendingNav;
 pub(crate) use sorting::{sort_field_from_index, RECENT_LIMIT};
 pub use state::SideritaControllerRust;
-
-/// The first non-flag argument: the location to open. Flags (`--portal`) are
-/// how the process is told *why* it started, not *where*.
-fn launch_argument() -> Option<std::ffi::OsString> {
-    std::env::args_os()
-        .skip(1)
-        .find(|arg| !arg.to_string_lossy().starts_with('-'))
-}

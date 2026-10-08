@@ -9,8 +9,15 @@ use core::pin::Pin;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QString, QStringList};
 
-use super::launch_argument;
 use super::qobject;
+
+/// The first non-flag argument: the location to open. Flags (`--portal`) are
+/// how the process is told *why* it started, not *where*.
+pub(super) fn launch_argument() -> Option<std::ffi::OsString> {
+    std::env::args_os()
+        .skip(1)
+        .find(|arg| !arg.to_string_lossy().starts_with('-'))
+}
 
 impl qobject::SideritaController {
     pub fn saved_window_width(&self) -> i32 {

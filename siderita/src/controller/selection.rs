@@ -6,7 +6,7 @@
 //! are read from their own lists so every row lookup takes the same path.
 
 use core::pin::Pin;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
@@ -381,6 +381,7 @@ impl qobject::SideritaController {
         let volume = props.volume.unwrap_or_default();
         self.as_mut().set_prop_volume_free(volume.free as f64);
         self.as_mut().set_prop_volume_total(volume.total as f64);
+        self.as_mut().request_volume_format(path);
         self.as_mut().set_prop_size(QString::from(
             props
                 .size
@@ -390,6 +391,33 @@ impl qobject::SideritaController {
         ));
 
         self.as_mut().set_properties_pending(true);
+    }
+
+    /// Fills `prop_volume_format` («NTFS · /dev/sda1») from a reader: it is
+    /// empty until the answer lands, and stays empty when it cannot be told, so
+    /// the row hides. Only the latest request's answer is shown.
+    fn request_volume_format(mut self: Pin<&mut Self>, path: PathBuf) {
+        self.as_mut().set_prop_volume_format(QString::default());
+        let Ok(generation) = self.as_mut().rust_mut().get_mut().volume_formats.issue() else {
+            return;
+        };
+        let qt = self.qt_thread();
+        let _ = super::jobs::spawn_reader(move || {
+            let format = crate::fsformat::describe(&path);
+            let _ = qt.queue(move |mut controller| {
+                if controller
+                    .as_mut()
+                    .rust_mut()
+                    .get_mut()
+                    .volume_formats
+                    .accept(generation)
+                {
+                    controller
+                        .as_mut()
+                        .set_prop_volume_format(QString::from(format.as_str()));
+                }
+            });
+        });
     }
 
     pub fn close_properties(self: Pin<&mut Self>) {
