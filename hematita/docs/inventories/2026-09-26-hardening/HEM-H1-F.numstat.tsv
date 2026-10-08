@@ -1,0 +1,19 @@
+# HEM-H1-F exact change inventory
+
+Base revision	55fd83cda9b82fff3d9ebf61e13228e8e105c4ae
+Pathspec	hematita/docs/evidence/2026-10-08-claim-first-activation.md
+Pathspec	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-F.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	hematita/scripts/smoke.sh
+Pathspec	hematita/src/activation.rs
+Pathspec	hematita/src/main.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+56	0	fe5632b8dbe849245f20d06b236f13024da4dd3e4f5b737d67af984405198705	hematita/docs/evidence/2026-10-08-claim-first-activation.md
+19	0	self	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-F.numstat.tsv
+1	0	ab71201e0034ae9d472424f58a6af81533f592cb97afcbcbe9c88c03d3c98398	hematita/docs/plans/active/2026-09-26-hardening.md
+46	1	0e498b03a4af636142610022209ff05326b90b5c4466d23bc4c8e71d981665e8	hematita/scripts/smoke.sh
+219	66	f7b1f5b7dd83cabc00473a43a55e2d7feae8f569802970653abb40925800e191	hematita/src/activation.rs
+7	3	1cd318a6942efd482407b71d682ec29f5916c70bc701411772fae7dd703cb889	hematita/src/main.rs

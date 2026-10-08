@@ -50,9 +50,13 @@ fn main() {
         })
         .unwrap_or_default();
 
-    // A Hematita already running takes this launch: it raises itself (and
-    // browses the folder) and this process leaves without building a window.
-    if activation::hand_off(Some(start_path.as_str()).filter(|p| !p.is_empty())) {
+    // The name is claimed before anything else exists, so two launches in the
+    // same instant end as one window: the bus gives the name to one of them,
+    // and the other asks that one to raise itself (and browse the folder) and
+    // leaves without building a window.
+    if activation::claim(Some(start_path.as_str()).filter(|p| !p.is_empty()))
+        == activation::Launch::HandedOff
+    {
         return;
     }
 

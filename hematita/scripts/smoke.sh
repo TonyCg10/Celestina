@@ -40,6 +40,12 @@ set -u
 #     launch must make it absolute before browsing it. The window must land in
 #     the storage section browsing that one folder ('hematita-start browsing
 #     1'), and the hub must not have called it "not a folder".
+#  9) The race gate: on a private session bus (dbus-run-session), two
+#     launches start in the same instant. The name is claimed before any
+#     window exists, so exactly one must still be alive at the end (124) and
+#     the other must have handed off and left on its own with 0; both opening
+#     is the duplicate window a double-pressed key binding used to leave.
+#     Skipped, and said so, where dbus-run-session is missing.
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
 # real Wayland session.
@@ -157,4 +163,43 @@ if [ -z "$start" ]; then
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, the Services page listed system units, the Storage page listed locations, a folder argument landed in the storage section, no QML errors, no auto-bindings"
+race=skipped
+if command -v dbus-run-session >/dev/null 2>&1; then
+    race_log=$scratch/race.log
+    XDG_CONFIG_HOME=$scratch/config \
+    XDG_DATA_HOME=$scratch/data \
+    XDG_CACHE_HOME=$scratch/cache \
+    XDG_STATE_HOME=$scratch/state \
+    XDG_RUNTIME_DIR=$scratch/run \
+    QT_QPA_PLATFORM=offscreen \
+    QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+        dbus-run-session -- sh -c '
+            timeout 8 "$1" >"$2/race-a.log" 2>&1 &
+            a=$!
+            timeout 8 "$1" >"$2/race-b.log" 2>&1 &
+            b=$!
+            wait "$a"
+            ra=$?
+            wait "$b"
+            rb=$?
+            echo "$ra $rb"' race "$bin" "$scratch" >"$race_log" 2>&1
+    codes=$(tail -1 "$race_log")
+    case $codes in
+        "124 0" | "0 124") ;;
+        *)
+            echo "smoke: two launches on one bus did not end as one window (expected exit codes 124 and 0; got '$codes'); last lines:" >&2
+            tail -5 "$scratch/race-a.log" "$scratch/race-b.log" >&2
+            exit 1
+            ;;
+    esac
+    if grep -q -E 'cannot (claim|hand off)|no session bus' "$scratch/race-a.log" "$scratch/race-b.log"; then
+        echo "smoke: a launch could not claim or hand off on the private bus:" >&2
+        grep -E 'cannot (claim|hand off)|no session bus' "$scratch/race-a.log" "$scratch/race-b.log" >&2
+        exit 1
+    fi
+    race="two launches on one bus ended as one window"
+else
+    race="race gate skipped (no dbus-run-session)"
+fi
+
+echo "smoke: OK — binary alive for 10 s, every section was shown, the first row published the CPU contract, the Sensors page published chips, the Services page listed system units, the Storage page listed locations, a folder argument landed in the storage section, $race, no QML errors, no auto-bindings"
