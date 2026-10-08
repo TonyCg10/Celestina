@@ -1,0 +1,157 @@
+# AUD-1-P exact change inventory
+
+Base revision	f9bca364ed1277679a60ed7394b1726be62c0151
+Pathspec	README.md
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/cuprita-core/Cargo.toml
+Pathspec	celestina-rs/crates/cuprita-core/src/lib.rs
+Pathspec	celestina-style/icons/apps/org.celestina.Cuprita.svg
+Pathspec	cuprita/AGENTS.md
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/README.md
+Pathspec	cuprita/ROADMAP.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/VALIDATION.md
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/docs/evidence/2026-10-08-skeleton.md
+Pathspec	cuprita/docs/evidence/README.md
+Pathspec	cuprita/docs/inventories/README.md
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/docs/plans/active/README.md
+Pathspec	cuprita/docs/plans/archive/README.md
+Pathspec	cuprita/org.celestina.Cuprita.desktop
+Pathspec	cuprita/qml/CelestinaBackdrop.qml
+Pathspec	cuprita/qml/CelestinaButton.qml
+Pathspec	cuprita/qml/CelestinaCapsule.qml
+Pathspec	cuprita/qml/CelestinaFocusRing.qml
+Pathspec	cuprita/qml/CelestinaIcon.qml
+Pathspec	cuprita/qml/CelestinaIconButton.qml
+Pathspec	cuprita/qml/CelestinaIcons.qml
+Pathspec	cuprita/qml/CelestinaInputShield.qml
+Pathspec	cuprita/qml/CelestinaModalLayer.qml
+Pathspec	cuprita/qml/CelestinaRowHighlight.qml
+Pathspec	cuprita/qml/CelestinaScrollBar.qml
+Pathspec	cuprita/qml/CelestinaSectionLabel.qml
+Pathspec	cuprita/qml/CelestinaShadow.qml
+Pathspec	cuprita/qml/CelestinaSurface.qml
+Pathspec	cuprita/qml/CelestinaTextField.qml
+Pathspec	cuprita/qml/CelestinaTheme.qml
+Pathspec	cuprita/qml/CelestinaTreemap.qml
+Pathspec	cuprita/qml/CelestinaUsageList.qml
+Pathspec	cuprita/qml/CelestinaWheelScroll.qml
+Pathspec	cuprita/qml/GlassCard.qml
+Pathspec	cuprita/qml/GlassSurface.qml
+Pathspec	cuprita/qml/ListSection.qml
+Pathspec	cuprita/qml/Main.qml
+Pathspec	cuprita/qml/components/NavItem.qml
+Pathspec	cuprita/qml/components/NavStrip.qml
+Pathspec	cuprita/qml/components/SectionShortcuts.qml
+Pathspec	cuprita/qml/components/Sections.qml
+Pathspec	cuprita/qml/fonts
+Pathspec	cuprita/qml/fonts.qrc
+Pathspec	cuprita/qml/icons
+Pathspec	cuprita/qml/icons.qrc
+Pathspec	cuprita/qml/pages/AudioPage.qml
+Pathspec	cuprita/qml/pages/BluetoothPage.qml
+Pathspec	cuprita/qml/pages/NetworkPage.qml
+Pathspec	cuprita/scripts/build-production.sh
+Pathspec	cuprita/scripts/complete-production.sh
+Pathspec	cuprita/scripts/deploy-production.sh
+Pathspec	cuprita/scripts/qml-tests.sh
+Pathspec	cuprita/scripts/smoke.sh
+Pathspec	cuprita/scripts/status-production.sh
+Pathspec	cuprita/scripts/verify-production.sh
+Pathspec	cuprita/src/activation.rs
+Pathspec	cuprita/src/controller.rs
+Pathspec	cuprita/src/main.rs
+Pathspec	cuprita/tests/qml/tst_strip.qml
+Pathspec	docs/evidence/2026-10-08-cuprita-registration.md
+Pathspec	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-P.numstat.tsv
+Pathspec	docs/plans/active/2026-09-26-monorepo-hardening.md
+Pathspec	docs/projects.toml
+Pathspec	docs/superpowers/plans/2026-10-08-cuprita-foundation.md
+Pathspec	docs/superpowers/specs/2026-10-08-cuprita-design.md
+Pathspec	scripts/glass-canvas-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	scripts/radius-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	288b9e06971f1273324cdf0dbc2a0a55c7793b3903513df0567736b0c524a93d	README.md
+4	0	c2aff43527c1b2634ba9374cd5a81dd727da53bddec122dc565920e13cc785fa	celestina-rs/Cargo.lock
+1	0	cf17564d3ab2087899682fca2cd71c1ecacde1a7391eec50dda7546b49de3256	celestina-rs/Cargo.toml
+8	0	90be19a01335fa866cb990b8c57027ca24f035420aa3fabb3980fa44144f16ba	celestina-rs/crates/cuprita-core/Cargo.toml
+2	0	fa391ecd0acc95bbcbcf6d28609f28f2066b0fd4b028114f79d6a99099ebfee5	celestina-rs/crates/cuprita-core/src/lib.rs
+38	0	70f6de94b7571b26bc607dab0ad1cb6f9f6ecc7bf3096c65b02807bc27e34f18	celestina-style/icons/apps/org.celestina.Cuprita.svg
+44	0	cd028c372c5ee707a707a0f3155f24f901c69466d44420fe487125b0dd4e0177	cuprita/AGENTS.md
+1251	0	9dc22269a0bcc9360428ce864c5ab7706d3facd909c04735e8961792da6e00e6	cuprita/Cargo.lock
+37	0	65930fc4dfd3107317b33a60d3aed82ecb6aa48af0d309b427a74f7c17693af1	cuprita/Cargo.toml
+53	0	7e70c5ad2fd26d69189bede72b74d2893ee1c7dcc045bd5f3d5442d1ca675aab	cuprita/README.md
+50	0	1887e4d681fbb52253f80d183c26eaa58c6052553a5c0b230df1e9496c45860b	cuprita/ROADMAP.md
+17	0	167e31030b565b48e87a525dd1cc77a1d3cf0eadc12d09bc2b48221815cd6867	cuprita/STATUS.md
+38	0	bbc92af72ae9031e8945cc9acb70355f08e8a23b036111c6d513eaeab7c674e0	cuprita/VALIDATION.md
+81	0	899dbe234080c27295b294d8899d819d42b37df113a0680c9ca4d048f239bcb2	cuprita/build.rs
+38	0	bfc5a47d8bb3331b7700ce3776c4dd893ad5c59dbb7954dec6fbd35718921ad8	cuprita/docs/evidence/2026-10-08-skeleton.md
+7	0	6088d96a44331454fc5afc5da46c40984e9832e752eded72dd120c18bffbb0e2	cuprita/docs/evidence/README.md
+4	0	89c545f3c9b54c97ee9317bc8dfade1c786c5f7152b3bc61f2ca8e2d16221822	cuprita/docs/inventories/README.md
+55	0	252df4b8d3344271348beeae6b28a544d5741eb1e8aa4730330f0875c4bd56da	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+8	0	abf3931b4bc040e76a128bfa477b6786f056321d1cd625e854df5e3d87316300	cuprita/docs/plans/active/README.md
+6	0	a6d859bca61b47642698a1f7dc8b86a21cd33470d6f4ec5ada857e18ea97653d	cuprita/docs/plans/archive/README.md
+12	0	46703c65569a56982f98344e96f774f409d17f3890bb18babd252fc47c39ff11	cuprita/org.celestina.Cuprita.desktop
+1	0	3b62a769997026b56b2f32800802f4b94ab76a4313e997b73893242295a9e533	cuprita/qml/CelestinaBackdrop.qml
+1	0	1eb2ab4f2e6b72ca86b14135f7a7c1cc416d8e59063405bda1b7ea0dcd4609c8	cuprita/qml/CelestinaButton.qml
+1	0	1ca1f10ff3232a481597a16d1c38a1582196cd7c5236a71ea92a67018f0361c2	cuprita/qml/CelestinaCapsule.qml
+1	0	bbee65a98530774646e49e6f1843a8bba6f04813f607f1c9d778cd61241f8394	cuprita/qml/CelestinaFocusRing.qml
+1	0	83ba381a1abf9efee47d489672f96cbfe8f0b63166aed127f8b59921f290bf8f	cuprita/qml/CelestinaIcon.qml
+1	0	9110c437c48d946ce99191c578f43a449e577cc33b4c7980dea06cd2f3b289f0	cuprita/qml/CelestinaIconButton.qml
+1	0	43e5ca4ff6b7953f80f4b0dd6f8cd958364af738ade2ae6cbb265b87287629fd	cuprita/qml/CelestinaIcons.qml
+1	0	ca69db62ab6735eb96f61ba3066a9c968aa60816e476c6d4b829f2217f32393d	cuprita/qml/CelestinaInputShield.qml
+1	0	ca736884826ec69092c76d363d2eee080db50bbe0273cea514a15e31de3a985c	cuprita/qml/CelestinaModalLayer.qml
+1	0	14e119a326c35f9d113e2e031721491468f6aa375d4ff8c58e32e83476e5d167	cuprita/qml/CelestinaRowHighlight.qml
+1	0	eb9268b528b5b93e314a70ec14af08f82a55491bf3c1b69b52a37663d809bbad	cuprita/qml/CelestinaScrollBar.qml
+1	0	3649a49f14f26d0487ccebf5c29c90587846916fe87c74a5d577dcbfa5a272b5	cuprita/qml/CelestinaSectionLabel.qml
+1	0	e1ef735ae9330fdf16ef374432c9c3e4d956eb3c8002a1f897182d6e6ee9aa4c	cuprita/qml/CelestinaShadow.qml
+1	0	c680a487129fb18f9c9b9f3f9c1ddff8db11447f31befc22984c95f756a4c3dc	cuprita/qml/CelestinaSurface.qml
+1	0	859908d291e5a0b4de0cdce98b8b1b7265183971fba73f7d008309af0eb54aef	cuprita/qml/CelestinaTextField.qml
+1	0	9061c0c6f525a87b6229ecb2e749f8b4b816ca8a9542fea3de36f512e4d7cdd9	cuprita/qml/CelestinaTheme.qml
+1	0	51b9e1f4409a9981a01d662c5bf351b80f9326d3610e173ce43ff20b08462411	cuprita/qml/CelestinaTreemap.qml
+1	0	e8d18ddec56151a9b6de074f40723454e90280dcd62e689904ceee531b1133ac	cuprita/qml/CelestinaUsageList.qml
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	cuprita/qml/CelestinaWheelScroll.qml
+1	0	bdb8d09c6b297173b022c76c6019c6bde7c0c06c2a2c684df48f94d81228be3e	cuprita/qml/GlassCard.qml
+1	0	703af6df4940243b8efc7d215d246633aee454719b1019014f8da91923637550	cuprita/qml/GlassSurface.qml
+1	0	353a50fd35236ccc7e74e87a2e714762d6fdddd2f4a7c6e38eb64ca38a7f8e29	cuprita/qml/ListSection.qml
+73	0	92266aed2179b11f34665b79f7a43c4f7bfec9a643cecdb64696164092d4bdce	cuprita/qml/Main.qml
+80	0	8d5816bd6f7393038f7a87bd3e98a5ac3825dd2987a08411ae5ad6b2d6fe65af	cuprita/qml/components/NavItem.qml
+62	0	7444314dc45c550c5fba50c6907ab30596da49d430c74a5f630e816c329b199b	cuprita/qml/components/NavStrip.qml
+26	0	ba623895df2e7d738b56fd0e2d4a4d5686824c654ee1485673c13d82a4e5e38e	cuprita/qml/components/SectionShortcuts.qml
+12	0	00e7877703d1f552ebe9b5e32afa6ae68147c6353a8eac854e2367b1ed2a3e7b	cuprita/qml/components/Sections.qml
+1	0	3935470cff944efe2bf871e800c11739a676a7526598dca055c54708021b30e6	cuprita/qml/fonts
+1	0	1dc967e41bbecd7115614140d758961b9575e7c22d45a13aca0fe86f72a14e33	cuprita/qml/fonts.qrc
+1	0	ae5df8f850da89509da04c06c31b851345d0a2e1455f2ce41e1a880d834b46dd	cuprita/qml/icons
+1	0	124fd26e585793a6f0cb00a4dfa3076cddc7e50680709f84a98b05c3bda2091b	cuprita/qml/icons.qrc
+17	0	887a402e0988960bd0c60934f8da37d489e9c33102c2c386a990f9056e67bbe0	cuprita/qml/pages/AudioPage.qml
+17	0	d328b37f9e4f5813772fe9ff134a600f60f1ec6c829a8b1c5e7e4ddc3f0ee082	cuprita/qml/pages/BluetoothPage.qml
+17	0	903e0eb727267a48292807d0028035704ed24bed193b10605f8e7edf21766e49	cuprita/qml/pages/NetworkPage.qml
+19	0	72dfb082df9215a701f917e2b474c2c04f35b284d86fb2e1d3bb484db1e68fec	cuprita/scripts/build-production.sh
+4	0	7bfd5de706f01a4bfd719a7f540d4206cb4885dfda4ac7d5864cf71c86382a03	cuprita/scripts/complete-production.sh
+18	0	1b272f94d8a7c5e0e1025e9d57426ad969056aff2482c8589d556f59083e2d89	cuprita/scripts/deploy-production.sh
+59	0	3e44720eb70f99b87edc1daf1112ed2c40b7d2e87b3476c6c44d7cd3fef430c8	cuprita/scripts/qml-tests.sh
+76	0	a1e26a1158b57b3fe15fee3624bb2862addbefcfd20563705a3b5e82b84cc169	cuprita/scripts/smoke.sh
+12	0	8f9718d4b8102c376acad41929939e4feed3b3404e08071cc264026ad3c469a3	cuprita/scripts/status-production.sh
+33	0	e0518cc43b856d4e70b50d5035881cfa9aeb5c127975d00341b71aea9fc77f7b	cuprita/scripts/verify-production.sh
+165	0	56561350e6d1d074714893d8fbde32b0b5c7a05bbddb05b30f8af0addae2f123	cuprita/src/activation.rs
+28	0	2bf398ca3fb4b1603ba0794c6d38e6f091cacdbbdb677abb7a2f8ee32b5652f5	cuprita/src/controller.rs
+59	0	088862d6e02e216a01735597a7c47f90068085905dabd16f1a119be746971824	cuprita/src/main.rs
+66	0	78ddeb1538013b069ea2f72bfc850fd6587cb2d26bf47f32838eb632402e4059	cuprita/tests/qml/tst_strip.qml
+66	0	0284a673c3ebc0c29e1021b0f6810e343e8ca1b039687e9e60a8759e9881594a	docs/evidence/2026-10-08-cuprita-registration.md
+157	0	self	docs/inventories/2026-09-26-monorepo-hardening/AUD-1-P.numstat.tsv
+1	0	c5e8dd16678be1528e206b8c4ff9c5b7b10246c485d9b46ad58745597a0fb7ed	docs/plans/active/2026-09-26-monorepo-hardening.md
+37	0	1ce1a08ffc459112c541b77efb138a73b8ccb02df6b37065dcd4c3822535f601	docs/projects.toml
+372	0	bd9c7395031c7a52436758c106f074a7e9cdcca5e500b0f3a631dcdc949e6124	docs/superpowers/plans/2026-10-08-cuprita-foundation.md
+199	0	6858b2f23f09081e00348e1e41617895e53f4dc2bb9dab43afff2f93b5423f45	docs/superpowers/specs/2026-10-08-cuprita-design.md
+1	0	2e2f24c37a886c663a71d1e005a91d21b611477c68ffa8042f772ca8ce0a3a61	scripts/glass-canvas-baseline.tsv
+1	0	50ca15ba3d97c069b644fc2cbc393beb687614c7cc11637b1f0d126bee35e340	scripts/qmllint-baseline.tsv
+1	0	32ca0ac2ccce02162dc37b4030ce53d0204e706d7dab73eb81332180e9ba8ce0	scripts/radius-baseline.tsv

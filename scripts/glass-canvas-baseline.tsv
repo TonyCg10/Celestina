@@ -2,6 +2,7 @@
 # same commit that clears the window. Registered in docs/projects.toml as
 # a shared ratchet file so every project prefix may lower its own row.
 # findings<TAB>project
+0	cuprita
 0	fluorita
 0	grafita
 0	hematita

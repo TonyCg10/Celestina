@@ -1,0 +1,8 @@
+[package]
+name = "cuprita-core"
+version = "0.1.0"
+edition = "2021"
+description = "Cuprita's domain: networks, Bluetooth devices and audio endpoints, without Qt"
+license = "MIT"
+
+[dependencies]

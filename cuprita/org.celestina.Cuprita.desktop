@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Cuprita
+GenericName=Centro de control
+Comment=Gestiona la red, el Bluetooth y el audio del equipo
+Exec=cuprita
+Icon=org.celestina.Cuprita
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=red;wifi;bluetooth;audio;sonido;volumen;cuprita;celestina;
+StartupNotify=true
+StartupWMClass=org.celestina.Cuprita

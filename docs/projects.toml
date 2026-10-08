@@ -399,3 +399,40 @@ verification_inputs = ["hematita/scripts/smoke.sh", "celestina-rs/crates/hematit
 component_commit_scopes = [
   { prefix = "hematita-core", roots = ["celestina-rs/crates/hematita-core/"], include_workspace_manifests = true },
 ]
+
+[[projects]]
+id = "cuprita"
+name = "Cuprita"
+path = "cuprita"
+kind = "cxx-qt-application"
+commit_prefix = "cuprita"
+# Registered unversioned first so the registry commit carries no history row;
+# the baseline commit that follows the skeleton declares the Cargo source.
+versioned = false
+agents = "cuprita/AGENTS.md"
+readme = "cuprita/README.md"
+status = "cuprita/STATUS.md"
+roadmap = "cuprita/ROADMAP.md"
+validation = "cuprita/VALIDATION.md"
+active_plans = "cuprita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md", "docs/superpowers/specs/2026-10-08-cuprita-design.md"]
+source_roots = ["cuprita/src", "cuprita/qml", "celestina-rs/crates/cuprita-core"]
+commit_roots = ["cuprita/", "celestina-rs/crates/cuprita-core/"]
+include_workspace_manifests = true
+production_role = "desktop-application"
+deployable = true
+build_script = "cuprita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
+complete_script = "cuprita/scripts/complete-production.sh"
+verify_script = "cuprita/scripts/verify-production.sh"
+deploy_script = "cuprita/scripts/deploy-production.sh"
+status_script = "cuprita/scripts/status-production.sh"
+artifact_manifest = "cuprita/target/production-artifact.toml"
+artifact_paths = ["cuprita/target/release/cuprita"]
+cargo_manifests = ["cuprita/Cargo.toml"]
+production_inputs = ["cuprita/Cargo.toml", "cuprita/Cargo.lock", "cuprita/build.rs", "cuprita/src", "cuprita/qml", "cuprita/org.celestina.Cuprita.desktop", "celestina-style/icons/apps/org.celestina.Cuprita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/cuprita-core"]
+# cuprita-core gains tests/ in CUP-1-B; this list gains that path then.
+verification_inputs = ["cuprita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "cuprita-core", roots = ["celestina-rs/crates/cuprita-core/"], include_workspace_manifests = true },
+]

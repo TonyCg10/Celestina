@@ -366,6 +366,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cuprita-core"
+version = "0.1.0"
+
+[[package]]
 name = "curve25519-dalek"
 version = "4.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

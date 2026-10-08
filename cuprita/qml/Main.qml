@@ -1,0 +1,73 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import org.celestina.cuprita 1.0
+import "components"
+import "pages"
+
+// Cuprita's window. The sections live in a centred pill strip at the top;
+// each page below owns one region and reaches nothing outside itself.
+ApplicationWindow {
+    id: window
+
+    width: 880
+    height: 640
+    minimumWidth: 560
+    minimumHeight: 420
+    visible: true
+    // Transparent: the compositor blurs what lies behind the window and
+    // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
+    color: CelestinaTheme.clear
+    title: "Cuprita"
+
+    property int currentSection: 0
+
+    CelestinaBackdrop {
+        anchors.fill: parent
+    }
+
+    // A second launch asks the running window to come to the front.
+    CupritaActivation {
+        id: activation
+        onRaiseRequested: {
+            window.show()
+            window.raise()
+            window.requestActivate()
+        }
+    }
+
+    // Ctrl+1, Ctrl+2 and Ctrl+3 jump to a section from anywhere.
+    SectionShortcuts {
+        onActivated: function(index) { window.currentSection = index }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: CelestinaTheme.windowMargin
+        spacing: CelestinaTheme.spaceLg
+
+        NavStrip {
+            id: navStrip
+            Layout.alignment: Qt.AlignHCenter
+            model: Sections.all
+            currentIndex: window.currentSection
+            onActivated: function(index) { window.currentSection = index }
+        }
+
+        StackLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: window.currentSection
+
+            NetworkPage { }
+            BluetoothPage { }
+            AudioPage { }
+        }
+    }
+
+    Component.onCompleted: {
+        CelestinaTheme.reducedMotion = CupritaController.reducedMotion
+        activation.start()
+        navStrip.forceActiveFocus()
+    }
+}
