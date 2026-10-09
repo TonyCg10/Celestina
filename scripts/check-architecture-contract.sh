@@ -508,6 +508,19 @@ check_visual_contract() {
         "${glass_roots[@]}"; then
         fail "the glass-canvas contract failed"
     fi
+
+    # The activation contract (CONV-1-A): an application's bus name is claimed
+    # only by celestina-core's shared hand-off; Siderita's FileManager1 and
+    # portal names are the allowlisted exceptions, with reasons, in the script.
+    activation_roots=()
+    while IFS=$'\t' read -r role identifier app_path _qml_root; do
+        if [ "$role" = application ]; then
+            activation_roots+=("$identifier=$app_path")
+        fi
+    done < <(python3 scripts/architecture_scanners.py registry-qml-projects "$registry_file")
+    if ! python3 scripts/activation_contract.py "${activation_roots[@]}"; then
+        fail "the activation contract failed"
+    fi
 }
 
 check_shared_style_links() {

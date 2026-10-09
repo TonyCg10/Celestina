@@ -203,6 +203,9 @@ dependencies = [
 [[package]]
 name = "celestina-core"
 version = "0.1.0"
+dependencies = [
+ "zbus",
+]
 
 [[package]]
 name = "cfg-if"
@@ -617,7 +620,6 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "grafita-core",
- "zbus",
 ]
 
 [[package]]

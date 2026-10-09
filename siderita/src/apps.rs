@@ -8,8 +8,10 @@
 //! blocks — processes and a walk of every application directory — and runs on
 //! a worker thread.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+use celestina_core::activation::{self, ActivationError, ActivationName, HAND_OFF_TIMEOUT};
 
 use celestina_core::{desktop_entry, CancellationToken};
 
@@ -161,9 +163,119 @@ pub fn launch_with(id: &str, path: &Path) -> Result<(), String> {
     }
 }
 
+/// Grafita, Fluorita and Hematita, as Siderita reaches a running instance.
+pub use celestina_core::activation::{FLUORITA, GRAFITA, HEMATITA};
+
+/// Opens `paths` in the application that owns `name`, on a worker thread:
+/// through the bus when an instance is running (one window, a new tab or
+/// view there), else by `spawn`, which hands the program the same paths so
+/// the new instance opens them itself. `done` hears the outcome on that
+/// worker; it queues whatever the Qt side should learn.
+pub fn open_in(
+    name: ActivationName,
+    paths: Vec<PathBuf>,
+    spawn: impl FnOnce(&[PathBuf]) -> Result<(), String> + Send + 'static,
+    done: impl FnOnce(Result<(), OpenFailure>) + Send + 'static,
+) {
+    let worker = std::thread::Builder::new()
+        .name("siderita-open-in".to_owned())
+        .spawn(move || {
+            let answer = activation::open_in(name, &paths, HAND_OFF_TIMEOUT);
+            done(settle(name, answer, || spawn(&paths)));
+        });
+    if let Err(error) = worker {
+        eprintln!("siderita: cannot start the open-in worker: {error}");
+    }
+}
+
+/// Why an `open_in` did not open anything.
+#[derive(Debug, PartialEq, Eq)]
+pub enum OpenFailure {
+    /// An instance owns the name and refused the paths (said on stderr).
+    Unanswered,
+    /// Nobody owned the name and the program could not be started; the
+    /// spawn's own message, already worded for the person.
+    Spawn(String),
+}
+
+/// What an `open_in` answer means: delivered; start the program when nobody
+/// owns the name or the bus cannot settle it (no session bus, a timeout), so
+/// the launch carries on standalone as `claim` does; or a failure when an
+/// owner answered and refused.
+fn settle(
+    name: ActivationName,
+    answer: Result<bool, ActivationError>,
+    spawn: impl FnOnce() -> Result<(), String>,
+) -> Result<(), OpenFailure> {
+    match answer {
+        Ok(true) => Ok(()),
+        Ok(false) => spawn().map_err(OpenFailure::Spawn),
+        Err(error @ ActivationError::Refused(_)) => {
+            eprintln!("siderita: {} refused the paths: {error}", name.0);
+            Err(OpenFailure::Unanswered)
+        }
+        Err(error) => {
+            eprintln!("siderita: cannot reach {}, starting it: {error}", name.0);
+            spawn().map_err(OpenFailure::Spawn)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use celestina_core::activation::ActivationError;
     use celestina_core::desktop_entry::{self, DesktopEntry};
+    use std::cell::Cell;
+
+    #[test]
+    fn a_running_instance_takes_the_paths_and_nothing_is_spawned() {
+        let spawned = Cell::new(false);
+        let outcome = super::settle(super::GRAFITA, Ok(true), || {
+            spawned.set(true);
+            Ok(())
+        });
+        assert_eq!(outcome, Ok(()));
+        assert!(!spawned.get());
+    }
+
+    #[test]
+    fn the_program_is_spawned_only_when_nobody_owns_the_name() {
+        let spawned = Cell::new(false);
+        let outcome = super::settle(super::FLUORITA, Ok(false), || {
+            spawned.set(true);
+            Ok(())
+        });
+        assert_eq!(outcome, Ok(()));
+        assert!(spawned.get());
+
+        let spawned = Cell::new(false);
+        let outcome = super::settle(
+            super::HEMATITA,
+            Err(ActivationError::Refused("no".to_owned())),
+            || {
+                spawned.set(true);
+                Ok(())
+            },
+        );
+        assert_eq!(outcome, Err(super::OpenFailure::Unanswered));
+        assert!(!spawned.get(), "an owner that refused is not shadowed");
+    }
+
+    #[test]
+    fn a_bus_that_cannot_settle_it_starts_the_program_standalone() {
+        for answer in [
+            Err(ActivationError::Bus("no session bus".to_owned())),
+            Err(ActivationError::Timeout),
+        ] {
+            let spawned = Cell::new(false);
+            let outcome = super::settle(super::GRAFITA, answer, || {
+                spawned.set(true);
+                Ok(())
+            });
+            assert_eq!(outcome, Ok(()));
+            assert!(spawned.get());
+        }
+    }
 
     // The suite reads the file; this asks the question this module asks.
     fn parse(content: &str) -> Option<DesktopEntry> {

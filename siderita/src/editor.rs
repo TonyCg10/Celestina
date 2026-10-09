@@ -101,13 +101,19 @@ pub mod qobject {
         #[qinvokable]
         fn request_launch(self: Pin<&mut GrafitaEditor>, path: &QString);
 
-        /// Opens the file the path key `path` names in the standalone Grafita
-        /// application.
+        /// Opens the file the path key `path` names in standalone Grafita: a
+        /// tab in the running window when there is one, else a new process.
         ///
-        /// Reports whether the launcher could be started at all; a missing
-        /// binary is a truthful failure, not a silent no-op.
+        /// False only when `path` is no path key. The rest runs on a worker;
+        /// a failure there sets `error_text` and emits `standalone_failed`,
+        /// which the caller falls back from.
         #[qinvokable]
         fn launch_standalone(self: Pin<&mut GrafitaEditor>, path: &QString) -> bool;
+
+        /// The standalone open of `path` (a path key) failed after
+        /// `launch_standalone` accepted it.
+        #[qsignal]
+        fn standalone_failed(self: Pin<&mut GrafitaEditor>, path: QString);
 
         /// Classifies the file the path key `path` names and opens the editor
         /// when it is editable text.
@@ -242,17 +248,34 @@ impl qobject::GrafitaEditor {
         self.dispatch(outcome);
     }
 
-    pub fn launch_standalone(mut self: Pin<&mut Self>, path: &QString) -> bool {
+    pub fn launch_standalone(self: Pin<&mut Self>, path: &QString) -> bool {
+        let key = path.clone();
         let Ok(path) = crate::pathkey::decode(path) else {
             return false;
         };
-        match crate::controller::shell::spawn_detached("grafita", &path) {
-            Ok(()) => true,
-            Err(error) => {
-                self.as_mut().set_error_text(QString::from(error.as_str()));
-                false
-            }
-        }
+        let qt = self.qt_thread();
+        crate::apps::open_in(
+            crate::apps::GRAFITA,
+            vec![path],
+            |paths| {
+                paths.first().map_or(Ok(()), |path| {
+                    crate::controller::shell::spawn_detached("grafita", path)
+                })
+            },
+            move |outcome| {
+                if let Err(failure) = outcome {
+                    let _ = qt.queue(move |mut editor: Pin<&mut qobject::GrafitaEditor>| {
+                        if let crate::apps::OpenFailure::Spawn(message) = failure {
+                            editor
+                                .as_mut()
+                                .set_error_text(QString::from(message.as_str()));
+                        }
+                        editor.standalone_failed(key);
+                    });
+                }
+            },
+        );
+        true
     }
 
     pub fn apply_text(mut self: Pin<&mut Self>, text: &QString) {

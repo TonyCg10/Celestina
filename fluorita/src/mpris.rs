@@ -298,7 +298,7 @@ impl Root {
 
     #[zbus(property)]
     fn desktop_entry(&self) -> &str {
-        "org.celestina.Fluorita"
+        celestina_core::activation::FLUORITA.0
     }
 
     #[zbus(property)]

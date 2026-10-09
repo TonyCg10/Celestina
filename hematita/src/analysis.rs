@@ -176,8 +176,9 @@ pub mod qobject {
         #[qinvokable]
         fn enter(self: Pin<&mut HematitaAnalysis>, index: i32);
 
-        /// Browses `path` as a new stack of one folder, as if the person had
-        /// entered it; ignored with a diagnostic when it is not a folder.
+        /// Browses the folder the path key `path` names (ADR 0008) as a new
+        /// stack of one folder, as if the person had entered it; ignored with
+        /// a diagnostic when it is no key or not a folder.
         #[qinvokable]
         fn open_path(self: Pin<&mut HematitaAnalysis>, path: &QString);
 
@@ -522,7 +523,13 @@ impl qobject::HematitaAnalysis {
     /// resolves its links on the scan thread, and the tree and every
     /// deletion bounded by it use the resolved path.
     pub fn open_path(mut self: Pin<&mut Self>, path: &QString) {
-        let path = PathBuf::from(path.to_string());
+        let path = match celestina_core::pathkey::decode(&path.to_string()) {
+            Ok(path) => path,
+            Err(error) => {
+                eprintln!("hematita: not a path key, ignored: {error}");
+                return;
+            }
+        };
         if !path.is_dir() {
             eprintln!("hematita: not a folder, ignored: {}", path.display());
             return;

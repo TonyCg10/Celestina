@@ -15,6 +15,12 @@
 
 ## Current checkout truth
 
+- `CONV-1-A` (suite): Fluorita keeps to one player. A launch claims
+  `org.celestina.Fluorita` through `celestina_core::activation`, on a bus
+  connection of its own beside MPRIS; a second `fluorita ARCHIVO` plays its
+  file in the running window (only the first: there is no queue), a folder
+  that is a library source becomes the selected source, and a bare launch
+  raises the window ([evidence](../docs/evidence/2026-10-09-shared-activation.md)).
 - Delivered as `1.3.5`: `FEEDBACK-4-FLU`. Gallery cards, music rows and the
   filmstrip frames paint the shared plate in its Content family — the accent
   at 7 % under the pointer, 26 % and a sink under the finger — replacing two

@@ -194,6 +194,30 @@ ApplicationWindow {
         id: mediaLibrary
     }
 
+    // `org.celestina.Fluorita`: a second `fluorita ARCHIVO` plays its file
+    // here instead of opening a second player; a library folder is selected;
+    // a bare launch only raises this window.
+    FluoritaActivation {
+        id: activation
+
+        function bringForward() {
+            window.show()
+            window.raise()
+            window.requestActivate()
+        }
+
+        onRaiseRequested: activation.bringForward()
+        onOpenRequested: function(key, name, kind) {
+            window.open(key, name, undefined, "", kind)
+            activation.bringForward()
+        }
+        onSourceRequested: function(source) {
+            mediaLibrary.selectSource(source)
+            activation.bringForward()
+        }
+        Component.onCompleted: activation.start()
+    }
+
     FluoritaEditor {
         id: mediaEditor
     }

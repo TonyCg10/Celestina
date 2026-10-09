@@ -23,7 +23,7 @@ Bluetooth on BlueZ; Audio on PipeWire through WirePlumber. See the
 | Area | Responsibility |
 |---|---|
 | `../celestina-rs/crates/cuprita-core` | Models, the three backend traits, fakes and pure logic; no Qt. The NetworkManager client (`nm`, feature `nm`) and the BlueZ client with the pairing agent (`bluez`, feature `bluez`) are its D-Bus modules; the audio client (`wpctl`, feature `wpctl`) drives WirePlumber's `wpctl` and PipeWire's `pw-cli` and `pw-mon` |
-| `src/` | The CXX-Qt controllers and models, worker threads, the real clients, single-instance activation |
+| `src/` | The CXX-Qt controllers and models, worker threads, the real clients, the adapter of the shared single-instance activation (`celestina_core::activation`) |
 | `qml/` | The window, the pill navigation strip and the pages |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Cuprita.desktop` | Desktop discovery |

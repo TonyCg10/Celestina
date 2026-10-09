@@ -24,7 +24,9 @@ hematita-core = { path = "../celestina-rs/crates/hematita-core" }
 # The suite's shared owners: the bounded `.desktop` lookup Hematita reads an
 # application's name and icon through, the bounded reader of every kernel
 # file, and the cancellation token of the storage workers.
-celestina-core = { path = "../celestina-rs/crates/celestina-core" }
+# Feature `activation`: the shared single-instance hand-off on
+# `org.celestina.Hematita` (claim first, inbox until the window attaches).
+celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
 # Sending SIGTERM/SIGKILL, reading the clock tick rate, a mount's capacity
 # and a command line opened without waiting (`statvfs` and `open`, the `fs`
 # feature) without `unsafe`: rustix wraps the syscalls in

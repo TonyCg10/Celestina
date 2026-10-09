@@ -1,0 +1,147 @@
+# CONV-1-A exact change inventory
+
+Base revision	dd13c81e3052870cc306f6454f439600e5fe139c
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/celestina-core/Cargo.toml
+Pathspec	celestina-rs/crates/celestina-core/src/activation.rs
+Pathspec	celestina-rs/crates/celestina-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-core/tests/activation.rs
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/README.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/qml/Main.qml
+Pathspec	cuprita/qml/components/ActivationRoute.qml
+Pathspec	cuprita/src/controller/activation.rs
+Pathspec	cuprita/src/main.rs
+Pathspec	cuprita/tests/qml/fakes/FakeActivation.qml
+Pathspec	cuprita/tests/qml/tst_activation.qml
+Pathspec	docs/evidence/2026-10-09-shared-activation.md
+Pathspec	docs/inventories/2026-10-09-suite-conventions/CONV-1-A.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-suite-conventions.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/superpowers/plans/2026-10-09-suite-conventions.md
+Pathspec	docs/superpowers/specs/2026-10-09-suite-conventions-design.md
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/README.md
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/build.rs
+Pathspec	fluorita/qml/Main.qml
+Pathspec	fluorita/src/activation.rs
+Pathspec	fluorita/src/library.rs
+Pathspec	fluorita/src/library/work.rs
+Pathspec	fluorita/src/main.rs
+Pathspec	fluorita/src/mpris.rs
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/README.md
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/qml/Main.qml
+Pathspec	grafita/src/activation.rs
+Pathspec	grafita/src/main.rs
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/README.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/src/activation.rs
+Pathspec	hematita/src/analysis.rs
+Pathspec	hematita/src/main.rs
+Pathspec	scripts/activation_contract.py
+Pathspec	scripts/check-architecture-contract.sh
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	scripts/test-activation-contract.py
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/README.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/qml/Main.qml
+Pathspec	siderita/qml/components/chrome/ActivationRoute.qml
+Pathspec	siderita/qml/dialogs/FolderUsage.qml
+Pathspec	siderita/src/activation.rs
+Pathspec	siderita/src/apps.rs
+Pathspec	siderita/src/editor.rs
+Pathspec	siderita/src/main.rs
+Pathspec	siderita/src/media.rs
+Pathspec	siderita/src/usage.rs
+Pathspec	siderita/tests/qml/tst_activation_route.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+27	2	41bb1b753161272d97bd9533fce613d7b643b4f28e6712e2b790ce16b74e56b4	ROADMAP.md
+9	6	bd46d8ddca4139425b57f54a4e591cf9ad8c58bf537f5e0301349ad7545cc170	STATUS.md
+3	0	5bbeda7703d44b3f016527598c8af0bec2ca6d204e58baa8bf15628d15e138c8	celestina-rs/Cargo.lock
+11	0	502ad97de262d3e0443491e3c8a3101d296c5569fcc2f6e5af26c24fdc478b24	celestina-rs/crates/celestina-core/Cargo.toml
+478	0	c71a14321c3c93faf2f47bae82096ef2990845f63a30ffa5bd1bc4ac8ec64571	celestina-rs/crates/celestina-core/src/activation.rs
+4	0	980e0df107dbd0b8e0a1849d4c709a8b8257bccbe8b075ae5b5092da9b2c0e42	celestina-rs/crates/celestina-core/src/lib.rs
+173	0	8eae2899cb1fef8d9987f72a859c8670de37054dc749104cd084f09e6941bca7	celestina-rs/crates/celestina-core/tests/activation.rs
+8	1	cbd3acb7882ef75d93b3130f7d41c2972ecacdfeff7726b8db9b9310e4349118	cuprita/Cargo.lock
+4	3	d6ecc19ab1c7f1a1522c3c6805f8347c73e0b983358865d91e3a8ac704739b34	cuprita/Cargo.toml
+1	1	b72fd4321bcc943d32a228691b51e3b43f7dd9ed2d88946c574beec014b61dea	cuprita/README.md
+5	0	834a92f63b0d5f4bec5a9b81b22d8133f78088d829427cc46bf78003e0bccad3	cuprita/STATUS.md
+1	0	b62994c88d4934b3c7b1bc926ae9cafa2ab07b48b1434efd36369c278161a8db	cuprita/build.rs
+5	5	710383ba799c1a20dcf45e2da0470f5885d916b25d64f97c428ae76a00d0fca2	cuprita/qml/Main.qml
+20	0	f42f9bee8de42a49a10196882ecf5ce0b7cad88f3ff165b8d05abbb5018092d3	cuprita/qml/components/ActivationRoute.qml
+80	123	da4f8cb889a8fcfa084b2f79c595b4f33b9e835882232c7d33b5125f46aa9693	cuprita/src/controller/activation.rs
+2	4	cf50d27c72b2f7ea1028b427919f224adf941140ba23f838ea4c70512c63178d	cuprita/src/main.rs
+7	0	406b67974e29b73c11b97558d70a5091b53f917be602a2ea15e92d2847c5071c	cuprita/tests/qml/fakes/FakeActivation.qml
+38	0	a8d29661dc817213db06fd4d6f07c829cd739d6d1968c4f4a49b75eda2c384fc	cuprita/tests/qml/tst_activation.qml
+166	0	f9e05665a8eda7c2d41c3257a4257547fcf45e98093531e535a6fdf67ea044ba	docs/evidence/2026-10-09-shared-activation.md
+147	0	self	docs/inventories/2026-10-09-suite-conventions/CONV-1-A.numstat.tsv
+76	0	5229f3ae6819017cdf992098bdfb088edc5ce7628bf2f1af7077f8bfcbe5781e	docs/plans/active/2026-10-09-suite-conventions.md
+2	1	c916e2df72db0547ddce11827ca78ba16b0fb988ed8de9e8799af2ea5b2fee32	docs/plans/active/README.md
+161	0	66e3f7c3aa9a304a87849a9250527d646638c24b7f762bad61ca2f9e49da2be8	docs/superpowers/plans/2026-10-09-suite-conventions.md
+252	0	9d8df23fd3279728ec688ea7485b31759d54accb4fe0da36da760d509b395d2c	docs/superpowers/specs/2026-10-09-suite-conventions-design.md
+3	0	9899700d8faa1b965c48a2b47530b9cd34fb9906a2d104dcce34c11eee4eeca8	fluorita/Cargo.lock
+3	1	85ae53c8d2ea945c68c50ccd345b50ebe5c2ba3888c59ce8e61ede02fe0a4ff0	fluorita/Cargo.toml
+1	1	7952dba146ea505cc4e245db2fb6da76ca7fb8309a2635321081f883312ff13b	fluorita/README.md
+6	0	f438b14ffb782607e25a12e1532b850b046cfbee4b6ab967cd1cb710ac3d3451	fluorita/ROADMAP.md
+6	0	587e5e082f5085ae44999cab0742f1f7e113848a6be74b903fb22e5bd7907ea5	fluorita/STATUS.md
+1	0	ccb1925892ce6360771c2ddc18ad8d1d62b50a533a3aeb7102bff5eef54b37b4	fluorita/build.rs
+24	0	0a4e83cec5367ae2ca8584c7b6737bd72d3372c57f893c0571c448bc0460e7d4	fluorita/qml/Main.qml
+314	3	b332def05b2fb68a3421c8de4142f22ddf840624d763aafec45205a5260a0401	fluorita/src/activation.rs
+18	0	be974775c7165209ccd54fc1e7265db13213da76d4a7f8db5f65cebb0ce4ece7	fluorita/src/library.rs
+1	1	b8473cba4b2b65fa9f888b3931a908e15562af154bc0353384724cac019530d2	fluorita/src/library/work.rs
+9	3	a62968b87e7342baae67bbd831976693e9296f8ba4f184fa5011980a0b81354a	fluorita/src/main.rs
+1	1	563d36596b5009b011553f5638265ff2b2b29ad129e437cc95ac83bffc6af1d3	fluorita/src/mpris.rs
+3	1	7aeb53c118c80874ab76e9ee144604133ed82586150cc23dcacaa13820bb8770	grafita/Cargo.lock
+4	6	ee6d3e675f0211ecd7f8e19dab702e0fb757cf8b06ed989c797483e325f08938	grafita/Cargo.toml
+1	1	28c9b5b46e7c2b3db8f9340da387088a5919ffba1bc80c8f2479c65cce5c0215	grafita/README.md
+6	0	d98cb293375d56b78295d34c0e3a7c0dd6da89020de8662cda3069b7c134e5f7	grafita/STATUS.md
+4	2	a5ad31b006d39d9b3d47ae3c177dfdcc741288b4a7ef2106b8ba080e8d1e08f2	grafita/qml/Main.qml
+109	80	704b23a580c6204a058432ec6b2611f29defe5332b7000393a9141e7db2a017e	grafita/src/activation.rs
+6	9	416c8beb25e086946d18641494e580cc207faaf8049b2ba26ed6511fbc90c6f2	grafita/src/main.rs
+3	0	f5e512516b87de70c14252ad1d1c8b17577831cad6b5ec92f82917b3363d0d87	hematita/Cargo.lock
+3	1	084838931ecf52234d2361a318a275f4fcc7937531d095624e23d93df60fba2e	hematita/Cargo.toml
+1	1	a29388dbcdf482bdbb19e827e256a3bf1a9997ee1bdca9af61d1f34c72184487	hematita/README.md
+7	0	e51eb232d5acbecb0b5cd7c48f6916bb66b8de08610682ce218e9fce4f6b5918	hematita/STATUS.md
+69	235	7daf95195d9b57d795d60afa877b4fdc37295c464e205133d3ad5a505cebf423	hematita/src/activation.rs
+10	3	ec1e448f271bff31ccb5d8ae6cd946015084ddf72e70e17c33e515153ec88153	hematita/src/analysis.rs
+16	17	4a4d2e33c43106faaea3bf535187e087e9e59c664d225e3f605355c97a582b1d	hematita/src/main.rs
+201	0	e73277845f6334de0aa4e28f38fd968a0e7c71550a38d1062686b2411f0624a0	scripts/activation_contract.py
+13	0	8c279fadfd632d4ee6ed4faa04bd25b506dc568a7e6ec3522ff0013564bbbe2c	scripts/check-architecture-contract.sh
+0	1	9b378cab08a03bd74cb5df15e56dc58a848e3800291380b82668bd32e6228392	scripts/language-baseline.tsv
+9	6	90f569e888a0aebdae92106e540bf2d291ce3b538684f3c8f7776126b652e85a	scripts/qmllint-baseline.tsv
+147	0	fb9975f6a34615e46508f91cafdfbdb1b75ec4f52d9341c14b78c7badd0204a3	scripts/test-activation-contract.py
+3	0	8d1554d1b4a864eb5490fc6a9fe732c19d2b175969c813f83d73041b7dcd2c82	siderita/Cargo.lock
+4	1	9dfa5265597ccf5d0f94e6b63e268ecda22aeaeb9dd28b140edf4609cfac4dc3	siderita/Cargo.toml
+4	0	feb5962656ff530596415cee85629627c1f7c21c31f41f8a639faa43c609b3e5	siderita/README.md
+10	0	5e134f6da43bbaa36794f210d5a0f10ff02aa8f0232926bdcb454f1bc3a40605	siderita/STATUS.md
+2	0	fa51ef0d2bd999fe53228370a2b4e79785daf6d72085fa783e799a7269cd0b96	siderita/build.rs
+44	4	da25e718102b8551f71e00aebaf4451f0c30327c681e48f5b7c2ae931508d845	siderita/qml/Main.qml
+36	0	4c3d7a944a181a73872d9fd06da7b31ff2ea28ca9cdf68275ce525e3ad9aaba9	siderita/qml/components/chrome/ActivationRoute.qml
+3	0	52f700a529f3ae2b220eb96ca8d2b7802cde888de60ed0513b375ee6f7cb261f	siderita/qml/dialogs/FolderUsage.qml
+258	0	5459f58c70a619089c11c58e81d7356b20eb7edc9fe8fe3cd6ab8c1fe7e9e8a4	siderita/src/activation.rs
+113	1	41971e606ffca5a05c9e1002da3cc5ac0af6c64a24e7cd98e612daef0172a714	siderita/src/apps.rs
+35	12	bab1e5b5a391838718ddc512aa0cfdc22b518955613270a5f4c632f6b68f3337	siderita/src/editor.rs
+11	1	4caab4c9a188ce24a386cf0f7c976ed89995d51b19d0d82d836d91204f1af9fd	siderita/src/main.rs
+34	6	1595c0f33d523fcb305e9b64fdb6d6841131bc15272e5e6dc3f45a102ff4aca3	siderita/src/media.rs
+34	10	302a8f257012529fabdeb14e819aa98be140e967963e005904fcfd284b7231a1	siderita/src/usage.rs
+58	0	7653c5f2b7b5d8c220309fb6fa403bbbd07f06cac0612f804968866d334595c3	siderita/tests/qml/tst_activation_route.qml

@@ -13,17 +13,14 @@ use cxx_qt_lib::{
 /// The freedesktop application ID: the installed `.desktop` basename, the icon
 /// name, and — because Qt reports it as the Wayland `app_id` — what the
 /// compositor matches a window against. All three must be this one string.
-const APP_ID: &str = "org.celestina.Grafita";
+const APP_ID: &str = celestina_core::activation::GRAFITA.0;
 
 fn main() {
-    // A Grafita already running takes this document into a tab; this launch
-    // then has nothing to show and leaves without building a window. Opening a
-    // second file should not open a second editor.
-    if let Some(path) = initial_path_buf() {
-        if activation::hand_off(&path) {
-            return;
-        }
-    }
+    // The name is claimed before anything else exists: a Grafita already
+    // running takes this document into a tab (or comes to the front when there
+    // is none), and this launch leaves without building a window.
+    let argv_paths: Vec<std::path::PathBuf> = initial_path_buf().into_iter().collect();
+    activation::claim(&argv_paths);
 
     // Without a platform theme Qt has nobody to ask for a file dialog and
     // draws its own floating window outside this session's portal route. The

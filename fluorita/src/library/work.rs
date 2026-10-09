@@ -824,7 +824,7 @@ pub(crate) fn thumbnail_cache_root() -> Option<PathBuf> {
 /// A directory that is not there is simply not configured — seeding must never
 /// fail a first run, and a library that invented folders would be worse than an
 /// empty one.
-pub(super) fn media_directories() -> XdgMediaDirs {
+pub(crate) fn media_directories() -> XdgMediaDirs {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let existing = |names: &[&str]| -> Option<PathBuf> {
         let home = home.as_ref()?;

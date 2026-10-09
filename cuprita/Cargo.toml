@@ -31,9 +31,10 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # without Qt. This binary adds a window, worker threads and nothing else.
 cuprita-core = { path = "../celestina-rs/crates/cuprita-core" }
 # Single-instance activation: a second `cuprita` raises the running window
-# instead of mapping another one. The session bus is how the suite talks
-# between processes, so this earns zbus rather than a socket protocol.
-zbus = "5"
+# instead of mapping another one. The suite's one claim-first hand-off lives in
+# `celestina-core` (feature `activation`, which brings zbus 5 for the session
+# bus); nothing else of the crate is used here.
+celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
 
 [build-dependencies]
 # Generates the C++ side of the bridges, compiles it and builds the QML

@@ -31,6 +31,7 @@ const QML_FILES: &[&str] = &[
     "qml/ListSection.qml",
     // Cuprita's own composition: Main owns the window, the components own
     // one region each and the pages one section each.
+    "qml/components/ActivationRoute.qml",
     "qml/components/ConnectionRow.qml",
     "qml/components/DeviceRow.qml",
     "qml/components/EmptyLine.qml",

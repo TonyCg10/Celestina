@@ -484,6 +484,12 @@ used to hold are now above it, delivered; what remains conditional is:
   F15 is the instrument that makes it reproducible, so what is missing now is a
   captured report from a real session showing something to fix, and an account
   of Qt owning the final frame swap.
+- **A play queue.** Since CONV-1-A a second launch hands its files to the
+  running player over `org.celestina.Application1`, which plays the first and
+  ignores the rest with a note on stderr, because there is nothing to queue
+  them in. A queue needs its own model beside the folder order F12 follows,
+  and a surface that shows what is waiting; it waits for a measured need
+  ([evidence](../docs/evidence/2026-10-09-shared-activation.md)).
 - **Shell MPRIS presentation**, which requires a shell-owned checkpoint in
   Celestina and preserves Fluorita as the single confirmed playback source.
 

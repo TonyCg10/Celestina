@@ -68,7 +68,7 @@ bounded session, never a file; showing a row never starts playback.
 | `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth, the session/surface handshake and generation-stamped resource contracts; no Qt/decode |
 | `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue and edit recipes, metadata, artwork and the libmpv playback session loop |
 | `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv and the freedesktop-thumbnail image provider |
-| `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, activation and MPRIS2 |
+| `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, argv reading and the adapter of the shared single-instance activation (`celestina_core::activation`), and MPRIS2 |
 | `qml/` | Source sidebar, Gallery, Music and complete player composition |
 | `cpp/` | The narrow toolkit seams unavailable through CXX-Qt: the image probe and the edit canvas that draws and encodes a picture |
 | `../siderita/src/media.rs`, `../siderita/qml/dialogs/` | Separate thin adapter and minimal embedded player |

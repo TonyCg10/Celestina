@@ -934,3 +934,21 @@ fn columns<const N: usize>(rows: &[[String; N]]) -> [QStringList; N] {
     }
     lists
 }
+
+/// The handle of the configured source whose root is exactly `folder`, read
+/// from the stored configuration (the first-run seed when none is stored).
+/// Blocking: reads a file, so it runs off the Qt thread — another launch's
+/// `Open` asks it on the activation worker.
+pub(crate) fn configured_source(folder: &std::path::Path) -> Option<i32> {
+    let sources = match fluorita_engine::source_store::default_path() {
+        Some(path) => {
+            fluorita_engine::source_store::load(&path, &work::media_directories()).sources
+        }
+        None => SourceSet::seeded_from(&work::media_directories()),
+    };
+    sources
+        .sources()
+        .iter()
+        .find(|source| source.root() == folder)
+        .and_then(|source| i32::try_from(source.id().value()).ok())
+}

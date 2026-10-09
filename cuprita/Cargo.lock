@@ -195,6 +195,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "celestina-core"
+version = "0.1.0"
+dependencies = [
+ "zbus",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -284,13 +291,13 @@ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 name = "cuprita"
 version = "1.0.2"
 dependencies = [
+ "celestina-core",
  "cuprita-core",
  "cxx",
  "cxx-gen",
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
- "zbus",
 ]
 
 [[package]]

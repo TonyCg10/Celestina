@@ -1,3 +1,4 @@
+mod activation;
 mod apps;
 mod bookmarks;
 mod controller;
@@ -44,9 +45,18 @@ use cxx_qt_lib::{
 /// Wayland `app_id` — what the compositor matches a window against. All three
 /// must be this one string or the launcher shows a generic icon for a window it
 /// cannot tie back to its entry.
-const APP_ID: &str = "org.celestina.Siderita";
+const APP_ID: &str = celestina_core::activation::SIDERITA.0;
 
 fn main() {
+    // One Siderita window per session: a launch claims the name before
+    // anything exists, and a later one hands its folders (or files, shown
+    // selected in their folder) to it and leaves. A process the bus started
+    // for the portal or for `FileManager1` serves those names only and never
+    // claims this one, or a normal launch would hand off to a hidden window.
+    if !portal::portal_mode() && !dbus::file_manager_mode() {
+        activation::claim(&activation::argv_paths());
+    }
+
     let mut app = QGuiApplication::new();
 
     if let Some(mut app) = app.as_mut() {

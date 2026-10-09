@@ -279,6 +279,9 @@ dependencies = [
 [[package]]
 name = "celestina-core"
 version = "0.1.0"
+dependencies = [
+ "zbus",
+]
 
 [[package]]
 name = "cfg-if"

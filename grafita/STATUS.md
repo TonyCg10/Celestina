@@ -13,6 +13,12 @@
 
 ## Current checkout truth
 
+- `CONV-1-A` (suite): the single instance is the suite's shared
+  claim-first hand-off, `celestina_core::activation`: `OpenDocument` is
+  retired for `org.celestina.Application1` (`Activate()`, `Open(as paths)`);
+  a second `grafita RUTA` opens its document in a tab of the running window,
+  and a bare second `grafita` now raises it instead of opening a second
+  window ([evidence](../docs/evidence/2026-10-09-shared-activation.md)).
 - Delivered as `1.2.4`: `FEEDBACK-4-GRA`. The encoding chooser's rows paint
   the shared plate in its Content family; the tabs keep the Control family and
   gain the sink. See

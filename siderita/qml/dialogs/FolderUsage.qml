@@ -135,6 +135,9 @@ FocusScope {
             section.handoffFailed = false
             section.weave()
         }
+        function onHandoffFailed() {
+            section.handoffFailed = true
+        }
     }
 
     // A Shortcut rather than a key handler: the list and the map accept

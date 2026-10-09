@@ -3,10 +3,13 @@
 # added only when a new application is registered.
 # The siderita row was re-measured under sorted order on 2026-10-08 (AUD-1-N):
 # a correction of the measurement, not new debt.
+# Every row was re-measured on 2026-10-09 under Qt 6.12.0's qmllint (CONV-1-A):
+# the host upgraded from 6.11.1 and the new linter counts differently in every
+# application, on main as well; a correction of the measurement, not new debt.
 # warnings<TAB>project
-17	fluorita
-45	grafita
-4	magnetita
-241	siderita
-0	hematita
-0	cuprita
+56	fluorita
+38	grafita
+38	magnetita
+222	siderita
+26	hematita
+9	cuprita

@@ -23,7 +23,7 @@ on it. It replaces Mission Center.
 | Area | Responsibility |
 |---|---|
 | `../celestina-rs/crates/hematita-core` | Parsers over `/proc` and `/sys` text, rate samplers, the history ring, and the storage analyser's domain; no Qt, and file IO only in `usage` (the walk, the duplicate check, the guarded deletion) |
-| `src/` | The sampling thread and the bounded kernel-file reader, its immutable snapshot, load thresholds, CXX-Qt objects, single-instance activation |
+| `src/` | The sampling thread and the bounded kernel-file reader, its immutable snapshot, load thresholds, CXX-Qt objects, the adapter of the shared single-instance activation (`celestina_core::activation`) |
 | `qml/` | The window, the pill navigation strip and the pages |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Hematita.desktop` | Desktop discovery |

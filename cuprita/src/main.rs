@@ -8,7 +8,7 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, Q
 /// The freedesktop application ID: the installed `.desktop` basename, the icon
 /// name, and, because Qt reports it as the Wayland `app_id`, what the
 /// compositor matches a window against. All three must be this one string.
-const APP_ID: &str = "org.celestina.Cuprita";
+const APP_ID: &str = celestina_core::activation::CUPRITA.0;
 
 fn main() {
     // Without a platform theme Qt has nobody to ask for dialogs and draws its
@@ -20,9 +20,7 @@ fn main() {
     // Claim the single-instance name before any window exists: the loser of
     // a race hands its launch to the winner and leaves here, so two launches
     // a moment apart never build two windows.
-    if let controller::activation::Claim::HandedOff = controller::activation::claim() {
-        return;
-    }
+    controller::activation::claim();
 
     let mut app = QGuiApplication::new();
 

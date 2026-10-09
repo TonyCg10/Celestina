@@ -123,11 +123,16 @@ pub mod qobject {
         fn path_of(self: &SideritaUsage, id: i32) -> QString;
 
         /// Hands the folder the path key `path` names to Hematita's storage
-        /// section through its desktop entry, which applies `%f`. False when
-        /// the launch could not even start; the reason goes to the log and
-        /// the page words the failure.
+        /// section: the running window when there is one, else a launch
+        /// through its desktop entry, which applies `%f`. False only when
+        /// `path` is no path key; a later failure, on the worker, emits
+        /// `handoff_failed` and the page words it.
         #[qinvokable]
         fn open_in_hematita(self: &SideritaUsage, path: &QString) -> bool;
+
+        /// The hand-off `open_in_hematita` accepted did not reach Hematita.
+        #[qsignal]
+        fn handoff_failed(self: Pin<&mut SideritaUsage>);
     }
 
     impl cxx_qt::Threading for SideritaUsage {}
@@ -308,13 +313,32 @@ impl qobject::SideritaUsage {
     }
 
     pub fn open_in_hematita(&self, path: &QString) -> bool {
-        let launched = crate::pathkey::decode(path)
-            .map_err(|error| error.to_string())
-            .and_then(|path| crate::apps::launch_with("org.celestina.Hematita", &path));
-        if let Err(error) = &launched {
-            eprintln!("siderita-usage: cannot open Hematita: {error}");
-        }
-        launched.is_ok()
+        let path = match crate::pathkey::decode(path) {
+            Ok(path) => path,
+            Err(error) => {
+                eprintln!("siderita-usage: cannot open Hematita: {error}");
+                return false;
+            }
+        };
+        let qt = self.qt_thread();
+        crate::apps::open_in(
+            crate::apps::HEMATITA,
+            vec![path],
+            |paths| {
+                paths.first().map_or(Ok(()), |path| {
+                    crate::apps::launch_with(crate::apps::HEMATITA.0, path)
+                })
+            },
+            move |outcome| {
+                if let Err(failure) = outcome {
+                    eprintln!("siderita-usage: cannot open Hematita: {failure:?}");
+                    let _ = qt.queue(|usage: Pin<&mut qobject::SideritaUsage>| {
+                        usage.handoff_failed();
+                    });
+                }
+            },
+        );
+        true
     }
 
     /// Progress of the scan asked under `generation`, when it is current.

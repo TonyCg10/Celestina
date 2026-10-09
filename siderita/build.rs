@@ -44,6 +44,7 @@ const QML_FILES: &[&str] = &[
     // Componentes de presentación de Siderita.
     "qml/components/chrome/GlassPill.qml",
     "qml/components/chrome/HistoryMouseArea.qml",
+    "qml/components/chrome/ActivationRoute.qml",
     "qml/components/chrome/RouteReveal.qml",
     "qml/components/chrome/FloatingButton.qml",
     "qml/components/chrome/HiddenTogglePill.qml",
@@ -244,6 +245,7 @@ fn main() {
         .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
         .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
         .files([
+            "src/activation.rs",
             "src/controller.rs",
             // Exports one function to the thumbnail provider: the picture a
             // file carries inside itself.

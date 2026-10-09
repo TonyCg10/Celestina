@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** CONV-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -187,6 +187,31 @@ The project units of the same program are rows of each project's own plan;
 the build order, exclusions and ledger are in
 [the archived plan](docs/plans/archive/2026-09-26-monorepo-hardening.md), and the
 findings in [the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md).
+
+## CONV-1 — Suite conventions
+
+**Hypothesis:** one shared activation interface, one appearance file,
+open-with inside the suite and drag-and-drop between the applications make the
+five first-party applications behave as one system, each convention with a
+single owner in `celestina-rs` and a guard against private copies.
+
+**Tangible outcome:** a second launch of any application reaches its running
+window; reduced motion and the text scale come from one file edited in
+Cuprita; Siderita opens the suite's applications through the bus and offers
+them in its context menu; Grafita, Fluorita and Magnetita accept drops; the
+conventions are an ADR enforced by the architecture contract.
+
+- [ ] Add the shared activation interface and adopt it in every application
+      (`CONV-1-A`).
+- [ ] Add the shared appearance file with the text scale (`CONV-1-B`).
+- [ ] Add Cuprita's appearance section (`CONV-1-C`).
+- [ ] Add open-with inside the suite (`CONV-1-D`).
+- [ ] Add drag-and-drop between the applications (`CONV-1-E`).
+- [ ] Record the conventions as an ADR and enforce them (`CONV-1-F`).
+
+The build order, exclusions and ledger are in
+[the active plan](docs/plans/active/2026-10-09-suite-conventions.md), and the
+design in [the spec](docs/superpowers/specs/2026-10-09-suite-conventions-design.md).
 
 ## Project implementation fronts
 

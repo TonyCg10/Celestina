@@ -26,12 +26,10 @@ grafita-core = { path = "../celestina-rs/crates/grafita-core" }
 # and another launch hand Grafita URIs, and the rule for which of them name a
 # local file, byte for byte, belongs to the suite rather than to each app.
 # Already linked through grafita-core, so it adds no code to the build.
-celestina-core = { path = "../celestina-rs/crates/celestina-core" }
-# Single-instance activation: a second `grafita RUTA` hands its document to the
-# running window instead of mapping another one. The session bus is how the rest
-# of the suite talks between processes, so this earns zbus rather than inventing
-# a socket protocol of its own.
-zbus = "5"
+# Feature `activation`: the suite's shared single-instance hand-off — a second
+# `grafita RUTA` hands its document to the running window over the session bus
+# (zbus 5, which the crate brings) instead of mapping another one.
+celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
 # Guesses the encoding of a file that is not UTF-8, so the author never has to
 # name it. Mozilla's detector (the one Firefox uses), pure Rust. It lives here
 # and not in grafita-core because Siderita's editor shares that crate and wants

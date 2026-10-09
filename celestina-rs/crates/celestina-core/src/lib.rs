@@ -13,6 +13,8 @@
 //! - [`desktop_entry`] — `.desktop` files: parsing, `Exec` expansion, a bounded
 //!   reader and the one application scan with one shadowing rule.
 //! - [`image`] — whether untrusted cover art is bounded and plausible.
+//! - `activation` (feature `activation`) — one running window per application,
+//!   claimed first and reached over `org.celestina.Application1`.
 //!
 //! Nothing here knows Qt, QML or an application. Every function that touches
 //! the filesystem is blocking and belongs on a worker thread.
@@ -33,6 +35,8 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "activation")]
+pub mod activation;
 pub mod atomic_file;
 pub mod desktop_entry;
 pub mod file_uri;

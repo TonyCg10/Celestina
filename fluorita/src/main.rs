@@ -20,9 +20,17 @@ use cxx_qt_lib::{
 /// The freedesktop application ID: the installed `.desktop` basename, the icon
 /// name, and — because Qt reports it as the Wayland `app_id` — what the
 /// compositor matches a window against. All three must be this one string.
-const APP_ID: &str = "org.celestina.Fluorita";
+const APP_ID: &str = celestina_core::activation::FLUORITA.0;
 
 fn main() {
+    // What this launch was asked to open, read before anything exists: a
+    // Fluorita already running takes it (or comes to the front when there is
+    // nothing) and this launch leaves, so a second file never opens a second
+    // player. MPRIS keeps its own bus connection; this claim is another.
+    let requested = activation::requested_media();
+    let argv_paths: Vec<std::path::PathBuf> = requested.path.iter().cloned().collect();
+    activation::claim(&argv_paths);
+
     let mut app = QGuiApplication::new();
 
     if let Some(mut app) = app.as_mut() {
@@ -40,8 +48,6 @@ fn main() {
     if std::env::var_os("QT_QUICK_CONTROLS_STYLE").is_none() {
         QQuickStyle::set_style(&QString::from("Basic"));
     }
-
-    let requested = activation::requested_media();
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {

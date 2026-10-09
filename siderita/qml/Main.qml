@@ -110,10 +110,13 @@ ApplicationWindow {
         return controller.displayLocationName(p)
     }
 
-    function openTab(path, foreground) {
+    // `reveal`, when given, is the key of an entry in `path` that the new tab
+    // selects once it lands — how a file handed by another launch is shown.
+    function openTab(path, foreground, reveal) {
         const initial = (path === undefined || path === null) ? "" : path
         tabsModel.append({
             initialPath: initial,
+            revealPath: (reveal === undefined || reveal === null) ? "" : reveal,
             title: window.tabTitle(window.activeController, initial)
         })
         if (foreground)
@@ -174,6 +177,20 @@ ApplicationWindow {
     // glyph, a photo thumbnail and an empty tile alike.
     // Los tipos propios de Siderita (pastillas, botones, filas, la vista de
     // carpeta y el panel lateral) viven cada uno en su fichero, junto a éste.
+
+    // `org.celestina.Siderita`: a second `siderita RUTA` hands its folders
+    // (or files) here instead of mapping another window. A portal or
+    // `FileManager1` process never claimed the name, so it has nothing to
+    // attach.
+    SideritaActivation {
+        id: activation
+        Component.onCompleted: activation.start()
+    }
+
+    ActivationRoute {
+        source: activation
+        host: window
+    }
 
     FileManager1Service {
         id: fileManager1
@@ -240,11 +257,14 @@ ApplicationWindow {
             // Text goes to Grafita; anything else — and a Grafita that is not
             // installed — falls back to the desktop's own handler, so a failed
             // launch still opens the file.
-            if (editable && textActivator.launchStandalone(path))
+            if (editable && textActivator.launchStandalone(path)) {
+                window.launchFallback = { path: path, controller: controller, token: token }
                 return
+            }
             if (controller)
                 controller.activateToken(token)
         }
+        onStandaloneFailed: function(path) { window.fallBackFrom(path) }
     }
 
     // Clasifica y lanza; nunca abre una sesión. Es el mismo patrón que
@@ -253,6 +273,21 @@ ApplicationWindow {
     // carpeta.
     SideritaPlayer {
         id: mediaActivator
+        onStandaloneFailed: function(path) { window.fallBackFrom(path) }
+    }
+
+    // The entry a standalone launch was last handed. The launch goes through
+    // the bus on a worker, so a failure arrives later as a signal; the
+    // desktop's own handler then opens the file, as a failed spawn always did.
+    property var launchFallback: null
+
+    function fallBackFrom(path) {
+        const pending = window.launchFallback
+        if (!pending || pending.path !== path)
+            return
+        window.launchFallback = null
+        if (pending.controller)
+            pending.controller.activateToken(pending.token)
     }
 
     // Called by every activation site instead of `controller.activateToken`.
@@ -277,8 +312,10 @@ ApplicationWindow {
         // A Fluorita that is not installed falls back to the desktop's own
         // handler, so a failed launch still opens the file.
         if (mediaActivator.isMedia(path)) {
-            if (mediaActivator.launchStandalone(path))
+            if (mediaActivator.launchStandalone(path)) {
+                window.launchFallback = { path: path, controller: controller, token: token }
                 return
+            }
             controller.activateToken(token)
             return
         }
@@ -526,6 +563,7 @@ ApplicationWindow {
 
                     required property int index
                     required property string initialPath
+                    required property string revealPath
 
                     anchors.fill: parent
                     visible: index === window.currentTabIndex
@@ -559,6 +597,8 @@ ApplicationWindow {
                                 doc.tabController.startAt(tabHolder.initialPath)
                             else
                                 doc.tabController.start()
+                            if (tabHolder.revealPath.length > 0)
+                                doc.tabController.revealPath(tabHolder.revealPath)
                         }
 
                         Component.onCompleted: startIfNeeded()
@@ -627,7 +667,7 @@ ApplicationWindow {
         // la carpeta que se pase por línea de órdenes —esa sí manda—. El historial
         // de atrás/adelante de los botones del ratón es de la sesión y se
         // construye desde aquí, así que abrir en Inicio no lo rompe.
-        tabsModel.append({ initialPath: "", title: "…" })
+        tabsModel.append({ initialPath: "", revealPath: "", title: "…" })
         window.currentTabIndex = 0
         // Activated by the portal to serve a file chooser: this process has no
         // main window, only the pickers it is asked for. Activated for

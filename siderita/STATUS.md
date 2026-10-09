@@ -15,6 +15,16 @@
 
 ## Current checkout truth
 
+- `CONV-1-A` (suite): Siderita keeps to one window. A launch claims
+  `org.celestina.Siderita` through `celestina_core::activation` before any
+  window exists; a later `siderita RUTA…` hands its paths over
+  `org.celestina.Application1.Open`, where a folder opens a tab of its own and
+  a file a tab on its folder with the file selected, and a bare launch raises
+  the window. A `--portal` or `--file-manager` process never claims it, and
+  `FileManager1` and the portal are unchanged. Opening a file in Grafita or
+  Fluorita, and a folder in Hematita, goes to the running instance through
+  the bus on a worker, and spawns the program only when nobody owns its name
+  ([evidence](../docs/evidence/2026-10-09-shared-activation.md)).
 - `SID-H1-C` (P-15 of the 2026-09-26 audit): quitting cancels every running
   job and waits (up to ten seconds) for each worker's rollback, so a copy is
   no longer killed halfway under its final name; a job ends from its worker,

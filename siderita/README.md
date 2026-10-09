@@ -12,6 +12,10 @@ and bounded in-place Grafita/Fluorita actions.
   view/play media with embedded Fluorita. Double-click/`Enter` opens the owning
   standalone application. The canonical mapping is
   [the content-activation contract](../docs/contracts/content-activation.md).
+- One window: a second `siderita RUTA` hands its folders to the running one
+  over `org.celestina.Application1` (the suite's shared activation in
+  `celestina_core::activation`), and opening a file in Grafita or Fluorita
+  reaches their running window the same way before starting a new one.
 - Compressing and extracting are ordinary loss-free file operations: `.zip`,
   `.tar` and `.tar.gz` are read and `.zip` and `.tar.gz` are written in
   process; `.rar` and `.7z` are extracted by an installed `7z`, `7za`, `7zz`

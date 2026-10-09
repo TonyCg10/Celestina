@@ -32,11 +32,11 @@ ApplicationWindow {
     // A second launch asks the running window to come to the front.
     CupritaActivation {
         id: activation
-        onRaiseRequested: {
-            window.show()
-            window.raise()
-            window.requestActivate()
-        }
+    }
+
+    ActivationRoute {
+        source: activation
+        host: window
     }
 
     // Ctrl+1, Ctrl+2 and Ctrl+3 jump to a section from anywhere.

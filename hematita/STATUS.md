@@ -193,6 +193,13 @@
 
 ## Current checkout truth
 
+- `CONV-1-A` (suite): HEM-H1-F's claim-first hand-off moved into
+  `celestina_core::activation` (HEM-16 done by reference). The served
+  interface is now the suite's `org.celestina.Application1`
+  (`Activate()`, `Open(as paths)` with byte-exact path keys) instead of
+  `org.celestina.Hematita`'s `Open(s)`; behaviour is unchanged: a second
+  launch raises the window and browses the folder it was handed
+  ([evidence](../docs/evidence/2026-10-09-shared-activation.md)).
 - The project is registered and builds a release binary at `1.2.2`, the
   version deployed to the author's prefix. The window shows the pill strip
   with six sections, each with its page: Performance, Processes,

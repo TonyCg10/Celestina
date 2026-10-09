@@ -68,7 +68,6 @@
 1	grafita/qml/components/TabStrip.qml
 3	grafita/scripts/run.sh
 13	grafita/scripts/smoke.sh
-1	grafita/src/activation.rs
 12	grafita/src/session.rs
 1	grafita/src/url.rs
 3	magnetita/org.celestina.Magnetita.desktop

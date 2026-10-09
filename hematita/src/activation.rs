@@ -1,38 +1,18 @@
-//! One Hematita.
+//! Hematita's side of the suite's activation interface.
 //!
-//! A launch claims the bus name before it builds anything. The bus serialises
-//! the claims, so of two launches in the same instant exactly one is answered
-//! primary owner: it serves `Activate` and `Open` and goes on to open the
-//! window. The other finds the name taken, asks the owner to raise itself
-//! (and to browse the folder it was handed, if any) and exits without a
-//! window. Claiming after the window, as before, left a gap the width of the
-//! QML load in which both launches found nobody and both opened.
-//!
-//! The served object exists before the Qt side does: a request that arrives
-//! before the QML attaches waits in a bounded inbox and is replayed onto the
-//! Qt thread when it does. Failing to reach the bus is never fatal: the launch
-//! says so once and opens its own window.
+//! The claim-first hand-off that used to live here (HEM-H1-F) is now
+//! `celestina_core::activation`, which claims `org.celestina.Hematita`, serves
+//! `org.celestina.Application1` and keeps early requests in its inbox. This
+//! adapter only turns those requests into Qt work: `Activate` raises the
+//! window, `Open` browses the first folder in the storage section.
 
+use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::sync::OnceLock;
 
+use celestina_core::activation::{self, Activatable, Owner};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
-
-const SERVICE: &str = "org.celestina.Hematita";
-const OBJECT: &str = "/org/celestina/Hematita";
-const INTERFACE: &str = "org.celestina.Hematita";
-
-/// How long a launch waits for the running window to answer `Activate` or
-/// `Open` before it gives up and opens its own window: a hung owner must not
-/// hang the launch.
-const HAND_OFF_TIMEOUT: Duration = Duration::from_secs(3);
-
-/// How many requests the inbox keeps for the Qt side before it attaches; the
-/// window is seconds away, and a peer flooding the name gets its oldest
-/// requests dropped rather than unbounded memory.
-const INBOX_LIMIT: usize = 8;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -51,7 +31,8 @@ pub mod qobject {
         #[qsignal]
         fn raise_requested(self: Pin<&mut HematitaActivation>);
 
-        /// Another launch handed this window a folder to browse.
+        /// Another launch handed this window a folder to browse, as its path
+        /// key.
         #[qsignal]
         fn open_requested(self: Pin<&mut HematitaActivation>, path: QString);
 
@@ -70,256 +51,109 @@ pub struct HematitaActivationRust {
     started: bool,
 }
 
+static QT: OnceLock<cxx_qt::CxxQtThread<qobject::HematitaActivation>> = OnceLock::new();
+static OWNER: OnceLock<Owner> = OnceLock::new();
+
 impl qobject::HematitaActivation {
     pub fn start(mut self: Pin<&mut Self>) {
         if self.rust().started {
             return;
         }
         self.as_mut().rust_mut().started = true;
-        if let Some(claim) = CLAIM.get() {
-            lock(&claim.inbox).attach(self.qt_thread());
+        let _ = QT.set(self.qt_thread());
+        if let Some(owner) = OWNER.get() {
+            owner.attach();
         }
     }
 }
 
-/// How a launch goes on after the claim.
+/// What the window is asked to do.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Launch {
-    /// This process owns the name, or could not reach the bus: open a window.
-    Window,
-    /// A running window took this launch: exit without one.
-    HandedOff,
-}
-
-/// What a peer asked of the window.
-#[derive(Debug, PartialEq, Eq)]
-enum Request {
+enum Action {
     Raise,
     Open(String),
 }
 
-/// Where a request ends up once the Qt side is attached.
-trait Sink {
-    fn deliver(&self, request: Request);
+/// Where actions go: the Qt thread in the application, a recorder in tests.
+trait Sink: Send + 'static {
+    fn deliver(&self, action: Action);
 }
 
-impl Sink for cxx_qt::CxxQtThread<qobject::HematitaActivation> {
-    fn deliver(&self, request: Request) {
-        // A queue that fails means the Qt object is gone: the window is
-        // closing and nobody is left to raise.
-        let _ = self.queue(
-            move |activation: Pin<&mut qobject::HematitaActivation>| match request {
-                Request::Raise => activation.raise_requested(),
-                Request::Open(path) => activation.open_requested(QString::from(path.as_str())),
-            },
-        );
-    }
-}
+struct QtSink;
 
-/// The requests between the bus and the Qt thread: delivered straight through
-/// once a sink is attached, kept (bounded, oldest dropped) until then.
-struct Inbox<S> {
-    sink: Option<S>,
-    pending: Vec<Request>,
-}
-
-impl<S: Sink> Inbox<S> {
-    const fn new() -> Self {
-        Self {
-            sink: None,
-            pending: Vec::new(),
-        }
-    }
-
-    fn deliver(&mut self, request: Request) {
-        match &self.sink {
-            Some(sink) => sink.deliver(request),
-            None => {
-                if self.pending.len() >= INBOX_LIMIT {
-                    self.pending.remove(0);
-                }
-                self.pending.push(request);
-            }
-        }
-    }
-
-    fn attach(&mut self, sink: S) {
-        for request in self.pending.drain(..) {
-            sink.deliver(request);
-        }
-        self.sink = Some(sink);
-    }
-}
-
-type SharedInbox = Arc<Mutex<Inbox<cxx_qt::CxxQtThread<qobject::HematitaActivation>>>>;
-
-/// A poisoned inbox still holds valid requests: a panic elsewhere must not
-/// strand the hand-off.
-fn lock<S>(inbox: &Mutex<Inbox<S>>) -> std::sync::MutexGuard<'_, Inbox<S>> {
-    inbox
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
-
-/// The name this process owns, kept for its lifetime: dropping the connection
-/// would release the name and let the next launch open a second window.
-struct Claim {
-    _connection: zbus::blocking::Connection,
-    inbox: SharedInbox,
-}
-
-static CLAIM: OnceLock<Claim> = OnceLock::new();
-
-/// The served object. It owns no Qt state: it hands every request to the
-/// inbox, which reaches the Qt thread once the window has attached.
-struct Activation {
-    inbox: SharedInbox,
-}
-
-#[zbus::interface(name = "org.celestina.Hematita")]
-impl Activation {
-    fn activate(&self) {
-        lock(&self.inbox).deliver(Request::Raise);
-    }
-
-    fn open(&self, path: String) {
-        lock(&self.inbox).deliver(Request::Open(path));
-    }
-}
-
-/// Claims the activation name for this launch, before any window exists.
-///
-/// Owning it answers `Window`. Finding it owned asks that owner to raise
-/// itself, and with `path` to browse that folder (`Open`) instead of only
-/// raising (`Activate`), and answers `HandedOff` when it did: this launch
-/// should exit. Any failure to reach the bus, to claim, or to be answered
-/// within [`HAND_OFF_TIMEOUT`] is said once on stderr and answers `Window`,
-/// so two running Hematitas always have a reason on record.
-#[must_use]
-pub fn claim(path: Option<&str>) -> Launch {
-    let inbox: SharedInbox = Arc::new(Mutex::new(Inbox::new()));
-    let connection = zbus::blocking::connection::Builder::session()
-        .and_then(|builder| {
-            builder.serve_at(
-                OBJECT,
-                Activation {
-                    inbox: Arc::clone(&inbox),
+impl Sink for QtSink {
+    fn deliver(&self, action: Action) {
+        // A failed queue means the window is closing: nobody is left to raise.
+        if let Some(qt) = QT.get() {
+            let _ = qt.queue(
+                move |activation: Pin<&mut qobject::HematitaActivation>| match action {
+                    Action::Raise => activation.raise_requested(),
+                    Action::Open(path) => activation.open_requested(QString::from(path.as_str())),
                 },
-            )
-        })
-        .map(|builder| builder.method_timeout(HAND_OFF_TIMEOUT))
-        .and_then(zbus::blocking::connection::Builder::build);
-    let connection = match connection {
-        Ok(connection) => connection,
-        Err(error) => {
-            eprintln!("hematita: no session bus, cannot keep to one window: {error}");
-            return Launch::Window;
+            );
         }
-    };
-    // `DoNotQueue`: without it a second instance sits in the name's queue and
-    // inherits the name the moment the first exits, stranding a process.
-    match connection
-        .request_name_with_flags(SERVICE, zbus::fdo::RequestNameFlags::DoNotQueue.into())
+    }
+}
+
+/// Turns the shared requests into Hematita's actions.
+struct Forward<S>(S);
+
+impl<S: Sink> Activatable for Forward<S> {
+    fn activate(&self) {
+        self.0.deliver(Action::Raise);
+    }
+
+    fn open(&self, paths: Vec<PathBuf>) {
+        // One storage view: the first folder is browsed, the rest are not.
+        // The folder crosses as its path key, byte-exact (ADR 0008).
+        if paths.len() > 1 {
+            eprintln!("hematita: browsing the first of {} folders", paths.len());
+        }
+        match paths.into_iter().next() {
+            Some(path) => self
+                .0
+                .deliver(Action::Open(celestina_core::pathkey::encode(&path))),
+            None => self.0.deliver(Action::Raise),
+        }
+    }
+}
+
+/// Claims Hematita's name before any window exists. A running window that
+/// takes this launch ends the process here (status 0); otherwise the owner is
+/// kept for `start` to attach.
+pub fn claim(argv_paths: &[PathBuf]) {
+    if let Some(owner) =
+        activation::claim_or_exit(activation::HEMATITA, Box::new(Forward(QtSink)), argv_paths)
     {
-        Ok(_) => {
-            // `claim` runs once, from `main`; a second call would be a bug,
-            // and the connection it built is dropped with its name.
-            let _ = CLAIM.set(Claim {
-                _connection: connection,
-                inbox,
-            });
-            Launch::Window
-        }
-        Err(zbus::Error::NameTaken) => hand_off(&connection, path),
-        Err(error) => {
-            eprintln!("hematita: cannot claim {SERVICE}, opening a window anyway: {error}");
-            Launch::Window
-        }
-    }
-}
-
-/// Asks the window that owns the name to raise itself, or to browse `path`.
-fn hand_off(connection: &zbus::blocking::Connection, path: Option<&str>) -> Launch {
-    let proxy = match zbus::blocking::Proxy::<'_>::new(connection, SERVICE, OBJECT, INTERFACE) {
-        Ok(proxy) => proxy,
-        Err(error) => {
-            eprintln!("hematita: cannot hand off to the running window: {error}");
-            return Launch::Window;
-        }
-    };
-    let answer = match path {
-        // An older running instance has no `Open`: raising it still beats
-        // opening a second window.
-        Some(path) => match proxy.call::<_, _, ()>("Open", &(path,)) {
-            Err(error) if method_unknown(&error) => proxy.call::<_, _, ()>("Activate", &()),
-            other => other,
-        },
-        None => proxy.call::<_, _, ()>("Activate", &()),
-    };
-    match answer {
-        Ok(()) => Launch::HandedOff,
-        Err(error) => {
-            eprintln!("hematita: cannot hand off to the running window: {error}");
-            Launch::Window
-        }
-    }
-}
-
-/// Whether a failed `Open` means the running instance predates it.
-fn method_unknown(error: &zbus::Error) -> bool {
-    match error {
-        zbus::Error::MethodError(name, _, _) => {
-            name.as_str() == "org.freedesktop.DBus.Error.UnknownMethod"
-        }
-        zbus::Error::FDO(fdo) => matches!(**fdo, zbus::fdo::Error::UnknownMethod(_)),
-        _ => false,
+        let _ = OWNER.set(owner);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Inbox, Request, Sink, INBOX_LIMIT};
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use super::{Action, Forward, Sink};
+    use celestina_core::activation::Activatable;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default)]
-    struct Recorder(Rc<RefCell<Vec<Request>>>);
+    struct Recorder(Arc<Mutex<Vec<Action>>>);
 
     impl Sink for Recorder {
-        fn deliver(&self, request: Request) {
-            self.0.borrow_mut().push(request);
+        fn deliver(&self, action: Action) {
+            self.0.lock().expect("recorder").push(action);
         }
     }
 
     #[test]
-    fn requests_before_the_window_attaches_are_replayed_in_order() {
-        let mut inbox = Inbox::new();
-        inbox.deliver(Request::Raise);
-        inbox.deliver(Request::Open("/tmp".to_owned()));
-        let sink = Recorder::default();
-        inbox.attach(sink.clone());
+    fn an_open_reaches_the_storage_view_with_the_first_folder() {
+        let recorder = Recorder::default();
+        let forward = Forward(recorder.clone());
+        forward.open(vec![PathBuf::from("/srv/mis datos"), PathBuf::from("/tmp")]);
+        forward.activate();
         assert_eq!(
-            *sink.0.borrow(),
-            vec![Request::Raise, Request::Open("/tmp".to_owned())]
-        );
-        inbox.deliver(Request::Raise);
-        assert_eq!(sink.0.borrow().len(), 3);
-    }
-
-    #[test]
-    fn the_inbox_keeps_only_the_newest_requests_until_then() {
-        let mut inbox = Inbox::new();
-        for n in 0..(INBOX_LIMIT + 3) {
-            inbox.deliver(Request::Open(n.to_string()));
-        }
-        let sink = Recorder::default();
-        inbox.attach(sink.clone());
-        let kept = sink.0.borrow();
-        assert_eq!(kept.len(), INBOX_LIMIT);
-        assert_eq!(kept[0], Request::Open("3".to_owned()));
-        assert_eq!(
-            kept[INBOX_LIMIT - 1],
-            Request::Open((INBOX_LIMIT + 2).to_string())
+            *recorder.0.lock().expect("recorder"),
+            vec![Action::Open("/srv/mis%20datos".to_owned()), Action::Raise]
         );
     }
 }

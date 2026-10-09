@@ -28,7 +28,7 @@ silently reinterpreted.
 | Area | Responsibility |
 |---|---|
 | `../celestina-rs/crates/grafita-core` | Text probing, byte/newline-preserving document, edit history, search, tabs/session outcomes and safe file IO; no Qt |
-| `src/` | Standalone CXX-Qt adapter, activation, bounded workers and desktop integration |
+| `src/` | Standalone CXX-Qt adapter, the adapter of the shared activation (`celestina_core::activation`), bounded workers and desktop integration |
 | `cpp/` | Syntax colouring through KDE's KSyntaxHighlighting, painted from `CelestinaTheme` colours, and bracket matching beside the caret |
 | `qml/` | Standalone window, document tabs and editor presentation |
 | `../siderita/src/editor.rs` | Thin Siderita adapter over the same core |

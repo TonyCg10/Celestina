@@ -13,6 +13,11 @@
 
 ## Current checkout truth
 
+- `CONV-1-A` (suite): the single instance is the suite's shared
+  claim-first hand-off, `celestina_core::activation`, on
+  `org.celestina.Application1`; a second `cuprita` still raises the running
+  window, and `Open` does the same since Cuprita opens no files
+  ([evidence](../docs/evidence/2026-10-09-shared-activation.md)).
 - 1.0.0 is published (the landing deploys it to the author's test prefix). The window
   shows the
   pill strip with Red, Bluetooth and Audio; Ctrl+1, Ctrl+2 and Ctrl+3 jump

@@ -8,3 +8,14 @@ license.workspace = true
 [lints]
 workspace = true
 
+
+[features]
+# The shared single-instance hand-off (`activation`). Off by default so the
+# crates that never touch the bus keep their dependency closure.
+activation = ["dep:zbus"]
+
+[dependencies]
+# The session bus is how the suite's processes reach each other; every
+# application already links zbus 5, so `activation` adds no new runtime to
+# them. Blocking API only, on zbus's own async-io executor thread.
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"], optional = true }

@@ -93,13 +93,19 @@ pub mod qobject {
         #[qinvokable]
         fn request_preview(self: Pin<&mut SideritaPlayer>, path: &QString);
 
-        /// Opens the file the path key `path` names in standalone Fluorita.
+        /// Opens the file the path key `path` names in standalone Fluorita:
+        /// the running player when there is one, else a new process.
         ///
-        /// Reports whether the launcher could be started at all; a missing
-        /// binary is a truthful failure the caller falls back from, not a
-        /// silent no-op.
+        /// False only when `path` is no path key. The rest runs on a worker;
+        /// a failure there emits `standalone_failed`, which the caller falls
+        /// back from.
         #[qinvokable]
         fn launch_standalone(self: Pin<&mut SideritaPlayer>, path: &QString) -> bool;
+
+        /// The standalone open of `path` (a path key) failed after
+        /// `launch_standalone` accepted it.
+        #[qsignal]
+        fn standalone_failed(self: Pin<&mut SideritaPlayer>, path: QString);
 
         /// Whether the file the path key `path` names is media this app would
         /// hand to Fluorita at all. Decided from the name alone, so it costs
@@ -260,8 +266,30 @@ impl qobject::SideritaPlayer {
     }
 
     pub fn launch_standalone(self: core::pin::Pin<&mut Self>, path: &QString) -> bool {
-        crate::pathkey::decode(path)
-            .is_ok_and(|path| crate::controller::shell::spawn_detached("fluorita", &path).is_ok())
+        let key = path.clone();
+        let Ok(path) = crate::pathkey::decode(path) else {
+            return false;
+        };
+        let qt = self.qt_thread();
+        crate::apps::open_in(
+            crate::apps::FLUORITA,
+            vec![path],
+            |paths| {
+                paths.first().map_or(Ok(()), |path| {
+                    crate::controller::shell::spawn_detached("fluorita", path)
+                })
+            },
+            move |outcome| {
+                if outcome.is_err() {
+                    let _ = qt.queue(
+                        move |player: core::pin::Pin<&mut qobject::SideritaPlayer>| {
+                            player.standalone_failed(key);
+                        },
+                    );
+                }
+            },
+        );
+        true
     }
 
     pub fn is_media(self: core::pin::Pin<&mut Self>, path: &QString) -> bool {

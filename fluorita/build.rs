@@ -123,6 +123,7 @@ fn main() {
         // header is watched through `rerun_paths`.
         .cpp_file(fluorita_qt::THUMBNAIL_PROVIDER_SOURCE)
         .files([
+            "src/activation.rs",
             "src/library.rs",
             "src/player.rs",
             "src/batch.rs",

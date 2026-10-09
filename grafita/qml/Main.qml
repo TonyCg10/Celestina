@@ -363,10 +363,12 @@ ApplicationWindow {
     }
 
     // A second `grafita RUTA` hands its document here instead of mapping another
-    // window. Best-effort: without a session bus this simply never fires and
-    // every launch opens its own window, which is where Grafita started.
+    // window, and a second bare `grafita` raises this one. Best-effort: without
+    // a session bus this never fires and every launch opens its own window.
     GrafitaActivation {
         id: activation
+
+        onRaiseRequested: window.requestActivate()
 
         onOpenRequested: function(path) {
             window.openTab(path)

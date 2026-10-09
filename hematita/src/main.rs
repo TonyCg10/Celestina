@@ -25,7 +25,7 @@ use cxx_qt_lib::{
 /// The freedesktop application ID: the installed `.desktop` basename, the icon
 /// name, and — because Qt reports it as the Wayland `app_id` — what the
 /// compositor matches a window against. All three must be this one string.
-const APP_ID: &str = "org.celestina.Hematita";
+const APP_ID: &str = celestina_core::activation::HEMATITA.0;
 
 fn main() {
     // Without a platform theme Qt has nobody to ask for dialogs and draws its
@@ -34,19 +34,22 @@ fn main() {
         std::env::set_var("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
     }
 
-    // The folder to browse on arrival, if one was handed (`Exec=hematita %f`).
-    // Read as OS text so a non-UTF-8 argument cannot panic; such a path
-    // becomes lossy and the hub ignores it as not a folder.
-    // Made absolute here, against this launch's working directory, before it
-    // crosses to a running instance over D-Bus or onto the browse stack; a
-    // path `absolute` cannot handle stays as given and `open_path` reports it.
-    let start_path = std::env::args_os()
+    // The folder to browse on arrival, if one was handed (`Exec=hematita %f`),
+    // read as OS text so a non-UTF-8 argument cannot panic. It crosses to a
+    // running instance byte-exact (the shared hand-off makes it absolute
+    // against this launch's working directory), and to this window as its
+    // path key, absolute too; the hub ignores it if it is not a folder.
+    let argv_paths: Vec<std::path::PathBuf> = std::env::args_os()
         .nth(1)
+        .map(std::path::PathBuf::from)
+        .into_iter()
+        .collect();
+    let start_path = argv_paths
+        .first()
         .map(|arg| {
-            std::path::absolute(&arg)
-                .map_or(arg, std::path::PathBuf::into_os_string)
-                .to_string_lossy()
-                .into_owned()
+            celestina_core::pathkey::encode(
+                &std::path::absolute(arg).unwrap_or_else(|_| arg.clone()),
+            )
         })
         .unwrap_or_default();
 
@@ -54,11 +57,7 @@ fn main() {
     // same instant end as one window: the bus gives the name to one of them,
     // and the other asks that one to raise itself (and browse the folder) and
     // leaves without building a window.
-    if activation::claim(Some(start_path.as_str()).filter(|p| !p.is_empty()))
-        == activation::Launch::HandedOff
-    {
-        return;
-    }
+    activation::claim(&argv_paths);
 
     let mut app = QGuiApplication::new();
 

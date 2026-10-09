@@ -22,7 +22,10 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
     "qt_qml",
     "qt_quickcontrols",
 ] }
-celestina-core = { path = "../celestina-rs/crates/celestina-core" }
+# Feature `activation`: the suite's shared single-instance hand-off. Siderita
+# claims `org.celestina.Siderita` with it and reaches a running Grafita,
+# Fluorita or Hematita through it before spawning one (zbus 5, already here).
+celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
 siderita-core = { path = "../celestina-rs/crates/siderita-core" }
 siderita-archive = { path = "../celestina-rs/crates/siderita-archive" }
 siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
