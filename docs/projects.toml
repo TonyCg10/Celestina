@@ -444,9 +444,10 @@ name = "Calcita"
 path = "calcita"
 kind = "cxx-qt-application"
 commit_prefix = "calcita"
-# Registered unversioned first so the registry commit carries no history row;
-# the author's baseline commit after the landing declares the Cargo source.
-versioned = false
+version_source = { kind = "cargo-package", path = "calcita/Cargo.toml", package = "calcita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "calcita/Cargo.lock", package = "calcita" },
+]
 agents = "calcita/AGENTS.md"
 readme = "calcita/README.md"
 status = "calcita/STATUS.md"
@@ -469,7 +470,6 @@ artifact_manifest = "calcita/target/production-artifact.toml"
 artifact_paths = ["calcita/target/release/calcita"]
 cargo_manifests = ["calcita/Cargo.toml"]
 production_inputs = ["calcita/Cargo.toml", "calcita/Cargo.lock", "calcita/build.rs", "calcita/src", "calcita/qml", "calcita/org.celestina.Calcita.desktop", "celestina-style/icons/apps/org.celestina.Calcita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/calcita-core"]
-# calcita-core gains tests/ in CAL-1-A; this list gains that path then.
 verification_inputs = ["calcita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "calcita-core", roots = ["celestina-rs/crates/calcita-core/"], include_workspace_manifests = true },
