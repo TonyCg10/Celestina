@@ -1,3 +1,8 @@
+// The segment delegate reaches the control, the row and the label by id.
+// Bound, those are legal references; unbound, every consumer's qmllint
+// counted each one as an unqualified access (five per registering host).
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 

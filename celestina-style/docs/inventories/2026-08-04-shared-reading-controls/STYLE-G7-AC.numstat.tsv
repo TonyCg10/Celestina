@@ -1,0 +1,19 @@
+# STYLE-G7-AC exact change inventory
+
+Base revision	c2d71ddbf85e53e288126eddb920248fe1aaad8c
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaSegmentedControl.qml
+Pathspec	celestina-style/docs/evidence/2026-10-09-segmented-control-lint.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AC.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	32ddb0b0dfd3afd0e09675ee66628a2fe30fce6cf287ccdf65984ffdad4b6dc9	celestina-style/CMakeLists.txt
+5	0	5cce24fcf62cded8799b43c722659339abbc956bb686d1e92da08709eff460a4	celestina-style/CelestinaSegmentedControl.qml
+73	0	ae39e2ac4dc15658d2e1db6c44f242f9301d00bd98993e5e0646293de375cbba	celestina-style/docs/evidence/2026-10-09-segmented-control-lint.md
+19	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AC.numstat.tsv
+1	0	24e648c95e6c4fa6e462a10fb3767a806092e1bf7ca2ca003af392f5efee4050	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+1	0	1a9c437780eb8df00744ed85a6ad9fb232eaabc12476e7dbcd3309f339ddbd83	docs/version-history.tsv
