@@ -12,8 +12,11 @@ macro_rules! section_error {
             Unavailable,
             /// The service refused: policy or authorisation.
             Denied,
-            /// The named object does not exist (any more).
+            /// The named object does not exist (any more); empty when the
+            /// service did not say which.
             NotFound(String),
+            /// The service is busy with an operation of the same kind.
+            Busy,
             /// Anything else, with the service's own detail.
             Failed(String),
         }
@@ -24,9 +27,20 @@ macro_rules! section_error {
                 match self {
                     Self::Unavailable => format!("{} no está disponible", $service),
                     Self::Denied => "No tienes permiso para hacer eso".to_owned(),
+                    Self::NotFound(what) if what.is_empty() => "Eso ya no existe".to_owned(),
                     Self::NotFound(what) => format!("No se encuentra «{what}»"),
+                    Self::Busy => "Ya hay una operación en curso; inténtalo de nuevo".to_owned(),
                     Self::Failed(detail) => format!("No se pudo completar: {detail}"),
                 }
+            }
+        }
+
+        impl $name {
+            /// A failure the service described only in its own technical
+            /// words: those go to the log, the notice says this.
+            #[must_use]
+            pub fn service_failed() -> Self {
+                Self::Failed("el servicio respondió con un error".to_owned())
             }
         }
 

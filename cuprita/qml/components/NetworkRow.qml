@@ -76,6 +76,7 @@ Item {
         switch (key) {
         case "psk": return qsTr("Protegida")
         case "enterprise": return qsTr("Empresarial")
+        case "wep": return qsTr("WEP (no admitida)")
         default: return qsTr("Abierta")
         }
     }

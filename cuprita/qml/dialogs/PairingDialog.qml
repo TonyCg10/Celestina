@@ -108,6 +108,10 @@ CelestinaModalLayer {
             anchors.rightMargin: CelestinaTheme.spaceLg
             anchors.topMargin: CelestinaTheme.spaceMd
             placeholderText: qsTr("Código")
+            // BlueZ's `RequestPinCode` asks for a text PIN (most devices
+            // expect digits, some accept letters), so the hint does not
+            // restrict it; it stays out of input-method history.
+            inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
             Accessible.name: qsTr("Código")
             onAccepted: {
                 if (pinField.text.length > 0)

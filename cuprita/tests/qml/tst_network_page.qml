@@ -113,15 +113,57 @@ TestCase {
         keyClick(Qt.Key_E)
         keyClick(Qt.Key_T)
         compare(field.text, "secret")
+        // Six characters: too short for a WPA passphrase.
+        const confirm = findChild(dialog, "confirmButton")
+        verify(!confirm.enabled)
+        verify(findChild(dialog, "lengthHint").visible)
+        keyClick(Qt.Key_Return)
+        compare(host.fake.calls, [])
+        keyClick(Qt.Key_1)
+        keyClick(Qt.Key_2)
+        compare(field.text, "secret12")
+        verify(confirm.enabled)
+        verify(!findChild(dialog, "lengthHint").visible)
         mouseClick(findChild(dialog, "revealButton"))
         compare(field.echoMode, TextInput.Normal)
-        const confirm = findChild(dialog, "confirmButton")
         waitForRendering(host.page)
         mouseClick(confirm)
-        compare(host.fake.calls, ["connect:neighbour:secret"])
+        compare(host.fake.calls, ["connect:neighbour:secret12"])
         verify(!confirm.enabled)
         tryCompare(dialog, "shown", false)
         compare(field.text, "")
+    }
+
+    function test_the_passphrase_length_gates_connect() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        const dialog = findChild(host.page, "wifiPasswordDialog")
+        dialog.ask("neighbour", "Neighbour")
+        tryCompare(dialog, "shown", true)
+        const field = findChild(dialog, "passwordField")
+        const confirm = findChild(dialog, "confirmButton")
+        const hint = findChild(dialog, "lengthHint")
+        verify(field.inputMethodHints & Qt.ImhSensitiveData)
+        verify(field.inputMethodHints & Qt.ImhNoPredictiveText)
+        // Empty: disabled, but no hint yet.
+        verify(!confirm.enabled)
+        verify(!hint.visible)
+        field.text = "1234567"
+        verify(!confirm.enabled)
+        verify(hint.visible)
+        field.text = "12345678"
+        verify(confirm.enabled)
+        field.text = "a".repeat(63)
+        verify(confirm.enabled)
+        field.text = "g".repeat(64)
+        verify(!confirm.enabled)
+        verify(hint.visible)
+        // Sixty-four hexadecimal digits are the raw key.
+        field.text = "0123456789abcdef".repeat(4)
+        verify(confirm.enabled)
+        field.text = "g".repeat(70)
+        dialog.confirm()
+        compare(host.fake.calls, [])
+        dialog.close()
     }
 
     function test_a_connecting_row_ignores_another_join() {

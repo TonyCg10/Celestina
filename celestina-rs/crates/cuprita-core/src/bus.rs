@@ -1,15 +1,17 @@
 //! What the two system-bus clients (`nm`, `bluez`) share: how a D-Bus failure
 //! reads as a section error, and the signal watcher that coalesces a burst of
-//! a service's signals into one call. Each client keeps its own names, paths
-//! and filter; only the bus mechanics live here.
+//! a service's signals into one call, and how a proxy to one of their objects
+//! is built. Each client keeps its own names, paths and filter; only the bus
+//! mechanics live here.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use zbus::blocking::{Connection, MessageIterator};
+use zbus::blocking::{Connection, MessageIterator, Proxy};
 use zbus::message::Type as MessageType;
+use zbus::proxy::CacheProperties;
 use zbus::{DBusError, MatchRule, Message};
 
 /// A D-Bus failure, before it becomes one section's error type.
@@ -17,9 +19,16 @@ use zbus::{DBusError, MatchRule, Message};
 pub(crate) enum Fault {
     /// Policy or polkit refused.
     Denied,
-    /// The service is not running or the bus cannot be reached.
+    /// The service is not running, the bus cannot be reached, or the service
+    /// is not ready for the call (BlueZ's adapter is off, NetworkManager has
+    /// no device that can carry the connection).
     Unavailable,
-    /// Anything else, with the service's detail (or the error name).
+    /// The object the call named does not exist (any more).
+    NotFound,
+    /// The service is already busy with an operation of the same kind.
+    Busy,
+    /// Anything else, with the service's detail (or the error name). Only
+    /// logged: the notice says a short Spanish sentence instead.
     Failed(String),
 }
 
@@ -42,14 +51,25 @@ pub(crate) fn error_name(error: &zbus::Error) -> Option<(String, Option<String>)
 }
 
 /// An error name and its detail as a fault. NetworkManager names a polkit
-/// refusal `…PermissionDenied`, the bus itself `…AccessDenied`.
+/// refusal `…PermissionDenied`, the bus itself `…AccessDenied`; a vanished
+/// object is NetworkManager's `UnknownConnection` or `UnknownDevice`, BlueZ's
+/// `DoesNotExist` or the bus's `UnknownObject`; BlueZ says `NotReady` while
+/// the adapter is off and NetworkManager `ConnectionNotAvailable` when no
+/// device can carry the profile; both say `InProgress` (BlueZ also `Busy`)
+/// for a second call while one runs.
 pub(crate) fn fault_of_name(name: &str, detail: Option<String>) -> Fault {
-    if name.ends_with("PermissionDenied") || name.ends_with("AccessDenied") {
-        Fault::Denied
-    } else if name.ends_with("ServiceUnknown") || name.ends_with("NameHasNoOwner") {
-        Fault::Unavailable
-    } else {
-        Fault::Failed(detail.unwrap_or_else(|| name.to_owned()))
+    let last = name.rsplit('.').next().unwrap_or(name);
+    match last {
+        "PermissionDenied" | "AccessDenied" | "NotAuthorized" => Fault::Denied,
+        "ServiceUnknown" | "NameHasNoOwner" | "NotReady" | "ConnectionNotAvailable" => {
+            Fault::Unavailable
+        }
+        "UnknownConnection" | "UnknownDevice" | "DoesNotExist" | "UnknownObject" => Fault::NotFound,
+        "InProgress" | "Busy" => Fault::Busy,
+        _ => Fault::Failed(match detail {
+            Some(detail) => format!("{name}: {detail}"),
+            None => name.to_owned(),
+        }),
     }
 }
 
@@ -65,6 +85,44 @@ pub(crate) fn fault(error: zbus::Error) -> Fault {
 
 pub(crate) fn fdo_fault(error: zbus::fdo::Error) -> Fault {
     fault(zbus::Error::FDO(Box::new(error)))
+}
+
+/// A D-Bus failure as one section's error.
+pub(crate) fn map_error<E: From<Fault>>(error: zbus::Error) -> E {
+    fault(error).into()
+}
+
+/// A property write's failure as one section's error.
+pub(crate) fn map_fdo<E: From<Fault>>(error: zbus::fdo::Error) -> E {
+    fdo_fault(error).into()
+}
+
+/// A proxy to `destination`'s object at `path`, for `interface`, that reads
+/// every property afresh: the clients re-read on each snapshot and a cached
+/// value would hide a change between two signals.
+pub(crate) fn proxy<'a, E: From<Fault>>(
+    connection: &Connection,
+    destination: &'static str,
+    path: &'a str,
+    interface: &'a str,
+) -> Result<Proxy<'a>, E> {
+    zbus::blocking::proxy::Builder::new(connection)
+        .destination(destination)
+        .and_then(|b| b.path(path))
+        .and_then(|b| b.interface(interface))
+        .map(|b| b.cache_properties(CacheProperties::No))
+        .and_then(|b| b.build())
+        .map_err(map_error)
+}
+
+/// A system-bus connection whose every method call gives up after
+/// `timeout`, so a hung service or an unanswered prompt frees the worker.
+/// zbus sets this per connection (`connection::Builder::method_timeout`).
+pub(crate) fn system_connection<E: From<Fault>>(timeout: Duration) -> Result<Connection, E> {
+    zbus::blocking::connection::Builder::system()
+        .map(|b| b.method_timeout(timeout))
+        .and_then(|b| b.build())
+        .map_err(map_error)
 }
 
 /// How long the watcher waits for a burst of signals to settle.
@@ -173,23 +231,29 @@ pub(crate) fn signal_header(message: &Message) -> (String, String, String) {
 }
 
 /// Turns a fault into one section's error; each section's error enum has
-/// the same four shapes (see `error.rs`).
+/// the same shapes (see `error.rs`). The service's own detail is English and
+/// technical: it goes to the log, and the notice says a Spanish sentence.
 macro_rules! section_from_fault {
-    ($error:ty) => {
+    ($error:ty, $label:literal) => {
         impl From<Fault> for $error {
             fn from(fault: Fault) -> Self {
                 match fault {
                     Fault::Denied => Self::Denied,
                     Fault::Unavailable => Self::Unavailable,
-                    Fault::Failed(detail) => Self::Failed(detail),
+                    Fault::NotFound => Self::NotFound(String::new()),
+                    Fault::Busy => Self::Busy,
+                    Fault::Failed(detail) => {
+                        eprintln!("cuprita: {}: {detail}", $label);
+                        Self::service_failed()
+                    }
                 }
             }
         }
     };
 }
 
-section_from_fault!(crate::error::NetworkError);
-section_from_fault!(crate::error::BluetoothError);
+section_from_fault!(crate::error::NetworkError, "NetworkManager");
+section_from_fault!(crate::error::BluetoothError, "BlueZ");
 
 #[cfg(test)]
 mod tests {
@@ -210,11 +274,61 @@ mod tests {
                 "org.freedesktop.NetworkManager.UnknownConnection",
                 Some("no such profile".to_owned())
             ),
-            Fault::Failed("no such profile".to_owned())
+            Fault::NotFound
+        );
+        assert_eq!(
+            fault_of_name("org.freedesktop.NetworkManager.UnknownDevice", None),
+            Fault::NotFound
+        );
+        assert_eq!(
+            fault_of_name("org.bluez.Error.DoesNotExist", None),
+            Fault::NotFound
+        );
+        assert_eq!(
+            fault_of_name("org.bluez.Error.NotReady", None),
+            Fault::Unavailable
+        );
+        assert_eq!(
+            fault_of_name(
+                "org.freedesktop.NetworkManager.ConnectionNotAvailable",
+                None
+            ),
+            Fault::Unavailable
+        );
+        assert_eq!(
+            fault_of_name("org.bluez.Error.InProgress", None),
+            Fault::Busy
+        );
+        assert_eq!(fault_of_name("org.bluez.Error.Busy", None), Fault::Busy);
+        assert_eq!(
+            fault_of_name(
+                "org.bluez.Error.Failed",
+                Some("Input/output error".to_owned())
+            ),
+            Fault::Failed("org.bluez.Error.Failed: Input/output error".to_owned())
         );
         assert_eq!(
             fdo_fault(zbus::fdo::Error::AccessDenied("polkit".to_owned())),
             Fault::Denied
+        );
+    }
+
+    #[test]
+    fn a_service_detail_never_reaches_the_notice() {
+        let fault = fault_of_name(
+            "org.freedesktop.NetworkManager.Failed",
+            Some("Connection activation failed".to_owned()),
+        );
+        let message = crate::error::NetworkError::from(fault).message_es();
+        assert!(!message.contains("org.freedesktop"), "{message}");
+        assert!(!message.contains("activation"), "{message}");
+        assert_eq!(
+            crate::error::BluetoothError::from(Fault::Busy).message_es(),
+            crate::error::BluetoothError::Busy.message_es()
+        );
+        assert_eq!(
+            crate::error::NetworkError::from(Fault::NotFound).message_es(),
+            "Eso ya no existe"
         );
     }
 

@@ -21,7 +21,8 @@ use crate::error::AudioError;
 use crate::model::{AudioEndpoint, AudioSnapshot, AudioStream, CardProfile, EndpointKind};
 use crate::volume::clamp_volume;
 
-/// How often the watcher re-reads `wpctl status` without a `pw-mon` event.
+/// How often the watcher re-reads `wpctl status` when `pw-mon` cannot tell
+/// it about changes, or PipeWire did not answer.
 const POLL: Duration = Duration::from_secs(2);
 /// How long the watcher lets a burst of `pw-mon` events settle.
 const DEBOUNCE: Duration = Duration::from_millis(300);
@@ -49,7 +50,7 @@ fn run_within(program: &str, args: &[&str], deadline: Duration) -> Result<String
         .spawn()
         .map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => AudioError::Unavailable,
-            _ => AudioError::Failed(e.to_string()),
+            _ => logged(&format!("{program}: {e}")),
         })?;
     // Drained on threads of their own, so a full pipe never stalls the child.
     let drain = |pipe: Option<Box<dyn Read + Send>>| {
@@ -85,7 +86,7 @@ fn run_within(program: &str, args: &[&str], deadline: Duration) -> Result<String
                 let _ = child.wait();
                 return Err(AudioError::Unavailable);
             }
-            Err(e) => return Err(AudioError::Failed(e.to_string())),
+            Err(e) => return Err(logged(&format!("{program}: {e}"))),
         }
     };
     let stdout = stdout.join().unwrap_or_default();
@@ -96,7 +97,16 @@ fn run_within(program: &str, args: &[&str], deadline: Duration) -> Result<String
     Err(fault(String::from_utf8_lossy(&stderr).trim()))
 }
 
-/// A failed tool's message as an error.
+/// A failure the tool described only in its own English words: the detail
+/// goes to the log and the notice says a short Spanish sentence.
+fn logged(detail: &str) -> AudioError {
+    eprintln!("cuprita: PipeWire: {detail}");
+    AudioError::service_failed()
+}
+
+/// A failed tool's message as an error: an object the tool cannot find is
+/// `NotFound`, a sound server it cannot reach `Unavailable`, anything else
+/// is logged (see `logged`).
 fn fault(detail: &str) -> AudioError {
     // Warnings may come first; the tool's verdict is its last line.
     let detail = detail
@@ -115,9 +125,9 @@ fn fault(detail: &str) -> AudioError {
     if detail.contains("connect") {
         AudioError::Unavailable
     } else if detail.is_empty() {
-        AudioError::Failed("wpctl".to_owned())
+        logged("the tool failed without a message")
     } else {
-        AudioError::Failed(detail.to_owned())
+        logged(detail)
     }
 }
 
@@ -745,11 +755,33 @@ impl Drop for WatchHandle {
     }
 }
 
+/// How long the watcher waits before it reads `wpctl status` again without
+/// an event: never while `pw-mon` runs and the last read worked (its events
+/// are the only wake-up), every 2 s while `pw-mon` is missing or ended, or
+/// while PipeWire did not answer the last read.
+fn next_wait(monitor_alive: bool, pipewire_present: bool) -> Option<Duration> {
+    (!(monitor_alive && pipewire_present)).then_some(POLL)
+}
+
+/// Lets a burst of `pw-mon` events settle: waits until 300 ms after the
+/// burst's first event, however many follow (the cap keeps a stream of
+/// events from holding the read back).
+fn settle(ticks: &mpsc::Receiver<()>) {
+    let until = Instant::now() + DEBOUNCE;
+    while let Some(left) = until.checked_duration_since(Instant::now()) {
+        if ticks.recv_timeout(left).is_err() {
+            break;
+        }
+    }
+}
+
 /// Calls `on_change` from a thread of its own when the audio graph changes:
-/// `wpctl status` is re-read every 2 s and on every burst of `pw-mon` events
-/// (when `pw-mon` is installed; a burst settles for 300 ms, and only nodes,
-/// devices and metadata count, see `MonitorFilter`). A change of the parsed
-/// status, or any such event (a stream's volume is not in the status), calls.
+/// `wpctl status` is re-read on every burst of `pw-mon` events (a burst
+/// settles for at most 300 ms, and only nodes, devices and metadata count,
+/// see `MonitorFilter`); only when `pw-mon` is missing or ended, or PipeWire
+/// did not answer, is it re-read every 2 s instead (see `next_wait`). A
+/// change of the parsed status, or any such event (a stream's volume is not
+/// in the status), calls.
 ///
 /// # Errors
 /// `Unavailable` without `wpctl`; `Failed` if a thread cannot start.
@@ -798,24 +830,37 @@ pub fn watch(on_change: impl Fn() + Send + 'static) -> Result<WatchHandle, Audio
     }
 
     let flag = Arc::clone(&stopped);
+    let mut monitor_alive = monitor.is_some();
+    let mut pipewire_present = true;
     std::thread::Builder::new()
         .name("cuprita-audio-watch".to_owned())
         .spawn(move || loop {
-            let woken = match ticks.recv_timeout(POLL) {
-                Ok(()) => {
-                    // Let the burst settle.
-                    let until = Instant::now() + DEBOUNCE;
-                    while let Some(left) = until.checked_duration_since(Instant::now()) {
-                        if ticks.recv_timeout(left).is_err() {
-                            break;
-                        }
+            let woken = match next_wait(monitor_alive, pipewire_present) {
+                // `pw-mon` reports every change: sleep until it speaks.
+                None => match ticks.recv() {
+                    Ok(()) => {
+                        settle(&ticks);
+                        true
                     }
-                    true
-                }
-                Err(RecvTimeoutError::Timeout) => false,
-                // No `pw-mon`: a plain poll.
-                Err(RecvTimeoutError::Disconnected) => {
-                    std::thread::sleep(POLL);
+                    Err(_) => {
+                        // `pw-mon` ended: read once now, then poll.
+                        monitor_alive = false;
+                        false
+                    }
+                },
+                Some(wait) if monitor_alive => match ticks.recv_timeout(wait) {
+                    Ok(()) => {
+                        settle(&ticks);
+                        true
+                    }
+                    Err(RecvTimeoutError::Timeout) => false,
+                    Err(RecvTimeoutError::Disconnected) => {
+                        monitor_alive = false;
+                        false
+                    }
+                },
+                Some(wait) => {
+                    std::thread::sleep(wait);
                     false
                 }
             };
@@ -823,8 +868,10 @@ pub fn watch(on_change: impl Fn() + Send + 'static) -> Result<WatchHandle, Audio
                 return;
             }
             let Ok(now) = run("wpctl", &["status"]).map(|t| parse_status(&t)) else {
+                pipewire_present = false;
                 continue;
             };
+            pipewire_present = true;
             if woken || now != last {
                 last = now;
                 on_change();
@@ -849,7 +896,21 @@ mod tests {
             fault("Could not connect to PipeWire"),
             AudioError::Unavailable
         );
-        assert_eq!(fault("odd"), AudioError::Failed("odd".to_owned()));
+        // The tool's own English never reaches the notice.
+        assert_eq!(fault("odd"), AudioError::service_failed());
+        assert_eq!(fault(""), AudioError::service_failed());
+        assert!(!fault("Invalid argument").message_es().contains("Invalid"));
+    }
+
+    #[test]
+    fn the_watcher_polls_only_without_pw_mon_or_pipewire() {
+        // `pw-mon` runs and PipeWire answers: only its events wake.
+        assert_eq!(next_wait(true, true), None);
+        // No `pw-mon` (missing or ended): poll.
+        assert_eq!(next_wait(false, true), Some(POLL));
+        // PipeWire did not answer: retry every 2 s, `pw-mon` or not.
+        assert_eq!(next_wait(true, false), Some(POLL));
+        assert_eq!(next_wait(false, false), Some(POLL));
     }
 
     fn events(filter: &mut MonitorFilter, text: &str) -> usize {

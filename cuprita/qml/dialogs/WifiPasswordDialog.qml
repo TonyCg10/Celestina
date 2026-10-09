@@ -14,6 +14,12 @@ CelestinaModalLayer {
     property string networkName: ""
     // Set by the first «Conectar»: a second press sends nothing.
     property bool submitted: false
+    // A WPA passphrase is 8 to 63 characters; 64 hexadecimal digits are the
+    // raw key itself. Anything else NetworkManager would refuse after the
+    // dialog closed, so «Conectar» waits for a valid one.
+    readonly property bool passphraseValid: (passwordField.text.length >= 8
+                                             && passwordField.text.length <= 63)
+                                            || /^[0-9A-Fa-f]{64}$/.test(passwordField.text)
 
     signal connectRequested(string id, string password)
 
@@ -33,7 +39,7 @@ CelestinaModalLayer {
     }
 
     function confirm() {
-        if (passwordField.text.length === 0 || layer.submitted)
+        if (!layer.passphraseValid || layer.submitted)
             return
         layer.submitted = true
         layer.connectRequested(layer.networkId, passwordField.text)
@@ -85,8 +91,28 @@ CelestinaModalLayer {
             anchors.topMargin: CelestinaTheme.spaceMd
             echoMode: reveal.shown ? TextInput.Normal : TextInput.Password
             placeholderText: qsTr("Contraseña")
+            // Kept out of input-method history and prediction.
+            inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
             Accessible.name: qsTr("Contraseña")
+            Accessible.description: lengthHint.visible ? lengthHint.text : ""
             onAccepted: layer.confirm()
+        }
+
+        Text {
+            id: lengthHint
+            objectName: "lengthHint"
+            visible: passwordField.text.length > 0 && !layer.passphraseValid
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: passwordField.bottom
+            anchors.leftMargin: CelestinaTheme.spaceLg
+            anchors.rightMargin: CelestinaTheme.spaceLg
+            anchors.topMargin: CelestinaTheme.spaceXs
+            elide: Text.ElideRight
+            text: qsTr("Entre 8 y 63 caracteres")
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontRowSecondary
         }
 
         CelestinaIconButton {
@@ -106,7 +132,7 @@ CelestinaModalLayer {
             id: buttons
             anchors.right: parent.right
             anchors.rightMargin: CelestinaTheme.spaceLg
-            anchors.top: passwordField.bottom
+            anchors.top: lengthHint.visible ? lengthHint.bottom : passwordField.bottom
             anchors.topMargin: CelestinaTheme.spaceLg
             spacing: CelestinaTheme.spaceSm
 
@@ -120,7 +146,7 @@ CelestinaModalLayer {
                 objectName: "confirmButton"
                 text: qsTr("Conectar")
                 role: CelestinaButton.Primary
-                enabled: passwordField.text.length > 0 && !layer.submitted
+                enabled: layer.passphraseValid && !layer.submitted
                 onClicked: layer.confirm()
             }
         }

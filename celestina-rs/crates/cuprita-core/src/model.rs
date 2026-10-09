@@ -20,6 +20,8 @@ pub enum Security {
     Open,
     Psk,
     Enterprise,
+    /// WEP only: shown so the person sees why Cuprita will not join it.
+    Wep,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

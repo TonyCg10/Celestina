@@ -51,5 +51,6 @@ pub fn security_label_key(s: Security) -> &'static str {
         Security::Open => "open",
         Security::Psk => "psk",
         Security::Enterprise => "enterprise",
+        Security::Wep => "wep",
     }
 }

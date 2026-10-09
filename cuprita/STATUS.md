@@ -1,9 +1,10 @@
 # Cuprita status
 
 - **Updated:** 2026-10-08
-- **Implementation:** only CUP-1-F is open; its landing closes it and
-  publishes 1.0.0. Red
-  runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
+- **Version:** 1.0.0 (landed with CUP-1-F, `cuprita-release`)
+- **Implementation:** CUP-1-A to CUP-1-F are done; CUP-1-G, the fix wave
+  from the final review of 1.0, is open as maintenance (no version change).
+  Red runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
   agent, and Audio on PipeWire through WirePlumber's `wpctl`;
   `CUPRITA_FAKE=1` runs all three over the scripted backends
 - **Author validation:** `VAL-C`, `VAL-D` and `VAL-E` pending: the live
@@ -11,8 +12,8 @@
 
 ## Current checkout truth
 
-- The landing of CUP-1-F publishes 1.0.0 (the history row is the landing's). The
-  project is registered and builds a release binary. The window shows the
+- 1.0.0 is published (the landing deploys it to the author's test prefix). The window
+  shows the
   pill strip with Red, Bluetooth and Audio; Ctrl+1, Ctrl+2 and Ctrl+3 jump
   between them.
 - Keyboard: the strip is one Tab stop (Left and Right walk it), Tab then
@@ -32,7 +33,8 @@
   change watcher and the exported `org.bluez.Agent1` pairing agent (the two
   share the error classification and the debounced watcher in `bus`), and
   the audio client `wpctl` over `wpctl` and `pw-cli` with a watcher that
-  polls every 2 s and wakes on `pw-mon` events (64 tests).
+  wakes on `pw-mon` events and polls every 2 s only while `pw-mon` is
+  missing or PipeWire does not answer (66 tests).
 - `src/controller/` holds the three section controllers (worker thread per
   section, each re-reading when its client's watcher reports a change) and four
   `QAbstractListModel`s that reconcile snapshots by key; the window shows
@@ -55,6 +57,33 @@
   await the author's check. Until they pass, nm-applet, Blueman and
   pavucontrol stay installed; their removal is the author's action (see the
   [exit evidence](docs/evidence/2026-10-08-exit.md)).
+
+## What CUP-1-G fixes
+
+From the final review of 1.0 (see the
+[final-review evidence](docs/evidence/2026-10-08-final-review.md)):
+
+- The NetworkManager connection gives up on any call after 120 s (BlueZ's
+  stays 90 s), so a hung NetworkManager or an unanswered polkit prompt no
+  longer holds the network worker forever; the proxy builder and the error
+  mapping are one copy in `bus.rs`.
+- Notices are Spanish throughout: known D-Bus error names map to the
+  not-found, unavailable, denied and busy sentences of `message_es`; any
+  other service detail is written to the log (`eprintln!`) and the notice
+  says only that the service answered with an error. The same holds for
+  `wpctl` failures.
+- Audio no longer polls every 2 s while `pw-mon` runs.
+- The Wi-Fi passphrase dialog accepts 8–63 characters (or a 64-digit
+  hexadecimal key) and says so otherwise; the passphrase and PIN fields are
+  marked sensitive for input methods.
+- A WEP-only network is labelled as WEP and unsupported instead of
+  protected.
+
+## Author validation
+
+`VAL-C` (Red), `VAL-D` (Bluetooth) and `VAL-E` (Audio) in
+[VALIDATION.md](VALIDATION.md) are the author's live checks; nm-applet,
+Blueman and pavucontrol stay installed until they pass.
 
 ## Blockers
 

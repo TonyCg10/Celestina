@@ -26,6 +26,7 @@ whose three sections manage network, Bluetooth and audio.
 - `CUP-1-B` — `cuprita-core` and the controllers over the fakes.
 - `CUP-1-C` — Red. `CUP-1-D` — Bluetooth. `CUP-1-E` — Audio.
 - `CUP-1-F` — implementation exit and 1.0.0.
+- `CUP-1-G` — the fix wave from the final review of 1.0 (maintenance).
 
 ## Exclusions
 
@@ -36,7 +37,7 @@ whose three sections manage network, Bluetooth and audio.
 
 ## Build order
 
-1. `CUP-1-A`, then `-B`, then `-C`, `-D` and `-E`, then `-F`.
+1. `CUP-1-A`, then `-B`, then `-C`, `-D` and `-E`, then `-F`, then `-G`.
 
 ## Implementation exit
 
@@ -57,3 +58,4 @@ it has no row of its own below.
 | CUP-1-D | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-D.numstat.tsv) | 35 files, +2658/-242 | BlueZ client (`bluez/`) with its change watcher and the exported `Agent1` pairing agent; the bus mechanics shared with `nm` moved to `bus.rs`; the Bluetooth worker driven by the watcher; the agent bridge and `PairingDialog`; airplane mode powers the adapter off; the Bluetooth page live | [evidence](../../evidence/2026-10-08-bluetooth.md) | `VAL-D` |
 | CUP-1-E | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-E.numstat.tsv) | 27 files, +2244/-143 | Binding spike (decision: `wpctl`); the audio client over `wpctl` and `pw-cli` with its poll-and-`pw-mon` watcher; the audio worker driven by the watcher; a profile card per sound card; 0–150 % sliders in 1 % steps with a tick at 100 %; the Audio page live | [evidence](../../evidence/2026-10-08-audio.md) | `VAL-E` |
 | CUP-1-F | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-F.numstat.tsv) | 19 files, +612/-32 | Keyboard and accessibility pass, glass and motion check, the roles nm-applet, Blueman and pavucontrol held, documents closed for 1.0.0 (published by the landing, `--kind release`) | [evidence](../../evidence/2026-10-08-exit.md) | `VAL-C`, `VAL-D`, `VAL-E` |
+| CUP-1-G | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-G.numstat.tsv) | 21 files, +579/-115 | The final review's fixes: a 120 s NetworkManager call timeout with the proxy builder and error mapping shared in `bus.rs`; known D-Bus and `wpctl` errors as Spanish notices, other details logged; no audio poll while `pw-mon` runs; the passphrase length gate and sensitive input hints; the WEP label; deferred items in the roadmap's "Later" | [evidence](../../evidence/2026-10-08-final-review.md) | `VAL-C`, `VAL-D`, `VAL-E` |

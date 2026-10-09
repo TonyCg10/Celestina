@@ -49,6 +49,7 @@ fn security_keys_are_tokens() {
     assert_eq!(security_label_key(Security::Open), "open");
     assert_eq!(security_label_key(Security::Psk), "psk");
     assert_eq!(security_label_key(Security::Enterprise), "enterprise");
+    assert_eq!(security_label_key(Security::Wep), "wep");
 }
 
 fn device(name: &str, paired: bool, connected: bool) -> BluetoothDevice {

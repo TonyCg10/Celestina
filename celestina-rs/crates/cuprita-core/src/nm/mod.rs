@@ -11,9 +11,9 @@ mod watch;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 
 use zbus::blocking::{Connection, Proxy};
-use zbus::proxy::CacheProperties;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 
 use crate::bus;
@@ -49,6 +49,12 @@ const ACTIVE_ACTIVATED: u32 = 2;
 #[cfg(test)]
 const ACTIVE_DEACTIVATING: u32 = 3;
 const ACTIVE_DEACTIVATED: u32 = 4;
+/// The longest any NetworkManager call may take on the client's connection.
+/// Activating or deleting a profile may wait for a polkit prompt in its own
+/// window; 120 s leaves the person room to answer it, while a hung
+/// NetworkManager still frees the network worker and the commands queued
+/// behind it. Set once for the whole connection (`bus::system_connection`).
+const CALL_TIMEOUT: Duration = Duration::from_secs(120);
 /// The empty object path NetworkManager uses for "none".
 const NO_PATH: &str = "/";
 
@@ -74,8 +80,10 @@ pub fn ap_to_network(
 ) -> NetworkEntry {
     let security = if rsn_flags & KEY_MGMT_802_1X != 0 || wpa_flags & KEY_MGMT_802_1X != 0 {
         Security::Enterprise
-    } else if rsn_flags | wpa_flags != 0 || flags & AP_PRIVACY != 0 {
-        // WEP reads as protected; `connect` refuses it (see `wep_only`).
+    } else if wep_only(flags, wpa_flags, rsn_flags) {
+        // Shown as such: `connect` refuses it.
+        Security::Wep
+    } else if rsn_flags | wpa_flags != 0 {
         Security::Psk
     } else {
         Security::Open
@@ -144,10 +152,6 @@ fn map_error(error: zbus::Error) -> NetworkError {
     bus::fault(error).into()
 }
 
-fn map_fdo(error: zbus::fdo::Error) -> NetworkError {
-    bus::fdo_fault(error).into()
-}
-
 /// What a row's id leads back to when a command names it. Rebuilt with every
 /// snapshot: NetworkManager's object paths are only valid while they exist.
 #[derive(Debug, Clone)]
@@ -161,7 +165,6 @@ enum Route {
         ap: OwnedObjectPath,
         ssid: Vec<u8>,
         security: Security,
-        wep: bool,
         saved: Option<OwnedObjectPath>,
         active: Option<OwnedObjectPath>,
     },
@@ -206,7 +209,7 @@ impl NmNetwork {
     /// Connects to the system bus. NetworkManager itself is reached lazily:
     /// a missing service reports `Unavailable` on the first read.
     pub fn connect_system() -> Result<Self, NetworkError> {
-        let connection = Connection::system().map_err(map_error)?;
+        let connection = bus::system_connection::<NetworkError>(CALL_TIMEOUT)?;
         Ok(Self {
             connection,
             airplane: false,
@@ -368,7 +371,6 @@ impl NmNetwork {
                 ap,
                 ssid: ssid.clone(),
                 security: row.security,
-                wep: wep_only(flags, wpa, rsn),
                 saved: profile,
                 active: link.map(|(_, path, _)| path.clone()),
             };
@@ -497,18 +499,14 @@ fn kept_carried(route: &Route) -> bool {
     )
 }
 
+/// A proxy to one of NetworkManager's objects (built in `bus::proxy`, shared
+/// with the BlueZ client); it only fixes the service and the error type.
 fn proxy<'a>(
     connection: &Connection,
     path: &'a str,
     interface: &'a str,
 ) -> Result<Proxy<'a>, NetworkError> {
-    zbus::blocking::proxy::Builder::new(connection)
-        .destination(NM)
-        .and_then(|b| b.path(path))
-        .and_then(|b| b.interface(interface))
-        .map(|b| b.cache_properties(CacheProperties::No))
-        .and_then(|b| b.build())
-        .map_err(map_error)
+    bus::proxy(connection, NM, path, interface)
 }
 
 fn object_path(path: &str) -> Result<OwnedObjectPath, NetworkError> {
@@ -637,7 +635,7 @@ impl Network for NmNetwork {
     fn set_wifi_enabled(&mut self, on: bool) -> Result<(), NetworkError> {
         self.manager()?
             .set_property("WirelessEnabled", on)
-            .map_err(map_fdo)
+            .map_err(bus::map_fdo::<NetworkError>)
     }
 
     /// Airplane mode is Cuprita's, kept in memory: here it turns the Wi-Fi
@@ -654,7 +652,10 @@ impl Network for NmNetwork {
             Route::Ethernet { device, .. } => {
                 self.activate(NO_PATH, device.as_str(), NO_PATH).map(drop)
             }
-            Route::Wifi { wep: true, .. } => Err(NetworkError::wep_unsupported()),
+            Route::Wifi {
+                security: Security::Wep,
+                ..
+            } => Err(NetworkError::wep_unsupported()),
             Route::Wifi {
                 device,
                 ap,
@@ -757,9 +758,9 @@ mod tests {
     }
 
     #[test]
-    fn a_wep_access_point_reads_protected_and_is_flagged() {
+    fn a_wep_access_point_reads_wep_and_is_flagged() {
         let row = ap_to_network(b"Old", 30, AP_PRIVACY, 0, 0, false, false);
-        assert_eq!(row.security, Security::Psk);
+        assert_eq!(row.security, Security::Wep);
         assert!(wep_only(AP_PRIVACY, 0, 0));
     }
 
@@ -817,7 +818,7 @@ mod tests {
     #[test]
     fn a_polkit_refusal_is_denied() {
         assert_eq!(
-            map_fdo(zbus::fdo::Error::AccessDenied("polkit".to_owned())),
+            bus::map_fdo::<NetworkError>(zbus::fdo::Error::AccessDenied("polkit".to_owned())),
             NetworkError::Denied
         );
     }

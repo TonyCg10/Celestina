@@ -14,7 +14,6 @@ use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use zbus::blocking::{Connection, Proxy};
-use zbus::proxy::CacheProperties;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
 use crate::bluetooth::Bluetooth;
@@ -37,7 +36,7 @@ const AGENT_MANAGER_PATH: &str = "/org/bluez";
 /// returns only when the pairing ends, and BlueZ waits about a minute for
 /// each agent answer; 90 s leaves a slow PIN entry room, while a BlueZ that
 /// stopped answering still frees the worker. zbus sets this per connection
-/// (`connection::Builder::method_timeout`), so every call shares it.
+/// (`bus::system_connection`), so every call shares it.
 const CALL_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// One object's interfaces and their properties.
@@ -131,18 +130,14 @@ fn pairing_refused(name: &str) -> bool {
     name.ends_with(".AuthenticationCanceled") || name.ends_with(".AuthenticationRejected")
 }
 
-/// A D-Bus failure as the section's error. BlueZ's `NotReady` means the
-/// adapter is off; a refused pairing reads as cancelled.
+/// A D-Bus failure as the section's error. A refused pairing reads as
+/// cancelled; the rest (`NotReady` while the adapter is off, `DoesNotExist`,
+/// `InProgress`) is the shared classification in `bus.rs`.
 fn map_error(error: zbus::Error) -> BluetoothError {
     match bus::error_name(&error) {
         Some((name, _)) if pairing_refused(&name) => BluetoothError::pairing_cancelled(),
-        Some((name, _)) if name.ends_with(".NotReady") => BluetoothError::Unavailable,
         _ => bus::fault(error).into(),
     }
-}
-
-fn map_fdo(error: zbus::fdo::Error) -> BluetoothError {
-    map_error(zbus::Error::FDO(Box::new(error)))
 }
 
 /// A command's result, with the BlueZ errors `harmless` accepts read as done
@@ -160,18 +155,14 @@ fn tolerate(
     }
 }
 
+/// A proxy to one of BlueZ's objects (built in `bus::proxy`, shared with the
+/// NetworkManager client); it only fixes the service and the error type.
 fn proxy<'a>(
     connection: &Connection,
     path: &'a str,
     interface: &'a str,
 ) -> Result<Proxy<'a>, BluetoothError> {
-    zbus::blocking::proxy::Builder::new(connection)
-        .destination(BLUEZ)
-        .and_then(|b| b.path(path))
-        .and_then(|b| b.interface(interface))
-        .map(|b| b.cache_properties(CacheProperties::No))
-        .and_then(|b| b.build())
-        .map_err(map_error)
+    bus::proxy(connection, BLUEZ, path, interface)
 }
 
 /// The `Bluetooth` backend over BlueZ. It drives the first adapter BlueZ
@@ -186,10 +177,7 @@ impl BluezBluetooth {
     /// Connects to the system bus. BlueZ itself is reached lazily: a missing
     /// service reports `Unavailable` on the first read.
     pub fn connect_system() -> Result<Self, BluetoothError> {
-        let connection = zbus::blocking::connection::Builder::system()
-            .map(|b| b.method_timeout(CALL_TIMEOUT))
-            .and_then(|b| b.build())
-            .map_err(map_error)?;
+        let connection = bus::system_connection::<BluetoothError>(CALL_TIMEOUT)?;
         Ok(Self {
             connection,
             adapter: None,
@@ -309,7 +297,9 @@ impl Bluetooth for BluezBluetooth {
     fn set_powered(&mut self, on: bool) -> Result<(), BluetoothError> {
         let adapter = self.adapter()?;
         let adapter = proxy(&self.connection, &adapter, IFACE_ADAPTER)?;
-        adapter.set_property("Powered", on).map_err(map_fdo)
+        adapter
+            .set_property("Powered", on)
+            .map_err(bus::map_fdo::<BluetoothError>)
     }
 
     /// A search belongs to the connection that started it: BlueZ ends it when
@@ -496,7 +486,15 @@ mod tests {
         );
         assert_eq!(
             map_error(error("org.bluez.Error.Failed")),
-            BluetoothError::Failed("detail".to_owned())
+            BluetoothError::service_failed()
+        );
+        assert_eq!(
+            map_error(error("org.bluez.Error.InProgress")),
+            BluetoothError::Busy
+        );
+        assert_eq!(
+            map_error(error("org.bluez.Error.DoesNotExist")),
+            BluetoothError::NotFound(String::new())
         );
         assert_eq!(
             tolerate(Err(error("org.bluez.Error.AlreadyConnected")), |name, _| {
@@ -508,7 +506,7 @@ mod tests {
             tolerate(Err(error("org.bluez.Error.Failed")), |name, _| {
                 name.ends_with(".AlreadyConnected")
             }),
-            Err(BluetoothError::Failed("detail".to_owned()))
+            Err(BluetoothError::service_failed())
         );
     }
 }

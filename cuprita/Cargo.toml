@@ -1,6 +1,6 @@
 [package]
 name = "cuprita"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -11,8 +11,17 @@ name = "cuprita"
 path = "src/main.rs"
 
 [dependencies]
+# The Rust/C++ bridge under CXX-Qt, the suite's way to write Qt objects in
+# Rust (architecture standard). Pinned exactly with `cxx-gen` below: the
+# generated C++ and the runtime must come from the same release.
 cxx = "=1.0.176"
+# The controllers and list models are QObjects written in Rust
+# (`#[cxx_qt::bridge]`), with `Threading` queues carrying the workers'
+# results to the Qt thread. Pinned with `cxx-qt-build` to one release.
 cxx-qt = "=0.9.1"
+# Qt's types on the Rust side (QString, QVariant, QModelIndex, the
+# application and QML engine); only the GUI, QML and Quick Controls parts the
+# window uses, nothing else by default.
 cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
     "qt_gui",
     "qt_qml",
@@ -27,7 +36,11 @@ cuprita-core = { path = "../celestina-rs/crates/cuprita-core" }
 zbus = "5"
 
 [build-dependencies]
+# Generates the C++ side of the bridges, compiles it and builds the QML
+# module (`org.celestina.cuprita`) with its resources at build time.
 cxx-qt-build = "=0.9.1"
+# The C++ generator `cxx-qt-build` drives, pinned to the release that
+# matches `cxx` above so the generated code and the runtime agree.
 cxx-gen = "=0.7.176"
 
 [profile.release]
