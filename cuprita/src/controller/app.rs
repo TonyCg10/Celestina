@@ -11,9 +11,28 @@
 //! so its follower thread lives until the process exits.
 
 use std::pin::Pin;
+use std::sync::{Mutex, PoisonError};
 
 use celestina_settings::{Appearance, Follower};
-use cxx_qt::{CxxQtType, Threading};
+use cxx_qt::{CxxQtThread, CxxQtType, Threading};
+
+/// The window's controller, for the fake appearance store's preview.
+static CONTROLLER: Mutex<Option<CxxQtThread<qobject::CupritaController>>> = Mutex::new(None);
+
+/// Hands the window an appearance that did not come through the file: the
+/// fake store's writes under `CUPRITA_FAKE=1`, which never reach a file the
+/// follower watches.
+pub fn preview(value: Appearance) {
+    if let Some(qt) = CONTROLLER
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+    {
+        let _ = qt.queue(move |controller: Pin<&mut qobject::CupritaController>| {
+            controller.apply_appearance(value);
+        });
+    }
+}
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -79,6 +98,7 @@ impl cxx_qt::Initialize for qobject::CupritaController {
             });
         });
         self.as_mut().rust_mut().follower = Some(follower);
+        *CONTROLLER.lock().unwrap_or_else(PoisonError::into_inner) = Some(self.qt_thread());
     }
 }
 

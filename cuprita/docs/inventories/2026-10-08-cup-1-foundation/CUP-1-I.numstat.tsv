@@ -1,0 +1,55 @@
+# CUP-1-I exact change inventory
+
+Base revision	1225374bd128c70e3aa54320466b7b4c9914c1af
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/README.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/VALIDATION.md
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/docs/evidence/2026-10-09-appearance.md
+Pathspec	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-I.numstat.tsv
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/qml/Main.qml
+Pathspec	cuprita/qml/components/ScaleChoice.qml
+Pathspec	cuprita/qml/components/SectionShortcuts.qml
+Pathspec	cuprita/qml/components/Sections.qml
+Pathspec	cuprita/qml/components/SettingRow.qml
+Pathspec	cuprita/qml/pages/AppearancePage.qml
+Pathspec	cuprita/scripts/smoke.sh
+Pathspec	cuprita/src/backend.rs
+Pathspec	cuprita/src/controller/app.rs
+Pathspec	cuprita/src/controller/appearance.rs
+Pathspec	cuprita/src/controller/mod.rs
+Pathspec	cuprita/tests/qml/fakes/FakeAppearanceController.qml
+Pathspec	cuprita/tests/qml/tst_appearance_page.qml
+Pathspec	cuprita/tests/qml/tst_strip.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	0735ebe85dfece514bbc5f08bd05e124b0d6bc5ae1e6e1500687fdc428fbf546	cuprita/Cargo.lock
+1	1	be21521c5a5dabdabc2e151d796760507788788ded721867dff5b71a354cba5d	cuprita/Cargo.toml
+2	0	0968bf88076310b40695ac70c6b7a202c017adf8504fd1cbde8787ef070be734	cuprita/README.md
+22	10	0435ad2dfb722d6fbd5476ba85e6133f33048cc7b4889f0bb3cbb806ba0b3cf2	cuprita/STATUS.md
+19	0	b62327f5d3d6b462597ae3bc1e4fa6c70c480ce0e9430fc496595a6a8deb6fcc	cuprita/VALIDATION.md
+3	0	a2be2f64bc1efef0ab14b27ff2a7b4f307316933969dc3922793ab0825bcb33b	cuprita/build.rs
+109	0	27f4d0b6252650a481c402b825fc4be8ae12afdc9135de7d777bad6654b7abac	cuprita/docs/evidence/2026-10-09-appearance.md
+55	0	self	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-I.numstat.tsv
+6	1	8e1a28203e250fbc8fd2378d5700f4521e30040a79d538f920203d5056f5b5fe	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+11	2	2e85c713b446c73e78b3fb4b1616f89c0939ecaecfa2c68f0a9d5bc86d431194	cuprita/qml/Main.qml
+146	0	f4611894aa3590842f39db0445a7dcc47e36d235cb086c5977a9ab0056182ad7	cuprita/qml/components/ScaleChoice.qml
+6	1	bf07d774092f75da70efbe57063642aaf1bffd7abc5cb204072ef690aea59e36	cuprita/qml/components/SectionShortcuts.qml
+2	1	0125db5231d90959385fea5e4e8c206566794f38049b98a1e867704da282175b	cuprita/qml/components/Sections.qml
+23	6	18a5b1924402c65a36cb1873831f9ae29697286c480a3f67617af840ceeed04f	cuprita/qml/components/SettingRow.qml
+105	0	e112429340d920a28e4dfe6e82e48338a4bad10203c635fe6ea61b0fb280d860	cuprita/qml/pages/AppearancePage.qml
+4	3	adf7c2515a568afd87fd23c4261c24cfd2b3da357aadfe7f3f2c131ca301f255	cuprita/scripts/smoke.sh
+75	0	20f13a5cdcc67c2db497cf2644f4858db2f82d9a55f334d4b5e3134e7198bab1	cuprita/src/backend.rs
+21	1	a8bf9fbc4c17535b3b5414bbe4b6c2add6879e42cc22d1ff6627a3a02e10c120	cuprita/src/controller/app.rs
+230	0	aa591e42fcad9e951c1756cf754b6db8cfa00ba4e0cc6da12cd4699d1b608569	cuprita/src/controller/appearance.rs
+1	0	61a1c411cb51e330403bc472c4e4021c5bfb7826319b0169d64e4a6c9cedcf01	cuprita/src/controller/mod.rs
+33	0	59463f7c3718b3ceda1fa24429e59539d864ddc45e6f1e8e2d6e96c429279399	cuprita/tests/qml/fakes/FakeAppearanceController.qml
+157	0	bb37efc00854c76d209c2be569b23fe93c37cb00ad4bcb9156d752690d0588f2	cuprita/tests/qml/tst_appearance_page.qml
+4	4	ccb44d460a7e21b09e0bdd475b0cfe413820411d73b8efc5360d13623ed93023	cuprita/tests/qml/tst_strip.qml
+1	0	a85eeb8e5bea59b6aeef8b9d6530f4332067ec1b1d0dae8e93e896cf487d7a63	docs/version-history.tsv

@@ -7,6 +7,7 @@ QtObject {
     readonly property var all: [
         { id: "network", title: qsTr("Red"), icon: "wifi" },
         { id: "bluetooth", title: qsTr("Bluetooth"), icon: "bluetooth" },
-        { id: "audio", title: qsTr("Audio"), icon: "media-volume" }
+        { id: "audio", title: qsTr("Audio"), icon: "media-volume" },
+        { id: "appearance", title: qsTr("Apariencia"), icon: "paintbrush" }
     ]
 }

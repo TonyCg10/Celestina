@@ -237,3 +237,4 @@ cuprita	0.5.0	milestone	CUP-1-E	Add the PipeWire client and bring the audio page
 cuprita	1.0.0	release	CUP-1-F	Close the foundation at 1.0 with the keyboard and accessibility pass
 cuprita	1.0.1	bug	CUP-1-G	Fix the findings of the final review before the author's live checks
 cuprita	1.0.2	bug	CUP-1-H	Add the grouped-card layout to the three pages with the active connection card and the loading state
+cuprita	1.1.0	milestone	CUP-1-I	Add the appearance section with reduced motion and the text size

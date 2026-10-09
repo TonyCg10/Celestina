@@ -45,6 +45,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/PageScroll.qml",
     "qml/components/RowDivider.qml",
     "qml/components/RowFilter.qml",
+    "qml/components/ScaleChoice.qml",
     "qml/components/SectionCard.qml",
     "qml/components/SettingRow.qml",
     "qml/components/SectionShortcuts.qml",
@@ -54,6 +55,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/VolumeSlider.qml",
     "qml/dialogs/PairingDialog.qml",
     "qml/dialogs/WifiPasswordDialog.qml",
+    "qml/pages/AppearancePage.qml",
     "qml/pages/AudioPage.qml",
     "qml/pages/BluetoothPage.qml",
     "qml/pages/NetworkPage.qml",
@@ -106,6 +108,7 @@ fn main() {
         .files([
             "src/controller/activation.rs",
             "src/controller/app.rs",
+            "src/controller/appearance.rs",
             "src/controller/audio.rs",
             "src/controller/bluetooth.rs",
             "src/controller/device_model.rs",

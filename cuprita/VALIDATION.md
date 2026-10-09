@@ -46,3 +46,22 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   application goes silent, and the card plays again on its first profile
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-F — Change the appearance and watch every window follow
+
+- **Status:** pending
+- **Related implementation:** CUP-1-I (`CONV-1-C`)
+- **Requires:** the deployed Cuprita and at least two other suite windows
+  open on the real session, without `CELESTINA_REDUCED_MOTION` set
+- **Procedure:** open Cuprita on Apariencia (Ctrl+4); with the keyboard,
+  Tab to the text-size choice and walk it with Right to large, then
+  larger, then Left back to normal; Tab to the reduced-motion switch and
+  switch it with Space, then switch it back; start Cuprita once more
+  with `CELESTINA_REDUCED_MOTION=1` and look at the switch
+- **Pass condition:** every open suite window, Cuprita included, redraws its
+  text at each size within about a second and stops animating while reduced
+  motion is on; `~/.config/celestina/appearance.toml` holds the last
+  choice; with the variable set the switch is on, disabled and reads
+  «Forzado por el entorno»
+- **Result:** not run
+- **Evidence:** none

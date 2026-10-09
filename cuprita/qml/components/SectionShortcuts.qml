@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import org.celestina.cuprita 1.0
 
-// Ctrl+1, Ctrl+2 and Ctrl+3, one per section. An Item, so the shortcuts have
+// Ctrl+1 to Ctrl+4, one per section. An Item, so the shortcuts have
 // the window as their context wherever it is placed.
 Item {
     id: shortcuts
@@ -22,5 +22,10 @@ Item {
     Shortcut {
         sequence: "Ctrl+3"
         onActivated: shortcuts.activated(2)
+    }
+
+    Shortcut {
+        sequence: "Ctrl+4"
+        onActivated: shortcuts.activated(3)
     }
 }

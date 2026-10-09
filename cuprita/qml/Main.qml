@@ -46,7 +46,7 @@ ApplicationWindow {
         host: window
     }
 
-    // Ctrl+1, Ctrl+2 and Ctrl+3 jump to a section from anywhere.
+    // Ctrl+1 to Ctrl+4 jump to a section from anywhere.
     SectionShortcuts {
         onActivated: function(index) { window.currentSection = index }
     }
@@ -87,10 +87,13 @@ ApplicationWindow {
                 streams: StreamModel { id: streamModel }
                 backdropSource: pages
             }
+            AppearancePage {
+                controller: AppearanceController
+            }
         }
     }
 
-    // The three controllers' notices, one pill for the window.
+    // The section controllers' notices, one pill for the window.
     NoticePill {
         id: notice
         anchors.horizontalCenter: parent.horizontalCenter
@@ -110,6 +113,10 @@ ApplicationWindow {
         target: AudioController
         function onNotice(kind, text) { notice.show(kind, text) }
     }
+    Connections {
+        target: AppearanceController
+        function onNotice(kind, text) { notice.show(kind, text) }
+    }
 
     // Development only: the smoke reads the models' rows once they are filled.
     Timer {
@@ -122,6 +129,8 @@ ApplicationWindow {
                                  + " streams=" + streamModel.count
                                  + " sink=" + sinkModel.defaultId
                                  + " source=" + sourceModel.defaultId
+                                 + " appearance=" + (AppearanceController.loaded
+                                                     ? AppearanceController.textScale : "none")
                                  + " textScale=" + CelestinaTheme.textScale
                                  + " fontBody=" + CelestinaTheme.fontBody)
     }

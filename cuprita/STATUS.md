@@ -1,17 +1,29 @@
 # Cuprita status
 
-- **Updated:** 2026-10-08
+- **Updated:** 2026-10-09
 - **Version:** 1.0.1
-- **Implementation:** CUP-1-A to CUP-1-G are done; CUP-1-H, the
-  grouped-card layout the author approved, is open as maintenance (no
-  version change).
+- **Implementation:** CUP-1-A to CUP-1-H are done; CUP-1-I, the
+  Appearance section (`CONV-1-C` of the suite program), is open as
+  maintenance (no version change).
   Red runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
   agent, and Audio on PipeWire through WirePlumber's `wpctl`;
   `CUPRITA_FAKE=1` runs all three over the scripted backends
-- **Author validation:** `VAL-C`, `VAL-D` and `VAL-E` pending: the live
-  network, Bluetooth and audio checks in [VALIDATION.md](VALIDATION.md)
+- **Author validation:** `VAL-C`, `VAL-D`, `VAL-E` and `VAL-F` pending: the
+  live network, Bluetooth, audio and appearance checks in [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
+
+- `CONV-1-C` (`CUP-1-I`): a fourth section, Apariencia (Ctrl+4), is the one
+  place in the suite where the shared appearance file
+  (`~/.config/celestina/appearance.toml`) is edited: a reduced-motion
+  switch and a choice of four text sizes (compact, normal, large, larger;
+  Left and Right walk it). Each
+  change is saved through `celestina_settings::save` on the section's
+  worker and every open window of the suite follows the file, Cuprita
+  included. While `CELESTINA_REDUCED_MOTION` is set the switch is on,
+  disabled and says it is forced by the environment. `CUPRITA_FAKE=1` keeps
+  the appearance in memory and never writes a file
+  ([evidence](docs/evidence/2026-10-09-appearance.md)).
 
 - `CONV-1-A` (suite): the single instance is the suite's shared
   claim-first hand-off, `celestina_core::activation`, on
@@ -20,8 +32,8 @@
   ([evidence](../docs/evidence/2026-10-09-shared-activation.md)).
 - 1.0.0 is published (the landing deploys it to the author's test prefix). The window
   shows the
-  pill strip with Red, Bluetooth and Audio; Ctrl+1, Ctrl+2 and Ctrl+3 jump
-  between them.
+  pill strip with Red, Bluetooth, Audio and Apariencia; Ctrl+1 to Ctrl+4
+  jump between them.
 - Keyboard: the strip is one Tab stop (Left and Right walk it), Tab then
   reaches the page's switches, buttons and list; the arrows walk a list,
   Enter runs the current row's primary action (join or leave a network,
@@ -106,8 +118,8 @@ From the final review of 1.0 (see the
 
 ## Author validation
 
-`VAL-C` (Red), `VAL-D` (Bluetooth) and `VAL-E` (Audio) in
-[VALIDATION.md](VALIDATION.md) are the author's live checks; nm-applet,
+`VAL-C` (Red), `VAL-D` (Bluetooth), `VAL-E` (Audio) and `VAL-F`
+(Apariencia) in [VALIDATION.md](VALIDATION.md) are the author's live checks; nm-applet,
 Blueman and pavucontrol stay installed until they pass.
 
 ## Blockers

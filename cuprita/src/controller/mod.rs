@@ -13,6 +13,7 @@
 
 pub mod activation;
 pub mod app;
+pub mod appearance;
 pub mod audio;
 pub mod bluetooth;
 pub mod device_model;

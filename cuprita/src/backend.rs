@@ -19,6 +19,8 @@ use cuprita_core::network::Network;
 use cuprita_core::nm::{self, NmNetwork};
 use cuprita_core::wpctl::{self, WpctlAudio};
 
+use celestina_settings::{Appearance, SettingsError};
+
 use crate::controller::Keepalive;
 
 fn fake() -> bool {
@@ -143,6 +145,79 @@ pub fn audio(on_change: impl Fn() + Send + Sync + 'static) -> (Box<dyn Audio>, O
         }
     }
     (Box::new(backend), None)
+}
+
+/// Where the appearance section reads and writes the suite's appearance.
+pub trait AppearanceStore: Send {
+    /// The current appearance, with the environment override applied.
+    fn read(&mut self) -> Appearance;
+    /// Writes both values.
+    ///
+    /// # Errors
+    ///
+    /// Whatever kept the file from being written.
+    fn write(&mut self, value: &Appearance) -> Result<(), SettingsError>;
+}
+
+/// The suite's appearance file, through `celestina_settings`.
+struct AppearanceFile;
+
+impl AppearanceStore for AppearanceFile {
+    fn read(&mut self) -> Appearance {
+        celestina_settings::load()
+    }
+
+    fn write(&mut self, value: &Appearance) -> Result<(), SettingsError> {
+        celestina_settings::save(value)
+    }
+}
+
+/// An appearance kept in memory, so the fakes never write a real
+/// `~/.config`. A write is handed straight to the window, as the follower
+/// would hand the file's change, so the fake window previews itself.
+struct FakeAppearance {
+    value: Appearance,
+}
+
+impl AppearanceStore for FakeAppearance {
+    fn read(&mut self) -> Appearance {
+        let mut value = self.value;
+        if celestina_settings::env_forces_reduced_motion() {
+            value.reduced_motion = true;
+        }
+        value
+    }
+
+    fn write(&mut self, value: &Appearance) -> Result<(), SettingsError> {
+        self.value = *value;
+        crate::controller::app::preview(self.read());
+        Ok(())
+    }
+}
+
+/// The appearance store and the watcher that calls `on_change` when the file
+/// changes. Blocking: call it on the worker. The fake has no watcher; it only
+/// changes through commands, which re-read anyway.
+pub fn appearance(
+    on_change: impl Fn() + Send + 'static,
+) -> (Box<dyn AppearanceStore>, Option<Keepalive>) {
+    if fake() {
+        return (
+            Box::new(FakeAppearance {
+                value: Appearance::default(),
+            }),
+            None,
+        );
+    }
+    // Without the watcher the page still updates after each command.
+    let watcher = match celestina_settings::watch(move |_| on_change()) {
+        Ok(handle) => Some(Box::new(handle) as Keepalive),
+        Err(error) => {
+            eprintln!("Cuprita: the appearance file is not watched: {error}");
+            None
+        }
+    };
+    (Box::new(AppearanceFile), watcher)
 }
 
 /// Ends what outlives the window: the audio watcher's `pw-mon`.

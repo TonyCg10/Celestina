@@ -15,8 +15,9 @@ set -u
 #
 #  3) The controller-to-model wiring over the fakes: CUPRITA_SMOKE_REPORT makes
 #     the window print its models' rows after 3 s, and the scripted state must
-#     show 4 networks, 2 devices, 3 endpoints, 2 streams and a default sink
-#     and source. The QML page tests use stand-ins, so this is the one check
+#     show 4 networks, 2 devices, 3 endpoints, 2 streams, a default sink
+#     and source, and the appearance section's first reading (the fake
+#     store's default text size). The QML page tests use stand-ins, so this is the one check
 #     of the real models.
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
@@ -84,7 +85,7 @@ fi
 
 report=$(grep -o 'cuprita-smoke:.*' "$log" | tail -1)
 case $report in
-    *" networks=4 devices=2 endpoints=3 streams=2 sink="[0-9]*" source="[0-9]*) ;;
+    *" networks=4 devices=2 endpoints=3 streams=2 sink="[0-9]*" source="[0-9]*" appearance=normal "*) ;;
     *)
         echo "smoke: the models over the fakes are not as scripted: ${report:-no report}" >&2
         exit 1

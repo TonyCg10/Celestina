@@ -11,6 +11,8 @@ and audio in one window. It replaces nm-applet, Blueman and pavucontrol.
   connecting and forgetting devices.
 - Audio: default output and input, volume and mute per device and per
   application, the card profile.
+- Apariencia: the suite's shared appearance, reduced motion and the text
+  size, edited here for every first-party window.
 - Cuprita is a window opened from the launcher or a key binding. It has no
   tray icon, no indicator and no daemon.
 

@@ -32,10 +32,10 @@ TestCase {
         }
     }
 
-    function test_the_window_has_three_sections() {
-        compare(Sections.all.length, 3)
+    function test_the_window_has_four_sections() {
+        compare(Sections.all.length, 4)
         compare(Sections.all.map(function(s) { return s.id }),
-                ["network", "bluetooth", "audio"])
+                ["network", "bluetooth", "audio", "appearance"])
     }
 
     function test_clicking_the_second_item_selects_it() {
@@ -52,7 +52,7 @@ TestCase {
             }
         }
         walk(host.strip)
-        compare(items.length, 3)
+        compare(items.length, 4)
         mouseClick(items[1])
         compare(host.chosen, 1)
     }

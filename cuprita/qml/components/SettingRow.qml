@@ -11,6 +11,8 @@ Item {
     property bool checked: false
     // What a screen reader calls the switch; the label unless a row says more.
     property string accessibleName: root.label
+    // A muted line under the label saying why the switch is as it is.
+    property string hint: ""
     // A hairline above the row, when another row of the card precedes it.
     property bool separated: false
 
@@ -32,17 +34,32 @@ Item {
         hovered: hover.hovered && root.enabled
     }
 
-    Text {
+    Column {
         anchors.left: parent.left
         anchors.leftMargin: root.inset
         anchors.right: toggle.left
         anchors.rightMargin: CelestinaTheme.spaceMd
         anchors.verticalCenter: parent.verticalCenter
-        text: root.label
-        elide: Text.ElideRight
-        color: CelestinaTheme.text
-        font.family: CelestinaTheme.sansFamily
-        font.pixelSize: CelestinaTheme.fontRowTitle
+
+        Text {
+            width: parent.width
+            text: root.label
+            elide: Text.ElideRight
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontRowTitle
+        }
+
+        Text {
+            objectName: "settingHint"
+            width: parent.width
+            visible: root.hint.length > 0
+            text: root.hint
+            elide: Text.ElideRight
+            color: CelestinaTheme.textMuted
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontCaption
+        }
     }
 
     CelestinaSwitch {

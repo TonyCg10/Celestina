@@ -29,6 +29,10 @@ whose three sections manage network, Bluetooth and audio.
 - `CUP-1-G` — the fix wave from the final review of 1.0 (maintenance).
 - `CUP-1-H` — the grouped-card layout the author approved on 2026-10-08
   (maintenance).
+- `CUP-1-I` — the Appearance section, where the suite's shared appearance
+  (reduced motion, text size) is edited (maintenance). It is `CONV-1-C` of
+  the suite program in
+  [`docs/plans/active/2026-10-09-suite-conventions.md`](../../../../docs/plans/active/2026-10-09-suite-conventions.md).
 
 ## Exclusions
 
@@ -40,7 +44,7 @@ whose three sections manage network, Bluetooth and audio.
 ## Build order
 
 1. `CUP-1-A`, then `-B`, then `-C`, `-D` and `-E`, then `-F`, then `-G`,
-   then `-H`.
+   then `-H`, then `-I`.
 
 ## Implementation exit
 
@@ -63,3 +67,4 @@ it has no row of its own below.
 | CUP-1-F | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-F.numstat.tsv) | 19 files, +612/-32 | Keyboard and accessibility pass, glass and motion check, the roles nm-applet, Blueman and pavucontrol held, documents closed for 1.0.0 (published by the landing, `--kind release`) | [evidence](../../evidence/2026-10-08-exit.md) | `VAL-C`, `VAL-D`, `VAL-E` |
 | CUP-1-G | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-G.numstat.tsv) | 21 files, +579/-115 | The final review's fixes: a 120 s NetworkManager call timeout with the proxy builder and error mapping shared in `bus.rs`; known D-Bus and `wpctl` errors as Spanish notices, other details logged; no audio poll while `pw-mon` runs; the passphrase length gate and sensitive input hints; the WEP label; deferred items in the roadmap's "Later" | [evidence](../../evidence/2026-10-08-final-review.md) | `VAL-C`, `VAL-D`, `VAL-E` |
 | CUP-1-H | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-H.numstat.tsv) | 41 files, +1610/-411 | Add the grouped-card layout to the three pages: a section label above each card, rows inset 16 px with a hover plate and hairlines, one scrolling column per page; the Red page's connection card with the IPv4 address (new `address` on `Network`, read from NetworkManager's `Ip4Config`) | [evidence](../../evidence/2026-10-08-grouped-cards.md) | `VAL-C`, `VAL-D`, `VAL-E` |
+| CUP-1-I | `cuprita:` | done | [inventory](../../inventories/2026-10-08-cup-1-foundation/CUP-1-I.numstat.tsv) | 24 files, +1037/-31 | `CONV-1-C` of the suite program: add the Appearance section (Ctrl+4) with reduced motion and the text size, saved through `celestina_settings` on the section's worker | [evidence](../../evidence/2026-10-09-appearance.md) | `VAL-F` |
