@@ -208,6 +208,47 @@ pub fn send_files(device_id: &str, paths: &[PathBuf]) -> Result<(), String> {
     }
 }
 
+/// What a `text/uri-list` dropped on a device names: the local files, byte
+/// for byte, and how many entries were not local files and are not sent.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Dropped {
+    pub local: Vec<PathBuf>,
+    pub ignored: usize,
+}
+
+/// Splits dropped URIs with the suite's one strict `file://` reading; a
+/// remote or malformed URI is counted, never sent.
+pub fn dropped<I, S>(uris: I) -> Dropped
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut out = Dropped::default();
+    for uri in uris {
+        match celestina_core::file_uri::to_path(uri.as_ref()) {
+            Ok(path) => out.local.push(path),
+            Err(_) => out.ignored += 1,
+        }
+    }
+    out
+}
+
+/// Sends what a drop names to `device_id`; blocks, so it runs on a worker.
+/// `send` is the bus call, a recorder in tests. A folder or a vanished name
+/// is refused before the bus, as for `--send`; nothing local, nothing sent.
+pub fn send_dropped(
+    dropped: &Dropped,
+    send: impl FnOnce(&[PathBuf]) -> Result<(), String>,
+) -> Result<(), String> {
+    if dropped.local.is_empty() {
+        return Ok(());
+    }
+    if let Some(path) = first_non_file(&dropped.local) {
+        return Err(format!("{}: not a file", path.display()));
+    }
+    send(&dropped.local)
+}
+
 /// The argument parsing and the one-device decision. A test under `tests/`
 /// cannot link the binary's generated Qt archive, so they live here.
 #[cfg(test)]
@@ -215,7 +256,52 @@ mod tests {
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
 
-    use super::{parse, plan, Plan, SendError, SendRequest};
+    use super::{dropped, parse, plan, send_dropped, Dropped, Plan, SendError, SendRequest};
+
+    #[test]
+    fn a_drop_sends_local_files_by_bytes_and_ignores_remote_uris() {
+        use std::os::unix::ffi::OsStrExt;
+        let drop = dropped(["file:///tmp/a%20b", "smb://x/y", "file:///tmp/%FF"]);
+        assert_eq!(
+            drop,
+            Dropped {
+                local: vec![
+                    PathBuf::from("/tmp/a b"),
+                    PathBuf::from(std::ffi::OsStr::from_bytes(b"/tmp/\xFF")),
+                ],
+                ignored: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn a_dropped_file_reaches_the_send_and_a_folder_does_not() {
+        let dir = std::env::temp_dir().join(format!("magnetita-drop-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let file = dir.join("a b.txt");
+        std::fs::write(&file, b"x").expect("file");
+        let uri = celestina_core::file_uri::from_path(&file).expect("uri");
+
+        let mut sent = Vec::new();
+        let result = send_dropped(&dropped([uri.as_str(), "https://x/y"]), |paths| {
+            sent.extend_from_slice(paths);
+            Ok(())
+        });
+        assert_eq!(result, Ok(()));
+        assert_eq!(sent, vec![file.clone()]);
+
+        let folder = celestina_core::file_uri::from_path(&dir).expect("uri");
+        let refused = send_dropped(&dropped([folder.as_str()]), |_| {
+            panic!("a folder must not reach the bus")
+        });
+        assert!(refused.is_err());
+        // Only remote URIs: nothing to send, nothing called.
+        assert_eq!(
+            send_dropped(&dropped(["smb://x/y"]), |_| panic!("nothing to send")),
+            Ok(())
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn args(list: &[&str]) -> Vec<OsString> {
         list.iter().map(OsString::from).collect()

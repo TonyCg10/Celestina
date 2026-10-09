@@ -31,6 +31,10 @@ pub(super) const SCAN_NOT_STARTED: &str = "No se pudo iniciar la exploración";
 /// cannot be asked at all.
 pub(super) const CHOOSE_FOLDER: &str = "Añadir una carpeta a tu biblioteca";
 pub(super) const CHOOSER_UNAVAILABLE: &str = "El escritorio no ofreció un selector de carpetas";
+/// A folder was dropped while the chooser was already open: it is not
+/// queued, so the person hears it was left out.
+pub(super) const CHOOSER_BUSY: &str =
+    "El selector de carpetas ya está abierto; suelta la carpeta de nuevo cuando termines";
 
 /// Item actions.
 pub(super) const ITEM_GONE: &str = "Ese elemento ya no está en la biblioteca";

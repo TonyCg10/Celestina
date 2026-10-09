@@ -9,6 +9,11 @@
 //! play queue; a folder that is a configured library source becomes the
 //! selected source; anything else, and `Activate`, raises the window.
 //!
+//! A drop from another application (`openDropped`) is decided on the same
+//! worker by the same rule, with two differences a drop calls for: a folder
+//! that is not a source is offered to the source chooser, opened at it, and a
+//! URI that names no local file is counted for the window's notice.
+//!
 //! The desktop hands over either a path or a `file://` URI, and either may be
 //! bytes that are not valid UTF-8. The raw `PathBuf` is what would eventually
 //! reach the engine; the lossy string beside it exists only to put something on
@@ -27,7 +32,7 @@ use std::sync::OnceLock;
 use celestina_core::activation::{self, Activatable, Owner, Request};
 use celestina_core::file_uri::{self, FileUriError};
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QString, QStringList};
 use fluorita_core::MediaKind;
 
 #[cxx_qt::bridge]
@@ -35,6 +40,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
     }
 
     #[auto_cxx_name]
@@ -61,6 +68,19 @@ pub mod qobject {
         #[qsignal]
         fn source_requested(self: Pin<&mut FluoritaActivation>, source: i32);
 
+        /// A dropped folder that is not a source: offer it to the source
+        /// chooser, opened at its path key.
+        #[qsignal]
+        fn folder_offered(self: Pin<&mut FluoritaActivation>, key: QString);
+
+        /// A drop left this many entries that are not local files unopened.
+        #[qsignal]
+        fn drop_ignored(self: Pin<&mut FluoritaActivation>, count: i32);
+
+        /// A `text/uri-list` dropped on the window, decided on the worker.
+        #[qinvokable]
+        fn open_dropped(self: Pin<&mut FluoritaActivation>, uris: &QStringList);
+
         /// Attaches this object to the claim `main` made, once.
         #[qinvokable]
         fn start(self: Pin<&mut FluoritaActivation>);
@@ -76,6 +96,8 @@ pub struct FluoritaActivationRust {
 
 static QT: OnceLock<cxx_qt::CxxQtThread<qobject::FluoritaActivation>> = OnceLock::new();
 static OWNER: OnceLock<Owner> = OnceLock::new();
+/// The worker's queue, for drops; set when the worker starts.
+static DROPS: OnceLock<std::sync::mpsc::Sender<Job>> = OnceLock::new();
 
 impl qobject::FluoritaActivation {
     pub fn start(mut self: Pin<&mut Self>) {
@@ -90,6 +112,13 @@ impl qobject::FluoritaActivation {
             owner.attach();
         }
     }
+
+    pub fn open_dropped(self: Pin<&mut Self>, uris: &QStringList) {
+        let uris: Vec<String> = uris.iter().map(QString::to_string).collect();
+        if let Some(jobs) = DROPS.get() {
+            let _ = jobs.send(Job::Dropped(uris));
+        }
+    }
 }
 
 /// What the window is asked to do.
@@ -102,6 +131,10 @@ enum Action {
         kind: &'static str,
     },
     Source(i32),
+    /// A dropped folder to offer to the source chooser, as its path key.
+    Offer(String),
+    /// A drop held this many entries that are not local files.
+    Ignored(i32),
 }
 
 /// Where actions go: the Qt thread in the application, a recorder in tests.
@@ -125,6 +158,8 @@ impl Sink for QtSink {
                         QString::from(kind),
                     ),
                     Action::Source(source) => activation.source_requested(source),
+                    Action::Offer(key) => activation.folder_offered(QString::from(key.as_str())),
+                    Action::Ignored(count) => activation.drop_ignored(count),
                 },
             );
         }
@@ -164,7 +199,9 @@ impl World for Disk {
 
 /// The one action an `Open` comes to: the first playable file, else the
 /// first folder that is a source, else a raise. What is left over is said.
-fn decide(paths: &[PathBuf], world: &impl World) -> Action {
+/// With `offer`, a folder that is not a source is a candidate too: it goes
+/// to the source chooser.
+fn decide(paths: &[PathBuf], world: &impl World, offer: bool) -> Action {
     let mut chosen = None;
     for path in paths {
         let candidate = match world.kind(path) {
@@ -186,13 +223,17 @@ fn decide(paths: &[PathBuf], world: &impl World) -> Action {
             }
             Handed::Folder => {
                 let source = world.source_of(path).map(Action::Source);
-                if source.is_none() {
+                if source.is_none() && offer {
+                    Some(Action::Offer(celestina_core::pathkey::encode(path)))
+                } else if source.is_none() {
                     eprintln!(
                         "fluorita: {} is not a library folder, not opened",
                         path.display()
                     );
+                    None
+                } else {
+                    source
                 }
-                source
             }
         };
         match (&chosen, candidate) {
@@ -209,24 +250,59 @@ fn decide(paths: &[PathBuf], world: &impl World) -> Action {
     chosen.unwrap_or(Action::Raise)
 }
 
+/// What the worker is fed: the shared requests, and the window's drops.
+enum Job {
+    Shared(Request),
+    Dropped(Vec<String>),
+}
+
+/// What a drop comes to: one action for its local entries, as `Open` would
+/// decide them (plus the folder offer), and a notice for the rest.
+fn decide_dropped(uris: &[String], world: &impl World) -> Vec<Action> {
+    let mut local = Vec::new();
+    let mut ignored = 0_usize;
+    for uri in uris {
+        match file_uri::to_path(uri) {
+            Ok(path) => local.push(path),
+            Err(_) => ignored += 1,
+        }
+    }
+    let mut actions = Vec::new();
+    if !local.is_empty() {
+        actions.push(decide(&local, world, true));
+    }
+    if ignored > 0 {
+        eprintln!("fluorita: {ignored} dropped item(s) are not local files, ignored");
+        actions.push(Action::Ignored(i32::try_from(ignored).unwrap_or(i32::MAX)));
+    }
+    actions
+}
+
 /// Turns the shared requests into Fluorita's actions on one long-lived
 /// worker fed in arrival order: the filesystem and the stored sources are
 /// asked there, so a stalled mount holds neither the Qt thread nor the bus
 /// thread, and requests keep the order they arrived in.
 struct Forward {
-    jobs: std::sync::mpsc::Sender<Request>,
+    jobs: std::sync::mpsc::Sender<Job>,
 }
 
 impl Forward {
     fn start<S: Sink, W: World>(sink: S, world: W) -> Self {
-        let (jobs, queue) = std::sync::mpsc::channel::<Request>();
+        let (jobs, queue) = std::sync::mpsc::channel::<Job>();
         let spawned = std::thread::Builder::new()
             .name("fluorita-activation".to_owned())
             .spawn(move || {
                 for job in queue {
                     match job {
-                        Request::Activate => sink.deliver(Action::Raise),
-                        Request::Open(paths) => sink.deliver(decide(&paths, &world)),
+                        Job::Shared(Request::Activate) => sink.deliver(Action::Raise),
+                        Job::Shared(Request::Open(paths)) => {
+                            sink.deliver(decide(&paths, &world, false));
+                        }
+                        Job::Dropped(uris) => {
+                            for action in decide_dropped(&uris, &world) {
+                                sink.deliver(action);
+                            }
+                        }
                     }
                 }
             });
@@ -239,11 +315,11 @@ impl Forward {
 
 impl Activatable for Forward {
     fn activate(&self) {
-        let _ = self.jobs.send(Request::Activate);
+        let _ = self.jobs.send(Job::Shared(Request::Activate));
     }
 
     fn open(&self, paths: Vec<PathBuf>) {
-        let _ = self.jobs.send(Request::Open(paths));
+        let _ = self.jobs.send(Job::Shared(Request::Open(paths)));
     }
 }
 
@@ -252,6 +328,7 @@ impl Activatable for Forward {
 /// kept for `start` to attach.
 pub fn claim(argv_paths: &[PathBuf]) {
     let served = Forward::start(QtSink, Disk);
+    let _ = DROPS.set(served.jobs.clone());
     if let Some(owner) =
         activation::claim_or_exit(activation::FLUORITA, Box::new(served), argv_paths)
     {
@@ -347,7 +424,8 @@ fn display_label(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        decide, describe, local_path, Action, Forward, Handed, RequestedMedia, Sink, World,
+        decide, decide_dropped, describe, local_path, Action, Forward, Handed, RequestedMedia,
+        Sink, World,
     };
     use celestina_core::activation::Activatable;
     use fluorita_core::MediaKind;
@@ -413,10 +491,13 @@ mod tests {
     #[test]
     fn a_folder_selects_its_source_or_only_raises() {
         assert_eq!(
-            decide(&[PathBuf::from("/d/fotos")], &Fake),
+            decide(&[PathBuf::from("/d/fotos")], &Fake, false),
             Action::Source(3)
         );
-        assert_eq!(decide(&[PathBuf::from("/d/otra")], &Fake), Action::Raise);
+        assert_eq!(
+            decide(&[PathBuf::from("/d/otra")], &Fake, false),
+            Action::Raise
+        );
     }
 
     #[test]
@@ -481,5 +562,56 @@ mod tests {
         assert_eq!(unknown.kind_label(), "tipo no reconocido");
 
         assert_eq!(RequestedMedia::default().kind_label(), "");
+    }
+
+    #[test]
+    fn a_drop_decides_like_open_and_offers_other_folders() {
+        let uris = |list: &[&str]| list.iter().map(|uri| (*uri).to_owned()).collect::<Vec<_>>();
+        // The first media file plays; a remote URI is only reported.
+        assert_eq!(
+            decide_dropped(
+                &uris(&["smb://x/y", "file:///m/a%20b.mkv", "file:///m/c.png"]),
+                &Fake
+            ),
+            vec![
+                Action::Play {
+                    key: "/m/a%20b.mkv".to_owned(),
+                    name: "a b.mkv".to_owned(),
+                    kind: describe(&OsString::from("/m/a b.mkv")).kind_label(),
+                },
+                Action::Ignored(1),
+            ]
+        );
+        // A dropped image opens in the viewer through the same action.
+        assert!(matches!(
+            decide_dropped(&uris(&["file:///m/c.png"]), &Fake).as_slice(),
+            [Action::Play { kind: "imagen", .. }]
+        ));
+        assert_eq!(
+            decide_dropped(&uris(&["file:///d/fotos"]), &Fake),
+            vec![Action::Source(3)]
+        );
+        assert_eq!(
+            decide_dropped(&uris(&["file:///d/otra"]), &Fake),
+            vec![Action::Offer("/d/otra".to_owned())]
+        );
+        assert_eq!(
+            decide_dropped(&uris(&["https://x/y"]), &Fake),
+            vec![Action::Ignored(1)]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dropped_name_that_is_not_utf8_keeps_its_bytes() {
+        let actions = decide_dropped(&["file:///d/%FF".to_owned()], &Fake);
+        let [Action::Offer(key)] = actions.as_slice() else {
+            panic!("an offer, got {actions:?}");
+        };
+        let path = celestina_core::pathkey::decode(key).expect("a path key");
+        assert_eq!(
+            std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str()),
+            b"/d/\xFF"
+        );
     }
 }

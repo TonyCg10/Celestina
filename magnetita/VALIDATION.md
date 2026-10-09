@@ -3,6 +3,21 @@
 This manual lane requires the real phone, LAN, mounts or Wayland session. It
 does not contain implementation and does not block [ROADMAP.md](ROADMAP.md).
 
+## VAL-MAG-DROP — Files dropped from Siderita onto a phone
+
+- **Status:** pending
+- **Related implementation:** `CONV-1-E`, recorded in
+  [the suite evidence](../docs/evidence/2026-10-09-drag-and-drop.md)
+- **Requires:** the deployed Magnetita and Siderita on the real session, one
+  phone connected
+- **Procedure:** drag a file from Siderita onto the phone's card; then two
+  files onto the page below the card; then a folder
+- **Pass condition:** the card (or the window) shows an accent rim while
+  dragging; «Enviando…» shows and the files arrive on the phone; the folder
+  is refused with «No se pudo enviar: …» and nothing is sent
+- **Result:** not run by hand
+- **Evidence:** any file that did not arrive, or arrived under another name
+
 ## VAL-MAG-17 — Liveness, released input and the accessible conversation row
 
 - **Status:** pending

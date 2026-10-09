@@ -13,6 +13,10 @@
 
 ## Current checkout truth
 
+- `CONV-1-E` (suite): files dropped on the window (from Siderita or any
+  manager) open as tabs through the same path as `Open`; the bytes decide,
+  and a URI that names no local file is ignored with a short notice
+  ([evidence](../docs/evidence/2026-10-09-drag-and-drop.md)).
 - `CONV-1-A` (suite): the single instance is the suite's shared
   claim-first hand-off, `celestina_core::activation`: `OpenDocument` is
   retired for `org.celestina.Application1` (`Activate()`, `Open(as paths)`);

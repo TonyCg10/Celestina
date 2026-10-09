@@ -76,13 +76,64 @@ pub fn qml_argument(path: &Path) -> Option<String> {
     }
 }
 
+/// What a dropped `text/uri-list` names: the local files, byte for byte, and
+/// how many entries were not local files and are left alone.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Dropped {
+    pub local: Vec<PathBuf>,
+    pub ignored: usize,
+}
+
+/// Splits dropped URIs. Unlike a command-line argument, a drop always carries
+/// URIs, so only [`file_uri::to_path`] decides: a remote URI (`smb://`,
+/// `https://`, `file://otra-maquina/…`) or a malformed one is counted and
+/// ignored, never read as a relative name.
+#[must_use]
+pub fn dropped<I, S>(uris: I) -> Dropped
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut out = Dropped::default();
+    for uri in uris {
+        match file_uri::to_path(uri.as_ref()) {
+            Ok(path) => out.local.push(path),
+            Err(_) => out.ignored += 1,
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
 
-    use super::{local_path, local_path_os, qml_argument};
+    use super::{dropped, local_path, local_path_os, qml_argument};
+
+    #[test]
+    fn a_drop_keeps_local_files_by_bytes_and_ignores_remote_uris() {
+        let drop = dropped([
+            "file:///tmp/a%20b",
+            "smb://x/y",
+            "file:///tmp/%FFnota.txt",
+            "file://otra-maquina/tmp/c",
+            "notas.txt",
+        ]);
+        assert_eq!(
+            drop.local,
+            vec![
+                PathBuf::from("/tmp/a b"),
+                PathBuf::from(OsStr::from_bytes(b"/tmp/\xFFnota.txt")),
+            ]
+        );
+        assert_eq!(drop.ignored, 3);
+        // A name that is not UTF-8 reaches the tab in the form `openPath`
+        // reads back unchanged.
+        let argument = qml_argument(&drop.local[1]).expect("an argument");
+        assert_eq!(local_path(&argument).as_ref(), Some(&drop.local[1]));
+    }
 
     #[test]
     fn plain_paths_and_local_urls_both_arrive_as_paths() {

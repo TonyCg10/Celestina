@@ -1,0 +1,51 @@
+# CONV-1-E exact change inventory
+
+Base revision	f035450b415284cd20568f56ac76b8f94d7e1dcb
+Pathspec	docs/evidence/2026-10-09-drag-and-drop.md
+Pathspec	docs/inventories/2026-10-09-suite-conventions/CONV-1-E.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-suite-conventions.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/VALIDATION.md
+Pathspec	fluorita/qml/Main.qml
+Pathspec	fluorita/src/activation.rs
+Pathspec	fluorita/src/folders.rs
+Pathspec	fluorita/src/library.rs
+Pathspec	fluorita/src/library/copy.rs
+Pathspec	fluorita/src/library/work.rs
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/VALIDATION.md
+Pathspec	grafita/qml/Main.qml
+Pathspec	grafita/src/activation.rs
+Pathspec	grafita/src/url.rs
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/VALIDATION.md
+Pathspec	magnetita/qml/Main.qml
+Pathspec	magnetita/qml/pages/DevicesPage.qml
+Pathspec	magnetita/src/controller.rs
+Pathspec	magnetita/src/send.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+125	0	e2701c463d10e00415fc7a5f2fd1aec5a8e1e6eeb49042ddc50b8e6364a6c426	docs/evidence/2026-10-09-drag-and-drop.md
+51	0	self	docs/inventories/2026-10-09-suite-conventions/CONV-1-E.numstat.tsv
+1	1	71188b83886474a66bf887b4b43acf138bf347b8cc7d729538a17995c8c65b63	docs/plans/active/2026-10-09-suite-conventions.md
+4	0	8cf76558404159dbb336354c19fe4da0afb443f4d6d8351feabcdbfcdeb4869a	fluorita/STATUS.md
+17	0	4704b16ab869290c938ea5b1245df79eacea5c21f7d921b8d98feab1315d63a1	fluorita/VALIDATION.md
+82	0	6da3eb2db53e5bdfc8f949911559cb3d126b25a5f3ccd00115d49006b9b31ef1	fluorita/qml/Main.qml
+145	13	8125cc4540486a80cfc32bf02f749a229a284633d744e1ad897654310b9d048c	fluorita/src/activation.rs
+16	5	1b565aa3b7e85647c706f186457a7e5e0310b9855a4b85b2e6c0709b8725fea2	fluorita/src/folders.rs
+28	2	9d92d66c743ab2147eba2c3cace8a1f941bf445aab7a6cb3857221ac8864187a	fluorita/src/library.rs
+4	0	f778cecd9edbd900a825b5023858d93337fff8f6122da81d01a6f286b7124635	fluorita/src/library/copy.rs
+2	1	88e92d2acdf573c80b5e47e4532fb185c64267cf98abfecf3d0ade133fef8aa0	fluorita/src/library/work.rs
+4	0	0dbada85735556a463045f6f98ece3ce9b6e8e0ed13200404317208c5fdd3274	grafita/STATUS.md
+15	0	1056cf4fa7c7ce820f62d800a58b6e9ff7686c3504eae3e4b05664315b2a6e16	grafita/VALIDATION.md
+81	0	ed2c4fea3be734e185daac32ccc08e6da88996f07dc911366e03cb012b4f4112	grafita/qml/Main.qml
+90	10	e19a07e4fec62f2e5edeea4615bb34043bcfb8c466df60143cefd225ef8f6a22	grafita/src/activation.rs
+52	1	5f89c460962095d9965f0995c4898033f7c6561348d3c1e7b7ab65c68e34701d	grafita/src/url.rs
+4	0	84da4df921414e097a2fb2a017e9f74100e09ebeadaaa30a0b2941f91b754a75	magnetita/STATUS.md
+15	0	0903be3fdd0e8b39b3205ec597c9743d6521e34b78b2dc619b513591422f5688	magnetita/VALIDATION.md
+27	0	a7519f4213262bbb7b3405fb7f611e21c2ca37c4203991c828196736dd4537e1	magnetita/qml/Main.qml
+94	0	2fadee499fde81496829eedb5f016fd1d08e83db3dc2e839178d25f26e646235	magnetita/qml/pages/DevicesPage.qml
+43	0	ba0760513e47a2f04df0c1f835ac9448eef3f3961803ad218df399118fbdad5d	magnetita/src/controller.rs
+87	1	d0b6963c94a363d3c116f964e800923581cb0759b7d4382c3eb754642337849b	magnetita/src/send.rs

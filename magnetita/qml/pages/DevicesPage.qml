@@ -18,6 +18,75 @@ ScrollPage {
 
     spacing: 10
 
+    // Files dragged from Siderita onto a device row or this page go to that
+    // device. The notice is `--send`'s chooser's own wording: sending, then a
+    // failure if there was one; what was not a local file is only reported.
+    property bool dropSending: false
+    property string dropNotice: ""
+
+    // The dropped URLs as plain strings, as Siderita's `droppedUris`; a loop
+    // inside a drop handler made qmllint stop reporting the file.
+    function droppedUris(urls) {
+        const out = []
+        for (let i = 0; i < urls.length; i++)
+            out.push(urls[i].toString())
+        return out
+    }
+
+    function sendDrop(index, drop) {
+        if (!drop.hasUrls || index < 0)
+            return
+        // One drop at a time: a fast second send would otherwise overwrite
+        // the first one's outcome before it was read.
+        if (root.dropSending) {
+            root.dropNotice = qsTr("Hay un envío en curso")
+            dropNoticeTimer.restart()
+            return
+        }
+        // Not decoded here: Rust reads each URI by bytes.
+        const uris = root.droppedUris(drop.urls)
+        root.dropSending = true
+        root.dropNotice = ""
+        dropNoticeTimer.stop()
+        root.devices.sendDropped(index, uris)
+        drop.accept(Qt.CopyAction)
+    }
+
+    Connections {
+        target: root.devices
+
+        function onDropSendFinished(error, ignored) {
+            root.dropSending = false
+            const parts = []
+            if (error !== "")
+                parts.push(qsTr("No se pudo enviar: %1").arg(error))
+            if (ignored > 0)
+                parts.push(qsTr("Solo se envían archivos locales: %n elemento(s) ignorado(s)",
+                                "", ignored))
+            root.dropNotice = parts.join("\n")
+            dropNoticeTimer.restart()
+        }
+    }
+
+    Timer {
+        id: dropNoticeTimer
+        interval: 4000
+        onTriggered: root.dropNotice = ""
+    }
+
+    Text {
+        width: parent.width
+        visible: root.dropSending || root.dropNotice.length > 0
+        // The daemon's message is development text; the line before it is
+        // what the person reads.
+        textFormat: Text.PlainText
+        text: root.dropNotice.length > 0 ? root.dropNotice : qsTr("Enviando…")
+        color: root.dropNotice.length > 0 ? CelestinaTheme.danger : CelestinaTheme.textMuted
+        font.family: CelestinaTheme.sansFamily
+        font.pixelSize: CelestinaTheme.fontBody
+        wrapMode: Text.Wrap
+    }
+
     // Pairing over the own wire starts here, with or without a phone in the
     // list: the QR is the way in, and the same action re-pairs a phone that
     // forgot this desktop.
@@ -142,6 +211,7 @@ ScrollPage {
             model: root.devices.deviceNames
 
             delegate: ConnectedDeviceCard {
+                id: deviceCard
                 required property int index
                 required property string modelData
 
@@ -160,6 +230,30 @@ ScrollPage {
                 charging: index < root.devices.deviceCharging.length
                           && root.devices.deviceCharging[index] === "true"
                 onOpenMountRequested: root.devices.openMount(index)
+
+                // A drop on this row sends to this device.
+                DropArea {
+                    id: cardDrop
+                    anchors.fill: parent
+                    keys: ["text/uri-list"]
+                    onEntered: function(drag) {
+                        if (!drag.hasUrls)
+                            drag.accepted = false
+                    }
+                    onDropped: function(drop) {
+                        root.sendDrop(deviceCard.index, drop)
+                    }
+
+                    // Siderita's drop highlight: an accent rim, nothing filled.
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: cardDrop.containsDrag
+                        color: CelestinaTheme.clear
+                        border.width: CelestinaTheme.borderFocus
+                        border.color: CelestinaTheme.accent
+                        radius: deviceCard.radius
+                    }
+                }
             }
         }
     }

@@ -25,7 +25,7 @@
 //!   on as raw bytes; the domain then applies its own rules to it.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::Duration;
 
@@ -74,8 +74,11 @@ pub enum FolderChoice {
 ///
 /// Blocking by construction: call it from a worker thread.
 #[must_use]
-pub fn choose(title: &str, cancellation: &CancellationToken) -> FolderChoice {
-    match request(title, Wanted::Directory, cancellation) {
+/// `start`, when given, is the folder the dialog opens at (the portal's
+/// `current_folder`, its bytes as they are): a folder dropped on the window
+/// is offered there, one confirmation away.
+pub fn choose(title: &str, start: Option<&Path>, cancellation: &CancellationToken) -> FolderChoice {
+    match request(title, Wanted::Directory(start), cancellation) {
         Ok(choice) => choice,
         Err(error) => FolderChoice::Unavailable(error),
     }
@@ -102,7 +105,8 @@ pub fn choose_picture(
 /// What the chooser is being asked for.
 #[derive(Clone, Copy)]
 enum Wanted<'a> {
-    Directory,
+    /// A folder, the dialog opened at the one given.
+    Directory(Option<&'a Path>),
     /// A picture, labelled for the dialog's filter row.
     Picture(&'a str),
 }
@@ -216,8 +220,15 @@ fn exchange(
     options.insert("multiple", Value::Bool(false));
     options.insert("modal", Value::Bool(true));
     match wanted {
-        Wanted::Directory => {
+        Wanted::Directory(start) => {
             options.insert("directory", Value::Bool(true));
+            if let Some(start) = start {
+                // `ay`, NUL-terminated: the name crosses as bytes, so a folder
+                // whose name is not UTF-8 is still the one the dialog opens.
+                let mut bytes = std::os::unix::ffi::OsStrExt::as_bytes(start.as_os_str()).to_vec();
+                bytes.push(0);
+                options.insert("current_folder", Value::from(bytes));
+            }
         }
         Wanted::Picture(label) => {
             options.insert("directory", Value::Bool(false));

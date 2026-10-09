@@ -134,6 +134,16 @@ pub mod qobject {
         #[qsignal]
         fn send_finished(self: Pin<&mut DevicesModel>, error: QString);
 
+        /// Sends the local files of a `text/uri-list` dropped on device
+        /// `index`'s row or page; decoded and sent on an owned worker.
+        #[qinvokable]
+        fn send_dropped(self: Pin<&mut DevicesModel>, index: i32, uris: &QStringList);
+
+        /// A drop's send ended: `error` is empty when it went, and
+        /// `ignored` counts the entries that were not local files.
+        #[qsignal]
+        fn drop_send_finished(self: Pin<&mut DevicesModel>, error: QString, ignored: i32);
+
         /// "Mute", "Answer" or "HangUp" device `index`'s call.
         #[qinvokable]
         fn call_action(self: Pin<&mut DevicesModel>, index: i32, action: QString);
@@ -611,6 +621,39 @@ impl qobject::DevicesModel {
                     }
                 };
                 model.send_finished(message);
+            },
+        );
+    }
+
+    pub fn send_dropped(self: Pin<&mut Self>, index: i32, uris: &QStringList) {
+        let Some(device_id) = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.rust().devices.get(i))
+            .map(|device| device.id.clone())
+        else {
+            return;
+        };
+        let uris: Vec<String> = uris.iter().map(QString::to_string).collect();
+        self.read_owned(
+            move || {
+                let dropped = crate::send::dropped(&uris);
+                let result = crate::send::send_dropped(&dropped, |paths| {
+                    crate::send::send_files(&device_id, paths)
+                });
+                (result, dropped.ignored)
+            },
+            |model, (result, ignored)| {
+                if ignored > 0 {
+                    eprintln!("magnetita: {ignored} dropped item(s) are not local files, not sent");
+                }
+                let message = match result {
+                    Ok(()) => QString::default(),
+                    Err(error) => {
+                        eprintln!("magnetita: cannot send: {error}");
+                        QString::from(error.as_str())
+                    }
+                };
+                model.drop_send_finished(message, i32::try_from(ignored).unwrap_or(i32::MAX));
             },
         );
     }

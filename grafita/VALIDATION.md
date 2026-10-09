@@ -3,6 +3,21 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-GRA-DROP — Files dropped from Siderita
+
+- **Status:** pending
+- **Related implementation:** `CONV-1-E`, recorded in
+  [the suite evidence](../docs/evidence/2026-10-09-drag-and-drop.md)
+- **Requires:** the deployed Grafita and Siderita on the real session
+- **Procedure:** drag a text file, then two at once, then an image and a
+  file whose name is not UTF-8 from Siderita onto Grafita's window
+- **Pass condition:** an accent rim shows while dragging over the window;
+  each text file opens in its own tab (one already open is focused, not
+  duplicated); the image shows the usual refusal; the non-UTF-8 name opens
+  the right file
+- **Result:** not run by hand
+- **Evidence:** any drop that opened the wrong file or none
+
 ## VAL-GRA-FEEDBACK — Tabs, footer and find bar as glyphs
 
 - **Status:** pending

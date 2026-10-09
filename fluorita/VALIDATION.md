@@ -3,6 +3,23 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-FLU-DROP — Files and folders dropped from Siderita
+
+- **Status:** pending
+- **Related implementation:** `CONV-1-E`, recorded in
+  [the suite evidence](../docs/evidence/2026-10-09-drag-and-drop.md)
+- **Requires:** the deployed Fluorita and Siderita on the real session, one
+  configured library source
+- **Procedure:** drag onto Fluorita's window a video, then a video and an
+  audio file together, then an image, then the configured source folder,
+  then a folder that is not a source
+- **Pass condition:** an accent rim shows while dragging; the video plays;
+  of two files only the first plays; the image opens in the viewer; the
+  source folder becomes the selected source; the other folder opens the
+  folder chooser at it, and confirming adds it
+- **Result:** not run by hand
+- **Evidence:** any drop that did nothing or opened the wrong item
+
 ## VAL-FLU-FEEDBACK — Arrows, dock and panel verbs
 
 - **Status:** pending

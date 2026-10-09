@@ -23,6 +23,10 @@
 
 ## Current checkout truth
 
+- `CONV-1-E` (suite): files dropped on a device card, or on the device page,
+  go to that device through `SendFileUri` on the model's worker, with
+  `--send`'s sending and failure notice; a URI that names no local file is
+  ignored and reported ([evidence](../docs/evidence/2026-10-09-drag-and-drop.md)).
 - `CONV-1-D` (suite): `magnetita --send FILE…`, the desktop entry's `send`
   action, sends to the one connected device through `SendFileUri` before Qt
   starts, or opens a device chooser when several are connected and sends the

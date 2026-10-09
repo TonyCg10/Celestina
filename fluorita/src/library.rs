@@ -41,6 +41,7 @@
 //! where rebuilding these lists on every change starts to show — that is the
 //! moment to write it, with the numbers in hand.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -182,6 +183,11 @@ pub mod qobject {
         /// is answered on a worker, and the result arrives through the queue.
         #[qinvokable]
         fn add_folder(self: Pin<&mut FluoritaLibrary>);
+
+        /// The same chooser, opened at the folder behind `key` (a path key):
+        /// how a folder dropped on the window is offered as a source.
+        #[qinvokable]
+        fn add_folder_at(self: Pin<&mut FluoritaLibrary>, key: &QString);
 
         /// Stops reading a root. Its catalogue entries go with it; not one of
         /// its files is touched.
@@ -446,8 +452,28 @@ impl qobject::FluoritaLibrary {
         self.request_projection();
     }
 
-    pub fn add_folder(mut self: core::pin::Pin<&mut Self>) {
+    pub fn add_folder(self: core::pin::Pin<&mut Self>) {
+        self.choose_folder(None);
+    }
+
+    pub fn add_folder_at(self: core::pin::Pin<&mut Self>, key: &QString) {
+        // A key that does not decode names no folder; the plain chooser is
+        // still the honest offer.
+        let start = pathkey::decode(&key.to_string()).ok();
+        self.choose_folder(start);
+    }
+
+    fn choose_folder(mut self: core::pin::Pin<&mut Self>, start: Option<PathBuf>) {
         if *self.choosing_folder() {
+            // A dropped folder must not vanish behind the open dialog.
+            if let Some(start) = start {
+                eprintln!(
+                    "fluorita: {} dropped while the folder chooser is open, not offered",
+                    start.display()
+                );
+                self.as_mut()
+                    .set_folder_notice(QString::from(copy::CHOOSER_BUSY));
+            }
             return;
         }
         self.as_mut().set_choosing_folder(true);
@@ -458,7 +484,7 @@ impl qobject::FluoritaLibrary {
         let qt_thread = self.qt_thread();
         let worker = std::thread::Builder::new()
             .name("fluorita-folder".to_owned())
-            .spawn(move || run_folder_choice(&qt_thread, &cancellation));
+            .spawn(move || run_folder_choice(&qt_thread, start.as_deref(), &cancellation));
         match worker {
             Ok(handle) => self.as_mut().rust_mut().folder_worker = Some(handle),
             Err(_) => {

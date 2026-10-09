@@ -244,9 +244,10 @@ fn lock_tried(
 /// can join this thread instead of waiting on the person.
 pub(super) fn run_folder_choice(
     qt_thread: &cxx_qt::CxxQtThread<qobject::FluoritaLibrary>,
+    start: Option<&Path>,
     cancellation: &CancellationToken,
 ) {
-    let (key, notice) = match folders::choose(copy::CHOOSE_FOLDER, cancellation) {
+    let (key, notice) = match folders::choose(copy::CHOOSE_FOLDER, start, cancellation) {
         FolderChoice::Chosen(path) => (pathkey::encode(&path), String::new()),
         FolderChoice::Cancelled => (String::new(), String::new()),
         FolderChoice::Unavailable(reason) => (

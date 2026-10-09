@@ -15,6 +15,10 @@
 
 ## Current checkout truth
 
+- `CONV-1-E` (suite): a drop on the window is decided like `Open`: the first
+  media file plays (an image opens in the viewer), a source folder is
+  selected, another folder opens the source chooser at it; a URI that names
+  no local file is ignored with a short notice ([evidence](../docs/evidence/2026-10-09-drag-and-drop.md)).
 - `CONV-1-A` (suite): Fluorita keeps to one player. A launch claims
   `org.celestina.Fluorita` through `celestina_core::activation`, on a bus
   connection of its own beside MPRIS; a second `fluorita ARCHIVO` plays its

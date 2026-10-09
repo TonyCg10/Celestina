@@ -225,7 +225,89 @@ ApplicationWindow {
             mediaLibrary.selectSource(source)
             activation.bringForward()
         }
+        // A dropped folder that is not a source: the source chooser opens at
+        // it, so adding it is one confirmation.
+        onFolderOffered: function(key) {
+            mediaLibrary.addFolderAt(key)
+        }
+        onDropIgnored: function(count) {
+            window.dropNotice = qsTr("Solo se abren archivos locales: %n elemento(s) ignorado(s)",
+                                     "", count)
+            dropNoticeTimer.restart()
+        }
         Component.onCompleted: activation.start()
+    }
+
+    // Files dragged from Siderita (or any manager): decided on the activation
+    // worker by the same rule as a second launch's `Open` — the first media
+    // file plays (an image opens in the viewer), a source folder is selected,
+    // another folder is offered to the source chooser.
+    // The dropped URLs as plain strings, as Siderita's `droppedUris`. A loop
+    // written inside the drop handler made qmllint stop reporting this file.
+    function droppedUris(urls) {
+        const out = []
+        for (let i = 0; i < urls.length; i++)
+            out.push(urls[i].toString())
+        return out
+    }
+
+    DropArea {
+        id: fileDrop
+        anchors.fill: parent
+        z: 100
+        keys: ["text/uri-list"]
+
+        onEntered: function(drag) {
+            if (!drag.hasUrls)
+                drag.accepted = false
+        }
+        onDropped: function(drop) {
+            if (!drop.hasUrls)
+                return
+            // Not decoded here: Rust reads each URI by bytes.
+            activation.openDropped(window.droppedUris(drop.urls))
+            drop.accept(Qt.CopyAction)
+        }
+
+        // Siderita's drop highlight: an accent rim, nothing filled.
+        Rectangle {
+            anchors.fill: parent
+            visible: fileDrop.containsDrag
+            color: CelestinaTheme.clear
+            border.width: CelestinaTheme.borderFocus
+            border.color: CelestinaTheme.accent
+            radius: CelestinaTheme.radiusWindow
+        }
+    }
+
+    // What a drop left alone, said briefly.
+    property string dropNotice: ""
+
+    Timer {
+        id: dropNoticeTimer
+        interval: 4000
+        onTriggered: window.dropNotice = ""
+    }
+
+    Rectangle {
+        z: 101
+        visible: window.dropNotice.length > 0
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: CelestinaTheme.spaceXl
+        width: dropNoticeText.implicitWidth + CelestinaTheme.spaceMd * 2
+        height: dropNoticeText.implicitHeight + CelestinaTheme.spaceSm * 2
+        radius: CelestinaTheme.radiusPill
+        color: CelestinaTheme.pillFill
+
+        Text {
+            id: dropNoticeText
+            anchors.centerIn: parent
+            text: window.dropNotice
+            color: CelestinaTheme.text
+            font.family: CelestinaTheme.sansFamily
+            font.pixelSize: CelestinaTheme.fontBody
+        }
     }
 
     FluoritaEditor {

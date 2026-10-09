@@ -111,6 +111,32 @@ ApplicationWindow {
             anchors.fill: parent
         }
 
+        // A drop on the device page, outside any row, goes to the page's
+        // device; the rows, stacked above, take a drop meant for them.
+        DropArea {
+            id: pageDrop
+            anchors.fill: parent
+            enabled: devicesPage.visible && window.primaryIndex >= 0
+            keys: ["text/uri-list"]
+            onEntered: function(drag) {
+                if (!drag.hasUrls)
+                    drag.accepted = false
+            }
+            onDropped: function(drop) {
+                devicesPage.sendDrop(window.primaryIndex, drop)
+            }
+
+            // Siderita's drop highlight: an accent rim, nothing filled.
+            Rectangle {
+                anchors.fill: parent
+                visible: pageDrop.containsDrag
+                color: CelestinaTheme.clear
+                border.width: CelestinaTheme.borderFocus
+                border.color: CelestinaTheme.accent
+                radius: CelestinaTheme.radiusWindow
+            }
+        }
+
         Column {
             anchors.fill: parent
             anchors.margins: 25
@@ -159,6 +185,7 @@ ApplicationWindow {
             }
 
             DevicesPage {
+                id: devicesPage
                 visible: !window.settingsOpen && !window.messagesOpen && !window.sendMode
                 width: parent.width
                 height: parent.height - y
