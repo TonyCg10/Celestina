@@ -9,6 +9,13 @@ import QtQuick
 QtObject {
     id: fake
 
+    // Never busy: the stand-in answers every command at once.
+    property bool busy: false
+    // The first snapshot has arrived. The stand-in starts with it, like the
+    // fakes; a test may set it false and call `snapshot()` to deliver it.
+    property bool loaded: true
+    function snapshot() { loaded = true }
+
     property var calls: []
     property var profiles: [
         { cardId: 30, id: "output:analog-stereo", description: "Analog Stereo", active: true },

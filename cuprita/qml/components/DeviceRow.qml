@@ -20,6 +20,8 @@ Item {
 
     // Set by the list: this row is current and the list holds the focus.
     property bool focused: false
+    // The card's `rowInset`, from whoever places the row in a SectionCard.
+    required property int inset
 
     implicitHeight: CelestinaTheme.rowHeight
     Accessible.role: Accessible.ListItem
@@ -57,17 +59,22 @@ Item {
         }
     }
 
-    // The keyboard's place in the list: the list says which row is current
-    // and whether it holds the focus; the plate draws the ring.
+    HoverHandler { id: hover }
+
+    // Hover, and the keyboard's place in the list: the list says which row is
+    // current and whether it holds the focus; the plate draws the ring.
     CelestinaRowHighlight {
         anchors.fill: parent
+        radius: CelestinaTheme.radiusMd
         family: CelestinaRowHighlight.Content
+        hovered: hover.hovered
         focused: row.focused
     }
 
     CelestinaIcon {
         id: glyph
         anchors.left: parent.left
+        anchors.leftMargin: row.inset
         anchors.verticalCenter: parent.verticalCenter
         width: CelestinaTheme.iconMd
         height: CelestinaTheme.iconMd
@@ -122,6 +129,7 @@ Item {
     Row {
         id: actions
         anchors.right: parent.right
+        anchors.rightMargin: row.inset
         anchors.verticalCenter: parent.verticalCenter
         spacing: CelestinaTheme.spaceXs
 

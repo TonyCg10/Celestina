@@ -43,7 +43,8 @@ TestCase {
         const card = findChild(host.page, "outputCard")
         const selector = findChild(card, "endpointSelector")
         compare(selector.text, "Speakers")
-        waitForRendering(host.page)
+        // One frame is enough: a second wait finds the scene idle and only
+        // times out.
         waitForRendering(host.page)
         mouseClick(selector)
         const menu = findChild(card, "endpointMenu")
@@ -136,5 +137,18 @@ TestCase {
         slider.dragging = true
         slider.dragging = false
         compare(host.fake.calls[host.fake.calls.length - 1], "setVolume:40:1.1")
+    }
+
+    function test_the_audio_cards_show_a_loading_row_until_the_first_snapshot() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        host.fake.loaded = false
+        const streams = findChild(host.page, "streamsLoading")
+        const output = findChild(findChild(host.page, "outputCard"), "endpointLoading")
+        tryCompare(streams, "visible", true)
+        tryCompare(output, "visible", true)
+        verify(!findChild(findChild(host.page, "outputCard"), "endpointSelector").visible)
+        host.fake.snapshot()
+        tryCompare(streams, "visible", false)
+        tryCompare(output, "visible", false)
     }
 }

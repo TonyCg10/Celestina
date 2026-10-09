@@ -36,6 +36,8 @@ pub mod qobject {
         #[qproperty(bool, wifi_enabled, READ, NOTIFY)]
         #[qproperty(bool, airplane, READ, NOTIFY)]
         #[qproperty(bool, busy, READ, NOTIFY)]
+        // False until the first snapshot arrives; true from then on.
+        #[qproperty(bool, loaded, READ, NOTIFY)]
         type NetworkController = super::NetworkControllerRust;
 
         #[qsignal]
@@ -65,6 +67,7 @@ pub struct NetworkControllerRust {
     wifi_enabled: bool,
     airplane: bool,
     busy: bool,
+    loaded: bool,
     pending: u32,
     worker: Option<Worker<Backend>>,
 }
@@ -111,6 +114,23 @@ impl qobject::NetworkController {
                 self.as_mut().set_wifi_enabled_value(snapshot.wifi_enabled);
                 self.as_mut().set_airplane_value(snapshot.airplane);
                 NETWORKS.publish(Arc::clone(&snapshot));
+                if !self.rust().loaded {
+                    // The models queued their copy of this snapshot just now,
+                    // on this same thread: flipping `loaded` from a call queued
+                    // after theirs means no frame sees it true with lists
+                    // still empty.
+                    let queued = self.qt_thread().queue(
+                        |mut controller: Pin<&mut qobject::NetworkController>| {
+                            if !controller.rust().loaded {
+                                controller.as_mut().rust_mut().loaded = true;
+                                controller.as_mut().loaded_changed();
+                            }
+                        },
+                    );
+                    if queued.is_err() {
+                        eprintln!("Cuprita: the loaded flag could not be queued");
+                    }
+                }
             }
             Report::Failed(text) => self.as_mut().notice(
                 QString::from(NoticeKind::Error.token()),

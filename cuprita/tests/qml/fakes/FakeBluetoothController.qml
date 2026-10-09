@@ -12,6 +12,12 @@ QtObject {
     property bool powered: true
     property bool discovering: false
     property bool airplane: false
+    // Never busy: the stand-in answers every command at once.
+    property bool busy: false
+    // The first snapshot has arrived. The stand-in starts with it, like the
+    // fakes; a test may set it false and call `snapshot()` to deliver it.
+    property bool loaded: true
+    function snapshot() { loaded = true }
     property var calls: []
 
     signal agentRequest(string kind, string device, int passkey)

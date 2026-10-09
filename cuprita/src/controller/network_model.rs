@@ -1,6 +1,7 @@
 //! One row per network, in the order `cuprita_core::order` decides.
-//! Roles: `id, name, kind, state, signal, bars, security, known`; `kind`,
-//! `state` and `security` are tokens the page turns into Spanish.
+//! Roles: `id, name, kind, state, signal, bars, security, known, address`;
+//! `kind`, `state` and `security` are tokens the page turns into Spanish, and
+//! `address` is the connected link's IPv4 address or an empty string.
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -15,7 +16,7 @@ use super::network::NETWORKS;
 use crate::models::{count, reconcile, role_names, row_of, Keyed, RowSink, FIRST_ROLE};
 
 const ROLES: &[&str] = &[
-    "id", "name", "kind", "state", "signal", "bars", "security", "known",
+    "id", "name", "kind", "state", "signal", "bars", "security", "known", "address",
 ];
 
 #[cxx_qt::bridge]
@@ -225,6 +226,7 @@ impl qobject::NetworkModel {
             5 => QVariant::from(&n.signal.map_or(0, |s| i32::from(signal_bars(s)))),
             6 => QVariant::from(&QString::from(security_label_key(n.security))),
             7 => QVariant::from(&n.known),
+            8 => QVariant::from(&QString::from(n.address.as_deref().unwrap_or_default())),
             _ => QVariant::default(),
         }
     }

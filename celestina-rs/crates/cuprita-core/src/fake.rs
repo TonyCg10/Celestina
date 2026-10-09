@@ -20,8 +20,8 @@ pub struct FakeNetwork {
 }
 
 impl FakeNetwork {
-    /// A wired link in use, a saved PSK Wi-Fi at 72, an open cafe Wi-Fi at 20
-    /// and a saved VPN that is down.
+    /// A wired link in use at 192.168.1.23, a saved PSK Wi-Fi at 72, an open
+    /// cafe Wi-Fi at 20 and a saved VPN that is down.
     #[must_use]
     pub fn scripted() -> Self {
         let entry = |id: &str, kind, name: &str, state, signal, security, known| NetworkEntry {
@@ -32,21 +32,24 @@ impl FakeNetwork {
             signal,
             security,
             known,
+            address: None,
         };
+        let mut wired = entry(
+            "wired",
+            NetworkKind::Ethernet,
+            "Ethernet",
+            NetworkState::Connected,
+            None,
+            Security::Open,
+            true,
+        );
+        wired.address = Some("192.168.1.23".to_owned());
         Self {
             state: NetworkSnapshot {
                 wifi_enabled: true,
                 airplane: false,
                 networks: vec![
-                    entry(
-                        "wired",
-                        NetworkKind::Ethernet,
-                        "Ethernet",
-                        NetworkState::Connected,
-                        None,
-                        Security::Open,
-                        true,
-                    ),
+                    wired,
                     entry(
                         "home-wifi",
                         NetworkKind::Wifi,
@@ -119,7 +122,9 @@ impl Network for FakeNetwork {
     }
 
     fn disconnect(&mut self, id: &str) -> Result<(), NetworkError> {
-        self.find(id)?.state = NetworkState::Disconnected;
+        let network = self.find(id)?;
+        network.state = NetworkState::Disconnected;
+        network.address = None;
         Ok(())
     }
 
@@ -127,6 +132,7 @@ impl Network for FakeNetwork {
         let network = self.find(id)?;
         network.known = false;
         network.state = NetworkState::Disconnected;
+        network.address = None;
         Ok(())
     }
 

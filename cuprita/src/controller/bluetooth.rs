@@ -106,6 +106,8 @@ pub mod qobject {
         #[qproperty(bool, powered, READ, NOTIFY)]
         #[qproperty(bool, discovering, READ, NOTIFY)]
         #[qproperty(bool, busy, READ, NOTIFY)]
+        // False until the first snapshot arrives; true from then on.
+        #[qproperty(bool, loaded, READ, NOTIFY)]
         /// Airplane mode is on: the adapter stays off.
         #[qproperty(bool, airplane, READ, NOTIFY)]
         type BluetoothController = super::BluetoothControllerRust;
@@ -155,6 +157,7 @@ pub struct BluetoothControllerRust {
     powered: bool,
     discovering: bool,
     busy: bool,
+    loaded: bool,
     pending: u32,
     airplane: bool,
     /// One entry per queued command, in order: the address of a `pair`, or
@@ -224,6 +227,23 @@ impl qobject::BluetoothController {
                 }
                 self.as_mut().rust_mut().devices = Some(Arc::clone(&snapshot));
                 DEVICES.publish(Arc::clone(&snapshot));
+                if !self.rust().loaded {
+                    // The models queued their copy of this snapshot just now,
+                    // on this same thread: flipping `loaded` from a call queued
+                    // after theirs means no frame sees it true with lists
+                    // still empty.
+                    let queued = self.qt_thread().queue(
+                        |mut controller: Pin<&mut qobject::BluetoothController>| {
+                            if !controller.rust().loaded {
+                                controller.as_mut().rust_mut().loaded = true;
+                                controller.as_mut().loaded_changed();
+                            }
+                        },
+                    );
+                    if queued.is_err() {
+                        eprintln!("Cuprita: the loaded flag could not be queued");
+                    }
+                }
             }
             Report::Failed(text) => self.as_mut().notice(
                 QString::from(NoticeKind::Error.token()),

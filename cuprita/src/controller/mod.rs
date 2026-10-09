@@ -232,6 +232,10 @@ impl<S> Hub<S> {
     /// synchronously would deadlock.
     pub fn subscribe(&self, deliver: impl Fn(Arc<S>) -> bool + Send + 'static) {
         let mut state = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        // A model that subscribes after the first snapshot gets `latest`
+        // here, after its controller's `loaded` is already true, so its page
+        // could show an empty card for a frame. Every model exists at startup
+        // today, before any snapshot, so none does.
         if let Some(latest) = &state.latest {
             if !deliver(latest.clone()) {
                 return;

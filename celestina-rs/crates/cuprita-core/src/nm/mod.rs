@@ -34,6 +34,7 @@ const IFACE_AP: &str = "org.freedesktop.NetworkManager.AccessPoint";
 const IFACE_ACTIVE: &str = "org.freedesktop.NetworkManager.Connection.Active";
 const IFACE_SETTINGS: &str = "org.freedesktop.NetworkManager.Settings";
 const IFACE_CONNECTION: &str = "org.freedesktop.NetworkManager.Settings.Connection";
+const IFACE_IP4_CONFIG: &str = "org.freedesktop.NetworkManager.IP4Config";
 const IFACE_PROPERTIES: &str = "org.freedesktop.DBus.Properties";
 
 /// `NM_DEVICE_TYPE_ETHERNET` and `NM_DEVICE_TYPE_WIFI`.
@@ -100,7 +101,17 @@ pub fn ap_to_network(
         signal: Some(strength.min(100)),
         security,
         known,
+        address: None,
     }
+}
+
+/// The `address` of the first entry of an `IP4Config.AddressData` list.
+#[must_use]
+pub fn first_address(data: &[HashMap<String, OwnedValue>]) -> Option<String> {
+    data.first()
+        .and_then(|entry| entry.get("address"))
+        .and_then(|value| String::try_from(value.clone()).ok())
+        .filter(|address| !address.is_empty())
 }
 
 /// An access point that offers only WEP: the privacy flag without any WPA or
@@ -301,6 +312,25 @@ impl NmNetwork {
         Ok(active)
     }
 
+    /// The device's first IPv4 address (`Ip4Config.AddressData[0].address`),
+    /// or `None` while it has no configuration or it cannot be read.
+    fn device_address(&self, device: &OwnedObjectPath) -> Option<String> {
+        let config: OwnedObjectPath = self
+            .proxy(device.as_str(), IFACE_DEVICE)
+            .ok()?
+            .get_property("Ip4Config")
+            .ok()?;
+        if config.as_str() == NO_PATH {
+            return None;
+        }
+        let data: Vec<HashMap<String, OwnedValue>> = self
+            .proxy(config.as_str(), IFACE_IP4_CONFIG)
+            .ok()?
+            .get_property("AddressData")
+            .ok()?;
+        first_address(&data)
+    }
+
     fn active_id(&self, active: &OwnedObjectPath) -> Option<String> {
         self.proxy(active.as_str(), IFACE_ACTIVE)
             .ok()?
@@ -334,6 +364,8 @@ impl NmNetwork {
                     .and_then(|s| s.ssid.clone())?;
                 Some((ssid, path.clone(), *state))
             });
+        // Read once per radio, and only while it carries a connection.
+        let address = carried.as_ref().and_then(|_| self.device_address(device));
         let aps: Vec<OwnedObjectPath> = wireless
             .call("GetAllAccessPoints", &())
             .map_err(map_error)?;
@@ -366,6 +398,9 @@ impl NmNetwork {
             let link = carried.as_ref().filter(|(s, _, _)| *s == ssid);
             let mut row = ap_to_network(&ssid, strength, flags, wpa, rsn, profile.is_some(), false);
             row.state = wifi_row_state(link.map(|(_, _, s)| *s), failed.contains(&ssid));
+            if row.state == NetworkState::Connected {
+                row.address = address.clone();
+            }
             let route = Route::Wifi {
                 device: device.clone(),
                 ap,
@@ -567,6 +602,9 @@ impl Network for NmNetwork {
                         signal: None,
                         security: Security::Open,
                         known,
+                        address: (device_state_to_state(state) == NetworkState::Connected)
+                            .then(|| self.device_address(&device))
+                            .flatten(),
                     });
                 }
                 DEVICE_WIFI if wifi_enabled => {
@@ -620,6 +658,7 @@ impl Network for NmNetwork {
                 signal: None,
                 security: Security::Open,
                 known: true,
+                address: None,
             });
         }
 
@@ -773,6 +812,28 @@ mod tests {
         let other = ap_to_network(&[0x43, 0xfe, 0x61], 10, 0, 0, 0, false, false);
         assert_eq!(other.name, row.name);
         assert_ne!(other.id, row.id);
+    }
+
+    #[test]
+    fn the_first_ipv4_entry_is_the_address() {
+        let entry = |address: &str| {
+            HashMap::from([
+                (
+                    "address".to_owned(),
+                    OwnedValue::try_from(Value::from(address)).unwrap(),
+                ),
+                (
+                    "prefix".to_owned(),
+                    OwnedValue::try_from(Value::from(24_u32)).unwrap(),
+                ),
+            ])
+        };
+        assert_eq!(
+            first_address(&[entry("192.168.1.23"), entry("10.0.0.2")]).as_deref(),
+            Some("192.168.1.23")
+        );
+        assert_eq!(first_address(&[]), None);
+        assert_eq!(first_address(&[entry("")]), None);
     }
 
     #[test]

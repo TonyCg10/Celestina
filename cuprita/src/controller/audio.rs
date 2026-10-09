@@ -40,6 +40,8 @@ pub mod qobject {
         #[qml_singleton]
         #[qproperty(QVariant, profiles, READ, NOTIFY)]
         #[qproperty(bool, busy, READ, NOTIFY)]
+        // False until the first snapshot arrives; true from then on.
+        #[qproperty(bool, loaded, READ, NOTIFY)]
         type AudioController = super::AudioControllerRust;
 
         #[qsignal]
@@ -63,6 +65,7 @@ pub mod qobject {
 pub struct AudioControllerRust {
     profiles: QVariant,
     busy: bool,
+    loaded: bool,
     pending: u32,
     shown_profiles: Vec<CardProfile>,
     worker: Option<Worker<Backend>>,
@@ -74,6 +77,7 @@ impl Default for AudioControllerRust {
             // An empty list, not an invalid variant: QML reads `.length`.
             profiles: profile_list(&[]),
             busy: false,
+            loaded: false,
             pending: 0,
             shown_profiles: Vec::new(),
             worker: None,
@@ -142,6 +146,23 @@ impl qobject::AudioController {
                     self.as_mut().profiles_changed();
                 }
                 AUDIO.publish(Arc::clone(&snapshot));
+                if !self.rust().loaded {
+                    // The models queued their copy of this snapshot just now,
+                    // on this same thread: flipping `loaded` from a call queued
+                    // after theirs means no frame sees it true with lists
+                    // still empty.
+                    let queued = self.qt_thread().queue(
+                        |mut controller: Pin<&mut qobject::AudioController>| {
+                            if !controller.rust().loaded {
+                                controller.as_mut().rust_mut().loaded = true;
+                                controller.as_mut().loaded_changed();
+                            }
+                        },
+                    );
+                    if queued.is_err() {
+                        eprintln!("Cuprita: the loaded flag could not be queued");
+                    }
+                }
             }
             Report::Failed(text) => self.as_mut().notice(
                 QString::from(NoticeKind::Error.token()),

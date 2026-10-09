@@ -169,4 +169,14 @@ TestCase {
         mouseClick(findChild(row, "settingSwitch"))
         compare(host.fake.calls, [])
     }
+
+    function test_the_devices_card_shows_a_loading_row_until_the_first_snapshot() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        host.fake.loaded = false
+        const loading = findChild(host.page, "devicesLoading")
+        tryCompare(loading, "visible", true)
+        verify(!findChild(host.page, "noDevices").visible)
+        host.fake.snapshot()
+        tryCompare(loading, "visible", false)
+    }
 }

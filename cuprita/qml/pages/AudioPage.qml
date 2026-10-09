@@ -4,7 +4,7 @@ import QtQuick
 import org.celestina.cuprita 1.0
 import "../components"
 
-// The Audio section: the output and input cards, the applications playing,
+// The Audio section, in cards: output and input, the applications playing,
 // and a profile card for each sound card that has more than one profile.
 Item {
     id: page
@@ -20,17 +20,16 @@ Item {
 
     Accessible.name: qsTr("Audio")
 
-    Column {
-        id: cards
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        spacing: CelestinaTheme.spaceCardGap
+    PageScroll {
+        id: scroll
+        anchors.fill: parent
 
         EndpointCard {
             objectName: "outputCard"
             width: parent.width
             title: qsTr("Salida")
+            loaded: page.controller.loaded
+            working: page.controller.loaded && page.controller.busy
             endpoints: page.sinks
             backdropSource: page.backdropSource
             onDefaultRequested: function(id) { page.controller.setDefault(id) }
@@ -42,6 +41,8 @@ Item {
             objectName: "inputCard"
             width: parent.width
             title: qsTr("Entrada")
+            loaded: page.controller.loaded
+            working: page.controller.loaded && page.controller.busy
             endpoints: page.sources
             backdropSource: page.backdropSource
             mutedIcon: "mic-off"
@@ -51,19 +52,72 @@ Item {
             onMuteRequested: function(id, muted) { page.controller.setMuted(id, muted) }
         }
 
+        SectionCard {
+            id: appsCard
+            width: parent.width
+            title: qsTr("Aplicaciones")
+            working: page.controller.loaded && page.controller.busy
+
+            ListView {
+                id: list
+                objectName: "streamList"
+                width: parent.width
+                height: list.contentHeight
+                interactive: false
+                model: page.streams
+                // Keyboard: Tab enters the list once, the arrows walk it and
+                // Enter runs the current row's primary action; the page
+                // scrolls to keep the current row in view.
+                activeFocusOnTab: true
+                keyNavigationEnabled: true
+                Keys.onReturnPressed: function(event) { list.primary(); event.accepted = true }
+                Keys.onEnterPressed: function(event) { list.primary(); event.accepted = true }
+                onCurrentItemChanged: if (list.activeFocus) scroll.reveal(list.currentItem)
+                onActiveFocusChanged: if (list.activeFocus) scroll.reveal(list.currentItem)
+
+                function primary() {
+                    if (list.currentItem)
+                        (list.currentItem as StreamRow).primaryAction()
+                }
+                Accessible.role: Accessible.List
+                Accessible.name: qsTr("Aplicaciones")
+
+                delegate: StreamRow {
+                    inset: appsCard.rowInset
+                    width: ListView.view.width
+                    focused: list.activeFocus && ListView.isCurrentItem
+                    onVolumeRequested: function(id, volume) { page.controller.setVolume(id, volume) }
+                    onMuteRequested: function(id, muted) { page.controller.setMuted(id, muted) }
+                }
+            }
+
+            LoadingLine {
+                objectName: "streamsLoading"
+                visible: !page.controller.loaded
+                text: qsTr("Leyendo el audio…")
+            }
+
+            EmptyLine {
+                objectName: "noStreams"
+                inset: appsCard.rowInset
+                visible: page.controller.loaded && list.count === 0
+                text: qsTr("Ninguna aplicación suena")
+            }
+        }
+
         // One profile card per sound card that has more than one profile
         // (the controller lists only those).
         Repeater {
             model: {
                 const ids = []
-                const list = page.controller.profiles
-                for (let i = 0; i < list.length; ++i)
-                    if (ids.indexOf(list[i].cardId) < 0)
-                        ids.push(list[i].cardId)
+                const choices = page.controller.profiles
+                for (let i = 0; i < choices.length; ++i)
+                    if (ids.indexOf(choices[i].cardId) < 0)
+                        ids.push(choices[i].cardId)
                 return ids
             }
 
-            delegate: CelestinaSurface {
+            delegate: SectionCard {
                 id: profileCard
                 objectName: "profileCard"
 
@@ -71,33 +125,43 @@ Item {
                 readonly property var choices: page.controller.profiles.filter(
                     p => p.cardId === profileCard.modelData)
 
-                width: cards.width
-                height: CelestinaTheme.rowHeight + CelestinaTheme.spaceCardInset * 2
-                role: CelestinaSurface.Grouped
+                width: parent.width
+                title: qsTr("Perfil")
 
-                CelestinaSectionLabel {
-                    anchors.left: parent.left
-                    anchors.leftMargin: CelestinaTheme.spaceCardInset
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("Perfil")
-                }
+                Item {
+                    width: parent.width
+                    height: CelestinaTheme.rowHeight
 
-                CelestinaButton {
-                    id: profileSelector
-                    objectName: "profileSelector"
-                    anchors.right: parent.right
-                    anchors.rightMargin: CelestinaTheme.spaceCardInset
-                    anchors.verticalCenter: parent.verticalCenter
-                    role: CelestinaButton.Ghost
-                    text: {
-                        const list = profileCard.choices
-                        for (let i = 0; i < list.length; ++i)
-                            if (list[i].active)
-                                return list[i].description
-                        return ""
+                    Text {
+                        anchors.left: parent.left
+                        anchors.leftMargin: profileCard.rowInset
+                        anchors.right: profileSelector.left
+                        anchors.rightMargin: CelestinaTheme.spaceMd
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("Perfil de la tarjeta")
+                        elide: Text.ElideRight
+                        color: CelestinaTheme.text
+                        font.family: CelestinaTheme.sansFamily
+                        font.pixelSize: CelestinaTheme.fontRowTitle
                     }
-                    helpText: qsTr("Elegir perfil")
-                    onClicked: profileMenu.popupBeside(profileSelector, false)
+
+                    CelestinaButton {
+                        id: profileSelector
+                        objectName: "profileSelector"
+                        anchors.right: parent.right
+                        anchors.rightMargin: profileCard.rowInset
+                        anchors.verticalCenter: parent.verticalCenter
+                        role: CelestinaButton.Ghost
+                        text: {
+                            const choices = profileCard.choices
+                            for (let i = 0; i < choices.length; ++i)
+                                if (choices[i].active)
+                                    return choices[i].description
+                            return ""
+                        }
+                        helpText: qsTr("Elegir perfil")
+                        onClicked: profileMenu.popupBeside(profileSelector, false)
+                    }
                 }
 
                 GlassContextMenu {
@@ -122,46 +186,6 @@ Item {
                         onObjectRemoved: function(index, object) { profileMenu.removeItem(object) }
                     }
                 }
-            }
-        }
-    }
-
-    CelestinaSurface {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: cards.bottom
-        anchors.topMargin: CelestinaTheme.spaceCardGap
-        anchors.bottom: parent.bottom
-        role: CelestinaSurface.Grouped
-
-        ListView {
-            id: list
-            objectName: "streamList"
-            anchors.fill: parent
-            anchors.margins: CelestinaTheme.spaceCardInset
-            clip: true
-            model: page.streams
-            boundsBehavior: Flickable.StopAtBounds
-            CelestinaWheelScroll { view: list }
-            // Keyboard: Tab enters the list once, the arrows walk it, Enter runs
-            // the current row's primary action.
-            activeFocusOnTab: true
-            keyNavigationEnabled: true
-            Keys.onReturnPressed: function(event) { list.primary(); event.accepted = true }
-            Keys.onEnterPressed: function(event) { list.primary(); event.accepted = true }
-
-            function primary() {
-                if (list.currentItem)
-                    (list.currentItem as StreamRow).primaryAction()
-            }
-            Accessible.role: Accessible.List
-            Accessible.name: qsTr("Aplicaciones")
-
-            delegate: StreamRow {
-                width: ListView.view.width
-                focused: list.activeFocus && ListView.isCurrentItem
-                onVolumeRequested: function(id, volume) { page.controller.setVolume(id, volume) }
-                onMuteRequested: function(id, muted) { page.controller.setMuted(id, muted) }
             }
         }
     }

@@ -36,6 +36,9 @@ pub struct Network {
     pub security: Security,
     /// A saved connection exists for it.
     pub known: bool,
+    /// The device's first IPv4 address while this link is connected;
+    /// `None` otherwise and for VPNs.
+    pub address: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

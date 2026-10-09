@@ -5,12 +5,13 @@ import org.celestina.cuprita 1.0
 import "../components"
 import "../dialogs"
 
-// The Bluetooth section: the adapter switch and a search button that spins
-// while the adapter searches, then the devices the adapter knows or sees.
+// The Bluetooth section, in two cards: the adapter switch and a search
+// button that spins while the adapter searches, then the devices the adapter
+// knows or sees.
 // What the pairing agent asks arrives as the controller's `agentRequest` and
 // is answered in PairingDialog; the page reads its controller and model from
 // the window, so tests can hand it stand-ins.
-CelestinaSurface {
+Item {
     id: page
 
     // BluetoothController: powered, discovering and the commands.
@@ -23,113 +24,145 @@ CelestinaSurface {
     // The device the row menu was opened for.
     property string menuAddress: ""
 
-    role: CelestinaSurface.Grouped
     Accessible.name: qsTr("Bluetooth")
 
-    Column {
-        id: header
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.margins: CelestinaTheme.spaceCardInset
+    PageScroll {
+        id: scroll
+        anchors.fill: parent
 
-        SettingRow {
-            objectName: "poweredRow"
+        // Two rows with a hairline between them: the adapter switch, then
+        // the search. One row with both read as a switch and a button that
+        // competed for the same words.
+        SectionCard {
+            id: adapterCard
             width: parent.width
-            label: qsTr("Bluetooth")
-            checked: page.controller.powered
-            // Airplane mode keeps the adapter off until it ends.
-            enabled: !page.controller.airplane
-            onToggled: function(on) { page.controller.setPowered(on) }
+            title: qsTr("Bluetooth")
+
+            SettingRow {
+                objectName: "poweredRow"
+                inset: adapterCard.rowInset
+                width: parent.width
+                label: qsTr("Bluetooth")
+                checked: page.controller.powered
+                // Airplane mode keeps the adapter off until it ends.
+                enabled: !page.controller.airplane
+                onToggled: function(on) { page.controller.setPowered(on) }
+            }
+
+            Item {
+                id: searchRow
+
+
+                width: parent.width
+                height: CelestinaTheme.rowHeight
+
+                RowDivider { inset: adapterCard.rowInset }
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.leftMargin: adapterCard.rowInset
+                    anchors.right: spinner.left
+                    anchors.rightMargin: CelestinaTheme.spaceMd
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: page.controller.discovering ? qsTr("Buscando dispositivos…")
+                                                      : qsTr("Dispositivos cercanos")
+                    elide: Text.ElideRight
+                    color: CelestinaTheme.text
+                    font.family: CelestinaTheme.sansFamily
+                    font.pixelSize: CelestinaTheme.fontRowTitle
+                }
+
+                Spinner {
+                    id: spinner
+                    objectName: "searchSpinner"
+                    anchors.right: searchButton.left
+                    anchors.rightMargin: CelestinaTheme.spaceSm
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: page.controller.discovering
+                }
+
+                CelestinaButton {
+                    id: searchButton
+                    objectName: "searchButton"
+                    anchors.right: parent.right
+                    anchors.rightMargin: adapterCard.rowInset
+                    anchors.verticalCenter: parent.verticalCenter
+                    enabled: page.controller.powered
+                    text: page.controller.discovering ? qsTr("Detener búsqueda") : qsTr("Buscar")
+                    onClicked: page.controller.setDiscovering(!page.controller.discovering)
+                }
+            }
         }
 
-        Item {
+        SectionCard {
+            id: devicesCard
             width: parent.width
-            height: CelestinaTheme.rowHeight
+            title: qsTr("Dispositivos")
+            working: page.controller.loaded && page.controller.busy
 
-            CelestinaIcon {
-                id: spinner
-                objectName: "searchSpinner"
-                anchors.right: searchButton.left
-                anchors.rightMargin: CelestinaTheme.spaceSm
-                anchors.verticalCenter: parent.verticalCenter
-                width: CelestinaTheme.iconMd
-                height: CelestinaTheme.iconMd
-                name: "view-refresh"
-                visible: page.controller.discovering
-                Accessible.ignored: true
+            ListView {
+                id: list
+                objectName: "deviceList"
+                width: parent.width
+                height: list.contentHeight
+                interactive: false
+                model: page.devices
+                // Keyboard: Tab enters the list once, the arrows walk it and
+                // Enter runs the current row's primary action; the page
+                // scrolls to keep the current row in view.
+                activeFocusOnTab: true
+                keyNavigationEnabled: true
+                Keys.onReturnPressed: function(event) { list.primary(); event.accepted = true }
+                Keys.onEnterPressed: function(event) { list.primary(); event.accepted = true }
+                // Menu or Shift+F10 opens the current row's menu beside its button.
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Menu
+                            || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
+                        if (list.currentItem) {
+                            // A wheel-scrolled current row may sit off screen:
+                            // show it first, so the menu opens beside a
+                            // visible button.
+                            scroll.reveal(list.currentItem);
+                            (list.currentItem as DeviceRow).openMenu()
+                        }
+                        event.accepted = true
+                    }
+                }
+                onCurrentItemChanged: if (list.activeFocus) scroll.reveal(list.currentItem)
+                onActiveFocusChanged: if (list.activeFocus) scroll.reveal(list.currentItem)
 
-                // The glyph is symmetric under a half turn: one half turn
-                // per cycle reads as continuous spinning.
-                RotationAnimator on rotation {
-                    from: 0
-                    to: 180
-                    duration: CelestinaTheme.motionCeiling
-                    loops: Animation.Infinite
-                    running: spinner.visible && !CelestinaTheme.reducedMotion
+                function primary() {
+                    if (list.currentItem)
+                        (list.currentItem as DeviceRow).primaryAction()
+                }
+                Accessible.role: Accessible.List
+                Accessible.name: qsTr("Dispositivos")
+
+                delegate: DeviceRow {
+                    inset: devicesCard.rowInset
+                    width: ListView.view.width
+                    focused: list.activeFocus && ListView.isCurrentItem
+                    onPairRequested: function(address) { page.controller.pair(address) }
+                    onConnectRequested: function(address) { page.controller.connect(address) }
+                    onDisconnectRequested: function(address) { page.controller.disconnect(address) }
+                    onMenuRequested: function(address, anchor) {
+                        page.menuAddress = address
+                        deviceMenu.popupBeside(anchor, false)
+                    }
                 }
             }
 
-            CelestinaButton {
-                id: searchButton
-                objectName: "searchButton"
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                enabled: page.controller.powered
-                text: page.controller.discovering ? qsTr("Detener búsqueda") : qsTr("Buscar")
-                onClicked: page.controller.setDiscovering(!page.controller.discovering)
+            LoadingLine {
+                objectName: "devicesLoading"
+                visible: !page.controller.loaded
+                text: qsTr("Buscando dispositivos…")
             }
-        }
-    }
 
-    ListView {
-        id: list
-        objectName: "deviceList"
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: header.bottom
-        anchors.bottom: parent.bottom
-        anchors.margins: CelestinaTheme.spaceCardInset
-        clip: true
-        model: page.devices
-        boundsBehavior: Flickable.StopAtBounds
-        CelestinaWheelScroll { view: list }
-        // Keyboard: Tab enters the list once, the arrows walk it, Enter runs
-        // the current row's primary action.
-        activeFocusOnTab: true
-        keyNavigationEnabled: true
-        Keys.onReturnPressed: function(event) { list.primary(); event.accepted = true }
-        Keys.onEnterPressed: function(event) { list.primary(); event.accepted = true }
-        // Menu or Shift+F10 opens the current row's menu beside its button.
-        Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_Menu
-                    || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
-                if (list.currentItem) {
-                    // A wheel-scrolled current row may sit clipped: show it
-                    // first, so the menu opens beside a visible button.
-                    list.positionViewAtIndex(list.currentIndex, ListView.Contain);
-                    (list.currentItem as DeviceRow).openMenu()
-                }
-                event.accepted = true
-            }
-        }
-
-        function primary() {
-            if (list.currentItem)
-                (list.currentItem as DeviceRow).primaryAction()
-        }
-        Accessible.role: Accessible.List
-        Accessible.name: qsTr("Dispositivos")
-
-        delegate: DeviceRow {
-            width: ListView.view.width
-            focused: list.activeFocus && ListView.isCurrentItem
-            onPairRequested: function(address) { page.controller.pair(address) }
-            onConnectRequested: function(address) { page.controller.connect(address) }
-            onDisconnectRequested: function(address) { page.controller.disconnect(address) }
-            onMenuRequested: function(address, anchor) {
-                page.menuAddress = address
-                deviceMenu.popupBeside(anchor, false)
+            EmptyLine {
+                objectName: "noDevices"
+                inset: devicesCard.rowInset
+                visible: page.controller.loaded && list.count === 0
+                text: qsTr("Ningún dispositivo")
             }
         }
     }

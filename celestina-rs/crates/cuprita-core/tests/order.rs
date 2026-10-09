@@ -10,6 +10,7 @@ fn net(name: &str, state: NetworkState, known: bool, signal: Option<u8>) -> Netw
         signal,
         security: Security::Psk,
         known,
+        address: None,
     }
 }
 

@@ -10,6 +10,21 @@ fn the_scripted_network_starts_wired_and_ordered() {
     assert_eq!(snapshot.networks.len(), 4);
     assert_eq!(snapshot.networks[0].kind, NetworkKind::Ethernet);
     assert_eq!(snapshot.networks[0].state, NetworkState::Connected);
+    assert_eq!(
+        snapshot.networks[0].address.as_deref(),
+        Some("192.168.1.23")
+    );
+    assert!(snapshot.networks[1..].iter().all(|n| n.address.is_none()));
+}
+
+#[test]
+fn disconnecting_the_wired_link_drops_its_address() {
+    let mut network = FakeNetwork::scripted();
+    network.disconnect("wired").unwrap();
+    let snapshot = network.snapshot().unwrap();
+    let wired = snapshot.networks.iter().find(|n| n.id == "wired").unwrap();
+    assert_eq!(wired.state, NetworkState::Disconnected);
+    assert_eq!(wired.address, None);
 }
 
 #[test]

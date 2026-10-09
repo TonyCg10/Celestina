@@ -1,0 +1,89 @@
+# CUP-1-H exact change inventory
+
+Base revision	122499cb668f1186f5ee5fa896ceb223c235191f
+Pathspec	celestina-rs/crates/cuprita-core/src/fake.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/model.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/nm/mod.rs
+Pathspec	celestina-rs/crates/cuprita-core/tests/fakes.rs
+Pathspec	celestina-rs/crates/cuprita-core/tests/order.rs
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/docs/evidence/2026-10-08-grouped-cards.md
+Pathspec	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-H.numstat.tsv
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/qml/components/ConnectionRow.qml
+Pathspec	cuprita/qml/components/DeviceRow.qml
+Pathspec	cuprita/qml/components/EmptyLine.qml
+Pathspec	cuprita/qml/components/EndpointCard.qml
+Pathspec	cuprita/qml/components/LoadingLine.qml
+Pathspec	cuprita/qml/components/NetworkRow.qml
+Pathspec	cuprita/qml/components/PageScroll.qml
+Pathspec	cuprita/qml/components/RowDivider.qml
+Pathspec	cuprita/qml/components/RowFilter.qml
+Pathspec	cuprita/qml/components/SectionCard.qml
+Pathspec	cuprita/qml/components/SettingRow.qml
+Pathspec	cuprita/qml/components/SignalBars.qml
+Pathspec	cuprita/qml/components/Spinner.qml
+Pathspec	cuprita/qml/components/StreamRow.qml
+Pathspec	cuprita/qml/pages/AudioPage.qml
+Pathspec	cuprita/qml/pages/BluetoothPage.qml
+Pathspec	cuprita/qml/pages/NetworkPage.qml
+Pathspec	cuprita/src/controller/audio.rs
+Pathspec	cuprita/src/controller/bluetooth.rs
+Pathspec	cuprita/src/controller/mod.rs
+Pathspec	cuprita/src/controller/network.rs
+Pathspec	cuprita/src/controller/network_model.rs
+Pathspec	cuprita/tests/qml/fakes/FakeAudioController.qml
+Pathspec	cuprita/tests/qml/fakes/FakeBluetoothController.qml
+Pathspec	cuprita/tests/qml/fakes/FakeNetworkController.qml
+Pathspec	cuprita/tests/qml/tst_audio_page.qml
+Pathspec	cuprita/tests/qml/tst_bluetooth_page.qml
+Pathspec	cuprita/tests/qml/tst_network_page.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+18	12	919e723d139a3433f2d3a321ca3564cee4e26c239862be2a6750a9dc8224e23a	celestina-rs/crates/cuprita-core/src/fake.rs
+3	0	c96eb40b4f5d7b9863f277b65dce1ed2648ec9f0457c82da68380ea8fdd803e5	celestina-rs/crates/cuprita-core/src/model.rs
+61	0	d78ae55fea50632cc80c28e969cd196e38354ad9b0375e50eb6082678d96a389	celestina-rs/crates/cuprita-core/src/nm/mod.rs
+15	0	c1404d61a95eefc5096704fd66527678b44c236e6fb63c4d0f5aefa7ba11d626	celestina-rs/crates/cuprita-core/tests/fakes.rs
+1	0	dbdcbf64eaa37068b792742b5c261c25c2c3d61475301309e5efc7839ee3d0e9	celestina-rs/crates/cuprita-core/tests/order.rs
+1	1	db00800b3de0b18a7ed9314d775ad1544e30e2ae56d6a650cd0599fb22f58922	cuprita/Cargo.lock
+1	1	8fc42c6b761de0b0ed7d0470598614b173ab79c872199c0e65e0c57693b6cfa3	cuprita/Cargo.toml
+30	10	468173cc606f5b2a6eaef3c88df4f79d08db47a19b0cd5fcd2f291ca671ef886	cuprita/STATUS.md
+9	0	70abf970881564dbc7397a2068d92821af5e47cb1de38706d3e5bdc96235e867	cuprita/build.rs
+206	0	c786e33c81f7720c9f305ff8fb84898b46eb1fb90eec34b19e67e587c25473ed	cuprita/docs/evidence/2026-10-08-grouped-cards.md
+89	0	self	cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-H.numstat.tsv
+5	1	330d770ccf905a49716f284b965fa11938b507772719ce8451ecb7e4a6e2c461	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+85	0	aa09f936f86a8b74d4934dca74a5614f80072109f0a546ec47d8dbe73ba41519	cuprita/qml/components/ConnectionRow.qml
+10	2	05ebf5c5369fa93d69c5982dc840af6fb5923de2046989396e87b0078e4bc604	cuprita/qml/components/DeviceRow.qml
+27	0	907ede72b2aea56448970309411458bb8562c0a80bf9036de7b85be893f57283	cuprita/qml/components/EmptyLine.qml
+80	67	ab715ef025e2615f1881b0c829ab589306e40e0cc0705102c52a293c7b030216	cuprita/qml/components/EndpointCard.qml
+33	0	41328453e4766c0d21bc953f1d4e31aae9cd68a46ebd7465e7868609bc82f272	cuprita/qml/components/LoadingLine.qml
+42	53	88bebe0f7950335df2a6f80c1abea00e1edeb18f4e729107aa1120cbe911732a	cuprita/qml/components/NetworkRow.qml
+52	0	2a52179ebea5a9faa42358ac4e68d74a35816c5026d5d6c7f13486a01db01c8b	cuprita/qml/components/PageScroll.qml
+19	0	deacfcc5ef67ec0f5ed23df00c96f2139825adcef92098c03503bf4155dae3f1	cuprita/qml/components/RowDivider.qml
+60	0	57f3758414515c8cad83d10777dcf7d9ff5f71048d70f12a7a2632f925c8d7bb	cuprita/qml/components/RowFilter.qml
+58	0	396187de8d17b7e4b18775fe743199eb8a5df24832ba5d62bc036428d0a1cb89	cuprita/qml/components/SectionCard.qml
+21	1	5637226f666c9020cbf1fe3a0aaca7030d27c1e9312194dd2402783511414c0b	cuprita/qml/components/SettingRow.qml
+46	0	3204f5c045db28d2e238097ececcefb3b69c743aef5c19f04abb180a8e788235	cuprita/qml/components/SignalBars.qml
+23	0	1d639bb457eb3d6bd566f68d1041e6fb676a3ef8cd59aaa29f9f660a81a50868	cuprita/qml/components/Spinner.qml
+10	2	0f3d502d45ac32f34189368e1df3d9bfe6ea2c67fa8c43c5087fc0a72b64209a	cuprita/qml/components/StreamRow.qml
+101	77	a5428484d8b5799c38a77b316f71723ae243845a27320b83e8e0c4b6cb390a1c	cuprita/qml/pages/AudioPage.qml
+130	97	8bde8d9bd4c2f37c7c191f45c2bb026b65e95c66335a6486174892f918ddfe35	cuprita/qml/pages/BluetoothPage.qml
+150	57	023b449934d7d8e1c1dde41b89cf4cec0dd6461b02bfa500849184442eb6504e	cuprita/qml/pages/NetworkPage.qml
+21	0	7eaa2c7062e731c6c31cdd850ba51b61f4b1cc4d6dab8c644f2ca04aa2601c3b	cuprita/src/controller/audio.rs
+20	0	0ac23a09d2eb837255f71513b4d5cd1a3c9d9b0ce360dbe85793957032d4ad6e	cuprita/src/controller/bluetooth.rs
+4	0	199a179179193929947e1d07ea8dc8398a89e6c0ee0b38bbe4edb0c384fe144e	cuprita/src/controller/mod.rs
+20	0	8af1cef15113f390502dcdbf086708179c0512cdab0396b5fc885f71136e7945	cuprita/src/controller/network.rs
+5	3	ed6e7eb5e3a8785b93b8ff95082cf7e4510326999f558e35f327d15d2ff21a20	cuprita/src/controller/network_model.rs
+7	0	eb80033ee6bdd00645796f3cab57a3d02dfe636135cc839ea9fa34bf750964b9	cuprita/tests/qml/fakes/FakeAudioController.qml
+6	0	6659b59e6c8a26c77497c7e54e7d50ee165c3337345fb2a132dbe5cd424d6eae	cuprita/tests/qml/fakes/FakeBluetoothController.qml
+10	5	49e30968bc5b308474d1c5ef71a73fa22ee23b29f88fa14633e3ab5f100e3a07	cuprita/tests/qml/fakes/FakeNetworkController.qml
+15	1	d8f756f85af52bbed4e5d93ca8edf180a2d170288ff346f2bd1f88b2d0bce060	cuprita/tests/qml/tst_audio_page.qml
+10	0	f283dadabadb91dba3375c28839d7667ae837cc0a6f659b8e280e741748a6c4e	cuprita/tests/qml/tst_bluetooth_page.qml
+105	21	ad80deed73ba0058450fd63d1c9ff22a8e2fecd83cd363dde690394833945db1	cuprita/tests/qml/tst_network_page.qml
+1	0	33baad2cf3580339f97cd3c2281dd50a07e81d93e38a887e74874d655917416e	docs/version-history.tsv

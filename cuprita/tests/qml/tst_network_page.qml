@@ -4,10 +4,11 @@ import org.celestina.cuprita 1.0
 import "../../qml/pages"
 import "fakes"
 
-// The Network page over the scripted networks: four rows with the wired link
-// first, the Wi-Fi switch asks the controller and drops the Wi-Fi rows, an
-// open network joins at once and a protected one without a saved profile
-// asks for its passphrase first.
+// The Network page over the scripted networks: the wired link in use with its
+// address in the connection card, the two Wi-Fi networks in the networks card,
+// the VPN in its own card; the Wi-Fi switch asks the controller and drops the Wi-Fi
+// rows, an open network joins at once and a protected one without a saved
+// profile asks for its passphrase first.
 TestCase {
     id: testCase
     name: "NetworkPage"
@@ -38,28 +39,79 @@ TestCase {
         }
     }
 
-    function test_four_rows_wired_first() {
+    function test_the_connection_card_shows_the_wired_link_and_its_address() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        const card = findChild(host.page, "connectionCard")
+        verify(card)
+        tryVerify(function() { return findChild(card, "connectionRow") })
+        const row = findChild(card, "connectionRow")
+        compare(findChild(row, "connectionName").text, "Ethernet")
+        compare(findChild(row, "connectionDetail").text, "Ethernet · 192.168.1.23")
+        verify(!findChild(card, "noConnection").visible)
+        waitForRendering(host.page)
+        mouseClick(findChild(row, "disconnectButton"))
+        compare(host.fake.calls, ["disconnect:wired"])
+    }
+
+    function test_the_networks_card_leaves_out_the_connection_and_the_vpn() {
         const host = createTemporaryObject(pageComponent, testCase)
         const list = findChild(host.page, "networkList")
         verify(list)
-        tryCompare(list, "count", 4)
-        list.currentIndex = 0
-        const first = list.itemAtIndex(0)
-        verify(first)
-        compare(first.model.kind, "ethernet")
-        compare(findChild(first, "networkState").text, "Conectado")
+        tryCompare(list, "count", 2)
+        const ids = []
+        for (let i = 0; i < list.count; ++i) {
+            list.currentIndex = i
+            ids.push(list.itemAtIndex(i).model.id)
+        }
+        compare(ids, ["home-wifi", "open-cafe"])
+        // The model keeps every row; only the page filters.
+        compare(host.fake.networks.count, 4)
+        compare(findChild(list.itemAtIndex(0), "networkState").text, "Protegida")
+        compare(findChild(list.itemAtIndex(0), "signalBars").level, 3)
+    }
+
+    function test_without_a_connection_the_card_says_so() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        const list = findChild(host.page, "networkList")
+        tryCompare(list, "count", 2)
+        host.fake.networks.setProperty(0, "state", "disconnected")
+        host.fake.networks.setProperty(0, "address", "")
+        const card = findChild(host.page, "connectionCard")
+        tryCompare(findChild(card, "noConnection"), "visible", true)
+        verify(!findChild(card, "connectionRow"))
+        // The wire leaves the card for the list.
+        tryCompare(list, "count", 3)
+    }
+
+    function test_the_vpn_card_switches_the_vpn() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        const card = findChild(host.page, "vpnCard")
+        tryCompare(card, "visible", true)
+        tryVerify(function() { return findChild(card, "vpnRow") })
+        const row = findChild(card, "vpnRow")
+        compare(row.label, "Office")
+        const toggle = findChild(row, "settingSwitch")
+        verify(!toggle.checked)
+        compare(toggle.Accessible.name, "Activar Office")
+        waitForRendering(host.page)
+        mouseClick(toggle)
+        compare(host.fake.calls, ["setVpnActive:office-vpn:true"])
     }
 
     function test_wifi_switch_asks_and_hides_wifi_rows() {
         const host = createTemporaryObject(pageComponent, testCase)
         const list = findChild(host.page, "networkList")
-        tryCompare(list, "count", 4)
+        tryCompare(list, "count", 2)
         const toggle = findChild(findChild(host.page, "wifiRow"), "settingSwitch")
         verify(toggle.checked)
-        waitForRendering(host.page)
+        // The scene is idle by now (the count wait let it render); a frame
+        // wait would only time out. The click needs the switch laid out.
+        tryVerify(function() { return toggle.visible && toggle.width > 0 && toggle.height > 0 })
         mouseClick(toggle)
         compare(host.fake.calls, ["setWifiEnabled:false"])
-        tryCompare(list, "count", 2)
+        // Only the wire (in the connection card) and the VPN are left.
+        tryCompare(list, "count", 0)
+        tryCompare(findChild(host.page, "noNetworks"), "visible", true)
         verify(!toggle.checked)
         for (let i = 0; i < host.fake.networks.count; ++i)
             verify(host.fake.networks.get(i).kind !== "wifi")
@@ -78,7 +130,7 @@ TestCase {
     function test_open_network_connects_without_a_dialog() {
         const host = createTemporaryObject(pageComponent, testCase)
         const list = findChild(host.page, "networkList")
-        tryCompare(list, "count", 4)
+        tryCompare(list, "count", 2)
         const row = rowWithId(list, "open-cafe")
         verify(row)
         waitForRendering(host.page)
@@ -90,12 +142,12 @@ TestCase {
     function test_unknown_protected_network_asks_for_the_password() {
         const host = createTemporaryObject(pageComponent, testCase)
         const list = findChild(host.page, "networkList")
-        tryCompare(list, "count", 4)
+        tryCompare(list, "count", 2)
         // Not in the scripted state: a protected network nobody saved.
         host.fake.networks.append({ id: "neighbour", name: "Neighbour", kind: "wifi",
                                     state: "disconnected", signal: 50, bars: 2,
-                                    security: "psk", known: false })
-        tryCompare(list, "count", 5)
+                                    security: "psk", known: false, address: "" })
+        tryCompare(list, "count", 3)
         const row = rowWithId(list, "neighbour")
         verify(row)
         waitForRendering(host.page)
@@ -169,7 +221,7 @@ TestCase {
     function test_a_connecting_row_ignores_another_join() {
         const host = createTemporaryObject(pageComponent, testCase)
         const list = findChild(host.page, "networkList")
-        tryCompare(list, "count", 4)
+        tryCompare(list, "count", 2)
         const row = rowWithId(list, "open-cafe")
         verify(row)
         host.fake.networks.setProperty(row.index, "state", "connecting")
@@ -181,7 +233,7 @@ TestCase {
     function test_a_join_in_flight_ignores_a_second_press() {
         const host = createTemporaryObject(pageComponent, testCase)
         const list = findChild(host.page, "networkList")
-        tryCompare(list, "count", 4)
+        tryCompare(list, "count", 2)
         const row = rowWithId(list, "open-cafe")
         verify(row)
         host.fake.busy = true
@@ -198,7 +250,7 @@ TestCase {
     function test_a_notice_after_a_join_re_enables_the_row() {
         const host = createTemporaryObject(pageComponent, testCase)
         const list = findChild(host.page, "networkList")
-        tryCompare(list, "count", 4)
+        tryCompare(list, "count", 2)
         const row = rowWithId(list, "open-cafe")
         verify(row)
         // Busy never drops: the command could not be queued.
@@ -211,5 +263,37 @@ TestCase {
         host.fake.notice("error", "unavailable")
         mouseClick(join)
         compare(host.fake.calls, ["connect:open-cafe:", "connect:open-cafe:"])
+    }
+
+    function test_the_networks_card_shows_a_loading_row_until_the_first_snapshot() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        host.fake.loaded = false
+        const loading = findChild(host.page, "networksLoading")
+        tryCompare(loading, "visible", true)
+        verify(!findChild(host.page, "noNetworks").visible)
+        verify(!findChild(host.page, "noConnection").visible)
+        host.fake.snapshot()
+        tryCompare(loading, "visible", false)
+        // A command in flight: a spinner beside the card's label only.
+        host.fake.busy = true
+        tryCompare(findChild(findChild(host.page, "connectionCard"), "workingSpinner"), "visible", true)
+        verify(!loading.visible)
+    }
+
+    function test_the_empty_line_never_shows_between_loaded_and_the_rows() {
+        const host = createTemporaryObject(pageComponent, testCase)
+        host.fake.loaded = false
+        host.fake.networks.clear()
+        const empty = findChild(host.page, "noNetworks")
+        const list = findChild(host.page, "networkList")
+        tryCompare(findChild(host.page, "networksLoading"), "visible", true)
+        let flashed = false
+        empty.visibleChanged.connect(function() { if (empty.visible) flashed = true })
+        host.fake.snapshot()
+        tryCompare(list, "count", 2)
+        // Let any late pass run: a flash would show in these turns.
+        wait(CelestinaTheme.motionFast)
+        verify(!flashed)
+        verify(!empty.visible)
     }
 }

@@ -1,9 +1,10 @@
 # Cuprita status
 
 - **Updated:** 2026-10-08
-- **Version:** 1.0.0 (landed with CUP-1-F, `cuprita-release`)
-- **Implementation:** CUP-1-A to CUP-1-F are done; CUP-1-G, the fix wave
-  from the final review of 1.0, is open as maintenance (no version change).
+- **Version:** 1.0.1
+- **Implementation:** CUP-1-A to CUP-1-G are done; CUP-1-H, the
+  grouped-card layout the author approved, is open as maintenance (no
+  version change).
   Red runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
   agent, and Audio on PipeWire through WirePlumber's `wpctl`;
   `CUPRITA_FAKE=1` runs all three over the scripted backends
@@ -19,8 +20,8 @@
 - Keyboard: the strip is one Tab stop (Left and Right walk it), Tab then
   reaches the page's switches, buttons and list; the arrows walk a list,
   Enter runs the current row's primary action (join or leave a network,
-  switch a VPN, pair, connect or disconnect a device, mute an application),
-  Space switches a VPN row and any focused switch, Menu or Shift+F10
+  pair, connect or disconnect a device, mute an application), Space
+  switches any focused switch (a VPN has its own switch row), Menu or Shift+F10
   opens a device row's menu, Left/Right move a focused volume slider by
   1 % (Shift: 5 %), Esc closes the dialogs and menus. For a screen reader every row is a list item named by kind,
   name and state (and the bars of four, the battery or the volume), the
@@ -34,7 +35,7 @@
   share the error classification and the debounced watcher in `bus`), and
   the audio client `wpctl` over `wpctl` and `pw-cli` with a watcher that
   wakes on `pw-mon` events and polls every 2 s only while `pw-mon` is
-  missing or PipeWire does not answer (66 tests).
+  missing or PipeWire does not answer (68 tests).
 - `src/controller/` holds the three section controllers (worker thread per
   section, each re-reading when its client's watcher reports a change) and four
   `QAbstractListModel`s that reconcile snapshots by key; the window shows
@@ -43,10 +44,16 @@
   off and powers the Bluetooth adapter off; while it lasts the adapter
   switch is disabled and switching it on is refused, and it stays off when
   airplane mode ends.
-- The pages: Wi-Fi and airplane switches with the network list; the adapter
-  switch, search and the device list; output and input cards with a default
-  selector, volume (0–150 % in 1 % steps, a tick at 100 %) and mute, the
-  application streams, and a profile card per sound card with a choice.
+- The pages are grouped cards, each under its section label, and each page
+  scrolls as one column. Red: the connection in use (kind, name, its kind
+  and IPv4 address and a disconnect button, or a muted line saying there
+  is none), the Wi-Fi and
+  airplane switches, the other networks with four signal bars and their
+  security, and a VPN card with a switch per VPN when one exists.
+  Bluetooth: the adapter switch and the search, then the devices. Audio:
+  output and input cards with a default selector, volume (0–150 % in 1 %
+  steps, a tick at 100 %) and mute, the application streams, and a profile
+  card per sound card with a choice.
   Joining a protected Wi-Fi network without a saved profile asks for its
   passphrase in a dialog; pairing asks in `PairingDialog` (a PIN to type, a
   passkey to confirm, or one to type on the device). «Buscar» spins while the
@@ -57,6 +64,19 @@
   await the author's check. Until they pass, nm-applet, Blueman and
   pavucontrol stay installed; their removal is the author's action (see the
   [exit evidence](docs/evidence/2026-10-08-exit.md)).
+
+## What CUP-1-H changes
+
+The author's verdict on 1.0.1 was that the content sat too close to the
+edges and read as things put one after another. CUP-1-H regroups the three
+pages in the suite's grouped-card grammar (see the
+[grouped-cards evidence](docs/evidence/2026-10-08-grouped-cards.md)): the
+words and controls sit 16 px from each card's edge, rows light on hover and
+focus, setting rows are split by hairlines, and the connection in use moves
+out of the network list into a card of its own that reads its IPv4 address
+(`Network::address`, from NetworkManager's `Ip4Config`). Until a section's
+first reading arrives its list cards show a spinner with a muted line, and a
+command in flight turns a small spinner beside the card's label.
 
 ## What CUP-1-G fixes
 
