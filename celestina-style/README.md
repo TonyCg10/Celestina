@@ -18,7 +18,8 @@ the shell.
 
 | Area | Responsibility |
 |---|---|
-| `CelestinaTheme.qml` | Semantic colour pairs, typography, radii, anatomy, motion and `reducedMotion` |
+| `CelestinaTheme.qml` | Semantic colour pairs, typography and its `textScale`, radii, anatomy, motion and `reducedMotion` |
+| `CelestinaAppearance.qml` | Binds the theme's `reducedMotion` and `textScale` from the host's appearance values |
 | `CelestinaIcons.qml`, `CelestinaIconShapes.qml` | Closed Lucide UI names and generated Phosphor content shapes |
 | `CelestinaSurface.qml`, `CelestinaBackdrop.qml` | Canonical opaque L0/L1 composition |
 | `Glass*.qml` | Canonical floating/modal material over an explicit in-scene capture or compositor backdrop, with opt-in dense-content and contextual-veil roles |

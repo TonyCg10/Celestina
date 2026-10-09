@@ -13,6 +13,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaIconButton.qml",
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
+    "qml/CelestinaAppearance.qml",
     "qml/CelestinaSlider.qml",
     // The format dialog's two toggles.
     "qml/CelestinaSwitch.qml",
@@ -245,6 +246,7 @@ fn main() {
         .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
         .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
         .files([
+            "src/appearance.rs",
             "src/activation.rs",
             "src/controller.rs",
             // Exports one function to the thumbnail provider: the picture a

@@ -1,4 +1,5 @@
 mod activation;
+mod appearance;
 mod apps;
 mod bookmarks;
 mod controller;
@@ -35,10 +36,7 @@ mod usage;
 mod usage_session;
 mod volumes;
 
-use cxx_qt_lib::{
-    QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,
-    QUrl, QVariant,
-};
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
 /// The freedesktop application ID: the basename of the installed `.desktop`
 /// entry, the name of the installed icon, and — because Qt reports it as the
@@ -90,13 +88,6 @@ fn main() {
         // graph to OpenGL, which libmpv's render API needs; both must happen
         // before any window exists.
         media::qobject::register_video_item(engine.as_mut());
-        let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
-        let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
-        initial_properties.insert(
-            QString::from("reducedMotion"),
-            QVariant::from(&reduced_motion),
-        );
-        engine.as_mut().set_initial_properties(&initial_properties);
         // Development only: scripts/qml-dev.sh lays the source QML out as an
         // import tree, so a QML change needs a restart instead of a build.
         // The tree goes first, ahead of the module compiled in.

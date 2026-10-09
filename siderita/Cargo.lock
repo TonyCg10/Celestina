@@ -284,6 +284,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "celestina-settings"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
+ "notify-debouncer-full",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2115,6 +2123,7 @@ version = "1.11.0"
 dependencies = [
  "async-channel",
  "celestina-core",
+ "celestina-settings",
  "cxx",
  "cxx-gen",
  "cxx-qt",

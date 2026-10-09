@@ -29,6 +29,13 @@ ApplicationWindow {
         anchors.fill: parent
     }
 
+    // The suite's appearance file (reduced motion, text scale), followed on
+    // the controller's worker and bound into the theme once for this window.
+    CelestinaAppearance {
+        reducedMotion: CupritaController.appearanceReducedMotion
+        textScale: CupritaController.appearanceTextScale
+    }
+
     // A second launch asks the running window to come to the front.
     CupritaActivation {
         id: activation
@@ -114,11 +121,23 @@ ApplicationWindow {
                                  + " endpoints=" + (sinkModel.count + sourceModel.count)
                                  + " streams=" + streamModel.count
                                  + " sink=" + sinkModel.defaultId
-                                 + " source=" + sourceModel.defaultId)
+                                 + " source=" + sourceModel.defaultId
+                                 + " textScale=" + CelestinaTheme.textScale
+                                 + " fontBody=" + CelestinaTheme.fontBody)
+    }
+
+    // Development only, behind the same switch: each change of the theme's
+    // text scale, as the appearance file reaches it.
+    Connections {
+        target: CelestinaTheme
+        enabled: CupritaController.smokeReport
+        function onFontBodyChanged() {
+            console.log("cuprita-appearance: textScale=" + CelestinaTheme.textScale
+                        + " fontBody=" + CelestinaTheme.fontBody)
+        }
     }
 
     Component.onCompleted: {
-        CelestinaTheme.reducedMotion = CupritaController.reducedMotion
         activation.start()
         navStrip.forceActiveFocus()
     }

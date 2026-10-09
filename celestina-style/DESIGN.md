@@ -284,6 +284,16 @@ Body uses weight 400 and titles 600. Panel numerics enable `tnum`. A mono face
 or fallback must be declared by the public font contract before a component
 depends on it.
 
+The text scale is a host-controlled accessibility input like reduced motion:
+`CelestinaTheme.textScale` (default `1.0`) comes from the suite's appearance
+file, `~/.config/celestina/appearance.toml` (`text_scale = "compact" |
+"normal" | "large" | "larger"`, factors 0.9, 1.0, 1.15 and 1.3, owned by
+`celestina-settings`), and each application binds it once from its adapter
+through `CelestinaAppearance`. Those values are the bases above: every `font*`
+role is `Math.round(base * textScale)`. Only the nine type roles scale. Layout
+tokens, `rowHeight`, spacing and radii stay fixed; a row grows only where its
+height already follows its text's implicit height.
+
 ### 5.5 Motion
 
 `easeOneUi` is the default curve. The duration ladder is `motionFast 100`,
@@ -324,6 +334,7 @@ compatibility policy changes that contract.
 | Component | Contract |
 |---|---|
 | `CelestinaTheme` | Semantic colour, metric, type, motion and reduced-motion source of truth |
+| `CelestinaAppearance` | Binds `CelestinaTheme.reducedMotion` and `textScale` once per window from two plain values the host's appearance adapter queues; takes no controller and draws nothing |
 | `CelestinaIcons` | Stable semantic UI-icon lookup with a visible fallback |
 | `CelestinaIconShapes` | Stable filled content-shape catalogue; consumers do not call its path data directly |
 | `CelestinaSurface` | L0/L1 semantic container; role owns fill/ink/radius/outline |

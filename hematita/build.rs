@@ -7,6 +7,7 @@ const QML_FILES: &[&str] = &[
     // The suite's shared visual language, symlinked from ../celestina-style.
     "qml/CelestinaButton.qml",
     "qml/CelestinaFocusRing.qml",
+    "qml/CelestinaAppearance.qml",
     "qml/CelestinaBackdrop.qml",
     "qml/CelestinaIcon.qml",
     "qml/CelestinaIconButton.qml",
@@ -113,6 +114,7 @@ fn main() {
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
         .files([
+            "src/appearance.rs",
             "src/activation.rs",
             "src/analysis.rs",
             "src/resources.rs",

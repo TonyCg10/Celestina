@@ -9,7 +9,6 @@ import "components"
 ApplicationWindow {
     id: window
 
-    required property bool reducedMotion
     // Set only by `scripts/smoke.sh`: see the shape gate below.
     required property bool smokeShape
     // Set only by `scripts/smoke.sh`: see the section walk below.
@@ -44,6 +43,17 @@ ApplicationWindow {
         { key: "storage", icon: "hard-drive", label: qsTr("Almacenamiento") }
     ]
     property int currentSection: 0
+
+    // The suite's appearance file (reduced motion, text scale), followed on
+    // the adapter's worker and bound into the theme once for this window.
+    HematitaAppearance {
+        id: appearanceAdapter
+    }
+
+    CelestinaAppearance {
+        reducedMotion: appearanceAdapter.appearanceReducedMotion
+        textScale: appearanceAdapter.appearanceTextScale
+    }
 
     // Under the strip and every page: the Haze canvas over the compositor's
     // blur. The pages' panels are CelestinaSurface and already paint `card`.
@@ -247,7 +257,6 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        CelestinaTheme.reducedMotion = window.reducedMotion
         navStrip.forceActiveFocus()
         machine.start()
         processHub.start()

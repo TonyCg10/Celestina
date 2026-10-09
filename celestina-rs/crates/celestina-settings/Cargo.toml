@@ -1,0 +1,20 @@
+[package]
+name = "celestina-settings"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# The base directory (`xdg::config_home`), the atomic replace and the bounded
+# read: the suite's one owner of each, reused rather than copied.
+celestina-core.workspace = true
+# Noticing that the appearance file changed. Already the suite's watcher
+# (Siderita's folder view and Fluorita's library use this version, Magnetita
+# carries it through fluorita-engine), so it is no second way to watch a file;
+# Grafita, Hematita and Cuprita gain it with this crate. Directory watching
+# with coalescing is what an atomic replace needs, and std offers neither.
+notify-debouncer-full = "0.5"
+
+[lints]
+workspace = true

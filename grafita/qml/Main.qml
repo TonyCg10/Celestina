@@ -12,7 +12,6 @@ import org.celestina.grafita 1.0
 ApplicationWindow {
     id: window
 
-    required property bool reducedMotion
     // The document named on the command line, already reduced to a local path.
     // Empty means Grafita was launched without one.
     required property string initialPath
@@ -42,6 +41,17 @@ ApplicationWindow {
         tabsRevision
         const holder = tabRepeater.itemAt(currentTab)
         return holder ? holder.tabView : null
+    }
+
+    // The suite's appearance file (reduced motion, text scale), followed on
+    // the adapter's worker and bound into the theme once for this window.
+    GrafitaAppearance {
+        id: appearanceAdapter
+    }
+
+    CelestinaAppearance {
+        reducedMotion: appearanceAdapter.appearanceReducedMotion
+        textScale: appearanceAdapter.appearanceTextScale
     }
 
     ListModel { id: tabsModel }
@@ -377,7 +387,6 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        CelestinaTheme.reducedMotion = window.reducedMotion
         // Always one tab, even with no document: the empty state carries the
         // button that opens one.
         window.openTab(window.initialPath)

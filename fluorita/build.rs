@@ -23,6 +23,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaIcon.qml",
     "qml/CelestinaFocusRing.qml",
+    "qml/CelestinaAppearance.qml",
     "qml/CelestinaButton.qml",
     "qml/CelestinaIconButton.qml",
     "qml/CelestinaCapsule.qml",
@@ -123,6 +124,7 @@ fn main() {
         // header is watched through `rerun_paths`.
         .cpp_file(fluorita_qt::THUMBNAIL_PROVIDER_SOURCE)
         .files([
+            "src/appearance.rs",
             "src/activation.rs",
             "src/library.rs",
             "src/player.rs",

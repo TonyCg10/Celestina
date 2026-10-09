@@ -41,6 +41,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaIconButton.qml",
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
+    "qml/CelestinaAppearance.qml",
     "qml/CelestinaTextField.qml",
     // The pill that groups a pair of icon actions (undo/redo, previous/next)
     // and the one row-fill recipe the tabs and the encoding list paint.
@@ -123,6 +124,7 @@ fn main() {
         .cpp_file("cpp/highlighter.cpp")
         .cpp_file("cpp/highlighter.h")
         .files([
+            "src/appearance.rs",
             "src/activation.rs",
             "src/preferences.rs",
             "src/session.rs",

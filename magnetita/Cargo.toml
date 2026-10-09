@@ -21,6 +21,9 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # Playback capability and progress classification are pure protocol-domain
 # contracts shared with the daemon; the Qt bridge only projects their result.
 magnetita-core = { path = "../celestina-rs/crates/magnetita-core" }
+# The suite's appearance file (reduced motion, text scale) and its watcher:
+# its one owner, so this window follows the same choice as every other.
+celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
 # The mirror window decodes the phone's picture with the suite's engine
 # (libmpv), the same one Fluorita's window and Siderita's preview use; the
 # app never talks to libmpv, it opens an instance and hands the surface one

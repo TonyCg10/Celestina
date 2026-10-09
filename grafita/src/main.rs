@@ -1,4 +1,5 @@
 mod activation;
+mod appearance;
 mod encoding;
 mod preferences;
 mod session;
@@ -54,12 +55,7 @@ fn main() {
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
-        let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
         let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
-        initial_properties.insert(
-            QString::from("reducedMotion"),
-            QVariant::from(&reduced_motion),
-        );
         // The document to open, resolved here so the window never has to parse
         // a command line. Whether it is *editable* is decided later, by its
         // bytes — a name Grafita cannot classify is still opened and answered

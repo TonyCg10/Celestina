@@ -3,6 +3,7 @@ mod activation;
 mod analysis;
 mod analysis_session;
 mod analysis_view;
+mod appearance;
 mod browse;
 mod kernel_text;
 mod lists;
@@ -79,12 +80,7 @@ fn main() {
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
-        let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
         let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
-        initial_properties.insert(
-            QString::from("reducedMotion"),
-            QVariant::from(&reduced_motion),
-        );
         // The smoke's shape gate, off in every other run.
         let smoke_shape = std::env::var_os("HEMATITA_SMOKE_SHAPE").is_some();
         initial_properties.insert(QString::from("smokeShape"), QVariant::from(&smoke_shape));

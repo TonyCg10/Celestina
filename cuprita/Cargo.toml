@@ -35,6 +35,9 @@ cuprita-core = { path = "../celestina-rs/crates/cuprita-core" }
 # `celestina-core` (feature `activation`, which brings zbus 5 for the session
 # bus); nothing else of the crate is used here.
 celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
+# The suite's appearance file (reduced motion, text scale) and its watcher:
+# its one owner, so this window follows the same choice as every other.
+celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
 
 [build-dependencies]
 # Generates the C++ side of the bridges, compiles it and builds the QML

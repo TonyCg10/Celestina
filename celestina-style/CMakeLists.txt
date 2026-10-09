@@ -31,6 +31,7 @@ qt_add_qml_module(celestina-style
     OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/CelestinaStyle
     QML_FILES
         CelestinaTheme.qml
+        CelestinaAppearance.qml
         CelestinaIcons.qml
         CelestinaSurface.qml
         CelestinaBackdrop.qml

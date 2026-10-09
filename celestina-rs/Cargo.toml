@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/celestina-core",
+    "crates/celestina-settings",
     "crates/celestina-shell-core",
     "crates/siderita-core",
     "crates/siderita-archive",

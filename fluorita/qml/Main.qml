@@ -13,7 +13,6 @@ import org.celestina.fluorita 1.0
 ApplicationWindow {
     id: window
 
-    required property bool reducedMotion
     // The item named on the command line, already reduced to a display label
     // by the Rust side. Empty means Fluorita was launched with no argument.
     required property string requestedLabel
@@ -78,6 +77,17 @@ ApplicationWindow {
         // re-run the expansion.
         window.open(wanted.key, wanted.name, Qt.rect(0, 0, 0, 0),
                     wanted.thumbnail, wanted.kind);
+    }
+
+    // The suite's appearance file (reduced motion, text scale), followed on
+    // the adapter's worker and bound into the theme once for this window.
+    FluoritaAppearance {
+        id: appearanceAdapter
+    }
+
+    CelestinaAppearance {
+        reducedMotion: appearanceAdapter.appearanceReducedMotion
+        textScale: appearanceAdapter.appearanceTextScale
     }
 
     // What happens when something ends.
@@ -703,7 +713,6 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        CelestinaTheme.reducedMotion = window.reducedMotion
         if (window.requestedKey.length > 0) {
             mediaPlayer.open(window.requestedKey)
         } else {

@@ -1,3 +1,4 @@
+mod appearance;
 mod commands;
 mod controller;
 mod devices;
@@ -45,12 +46,7 @@ fn main() {
     if let Some(mut engine) = engine.as_mut() {
         // The shared media surface, registered once before any window exists.
         mirror_view::qobject::register_video_item(engine.as_mut());
-        let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
         let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
-        initial_properties.insert(
-            QString::from("reducedMotion"),
-            QVariant::from(&reduced_motion),
-        );
         initial_properties.insert(QString::from("mirrorOnly"), QVariant::from(&mirror_only));
         engine.as_mut().set_initial_properties(&initial_properties);
         // Development only: scripts/qml-dev.sh lays the source QML out as an

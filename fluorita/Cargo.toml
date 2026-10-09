@@ -23,6 +23,9 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # Feature `activation`: the suite's shared single-instance hand-off on
 # `org.celestina.Fluorita`, so a second launch reaches the running player.
 celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
+# The suite's appearance file (reduced motion, text scale) and its watcher:
+# its one owner, so this window follows the same choice as every other.
+celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
 # What media *is*: kind classification, the library projections and the
 # playback model. Classifying a path costs no decoder, which is why the
 # scaffold can be honest about what it was handed without starting one.

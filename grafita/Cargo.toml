@@ -30,6 +30,9 @@ grafita-core = { path = "../celestina-rs/crates/grafita-core" }
 # `grafita RUTA` hands its document to the running window over the session bus
 # (zbus 5, which the crate brings) instead of mapping another one.
 celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
+# The suite's appearance file (reduced motion, text scale) and its watcher:
+# its one owner, so this window follows the same choice as every other.
+celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
 # Guesses the encoding of a file that is not UTF-8, so the author never has to
 # name it. Mozilla's detector (the one Firefox uses), pure Rust. It lives here
 # and not in grafita-core because Siderita's editor shares that crate and wants

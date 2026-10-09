@@ -706,15 +706,32 @@ QtObject {
 
     // Type roles (One UI: large, comfortable, semibold titles over heavy bolds).
     // Starting px; tuned per surface with screenshots in the visual phases.
-    readonly property int fontMini: 10
-    readonly property int fontCaption: 11
-    readonly property int fontRowSecondary: 12       // list-row subtitle
-    readonly property int fontBody: 13               // dialog/body text
-    readonly property int fontRowTitle: 15           // list-row title, dialog headings
-    readonly property int fontTitle: 17              // dialog title (ready; S4 dialogs)
-    readonly property int fontHeaderCollapsed: 20    // collapsed big header
-    readonly property int fontHeaderExpanded: 30     // expanded big header (ready; CP4/S4)
-    readonly property int fontDisplay: 34            // display (ready)
+    //
+    // Text scale: host-controlled accessibility input, like `reducedMotion`.
+    // Each application binds it once from the shared appearance file
+    // (`~/.config/celestina/appearance.toml`, `celestina-settings`): 0.9, 1.0,
+    // 1.15 or 1.3. It multiplies these nine type roles only; layout tokens,
+    // `rowHeight` and radii never scale (DESIGN §5.4).
+    property real textScale: 1.0
+    // The unscaled bases; consumers read the scaled roles below.
+    readonly property int fontMiniBase: 10
+    readonly property int fontCaptionBase: 11
+    readonly property int fontRowSecondaryBase: 12
+    readonly property int fontBodyBase: 13
+    readonly property int fontRowTitleBase: 15
+    readonly property int fontTitleBase: 17
+    readonly property int fontHeaderCollapsedBase: 20
+    readonly property int fontHeaderExpandedBase: 30
+    readonly property int fontDisplayBase: 34
+    readonly property int fontMini: Math.round(fontMiniBase * textScale)
+    readonly property int fontCaption: Math.round(fontCaptionBase * textScale)
+    readonly property int fontRowSecondary: Math.round(fontRowSecondaryBase * textScale)       // list-row subtitle
+    readonly property int fontBody: Math.round(fontBodyBase * textScale)                       // dialog/body text
+    readonly property int fontRowTitle: Math.round(fontRowTitleBase * textScale)               // list-row title, dialog headings
+    readonly property int fontTitle: Math.round(fontTitleBase * textScale)                     // dialog title (ready; S4 dialogs)
+    readonly property int fontHeaderCollapsed: Math.round(fontHeaderCollapsedBase * textScale) // collapsed big header
+    readonly property int fontHeaderExpanded: Math.round(fontHeaderExpandedBase * textScale)   // expanded big header (ready; CP4/S4)
+    readonly property int fontDisplay: Math.round(fontDisplayBase * textScale)                 // display (ready)
     readonly property real sectionLetterSpacing: 1.4
 
     readonly property int weightRegular: Font.Normal    // 400 — body

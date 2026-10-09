@@ -346,6 +346,14 @@ name = "celestina-dotfiles-core"
 version = "0.1.0"
 
 [[package]]
+name = "celestina-settings"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
+ "notify-debouncer-full",
+]
+
+[[package]]
 name = "celestina-shell-core"
 version = "0.1.0"
 dependencies = [

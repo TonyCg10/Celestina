@@ -7,7 +7,6 @@ import org.celestina.siderita.internal 1.0
 ApplicationWindow {
     id: window
 
-    required property bool reducedMotion
 
     width: 1120
     height: 720
@@ -21,6 +20,17 @@ ApplicationWindow {
     // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
     color: CelestinaTheme.clear
     title: "Siderita"
+
+    // The suite's appearance file (reduced motion, text scale), followed on
+    // the adapter's worker and bound into the theme once for this window.
+    SideritaAppearance {
+        id: appearanceAdapter
+    }
+
+    CelestinaAppearance {
+        reducedMotion: appearanceAdapter.appearanceReducedMotion
+        textScale: appearanceAdapter.appearanceTextScale
+    }
 
     // ── Session ──────────────────────────────────────────────────────────
     // A controller that owns no tab, used only to read and write what belongs
@@ -658,7 +668,6 @@ ApplicationWindow {
 
 
     Component.onCompleted: {
-        CelestinaTheme.reducedMotion = reducedMotion
         window.width = sessionStore.savedWindowWidth()
         window.height = sessionStore.savedWindowHeight()
 

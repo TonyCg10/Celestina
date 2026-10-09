@@ -26,6 +26,9 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # claims `org.celestina.Siderita` with it and reaches a running Grafita,
 # Fluorita or Hematita through it before spawning one (zbus 5, already here).
 celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
+# The suite's appearance file (reduced motion, text scale) and its watcher:
+# its one owner, so this window follows the same choice as every other.
+celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
 siderita-core = { path = "../celestina-rs/crates/siderita-core" }
 siderita-archive = { path = "../celestina-rs/crates/siderita-archive" }
 siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }

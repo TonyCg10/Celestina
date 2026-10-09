@@ -12,6 +12,7 @@ const QML_FILES: &[&str] = &[
     "qml/CelestinaIconButton.qml",
     "qml/CelestinaSectionLabel.qml",
     "qml/CelestinaFocusRing.qml",
+    "qml/CelestinaAppearance.qml",
     "qml/CelestinaSwitch.qml",
     "qml/CelestinaCapsule.qml",
     "qml/CelestinaRowHighlight.qml",
@@ -95,6 +96,7 @@ fn main() {
         .cpp_file(fluorita_qt::VIDEO_ITEM_SOURCE)
         .cpp_file(fluorita_qt::VIDEO_ITEM_HEADER)
         .files([
+            "src/appearance.rs",
             "src/commands.rs",
             "src/controller.rs",
             "src/messages.rs",

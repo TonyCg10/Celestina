@@ -1,0 +1,131 @@
+# CONV-1-B exact change inventory
+
+Base revision	efc08f29d7764f38163ad8c8d46fe74bd367fd8f
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/celestina-settings/Cargo.toml
+Pathspec	celestina-rs/crates/celestina-settings/src/appearance.rs
+Pathspec	celestina-rs/crates/celestina-settings/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-settings/src/watch.rs
+Pathspec	celestina-rs/crates/celestina-settings/tests/appearance.rs
+Pathspec	celestina-rs/crates/celestina-settings/tests/watch.rs
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaAppearance.qml
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/README.md
+Pathspec	celestina-style/qmldir
+Pathspec	celestina-style/tests/tst_textscale.qml
+Pathspec	cuprita/Cargo.lock
+Pathspec	cuprita/Cargo.toml
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/qml/CelestinaAppearance.qml
+Pathspec	cuprita/qml/Main.qml
+Pathspec	cuprita/src/controller/app.rs
+Pathspec	cuprita/tests/qml/tst_appearance.qml
+Pathspec	docs/evidence/2026-10-09-shared-appearance.md
+Pathspec	docs/inventories/2026-10-09-suite-conventions/CONV-1-B.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-suite-conventions.md
+Pathspec	docs/projects.toml
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/build.rs
+Pathspec	fluorita/qml/CelestinaAppearance.qml
+Pathspec	fluorita/qml/Main.qml
+Pathspec	fluorita/src/appearance.rs
+Pathspec	fluorita/src/main.rs
+Pathspec	grafita/Cargo.lock
+Pathspec	grafita/Cargo.toml
+Pathspec	grafita/build.rs
+Pathspec	grafita/qml/CelestinaAppearance.qml
+Pathspec	grafita/qml/Main.qml
+Pathspec	grafita/src/appearance.rs
+Pathspec	grafita/src/main.rs
+Pathspec	hematita/Cargo.lock
+Pathspec	hematita/Cargo.toml
+Pathspec	hematita/build.rs
+Pathspec	hematita/qml/CelestinaAppearance.qml
+Pathspec	hematita/qml/Main.qml
+Pathspec	hematita/src/appearance.rs
+Pathspec	hematita/src/main.rs
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/qml/CelestinaAppearance.qml
+Pathspec	magnetita/qml/Main.qml
+Pathspec	magnetita/src/appearance.rs
+Pathspec	magnetita/src/main.rs
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/build.rs
+Pathspec	siderita/qml/CelestinaAppearance.qml
+Pathspec	siderita/qml/Main.qml
+Pathspec	siderita/src/appearance.rs
+Pathspec	siderita/src/main.rs
+Pathspec	siderita/tests/qml/tst_appearance.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	0	08edeed07686d309ffdeb431520eb2b8a4ab5a0000ab95aad070bed1696e9b11	celestina-rs/Cargo.lock
+1	0	16f792e5e4307734a25c527478b9457a4d4e3fa75ce43b372ee4ffe11726ee78	celestina-rs/Cargo.toml
+20	0	ac017b6e6534dfea299b2ec8b00587305f7b1684dbee112f88416b1edcb08243	celestina-rs/crates/celestina-settings/Cargo.toml
+619	0	fcfc6af995242d88f4c5ba8fefc64e7679936292a08d36127808ff496cec1c65	celestina-rs/crates/celestina-settings/src/appearance.rs
+69	0	81747e5b0a25a4bdfd1a043a882f7f076c0a1b0cbca44cd01d750ef48a23e7bc	celestina-rs/crates/celestina-settings/src/lib.rs
+136	0	7e2cb06722ec511f00c3bd298b3db53ab20cea15b4dd08fe93daf9e7bfe6d347	celestina-rs/crates/celestina-settings/src/watch.rs
+142	0	091be830d2f54aa9916221cf2fe52289299382839ccab4db578c3b4249fa004b	celestina-rs/crates/celestina-settings/tests/appearance.rs
+151	0	c1fa2fc684223bc985b88c622e337e8c112a32706a4338df6e6320ae2353cbf4	celestina-rs/crates/celestina-settings/tests/watch.rs
+1	0	3ec990d24751601a1842ce912abb3866aa317fb2d5d2887a91c91985dae28fb0	celestina-style/CMakeLists.txt
+26	0	a710d131c156e38a3430f127bb2e6175e38fb064fa3ab413a27da3dfdb83a124	celestina-style/CelestinaAppearance.qml
+26	9	a1729d2feb890b99beccc631feca7917073881328c429210983b8b3d9ca59333	celestina-style/CelestinaTheme.qml
+11	0	29896c6d6ddd4ac89c437b8466ca73347c43f3c8cb7fcb47547e32fa80ef6da7	celestina-style/DESIGN.md
+2	1	25add03e269da4d1566a2edee17167683fea742c54873faceb54ac301ebfac72	celestina-style/README.md
+1	0	d7336ae9efcc2a0b1e96317aa1772392f88cfbd7fe279c4fa280c847013e0c27	celestina-style/qmldir
+69	0	501df211209eba25516cfe9fcc8b223b9a4e833bdafe17adc34f8214cbcbe904	celestina-style/tests/tst_textscale.qml
+243	19	8b31da024070c7650deccbb680d587e5d777f9d06471880dc4cd86c30b9c12b2	cuprita/Cargo.lock
+3	0	9c8d2dbc6bd6318c23ab305cab35070282eb3226a2519086913e3c02f11551b6	cuprita/Cargo.toml
+1	0	3e125b3b6231791261d14a208ecebbf20d23af7339c8d85c9d8e01fdf563c5c8	cuprita/build.rs
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	cuprita/qml/CelestinaAppearance.qml
+21	2	8e2c255561ab9d01c1614cb8a842f2dbc4568e3506b50e151958e80f3d6f6adf	cuprita/qml/Main.qml
+71	9	01502a1e720c8620fd0ab624c494aa0e588fde283b90b0f0ab93c16a810b6a79	cuprita/src/controller/app.rs
+37	0	c05ce75798b4ded48cc87121af4f7372fbbd202039e98562b7aea72f0dbcf132	cuprita/tests/qml/tst_appearance.qml
+165	0	4866c13bd98ade30b591041634a39f5e9fb155de2b8e800402a181f47d8ab48b	docs/evidence/2026-10-09-shared-appearance.md
+131	0	self	docs/inventories/2026-10-09-suite-conventions/CONV-1-B.numstat.tsv
+1	1	c31f09128247f812600888731e85a1da956a9ac768b48cb0882d99e6c0825167	docs/plans/active/2026-10-09-suite-conventions.md
+7	6	1f3e2bd2cf83c4c18cd2c346849769d3087e54bc3d39ec741c4f44ed94ae4bce	docs/projects.toml
+9	0	72dd0ac2b686810bd4694ace39afd5705c0e34f4dfffa1cca33a258fd69d6084	fluorita/Cargo.lock
+3	0	bf31e7c8321a40f9219d76d27f1208958157e2b8b0f3ee715d1854bca8c12ca7	fluorita/Cargo.toml
+2	0	4784190a07a6b924740157f525f7d6ac7099d247a42459101f9e0b492d4f3859	fluorita/build.rs
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	fluorita/qml/CelestinaAppearance.qml
+11	2	442a124d4b736ae19dbc48495aaa168b6ffa13b8249377837cf40bd6bec85d6f	fluorita/qml/Main.qml
+86	0	14adef2209c66e42abf80ad38fb56f10d49ddf1364c62e69e45d94a7e93092af	fluorita/src/appearance.rs
+1	5	68f33622677830f4a18074c5dd383ad2883feeb1a79e58a5d4a946c3449fa4fc	fluorita/src/main.rs
+233	9	30b2897cf04add625f4650de912e51442557fbf215f44791cca90a773ef4c03e	grafita/Cargo.lock
+3	0	246f16443be662b228d9a4c982e8ed386389ae59f4024c2ab0de45221615220b	grafita/Cargo.toml
+2	0	7a470b00d2800cb4bd5555049f6a1a42965e56f07f526ccf975a85a3f60da450	grafita/build.rs
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	grafita/qml/CelestinaAppearance.qml
+11	2	06650cfc0f6624c3dd685908ef556197f3e850f8dd9c44d8119eef75e0270e97	grafita/qml/Main.qml
+86	0	8815f41f5fc8ff1cae98bcdad7643ccb966dd86f39cd768551dc159c62400cec	grafita/src/appearance.rs
+1	5	168ec97d9ca7f8cfa4cbaedb3fbd8d51b102f2ed4e348aa11116bb3c2ccd2741	grafita/src/main.rs
+233	9	5da1bab8b24c461fb20a4d9776f9c969f869ae441b36b7757dc8f29d055cf252	hematita/Cargo.lock
+3	0	b85e2ad20bf46cdbc60651406cfea8cc36f70c782c77afb76276547c9f33adb4	hematita/Cargo.toml
+2	0	3e88a7ea37939dcff1367b388fd9bca758a5be6af9bc7a578a2e7029b9da84ae	hematita/build.rs
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	hematita/qml/CelestinaAppearance.qml
+11	2	75974153a1e078bc2d75357276bd0f6b33861d2013c3c69f0f3698a8927a67d8	hematita/qml/Main.qml
+86	0	7fec8ede35cb98ded27ad1ea86aa1baa4946cb3d566741fd0060838a3fe69ead	hematita/src/appearance.rs
+1	5	ed6811a4437bb9e0cf555f52a29b418d01071a940897b89e9add88f8282e4ba5	hematita/src/main.rs
+9	0	5c668e906a1ba35db4be18a7e91d37f0607f115b39788df534c5a77af7999552	magnetita/Cargo.lock
+3	0	f38f046e4c01ebbd09c427758f633909782b1c9ae28ada6f3d682c16a5dc00cd	magnetita/Cargo.toml
+2	0	b2150a7822c7acdb4526ee5924eb289b9f9c9d8991a6428b5cf8a0dcc6b9a665	magnetita/build.rs
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	magnetita/qml/CelestinaAppearance.qml
+10	2	50dc7990d5fd4511ac8867e3baefb33c5e57cc7ad630380643930029cc211739	magnetita/qml/Main.qml
+86	0	66c9a7e17f6a3a09ef50856cfecc19a17870ababcd556b8dd8753124113c76b8	magnetita/src/appearance.rs
+1	5	9ed519284b3a635d669df426a2c166565e14b110e648471a28d54ef793957e56	magnetita/src/main.rs
+9	0	66da9abcb91d6609299c11856825200672c88af8ba5debaa57c52fd47bace2fa	siderita/Cargo.lock
+3	0	c22c940f1daab9995e2c09c3d391e2b60621f529d27742f3759a204a52d02cd4	siderita/Cargo.toml
+2	0	5f61041bb23300899bd89cfd8472141503bb81b24862742fcf93e15c00da1fb1	siderita/build.rs
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	siderita/qml/CelestinaAppearance.qml
+11	2	034eebbda04100aeeb80f6d83e908af5b01132034a9f4a628071a9f045d0898b	siderita/qml/Main.qml
+86	0	135dc213c753c14b19e14e86ef683ff08899720e0a4fb2e7bbd6606cc8324943	siderita/src/appearance.rs
+2	11	44943de81e70ce423ab18f1fafc535a1a4de0a33d200f7e69c67be783d86bfb8	siderita/src/main.rs
+37	0	e79b42e9502a0c389bb2cda51caf30d96889b2c2471fe3bb93dc8c18424bc119	siderita/tests/qml/tst_appearance.qml

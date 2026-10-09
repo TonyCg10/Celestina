@@ -6,7 +6,6 @@ import org.celestina.magnetita 1.0
 ApplicationWindow {
     id: window
 
-    required property bool reducedMotion
     // Launched by the daemon for the mirror alone: no main window, and the
     // process ends when the mirror does.
     required property bool mirrorOnly
@@ -23,7 +22,16 @@ ApplicationWindow {
     // to the phone's picture, and nothing of the desktop belongs around it.
     color: CelestinaTheme.clear
 
-    Component.onCompleted: CelestinaTheme.reducedMotion = reducedMotion
+    // The suite's appearance file (reduced motion, text scale), followed on
+    // the adapter's worker and bound into the theme once for this window.
+    MagnetitaAppearance {
+        id: appearanceAdapter
+    }
+
+    CelestinaAppearance {
+        reducedMotion: appearanceAdapter.appearanceReducedMotion
+        textScale: appearanceAdapter.appearanceTextScale
+    }
 
     DevicesModel {
         id: devicesModel

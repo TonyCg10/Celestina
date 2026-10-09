@@ -1,4 +1,5 @@
 mod activation;
+mod appearance;
 mod batch;
 mod copy;
 mod editor;
@@ -58,12 +59,7 @@ fn main() {
         // The grid and the dock name image thumbnails as `image://thumb/…`,
         // so the provider must be on the engine before that QML loads.
         thumbnails::ffi::register_thumbnail_provider(engine.as_mut());
-        let reduced_motion = std::env::var_os("CELESTINA_REDUCED_MOTION").is_some();
         let mut initial_properties = QMap::<QMapPair_QString_QVariant>::default();
-        initial_properties.insert(
-            QString::from("reducedMotion"),
-            QVariant::from(&reduced_motion),
-        );
         // Display only. The real path stays a raw `PathBuf` in `activation`,
         // because a lossy label can never be turned back into a file — and the
         // window has nothing to open yet in any case.
