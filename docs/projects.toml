@@ -481,9 +481,10 @@ name = "Selenita"
 path = "selenita"
 kind = "cxx-qt-application"
 commit_prefix = "selenita"
-# Registered unversioned first so the registry commit carries no history row;
-# the author's baseline commit after the landing declares the Cargo source.
-versioned = false
+version_source = { kind = "cargo-package", path = "selenita/Cargo.toml", package = "selenita" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "selenita/Cargo.lock", package = "selenita" },
+]
 agents = "selenita/AGENTS.md"
 readme = "selenita/README.md"
 status = "selenita/STATUS.md"
