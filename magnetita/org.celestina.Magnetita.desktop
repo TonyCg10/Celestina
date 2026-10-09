@@ -10,3 +10,10 @@ Categories=Network;RemoteAccess;
 Keywords=phone;móvil;kdeconnect;magnetita;celestina;
 StartupNotify=true
 StartupWMClass=org.celestina.Magnetita
+MimeType=application/octet-stream;
+Actions=send;
+
+[Desktop Action send]
+Name=Send to phone
+Name[es]=Enviar al móvil
+Exec=magnetita --send %F

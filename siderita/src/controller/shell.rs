@@ -203,7 +203,7 @@ impl qobject::SideritaController {
 /// The opened application is reparented and outlives Siderita. Returns a
 /// user-facing Spanish message if the launcher could not even be spawned.
 fn open_with_default(path: &Path) -> Result<(), String> {
-    spawn_opener("xdg-open", path)
+    spawn_opener("xdg-open", std::slice::from_ref(&path))
 }
 
 /// Spawns `program PATH` detached from Siderita's stdio and reaps the launcher on
@@ -213,14 +213,20 @@ fn open_with_default(path: &Path) -> Result<(), String> {
 /// Public to the crate because activation may route a text file straight to
 /// Grafita instead of through the desktop's handler resolution.
 pub(crate) fn spawn_detached(program: &str, path: &Path) -> Result<(), String> {
-    spawn_opener(program, path)
+    spawn_opener(program, std::slice::from_ref(&path))
 }
 
-fn spawn_opener(program: &str, path: &Path) -> Result<(), String> {
+/// Starts `program` with every path as an argument: the fallback of an «Abrir
+/// en» entry when no instance runs, so the new one opens them all itself.
+pub(crate) fn spawn_detached_all(program: &str, paths: &[PathBuf]) -> Result<(), String> {
+    spawn_opener(program, paths)
+}
+
+fn spawn_opener<P: AsRef<Path>>(program: &str, paths: &[P]) -> Result<(), String> {
     use std::process::{Command, Stdio};
 
     let child = Command::new(program)
-        .arg(path.as_os_str())
+        .args(paths.iter().map(|path| path.as_ref().as_os_str()))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -295,9 +301,11 @@ mod tests {
 
     #[test]
     fn spawn_opener_reports_a_missing_launcher() {
-        let error =
-            super::spawn_opener("siderita-no-such-launcher-xyz", Path::new("/tmp/whatever"))
-                .unwrap_err();
+        let error = super::spawn_opener(
+            "siderita-no-such-launcher-xyz",
+            &[Path::new("/tmp/whatever")],
+        )
+        .unwrap_err();
         assert!(
             error.contains("siderita-no-such-launcher-xyz"),
             "message should name the missing launcher: {error}"
@@ -308,7 +316,7 @@ mod tests {
     fn spawn_opener_launches_an_existing_program() {
         // `true` ignores its argument and exits 0 — a side-effect-free stand-in
         // for xdg-open that proves the spawn path succeeds and reaps cleanly.
-        super::spawn_opener("true", Path::new("/tmp/whatever"))
+        super::spawn_opener("true", &[Path::new("/tmp/whatever")])
             .expect("spawning an existing launcher should succeed");
     }
 }

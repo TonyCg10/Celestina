@@ -2,7 +2,7 @@
 //!
 //! `~/.config/celestina/appearance.toml` holds the two appearance choices every
 //! first-party window honours: reduced motion and the text scale. This crate
-//! is their one owner. It reads and writes the file ([`load`], [`save`]),
+//! is their one owner. It reads and writes the file ([`load`], [`load_stored`], [`save`]),
 //! watches it ([`watch`]), and applies the `CELESTINA_REDUCED_MOTION`
 //! development and accessibility override. It has no Qt: each application
 //! runs [`watch`] on a worker and queues the values to its window, which binds
@@ -13,7 +13,9 @@
 mod appearance;
 mod watch;
 
-pub use appearance::{env_forces_reduced_motion, load, path, save, Appearance, TextScale};
+pub use appearance::{
+    env_forces_reduced_motion, load, load_stored, path, save, Appearance, TextScale,
+};
 pub use watch::{follow, watch, Follower, WatchHandle};
 
 use std::error::Error;

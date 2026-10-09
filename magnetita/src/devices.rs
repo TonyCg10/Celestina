@@ -401,6 +401,23 @@ pub fn remove_command(id: u32) -> Result<bool, String> {
         .map_err(|error| error.to_string())
 }
 
+/// Sends one local file to `device_id`, named by its percent-encoded
+/// `file://` URI (`SendFileUri`), so a name that is not valid UTF-8 reaches
+/// the daemon as the bytes on disk.
+pub fn send_file(
+    connection: &Connection,
+    device_id: &str,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let uri = celestina_core::file_uri::from_path(path)
+        .ok_or_else(|| format!("{} no es una ruta absoluta", path.display()))?;
+    let proxy =
+        Proxy::new(connection, SERVICE, OBJECT, INTERFACE).map_err(|error| error.to_string())?;
+    proxy
+        .call("SendFileUri", &(device_id, uri.as_str()))
+        .map_err(|error| error.to_string())
+}
+
 /// Ask Magnetita to drop the pairing (best-effort).
 pub fn unpair(device_id: &str) -> Result<(), String> {
     call_method("Unpair", device_id)

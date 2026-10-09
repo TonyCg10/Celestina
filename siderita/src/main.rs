@@ -25,6 +25,7 @@ mod properties;
 mod recent;
 mod search;
 mod settings;
+mod suite;
 // The C++ thumbnail provider's cache-key spelling, bound only where it is
 // checked. Nothing in Rust computes a thumbnail, but that spelling must equal
 // `celestina_core::percent::encode_qt_path` byte for byte or the shared
@@ -54,6 +55,10 @@ fn main() {
     if !portal::portal_mode() && !dbus::file_manager_mode() {
         activation::claim(&activation::argv_paths());
     }
+
+    // Which suite applications the «Abrir en» menu may offer: looked up once,
+    // on a worker, before any menu opens.
+    apps::probe_installed();
 
     let mut app = QGuiApplication::new();
 

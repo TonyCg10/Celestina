@@ -16,6 +16,13 @@ and bounded in-place Grafita/Fluorita actions.
   over `org.celestina.Application1` (the suite's shared activation in
   `celestina_core::activation`), and opening a file in Grafita or Fluorita
   reaches their running window the same way before starting a new one.
+- An entry's context menu has an «Abrir en» section above «Abrir con…»: Grafita
+  for any file, Fluorita for media or one folder, Hematita for one folder, and
+  send-to-phone for files (one entry per connected phone, sent through
+  Magnetita's `Devices1.SendFileUri`). An application without a desktop entry
+  is not offered, and with no phone connected there is no send entry. The
+  desktop entries are looked up once, on a worker at start, so the application
+  entries appear once that lookup has answered.
 - Compressing and extracting are ordinary loss-free file operations: `.zip`,
   `.tar` and `.tar.gz` are read and `.zip` and `.tar.gz` are written in
   process; `.rar` and `.7z` are extracted by an installed `7z`, `7za`, `7zz`

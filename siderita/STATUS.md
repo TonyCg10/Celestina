@@ -15,6 +15,12 @@
 
 ## Current checkout truth
 
+- `CONV-1-D` (suite): an entry's context menu offers «Abrir en» — Grafita,
+  Fluorita, Hematita when installed and applicable to the acting entries, and
+  one send-to-phone entry per connected phone — decided from the folder model
+  and by name on the Qt thread, opened through `celestina_core::activation`
+  on a worker, and sent through Magnetita's `SendFileUri` on the device
+  model's worker ([evidence](../docs/evidence/2026-10-09-open-with.md)).
 - `CONV-1-A` (suite): Siderita keeps to one window. A launch claims
   `org.celestina.Siderita` through `celestina_core::activation` before any
   window exists; a later `siderita RUTA…` hands its paths over

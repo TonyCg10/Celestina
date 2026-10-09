@@ -23,6 +23,12 @@
 
 ## Current checkout truth
 
+- `CONV-1-D` (suite): `magnetita --send FILE…`, the desktop entry's `send`
+  action, sends to the one connected device through `SendFileUri` before Qt
+  starts, or opens a device chooser when several are connected and sends the
+  pick on a worker while the window shows the result; a file given without
+  `--send` is ignored. The entry gains `MimeType=application/octet-stream;`
+  ([evidence](../docs/evidence/2026-10-09-open-with.md)).
 - **One wire, the suite's own.** `magnetitad` speaks `magnetita-proto` over
   `magnetita-link`'s QUIC on UDP 1760, with certificates pinned by
   fingerprint; the KDE Connect wire, its discovery, pairing, payload sockets

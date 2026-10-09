@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-use celestina_settings::{load, path, save, Appearance, TextScale};
+use celestina_settings::{load, load_stored, path, save, Appearance, TextScale};
 
 static ENVIRONMENT: Mutex<()> = Mutex::new(());
 
@@ -130,6 +130,42 @@ fn the_environment_forces_reduced_motion() {
             text_scale: TextScale::Larger
         }
     );
+}
+
+#[test]
+fn the_stored_values_ignore_the_environment() {
+    let home = Home::new("stored");
+    home.write("reduced_motion = false\ntext_scale = \"large\"\n");
+    std::env::set_var("CELESTINA_REDUCED_MOTION", "1");
+    assert_eq!(
+        load_stored(),
+        Appearance {
+            reduced_motion: false,
+            text_scale: TextScale::Large
+        }
+    );
+    assert!(load().reduced_motion);
+}
+
+#[test]
+fn a_read_modify_save_under_the_override_keeps_the_stored_motion() {
+    let home = Home::new("stored-save");
+    home.write("reduced_motion = false\ntext_scale = \"normal\"\n");
+    std::env::set_var("CELESTINA_REDUCED_MOTION", "1");
+    let mut value = load_stored();
+    value.text_scale = TextScale::Larger;
+    save(&value).expect("saved");
+    assert_eq!(
+        read(&home.file()),
+        "reduced_motion = false\ntext_scale = \"larger\"\n"
+    );
+}
+
+#[test]
+fn a_missing_file_stores_the_defaults() {
+    let _home = Home::new("stored-missing");
+    std::env::set_var("CELESTINA_REDUCED_MOTION", "1");
+    assert_eq!(load_stored(), Appearance::default());
 }
 
 #[test]

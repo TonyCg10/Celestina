@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Window
 import QtQuick.Controls
@@ -25,6 +27,7 @@ GlassContextMenu {
     property var batchRename  // diálogo de renombrado en lote
     property var iconPicker   // diálogo de cambiar icono
     property var compressPrompt  // the compress dialog
+    property var suite        // SideritaSuite: «Abrir en» decisions and verbs
     signal newTabRequested(string path, bool foreground)
 
     // How many entries the batch-capable verbs (copy/cut/trash) will act
@@ -83,6 +86,106 @@ GlassContextMenu {
         onTriggered: root.Window.window.activateEntry(root.controller, root.targetToken)
     }
 
+    // «Abrir en»: the suite's own applications that apply to the acting
+    // entries, and one send-to-phone entry per connected phone. Whether an
+    // entry is a folder comes from the folder model; the rest is decided by
+    // `suite` without touching the disk. The generic chooser stays below.
+    readonly property var actingTokens:
+            root.multi
+            ? Object.keys(root.panel.selectedTokens)
+                  .filter(token => root.panel.selectedTokens[token] === true)
+            : [root.targetToken]
+    readonly property var suiteTargets: {
+        void root.controller.phoneRevision
+        if (!root.suite || root.controller.trashActive)
+            return []
+        const keys = []
+        const folders = []
+        for (const token of root.actingTokens) {
+            const index = root.controller.indexForToken(token)
+            keys.push(root.controller.entryPath(index))
+            folders.push(root.controller.entryTargetsDirectory(index) ? "1" : "0")
+        }
+        const answer = []
+        for (const target of root.suite.targets(keys, folders)) {
+            if (target !== "phone") {
+                answer.push(target)
+                continue
+            }
+            for (let phone = 0; phone < root.controller.phoneNames.length; ++phone) {
+                if (root.controller.phoneInfo(phone)[3] === "1")
+                    answer.push("phone:" + phone)
+            }
+        }
+        return answer
+    }
+    readonly property var suiteKeys: root.actingTokens.map(
+        token => root.controller.entryPath(root.controller.indexForToken(token)))
+    readonly property int phoneTargetCount:
+            root.suiteTargets.filter(target => target.startsWith("phone:")).length
+
+    function suiteTargetLabel(target) {
+        if (target === "grafita")
+            return qsTr("Grafita")
+        if (target === "fluorita")
+            return qsTr("Fluorita")
+        if (target === "hematita")
+            return qsTr("Hematita")
+        if (root.phoneTargetCount === 1)
+            return qsTr("Enviar al móvil")
+        const index = Number(target.slice("phone:".length))
+        return qsTr("Enviar a %1").arg(root.controller.phoneNames[index])
+    }
+
+    function sectionIndex() {
+        for (let index = 0; index < root.count; ++index) {
+            if (root.itemAt(index) === suiteSection)
+                return index
+        }
+        return root.count
+    }
+
+    GlassMenuSection {
+        id: suiteSection
+        objectName: "suiteSection"
+        text: qsTr("Abrir en")
+        visible: root.suiteTargets.length > 0
+        height: visible ? implicitHeight : 0
+    }
+
+    Instantiator {
+        model: root.suiteTargets
+
+        delegate: GlassMenuItem {
+            id: suiteEntry
+            required property string modelData
+            readonly property bool phone: suiteEntry.modelData.startsWith("phone:")
+
+            objectName: "suiteTarget:" + suiteEntry.modelData
+            text: root.suiteTargetLabel(suiteEntry.modelData)
+            icon.name: suiteEntry.phone
+                       ? "phone"
+                       : "org.celestina." + suiteEntry.modelData.charAt(0).toUpperCase()
+                         + suiteEntry.modelData.slice(1)
+            icon.source: CelestinaTheme.fallbackIcon(suiteEntry.phone ? "phone" : "file")
+            onTriggered: {
+                if (suiteEntry.phone)
+                    root.suite.send(root.controller.phoneInfo(
+                        Number(suiteEntry.modelData.slice("phone:".length)))[0],
+                        root.suiteKeys)
+                else
+                    root.suite.open(suiteEntry.modelData, root.suiteKeys)
+            }
+        }
+
+        onObjectAdded: function(index, object) {
+            root.insertItem(root.sectionIndex() + 1 + index, object)
+        }
+        onObjectRemoved: function(index, object) {
+            root.removeItem(object)
+        }
+    }
+
     GlassMenuItem {
         text: "Abrir con…"
         visible: !root.targetDirectory && !root.multi && !root.controller.trashActive
@@ -90,17 +193,6 @@ GlassContextMenu {
         icon.name: "system-run"
         icon.source: CelestinaTheme.fallbackIcon("file")
         onTriggered: root.controller.openWith(root.targetPath)
-    }
-
-    GlassMenuItem {
-        text: "Enviar al móvil"
-        // Only for a single file, and only when a phone is connected.
-        visible: !root.targetDirectory && !root.multi
-                 && !root.controller.trashActive && root.controller.phoneNames.length > 0
-        height: visible ? implicitHeight : 0
-        icon.name: "phone"
-        icon.source: CelestinaTheme.fallbackIcon("phone")
-        onTriggered: root.controller.sendToPhone(root.targetPath)
     }
 
     GlassMenuItem {

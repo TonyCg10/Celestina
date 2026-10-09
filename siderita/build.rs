@@ -257,6 +257,8 @@ fn main() {
             "src/media.rs",
             "src/portal.rs",
             "src/preferences.rs",
+            // The «Abrir en» section of an entry's menu.
+            "src/suite.rs",
             // Binds the shared provider's test helpers so a test can pin the
             // thumbnail cache key to its Rust owner; it declares no QObject.
             "src/thumbnails.rs",

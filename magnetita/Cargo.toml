@@ -21,6 +21,10 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
 # Playback capability and progress classification are pure protocol-domain
 # contracts shared with the daemon; the Qt bridge only projects their result.
 magnetita-core = { path = "../celestina-rs/crates/magnetita-core" }
+# `magnetita --send` names its files to the daemon as `file://` URIs
+# (`SendFileUri`), written by the suite's one byte-exact codec (ADR 0008);
+# already in the closure through celestina-settings.
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 # The suite's appearance file (reduced motion, text scale) and its watcher:
 # its one owner, so this window follows the same choice as every other.
 celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }

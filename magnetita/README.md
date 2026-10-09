@@ -60,6 +60,13 @@ the live session.
 After completion, open `magnetita` for pairing, diagnostics and
 settings; the daemon continues to provide devices while the window is closed.
 
+`magnetita --send FILE…` (the desktop entry's `send` action) sends each file
+to the one connected device through `SendFileUri` and exits; with several
+connected it opens a chooser window with the files already chosen, which
+stays up to show a failed send; with none it says so and exits 1. A file given
+without `--send` is ignored and the window opens as usual. `--dry-run` after
+`--send` reports the decision without sending.
+
 ## Project documents
 
 - [Current status](STATUS.md)

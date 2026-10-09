@@ -42,6 +42,8 @@ const QML_FILES: &[&str] = &[
     "qml/components/CommandRow.qml",
     "qml/components/MessageBubble.qml",
     "qml/pages/SettingsPage.qml",
+    // `magnetita --send`'s device chooser.
+    "qml/components/SendChooser.qml",
     "qml/MirrorWindow.qml",
     "qml/Main.qml",
 ];

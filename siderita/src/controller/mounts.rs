@@ -240,20 +240,6 @@ impl qobject::SideritaController {
         ))
     }
 
-    /// Send a local file to the connected phone (the "Enviar al móvil" menu
-    /// item). Sends to the first connected phone; a no-op if none is connected.
-    pub fn send_to_phone(mut self: Pin<&mut Self>, key: &QString) {
-        let Some(path) = self.as_mut().accept_key(key) else {
-            return;
-        };
-        if let Some(phone) = self.rust().phones.iter().find(|phone| phone.connected) {
-            // The path goes out as bytes, not as display text: `send_file` calls
-            // Magnetita's `SendFileUri` with the percent-encoded `file://` URI.
-            // This was the last verb that let a lossy path leave the process.
-            crate::devicemodel::send_file(&phone.id, path);
-        }
-    }
-
     /// Mounts the volume at `index` on a worker thread — mounting can block on a
     /// polkit authorization prompt, so it must never run on the Qt thread — then
     /// refreshes the list (or reports the failure) back on the Qt thread.

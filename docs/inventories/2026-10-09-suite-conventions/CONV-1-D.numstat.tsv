@@ -1,0 +1,71 @@
+# CONV-1-D exact change inventory
+
+Base revision	2d936b627fc22bfaa3ded629f7594dc5f683d316
+Pathspec	celestina-rs/crates/celestina-settings/src/appearance.rs
+Pathspec	celestina-rs/crates/celestina-settings/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-settings/tests/appearance.rs
+Pathspec	docs/evidence/2026-10-09-open-with.md
+Pathspec	docs/inventories/2026-10-09-suite-conventions/CONV-1-D.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-suite-conventions.md
+Pathspec	magnetita/Cargo.lock
+Pathspec	magnetita/Cargo.toml
+Pathspec	magnetita/README.md
+Pathspec	magnetita/STATUS.md
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/org.celestina.Magnetita.desktop
+Pathspec	magnetita/qml/Main.qml
+Pathspec	magnetita/qml/components/SendChooser.qml
+Pathspec	magnetita/src/controller.rs
+Pathspec	magnetita/src/devices.rs
+Pathspec	magnetita/src/main.rs
+Pathspec	magnetita/src/send.rs
+Pathspec	scripts/architecture-baseline.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	siderita/README.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/qml/components/folder/FolderActions.qml
+Pathspec	siderita/qml/menus/EntryContextMenu.qml
+Pathspec	siderita/src/apps.rs
+Pathspec	siderita/src/controller.rs
+Pathspec	siderita/src/controller/mounts.rs
+Pathspec	siderita/src/controller/shell.rs
+Pathspec	siderita/src/main.rs
+Pathspec	siderita/src/suite.rs
+Pathspec	siderita/tests/qml/tst_entry_menu_suite.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+16	10	7f06ca40a47a48d346e8ca149e1897d47258896babc86b5275638ebbefbe0c57	celestina-rs/crates/celestina-settings/src/appearance.rs
+4	2	9e58c787c0242bab1813dafc424bdbc4864240e10bfd4436f57d58d7cdf68804	celestina-rs/crates/celestina-settings/src/lib.rs
+37	1	9fc75cb0b4b76d6c7e9fdd073096fd9cb9b25970ba9456f53f0b4621d4927679	celestina-rs/crates/celestina-settings/tests/appearance.rs
+201	0	5c1d9025297cc1647a47867cfc07a101eecd5bc09b6d8daac2e926be92b9c2b5	docs/evidence/2026-10-09-open-with.md
+71	0	self	docs/inventories/2026-10-09-suite-conventions/CONV-1-D.numstat.tsv
+1	1	f1ddb7f9830759762524f8e4bda415ac8a7257e202496881e2f951ef2efabcca	docs/plans/active/2026-10-09-suite-conventions.md
+1	0	4e5796deced74858e176f8efa23cea0e76013b3bf605a05571aa2521d95059cf	magnetita/Cargo.lock
+4	0	b903a7c3e8a311d536955d17a12c3a67c4f37933410d9e4ef4f7ed83c34b5e38	magnetita/Cargo.toml
+7	0	ae341f89ffad5fcf7f724824935da6fff2cbfc5252fd532c34f08e79cea5a79d	magnetita/README.md
+6	0	057f7e87a2d372693a9fd482b587a0e4dc38fbc0c81916c9c240dc96ff4fdec0	magnetita/STATUS.md
+2	0	440087ee4a52d55f6655c42fd5bd5b5f72efc50f22677571f96508e92aebf465	magnetita/build.rs
+7	0	bf15d1047810d09b727c5c352702ad2092ccffd62c7bed11dad2be06af5fbde2	magnetita/org.celestina.Magnetita.desktop
+34	3	ccf873b9e0e1c043472398945111c8642594c2731c175bc196adbfef566d24df	magnetita/qml/Main.qml
+73	0	14e6fa6924a33c9b3e11709ea37eac10978a1ed7f8c939e7c8d7ef3b96a2a810	magnetita/qml/components/SendChooser.qml
+32	0	991aa780028ac2019a250006865efcb39d159aa960a39456f27fec4162b1ae85	magnetita/src/controller.rs
+17	0	2d9093f1341713b7917fd2d6b09d032db01ae468004c0e0ff71ebd0caa52a242	magnetita/src/devices.rs
+116	2	e0eb12edb7ca3bd06452a450323a6ac518d8223cc490e29fb8205e638a5b1598	magnetita/src/main.rs
+351	0	6bc0ca7f190306cfacd58fc3f3cfdebde29b4ed9b9b50b25d6f30a418ca0028c	magnetita/src/send.rs
+1	1	6332fcc70092881df012319409b34b1e8f8fca3fe85df58e65f1069cccf5a57a	scripts/architecture-baseline.tsv
+1	2	fbc7507786f3f88cb4930c382ac32cc26c0ff3bac93ade2f8b72632e7a332c92	scripts/language-baseline.tsv
+7	0	51e270a83db694a491e8e2fc16d2b96449a03722eeb6e2469e1a4eef7dc9c0b0	siderita/README.md
+6	0	d2af77ebb0df3c208486560e0be6ea064923f83826ef4fea53cae0e8a10e6558	siderita/STATUS.md
+2	0	73c92ba74f519cfcd76b0c6e3f1825c4c333d9aba406fa05d9bacb0086393bf9	siderita/build.rs
+9	0	9f16f6107238abba1d0636506d8e2a5538f61e9a9005a13a0602450aa9800129	siderita/qml/components/folder/FolderActions.qml
+103	11	49047deab411b2cd4be24b8dd4aa9dcb8da63c9b0acf00c59ca7d3a9ab54d412	siderita/qml/menus/EntryContextMenu.qml
+209	0	999891e911e6187b2471177c8ed0f4598406d9e56b729f293be45a231029f888	siderita/src/apps.rs
+0	2	cb7d5fdcf903d9f8e99e6eee256a49879841be58aa2f9cbadeb26c15906ecdda	siderita/src/controller.rs
+0	14	9200e15fdb9e90dda8ce0af9f259316d07de19d465a4dc7541f3842dd50bb228	siderita/src/controller/mounts.rs
+16	8	ec9d4984a2af86690d8e779c3ca493f6b52de1aec970046bcbf7cb3986dddfa1	siderita/src/controller/shell.rs
+5	0	37fb62a158588594e7dc7dec0a1d6d2e8fe79efc465459be531e7500847df965	siderita/src/main.rs
+193	0	4c21294bb084b844c2c1731e7f2f71ce3b286bd33cfb75420009bdebbaa8ac84	siderita/src/suite.rs
+158	0	3ac094c21fe9129f89322c42e3bf821b530a33b22f75de635cc2d28606852e33	siderita/tests/qml/tst_entry_menu_suite.qml

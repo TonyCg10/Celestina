@@ -188,6 +188,143 @@ pub fn open_in(
     }
 }
 
+/// What one selected entry is, as far as the «Abrir en» section asks: the
+/// kind is decided by the folder model and by name, never by reading the file,
+/// so the menu can ask it on the Qt thread.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ItemKind {
+    /// A folder, or a symlink to one.
+    Folder,
+    /// An image, a video or a sound, by name (`fluorita_core::MediaKind`).
+    Media,
+    /// Any other file.
+    File,
+}
+
+/// One entry of the «Abrir en» section: a suite application reached through
+/// [`open_in`], or the send-to-phone verb through Magnetita.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Target {
+    Grafita,
+    Fluorita,
+    Hematita,
+    Phone,
+}
+
+impl Target {
+    /// The applications, in the order the menu shows them.
+    pub const APPLICATIONS: [Self; 3] = [Self::Grafita, Self::Fluorita, Self::Hematita];
+
+    /// The id QML carries for this target.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Grafita => "grafita",
+            Self::Fluorita => "fluorita",
+            Self::Hematita => "hematita",
+            Self::Phone => "phone",
+        }
+    }
+
+    /// The application target a QML id names; the phone has its own verb.
+    #[must_use]
+    pub fn application(key: &str) -> Option<Self> {
+        Self::APPLICATIONS
+            .into_iter()
+            .find(|target| target.key() == key)
+    }
+
+    /// The activation name, which is also the desktop-file id's basename;
+    /// `None` for the phone, which is not an application of its own.
+    #[must_use]
+    pub const fn activation_name(self) -> Option<ActivationName> {
+        match self {
+            Self::Grafita => Some(GRAFITA),
+            Self::Fluorita => Some(FLUORITA),
+            Self::Hematita => Some(HEMATITA),
+            Self::Phone => None,
+        }
+    }
+}
+
+/// The targets that apply to a selection, before asking what is installed:
+/// Grafita takes any file (it decides by bytes and says so when one is not
+/// text); Fluorita takes media, or one folder as a source; Hematita takes one
+/// folder, to see its usage; the phone takes any file or files. A selection
+/// that mixes folders and files gets no application, and an empty one none.
+#[must_use]
+pub fn suite_targets(selection: &[ItemKind]) -> Vec<Target> {
+    if selection.is_empty() {
+        return Vec::new();
+    }
+    let all_files = selection.iter().all(|kind| *kind != ItemKind::Folder);
+    let all_media = selection.iter().all(|kind| *kind == ItemKind::Media);
+    let one_folder = selection == [ItemKind::Folder];
+    let mut targets = Vec::new();
+    if all_files {
+        targets.push(Target::Grafita);
+    }
+    if all_media || one_folder {
+        targets.push(Target::Fluorita);
+    }
+    if one_folder {
+        targets.push(Target::Hematita);
+    }
+    if all_files {
+        targets.push(Target::Phone);
+    }
+    targets
+}
+
+/// Which suite applications have a desktop entry, once [`probe_installed`]
+/// has looked; `None` until then.
+static INSTALLED: std::sync::OnceLock<Vec<Target>> = std::sync::OnceLock::new();
+
+/// Looks up each suite application's desktop entry on a worker thread, once:
+/// the walk reads the application directories, which the Qt thread never
+/// does. Until it answers, the menu offers no application.
+pub fn probe_installed() {
+    if INSTALLED.get().is_some() {
+        return;
+    }
+    let worker = std::thread::Builder::new()
+        .name("siderita-suite-probe".to_owned())
+        .spawn(|| {
+            let dirs = desktop_entry::application_search_dirs();
+            let found = installed_in(&dirs);
+            let _ = INSTALLED.set(found);
+        });
+    if let Err(error) = worker {
+        eprintln!("siderita: cannot start the suite probe: {error}");
+    }
+}
+
+/// The application targets whose desktop entry `dirs` hold, under the scan's
+/// own shadowing rule (`desktop_entry::find`).
+fn installed_in(dirs: &[PathBuf]) -> Vec<Target> {
+    Target::APPLICATIONS
+        .into_iter()
+        .filter(|target| {
+            target.activation_name().is_some_and(|name| {
+                desktop_entry::find(dirs, &format!("{}.desktop", name.0)).is_some()
+            })
+        })
+        .collect()
+}
+
+/// `targets` without the applications that are not installed; the phone
+/// stays, its own condition is a connected device.
+#[must_use]
+pub fn only_installed(targets: Vec<Target>) -> Vec<Target> {
+    let installed = INSTALLED.get().map_or(&[][..], Vec::as_slice);
+    retain_installed(targets, installed)
+}
+
+fn retain_installed(mut targets: Vec<Target>, installed: &[Target]) -> Vec<Target> {
+    targets.retain(|target| *target == Target::Phone || installed.contains(target));
+    targets
+}
+
 /// Why an `open_in` did not open anything.
 #[derive(Debug, PartialEq, Eq)]
 pub enum OpenFailure {
@@ -226,6 +363,78 @@ mod tests {
     use celestina_core::activation::ActivationError;
     use celestina_core::desktop_entry::{self, DesktopEntry};
     use std::cell::Cell;
+
+    use super::{retain_installed, suite_targets, ItemKind, Target};
+
+    #[test]
+    fn a_text_file_goes_to_grafita_and_the_phone() {
+        assert_eq!(
+            suite_targets(&[ItemKind::File]),
+            vec![Target::Grafita, Target::Phone]
+        );
+    }
+
+    #[test]
+    fn an_image_goes_to_grafita_fluorita_and_the_phone() {
+        assert_eq!(
+            suite_targets(&[ItemKind::Media]),
+            vec![Target::Grafita, Target::Fluorita, Target::Phone]
+        );
+    }
+
+    #[test]
+    fn one_folder_goes_to_fluorita_and_hematita_only() {
+        assert_eq!(
+            suite_targets(&[ItemKind::Folder]),
+            vec![Target::Fluorita, Target::Hematita]
+        );
+        assert_eq!(suite_targets(&[ItemKind::Folder, ItemKind::Folder]), vec![]);
+    }
+
+    #[test]
+    fn a_mixed_selection_keeps_only_what_applies_to_every_entry() {
+        assert_eq!(
+            suite_targets(&[ItemKind::File, ItemKind::Media]),
+            vec![Target::Grafita, Target::Phone]
+        );
+        assert_eq!(
+            suite_targets(&[ItemKind::Media, ItemKind::Media]),
+            vec![Target::Grafita, Target::Fluorita, Target::Phone]
+        );
+        assert_eq!(suite_targets(&[ItemKind::File, ItemKind::Folder]), vec![]);
+        assert_eq!(suite_targets(&[]), vec![]);
+    }
+
+    #[test]
+    fn an_application_that_is_not_installed_is_hidden_but_the_phone_stays() {
+        let all = suite_targets(&[ItemKind::Media]);
+        assert_eq!(
+            retain_installed(all.clone(), &[Target::Fluorita]),
+            vec![Target::Fluorita, Target::Phone]
+        );
+        assert_eq!(retain_installed(all, &[]), vec![Target::Phone]);
+    }
+
+    #[test]
+    fn only_a_desktop_entry_marks_an_application_installed() {
+        let dir = std::env::temp_dir().join(format!("siderita-suite-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{}.desktop", super::GRAFITA.0)),
+            "[Desktop Entry]\nType=Application\nName=Grafita\nExec=grafita %F\n",
+        )
+        .unwrap();
+        let found = super::installed_in(std::slice::from_ref(&dir));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(found, vec![Target::Grafita]);
+    }
+
+    #[test]
+    fn a_qml_key_names_only_an_application() {
+        assert_eq!(Target::application("hematita"), Some(Target::Hematita));
+        assert_eq!(Target::application("phone"), None);
+        assert_eq!(Target::application(""), None);
+    }
 
     #[test]
     fn a_running_instance_takes_the_paths_and_nothing_is_spawned() {

@@ -584,8 +584,6 @@ pub mod qobject {
         #[qinvokable]
         fn path_exists(self: &SideritaController, path: &QString) -> bool;
         #[qinvokable]
-        fn send_to_phone(self: Pin<&mut SideritaController>, path: &QString);
-        #[qinvokable]
         fn open_properties(self: Pin<&mut SideritaController>, path: &QString);
         #[qinvokable]
         fn close_properties(self: Pin<&mut SideritaController>);

@@ -75,6 +75,7 @@ Item {
         batchRename: batchRenameDialog
         iconPicker: iconPickerDialog
         compressPrompt: compressDialog
+        suite: suiteActions
         onNewTabRequested: function(path, foreground) {
             root.newTabRequested(path, foreground)
         }
@@ -179,6 +180,14 @@ Item {
     // El reproductor incrustado detrás del modal de `Espacio`. Como el editor,
     // no sabe nada de carpetas: recibe una ruta y responde con una sesión o con
     // un rechazo, y no construye nada hasta que se lo piden.
+    // The «Abrir en» section's decisions and verbs.
+    SideritaSuite {
+        id: suiteActions
+        onFailed: function(message) {
+            root.controller.opError = message
+        }
+    }
+
     SideritaPlayer {
         id: mediaPlayerState
     }

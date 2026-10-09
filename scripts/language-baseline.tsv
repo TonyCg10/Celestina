@@ -114,7 +114,7 @@
 5	siderita/qml/dialogs/PhoneMediaDialog.qml
 1	siderita/qml/dialogs/PropertiesDialog.qml
 7	siderita/qml/dialogs/QuickLookView.qml
-13	siderita/qml/menus/EntryContextMenu.qml
+12	siderita/qml/menus/EntryContextMenu.qml
 7	siderita/qml/menus/FolderMenu.qml
 6	siderita/qml/menus/PathMenu.qml
 4	siderita/qml/menus/SizePopup.qml
@@ -125,7 +125,6 @@
 12	siderita/scripts/smoke.sh
 2	siderita/src/apps.rs
 2	siderita/src/controller/find.rs
-1	siderita/src/controller/mounts.rs
 1	siderita/src/controller/navigation.rs
 2	siderita/src/controller/scan.rs
 1	siderita/src/controller/selection.rs

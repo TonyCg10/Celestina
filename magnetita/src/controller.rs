@@ -125,6 +125,15 @@ pub mod qobject {
         #[qinvokable]
         fn ring_device(self: Pin<&mut DevicesModel>, index: i32);
 
+        /// `--send`'s chooser: the person picked entry `index` of the devices
+        /// the launch listed; the files go on a worker, and `sendFinished`
+        /// answers with an empty message or the failure.
+        #[qinvokable]
+        fn choose_send_device(self: Pin<&mut DevicesModel>, index: i32);
+
+        #[qsignal]
+        fn send_finished(self: Pin<&mut DevicesModel>, error: QString);
+
         /// "Mute", "Answer" or "HangUp" device `index`'s call.
         #[qinvokable]
         fn call_action(self: Pin<&mut DevicesModel>, index: i32, action: QString);
@@ -581,6 +590,29 @@ impl qobject::DevicesModel {
         {
             self.enqueue_command(ClientCommand::Unpair(device_id));
         }
+    }
+
+    /// Sends the `--send` files to the chooser's pick on an owned worker,
+    /// so a failure reaches the window before it closes.
+    pub fn choose_send_device(self: Pin<&mut Self>, index: i32) {
+        let Some((device_id, paths)) = usize::try_from(index).ok().and_then(crate::send::chosen)
+        else {
+            return;
+        };
+        crate::send::begin_chosen();
+        self.read_owned(
+            move || crate::send::run_chosen(|| crate::send::send_files(&device_id, &paths)),
+            |model, result| {
+                let message = match result {
+                    Ok(()) => QString::default(),
+                    Err(error) => {
+                        eprintln!("magnetita: cannot send: {error}");
+                        QString::from(error.as_str())
+                    }
+                };
+                model.send_finished(message);
+            },
+        );
     }
 
     /// Ring device `index` (its "Sonar" button — find-my-phone).

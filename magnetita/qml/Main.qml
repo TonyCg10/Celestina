@@ -9,6 +9,11 @@ ApplicationWindow {
     // Launched by the daemon for the mirror alone: no main window, and the
     // process ends when the mirror does.
     required property bool mirrorOnly
+    // `magnetita --send` with several devices connected: the window is the
+    // device chooser alone, and closes once the person picks or cancels.
+    required property var sendDeviceNames
+    required property int sendCount
+    readonly property bool sendMode: sendCount > 0
 
     visible: !mirrorOnly
     width: 520
@@ -21,6 +26,11 @@ ApplicationWindow {
     // The mirror is its own window and keeps the opaque canvas: it is sized
     // to the phone's picture, and nothing of the desktop belongs around it.
     color: CelestinaTheme.clear
+
+    // `--send`: the window stays while the files go, so a failure is seen.
+    onClosing: function(close) {
+        close.accepted = !sendChooser.busy
+    }
 
     // The suite's appearance file (reduced motion, text scale), followed on
     // the adapter's worker and bound into the theme once for this window.
@@ -36,6 +46,13 @@ ApplicationWindow {
     DevicesModel {
         id: devicesModel
         Component.onCompleted: reload()
+        // `--send`'s chooser: done closes the window; a failure stays shown.
+        onSendFinished: function(error) {
+            sendChooser.busy = false
+            sendChooser.failure = error
+            if (error === "")
+                Qt.quit()
+        }
     }
 
     readonly property int mediaIndex: {
@@ -99,8 +116,22 @@ ApplicationWindow {
             anchors.margins: 25
             spacing: 0
 
+            SendChooser {
+                id: sendChooser
+                visible: window.sendMode
+                width: parent.width
+                deviceNames: window.sendDeviceNames
+                fileCount: window.sendCount
+                onChosen: function(index) {
+                    sendChooser.busy = true
+                    devicesModel.chooseSendDevice(index)
+                }
+                onCancelled: Qt.quit()
+            }
+
             AppHeader {
                 id: appHeader
+                visible: !window.sendMode
                 width: parent.width
                 settingsOpen: window.settingsOpen
                 messagesOpen: window.messagesOpen
@@ -119,7 +150,7 @@ ApplicationWindow {
             }
 
             MessagesPage {
-                visible: window.messagesOpen && !window.settingsOpen
+                visible: window.messagesOpen && !window.settingsOpen && !window.sendMode
                 width: parent.width
                 height: parent.height - y
                 messages: messagesModel
@@ -128,7 +159,7 @@ ApplicationWindow {
             }
 
             DevicesPage {
-                visible: !window.settingsOpen && !window.messagesOpen
+                visible: !window.settingsOpen && !window.messagesOpen && !window.sendMode
                 width: parent.width
                 height: parent.height - y
                 devices: devicesModel
@@ -139,7 +170,7 @@ ApplicationWindow {
             }
 
             SettingsPage {
-                visible: window.settingsOpen
+                visible: window.settingsOpen && !window.sendMode
                 width: parent.width
                 height: parent.height - y
                 devices: devicesModel

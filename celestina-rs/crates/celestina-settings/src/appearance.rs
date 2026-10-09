@@ -104,26 +104,32 @@ pub fn env_forces_reduced_motion() -> bool {
 
 /// The current appearance: the file's values, or the defaults for a missing,
 /// unreadable or malformed file (logged, and the file is left as it is), with
-/// the environment override applied.
+/// the environment override applied. This is what a window shows; a caller
+/// that reads, changes and saves starts from [`load_stored`] instead.
 #[must_use]
 pub fn load() -> Appearance {
-    located().map_or_else(with_override, |path| load_from(&path))
+    with_override(load_stored())
+}
+
+/// The file's values as stored, without the `CELESTINA_REDUCED_MOTION`
+/// override: the starting point of a read-modify-save, so changing the text
+/// size while the variable is set does not write `reduced_motion = true`.
+/// The defaults for a missing, unreadable or malformed file, as [`load`].
+#[must_use]
+pub fn load_stored() -> Appearance {
+    located().map_or_else(Appearance::default, |path| read_file(&path))
 }
 
 /// [`load`] for a path already located: the watcher's re-read.
 pub(crate) fn load_from(path: &Path) -> Appearance {
-    let mut value = read_file(path);
+    with_override(read_file(path))
+}
+
+fn with_override(mut value: Appearance) -> Appearance {
     if env_forces_reduced_motion() {
         value.reduced_motion = true;
     }
     value
-}
-
-fn with_override() -> Appearance {
-    Appearance {
-        reduced_motion: env_forces_reduced_motion(),
-        ..Appearance::default()
-    }
 }
 
 fn read_file(path: &Path) -> Appearance {
