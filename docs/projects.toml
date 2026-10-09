@@ -474,3 +474,40 @@ verification_inputs = ["calcita/scripts/smoke.sh", "celestina-rs/rust-toolchain.
 component_commit_scopes = [
   { prefix = "calcita-core", roots = ["celestina-rs/crates/calcita-core/"], include_workspace_manifests = true },
 ]
+
+[[projects]]
+id = "selenita"
+name = "Selenita"
+path = "selenita"
+kind = "cxx-qt-application"
+commit_prefix = "selenita"
+# Registered unversioned first so the registry commit carries no history row;
+# the author's baseline commit after the landing declares the Cargo source.
+versioned = false
+agents = "selenita/AGENTS.md"
+readme = "selenita/README.md"
+status = "selenita/STATUS.md"
+roadmap = "selenita/ROADMAP.md"
+validation = "selenita/VALIDATION.md"
+active_plans = "selenita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md", "docs/superpowers/specs/2026-10-09-reading-and-capture-design.md"]
+source_roots = ["selenita/src", "selenita/qml", "celestina-rs/crates/selenita-core"]
+commit_roots = ["selenita/", "celestina-rs/crates/selenita-core/"]
+include_workspace_manifests = true
+production_role = "desktop-application"
+deployable = true
+build_script = "selenita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
+complete_script = "selenita/scripts/complete-production.sh"
+verify_script = "selenita/scripts/verify-production.sh"
+deploy_script = "selenita/scripts/deploy-production.sh"
+status_script = "selenita/scripts/status-production.sh"
+artifact_manifest = "selenita/target/production-artifact.toml"
+artifact_paths = ["selenita/target/release/selenita"]
+cargo_manifests = ["selenita/Cargo.toml"]
+production_inputs = ["selenita/Cargo.toml", "selenita/Cargo.lock", "selenita/build.rs", "selenita/src", "selenita/qml", "selenita/org.celestina.Selenita.desktop", "celestina-style/icons/apps/org.celestina.Selenita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/selenita-core"]
+# selenita-core gains tests/ in CAL-1-A; this list gains that path then.
+verification_inputs = ["selenita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "selenita-core", roots = ["celestina-rs/crates/selenita-core/"], include_workspace_manifests = true },
+]

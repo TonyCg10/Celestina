@@ -1,0 +1,8 @@
+[package]
+name = "selenita-core"
+version = "0.1.0"
+edition = "2021"
+description = "Selenita's domain: capture targets, file names, history, the niri client, tool argv and the recording pipeline, without Qt"
+license = "MIT"
+
+[dependencies]

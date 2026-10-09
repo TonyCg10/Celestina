@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Selenita
+GenericName=Captura de pantalla
+Comment=Captura y graba la pantalla
+Exec=selenita
+Icon=org.celestina.Selenita
+Terminal=false
+Categories=Utility;Graphics;
+Keywords=captura;pantalla;grabar;screenshot;selenita;celestina;
+StartupNotify=true
+StartupWMClass=org.celestina.Selenita

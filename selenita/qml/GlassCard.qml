@@ -1,0 +1,1 @@
+../../celestina-style/GlassCard.qml

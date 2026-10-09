@@ -1,0 +1,163 @@
+# EXT-1-B exact change inventory
+
+Base revision	42595540b979ce2c7b985c1792ecdc761d9ab972
+Pathspec	README.md
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/selenita-core/Cargo.toml
+Pathspec	celestina-rs/crates/selenita-core/src/lib.rs
+Pathspec	celestina-style/icons/apps/org.celestina.Selenita.svg
+Pathspec	docs/evidence/2026-10-09-selenita-registration.md
+Pathspec	docs/inventories/2026-10-09-reading-and-capture/EXT-1-B.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-reading-and-capture.md
+Pathspec	docs/projects.toml
+Pathspec	scripts/glass-canvas-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	scripts/radius-baseline.tsv
+Pathspec	scripts/test-activation-contract.py
+Pathspec	selenita/AGENTS.md
+Pathspec	selenita/Cargo.lock
+Pathspec	selenita/Cargo.toml
+Pathspec	selenita/README.md
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/VALIDATION.md
+Pathspec	selenita/build.rs
+Pathspec	selenita/docs/evidence/2026-10-09-skeleton.md
+Pathspec	selenita/docs/evidence/README.md
+Pathspec	selenita/docs/inventories/README.md
+Pathspec	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+Pathspec	selenita/docs/plans/active/README.md
+Pathspec	selenita/docs/plans/archive/README.md
+Pathspec	selenita/org.celestina.Selenita.desktop
+Pathspec	selenita/qml/CelestinaAppearance.qml
+Pathspec	selenita/qml/CelestinaBackdrop.qml
+Pathspec	selenita/qml/CelestinaButton.qml
+Pathspec	selenita/qml/CelestinaCapsule.qml
+Pathspec	selenita/qml/CelestinaFocusRing.qml
+Pathspec	selenita/qml/CelestinaIcon.qml
+Pathspec	selenita/qml/CelestinaIconButton.qml
+Pathspec	selenita/qml/CelestinaIcons.qml
+Pathspec	selenita/qml/CelestinaInputShield.qml
+Pathspec	selenita/qml/CelestinaModalLayer.qml
+Pathspec	selenita/qml/CelestinaRowHighlight.qml
+Pathspec	selenita/qml/CelestinaScrollBar.qml
+Pathspec	selenita/qml/CelestinaSectionLabel.qml
+Pathspec	selenita/qml/CelestinaShadow.qml
+Pathspec	selenita/qml/CelestinaSlider.qml
+Pathspec	selenita/qml/CelestinaSurface.qml
+Pathspec	selenita/qml/CelestinaSwitch.qml
+Pathspec	selenita/qml/CelestinaTextField.qml
+Pathspec	selenita/qml/CelestinaTheme.qml
+Pathspec	selenita/qml/CelestinaTreemap.qml
+Pathspec	selenita/qml/CelestinaUsageList.qml
+Pathspec	selenita/qml/CelestinaWheelScroll.qml
+Pathspec	selenita/qml/GlassCard.qml
+Pathspec	selenita/qml/GlassContextMenu.qml
+Pathspec	selenita/qml/GlassMenuItem.qml
+Pathspec	selenita/qml/GlassSurface.qml
+Pathspec	selenita/qml/ListSection.qml
+Pathspec	selenita/qml/Main.qml
+Pathspec	selenita/qml/components/ActivationRoute.qml
+Pathspec	selenita/qml/components/EmptyLine.qml
+Pathspec	selenita/qml/components/SectionCard.qml
+Pathspec	selenita/qml/fonts
+Pathspec	selenita/qml/fonts.qrc
+Pathspec	selenita/qml/icons
+Pathspec	selenita/qml/icons.qrc
+Pathspec	selenita/scripts/build-production.sh
+Pathspec	selenita/scripts/complete-production.sh
+Pathspec	selenita/scripts/deploy-production.sh
+Pathspec	selenita/scripts/qml-tests.sh
+Pathspec	selenita/scripts/smoke.sh
+Pathspec	selenita/scripts/status-production.sh
+Pathspec	selenita/scripts/verify-production.sh
+Pathspec	selenita/src/activation.rs
+Pathspec	selenita/src/appearance.rs
+Pathspec	selenita/src/controller.rs
+Pathspec	selenita/src/main.rs
+Pathspec	selenita/tests/qml/stubs/SelenitaActivation.qml
+Pathspec	selenita/tests/qml/stubs/SelenitaController.qml
+Pathspec	selenita/tests/qml/tst_main.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	63337da3698a49a83d3269c4047bd803aaf3506145305d018cc9d038a19463bf	README.md
+4	0	28515d7872e2d0636649a807c60744da664fb88110ba3a7b61c182907c2d1a11	celestina-rs/Cargo.lock
+1	0	6c47f9f521f8a4e7ee9e56a77d7eb55bb4a0b7059ead9ec827a9b8523984c192	celestina-rs/Cargo.toml
+8	0	c1e9d3c01a69c4b24c5250f4a667cceaee51fbb150d5b83ff5d26db36715148d	celestina-rs/crates/selenita-core/Cargo.toml
+3	0	cc2e45b67c13ca63ed3f06d4c533f8a06d9a035c2c7ed3e9a23a0ef471097deb	celestina-rs/crates/selenita-core/src/lib.rs
+36	0	6fe953d70703b7bc5d966246ce6405e06fcab254e9b8d93000b26a81854a2043	celestina-style/icons/apps/org.celestina.Selenita.svg
+73	0	5da2c30c5d07835d3b340b94597e9dacd5a29e0638aa7ba6e40693592a21737a	docs/evidence/2026-10-09-selenita-registration.md
+163	0	self	docs/inventories/2026-10-09-reading-and-capture/EXT-1-B.numstat.tsv
+1	1	2994493efffd889e150f63229cceeae9bc3b97dbc727445ac4bde8f518b53b6c	docs/plans/active/2026-10-09-reading-and-capture.md
+37	0	32283071c0e0989f4ee2cdb4206acb3db773b8b28e308c6a815652da4102b33e	docs/projects.toml
+1	0	219e3bf47c6d94699eeae8955c8945c710d5c6c919e71d7ae58049d7c6c4d58c	scripts/glass-canvas-baseline.tsv
+1	0	c2fb48758171b63b64593bab185aa30f25478137f6ef187ad7b8fe1996884c53	scripts/qmllint-baseline.tsv
+1	0	4cd971e83ccec921db67e0950e3a692434966b78b2e3bccdaca5cc0aecab8da5	scripts/radius-baseline.tsv
+2	1	53564036bff7b5060a930f64a22e9ae7d725bd5e5828a71640cb6a43281128e6	scripts/test-activation-contract.py
+49	0	f37fc647c72e3408d02eb0a918934410b1ccee31d535603d1e0bc9f9bc17961a	selenita/AGENTS.md
+1482	0	3c678a19d8ad74f8223d32e8094341a39fec67af2966574b49bd0402e41b11e2	selenita/Cargo.lock
+54	0	d60be2c66d0eda85c354fd4890b811d1162d2f0858a7bfebc7e86d503ca06b05	selenita/Cargo.toml
+61	0	0020273b66a15f7895dd60808f6d86d6ce854ea8688f4b48181a305f4cc1cace	selenita/README.md
+43	0	adb3a271c5352206f8213b62804cc2cdaca59bbe5961c0bf167e2cb41f1ef888	selenita/ROADMAP.md
+20	0	c4b9be14a37b1c125244207294454789e5ed06685444beaa7a3a318f8d37cb27	selenita/STATUS.md
+8	0	0bc74d6551e4ce8830906a81078ef5e2ab8d4c05e8b335c3347467d7f8fb3b08	selenita/VALIDATION.md
+79	0	ef70eadb03d521d9367a783bd5a5dac36c0907a488fbe5dc81a45ed9e8ce7c80	selenita/build.rs
+50	0	551107daa851be2176f0a323502a6ed1ba9e836a2443a0445ecc2fbba6e1c7bf	selenita/docs/evidence/2026-10-09-skeleton.md
+7	0	9e4277df93dbe63bbd4a5d453b2756cb7aeb4b15094bfbff05ffabdca961593c	selenita/docs/evidence/README.md
+4	0	3ef92fdf03b1169131676e008177bcbba877b012ec0e517b322bc1bec4364056	selenita/docs/inventories/README.md
+66	0	ee433be9eeb89a6f8c4078a502568173b5b63c9d2e134bc9d0d03977cf591028	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+8	0	dba034fb88263586f98cb19c31b2c3c7d2ed7e44d723d8568592b719942497df	selenita/docs/plans/active/README.md
+6	0	664c302465344b1d09d7ce5bdff5c21ded871b21a6f78a9dccd0827fe1f7c5b7	selenita/docs/plans/archive/README.md
+12	0	0f814a3146741f73dcdaa5e10227faab3520fb65224b9b301cac9e3db1b88a5c	selenita/org.celestina.Selenita.desktop
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	selenita/qml/CelestinaAppearance.qml
+1	0	3b62a769997026b56b2f32800802f4b94ab76a4313e997b73893242295a9e533	selenita/qml/CelestinaBackdrop.qml
+1	0	1eb2ab4f2e6b72ca86b14135f7a7c1cc416d8e59063405bda1b7ea0dcd4609c8	selenita/qml/CelestinaButton.qml
+1	0	1ca1f10ff3232a481597a16d1c38a1582196cd7c5236a71ea92a67018f0361c2	selenita/qml/CelestinaCapsule.qml
+1	0	bbee65a98530774646e49e6f1843a8bba6f04813f607f1c9d778cd61241f8394	selenita/qml/CelestinaFocusRing.qml
+1	0	83ba381a1abf9efee47d489672f96cbfe8f0b63166aed127f8b59921f290bf8f	selenita/qml/CelestinaIcon.qml
+1	0	9110c437c48d946ce99191c578f43a449e577cc33b4c7980dea06cd2f3b289f0	selenita/qml/CelestinaIconButton.qml
+1	0	43e5ca4ff6b7953f80f4b0dd6f8cd958364af738ade2ae6cbb265b87287629fd	selenita/qml/CelestinaIcons.qml
+1	0	ca69db62ab6735eb96f61ba3066a9c968aa60816e476c6d4b829f2217f32393d	selenita/qml/CelestinaInputShield.qml
+1	0	ca736884826ec69092c76d363d2eee080db50bbe0273cea514a15e31de3a985c	selenita/qml/CelestinaModalLayer.qml
+1	0	14e119a326c35f9d113e2e031721491468f6aa375d4ff8c58e32e83476e5d167	selenita/qml/CelestinaRowHighlight.qml
+1	0	eb9268b528b5b93e314a70ec14af08f82a55491bf3c1b69b52a37663d809bbad	selenita/qml/CelestinaScrollBar.qml
+1	0	3649a49f14f26d0487ccebf5c29c90587846916fe87c74a5d577dcbfa5a272b5	selenita/qml/CelestinaSectionLabel.qml
+1	0	e1ef735ae9330fdf16ef374432c9c3e4d956eb3c8002a1f897182d6e6ee9aa4c	selenita/qml/CelestinaShadow.qml
+1	0	3821297ceefd93abffacb07b0e1742331ec2fcfc49dba83ab953685cfab0ee5c	selenita/qml/CelestinaSlider.qml
+1	0	c680a487129fb18f9c9b9f3f9c1ddff8db11447f31befc22984c95f756a4c3dc	selenita/qml/CelestinaSurface.qml
+1	0	05a75ec76536c86e0e3766ee643ec6f1fc2a6711b17df562045a0b49f2047bca	selenita/qml/CelestinaSwitch.qml
+1	0	859908d291e5a0b4de0cdce98b8b1b7265183971fba73f7d008309af0eb54aef	selenita/qml/CelestinaTextField.qml
+1	0	9061c0c6f525a87b6229ecb2e749f8b4b816ca8a9542fea3de36f512e4d7cdd9	selenita/qml/CelestinaTheme.qml
+1	0	51b9e1f4409a9981a01d662c5bf351b80f9326d3610e173ce43ff20b08462411	selenita/qml/CelestinaTreemap.qml
+1	0	e8d18ddec56151a9b6de074f40723454e90280dcd62e689904ceee531b1133ac	selenita/qml/CelestinaUsageList.qml
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	selenita/qml/CelestinaWheelScroll.qml
+1	0	bdb8d09c6b297173b022c76c6019c6bde7c0c06c2a2c684df48f94d81228be3e	selenita/qml/GlassCard.qml
+1	0	ebf3b19c1bb1ddba600feff7e77cffe157001ce8b7f5071bc92d7dd7c173b4c3	selenita/qml/GlassContextMenu.qml
+1	0	47b2fd86105f32aafe2dfb63013f2486a00e971575d108e54a644930011d211b	selenita/qml/GlassMenuItem.qml
+1	0	703af6df4940243b8efc7d215d246633aee454719b1019014f8da91923637550	selenita/qml/GlassSurface.qml
+1	0	353a50fd35236ccc7e74e87a2e714762d6fdddd2f4a7c6e38eb64ca38a7f8e29	selenita/qml/ListSection.qml
+105	0	374778cbd1ac33db47c58dbcd39efd18c59c43672ea3bfd768615dedd0bea10c	selenita/qml/Main.qml
+21	0	9e46fb60bfd625dbc946298d1211e63cc703b0cdfb347e0a427543a8d7efce6b	selenita/qml/components/ActivationRoute.qml
+29	0	6db92acd8a51f374362e81661d05fa5fe1599cbcf6aeb08886370e170ef8d04e	selenita/qml/components/EmptyLine.qml
+41	0	b1eae136ae735f994f0d61527222c33232cf5133717edee35e867e00fab75ecf	selenita/qml/components/SectionCard.qml
+1	0	3935470cff944efe2bf871e800c11739a676a7526598dca055c54708021b30e6	selenita/qml/fonts
+1	0	1dc967e41bbecd7115614140d758961b9575e7c22d45a13aca0fe86f72a14e33	selenita/qml/fonts.qrc
+1	0	ae5df8f850da89509da04c06c31b851345d0a2e1455f2ce41e1a880d834b46dd	selenita/qml/icons
+1	0	124fd26e585793a6f0cb00a4dfa3076cddc7e50680709f84a98b05c3bda2091b	selenita/qml/icons.qrc
+19	0	210d4c1a408df9951881757fc5c59a4a7d13f81dde2e4deb9a088e321619f1fb	selenita/scripts/build-production.sh
+4	0	a4f43fcc1b28ae0dfe1049f7179c6b6b8895814d042a3d62e81c9ae22aeb356a	selenita/scripts/complete-production.sh
+18	0	15ee5c07f85c6307e4648e3ad3ab3602b21929db77c6a91256ed83b4fa5d0054	selenita/scripts/deploy-production.sh
+71	0	f7d277f56936b1e3d4509cddffc8864e5bc7f853aaf9f0b2adf053a93e5ad20e	selenita/scripts/qml-tests.sh
+88	0	0cbe1fabc19494000afde50f5ad452d75abd4c36264f6f6d63210e21bbbb5320	selenita/scripts/smoke.sh
+12	0	9f74bf3840df9dff0f8858a5400223edcf9e38211ecf5e779c74bbd90d9b4a2b	selenita/scripts/status-production.sh
+33	0	db931885b0c55c47d49734eb1e0270407406baf43b3d211c77426549dbb7164b	selenita/scripts/verify-production.sh
+131	0	932cae6c5dec11c2794016e2ddcb4852c8f5fb44d4369c6831eeb8acd42ad293	selenita/src/activation.rs
+52	0	71fdf70005066d062533d84a4c0c2aacc23de5803bf09a3a459c6538db3a26e8	selenita/src/appearance.rs
+115	0	f9f27951380f841ea84ff6187121dcfe8ffeaefe0976ec417e11898d67dbdb67	selenita/src/controller.rs
+64	0	4be7ac66191fee59cfb1773206a5c39836d20bb859ead568480f9422d7aaebca	selenita/src/main.rs
+9	0	1e24c24726ae5811723c9558f6aad8d8dcd5781d65775e60529806697ff8112a	selenita/tests/qml/stubs/SelenitaActivation.qml
+12	0	99f21fc1da52dbd0fad7a709eb6c5f7c86ebab6a9b94b3113aa7f4fc205b3196	selenita/tests/qml/stubs/SelenitaController.qml
+61	0	83179937e2a80a74b2763c06b2cb15436e4c3a767a3efb5f47a421abe83faa2e	selenita/tests/qml/tst_main.qml

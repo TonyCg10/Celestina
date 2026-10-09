@@ -137,7 +137,8 @@ class ActivationContract(unittest.TestCase):
     def test_the_real_tree_passes(self) -> None:
         repo = SCRIPT.parent.parent
         apps = [name for name in ("siderita", "grafita", "hematita", "fluorita",
-                                  "cuprita", "magnetita", "calcita") if (repo / name).is_dir()]
+                                  "cuprita", "magnetita", "calcita",
+                                  "selenita") if (repo / name).is_dir()]
         result = self.run_in(repo, *apps)
         self.assertEqual(result.returncode, 0, result.stderr)
 

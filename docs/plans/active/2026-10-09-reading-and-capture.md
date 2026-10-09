@@ -64,5 +64,5 @@ plans are closed at 1.0.0 and, on the landed `main`,
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | EXT-1-A | `suite:` | done | [inventory](../../inventories/2026-10-09-reading-and-capture/EXT-1-A.numstat.tsv) | 83 files, +3629/-10 | Register the Calcita project (`versioned = false`) with its skeleton, icon and document set; add `CALCITA` and `SELENITA` to the suite's activation names; open EXT-1. | [evidence](../../evidence/2026-10-09-calcita-registration.md) | None |
-| EXT-1-B | `suite:` | planned | — | — | Register the Selenita project with its skeleton, icon and document set. | — | None |
+| EXT-1-B | `suite:` | done | [inventory](../../inventories/2026-10-09-reading-and-capture/EXT-1-B.numstat.tsv) | 78 files, +3197/-2 | Register the Selenita project (`versioned = false`) with its skeleton, icon and document set; add Selenita to the activation guard's real-tree test. | [evidence](../../evidence/2026-10-09-selenita-registration.md) | None |
 | EXT-1-C | `suite:` | planned | — | — | Add Calcita to Siderita's open-in targets, record the host hygiene and close the program. | — | None |
