@@ -1,0 +1,47 @@
+# CONV-1-F exact change inventory
+
+Base revision	48bd717c210ab2ae731d29d4ed2989b5544ba75d
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/VALIDATION.md
+Pathspec	cuprita/docs/evidence/2026-10-09-appearance.md
+Pathspec	cuprita/src/backend.rs
+Pathspec	cuprita/src/controller/appearance.rs
+Pathspec	docs/decisions/0012-suite-conventions.md
+Pathspec	docs/decisions/README.md
+Pathspec	docs/evidence/2026-10-09-suite-conventions-exit.md
+Pathspec	docs/inventories/2026-10-09-suite-conventions/CONV-1-F.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-suite-conventions.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/VALIDATION.md
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/VALIDATION.md
+Pathspec	hematita/STATUS.md
+Pathspec	magnetita/STATUS.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+13	0	d29fe5ca55e4ad555220e160d847a2f4e21bb0955cf23194e3b3a1b60a85c0fa	README.md
+8	7	c0f90f56faa393a5b5bd4044416a9d71719057110a62f6388a01b2debf74d351	ROADMAP.md
+11	3	aaeec8dad6223098d2d55d400c33366789c9ca114fd13bc8491d8580c33c751c	cuprita/STATUS.md
+5	3	1ac898eeec662ae04427c1ade81752f1f99d178e79cdf33c8c04bb836c767b01	cuprita/VALIDATION.md
+6	3	391692c9d1561220bfa4c7138c457a261a326ddd2c73a6dd2ec545fb44add10a	cuprita/docs/evidence/2026-10-09-appearance.md
+11	0	8b171ec08006246e14ad1b509b6e30bf505a2d134e6dd8288b36aa207eb1b90b	cuprita/src/backend.rs
+37	3	bf1656f7f41ae8029dccbb51ad2ff9a6bacb6e81c96cb5fd42690e6dd5d5ea54	cuprita/src/controller/appearance.rs
+91	0	c8c3dff174c869497436e6406bcf5cf6a0f59f8bae51d139a1445bf865679dd5	docs/decisions/0012-suite-conventions.md
+1	0	0aa7d406ada97c731e64bbab0c0c53809a99b844aab7903f3aa0f835343c7fa7	docs/decisions/README.md
+93	0	6a87266cca90824a605786ba773a0a73964b4b31754daf7354d1ee64738ffc76	docs/evidence/2026-10-09-suite-conventions-exit.md
+47	0	self	docs/inventories/2026-10-09-suite-conventions/CONV-1-F.numstat.tsv
+9	5	d9916676217ae736eb45ddfdda457c0f1ade0aebc9c2ad512d972f6e411cdc37	docs/plans/active/2026-10-09-suite-conventions.md
+7	0	aa0a9685887f821b93c59735528ed96313184279d9c030fde54a6e6ef13af0db	fluorita/STATUS.md
+13	0	8fe3e6656535ce0e70b685fa9fca84dd60b4b93a7a1bca8fbe2d168c4d0abd84	fluorita/VALIDATION.md
+8	0	9db112d0aaeb8078bf70bcac5388cbf5482078fa723b3f7bc1146d6130493f3f	grafita/STATUS.md
+14	0	593c5f469d95b4fb1cfc1de350a00fde15a1e484c6d9d4dead6f6c286d26d9b4	grafita/VALIDATION.md
+6	0	71319181aab2c6a693bb9557a3b686cdd4ecf50d99306c17378679856a6fdc42	hematita/STATUS.md
+9	0	17d1130ac42903508537798a78ab02a02cf9efd21fa7b69314d0ffcfde190e0f	magnetita/STATUS.md
+11	0	306f02316ff97904800e9071d0eb752ec7f07de4e54550c7dabe3ef053555087	siderita/STATUS.md
+17	0	42077c2697f094745cffe9dd28264a2f10157697711be656ca77e5df9e1fbff7	siderita/VALIDATION.md

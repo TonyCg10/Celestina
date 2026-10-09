@@ -50,18 +50,20 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 ## VAL-F — Change the appearance and watch every window follow
 
 - **Status:** pending
-- **Related implementation:** CUP-1-I (`CONV-1-C`)
+- **Related implementation:** CUP-1-I (`CONV-1-C`), `CONV-1-F`
 - **Requires:** the deployed Cuprita and at least two other suite windows
   open on the real session, without `CELESTINA_REDUCED_MOTION` set
 - **Procedure:** open Cuprita on Apariencia (Ctrl+4); with the keyboard,
   Tab to the text-size choice and walk it with Right to large, then
   larger, then Left back to normal; Tab to the reduced-motion switch and
   switch it with Space, then switch it back; start Cuprita once more
-  with `CELESTINA_REDUCED_MOTION=1` and look at the switch
+  with `CELESTINA_REDUCED_MOTION=1`, look at the switch and change the
+  text size
 - **Pass condition:** every open suite window, Cuprita included, redraws its
   text at each size within about a second and stops animating while reduced
   motion is on; `~/.config/celestina/appearance.toml` holds the last
   choice; with the variable set the switch is on, disabled and reads
-  «Forzado por el entorno»
+  «Forzado por el entorno», and the size change leaves the file's
+  `reduced_motion` as it was (`CONV-1-F`)
 - **Result:** not run
 - **Evidence:** none

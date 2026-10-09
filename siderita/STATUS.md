@@ -15,6 +15,17 @@
 
 ## Current checkout truth
 
+- Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
+  `CONV-1`): Siderita serves `org.celestina.Siderita` through
+  `celestina_core::activation` (claim first, `Open(as paths)` with byte-exact
+  path keys) and is the suite's launcher: «Abrir en» and a second launch reach
+  a running Grafita, Fluorita or Hematita over `org.celestina.Application1`
+  and spawn only when nobody owns the name, and its send-to-phone entry is an
+  explicit send through Magnetita. Its entry drag carries the `text/uri-list`
+  the other applications read. Every window follows
+  `~/.config/celestina/appearance.toml` (reduced motion and the text scale on
+  the font tokens); Siderita's own text scales are kept until a later unit
+  decides them. `VAL-SID-SEND` is the author's check of the send.
 - `CONV-1-D` (suite): an entry's context menu offers «Abrir en» — Grafita,
   Fluorita, Hematita when installed and applicable to the acting entries, and
   one send-to-phone entry per connected phone — decided from the folder model

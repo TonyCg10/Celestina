@@ -13,6 +13,14 @@
 
 ## Current checkout truth
 
+- Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
+  `CONV-1`): Grafita serves `org.celestina.Grafita` through
+  `celestina_core::activation`: a second launch or Siderita's «Abrir en» opens
+  a tab in the running window, and a `text/uri-list` drop opens one tab per
+  local file, decoded by `celestina_core::file_uri::to_path`. The window
+  follows the suite's appearance file (reduced motion, the text scale on the
+  font tokens; Grafita's own remembered text size is kept). `VAL-GRA-OPEN` and
+  `VAL-GRA-DROP` are the author's checks.
 - `CONV-1-E` (suite): files dropped on the window (from Siderita or any
   manager) open as tabs through the same path as `Open`; the bytes decide,
   and a URI that names no local file is ignored with a short notice

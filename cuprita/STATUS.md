@@ -2,9 +2,9 @@
 
 - **Updated:** 2026-10-09
 - **Version:** 1.0.1
-- **Implementation:** CUP-1-A to CUP-1-H are done; CUP-1-I, the
-  Appearance section (`CONV-1-C` of the suite program), is open as
-  maintenance (no version change).
+- **Implementation:** CUP-1-A to CUP-1-I are done; CUP-1-I, the
+  Appearance section, was `CONV-1-C` of the suite program (maintenance, no
+  version change).
   Red runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
   agent, and Audio on PipeWire through WirePlumber's `wpctl`;
   `CUPRITA_FAKE=1` runs all three over the scripted backends
@@ -13,6 +13,14 @@
 
 ## Current checkout truth
 
+- Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
+  `CONV-1`): Cuprita serves `org.celestina.Cuprita` through
+  `celestina_core::activation`, and its Apariencia section is the one editor
+  of the suite's appearance file: a change reads the file as stored
+  (`celestina_settings::load_stored`), so a text-size change while
+  `CELESTINA_REDUCED_MOTION` is set never saves the forced reduced motion
+  (fixed in `CONV-1-F`). Its own window follows the file like every other.
+  `VAL-F` is the author's check.
 - `CONV-1-C` (`CUP-1-I`): a fourth section, Apariencia (Ctrl+4), is the one
   place in the suite where the shared appearance file
   (`~/.config/celestina/appearance.toml`) is edited: a reduced-motion

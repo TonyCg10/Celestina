@@ -3,6 +3,20 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-GRA-OPEN — A second file from Siderita into a running Grafita
+
+- **Status:** pending
+- **Related implementation:** `CONV-1-A`, `CONV-1-D`, recorded in
+  [the suite evidence](../docs/evidence/2026-10-09-open-with.md)
+- **Requires:** the deployed Grafita and Siderita on the real session
+- **Procedure:** open a text file in Grafita; in Siderita, right-click another
+  text file and choose «Abrir en» → Grafita; then run `grafita OTHER_FILE`
+  from a terminal
+- **Pass condition:** no second Grafita window appears; each file opens in a
+  new tab of the running window, which comes forward
+- **Result:** not run by hand
+- **Evidence:** a second window, or a file that did not open
+
 ## VAL-GRA-DROP — Files dropped from Siderita
 
 - **Status:** pending

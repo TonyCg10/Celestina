@@ -27,7 +27,7 @@ Reduced motion and the text scale come from
 `~/.config/celestina/appearance.toml`, edited in Cuprita. Siderita opens the
 suite's applications through the bus and offers them in its context menu;
 Grafita, Fluorita and Magnetita accept `text/uri-list` drops. The conventions
-are an ADR enforced by the architecture contract.
+are an ADR; the architecture contract enforces the activation convention.
 
 ## Scope
 
@@ -37,8 +37,8 @@ are an ADR enforced by the architecture contract.
   refuses a bus-name request outside the shared owner.
 - `CONV-1-B` — the shared appearance file (`celestina-settings`) with the
   text scale, fed to every window.
-- `CONV-1-C` — Cuprita's appearance section (also a row of Cuprita's own
-  ledger).
+- `CONV-1-C` — Cuprita's appearance section, delivered as Cuprita's own
+  unit `CUP-1-I` (see the ledger note).
 - `CONV-1-D` — open-with inside the suite: Siderita's direct targets and
   Magnetita's send action.
 - `CONV-1-E` — drag-and-drop from Siderita into Grafita, Fluorita and
@@ -66,11 +66,15 @@ The checkpoint closes when every row below is `done` and, on the landed
 
 ## Change and commit ledger
 
+`CONV-1-C` was delivered as `CUP-1-I` under `cuprita:`, with its row and
+[inventory](../../../cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-I.numstat.tsv)
+in [Cuprita's foundation plan](../../../cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md);
+it has no row here, because a `done` row needs an inventory of its own.
+
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | CONV-1-A | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-A.numstat.tsv) | 70 files, +3328/-554 | Add the shared activation interface (`celestina_core::activation`, feature `activation`: claim first, `org.celestina.Application1` with `Activate()` and `Open(as paths)`, a bounded inbox, `open_in`) and adopt it in Siderita, Grafita, Hematita, Fluorita and Cuprita; remove the three private hand-off copies; Siderita opens Grafita, Fluorita and Hematita through the bus before spawning; add the activation scanner to the architecture contract. | [evidence](../../evidence/2026-10-09-shared-activation.md) | None |
 | CONV-1-B | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-B.numstat.tsv) | 62 files, +3013/-106 | Add the shared appearance file with the text scale and feed every window from it. | [evidence](../../evidence/2026-10-09-shared-appearance.md) | None |
-| CONV-1-C | `suite:` | planned | — | — | Add Cuprita's appearance section with reduced motion and the text size; delivered under `cuprita:` as row CUP-1-I of Cuprita's own ledger, and closed here by reference. | — | None |
 | CONV-1-D | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-D.numstat.tsv) | 32 files, +1690/-57 | Add the suite's open-in entries to Siderita and the send action to Magnetita; add `celestina_settings::load_stored` for read-modify-save callers. | [evidence](../../evidence/2026-10-09-open-with.md) | None |
 | CONV-1-E | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-E.numstat.tsv) | 22 files, +987/-34 | Add drag-and-drop from Siderita into Grafita, Fluorita and Magnetita. | [evidence](../../evidence/2026-10-09-drag-and-drop.md) | None |
-| CONV-1-F | `suite:` | planned | — | — | Record the conventions as an ADR and enforce them in the architecture contract. | — | None |
+| CONV-1-F | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-F.numstat.tsv) | 20 files, +417/-24 | Record the conventions as ADR 0012, the documents and the per-application checks; Cuprita's appearance save starts from `load_stored()`. | [evidence](../../evidence/2026-10-09-suite-conventions-exit.md) | None |

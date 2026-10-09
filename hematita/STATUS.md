@@ -193,6 +193,12 @@
 
 ## Current checkout truth
 
+- Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
+  `CONV-1`): Hematita serves `org.celestina.Hematita` through
+  `celestina_core::activation`: a second launch, or Siderita's «Abrir en» on a
+  folder, browses that folder in the running window's storage section. The
+  window follows the suite's appearance file (reduced motion, the text scale
+  on the font tokens). Hematita accepts no drops.
 - `CONV-1-A` (suite): HEM-H1-F's claim-first hand-off moved into
   `celestina_core::activation` (HEM-16 done by reference). The served
   interface is now the suite's `org.celestina.Application1`

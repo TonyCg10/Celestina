@@ -15,6 +15,13 @@
 
 ## Current checkout truth
 
+- Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
+  `CONV-1`): Fluorita serves `org.celestina.Fluorita` through
+  `celestina_core::activation`: a second launch or Siderita's «Abrir en» plays
+  the first media file in the running player, and a `text/uri-list` drop is
+  decided by the same rule. The window follows the suite's appearance file
+  (reduced motion, the text scale on the font tokens). `VAL-FLU-OPEN` and
+  `VAL-FLU-DROP` are the author's checks.
 - `CONV-1-E` (suite): a drop on the window is decided like `Open`: the first
   media file plays (an image opens in the viewer), a source folder is
   selected, another folder opens the source chooser at it; a URI that names

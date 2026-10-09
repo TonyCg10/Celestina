@@ -83,10 +83,13 @@ sections.
 
 ## Limits
 
-- While `CELESTINA_REDUCED_MOTION` is set, `load()` reports reduced motion
+- ~~While `CELESTINA_REDUCED_MOTION` is set, `load()` reports reduced motion
   on whatever the file says, so changing the text size then also writes
-  `reduced_motion = true` to the file. `celestina_settings` offers no read
-  of the file without the override; a later suite unit can add one.
+  `reduced_motion = true` to the file.~~ Fixed in `CONV-1-F`
+  ([evidence](../../../docs/evidence/2026-10-09-suite-conventions-exit.md)):
+  a change starts from `AppearanceStore::read_stored`, which is
+  `celestina_settings::load_stored()` (added in `CONV-1-D`), so the forced
+  value is shown but never saved.
 - Live following across windows (a change here redrawing every other open
   suite window) is proven only by `VAL-F`: the automated tests run the page
   on a stand-in and the smoke on the in-memory fake store.

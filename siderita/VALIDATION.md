@@ -4,6 +4,23 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-SEND — Send to the phone from the context menu
+
+- **Status:** pending
+- **Related implementation:** `CONV-1-A`, `CONV-1-D`, recorded in
+  [the suite evidence](../docs/evidence/2026-10-09-open-with.md)
+- **Requires:** the deployed Siderita and Magnetita with one phone paired and
+  connected (then two)
+- **Procedure:** right-click a file and choose the single-phone send entry under «Abrir en» (the
+  `qsTr` text at `qml/menus/EntryContextMenu.qml:135`); select three
+  files and send them; with two phones connected, open the menu again
+- **Pass condition:** the files arrive on the phone; with two phones the menu
+  shows «Enviar a NAME» for each and the file reaches the one chosen; with no
+  phone connected no send entry is shown
+- **Result:** not run by hand
+- **Evidence:** a file that did not arrive, or an entry shown with no phone
+  connected
+
 ## VAL-SID-18 — Renaming and formatting a spare USB stick
 
 - **Status:** pending

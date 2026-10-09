@@ -3,7 +3,8 @@
 //! the suite where the shared appearance file is edited.
 //!
 //! Every read and write runs on this section's worker, never on the Qt
-//! thread: a change reads the file, sets the one value and saves both
+//! thread: a change reads the file as stored (without the environment
+//! override, `celestina_settings::load_stored`), sets the one value and saves both
 //! (`celestina_settings::save`), and the watcher re-reads after any write,
 //! from here or from elsewhere. The window itself follows the file through
 //! `CupritaController`, so a change here previews in Cuprita as in every
@@ -36,12 +37,13 @@ fn message_es(error: &SettingsError) -> String {
     }
 }
 
-/// Reads the current appearance, changes it with `change` and saves it.
+/// Reads the stored appearance (never the environment's forced reduced
+/// motion), changes it with `change` and saves it.
 fn update(
     change: impl FnOnce(&mut Appearance) + Send + 'static,
 ) -> impl FnOnce(&mut Backend) -> Result<(), String> + Send + 'static {
     move |store: &mut Backend| {
-        let mut value = store.read();
+        let mut value = store.read_stored();
         change(&mut value);
         store.write(&value).map_err(|error| {
             // The detail goes to the log; the notice stays a sentence.
@@ -194,10 +196,21 @@ mod tests {
 
     struct Memory {
         value: Appearance,
+        /// Stands for `CELESTINA_REDUCED_MOTION`: `read` reports reduced
+        /// motion on, `read_stored` the file's value.
+        forced: bool,
     }
 
     impl AppearanceStore for Memory {
         fn read(&mut self) -> Appearance {
+            let mut value = self.value;
+            if self.forced {
+                value.reduced_motion = true;
+            }
+            value
+        }
+
+        fn read_stored(&mut self) -> Appearance {
             self.value
         }
 
@@ -214,6 +227,7 @@ mod tests {
                 reduced_motion: true,
                 text_scale: TextScale::Normal,
             },
+            forced: false,
         };
         update(|value| value.text_scale = TextScale::Large)(&mut store).expect("saved");
         assert_eq!(
@@ -226,5 +240,25 @@ mod tests {
         update(|value| value.reduced_motion = false)(&mut store).expect("saved");
         assert_eq!(store.value.text_scale, TextScale::Large);
         assert!(!store.value.reduced_motion);
+    }
+
+    #[test]
+    fn a_forced_reduced_motion_is_never_saved() {
+        let mut store = Memory {
+            value: Appearance {
+                reduced_motion: false,
+                text_scale: TextScale::Normal,
+            },
+            forced: true,
+        };
+        assert!(store.read().reduced_motion);
+        update(|value| value.text_scale = TextScale::Large)(&mut store).expect("saved");
+        assert_eq!(
+            store.value,
+            Appearance {
+                reduced_motion: false,
+                text_scale: TextScale::Large,
+            }
+        );
     }
 }

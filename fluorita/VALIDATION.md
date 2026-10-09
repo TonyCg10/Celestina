@@ -3,6 +3,19 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-FLU-OPEN — A second file from Siderita into a running Fluorita
+
+- **Status:** pending
+- **Related implementation:** `CONV-1-A`, `CONV-1-D`, recorded in
+  [the suite evidence](../docs/evidence/2026-10-09-open-with.md)
+- **Requires:** the deployed Fluorita and Siderita on the real session
+- **Procedure:** play a song in Fluorita; in Siderita, right-click a video and
+  choose «Abrir en» → Fluorita; then run `fluorita OTHER_SONG` from a terminal
+- **Pass condition:** no second Fluorita window appears; the running player
+  comes forward and plays each new file in turn
+- **Result:** not run by hand
+- **Evidence:** a second window, or a file that did not play
+
 ## VAL-FLU-DROP — Files and folders dropped from Siderita
 
 - **Status:** pending

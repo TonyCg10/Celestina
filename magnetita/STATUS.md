@@ -23,6 +23,15 @@
 
 ## Current checkout truth
 
+- Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
+  `CONV-1`): Magnetita is the suite's send target: `magnetita --send FILE…`
+  (the desktop entry's explicit «send» action, never a plain open) and a
+  `text/uri-list` drop on a device card send through `Devices1.SendFileUri`
+  with byte-exact names; Siderita's send-to-phone entry uses the same call.
+  Magnetita does not claim an `org.celestina.Application1` name. The window
+  follows the suite's appearance file (reduced motion, the text scale on the
+  font tokens). `VAL-MAG-DROP` and Siderita's `VAL-SID-SEND` are the author's
+  checks.
 - `CONV-1-E` (suite): files dropped on a device card, or on the device page,
   go to that device through `SendFileUri` on the model's worker, with
   `--send`'s sending and failure notice; a URI that names no local file is

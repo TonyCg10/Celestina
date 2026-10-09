@@ -53,6 +53,19 @@ XDG/freedesktop contract. The binding rules are documented in
 content gesture mapping in
 [the activation contract](docs/contracts/content-activation.md).
 
+## How the applications work together
+
+Siderita, Grafita, Hematita, Fluorita and Cuprita each keep to one window
+(Magnetita claims no name): a launch claims `org.celestina.<App>` and a second launch hands its paths to the running one
+over `org.celestina.Application1` (`celestina_core::activation`). Siderita is
+the launcher: «Abrir en» opens a file in Grafita or Fluorita and a folder in
+Hematita, and its send-to-phone entry sends through Magnetita; a file dragged from
+Siderita onto Grafita, Fluorita or a Magnetita device opens or sends it.
+Reduced motion and the text size live in one file,
+`~/.config/celestina/appearance.toml`, edited in Cuprita's Apariencia section
+and followed by every open window. The rules are
+[ADR 0012](docs/decisions/0012-suite-conventions.md).
+
 ## Build and verification
 
 Do not use `run.sh` as an ambiguous proof step. Every registered project exposes

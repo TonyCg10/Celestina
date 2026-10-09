@@ -151,6 +151,9 @@ pub fn audio(on_change: impl Fn() + Send + Sync + 'static) -> (Box<dyn Audio>, O
 pub trait AppearanceStore: Send {
     /// The current appearance, with the environment override applied.
     fn read(&mut self) -> Appearance;
+    /// The values stored in the file, without the environment override:
+    /// what a change starts from, so a forced reduced motion is never saved.
+    fn read_stored(&mut self) -> Appearance;
     /// Writes both values.
     ///
     /// # Errors
@@ -165,6 +168,10 @@ struct AppearanceFile;
 impl AppearanceStore for AppearanceFile {
     fn read(&mut self) -> Appearance {
         celestina_settings::load()
+    }
+
+    fn read_stored(&mut self) -> Appearance {
+        celestina_settings::load_stored()
     }
 
     fn write(&mut self, value: &Appearance) -> Result<(), SettingsError> {
@@ -186,6 +193,10 @@ impl AppearanceStore for FakeAppearance {
             value.reduced_motion = true;
         }
         value
+    }
+
+    fn read_stored(&mut self) -> Appearance {
+        self.value
     }
 
     fn write(&mut self, value: &Appearance) -> Result<(), SettingsError> {

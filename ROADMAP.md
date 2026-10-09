@@ -199,15 +199,16 @@ single owner in `celestina-rs` and a guard against private copies.
 window; reduced motion and the text scale come from one file edited in
 Cuprita; Siderita opens the suite's applications through the bus and offers
 them in its context menu; Grafita, Fluorita and Magnetita accept drops; the
-conventions are an ADR enforced by the architecture contract.
+conventions are an ADR; the architecture contract enforces the activation
+convention.
 
-- [ ] Add the shared activation interface and adopt it in every application
+- [x] Add the shared activation interface and adopt it in every application
       (`CONV-1-A`).
-- [ ] Add the shared appearance file with the text scale (`CONV-1-B`).
-- [ ] Add Cuprita's appearance section (`CONV-1-C`).
-- [ ] Add open-with inside the suite (`CONV-1-D`).
-- [ ] Add drag-and-drop between the applications (`CONV-1-E`).
-- [ ] Record the conventions as an ADR and enforce them (`CONV-1-F`).
+- [x] Add the shared appearance file with the text scale (`CONV-1-B`).
+- [x] Add Cuprita's appearance section (`CONV-1-C`).
+- [x] Add open-with inside the suite (`CONV-1-D`).
+- [x] Add drag-and-drop between the applications (`CONV-1-E`).
+- [ ] Record the conventions as an ADR (`CONV-1-F`).
 
 The build order, exclusions and ledger are in
 [the active plan](docs/plans/active/2026-10-09-suite-conventions.md), and the
