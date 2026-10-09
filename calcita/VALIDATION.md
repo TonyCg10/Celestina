@@ -22,5 +22,25 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Result:** not run
 - **Evidence:** none
 
-The later CAL-1 units add theirs: search and the outline (CAL-1-B), and the
-reading mode with Calcita as the `application/pdf` handler (CAL-1-C).
+## VAL-CAL-SEARCH — Search, the outline, copy and links in a real PDF
+
+- **Status:** pending
+- **Related implementation:** CAL-1-B
+- **Requires:** the Calcita release binary of CAL-1-B on the real session; a
+  real PDF with text, an outline, internal links and a web link
+- **Procedure:** open the PDF; press Ctrl+F, type a word that appears several
+  times, walk the hits with Enter, Shift+Enter, F3 and Shift+F3, then press
+  Escape; press F9, move through the outline with the arrows and Enter, and
+  click a bookmark; drag over a line of text, press Ctrl+C and paste into
+  another application; click an internal link; click a web link, answer
+  «Cancelar», click it again and answer «Abrir»
+- **Pass condition:** the hits are marked and the current one stands out in
+  the selection colour, comes into view and the counter reads «n de N»;
+  Escape closes the card; the outline shows the document's bookmarks
+  indented and each one goes to its place; the pasted text is the selected
+  text; the internal link goes to its page; the web link opens nothing until
+  «Abrir», then opens in the default browser
+- **Result:** not run
+- **Evidence:** none
+
+CAL-1-C adds the reading mode with Calcita as the `application/pdf` handler.

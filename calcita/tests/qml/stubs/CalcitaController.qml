@@ -17,6 +17,9 @@ QtObject {
     property var recents: []
     property var recentNames: []
     property var remembered: ({})
+    // What `copySelection` and `openExternal` were given, for the tests.
+    property string clipboard: ""
+    property var openedLinks: []
 
     signal openDocument(string key)
     signal raiseDocument(string key)
@@ -27,6 +30,8 @@ QtObject {
         recents = []
         recentNames = []
         remembered = ({})
+        clipboard = ""
+        openedLinks = []
     }
 
     function admit(key) {
@@ -72,5 +77,17 @@ QtObject {
 
     function restoredZoom(key) {
         return remembered[key] !== undefined ? remembered[key].zoom : "width"
+    }
+
+    function copySelection(text) {
+        if (text.length > 0)
+            clipboard = text
+    }
+
+    function openExternal(url, origin) {
+        if (/^(https?|mailto):/i.test(url))
+            openedLinks = openedLinks.concat([url])
+        else
+            notice("error", "Calcita solo abre enlaces web y de correo.", origin)
     }
 }

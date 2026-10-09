@@ -1,0 +1,79 @@
+# CAL-1-B exact change inventory
+
+Base revision	bc9b04326018b6a8b9ffbfcaabcca623f79140e2
+Pathspec	calcita/AGENTS.md
+Pathspec	calcita/Cargo.lock
+Pathspec	calcita/Cargo.toml
+Pathspec	calcita/README.md
+Pathspec	calcita/ROADMAP.md
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/VALIDATION.md
+Pathspec	calcita/build.rs
+Pathspec	calcita/cpp/calcita/clipboard.h
+Pathspec	calcita/cpp/clipboard.cpp
+Pathspec	calcita/docs/evidence/2026-10-09-search-outline-links.md
+Pathspec	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-B.numstat.tsv
+Pathspec	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+Pathspec	calcita/qml/DocumentWindow.qml
+Pathspec	calcita/qml/OutlinePanel.qml
+Pathspec	calcita/qml/SearchCard.qml
+Pathspec	calcita/qml/components/DocumentBar.qml
+Pathspec	calcita/qml/components/LinkPill.qml
+Pathspec	calcita/qml/components/PageView.qml
+Pathspec	calcita/scripts/make-fixture-pdf.py
+Pathspec	calcita/src/controller.rs
+Pathspec	calcita/src/document.rs
+Pathspec	calcita/tests/fixtures/many-pages.pdf
+Pathspec	calcita/tests/fixtures/outline.pdf
+Pathspec	calcita/tests/qml/stubs/CalcitaController.qml
+Pathspec	calcita/tests/qml/stubs/CalcitaDocument.qml
+Pathspec	calcita/tests/qml/tst_document.qml
+Pathspec	calcita/tests/qml/tst_keyboard.qml
+Pathspec	calcita/tests/qml/tst_long.qml
+Pathspec	calcita/tests/qml/tst_outline.qml
+Pathspec	calcita/tests/qml/tst_search.qml
+Pathspec	celestina-rs/crates/calcita-core/Cargo.toml
+Pathspec	celestina-rs/crates/calcita-core/src/lib.rs
+Pathspec	celestina-rs/crates/calcita-core/src/search.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/search.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	3	80aea88b1c9e6915d19293e95a578bc232a94bcb26643afa5780f7158e5d00a6	calcita/AGENTS.md
+1	1	a9c0019a07107cf4cbef24fd6b63c041b5794355ff7d86976f9bbb5f4e8fa7c3	calcita/Cargo.lock
+1	1	579b6a9c5fc152ad114171427a327ae305b154c38ca68dde4a50fc4f63360249	calcita/Cargo.toml
+12	5	c8acad2d89074ecbead52d6f4b4e5ee952221bb99781c027c3e9a05b921cc785	calcita/README.md
+2	2	b87263fd79fc84713411d22e9bf9a6f07690193bbabcd8684185d54dceb48820	calcita/ROADMAP.md
+18	4	56cd3c65646f249bd72415f143509a6265d8038d10cdbbb98092935b0f0d2d81	calcita/STATUS.md
+22	2	366b1ce13cc6e4fde16a0f467c0003db3b483aded078a2e25644af8aa1b61af4	calcita/VALIDATION.md
+20	3	3fe0636326052bb616e9efe7c35d7e03fe1210a92225c51034a973bb006a9245	calcita/build.rs
+7	0	b15fe85ded71ab6100e55cb8f51c698c44bb2c07aba88a832aa489ae65288e7c	calcita/cpp/calcita/clipboard.h
+13	0	c9702884640d8b30d150533493946bc268a78c7df0faab16d4dcc162c6137095	calcita/cpp/clipboard.cpp
+180	0	478028b8bbd2d2ffbdb5b4dc4fefb04ad1c191c1cb06aac41ab0616b6be3ba40	calcita/docs/evidence/2026-10-09-search-outline-links.md
+79	0	self	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-B.numstat.tsv
+1	1	31879212dbdd733db2823675668d41d201ba61be4712e143d8373e3b0e920474	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+150	47	3b7512940044125053a9d2125b2491949026572e2f175e2f3ef46637f2210f5a	calcita/qml/DocumentWindow.qml
+151	0	4bf293e0d92413e590cd8631818ffef0d3d5ef8f0b6391cae6c80b7230588507	calcita/qml/OutlinePanel.qml
+134	0	1f886f828d0e3b30af6a913e7e211dbb0e7049a1ba3848b7d7330b3ead01f6d1	calcita/qml/SearchCard.qml
+23	1	98a90e2c0681f41fc882363b23bbe6b12b1ee205a9116de52a4b6c3f7ebfe4ff	calcita/qml/components/DocumentBar.qml
+100	0	683d647cb4ed85c2b7b711ec00bf38713bc3c9adcd33ecb6a0c2b408287b45a8	calcita/qml/components/LinkPill.qml
+439	0	1c37ac35a540cd82d6146536cbf015bcd5286b3d91c591a811037a7bb4fe9ca3	calcita/qml/components/PageView.qml
+58	9	eed6f5e253f988e7b62aed538a2900310d64843a7aacda66cd52697190ceea6a	calcita/scripts/make-fixture-pdf.py
+128	1	03bb724b79ea181cb16a04f8f5f06d4ad0a565a51020be19d86fafd74095f03e	calcita/src/controller.rs
+47	1	d49e4be9bee815c2ecc4ee94f5202efc88dc2a42843a3ee182836f18d74fdf77	calcita/src/document.rs
+1217	0	5d53c0f6bcb1194e59e082a6013d161b03c4dc551c4cdf8d30f9ffb6a1d86018	calcita/tests/fixtures/many-pages.pdf
+76	0	2b9c4478a09d1dd16e2fc43d7c20bf377cd4d0f8e5dd6d32c4171ff103b3e937	calcita/tests/fixtures/outline.pdf
+17	0	e2cd8801fcf88a3c819bbc13bbccf92cb3742ad706cf40455b5e82d661c3353d	calcita/tests/qml/stubs/CalcitaController.qml
+16	2	d22e826a880326ebb7c0fdf496e09ee8b985face8b5d1a447e117af687b2e295	calcita/tests/qml/stubs/CalcitaDocument.qml
+21	17	bd8dbe0c377aa24c11b12ec4ee4c69b94a68182c296ece96fe69e2f25592d3ae	calcita/tests/qml/tst_document.qml
+2	2	fd8ffb470d3ca944d7036746c45965272255bb0f090674942949fbe540650952	calcita/tests/qml/tst_keyboard.qml
+101	0	ce70104437e7e94cbeed69c08c1b0ed7ff067fdcdaa768c2b9b17a4709c7adbd	calcita/tests/qml/tst_long.qml
+180	0	aae0fb49b9af85c08fded932041154753343c9d79421deadcba38c526c822373	calcita/tests/qml/tst_outline.qml
+186	0	c3a441e3d8ae58b38422d72a17f88dad1d608a902d864757b6c5bce9abe34ac3	calcita/tests/qml/tst_search.qml
+1	1	06aa45e6f0f2ca61cc875830978f73d93e4cf4f270a8d6d627acb51b746fe08c	celestina-rs/crates/calcita-core/Cargo.toml
+3	1	0cee2b15facf7c9db38e9fd8a9b200a238f7eca3b33bff969b11e40d5b797f37	celestina-rs/crates/calcita-core/src/lib.rs
+71	0	5a89b225fd189c43a5563d22f1edbd80ee73441c46ad0c473313c9761db12980	celestina-rs/crates/calcita-core/src/search.rs
+47	0	f086d717fba784fd749046470e8dd224bceac567d7c66a124a9155968e27309b	celestina-rs/crates/calcita-core/tests/search.rs
+1	0	07baa82f27a0dd04e3aa17488d3b53d8cc62e927f6f128e545bcb8b6bc7e5f26	docs/version-history.tsv

@@ -18,11 +18,14 @@ Calcita's constraints; it cannot relax the root or grant authority.
 ## Local boundary
 
 - `celestina-rs/crates/calcita-core` is the only owner of the domain: recent
-  documents, the zoom ladder, reading positions and the page field's grammar.
+  documents, the zoom ladder, reading positions, the page field's grammar
+  and the order a search walks its hits in.
   It has no Qt.
-- `src/` owns the Qt adaptation: the controller (open documents, recents),
+- `src/` owns the Qt adaptation: the controller (open documents, recents,
+  the clipboard and `xdg-open` for a confirmed external link),
   the per-window `CalcitaDocument`, the activation adapter and the
-  appearance follower. `qml/` presents. QtPdf renders from QML; the
+  appearance follower; `cpp/` holds the one-function clipboard shim
+  cxx-qt-lib lacks. `qml/` presents. QtPdf renders from QML; the
   controller never touches page rendering, and QML never decides what a path
   or a recent entry means.
 - One document per window. Activation goes through

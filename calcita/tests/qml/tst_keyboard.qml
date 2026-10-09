@@ -127,10 +127,10 @@ TestCase {
         keyClick(Qt.Key_G, Qt.ControlModifier)
         const field = findNamed(window.contentItem, "pageField")
         tryVerify(() => field.activeFocus)
-        const before = window.pageFlick.contentY
+        const before = window.view.contentY
         keyClick(Qt.Key_Space)
         compare(window.reader.page, 1)
-        compare(window.pageFlick.contentY, before)
+        compare(window.view.contentY, before)
         compare(field.text, " ")
     }
 }

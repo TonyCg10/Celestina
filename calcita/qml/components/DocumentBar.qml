@@ -3,7 +3,7 @@ import org.celestina.calcita 1.0
 
 // The bar over the pages, a glass pill: the document's name, the page field
 // «n / N» (type a page, +n, -n, «inicio» or «fin» and press Enter), the zoom
-// controls and «Abrir…». It only reports what the person asked; the window
+// controls, the search and outline toggles and «Abrir…». It only reports what the person asked; the window
 // hands each request to its `CalcitaDocument`.
 Item {
     id: bar
@@ -13,6 +13,8 @@ Item {
     property int pageCount: 0
     property string zoomMode: "fitWidth"
     property real zoomFactor: 1
+    property bool searchOpen: false
+    property bool outlineOpen: false
 
     signal goToRequested(string text)
     signal zoomInRequested()
@@ -20,6 +22,8 @@ Item {
     signal fitWidthRequested()
     signal fitPageRequested()
     signal openRequested()
+    signal searchToggled()
+    signal outlineToggled()
     // Enter or Escape in the page field: focus goes back to the pages.
     signal fieldDone()
 
@@ -139,6 +143,24 @@ Item {
             text: qsTr("Página")
             helpText: qsTr("Ajustar a la página")
             onClicked: bar.fitPageRequested()
+        }
+
+        CelestinaIconButton {
+            objectName: "searchButton"
+            anchors.verticalCenter: parent.verticalCenter
+            role: bar.searchOpen ? CelestinaButton.Selected : CelestinaButton.Ghost
+            iconName: "search"
+            helpText: qsTr("Buscar")
+            onClicked: bar.searchToggled()
+        }
+
+        CelestinaIconButton {
+            objectName: "outlineButton"
+            anchors.verticalCenter: parent.verticalCenter
+            role: bar.outlineOpen ? CelestinaButton.Selected : CelestinaButton.Ghost
+            iconName: "view-list"
+            helpText: qsTr("Índice")
+            onClicked: bar.outlineToggled()
         }
 
         CelestinaIconButton {

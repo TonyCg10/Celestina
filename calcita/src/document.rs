@@ -5,6 +5,7 @@
 use std::pin::Pin;
 
 use calcita_core::pagelabel::GoTo;
+use calcita_core::search::{self, Direction, SearchRequest};
 use calcita_core::zoom::{self, ZoomMode};
 use celestina_core::{file_uri, pathkey};
 use cxx_qt::CxxQtType;
@@ -86,6 +87,16 @@ pub mod qobject {
         /// The view's scale after fitting, so zooming continues from it.
         #[qinvokable]
         fn report_scale(self: Pin<&mut CalcitaDocument>, factor: f64);
+
+        /// What QtPdf searches for when the search field reads `text`: the
+        /// text trimmed, or empty for no search.
+        #[qinvokable]
+        fn search_query(self: &CalcitaDocument, text: &QString) -> QString;
+
+        /// The hit (0-based) a step from `current` (-1 for none) lands on
+        /// among `count` hits, going round the ends; -1 when there are none.
+        #[qinvokable]
+        fn next_hit(self: &CalcitaDocument, current: i32, count: i32, forward: bool) -> i32;
     }
 }
 
@@ -270,9 +281,35 @@ impl qobject::CalcitaDocument {
     }
 }
 
+/// The hit a step lands on, in the property's `i32` terms (-1 for none).
+fn step_hit(current: i32, count: i32, forward: bool) -> i32 {
+    let direction = if forward {
+        Direction::Forward
+    } else {
+        Direction::Backward
+    };
+    let current = usize::try_from(current).ok();
+    let count = usize::try_from(count).unwrap_or(0);
+    search::next_hit(current, count, direction, true)
+        .and_then(|hit| i32::try_from(hit).ok())
+        .unwrap_or(-1)
+}
+
+impl qobject::CalcitaDocument {
+    pub fn search_query(&self, text: &QString) -> QString {
+        SearchRequest::new(&text.to_string())
+            .map(|request| QString::from(request.query.as_str()))
+            .unwrap_or_default()
+    }
+
+    pub fn next_hit(&self, current: i32, count: i32, forward: bool) -> i32 {
+        step_hit(current, count, forward)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{accepts_scale, mode_name, zoom_word_for};
+    use super::{accepts_scale, mode_name, step_hit, zoom_word_for};
     use calcita_core::zoom::ZoomMode;
 
     #[test]
@@ -308,5 +345,14 @@ mod tests {
         assert!(!accepts_scale(1.0, 1.0));
         assert!(!accepts_scale(1.0, 0.0));
         assert!(!accepts_scale(1.0, f64::NAN));
+    }
+
+    #[test]
+    fn a_step_speaks_the_properties_terms() {
+        assert_eq!(step_hit(-1, 3, true), 0);
+        assert_eq!(step_hit(-1, 3, false), 2);
+        assert_eq!(step_hit(2, 3, true), 0);
+        assert_eq!(step_hit(0, 0, true), -1);
+        assert_eq!(step_hit(5, -1, false), -1);
     }
 }

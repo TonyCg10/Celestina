@@ -38,10 +38,14 @@ const QML_FILES: &[&str] = &[
     "qml/components/ActivationRoute.qml",
     "qml/components/DocumentBar.qml",
     "qml/components/EmptyState.qml",
+    "qml/components/LinkPill.qml",
     "qml/components/NoticePill.qml",
+    "qml/components/PageView.qml",
     "qml/components/WindowChrome.qml",
     "qml/DocumentWindow.qml",
     "qml/Main.qml",
+    "qml/OutlinePanel.qml",
+    "qml/SearchCard.qml",
 ];
 
 fn main() {
@@ -75,11 +79,24 @@ fn main() {
     {
         println!("cargo::rerun-if-changed={input}");
     }
+    println!("cargo::rerun-if-changed=cpp/clipboard.cpp");
+    println!("cargo::rerun-if-changed=cpp/calcita/clipboard.h");
 
-    CxxQtBuilder::new_qml_module(module)
+    let builder = CxxQtBuilder::new_qml_module(module)
         // The shared icons and Inter Variable, compiled in.
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
-        .files(["src/activation.rs", "src/controller.rs", "src/document.rs"])
-        .build();
+        // «Copiar» puts the selected text on the clipboard: cxx-qt-lib has no
+        // QClipboard, so a one-function shim under cpp/ does it on the Qt
+        // thread.
+        .cpp_file("cpp/clipboard.cpp")
+        .files(["src/activation.rs", "src/controller.rs", "src/document.rs"]);
+    // SAFETY: only adds the shim's include directory, so the generated bridge
+    // and clipboard.cpp both resolve "calcita/clipboard.h".
+    let builder = unsafe {
+        builder.cc_builder(|cc| {
+            cc.include("cpp");
+        })
+    };
+    builder.build();
 }

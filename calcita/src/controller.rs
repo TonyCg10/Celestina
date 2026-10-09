@@ -30,6 +30,11 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+
+        // The hand-written clipboard shim (see cpp/clipboard.cpp).
+        include!("calcita/clipboard.h");
+        #[rust_name = "set_clipboard_text"]
+        fn calcita_set_clipboard_text(text: &QString);
     }
 
     #[auto_cxx_name]
@@ -95,6 +100,15 @@ pub mod qobject {
         /// The zoom word `key` was left at (`width`, `page`, `free:<f>`).
         #[qinvokable]
         fn restored_zoom(self: &CalcitaController, key: &QString) -> QString;
+
+        /// Puts `text`, the selection of a page, on the clipboard.
+        #[qinvokable]
+        fn copy_selection(self: &CalcitaController, text: &QString);
+
+        /// Opens an external link the person confirmed, asked by `origin`;
+        /// only web and mail links go to `xdg-open`.
+        #[qinvokable]
+        fn open_external(self: Pin<&mut CalcitaController>, url: &QString, origin: &QString);
     }
 
     impl cxx_qt::Threading for CalcitaController {}
@@ -233,6 +247,44 @@ pub fn display_name(path: &Path) -> String {
     path.file_name()
         .map_or_else(|| path.to_string_lossy(), |name| name.to_string_lossy())
         .into_owned()
+}
+
+/// Why an external link did not open.
+#[derive(Debug, PartialEq)]
+pub enum LinkError {
+    /// Not a web (`http`, `https`) or mail (`mailto`) link with something
+    /// after the scheme: a `file:` or a `javascript:` link from a document is
+    /// never run.
+    NotWebOrMail,
+    /// `xdg-open` could not be started.
+    LaunchFailed,
+}
+
+impl LinkError {
+    pub fn message_es(&self) -> &'static str {
+        match self {
+            Self::NotWebOrMail => "Calcita solo abre enlaces web y de correo.",
+            Self::LaunchFailed => "No se pudo abrir el enlace.",
+        }
+    }
+}
+
+/// The link `url` is when Calcita may hand it to `xdg-open`: a web or mail
+/// link with something after the scheme and no blank or control character
+/// in it.
+pub fn external_target(url: &str) -> Result<&str, LinkError> {
+    let allowed = url.split_once(':').is_some_and(|(scheme, rest)| {
+        let known = ["http", "https", "mailto"]
+            .iter()
+            .any(|known| scheme.eq_ignore_ascii_case(known));
+        known && !rest.trim_start_matches('/').is_empty()
+    });
+    let clean = !url.chars().any(|c| c.is_whitespace() || c.is_control());
+    if allowed && clean {
+        Ok(url)
+    } else {
+        Err(LinkError::NotWebOrMail)
+    }
 }
 
 impl qobject::CalcitaController {
@@ -387,11 +439,59 @@ impl qobject::CalcitaController {
     pub fn restored_zoom(&self, key: &QString) -> QString {
         QString::from(self.reading_for(key).zoom.to_word().as_str())
     }
+
+    pub fn copy_selection(&self, text: &QString) {
+        if !text.is_empty() {
+            qobject::set_clipboard_text(text);
+        }
+    }
+
+    pub fn open_external(self: Pin<&mut Self>, url: &QString, origin: &QString) {
+        let url = url.to_string();
+        let target = match external_target(&url) {
+            Ok(target) => target.to_owned(),
+            Err(refusal) => {
+                self.notice(
+                    QString::from("error"),
+                    QString::from(refusal.message_es()),
+                    origin.clone(),
+                );
+                return;
+            }
+        };
+        // Starting `xdg-open` forks and execs, so it happens on a worker,
+        // which also waits for it so no zombie is left per link.
+        let qt = self.qt_thread();
+        let origin = origin.to_string();
+        let spawned = std::thread::Builder::new()
+            .name("calcita-link".to_owned())
+            .spawn(
+                move || match std::process::Command::new("xdg-open").arg(&target).spawn() {
+                    Ok(mut child) => {
+                        let _ = child.wait();
+                    }
+                    Err(error) => {
+                        eprintln!("calcita: xdg-open: {error}");
+                        let _ =
+                            qt.queue(move |controller: Pin<&mut qobject::CalcitaController>| {
+                                controller.notice(
+                                    QString::from("error"),
+                                    QString::from(LinkError::LaunchFailed.message_es()),
+                                    QString::from(origin.as_str()),
+                                );
+                            });
+                    }
+                },
+            );
+        if let Err(error) = spawned {
+            eprintln!("calcita: the link worker did not start: {error}");
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{admit, display_name, Refusal, Request};
+    use super::{admit, display_name, external_target, LinkError, Refusal, Request};
     use std::path::{Path, PathBuf};
 
     fn no_dir(_: &Path) -> bool {
@@ -432,5 +532,32 @@ mod tests {
     #[test]
     fn the_name_is_the_last_component() {
         assert_eq!(display_name(Path::new("/tmp/informe.pdf")), "informe.pdf");
+    }
+
+    #[test]
+    fn only_web_and_mail_links_go_out() {
+        assert_eq!(
+            external_target("https://example.org/guide"),
+            Ok("https://example.org/guide")
+        );
+        assert!(external_target("HTTP://example.org").is_ok());
+        assert!(external_target("mailto:autora@example.org").is_ok());
+        for refused in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "example.org",
+            "https://example.org/a b",
+            "https://example.org/\n",
+            "https:",
+            "https://",
+            "mailto:",
+            "",
+        ] {
+            assert_eq!(
+                external_target(refused),
+                Err(LinkError::NotWebOrMail),
+                "{refused}"
+            );
+        }
     }
 }

@@ -4,10 +4,13 @@ import QtQuick.Pdf
 import org.celestina.calcita 1.0
 import "components"
 
-// One document's window: the bar over a continuous page view. QtPdf loads and
-// draws the pages; the window's `CalcitaDocument` decides what the page field
-// and the zoom controls mean, and the controller keeps the recents. A drop of
-// `text/uri-list` opens each PDF in a window of its own.
+// One document's window: the bar over a continuous page view, the search card
+// under the bar, the outline card at the side and the confirmation an
+// external link needs. QtPdf loads, draws, searches and selects; the window's
+// `CalcitaDocument` decides what the page field, the zoom controls and a step
+// through the hits mean, and the controller keeps the recents, the clipboard
+// and `xdg-open`. A drop of `text/uri-list` opens each PDF in a window of its
+// own.
 ApplicationWindow {
     id: documentWindow
 
@@ -33,6 +36,11 @@ ApplicationWindow {
     readonly property alias view: pageView
     readonly property alias bar: documentBar
     readonly property alias chrome: chrome
+    readonly property alias search: searchCard
+    readonly property alias outline: outlinePanel
+    readonly property alias linkPill: linkConfirm
+    property bool searchOpen: false
+    property bool outlineOpen: false
     // This is the window `Activate` raises and that shows the notices no
     // window asked for; the owner sets it.
     property bool front: false
@@ -72,46 +80,60 @@ ApplicationWindow {
             readerState.goTo("-1")
     }
 
-    // QtPdf's view moves its current page only when a jump or the scroll
-    // bar ends; the page field follows every scroll instead, through the
-    // view's own Flickable, found once the view is built.
-    property Flickable pageFlick: null
-
-    function findFlick(node) {
-        if (node instanceof Flickable)
-            return node
-        const kids = node.children
-        let found = null
-        let i = 0
-        while (found === null && i < kids.length) {
-            found = documentWindow.findFlick(kids[i])
-            i += 1
-        }
-        return found
+    // The 1-based page under a line a third down the view, or the last page
+    // once the view has reached the end.
+    function pageAtScroll() {
+        const count = pageView.count
+        if (count < 1)
+            return 0
+        if (pageView.contentY >= pageView.originY + pageView.contentHeight - pageView.height - 1)
+            return count
+        const page = pageView.pageAt(pageView.contentY + pageView.height / 3)
+        return page >= 0 ? page + 1 : 0
     }
 
-    // The 1-based page under a line a third down the view, or the last page
-    // once the view has reached the end. QtPdf's view stacks the pages with
-    // its `rowSpacing`, `pageGap` logical pixels whatever the scale.
-    readonly property int pageGap: 6
+    function openSearch() {
+        documentWindow.searchOpen = true
+        searchCard.focusField()
+    }
 
-    function pageAtScroll() {
-        const flick = documentWindow.pageFlick
-        const count = documentWindow.pdf.pageCount
-        if (flick === null || count < 1)
-            return 0
-        if (flick.contentY >= flick.contentHeight - flick.height - 1)
-            return count
-        const line = flick.contentY + flick.height / 3
-        let top = 0
-        let page = 0
-        while (page < count - 1) {
-            top += documentWindow.pdf.pagePointSize(page).height * pageView.renderScale + documentWindow.pageGap
-            if (top > line)
-                break
-            page += 1
-        }
-        return page + 1
+    function closeSearch() {
+        documentWindow.searchOpen = false
+        searchCard.reset()
+        pageView.searchModel.searchString = ""
+        documentWindow.focusPages()
+    }
+
+    // Enter, F3 and the next button (`forward`), or their Shift forms.
+    function stepHit(forward) {
+        const hits = pageView.searchModel
+        if (hits.count < 1)
+            return
+        pageView.showHit(readerState.nextHit(hits.currentResult, hits.count, forward))
+    }
+
+    function toggleOutline() {
+        documentWindow.outlineOpen = !documentWindow.outlineOpen
+        if (documentWindow.outlineOpen)
+            outlinePanel.focusTree()
+        else
+            documentWindow.focusPages()
+    }
+
+    // Escape answers a waiting link with «Cancelar» first, then closes the
+    // search card, then the outline.
+    function closeTopCard() {
+        if (linkConfirm.asking)
+            linkConfirm.cancel()
+        else if (documentWindow.searchOpen)
+            documentWindow.closeSearch()
+        else if (documentWindow.outlineOpen)
+            documentWindow.toggleOutline()
+    }
+
+    function copySelection() {
+        if (pageView.selectedText.length > 0)
+            CalcitaController.copySelection(pageView.selectedText)
     }
 
     function focusPages() {
@@ -180,14 +202,16 @@ ApplicationWindow {
         }
     }
 
-    PdfMultiPageView {
+    PageView {
         id: pageView
-        objectName: "pageView"
         anchors.fill: parent
         anchors.topMargin: documentBar.height + CelestinaTheme.spaceMd * 2
+        anchors.leftMargin: documentWindow.outlineOpen
+                            ? outlinePanel.width + CelestinaTheme.spaceMd * 2 : 0
         document: documentWindow.pdf
         focus: true
-        Component.onCompleted: documentWindow.pageFlick = documentWindow.findFlick(pageView)
+        onExternalLinkRequested: url => linkConfirm.ask(url)
+        onContentYChanged: readerState.reportPage(documentWindow.pageAtScroll())
         onWidthChanged: {
             if (readerState.zoomMode !== "free")
                 documentWindow.applyZoom()
@@ -198,10 +222,54 @@ ApplicationWindow {
         }
     }
 
-    Connections {
-        target: documentWindow.pageFlick
-        function onContentYChanged() {
-            readerState.reportPage(documentWindow.pageAtScroll())
+    CelestinaScrollBar {
+        surface: pageView
+        anchors.right: pageView.right
+        anchors.top: pageView.top
+        anchors.bottom: pageView.bottom
+    }
+
+    OutlinePanel {
+        id: outlinePanel
+        visible: documentWindow.outlineOpen
+        anchors.left: parent.left
+        anchors.leftMargin: CelestinaTheme.spaceMd
+        anchors.top: pageView.top
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: CelestinaTheme.spaceMd
+        width: 260
+        document: documentWindow.pdf
+        onBookmarkChosen: (page, location) => {
+            pageView.goToLocation(page, location)
+            readerState.reportPage(page + 1)
+        }
+        onCloseRequested: documentWindow.toggleOutline()
+    }
+
+    SearchCard {
+        id: searchCard
+        visible: documentWindow.searchOpen
+        anchors.top: documentBar.bottom
+        anchors.topMargin: CelestinaTheme.spaceSm
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width - CelestinaTheme.windowMargin * 2, implicitWidth)
+        hitCount: pageView.searchModel.count
+        currentHit: pageView.searchModel.currentResult
+        searching: pageView.searchModel.searchString.length > 0
+        onQueryEdited: text => pageView.searchModel.searchString = readerState.searchQuery(text)
+        onNextRequested: documentWindow.stepHit(true)
+        onPreviousRequested: documentWindow.stepHit(false)
+        onCloseRequested: documentWindow.closeSearch()
+    }
+
+    LinkPill {
+        id: linkConfirm
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: CelestinaTheme.spaceXl
+        anchors.horizontalCenter: parent.horizontalCenter
+        onConfirmed: url => {
+            CalcitaController.openExternal(url, documentWindow.documentKey)
+            documentWindow.focusPages()
         }
     }
 
@@ -241,7 +309,16 @@ ApplicationWindow {
         onZoomOutRequested: readerState.zoomOut()
         onFitWidthRequested: readerState.fitWidth()
         onFitPageRequested: readerState.fitPage()
+        searchOpen: documentWindow.searchOpen
+        outlineOpen: documentWindow.outlineOpen
         onOpenRequested: documentWindow.openRequested()
+        onSearchToggled: {
+            if (documentWindow.searchOpen)
+                documentWindow.closeSearch()
+            else
+                documentWindow.openSearch()
+        }
+        onOutlineToggled: documentWindow.toggleOutline()
         onFieldDone: documentWindow.focusPages()
     }
 
@@ -305,5 +382,31 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+2"
         onActivated: readerState.fitPage()
+    }
+    Shortcut {
+        sequences: [StandardKey.Find]
+        onActivated: documentWindow.openSearch()
+    }
+    Shortcut {
+        sequence: "F3"
+        onActivated: documentWindow.stepHit(true)
+    }
+    Shortcut {
+        sequence: "Shift+F3"
+        onActivated: documentWindow.stepHit(false)
+    }
+    // The outline, F9 as in other readers' side pane.
+    Shortcut {
+        sequence: "F9"
+        onActivated: documentWindow.toggleOutline()
+    }
+    Shortcut {
+        sequences: [StandardKey.Copy]
+        onActivated: documentWindow.copySelection()
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: linkConfirm.asking || documentWindow.searchOpen || documentWindow.outlineOpen
+        onActivated: documentWindow.closeTopCard()
     }
 }

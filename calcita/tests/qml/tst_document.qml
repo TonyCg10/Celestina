@@ -38,20 +38,6 @@ TestCase {
         return found
     }
 
-    // The Flickable inside QtPdf's view, which a wheel or a drag moves.
-    function findFlickable(node) {
-        if (node.contentY !== undefined && node.rowSpacing !== undefined)
-            return node
-        const kids = node.children !== undefined ? node.children : []
-        let found = null
-        let i = 0
-        while (found === null && i < kids.length) {
-            found = findFlickable(kids[i])
-            i += 1
-        }
-        return found
-    }
-
     function init() {
         CalcitaController.reset()
     }
@@ -132,11 +118,29 @@ TestCase {
     function test_the_page_field_follows_a_scroll() {
         const window = openFixture()
         window.reader.setZoom(1)
-        const flickable = findFlickable(window.view)
-        verify(flickable, "the view's flickable")
-        flickable.contentY = 842 + 100
+        window.view.contentY = window.view.originY + 842 + 100
         tryCompare(window.reader, "page", 2)
         tryCompare(findNamed(window.contentItem, "pageField"), "text", "2 / 3")
+    }
+
+    function test_a_zoom_after_a_scroll_keeps_the_page() {
+        const window = openFixture()
+        window.reader.setZoom(1)
+        window.view.contentY = 842 + 100
+        tryCompare(window.view, "currentPage", 1)
+        window.reader.setZoom(1.5)
+        // The top of the view stays 100 pt into page 2.
+        tryCompare(window.view, "contentY", 842 * 1.5 + 6 + 94 * 1.5, 2000)
+        compare(window.reader.page, 2)
+    }
+
+    function test_a_zoom_keeps_the_place_on_the_first_page() {
+        const window = openFixture()
+        window.reader.setZoom(1)
+        window.view.contentY = 400
+        window.reader.setZoom(1.5)
+        compare(window.view.contentY, 600)
+        compare(window.reader.page, 1)
     }
 
     function test_the_page_field_takes_a_page() {

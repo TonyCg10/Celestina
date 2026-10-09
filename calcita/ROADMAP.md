@@ -2,7 +2,7 @@
 
 - **Status:** active
 - **Active implementation checkpoint:** CAL-1
-- **Related author validation:** VAL-CAL-OPEN pending; the CAL-1 units add
+- **Related author validation:** VAL-CAL-OPEN and VAL-CAL-SEARCH pending; the CAL-1 units add
   their entries to [VALIDATION.md](VALIDATION.md) (they do not block)
 
 ## Hypothesis and tangible outcome
@@ -29,7 +29,7 @@ a second launch, with the reading tools a person reaches for every day.
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
 | CAL-1-A | active | EXT-1-A | open, pages, zoom, navigation, drop and activation | [evidence](docs/evidence/2026-10-09-open-and-pages.md) |
-| CAL-1-B | planned | CAL-1-A | search, outline, selection, links | `scripts/verify-production.sh` |
+| CAL-1-B | active | CAL-1-A | search, outline, selection and copy, links | [evidence](docs/evidence/2026-10-09-search-outline-links.md) |
 | CAL-1-C | planned | CAL-1-B | reading mode, recents, handler entry, 1.0.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit

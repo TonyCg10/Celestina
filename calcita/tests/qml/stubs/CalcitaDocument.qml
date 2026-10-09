@@ -2,8 +2,8 @@
 import QtQuick
 
 // Stands in for the Rust `CalcitaDocument` under qmltestrunner: the same
-// properties, signals and invokables, with the page grammar and the zoom
-// ladder of `calcita-core` written out again in JavaScript.
+// properties, signals and invokables, with the page grammar, the zoom
+// ladder and the hit order of `calcita-core` written out again in JavaScript.
 QtObject {
     id: reader
 
@@ -90,6 +90,20 @@ QtObject {
     function reportPage(value) {
         if (value >= 1 && value <= pageCount)
             page = value
+    }
+
+    function searchQuery(text) {
+        return text.trim()
+    }
+
+    function nextHit(current, count, forward) {
+        if (count < 1)
+            return -1
+        if (current < 0 || current >= count)
+            return forward ? 0 : count - 1
+        if (forward)
+            return current === count - 1 ? 0 : current + 1
+        return current === 0 ? count - 1 : current - 1
     }
 
     function reportScale(factor) {

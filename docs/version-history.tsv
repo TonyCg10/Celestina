@@ -241,3 +241,4 @@ cuprita	1.1.0	milestone	CUP-1-I	Add the appearance section with reduced motion a
 celestina-style	1.13.2	bug	STYLE-G7-AC	Fix the segmented control's unqualified accesses under qmllint: bind its segment component (`pragma ComponentBehavior: Bound`) so the delegate's `control` and `row` references no longer count as five unqualified accesses in every application that registers it (Cuprita's `CUP-1-I` copied the control as `ScaleChoice.qml` to keep its ratchet at 9); API and tokens unchanged
 calcita	0.1.0	baseline	EXT-1-A	Adopt the Calcita Cargo version as the verified baseline
 calcita	0.2.0	milestone	CAL-1-A	Add opening, continuous pages, zoom and navigation
+calcita	0.3.0	milestone	CAL-1-B	Add search, the outline, text copy and links
