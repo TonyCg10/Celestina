@@ -1,6 +1,7 @@
 mod activation;
 mod appearance;
 mod controller;
+mod document;
 
 use std::path::PathBuf;
 

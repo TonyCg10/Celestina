@@ -58,6 +58,6 @@ reads a PDF with every tool of the scope.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
-| CAL-1-A | `calcita:` | planned | `calcita/`, `celestina-rs/crates/calcita-core/` | — | Open a document with its pages, zoom and navigation; the drop and `Open` reach it | `scripts/verify-production.sh` | VAL-CAL-OPEN |
+| CAL-1-A | `calcita:` | done | [inventory](../../inventories/2026-10-09-cal-1-foundation/CAL-1-A.numstat.tsv) | 43 files, +3385/-108 | Open a document with its pages, zoom and navigation; the drop and `Open` reach it (deferred: the page view keeps QtPdf's own scroll bar, not the suite's scroller) | [evidence](../../evidence/2026-10-09-open-and-pages.md) | VAL-CAL-OPEN |
 | CAL-1-B | `calcita:` | planned | `calcita/src/`, `calcita/qml/` | — | Search with the hits marked, the outline, text selection and copy, links | `scripts/verify-production.sh` | None yet |
 | CAL-1-C | `calcita:` | planned | `calcita/`, `docs/version-history.tsv` | — | Reading mode, recents, the `application/pdf` entry, 1.0.0, plan archived | `scripts/complete-production.sh` | None yet |

@@ -36,7 +36,11 @@ const QML_FILES: &[&str] = &[
     // Calcita's own composition: Main owns the window, each component one
     // region.
     "qml/components/ActivationRoute.qml",
+    "qml/components/DocumentBar.qml",
     "qml/components/EmptyState.qml",
+    "qml/components/NoticePill.qml",
+    "qml/components/WindowChrome.qml",
+    "qml/DocumentWindow.qml",
     "qml/Main.qml",
 ];
 
@@ -46,6 +50,9 @@ fn main() {
     // alias and break type resolution at run time.
     let module = QmlModule::new("org.celestina.calcita")
         .version(1, 0)
+        // The page area is QtPdf's `PdfMultiPageView` over a `PdfDocument`;
+        // without the dependency qmllint cannot resolve them.
+        .depend("QtQuick.Pdf")
         .qml_file(
             QmlFile::from("qml/CelestinaTheme.qml")
                 .version(1, 0)
@@ -73,6 +80,6 @@ fn main() {
         // The shared icons and Inter Variable, compiled in.
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
-        .files(["src/activation.rs", "src/controller.rs"])
+        .files(["src/activation.rs", "src/controller.rs", "src/document.rs"])
         .build();
 }

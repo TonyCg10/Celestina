@@ -12,8 +12,9 @@ grammar instead of the web browser.
   a dark reading mode and the recent documents.
 - No annotation, signing, forms or printing.
 
-The features arrive in the CAL-1 units; the skeleton shows the empty state
-«Sin documento» with an «Abrir…» button that is wired in CAL-1-A. See the
+Opening, continuous pages, zoom, the page field, the drop, `Open` and the
+recents are in place (CAL-1-A); search, the outline, selection, links and
+the reading mode arrive in CAL-1-B and CAL-1-C. See the
 [design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
 
 ## Architecture
@@ -21,15 +22,16 @@ The features arrive in the CAL-1 units; the skeleton shows the empty state
 | Area | Responsibility |
 |---|---|
 | `../celestina-rs/crates/calcita-core` | Recents, zoom, reading positions, page input; no Qt |
-| `src/` | The CXX-Qt controller, the activation adapter, the appearance follower |
-| `qml/` | The window, the empty state and, from CAL-1-A, the page area over QtPdf |
+| `src/` | The CXX-Qt controller (open documents, recents), the per-window `CalcitaDocument`, the activation adapter, the appearance follower |
+| `qml/` | The empty window, one `DocumentWindow` per document with its bar over QtPdf's `PdfMultiPageView` |
+| `tests/` | QML tests over stand-ins and the three-page fixture (`scripts/make-fixture-pdf.py`) |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Calcita.desktop` | Desktop discovery |
 
 ## Build and use
 
 Calcita needs Rust and a Qt 6 development environment visible to CXX-Qt
-(QtPdf from CAL-1-A). The canonical production workflow is:
+(with QtPdf, the `QtQuick.Pdf` module). The canonical production workflow is:
 
 ```sh
 scripts/build-production.sh

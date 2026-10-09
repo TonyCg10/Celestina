@@ -6,3 +6,7 @@ description = "Calcita's domain: recent documents, zoom, reading positions and p
 license = "MIT"
 
 [dependencies]
+# The recent store's file goes through the suite's shared owners: `pathkey`
+# spells a path byte-exact in one text line, `atomic_file` replaces the store
+# privately and reads it bounded, `xdg` names the data home.
+celestina-core.workspace = true
