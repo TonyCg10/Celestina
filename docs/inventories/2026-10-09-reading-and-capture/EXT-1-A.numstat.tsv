@@ -1,0 +1,173 @@
+# EXT-1-A exact change inventory
+
+Base revision	47977b299aa6b6ce830858f1934a56cd36781b81
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	calcita/AGENTS.md
+Pathspec	calcita/Cargo.lock
+Pathspec	calcita/Cargo.toml
+Pathspec	calcita/README.md
+Pathspec	calcita/ROADMAP.md
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/VALIDATION.md
+Pathspec	calcita/build.rs
+Pathspec	calcita/docs/evidence/2026-10-09-skeleton.md
+Pathspec	calcita/docs/evidence/README.md
+Pathspec	calcita/docs/inventories/README.md
+Pathspec	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+Pathspec	calcita/docs/plans/active/README.md
+Pathspec	calcita/docs/plans/archive/README.md
+Pathspec	calcita/org.celestina.Calcita.desktop
+Pathspec	calcita/qml/CelestinaAppearance.qml
+Pathspec	calcita/qml/CelestinaBackdrop.qml
+Pathspec	calcita/qml/CelestinaButton.qml
+Pathspec	calcita/qml/CelestinaCapsule.qml
+Pathspec	calcita/qml/CelestinaFocusRing.qml
+Pathspec	calcita/qml/CelestinaIcon.qml
+Pathspec	calcita/qml/CelestinaIconButton.qml
+Pathspec	calcita/qml/CelestinaIcons.qml
+Pathspec	calcita/qml/CelestinaInputShield.qml
+Pathspec	calcita/qml/CelestinaModalLayer.qml
+Pathspec	calcita/qml/CelestinaRowHighlight.qml
+Pathspec	calcita/qml/CelestinaScrollBar.qml
+Pathspec	calcita/qml/CelestinaSectionLabel.qml
+Pathspec	calcita/qml/CelestinaShadow.qml
+Pathspec	calcita/qml/CelestinaSlider.qml
+Pathspec	calcita/qml/CelestinaSurface.qml
+Pathspec	calcita/qml/CelestinaSwitch.qml
+Pathspec	calcita/qml/CelestinaTextField.qml
+Pathspec	calcita/qml/CelestinaTheme.qml
+Pathspec	calcita/qml/CelestinaTreemap.qml
+Pathspec	calcita/qml/CelestinaUsageList.qml
+Pathspec	calcita/qml/CelestinaWheelScroll.qml
+Pathspec	calcita/qml/GlassCard.qml
+Pathspec	calcita/qml/GlassContextMenu.qml
+Pathspec	calcita/qml/GlassMenuItem.qml
+Pathspec	calcita/qml/GlassSurface.qml
+Pathspec	calcita/qml/ListSection.qml
+Pathspec	calcita/qml/Main.qml
+Pathspec	calcita/qml/components/ActivationRoute.qml
+Pathspec	calcita/qml/components/EmptyState.qml
+Pathspec	calcita/qml/fonts
+Pathspec	calcita/qml/fonts.qrc
+Pathspec	calcita/qml/icons
+Pathspec	calcita/qml/icons.qrc
+Pathspec	calcita/scripts/build-production.sh
+Pathspec	calcita/scripts/complete-production.sh
+Pathspec	calcita/scripts/deploy-production.sh
+Pathspec	calcita/scripts/qml-tests.sh
+Pathspec	calcita/scripts/smoke.sh
+Pathspec	calcita/scripts/status-production.sh
+Pathspec	calcita/scripts/verify-production.sh
+Pathspec	calcita/src/activation.rs
+Pathspec	calcita/src/appearance.rs
+Pathspec	calcita/src/controller.rs
+Pathspec	calcita/src/main.rs
+Pathspec	calcita/tests/qml/stubs/CalcitaActivation.qml
+Pathspec	calcita/tests/qml/stubs/CalcitaController.qml
+Pathspec	calcita/tests/qml/tst_main.qml
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/crates/calcita-core/Cargo.toml
+Pathspec	celestina-rs/crates/calcita-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-core/src/activation.rs
+Pathspec	celestina-style/icons/apps/org.celestina.Calcita.svg
+Pathspec	docs/evidence/2026-10-09-calcita-registration.md
+Pathspec	docs/inventories/2026-10-09-reading-and-capture/EXT-1-A.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-reading-and-capture.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/projects.toml
+Pathspec	docs/superpowers/plans/2026-10-09-reading-and-capture.md
+Pathspec	docs/superpowers/specs/2026-10-09-reading-and-capture-design.md
+Pathspec	scripts/glass-canvas-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	scripts/radius-baseline.tsv
+Pathspec	scripts/test-activation-contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	d47d7f5cf27275a977316b1d67b89fc854073a6b1eae41d14b63bba0b89ab118	README.md
+29	2	ecdb284b8515bb7852cd08555f57ff9a6764bab6d78aed12423c24fea1ca78a5	ROADMAP.md
+8	6	f5fbb064ced901799ae1836c4eeaf0511dd6c22346c1521c0997fd602796d7de	STATUS.md
+45	0	57d18f700a48a9d2ae7ac94e4ae010801e25110bf0f6d2a6528eb08266f2e0ab	calcita/AGENTS.md
+1482	0	edec41166d78eeb11209c3b09dbf4616d88fd8b19d19c98f9c9498aaa70af279	calcita/Cargo.lock
+54	0	e6a2b62f24aaf68069558d367f14a4e6f9cf5d9c37d3a3d0df9a5a39e8054c9d	calcita/Cargo.toml
+48	0	71e8361e5c7a36932b9083887e5b4ff066147d03b1e83f0534026b5174318c36	calcita/README.md
+42	0	5b6ffa82f7c55e57d712b0fb142c50b4aa057523dcb4263b4d5f7b6aa4f96908	calcita/ROADMAP.md
+19	0	5f215abcdf9207218d4eacf1b8f009ea196cdad4c6cef98cd3b125824d21bacf	calcita/STATUS.md
+7	0	20566644b251455f54164fe8bdbe72f379239f67400710e3181144183527148e	calcita/VALIDATION.md
+78	0	35d0c57a055b952036beeec6f9eb554b95275a3152f05c71c275c97e1cd4de9b	calcita/build.rs
+52	0	1d99ba4c9a7366418b654f072aafbf953aad7c5f709942cddca2fdd3541656e1	calcita/docs/evidence/2026-10-09-skeleton.md
+7	0	a63763f06dd03a77c81f52498744fbf04520f8d9c86e16b1178117c049d925f7	calcita/docs/evidence/README.md
+4	0	955ac5c08bb36b58c34973fc7e29bc3cd46b6781aa20b01280b7ddd979ed6ca8	calcita/docs/inventories/README.md
+63	0	7e3b875f6b275276740c37fc83621a2c5b1a018297a242ac1bff48b45399a3b5	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+8	0	fc04d9a3abc54613157c7f7b490d5915cf9be81488f411ab1ee8a70a0ca8d7cf	calcita/docs/plans/active/README.md
+6	0	bf9a0b7b15d5d1c60f5c0f6755e5bda8add5b4b2b6622e6ed91b1c7a61d9f885	calcita/docs/plans/archive/README.md
+12	0	b3e35d819d211fee5aa0902846d185bdf8048218f855955481af60b3f52aa8cb	calcita/org.celestina.Calcita.desktop
+1	0	bb38df477fecac769b262124303067b140bcb32fa0cbd45ffb823e3d46340b23	calcita/qml/CelestinaAppearance.qml
+1	0	3b62a769997026b56b2f32800802f4b94ab76a4313e997b73893242295a9e533	calcita/qml/CelestinaBackdrop.qml
+1	0	1eb2ab4f2e6b72ca86b14135f7a7c1cc416d8e59063405bda1b7ea0dcd4609c8	calcita/qml/CelestinaButton.qml
+1	0	1ca1f10ff3232a481597a16d1c38a1582196cd7c5236a71ea92a67018f0361c2	calcita/qml/CelestinaCapsule.qml
+1	0	bbee65a98530774646e49e6f1843a8bba6f04813f607f1c9d778cd61241f8394	calcita/qml/CelestinaFocusRing.qml
+1	0	83ba381a1abf9efee47d489672f96cbfe8f0b63166aed127f8b59921f290bf8f	calcita/qml/CelestinaIcon.qml
+1	0	9110c437c48d946ce99191c578f43a449e577cc33b4c7980dea06cd2f3b289f0	calcita/qml/CelestinaIconButton.qml
+1	0	43e5ca4ff6b7953f80f4b0dd6f8cd958364af738ade2ae6cbb265b87287629fd	calcita/qml/CelestinaIcons.qml
+1	0	ca69db62ab6735eb96f61ba3066a9c968aa60816e476c6d4b829f2217f32393d	calcita/qml/CelestinaInputShield.qml
+1	0	ca736884826ec69092c76d363d2eee080db50bbe0273cea514a15e31de3a985c	calcita/qml/CelestinaModalLayer.qml
+1	0	14e119a326c35f9d113e2e031721491468f6aa375d4ff8c58e32e83476e5d167	calcita/qml/CelestinaRowHighlight.qml
+1	0	eb9268b528b5b93e314a70ec14af08f82a55491bf3c1b69b52a37663d809bbad	calcita/qml/CelestinaScrollBar.qml
+1	0	3649a49f14f26d0487ccebf5c29c90587846916fe87c74a5d577dcbfa5a272b5	calcita/qml/CelestinaSectionLabel.qml
+1	0	e1ef735ae9330fdf16ef374432c9c3e4d956eb3c8002a1f897182d6e6ee9aa4c	calcita/qml/CelestinaShadow.qml
+1	0	3821297ceefd93abffacb07b0e1742331ec2fcfc49dba83ab953685cfab0ee5c	calcita/qml/CelestinaSlider.qml
+1	0	c680a487129fb18f9c9b9f3f9c1ddff8db11447f31befc22984c95f756a4c3dc	calcita/qml/CelestinaSurface.qml
+1	0	05a75ec76536c86e0e3766ee643ec6f1fc2a6711b17df562045a0b49f2047bca	calcita/qml/CelestinaSwitch.qml
+1	0	859908d291e5a0b4de0cdce98b8b1b7265183971fba73f7d008309af0eb54aef	calcita/qml/CelestinaTextField.qml
+1	0	9061c0c6f525a87b6229ecb2e749f8b4b816ca8a9542fea3de36f512e4d7cdd9	calcita/qml/CelestinaTheme.qml
+1	0	51b9e1f4409a9981a01d662c5bf351b80f9326d3610e173ce43ff20b08462411	calcita/qml/CelestinaTreemap.qml
+1	0	e8d18ddec56151a9b6de074f40723454e90280dcd62e689904ceee531b1133ac	calcita/qml/CelestinaUsageList.qml
+1	0	b2b9dd4e5e9e3b6fe27a53a70fa450b7203c0bbf0ee96ab376626ac5c37e761c	calcita/qml/CelestinaWheelScroll.qml
+1	0	bdb8d09c6b297173b022c76c6019c6bde7c0c06c2a2c684df48f94d81228be3e	calcita/qml/GlassCard.qml
+1	0	ebf3b19c1bb1ddba600feff7e77cffe157001ce8b7f5071bc92d7dd7c173b4c3	calcita/qml/GlassContextMenu.qml
+1	0	47b2fd86105f32aafe2dfb63013f2486a00e971575d108e54a644930011d211b	calcita/qml/GlassMenuItem.qml
+1	0	703af6df4940243b8efc7d215d246633aee454719b1019014f8da91923637550	calcita/qml/GlassSurface.qml
+1	0	353a50fd35236ccc7e74e87a2e714762d6fdddd2f4a7c6e38eb64ca38a7f8e29	calcita/qml/ListSection.qml
+63	0	61a86d6e3dfca6f28d193e5c509d33ff0245957845054ee80a320d227c544ede	calcita/qml/Main.qml
+21	0	de610c0bd458a10d448c32471e7e5b07545586dcf0d125b044d4f95600962905	calcita/qml/components/ActivationRoute.qml
+61	0	4c19807e979c4793e5c829d1669d60166d947d94266b259d8d0aa2415ae2ec08	calcita/qml/components/EmptyState.qml
+1	0	3935470cff944efe2bf871e800c11739a676a7526598dca055c54708021b30e6	calcita/qml/fonts
+1	0	1dc967e41bbecd7115614140d758961b9575e7c22d45a13aca0fe86f72a14e33	calcita/qml/fonts.qrc
+1	0	ae5df8f850da89509da04c06c31b851345d0a2e1455f2ce41e1a880d834b46dd	calcita/qml/icons
+1	0	124fd26e585793a6f0cb00a4dfa3076cddc7e50680709f84a98b05c3bda2091b	calcita/qml/icons.qrc
+19	0	95ebdd4d36661e7cc308b93a51a13c9b44a6412971ca9542c969790625b3474c	calcita/scripts/build-production.sh
+4	0	4bd9c71edd65c3c6a6b2a3356162a07f36dce14378ccdd11b4e5a4e545243a16	calcita/scripts/complete-production.sh
+18	0	f8582d71fae77cf4eb0bb4c89d2e54dd9a861ab04c4bf8216cd75aa3b20b9471	calcita/scripts/deploy-production.sh
+71	0	a2745b0eadc238d99fcf0702c27645e7c96e008d4f4ccd9292bbb49280bf5484	calcita/scripts/qml-tests.sh
+88	0	9f7628d2c8215076b20e820a06213e1b0c90361a3b48b3f3a7874b758b3e2465	calcita/scripts/smoke.sh
+12	0	2e786cdbd7592a60efe399aa666abfde48d32ec9bc21567172802606ea41b091	calcita/scripts/status-production.sh
+33	0	015a1acf2bb50f6fc19e50823133b0a82f4890a13da36c91a97df0d0f80ff0be	calcita/scripts/verify-production.sh
+127	0	8860ce0c625f4e531c253d3def0560eccbfafa60a28ae6d4d771e6b9cd31bece	calcita/src/activation.rs
+52	0	ccf9652d75f21e7122c80415bf87701b4f7d880ecee723b462cfadc50d670ef3	calcita/src/appearance.rs
+90	0	e2400a72fa749dd68d2fa12e47ea3703bddeaec43138312a39c00cd2d164313d	calcita/src/controller.rs
+69	0	e1c0b74c6e38c425d11c3ac5c73615f837d40c6deff98496f9e93da57f3eb5c9	calcita/src/main.rs
+9	0	bbe6c6810bfbb7ad68815a9e6bf61d39666415e52696e6b8da12381715f0f3df	calcita/tests/qml/stubs/CalcitaActivation.qml
+10	0	24c2e7493df22d1fb2d5f348652c29822e7567d1af103a1e89cb0a235f14354f	calcita/tests/qml/stubs/CalcitaController.qml
+58	0	749eeb4c4aee90f0d63ee432f7366fc03de9901fb72be906619cd1300c27af6f	calcita/tests/qml/tst_main.qml
+4	0	2233a5eda84db9419e7ce9ce1969914fcd81293236e06dcde74f1f2a7bd70d38	celestina-rs/Cargo.lock
+1	0	84f6040bd5ea0a90fa6e31b65dfd286947a37b72a389942062e815f301d8bb81	celestina-rs/Cargo.toml
+8	0	8899d25368ccf6f09130fa2d6c20a79f366673f680a288f78d57ea0d8523ac28	celestina-rs/crates/calcita-core/Cargo.toml
+3	0	0e5324961f636d61b677a62faf448463f0659893418c55ab3354cf6824fca9b1	celestina-rs/crates/calcita-core/src/lib.rs
+2	0	1551596a628cd216a30fc9f7c0cc3fbe0d54e3943bc0bc063eaa1e04e1250d8e	celestina-rs/crates/celestina-core/src/activation.rs
+36	0	cb16b29920a61066f70140cca5d58810bf8cad6add494b40d87bc0fd9e11e24a	celestina-style/icons/apps/org.celestina.Calcita.svg
+75	0	e6a518ff308294d13eb874384d053ed4c47ff63fc0c2890f2097d51cbe1b2488	docs/evidence/2026-10-09-calcita-registration.md
+173	0	self	docs/inventories/2026-10-09-reading-and-capture/EXT-1-A.numstat.tsv
+68	0	466ea5392e5becc6835c1476dc6616dd5fa63a05841a0993fb75d854e67930e0	docs/plans/active/2026-10-09-reading-and-capture.md
+2	1	6130b5ceba314b9919d20185663d33e4c4f80b7aa2dd85c10f4b8f643c059894	docs/plans/active/README.md
+37	0	1c034c40993f1ac6889ad7ac7df3477b55925a8fe4cc8bc8c86cbfc80af0a4f2	docs/projects.toml
+150	0	0c4e9bed22aac7234d0026d0bd986a509a372bb08170ff2e65c6ef456c506f83	docs/superpowers/plans/2026-10-09-reading-and-capture.md
+261	0	1f9fe517b127a835e96ef393369a752e5d603dc080ffe95781d038c71125f48e	docs/superpowers/specs/2026-10-09-reading-and-capture-design.md
+1	0	c1b0285ed112d40b23a1cbc5ffb06ba73397a825322464a5e50e20fe98fe299a	scripts/glass-canvas-baseline.tsv
+5	0	2b55b5e1ab999d6962bcfa0c50f86e62ada7676f82d503d46639038d6cb86512	scripts/qmllint-baseline.tsv
+1	0	798ebb6a264903c26ce6abe3b21144e79f91a91f7e233ba8e07d7835b7628809	scripts/radius-baseline.tsv
+1	1	b4ad60fa91caebd243a7fdcb83ab76724278d4f27ef73084eef1605d100de4e7	scripts/test-activation-contract.py

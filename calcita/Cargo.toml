@@ -1,0 +1,54 @@
+[package]
+name = "calcita"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "GPL-3.0-or-later"
+build = "build.rs"
+
+[[bin]]
+name = "calcita"
+path = "src/main.rs"
+
+[dependencies]
+# The Rust/C++ bridge beneath CXX-Qt, the suite's way of writing Qt objects in
+# Rust (architecture standard). Pinned exactly beside `cxx-gen` below, so the
+# generated C++ and the runtime come from one release.
+cxx = "=1.0.176"
+# The controller, the activation adapter and the appearance follower are
+# QObjects written in Rust (`#[cxx_qt::bridge]`); `Threading` queues the bus
+# and watcher threads' requests onto the Qt thread. Pinned with
+# `cxx-qt-build`.
+cxx-qt = "=0.9.1"
+# Qt's types on the Rust side (QString, QUrl, the application and the QML
+# engine); only the GUI, QML and Quick Controls parts this window needs.
+cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
+    "qt_gui",
+    "qt_qml",
+    "qt_quickcontrols",
+] }
+# Calcita's domain (recents, zoom, reading positions, page input), tested
+# without Qt; a stub until CAL-1-A fills it.
+calcita-core = { path = "../celestina-rs/crates/calcita-core" }
+# Single instance: a second `calcita` hands its paths to the running process.
+# The claim-first hand-off is the suite's one owner in `celestina-core`
+# (feature `activation`, which brings zbus 5 for the session bus); nothing
+# else of the crate is used yet.
+celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
+# The suite's appearance file (reduced motion, text scale) and its follower,
+# so this window follows the same choice as every other one.
+celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
+
+[build-dependencies]
+# Generates the C++ half of the bridges, compiles it and builds the QML module
+# (`org.celestina.calcita`) with its resources.
+cxx-qt-build = "=0.9.1"
+# The C++ generator `cxx-qt-build` drives, pinned to the release matching
+# `cxx` above.
+cxx-gen = "=0.7.176"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"

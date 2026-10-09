@@ -437,3 +437,40 @@ verification_inputs = ["cuprita/scripts/smoke.sh", "celestina-rs/crates/cuprita-
 component_commit_scopes = [
   { prefix = "cuprita-core", roots = ["celestina-rs/crates/cuprita-core/"], include_workspace_manifests = true },
 ]
+
+[[projects]]
+id = "calcita"
+name = "Calcita"
+path = "calcita"
+kind = "cxx-qt-application"
+commit_prefix = "calcita"
+# Registered unversioned first so the registry commit carries no history row;
+# the author's baseline commit after the landing declares the Cargo source.
+versioned = false
+agents = "calcita/AGENTS.md"
+readme = "calcita/README.md"
+status = "calcita/STATUS.md"
+roadmap = "calcita/ROADMAP.md"
+validation = "calcita/VALIDATION.md"
+active_plans = "calcita/docs/plans/active"
+context_documents = ["celestina-style/DESIGN.md", "docs/superpowers/specs/2026-10-09-reading-and-capture-design.md"]
+source_roots = ["calcita/src", "calcita/qml", "celestina-rs/crates/calcita-core"]
+commit_roots = ["calcita/", "celestina-rs/crates/calcita-core/"]
+include_workspace_manifests = true
+production_role = "desktop-application"
+deployable = true
+build_script = "calcita/scripts/build-production.sh"
+toolchains = ["rust", "cxx", "qt"]
+complete_script = "calcita/scripts/complete-production.sh"
+verify_script = "calcita/scripts/verify-production.sh"
+deploy_script = "calcita/scripts/deploy-production.sh"
+status_script = "calcita/scripts/status-production.sh"
+artifact_manifest = "calcita/target/production-artifact.toml"
+artifact_paths = ["calcita/target/release/calcita"]
+cargo_manifests = ["calcita/Cargo.toml"]
+production_inputs = ["calcita/Cargo.toml", "calcita/Cargo.lock", "calcita/build.rs", "calcita/src", "calcita/qml", "calcita/org.celestina.Calcita.desktop", "celestina-style/icons/apps/org.celestina.Calcita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/calcita-core"]
+# calcita-core gains tests/ in CAL-1-A; this list gains that path then.
+verification_inputs = ["calcita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
+component_commit_scopes = [
+  { prefix = "calcita-core", roots = ["celestina-rs/crates/calcita-core/"], include_workspace_manifests = true },
+]

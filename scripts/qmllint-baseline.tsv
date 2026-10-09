@@ -6,6 +6,10 @@
 # Every row was re-measured on 2026-10-09 under Qt 6.12.0's qmllint (CONV-1-A):
 # the host upgraded from 6.11.1 and the new linter counts differently in every
 # application, on main as well; a correction of the measurement, not new debt.
+# The calcita row starts at 1, not 0 (EXT-1-A): Qt 6.12's qmllint reports the
+# shared celestina-style/CelestinaIcons.qml as "not declared as singleton in
+# qmldir" although every qmldir declares it, in every application that links
+# it; Calcita's own QML lints clean.
 # warnings<TAB>project
 56	fluorita
 38	grafita
@@ -13,3 +17,4 @@
 222	siderita
 26	hematita
 9	cuprita
+1	calcita

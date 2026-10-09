@@ -1,0 +1,8 @@
+[package]
+name = "calcita-core"
+version = "0.1.0"
+edition = "2021"
+description = "Calcita's domain: recent documents, zoom, reading positions and page input, without Qt"
+license = "MIT"
+
+[dependencies]

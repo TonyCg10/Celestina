@@ -8,6 +8,7 @@ members = [
     "crates/siderita-embedded",
     "crates/siderita-ops",
     "crates/siderita-qt",
+    "crates/calcita-core",
     "crates/cuprita-core",
     "crates/dotfiles-core",
     "crates/fluorita-core",

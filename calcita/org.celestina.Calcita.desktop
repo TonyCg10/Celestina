@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Calcita
+GenericName=Visor de PDF
+Comment=Lee documentos PDF
+Exec=calcita %U
+Icon=org.celestina.Calcita
+Terminal=false
+Categories=Office;Viewer;
+Keywords=pdf;documento;leer;visor;calcita;celestina;
+StartupNotify=true
+StartupWMClass=org.celestina.Calcita

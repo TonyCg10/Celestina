@@ -1,9 +1,10 @@
 # Suite status
 
 - **Updated:** 2026-10-09
-- **Current focus:** no suite checkpoint is active; the next suite work starts
-  from an accepted decision, and all project work follows each local roadmap
-- **Implementation checkpoint:** none
+- **Current focus:** EXT-1, reading and capture: Calcita, the PDF viewer,
+  and Selenita, the screen capture and recording tool
+  ([plan](docs/plans/active/2026-10-09-reading-and-capture.md))
+- **Implementation checkpoint:** EXT-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -35,9 +36,10 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
-No suite checkpoint is active. New cross-project work starts only when an
-accepted decision promotes it, as the root roadmap's later suite-level section
-requires.
+EXT-1 adds two applications in the suite's grammar: Calcita, the PDF viewer,
+and Selenita, the screen capture and recording tool, each registered by a suite
+unit and built by its own ledger. The suite ledger is
+[the active plan](docs/plans/active/2026-10-09-reading-and-capture.md).
 
 ## Completed cross-project work
 

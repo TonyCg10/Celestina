@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** EXT-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -213,6 +213,33 @@ convention.
 The build order, exclusions and ledger are in
 [the archived plan](docs/plans/archive/2026-10-09-suite-conventions.md), and the
 design in [the spec](docs/superpowers/specs/2026-10-09-suite-conventions-design.md).
+
+## EXT-1 — Reading and capture
+
+**Hypothesis:** two small applications in the suite's grammar, built on the
+CONV-1 conventions, take the last two daily needs out of the web browser and
+the terminal: reading a PDF and capturing or recording the screen.
+
+**Tangible outcome:** Calcita opens a PDF from Siderita, a drop or a second
+launch, with continuous pages, zoom, search, the outline, selection and a
+reading mode; Selenita takes a screenshot of the screen, a window or a region
+to the clipboard and the pictures folder, keeps a history and records the
+screen to MP4; both are registered, deployed at 1.0 and offered by Siderita.
+
+- [ ] Register Calcita with its skeleton and icon (`EXT-1-A`).
+- [ ] Open a document with its pages, zoom and navigation (`CAL-1-A`).
+- [ ] Add search, the outline, selection and links (`CAL-1-B`).
+- [ ] Add the reading mode and recents, and reach 1.0 (`CAL-1-C`).
+- [ ] Register Selenita with its skeleton and icon (`EXT-1-B`).
+- [ ] Add screenshots with delay, destinations and history (`SEL-1-A`).
+- [ ] Add screen recording (`SEL-1-B`).
+- [ ] Reach Selenita's 1.0 (`SEL-1-C`).
+- [ ] Close the program (`EXT-1-C`).
+
+The application units are rows of each project's own plan; the build order,
+exclusions and suite ledger are in
+[the active plan](docs/plans/active/2026-10-09-reading-and-capture.md), and the
+design in [the spec](docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
 
 ## Project implementation fronts
 

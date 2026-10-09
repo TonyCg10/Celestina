@@ -68,6 +68,8 @@ pub const GRAFITA: ActivationName = ActivationName("org.celestina.Grafita");
 pub const HEMATITA: ActivationName = ActivationName("org.celestina.Hematita");
 pub const FLUORITA: ActivationName = ActivationName("org.celestina.Fluorita");
 pub const CUPRITA: ActivationName = ActivationName("org.celestina.Cuprita");
+pub const CALCITA: ActivationName = ActivationName("org.celestina.Calcita");
+pub const SELENITA: ActivationName = ActivationName("org.celestina.Selenita");
 
 /// The object path an application serves [`INTERFACE`] at: the name with its
 /// dots as slashes, `org.celestina.Grafita` → `/org/celestina/Grafita`.
