@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-29
 - **Scope:** `AUD-1-G` of the
-  [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md):
+  [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md):
   `celestina-rs/scripts/build-production.sh`, the `celestina-rs` entry of
   `docs/projects.toml`, the registry check in
   `scripts/documentation_contract.py`, its fixture test and

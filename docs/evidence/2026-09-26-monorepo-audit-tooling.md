@@ -1,7 +1,7 @@
 # Evidence: the repository tooling and governance audit
 
 - **Date:** 2026-09-26
-- **Scope:** `AUD-1-A` of the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md): `scripts/`, `.githooks/`, `.github/workflows/`, `docs/projects.toml` and the governance documents, on `main` at `9d022dd`; one of the seven area records the [monorepo audit](2026-09-26-monorepo-audit.md) consolidates
+- **Scope:** `AUD-1-A` of the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md): `scripts/`, `.githooks/`, `.github/workflows/`, `docs/projects.toml` and the governance documents, on `main` at `9d022dd`; one of the seven area records the [monorepo audit](2026-09-26-monorepo-audit.md) consolidates
 - **Environment:** read-only audit in a Linux container (kernel 6.18) running as uid 0; rustc and cargo 1.94.1, Python 3.11, Git 2.43.0; no Qt 6 SDK or CXX-Qt build, no libmpv, no Android SDK, NDK or Gradle, no Wayland session, no AT-SPI bus and no real device; Cargo ran `--offline` with its target directory in the session scratchpad, so no production target or cache was touched
 - **Artifact:** not applicable
 
@@ -584,13 +584,13 @@ A system Qt upgrade (for example, a distribution update) leaves every artifact "
 Each finding closes in the program unit that carries it; the program
 ids, the rulings and the dependency order are in the
 [monorepo audit](2026-09-26-monorepo-audit.md) record, and the units are ledger rows of the plans named
-below. The suite rows are in the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md).
+below. The suite rows are in the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md).
 
 | Program | Ledger unit | Plan | Findings of this area it closes |
 |---|---|---|---|
-| P-1 | `AUD-1-B` | `docs/plans/active/2026-09-26-monorepo-hardening.md` | TOOL-1, TOOL-2, TOOL-13 |
-| P-2 | `AUD-1-D` | `docs/plans/active/2026-09-26-monorepo-hardening.md` | TOOL-3, TOOL-4, TOOL-21, TOOL-22 |
-| P-20 | `AUD-1-F` | `docs/plans/active/2026-09-26-monorepo-hardening.md` | TOOL-5, TOOL-6, TOOL-7, TOOL-8, TOOL-9, TOOL-10, TOOL-11, TOOL-12, TOOL-14, TOOL-15, TOOL-16, TOOL-17, TOOL-18, TOOL-19, TOOL-20 |
+| P-1 | `AUD-1-B` | `docs/plans/archive/2026-09-26-monorepo-hardening.md` | TOOL-1, TOOL-2, TOOL-13 |
+| P-2 | `AUD-1-D` | `docs/plans/archive/2026-09-26-monorepo-hardening.md` | TOOL-3, TOOL-4, TOOL-21, TOOL-22 |
+| P-20 | `AUD-1-F` | `docs/plans/archive/2026-09-26-monorepo-hardening.md` | TOOL-5, TOOL-6, TOOL-7, TOOL-8, TOOL-9, TOOL-10, TOOL-11, TOOL-12, TOOL-14, TOOL-15, TOOL-16, TOOL-17, TOOL-18, TOOL-19, TOOL-20 |
 
 ### Proposed units, as the auditor wrote them
 

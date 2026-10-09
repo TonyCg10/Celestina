@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-28
 - **Scope:** `HALT-SHELL-0` of the
-  [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md):
+  [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md):
   `halted_projects` and `halted_owner` in `scripts/project_registry.py`, and
   `affected_projects` in `scripts/landing.py`, which leaves out every project
   whose registry entry carries `halted = "YYYY-MM-DD"`, even as the owner

@@ -1,7 +1,7 @@
 # Evidence: monorepo audit and hardening program
 
 - **Date:** 2026-09-26
-- **Scope:** `AUD-1-A` of the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md): the whole monorepo on `main` at `9d022dd`, clean
+- **Scope:** `AUD-1-A` of the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md): the whole monorepo on `main` at `9d022dd`, clean
 - **Environment:** read-only audit in a Linux container (kernel 6.18) running as uid 0; rustc and cargo 1.94.1, Python 3.11, Git 2.43.0; no Qt 6 SDK or CXX-Qt build, no libmpv, no Android SDK, NDK or Gradle, no Wayland session, no AT-SPI bus and no real device; Cargo ran `--offline` with its target directory in the session scratchpad, so no production target or cache was touched
 - **Artifact:** not applicable
 
@@ -304,7 +304,7 @@ A real session on the author's machine is still needed for everything below.
 This unit opens the plans that carry every scheduled finding; each area
 record maps its findings to these units.
 
-- `docs/plans/active/2026-09-26-monorepo-hardening.md`: suite checkpoint `AUD-1`: `AUD-1-A` (this record), `AUD-1-B` (P-1), `AUD-1-C` (P-0b), `AUD-1-D` (P-2), `AUD-1-E` (P-13), `AUD-1-F` (P-20).
+- `docs/plans/archive/2026-09-26-monorepo-hardening.md`: suite checkpoint `AUD-1`: `AUD-1-A` (this record), `AUD-1-B` (P-1), `AUD-1-C` (P-0b), `AUD-1-D` (P-2), `AUD-1-E` (P-13), `AUD-1-F` (P-20).
 - `siderita/docs/plans/active/2026-09-26-hardening.md`: `SID-H1`: `SID-H1-A` (P-4), `SID-H1-B` (P-8), `SID-H1-C` (P-15).
 - `hematita/docs/plans/active/2026-09-26-hardening.md`: `HEM-H1`: `HEM-H1-A` (P-9), `HEM-H1-B` (P-18).
 - `grafita/docs/plans/active/2026-09-26-hardening.md`: `GRA-H1`: `GRA-H1-A` (P-5), `GRA-H1-B` (P-19).

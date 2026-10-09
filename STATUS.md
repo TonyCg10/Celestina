@@ -1,10 +1,9 @@
 # Suite status
 
-- **Updated:** 2026-09-28
-- **Current focus:** AUD-1, the monorepo hardening program that follows the
-  2026-09-26 audit; project units of the same program follow each local
-  roadmap
-- **Implementation checkpoint:** AUD-1
+- **Updated:** 2026-10-09
+- **Current focus:** no suite checkpoint is active; the next suite work starts
+  from an accepted decision, and all project work follows each local roadmap
+- **Implementation checkpoint:** none
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -36,6 +35,12 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
+No suite checkpoint is active. New cross-project work starts only when an
+accepted decision promotes it, as the root roadmap's later suite-level section
+requires.
+
+## Completed cross-project work
+
 AUD-1 carries the program of the 2026-09-26 monorepo audit: 184 findings
 after de-duplication, 6 Critical, 78 Important and 100 Minor. The pure Rust
 layer is strong; the problems sit at the edges: hostile input from files and
@@ -50,9 +55,7 @@ Celestina shell's rows were withdrawn when the author halted the shell on
 Qt, libmpv or the Android SDK; every other unit is prepared on its own branch
 and landed by the author in program order. The findings and rulings are in
 [the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md) and the
-ledger in [the active plan](docs/plans/active/2026-09-26-monorepo-hardening.md).
-
-## Completed cross-project work
+ledger in [the archived plan](docs/plans/archive/2026-09-26-monorepo-hardening.md).
 
 LND-1 moves the closure of a unit (inventory, ledger closure, version bump and
 production build) from the session to a landing step that runs on the current

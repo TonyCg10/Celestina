@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `AUD-1-C` (program unit P-0b, ruling R-A1) of the
-  [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md);
+  [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md);
   no audit finding. `scripts/landing.py`, `scripts/land-unit.py`,
   `scripts/worktree.sh`, their fixture tests,
   [the landing contract](../contracts/landing.md) and the §10 amendment of

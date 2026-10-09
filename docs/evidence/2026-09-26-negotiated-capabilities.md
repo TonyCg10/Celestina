@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-28
 - **Scope:** `AUD-1-E` (program `P-13`) of the
-  [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md):
+  [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md):
   `MAG-8`, `MAG-12`, `MAG-19`, `MAG-28`, `AND-2`, `AND-3`, `AND-5`, `AND-7`,
   `AND-9`, plus ruling `R-A16` (the Kotlin `PairPreview` and `LanAddress`
   owners `AND-6-D` left) and `RS-13` (the bindgen gate `MAG-D1-E` left).

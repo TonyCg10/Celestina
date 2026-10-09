@@ -1,7 +1,7 @@
 # Evidence: production inputs that hold every crate an app links
 
 - **Date:** 2026-09-26
-- **Scope:** `AUD-1-D` (program unit P-2) of the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md), closing TOOL-3, TOOL-4, TOOL-21 and TOOL-22 of the [tooling audit](2026-09-26-monorepo-audit-tooling.md), MAG-9 of the [Magnetita audit](2026-09-26-monorepo-audit-magnetita.md) and FLU-21 of the [Fluorita audit](2026-09-26-monorepo-audit-fluorita.md); session worktree `Celestina.worktrees/suite-AUD-1-D`, branch `unit/suite/AUD-1-D`, stacked on `unit/suite/AUD-1-B` at `4111a8d`
+- **Scope:** `AUD-1-D` (program unit P-2) of the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md), closing TOOL-3, TOOL-4, TOOL-21 and TOOL-22 of the [tooling audit](2026-09-26-monorepo-audit-tooling.md), MAG-9 of the [Magnetita audit](2026-09-26-monorepo-audit-magnetita.md) and FLU-21 of the [Fluorita audit](2026-09-26-monorepo-audit-fluorita.md); session worktree `Celestina.worktrees/suite-AUD-1-D`, branch `unit/suite/AUD-1-D`, stacked on `unit/suite/AUD-1-B` at `4111a8d`
 - **Environment:** Linux container (kernel 6.18) running as uid 0; Python 3.11.15, Git 2.43.0; cargo 1.94.1 as the rustup default and 1.97.1 selected by `celestina-rs/rust-toolchain.toml` and `siderita/rust-toolchain.toml`; no Qt 6 SDK, CMake build of the shell, libmpv, Gradle or Android SDK
 - **Artifact:** the landing builds it. The unit changes `docs/projects.toml`, `scripts/production_artifact.py` and the architecture guard, which are verification inputs of every registered project, and the production inputs of Magnetita, Magnetita Android, Grafita, Fluorita and Hematita
 

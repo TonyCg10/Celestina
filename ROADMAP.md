@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** AUD-1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -172,20 +172,20 @@ close, GitHub `contracts` is green on `main`, a fix to any linked crate stales
 and rebuilds every app that links it, the Magnetita protocol has one owner on
 both ends, and the hooks judge the index with committed rules.
 
-- [ ] Record the audit as evidence and open the hardening plans (`AUD-1-A`).
-- [ ] Restore green CI and cover Hematita with the style guard (`AUD-1-B`,
+- [x] Record the audit as evidence and open the hardening plans (`AUD-1-A`).
+- [x] Restore green CI and cover Hematita with the style guard (`AUD-1-B`,
       P-1).
-- [ ] Let the landing accept a stacked branch (`AUD-1-C`, P-0b).
-- [ ] Derive production inputs from Cargo and declare Magnetita Android's
+- [x] Let the landing accept a stacked branch (`AUD-1-C`, P-0b).
+- [x] Derive production inputs from Cargo and declare Magnetita Android's
       inputs (`AUD-1-D`, P-2).
-- [ ] Give the Magnetita protocol rules one owner and negotiate capabilities
+- [x] Give the Magnetita protocol rules one owner and negotiate capabilities
       on both ends (`AUD-1-E`, P-13).
-- [ ] Make the hooks and the landing trustworthy and fast, and correct the
+- [x] Make the hooks and the landing trustworthy and fast, and correct the
       governance documents (`AUD-1-F`, P-20).
 
 The project units of the same program are rows of each project's own plan;
 the build order, exclusions and ledger are in
-[the active plan](docs/plans/active/2026-09-26-monorepo-hardening.md), and the
+[the archived plan](docs/plans/archive/2026-09-26-monorepo-hardening.md), and the
 findings in [the audit evidence](docs/evidence/2026-09-26-monorepo-audit.md).
 
 ## Project implementation fronts

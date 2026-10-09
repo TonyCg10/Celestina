@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-09-26
 - **Plan ID:** monorepo-hardening
-- **Status:** active
+- **Closed:** 2026-10-09
+- **Successor:** none; the author named no next suite checkpoint. All 20 ledger rows are done
+- **Status:** done
 - **Authorization:** after the 2026-09-26 audit the author asked for the
   whole program to be done; the rulings R-A1 to R-A8 that settled its open
   questions are recorded in
@@ -175,6 +177,7 @@ plans; a pending author validation never keeps this checkpoint open.
 | AUD-1-P | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-P.numstat.tsv) | 75 files, +3459/-0 | Register the Cuprita project and its core crate, commit its design spec and plan, with the application skeleton (registered unversioned; the baseline is the author's hand commit) | [evidence](../../evidence/2026-10-08-cuprita-registration.md) | None |
 | AUD-1-Q | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-Q.numstat.tsv) | 5 files, +87/-4 | Count a new symbolic link as one added line in the unit inventory: `numstat_rows` asked `git diff --no-index` about every new path, which follows a link to a directory and compares the directory instead, so the links a skeleton makes to `celestina-style` (`qml/fonts`, `qml/icons`) were written as 0/0 while the staged index counts 1/0, and `check-staged-units.py` refused the landing of AUD-1-P. The landing tool runs from the canonical checkout, so the fix must land before that unit. | [evidence](../../evidence/2026-10-08-inventory-symlinks.md) | None |
 | AUD-1-R | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-R.numstat.tsv) | 4 files, +67/-2 | Record in `HOST-HYGIENE.md` that Cuprita 1.0 supersedes Blueman, `nm-applet` and Pavucontrol as the session's network, Bluetooth and audio control surfaces, pointing at the exit evidence and the author's pending live checks; the packages stay until the author removes them. | [evidence](../../evidence/2026-10-08-cuprita-handover.md) | None |
+| AUD-1-S | `suite:` | done | [inventory](../../inventories/2026-09-26-monorepo-hardening/AUD-1-S.numstat.tsv) | 25 files, +355/-237 | Archive the delivered monorepo hardening plan through its own administrative unit and reconcile the suite roadmap, status and plan indexes | [evidence](../../evidence/2026-10-09-monorepo-hardening-archive.md) | None |
 
 `AUD-1-E` lands as `suite-bug` bumping Magnetita and Magnetita Android;
 `scripts/land-unit.py` refuses a `suite-bug`, so the author records both

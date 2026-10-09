@@ -1,7 +1,7 @@
 # Evidence: CI contracts green again, with the style guard over Hematita
 
 - **Date:** 2026-09-26
-- **Scope:** `AUD-1-B` (program unit P-1) of the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md), closing TOOL-1, TOOL-2 and TOOL-13 of the [tooling audit](2026-09-26-monorepo-audit-tooling.md) as far as the row's intended change reaches (see Limits); session worktree `Celestina.worktrees/suite-AUD-1-B`, branch `unit/suite/AUD-1-B`, forked from `origin/main` at `2a3c74f`
+- **Scope:** `AUD-1-B` (program unit P-1) of the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md), closing TOOL-1, TOOL-2 and TOOL-13 of the [tooling audit](2026-09-26-monorepo-audit-tooling.md) as far as the row's intended change reaches (see Limits); session worktree `Celestina.worktrees/suite-AUD-1-B`, branch `unit/suite/AUD-1-B`, forked from `origin/main` at `2a3c74f`
 - **Environment:** Linux container (kernel 6.18) running as uid 0; Python 3.11.15, Git 2.43.0; no Qt 6 SDK, `qmllint`, CXX-Qt build, libmpv or Android SDK; no Wayland session or AT-SPI bus. The workflow run below used `GIT_CONFIG_GLOBAL=/dev/null`, so no personal Git identity or signing setting reached the fixtures, as on a fresh GitHub runner
 - **Artifact:** the landing builds it. The unit changes `hematita/qml`, a Hematita production input, and `celestina-style/scripts/check-style-contract.sh`, a verification input shared by every registered project
 

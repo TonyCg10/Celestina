@@ -1,7 +1,7 @@
 # Evidence: the shell and shared style audit
 
 - **Date:** 2026-09-26
-- **Scope:** `AUD-1-A` of the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md): the Celestina shell (`celestina/`, the lock, the polkit agent, the helper and `celestina-shell-core`) and `celestina-style/`, on `main` at `9d022dd`; one of the seven area records the [monorepo audit](2026-09-26-monorepo-audit.md) consolidates
+- **Scope:** `AUD-1-A` of the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md): the Celestina shell (`celestina/`, the lock, the polkit agent, the helper and `celestina-shell-core`) and `celestina-style/`, on `main` at `9d022dd`; one of the seven area records the [monorepo audit](2026-09-26-monorepo-audit.md) consolidates
 - **Environment:** read-only audit in a Linux container (kernel 6.18) running as uid 0; rustc and cargo 1.94.1, Python 3.11, Git 2.43.0; no Qt 6 SDK or CXX-Qt build, no libmpv, no Android SDK, NDK or Gradle, no Wayland session, no AT-SPI bus and no real device; Cargo ran `--offline` with its target directory in the session scratchpad, so no production target or cache was touched
 - **Artifact:** not applicable
 
@@ -473,7 +473,7 @@ Effort S. Prefix `siderita:`.
 Each finding closes in the program unit that carries it; the program
 ids, the rulings and the dependency order are in the
 [monorepo audit](2026-09-26-monorepo-audit.md) record, and the units are ledger rows of the plans named
-below. The suite rows are in the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md).
+below. The suite rows are in the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md).
 
 | Program | Ledger unit | Plan | Findings of this area it closes |
 |---|---|---|---|

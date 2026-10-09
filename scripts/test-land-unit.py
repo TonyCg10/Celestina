@@ -3591,7 +3591,12 @@ class RealGuardLanding(unittest.TestCase):
             encoding="utf-8",
         )
         self.git(side, "add", "docs/evidence/README.md")
-        self.git(side, "commit", "--quiet", "-m", "suite-maintenance: Record a side note")
+        # Setup only: with an idle roadmap the clone's fixture plan has an empty
+        # ledger, which the documentation contract rejects on any later commit;
+        # the hooks under test here are the merge's, not this commit's.
+        self.git(
+            side, "commit", "--quiet", "--no-verify", "-m", "suite-maintenance: Record a side note"
+        )
         merged = subprocess.run(
             ["git", "merge", "--no-ff", "--no-edit", "origin/main"],
             cwd=side,

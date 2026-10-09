@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-28
 - **Scope:** `HALT-SHELL` of the
-  [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md):
+  [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md):
   the author's halt of the Celestina shell (2026-09-27) recorded in
   [the root contract](../../AGENTS.md#halted-projects) and `docs/projects.toml`
   (`halted`), read by `scripts/project_registry.py`, and honoured by

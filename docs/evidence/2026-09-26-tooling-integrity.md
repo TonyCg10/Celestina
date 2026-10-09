@@ -1,7 +1,7 @@
 # Evidence: tooling integrity, speed and governance documents
 
 - **Date:** 2026-09-28
-- **Scope:** `AUD-1-F` (program P-20) of the [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md): TOOL-5, TOOL-6, TOOL-7, TOOL-8, TOOL-9, TOOL-10, TOOL-11, TOOL-12, TOOL-14, TOOL-15, TOOL-16, TOOL-17, TOOL-18, TOOL-19, TOOL-20 of the [tooling audit](2026-09-26-monorepo-audit-tooling.md), and the items carried to the unit: TOOL-1's third fix, TOOL-13's second fix, per-project toolchain probes, one owner for the input path matchers, and halted projects left out of the consumers `agent-context.py` prints
+- **Scope:** `AUD-1-F` (program P-20) of the [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md): TOOL-5, TOOL-6, TOOL-7, TOOL-8, TOOL-9, TOOL-10, TOOL-11, TOOL-12, TOOL-14, TOOL-15, TOOL-16, TOOL-17, TOOL-18, TOOL-19, TOOL-20 of the [tooling audit](2026-09-26-monorepo-audit-tooling.md), and the items carried to the unit: TOOL-1's third fix, TOOL-13's second fix, per-project toolchain probes, one owner for the input path matchers, and halted projects left out of the consumers `agent-context.py` prints
 - **Environment:** session worktree `unit/suite/AUD-1-F` on base `b510455` (AUD-1-B, AUD-1-C, AUD-1-D and HALT-SHELL merged), Linux container, Python 3.11.15, Git 2.43.0, rustc 1.94.1; no Qt, CMake application build, libmpv, Android SDK or Gradle, and no production entry may run in a session worktree
 - **Artifact:** the landing builds it; the unit changes shared verification inputs (`scripts/production_artifact.py`, `scripts/complete-production.py`, `scripts/qmllint-cxxqt.sh`, `docs/projects.toml`), so every registered project that is not halted re-verifies once at landing
 

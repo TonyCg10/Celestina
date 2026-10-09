@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-29
 - **Scope:** `AUD-1-H` of the
-  [monorepo hardening plan](../plans/active/2026-09-26-monorepo-hardening.md):
+  [monorepo hardening plan](../plans/archive/2026-09-26-monorepo-hardening.md):
   `merge_heads` in `scripts/repo_git.py`, `merged_in` in
   `scripts/check-staged-units.py`, `merged_inventory_endpoint` in
   `scripts/documentation_contract.py`, the `RealGuardLanding` test of
