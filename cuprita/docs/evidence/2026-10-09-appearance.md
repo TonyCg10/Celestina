@@ -4,7 +4,7 @@
 - **Scope:** `CUP-1-I` of
   [`../plans/active/2026-10-08-cup-1-foundation.md`](../plans/active/2026-10-08-cup-1-foundation.md),
   which is `CONV-1-C` of the suite program
-  ([`../../../docs/plans/active/2026-10-09-suite-conventions.md`](../../../docs/plans/active/2026-10-09-suite-conventions.md)):
+  ([`../../../docs/plans/archive/2026-10-09-suite-conventions.md`](../../../docs/plans/archive/2026-10-09-suite-conventions.md)):
   `cuprita/src/controller/` (new `appearance.rs`; `app.rs`, `mod.rs`),
   `cuprita/src/backend.rs`, `cuprita/build.rs`, `cuprita/qml/Main.qml`,
   `cuprita/qml/pages/AppearancePage.qml` (new),

@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** CONV-1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -208,10 +208,10 @@ convention.
 - [x] Add Cuprita's appearance section (`CONV-1-C`).
 - [x] Add open-with inside the suite (`CONV-1-D`).
 - [x] Add drag-and-drop between the applications (`CONV-1-E`).
-- [ ] Record the conventions as an ADR (`CONV-1-F`).
+- [x] Record the conventions as an ADR (`CONV-1-F`).
 
 The build order, exclusions and ledger are in
-[the active plan](docs/plans/active/2026-10-09-suite-conventions.md), and the
+[the archived plan](docs/plans/archive/2026-10-09-suite-conventions.md), and the
 design in [the spec](docs/superpowers/specs/2026-10-09-suite-conventions-design.md).
 
 ## Project implementation fronts

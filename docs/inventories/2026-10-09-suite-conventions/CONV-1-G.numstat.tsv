@@ -1,0 +1,27 @@
+# CONV-1-G exact change inventory
+
+Base revision	4630f2912927a591f6a8a99f64f473958e874418
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	cuprita/docs/evidence/2026-10-09-appearance.md
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	docs/decisions/0012-suite-conventions.md
+Pathspec	docs/evidence/2026-10-09-suite-conventions-archive.md
+Pathspec	docs/inventories/2026-10-09-suite-conventions/CONV-1-G.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-suite-conventions.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-10-09-suite-conventions.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	4	79ccdf63482e64712c9404e1b128ab47e2d86e10f9625bc0787075bcdaf2559c	ROADMAP.md
+10	7	131bdd30ba7e5f75d4dc36cb3c15ba2ee2a5bd14dbfcd441c5223e58dc8403cc	STATUS.md
+1	1	82414d7ad780c88f2a3dba9d6c253b904cabf5183fcdedebf9c1ef44d53a95db	cuprita/docs/evidence/2026-10-09-appearance.md
+1	1	46105c265bf4747ab62898183cde9796451ec80a43a85d043d52b023d64ab194	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+1	1	40d1be513d6a6c56a0e46d56bbafb4f9fa55cf570e3f5db9675796b5469f6e3a	docs/decisions/0012-suite-conventions.md
+48	0	ee5df226e4472a6473fde677f7d8debffe559849d6d0c74dbdf0578d351daee4	docs/evidence/2026-10-09-suite-conventions-archive.md
+27	0	self	docs/inventories/2026-10-09-suite-conventions/CONV-1-G.numstat.tsv
+0	80	deleted	docs/plans/active/2026-10-09-suite-conventions.md
+3	3	a7d92f65391d53a6756d20b07494d81a9d16bb1fd6a05bd1b74875cdbdf1a77a	docs/plans/active/README.md
+83	0	827bc3ce94e575b7894adc805b0d033adcd80be214e827b9c28fc4445ade0be7	docs/plans/archive/2026-10-09-suite-conventions.md

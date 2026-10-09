@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-09
 - **Plan ID:** suite-conventions
-- **Status:** active
+- **Closed:** 2026-10-09
+- **Successor:** none; the author named no next suite checkpoint. All 6 ledger rows are done
+- **Status:** done
 - **Authorization:** the author approved the design in brainstorming on
   2026-10-09 and asked for the program to be implemented; the design is
   [the spec](../../superpowers/specs/2026-10-09-suite-conventions-design.md)
@@ -78,3 +80,4 @@ it has no row here, because a `done` row needs an inventory of its own.
 | CONV-1-D | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-D.numstat.tsv) | 32 files, +1690/-57 | Add the suite's open-in entries to Siderita and the send action to Magnetita; add `celestina_settings::load_stored` for read-modify-save callers. | [evidence](../../evidence/2026-10-09-open-with.md) | None |
 | CONV-1-E | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-E.numstat.tsv) | 22 files, +987/-34 | Add drag-and-drop from Siderita into Grafita, Fluorita and Magnetita. | [evidence](../../evidence/2026-10-09-drag-and-drop.md) | None |
 | CONV-1-F | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-F.numstat.tsv) | 20 files, +417/-24 | Record the conventions as ADR 0012, the documents and the per-application checks; Cuprita's appearance save starts from `load_stored()`. | [evidence](../../evidence/2026-10-09-suite-conventions-exit.md) | None |
+| CONV-1-G | `suite:` | done | [inventory](../../inventories/2026-10-09-suite-conventions/CONV-1-G.numstat.tsv) | 10 files, +178/-97 | Archive the delivered suite conventions plan through its own administrative unit and reconcile the suite roadmap, status and plan indexes | [evidence](../../evidence/2026-10-09-suite-conventions-archive.md) | None |

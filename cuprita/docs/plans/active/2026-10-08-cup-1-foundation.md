@@ -32,7 +32,7 @@ whose three sections manage network, Bluetooth and audio.
 - `CUP-1-I` — the Appearance section, where the suite's shared appearance
   (reduced motion, text size) is edited (maintenance). It is `CONV-1-C` of
   the suite program in
-  [`docs/plans/active/2026-10-09-suite-conventions.md`](../../../../docs/plans/active/2026-10-09-suite-conventions.md).
+  [`docs/plans/archive/2026-10-09-suite-conventions.md`](../../../../docs/plans/archive/2026-10-09-suite-conventions.md).
 
 ## Exclusions
 

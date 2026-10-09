@@ -18,7 +18,7 @@ lossy text, against [ADR 0008](0008-byte-exact-paths-across-the-qt-seam.md).
 The design is
 [the suite conventions spec](../superpowers/specs/2026-10-09-suite-conventions-design.md);
 the delivery is
-[the plan](../plans/active/2026-10-09-suite-conventions.md).
+[the plan](../plans/archive/2026-10-09-suite-conventions.md).
 
 ## Decision
 

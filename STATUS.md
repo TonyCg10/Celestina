@@ -1,10 +1,9 @@
 # Suite status
 
 - **Updated:** 2026-10-09
-- **Current focus:** CONV-1, the suite conventions: shared activation,
-  shared appearance, open-with inside the suite and drag-and-drop
-  ([plan](docs/plans/active/2026-10-09-suite-conventions.md))
-- **Implementation checkpoint:** CONV-1
+- **Current focus:** no suite checkpoint is active; the next suite work starts
+  from an accepted decision, and all project work follows each local roadmap
+- **Implementation checkpoint:** none
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -36,13 +35,17 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
+No suite checkpoint is active. New cross-project work starts only when an
+accepted decision promotes it, as the root roadmap's later suite-level section
+requires.
+
+## Completed cross-project work
+
 CONV-1 makes the first-party applications behave as one system: one
 claim-first activation interface in `celestina-core` served by every
 application, one appearance file, open-with inside the suite and
 drag-and-drop between the applications. The ledger is
-[the active plan](docs/plans/active/2026-10-09-suite-conventions.md).
-
-## Completed cross-project work
+[the archived plan](docs/plans/archive/2026-10-09-suite-conventions.md).
 
 AUD-1 carries the program of the 2026-09-26 monorepo audit: 184 findings
 after de-duplication, 6 Critical, 78 Important and 100 Minor. The pure Rust
