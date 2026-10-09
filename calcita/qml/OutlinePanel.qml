@@ -29,26 +29,59 @@ Item {
     }
 
     function choose(row) {
-        if (row < 0 || row >= tree.rows)
+        if (row < 0 || row >= tree.rows || panel.bookmarks === null)
             return
         panel.currentRow = row
         const index = tree.index(row, 0)
-        panel.bookmarkChosen(bookmarks.data(index, panel.pageRole),
-                             bookmarks.data(index, panel.locationRole))
+        panel.bookmarkChosen(panel.bookmarks.data(index, panel.pageRole),
+                             panel.bookmarks.data(index, panel.locationRole))
     }
 
     function title(row) {
-        return bookmarks.data(tree.index(row, 0), Qt.UserRole)
+        return panel.bookmarks.data(tree.index(row, 0), Qt.UserRole)
     }
 
     objectName: "outlinePanel"
+    Accessible.role: Accessible.Pane
+    Accessible.name: qsTr("Índice del documento")
 
-    PdfBookmarkModel {
-        id: bookmarks
-        document: panel.document
-        onModelReset: {
-            panel.currentRow = 0
-            tree.expandRecursively()
+    // The bookmark model of the document's current load, made afresh each
+    // time the document reports Ready. QtPdf's model reads the outline when
+    // it hears its document become Ready; a pooled document, emptied by a
+    // closed window and loaded again, could reach Ready without the model
+    // rereading it (seen under CPU load: Ready, three pages, no bookmarks),
+    // and the model cannot be detached (a null document crashes QtPdf), so
+    // each load gets its own model.
+    property PdfBookmarkModel bookmarks: null
+
+    function renewBookmarks() {
+        const old = panel.bookmarks
+        panel.bookmarks = panel.document !== null && panel.document.status === PdfDocument.Ready
+                          ? bookmarkComponent.createObject(panel, { "document": panel.document })
+                          : null
+        if (old !== null)
+            old.destroy()
+        panel.currentRow = 0
+        tree.expandRecursively()
+    }
+
+    onDocumentChanged: panel.renewBookmarks()
+    Component.onCompleted: panel.renewBookmarks()
+
+    Connections {
+        target: panel.document
+        function onStatusChanged() {
+            panel.renewBookmarks()
+        }
+    }
+
+    Component {
+        id: bookmarkComponent
+        PdfBookmarkModel {
+            onModelReset: {
+                panel.currentRow = 0
+                tree.expandRecursively()
+            }
         }
     }
 
@@ -88,7 +121,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: CelestinaTheme.spaceSm
         clip: true
-        model: bookmarks
+        model: panel.bookmarks
         boundsBehavior: Flickable.StopAtBounds
         keyNavigationEnabled: false
         pointerNavigationEnabled: false
@@ -118,7 +151,9 @@ Item {
             implicitWidth: tree.width
             implicitHeight: CelestinaTheme.controlHeight
             Accessible.role: Accessible.TreeItem
-            Accessible.name: outlineRow.title
+            Accessible.name: outlineRow.depth > 0
+                             ? qsTr("%1, nivel %2").arg(outlineRow.title).arg(outlineRow.depth + 1)
+                             : outlineRow.title
             Accessible.onPressAction: panel.choose(outlineRow.row)
 
             CelestinaRowHighlight {

@@ -53,6 +53,12 @@ TestCase {
         wait(0)
     }
 
+    // The outline has its two bookmarks; the document is Ready first.
+    function waitRows(window) {
+        tryCompare(testPdf, "status", PdfDocument.Ready, 15000)
+        tryCompare(window.outline, "rowCount", 2, 15000)
+    }
+
     function openFixture() {
         const window = createTemporaryObject(documentComponent, testCase,
                                              { "documentKey": testCase.fixture,
@@ -75,7 +81,7 @@ TestCase {
         verify(!window.outline.visible)
         keyClick(Qt.Key_F9)
         verify(window.outline.visible)
-        tryCompare(window.outline, "rowCount", 2)
+        waitRows(window)
         compare(window.outline.title(0), "Introduction")
         compare(window.outline.title(1), "Chapter two")
         const row = findNamed(window.outline, "outlineRow1")
@@ -86,7 +92,7 @@ TestCase {
     function test_enter_follows_the_current_bookmark() {
         const window = openFixture()
         keyClick(Qt.Key_F9)
-        tryCompare(window.outline, "rowCount", 2)
+        waitRows(window)
         tryVerify(() => findNamed(window.outline, "outlineTree").activeFocus)
         keyClick(Qt.Key_Down)
         keyClick(Qt.Key_Return)
@@ -100,7 +106,7 @@ TestCase {
     function test_a_click_on_a_bookmark_navigates() {
         const window = openFixture()
         mouseClick(findNamed(window.contentItem, "outlineButton"))
-        tryCompare(window.outline, "rowCount", 2)
+        waitRows(window)
         const row = findNamed(window.outline, "outlineRow1")
         mouseClick(row)
         tryCompare(window.view, "currentPage", 1)

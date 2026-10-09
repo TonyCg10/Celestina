@@ -124,7 +124,7 @@ TestCase {
     }
 
     function test_a_recent_document_reopens_from_the_empty_state() {
-        CalcitaController.remember(testCase.fixture, 2, "width")
+        CalcitaController.remember(testCase.fixture, 2, "width", false)
         const window = createTemporaryObject(mainComponent, testCase)
         const empty = findNamed(window.contentItem, "emptyState")
         verify(findNamed(empty, "recentCard").visible)

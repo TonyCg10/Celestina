@@ -13,14 +13,18 @@ grammar instead of the web browser.
 - The keyboard: PageDown/PageUp, Space/Shift+Space, Home/End, Ctrl+G (go
   to), Ctrl+Plus/Minus/0, Ctrl+1 (fit width), Ctrl+2 (fit page), Ctrl+O,
   Ctrl+F (search), Enter/Shift+Enter and F3/Shift+F3 (next and previous
-  hit), F9 (outline), Ctrl+C (copy the selection), Escape (close the search,
-  the outline or a link's question).
+  hit), F9 (outline), Ctrl+I (the dark reading mode), Ctrl+C (copy the
+  selection), Escape (close the search, the outline or a link's question);
+  on a recent row of the empty window, Enter or Space opens it and the Menu
+  key or Shift+F10 opens its menu («Quitar de recientes»).
+- The `application/pdf` handler once the author pins it in `mimeapps.list`.
 - No annotation, signing, forms or printing.
 
 Opening, continuous pages, zoom, the page field, the drop, `Open` and the
 recents are in place (CAL-1-A), and so are search, the outline, selection
-and copy, and links, an external one only after a confirmation (CAL-1-B);
-the reading mode arrives in CAL-1-C. See the
+and copy, and links, an external one only after a confirmation (CAL-1-B),
+and the dark reading mode, the recents' menu and the `application/pdf`
+entry (CAL-1-C, 1.0). See the
 [design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
 
 ## Architecture
@@ -30,7 +34,7 @@ the reading mode arrives in CAL-1-C. See the
 | `../celestina-rs/crates/calcita-core` | Recents, zoom, reading positions, page input; no Qt |
 | `src/` | The CXX-Qt controller (open documents, recents, clipboard, confirmed external links), the per-window `CalcitaDocument`, the activation adapter, the appearance follower |
 | `cpp/` | The clipboard shim cxx-qt-lib lacks (`QClipboard` on the Qt thread) |
-| `qml/` | The empty window, one `DocumentWindow` per document: its bar, its own continuous `PageView` over QtPdf, the search card, the outline card and the link confirmation |
+| `qml/` | The empty window, one `DocumentWindow` per document: its bar, its own continuous `PageView` over QtPdf, the search card, the outline card, the link confirmation and the reading mode's layer effect (`shaders/reading.frag`, baked by `build.rs` with Qt's `qsb`) |
 | `tests/` | QML tests over stand-ins and the fixtures `three-pages.pdf`, `outline.pdf` and `many-pages.pdf` (`scripts/make-fixture-pdf.py`) |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Calcita.desktop` | Desktop discovery |

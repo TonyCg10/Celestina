@@ -1,6 +1,6 @@
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use calcita_core::recent::{Recent, RecentStore, CAPACITY};
@@ -12,6 +12,7 @@ fn recent(path: &str, seconds: u64) -> Recent {
         page: 1,
         zoom: ZoomMode::FitWidth,
         opened_at: SystemTime::UNIX_EPOCH + Duration::from_secs(seconds),
+        dark: false,
     }
 }
 
@@ -56,6 +57,7 @@ fn a_non_utf8_path_round_trips_through_the_file() {
         page: 7,
         zoom: ZoomMode::Free(1.5),
         opened_at: SystemTime::UNIX_EPOCH + Duration::from_secs(42),
+        dark: false,
     });
     store.save().expect("the store saves");
     let loaded = RecentStore::load_from(file.clone()).expect("the store loads");
@@ -89,4 +91,62 @@ fn a_missing_file_is_an_empty_store_and_bad_lines_are_skipped() {
         Some(2)
     );
     let _ = std::fs::remove_dir_all(file.parent().expect("a parent"));
+}
+
+#[test]
+fn the_reading_mode_is_remembered() {
+    let file = scratch("dark");
+    let mut store = RecentStore::at(file.clone());
+    store.touch(Recent {
+        dark: true,
+        ..recent("/tmp/noche.pdf", 5)
+    });
+    store.touch(recent("/tmp/dia.pdf", 6));
+    store.save().expect("the store saves");
+    let loaded = RecentStore::load_from(file.clone()).expect("the store loads");
+    let night = loaded
+        .reading_for(Path::new("/tmp/noche.pdf"))
+        .expect("remembered");
+    assert!(night.dark);
+    let day = loaded
+        .reading_for(Path::new("/tmp/dia.pdf"))
+        .expect("remembered");
+    assert!(!day.dark);
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_line_without_the_reading_mode_reads_as_light() {
+    let file = scratch("four-fields");
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir).expect("the scratch folder");
+    }
+    std::fs::write(
+        &file,
+        "/tmp/viejo.pdf\t3\twidth\t9\n/tmp/raro.pdf\t3\twidth\t9\tsepia\n",
+    )
+    .expect("the store is written");
+    let loaded = RecentStore::load_from(file.clone()).expect("the store loads");
+    assert_eq!(
+        loaded.entries().len(),
+        1,
+        "an unknown mode is a damaged line"
+    );
+    let old = loaded
+        .reading_for(Path::new("/tmp/viejo.pdf"))
+        .expect("remembered");
+    assert_eq!(old.page, 3);
+    assert!(!old.dark);
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn a_document_can_be_forgotten() {
+    let mut store = RecentStore::default();
+    store.touch(recent("/tmp/a.pdf", 1));
+    store.touch(recent("/tmp/b.pdf", 2));
+    assert!(store.forget(Path::new("/tmp/a.pdf")));
+    assert!(!store.forget(Path::new("/tmp/a.pdf")));
+    assert_eq!(store.entries().len(), 1);
+    assert_eq!(store.entries()[0].path, PathBuf::from("/tmp/b.pdf"));
 }

@@ -196,7 +196,9 @@ ApplicationWindow {
         recentKeys: CalcitaController.recents
         recentNames: CalcitaController.recentNames
         onOpenRequested: window.openChooser("main")
+        backdropSource: window.contentItem
         onRecentChosen: key => CalcitaController.openPath(key, "main")
+        onRecentForgotten: key => CalcitaController.forgetRecent(key)
     }
 
     // The drop, the notices this window was given (and those no window

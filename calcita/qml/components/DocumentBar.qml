@@ -3,7 +3,7 @@ import org.celestina.calcita 1.0
 
 // The bar over the pages, a glass pill: the document's name, the page field
 // «n / N» (type a page, +n, -n, «inicio» or «fin» and press Enter), the zoom
-// controls, the search and outline toggles and «Abrir…». It only reports what the person asked; the window
+// controls, the search, outline and reading-mode toggles and «Abrir…». It only reports what the person asked; the window
 // hands each request to its `CalcitaDocument`.
 Item {
     id: bar
@@ -15,6 +15,7 @@ Item {
     property real zoomFactor: 1
     property bool searchOpen: false
     property bool outlineOpen: false
+    property bool readingDark: false
 
     signal goToRequested(string text)
     signal zoomInRequested()
@@ -24,6 +25,7 @@ Item {
     signal openRequested()
     signal searchToggled()
     signal outlineToggled()
+    signal readingToggled()
     // Enter or Escape in the page field: focus goes back to the pages.
     signal fieldDone()
 
@@ -45,12 +47,15 @@ Item {
     onPageDisplayChanged: bar.showPage()
 
     objectName: "documentBar"
+    Accessible.role: Accessible.ToolBar
+    Accessible.name: qsTr("Barra del documento")
     implicitWidth: row.implicitWidth + CelestinaTheme.spaceSm * 2
     implicitHeight: row.implicitHeight + CelestinaTheme.spaceXs * 2
 
     CelestinaSurface {
         anchors.fill: parent
         role: CelestinaSurface.Elevated
+        Accessible.ignored: true
         radiusOverride: CelestinaTheme.radiusPill
     }
 
@@ -81,7 +86,10 @@ Item {
             height: CelestinaTheme.controlHeightSm
             horizontalAlignment: TextInput.AlignHCenter
             font.features: CelestinaTheme.fontFeaturesTabular
-            Accessible.name: qsTr("Página")
+            Accessible.name: bar.pageCount > 0
+                             ? qsTr("Página %1 de %2").arg(bar.page).arg(bar.pageCount)
+                             : qsTr("Página")
+            Accessible.description: qsTr("Escribe un número de página, +n, -n, inicio o fin")
             Component.onCompleted: bar.showPage()
             onActiveFocusChanged: {
                 if (activeFocus)
@@ -116,6 +124,8 @@ Item {
                 color: CelestinaTheme.textMuted
                 font.pixelSize: CelestinaTheme.fontCaption
                 font.features: CelestinaTheme.fontFeaturesTabular
+                Accessible.role: Accessible.StaticText
+                Accessible.name: qsTr("Zoom %1 %").arg(Math.round(bar.zoomFactor * 100))
             }
 
             CelestinaIconButton {
@@ -161,6 +171,17 @@ Item {
             iconName: "view-list"
             helpText: qsTr("Índice")
             onClicked: bar.outlineToggled()
+        }
+
+        CelestinaIconButton {
+            objectName: "readingButton"
+            anchors.verticalCenter: parent.verticalCenter
+            role: bar.readingDark ? CelestinaButton.Selected : CelestinaButton.Ghost
+            iconName: "sun"
+            helpText: bar.readingDark ? qsTr("Lectura clara") : qsTr("Lectura oscura")
+            Accessible.checkable: true
+            Accessible.checked: bar.readingDark
+            onClicked: bar.readingToggled()
         }
 
         CelestinaIconButton {

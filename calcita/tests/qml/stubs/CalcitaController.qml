@@ -63,12 +63,28 @@ QtObject {
         documents = documents.filter(open => open !== key)
     }
 
-    function remember(key, page, zoom) {
+    function publishNames() {
+        recentNames = recents.map(known => known.substring(known.lastIndexOf("/") + 1))
+    }
+
+    function remember(key, page, zoom, dark) {
         const next = Object.assign({}, remembered)
-        next[key] = { "page": page, "zoom": zoom }
+        next[key] = { "page": page, "zoom": zoom, "dark": !!dark }
         remembered = next
         recents = [key].concat(recents.filter(known => known !== key))
-        recentNames = recents.map(known => known.substring(known.lastIndexOf("/") + 1))
+        publishNames()
+    }
+
+    function forgetRecent(key) {
+        const next = Object.assign({}, remembered)
+        delete next[key]
+        remembered = next
+        recents = recents.filter(known => known !== key)
+        publishNames()
+    }
+
+    function restoredDark(key) {
+        return remembered[key] !== undefined ? remembered[key].dark : false
     }
 
     function restoredPage(key) {

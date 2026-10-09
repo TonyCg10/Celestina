@@ -1,0 +1,65 @@
+# CAL-1-C exact change inventory
+
+Base revision	a8f552eba444c94335584ecf503b54f889220069
+Pathspec	calcita/Cargo.lock
+Pathspec	calcita/Cargo.toml
+Pathspec	calcita/README.md
+Pathspec	calcita/ROADMAP.md
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/VALIDATION.md
+Pathspec	calcita/build.rs
+Pathspec	calcita/docs/evidence/2026-10-09-exit.md
+Pathspec	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-C.numstat.tsv
+Pathspec	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+Pathspec	calcita/org.celestina.Calcita.desktop
+Pathspec	calcita/qml/DocumentWindow.qml
+Pathspec	calcita/qml/Main.qml
+Pathspec	calcita/qml/OutlinePanel.qml
+Pathspec	calcita/qml/SearchCard.qml
+Pathspec	calcita/qml/components/DocumentBar.qml
+Pathspec	calcita/qml/components/EmptyState.qml
+Pathspec	calcita/qml/components/ReadingEffect.qml
+Pathspec	calcita/qml/shaders/reading.frag
+Pathspec	calcita/src/controller.rs
+Pathspec	calcita/tests/qml/stubs/CalcitaController.qml
+Pathspec	calcita/tests/qml/tst_main.qml
+Pathspec	calcita/tests/qml/tst_outline.qml
+Pathspec	calcita/tests/qml/tst_reading_mode.qml
+Pathspec	calcita/tests/qml/tst_recents.qml
+Pathspec	celestina-rs/crates/calcita-core/src/reading.rs
+Pathspec	celestina-rs/crates/calcita-core/src/recent.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/recent.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	f7bb8421c61d252eb46f97ec23c238f3a5e5064064b90473d4a6352f2cf39799	calcita/Cargo.lock
+1	1	c5394913d33a747f92f523b88d333fc57d035efc72fcffa115beb0957dc91d38	calcita/Cargo.toml
+9	5	cdf09ff572717bfca9ca32fa21dfa94d9639f5eecf535d114ee17bcdb4d1b583	calcita/README.md
+7	2	a53e12a542a7f95319995aa46c95e099561792b382386379cd576a39930fe1a8	calcita/ROADMAP.md
+30	10	56de4d47e10e854c8ddb00d5557401c7de29ce4eab0a7ff60cb83e03197c1d75	calcita/STATUS.md
+29	1	da988e2f93053e83614373552d344607b9e5b578071638ca002519d2fd3e31f7	calcita/VALIDATION.md
+81	0	5b93ccd9810397ee97b52afefb4151105f75f5680b9901373e1156bf55ef6866	calcita/build.rs
+144	0	f704cfffd68691cbe247dbc85691335dc2c208726679fd72af68d3043cdcb421	calcita/docs/evidence/2026-10-09-exit.md
+65	0	self	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-C.numstat.tsv
+1	1	d817aeb6b9389191fda78d408914589729ade350ec574ee8be3716079b56d125	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+1	0	c1461a3d0a2922f0387c696504f1cc196f50cc3f3a6c5ae582c919cba440b711	calcita/org.celestina.Calcita.desktop
+36	2	fcef268bdd83606598f75d70ae0cd75c450e23c691a3a1951b6f89248eaa3cf4	calcita/qml/DocumentWindow.qml
+2	0	fda6f4a5638ac76fe39ed625c18040d9610505c9f3c61630c32e84ae99f1f796	calcita/qml/Main.qml
+47	12	414c45478d4f998d6956aced0d67bc9be4e1f7da8311c94f3ac2c9c652382d22	calcita/qml/OutlinePanel.qml
+2	0	821826bdab513187698ce2a19909dec8e5487676d6db47d152e99b53a9e60865	calcita/qml/SearchCard.qml
+23	2	8bc4891ef45632ecb66c3314d93cb840d5ffc9bdcebd712e4668b398de2b826d	calcita/qml/components/DocumentBar.qml
+49	3	355290c1324f892b5b3d300b2530c190987b83ef7e17da50fa9efe78fbf05560	calcita/qml/components/EmptyState.qml
+14	0	1472c329b94fe672bb759f3816852d5d4fcf5e46eb84bb474602408d07a0e6b9	calcita/qml/components/ReadingEffect.qml
+32	0	3ee0997d1c811d25454641cebe3f7e0350c798d38b291a65ed0b3d43d02ed3c5	calcita/qml/shaders/reading.frag
+44	3	09f6d809614e68e2326e607bd4f2278a46eea31323e3591b0c34eb79b4b3f827	calcita/src/controller.rs
+19	3	0c47c5ec5fca955ddf8e86e49e24e191ce0c3cda8e5d65214d22d1fa5d89d0df	calcita/tests/qml/stubs/CalcitaController.qml
+1	1	a8f9d8895de684ecc891a9e9764fbff825d4b24bec45137eebb389beee570e56	calcita/tests/qml/tst_main.qml
+9	3	b0c86cd2c4112e2740a560354afef664d22ac176f90404c63bf2b42567dce53a	calcita/tests/qml/tst_outline.qml
+127	0	806a4321f569862fd40c7e27731b42cad01dc4feed0b0feffea6cc85668dc7f2	calcita/tests/qml/tst_reading_mode.qml
+95	0	a392e42f522287247106fc44258a39667377780ad8258a4a3ac630c0046e41b2	calcita/tests/qml/tst_recents.qml
+5	1	7335dba459ad4d7eda65b0de004ce8c0e1bd45ea0575a842a492faf9d81d8aa2	celestina-rs/crates/calcita-core/src/reading.rs
+24	5	fd29e5e4d0bfb6b99f92509c4dbdcec3b8ed60299aed7ee6dac76a18c9de28cc	celestina-rs/crates/calcita-core/src/recent.rs
+61	1	3a2a59724f3315d1306fc25d3dd27f763574ff9c07676d9783bad730b732772d	celestina-rs/crates/calcita-core/tests/recent.rs
+1	0	e8a9af1e25dc6a1c9a8ea52ee81c591a72586731bd127e53f3318b5f3b460fa9	docs/version-history.tsv

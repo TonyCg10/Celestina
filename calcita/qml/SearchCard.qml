@@ -38,6 +38,8 @@ Item {
     }
 
     objectName: "searchCard"
+    Accessible.role: Accessible.Pane
+    Accessible.name: qsTr("Búsqueda")
     implicitWidth: 380
     implicitHeight: row.implicitHeight + CelestinaTheme.spaceXs * 2
 

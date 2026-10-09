@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Pdf
@@ -6,7 +7,8 @@ import "components"
 
 // One document's window: the bar over a continuous page view, the search card
 // under the bar, the outline card at the side and the confirmation an
-// external link needs. QtPdf loads, draws, searches and selects; the window's
+// external link needs, and the dark reading mode laid over the pages as a
+// layer effect. QtPdf loads, draws, searches and selects; the window's
 // `CalcitaDocument` decides what the page field, the zoom controls and a step
 // through the hits mean, and the controller keeps the recents, the clipboard
 // and `xdg-open`. A drop of `text/uri-list` opens each PDF in a window of its
@@ -41,9 +43,25 @@ ApplicationWindow {
     readonly property alias linkPill: linkConfirm
     property bool searchOpen: false
     property bool outlineOpen: false
+    // The dark reading mode (Ctrl+I or the bar's button): the pages inverted
+    // with their hue turned, remembered per document.
+    property bool readingDark: false
+    // The reading mode's strength, 0 to 1: it fades over `motionNormal`, at
+    // once under reduced motion. The layer exists only while it is above 0.
+    property real readingAmount: documentWindow.readingDark ? 1 : 0
+    readonly property alias readingFade: readingFade
     // This is the window `Activate` raises and that shows the notices no
     // window asked for; the owner sets it.
     property bool front: false
+
+    Behavior on readingAmount {
+        id: readingFade
+        enabled: !CelestinaTheme.reducedMotion
+        NumberAnimation {
+            duration: CelestinaTheme.motionNormal
+            easing.type: CelestinaTheme.easeStandard
+        }
+    }
 
     // The pages sit this far from the window's sides when fitted.
     readonly property int fitMargin: CelestinaTheme.spaceXl
@@ -67,7 +85,12 @@ ApplicationWindow {
     function remember() {
         if (readerState.loaded)
             CalcitaController.remember(documentWindow.documentKey, readerState.page,
-                                       readerState.zoomWord())
+                                       readerState.zoomWord(), documentWindow.readingDark)
+    }
+
+    function toggleReadingMode() {
+        documentWindow.readingDark = !documentWindow.readingDark
+        documentWindow.remember()
     }
 
     function nextPage() {
@@ -190,6 +213,7 @@ ApplicationWindow {
             if (pdf.status === PdfDocument.Ready) {
                 readerState.reportLoaded(pdf.pageCount)
                 readerState.restoreZoom(CalcitaController.restoredZoom(documentWindow.documentKey))
+                documentWindow.readingDark = CalcitaController.restoredDark(documentWindow.documentKey)
                 documentWindow.applyZoom()
                 const page = CalcitaController.restoredPage(documentWindow.documentKey)
                 if (page > 1 && page <= pdf.pageCount)
@@ -210,6 +234,10 @@ ApplicationWindow {
                             ? outlinePanel.width + CelestinaTheme.spaceMd * 2 : 0
         document: documentWindow.pdf
         focus: true
+        layer.enabled: documentWindow.readingAmount > 0
+        layer.effect: ReadingEffect {
+            amount: documentWindow.readingAmount
+        }
         onExternalLinkRequested: url => linkConfirm.ask(url)
         onContentYChanged: readerState.reportPage(documentWindow.pageAtScroll())
         onWidthChanged: {
@@ -311,6 +339,8 @@ ApplicationWindow {
         onFitPageRequested: readerState.fitPage()
         searchOpen: documentWindow.searchOpen
         outlineOpen: documentWindow.outlineOpen
+        readingDark: documentWindow.readingDark
+        onReadingToggled: documentWindow.toggleReadingMode()
         onOpenRequested: documentWindow.openRequested()
         onSearchToggled: {
             if (documentWindow.searchOpen)
@@ -399,6 +429,10 @@ ApplicationWindow {
     Shortcut {
         sequence: "F9"
         onActivated: documentWindow.toggleOutline()
+    }
+    Shortcut {
+        sequence: "Ctrl+I"
+        onActivated: documentWindow.toggleReadingMode()
     }
     Shortcut {
         sequences: [StandardKey.Copy]

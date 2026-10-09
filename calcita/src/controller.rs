@@ -89,9 +89,21 @@ pub mod qobject {
         #[qinvokable]
         fn close_document(self: Pin<&mut CalcitaController>, key: &QString);
 
-        /// Remembers where `key` is being read; saved on the store's worker.
+        /// Remembers where `key` is being read and whether in the dark
+        /// reading mode; saved on the store's worker.
         #[qinvokable]
-        fn remember(self: Pin<&mut CalcitaController>, key: &QString, page: i32, zoom: &QString);
+        fn remember(
+            self: Pin<&mut CalcitaController>,
+            key: &QString,
+            page: i32,
+            zoom: &QString,
+            dark: bool,
+        );
+
+        /// Forgets the recent document `key` («Quitar de recientes»); the
+        /// file itself is not touched.
+        #[qinvokable]
+        fn forget_recent(self: Pin<&mut CalcitaController>, key: &QString);
 
         /// The page `key` was left at, 1 when it is not remembered.
         #[qinvokable]
@@ -100,6 +112,10 @@ pub mod qobject {
         /// The zoom word `key` was left at (`width`, `page`, `free:<f>`).
         #[qinvokable]
         fn restored_zoom(self: &CalcitaController, key: &QString) -> QString;
+
+        /// Whether `key` was left in the dark reading mode.
+        #[qinvokable]
+        fn restored_dark(self: &CalcitaController, key: &QString) -> bool;
 
         /// Puts `text`, the selection of a page, on the clipboard.
         #[qinvokable]
@@ -405,20 +421,41 @@ impl qobject::CalcitaController {
         }
     }
 
-    pub fn remember(mut self: Pin<&mut Self>, key: &QString, page: i32, zoom: &QString) {
+    pub fn remember(
+        mut self: Pin<&mut Self>,
+        key: &QString,
+        page: i32,
+        zoom: &QString,
+        dark: bool,
+    ) {
         let Ok(path) = pathkey::decode(&key.to_string()) else {
             return;
         };
         let reading = Reading {
             page: u32::try_from(page).unwrap_or(1).max(1),
             zoom: ZoomMode::parse(&zoom.to_string()).unwrap_or(ZoomMode::FitWidth),
+            dark,
         };
         self.as_mut().rust_mut().store.touch(Recent {
             path,
             page: reading.page,
             zoom: reading.zoom,
             opened_at: SystemTime::now(),
+            dark: reading.dark,
         });
+        if self.rust().store_ready {
+            self.as_mut().send_store();
+        }
+        self.publish_recents();
+    }
+
+    pub fn forget_recent(mut self: Pin<&mut Self>, key: &QString) {
+        let Ok(path) = pathkey::decode(&key.to_string()) else {
+            return;
+        };
+        if !self.as_mut().rust_mut().store.forget(&path) {
+            return;
+        }
         if self.rust().store_ready {
             self.as_mut().send_store();
         }
@@ -438,6 +475,10 @@ impl qobject::CalcitaController {
 
     pub fn restored_zoom(&self, key: &QString) -> QString {
         QString::from(self.reading_for(key).zoom.to_word().as_str())
+    }
+
+    pub fn restored_dark(&self, key: &QString) -> bool {
+        self.reading_for(key).dark
     }
 
     pub fn copy_selection(&self, text: &QString) {

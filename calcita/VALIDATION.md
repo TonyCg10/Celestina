@@ -43,4 +43,32 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 - **Result:** not run
 - **Evidence:** none
 
-CAL-1-C adds the reading mode with Calcita as the `application/pdf` handler.
+## VAL-CAL-DARK — The reading mode, the recents menu and the PDF handler
+
+- **Status:** pending
+- **Related implementation:** CAL-1-C
+- **Requires:** the Calcita 1.0.0 binary installed by
+  `calcita/scripts/complete-production.sh` on the real session; a real PDF
+  with black text on white and at least one colour image
+- **Procedure:** open the PDF; press Ctrl+I, scroll through a few pages,
+  press Ctrl+I again, then use the bar's «Lectura oscura» button; turn
+  reduced motion on in the suite's appearance settings and toggle the mode
+  again; leave the document in the reading mode, close the window and
+  reopen the document from the recents card; in the empty window, right
+  click a recent row (and, with the keyboard, focus a row and press
+  Shift+F10) and choose «Quitar de recientes»; run
+  `update-desktop-database ~/.local/share/applications`, add
+  `application/pdf=org.celestina.Calcita.desktop` to
+  `~/.config/mimeapps.list` under `[Default Applications]`, then open a PDF
+  from Siderita with a double click and with `xdg-open <file.pdf>`; in the
+  reading mode, search a word with Ctrl+F and drag over a word to select it
+- **Pass condition:** the pages turn dark with light text and colours keep
+  their hue (the image is inverted, accepted), the gaps between pages stay
+  the window's glass, the bar, the cards and the scroll bar are not
+  inverted; the change fades in about 200 ms, and with reduced motion it is
+  immediate; the document reopens in the reading mode; the row leaves the
+  card and its file is untouched; Siderita and `xdg-open` open the PDF in
+  Calcita, not in the browser; in the reading mode the search hit and the
+  selection stay clearly visible
+- **Result:** not run
+- **Evidence:** none

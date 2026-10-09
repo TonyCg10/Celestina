@@ -3,9 +3,11 @@
 //! `data_home/calcita/recent`.
 //!
 //! One line per document, tab-separated: the path's key (byte-exact,
-//! `celestina_core::pathkey`), the page, the zoom word and the opening time
-//! in seconds since the epoch. A line that does not read is skipped, so a
-//! damaged store loses lines rather than the whole list.
+//! `celestina_core::pathkey`), the page, the zoom word, the opening time in
+//! seconds since the epoch and the reading mode (`dark` or `light`). A line
+//! written before the reading mode existed has no fifth field and reads as
+//! `light`. A line that does not read is skipped, so a damaged store loses
+//! lines rather than the whole list.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -31,6 +33,8 @@ pub struct Recent {
     pub page: u32,
     pub zoom: ZoomMode,
     pub opened_at: SystemTime,
+    /// Read in the dark reading mode.
+    pub dark: bool,
 }
 
 impl Recent {
@@ -40,6 +44,7 @@ impl Recent {
         Reading {
             page: self.page.max(1),
             zoom: self.zoom,
+            dark: self.dark,
         }
     }
 
@@ -49,11 +54,12 @@ impl Recent {
             .duration_since(SystemTime::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_secs());
         format!(
-            "{}\t{}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\n",
             pathkey::encode(&self.path),
             self.page,
             self.zoom.to_word(),
-            seconds
+            seconds,
+            if self.dark { "dark" } else { "light" }
         )
     }
 
@@ -63,6 +69,11 @@ impl Recent {
         let page = fields.next()?.parse().ok()?;
         let zoom = ZoomMode::parse(fields.next()?)?;
         let seconds: u64 = fields.next()?.parse().ok()?;
+        let dark = match fields.next() {
+            None | Some("light") => false,
+            Some("dark") => true,
+            Some(_) => return None,
+        };
         if fields.next().is_some() {
             return None;
         }
@@ -71,6 +82,7 @@ impl Recent {
             page,
             zoom,
             opened_at: SystemTime::UNIX_EPOCH + Duration::from_secs(seconds),
+            dark,
         })
     }
 }
@@ -183,6 +195,13 @@ impl RecentStore {
         self.entries.retain(|entry| entry.path != recent.path);
         self.entries.insert(0, recent);
         self.entries.truncate(CAPACITY);
+    }
+
+    /// Forgets `path`; whether it was remembered.
+    pub fn forget(&mut self, path: &Path) -> bool {
+        let before = self.entries.len();
+        self.entries.retain(|entry| entry.path != path);
+        self.entries.len() != before
     }
 
     /// Writes the store atomically, private to the person.

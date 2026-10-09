@@ -1,3 +1,6 @@
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
 /// The two shared singletons, registered as such in `main`; watched like the
@@ -41,12 +44,85 @@ const QML_FILES: &[&str] = &[
     "qml/components/LinkPill.qml",
     "qml/components/NoticePill.qml",
     "qml/components/PageView.qml",
+    "qml/components/ReadingEffect.qml",
     "qml/components/WindowChrome.qml",
     "qml/DocumentWindow.qml",
     "qml/Main.qml",
     "qml/OutlinePanel.qml",
     "qml/SearchCard.qml",
 ];
+
+/// The reading mode's fragment shader, compiled to `.qsb` below.
+const READING_SHADER: &str = "qml/shaders/reading.frag";
+
+/// Qt's shader baker: `QSB` when set, else the one beside the Qt that
+/// `QMAKE` (or `qmake6`, `qmake`) names, in its host binaries or its
+/// libexec folder.
+fn find_qsb() -> PathBuf {
+    if let Some(qsb) = std::env::var_os("QSB") {
+        return PathBuf::from(qsb);
+    }
+    let qmakes: Vec<String> = std::env::var("QMAKE")
+        .into_iter()
+        .chain(["qmake6".to_owned(), "qmake".to_owned()])
+        .collect();
+    for qmake in qmakes {
+        for query in ["QT_HOST_BINS", "QT_INSTALL_BINS", "QT_HOST_LIBEXECS"] {
+            let Ok(output) = Command::new(&qmake).args(["-query", query]).output() else {
+                continue;
+            };
+            let dir = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            let candidate = Path::new(&dir).join("qsb");
+            if output.status.success() && !dir.is_empty() && candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from("qsb")
+}
+
+/// Compiles the reading shader for every Qt Quick backend (Vulkan, OpenGL
+/// and GLES, Metal, Direct3D) and writes the resource file that places it at
+/// `qrc:/calcita/shaders/reading.frag.qsb`. Both outputs live in `OUT_DIR`
+/// and are only rewritten when they change, so the build stays quiet.
+fn bake_shaders() -> PathBuf {
+    let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"));
+    let shaders = out.join("shaders");
+    std::fs::create_dir_all(&shaders).expect("the shader folder in OUT_DIR");
+    let baked = shaders.join("reading.frag.qsb");
+    let fresh = shaders.join("reading.frag.qsb.new");
+    let status = Command::new(find_qsb())
+        .args([
+            "--glsl",
+            "100es,120,150",
+            "--hlsl",
+            "50",
+            "--msl",
+            "12",
+            "-o",
+        ])
+        .arg(&fresh)
+        .arg(READING_SHADER)
+        .status()
+        .expect("qsb, Qt's shader baker, runs (set QSB to its path)");
+    assert!(status.success(), "qsb could not compile {READING_SHADER}");
+    // The resource compiler watches the baked file, so it is only replaced
+    // when the shader really changed.
+    let new_bytes = std::fs::read(&fresh).expect("the baked shader");
+    if std::fs::read(&baked).ok().as_deref() != Some(new_bytes.as_slice()) {
+        std::fs::rename(&fresh, &baked).expect("the baked shader in place");
+    } else {
+        let _ = std::fs::remove_file(&fresh);
+    }
+    let qrc = out.join("shaders.qrc");
+    let text = "<RCC>\n  <qresource prefix=\"/calcita/shaders\">\n    \
+                <file alias=\"reading.frag.qsb\">shaders/reading.frag.qsb</file>\n  \
+                </qresource>\n</RCC>\n";
+    if std::fs::read_to_string(&qrc).ok().as_deref() != Some(text) {
+        std::fs::write(&qrc, text).expect("the shader resource file in OUT_DIR");
+    }
+    qrc
+}
 
 fn main() {
     // The shared files are symlinked into qml/ so they register under a clean
@@ -79,6 +155,9 @@ fn main() {
     {
         println!("cargo::rerun-if-changed={input}");
     }
+    println!("cargo::rerun-if-changed={READING_SHADER}");
+    println!("cargo::rerun-if-env-changed=QSB");
+    let shader_qrc = bake_shaders();
     println!("cargo::rerun-if-changed=cpp/clipboard.cpp");
     println!("cargo::rerun-if-changed=cpp/calcita/clipboard.h");
 
@@ -86,6 +165,8 @@ fn main() {
         // The shared icons and Inter Variable, compiled in.
         .qrc("qml/icons.qrc")
         .qrc("qml/fonts.qrc")
+        // The reading mode's shader, baked from qml/shaders/ in OUT_DIR.
+        .qrc(&shader_qrc)
         // «Copiar» puts the selected text on the clipboard: cxx-qt-lib has no
         // QClipboard, so a one-function shim under cpp/ does it on the Qt
         // thread.
