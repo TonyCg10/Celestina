@@ -17,7 +17,12 @@
   2026-10-10 recorded nothing: the portal's node never streamed, which the
   child could not say (SEL-1-E adds the no-signal watchdog, the node line
   on stderr and the diagnosis recipe; see the
-  [recording start evidence](docs/evidence/2026-10-10-recording-start.md))
+  [recording start evidence](docs/evidence/2026-10-10-recording-start.md)).
+  The cause was the portal backend: SEL-1-F builds the suite's own
+  xdg-desktop-portal-wlr (upstream `c0255d7b` plus a timestamp and a
+  first-copy fix) with `scripts/build-portal.sh`; with it six test sessions
+  in a row recorded; see the
+  [capture portal evidence](docs/evidence/2026-10-10-capture-portal.md)
 
 ## Current checkout truth
 
@@ -96,31 +101,21 @@
 
 ## Known issues
 
-- On 2026-10-10 (1.0.1) four recordings in a row received no frame: the
-  child prerolled on the node the portal's `Start` named (the same code
-  order as 1.0.0, which recorded at 14:55; pinned by
-  `the_child_is_spawned_after_the_portal_answered_and_on_its_node`) and
-  nothing arrived, so `gst-launch-1.0 -e` could not reach its EOS and the
-  stop killed it after 10 s with nothing saved (reproduced offline with a
-  PipeWire node that exists and never streams). Why the portal backend
-  stopped streaming between 14:55 and 15:53 is not known; a recording
-  whose file is still empty after `SIGNAL_DEADLINE` (8 s) now fails at
-  once with «El portal no ha enviado ninguna imagen» and the node is on
-  stderr. The next live failure needs the child's log:
+- Recording depends on the ScreenCast backend. The distribution's
+  xdg-desktop-portal-wlr 0.8.4 gives one frame per session under niri, and
+  upstream's master loses whole recordings to a frameless buffer stamped
+  with time 0 (GStreamer's `pipewiresrc` then waits for ever). The suite's
+  build (`scripts/build-portal.sh --install-override`) carries the fix; on
+  any other backend a recording that receives nothing fails after
+  `SIGNAL_DEADLINE` (8 s) with «El portal no ha enviado ninguna imagen».
+  A live failure still wants the child's log:
   `GST_DEBUG=3 GST_DEBUG_FILE=/tmp/selenita-gst.log selenita` from a
-  terminal (the child inherits the environment). A shell wrapper put in
-  `SELENITA_TOOLS_DIR` must `exec` the launcher: a wrapper that runs it as
-  a background job hands it `/dev/null` on fd 0 and loses the portal's
-  remote, which is what the two wrapped diagnostic runs of that day
-  measured.
-- The first second of a recording is black except for the parts of the
-  screen that changed, until the second keyframe: xdg-desktop-portal-wlr
-  0.8.4 captures through ext-image-copy-capture and never damages a buffer
-  whole on its first use, so niri paints only its own damage into it. The
-  encoder is cleared (the same pipeline over a still of the desktop writes
-  a full first keyframe) and no element of `gst-launch-1.0` drops a first
-  second by time; the SEL-1-D evidence has the measurements. The fix is
-  the backend's.
+  terminal. A wrapper in `SELENITA_TOOLS_DIR` must `exec` the launcher, or
+  it hands the child `/dev/null` on fd 0 and loses the portal's remote.
+- One frame near the start of a recording can be a partial render (only
+  what changed since another buffer's frame): niri's screencopy keeps one
+  damage tracker for every client buffer. The portal build already copies
+  each buffer whole on its first use; the rest is the compositor's.
 - A portal request that times out or is cancelled at quit leaves its
   `selenita-portal` helper thread parked on the signal iterator (zbus's
   blocking iterator has no deadline) together with its connection until the

@@ -54,13 +54,17 @@ covers the window.
 ## VAL-SEL-REC — Record the screen, with and without sound
 
 - **Status:** pending
-- **Related implementation:** SEL-1-B, SEL-1-D, SEL-1-E (the run of
+- **Related implementation:** SEL-1-B, SEL-1-D, SEL-1-E, SEL-1-F (the run of
   2026-10-10 found the SEL-1-D findings; the 1.0.1 run received no frame
   from the portal; re-run on the SEL-1-E binary, started from a terminal
   as `GST_DEBUG=3 GST_DEBUG_FILE=/tmp/selenita-gst.log selenita` so a
   failure leaves the child's log, and with Selenita's own stderr kept:
   it prints `portal stream node N, remote fd yes` per recording)
 - **Requires:** the deployed Selenita (`scripts/complete-production.sh`),
+  the suite's portal build running (`scripts/build-portal.sh
+  --install-override`, SEL-1-F; `busctl --user list` shows
+  `org.freedesktop.impl.portal.desktop.wlr` owned by
+  `~/.local/libexec/xdg-desktop-portal-wlr`),
   `gst-plugins-good` installed (`gst-inspect-1.0 --exists mp4mux` exits 0;
   it was missing when the unit was built), `gst-plugin-pipewire`,
   `gst-plugins-ugly` or `gst-plugin-va`, `gst-libav`, `xdg-desktop-portal`

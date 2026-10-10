@@ -1,0 +1,25 @@
+# SEL-1-F exact change inventory
+
+Base revision	aff924ad1109054e2b5000441ea30a915727a8ae
+Pathspec	selenita/README.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/VALIDATION.md
+Pathspec	selenita/docs/evidence/2026-10-10-capture-portal.md
+Pathspec	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-F.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+Pathspec	selenita/packaging/xdg-desktop-portal-wlr/0001-screencast-stamp-frameless-buffers.patch
+Pathspec	selenita/packaging/xdg-desktop-portal-wlr/README.md
+Pathspec	selenita/scripts/build-portal.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+21	1	4e5b84be787db43720a405c1ad8075e7c460b702444efde82fb0072eee3fe132	selenita/README.md
+20	25	e7a3828ce5aebb055777993439d76533e86443580ce444ef185457f8d104941c	selenita/STATUS.md
+5	1	2c028cbdb1abcdef8a21ee2a65f79ebf21cf6f8d540998287fc906a5b13ed41e	selenita/VALIDATION.md
+133	0	fd5afc5a9db52409c07852a23f658a23f8c0fc172d98b33403e4db5b932bbca5	selenita/docs/evidence/2026-10-10-capture-portal.md
+25	0	self	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-F.numstat.tsv
+1	0	d62c8e3c2ac87fb976ea84318f9610861de51b6b0a1cc2cd2cf881204bd59011	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+101	0	08ed0667ba246ca0175aea9afd1dc5237f7d3d8c5b8cef6dfa72420236bff3f8	selenita/packaging/xdg-desktop-portal-wlr/0001-screencast-stamp-frameless-buffers.patch
+59	0	2de819512b5932acb964e7859c5db2f514f4bffb5ea923ee4f09946ec58bd5f2	selenita/packaging/xdg-desktop-portal-wlr/README.md
+136	0	7d5956d53b45293b0cda16144d9da8f44d71cf86ec65eddd0224f57e927355cf	selenita/scripts/build-portal.sh

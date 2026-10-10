@@ -1,0 +1,101 @@
+From c0d9c2e5e316caa160ed4b6880dae295a13a87f1 Mon Sep 17 00:00:00 2001
+From: toni <tony@joinvalor.com>
+Date: Sat, 10 Oct 2026 17:59:08 -0400
+Subject: [PATCH] screencast: stamp frameless buffers with the monotonic clock
+ and copy a buffer whole on its first use
+
+---
+ include/pipewire_screencast.h        |  4 ++--
+ include/screencast_common.h          |  4 ++++
+ src/screencast/pipewire_screencast.c | 12 ++++++++++++
+ src/screencast/wlr_screencopy.c      | 10 +++++++++-
+ 4 files changed, 27 insertions(+), 3 deletions(-)
+
+diff --git a/include/pipewire_screencast.h b/include/pipewire_screencast.h
+index f8cd88e..0ede7be 100644
+--- a/include/pipewire_screencast.h
++++ b/include/pipewire_screencast.h
+@@ -3,8 +3,8 @@
+ 
+ #include "screencast_common.h"
+ 
+-#define XDPW_PWR_BUFFERS 2
+-#define XDPW_PWR_BUFFERS_MIN 2
++#define XDPW_PWR_BUFFERS 8
++#define XDPW_PWR_BUFFERS_MIN 4
+ #define XDPW_PWR_ALIGN 16
+ 
+ void xdpw_pwr_enqueue_buffer(struct xdpw_screencast_instance *cast);
+diff --git a/include/screencast_common.h b/include/screencast_common.h
+index 668f80c..46cc6eb 100644
+--- a/include/screencast_common.h
++++ b/include/screencast_common.h
+@@ -73,6 +73,10 @@ struct xdpw_frame {
+ struct xdpw_buffer {
+ 	struct wl_list link;
+ 	enum buffer_type buffer_type;
++	// Set once the compositor has filled this buffer with a whole frame.
++	// Until then a copy with damage would leave the undamaged area as it
++	// was allocated, so the first copy into each buffer asks for everything.
++	bool filled;
+ 
+ 	uint32_t width;
+ 	uint32_t height;
+diff --git a/src/screencast/pipewire_screencast.c b/src/screencast/pipewire_screencast.c
+index 72aaddc..e457b9f 100644
+--- a/src/screencast/pipewire_screencast.c
++++ b/src/screencast/pipewire_screencast.c
+@@ -1,3 +1,4 @@
++#include <time.h>
+ #include "pipewire_screencast.h"
+ 
+ #include <pipewire/pipewire.h>
+@@ -246,6 +247,17 @@ void xdpw_pwr_enqueue_buffer(struct xdpw_screencast_instance *cast) {
+ 	struct spa_meta_header *h;
+ 	if ((h = spa_buffer_find_meta_data(spa_buf, SPA_META_Header, sizeof(*h)))) {
+ 		h->pts = SPA_TIMESPEC_TO_NSEC(&cast->current_frame);
++		if (buffer_corrupt || h->pts == 0) {
++			// A buffer returned without a frame (the stream paused before
++			// the copy landed) carries no compositor timestamp. Consumers
++			// such as GStreamer's pipewiresrc take the first pts as the
++			// stream's time base, so a zero here makes every real frame
++			// look hours late and stalls the pipeline. Stamp it with the
++			// clock the compositor uses instead.
++			struct timespec now;
++			clock_gettime(CLOCK_MONOTONIC, &now);
++			h->pts = SPA_TIMESPEC_TO_NSEC(&now);
++		}
+ 		h->flags = buffer_corrupt ? SPA_META_HEADER_FLAG_CORRUPTED : 0;
+ 		h->seq = cast->seq++;
+ 		h->dts_offset = 0;
+diff --git a/src/screencast/wlr_screencopy.c b/src/screencast/wlr_screencopy.c
+index 693ca4c..47307ea 100644
+--- a/src/screencast/wlr_screencopy.c
++++ b/src/screencast/wlr_screencopy.c
+@@ -161,7 +161,12 @@ static void wlr_frame_buffer_done(void *data,
+ 
+ 	cast->current_frame.damage.size = 0;
+ 
+-	zwlr_screencopy_frame_v1_copy_with_damage(frame, cast->current_frame.xdpw_buffer->buffer);
++	if (cast->current_frame.xdpw_buffer->filled) {
++		zwlr_screencopy_frame_v1_copy_with_damage(frame, cast->current_frame.xdpw_buffer->buffer);
++	} else {
++		// First use of this buffer: a whole frame, whatever the damage.
++		zwlr_screencopy_frame_v1_copy(frame, cast->current_frame.xdpw_buffer->buffer);
++	}
+ 	logprint(TRACE, "wlroots: frame copied");
+ }
+ 
+@@ -203,6 +208,9 @@ static void wlr_frame_ready(void *data, struct zwlr_screencopy_frame_v1 *frame,
+ 	cast->current_frame.tv_sec = ((((uint64_t)tv_sec_hi) << 32) | tv_sec_lo);
+ 	cast->current_frame.tv_nsec = tv_nsec;
+ 	cast->current_frame.completed = true;
++	if (cast->current_frame.xdpw_buffer) {
++		cast->current_frame.xdpw_buffer->filled = true;
++	}
+ 	logprint(TRACE, "wlroots: timestamp %"PRIu64":%"PRIu32, cast->current_frame.tv_sec, cast->current_frame.tv_nsec);
+ 
+ 	wlr_frame_done(cast);
+-- 
+2.56.0
+

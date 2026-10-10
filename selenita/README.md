@@ -79,7 +79,7 @@ button is disabled and the notice names the package.
 | `slurp` | choosing a region, in the theme's accent | SEL-1-A |
 | `wl-clipboard` (`wl-copy`) | copying the capture | SEL-1-A |
 | Fluorita, Siderita | «Abrir en Fluorita» and «Mostrar en Siderita» (`org.freedesktop.FileManager1`) | SEL-1-A |
-| `xdg-desktop-portal` with a ScreenCast backend (`wlr` under niri) | the recording's monitor and PipeWire node | SEL-1-B |
+| `xdg-desktop-portal` with a ScreenCast backend (`wlr` under niri, the suite's build: see below) | the recording's monitor and PipeWire node | SEL-1-B, SEL-1-F |
 | GStreamer (`gst-launch-1.0`, `gst-inspect-1.0`) with `gst-plugin-pipewire` (`pipewiresrc`) | running the recording pipeline | SEL-1-B |
 | `gst-plugins-good` (`mp4mux`) | muxing the recording; probed at start, said in the card and the notice when missing | SEL-1-B |
 | `gst-plugins-ugly` (`x264enc`), `gst-plugin-va` (`vah264enc`, optional), `gst-libav` (`avenc_aac`) | encoding the picture and the sound | SEL-1-B |
@@ -90,6 +90,26 @@ named `grim`, `slurp`, `wl-copy`, `niri`, `gst-launch-1.0` and
 `gst-inspect-1.0` from that folder instead (the test seam). `XDG_PICTURES_DIR`
 and `XDG_VIDEOS_DIR` in the environment override the folders
 `user-dirs.dirs` names.
+
+## The capture portal
+
+Under niri the ScreenCast portal's backend is xdg-desktop-portal-wlr. No
+release records reliably there, so the suite builds its own: upstream at a
+pinned commit plus the patches in
+[`packaging/xdg-desktop-portal-wlr/`](packaging/xdg-desktop-portal-wlr/README.md).
+
+```sh
+sh selenita/scripts/build-portal.sh --install-override
+```
+
+It installs `~/.local/libexec/xdg-desktop-portal-wlr` (the previous one kept
+as `.prev`), writes the systemd user drop-in that points
+`xdg-desktop-portal-wlr.service` at it and restarts the service. The
+distribution's package stays installed and untouched. The portal routing
+(`~/.config/xdg-desktop-portal/niri-portals.conf`, `ScreenCast=wlr`) and the
+backend's own configuration (the output chooser, `max_fps`) are the
+session's, not this script's. Rollback: delete the drop-in and restart the
+service, or copy `.prev` back.
 
 ## Architecture
 
