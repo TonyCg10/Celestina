@@ -1,0 +1,19 @@
+# EXT-1-S exact change inventory
+
+Base revision	202aeb38eb21c4aa51d11e90ab57e848bf1acdeb
+Pathspec	celestina-rs/crates/celestina-core/src/activation.rs
+Pathspec	docs/evidence/2026-10-09-selenita-support.md
+Pathspec	docs/inventories/2026-10-09-reading-and-capture/EXT-1-S.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-reading-and-capture.md
+Pathspec	docs/projects.toml
+Pathspec	scripts/activation_contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+11	7	391a793e32f2f6f91e1507dbb93f1f88806381df7076457cdbdea28a68c8cc1f	celestina-rs/crates/celestina-core/src/activation.rs
+37	0	d6e56daac6e3896f5f116a0e66f1d546baaa8a3e3e16ae7b754df2d23c1ecf76	docs/evidence/2026-10-09-selenita-support.md
+19	0	self	docs/inventories/2026-10-09-reading-and-capture/EXT-1-S.numstat.tsv
+1	0	271e25e2f716c91ff2a375fa4e193c0bc5d682384c911a2f1d81e893472ec692	docs/plans/active/2026-10-09-reading-and-capture.md
+1	1	6c3afe95c6287319ac778359ce465a0aa7fea123c198b918799e12177bdf782a	docs/projects.toml
+4	0	446ad12d337bb9b1c95e7bc68e189fb8ab842f2e6cebe356f35c4ca2bc3c426b	scripts/activation_contract.py

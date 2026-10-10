@@ -506,7 +506,7 @@ status_script = "selenita/scripts/status-production.sh"
 artifact_manifest = "selenita/target/production-artifact.toml"
 artifact_paths = ["selenita/target/release/selenita"]
 cargo_manifests = ["selenita/Cargo.toml"]
-production_inputs = ["selenita/Cargo.toml", "selenita/Cargo.lock", "selenita/build.rs", "selenita/src", "selenita/qml", "selenita/org.celestina.Selenita.desktop", "celestina-style/icons/apps/org.celestina.Selenita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/selenita-core"]
+production_inputs = ["selenita/Cargo.toml", "selenita/Cargo.lock", "selenita/build.rs", "selenita/src", "selenita/qml", "selenita/org.celestina.Selenita.desktop", "celestina-style/icons/apps/org.celestina.Selenita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/selenita-core", "celestina-rs/crates/siderita-ops"]
 # selenita-core gains tests/ in CAL-1-A; this list gains that path then.
 verification_inputs = ["selenita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [

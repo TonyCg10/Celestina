@@ -232,7 +232,7 @@ pub enum Claim {
 /// The claimed name. Dropping it releases the name, so it lives as long as the
 /// process does.
 pub struct Owner {
-    _connection: zbus::blocking::Connection,
+    connection: zbus::blocking::Connection,
     inbox: SharedInbox,
 }
 
@@ -241,6 +241,15 @@ impl Owner {
     /// every later request straight to the served [`Activatable`].
     pub fn attach(&self) {
         lock(&self.inbox).attach();
+    }
+
+    /// The connection that owns the name. An application may serve an extra
+    /// interface of its own at [`object_path`] on it (Selenita's
+    /// `org.celestina.Selenita1`), so callers reach both through the one
+    /// name; the shared [`INTERFACE`] stays as this module serves it.
+    #[must_use]
+    pub fn connection(&self) -> &zbus::blocking::Connection {
+        &self.connection
     }
 }
 
@@ -316,12 +325,7 @@ pub fn claim(name: ActivationName, served: Box<dyn Activatable>, argv_paths: &[P
             Ok(
                 zbus::fdo::RequestNameReply::PrimaryOwner
                 | zbus::fdo::RequestNameReply::AlreadyOwner,
-            ) => {
-                return Claim::Owner(Owner {
-                    _connection: connection,
-                    inbox,
-                })
-            }
+            ) => return Claim::Owner(Owner { connection, inbox }),
             Ok(_) | Err(zbus::Error::NameTaken) => call_owner(&connection, name, argv_paths),
             Err(error) => return unsettled(name, error.into()),
         };
