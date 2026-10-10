@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use celestina_core::activation;
 use celestina_core::{file_uri, CancellationToken};
-use selenita_core::niri::{self, Output, Window, Workspace};
+use selenita_core::niri::{self, Output, Window};
 use selenita_core::{runner, tools, Geometry, Target};
 
 use crate::capture::CaptureError;
@@ -50,8 +50,6 @@ pub trait Backend: Send {
     fn outputs(&mut self) -> Result<Vec<Output>, CaptureError>;
     /// Every window, with when each last had the focus.
     fn windows(&mut self) -> Result<Vec<Window>, CaptureError>;
-    /// The workspaces and their outputs.
-    fn workspaces(&mut self) -> Result<Vec<Workspace>, CaptureError>;
     /// Lets the person draw a region; `None` when they cancelled.
     fn select_region(
         &mut self,
@@ -107,11 +105,6 @@ impl Backend for Real {
     fn windows(&mut self) -> Result<Vec<Window>, CaptureError> {
         let socket = niri::socket().map_err(CaptureError::Niri)?;
         niri::windows(&socket).map_err(CaptureError::Niri)
-    }
-
-    fn workspaces(&mut self) -> Result<Vec<Workspace>, CaptureError> {
-        let socket = niri::socket().map_err(CaptureError::Niri)?;
-        niri::workspaces(&socket).map_err(CaptureError::Niri)
     }
 
     fn select_region(
@@ -249,13 +242,6 @@ impl Backend for Fake {
             window(1, activation::SELENITA.0, 20),
             window(2, "fake.window", 10),
         ])
-    }
-
-    fn workspaces(&mut self) -> Result<Vec<Workspace>, CaptureError> {
-        Ok(vec![Workspace {
-            id: 1,
-            output: Some("FAKE-1".to_owned()),
-        }])
     }
 
     fn select_region(

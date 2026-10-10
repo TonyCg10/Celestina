@@ -43,6 +43,10 @@ the QML test harness and the document set; its record is
 - `SEL-1-B` — recording through the ScreenCast portal and GStreamer, the
   sound option, `--stop`.
 - `SEL-1-C` — the keyboard and accessibility pass, 1.0.0.
+- `SEL-1-D` — bug unit after the author's first live session (2026-10-10):
+  the `Recordings` folder, the encoders' quality, the sound branch's stop,
+  the second recording's clock, the last recording after a trash, and the
+  window staying for a capture.
 
 ## Exclusions
 
@@ -65,3 +69,4 @@ captures and records with every tool of the scope.
 | SEL-1-A | `selenita:` | done | [inventory](../../inventories/2026-10-09-sel-1-foundation/SEL-1-A.numstat.tsv) | 51 files, +5841/-133 | Screenshots of the screen, a window or a region with delay, clipboard and folder, the history card and the niri key-binding flags | [evidence](../../evidence/2026-10-09-screenshots.md) | VAL-SEL-SHOT pending |
 | SEL-1-B | `selenita:` | done | [inventory](../../inventories/2026-10-09-sel-1-foundation/SEL-1-B.numstat.tsv) | 36 files, +3446/-173 | Recording to MP4 through the ScreenCast portal and `gst-launch-1.0` (the spike's choice), the sound option, `--record` and `--stop`, `ToggleRecording()` and `StopRecording()` | [evidence](../../evidence/2026-10-09-recording.md) | VAL-SEL-REC pending |
 | SEL-1-C | `selenita:` | done | [inventory](../../inventories/2026-10-09-sel-1-foundation/SEL-1-C.numstat.tsv) | 21 files, +858/-51 | The keyboard (`1`/`2`/`3`, Enter, `R`, Escape, the history rows' arrows, Home/End, Enter and Delete, no key in a text field) and the accessibility pass (names and roles everywhere, the rows as list items, the last recording's line); 1.0.0 at the landing (`--kind release`), plan archived after it | [evidence](../../evidence/2026-10-09-exit.md) | VAL-SEL-SHOT and VAL-SEL-REC (keyboard and Orca steps added) |
+| SEL-1-D | `selenita:` | done | [inventory](../../inventories/2026-10-09-sel-1-foundation/SEL-1-D.numstat.tsv) | 28 files, +898/-291 | Recordings land in the videos folder's `Recordings`; `vah264enc` at CQP 20/22 and `x264enc` at CRF 21; the sound branch mixed over a silent live bed so its EOS always arrives (a monitor with no buffers hung the stop past the 10 s deadline and lost the file); the start reported before the recording state and the card's clock re-read on it; the last recording's line cleared when its row leaves the history; the window no longer hides (nor settles 350 ms) for a capture; the first second's black frames traced to the portal backend and recorded (`--kind bug`) | [evidence](../../evidence/2026-10-10-recording-fixes.md) | VAL-SEL-SHOT and VAL-SEL-REC re-run (the `Recordings` folder and the two-in-a-row sequence added to the procedure) |

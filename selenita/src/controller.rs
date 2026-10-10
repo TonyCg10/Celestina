@@ -126,11 +126,8 @@ pub mod qobject {
         /// went to the clipboard only.
         #[qsignal]
         fn captured(self: Pin<&mut SelenitaController>, entry_id: QString);
-        /// The window steps aside for a capture that would include it.
-        #[qsignal]
-        #[cxx_name = "hideWindowRequested"]
-        fn hide_window_requested(self: Pin<&mut SelenitaController>);
-        /// The capture is over: the window comes back on the history.
+        /// A launch's capture is over: the window, hidden until now, shows
+        /// on the history.
         #[qsignal]
         #[cxx_name = "showWindowRequested"]
         fn show_window_requested(self: Pin<&mut SelenitaController>);
@@ -139,16 +136,11 @@ pub mod qobject {
         #[cxx_name = "recordingFinished"]
         fn recording_finished(self: Pin<&mut SelenitaController>, entry_id: QString);
 
-        /// Takes a capture with the card's choices. `window_shown` says
-        /// whether the window is on screen; `accent` and `background` are
-        /// the theme's colours for the region selector.
+        /// Takes a capture with the card's choices; `accent` and
+        /// `background` are the theme's colours for the region selector.
+        /// The window stays where it is: a capture may include it.
         #[qinvokable]
-        fn capture(
-            self: Pin<&mut SelenitaController>,
-            window_shown: bool,
-            accent: &QString,
-            background: &QString,
-        );
+        fn capture(self: Pin<&mut SelenitaController>, accent: &QString, background: &QString);
         #[qinvokable]
         #[cxx_name = "openInFluorita"]
         fn open_in_fluorita(self: Pin<&mut SelenitaController>, id: &QString);
@@ -203,8 +195,6 @@ pub struct SelenitaControllerRust {
     recorder_missing: QString,
     recording_stem: QString,
     launch_capture: bool,
-    /// The window stepped aside for the capture under way.
-    hidden: bool,
     /// The window has not shown yet and shows when the launch's capture
     /// ends.
     reveal: bool,
@@ -241,7 +231,6 @@ impl Default for SelenitaControllerRust {
             recorder_missing: QString::default(),
             recording_stem: QString::default(),
             launch_capture: crate::activation::capture_waiting(),
-            hidden: false,
             reveal: crate::activation::capture_waiting(),
             worker: None,
             recorder: None,
@@ -293,16 +282,18 @@ impl qobject::SelenitaController {
     fn apply(mut self: Pin<&mut Self>, report: Report) {
         match report {
             Report::History(entries) => {
+                // The last recording's line and «Abrir en Fluorita» follow
+                // the history: trashed (or gone), they go.
+                let last = self.rust().last_recording_id.to_string();
+                if !last_recording_listed(&last, &entries) {
+                    self.as_mut().forget_last_recording();
+                }
                 self.as_mut().rust_mut().history = history_rows(&entries);
                 self.as_mut().history_changed();
             }
             Report::Outputs(names) => {
                 self.as_mut().rust_mut().outputs = string_list(&names);
                 self.as_mut().outputs_changed();
-            }
-            Report::HideWindow => {
-                self.as_mut().rust_mut().hidden = true;
-                self.as_mut().hide_window_requested();
             }
             Report::Countdown(left) => {
                 self.as_mut().countdown(i32::try_from(left).unwrap_or(0));
@@ -391,22 +382,28 @@ impl qobject::SelenitaController {
         }
     }
 
-    /// The capture is over, however it ended: the window comes back.
+    /// The capture is over, however it ended: a launch's window, hidden
+    /// until its capture, shows now.
     fn end_capture(mut self: Pin<&mut Self>) {
         self.as_mut().set_busy(false);
-        let hidden = std::mem::take(&mut self.as_mut().rust_mut().hidden);
-        let reveal = std::mem::take(&mut self.as_mut().rust_mut().reveal);
-        if hidden || reveal {
+        if std::mem::take(&mut self.as_mut().rust_mut().reveal) {
             self.as_mut().show_window_requested();
         }
     }
 
-    pub fn capture(
-        mut self: Pin<&mut Self>,
-        window_shown: bool,
-        accent: &QString,
-        background: &QString,
-    ) {
+    /// The last recording's id and name go: its row left the history.
+    fn forget_last_recording(mut self: Pin<&mut Self>) {
+        if !self.rust().last_recording_id.is_empty() {
+            self.as_mut().rust_mut().last_recording_id = QString::default();
+            self.as_mut().last_recording_id_changed();
+        }
+        if !self.rust().last_recording_name.is_empty() {
+            self.as_mut().rust_mut().last_recording_name = QString::default();
+            self.as_mut().last_recording_name_changed();
+        }
+    }
+
+    pub fn capture(mut self: Pin<&mut Self>, accent: &QString, background: &QString) {
         if self.rust().busy {
             self.say_error(&CaptureError::Busy.message_es());
             return;
@@ -417,14 +414,12 @@ impl qobject::SelenitaController {
             .to_string()
             .parse::<TargetKind>()
             .unwrap_or(TargetKind::Screen);
-        let hide = kind.hides_own_window(window_shown);
         let request = Request {
             kind,
             output: self.rust().screen_output.to_string(),
             delay: delay_from_seconds(i64::from(self.rust().delay)),
             to_clipboard: self.rust().to_clipboard,
             to_file: self.rust().to_file,
-            hide,
             accent: slurp_colour(&accent.to_string()).unwrap_or_else(|| FALLBACK_ACCENT.to_owned()),
             background: slurp_colour(&background.to_string())
                 .unwrap_or_else(|| FALLBACK_BACKGROUND.to_owned()),
@@ -445,8 +440,6 @@ impl qobject::SelenitaController {
             self.say_error(&error.message_es());
             return;
         }
-        // The worker asks the window to step aside once it has noted the
-        // window a window capture means (`Report::HideWindow`).
         self.as_mut().set_busy(true);
     }
 
@@ -512,6 +505,12 @@ fn record_state_word(state: selenita_core::record::State) -> &'static str {
     state.as_str()
 }
 
+/// Whether the last recording (`id`, empty when there is none) still has
+/// its row in `entries`; an empty id has nothing to lose.
+fn last_recording_listed(id: &str, entries: &[Entry]) -> bool {
+    id.is_empty() || entries.iter().any(|entry| entry.id() == id)
+}
+
 fn string_list(items: &[String]) -> QVariant {
     let mut list = QList::<QVariant>::default();
     for item in items {
@@ -562,8 +561,11 @@ fn fake_requested(value: Option<&std::ffi::OsStr>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::fake_requested;
+    use super::{fake_requested, last_recording_listed};
+    use selenita_core::{Entry, EntryKind};
     use std::ffi::OsStr;
+    use std::path::PathBuf;
+    use std::time::SystemTime;
 
     #[test]
     fn only_one_asks_for_the_fakes() {
@@ -571,5 +573,30 @@ mod tests {
         assert!(!fake_requested(Some(OsStr::new("0"))));
         assert!(!fake_requested(Some(OsStr::new(""))));
         assert!(!fake_requested(None));
+    }
+
+    /// The last recording's line follows its history row: once the row is
+    /// gone (trashed, or pruned at load), the card has nothing to open.
+    #[test]
+    fn the_last_recording_is_forgotten_with_its_row() {
+        let clip = Entry {
+            path: PathBuf::from("/videos/Recordings/Clip 1.mp4"),
+            kind: EntryKind::Recording,
+            taken_at: SystemTime::UNIX_EPOCH,
+            size: 3,
+        };
+        let shot = Entry {
+            path: PathBuf::from("/pictures/Capturas/Shot 1.png"),
+            kind: EntryKind::Screenshot,
+            taken_at: SystemTime::UNIX_EPOCH,
+            size: 3,
+        };
+        assert!(last_recording_listed(
+            &clip.id(),
+            &[shot.clone(), clip.clone()]
+        ));
+        assert!(!last_recording_listed(&clip.id(), &[shot]));
+        assert!(!last_recording_listed(&clip.id(), &[]));
+        assert!(last_recording_listed("", &[]));
     }
 }

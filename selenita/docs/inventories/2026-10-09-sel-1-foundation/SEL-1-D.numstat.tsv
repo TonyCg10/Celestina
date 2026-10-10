@@ -1,0 +1,63 @@
+# SEL-1-D exact change inventory
+
+Base revision	79e62e53e154ba5253372ea7ed3a725e1f1a9b4f
+Pathspec	celestina-rs/crates/selenita-core/src/lib.rs
+Pathspec	celestina-rs/crates/selenita-core/src/names.rs
+Pathspec	celestina-rs/crates/selenita-core/src/record.rs
+Pathspec	celestina-rs/crates/selenita-core/src/target.rs
+Pathspec	celestina-rs/crates/selenita-core/tests/geometry.rs
+Pathspec	celestina-rs/crates/selenita-core/tests/record.rs
+Pathspec	docs/version-history.tsv
+Pathspec	selenita/Cargo.lock
+Pathspec	selenita/Cargo.toml
+Pathspec	selenita/README.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/VALIDATION.md
+Pathspec	selenita/docs/evidence/2026-10-10-recording-fixes.md
+Pathspec	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-D.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+Pathspec	selenita/qml/CaptureCard.qml
+Pathspec	selenita/qml/Main.qml
+Pathspec	selenita/qml/RecordingCard.qml
+Pathspec	selenita/scripts/smoke.sh
+Pathspec	selenita/src/backend.rs
+Pathspec	selenita/src/capture.rs
+Pathspec	selenita/src/controller.rs
+Pathspec	selenita/src/record.rs
+Pathspec	selenita/tests/qml/stubs/SelenitaController.qml
+Pathspec	selenita/tests/qml/tst_capture_card.qml
+Pathspec	selenita/tests/qml/tst_keyboard.qml
+Pathspec	selenita/tests/qml/tst_main.qml
+Pathspec	selenita/tests/qml/tst_recording.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	dcaa197f6f78999398ec58c41fb21668d66066b922a0ca44c86c1b3f32644c59	celestina-rs/crates/selenita-core/src/lib.rs
+23	3	5dbb092d43116baef41dbf82c37b2acf61846b30e4f1c641f8c97f222c7f63fa	celestina-rs/crates/selenita-core/src/names.rs
+49	12	1f985933013c480c06ad48b7ef3c02789355644fef7078059e56dbde6b43d07d	celestina-rs/crates/selenita-core/src/record.rs
+0	27	ecafad9e26d8d2fea0a4fba5d3a7ad9534425ce0c63b20d7467e13d38b8e11fc	celestina-rs/crates/selenita-core/src/target.rs
+1	21	2c50eb910e4f35fd1fa8acade5f8fba05eaf5470595c17ff0676dbf501622ef3	celestina-rs/crates/selenita-core/tests/geometry.rs
+61	1	064ec7d8060d837c2ad979adfdd5aedc1820aac45d2450d4fa99a9d29a6d10fb	celestina-rs/crates/selenita-core/tests/record.rs
+1	0	6f74f2bc242b703f0c189f571bd51f915caae8c250052d916a1bd39eb918661e	docs/version-history.tsv
+1	1	492e0ea90ca1a9cb20530db2e82b42f8887f3e6b6829229fe77dc8733dc681c9	selenita/Cargo.lock
+1	1	b9c5782523d326b3f9f46f52f4317381a13c68dc5786855c26ae34bb13b9141e	selenita/Cargo.toml
+13	6	5559af2c71eaa0ec976f08d3b2037491c40e9c500782f69156283b8088b6a762	selenita/README.md
+32	15	3de054cd8fef8f729fe4eeadc6ecc498c43d0c9edff75d91c6f7338d87f513c8	selenita/STATUS.md
+25	12	f7f31d0b7acf2344fd133b42a9c370c3e961fdea6fa4a0312fe2b6be2d4ed038	selenita/VALIDATION.md
+269	0	5d3f12858179206b2504738b7025d9893716bfbe1933b9ea73ff26c1fea65d40	selenita/docs/evidence/2026-10-10-recording-fixes.md
+63	0	self	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-D.numstat.tsv
+5	0	358dcff33188ffd8eb551a77bd0ac31fb12e23847c6b3f3952b09da2bd2bdb71	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+2	5	a31552f3eee5f753c69915c73358998332707f99ac2d9dedeffbcbfd5f6be24b	selenita/qml/CaptureCard.qml
+2	7	859967fa08ce52b5676e9aa2b6df385a53982e6c210f048c8e1829e99cc242b3	selenita/qml/Main.qml
+11	0	0c7b60aa9570c4bf419758f6bc74b6cc78a542de36921a46e5d49b97c2e893bd	selenita/qml/RecordingCard.qml
+9	4	e6e780eabdda216350944dd3b928b5253e008534f46935621c561cf5b6c32665	selenita/scripts/smoke.sh
+1	15	151411d2724cc6f58ca85c8270f996353a71673005f0a6ad06e79fb6eb212e3c	selenita/src/backend.rs
+88	95	08bb7cd569a7d56e30260cd079b6365a11a74623113798a13ce8d596efaec650	selenita/src/capture.rs
+63	36	79a36d8e452d31a68cb594f3fedf8f93154d2f71042b90f7c1b0cc1a4c0ef983	selenita/src/controller.rs
+103	21	0c71f5d24475341c6f682c7c6efe39303533180ab3cf388c9307d9f115be902c	selenita/src/record.rs
+7	3	6322b62a71f7ac71933a5d4fffc5aae5d30344799295a93c59de0c3c14716c17	selenita/tests/qml/stubs/SelenitaController.qml
+1	1	0b35d79e0a16b052e2d4cd1693291548c400348dd444eb7fe196674992a11ba9	selenita/tests/qml/tst_capture_card.qml
+1	1	23d618099350ee4a41b01da779e15140249205d3585568de4ab08bb2a92d8816	selenita/tests/qml/tst_keyboard.qml
+9	3	66910f707733a5f6eb13c296f268d7a7756ef538b652869cbe09712c0087010b	selenita/tests/qml/tst_main.qml
+56	0	49d2149ca0ea113174c5b57b1aa11a71a7e3db1727b14c7d08809ac1025aad87	selenita/tests/qml/tst_recording.qml

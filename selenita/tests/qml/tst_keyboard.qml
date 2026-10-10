@@ -89,7 +89,7 @@ TestCase {
         keyClick(Qt.Key_3)
         keyClick(Qt.Key_Return)
         compare(SelenitaController.calls.length, 1)
-        verify(SelenitaController.calls[0].startsWith("capture:region,0,true,true,true,"))
+        verify(SelenitaController.calls[0].startsWith("capture:region,0,true,true,"))
         compare(SelenitaController.history.length, 1)
         // From a focused switch the key still reaches the window's map.
         const toggle = named(named(window.contentItem, "clipboardRow"), "settingSwitch")

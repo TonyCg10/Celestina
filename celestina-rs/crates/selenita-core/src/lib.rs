@@ -17,5 +17,5 @@ pub mod tools;
 
 pub use geometry::Geometry;
 pub use history::{Entry, EntryKind, History};
-pub use names::{capture_file_name, pictures_dir, videos_dir};
+pub use names::{capture_file_name, pictures_dir, recordings_dir, videos_dir};
 pub use target::{Capture, Target, TargetKind};

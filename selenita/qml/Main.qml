@@ -5,8 +5,8 @@ import "components"
 
 // Selenita's window: one window, no strip, the cards stacked and scrolled as
 // one (design §5.3): the capture, the recording and the history.
-// The window steps aside while a capture would include it and comes back on
-// the history once it is taken.
+// The window stays on screen while it captures (a capture may be of Selenita
+// itself); only a `--screenshot` launch keeps it hidden until its capture.
 ApplicationWindow {
     id: window
 
@@ -74,10 +74,6 @@ ApplicationWindow {
     Connections {
         target: SelenitaController
 
-        function onHideWindowRequested() {
-            window.hide()
-        }
-
         function onShowWindowRequested() {
             window.show()
             window.raise()
@@ -110,7 +106,6 @@ ApplicationWindow {
                 id: captureCard
                 objectName: "captureCard"
                 width: parent.width
-                windowShown: window.visible
             }
 
             RecordingCard {

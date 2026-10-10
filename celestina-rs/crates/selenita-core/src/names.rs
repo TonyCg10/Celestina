@@ -1,4 +1,4 @@
-//! Where a capture lands and what it is called.
+//! Where a capture or a recording lands and what it is called.
 //!
 //! The name is `<stem> YYYY-MM-DD HH.MM.SS.<ext>` in local time. The stem is
 //! product copy («Captura» for a screenshot) and comes from the Qt seam, so
@@ -54,11 +54,31 @@ pub fn pictures_dir() -> Option<PathBuf> {
     user_dir("XDG_PICTURES_DIR")
 }
 
-/// The person's videos folder, where a recording lands; found as
-/// [`pictures_dir`] is, under `XDG_VIDEOS_DIR`.
+/// The person's videos folder; found as [`pictures_dir`] is, under
+/// `XDG_VIDEOS_DIR`.
 #[must_use]
 pub fn videos_dir() -> Option<PathBuf> {
     user_dir("XDG_VIDEOS_DIR")
+}
+
+/// The folder inside the videos folder where a recording lands, as a
+/// capture lands in the pictures folder's «Capturas»: the author's choice
+/// of 2026-10-10 (the design's §5.1 wrote «Grabaciones»; the folder the
+/// session already had is this one).
+pub const RECORDINGS_FOLDER: &str = "Recordings";
+
+/// Where a recording lands: [`RECORDINGS_FOLDER`] inside `videos`; the
+/// caller makes it, as it makes the captures folder.
+#[must_use]
+pub fn recordings_dir_in(videos: &Path) -> PathBuf {
+    videos.join(RECORDINGS_FOLDER)
+}
+
+/// [`recordings_dir_in`] the person's [`videos_dir`]; `None` when no videos
+/// folder is named.
+#[must_use]
+pub fn recordings_dir() -> Option<PathBuf> {
+    videos_dir().map(|videos| recordings_dir_in(&videos))
 }
 
 fn user_dir(key: &str) -> Option<PathBuf> {

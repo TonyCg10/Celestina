@@ -4,14 +4,15 @@
 //! Qt thread never waits on a tool, a socket or a file.
 //!
 //! A capture runs its plan here: note the window a window capture means
-//! (the latest focused one that is not Selenita) while Selenita is still on
-//! screen, ask the window to step aside and, when the target may show the
-//! output it was on, wait for it to go; count the delay down (one `Countdown` a second), resolve the target
-//! (niri's outputs or focused window, or `slurp` for a region), take the
-//! picture into a hidden file, publish it under its name in the captures
-//! folder without replacing anything, put it on the clipboard when asked,
-//! push it to the history and report it. Every failure is a [`CaptureError`]
-//! whose `message_es` the window shows in its notice.
+//! (the latest focused one that is not Selenita), count the delay down (one
+//! `Countdown` a second), resolve the target (niri's outputs or focused
+//! window, or `slurp` for a region), take the picture into a hidden file,
+//! publish it under its name in the captures folder without replacing
+//! anything, put it on the clipboard when asked, push it to the history and
+//! report it. Every failure is a [`CaptureError`] whose `message_es` the
+//! window shows in its notice. Selenita's window stays where it is: the
+//! person may want it in the picture (SEL-1-D), and a window capture is the
+//! window focused before Selenita in any case.
 //!
 //! The thread is detached and never joined, as Cuprita's workers: a tool
 //! still running when the window closes is abandoned with the process.
@@ -26,15 +27,10 @@ use celestina_core::{atomic_file, xdg};
 use selenita_core::history::HistoryError;
 use selenita_core::niri::{self, NiriError};
 use selenita_core::runner::RunError;
-use selenita_core::target::needs_settle;
 use selenita_core::{capture_file_name, names, pictures_dir};
 use selenita_core::{Entry, EntryKind, History, Target, TargetKind};
 
 use crate::backend::Backend;
-
-/// How long the compositor gets to take the hidden window off screen before
-/// the picture is taken: an estimate VAL-SEL-SHOT confirms.
-const HIDE_SETTLE: Duration = Duration::from_millis(350);
 
 /// How many numbered names a capture tries before giving up.
 const NAME_ATTEMPTS: u32 = 1000;
@@ -127,8 +123,6 @@ pub struct Request {
     pub delay: Duration,
     pub to_clipboard: bool,
     pub to_file: bool,
-    /// The window is on screen and steps aside for this capture.
-    pub hide: bool,
     /// slurp's colours, `#RRGGBBAA`.
     pub accent: String,
     pub background: String,
@@ -186,14 +180,12 @@ fn hidden_file(folder: &Path) -> PathBuf {
 /// What a capture tells the window while it runs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Progress {
-    /// Step aside now.
-    Hide,
     /// Seconds left; the last is 0.
     Countdown(u32),
 }
 
 /// Runs one capture's plan. `sleep` waits (a test passes one that does not),
-/// `progress` hears the hide and the seconds left.
+/// `progress` hears the seconds left.
 ///
 /// # Errors
 ///
@@ -211,16 +203,10 @@ pub fn capture(
     if !request.to_clipboard && !request.to_file && !window_kind {
         return Err(CaptureError::NoDestination);
     }
-    // Read while Selenita is still on screen and focused, so the window meant
-    // is the one focused before it.
-    let windows = if window_kind {
-        backend.windows()?
-    } else if request.hide {
-        backend.windows().unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    // Selenita is focused while the person presses its button, so the
+    // window meant is the latest one focused before it.
     let meant = if window_kind {
+        let windows = backend.windows()?;
         Some(
             niri::pick_window(&windows, SELENITA.0)
                 .cloned()
@@ -229,26 +215,6 @@ pub fn capture(
     } else {
         None
     };
-    if request.hide {
-        progress(Progress::Hide);
-        let own = windows.iter().find(|window| window.app_id == SELENITA.0);
-        let workspaces = if own.is_some() {
-            backend.workspaces().unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        let own_output = own.and_then(|window| niri::output_of(window, &workspaces));
-        let target_output = match request.kind {
-            TargetKind::Screen => Some(request.output.as_str()),
-            TargetKind::Window => meant
-                .as_ref()
-                .and_then(|window| niri::output_of(window, &workspaces)),
-            TargetKind::Region => None,
-        };
-        if needs_settle(request.kind, target_output, own_output) {
-            sleep(HIDE_SETTLE);
-        }
-    }
     let seconds = u32::try_from(request.delay.as_secs()).unwrap_or(0);
     for left in (1..=seconds).rev() {
         progress(Progress::Countdown(left));
@@ -355,8 +321,6 @@ pub enum Report {
     History(Vec<Entry>),
     /// The enabled outputs' names, left to right.
     Outputs(Vec<String>),
-    /// The window steps aside now.
-    HideWindow,
     /// Seconds left before the picture is taken.
     Countdown(u32),
     /// The capture is done: the entry's id when it went to a file.
@@ -420,7 +384,6 @@ impl Worker {
                                 &std::thread::sleep,
                                 &mut |step| {
                                     report(match step {
-                                        Progress::Hide => Report::HideWindow,
                                         Progress::Countdown(left) => Report::Countdown(left),
                                     });
                                 },
@@ -563,7 +526,7 @@ fn act(
 mod tests {
     use super::{act, capture, publish, Action, CaptureError, Outcome, Places, Progress, Request};
     use crate::backend::{self, Backend, PIXEL_PNG};
-    use selenita_core::niri::{Output, Window, Workspace};
+    use selenita_core::niri::{Output, Window};
     use selenita_core::{Geometry, History, Target, TargetKind};
     use std::cell::RefCell;
     use std::path::{Path, PathBuf};
@@ -601,7 +564,6 @@ mod tests {
             delay: Duration::ZERO,
             to_clipboard: true,
             to_file: true,
-            hide: false,
             accent: "#3e91ffff".to_owned(),
             background: "#00000040".to_owned(),
             stem: "Captura".to_owned(),
@@ -656,8 +618,10 @@ mod tests {
         assert_eq!(saved.entries()[0].size, entry.size);
     }
 
+    /// The delay counts down and nothing else waits: the window never steps
+    /// aside, so there is no hide and no settle before the seconds.
     #[test]
-    fn the_delay_counts_down_after_the_window_settles() {
+    fn the_delay_counts_down_and_the_window_is_never_asked_to_hide() {
         let scratch = Scratch::new("delay");
         let mut fake = backend::make(true);
         let mut history = History::default();
@@ -665,7 +629,6 @@ mod tests {
         let mut heard = Vec::new();
         let mut asked = request(TargetKind::Window);
         asked.delay = Duration::from_secs(3);
-        asked.hide = true;
         asked.to_file = false;
         capture(
             fake.as_mut(),
@@ -679,7 +642,6 @@ mod tests {
         assert_eq!(
             heard,
             [
-                Progress::Hide,
                 Progress::Countdown(3),
                 Progress::Countdown(2),
                 Progress::Countdown(1),
@@ -687,9 +649,32 @@ mod tests {
             ]
         );
         let slept = slept.into_inner();
-        assert_eq!(slept.len(), 4);
-        assert!(slept[0] < Duration::from_secs(1), "the settle comes first");
-        assert!(slept[1..].iter().all(|d| *d == Duration::from_secs(1)));
+        assert_eq!(slept, [Duration::from_secs(1); 3]);
+    }
+
+    /// A screen capture with no delay waits for nothing at all, whatever
+    /// output it takes, Selenita's own included.
+    #[test]
+    fn a_screen_capture_of_selenitas_own_output_waits_for_nothing() {
+        let scratch = Scratch::new("own-output");
+        let mut fake = backend::Fake::default();
+        let mut heard = Vec::new();
+        for output in ["", "FAKE-1", "OTHER-2"] {
+            let mut asked = request(TargetKind::Screen);
+            asked.output = output.to_owned();
+            asked.to_file = false;
+            capture(
+                &mut fake,
+                &mut History::default(),
+                &scratch.places(),
+                &asked,
+                &|_| panic!("nothing waits"),
+                &mut |step| heard.push(step),
+            )
+            .expect("captured");
+        }
+        assert!(heard.is_empty(), "{heard:?}");
+        assert_eq!(fake.grabbed.len(), 3);
     }
 
     #[test]
@@ -740,9 +725,6 @@ mod tests {
             Ok(Vec::new())
         }
         fn windows(&mut self) -> Result<Vec<Window>, CaptureError> {
-            Ok(Vec::new())
-        }
-        fn workspaces(&mut self) -> Result<Vec<Workspace>, CaptureError> {
             Ok(Vec::new())
         }
         fn select_region(&mut self, _: &str, _: &str) -> Result<Option<Geometry>, CaptureError> {
@@ -803,40 +785,6 @@ mod tests {
     }
 
     #[test]
-    fn the_settle_is_skipped_for_another_output() {
-        let scratch = Scratch::new("settle");
-        let mut fake = backend::Fake::default();
-        let mut asked = request(TargetKind::Screen);
-        asked.hide = true;
-        asked.output = "OTHER-2".to_owned();
-        let slept = RefCell::new(Vec::new());
-        let mut heard = Vec::new();
-        capture(
-            &mut fake,
-            &mut History::default(),
-            &scratch.places(),
-            &asked,
-            &|duration| slept.borrow_mut().push(duration),
-            &mut |step| heard.push(step),
-        )
-        .expect("captured");
-        assert_eq!(heard, [Progress::Hide]);
-        assert!(slept.into_inner().is_empty());
-        asked.output = "FAKE-1".to_owned();
-        let slept = RefCell::new(Vec::new());
-        capture(
-            &mut fake,
-            &mut History::default(),
-            &scratch.places(),
-            &asked,
-            &|duration| slept.borrow_mut().push(duration),
-            &mut |_| {},
-        )
-        .expect("captured");
-        assert_eq!(slept.into_inner().len(), 1, "Selenita's own output waits");
-    }
-
-    #[test]
     fn a_taken_name_is_numbered_never_replaced() {
         let scratch = Scratch::new("publish");
         let name = "Captura 2026-10-09 14.32.05.png";
@@ -888,6 +836,51 @@ mod tests {
             ),
             Err(CaptureError::UnknownEntry)
         ));
+    }
+
+    /// Trashing one entry rewrites the file from the live list: the other
+    /// entries' lines stay, so a trash never empties the history.
+    #[test]
+    fn trashing_one_entry_keeps_the_others_lines_in_the_file() {
+        let scratch = Scratch::new("trash-keeps");
+        let mut fake = backend::make(true);
+        let file = scratch.0.join("history");
+        let mut history = History::at(file.clone());
+        let Ok(Outcome::Captured {
+            entry: Some(shot), ..
+        }) = capture(
+            fake.as_mut(),
+            &mut history,
+            &scratch.places(),
+            &request(TargetKind::Screen),
+            &|_| {},
+            &mut |_| {},
+        )
+        else {
+            panic!("a file");
+        };
+        // A recording handed over by the recording worker (`Job::Push`).
+        let clip = scratch.0.join("clip.mp4");
+        std::fs::write(&clip, b"mp4").expect("clip");
+        let recording = selenita_core::Entry {
+            path: clip,
+            kind: selenita_core::EntryKind::Recording,
+            taken_at: std::time::SystemTime::now(),
+            size: 3,
+        };
+        history.push(recording.clone());
+        history.save().expect("saved");
+        assert_eq!(History::load(file.clone()).expect("two").entries().len(), 2);
+        assert!(
+            act(fake.as_mut(), &mut history, Action::Delete, &recording.id()).expect("trashed")
+        );
+        let left = History::load(file.clone()).expect("one");
+        assert_eq!(left.entries().len(), 1);
+        assert_eq!(left.entries()[0].path, shot.path);
+        assert!(!std::fs::read_to_string(&file).expect("text").is_empty());
+        // The last one trashed leaves an empty file: that is the whole list.
+        assert!(act(fake.as_mut(), &mut history, Action::Delete, &shot.id()).expect("trashed"));
+        assert!(History::load(file).expect("none").entries().is_empty());
     }
 
     #[test]

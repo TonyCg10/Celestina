@@ -43,7 +43,6 @@ QtObject {
     signal notice(string kind, string text)
     signal countdown(int seconds)
     signal captured(string entryId)
-    signal hideWindowRequested()
     signal showWindowRequested()
     signal recordingFinished(string entryId)
 
@@ -70,9 +69,9 @@ QtObject {
         calls = calls.concat([name + ":" + argument])
     }
 
-    function capture(windowShown, accent, background) {
+    function capture(accent, background) {
         record("capture", target + "," + delay + "," + toClipboard + "," + toFile
-               + "," + windowShown + "," + accent.length + "," + background.length)
+               + "," + accent.length + "," + background.length)
         if (!toFile)
             return
         taken += 1
@@ -126,8 +125,13 @@ QtObject {
     function openInFluorita(id) { record("openInFluorita", id) }
     function copy(id) { record("copy", id) }
     function showInSiderita(id) { record("showInSiderita", id) }
+    // As the controller does: the last recording's line follows its row.
     function deleteEntry(id) {
         record("deleteEntry", id)
         history = history.filter(row => row.id !== id)
+        if (lastRecordingId === id) {
+            lastRecordingId = ""
+            lastRecordingName = ""
+        }
     }
 }

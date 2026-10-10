@@ -54,12 +54,19 @@ The recording goes through the ScreenCast portal
 the person consents and chooses the output in the portal's own dialog each
 time, and through `gst-launch-1.0 -e` as a child: `pipewiresrc` on the
 portal's node, `vah264enc` when a render node and the element exist (else
-`x264enc`), `mp4mux`, and with «Con sonido del sistema» a second
-`pipewiresrc` on the default sink's monitor encoded with `avenc_aac`. The
-stop sends SIGINT, which `-e` turns into an EOS so the muxer writes its
-index; the file is then published as `<stem> 2026-10-09 14.32.05.mp4` (the stem is the recording card's product copy) in
-the videos folder (`XDG_VIDEOS_DIR` or `user-dirs.dirs`), numbered on a
-collision, and joins the history. The muxer is probed at start with
+`x264enc`), both at a constant quality (CQP 20/22, CRF 21; a screen is
+text, and a bitrate budget smears it) with a keyframe a second, `mp4mux`,
+and with «Con sonido del sistema» a second `pipewiresrc` on the default
+sink's monitor, mixed over a silent live `audiotestsrc` in an `audiomixer`
+(so the branch always flows and the stop finishes even when the monitor is
+silent or absent) and encoded with `avenc_aac`. The stop sends SIGINT,
+which `-e` turns into an EOS so the muxer writes its index; the file is
+then published as `<stem> 2026-10-09 14.32.05.mp4` (the stem is the
+recording card's product copy) in the videos folder's `Recordings`
+(`XDG_VIDEOS_DIR` or `user-dirs.dirs`, then `Recordings` inside it, made
+when needed), numbered on a collision, and joins the history. The window
+stays on screen for a capture and a recording alike: Selenita may be what
+is being captured. The muxer is probed at start with
 `gst-inspect-1.0 --exists mp4mux`; when it is missing the card says so, the
 button is disabled and the notice names the package.
 

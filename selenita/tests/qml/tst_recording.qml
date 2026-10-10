@@ -70,6 +70,62 @@ TestCase {
         compare(named(card, "elapsedText").text, "1:01")
     }
 
+    // A second recording's origin resets the clock the moment it arrives,
+    // whether before the state (as the worker now reports it) or after.
+    function test_a_second_recording_restarts_the_clock() {
+        const card = createTemporaryObject(cardComponent, testCase)
+        const clock = named(card, "elapsedText")
+        SelenitaController.recordingStartedAt = Date.now() - 45000
+        SelenitaController.recordingState = "recording"
+        compare(clock.text, "0:45")
+        SelenitaController.recordingState = "idle"
+        compare(card.elapsed, 0)
+        // The state first, with the stale origin, then the new origin.
+        SelenitaController.recordingState = "recording"
+        compare(clock.text, "0:45")
+        SelenitaController.recordingStartedAt = Date.now()
+        compare(clock.text, "0:00")
+        SelenitaController.recordingState = "idle"
+        // The origin first, as the worker reports it: the clock is right
+        // from its first frame.
+        SelenitaController.recordingStartedAt = Date.now() - 2000
+        SelenitaController.recordingState = "recording"
+        compare(clock.text, "0:02")
+    }
+
+    // Two recordings in a row over the stub: each lands and the second
+    // becomes the last.
+    function test_two_recordings_in_a_row_both_land() {
+        const card = createTemporaryObject(cardComponent, testCase)
+        const button = named(card, "recordButton")
+        for (let round = 0; round < 2; round += 1) {
+            mouseClick(button)
+            compare(SelenitaController.recordingState, "recording")
+            mouseClick(button)
+            compare(SelenitaController.recordingState, "idle")
+        }
+        compare(SelenitaController.history.length, 2)
+        compare(named(card, "lastRecordingName").text, "Recording 2.mp4")
+        verify(button.enabled)
+    }
+
+    // Trashing the last recording takes its line and «Abrir en Fluorita»
+    // with it: nothing points at a file that is gone.
+    function test_trashing_the_last_recording_clears_its_line() {
+        const card = createTemporaryObject(cardComponent, testCase)
+        const row = named(card, "lastRecordingRow")
+        mouseClick(named(card, "recordButton"))
+        mouseClick(named(card, "recordButton"))
+        verify(row.visible)
+        const id = SelenitaController.lastRecordingId
+        verify(id !== "")
+        SelenitaController.deleteEntry(id)
+        compare(SelenitaController.lastRecordingId, "")
+        compare(SelenitaController.lastRecordingName, "")
+        verify(!row.visible)
+        compare(SelenitaController.history.length, 0)
+    }
+
     function test_the_sound_switch_is_chosen_before_recording() {
         const card = createTemporaryObject(cardComponent, testCase)
         const toggle = named(named(card, "audioRow"), "settingSwitch")

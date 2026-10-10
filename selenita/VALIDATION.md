@@ -20,9 +20,9 @@ covers the window.
   during the countdown (then capture «Ventana» with no delay, the window you
   used before Selenita being the one meant); choose the region target, draw a rectangle (then repeat and
   press Escape); turn «Guardar en la carpeta Capturas» off and capture once
-  more; on a second monitor, if any, capture the other output and watch for
-  Selenita in the picture (the 350 ms wait after it steps aside is an
-  estimate and is skipped for another output); close Selenita and press
+  more; capture «Pantalla» of the output Selenita is on and look for
+  Selenita itself in the picture (since SEL-1-D the window never steps
+  aside); close Selenita and press
   Print, Alt+Print and Ctrl+Print; on one
   history row press «Abrir en Fluorita», «Copiar», «Mostrar en Siderita» and
   «Mover a la papelera»; then with the keyboard only: press `2`, `3`, `1`
@@ -30,8 +30,8 @@ covers the window.
   controls, Tab to a history row and press Down, Up, End, Home, Enter and
   Delete; with Orca running, read the capture card, the switches and a
   history row
-- **Pass condition:** the window disappears for each capture and returns on
-  the history, and Selenita appears in no picture; a key binding with
+- **Pass condition:** the window stays on screen for each capture and
+  Selenita appears in the picture of its own output; a key binding with
   Selenita closed never shows the window before its capture; the window
   capture with no delay is the window used before Selenita, and with the
   window target the clipboard switch is disabled with its niri hint; the pasted image is the screen; the window capture is the
@@ -54,7 +54,8 @@ covers the window.
 ## VAL-SEL-REC — Record the screen, with and without sound
 
 - **Status:** pending
-- **Related implementation:** SEL-1-B
+- **Related implementation:** SEL-1-B, SEL-1-D (the run of 2026-10-10
+  found the SEL-1-D findings; re-run on the SEL-1-D binary)
 - **Requires:** the deployed Selenita (`scripts/complete-production.sh`),
   `gst-plugins-good` installed (`gst-inspect-1.0 --exists mp4mux` exits 0;
   it was missing when the unit was built), `gst-plugin-pipewire`,
@@ -66,18 +67,30 @@ covers the window.
   and play the file (the pipeline builder's shape, which the subagent could
   not run without the muxer); open Selenita and read the recording card
   (no missing-element line); press «Grabar», choose the output in the
-  portal's dialog, wait 10 s while moving a window, press «Detener»; turn
-  «Con sonido del sistema» on, play something audible and record 10 s
-  more; press «Abrir en Fluorita» on the last recording; close Selenita
+  portal's dialog, wait 10 s while moving a window, press «Detener»; at
+  once press «Grabar» again, choose the output, watch the clock start from
+  0:00, wait 5 s and press «Detener» (the two-in-a-row sequence that failed
+  on 2026-10-10); turn «Con sonido del sistema» on and record 10 s with
+  nothing playing, then 10 s more while something audible plays; press
+  «Abrir en Fluorita» on the last recording, then «Mover a la papelera» on
+  its history row and look at the card; close Selenita
   and press Shift+Print, wait, Ctrl+Shift+Print; press Ctrl+Shift+Print
   again with nothing recording; cancel the portal's dialog once; on the
   recording's history row press «Mostrar en Siderita» and «Mover a la
   papelera»; press `R` to start a recording and `R` again to stop it; with
   Orca running, read the recording card after the stop
 - **Pass condition:** the card shows the red dot and the time counting
-  while it records, and «Grabar» again afterwards; each recording is a
-  `<recording stem> <date> <time>.mp4` in the videos folder that Fluorita plays
-  with the pointer drawn and, for the second, the sound heard; the history
+  from 0:00 while it records (the second recording too), and «Grabar»
+  again afterwards within a second of each «Detener»; each recording is a
+  `<recording stem> <date> <time>.mp4` in the videos folder's `Recordings`
+  (nothing in the videos root) that Fluorita plays with the pointer drawn,
+  text legible at the screen's own resolution, the silent one with a
+  silent audio track and the last with the sound heard; after the trash
+  the last recording's line and «Abrir en Fluorita» are gone from the
+  card; the first second of each recording is noted as it is (SEL-1-D
+  records a backend fault there: black with only the parts that changed
+  until the second keyframe; a full first second means the host no longer
+  has it); the history
   row shows the film glyph and the actions work; the key bindings start
   and stop with Selenita closed or open and a stop with nothing recording
   says nothing; a cancelled dialog leaves the card idle with the cancel

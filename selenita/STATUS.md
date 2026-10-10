@@ -6,9 +6,14 @@
   history and the key-binding flags), SEL-1-B (recording through the portal
   and GStreamer, the sound option, `--record` and `--stop`) and SEL-1-C
   (the keyboard and accessibility pass); the SEL-1-C landing releases 1.0.0
-  and closes the foundation
+  and closes the foundation. SEL-1-D (bug) answers the author's first live
+  session of 2026-10-10: the `Recordings` folder, constant-quality encoders,
+  a sound branch that always reaches its EOS, the recording clock, the last
+  recording's line after a trash, and the window no longer hiding for a
+  capture; see the
+  [recording fixes evidence](docs/evidence/2026-10-10-recording-fixes.md)
 - **Author validation:** VAL-SEL-SHOT (a real capture) and VAL-SEL-REC (a
-  real recording, after installing `gst-plugins-good`) pending
+  real recording) pending; both re-run after SEL-1-D
 
 ## Current checkout truth
 
@@ -19,15 +24,20 @@
   several), the focused window or a region drawn with `slurp`, after no delay
   or 3, 5 or 10 s, to the clipboard and to the pictures folder's «Capturas»
   (`Captura 2026-10-09 14.32.05.png`, numbered on a collision). The window
-  steps aside while it captures and comes back on the history.
+  stays where it is while it captures: a capture may be of Selenita itself
+  (SEL-1-D); only a `--screenshot` launch keeps it hidden until its capture.
 - The recording card records one monitor (chosen in the ScreenCast
-  portal's dialog) to `<recording stem> <date> <time>.mp4` in the videos folder
-  through `gst-launch-1.0 -e` (`pipewiresrc`, `vah264enc` or `x264enc`,
-  `mp4mux`), with the system's sound (`avenc_aac`) when the switch is on;
-  a red dot and the elapsed time show while it records, and the last
-  recording has its «Abrir en Fluorita». `mp4mux` is probed at start: when
-  `gst-plugins-good` is missing (it is, on the author's host) the card says
-  so and the button is disabled.
+  portal's dialog) to `<recording stem> <date> <time>.mp4` in the videos
+  folder's `Recordings` through `gst-launch-1.0 -e` (`pipewiresrc`,
+  `vah264enc` at CQP 20/22 or `x264enc` at CRF 21, one keyframe a second,
+  `mp4mux`), with the system's sound (`avenc_aac`) when the switch is on:
+  the default sink's monitor mixed over a silent live bed in an
+  `audiomixer`, so the branch flows and the stop's EOS goes through even
+  when the monitor hands over nothing; a red dot and the elapsed time show
+  while it records (the clock restarts with each recording), and the last
+  recording has its «Abrir en Fluorita», which goes with its history row
+  when that is trashed. `mp4mux` is probed at start: when `gst-plugins-good`
+  is missing the card says so and the button is disabled.
 - The history keeps the last 100 captures and recordings in
   `data_home/selenita/history`, a thumbnail for a capture and the film glyph
   for a recording, each with «Abrir en Fluorita», «Mostrar en Siderita» and
@@ -52,14 +62,11 @@
   the tests free of GStreamer); see the
   [recording evidence](docs/evidence/2026-10-09-recording.md).
 - A window capture takes the window focused before Selenita (niri's focus
-  times), noted before the window steps aside, through niri's own
-  `screenshot-window --id`. niri copies it to the clipboard whatever is
+  times) through niri's own `screenshot-window --id`. niri copies it to the clipboard whatever is
   asked, so with that target the clipboard switch shows on and disabled
   with a hint saying so.
 - A `--screenshot` launch with no Selenita running starts with the window
   hidden, takes the capture and then shows the window on the history.
-- The window waits 350 ms after stepping aside (an estimate) only when the
-  target may show the output it was on.
 - The output choice is an inline row of buttons, not a popup menu
   (accepted in review).
 - The keyboard: `1`, `2` and `3` choose the screen, the window or the
@@ -85,6 +92,14 @@
 
 ## Known issues
 
+- The first second of a recording is black except for the parts of the
+  screen that changed, until the second keyframe: xdg-desktop-portal-wlr
+  0.8.4 captures through ext-image-copy-capture and never damages a buffer
+  whole on its first use, so niri paints only its own damage into it. The
+  encoder is cleared (the same pipeline over a still of the desktop writes
+  a full first keyframe) and no element of `gst-launch-1.0` drops a first
+  second by time; the SEL-1-D evidence has the measurements. The fix is
+  the backend's.
 - A portal request that times out or is cancelled at quit leaves its
   `selenita-portal` helper thread parked on the signal iterator (zbus's
   blocking iterator has no deadline) together with its connection until the
@@ -103,7 +118,9 @@
 - The history file is written from two places at quit: the recording worker
   loads, appends and saves it directly while the capture worker still holds
   its own copy; whichever saves last wins, so an entry can be lost in that
-  window.
+  window. (The empty history of 2026-10-10 was not this: every file it
+  listed had been moved to the trash, and a trash keeps the other lines,
+  as `trashing_one_entry_keeps_the_others_lines_in_the_file` shows.)
 - A `--screenshot` or `--record` launch that races an instance still
   starting finds the name taken, only raises it, and its request is lost.
 

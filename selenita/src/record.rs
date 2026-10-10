@@ -6,7 +6,7 @@
 //!
 //! A recording runs here: the portal is asked for a monitor (the person
 //! chooses in its dialog), the pipeline is started into a hidden file in
-//! the videos folder, the child is watched (an early exit is a failure)
+//! the videos folder's `Recordings`, the child is watched (an early exit is a failure)
 //! together with the stop file `selenita --stop` touches when no instance
 //! answers on the bus, and the stop interrupts the child, waits for the
 //! muxer to finish, publishes the file under its name without replacing
@@ -30,6 +30,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
 
 use celestina_core::xdg;
+use selenita_core::names::recordings_dir_in;
 use selenita_core::record::{
     self, inspect_argv, take_stop_request, Event, Pipeline, Source, State, VideoEncoder, INSPECTOR,
     LAUNCHER, MUXER,
@@ -360,20 +361,21 @@ enum Job {
 
 /// Where a recording's files go and where the stop file is.
 pub struct Places {
-    pub videos: PathBuf,
+    /// The recordings folder inside the videos folder; made at start.
+    pub recordings: PathBuf,
     pub stop_file: PathBuf,
 }
 
 impl Places {
-    /// The videos folder (else the home), and the runtime folder's stop
-    /// file. Blocking.
+    /// `Recordings` in the videos folder (else in the home), and the runtime
+    /// folder's stop file. Blocking.
     fn resolve() -> Self {
         let videos = videos_dir()
             .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
             .unwrap_or_else(std::env::temp_dir);
         let runtime = xdg::runtime_dir().unwrap_or_else(|_| std::env::temp_dir());
         Self {
-            videos,
+            recordings: recordings_dir_in(&videos),
             stop_file: record::stop_file(&runtime),
         }
     }
@@ -451,10 +453,13 @@ impl Session {
         let _ = take_stop_request(&places.stop_file);
         match self.prepare_and_start(recorder, places, request) {
             Ok(()) => {
-                self.step(Event::Prepared, report);
+                // The start comes before the state: the card's clock reads
+                // the new origin the moment it sees `Recording`, never the
+                // previous recording's.
                 if let Some(active) = &self.active {
                     report(Report::Started(active.started));
                 }
+                self.step(Event::Prepared, report);
                 Ok(())
             }
             Err(error) => {
@@ -472,9 +477,9 @@ impl Session {
         request: &Request,
     ) -> Result<(), RecordError> {
         let prepared = recorder.prepare()?;
-        std::fs::create_dir_all(&places.videos)
+        std::fs::create_dir_all(&places.recordings)
             .map_err(|error| RecordError::Write(error.to_string()))?;
-        let hidden = hidden_file(&places.videos);
+        let hidden = hidden_file(&places.recordings);
         let pipeline = Pipeline {
             source: prepared.source,
             encoder: self.encoder,
@@ -595,7 +600,7 @@ impl Session {
             return Err(RecordError::NoFile);
         }
         let name = capture_file_name(&active.stem, active.started, "mp4");
-        let path = publish(&active.hidden, &places.videos, &name).map_err(|error| {
+        let path = publish(&active.hidden, &places.recordings, &name).map_err(|error| {
             let _ = std::fs::remove_file(&active.hidden);
             RecordError::Write(error.to_string())
         })?;
@@ -767,6 +772,7 @@ impl Worker {
 #[cfg(test)]
 mod tests {
     use super::{make, Fake, Places, Probe, RecordError, Recorder, Report, Request, Session};
+    use selenita_core::names::recordings_dir_in;
     use selenita_core::record::{Pipeline, State};
     use selenita_core::runner::Exit;
     use selenita_core::EntryKind;
@@ -786,9 +792,14 @@ mod tests {
 
         fn places(&self) -> Places {
             Places {
-                videos: self.0.join("videos"),
+                recordings: recordings_dir_in(&self.0.join("videos")),
                 stop_file: self.0.join("run").join("selenita").join("stop"),
             }
+        }
+
+        /// The recordings folder, `videos/Recordings`.
+        fn recordings(&self) -> PathBuf {
+            self.0.join("videos").join("Recordings")
         }
     }
 
@@ -816,7 +827,7 @@ mod tests {
     }
 
     #[test]
-    fn a_recording_walks_the_states_and_lands_in_the_videos_folder() {
+    fn a_recording_walks_the_states_and_lands_in_the_recordings_folder() {
         let scratch = Scratch::new("walk");
         let mut fake = Fake::default();
         let mut session = Session::new(fake.probe());
@@ -828,7 +839,16 @@ mod tests {
             .expect("started");
         assert_eq!(session.state(), State::Recording);
         assert!(fake.started[0].audio);
-        assert!(heard.iter().any(|r| matches!(r, Report::Started(_))));
+        // The origin arrives before the state the card's clock starts on.
+        let started_at = heard
+            .iter()
+            .position(|r| matches!(r, Report::Started(_)))
+            .expect("a start");
+        let recording_at = heard
+            .iter()
+            .position(|r| matches!(r, Report::State(State::Recording)))
+            .expect("the recording state");
+        assert!(started_at < recording_at, "{heard:?}");
         let entry = session
             .stop(&mut fake, &scratch.places(), &mut |r| heard.push(r))
             .expect("stopped");
@@ -842,9 +862,14 @@ mod tests {
             ]
         );
         assert_eq!(entry.kind, EntryKind::Recording);
-        assert_eq!(
-            entry.path.parent(),
-            Some(scratch.0.join("videos").as_path())
+        assert_eq!(entry.path.parent(), Some(scratch.recordings().as_path()));
+        assert!(
+            !scratch
+                .0
+                .join("videos")
+                .join(entry.path.file_name().unwrap())
+                .exists(),
+            "nothing lands in the videos root"
         );
         let name = entry
             .path
@@ -864,12 +889,69 @@ mod tests {
         assert!(heard
             .iter()
             .any(|r| matches!(r, Report::Finished(e) if e == &entry)));
-        let hidden: Vec<_> = std::fs::read_dir(scratch.0.join("videos"))
+        let hidden: Vec<_> = std::fs::read_dir(scratch.recordings())
             .expect("folder")
             .filter_map(Result::ok)
             .filter(|e| e.file_name().to_string_lossy().starts_with('.'))
             .collect();
         assert!(hidden.is_empty(), "the hidden file is published");
+    }
+
+    /// Two recordings in a row: both publish, the second with an origin of
+    /// its own reported before its state, nothing of the first left behind.
+    #[test]
+    fn a_second_recording_in_a_row_publishes_with_its_own_origin() {
+        let scratch = Scratch::new("twice");
+        let mut fake = Fake::default();
+        let mut session = Session::new(fake.probe());
+        let mut heard = Vec::new();
+        let mut origins = Vec::new();
+        for _ in 0..2 {
+            session
+                .start(&mut fake, &scratch.places(), &request(false), &mut |r| {
+                    heard.push(r)
+                })
+                .expect("started");
+            assert_eq!(session.state(), State::Recording);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            let entry = session
+                .stop(&mut fake, &scratch.places(), &mut |r| heard.push(r))
+                .expect("stopped");
+            assert_eq!(session.state(), State::Idle);
+            assert!(session.active.is_none());
+            origins.push(entry.taken_at);
+        }
+        assert!(origins[1] > origins[0], "the second origin is later");
+        let starts: Vec<_> = heard
+            .iter()
+            .filter_map(|r| match r {
+                Report::Started(when) => Some(*when),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(starts, origins);
+        assert_eq!(
+            states(&heard),
+            [
+                State::Preparing,
+                State::Recording,
+                State::Stopping,
+                State::Idle,
+                State::Preparing,
+                State::Recording,
+                State::Stopping,
+                State::Idle
+            ]
+        );
+        assert_eq!(fake.started.len(), 2);
+        assert_ne!(fake.started[0].out, fake.started[1].out);
+        let published: Vec<_> = std::fs::read_dir(scratch.recordings())
+            .expect("folder")
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(published.len(), 2, "{published:?}");
+        assert!(published.iter().all(|name| !name.starts_with('.')));
     }
 
     #[test]
@@ -972,8 +1054,8 @@ mod tests {
             [State::Preparing, State::Failed, State::Idle]
         );
         assert!(
-            !scratch.0.join("videos").exists()
-                || std::fs::read_dir(scratch.0.join("videos"))
+            !scratch.recordings().exists()
+                || std::fs::read_dir(scratch.recordings())
                     .unwrap()
                     .next()
                     .is_none()
@@ -997,7 +1079,7 @@ mod tests {
             Err(RecordError::Exited(_))
         ));
         assert_eq!(session.state(), State::Idle);
-        assert!(std::fs::read_dir(scratch.0.join("videos"))
+        assert!(std::fs::read_dir(scratch.recordings())
             .unwrap()
             .next()
             .is_none());
@@ -1009,7 +1091,7 @@ mod tests {
             session.stop(&mut broken, &scratch.places(), &mut |_| {}),
             Err(RecordError::Exited(_))
         ));
-        assert!(std::fs::read_dir(scratch.0.join("videos"))
+        assert!(std::fs::read_dir(scratch.recordings())
             .unwrap()
             .next()
             .is_none());
@@ -1102,7 +1184,7 @@ mod tests {
         assert!(session
             .quit(&mut fake, &scratch.places(), &mut |_| {})
             .is_none());
-        let files: Vec<_> = std::fs::read_dir(scratch.0.join("videos"))
+        let files: Vec<_> = std::fs::read_dir(scratch.recordings())
             .expect("folder")
             .filter_map(Result::ok)
             .collect();

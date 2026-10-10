@@ -10,15 +10,12 @@ import "components"
 SectionCard {
     id: card
 
-    // Whether the window is on screen: the controller hides it for a capture
-    // that would include it.
-    property bool windowShown: true
     // Seconds left in the delay under way; 0 when none.
     property int secondsLeft: 0
 
+    // The window stays where it is: a capture may include Selenita itself.
     function capture() {
-        SelenitaController.capture(card.windowShown, String(CelestinaTheme.accent),
-                                   String(CelestinaTheme.scrim))
+        SelenitaController.capture(String(CelestinaTheme.accent), String(CelestinaTheme.scrim))
     }
 
     title: qsTr("Captura")

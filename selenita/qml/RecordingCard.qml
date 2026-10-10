@@ -42,6 +42,17 @@ SectionCard {
             card.elapsed = 0
     }
 
+    // A new origin (the next recording's start) resets the clock at once
+    // rather than on the next second.
+    Connections {
+        target: SelenitaController
+
+        function onRecordingStartedAtChanged() {
+            if (card.recording)
+                card.tick()
+        }
+    }
+
     Timer {
         interval: 1000
         repeat: true

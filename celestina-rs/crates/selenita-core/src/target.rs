@@ -60,33 +60,6 @@ impl TargetKind {
             Self::Region => "region",
         }
     }
-
-    /// Whether Selenita's own window, when shown, would be in the picture or
-    /// in the way. A screen or a region shows whatever is on screen, the
-    /// window included; the window target takes the focused window, which is
-    /// Selenita itself while the person presses its button. So the window
-    /// steps aside for every target whenever it is shown.
-    #[must_use]
-    pub fn hides_own_window(self, window_shown: bool) -> bool {
-        window_shown
-    }
-}
-
-/// Whether the picture must wait for Selenita's hidden window to leave the
-/// screen: only when the target may show the output Selenita was on. A region
-/// may be drawn anywhere; a screen capture of every output (`""`) includes
-/// it; an unknown output on either side counts as the same one.
-#[must_use]
-pub fn needs_settle(
-    kind: TargetKind,
-    target_output: Option<&str>,
-    own_output: Option<&str>,
-) -> bool {
-    match (kind, target_output, own_output) {
-        (TargetKind::Region, _, _) | (_, None, _) | (_, _, None) => true,
-        (TargetKind::Screen, Some(""), _) => true,
-        (_, Some(target), Some(own)) => target == own,
-    }
 }
 
 impl fmt::Display for TargetKind {

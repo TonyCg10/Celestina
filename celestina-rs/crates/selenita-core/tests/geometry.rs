@@ -1,4 +1,4 @@
-use selenita_core::target::{delay_from_seconds, needs_settle, TargetKind};
+use selenita_core::target::{delay_from_seconds, TargetKind};
 use selenita_core::Geometry;
 use std::time::Duration;
 
@@ -59,24 +59,4 @@ fn only_the_offered_delays_are_kept() {
     assert_eq!(delay_from_seconds(0), Duration::ZERO);
     assert_eq!(delay_from_seconds(7), Duration::ZERO);
     assert_eq!(delay_from_seconds(-3), Duration::ZERO);
-}
-
-#[test]
-fn the_window_steps_aside_whenever_it_is_shown() {
-    for kind in TargetKind::ALL {
-        assert!(kind.hides_own_window(true));
-        assert!(!kind.hides_own_window(false));
-    }
-}
-
-#[test]
-fn the_settle_waits_only_where_selenita_was() {
-    use TargetKind::{Region, Screen, Window};
-    assert!(needs_settle(Region, Some("DP-2"), Some("DP-1")));
-    assert!(needs_settle(Screen, Some(""), Some("DP-1")));
-    assert!(needs_settle(Screen, Some("DP-1"), Some("DP-1")));
-    assert!(!needs_settle(Screen, Some("DP-2"), Some("DP-1")));
-    assert!(!needs_settle(Window, Some("DP-2"), Some("DP-1")));
-    assert!(needs_settle(Window, None, Some("DP-1")));
-    assert!(needs_settle(Window, Some("DP-2"), None));
 }

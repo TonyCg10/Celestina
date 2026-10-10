@@ -3,12 +3,18 @@
 //! touches when no running instance answers on the bus.
 //!
 //! The pipeline reads the ScreenCast portal's PipeWire node (`pipewiresrc`),
-//! encodes it to H.264 (`vah264enc` on a VA-API render node, else `x264enc`)
-//! and muxes it into an MP4 ([`MUXER`], from `gst-plugins-good`), with the
-//! system's sound as a second branch when asked: `pipewiresrc` capturing the
-//! default sink's monitor, encoded to AAC ([`AUDIO_ENCODER`]). The launcher
-//! runs with `-e`, so the SIGINT the worker sends at the stop becomes an EOS
-//! and the muxer writes its index before the child exits.
+//! encodes it to H.264 (`vah264enc` on a VA-API render node, else `x264enc`),
+//! both at a constant quality rather than a bitrate (a screen is sharp text
+//! that a 2 Mbit/s budget smears), and muxes it into an MP4 ([`MUXER`], from
+//! `gst-plugins-good`), with the system's sound as a second branch when
+//! asked: `pipewiresrc` capturing the default sink's monitor, mixed over a
+//! silent live bed ([`AUDIO_BED`] into an `audiomixer` that ignores a pad
+//! with nothing on it) and encoded to AAC ([`AUDIO_ENCODER`]). The bed keeps
+//! the audio branch flowing when the monitor hands over nothing, which is
+//! what makes the stop finish: the launcher runs with `-e`, so the SIGINT
+//! the worker sends becomes an EOS and the muxer writes its index before the
+//! child exits, and a muxer pad that never saw a buffer never reaches that
+//! EOS (measured in the SEL-1-D evidence).
 
 use std::ffi::OsString;
 use std::fmt;
@@ -18,6 +24,13 @@ use std::path::{Path, PathBuf};
 pub const MUXER: &str = "mp4mux";
 /// The AAC encoder of `gst-libav`.
 pub const AUDIO_ENCODER: &str = "avenc_aac";
+/// The silent live source under the sound branch: the mixer always has one
+/// pad producing, so the branch reaches EOS whatever the monitor does.
+pub const AUDIO_BED: &str = "audiotestsrc";
+/// The mixer the monitor and the bed meet in.
+pub const AUDIO_MIXER: &str = "audiomixer";
+/// The keyframe interval, in frames: one a second at 60 fps.
+pub const KEY_INTERVAL: u32 = 60;
 /// The child that runs the pipeline.
 pub const LAUNCHER: &str = "gst-launch-1.0";
 /// The tool that says whether an element exists (`--exists`, status 0 or 1).
@@ -53,15 +66,21 @@ impl VideoEncoder {
         }
     }
 
-    /// The encoder's own settings: a live screen with little latency.
+    /// The encoder's own settings: a live screen with little latency, at a
+    /// constant quality. `x264enc` defaults to 2048 kbit/s ABR and
+    /// `vah264enc` to CBR at a bitrate it works out itself; both are replaced
+    /// by a quantizer around 20 (CRF for x264, CQP for VA), the usual range
+    /// for text that must stay legible.
     fn settings(self) -> &'static [&'static str] {
         match self {
             Self::X264 => &[
                 "tune=zerolatency",
                 "speed-preset=veryfast",
+                "pass=qual",
+                "quantizer=21",
                 "key-int-max=60",
             ],
-            Self::VaH264 => &["key-int-max=60"],
+            Self::VaH264 => &["rate-control=cqp", "qpi=20", "qpp=22", "key-int-max=60"],
         }
     }
 }
@@ -128,13 +147,20 @@ impl Pipeline {
                 .map(str::to_owned),
         );
         if self.audio {
+            // The bed first, so its stereo 48 kHz is the mixer's format and
+            // the monitor is converted to it rather than the other way
+            // round; the monitor joins the mixer by name.
             tokens.extend(
                 [
-                    "pipewiresrc",
-                    "stream-properties=\"props,stream.capture.sink=true\"",
-                    "do-timestamp=true",
+                    AUDIO_BED,
+                    "wave=silence",
+                    "is-live=true",
                     "!",
-                    "audio/x-raw",
+                    "audio/x-raw,format=S16LE,rate=48000,channels=2",
+                    "!",
+                    AUDIO_MIXER,
+                    "name=mix",
+                    "ignore-inactive-pads=true",
                     "!",
                     "audioconvert",
                     "!",
@@ -145,6 +171,17 @@ impl Pipeline {
                     "queue",
                     "!",
                     "mux.",
+                    "pipewiresrc",
+                    "stream-properties=\"props,stream.capture.sink=true\"",
+                    "do-timestamp=true",
+                    "!",
+                    "audio/x-raw",
+                    "!",
+                    "audioconvert",
+                    "!",
+                    "audioresample",
+                    "!",
+                    "mix.",
                 ]
                 .into_iter()
                 .map(str::to_owned),

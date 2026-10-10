@@ -16,8 +16,8 @@ set -u
 #     shown, the history holds the capture and the recording, the recording
 #     is idle again with its last file named, and the appearance reached the
 #     theme. The fake's 1×1 PNG must be in the scratch pictures folder's
-#     `Capturas`, the fake MP4 in the scratch videos folder, and both lines
-#     in the scratch history.
+#     `Capturas`, the fake MP4 in the scratch videos folder's `Recordings`
+#     (never in its root), and both lines in the scratch history.
 #
 # Startup only. Keyboard, focus and assistive technology need a real Wayland
 # session.
@@ -111,9 +111,14 @@ smoke_run() {
         echo "smoke: expected one fake capture in the pictures folder, found $shots" >&2
         return 1
     fi
-    clips=$(find "$scratch/videos" -name '*.mp4' | wc -l)
+    clips=$(find "$scratch/videos/Recordings" -name '*.mp4' 2>/dev/null | wc -l)
     if [ "$clips" -ne 1 ]; then
-        echo "smoke: expected one fake recording in the videos folder, found $clips" >&2
+        echo "smoke: expected one fake recording in the videos folder's Recordings, found $clips" >&2
+        return 1
+    fi
+    loose=$(find "$scratch/videos" -maxdepth 1 -name '*.mp4' | wc -l)
+    if [ "$loose" -ne 0 ]; then
+        echo "smoke: a recording landed in the videos root" >&2
         return 1
     fi
     if [ "$(wc -l < "$scratch/data/selenita/history" 2>/dev/null || echo 0)" -ne 2 ]; then

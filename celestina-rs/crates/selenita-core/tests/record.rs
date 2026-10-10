@@ -2,9 +2,11 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use selenita_core::names::user_dir_from;
+use selenita_core::names::{recordings_dir_in, RECORDINGS_FOLDER};
 use selenita_core::record::{
     inspect_argv, quoted, request_stop, stop_file, take_stop_request, Event, Pipeline, Source,
-    State, VideoEncoder, AUDIO_ENCODER, INSPECTOR, LAUNCHER, MUXER,
+    State, VideoEncoder, AUDIO_BED, AUDIO_ENCODER, AUDIO_MIXER, INSPECTOR, KEY_INTERVAL, LAUNCHER,
+    MUXER,
 };
 
 fn pipeline(encoder: VideoEncoder, audio: bool) -> Pipeline {
@@ -49,6 +51,47 @@ fn the_four_combinations_build_their_branches() {
             );
         }
     }
+}
+
+/// The encoders run at a constant quality, never at `x264enc`'s 2048 kbit/s
+/// or `vah264enc`'s CBR default, with one keyframe a second.
+#[test]
+fn the_encoders_run_at_a_constant_quality() {
+    let x264 = joined(&pipeline(VideoEncoder::X264, false));
+    assert!(
+        x264.contains("! x264enc tune=zerolatency speed-preset=veryfast pass=qual quantizer=21 key-int-max=60 !"),
+        "{x264}"
+    );
+    assert!(!x264.contains("bitrate="), "{x264}");
+    let va = joined(&pipeline(VideoEncoder::VaH264, false));
+    assert!(
+        va.contains("! vah264enc rate-control=cqp qpi=20 qpp=22 key-int-max=60 !"),
+        "{va}"
+    );
+    assert!(va.contains(&format!("key-int-max={KEY_INTERVAL} ")), "{va}");
+}
+
+/// The sound branch mixes the monitor over a silent live bed, so the muxer's
+/// audio pad always has data and the EOS at the stop goes through even when
+/// the monitor hands over nothing; the bed fixes the format (stereo, 48 kHz)
+/// and the monitor is converted into the mixer.
+#[test]
+fn the_sound_branch_flows_over_a_silent_bed() {
+    let text = joined(&pipeline(VideoEncoder::VaH264, true));
+    let bed = format!(
+        "{AUDIO_BED} wave=silence is-live=true ! audio/x-raw,format=S16LE,rate=48000,channels=2 \
+         ! {AUDIO_MIXER} name=mix ignore-inactive-pads=true ! audioconvert ! audioresample \
+         ! {AUDIO_ENCODER} ! queue ! mux."
+    );
+    assert!(text.contains(&bed), "{text}");
+    let monitor = "pipewiresrc stream-properties=\"props,stream.capture.sink=true\" \
+                   do-timestamp=true ! audio/x-raw ! audioconvert ! audioresample ! mix.";
+    assert!(text.ends_with(monitor), "{text}");
+    let bed_at = text.find(AUDIO_BED).expect("the bed");
+    let monitor_at = text.find("stream.capture.sink").expect("the monitor");
+    assert!(bed_at < monitor_at, "the bed sets the mixer's format first");
+    let silent = joined(&pipeline(VideoEncoder::VaH264, false));
+    assert!(!silent.contains(AUDIO_MIXER) && !silent.contains(AUDIO_BED));
 }
 
 #[test]
@@ -175,6 +218,23 @@ fn the_videos_folder_reads_like_the_pictures_one() {
     let file = "XDG_PICTURES_DIR=\"$HOME/Pictures\"\nXDG_VIDEOS_DIR=\"$HOME/Videos\"\n".as_bytes();
     assert_eq!(
         user_dir_from(file, "XDG_VIDEOS_DIR", home),
+        Some(PathBuf::from("/home/ana/Videos"))
+    );
+}
+
+/// A recording lands in the videos folder's `Recordings`, as a capture lands
+/// in the pictures folder's «Capturas», never in the videos root.
+#[test]
+fn a_recording_lands_in_the_recordings_folder_of_the_videos_folder() {
+    assert_eq!(RECORDINGS_FOLDER, "Recordings");
+    assert_eq!(
+        recordings_dir_in(Path::new("/home/ana/Videos")),
+        PathBuf::from("/home/ana/Videos/Recordings")
+    );
+    assert_eq!(
+        recordings_dir_in(Path::new("/home/ana/Videos"))
+            .parent()
+            .map(Path::to_path_buf),
         Some(PathBuf::from("/home/ana/Videos"))
     );
 }

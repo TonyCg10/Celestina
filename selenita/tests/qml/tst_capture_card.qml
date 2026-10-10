@@ -119,7 +119,7 @@ TestCase {
         mouseClick(named(card, "delay3"))
         mouseClick(named(card, "captureButton"))
         compare(SelenitaController.calls.length, 1)
-        verify(SelenitaController.calls[0].startsWith("capture:region,3,true,true,true,"))
+        verify(SelenitaController.calls[0].startsWith("capture:region,3,true,true,"))
         compare(history.count, 1)
         verify(!named(history, "historyEmpty").visible)
         const thumbnail = named(named(history, "historyRow0"), "thumbnail")

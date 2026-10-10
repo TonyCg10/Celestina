@@ -5,7 +5,7 @@ import org.celestina.selenita 1.0
 // The whole window, over QML stand-ins for the Rust types: it constructs,
 // starts its activation adapter, shows the three cards in order, a second
 // launch brings it forward, a key binding's capture is taken, and the window
-// steps aside for a capture and comes back.
+// stays for a capture and shows after a launch's capture.
 TestCase {
     id: testCase
     name: "Main"
@@ -77,10 +77,16 @@ TestCase {
         compare(SelenitaController.history[0].kind, "recording")
     }
 
-    function test_the_window_steps_aside_and_returns() {
+    // A launch's capture shows the window when it ends; a capture asked from
+    // the window never hides it (the person may be capturing Selenita).
+    function test_the_window_stays_for_a_capture_and_shows_after_a_launch_capture() {
+        SelenitaController.reset()
         const window = createTemporaryObject(mainComponent, testCase)
         tryVerify(function() { return window.visible })
-        SelenitaController.hideWindowRequested()
+        window.startCapture()
+        verify(window.visible)
+        compare(SelenitaController.history.length, 1)
+        window.hide()
         verify(!window.visible)
         SelenitaController.showWindowRequested()
         verify(window.visible)
