@@ -37,7 +37,14 @@ const QML_FILES: &[&str] = &[
     // region.
     "qml/components/ActivationRoute.qml",
     "qml/components/EmptyLine.qml",
+    "qml/components/NoticePill.qml",
+    "qml/components/PageScroll.qml",
+    "qml/components/RowDivider.qml",
     "qml/components/SectionCard.qml",
+    "qml/components/SettingRow.qml",
+    "qml/CaptureCard.qml",
+    "qml/HistoryCard.qml",
+    "qml/HistoryRow.qml",
     "qml/Main.qml",
 ];
 

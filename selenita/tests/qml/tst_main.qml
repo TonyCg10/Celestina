@@ -3,8 +3,9 @@ import QtTest 1.3
 import org.celestina.selenita 1.0
 
 // The whole window, over QML stand-ins for the Rust types: it constructs,
-// starts its activation adapter, shows the three cards in order, and a second
-// launch brings it forward.
+// starts its activation adapter, shows the three cards in order, a second
+// launch brings it forward, a key binding's capture is taken, and the window
+// steps aside for a capture and comes back.
 TestCase {
     id: testCase
     name: "Main"
@@ -48,6 +49,27 @@ TestCase {
     function test_the_activation_adapter_starts_once() {
         const window = createTemporaryObject(mainComponent, testCase)
         compare(window.activation.starts, 1)
+    }
+
+    function test_a_key_binding_capture_chooses_the_target_and_captures() {
+        SelenitaController.reset()
+        const window = createTemporaryObject(mainComponent, testCase)
+        tryVerify(function() { return window.visible })
+        window.activation.captureRequested("window")
+        compare(SelenitaController.target, "window")
+        compare(SelenitaController.calls.length, 1)
+        verify(SelenitaController.calls[0].startsWith("capture:window,"))
+        compare(SelenitaController.fileStem, qsTr("Captura"))
+        compare(SelenitaController.folderName, qsTr("Capturas"))
+    }
+
+    function test_the_window_steps_aside_and_returns() {
+        const window = createTemporaryObject(mainComponent, testCase)
+        tryVerify(function() { return window.visible })
+        SelenitaController.hideWindowRequested()
+        verify(!window.visible)
+        SelenitaController.showWindowRequested()
+        verify(window.visible)
     }
 
     function test_a_second_launch_raises_the_window() {

@@ -1,6 +1,9 @@
 mod activation;
 mod appearance;
+mod backend;
+mod capture;
 mod controller;
+mod flags;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
@@ -19,14 +22,43 @@ fn main() {
         std::env::set_var("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
     }
 
-    // Selenita opens no files: the command line is ignored, so a path handed
-    // to it can never trigger a capture or anything else. The
-    // `--screenshot`/`--record`/`--stop` flags arrive with SEL-1-A/B.
+    // Selenita opens no files: apart from the key-binding flags the command
+    // line is ignored, so a path handed to it never triggers anything.
+    let screenshot = match flags::parse(std::env::args_os().skip(1)) {
+        Ok(flags::Launch::Window) => None,
+        Ok(flags::Launch::Screenshot(kind)) => Some(kind),
+        Ok(flags::Launch::Reserved(flag)) => {
+            eprintln!("selenita: {flag} arrives with screen recording (SEL-1-B)");
+            std::process::exit(2);
+        }
+        Err(error) => {
+            eprintln!("selenita: {error}");
+            std::process::exit(2);
+        }
+    };
+
+    // A key binding's capture goes to the running instance when there is
+    // one; otherwise this launch becomes the instance, takes it and stays
+    // open on the history.
+    if let Some(kind) = screenshot {
+        match activation::send_capture(kind) {
+            Ok(true) => return,
+            Ok(false) => {}
+            // Without a bus no instance can be reached: this launch takes
+            // the capture itself.
+            Err(error) => {
+                eprintln!("selenita: no running instance took the capture: {error}");
+            }
+        }
+    }
 
     // Claim the single-instance name before any window exists: a launch that
     // finds Selenita running asks it to come forward and ends here, so two
     // quick launches never race to build two processes.
     activation::claim();
+    if let Some(kind) = screenshot {
+        activation::request_capture(kind);
+    }
 
     let mut app = QGuiApplication::new();
     if let Some(mut app) = app.as_mut() {
@@ -47,8 +79,9 @@ fn main() {
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
-        // Development only: scripts/qml-dev.sh serves the source QML as an
-        // import tree, so a QML edit needs a restart rather than a build.
+        // Development only: a caller may serve the source QML as an import
+        // tree (CELESTINA_QML_DEV_IMPORT, CELESTINA_QML_DEV_MAIN), so a QML
+        // edit needs a restart rather than a build.
         if let Some(import) = std::env::var_os("CELESTINA_QML_DEV_IMPORT") {
             engine
                 .as_mut()

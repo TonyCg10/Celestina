@@ -10,8 +10,8 @@
   [the plan](../../../../docs/superpowers/plans/2026-10-09-reading-and-capture.md)
 - **Scope:** selenita
 - **Implementation checkpoint:** SEL-1
-- **Author-validation checkpoint:** none yet; each unit adds its entry to
-  [VALIDATION.md](../../../VALIDATION.md)
+- **Author-validation checkpoint:** VAL-SEL-SHOT (SEL-1-A) is pending; each
+  unit adds its entry to [VALIDATION.md](../../../VALIDATION.md)
 
 ## Hypothesis
 
@@ -61,6 +61,6 @@ captures and records with every tool of the scope.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
-| SEL-1-A | `selenita:` | planned | `selenita/`, `celestina-rs/crates/selenita-core/` | — | Screenshots of the screen, a window or a region with delay, clipboard and folder, the history card and the niri key-binding flags | `scripts/verify-production.sh` | None yet |
+| SEL-1-A | `selenita:` | done | [inventory](../../inventories/2026-10-09-sel-1-foundation/SEL-1-A.numstat.tsv) | 51 files, +5841/-133 | Screenshots of the screen, a window or a region with delay, clipboard and folder, the history card and the niri key-binding flags | [evidence](../../evidence/2026-10-09-screenshots.md) | VAL-SEL-SHOT pending |
 | SEL-1-B | `selenita:` | planned | `selenita/`, `celestina-rs/crates/selenita-core/` | — | Recording to MP4 through the ScreenCast portal and GStreamer, the sound option and `--stop` | `scripts/verify-production.sh` | None yet |
 | SEL-1-C | `selenita:` | planned | `selenita/`, `docs/version-history.tsv` | — | The keyboard and accessibility pass, 1.0.0, plan archived | `scripts/complete-production.sh` | None yet |

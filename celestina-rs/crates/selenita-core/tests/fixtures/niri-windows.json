@@ -1,0 +1,68 @@
+[
+  {
+    "id": 2,
+    "title": "Window title 1",
+    "app_id": "com.anthropic.Claude",
+    "pid": 4000,
+    "workspace_id": 1,
+    "is_focused": true,
+    "is_floating": false,
+    "is_urgent": false,
+    "layout": {
+      "pos_in_scrolling_layout": [
+        1,
+        1
+      ],
+      "tile_size": [
+        942.0,
+        1010.0
+      ],
+      "window_size": [
+        942,
+        1010
+      ],
+      "tile_pos_in_workspace_view": null,
+      "window_offset_in_tile": [
+        0.0,
+        0.0
+      ]
+    },
+    "focus_timestamp": {
+      "secs": 28522,
+      "nanos": 944035349
+    }
+  },
+  {
+    "id": 45,
+    "title": "Window title 2",
+    "app_id": "com.usebottles.bottles",
+    "pid": 4001,
+    "workspace_id": 6,
+    "is_focused": false,
+    "is_floating": false,
+    "is_urgent": false,
+    "layout": {
+      "pos_in_scrolling_layout": [
+        1,
+        1
+      ],
+      "tile_size": [
+        625.3333333333334,
+        1370.0
+      ],
+      "window_size": [
+        625,
+        1370
+      ],
+      "tile_pos_in_workspace_view": null,
+      "window_offset_in_tile": [
+        0.0,
+        0.0
+      ]
+    },
+    "focus_timestamp": {
+      "secs": 28508,
+      "nanos": 570816145
+    }
+  }
+]

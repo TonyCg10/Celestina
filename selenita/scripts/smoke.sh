@@ -10,8 +10,11 @@ set -u
 #     binary must still be running when the timeout ends it (status 124) and
 #     the QML runtime must report no errors, including the ones that mean an
 #     object never constructed.
-#  3) The window's own report (SELENITA_SMOKE_REPORT) after 2 s: the three cards
-#     are shown and the appearance reached the theme.
+#  3) Under SELENITA_FAKE=1 the window takes one capture through the report
+#     switch (SELENITA_SMOKE_REPORT) after 1 s, and reports after 3 s: the
+#     three cards are shown, the history holds the capture, and the
+#     appearance reached the theme. The fake's 1×1 PNG must be in the scratch
+#     pictures folder's `Capturas` and its line in the scratch history.
 #
 # Startup only. Keyboard, focus and assistive technology need a real Wayland
 # session.
@@ -44,45 +47,77 @@ if [ ! -x "$bin" ]; then
     exit 1
 fi
 
-scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"' EXIT HUP INT TERM
-mkdir -p "$scratch/config" "$scratch/data" "$scratch/cache" \
-    "$scratch/state" "$scratch/run"
-chmod 0700 "$scratch/run"
-log=$scratch/output.log
+# One run as a plain launch (the window takes a capture through the report
+# switch), one as `--screenshot screen` with no instance running (the window
+# starts hidden, takes the capture, then shows): both end shown with one
+# capture.
+smoke_run() {
+    # Whether the window is on screen when it starts: shown for a plain
+    # launch, hidden for a launch that captures first.
+    start_shown=$1
+    shift
+    scratch=$(mktemp -d)
+    mkdir -p "$scratch/config" "$scratch/data" "$scratch/cache" \
+        "$scratch/state" "$scratch/run" "$scratch/pictures"
+    chmod 0700 "$scratch/run"
+    log=$scratch/output.log
 
-XDG_CONFIG_HOME=$scratch/config \
-XDG_DATA_HOME=$scratch/data \
-XDG_CACHE_HOME=$scratch/cache \
-XDG_STATE_HOME=$scratch/state \
-XDG_RUNTIME_DIR=$scratch/run \
-DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
-SELENITA_FAKE=1 \
-SELENITA_SMOKE_REPORT=1 \
-QT_QPA_PLATFORM=offscreen \
-QT_ASSUME_STDERR_HAS_CONSOLE=1 \
-    timeout 8 "$bin" >"$log" 2>&1
-rc=$?
-if [ "$rc" -ne 124 ]; then
-    echo "smoke: the binary exited on its own (rc=$rc); last lines:" >&2
-    tail -20 "$log" >&2
-    exit 1
-fi
+    XDG_CONFIG_HOME=$scratch/config \
+    XDG_DATA_HOME=$scratch/data \
+    XDG_CACHE_HOME=$scratch/cache \
+    XDG_STATE_HOME=$scratch/state \
+    XDG_RUNTIME_DIR=$scratch/run \
+    XDG_PICTURES_DIR=$scratch/pictures \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+    SELENITA_FAKE=1 \
+    SELENITA_SMOKE_REPORT=1 \
+    QT_QPA_PLATFORM=offscreen \
+    QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+        timeout 8 "$bin" "$@" >"$log" 2>&1
+    rc=$?
+    if [ "$rc" -ne 124 ]; then
+        echo "smoke: the binary exited on its own (rc=$rc); last lines:" >&2
+        tail -20 "$log" >&2
+        return 1
+    fi
 
-errors=$(grep -E 'TypeError|ReferenceError|SyntaxError|Cannot create delegate|Cannot set properties on|Cannot assign|Unable to assign|Type [A-Za-z_][A-Za-z0-9_]* unavailable|is not a type|Binding loop detected|QQmlApplicationEngine failed' "$log" || true)
-if [ -n "$errors" ]; then
-    echo "smoke: QML errors at startup:" >&2
-    echo "$errors" | sort | uniq -c | sort -rn >&2
-    exit 1
-fi
+    errors=$(grep -E 'TypeError|ReferenceError|SyntaxError|Cannot create delegate|Cannot set properties on|Cannot assign|Unable to assign|Type [A-Za-z_][A-Za-z0-9_]* unavailable|is not a type|Binding loop detected|QQmlApplicationEngine failed' "$log" || true)
+    if [ -n "$errors" ]; then
+        echo "smoke: QML errors at startup:" >&2
+        echo "$errors" | sort | uniq -c | sort -rn >&2
+        return 1
+    fi
 
-report=$(grep -o 'selenita-smoke:.*' "$log" | tail -1)
-case $report in
-    *" cards=3 fake=true textScale=1 fontBody=13") ;;
-    *)
-        echo "smoke: the window did not report its three cards: ${report:-no report}" >&2
-        exit 1
-        ;;
-esac
+    if ! grep -q "selenita-smoke-start: shown=$start_shown" "$log"; then
+        echo "smoke: the window did not start shown=$start_shown ($*)" >&2
+        return 1
+    fi
 
-echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings ($report)"
+    report=$(grep -o 'selenita-smoke:.*' "$log" | tail -1)
+    case $report in
+        *" cards=3 history=1 shown=true fake=true textScale=1 fontBody=13") ;;
+        *)
+            echo "smoke: the window did not report its cards and one capture: ${report:-no report}" >&2
+            return 1
+            ;;
+    esac
+
+    shots=$(find "$scratch/pictures" -name '*.png' | wc -l)
+    if [ "$shots" -ne 1 ]; then
+        echo "smoke: expected one fake capture in the pictures folder, found $shots" >&2
+        return 1
+    fi
+    if [ "$(wc -l < "$scratch/data/selenita/history" 2>/dev/null || echo 0)" -ne 1 ]; then
+        echo "smoke: the history file does not hold the capture" >&2
+        return 1
+    fi
+
+    rm -rf "$scratch"
+}
+
+scratch=
+trap 'rm -rf "${scratch:-}"' EXIT HUP INT TERM
+smoke_run true || exit 1
+smoke_run false --screenshot screen || exit 1
+
+echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings, one fake capture in the history ($report)"

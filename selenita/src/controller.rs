@@ -1,20 +1,41 @@
 //! The window-wide controller, a QML singleton.
 //!
-//! In the skeleton it carries the appearance to the window, which hands
-//! `appearanceReducedMotion` and `appearanceTextScale` to
-//! `CelestinaAppearance`, the smoke switch and the fake switch. The capture
-//! settings, the recording state and the history join it in SEL-1-A/B. The singleton lives as long as
-//! the engine, so its follower lives until the process exits.
+//! It carries the appearance to the window (`appearanceReducedMotion` and
+//! `appearanceTextScale`, handed to `CelestinaAppearance`), the smoke and
+//! fake switches, the capture card's choices, the history and the outputs.
+//! Every capture and every history action is queued to the capture worker
+//! (`capture.rs`); its reports come back through the Qt thread's queue.
+//! The singleton lives as long as the engine, so its follower and its
+//! worker live until the process exits.
 
 use std::pin::Pin;
+use std::time::UNIX_EPOCH;
 
+use celestina_core::file_uri;
 use celestina_settings::Follower;
 use cxx_qt::{CxxQtType, Threading};
+use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QVariant};
+use selenita_core::target::delay_from_seconds;
+use selenita_core::tools::slurp_colour;
+use selenita_core::{Entry, TargetKind};
 
 use crate::appearance::{self, Values};
+use crate::capture::{Action, CaptureError, Report, Request, Worker};
+
+/// slurp's colours when QML hands over something that is not a colour: the
+/// theme's accent and a quarter-black veil.
+const FALLBACK_ACCENT: &str = "#3e91ffff";
+const FALLBACK_BACKGROUND: &str = "#00000040";
 
 #[cxx_qt::bridge]
 pub mod qobject {
+    unsafe extern "C++" {
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qvariant.h");
+        type QVariant = cxx_qt_lib::QVariant;
+    }
+
     #[auto_cxx_name]
     extern "RustQt" {
         #[qobject]
@@ -36,7 +57,72 @@ pub mod qobject {
         )]
         #[qproperty(bool, smoke_report, cxx_name = "smokeReport", READ, CONSTANT)]
         #[qproperty(bool, fake, READ, CONSTANT)]
+        // This launch came from `--screenshot` with no Selenita running: the
+        // window starts hidden, takes the capture and shows on the history.
+        #[qproperty(bool, launch_capture, cxx_name = "launchCapture", READ, CONSTANT)]
+        // The capture card's choices: `screen`, `window` or `region`; the
+        // delay in seconds (0, 3, 5 or 10); the two destinations; the output
+        // a screen capture takes (empty: every output).
+        #[qproperty(QString, target, READ, WRITE, NOTIFY)]
+        #[qproperty(i32, delay, READ, WRITE, NOTIFY)]
+        #[qproperty(bool, to_clipboard, cxx_name = "toClipboard", READ, WRITE, NOTIFY)]
+        #[qproperty(bool, to_file, cxx_name = "toFile", READ, WRITE, NOTIFY)]
+        #[qproperty(QString, screen_output, cxx_name = "screenOutput", READ, WRITE, NOTIFY)]
+        // Product copy from QML (`qsTr`): the file name's stem and the
+        // folder inside the pictures folder.
+        #[qproperty(QString, file_stem, cxx_name = "fileStem", READ, WRITE, NOTIFY)]
+        #[qproperty(QString, folder_name, cxx_name = "folderName", READ, WRITE, NOTIFY)]
+        // The enabled outputs' names, left to right.
+        #[qproperty(QVariant, outputs, READ, NOTIFY)]
+        // The history, the latest first: `{ id, name, url, kind, size,
+        // takenAt }` with `takenAt` in milliseconds since the epoch.
+        #[qproperty(QVariant, history, READ, NOTIFY)]
+        // A capture is under way.
+        #[qproperty(bool, busy, READ, NOTIFY)]
         type SelenitaController = super::SelenitaControllerRust;
+
+        /// A sentence for the window's notice pill; `kind` is `info` or
+        /// `error`.
+        #[qsignal]
+        fn notice(self: Pin<&mut SelenitaController>, kind: QString, text: QString);
+        /// Seconds left before the picture is taken; 0 when it is taken.
+        #[qsignal]
+        fn countdown(self: Pin<&mut SelenitaController>, seconds: i32);
+        /// A capture finished; `entry_id` is its history row, empty when it
+        /// went to the clipboard only.
+        #[qsignal]
+        fn captured(self: Pin<&mut SelenitaController>, entry_id: QString);
+        /// The window steps aside for a capture that would include it.
+        #[qsignal]
+        #[cxx_name = "hideWindowRequested"]
+        fn hide_window_requested(self: Pin<&mut SelenitaController>);
+        /// The capture is over: the window comes back on the history.
+        #[qsignal]
+        #[cxx_name = "showWindowRequested"]
+        fn show_window_requested(self: Pin<&mut SelenitaController>);
+
+        /// Takes a capture with the card's choices. `window_shown` says
+        /// whether the window is on screen; `accent` and `background` are
+        /// the theme's colours for the region selector.
+        #[qinvokable]
+        fn capture(
+            self: Pin<&mut SelenitaController>,
+            window_shown: bool,
+            accent: &QString,
+            background: &QString,
+        );
+        #[qinvokable]
+        #[cxx_name = "openInFluorita"]
+        fn open_in_fluorita(self: Pin<&mut SelenitaController>, id: &QString);
+        #[qinvokable]
+        fn copy(self: Pin<&mut SelenitaController>, id: &QString);
+        #[qinvokable]
+        #[cxx_name = "showInSiderita"]
+        fn show_in_siderita(self: Pin<&mut SelenitaController>, id: &QString);
+        /// Moves the entry's file to the trash and forgets it.
+        #[qinvokable]
+        #[cxx_name = "deleteEntry"]
+        fn delete_entry(self: Pin<&mut SelenitaController>, id: &QString);
     }
 
     impl cxx_qt::Threading for SelenitaController {}
@@ -44,14 +130,31 @@ pub mod qobject {
 }
 
 /// `smokeReport` is `SELENITA_SMOKE_REPORT` set: `scripts/smoke.sh` asks the
-/// window to print what it shows once it is up. `fake` is `SELENITA_FAKE=1`:
-/// the tests and the smoke run without `grim`, `slurp`, niri or the portal;
-/// SEL-1-A/B route their workers to fakes through it. Nothing is faked yet.
+/// window to take one capture over the fakes and print what it shows. `fake`
+/// is `SELENITA_FAKE=1`: the capture worker drives the fake backend
+/// (`backend.rs`) instead of niri, `grim`, `slurp` and `wl-copy`.
 pub struct SelenitaControllerRust {
     appearance_reduced_motion: bool,
     appearance_text_scale: f64,
     smoke_report: bool,
     fake: bool,
+    target: QString,
+    delay: i32,
+    to_clipboard: bool,
+    to_file: bool,
+    screen_output: QString,
+    file_stem: QString,
+    folder_name: QString,
+    outputs: QVariant,
+    history: QVariant,
+    busy: bool,
+    launch_capture: bool,
+    /// The window stepped aside for the capture under way.
+    hidden: bool,
+    /// The window has not shown yet and shows when the launch's capture
+    /// ends.
+    reveal: bool,
+    worker: Option<Worker>,
     /// Held for the singleton's life; dropping it stops the follower.
     follower: Option<Follower>,
 }
@@ -64,6 +167,21 @@ impl Default for SelenitaControllerRust {
             appearance_text_scale: initial.text_scale,
             smoke_report: std::env::var_os("SELENITA_SMOKE_REPORT").is_some(),
             fake: fake_requested(std::env::var_os("SELENITA_FAKE").as_deref()),
+            target: QString::from(TargetKind::Screen.as_str()),
+            delay: 0,
+            to_clipboard: true,
+            to_file: true,
+            screen_output: QString::default(),
+            file_stem: QString::default(),
+            folder_name: QString::default(),
+            // Empty lists, not invalid variants: QML reads `.length`.
+            outputs: string_list(&[]),
+            history: history_rows(&[]),
+            busy: false,
+            launch_capture: crate::activation::capture_waiting(),
+            hidden: false,
+            reveal: crate::activation::capture_waiting(),
+            worker: None,
             follower: None,
         }
     }
@@ -78,6 +196,14 @@ impl cxx_qt::Initialize for qobject::SelenitaController {
             });
         });
         self.as_mut().rust_mut().follower = Some(follower);
+
+        let qt = self.qt_thread();
+        let worker = Worker::start(self.rust().fake, move |report| {
+            let _ = qt.queue(move |controller: Pin<&mut qobject::SelenitaController>| {
+                controller.apply(report);
+            });
+        });
+        self.as_mut().rust_mut().worker = worker;
     }
 }
 
@@ -92,6 +218,177 @@ impl qobject::SelenitaController {
             self.as_mut().appearance_text_scale_changed();
         }
     }
+
+    fn apply(mut self: Pin<&mut Self>, report: Report) {
+        match report {
+            Report::History(entries) => {
+                self.as_mut().rust_mut().history = history_rows(&entries);
+                self.as_mut().history_changed();
+            }
+            Report::Outputs(names) => {
+                self.as_mut().rust_mut().outputs = string_list(&names);
+                self.as_mut().outputs_changed();
+            }
+            Report::HideWindow => {
+                self.as_mut().rust_mut().hidden = true;
+                self.as_mut().hide_window_requested();
+            }
+            Report::Countdown(left) => {
+                self.as_mut().countdown(i32::try_from(left).unwrap_or(0));
+            }
+            Report::Captured(id) => {
+                self.as_mut().end_capture();
+                let id = id.unwrap_or_default();
+                self.as_mut().captured(QString::from(id.as_str()));
+            }
+            Report::Cancelled => self.as_mut().end_capture(),
+            Report::CaptureFailed(text) => {
+                self.as_mut().end_capture();
+                self.as_mut().say_error(&text);
+            }
+            Report::Failed(text) => self.as_mut().say_error(&text),
+        }
+    }
+
+    fn say_error(self: Pin<&mut Self>, text: &str) {
+        self.notice(QString::from("error"), QString::from(text));
+    }
+
+    fn set_busy(mut self: Pin<&mut Self>, busy: bool) {
+        if self.rust().busy != busy {
+            self.as_mut().rust_mut().busy = busy;
+            self.as_mut().busy_changed();
+        }
+    }
+
+    /// The capture is over, however it ended: the window comes back.
+    fn end_capture(mut self: Pin<&mut Self>) {
+        self.as_mut().set_busy(false);
+        let hidden = std::mem::take(&mut self.as_mut().rust_mut().hidden);
+        let reveal = std::mem::take(&mut self.as_mut().rust_mut().reveal);
+        if hidden || reveal {
+            self.as_mut().show_window_requested();
+        }
+    }
+
+    pub fn capture(
+        mut self: Pin<&mut Self>,
+        window_shown: bool,
+        accent: &QString,
+        background: &QString,
+    ) {
+        if self.rust().busy {
+            self.say_error(&CaptureError::Busy.message_es());
+            return;
+        }
+        let kind = self
+            .rust()
+            .target
+            .to_string()
+            .parse::<TargetKind>()
+            .unwrap_or(TargetKind::Screen);
+        let hide = kind.hides_own_window(window_shown);
+        let request = Request {
+            kind,
+            output: self.rust().screen_output.to_string(),
+            delay: delay_from_seconds(i64::from(self.rust().delay)),
+            to_clipboard: self.rust().to_clipboard,
+            to_file: self.rust().to_file,
+            hide,
+            accent: slurp_colour(&accent.to_string()).unwrap_or_else(|| FALLBACK_ACCENT.to_owned()),
+            background: slurp_colour(&background.to_string())
+                .unwrap_or_else(|| FALLBACK_BACKGROUND.to_owned()),
+            stem: self.rust().file_stem.to_string(),
+            folder: self.rust().folder_name.to_string(),
+        };
+        if !request.to_clipboard && !request.to_file && kind != TargetKind::Window {
+            self.say_error(&CaptureError::NoDestination.message_es());
+            return;
+        }
+        let queued = self
+            .rust()
+            .worker
+            .as_ref()
+            .ok_or(CaptureError::WorkerGone)
+            .and_then(|worker| worker.capture(request));
+        if let Err(error) = queued {
+            self.say_error(&error.message_es());
+            return;
+        }
+        // The worker asks the window to step aside once it has noted the
+        // window a window capture means (`Report::HideWindow`).
+        self.as_mut().set_busy(true);
+    }
+
+    fn act(self: Pin<&mut Self>, action: Action, id: &QString) {
+        let queued = self
+            .rust()
+            .worker
+            .as_ref()
+            .ok_or(CaptureError::WorkerGone)
+            .and_then(|worker| worker.act(action, id.to_string()));
+        if let Err(error) = queued {
+            self.say_error(&error.message_es());
+        }
+    }
+
+    pub fn open_in_fluorita(self: Pin<&mut Self>, id: &QString) {
+        self.act(Action::OpenInFluorita, id);
+    }
+
+    pub fn copy(self: Pin<&mut Self>, id: &QString) {
+        self.act(Action::Copy, id);
+    }
+
+    pub fn show_in_siderita(self: Pin<&mut Self>, id: &QString) {
+        self.act(Action::ShowInSiderita, id);
+    }
+
+    pub fn delete_entry(self: Pin<&mut Self>, id: &QString) {
+        self.act(Action::Delete, id);
+    }
+}
+
+fn string_list(items: &[String]) -> QVariant {
+    let mut list = QList::<QVariant>::default();
+    for item in items {
+        list.append(QVariant::from(&QString::from(item.as_str())));
+    }
+    QVariant::from(&list)
+}
+
+/// Milliseconds since the epoch, as QML's `Date` takes them.
+#[allow(clippy::cast_precision_loss)]
+fn millis(entry: &Entry) -> f64 {
+    entry
+        .taken_at
+        .duration_since(UNIX_EPOCH)
+        .map_or(0.0, |elapsed| elapsed.as_millis() as f64)
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn history_rows(entries: &[Entry]) -> QVariant {
+    let mut list = QList::<QVariant>::default();
+    for entry in entries {
+        let mut map = QMap::<QMapPair_QString_QVariant>::default();
+        let text = |value: &str| QVariant::from(&QString::from(value));
+        map.insert(QString::from("id"), text(&entry.id()));
+        let name = entry
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        map.insert(QString::from("name"), text(&name));
+        map.insert(
+            QString::from("url"),
+            text(&file_uri::from_path(&entry.path).unwrap_or_default()),
+        );
+        map.insert(QString::from("kind"), text(entry.kind.as_str()));
+        map.insert(QString::from("size"), QVariant::from(&(entry.size as f64)));
+        map.insert(QString::from("takenAt"), QVariant::from(&millis(entry)));
+        list.append(QVariant::from(&map));
+    }
+    QVariant::from(&list)
 }
 
 /// Only the exact value `1` asks for the fakes, so a stray empty or `0` never

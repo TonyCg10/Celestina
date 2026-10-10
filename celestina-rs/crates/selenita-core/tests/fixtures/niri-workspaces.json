@@ -1,0 +1,182 @@
+[
+  {
+    "id": 11,
+    "idx": 1,
+    "name": "11",
+    "output": "DP-2",
+    "is_urgent": false,
+    "is_active": true,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 2,
+    "idx": 2,
+    "name": "2",
+    "output": "HDMI-A-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 9,
+    "idx": 4,
+    "name": "9",
+    "output": "DP-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 14,
+    "idx": 4,
+    "name": "14",
+    "output": "DP-2",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 15,
+    "idx": 5,
+    "name": "15",
+    "output": "DP-2",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 1,
+    "idx": 1,
+    "name": "1",
+    "output": "HDMI-A-1",
+    "is_urgent": false,
+    "is_active": true,
+    "is_focused": true,
+    "active_window_id": 2
+  },
+  {
+    "id": 6,
+    "idx": 1,
+    "name": "6",
+    "output": "DP-1",
+    "is_urgent": false,
+    "is_active": true,
+    "is_focused": false,
+    "active_window_id": 45
+  },
+  {
+    "id": 17,
+    "idx": 6,
+    "name": null,
+    "output": "DP-2",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 3,
+    "idx": 3,
+    "name": "3",
+    "output": "HDMI-A-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 8,
+    "idx": 3,
+    "name": "8",
+    "output": "DP-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 4,
+    "idx": 4,
+    "name": "4",
+    "output": "HDMI-A-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 16,
+    "idx": 6,
+    "name": null,
+    "output": "HDMI-A-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 12,
+    "idx": 2,
+    "name": "12",
+    "output": "DP-2",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 18,
+    "idx": 6,
+    "name": null,
+    "output": "DP-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 10,
+    "idx": 5,
+    "name": "10",
+    "output": "DP-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 5,
+    "idx": 5,
+    "name": "5",
+    "output": "HDMI-A-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 13,
+    "idx": 3,
+    "name": "13",
+    "output": "DP-2",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  },
+  {
+    "id": 7,
+    "idx": 2,
+    "name": "7",
+    "output": "DP-1",
+    "is_urgent": false,
+    "is_active": false,
+    "is_focused": false,
+    "active_window_id": null
+  }
+]

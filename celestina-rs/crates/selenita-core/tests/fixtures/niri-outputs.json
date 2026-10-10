@@ -1,0 +1,110 @@
+{
+  "DP-1": {
+    "name": "DP-1",
+    "make": "LG Electronics",
+    "model": "LG ULTRAGEAR+",
+    "serial": "REDACTED",
+    "physical_size": [
+      700,
+      390
+    ],
+    "modes": [
+      {
+        "width": 3840,
+        "height": 2160,
+        "refresh_rate": 165058,
+        "is_preferred": true
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "refresh_rate": 59997,
+        "is_preferred": true
+      }
+    ],
+    "current_mode": 0,
+    "is_custom_mode": false,
+    "vrr_supported": true,
+    "vrr_enabled": false,
+    "logical": {
+      "x": 1920,
+      "y": 0,
+      "width": 2560,
+      "height": 1440,
+      "scale": 1.5,
+      "transform": "Normal"
+    }
+  },
+  "DP-2": {
+    "name": "DP-2",
+    "make": "LG Electronics",
+    "model": "LG ULTRAGEAR",
+    "serial": "REDACTED",
+    "physical_size": [
+      530,
+      300
+    ],
+    "modes": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "refresh_rate": 119982,
+        "is_preferred": true
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "refresh_rate": 100000,
+        "is_preferred": false
+      }
+    ],
+    "current_mode": 0,
+    "is_custom_mode": false,
+    "vrr_supported": true,
+    "vrr_enabled": false,
+    "logical": {
+      "x": 4480,
+      "y": 250,
+      "width": 1920,
+      "height": 1080,
+      "scale": 1.0,
+      "transform": "Normal"
+    }
+  },
+  "HDMI-A-1": {
+    "name": "HDMI-A-1",
+    "make": "HP Inc.",
+    "model": "HP M27h",
+    "serial": "REDACTED",
+    "physical_size": [
+      600,
+      340
+    ],
+    "modes": [
+      {
+        "width": 1920,
+        "height": 1080,
+        "refresh_rate": 60000,
+        "is_preferred": true
+      },
+      {
+        "width": 1920,
+        "height": 1080,
+        "refresh_rate": 74973,
+        "is_preferred": false
+      }
+    ],
+    "current_mode": 0,
+    "is_custom_mode": false,
+    "vrr_supported": true,
+    "vrr_enabled": false,
+    "logical": {
+      "x": 0,
+      "y": 120,
+      "width": 1920,
+      "height": 1080,
+      "scale": 1.0,
+      "transform": "Normal"
+    }
+  }
+}

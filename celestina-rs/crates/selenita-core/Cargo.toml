@@ -6,3 +6,18 @@ description = "Selenita's domain: capture targets, file names, history, the niri
 license = "MIT"
 
 [dependencies]
+# The history goes through the suite's shared owners: `pathkey` spells a path
+# byte-exact in one text line, `atomic_file` replaces the file privately and
+# reads it bounded, `xdg` names the data and config homes.
+celestina-core.workspace = true
+# niri's IPC speaks JSON (one request line, one reply line, as `niri msg
+# --json` prints); the workspace's one JSON parser reads the replies as
+# values, without derive.
+serde_json.workspace = true
+# The capture file name carries the local wall-clock time. The standard
+# library has no time zones; chrono's `clock` reads the system zone
+# (`TZ`, `/etc/localtime`) in safe Rust. No other feature.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[lints]
+workspace = true

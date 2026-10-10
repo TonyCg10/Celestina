@@ -1,6 +1,6 @@
 [package]
 name = "selenita"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -28,13 +28,22 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
     "qt_quickcontrols",
 ] }
 # Selenita's domain (targets, file names, history, the niri client, the tool
-# argv, the recording pipeline), tested without Qt; a stub until SEL-1-A.
+# argv and their runner), tested without Qt.
 selenita-core = { path = "../celestina-rs/crates/selenita-core" }
 # Single instance: a second `selenita` brings the running window forward.
 # The claim-first hand-off is the suite's one owner in `celestina-core`
-# (feature `activation`, which brings zbus 5 for the session bus); nothing
-# else of the crate is used yet.
+# (feature `activation`, which brings zbus 5 for the session bus). Besides
+# it Selenita uses the crate's `file_uri`, `atomic_file`, `xdg` and
+# `CancellationToken`.
 celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
+# The extra `org.celestina.Selenita1` interface served on the activation
+# connection, its client half for `--screenshot`, and the file manager's
+# `ShowItems`. The same zbus 5 `celestina-core`'s activation already links,
+# with the same blocking API and runtime.
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
+# «Eliminar» moves a capture to the freedesktop trash through the suite's one
+# implementation, so Siderita can restore it.
+siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 # The suite's appearance file (reduced motion, text scale) and its follower,
 # so this window follows the same choice as every other one.
 celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
