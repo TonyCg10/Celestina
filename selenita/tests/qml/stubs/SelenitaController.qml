@@ -5,8 +5,10 @@ import QtQuick
 // where the binary's types do not exist: the same properties, signals and
 // invokables, with the fakes on as `SELENITA_FAKE=1` sets them. A capture
 // answers at once as the fake backend does: a history row whose thumbnail
-// is a 1×1 PNG beside this file. `calls` records every invokable, and
-// `reset()` puts everything back between tests.
+// is a 1×1 PNG beside this file. A recording toggles between `idle` and
+// `recording` at once, as the fake recorder does, and its stop lands a
+// recording row. `calls` records every invokable, and `reset()` puts
+// everything back between tests.
 QtObject {
     id: stub
 
@@ -27,6 +29,14 @@ QtObject {
     property var history: []
     property bool busy: false
 
+    property string recordingState: "idle"
+    property bool withAudio: false
+    property real recordingStartedAt: 0
+    property string lastRecordingId: ""
+    property string lastRecordingName: ""
+    property string recorderMissing: ""
+    property string recordingStem: ""
+
     property var calls: []
     property int taken: 0
 
@@ -35,6 +45,7 @@ QtObject {
     signal captured(string entryId)
     signal hideWindowRequested()
     signal showWindowRequested()
+    signal recordingFinished(string entryId)
 
     function reset() {
         target = "screen"
@@ -45,6 +56,12 @@ QtObject {
         outputs = []
         history = []
         busy = false
+        recordingState = "idle"
+        withAudio = false
+        recordingStartedAt = 0
+        lastRecordingId = ""
+        lastRecordingName = ""
+        recorderMissing = ""
         calls = []
         taken = 0
     }
@@ -70,6 +87,40 @@ QtObject {
         }
         history = [row].concat(history)
         captured(id)
+    }
+
+    function toggleRecording() {
+        record("toggleRecording", withAudio)
+        if (recordingState === "recording") {
+            finishRecording()
+            return
+        }
+        recordingStartedAt = Date.now()
+        recordingState = "recording"
+    }
+
+    function stopRecording() {
+        record("stopRecording", recordingState)
+        if (recordingState === "recording")
+            finishRecording()
+    }
+
+    function finishRecording() {
+        taken += 1
+        const id = "/fake/" + recordingStem + " " + taken + ".mp4"
+        const row = {
+            id: id,
+            name: recordingStem + " " + taken + ".mp4",
+            url: "file://" + id,
+            kind: "recording",
+            size: 17,
+            takenAt: recordingStartedAt
+        }
+        history = [row].concat(history)
+        recordingState = "idle"
+        lastRecordingId = id
+        lastRecordingName = row.name
+        recordingFinished(id)
     }
 
     function openInFluorita(id) { record("openInFluorita", id) }

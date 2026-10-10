@@ -52,15 +52,29 @@ Item {
         color: CelestinaTheme.controlFill
         clip: true
 
+        // A recording has no still to show: the film glyph stands for it.
+        readonly property bool isRecording: row.entry.kind === "recording"
+
         Image {
             objectName: "thumbnail"
             anchors.fill: parent
-            source: row.entry.url
+            visible: !frame.isRecording
+            source: frame.isRecording ? "" : row.entry.url
             sourceSize.width: CelestinaTheme.glyphTileLg * 2
             sourceSize.height: CelestinaTheme.glyphTile * 2
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: false
+            Accessible.ignored: true
+        }
+
+        CelestinaIcon {
+            objectName: "filmGlyph"
+            anchors.centerIn: parent
+            visible: frame.isRecording
+            name: "film"
+            width: CelestinaTheme.iconMd
+            height: width
             Accessible.ignored: true
         }
     }
@@ -109,8 +123,10 @@ Item {
             onClicked: SelenitaController.openInFluorita(row.entry.id)
         }
 
+        // Only a picture goes to the clipboard.
         CelestinaIconButton {
             objectName: "copyAction"
+            visible: row.entry.kind !== "recording"
             iconName: "copy"
             role: CelestinaButton.Ghost
             helpText: qsTr("Copiar")

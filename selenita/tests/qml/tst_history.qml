@@ -57,6 +57,28 @@ TestCase {
         compare(named(card, "historyRow1").entry.name, "Captura 1.png")
     }
 
+    function test_a_recording_row_shows_the_film_glyph_not_a_still() {
+        const card = createTemporaryObject(historyComponent, testCase)
+        SelenitaController.recordingStem = "Recording"
+        SelenitaController.toggleRecording()
+        SelenitaController.stopRecording()
+        SelenitaController.capture(true, "#3e91ff", "#40000000")
+        compare(card.count, 2)
+        const still = named(card, "historyRow0")
+        verify(named(still, "thumbnail").visible)
+        verify(!named(still, "filmGlyph").visible)
+        const recording = named(card, "historyRow1")
+        compare(recording.entry.kind, "recording")
+        verify(!named(recording, "thumbnail").visible)
+        compare(named(recording, "thumbnail").source.toString(), "")
+        verify(named(recording, "filmGlyph").visible)
+        verify(named(recording, "details").text.indexOf(qsTr("Grabación")) === 0)
+        verify(named(still, "copyAction").visible)
+        verify(!named(recording, "copyAction").visible, "a recording is not copied")
+        verify(named(recording, "openAction").visible)
+        verify(named(recording, "deleteAction").visible)
+    }
+
     function test_row_actions_reach_the_controller() {
         const card = createTemporaryObject(historyComponent, testCase)
         SelenitaController.capture(true, "#3e91ff", "#40000000")

@@ -2,11 +2,12 @@
 //!
 //! It carries the appearance to the window (`appearanceReducedMotion` and
 //! `appearanceTextScale`, handed to `CelestinaAppearance`), the smoke and
-//! fake switches, the capture card's choices, the history and the outputs.
-//! Every capture and every history action is queued to the capture worker
-//! (`capture.rs`); its reports come back through the Qt thread's queue.
-//! The singleton lives as long as the engine, so its follower and its
-//! worker live until the process exits.
+//! fake switches, the capture card's choices, the recording card's state,
+//! the history and the outputs. Every capture and every history action is
+//! queued to the capture worker (`capture.rs`) and every recording to the
+//! recording worker (`record.rs`); their reports come back through the Qt
+//! thread's queue. The singleton lives as long as the engine, so its
+//! follower and its workers live until the process exits.
 
 use std::pin::Pin;
 use std::time::UNIX_EPOCH;
@@ -21,6 +22,7 @@ use selenita_core::{Entry, TargetKind};
 
 use crate::appearance::{self, Values};
 use crate::capture::{Action, CaptureError, Report, Request, Worker};
+use crate::record;
 
 /// slurp's colours when QML hands over something that is not a colour: the
 /// theme's accent and a quarter-black veil.
@@ -79,6 +81,38 @@ pub mod qobject {
         #[qproperty(QVariant, history, READ, NOTIFY)]
         // A capture is under way.
         #[qproperty(bool, busy, READ, NOTIFY)]
+        // The recording: `idle`, `preparing` (the portal's dialog),
+        // `recording` or `stopping`; the system's sound switch; when the
+        // recording under way began (milliseconds since the epoch); the
+        // last recording's history id and file name; what the host lacks
+        // for recording (an element name, empty when nothing).
+        #[qproperty(QString, recording_state, cxx_name = "recordingState", READ, NOTIFY)]
+        #[qproperty(bool, with_audio, cxx_name = "withAudio", READ, WRITE, NOTIFY)]
+        #[qproperty(
+            f64,
+            recording_started_at,
+            cxx_name = "recordingStartedAt",
+            READ,
+            NOTIFY
+        )]
+        #[qproperty(QString, last_recording_id, cxx_name = "lastRecordingId", READ, NOTIFY)]
+        #[qproperty(
+            QString,
+            last_recording_name,
+            cxx_name = "lastRecordingName",
+            READ,
+            NOTIFY
+        )]
+        #[qproperty(QString, recorder_missing, cxx_name = "recorderMissing", READ, NOTIFY)]
+        // Product copy from QML (`qsTr`): the recording file name's stem.
+        #[qproperty(
+            QString,
+            recording_stem,
+            cxx_name = "recordingStem",
+            READ,
+            WRITE,
+            NOTIFY
+        )]
         type SelenitaController = super::SelenitaControllerRust;
 
         /// A sentence for the window's notice pill; `kind` is `info` or
@@ -100,6 +134,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "showWindowRequested"]
         fn show_window_requested(self: Pin<&mut SelenitaController>);
+        /// A recording was published; `entry_id` is its history row.
+        #[qsignal]
+        #[cxx_name = "recordingFinished"]
+        fn recording_finished(self: Pin<&mut SelenitaController>, entry_id: QString);
 
         /// Takes a capture with the card's choices. `window_shown` says
         /// whether the window is on screen; `accent` and `background` are
@@ -123,6 +161,15 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "deleteEntry"]
         fn delete_entry(self: Pin<&mut SelenitaController>, id: &QString);
+        /// Starts a recording with the card's choices, or stops the one
+        /// under way.
+        #[qinvokable]
+        #[cxx_name = "toggleRecording"]
+        fn toggle_recording(self: Pin<&mut SelenitaController>);
+        /// Stops the recording under way; nothing happens when none is.
+        #[qinvokable]
+        #[cxx_name = "stopRecording"]
+        fn stop_recording(self: Pin<&mut SelenitaController>);
     }
 
     impl cxx_qt::Threading for SelenitaController {}
@@ -148,6 +195,13 @@ pub struct SelenitaControllerRust {
     outputs: QVariant,
     history: QVariant,
     busy: bool,
+    recording_state: QString,
+    with_audio: bool,
+    recording_started_at: f64,
+    last_recording_id: QString,
+    last_recording_name: QString,
+    recorder_missing: QString,
+    recording_stem: QString,
     launch_capture: bool,
     /// The window stepped aside for the capture under way.
     hidden: bool,
@@ -155,6 +209,7 @@ pub struct SelenitaControllerRust {
     /// ends.
     reveal: bool,
     worker: Option<Worker>,
+    recorder: Option<record::Worker>,
     /// Held for the singleton's life; dropping it stops the follower.
     follower: Option<Follower>,
 }
@@ -178,10 +233,18 @@ impl Default for SelenitaControllerRust {
             outputs: string_list(&[]),
             history: history_rows(&[]),
             busy: false,
+            recording_state: QString::from(record_state_word(selenita_core::record::State::Idle)),
+            with_audio: false,
+            recording_started_at: 0.0,
+            last_recording_id: QString::default(),
+            last_recording_name: QString::default(),
+            recorder_missing: QString::default(),
+            recording_stem: QString::default(),
             launch_capture: crate::activation::capture_waiting(),
             hidden: false,
             reveal: crate::activation::capture_waiting(),
             worker: None,
+            recorder: None,
             follower: None,
         }
     }
@@ -204,6 +267,14 @@ impl cxx_qt::Initialize for qobject::SelenitaController {
             });
         });
         self.as_mut().rust_mut().worker = worker;
+
+        let qt = self.qt_thread();
+        let recorder = record::Worker::start(self.rust().fake, move |report| {
+            let _ = qt.queue(move |controller: Pin<&mut qobject::SelenitaController>| {
+                controller.apply_recording(report);
+            });
+        });
+        self.as_mut().rust_mut().recorder = recorder;
     }
 }
 
@@ -247,6 +318,65 @@ impl qobject::SelenitaController {
                 self.as_mut().say_error(&text);
             }
             Report::Failed(text) => self.as_mut().say_error(&text),
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn apply_recording(mut self: Pin<&mut Self>, report: record::Report) {
+        match report {
+            record::Report::Missing(missing) => {
+                let element = missing.unwrap_or_default();
+                self.as_mut().rust_mut().recorder_missing = QString::from(element);
+                self.as_mut().recorder_missing_changed();
+                if let Some(element) = missing {
+                    let error = record::RecordError::Missing(element.to_owned());
+                    self.as_mut().say_error(&error.message_es());
+                }
+            }
+            record::Report::State(state) => {
+                // A failure is said by its own report; the card only sees
+                // the states a recording rests in.
+                if state == selenita_core::record::State::Failed {
+                    return;
+                }
+                let word = QString::from(record_state_word(state));
+                if self.rust().recording_state != word {
+                    self.as_mut().rust_mut().recording_state = word;
+                    self.as_mut().recording_state_changed();
+                }
+            }
+            record::Report::Started(when) => {
+                let millis = when
+                    .duration_since(UNIX_EPOCH)
+                    .map_or(0.0, |elapsed| elapsed.as_millis() as f64);
+                self.as_mut().rust_mut().recording_started_at = millis;
+                self.as_mut().recording_started_at_changed();
+            }
+            record::Report::Finished(entry) => {
+                let id = entry.id();
+                let name = entry
+                    .path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                self.as_mut().rust_mut().last_recording_id = QString::from(id.as_str());
+                self.as_mut().last_recording_id_changed();
+                self.as_mut().rust_mut().last_recording_name = QString::from(name.as_str());
+                self.as_mut().last_recording_name_changed();
+                // The capture worker owns the history: the entry joins it
+                // there and comes back as the next `History` report.
+                let pushed = self
+                    .rust()
+                    .worker
+                    .as_ref()
+                    .ok_or(CaptureError::WorkerGone)
+                    .and_then(|worker| worker.push(entry));
+                if let Err(error) = pushed {
+                    self.as_mut().say_error(&error.message_es());
+                }
+                self.as_mut().recording_finished(QString::from(id.as_str()));
+            }
+            record::Report::Failed(text) => self.as_mut().say_error(&text),
         }
     }
 
@@ -347,6 +477,39 @@ impl qobject::SelenitaController {
     pub fn delete_entry(self: Pin<&mut Self>, id: &QString) {
         self.act(Action::Delete, id);
     }
+
+    pub fn toggle_recording(self: Pin<&mut Self>) {
+        let request = record::Request {
+            audio: self.rust().with_audio,
+            stem: self.rust().recording_stem.to_string(),
+        };
+        let queued = self
+            .rust()
+            .recorder
+            .as_ref()
+            .ok_or(record::RecordError::WorkerGone)
+            .and_then(|recorder| recorder.toggle(request));
+        if let Err(error) = queued {
+            self.say_error(&error.message_es());
+        }
+    }
+
+    pub fn stop_recording(self: Pin<&mut Self>) {
+        let queued = self
+            .rust()
+            .recorder
+            .as_ref()
+            .ok_or(record::RecordError::WorkerGone)
+            .and_then(record::Worker::stop);
+        if let Err(error) = queued {
+            self.say_error(&error.message_es());
+        }
+    }
+}
+
+/// The word QML reads for a recording state.
+fn record_state_word(state: selenita_core::record::State) -> &'static str {
+    state.as_str()
 }
 
 fn string_list(items: &[String]) -> QVariant {

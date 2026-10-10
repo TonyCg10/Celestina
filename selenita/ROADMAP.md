@@ -29,8 +29,8 @@ the terminal: one window with the capture, the recording and the history.
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| SEL-1-A | planned | EXT-1-B | capture and history cards, delay, destinations, flags | `scripts/verify-production.sh` |
-| SEL-1-B | planned | SEL-1-A | recording card, portal, pipeline, sound, `--stop` | `scripts/verify-production.sh` |
+| SEL-1-A | done | EXT-1-B | capture and history cards, delay, destinations, flags | [screenshots](docs/evidence/2026-10-09-screenshots.md) |
+| SEL-1-B | done | SEL-1-A | recording card, portal, pipeline, sound, `--record`, `--stop` | [recording](docs/evidence/2026-10-09-recording.md) |
 | SEL-1-C | planned | SEL-1-B | keyboard, accessibility, 1.0.0 | `scripts/complete-production.sh` |
 
 ## Implementation exit
@@ -41,3 +41,5 @@ and records with every tool of the scope.
 ## Closed evidence
 
 - [The skeleton](docs/evidence/2026-10-09-skeleton.md) (EXT-1-B).
+- [Screenshots, delay, destinations and the history](docs/evidence/2026-10-09-screenshots.md) (SEL-1-A).
+- [Screen recording through the portal and GStreamer](docs/evidence/2026-10-09-recording.md) (SEL-1-B).

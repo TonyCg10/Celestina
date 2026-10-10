@@ -51,13 +51,24 @@ pub fn numbered(name: &str, n: u32) -> String {
 /// `xdg-user-dir`. `None` when neither names it.
 #[must_use]
 pub fn pictures_dir() -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os("XDG_PICTURES_DIR").filter(|dir| !dir.is_empty()) {
+    user_dir("XDG_PICTURES_DIR")
+}
+
+/// The person's videos folder, where a recording lands; found as
+/// [`pictures_dir`] is, under `XDG_VIDEOS_DIR`.
+#[must_use]
+pub fn videos_dir() -> Option<PathBuf> {
+    user_dir("XDG_VIDEOS_DIR")
+}
+
+fn user_dir(key: &str) -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os(key).filter(|dir| !dir.is_empty()) {
         return Some(PathBuf::from(dir));
     }
     let home = std::env::var_os("HOME").map(PathBuf::from)?;
     let file = xdg::config_home()?.join("user-dirs.dirs");
     let bytes = std::fs::read(file).ok()?;
-    user_dir_from(&bytes, "XDG_PICTURES_DIR", &home)
+    user_dir_from(&bytes, key, &home)
 }
 
 /// The folder `key` names in a `user-dirs.dirs` file's bytes: a line

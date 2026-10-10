@@ -4,6 +4,8 @@ mod backend;
 mod capture;
 mod controller;
 mod flags;
+mod portal;
+mod record;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
@@ -24,12 +26,15 @@ fn main() {
 
     // Selenita opens no files: apart from the key-binding flags the command
     // line is ignored, so a path handed to it never triggers anything.
-    let screenshot = match flags::parse(std::env::args_os().skip(1)) {
+    let asked = match flags::parse(std::env::args_os().skip(1)) {
         Ok(flags::Launch::Window) => None,
-        Ok(flags::Launch::Screenshot(kind)) => Some(kind),
-        Ok(flags::Launch::Reserved(flag)) => {
-            eprintln!("selenita: {flag} arrives with screen recording (SEL-1-B)");
-            std::process::exit(2);
+        Ok(flags::Launch::Screenshot(kind)) => Some(activation::Request::Capture(kind)),
+        Ok(flags::Launch::Record) => Some(activation::Request::Recording(
+            activation::RecordingAction::Toggle,
+        )),
+        Ok(flags::Launch::Stop) => {
+            stop_recording();
+            return;
         }
         Err(error) => {
             eprintln!("selenita: {error}");
@@ -37,17 +42,21 @@ fn main() {
         }
     };
 
-    // A key binding's capture goes to the running instance when there is
-    // one; otherwise this launch becomes the instance, takes it and stays
+    // A key binding's request goes to the running instance when there is
+    // one; otherwise this launch becomes the instance, does it and stays
     // open on the history.
-    if let Some(kind) = screenshot {
-        match activation::send_capture(kind) {
+    if let Some(request) = asked {
+        let sent = match request {
+            activation::Request::Capture(kind) => activation::send_capture(kind),
+            activation::Request::Recording(action) => activation::send_recording(action),
+        };
+        match sent {
             Ok(true) => return,
             Ok(false) => {}
-            // Without a bus no instance can be reached: this launch takes
-            // the capture itself.
+            // Without a bus no instance can be reached: this launch does it
+            // itself.
             Err(error) => {
-                eprintln!("selenita: no running instance took the capture: {error}");
+                eprintln!("selenita: no running instance took the request: {error}");
             }
         }
     }
@@ -56,8 +65,8 @@ fn main() {
     // finds Selenita running asks it to come forward and ends here, so two
     // quick launches never race to build two processes.
     activation::claim();
-    if let Some(kind) = screenshot {
-        activation::request_capture(kind);
+    if let Some(request) = asked {
+        activation::request(request);
     }
 
     let mut app = QGuiApplication::new();
@@ -93,5 +102,30 @@ fn main() {
 
     if let Some(app) = app.as_mut() {
         app.exec();
+    }
+    // The window is gone: a recording under way is finished and published
+    // (or the portal's dialog closed) before the process ends.
+    record::quit(record::STOP_DEADLINE);
+}
+
+/// `selenita --stop`: asks the running instance to stop its recording; when
+/// none answers (no instance, or no bus), touches the stop file the recording
+/// worker watches. Never opens a window.
+fn stop_recording() {
+    match activation::send_recording(activation::RecordingAction::Stop) {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(error) => eprintln!("selenita: no running instance took the stop: {error}"),
+    }
+    let file = match celestina_core::xdg::runtime_dir() {
+        Ok(runtime) => selenita_core::record::stop_file(&runtime),
+        Err(error) => {
+            eprintln!("selenita: no runtime folder for the stop file: {error}");
+            std::process::exit(1);
+        }
+    };
+    if let Err(error) = selenita_core::record::request_stop(&file) {
+        eprintln!("selenita: cannot touch {}: {error}", file.display());
+        std::process::exit(1);
     }
 }

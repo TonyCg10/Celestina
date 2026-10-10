@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "selenita"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "celestina-core",
  "celestina-settings",
@@ -974,6 +974,7 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "rustix",
  "selenita-core",
  "siderita-ops",
  "zbus",
@@ -985,6 +986,7 @@ version = "0.1.0"
 dependencies = [
  "celestina-core",
  "chrono",
+ "rustix",
  "serde_json",
 ]
 

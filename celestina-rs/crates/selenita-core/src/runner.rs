@@ -6,11 +6,16 @@
 //! clipboard that way) runs through [`run_quiet`], whose child has no output
 //! pipes at all. For any other child that forks anyway, the runner waits for
 //! the drains only briefly once the child has exited.
+//!
+//! A child that runs until told to stop (the recording's `gst-launch-1.0`)
+//! is a [`Running`]: started with [`start`], polled, interrupted with SIGINT
+//! and waited for with a deadline, after which it is killed.
 
 use std::ffi::OsString;
 use std::fmt;
 use std::io::{Read, Write};
-use std::process::{Command, Stdio};
+use std::os::fd::OwnedFd;
+use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -154,18 +159,123 @@ fn run_with(
     if status.success() {
         return Ok(Output { stdout, stderr });
     }
-    let last = String::from_utf8_lossy(&stderr)
+    Err(RunError::Failed {
+        program: name,
+        code: status.code(),
+        stderr: last_line(&stderr),
+    })
+}
+
+/// A child that runs until it is told to stop. Its standard output goes
+/// nowhere; its standard error is drained for the line a failure shows.
+pub struct Running {
+    name: String,
+    child: Child,
+    stderr: mpsc::Receiver<Vec<u8>>,
+}
+
+/// How a [`Running`] child ended.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Exit {
+    pub code: Option<i32>,
+    /// The last line it wrote on stderr.
+    pub stderr: String,
+}
+
+/// Starts `argv` (the program first) and keeps it running. `stdin` becomes
+/// the child's standard input when given (how a file descriptor is handed
+/// to a child without leaking it to any other); else nothing.
+///
+/// # Errors
+///
+/// [`RunError`] for a missing program or a failed start.
+pub fn start(argv: &[OsString], stdin: Option<OwnedFd>) -> Result<Running, RunError> {
+    let (program, args) = argv.split_first().ok_or(RunError::NoProgram)?;
+    let name = program.to_string_lossy().into_owned();
+    let mut child = Command::new(program)
+        .args(args)
+        .stdin(stdin.map_or_else(Stdio::null, Stdio::from))
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::NotFound => RunError::Missing(name.clone()),
+            _ => RunError::Spawn(format!("{name}: {error}")),
+        })?;
+    let stderr = drain(child.stderr.take());
+    Ok(Running {
+        name,
+        child,
+        stderr,
+    })
+}
+
+impl Running {
+    /// The program, as started.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// `Some` once the child has exited, without waiting.
+    pub fn poll(&mut self) -> Option<Exit> {
+        match self.child.try_wait() {
+            Ok(Some(status)) => Some(self.exit(status.code())),
+            Ok(None) => None,
+            Err(_) => Some(self.exit(None)),
+        }
+    }
+
+    /// Sends SIGINT: `gst-launch-1.0 -e` finishes its file on it.
+    ///
+    /// # Errors
+    ///
+    /// The signal could not be sent (the child is gone).
+    pub fn interrupt(&mut self) -> Result<(), RunError> {
+        let pid = rustix::process::Pid::from_child(&self.child);
+        rustix::process::kill_process(pid, rustix::process::Signal::INT)
+            .map_err(|error| RunError::Spawn(format!("{}: SIGINT: {error}", self.name)))
+    }
+
+    /// Waits for the exit up to `deadline`, then kills the child; whether it
+    /// exited on its own.
+    pub fn wait_until(&mut self, deadline: Duration) -> (bool, Exit) {
+        let started = Instant::now();
+        loop {
+            if let Some(exit) = self.poll() {
+                return (true, exit);
+            }
+            if started.elapsed() >= deadline {
+                return (false, self.kill());
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// Kills the child and reaps it.
+    pub fn kill(&mut self) -> Exit {
+        let _ = self.child.kill();
+        let code = self.child.wait().ok().and_then(|status| status.code());
+        self.exit(code)
+    }
+
+    fn exit(&mut self, code: Option<i32>) -> Exit {
+        let stderr = self.stderr.recv_timeout(DRAIN_GRACE).unwrap_or_default();
+        Exit {
+            code,
+            stderr: last_line(&stderr),
+        }
+    }
+}
+
+fn last_line(stderr: &[u8]) -> String {
+    String::from_utf8_lossy(stderr)
         .lines()
         .rev()
         .find(|line| !line.trim().is_empty())
         .unwrap_or_default()
         .trim()
-        .to_owned();
-    Err(RunError::Failed {
-        program: name,
-        code: status.code(),
-        stderr: last,
-    })
+        .to_owned()
 }
 
 fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> mpsc::Receiver<Vec<u8>> {

@@ -177,3 +177,43 @@ fn a_quiet_child_leaves_no_pipe_to_a_forked_server() {
         started.elapsed()
     );
 }
+
+#[test]
+fn a_running_child_stops_on_sigint_and_is_killed_at_the_deadline() {
+    use selenita_core::runner::{start, Exit};
+    use std::time::{Duration, Instant};
+    // `sh` ends on SIGINT with status 130 while it sleeps.
+    let argv: Vec<OsString> = ["sh", "-c", "echo starting >&2; sleep 30"]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+    let mut running = start(&argv, None).expect("started");
+    assert_eq!(running.name(), "sh");
+    assert!(running.poll().is_none());
+    running.interrupt().expect("interrupted");
+    let began = Instant::now();
+    let (exited, exit) = running.wait_until(Duration::from_secs(5));
+    assert!(exited);
+    assert!(began.elapsed() < Duration::from_secs(5));
+    assert_ne!(exit.code, Some(0));
+
+    let argv: Vec<OsString> = ["sh", "-c", "trap '' INT; sleep 30"]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+    let mut stubborn = start(&argv, None).expect("started");
+    std::thread::sleep(Duration::from_millis(100));
+    stubborn.interrupt().expect("interrupted");
+    let began = Instant::now();
+    let (exited, exit) = stubborn.wait_until(Duration::from_millis(300));
+    assert!(!exited, "the deadline kills it");
+    assert!(began.elapsed() < Duration::from_secs(2));
+    assert_eq!(
+        exit,
+        Exit {
+            code: None,
+            stderr: String::new()
+        }
+    );
+    assert!(start(&[OsString::from("/nonexistent/launcher")], None).is_err());
+}

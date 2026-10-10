@@ -4,7 +4,7 @@ import org.celestina.selenita 1.0
 import "components"
 
 // Selenita's window: one window, no strip, the cards stacked and scrolled as
-// one (design §5.3): the capture, the recording (SEL-1-B) and the history.
+// one (design §5.3): the capture, the recording and the history.
 // The window steps aside while a capture would include it and comes back on
 // the history once it is taken.
 ApplicationWindow {
@@ -54,6 +54,12 @@ ApplicationWindow {
         value: qsTr("Capturas")
     }
 
+    Binding {
+        target: SelenitaController
+        property: "recordingStem"
+        value: qsTr("Grabación")
+    }
+
     // A second launch brings this window forward; a key binding's
     // `--screenshot` takes a capture.
     SelenitaActivation {
@@ -82,6 +88,10 @@ ApplicationWindow {
         function onNotice(kind: string, text: string) {
             notice.show(kind, text)
         }
+
+        function onRecordingFinished(entryId: string) {
+            page.reveal(historyCard)
+        }
     }
 
     PageScroll {
@@ -95,16 +105,10 @@ ApplicationWindow {
             windowShown: window.visible
         }
 
-        SectionCard {
+        RecordingCard {
             id: recordingCard
             objectName: "recordingCard"
             width: parent.width
-            title: qsTr("Grabación")
-
-            EmptyLine {
-                inset: recordingCard.rowInset
-                text: qsTr("La grabación de pantalla llega pronto.")
-            }
         }
 
         HistoryCard {
@@ -121,8 +125,8 @@ ApplicationWindow {
         anchors.bottomMargin: CelestinaTheme.windowMargin
     }
 
-    // Development only: the smoke takes one capture over the fakes and reads
-    // what the window shows after it.
+    // Development only: the smoke takes one capture over the fakes, starts
+    // and stops one fake recording, and reads what the window shows after.
     Timer {
         id: smokeCapture
         interval: 1000
@@ -132,12 +136,26 @@ ApplicationWindow {
     }
 
     Timer {
-        interval: 3000
+        interval: 1500
+        running: SelenitaController.smokeReport && SelenitaController.fake
+        onTriggered: SelenitaController.toggleRecording()
+    }
+
+    Timer {
+        interval: 2500
+        running: SelenitaController.smokeReport && SelenitaController.fake
+        onTriggered: SelenitaController.stopRecording()
+    }
+
+    Timer {
+        interval: 4000
         running: SelenitaController.smokeReport
         onTriggered: console.log("selenita-smoke:"
                                  + " cards=" + [captureCard, recordingCard, historyCard]
                                        .filter(card => card.visible).length
                                  + " history=" + historyCard.count
+                                 + " recording=" + SelenitaController.recordingState
+                                 + " lastRecording=" + (SelenitaController.lastRecordingName !== "")
                                  + " shown=" + window.visible
                                  + " fake=" + SelenitaController.fake
                                  + " textScale=" + CelestinaTheme.textScale

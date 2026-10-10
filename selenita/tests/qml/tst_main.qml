@@ -63,6 +63,20 @@ TestCase {
         compare(SelenitaController.folderName, qsTr("Capturas"))
     }
 
+    function test_a_key_binding_toggles_and_stops_the_recording() {
+        SelenitaController.reset()
+        const window = createTemporaryObject(mainComponent, testCase)
+        tryVerify(function() { return window.visible })
+        compare(SelenitaController.recordingStem, qsTr("Grabación"))
+        window.activation.recordingRequested("toggle")
+        compare(SelenitaController.recordingState, "recording")
+        window.activation.recordingRequested("stop")
+        compare(SelenitaController.recordingState, "idle")
+        compare(SelenitaController.calls, ["toggleRecording:false", "stopRecording:recording"])
+        compare(SelenitaController.history.length, 1)
+        compare(SelenitaController.history[0].kind, "recording")
+    }
+
     function test_the_window_steps_aside_and_returns() {
         const window = createTemporaryObject(mainComponent, testCase)
         tryVerify(function() { return window.visible })

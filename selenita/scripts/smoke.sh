@@ -11,10 +11,13 @@ set -u
 #     the QML runtime must report no errors, including the ones that mean an
 #     object never constructed.
 #  3) Under SELENITA_FAKE=1 the window takes one capture through the report
-#     switch (SELENITA_SMOKE_REPORT) after 1 s, and reports after 3 s: the
-#     three cards are shown, the history holds the capture, and the
-#     appearance reached the theme. The fake's 1×1 PNG must be in the scratch
-#     pictures folder's `Capturas` and its line in the scratch history.
+#     switch (SELENITA_SMOKE_REPORT) after 1 s, starts a fake recording at
+#     1.5 s and stops it at 2.5 s, and reports after 4 s: the three cards are
+#     shown, the history holds the capture and the recording, the recording
+#     is idle again with its last file named, and the appearance reached the
+#     theme. The fake's 1×1 PNG must be in the scratch pictures folder's
+#     `Capturas`, the fake MP4 in the scratch videos folder, and both lines
+#     in the scratch history.
 #
 # Startup only. Keyboard, focus and assistive technology need a real Wayland
 # session.
@@ -58,7 +61,7 @@ smoke_run() {
     shift
     scratch=$(mktemp -d)
     mkdir -p "$scratch/config" "$scratch/data" "$scratch/cache" \
-        "$scratch/state" "$scratch/run" "$scratch/pictures"
+        "$scratch/state" "$scratch/run" "$scratch/pictures" "$scratch/videos"
     chmod 0700 "$scratch/run"
     log=$scratch/output.log
 
@@ -68,6 +71,7 @@ smoke_run() {
     XDG_STATE_HOME=$scratch/state \
     XDG_RUNTIME_DIR=$scratch/run \
     XDG_PICTURES_DIR=$scratch/pictures \
+    XDG_VIDEOS_DIR=$scratch/videos \
     DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
     SELENITA_FAKE=1 \
     SELENITA_SMOKE_REPORT=1 \
@@ -95,9 +99,9 @@ smoke_run() {
 
     report=$(grep -o 'selenita-smoke:.*' "$log" | tail -1)
     case $report in
-        *" cards=3 history=1 shown=true fake=true textScale=1 fontBody=13") ;;
+        *" cards=3 history=2 recording=idle lastRecording=true shown=true fake=true textScale=1 fontBody=13") ;;
         *)
-            echo "smoke: the window did not report its cards and one capture: ${report:-no report}" >&2
+            echo "smoke: the window did not report its cards, one capture and one recording: ${report:-no report}" >&2
             return 1
             ;;
     esac
@@ -107,8 +111,13 @@ smoke_run() {
         echo "smoke: expected one fake capture in the pictures folder, found $shots" >&2
         return 1
     fi
-    if [ "$(wc -l < "$scratch/data/selenita/history" 2>/dev/null || echo 0)" -ne 1 ]; then
-        echo "smoke: the history file does not hold the capture" >&2
+    clips=$(find "$scratch/videos" -name '*.mp4' | wc -l)
+    if [ "$clips" -ne 1 ]; then
+        echo "smoke: expected one fake recording in the videos folder, found $clips" >&2
+        return 1
+    fi
+    if [ "$(wc -l < "$scratch/data/selenita/history" 2>/dev/null || echo 0)" -ne 2 ]; then
+        echo "smoke: the history file does not hold the capture and the recording" >&2
         return 1
     fi
 
@@ -120,4 +129,4 @@ trap 'rm -rf "${scratch:-}"' EXIT HUP INT TERM
 smoke_run true || exit 1
 smoke_run false --screenshot screen || exit 1
 
-echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings, one fake capture in the history ($report)"
+echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings, one fake capture and one fake recording in the history ($report)"

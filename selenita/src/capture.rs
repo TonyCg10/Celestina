@@ -56,6 +56,8 @@ pub enum CaptureError {
     Busy,
     /// The history has no entry with that id.
     UnknownEntry,
+    /// «Copiar» on a recording: only a picture goes to the clipboard.
+    NotAPicture,
     Open(String),
     Show(String),
     Trash(String),
@@ -93,6 +95,7 @@ impl CaptureError {
             }
             Self::Busy => "Ya hay una captura en curso.".to_owned(),
             Self::UnknownEntry => "Esa captura ya no está en el historial.".to_owned(),
+            Self::NotAPicture => "Una grabación no se copia al portapapeles.".to_owned(),
             Self::Open(_) => "No se ha podido abrir en Fluorita.".to_owned(),
             Self::Show(_) => "No se ha podido mostrar en Siderita.".to_owned(),
             Self::Trash(_) => "No se ha podido mover a la papelera.".to_owned(),
@@ -331,8 +334,9 @@ fn take(
 }
 
 /// Publishes `hidden` as `name` in `folder`, or as the first free numbered
-/// name, never replacing a file.
-fn publish(hidden: &Path, folder: &Path, name: &str) -> Result<PathBuf, CaptureError> {
+/// name, never replacing a file. The recording worker publishes its file the
+/// same way.
+pub(crate) fn publish(hidden: &Path, folder: &Path, name: &str) -> Result<PathBuf, CaptureError> {
     for n in 1..=NAME_ATTEMPTS {
         let destination = folder.join(names::numbered(name, n));
         match atomic_file::publish_without_replacing(hidden, &destination) {
@@ -377,6 +381,8 @@ pub enum Action {
 enum Job {
     Capture(Request),
     Entry(Action, String),
+    /// A recording finished elsewhere joins the history, which lives here.
+    Push(Entry),
 }
 
 /// The sending half of the capture worker.
@@ -421,6 +427,14 @@ impl Worker {
                             );
                             finish(outcome, &history, &report);
                         }
+                        Job::Push(entry) => {
+                            history.push(entry);
+                            if let Err(error) = history.save() {
+                                eprintln!("selenita: {error}");
+                                report(Report::Failed(CaptureError::History(error).message_es()));
+                            }
+                            report(Report::History(history.entries().to_vec()));
+                        }
                         Job::Entry(action, id) => {
                             match act(backend.as_mut(), &mut history, action, &id) {
                                 Ok(true) => report(Report::History(history.entries().to_vec())),
@@ -458,6 +472,17 @@ impl Worker {
     pub fn act(&self, action: Action, id: String) -> Result<(), CaptureError> {
         self.jobs
             .send(Job::Entry(action, id))
+            .map_err(|_| CaptureError::WorkerGone)
+    }
+
+    /// Queues a finished recording for the history.
+    ///
+    /// # Errors
+    ///
+    /// [`CaptureError::WorkerGone`] when the thread is gone.
+    pub fn push(&self, entry: Entry) -> Result<(), CaptureError> {
+        self.jobs
+            .send(Job::Push(entry))
             .map_err(|_| CaptureError::WorkerGone)
     }
 }
@@ -507,9 +532,9 @@ fn act(
     action: Action,
     id: &str,
 ) -> Result<bool, CaptureError> {
-    let path = history
+    let (path, kind) = history
         .find(id)
-        .map(|entry| entry.path.clone())
+        .map(|entry| (entry.path.clone(), entry.kind))
         .ok_or(CaptureError::UnknownEntry)?;
     if std::fs::symlink_metadata(&path).is_err() {
         // The file went away under the history: forget it and say so.
@@ -520,6 +545,7 @@ fn act(
     match action {
         Action::OpenInFluorita => backend.open_in_fluorita(&path).map(|()| false),
         Action::ShowInSiderita => backend.show_in_siderita(&path).map(|()| false),
+        Action::Copy if kind == EntryKind::Recording => Err(CaptureError::NotAPicture),
         Action::Copy => {
             let png = std::fs::read(&path).map_err(|_| CaptureError::UnknownEntry)?;
             backend.copy_png(&png).map(|()| false)
@@ -893,6 +919,36 @@ mod tests {
             Err(CaptureError::UnknownEntry)
         ));
         assert!(history.entries().is_empty());
+    }
+
+    #[test]
+    fn a_recording_is_not_copied_to_the_clipboard() {
+        let scratch = Scratch::new("recording-copy");
+        let mut fake = backend::make(true);
+        let mut history = History::at(scratch.0.join("history"));
+        let path = scratch.0.join("clip.mp4");
+        std::fs::write(&path, b"mp4").expect("clip");
+        let entry = selenita_core::Entry {
+            path,
+            kind: selenita_core::EntryKind::Recording,
+            taken_at: std::time::SystemTime::now(),
+            size: 3,
+        };
+        history.push(entry.clone());
+        assert!(matches!(
+            act(fake.as_mut(), &mut history, Action::Copy, &entry.id()),
+            Err(CaptureError::NotAPicture)
+        ));
+        assert_eq!(
+            act(
+                fake.as_mut(),
+                &mut history,
+                Action::OpenInFluorita,
+                &entry.id()
+            )
+            .ok(),
+            Some(false)
+        );
     }
 
     #[test]

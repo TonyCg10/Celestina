@@ -9,9 +9,10 @@
 //! Beside the shared interface, the same object path serves Selenita's own
 //! [`CAPTURE_INTERFACE`] on the connection that owns the name: `Capture(s)`
 //! takes `screen`, `window` or `region` (the niri key bindings' `selenita
-//! --screenshot`), and `ToggleRecording()` is reserved for SEL-1-B and
-//! answers an error until then. A capture that arrives before the window
-//! started waits and is replayed by `start`.
+//! --screenshot`), `ToggleRecording()` starts a recording or stops the one
+//! under way (`selenita --record`) and `StopRecording()` only stops
+//! (`selenita --stop`). A request that arrives before the window started
+//! waits and is replayed by `start`.
 
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -47,6 +48,10 @@ pub mod qobject {
         #[qsignal]
         fn capture_requested(self: Pin<&mut SelenitaActivation>, target: QString);
 
+        /// A key binding asked about the recording: `toggle` or `stop`.
+        #[qsignal]
+        fn recording_requested(self: Pin<&mut SelenitaActivation>, action: QString);
+
         /// Connects this object to the claim `main` made, once; requests that
         /// waited in the inbox are replayed then.
         #[qinvokable]
@@ -74,70 +79,116 @@ impl qobject::SelenitaActivation {
         if let Some(owner) = OWNER.get() {
             owner.attach();
         }
-        let waiting = std::mem::take(&mut captures().waiting);
-        for kind in waiting {
-            QtTarget.capture(kind);
+        let waiting = std::mem::take(&mut inbox().waiting);
+        for request in waiting {
+            QtTarget.handle(request);
         }
     }
 }
 
-/// The captures that arrived before `start`.
-#[derive(Default)]
-struct Captures {
-    waiting: Vec<TargetKind>,
+/// What a key binding asks about the recording.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecordingAction {
+    /// Start, or stop the one under way.
+    Toggle,
+    /// Stop the one under way, if any.
+    Stop,
 }
 
-static CAPTURES: Mutex<Captures> = Mutex::new(Captures {
+impl RecordingAction {
+    /// The word the Qt signal carries.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Toggle => "toggle",
+            Self::Stop => "stop",
+        }
+    }
+
+    /// The method on [`CAPTURE_INTERFACE`].
+    fn method(self) -> &'static str {
+        match self {
+            Self::Toggle => "ToggleRecording",
+            Self::Stop => "StopRecording",
+        }
+    }
+}
+
+/// A key binding's request, as the window receives it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Request {
+    Capture(TargetKind),
+    Recording(RecordingAction),
+}
+
+/// The requests that arrived before `start`.
+#[derive(Default)]
+struct Inbox {
+    waiting: Vec<Request>,
+}
+
+static INBOX: Mutex<Inbox> = Mutex::new(Inbox {
     waiting: Vec::new(),
 });
 
 /// A poisoned lock still holds valid requests.
-fn captures() -> std::sync::MutexGuard<'static, Captures> {
-    CAPTURES.lock().unwrap_or_else(PoisonError::into_inner)
+fn inbox() -> std::sync::MutexGuard<'static, Inbox> {
+    INBOX.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Whether a capture waits for the window: this launch came from
-/// `--screenshot` and the window has not started yet.
+/// `--screenshot` and the window has not started yet. A waiting recording
+/// does not count: the window shows for it.
 pub fn capture_waiting() -> bool {
-    !captures().waiting.is_empty()
+    inbox()
+        .waiting
+        .iter()
+        .any(|request| matches!(request, Request::Capture(_)))
 }
 
-/// How many captures may wait for the window: a key held down must not grow
+/// How many requests may wait for the window: a key held down must not grow
 /// memory without bound.
 const WAITING_LIMIT: usize = 4;
 
-/// Hands a capture to the window, or keeps it until `start` when the window
-/// is not up yet: a fresh instance started by `--screenshot` does this
-/// before Qt exists.
-pub fn request_capture(kind: TargetKind) {
+/// Hands a request to the window, or keeps it until `start` when the window
+/// is not up yet: a fresh instance started by `--screenshot` or `--record`
+/// does this before Qt exists.
+pub fn request(request: Request) {
     if QT.get().is_some() {
-        QtTarget.capture(kind);
+        QtTarget.handle(request);
         return;
     }
-    let mut captures = captures();
+    let mut inbox = inbox();
     // Checked again under the lock: `start` may have run meanwhile.
     if QT.get().is_some() {
-        drop(captures);
-        QtTarget.capture(kind);
-    } else if captures.waiting.len() < WAITING_LIMIT {
-        captures.waiting.push(kind);
+        drop(inbox);
+        QtTarget.handle(request);
+    } else if inbox.waiting.len() < WAITING_LIMIT {
+        inbox.waiting.push(request);
     }
 }
 
 /// Where a request ends: the Qt thread in the binary, a tally under test.
 trait Target: Send + 'static {
     fn raise(&self);
-    fn capture(&self, kind: TargetKind);
+    fn handle(&self, request: Request);
 }
 
 struct QtTarget;
 
 impl Target for QtTarget {
-    fn capture(&self, kind: TargetKind) {
+    fn handle(&self, request: Request) {
         if let Some(qt) = QT.get() {
-            let _ = qt.queue(move |activation: Pin<&mut qobject::SelenitaActivation>| {
-                activation.capture_requested(QString::from(kind.as_str()));
-            });
+            let _ = qt.queue(
+                move |activation: Pin<&mut qobject::SelenitaActivation>| match request {
+                    Request::Capture(kind) => {
+                        activation.capture_requested(QString::from(kind.as_str()));
+                    }
+                    Request::Recording(action) => {
+                        activation.recording_requested(QString::from(action.as_str()));
+                    }
+                },
+            );
         }
     }
 
@@ -170,8 +221,12 @@ struct Capturer(Box<dyn Target + Sync>);
 
 impl Capturer {
     fn take(&self, word: &str) -> zbus::fdo::Result<()> {
-        self.0.capture(capture_word(word)?);
+        self.0.handle(Request::Capture(capture_word(word)?));
         Ok(())
+    }
+
+    fn recording(&self, action: RecordingAction) {
+        self.0.handle(Request::Recording(action));
     }
 }
 
@@ -181,30 +236,29 @@ fn capture_word(word: &str) -> zbus::fdo::Result<TargetKind> {
         .map_err(|error| zbus::fdo::Error::InvalidArgs(error.to_string()))
 }
 
-/// `ToggleRecording`'s answer until SEL-1-B.
-fn recording_reserved() -> zbus::fdo::Error {
-    zbus::fdo::Error::NotSupported("recording arrives with SEL-1-B".to_owned())
-}
-
 #[zbus::interface(name = "org.celestina.Selenita1")]
 impl Capturer {
     fn capture(&self, target: &str) -> zbus::fdo::Result<()> {
         self.take(target)
     }
 
-    fn toggle_recording(&self) -> zbus::fdo::Result<()> {
-        Err(recording_reserved())
+    fn toggle_recording(&self) {
+        self.recording(RecordingAction::Toggle);
+    }
+
+    fn stop_recording(&self) {
+        self.recording(RecordingAction::Stop);
     }
 }
 
-/// Where the bus's captures go in the binary: [`request_capture`].
+/// Where the bus's requests go in the binary: [`request`].
 struct Pending;
 
 impl Target for Pending {
     fn raise(&self) {}
 
-    fn capture(&self, kind: TargetKind) {
-        request_capture(kind);
+    fn handle(&self, asked: Request) {
+        request(asked);
     }
 }
 
@@ -223,7 +277,7 @@ pub fn claim() {
             .at(path.as_str(), Capturer(Box::new(Pending)))
         {
             Ok(_) => {}
-            Err(error) => eprintln!("selenita: key-binding captures are unavailable: {error}"),
+            Err(error) => eprintln!("selenita: key-binding requests are unavailable: {error}"),
         }
         let _ = OWNER.set(owner);
     }
@@ -237,6 +291,23 @@ pub fn claim() {
 ///
 /// The bus failed, or the running instance refused.
 pub fn send_capture(kind: TargetKind) -> Result<bool, ActivationError> {
+    send("Capture", &(kind.as_str(),))
+}
+
+/// `selenita --record`'s and `--stop`'s first step: asks a running Selenita.
+/// `Ok(true)` when it answered; `Ok(false)` when nobody runs.
+///
+/// # Errors
+///
+/// The bus failed, or the running instance refused.
+pub fn send_recording(action: RecordingAction) -> Result<bool, ActivationError> {
+    send(action.method(), &())
+}
+
+fn send<B>(method: &str, body: &B) -> Result<bool, ActivationError>
+where
+    B: zbus::export::serde::Serialize + zbus::zvariant::DynamicType,
+{
     let connection = zbus::blocking::connection::Builder::session()
         .map(|builder| builder.method_timeout(activation::HAND_OFF_TIMEOUT))
         .and_then(zbus::blocking::connection::Builder::build)?;
@@ -253,29 +324,37 @@ pub fn send_capture(kind: TargetKind) -> Result<bool, ActivationError> {
         path.as_str(),
         CAPTURE_INTERFACE,
     )?;
-    proxy.call::<_, _, ()>("Capture", &(kind.as_str(),))?;
+    proxy.call::<_, _, ()>(method, body)?;
     Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{capture_word, recording_reserved, Adapter, Capturer, Target};
+    use super::{capture_word, Adapter, Capturer, RecordingAction, Request, Target};
     use celestina_core::activation::Activatable;
-    use selenita_core::TargetKind;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default)]
-    struct Tally(Arc<AtomicUsize>);
+    struct Tally(Arc<Mutex<Vec<String>>>);
+
+    impl Tally {
+        fn seen(&self) -> Vec<String> {
+            self.0.lock().expect("tally").clone()
+        }
+    }
 
     impl Target for Tally {
         fn raise(&self) {
-            self.0.fetch_add(1, Ordering::Relaxed);
+            self.0.lock().expect("tally").push("raise".to_owned());
         }
 
-        fn capture(&self, _kind: TargetKind) {
-            self.0.fetch_add(100, Ordering::Relaxed);
+        fn handle(&self, request: Request) {
+            let word = match request {
+                Request::Capture(kind) => format!("capture:{kind}"),
+                Request::Recording(action) => format!("recording:{}", action.as_str()),
+            };
+            self.0.lock().expect("tally").push(word);
         }
     }
 
@@ -283,14 +362,14 @@ mod tests {
     fn activate_brings_the_window_forward() {
         let tally = Tally::default();
         Adapter(tally.clone()).activate();
-        assert_eq!(tally.0.load(Ordering::Relaxed), 1);
+        assert_eq!(tally.seen(), ["raise"]);
     }
 
     #[test]
     fn open_is_ignored_whatever_it_carries() {
         let tally = Tally::default();
         Adapter(tally.clone()).open(vec![PathBuf::from("/tmp/captura.png")]);
-        assert_eq!(tally.0.load(Ordering::Relaxed), 0);
+        assert!(tally.seen().is_empty());
     }
 
     #[test]
@@ -300,17 +379,23 @@ mod tests {
         for word in ["screen", "window", "region"] {
             assert!(capturer.take(word).is_ok(), "{word}");
         }
-        assert_eq!(tally.0.load(Ordering::Relaxed), 300);
+        assert_eq!(
+            tally.seen(),
+            ["capture:screen", "capture:window", "capture:region"]
+        );
         assert!(capture_word("desktop").is_err());
         assert!(capturer.take("").is_err());
-        assert_eq!(tally.0.load(Ordering::Relaxed), 300);
+        assert_eq!(tally.seen().len(), 3);
     }
 
     #[test]
-    fn toggle_recording_is_reserved() {
-        assert!(matches!(
-            recording_reserved(),
-            zbus::fdo::Error::NotSupported(_)
-        ));
+    fn the_recording_methods_hand_their_action_on() {
+        let tally = Tally::default();
+        let capturer = Capturer(Box::new(tally.clone()));
+        capturer.recording(RecordingAction::Toggle);
+        capturer.recording(RecordingAction::Stop);
+        assert_eq!(tally.seen(), ["recording:toggle", "recording:stop"]);
+        assert_eq!(RecordingAction::Toggle.method(), "ToggleRecording");
+        assert_eq!(RecordingAction::Stop.method(), "StopRecording");
     }
 }

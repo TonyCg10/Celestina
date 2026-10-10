@@ -2,9 +2,7 @@
 
 This queue contains no implementation work and never blocks `ROADMAP.md`.
 
-The later SEL-1 units add theirs: a real recording with and without sound
-(SEL-1-B), and the keyboard and a screen reader on the finished window
-(SEL-1-C).
+SEL-1-C adds the keyboard and a screen reader on the finished window.
 
 ## VAL-SEL-SHOT — Capture the screen, a window and a region
 
@@ -37,5 +35,40 @@ The later SEL-1 units add theirs: a real recording with and without sound
   takes its capture whether Selenita was running or not; the row actions open
   the image in Fluorita, copy it, show it selected in Siderita and move it to
   the trash (restorable from Siderita), the row leaving the history
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-SEL-REC — Record the screen, with and without sound
+
+- **Status:** pending
+- **Related implementation:** SEL-1-B
+- **Requires:** the deployed Selenita (`scripts/complete-production.sh`),
+  `gst-plugins-good` installed (`gst-inspect-1.0 --exists mp4mux` exits 0;
+  it was missing when the unit was built), `gst-plugin-pipewire`,
+  `gst-plugins-ugly` or `gst-plugin-va`, `gst-libav`, `xdg-desktop-portal`
+  with its ScreenCast backend, and the two recording key bindings of the
+  README in niri's config
+- **Procedure:** first, outside Selenita,
+  `gst-launch-1.0 -e videotestsrc num-buffers=120 ! videoconvert ! x264enc ! h264parse ! mp4mux ! filesink location=/tmp/selenita-test.mp4`
+  and play the file (the pipeline builder's shape, which the subagent could
+  not run without the muxer); open Selenita and read the recording card
+  (no missing-element line); press «Grabar», choose the output in the
+  portal's dialog, wait 10 s while moving a window, press «Detener»; turn
+  «Con sonido del sistema» on, play something audible and record 10 s
+  more; press «Abrir en Fluorita» on the last recording; close Selenita
+  and press Shift+Print, wait, Ctrl+Shift+Print; press Ctrl+Shift+Print
+  again with nothing recording; cancel the portal's dialog once; on the
+  recording's history row press «Mostrar en Siderita» and «Mover a la
+  papelera»
+- **Pass condition:** the card shows the red dot and the time counting
+  while it records, and «Grabar» again afterwards; each recording is a
+  `<recording stem> <date> <time>.mp4` in the videos folder that Fluorita plays
+  with the pointer drawn and, for the second, the sound heard; the history
+  row shows the film glyph and the actions work; the key bindings start
+  and stop with Selenita closed or open and a stop with nothing recording
+  says nothing; a cancelled dialog leaves the card idle with the cancel
+  notice and no file; closing the window while it records (or while the
+  portal's dialog is open) finishes and publishes the file (or closes the
+  dialog) and the recording is in the history on the next launch
 - **Result:** not run
 - **Evidence:** none

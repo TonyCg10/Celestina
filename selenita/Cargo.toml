@@ -1,6 +1,6 @@
 [package]
 name = "selenita"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -44,6 +44,10 @@ zbus = { version = "5", default-features = false, features = ["async-io", "block
 # «Eliminar» moves a capture to the freedesktop trash through the suite's one
 # implementation, so Siderita can restore it.
 siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
+# The PipeWire remote the portal hands over arrives without close-on-exec;
+# `fcntl_setfd` is the safe call that sets it. The crate is already in the
+# closure through zbus.
+rustix = { version = "1", default-features = false, features = ["std"] }
 # The suite's appearance file (reduced motion, text scale) and its follower,
 # so this window follows the same choice as every other one.
 celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }

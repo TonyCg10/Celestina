@@ -18,6 +18,10 @@ serde_json.workspace = true
 # library has no time zones; chrono's `clock` reads the system zone
 # (`TZ`, `/etc/localtime`) in safe Rust. No other feature.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# A recording's `gst-launch-1.0` is told to finish its file with SIGINT. The
+# standard library only kills; rustix's `kill_process` is the safe call, and
+# the crate (with `process`) is already in the closure through zbus.
+rustix = { version = "1", default-features = false, features = ["process", "std"] }
 
 [lints]
 workspace = true

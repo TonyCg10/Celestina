@@ -1,8 +1,10 @@
 //! The command line niri's key bindings use: `--screenshot
 //! <screen|window|region>` takes a capture through the running instance (or
-//! this launch, when none runs); `--record` and `--stop` are reserved for
-//! SEL-1-B. Anything else on the line is ignored: a path handed to Selenita
-//! never triggers anything.
+//! this launch, when none runs); `--record` starts a recording or stops the
+//! one under way (`ToggleRecording()`); `--stop` only stops
+//! (`StopRecording()`, or the stop file when no instance answers). Anything
+//! else on the line is ignored: a path handed to Selenita never triggers
+//! anything.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -21,8 +23,10 @@ pub enum Launch {
     Window,
     /// Take a capture of this target.
     Screenshot(TargetKind),
-    /// A flag that arrives with a later unit.
-    Reserved(&'static str),
+    /// Start a recording, or stop the one under way.
+    Record,
+    /// Stop the recording under way, if any.
+    Stop,
 }
 
 /// A flag used wrongly.
@@ -72,10 +76,10 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Launch, FlagErr
             return target(word);
         }
         if arg == RECORD {
-            return Ok(Launch::Reserved(RECORD));
+            return Ok(Launch::Record);
         }
         if arg == STOP {
-            return Ok(Launch::Reserved(STOP));
+            return Ok(Launch::Stop);
         }
     }
     Ok(Launch::Window)
@@ -126,9 +130,10 @@ mod tests {
     }
 
     #[test]
-    fn recording_flags_are_reserved_and_paths_ignored() {
-        assert_eq!(parse(args(&["--record"])), Ok(Launch::Reserved("--record")));
-        assert_eq!(parse(args(&["--stop"])), Ok(Launch::Reserved("--stop")));
+    fn recording_flags_are_read_and_paths_ignored() {
+        assert_eq!(parse(args(&["--record"])), Ok(Launch::Record));
+        assert_eq!(parse(args(&["--stop"])), Ok(Launch::Stop));
+        assert_eq!(parse(args(&["--stop", "--record"])), Ok(Launch::Stop));
         assert_eq!(parse(args(&["/tmp/captura.png"])), Ok(Launch::Window));
         assert_eq!(parse(args(&[])), Ok(Launch::Window));
         assert_eq!(
