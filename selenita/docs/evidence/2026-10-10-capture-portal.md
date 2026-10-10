@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** SEL-1-F of
-  [SEL-1's plan](../plans/active/2026-10-09-sel-1-foundation.md):
+  [SEL-1's plan](../plans/archive/2026-10-09-sel-1-foundation.md):
   `selenita/packaging/xdg-desktop-portal-wlr/`, `selenita/scripts/build-portal.sh`,
   README, STATUS, VALIDATION
 - **Environment:** niri 26.04 (the author's fork, `zwlr_screencopy_manager_v1`

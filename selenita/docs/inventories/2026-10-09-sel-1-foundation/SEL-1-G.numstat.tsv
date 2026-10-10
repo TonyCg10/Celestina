@@ -1,0 +1,35 @@
+# SEL-1-G exact change inventory
+
+Base revision	64239da0b8bbcaff0e3de620f61af190d8ce71cd
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/docs/evidence/2026-10-09-exit.md
+Pathspec	selenita/docs/evidence/2026-10-09-recording.md
+Pathspec	selenita/docs/evidence/2026-10-09-screenshots.md
+Pathspec	selenita/docs/evidence/2026-10-09-skeleton.md
+Pathspec	selenita/docs/evidence/2026-10-10-capture-portal.md
+Pathspec	selenita/docs/evidence/2026-10-10-recording-fixes.md
+Pathspec	selenita/docs/evidence/2026-10-10-recording-start.md
+Pathspec	selenita/docs/evidence/2026-10-10-sel-1-foundation-archive.md
+Pathspec	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-G.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+Pathspec	selenita/docs/plans/active/README.md
+Pathspec	selenita/docs/plans/archive/2026-10-09-sel-1-foundation.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	3	7c170a36fc33e7517ea55d46f84c13fc392b4043eff164d1cd8413b2eb2b400b	selenita/ROADMAP.md
+4	2	cb57c7209e80357d9180e00026675f128dae0b09c69dad05146b074bf1f3becd	selenita/STATUS.md
+1	1	fa9d798092359b8f9a3f11645486365b415366ca1acff3f81aefa56b49529457	selenita/docs/evidence/2026-10-09-exit.md
+1	1	7353ebb89ea4579f48ed027b110c993697850007da1ed7325a1d953c24ee900d	selenita/docs/evidence/2026-10-09-recording.md
+1	1	2950e2919d3c65d46216fb7d60e708e2dde0dc8b53a742384d3efce6209ec092	selenita/docs/evidence/2026-10-09-screenshots.md
+1	1	93415210667720b3e0676e44c69d62be100f866a62a93e726f6b63958bc7ab9d	selenita/docs/evidence/2026-10-09-skeleton.md
+1	1	87347255a4c4a67886016afd278b2c9b7a2ca21f991e6b366a77e8bda815f6d1	selenita/docs/evidence/2026-10-10-capture-portal.md
+1	1	f675290ea2e6a3eaab2c241310d83b84951ac21d369d65cafad22ad9475a503a	selenita/docs/evidence/2026-10-10-recording-fixes.md
+1	1	6ef482c501bfa19a6772f1150ae6d6ca63039cfcd25a4436f8f1ee6f651b404a	selenita/docs/evidence/2026-10-10-recording-start.md
+48	0	a4b0e8b8712bd8bcb15630313bcf62c0e3b8f9bc24694d6d23bdd385cceed6bd	selenita/docs/evidence/2026-10-10-sel-1-foundation-archive.md
+35	0	self	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-G.numstat.tsv
+0	76	deleted	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+3	2	06efb7c0d98bde92aa77d387f990cdaae578f46b790a68013395903f3a6cfb7d	selenita/docs/plans/active/README.md
+79	0	ae9ea395d1d4487c74519509e7426aef61abbcd28e2526be4af7a6a51e0f376e	selenita/docs/plans/archive/2026-10-09-sel-1-foundation.md

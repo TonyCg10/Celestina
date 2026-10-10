@@ -1,7 +1,8 @@
 # Active Selenita plans
 
-The active plan is [SEL-1 — foundation](2026-10-09-sel-1-foundation.md), which
-the project roadmap names as its active implementation checkpoint.
+No plan is active: SEL-1 closed on 2026-10-10 and moved to
+[`../archive/`](../archive/). A dated plan is added here only when the
+project roadmap names the same active implementation checkpoint.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

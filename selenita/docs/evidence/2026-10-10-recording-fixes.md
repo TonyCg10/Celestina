@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** SEL-1-D of
-  [SEL-1's plan](../plans/active/2026-10-09-sel-1-foundation.md):
+  [SEL-1's plan](../plans/archive/2026-10-09-sel-1-foundation.md):
   `celestina-rs/crates/selenita-core` (`names.rs`, `record.rs`,
   `target.rs`) and `selenita/` (the capture, recording and controller
   seams, the capture and recording cards, the window, the QML tests, the

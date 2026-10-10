@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-09
 - **Scope:** SEL-1-B of
-  [SEL-1's plan](../plans/active/2026-10-09-sel-1-foundation.md):
+  [SEL-1's plan](../plans/archive/2026-10-09-sel-1-foundation.md):
   `celestina-rs/crates/selenita-core` (the pipeline builder, the recording
   state machine, the stop file, the videos folder) and `selenita/` (the
   ScreenCast portal client, the recording worker with its real and fake

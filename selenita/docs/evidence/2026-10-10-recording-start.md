@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** SEL-1-E of
-  [SEL-1's plan](../plans/active/2026-10-09-sel-1-foundation.md):
+  [SEL-1's plan](../plans/archive/2026-10-09-sel-1-foundation.md):
   `selenita/src/record.rs` (the recording worker), STATUS, VALIDATION
 - **Environment:** as the
   [SEL-1-D record](2026-10-10-recording-fixes.md): niri 26.04,

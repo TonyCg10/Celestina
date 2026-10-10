@@ -1,7 +1,9 @@
 # Selenita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** SEL-1's three units are implemented and verified
+- **Implementation:** SEL-1 is closed and its
+  [plan](docs/plans/archive/2026-10-09-sel-1-foundation.md) archived; no
+  checkpoint is active. Its three units are implemented and verified
   offscreen over the fakes: SEL-1-A (screenshots, delay, destinations, the
   history and the key-binding flags), SEL-1-B (recording through the portal
   and GStreamer, the sound option, `--record` and `--stop`) and SEL-1-C
@@ -26,7 +28,7 @@
 
 ## Current checkout truth
 
-- Version 0.3.0 in the checkout (the SEL-1-C landing sets 1.0.0). The
+- Version 1.0.2 in the checkout. The
   window is transparent over the backdrop, follows the suite's appearance
   file and scrolls three cards: capture, recording and history.
 - The capture card takes the screen (every output, or one when there are

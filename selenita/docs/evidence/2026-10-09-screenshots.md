@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-09
 - **Scope:** SEL-1-A of
-  [SEL-1's plan](../plans/active/2026-10-09-sel-1-foundation.md):
+  [SEL-1's plan](../plans/archive/2026-10-09-sel-1-foundation.md):
   `celestina-rs/crates/selenita-core` (geometry, targets, file names, the
   history, the niri client, the tool argv and the deadline runner) and
   `selenita/` (the capture worker, the real and fake backends, the
