@@ -1,0 +1,25 @@
+# SEL-1-E exact change inventory
+
+Base revision	09403a4bd1bfa4a69a6e27beffbf133e95243565
+Pathspec	docs/version-history.tsv
+Pathspec	selenita/Cargo.lock
+Pathspec	selenita/Cargo.toml
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/VALIDATION.md
+Pathspec	selenita/docs/evidence/2026-10-10-recording-start.md
+Pathspec	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-E.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+Pathspec	selenita/src/record.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	124ea9d817dfa9290c9a1853d2598aeb4b5e97eddef63f5c82539c9c4246f807	docs/version-history.tsv
+1	1	795478364674d390f6977c69cfba3b529819221b1deac54f929d2acebcc0ca64	selenita/Cargo.lock
+1	1	6f3cd1663ab360ba7ea731eb11702e9e885f3792aba283061530e2a34c0248ed	selenita/Cargo.toml
+22	1	af3491b3abc6009f581093a0532597913da22677285413f2ae6ca06194bef148	selenita/STATUS.md
+10	3	fc979af163ffb6a2b3769fc4aa38b8c28ab847846ffa2db94e2b05160c128a2b	selenita/VALIDATION.md
+150	0	55ad5bc826a00f84fd164d263ab9b6556d36f10da98a39ed9b98e9a9576ec228	selenita/docs/evidence/2026-10-10-recording-start.md
+25	0	self	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-E.numstat.tsv
+3	0	acf10e5e3d3f7c03b9b45ce93baed26eb0eac4e440fe6b69c4347035412cb14a	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+197	3	05fa36db1c4cf9f2783fe3b18a5f6283778f177ef3590b500ab0db0af6f704bf	selenita/src/record.rs

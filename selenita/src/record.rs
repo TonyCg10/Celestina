@@ -8,7 +8,10 @@
 //! chooses in its dialog), the pipeline is started into a hidden file in
 //! the videos folder's `Recordings`, the child is watched (an early exit is a failure)
 //! together with the stop file `selenita --stop` touches when no instance
-//! answers on the bus, and the stop interrupts the child, waits for the
+//! answers on the bus and with the hidden file's size (a source that never
+//! streams leaves the muxer nothing to write: past [`SIGNAL_DEADLINE`] with
+//! an empty file the recording fails with a notice instead of hanging the
+//! stop, SEL-1-E), and the stop interrupts the child, waits for the
 //! muxer to finish, publishes the file under its name without replacing
 //! anything and hands the entry to the capture worker, which owns the
 //! history. A child that ends on its own with status 0 (the source sent
@@ -46,6 +49,12 @@ use crate::portal::{self, PortalError};
 pub const STOP_DEADLINE: Duration = Duration::from_secs(10);
 /// How long `gst-inspect-1.0` may take per element.
 const PROBE_DEADLINE: Duration = Duration::from_secs(5);
+/// How long after the child started the hidden file may stay empty: the
+/// muxer writes its header with the first frames, so an empty file past this
+/// means the portal's node never streamed (measured on 2026-10-10: a node
+/// that exists but sends nothing holds `gst-launch-1.0 -e` past any stop,
+/// and the kill at [`STOP_DEADLINE`] lost the recording in silence).
+pub const SIGNAL_DEADLINE: Duration = Duration::from_secs(8);
 /// How often the child and the stop file are looked at while recording.
 const POLL: Duration = Duration::from_millis(250);
 /// A render node VA-API can use.
@@ -60,6 +69,9 @@ pub enum RecordError {
     Exited(Exit),
     /// The child ended and left no file.
     NoFile,
+    /// The child ran but the portal's node sent no frame within
+    /// [`SIGNAL_DEADLINE`]: nothing was ever written.
+    NoSignal,
     Write(String),
     /// `mp4mux` (or the launcher) is not installed.
     Missing(String),
@@ -91,6 +103,9 @@ impl RecordError {
             Self::Tool(_) => "No se ha podido iniciar la grabación.".to_owned(),
             Self::Exited(_) => "La grabación se ha interrumpido.".to_owned(),
             Self::NoFile => "La grabación no ha producido ningún archivo.".to_owned(),
+            Self::NoSignal => {
+                "El portal no ha enviado ninguna imagen: la grabación se ha cancelado.".to_owned()
+            }
             Self::Write(_) => "No se ha podido guardar la grabación.".to_owned(),
             Self::Busy => "Ya hay una grabación en curso.".to_owned(),
             Self::NotRecording => "No hay ninguna grabación en curso.".to_owned(),
@@ -219,6 +234,13 @@ impl Recorder for Real {
     fn prepare(&mut self) -> Result<Prepared, RecordError> {
         let (session, stream) = portal::open_monitor().map_err(RecordError::Portal)?;
         self.session = Some(session);
+        // The one line a live diagnosis needs: the node the `Start` response
+        // named and whether the remote came with it.
+        eprintln!(
+            "selenita: recording: portal stream node {}, remote fd {}",
+            stream.node,
+            if stream.fd.is_some() { "yes" } else { "no" }
+        );
         let fd_number = stream.fd.as_ref().map(|_| 0);
         Ok(Prepared {
             source: Source {
@@ -281,7 +303,12 @@ impl Recorder for Real {
 pub struct Fake {
     out: Option<PathBuf>,
     pub started: Vec<Pipeline>,
+    /// Every call, in order: `prepare`, `start`, `stop`, `abandon`.
+    pub calls: Vec<&'static str>,
 }
+
+/// The node the fake portal answers with.
+pub const FAKE_NODE: u32 = 1;
 
 impl Recorder for Fake {
     fn probe(&mut self) -> Probe {
@@ -295,13 +322,18 @@ impl Recorder for Fake {
     }
 
     fn prepare(&mut self) -> Result<Prepared, RecordError> {
+        self.calls.push("prepare");
         Ok(Prepared {
-            source: Source { node: 1, fd: None },
+            source: Source {
+                node: FAKE_NODE,
+                fd: None,
+            },
             fd: None,
         })
     }
 
     fn start(&mut self, pipeline: &Pipeline, _fd: Option<OwnedFd>) -> Result<(), RecordError> {
+        self.calls.push("start");
         eprintln!("selenita-fake: record to {}", pipeline.out.display());
         std::fs::write(&pipeline.out, b"fake mp4 ")
             .map_err(|error| RecordError::Write(error.to_string()))?;
@@ -315,6 +347,7 @@ impl Recorder for Fake {
     }
 
     fn stop(&mut self) -> Result<(), RecordError> {
+        self.calls.push("stop");
         let out = self.out.take().ok_or(RecordError::NotRecording)?;
         let mut bytes =
             std::fs::read(&out).map_err(|error| RecordError::Write(error.to_string()))?;
@@ -323,6 +356,7 @@ impl Recorder for Fake {
     }
 
     fn abandon(&mut self) {
+        self.calls.push("abandon");
         self.out = None;
     }
 }
@@ -404,6 +438,8 @@ pub struct Session {
     state: State,
     active: Option<Active>,
     encoder: VideoEncoder,
+    /// How long the hidden file may stay empty after the start.
+    signal_deadline: Duration,
 }
 
 impl Session {
@@ -414,7 +450,47 @@ impl Session {
             state: State::Idle,
             active: None,
             encoder: VideoEncoder::choose(probe.render_node, probe.va_element),
+            signal_deadline: SIGNAL_DEADLINE,
         }
+    }
+
+    /// The same session with another [`SIGNAL_DEADLINE`] (the tests use
+    /// zero).
+    #[cfg(test)]
+    #[must_use]
+    pub fn with_signal_deadline(mut self, deadline: Duration) -> Self {
+        self.signal_deadline = deadline;
+        self
+    }
+
+    /// While it records: whether the child has written anything yet. Past
+    /// the deadline with an empty file the portal's node never streamed, so
+    /// the child is killed and the recording fails with [`RecordError::
+    /// NoSignal`]; `None` otherwise (nothing to say, or too early to tell).
+    pub fn watch_signal(
+        &mut self,
+        recorder: &mut dyn Recorder,
+        report: &mut dyn FnMut(Report),
+    ) -> Option<RecordError> {
+        let active = self.active.as_ref()?;
+        if self.state != State::Recording {
+            return None;
+        }
+        let waited = SystemTime::now()
+            .duration_since(active.started)
+            .unwrap_or_default();
+        if waited < self.signal_deadline {
+            return None;
+        }
+        let written = std::fs::metadata(&active.hidden)
+            .map(|meta| meta.len())
+            .unwrap_or(0);
+        if written > 0 {
+            return None;
+        }
+        recorder.abandon();
+        self.fail(report);
+        Some(RecordError::NoSignal)
     }
 
     #[must_use]
@@ -703,6 +779,11 @@ impl Worker {
                             }
                             continue;
                         }
+                        if let Some(error) = session.watch_signal(recorder.as_mut(), &mut tell) {
+                            eprintln!("selenita: recording: {error}");
+                            tell(Report::Failed(error.message_es()));
+                            continue;
+                        }
                     }
                     let job = match job {
                         Some(job) => job,
@@ -771,13 +852,16 @@ impl Worker {
 
 #[cfg(test)]
 mod tests {
-    use super::{make, Fake, Places, Probe, RecordError, Recorder, Report, Request, Session};
+    use super::{
+        make, Fake, Places, Probe, RecordError, Recorder, Report, Request, Session, FAKE_NODE,
+    };
     use selenita_core::names::recordings_dir_in;
     use selenita_core::record::{Pipeline, State};
     use selenita_core::runner::Exit;
     use selenita_core::EntryKind;
     use std::os::fd::OwnedFd;
     use std::path::PathBuf;
+    use std::time::Duration;
 
     struct Scratch(PathBuf);
 
@@ -895,6 +979,115 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().starts_with('.'))
             .collect();
         assert!(hidden.is_empty(), "the hidden file is published");
+    }
+
+    /// The child is spawned only once the portal has answered, and on the
+    /// node that answer named: `prepare` (the whole portal exchange, `Start`
+    /// and the remote included) returns before `start` is called, and the
+    /// pipeline's source is the prepared node. Pinned after the live run of
+    /// 2026-10-10 asked whether the order had moved (it had not).
+    #[test]
+    fn the_child_is_spawned_after_the_portal_answered_and_on_its_node() {
+        let scratch = Scratch::new("order");
+        let mut fake = Fake::default();
+        let mut session = Session::new(fake.probe());
+        let mut heard = Vec::new();
+        session
+            .start(&mut fake, &scratch.places(), &request(false), &mut |r| {
+                heard.push(r)
+            })
+            .expect("started");
+        assert_eq!(fake.calls, ["prepare", "start"]);
+        assert_eq!(fake.started[0].source.node, FAKE_NODE);
+        assert_eq!(fake.started[0].source.fd, None, "no remote: no fd= token");
+        let argv: Vec<String> = fake.started[0]
+            .launch_argv()
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+        assert!(argv.contains(&format!("path={FAKE_NODE}")), "{argv:?}");
+        // Nothing was reported before the portal answered: the first report
+        // is the preparing state, then the origin, then recording.
+        assert!(matches!(heard[0], Report::State(State::Preparing)));
+        session
+            .stop(&mut fake, &scratch.places(), &mut |r| heard.push(r))
+            .expect("stopped");
+        assert_eq!(fake.calls, ["prepare", "start", "stop"]);
+    }
+
+    /// A child whose source never streams writes nothing. Past the signal
+    /// deadline the recording fails with its own notice, the child is
+    /// killed and the empty file goes; a child that did write is left alone.
+    #[test]
+    fn a_source_that_never_streams_fails_the_recording_in_time() {
+        struct Silent;
+        impl Recorder for Silent {
+            fn probe(&mut self) -> Probe {
+                Fake::default().probe()
+            }
+            fn prepare(&mut self) -> Result<super::Prepared, RecordError> {
+                Ok(super::Prepared {
+                    source: selenita_core::record::Source { node: 57, fd: None },
+                    fd: None,
+                })
+            }
+            fn start(
+                &mut self,
+                pipeline: &Pipeline,
+                _fd: Option<OwnedFd>,
+            ) -> Result<(), RecordError> {
+                // The muxer opened the file and wrote nothing.
+                std::fs::write(&pipeline.out, b"").map_err(|e| RecordError::Write(e.to_string()))
+            }
+            fn exited(&mut self) -> Option<Exit> {
+                None
+            }
+            fn stop(&mut self) -> Result<(), RecordError> {
+                panic!("the stop would hang: the watchdog must act first")
+            }
+            fn abandon(&mut self) {}
+        }
+        let scratch = Scratch::new("silent");
+        let mut silent = Silent;
+        let mut session = Session::new(silent.probe()).with_signal_deadline(Duration::ZERO);
+        let mut heard = Vec::new();
+        session
+            .start(&mut silent, &scratch.places(), &request(false), &mut |r| {
+                heard.push(r)
+            })
+            .expect("started");
+        assert!(matches!(
+            session.watch_signal(&mut silent, &mut |r| heard.push(r)),
+            Some(RecordError::NoSignal)
+        ));
+        assert_eq!(session.state(), State::Idle);
+        assert_eq!(
+            states(&heard),
+            [
+                State::Preparing,
+                State::Recording,
+                State::Failed,
+                State::Idle
+            ]
+        );
+        assert!(std::fs::read_dir(scratch.recordings())
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(!RecordError::NoSignal.message_es().is_empty());
+        // Idle: nothing to watch.
+        assert!(session.watch_signal(&mut silent, &mut |_| {}).is_none());
+        // The fake writes at start, so even a zero deadline never fires.
+        let mut fake = Fake::default();
+        let mut session = Session::new(fake.probe()).with_signal_deadline(Duration::ZERO);
+        session
+            .start(&mut fake, &scratch.places(), &request(false), &mut |_| {})
+            .expect("started");
+        assert!(session.watch_signal(&mut fake, &mut |_| {}).is_none());
+        assert_eq!(session.state(), State::Recording);
+        session
+            .stop(&mut fake, &scratch.places(), &mut |_| {})
+            .expect("stopped");
     }
 
     /// Two recordings in a row: both publish, the second with an origin of
@@ -1252,6 +1445,7 @@ mod tests {
             RecordError::Busy,
             RecordError::NotRecording,
             RecordError::NoFile,
+            RecordError::NoSignal,
             RecordError::Missing("mp4mux".to_owned()),
             RecordError::Portal(crate::portal::PortalError::Cancelled),
         ] {

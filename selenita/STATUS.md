@@ -13,7 +13,11 @@
   capture; see the
   [recording fixes evidence](docs/evidence/2026-10-10-recording-fixes.md)
 - **Author validation:** VAL-SEL-SHOT (a real capture) and VAL-SEL-REC (a
-  real recording) pending; both re-run after SEL-1-D
+  real recording) pending; both re-run after SEL-1-D. The 1.0.1 run of
+  2026-10-10 recorded nothing: the portal's node never streamed, which the
+  child could not say (SEL-1-E adds the no-signal watchdog, the node line
+  on stderr and the diagnosis recipe; see the
+  [recording start evidence](docs/evidence/2026-10-10-recording-start.md))
 
 ## Current checkout truth
 
@@ -92,6 +96,23 @@
 
 ## Known issues
 
+- On 2026-10-10 (1.0.1) four recordings in a row received no frame: the
+  child prerolled on the node the portal's `Start` named (the same code
+  order as 1.0.0, which recorded at 14:55; pinned by
+  `the_child_is_spawned_after_the_portal_answered_and_on_its_node`) and
+  nothing arrived, so `gst-launch-1.0 -e` could not reach its EOS and the
+  stop killed it after 10 s with nothing saved (reproduced offline with a
+  PipeWire node that exists and never streams). Why the portal backend
+  stopped streaming between 14:55 and 15:53 is not known; a recording
+  whose file is still empty after `SIGNAL_DEADLINE` (8 s) now fails at
+  once with «El portal no ha enviado ninguna imagen» and the node is on
+  stderr. The next live failure needs the child's log:
+  `GST_DEBUG=3 GST_DEBUG_FILE=/tmp/selenita-gst.log selenita` from a
+  terminal (the child inherits the environment). A shell wrapper put in
+  `SELENITA_TOOLS_DIR` must `exec` the launcher: a wrapper that runs it as
+  a background job hands it `/dev/null` on fd 0 and loses the portal's
+  remote, which is what the two wrapped diagnostic runs of that day
+  measured.
 - The first second of a recording is black except for the parts of the
   screen that changed, until the second keyframe: xdg-desktop-portal-wlr
   0.8.4 captures through ext-image-copy-capture and never damages a buffer

@@ -54,8 +54,12 @@ covers the window.
 ## VAL-SEL-REC — Record the screen, with and without sound
 
 - **Status:** pending
-- **Related implementation:** SEL-1-B, SEL-1-D (the run of 2026-10-10
-  found the SEL-1-D findings; re-run on the SEL-1-D binary)
+- **Related implementation:** SEL-1-B, SEL-1-D, SEL-1-E (the run of
+  2026-10-10 found the SEL-1-D findings; the 1.0.1 run received no frame
+  from the portal; re-run on the SEL-1-E binary, started from a terminal
+  as `GST_DEBUG=3 GST_DEBUG_FILE=/tmp/selenita-gst.log selenita` so a
+  failure leaves the child's log, and with Selenita's own stderr kept:
+  it prints `portal stream node N, remote fd yes` per recording)
 - **Requires:** the deployed Selenita (`scripts/complete-production.sh`),
   `gst-plugins-good` installed (`gst-inspect-1.0 --exists mp4mux` exits 0;
   it was missing when the unit was built), `gst-plugin-pipewire`,
@@ -85,7 +89,10 @@ covers the window.
   `<recording stem> <date> <time>.mp4` in the videos folder's `Recordings`
   (nothing in the videos root) that Fluorita plays with the pointer drawn,
   text legible at the screen's own resolution, the silent one with a
-  silent audio track and the last with the sound heard; after the trash
+  silent audio track and the last with the sound heard; a recording whose
+  portal node sends nothing ends by itself within about 8 s with «El
+  portal no ha enviado ninguna imagen» and no file (if that happens, keep
+  `/tmp/selenita-gst.log`); after the trash
   the last recording's line and «Abrir en Fluorita» are gone from the
   card; the first second of each recording is noted as it is (SEL-1-D
   records a backend fault there: black with only the parts that changed
