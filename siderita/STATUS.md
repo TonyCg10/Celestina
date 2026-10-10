@@ -32,6 +32,8 @@
   and by name on the Qt thread, opened through `celestina_core::activation`
   on a worker, and sent through Magnetita's `SendFileUri` on the device
   model's worker ([evidence](../docs/evidence/2026-10-09-open-with.md)).
+  `EXT-1-C` (suite) added Calcita for PDFs, decided by name like media
+  ([evidence](../docs/evidence/2026-10-09-reading-and-capture-exit.md)).
 - `CONV-1-A` (suite): Siderita keeps to one window. A launch claims
   `org.celestina.Siderita` through `celestina_core::activation` before any
   window exists; a later `siderita RUTA…` hands its paths over

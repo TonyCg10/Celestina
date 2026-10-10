@@ -84,6 +84,26 @@ the delivery is
 - The author's live checks are `VAL-F` (Cuprita), `VAL-GRA-OPEN`,
   `VAL-FLU-OPEN`, `VAL-SID-SEND` and the three `VAL-*-DROP` rows.
 
+## Follow-ups
+
+- **EXT-1 (2026-10-09).** Two applications adopted the convention as written:
+  Calcita owns `org.celestina.Calcita` and Selenita `org.celestina.Selenita`,
+  both registered in `celestina_core::activation` and both serving
+  `org.celestina.Application1` claim first. Siderita's «Abrir en» offers
+  Calcita for PDFs (decided by name, like media) through `open_in`, and
+  Calcita accepts a drop as the drag-and-drop rule says. Selenita additionally
+  serves its own interface, `org.celestina.Selenita1`, on the connection that
+  owns its name (`Owner::connection()`, added by `EXT-1-S`) with `Capture(s)`,
+  `ToggleRecording()` and `StopRecording()`, so niri's key bindings reach the
+  running window; the scanner allowlists that literal by file. `StopRecording`
+  was added to the interface after `Capture` and `ToggleRecording`: an
+  additive method on an application's own interface is a compatible
+  evolution and needs no new name. No new decision arose, so there is no
+  ADR 0013: the one open question of the program, the `gstreamer` crate or
+  `gst-launch-1.0` as a child, was settled by the recording spike's measured
+  rule and is recorded in
+  [Selenita's recording evidence](../../selenita/docs/evidence/2026-10-09-recording.md).
+
 ## Revisit when
 
 A shell returns and wants to mirror the appearance to the portal, the suite

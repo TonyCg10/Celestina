@@ -129,6 +129,8 @@ GlassContextMenu {
             return qsTr("Grafita")
         if (target === "fluorita")
             return qsTr("Fluorita")
+        if (target === "calcita")
+            return qsTr("Calcita")
         if (target === "hematita")
             return qsTr("Hematita")
         if (root.phoneTargetCount === 1)

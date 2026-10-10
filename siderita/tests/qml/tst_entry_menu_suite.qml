@@ -123,6 +123,20 @@ TestCase {
         compare(menu.itemAt(header + 2).objectName, "suiteTarget:hematita")
     }
 
+    function test_a_pdf_lists_calcita_between_grafita_and_the_send_entry() {
+        controllerStub.phones = [["g1", "1"], ["p2", "0"], ["t3", "0"]]
+        setAnswer(["grafita", "calcita", "phone"])
+        const entries = shown("suiteTarget:")
+        compare(entries.length, 3)
+        compare(entries[1].objectName, "suiteTarget:calcita")
+        compare(entries[1].text, "Calcita")
+        compare(entries[1].icon.name, "org.celestina.Calcita")
+        entries[1].triggered()
+        compare(suiteStub.opened.length, 1)
+        compare(suiteStub.opened[0].target, "calcita")
+        compare(suiteStub.opened[0].keys, ["/home/toni/entry1"])
+    }
+
     function test_each_connected_phone_gets_an_entry() {
         setAnswer(["grafita", "phone"])
         const entries = shown("suiteTarget:phone")

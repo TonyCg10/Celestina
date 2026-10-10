@@ -1,0 +1,35 @@
+# EXT-1-C exact change inventory
+
+Base revision	392a5ea7b7fd3f12c360629ab16e02358a50382c
+Pathspec	HOST-HYGIENE.md
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	docs/decisions/0012-suite-conventions.md
+Pathspec	docs/evidence/2026-10-09-reading-and-capture-exit.md
+Pathspec	docs/inventories/2026-10-09-reading-and-capture/EXT-1-C.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-reading-and-capture.md
+Pathspec	scripts/activation_contract.py
+Pathspec	siderita/README.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/qml/menus/EntryContextMenu.qml
+Pathspec	siderita/src/apps.rs
+Pathspec	siderita/src/suite.rs
+Pathspec	siderita/tests/qml/tst_entry_menu_suite.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+97	0	c8fc52234e34114f3ac79d60a30b8330fc1b174cfa8bd4e934019c7720008f81	HOST-HYGIENE.md
+9	5	9058840a2d0f1ca610b79897b08ea4664ffd61ddc03c56d2b46e6592831247cb	README.md
+8	8	a17c3666a59c26423464feb4f58ba68349f5676b8776cd943212ade104846c55	ROADMAP.md
+20	0	7a4a6f323c32e3313dee70046b5d885db134d8740108c84147cf472c0c9b59fa	docs/decisions/0012-suite-conventions.md
+123	0	27d5f39d7cc233a740e40d7af1173fd5449fac702fad78f319913de3a8c458a6	docs/evidence/2026-10-09-reading-and-capture-exit.md
+35	0	self	docs/inventories/2026-10-09-reading-and-capture/EXT-1-C.numstat.tsv
+1	1	1261f5ae8d41426fd63b81a347dee62cc3a3236d91bae6a853e527f0f4f71521	docs/plans/active/2026-10-09-reading-and-capture.md
+3	3	8ecf767762c677c74cb2ed969c5264fbbe4ec45be55ddc5f8d651a2c9713cd82	scripts/activation_contract.py
+5	4	e66793b3ab014660c6549abb513c7982792204eac5bf65f8cf961be0bc2e22bd	siderita/README.md
+2	0	d2616f2152090c426a655f01bd203a6e10f1810b606db8452791b18751fb2b2c	siderita/STATUS.md
+2	0	2ea8894220f7f7f67be33ab1858a3e3980efd30acf5b9f08ea1ef2f1d3d6e790	siderita/qml/menus/EntryContextMenu.qml
+47	7	1c2a0061209254b80a1697e54fc1d5514a95b1aa24fd0104cc87da8ab2b1802a	siderita/src/apps.rs
+31	8	f464c4b1d3bd3fd922eb81ffaf7d566dd91140924b8648dd86e8502d9517cd2f	siderita/src/suite.rs
+14	0	6122a683d14e9d554c7587f9be226e3cad474bbe7da9d26fb41408dda70d477d	siderita/tests/qml/tst_entry_menu_suite.qml

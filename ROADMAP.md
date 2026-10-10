@@ -226,14 +226,14 @@ reading mode; Selenita takes a screenshot of the screen, a window or a region
 to the clipboard and the pictures folder, keeps a history and records the
 screen to MP4; both are registered, deployed at 1.0 and offered by Siderita.
 
-- [ ] Register Calcita with its skeleton and icon (`EXT-1-A`).
-- [ ] Open a document with its pages, zoom and navigation (`CAL-1-A`).
-- [ ] Add search, the outline, selection and links (`CAL-1-B`).
-- [ ] Add the reading mode and recents, and reach 1.0 (`CAL-1-C`).
-- [ ] Register Selenita with its skeleton and icon (`EXT-1-B`).
-- [ ] Add screenshots with delay, destinations and history (`SEL-1-A`).
-- [ ] Add screen recording (`SEL-1-B`).
-- [ ] Reach Selenita's 1.0 (`SEL-1-C`).
+- [x] Register Calcita with its skeleton and icon (`EXT-1-A`).
+- [x] Open a document with its pages, zoom and navigation (`CAL-1-A`).
+- [x] Add search, the outline, selection and links (`CAL-1-B`).
+- [x] Add the reading mode and recents, and reach 1.0 (`CAL-1-C`).
+- [x] Register Selenita with its skeleton and icon (`EXT-1-B`).
+- [x] Add screenshots with delay, destinations and history (`SEL-1-A`).
+- [x] Add screen recording (`SEL-1-B`).
+- [x] Reach Selenita's 1.0 (`SEL-1-C`).
 - [ ] Close the program (`EXT-1-C`).
 
 The application units are rows of each project's own plan; the build order,

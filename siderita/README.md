@@ -14,11 +14,12 @@ and bounded in-place Grafita/Fluorita actions.
   [the content-activation contract](../docs/contracts/content-activation.md).
 - One window: a second `siderita RUTA` hands its folders to the running one
   over `org.celestina.Application1` (the suite's shared activation in
-  `celestina_core::activation`), and opening a file in Grafita or Fluorita
-  reaches their running window the same way before starting a new one.
+  `celestina_core::activation`), and opening a file in Grafita, Fluorita or
+  Calcita reaches their running window the same way before starting a new
+  one.
 - An entry's context menu has an «Abrir en» section above «Abrir con…»: Grafita
-  for any file, Fluorita for media or one folder, Hematita for one folder, and
-  send-to-phone for files (one entry per connected phone, sent through
+  for any file, Fluorita for media or one folder, Calcita for PDFs (by name,
+  like media), Hematita for one folder, and send-to-phone for files (one entry per connected phone, sent through
   Magnetita's `Devices1.SendFileUri`). An application without a desktop entry
   is not offered, and with no phone connected there is no send entry. The
   desktop entries are looked up once, on a worker at start, so the application

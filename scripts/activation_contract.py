@@ -62,9 +62,9 @@ ALLOWED_LITERALS = {
         "Magnetita's freedesktop ID; Magnetita has not adopted the shared "
         "activation (not part of CONV-1-A)",
     ("selenita/src/activation.rs", "org.celestina.Selenita1"):
-        "Selenita's own capture interface (`Capture`, `ToggleRecording`), "
-        "served beside the shared one on the activation connection for the "
-        "niri key bindings; an interface, not a name",
+        "Selenita's own capture interface (`Capture`, `ToggleRecording`, "
+        "`StopRecording`), served beside the shared one on the activation "
+        "connection for the niri key bindings; an interface, not a name",
     ("grafita/src/syntax.rs", "org.celestina.Grafita.desktop"):
         "a desktop-entry file name in a syntax-detection test, not a bus name",
 }

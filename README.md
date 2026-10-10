@@ -57,12 +57,16 @@ content gesture mapping in
 
 ## How the applications work together
 
-Siderita, Grafita, Hematita, Fluorita and Cuprita each keep to one window
-(Magnetita claims no name): a launch claims `org.celestina.<App>` and a second launch hands its paths to the running one
+Siderita, Grafita, Hematita, Fluorita, Cuprita, Calcita and Selenita each
+keep to one window (Magnetita claims no name): a launch claims
+`org.celestina.<App>` and a second launch hands its paths to the running one
 over `org.celestina.Application1` (`celestina_core::activation`). Siderita is
-the launcher: «Abrir en» opens a file in Grafita or Fluorita and a folder in
-Hematita, and its send-to-phone entry sends through Magnetita; a file dragged from
-Siderita onto Grafita, Fluorita or a Magnetita device opens or sends it.
+the launcher: «Abrir en» opens a file in Grafita or Fluorita, a PDF in
+Calcita and a folder in Hematita, and its send-to-phone entry sends through
+Magnetita; a file dragged from Siderita onto Grafita, Fluorita, Calcita or a
+Magnetita device opens or sends it. Selenita also serves
+`org.celestina.Selenita1`, so a niri key binding's `selenita --screenshot` or
+`--record` reaches the running window.
 Reduced motion and the text size live in one file,
 `~/.config/celestina/appearance.toml`, edited in Cuprita's Apariencia section
 and followed by every open window. The rules are

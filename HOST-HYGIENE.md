@@ -973,3 +973,100 @@ Classification: Celestina platform.
 
 Decision: accepted by the author on 2026-10-08. Evidence:
 `siderita/docs/evidence/2026-10-08-filemanager1-activation.md`.
+
+## Host change record — 2026-10-09, the PDF role and the capture role
+
+EXT-1 (reading and capture) ends with two desktop roles that used to sit
+outside the suite now having a first-party owner. This record states what the
+suite provides and which actions stay with the author; it was written by the
+program's exit unit (`EXT-1-C`) and changes nothing on the host.
+
+Component: `application/pdf`
+
+Observed role: the design of 2026-10-09 recorded `xdg-mime query default
+application/pdf` answering the LibreWolf browser; a PDF opened from Siderita
+or a launcher left the suite for the browser.
+
+Installed because: no deliberate PDF handler had been chosen; the browser
+declares the type and was the only candidate.
+
+Native dependency closure: Calcita 1.0.0 reads PDFs with QtPdf, which Qt
+6.12 already ships (`qt6-webengine` provides the `QtQuick.Pdf` module); no new
+package.
+
+Session authority: Calcita's desktop entry declares `MimeType=application/pdf;`
+(CAL-1-C), so it is a candidate handler, not yet the default. Siderita's
+«Abrir en» offers Calcita for PDFs regardless of the default (EXT-1-C).
+
+Flatpak containment: not applicable to the choice of handler; the browser
+keeps declaring the type as a candidate, which is not a changed default.
+
+Current consumers: any application opening a PDF through the MIME default.
+
+Classification: Competing desktop authority, until the default is pinned.
+
+Proposal: pin `application/pdf=org.celestina.Calcita.desktop` under
+`[Default Applications]` in `~/.config/mimeapps.list`, a step of
+`VAL-CAL-DARK` in `calcita/VALIDATION.md` on the real session.
+
+Risk: a malformed PDF the browser rendered may be refused by QtPdf; the
+browser is still reachable through «Abrir con…».
+
+Rollback: remove the pin, or restore the previous `mimeapps.list` backup.
+
+Missing evidence: `VAL-CAL-OPEN` and `VAL-CAL-DARK`.
+
+Decision: pending — the pin is the author's hand edit of
+`~/.config/mimeapps.list`; once it is made, the browser no longer holds the
+PDF role, and the author records the date here.
+
+Component: screen capture and recording (Selenita 1.0.0, with `grim`,
+`slurp`, niri's screenshot actions and the ScreenCast portal)
+
+Observed role: Selenita holds the capture role: a screenshot of the screen,
+the focused window or a region, with a delay, to the clipboard and the
+pictures folder, with a history; and a recording of a monitor to MP4 through
+the ScreenCast portal (`wlr` under niri) and GStreamer.
+
+Installed because: capturing and recording the screen were the two daily
+tasks that still went to the terminal (`grim`, `slurp`, a GStreamer
+pipeline by hand).
+
+Native dependency closure: `grim` and `slurp` stay installed as Selenita's
+tools (it orchestrates them through the `SELENITA_TOOLS_DIR` seam rather than
+re-implementing the Wayland screencopy protocol); `slurp` draws in the theme's
+accent. The recording runs `gst-launch-1.0 -e` as a child, so no GStreamer
+library is linked into the window.
+
+Session authority: Selenita serves `org.celestina.Selenita` and its own
+`org.celestina.Selenita1` (`Capture`, `ToggleRecording`, `StopRecording`) so
+the niri key bindings in `selenita/README.md` reach the running window. niri's
+own screenshot UI (`niri msg action screenshot` and the default `Print`
+binding) remains available and untouched; it is not a competing authority,
+because it is the compositor's and Selenita uses `screenshot-window` itself.
+
+Flatpak containment: not applicable.
+
+Current consumers: the author's `Print` family of key bindings once they point
+at `selenita --screenshot …` and `--record`; Siderita and Fluorita for the
+results («Abrir en Fluorita», show in Siderita).
+
+Classification: Celestina platform (Selenita); chosen tools (`grim`, `slurp`).
+
+Proposal: keep `grim` and `slurp`; bind the keys as `selenita/README.md`
+shows. Recording needs `gst-plugins-good` for `mp4mux`, which is **absent on
+the host** (`gst-inspect-1.0 --exists mp4mux` exits 1, measured read-only by
+the SEL-1-B spike); until it is installed the recording card says so and the
+button is disabled. `gst-plugins-ugly` (`x264enc`), `gst-libav`
+(`avenc_aac`) and `gst-plugin-va` (`vah264enc`) are already present.
+
+Risk: none for screenshots; a recording without `mp4mux` never starts, by
+design.
+
+Rollback: unbind the keys; the compositor's screenshot UI is unchanged.
+
+Missing evidence: `VAL-SEL-SHOT` and `VAL-SEL-REC` in `selenita/VALIDATION.md`
+on the real session; `VAL-SEL-REC` needs the package above.
+
+Decision: pending — installing `gst-plugins-good` and binding the keys are the
+author's actions; this record grants no authority to install anything.

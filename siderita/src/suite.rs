@@ -34,8 +34,9 @@ pub mod qobject {
 
         /// The targets that apply to the entries `keys` name, `folders`
         /// parallel to them ("1" for a folder): `grafita`, `fluorita`,
-        /// `hematita` when installed, and `phone` when every entry is a file;
-        /// the menu turns `phone` into one entry per connected phone.
+        /// `calcita`, `hematita` when installed, and `phone` when every entry
+        /// is a file; the menu turns `phone` into one entry per connected
+        /// phone.
         #[qinvokable]
         fn targets(self: &SideritaSuite, keys: &QStringList, folders: &QStringList) -> QStringList;
 
@@ -60,8 +61,8 @@ pub mod qobject {
 pub struct SideritaSuiteRust;
 
 /// Each entry's kind: a folder when the folder model says so — which counts a
-/// symlink to a folder, as activating it navigates — media by name, any
-/// other file (a broken symlink among them) otherwise.
+/// symlink to a folder, as activating it navigates — media or a PDF by name,
+/// any other file (a broken symlink among them) otherwise.
 fn item_kinds(paths: &[std::path::PathBuf], folders: &[bool]) -> Vec<ItemKind> {
     paths
         .iter()
@@ -71,11 +72,20 @@ fn item_kinds(paths: &[std::path::PathBuf], folders: &[bool]) -> Vec<ItemKind> {
                 ItemKind::Folder
             } else if fluorita_core::MediaKind::classify_path(path).is_some() {
                 ItemKind::Media
+            } else if is_pdf_name(path) {
+                ItemKind::Pdf
             } else {
                 ItemKind::File
             }
         })
         .collect()
+}
+
+/// Whether `path` is named as a PDF: the extension `pdf` in any case, as
+/// Calcita itself admits a path.
+fn is_pdf_name(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
 }
 
 impl qobject::SideritaSuite {
@@ -121,6 +131,7 @@ impl qobject::SideritaSuite {
                         .map_or(Ok(()), |path| apps::launch_with(name.0, path)),
                     Target::Grafita => spawn_detached_all("grafita", paths),
                     Target::Fluorita => spawn_detached_all("fluorita", paths),
+                    Target::Calcita => spawn_detached_all("calcita", paths),
                     // Not an application: `Target::application` never names it.
                     Target::Phone => Ok(()),
                 }
@@ -183,11 +194,23 @@ mod tests {
     }
 
     #[test]
-    fn media_is_decided_by_name() {
-        let paths = vec![PathBuf::from("/x/photo.png"), PathBuf::from("/x/notes")];
+    fn media_and_pdfs_are_decided_by_name() {
+        let paths = vec![
+            PathBuf::from("/x/photo.png"),
+            PathBuf::from("/x/notes"),
+            PathBuf::from("/x/informe.pdf"),
+            PathBuf::from("/x/INFORME.PDF"),
+            PathBuf::from("/x/pdf"),
+        ];
         assert_eq!(
-            item_kinds(&paths, &[false, false]),
-            vec![ItemKind::Media, ItemKind::File]
+            item_kinds(&paths, &[false; 5]),
+            vec![
+                ItemKind::Media,
+                ItemKind::File,
+                ItemKind::Pdf,
+                ItemKind::Pdf,
+                ItemKind::File
+            ]
         );
     }
 }

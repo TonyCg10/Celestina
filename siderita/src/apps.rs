@@ -163,8 +163,9 @@ pub fn launch_with(id: &str, path: &Path) -> Result<(), String> {
     }
 }
 
-/// Grafita, Fluorita and Hematita, as Siderita reaches a running instance.
-pub use celestina_core::activation::{FLUORITA, GRAFITA, HEMATITA};
+/// Grafita, Fluorita, Calcita and Hematita, as Siderita reaches a running
+/// instance.
+pub use celestina_core::activation::{CALCITA, FLUORITA, GRAFITA, HEMATITA};
 
 /// Opens `paths` in the application that owns `name`, on a worker thread:
 /// through the bus when an instance is running (one window, a new tab or
@@ -197,6 +198,10 @@ pub enum ItemKind {
     Folder,
     /// An image, a video or a sound, by name (`fluorita_core::MediaKind`).
     Media,
+    /// A PDF, by name (`.pdf`, in any case): the one type Calcita's desktop
+    /// entry declares, `application/pdf`, which the generic chooser below
+    /// the section reaches through `xdg-mime` and this section by name.
+    Pdf,
     /// Any other file.
     File,
 }
@@ -207,13 +212,15 @@ pub enum ItemKind {
 pub enum Target {
     Grafita,
     Fluorita,
+    Calcita,
     Hematita,
     Phone,
 }
 
 impl Target {
     /// The applications, in the order the menu shows them.
-    pub const APPLICATIONS: [Self; 3] = [Self::Grafita, Self::Fluorita, Self::Hematita];
+    pub const APPLICATIONS: [Self; 4] =
+        [Self::Grafita, Self::Fluorita, Self::Calcita, Self::Hematita];
 
     /// The id QML carries for this target.
     #[must_use]
@@ -221,6 +228,7 @@ impl Target {
         match self {
             Self::Grafita => "grafita",
             Self::Fluorita => "fluorita",
+            Self::Calcita => "calcita",
             Self::Hematita => "hematita",
             Self::Phone => "phone",
         }
@@ -241,6 +249,7 @@ impl Target {
         match self {
             Self::Grafita => Some(GRAFITA),
             Self::Fluorita => Some(FLUORITA),
+            Self::Calcita => Some(CALCITA),
             Self::Hematita => Some(HEMATITA),
             Self::Phone => None,
         }
@@ -249,9 +258,10 @@ impl Target {
 
 /// The targets that apply to a selection, before asking what is installed:
 /// Grafita takes any file (it decides by bytes and says so when one is not
-/// text); Fluorita takes media, or one folder as a source; Hematita takes one
-/// folder, to see its usage; the phone takes any file or files. A selection
-/// that mixes folders and files gets no application, and an empty one none.
+/// text); Fluorita takes media, or one folder as a source; Calcita takes
+/// PDFs; Hematita takes one folder, to see its usage; the phone takes any
+/// file or files. A selection that mixes folders and files gets no
+/// application, and an empty one none.
 #[must_use]
 pub fn suite_targets(selection: &[ItemKind]) -> Vec<Target> {
     if selection.is_empty() {
@@ -259,6 +269,7 @@ pub fn suite_targets(selection: &[ItemKind]) -> Vec<Target> {
     }
     let all_files = selection.iter().all(|kind| *kind != ItemKind::Folder);
     let all_media = selection.iter().all(|kind| *kind == ItemKind::Media);
+    let all_pdf = selection.iter().all(|kind| *kind == ItemKind::Pdf);
     let one_folder = selection == [ItemKind::Folder];
     let mut targets = Vec::new();
     if all_files {
@@ -266,6 +277,9 @@ pub fn suite_targets(selection: &[ItemKind]) -> Vec<Target> {
     }
     if all_media || one_folder {
         targets.push(Target::Fluorita);
+    }
+    if all_pdf {
+        targets.push(Target::Calcita);
     }
     if one_folder {
         targets.push(Target::Hematita);
@@ -383,6 +397,18 @@ mod tests {
     }
 
     #[test]
+    fn a_pdf_goes_to_grafita_calcita_and_the_phone() {
+        assert_eq!(
+            suite_targets(&[ItemKind::Pdf]),
+            vec![Target::Grafita, Target::Calcita, Target::Phone]
+        );
+        assert_eq!(
+            suite_targets(&[ItemKind::Pdf, ItemKind::Pdf]),
+            vec![Target::Grafita, Target::Calcita, Target::Phone]
+        );
+    }
+
+    #[test]
     fn one_folder_goes_to_fluorita_and_hematita_only() {
         assert_eq!(
             suite_targets(&[ItemKind::Folder]),
@@ -400,6 +426,14 @@ mod tests {
         assert_eq!(
             suite_targets(&[ItemKind::Media, ItemKind::Media]),
             vec![Target::Grafita, Target::Fluorita, Target::Phone]
+        );
+        assert_eq!(
+            suite_targets(&[ItemKind::Pdf, ItemKind::File]),
+            vec![Target::Grafita, Target::Phone]
+        );
+        assert_eq!(
+            suite_targets(&[ItemKind::Pdf, ItemKind::Media]),
+            vec![Target::Grafita, Target::Phone]
         );
         assert_eq!(suite_targets(&[ItemKind::File, ItemKind::Folder]), vec![]);
         assert_eq!(suite_targets(&[]), vec![]);
@@ -424,14 +458,20 @@ mod tests {
             "[Desktop Entry]\nType=Application\nName=Grafita\nExec=grafita %F\n",
         )
         .unwrap();
+        std::fs::write(
+            dir.join(format!("{}.desktop", super::CALCITA.0)),
+            "[Desktop Entry]\nType=Application\nName=Calcita\nExec=calcita %U\n",
+        )
+        .unwrap();
         let found = super::installed_in(std::slice::from_ref(&dir));
         std::fs::remove_dir_all(&dir).unwrap();
-        assert_eq!(found, vec![Target::Grafita]);
+        assert_eq!(found, vec![Target::Grafita, Target::Calcita]);
     }
 
     #[test]
     fn a_qml_key_names_only_an_application() {
         assert_eq!(Target::application("hematita"), Some(Target::Hematita));
+        assert_eq!(Target::application("calcita"), Some(Target::Calcita));
         assert_eq!(Target::application("phone"), None);
         assert_eq!(Target::application(""), None);
     }
