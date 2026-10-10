@@ -1,0 +1,29 @@
+# PRV-1-A exact change inventory
+
+Base revision	dfda1326c0658f49aabeb8c936ce0b3a52fcb791
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/decisions/0012-suite-conventions.md
+Pathspec	docs/evidence/2026-10-10-capture-preview-interfaces.md
+Pathspec	docs/inventories/2026-10-10-capture-preview/PRV-1-A.numstat.tsv
+Pathspec	docs/plans/active/2026-10-10-capture-preview.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/superpowers/plans/2026-10-10-capture-preview.md
+Pathspec	docs/superpowers/specs/2026-10-10-capture-preview-design.md
+Pathspec	scripts/activation_contract.py
+Pathspec	scripts/test-activation-contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+26	2	581fb11b0b9fc14a163a347609cf6cfba743efde14984f3b2a97544d7bcd512c	ROADMAP.md
+12	6	ac5437c85dc8d2a9d77d41031e6dbd0b104a077042c15d06a5be2794cb645334	STATUS.md
+28	0	583ca126d880ae4f84d52ebd63fc381abfd22454ee009e753ee5c7d9c28515d0	docs/decisions/0012-suite-conventions.md
+80	0	8ba5b31200034a81971f7c04771a64b9299dd5c0a1018b7f8c358bd7f2a2cf32	docs/evidence/2026-10-10-capture-preview-interfaces.md
+29	0	self	docs/inventories/2026-10-10-capture-preview/PRV-1-A.numstat.tsv
+82	0	5782e6198ac913de2a0be49c4d835f765124f640ddf057492fc5b5ed0c83d38a	docs/plans/active/2026-10-10-capture-preview.md
+2	1	a8e99f135bfed35e99f32247d21fa915917188cc4dae789ff902a696ad354d79	docs/plans/active/README.md
+120	0	202dd9062490c0fc1e7c4624cfaf22799b32e894696299d58919f9a6b198036c	docs/superpowers/plans/2026-10-10-capture-preview.md
+238	0	5db5f0be9b40732942d86385a29ef0221dff0f55bdff36bcbab05da960cf5573	docs/superpowers/specs/2026-10-10-capture-preview-design.md
+13	2	942e744f2075c5b1b083e4394086e9670263cfb8d4044f5c68d95b25824b2499	scripts/activation_contract.py
+16	0	f9f16979bbcd3882d76665f6aa990c86a86cee063f8830c4b0ada0c6fd7fc08a	scripts/test-activation-contract.py

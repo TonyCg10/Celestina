@@ -1,7 +1,8 @@
 # Active suite plans
 
 Suite-level plans appear here only while the root roadmap names the same active
-implementation checkpoint. No suite plan is active: EXT-1 closed on
+implementation checkpoint. The active suite plan is
+[PRV-1 — Capture preview](2026-10-10-capture-preview.md). EXT-1 closed on
 2026-10-10, CONV-1 on 2026-10-09, AUD-1 on 2026-10-09, LND-1 on 2026-09-26,
 PRD-1 on 2026-09-25 and LNG-1 on 2026-08-05, all moved to
 [`../archive/`](../archive/).

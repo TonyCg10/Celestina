@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** PRV-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -240,6 +240,30 @@ The application units are rows of each project's own plan; the build order,
 exclusions and suite ledger are in
 [the archived plan](docs/plans/archive/2026-10-09-reading-and-capture.md), and the
 design in [the spec](docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
+
+## PRV-1 — Capture preview
+
+**Hypothesis:** a capture is most often taken to be sent or touched up at
+once; a small preview in the corner of the screen, as macOS and Android show,
+lets the file be dragged into any program that takes files, which is how a
+video reaches a chat, and a click opens it in a floating Fluorita editor.
+
+**Tangible outcome:** after every Selenita capture or finished recording the
+result appears in the bottom-right corner without taking focus; dragging it
+offers the file as a copy; clicking it opens Fluorita's floating editor,
+which saves both versions or only the edited one and can trim a video
+frame-accurately; an edited copy joins Selenita's history.
+
+- [ ] Fix the interfaces between Selenita and Fluorita (`PRV-1-A`).
+- [ ] Add the corner preview with drag, edit and adopt (`SEL-2-A`).
+- [ ] Add the floating editor that opens any path (`FLU-P1-A`).
+- [ ] Add the frame-accurate video trim through ffmpeg (`FLU-P1-B`).
+- [ ] Close the program with the niri window rules (`PRV-1-E`).
+
+The application units are rows of each project's own plan; the build order,
+exclusions and suite ledger are in
+[the active plan](docs/plans/active/2026-10-10-capture-preview.md), and the
+design in [the spec](docs/superpowers/specs/2026-10-10-capture-preview-design.md).
 
 ## Project implementation fronts
 

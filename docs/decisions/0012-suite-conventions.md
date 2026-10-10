@@ -103,6 +103,34 @@ the delivery is
   `gst-launch-1.0` as a child, was settled by the recording spike's measured
   rule and is recorded in
   [Selenita's recording evidence](../../selenita/docs/evidence/2026-10-09-recording.md).
+- **PRV-1 (2026-10-10).** The capture preview joins Selenita and Fluorita
+  through two methods, both on an application's own interface beside the
+  shared one, served on the connection that owns the application's name
+  (`Owner::connection()`), and both taking one string argument, a
+  `celestina_core::pathkey` key (`pathkey::encode(path)`), so the path crosses
+  byte for byte:
+  - Fluorita serves `org.celestina.Fluorita1` at its activation object path
+    (`celestina_core::activation::object_path(&FLUORITA)`) with
+    `Edit(s key)` → `()`: Fluorita opens the file in a floating edit window.
+    A key that does not decode, or that names anything but a regular file,
+    is refused with `org.freedesktop.DBus.Error.InvalidArgs`.
+  - Selenita's `org.celestina.Selenita1` gains `Adopt(s key)` → `()`: a
+    regular file inside Selenita's pictures `Capturas` folder or videos
+    `Recordings` folder joins the history, its kind taken from the
+    extension (`.png` a screenshot, `.mp4` a recording); any other key is
+    ignored without error.
+
+  Selenita calls `Edit` when the preview is clicked and spawns
+  `fluorita --edit <path>` when nobody owns `org.celestina.Fluorita`;
+  Fluorita calls `Adopt` after saving a copy beside the original and, when
+  nobody owns `org.celestina.Selenita`, appends the row through
+  `selenita_core::history::History` itself. `Adopt` is an additive method on
+  an existing interface, a compatible evolution; `org.celestina.Fluorita1` is
+  an interface, not a new bus name. The scanner allowlists the new literals
+  by file: `org.celestina.Fluorita1` in `fluorita/src/activation.rs` (served)
+  and `selenita/src/preview.rs` (client), and `org.celestina.Selenita1` in
+  `fluorita/src/adopt.rs` (client). The design is
+  [the capture preview spec](../superpowers/specs/2026-10-10-capture-preview-design.md).
 
 ## Revisit when
 

@@ -107,6 +107,22 @@ class ActivationContract(unittest.TestCase):
         self.assertNotIn("Comment", result.stderr)
         self.assertNotIn(":3:", result.stderr)
 
+    def test_the_capture_preview_interfaces_are_allowed_in_their_files_only(self) -> None:
+        write(self.root, "fluorita/src/activation.rs",
+              "const EDIT_INTERFACE: &str = \"org.celestina.Fluorita1\";\n")
+        write(self.root, "fluorita/src/adopt.rs",
+              "const ADOPT_INTERFACE: &str = \"org.celestina.Selenita1\";\n")
+        write(self.root, "selenita/src/preview.rs",
+              "const EDIT_INTERFACE: &str = \"org.celestina.Fluorita1\";\n")
+        result = self.run_in(self.root, "fluorita", "selenita")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # The same literal anywhere else is refused.
+        write(self.root, "grafita/src/x.rs",
+              "const EDIT_INTERFACE: &str = \"org.celestina.Fluorita1\";\n")
+        result = self.run_in(self.root, "grafita")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("grafita/src/x.rs:1: literal", result.stderr)
+
     def test_a_claim_after_a_uri_on_the_same_line_is_refused(self) -> None:
         write(self.root, "grafita/src/uri.rs",
               "let u = \"file:///tmp\"; connection.request_name(NAME);\n")

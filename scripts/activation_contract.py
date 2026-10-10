@@ -63,8 +63,19 @@ ALLOWED_LITERALS = {
         "activation (not part of CONV-1-A)",
     ("selenita/src/activation.rs", "org.celestina.Selenita1"):
         "Selenita's own capture interface (`Capture`, `ToggleRecording`, "
-        "`StopRecording`), served beside the shared one on the activation "
-        "connection for the niri key bindings; an interface, not a name",
+        "`StopRecording`, and `Adopt` for an edited copy joining the history), "
+        "served beside the shared one on the activation connection for the "
+        "niri key bindings and Fluorita; an interface, not a name",
+    ("selenita/src/preview.rs", "org.celestina.Fluorita1"):
+        "client of Fluorita's own edit interface (`Edit`), which the capture "
+        "preview calls on a click; an interface, not a name",
+    ("fluorita/src/activation.rs", "org.celestina.Fluorita1"):
+        "Fluorita's own edit interface (`Edit`), served beside the shared one "
+        "on the activation connection for Selenita's capture preview; an "
+        "interface, not a name",
+    ("fluorita/src/adopt.rs", "org.celestina.Selenita1"):
+        "client of Selenita's `Adopt`, which the floating editor calls after "
+        "saving a copy beside the original; an interface, not a name",
     ("grafita/src/syntax.rs", "org.celestina.Grafita.desktop"):
         "a desktop-entry file name in a syntax-detection test, not a bus name",
 }
