@@ -1,10 +1,9 @@
 # Suite status
 
-- **Updated:** 2026-10-09
-- **Current focus:** EXT-1, reading and capture: Calcita, the PDF viewer,
-  and Selenita, the screen capture and recording tool
-  ([plan](docs/plans/active/2026-10-09-reading-and-capture.md))
-- **Implementation checkpoint:** EXT-1
+- **Updated:** 2026-10-10
+- **Current focus:** no suite checkpoint is active; the next suite work starts
+  from an accepted decision, and all project work follows each local roadmap
+- **Implementation checkpoint:** none
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -36,12 +35,16 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
-EXT-1 adds two applications in the suite's grammar: Calcita, the PDF viewer,
-and Selenita, the screen capture and recording tool, each registered by a suite
-unit and built by its own ledger. The suite ledger is
-[the active plan](docs/plans/active/2026-10-09-reading-and-capture.md).
+No suite checkpoint is active. New cross-project work starts only when an
+accepted decision promotes it, as the root roadmap's later suite-level section
+requires.
 
 ## Completed cross-project work
+
+EXT-1 added two applications in the suite's grammar: Calcita, the PDF viewer,
+and Selenita, the screen capture and recording tool, each registered by a suite
+unit and built by its own ledger to 1.0.0. The suite ledger is
+[the archived plan](docs/plans/archive/2026-10-09-reading-and-capture.md).
 
 CONV-1 makes the first-party applications behave as one system: one
 claim-first activation interface in `celestina-core` served by every

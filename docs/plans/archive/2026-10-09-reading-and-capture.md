@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-09
 - **Plan ID:** reading-and-capture
-- **Status:** active
+- **Closed:** 2026-10-10
+- **Successor:** none; the author named no next suite checkpoint. All 4 ledger rows are done
+- **Status:** done
 - **Authorization:** the author approved the design in brainstorming on
   2026-10-09 and asked for the program to be implemented; the design is
   [the spec](../../superpowers/specs/2026-10-09-reading-and-capture-design.md)
@@ -67,3 +69,4 @@ plans are closed at 1.0.0 and, on the landed `main`,
 | EXT-1-B | `suite:` | done | [inventory](../../inventories/2026-10-09-reading-and-capture/EXT-1-B.numstat.tsv) | 78 files, +3197/-2 | Register the Selenita project (`versioned = false`) with its skeleton, icon and document set; add Selenita to the activation guard's real-tree test. | [evidence](../../evidence/2026-10-09-selenita-registration.md) | None |
 | EXT-1-S | `suite:` | done | [inventory](../../inventories/2026-10-09-reading-and-capture/EXT-1-S.numstat.tsv) | 6 files, +73/-8 | Support edits SEL-1-A needs before it can land: `Owner::connection()` in `celestina-core::activation` so an application can serve a second interface on the connection that owns its name; the (`selenita/src/activation.rs`, `org.celestina.Selenita1`) allowlist entry in `scripts/activation_contract.py`; `siderita-ops` in Selenita's production inputs (delete goes to the freedesktop trash through it). | [evidence](../../evidence/2026-10-09-selenita-support.md) | None |
 | EXT-1-C | `suite:` | done | [inventory](../../inventories/2026-10-09-reading-and-capture/EXT-1-C.numstat.tsv) | 14 files, +397/-36 | Add Calcita to the open-in targets and close the reading and capture program | [evidence](../../evidence/2026-10-09-reading-and-capture-exit.md) | None |
+| EXT-1-D | `suite:` | done | [inventory](../../inventories/2026-10-09-reading-and-capture/EXT-1-D.numstat.tsv) | 11 files, +172/-90 | Archive the delivered reading and capture plan through its own administrative unit and reconcile the suite roadmap, status and plan indexes | [evidence](../../evidence/2026-10-10-reading-and-capture-archive.md) | None |

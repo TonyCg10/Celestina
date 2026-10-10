@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** EXT-1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -234,11 +234,11 @@ screen to MP4; both are registered, deployed at 1.0 and offered by Siderita.
 - [x] Add screenshots with delay, destinations and history (`SEL-1-A`).
 - [x] Add screen recording (`SEL-1-B`).
 - [x] Reach Selenita's 1.0 (`SEL-1-C`).
-- [ ] Close the program (`EXT-1-C`).
+- [x] Close the program (`EXT-1-C`).
 
 The application units are rows of each project's own plan; the build order,
 exclusions and suite ledger are in
-[the active plan](docs/plans/active/2026-10-09-reading-and-capture.md), and the
+[the archived plan](docs/plans/archive/2026-10-09-reading-and-capture.md), and the
 design in [the spec](docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
 
 ## Project implementation fronts

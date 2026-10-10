@@ -30,7 +30,7 @@ records the screen to MP4, keeps a history, and answers niri key bindings.
 
 The skeleton is not a row of this ledger: it lands with the registration, in
 suite unit EXT-1-B of
-[the suite plan](../../../../docs/plans/active/2026-10-09-reading-and-capture.md).
+[the suite plan](../../../../docs/plans/archive/2026-10-09-reading-and-capture.md).
 It is the transparent window over the backdrop, the appearance follower, the
 claim-first activation adapter (an `Open` is ignored), the
 `SelenitaController` singleton reading `SELENITA_FAKE`, the three empty cards

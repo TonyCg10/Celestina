@@ -29,7 +29,7 @@ reading mode and recents.
 
 The skeleton is not a row of this ledger: it lands with the registration, in
 suite unit EXT-1-A of
-[the suite plan](../../../../docs/plans/active/2026-10-09-reading-and-capture.md).
+[the suite plan](../../../../docs/plans/archive/2026-10-09-reading-and-capture.md).
 It is the transparent window over the backdrop, the appearance follower, the
 claim-first activation adapter, the `CalcitaController` singleton, the empty
 state «Sin documento» with «Abrir…», the scripts, the QML test harness and

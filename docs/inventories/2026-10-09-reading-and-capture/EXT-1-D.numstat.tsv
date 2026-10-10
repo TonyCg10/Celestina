@@ -1,0 +1,29 @@
+# EXT-1-D exact change inventory
+
+Base revision	71235b33e569bb58b7edd0c0b81014a8f3e3b2d0
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	calcita/docs/evidence/2026-10-09-skeleton.md
+Pathspec	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+Pathspec	docs/evidence/2026-10-10-reading-and-capture-archive.md
+Pathspec	docs/inventories/2026-10-09-reading-and-capture/EXT-1-D.numstat.tsv
+Pathspec	docs/plans/active/2026-10-09-reading-and-capture.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-10-09-reading-and-capture.md
+Pathspec	selenita/docs/evidence/2026-10-09-skeleton.md
+Pathspec	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	4	fb20e10a94d5dd6782d33976110486be36a66b72883cac7b5fa4fae742a85b06	ROADMAP.md
+12	9	74c65795a9b3df3275272906fb1d21933583d44d3ceebfeed541cfa1f0ad61d1	STATUS.md
+1	1	fc9f4aa16c25aeec2f1af1c4c1ecfe30d1f5cf64b634fc9c924b18eed71f7bb9	calcita/docs/evidence/2026-10-09-skeleton.md
+1	1	2cfec5db15c047633da5e09993cb4fdf94e71638f0bb6ddf55134c5e90b811f2	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+48	0	95966fd55c2b34e86cb345c7c3e41ecfe158331de4ef7b47590d51471ab2fc01	docs/evidence/2026-10-10-reading-and-capture-archive.md
+29	0	self	docs/inventories/2026-10-09-reading-and-capture/EXT-1-D.numstat.tsv
+0	69	deleted	docs/plans/active/2026-10-09-reading-and-capture.md
+3	4	189409778c09aa4094ce20694c530355c2c092786e860ac4b1451f15ce379d8f	docs/plans/active/README.md
+72	0	c54b002f898546fcb4e3a4b29e17a9eb8f7a8a83d59dd840eb031d7fa46087b2	docs/plans/archive/2026-10-09-reading-and-capture.md
+1	1	923a558cfd51a579dfbe61e2bdaf48bd0434ff2a36b0223f1ed362fad01fd9e0	selenita/docs/evidence/2026-10-09-skeleton.md
+1	1	2e9514ccba0c5ac1e7a273b24317aea73f3a7d9c108247634dfd6d9963944aef	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
