@@ -247,3 +247,4 @@ selenita	0.1.0	baseline	EXT-1-B	Adopt the Selenita Cargo version as the verified
 selenita	0.2.0	milestone	SEL-1-A	Add screenshots with delay, destinations and the history
 selenita	0.3.0	milestone	SEL-1-B	Add screen recording through the portal and GStreamer
 selenita	1.0.0	release	SEL-1-C	Close the foundation at 1.0 with the keyboard and accessibility pass
+calcita	1.0.1	bug	CAL-1-D	Keep every page on opaque paper over the glass canvas

@@ -39,6 +39,7 @@ the document set; its record is
 - `CAL-1-A` — open a document: pages, zoom, go to, the drop and `Open`.
 - `CAL-1-B` — search, the outline, text selection and links.
 - `CAL-1-C` — reading mode, recents, the `application/pdf` entry, 1.0.0.
+- `CAL-1-D` — bug: the pages had no paper, so their ink sat on the glass.
 
 ## Exclusions
 
@@ -48,6 +49,7 @@ the document set; its record is
 ## Build order
 
 1. `CAL-1-A`, then `CAL-1-B`, then `CAL-1-C`.
+2. `CAL-1-D` after the author's report on the deployed 1.0.0.
 
 ## Implementation exit
 
@@ -61,3 +63,4 @@ reads a PDF with every tool of the scope.
 | CAL-1-A | `calcita:` | done | [inventory](../../inventories/2026-10-09-cal-1-foundation/CAL-1-A.numstat.tsv) | 43 files, +3385/-108 | Open a document with its pages, zoom and navigation; the drop and `Open` reach it (deferred: the page view keeps QtPdf's own scroll bar, not the suite's scroller) | [evidence](../../evidence/2026-10-09-open-and-pages.md) | VAL-CAL-OPEN |
 | CAL-1-B | `calcita:` | done | [inventory](../../inventories/2026-10-09-cal-1-foundation/CAL-1-B.numstat.tsv) | 36 files, +3531/-104 | Search with the hits marked, the outline, text selection and copy, links (an external one after a confirmation), on Calcita's own continuous page view, because QtPdf's `PdfMultiPageView` link delegate opens a URL at once and paints hits and selection in non-token colours (fix round 1: computed page offsets and a near range, hits that only move the view on a new search or a step, a drag that always selects) | [evidence](../../evidence/2026-10-09-search-outline-links.md) | VAL-CAL-SEARCH |
 | CAL-1-C | `calcita:` | done | [inventory](../../inventories/2026-10-09-cal-1-foundation/CAL-1-C.numstat.tsv) | 29 files, +960/-57 | The dark reading mode (a layer effect with a local fragment shader baked by `build.rs`, Ctrl+I and a bar button, remembered per document in `Reading`), the recents card's «Quitar de recientes» menu, the `application/pdf` entry, the accessibility pass; 1.0.0 at the landing (`--kind release`), plan archived after it | [evidence](../../evidence/2026-10-09-exit.md) | VAL-CAL-DARK |
+| CAL-1-D | `calcita:` | done | [inventory](../../inventories/2026-10-09-cal-1-foundation/CAL-1-D.numstat.tsv) | 10 files, +260/-5 | Bug: QtPdf renders a page with a clear background, so the ink was drawn straight on the window's glass; every page now lies on an opaque paper rectangle under its image (`PageView.paper`, the suite's `iconSheet`; square, no shadow, as content is), under the hits, the selection and the links, and inside the reading mode's layer so it reads dark there while the gaps stay glass | [evidence](../../evidence/2026-10-10-page-contrast.md) | VAL-CAL-OPEN |

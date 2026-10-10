@@ -43,6 +43,14 @@ Flickable {
     property var tops: []
     property real laidOutScale: 1
     readonly property int pageGap: 6
+    // The paper every page is drawn on. QtPdf renders a page with a clear
+    // background, so without it the ink would sit on the window's glass:
+    // the canvas is glass, but a page is content and is opaque paper. The
+    // suite has no paper token of its own; `iconSheet` is its one sheet of
+    // paper (the near-white, warm leaf of the folder icon), so the pages
+    // take that rather than a second white. The reading mode's layer
+    // inverts the paper with the ink, so it reads dark there.
+    readonly property color paper: CelestinaTheme.iconSheet
     // The pages whose content is built.
     property int firstNear: -1
     property int lastNear: -1
@@ -291,6 +299,15 @@ Flickable {
                     }
 
                     Component.onCompleted: paper.refreshHits()
+
+                    // The opaque sheet under the image: square and without
+                    // a shadow, as content is (DESIGN, L1).
+                    Rectangle {
+                        objectName: "paper"
+                        anchors.fill: parent
+                        color: pageArea.paper
+                        radius: CelestinaTheme.radiusNone
+                    }
 
                     PdfPageImage {
                         anchors.fill: parent

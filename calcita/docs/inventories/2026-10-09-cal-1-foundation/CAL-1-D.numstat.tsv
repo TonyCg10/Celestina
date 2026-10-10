@@ -1,0 +1,27 @@
+# CAL-1-D exact change inventory
+
+Base revision	b825a96921998efea1bc2ff88511893ba150950d
+Pathspec	calcita/Cargo.lock
+Pathspec	calcita/Cargo.toml
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/VALIDATION.md
+Pathspec	calcita/docs/evidence/2026-10-10-page-contrast.md
+Pathspec	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-D.numstat.tsv
+Pathspec	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+Pathspec	calcita/qml/components/PageView.qml
+Pathspec	calcita/tests/qml/tst_paper.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	2b395737f565f48abdf41bc58d3fb71020adea5ca9d4ee44194fc7fd94cd76be	calcita/Cargo.lock
+1	1	0bb87c73132965dd759541ee511d156a6814ba01fecf68d3ed00e07609195887	calcita/Cargo.toml
+3	1	fa2b0062cfdf152eb9ec1c5e88d99c279ba2a900db1413f4de4c0fab9cdf0066	calcita/STATUS.md
+4	2	ad4fc2ce0f6d9cb47505dd62d690ea35615a30dc0187e249ea20dc2baa61ccf2	calcita/VALIDATION.md
+100	0	f1f8924addfd2fec2d09c2c277534239a899ed98fee83900e1f0bc42e1ae6839	calcita/docs/evidence/2026-10-10-page-contrast.md
+27	0	self	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-D.numstat.tsv
+3	0	ddb6d5fac0f1d589beb74a4fff86815639b68d7e7297c6faa5c8204bcd6008c0	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+17	0	ccbd39d90d3443528ce0dda07b15831a83153d650598d53cbcff6483735beb0d	calcita/qml/components/PageView.qml
+103	0	d4707590255ba590200634c87673bc750ff08ab17657b63edcb522df6cfb05bd	calcita/tests/qml/tst_paper.qml
+1	0	ca44fbdf493c7ad7ad2893d010a0b4830b7bc50a6eff0b99d4be06b1d6b14172	docs/version-history.tsv

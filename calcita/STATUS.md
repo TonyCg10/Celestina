@@ -28,7 +28,9 @@
   question.
 - The pages are Calcita's own continuous view over QtPdf (the suite's wheel
   scroller and scroll bar; a pointer drag selects text rather than
-  scrolling). Search: Ctrl+F or the bar's button opens a card
+  scrolling). Each page lies on opaque paper (the suite's `iconSheet`) over
+  the glass canvas, since QtPdf renders a page with a clear background;
+  the gaps between pages stay glass. Search: Ctrl+F or the bar's button opens a card
   under the bar; the hits are marked, the current one in the selection
   colour and scrolled into view, with «n de N»; Enter/Shift+Enter, F3/Shift+F3
   and the card's arrows walk them round the ends; Escape closes. The outline
