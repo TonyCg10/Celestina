@@ -1,19 +1,20 @@
 # Selenita status
 
-- **Updated:** 2026-10-09
-- **Implementation:** SEL-1 is open; SEL-1-A (screenshots, delay,
-  destinations, the history and the key-binding flags) and SEL-1-B
-  (recording through the portal and GStreamer, the sound option, `--record`
-  and `--stop`) are implemented and verified offscreen over the fakes;
-  SEL-1-C (keyboard, accessibility, 1.0) is next
+- **Updated:** 2026-10-10
+- **Implementation:** SEL-1's three units are implemented and verified
+  offscreen over the fakes: SEL-1-A (screenshots, delay, destinations, the
+  history and the key-binding flags), SEL-1-B (recording through the portal
+  and GStreamer, the sound option, `--record` and `--stop`) and SEL-1-C
+  (the keyboard and accessibility pass); the SEL-1-C landing releases 1.0.0
+  and closes the foundation
 - **Author validation:** VAL-SEL-SHOT (a real capture) and VAL-SEL-REC (a
   real recording, after installing `gst-plugins-good`) pending
 
 ## Current checkout truth
 
-- Version 0.2.0. The window is transparent over the backdrop, follows the
-  suite's appearance file and scrolls three cards: capture, recording and
-  history.
+- Version 0.3.0 in the checkout (the SEL-1-C landing sets 1.0.0). The
+  window is transparent over the backdrop, follows the suite's appearance
+  file and scrolls three cards: capture, recording and history.
 - The capture card takes the screen (every output, or one when there are
   several), the focused window or a region drawn with `slurp`, after no delay
   or 3, 5 or 10 s, to the clipboard and to the pictures folder's «Capturas»
@@ -61,9 +62,23 @@
   target may show the output it was on.
 - The output choice is an inline row of buttons, not a popup menu
   (accepted in review).
-- Known loose end: a `--screenshot` or `--record` launch that races an
-  instance still starting finds the name taken, only raises it, and its
-  request is lost.
+- The keyboard: `1`, `2` and `3` choose the screen, the window or the
+  region, Enter takes the capture with the card's choices (the controller's
+  own refusals apply: busy, no destination) or, on a focused button,
+  presses that button, `R` starts or stops the
+  recording, Tab walks the controls with the style's focus ring and Escape
+  brings the focus back to the window. A history row is a Tab stop: Up and
+  Down walk the rows, Home and End reach the ends, Enter opens the row in
+  Fluorita, Delete moves it to the trash and the row that takes its place
+  keeps the focus; a click selects a row without the ring. No key fires
+  while a text field has the focus, and a modified digit is left alone.
+  A control reached with the keyboard is scrolled into view.
+- Every control carries a Spanish accessible name: the cards are named
+  groupings, a history row reads its name, kind, size and time as one list
+  item (Enter is its press action), the switches are check boxes whose
+  description is their hint, the last recording's line says it is the last
+  recording and names the file, the target, capture and record buttons say
+  their key.
 - Not yet proven on the session: VAL-SEL-SHOT and VAL-SEL-REC (the portal's
   dialog, the PipeWire node handed on the child's standard input, the
   pipeline's audio branch and the MP4's playback).
@@ -75,6 +90,22 @@
   blocking iterator has no deadline) together with its connection until the
   process ends; a bounded wait needs the async API and two more
   dependencies, so it stays recorded here.
+- Quitting while a recording is being finished can take up to about 20 s in
+  the worst case: the muxer gets `STOP_DEADLINE` (10 s) after the interrupt
+  and the quitting window waits the same deadline for the worker on top of
+  it.
+- A quit that arrives between two of the portal's calls (`CreateSession`,
+  `SelectSources`, `Start`) finds no pending request to close; the next call
+  goes out and the worker only notices the quit when it returns.
+- The recording worker checks the child first on each tick: when the child
+  has just exited on its own, a job received in that same tick (a toggle or
+  a stop) is dropped with the `continue` that reports the end.
+- The history file is written from two places at quit: the recording worker
+  loads, appends and saves it directly while the capture worker still holds
+  its own copy; whichever saves last wins, so an entry can be lost in that
+  window.
+- A `--screenshot` or `--record` launch that races an instance still
+  starting finds the name taken, only raises it, and its request is lost.
 
 ## Blockers
 

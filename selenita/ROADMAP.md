@@ -2,8 +2,8 @@
 
 - **Status:** active
 - **Active implementation checkpoint:** SEL-1
-- **Related author validation:** none yet; the SEL-1 units add their entries
-  to [VALIDATION.md](VALIDATION.md) (they do not block)
+- **Related author validation:** VAL-SEL-SHOT and VAL-SEL-REC pending in
+  [VALIDATION.md](VALIDATION.md) (they do not block)
 
 ## Hypothesis and tangible outcome
 
@@ -31,7 +31,7 @@ the terminal: one window with the capture, the recording and the history.
 |---|---|---|---|---|
 | SEL-1-A | done | EXT-1-B | capture and history cards, delay, destinations, flags | [screenshots](docs/evidence/2026-10-09-screenshots.md) |
 | SEL-1-B | done | SEL-1-A | recording card, portal, pipeline, sound, `--record`, `--stop` | [recording](docs/evidence/2026-10-09-recording.md) |
-| SEL-1-C | planned | SEL-1-B | keyboard, accessibility, 1.0.0 | `scripts/complete-production.sh` |
+| SEL-1-C | active | SEL-1-B | keyboard, accessibility, 1.0.0 | [exit](docs/evidence/2026-10-09-exit.md) |
 
 ## Implementation exit
 
@@ -43,3 +43,4 @@ and records with every tool of the scope.
 - [The skeleton](docs/evidence/2026-10-09-skeleton.md) (EXT-1-B).
 - [Screenshots, delay, destinations and the history](docs/evidence/2026-10-09-screenshots.md) (SEL-1-A).
 - [Screen recording through the portal and GStreamer](docs/evidence/2026-10-09-recording.md) (SEL-1-B).
+- [The keyboard and accessibility pass and the exit at 1.0](docs/evidence/2026-10-09-exit.md) (SEL-1-C; the landing releases 1.0.0).

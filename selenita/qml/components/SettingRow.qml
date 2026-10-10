@@ -42,6 +42,8 @@ Item {
         anchors.rightMargin: CelestinaTheme.spaceMd
         anchors.verticalCenter: parent.verticalCenter
 
+        // The switch reads the label and the hint; the words are not read
+        // twice.
         Text {
             width: parent.width
             text: row.label
@@ -49,6 +51,7 @@ Item {
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontRowTitle
+            Accessible.ignored: true
         }
 
         Text {
@@ -60,6 +63,7 @@ Item {
             color: CelestinaTheme.textMuted
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontCaption
+            Accessible.ignored: true
         }
     }
 
@@ -73,6 +77,7 @@ Item {
         enabled: row.enabled
         Accessible.role: Accessible.CheckBox
         Accessible.name: row.label
+        Accessible.description: row.hint
         onToggled: {
             row.toggled(toggle.checked)
             toggle.checked = Qt.binding(() => row.checked)

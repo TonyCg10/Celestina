@@ -1,0 +1,49 @@
+# SEL-1-C exact change inventory
+
+Base revision	1424de736912a5a3717696295898e3a45eba02ed
+Pathspec	docs/version-history.tsv
+Pathspec	selenita/Cargo.lock
+Pathspec	selenita/Cargo.toml
+Pathspec	selenita/README.md
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/VALIDATION.md
+Pathspec	selenita/build.rs
+Pathspec	selenita/docs/evidence/2026-10-09-exit.md
+Pathspec	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-C.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+Pathspec	selenita/qml/CaptureCard.qml
+Pathspec	selenita/qml/HistoryCard.qml
+Pathspec	selenita/qml/HistoryRow.qml
+Pathspec	selenita/qml/Main.qml
+Pathspec	selenita/qml/RecordingCard.qml
+Pathspec	selenita/qml/components/KeyMap.qml
+Pathspec	selenita/qml/components/PageScroll.qml
+Pathspec	selenita/qml/components/SectionCard.qml
+Pathspec	selenita/qml/components/SettingRow.qml
+Pathspec	selenita/tests/qml/tst_keyboard.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	1e8cffdfaad4c791a89e612d5f104a3782c5c03460d19dbcf3af47a2501ed659	docs/version-history.tsv
+1	1	d4eb8a8501386a3682343b0f1377db54ba110dbe7566b12853815c3562995b90	selenita/Cargo.lock
+1	1	e959a67d1c849d83c9f375fa2accb27b2dc3f43d09e279ee9d214de347ce3046	selenita/Cargo.toml
+11	3	f0d8a7f6d62d6d597c836f6a4a3636bff432ad84e6ce077193a1e6d46fad0749	selenita/README.md
+4	3	6f1290e3fdfc83716526087622303f681d23280179efa215aaa487c183ade076	selenita/ROADMAP.md
+43	12	865dbbc20da91da3cfdee7c347176346e597d6c5f06d6cbed8620656c642a6f3	selenita/STATUS.md
+21	5	5dc93c0ee009a53bfe282c972fa4982bc5c3b28d58abfcca4ff192bc404f1ecf	selenita/VALIDATION.md
+1	0	da3b3e8bd946a23c30210815b3f054099e390de3bb14b8079e4b8d07387c195e	selenita/build.rs
+147	0	b556c5438a707e0236d53e0d762c38989f02bd4141dd418b12fdae8b959f9e46	selenita/docs/evidence/2026-10-09-exit.md
+49	0	self	selenita/docs/inventories/2026-10-09-sel-1-foundation/SEL-1-C.numstat.tsv
+1	1	645f2f7b52d66dfd14d1898390dc14c77e9285c74e61445e4f27b97029f58704	selenita/docs/plans/active/2026-10-09-sel-1-foundation.md
+6	0	e639f44a11c082c410fd1cbe746d670500770c0704899b0868486b991d51f3aa	selenita/qml/CaptureCard.qml
+67	1	e0f9ec9962b1d18d4a86dfc96a31bbab22b26a18539baf10191f604fa2190f57	selenita/qml/HistoryCard.qml
+70	5	f0ffdf26af8193e36ef986648e2fa063ea5778d88a061c1da967e5742b8ec0d6	selenita/qml/HistoryRow.qml
+40	17	1a6ca1c991d3c76662ef8afee01278fc219a307eb971a5f883976bb01a07b207	selenita/qml/Main.qml
+3	0	7f6891eab56a8188c50f4130d877f5b5283a9979111260c803f1f86ad0aa2e40	selenita/qml/RecordingCard.qml
+87	0	ad01df3caf6c8a682949cbae877eae3682499e837acae0d29d540505db31ae3d	selenita/qml/components/KeyMap.qml
+10	2	c25d4e8ab6b5cec79b2e9d5e4295f545d72e6bdf567da36f88b2bf0f57f964fe	selenita/qml/components/PageScroll.qml
+2	0	a39f049ae8e4b9f0191147d15f0504e51f01d9a41e16c9b992fdfecd0f0415b4	selenita/qml/components/SectionCard.qml
+5	0	4a7376540f521c72d0d39bba84d3348cd7e349aa8398f7c767b5ff335121e529	selenita/qml/components/SettingRow.qml
+288	0	825314c4b349200f088733062d753de470ed77a4f0aa2362e21ffb9470e44d8e	selenita/tests/qml/tst_keyboard.qml

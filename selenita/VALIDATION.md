@@ -2,7 +2,10 @@
 
 This queue contains no implementation work and never blocks `ROADMAP.md`.
 
-SEL-1-C adds the keyboard and a screen reader on the finished window.
+Both entries below are run on the Selenita 1.0.0 binary the SEL-1-C landing
+installs (`scripts/complete-production.sh`); SEL-1-C added the keyboard and
+the screen-reader steps to them rather than a third entry, so one session
+covers the window.
 
 ## VAL-SEL-SHOT — Capture the screen, a window and a region
 
@@ -22,7 +25,11 @@ SEL-1-C adds the keyboard and a screen reader on the finished window.
   estimate and is skipped for another output); close Selenita and press
   Print, Alt+Print and Ctrl+Print; on one
   history row press «Abrir en Fluorita», «Copiar», «Mostrar en Siderita» and
-  «Mover a la papelera»
+  «Mover a la papelera»; then with the keyboard only: press `2`, `3`, `1`
+  and watch the target buttons, press Enter for a capture, Tab through the
+  controls, Tab to a history row and press Down, Up, End, Home, Enter and
+  Delete; with Orca running, read the capture card, the switches and a
+  history row
 - **Pass condition:** the window disappears for each capture and returns on
   the history, and Selenita appears in no picture; a key binding with
   Selenita closed never shows the window before its capture; the window
@@ -34,7 +41,13 @@ SEL-1-C adds the keyboard and a screen reader on the finished window.
   thumbnail row, and the clipboard-only one adds no row; each key binding
   takes its capture whether Selenita was running or not; the row actions open
   the image in Fluorita, copy it, show it selected in Siderita and move it to
-  the trash (restorable from Siderita), the row leaving the history
+  the trash (restorable from Siderita), the row leaving the history; the
+  digits move the checked target, Enter takes a capture like the button,
+  every control reached by Tab shows the focus ring, the arrows walk the
+  rows with the ring on the current one, Enter opens the row in Fluorita,
+  Delete moves it to the trash and the next row keeps the focus; Orca reads
+  «Captura» for the card, the switches as check boxes with their labels and
+  a row as its name, kind, size and time
 - **Result:** not run
 - **Evidence:** none
 
@@ -59,7 +72,8 @@ SEL-1-C adds the keyboard and a screen reader on the finished window.
   and press Shift+Print, wait, Ctrl+Shift+Print; press Ctrl+Shift+Print
   again with nothing recording; cancel the portal's dialog once; on the
   recording's history row press «Mostrar en Siderita» and «Mover a la
-  papelera»
+  papelera»; press `R` to start a recording and `R` again to stop it; with
+  Orca running, read the recording card after the stop
 - **Pass condition:** the card shows the red dot and the time counting
   while it records, and «Grabar» again afterwards; each recording is a
   `<recording stem> <date> <time>.mp4` in the videos folder that Fluorita plays
@@ -69,6 +83,8 @@ SEL-1-C adds the keyboard and a screen reader on the finished window.
   says nothing; a cancelled dialog leaves the card idle with the cancel
   notice and no file; closing the window while it records (or while the
   portal's dialog is open) finishes and publishes the file (or closes the
-  dialog) and the recording is in the history on the next launch
+  dialog) and the recording is in the history on the next launch; `R`
+  starts and stops like the button; Orca reads «Grabar» with «Tecla R» and
+  the last recording's line as the last recording with the file's name
 - **Result:** not run
 - **Evidence:** none

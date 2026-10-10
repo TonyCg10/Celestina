@@ -3,7 +3,7 @@ import org.celestina.selenita 1.0
 
 // The window's cards in one scrolled column: the wheel through the suite's
 // scroller, the shared bar on the right. `reveal` scrolls the least that
-// shows an item whole.
+// shows an item whole; an item outside the column is left alone.
 Item {
     id: page
 
@@ -11,7 +11,7 @@ Item {
     readonly property alias flickable: scroller
 
     function reveal(item: Item) {
-        if (!item)
+        if (!page.holds(item))
             return
         const top = item.mapToItem(column, 0, 0).y
         if (top < scroller.contentY)
@@ -19,6 +19,14 @@ Item {
         else if (top + item.height > scroller.contentY + scroller.height)
             scroller.contentY = Math.max(0, Math.min(top + item.height, scroller.contentHeight)
                                          - scroller.height)
+    }
+
+    // Whether the item sits in the column, so its position maps into it.
+    function holds(item: Item): bool {
+        let node = item
+        while (node && node !== column)
+            node = node.parent
+        return node === column
     }
 
     Flickable {

@@ -37,6 +37,7 @@ const QML_FILES: &[&str] = &[
     // region.
     "qml/components/ActivationRoute.qml",
     "qml/components/EmptyLine.qml",
+    "qml/components/KeyMap.qml",
     "qml/components/NoticePill.qml",
     "qml/components/PageScroll.qml",
     "qml/components/RowDivider.qml",

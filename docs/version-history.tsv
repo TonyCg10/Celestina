@@ -246,3 +246,4 @@ calcita	1.0.0	release	CAL-1-C	Add the reading mode and the recents and close the
 selenita	0.1.0	baseline	EXT-1-B	Adopt the Selenita Cargo version as the verified baseline
 selenita	0.2.0	milestone	SEL-1-A	Add screenshots with delay, destinations and the history
 selenita	0.3.0	milestone	SEL-1-B	Add screen recording through the portal and GStreamer
+selenita	1.0.0	release	SEL-1-C	Close the foundation at 1.0 with the keyboard and accessibility pass

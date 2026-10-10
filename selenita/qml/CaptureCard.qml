@@ -53,8 +53,11 @@ SectionCard {
 
             delegate: CelestinaButton {
                 required property var modelData
+                required property int index
 
                 objectName: modelData.name
+                // The key that chooses this target (design §5.3).
+                Accessible.description: qsTr("Tecla %1").arg(index + 1)
                 y: CelestinaTheme.spaceSm
                 width: (targets.width - targets.spacing * 2) / 3
                 height: CelestinaTheme.controlHeightXl
@@ -120,6 +123,8 @@ SectionCard {
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontRowTitle
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
         }
 
         Row {
@@ -204,6 +209,7 @@ SectionCard {
                      && (SelenitaController.toClipboard || SelenitaController.toFile
                          || SelenitaController.target === "window")
             text: qsTr("Capturar")
+            Accessible.description: qsTr("Intro")
             onClicked: card.capture()
         }
     }

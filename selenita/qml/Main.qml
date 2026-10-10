@@ -94,28 +94,51 @@ ApplicationWindow {
         }
     }
 
-    PageScroll {
-        id: page
+    // The keys of the window around the cards: a key no control took comes
+    // up to the map, and the map holds the focus until a control takes it.
+    KeyMap {
+        id: keyMap
+        objectName: "keyMap"
         anchors.fill: parent
+        host: window
 
-        CaptureCard {
-            id: captureCard
-            objectName: "captureCard"
-            width: parent.width
-            windowShown: window.visible
-        }
+        PageScroll {
+            id: page
+            anchors.fill: parent
 
-        RecordingCard {
-            id: recordingCard
-            objectName: "recordingCard"
-            width: parent.width
-        }
+            CaptureCard {
+                id: captureCard
+                objectName: "captureCard"
+                width: parent.width
+                windowShown: window.visible
+            }
 
-        HistoryCard {
-            id: historyCard
-            objectName: "historyCard"
-            width: parent.width
+            RecordingCard {
+                id: recordingCard
+                objectName: "recordingCard"
+                width: parent.width
+            }
+
+            HistoryCard {
+                id: historyCard
+                objectName: "historyCard"
+                width: parent.width
+            }
         }
+    }
+
+    // Whether the pointer gave an item its focus: a row says so itself, a
+    // control through its reason. Untyped, as the item may be either.
+    function pointerGave(item: var): bool {
+        return item.pointerFocused === true || item.focusReason === Qt.MouseFocusReason
+    }
+
+    // A control reached with the keyboard is brought into view; one clicked
+    // is where the pointer is.
+    onActiveFocusItemChanged: {
+        const item = window.activeFocusItem
+        if (item && !window.pointerGave(item))
+            page.reveal(item)
     }
 
     NoticePill {

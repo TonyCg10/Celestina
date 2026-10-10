@@ -23,6 +23,8 @@ Column {
         leftPadding: CelestinaTheme.spaceLg
         // The suite sets its eyebrows in capitals; the words stay the caller's.
         text: card.title.toUpperCase()
+        // The grouping reads the title; the eyebrow is not read again.
+        Accessible.ignored: true
     }
 
     CelestinaSurface {

@@ -13,8 +13,16 @@ terminal command.
   Siderita and delete, and copy for a capture.
 - Opens no files: launching it with a path only brings the window forward.
 
-Screenshots, the history and the key-binding flags are in (SEL-1-A), and
-so is recording (SEL-1-B). See the
+- The keyboard: `1`, `2`, `3` choose the target, Enter captures (or presses
+  the focused button), `R`
+  starts or stops the recording, Tab walks the controls, Escape returns the
+  focus to the window; on a history row, Up/Down, Home/End, Enter (open in
+  Fluorita) and Delete (move to the trash).
+- Every control has a Spanish accessible name for a screen reader.
+
+Screenshots, the history and the key-binding flags are in (SEL-1-A), so is
+recording (SEL-1-B), and the keyboard and accessibility pass closes the
+foundation at 1.0 (SEL-1-C). See the
 [design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
 
 ## Key bindings
@@ -82,7 +90,7 @@ and `XDG_VIDEOS_DIR` in the environment override the folders
 |---|---|
 | `../celestina-rs/crates/selenita-core` | Targets, file names, history, niri client, tool argv and the deadline runner, the recording pipeline, its state machine and the stop file; no Qt |
 | `src/` | The CXX-Qt controller, the capture worker and its backends (real and fake), the ScreenCast portal client, the recording worker and its recorders (real and fake), the activation adapter with `org.celestina.Selenita1`, the key-binding flags, the appearance follower |
-| `qml/` | The window, the capture, recording and history cards and their rows |
+| `qml/` | The window with its key map, the capture, recording and history cards and their rows |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Selenita.desktop` | Desktop discovery |
 

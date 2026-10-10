@@ -109,6 +109,7 @@ SectionCard {
             density: CelestinaButton.Regular
             enabled: !card.inTransit && !card.unavailable
             text: card.recording ? qsTr("Detener") : qsTr("Grabar")
+            Accessible.description: qsTr("Tecla R")
             onClicked: SelenitaController.toggleRecording()
         }
     }
@@ -145,6 +146,8 @@ SectionCard {
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontRowTitle
+            Accessible.role: Accessible.StaticText
+            Accessible.name: qsTr("Última grabación: %1").arg(SelenitaController.lastRecordingName)
         }
 
         CelestinaButton {
