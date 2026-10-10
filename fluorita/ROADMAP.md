@@ -1,7 +1,7 @@
 # Fluorita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** FLU-H1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Authorised sequence:** F7-F15, opened by author decision on 2026-08-19 and
   delivered on 2026-08-20 in a single commit. `FLU-H1` is the hardening the
   author asked for after the 2026-09-26 monorepo audit
@@ -13,7 +13,7 @@ Fluorita 1.0 is implemented and its F0-F4 arc is closed. Do not reopen it,
 repeat completed perceptual tests in this file or treat a manual check as
 unfinished implementation.
 
-## FLU-H1 — Hardening after the monorepo audit
+## FLU-H1 — Hardening after the monorepo audit, closed 2026-10-10
 
 The falsifiable problem found by the audit: a same-format Replace renames the
 new bytes over the original instead of sending it to the Trash, for edits,
@@ -29,10 +29,13 @@ and the app for the catalogue projection, the editor and the threads. The
 tangible outcome is a recoverable original after every Replace, no crash from
 a crafted file, and a library that stays true off the GUI thread.
 
-The plan is
-[Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
+The archived plan is
+[Hardening after the monorepo audit](docs/plans/archive/2026-09-26-hardening.md):
 `FLU-H1-A` (safe landing and bounded input) and `FLU-H1-B` (library truth,
-editor promises, the shared handshake and threads that end). The findings are
+editor promises, the shared handshake and threads that end), followed by the
+author's requests `FLU-H1-C` to `FLU-H1-F` (the glass canvas, the cards and
+photo arrows, automatic thumbnails, the stream menu and wheel scrolling); all
+six are done. The findings are
 in [the Fluorita audit record](../docs/evidence/2026-09-26-monorepo-audit-fluorita.md).
 
 ## F5 — Source-first library and direct activation

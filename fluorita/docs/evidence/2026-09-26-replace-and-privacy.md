@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `FLU-H1-A` (program unit P-7) of the
-  [FLU-H1 plan](../plans/active/2026-09-26-hardening.md): FLU-1, FLU-2, FLU-3,
+  [FLU-H1 plan](../plans/archive/2026-09-26-hardening.md): FLU-1, FLU-2, FLU-3,
   FLU-4, FLU-6, FLU-15 and FLU-16 of the
   [Fluorita audit](../../../docs/evidence/2026-09-26-monorepo-audit-fluorita.md),
   program row P-7 of the

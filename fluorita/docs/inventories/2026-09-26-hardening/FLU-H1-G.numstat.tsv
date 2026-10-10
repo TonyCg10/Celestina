@@ -1,0 +1,25 @@
+# FLU-H1-G exact change inventory
+
+Base revision	770625625ea0dacd08d203cb205e4cf35e418c1e
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/docs/evidence/2026-09-26-catalogue-and-player.md
+Pathspec	fluorita/docs/evidence/2026-09-26-replace-and-privacy.md
+Pathspec	fluorita/docs/evidence/2026-10-10-hardening-archive.md
+Pathspec	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-G.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	fluorita/docs/plans/active/README.md
+Pathspec	fluorita/docs/plans/archive/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+9	6	51d17bb19927c172609c2960f908b6f0946044c47f27318a7e338ace8bfc2bb8	fluorita/ROADMAP.md
+11	11	305aa72d9b617e09340c815ef998dd9d558caba61ffd4aa18d77a515be74dd36	fluorita/STATUS.md
+1	1	23cc7bd0edd9fb7043ebdbe0480d6942f883e9e7c46da73b6a857f1da7fd44ea	fluorita/docs/evidence/2026-09-26-catalogue-and-player.md
+1	1	06a303da1a0812851af7a230fe8324583176142a714c07835e624f2653337a37	fluorita/docs/evidence/2026-09-26-replace-and-privacy.md
+48	0	aaf7f5bdc4b5516f6c14decaad8aaec2891cb610fddb28c45005b6063fcbd897	fluorita/docs/evidence/2026-10-10-hardening-archive.md
+25	0	self	fluorita/docs/inventories/2026-09-26-hardening/FLU-H1-G.numstat.tsv
+0	72	deleted	fluorita/docs/plans/active/2026-09-26-hardening.md
+3	4	1c75ddb84735ba6fbf821f0021e99b08abfd292b2c4e00f5553fdc9ed94abadc	fluorita/docs/plans/active/README.md
+75	0	0afbf7e293c1b6ac74d57d641633de52ffd26d10e8b3a74009cb243ab751d9df	fluorita/docs/plans/archive/2026-09-26-hardening.md

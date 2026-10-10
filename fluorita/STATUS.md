@@ -1,13 +1,13 @@
 # Fluorita status
 
-- **Updated:** 2026-09-27
-- **Implementation:** checkpoints F0-F15 are closed and delivered; `FLU-H1`,
-  the hardening that follows the 2026-09-26 monorepo audit, is the active
-  checkpoint: `FLU-H1-A` (a Replace that trashes its original, bounded file
-  claims) and `FLU-H1-B` (a true library off the GUI thread, reopenable
-  copies, one owner for the playback handshake, threads that end) are each
-  prepared on their branch for landing
-  ([plan](docs/plans/active/2026-09-26-hardening.md))
+- **Updated:** 2026-10-10
+- **Implementation:** checkpoints F0-F15 and `FLU-H1`, the hardening that
+  followed the 2026-09-26 monorepo audit, are closed and delivered; no
+  checkpoint is active. `FLU-H1-A` (a Replace that trashes its original,
+  bounded file claims), `FLU-H1-B` (a true library off the GUI thread,
+  reopenable copies, one owner for the playback handshake, threads that end)
+  and the author's requests `FLU-H1-C` to `FLU-H1-F` landed
+  ([archived plan](docs/plans/archive/2026-09-26-hardening.md))
 - **Author validation:** the version-1 playback and interaction pass is closed;
   `VAL-FLU-SOURCES`, `VAL-FLU-IMMERSIVE`, `VAL-FLU-TEARDOWN`, `VAL-FLU-BYTES`,
   `VAL-FLU-EDIT` and `VAL-FLU-METADATA` are open, and the surfaces F11-F15
@@ -65,9 +65,9 @@
 
 ## Active work
 
-`FLU-H1`, the post-audit hardening; its two units are prepared on their
-branches and land in program order
-([plan](docs/plans/active/2026-09-26-hardening.md)).
+No checkpoint is active. `FLU-H1`, the post-audit hardening, closed on
+2026-10-10 with its six units landed
+([archived plan](docs/plans/archive/2026-09-26-hardening.md)).
 
 What the products now do beyond playing and browsing is in the
 [user contract](README.md); why editing stops where it does is

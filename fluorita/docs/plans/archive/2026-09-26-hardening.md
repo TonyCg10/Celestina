@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-09-26
 - **Plan ID:** hardening
-- **Status:** active
+- **Closed:** 2026-10-10
+- **Successor:** none; the author named no next Fluorita checkpoint. All 6 delivery rows (FLU-H1-A to FLU-H1-F) are done
+- **Status:** done
 - **Authorization:** after the 2026-09-26 monorepo audit the author asked
   for its whole program to be done; the findings and rulings are in
   [the audit evidence](../../../../docs/evidence/2026-09-26-monorepo-audit.md)
@@ -68,5 +70,6 @@ program id and the audit findings it closes.
 | FLU-H1-D | `fluorita:` | done | [inventory](../../inventories/2026-09-26-hardening/FLU-H1-D.numstat.tsv) | 12 files, +229/-23 | Take the names off the gallery cards, round the thumbnails and posters to the card's corner, step along an open photo with Left/Right, and open the stream menu beside its button instead of over it. Author request of 2026-10-07; no audit finding. | [evidence](../../evidence/2026-10-07-cards-and-arrows.md) | None |
 | FLU-H1-E | `fluorita:` | done | [inventory](../../inventories/2026-09-26-hardening/FLU-H1-E.numstat.tsv) | 26 files, +1692/-189 | Make thumbnails automatic: a shared freedesktop-thumbnail provider in `fluorita-qt` (Qt image reader, bounded pool, cancellation, owner-only cache writes, a hook seam for Siderita) serves every image as `image://thumb/<key>`, the video/audio poster pass runs in the background after each scan and watched change and goes past an item that does not answer, and the "Generar miniaturas" button with `Ctrl+G`/`Ctrl+Shift+G` goes away. Author decision of 2026-10-07; no audit finding. | [evidence](../../evidence/2026-10-07-automatic-thumbnails.md) | None |
 | FLU-H1-F | `fluorita:` | done | [inventory](../../inventories/2026-09-26-hardening/FLU-H1-F.numstat.tsv) | 13 files, +129/-10 | Fix the stream menu so its four section headers stay above their rows and the menu opens clear of its button, and give the gallery, the music list and the folder sidebar the shared free wheel scrolling (`CelestinaWheelScroll`). Author decision of 2026-10-07; no audit finding. | [evidence](../../evidence/2026-10-07-menu-sections-and-wheel.md) | None |
+| FLU-H1-G | `fluorita:` | done | [inventory](../../inventories/2026-09-26-hardening/FLU-H1-G.numstat.tsv) | 9 files, +173/-95 | Archive the delivered hardening plan through its own administrative unit and reconcile the Fluorita roadmap, status and plan index | [evidence](../../evidence/2026-10-10-hardening-archive.md) | None |
 
 This plan records intent; it grants no authority.
