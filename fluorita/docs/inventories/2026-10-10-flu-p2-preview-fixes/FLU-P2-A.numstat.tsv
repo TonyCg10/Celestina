@@ -1,0 +1,43 @@
+# FLU-P2-A exact change inventory
+
+Base revision	69baa0f617feec163743b2d0c17d2ba27f310a08
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/README.md
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/VALIDATION.md
+Pathspec	fluorita/docs/evidence/2026-10-10-editor-fixes.md
+Pathspec	fluorita/docs/inventories/2026-10-10-flu-p2-preview-fixes/FLU-P2-A.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-10-10-flu-p2-preview-fixes.md
+Pathspec	fluorita/docs/plans/active/README.md
+Pathspec	fluorita/qml/EditWindow.qml
+Pathspec	fluorita/qml/components/EditSurface.qml
+Pathspec	fluorita/qml/components/EditToolbar.qml
+Pathspec	fluorita/qml/components/TrimSurface.qml
+Pathspec	fluorita/src/adopt.rs
+Pathspec	fluorita/tests/qml/tst_edit_window.qml
+Pathspec	fluorita/tests/qml/tst_trim.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	03cd62e5d20a86ea901b64a5a8282bab1712da85cae8105c961d307e208f055b	docs/version-history.tsv
+1	1	0e8d822cb91fbcc7ec17b7f8abbfdca7ae52822255c5810238ce9bfa9a3540c7	fluorita/Cargo.lock
+1	1	25530b2ee4ef174cff6699b189d42cee22972f059ea21a076d84ba58080e720f	fluorita/Cargo.toml
+9	5	c2cef453397d58d0c57373b997d8ce6f09c960df7bbf853236ece7e8d4c58e36	fluorita/README.md
+34	5	ed6ed72e346963d050d5590a8e49d94aa155fb15edfc98fff2216ecae3f202c4	fluorita/ROADMAP.md
+23	3	70b92dd85db50ca3c34f2c59d5abc270fc38fc597dbc1079612a8419e643f2b5	fluorita/STATUS.md
+14	4	4da11e332cb2934d8f4bd495190c9c3affcf9834d1e636bb161305a09b11ac65	fluorita/VALIDATION.md
+164	0	e52be18839d4d2ea36e2e7b01d46167ed3f10756c77368209fe6e3f22ce42123	fluorita/docs/evidence/2026-10-10-editor-fixes.md
+43	0	self	fluorita/docs/inventories/2026-10-10-flu-p2-preview-fixes/FLU-P2-A.numstat.tsv
+66	0	2cc5fda227cf746cd9bc9e2d5f2fd0731eb9bb6f5540bdae9f89b4d59a0db3e6	fluorita/docs/plans/active/2026-10-10-flu-p2-preview-fixes.md
+4	1	572fc777bb8a46b7c1eee386e0c05948507cef8d8abe4221b1683530a9d1985d	fluorita/docs/plans/active/README.md
+39	4	844bf44facbdde0934070bedae2c60aaced7f34907dc671a69f32bd1faf0a831	fluorita/qml/EditWindow.qml
+7	0	12097c2e823f4dcbc84855f9a5f41db8b1b62b009b29f8a11cec4f9a006ac2c5	fluorita/qml/components/EditSurface.qml
+302	233	f720eb63d3b0d99e63b1a8d7921e47220d436046ce00007e420fecd1926f58d2	fluorita/qml/components/EditToolbar.qml
+15	0	28190ea4b2230cac1dfc7dbb0d076b664bf7b2f6664a7a0784e012783c42e138	fluorita/qml/components/TrimSurface.qml
+217	127	7fee5e619849232ade5d17dbcf86e3ce8bc27b14f78ebbfff97de58302dc1cb6	fluorita/src/adopt.rs
+146	5	a099a03e0d8809daa7fd6b999cd7082569bc7b02ba88508bd8e67e36181585d0	fluorita/tests/qml/tst_edit_window.qml
+31	1	17bb91d706066d2d1f8b0713938861b04b3e79791447145896d062064d8c682d	fluorita/tests/qml/tst_trim.qml

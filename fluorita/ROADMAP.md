@@ -1,20 +1,49 @@
 # Fluorita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** FLU-P2
 - **Authorised sequence:** F7-F15, opened by author decision on 2026-08-19 and
   delivered on 2026-08-20 in a single commit. `FLU-H1` is the hardening the
   author asked for after the 2026-09-26 monorepo audit. `FLU-P1` is
   Fluorita's part of the suite's capture preview program `PRV-1`, approved by
-  the author on 2026-10-10
-- **Related author validation:** `VAL-FLU-EDIT-WINDOW` and `VAL-FLU-TRIM`
-  for `FLU-P1`;
+  the author on 2026-10-10; `FLU-P2` holds the fixes the author approved
+  after first using it live, the same day
+- **Related author validation:** `VAL-FLU-EDIT-WINDOW` for `FLU-P2`;
+  `VAL-FLU-EDIT-WINDOW` and `VAL-FLU-TRIM` for `FLU-P1`;
   `VAL-FLU-EDIT`, `VAL-FLU-METADATA` and `VAL-FLU-TEARDOWN` for `FLU-H1`, none
   blocking; completed observations are in [VALIDATION.md](VALIDATION.md)
 
 Fluorita 1.0 is implemented and its F0-F4 arc is closed. Do not reopen it,
 repeat completed perceptual tests in this file or treat a manual check as
 unfinished implementation.
+
+## FLU-P2 — Fixes to the floating editor after its first live use, active
+
+The measured need, from the author's first live use on 2026-10-10: the edit
+window opened 960 px wide and its bottom toolbar, wider than that, was cut
+off at both ends; and `fluorita/src/adopt.rs` kept a second spelling of
+Selenita's adoption rule (`.png` directly in the pictures folder's
+«Capturas», `.mp4` directly in the videos folder's `Recordings`), which
+Selenita's rename of its recordings folder to `Grabaciones` (`SEL-3-A`)
+would have left behind.
+
+The boundary is the edit window and the two bars it hosts (Fluorita's QML),
+and the adoption worker's offline append, which now calls
+`selenita_core::history::adopted` over the folders
+`selenita_core::history::FolderPaths::inside` names with
+`selenita_core::names`'s two folder names. Nothing in `selenita-core` changes.
+
+The tangible outcome: the editor opens with its whole toolbar (at least
+1280 × 800, at most nine tenths of the screen), a window narrower than the
+toolbar is refused, a screen too narrow for it gets a toolbar that scrolls
+rather than clips, the trim follows the same rule with its own controls,
+and an edited copy joins Selenita's history by Selenita's one rule.
+
+The active plan is
+[fixes to the floating editor](docs/plans/active/2026-10-10-flu-p2-preview-fixes.md):
+
+- [ ] `FLU-P2-A` — the edit window's size, and the adoption rule taken from
+  Selenita.
 
 ## FLU-P1 — The floating editor of the capture preview, closed 2026-10-10
 

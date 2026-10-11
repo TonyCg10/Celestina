@@ -11,10 +11,14 @@
 //!   is appended through `selenita_core::history::History`, the file's one
 //!   owner (load, push, private atomic replace).
 //!
-//! The rule, as the ADR writes it: a regular file directly inside the
-//! pictures folder's «Capturas» with a `.png` extension is a screenshot, one
-//! directly inside the videos folder's `Recordings` with `.mp4` is a
-//! recording, and anything else is left out without error.
+//! The rule is Selenita's own, `selenita_core::history::adopted`, the one
+//! `Adopt` applies: a regular file directly inside the pictures folder's
+//! captures folder (`selenita_core::names::CAPTURES_FOLDER`) with a `.png`
+//! extension is a screenshot, one directly inside the videos folder's
+//! recordings folder (`selenita_core::names::RECORDINGS_FOLDER`) with `.mp4`
+//! is a recording, and anything else is left out without error. Both
+//! folders are named by `selenita_core::history::FolderPaths::inside`; only
+//! the pictures and videos folders are found here.
 //!
 //! Adoption never holds up a save. It runs on one long-lived worker fed
 //! through a queue: the bus call waits for at most the hand-off timeout and
@@ -32,14 +36,11 @@ use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
 
 use celestina_core::activation;
-use selenita_core::{Entry, EntryKind, History};
+use selenita_core::history::{adopted, FolderPaths, History};
+use selenita_core::names;
 
 /// Selenita's own interface, which serves `Adopt`.
 const ADOPT_INTERFACE: &str = "org.celestina.Selenita1";
-
-/// The folder inside the pictures folder where Selenita writes captures.
-/// A name on disk the author chose, spelled as Selenita's window spells it.
-const CAPTURES_FOLDER: &str = "Capturas";
 
 /// How long the end of the process waits for the copies still queued: one
 /// bus hand-off and a second for the connection and the history file.
@@ -102,7 +103,11 @@ fn adopt_and_report(copy: &Path) {
         copy,
         &Bus,
         History::default_file(),
-        &Folders::of_this_session(),
+        session_folders(
+            names::pictures_dir().as_deref(),
+            names::videos_dir().as_deref(),
+        )
+        .as_ref(),
     );
     if let Adopted::Failed(reason) = outcome {
         eprintln!(
@@ -160,48 +165,34 @@ impl Worker {
     }
 }
 
-/// Where Selenita keeps what it adopts. `None` when the session names no
-/// such folder.
-pub(crate) struct Folders {
-    pub captures: Option<PathBuf>,
-    pub recordings: Option<PathBuf>,
-}
-
-impl Folders {
-    /// Found the way Selenita finds them: `XDG_PICTURES_DIR` and
-    /// `XDG_VIDEOS_DIR`, else `user-dirs.dirs`.
-    fn of_this_session() -> Self {
-        Self {
-            captures: selenita_core::pictures_dir().map(|pictures| pictures.join(CAPTURES_FOLDER)),
-            recordings: selenita_core::recordings_dir(),
-        }
-    }
-}
-
-/// What a copy is to Selenita's history, by where it is and what it is
-/// called; `None` for anything the history does not keep.
-pub(crate) fn kind_of(copy: &Path, folders: &Folders) -> Option<EntryKind> {
-    let extension = copy.extension()?.to_str()?.to_ascii_lowercase();
-    let parent = copy.parent()?;
-    let inside = |folder: &Option<PathBuf>| {
-        folder
-            .as_deref()
-            .is_some_and(|folder| same_folder(parent, folder))
+/// Where Selenita keeps what it adopts, inside the session's `pictures`
+/// and `videos` folders (as `selenita_core::names` finds them:
+/// `XDG_PICTURES_DIR` and `XDG_VIDEOS_DIR`, else `user-dirs.dirs`), named
+/// by `FolderPaths::inside`, the constructor Selenita's own `Adopt` uses.
+/// `None` when neither folder is named.
+///
+/// `FolderPaths` holds both folders, so when the session names only one,
+/// that one's adopting folder stands in for the other, which `adopted`
+/// already accepts: the unnamed one adopts nothing of its own. This is not
+/// Selenita's lookup there. Selenita falls back to `$HOME` (then the
+/// temporary folder) for an unnamed folder and adopts inside it, where it
+/// also writes; Fluorita does not guess, so a copy only that fallback would
+/// keep joins the history through a running Selenita and is left out of the
+/// offline append.
+pub(crate) fn session_folders(
+    pictures: Option<&Path>,
+    videos: Option<&Path>,
+) -> Option<FolderPaths> {
+    let only = |folder: PathBuf| FolderPaths {
+        captures: folder.clone(),
+        recordings: folder,
     };
-    match extension.as_str() {
-        "png" if inside(&folders.captures) => Some(EntryKind::Screenshot),
-        "mp4" if inside(&folders.recordings) => Some(EntryKind::Recording),
-        _ => None,
+    match (pictures, videos) {
+        (Some(pictures), Some(videos)) => Some(FolderPaths::inside(pictures, videos)),
+        (Some(pictures), None) => Some(only(names::captures_dir_in(pictures))),
+        (None, Some(videos)) => Some(only(names::recordings_dir_in(videos))),
+        (None, None) => None,
     }
-}
-
-/// The same folder, spelled the same way or reached through a link.
-fn same_folder(left: &Path, right: &Path) -> bool {
-    left == right
-        || matches!(
-            (std::fs::canonicalize(left), std::fs::canonicalize(right)),
-            (Ok(left), Ok(right)) if left == right
-        )
 }
 
 /// What asking Selenita came to.
@@ -286,7 +277,7 @@ pub(crate) fn adopt(
     copy: &Path,
     selenita: &dyn Selenita,
     history_file: Option<PathBuf>,
-    folders: &Folders,
+    folders: Option<&FolderPaths>,
 ) -> Adopted {
     match selenita.adopt(&celestina_core::pathkey::encode(copy)) {
         Answer::Taken => Adopted::BySelenita,
@@ -295,15 +286,13 @@ pub(crate) fn adopt(
     }
 }
 
-/// Appends `copy` to the history in `history_file`, if it is one the
-/// history keeps.
-fn append(copy: &Path, history_file: Option<PathBuf>, folders: &Folders) -> Adopted {
-    let Some(kind) = kind_of(copy, folders) else {
+/// Appends `copy` to the history in `history_file`, taken now, if it is one
+/// the history keeps by Selenita's rule.
+fn append(copy: &Path, history_file: Option<PathBuf>, folders: Option<&FolderPaths>) -> Adopted {
+    let Some(entry) =
+        folders.and_then(|folders| adopted(copy, folders.folders(), SystemTime::now()))
+    else {
         return Adopted::Ignored;
-    };
-    let metadata = match std::fs::metadata(copy) {
-        Ok(metadata) if metadata.is_file() => metadata,
-        _ => return Adopted::Ignored,
     };
     let Some(file) = history_file else {
         return Adopted::Failed("no data home names Selenita's history".to_owned());
@@ -312,12 +301,7 @@ fn append(copy: &Path, history_file: Option<PathBuf>, folders: &Folders) -> Adop
         Ok(history) => history,
         Err(error) => return Adopted::Failed(error.to_string()),
     };
-    history.push(Entry {
-        path: copy.to_path_buf(),
-        kind,
-        taken_at: metadata.modified().unwrap_or_else(|_| SystemTime::now()),
-        size: metadata.len(),
-    });
+    history.push(entry);
     match history.save() {
         Ok(()) => Adopted::InHistory,
         Err(error) => Adopted::Failed(error.to_string()),
@@ -326,7 +310,9 @@ fn append(copy: &Path, history_file: Option<PathBuf>, folders: &Folders) -> Adop
 
 #[cfg(test)]
 mod tests {
-    use super::{adopt, kind_of, Adopted, Answer, Folders, Selenita, Worker};
+    use super::{adopt, session_folders, Adopted, Answer, Selenita, Worker};
+    use selenita_core::history::FolderPaths;
+    use selenita_core::names;
     use selenita_core::{Entry, EntryKind, History};
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex};
@@ -334,10 +320,41 @@ mod tests {
 
     use crate::test_support::Scratch;
 
-    fn folders(scratch: &Scratch) -> Folders {
-        Folders {
-            captures: Some(scratch.path().join("Pictures/Capturas")),
-            recordings: Some(scratch.path().join("Videos/Recordings")),
+    /// A scratch session: its pictures and videos folders, and the folders
+    /// Selenita keeps captures and recordings in, named by `selenita_core`.
+    struct Session {
+        scratch: Scratch,
+    }
+
+    impl Session {
+        fn new(name: &str) -> Self {
+            Self {
+                scratch: Scratch::new(name),
+            }
+        }
+
+        fn pictures(&self) -> PathBuf {
+            self.scratch.path().join("Pictures")
+        }
+
+        fn videos(&self) -> PathBuf {
+            self.scratch.path().join("Videos")
+        }
+
+        fn places(&self) -> Option<FolderPaths> {
+            session_folders(Some(&self.pictures()), Some(&self.videos()))
+        }
+
+        fn captures(&self) -> PathBuf {
+            names::captures_dir_in(&self.pictures())
+        }
+
+        fn recordings(&self) -> PathBuf {
+            names::recordings_dir_in(&self.videos())
+        }
+
+        fn history_file(&self) -> PathBuf {
+            self.scratch.path().join("data/selenita/history")
         }
     }
 
@@ -372,39 +389,107 @@ mod tests {
         std::fs::write(path, b"bytes").expect("a file");
     }
 
+    /// The kind the offline append wrote for `copy`, or `None` when it was
+    /// left out.
+    fn appended_kind(session: &Session, copy: &Path) -> Option<EntryKind> {
+        touch(copy);
+        let file = session.history_file();
+        let _ = std::fs::remove_file(&file);
+        let adopted = adopt(
+            copy,
+            &FakeSelenita::answering(Answer::NobodyRuns),
+            Some(file.clone()),
+            session.places().as_ref(),
+        );
+        match adopted {
+            Adopted::InHistory => {
+                let history = History::load(file).expect("the history");
+                assert_eq!(history.entries()[0].path, copy);
+                Some(history.entries()[0].kind)
+            }
+            Adopted::Ignored => {
+                assert!(!file.exists());
+                None
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
     #[test]
-    fn a_copy_beside_a_capture_is_a_screenshot_and_beside_a_recording_a_recording() {
-        let scratch = Scratch::new("adopt-kind");
-        let folders = folders(&scratch);
-        let captures = scratch.path().join("Pictures/Capturas");
-        let recordings = scratch.path().join("Videos/Recordings");
+    fn the_folders_are_selenitas_own_names() {
+        let session = Session::new("adopt-places");
+        let folders = session.places().expect("two folders");
 
         assert_eq!(
-            kind_of(&captures.join("Captura (editado).png"), &folders),
+            folders.captures,
+            session.pictures().join(names::CAPTURES_FOLDER)
+        );
+        assert_eq!(
+            folders.recordings,
+            session.videos().join(names::RECORDINGS_FOLDER)
+        );
+    }
+
+    #[test]
+    fn selenitas_rule_decides_what_the_append_keeps() {
+        let session = Session::new("adopt-kind");
+        let captures = session.captures();
+        let recordings = session.recordings();
+
+        assert_eq!(
+            appended_kind(&session, &captures.join("Captura (editado).png")),
             Some(EntryKind::Screenshot)
         );
         assert_eq!(
-            kind_of(&recordings.join("Recording (editado).mp4"), &folders),
+            appended_kind(&session, &recordings.join("Recording (editado).mp4")),
             Some(EntryKind::Recording)
         );
-        assert_eq!(kind_of(&captures.join("foto.jpg"), &folders), None);
-        assert_eq!(kind_of(&captures.join("dentro/x.png"), &folders), None);
-        assert_eq!(kind_of(&recordings.join("x.png"), &folders), None);
-        assert_eq!(kind_of(&scratch.path().join("x.png"), &folders), None);
-        let nowhere = Folders {
-            captures: None,
-            recordings: None,
-        };
-        assert_eq!(kind_of(&captures.join("x.png"), &nowhere), None);
+        assert_eq!(appended_kind(&session, &captures.join("foto.jpg")), None);
+        assert_eq!(
+            appended_kind(&session, &captures.join("dentro/x.png")),
+            None
+        );
+        assert_eq!(
+            appended_kind(&session, &session.scratch.path().join("x.png")),
+            None
+        );
+    }
+
+    #[test]
+    fn a_session_that_names_neither_folder_keeps_nothing() {
+        let session = Session::new("adopt-nowhere");
+        let copy = session.captures().join("x.png");
+        touch(&copy);
+        let file = session.history_file();
+
+        assert_eq!(
+            adopt(
+                &copy,
+                &FakeSelenita::answering(Answer::NobodyRuns),
+                Some(file.clone()),
+                session_folders(None, None).as_ref()
+            ),
+            Adopted::Ignored
+        );
+        assert!(!file.exists());
+    }
+
+    #[test]
+    fn without_a_pictures_folder_only_the_recordings_folder_adopts() {
+        let session = Session::new("adopt-videos-only");
+        let folders =
+            session_folders(None, Some(&session.videos())).expect("the recordings folder");
+
+        assert_eq!(folders.captures, session.recordings());
+        assert_eq!(folders.recordings, session.recordings());
     }
 
     #[test]
     fn without_selenita_the_copy_joins_the_history_first() {
-        let scratch = Scratch::new("adopt-history");
-        let folders = folders(&scratch);
-        let older = scratch.path().join("Pictures/Capturas/Captura.png");
+        let session = Session::new("adopt-history");
+        let older = session.captures().join("Captura.png");
         touch(&older);
-        let file = scratch.path().join("data/selenita/history");
+        let file = session.history_file();
         let mut history = History::at(file.clone());
         history.push(Entry {
             path: older.clone(),
@@ -413,13 +498,16 @@ mod tests {
             size: 5,
         });
         history.save().expect("a history");
-        let copy = scratch
-            .path()
-            .join("Pictures/Capturas/Captura (editado).png");
+        let copy = session.captures().join("Captura (editado).png");
         touch(&copy);
         let selenita = FakeSelenita::answering(Answer::NobodyRuns);
 
-        let adopted = adopt(&copy, &selenita, Some(file.clone()), &folders);
+        let adopted = adopt(
+            &copy,
+            &selenita,
+            Some(file.clone()),
+            session.places().as_ref(),
+        );
 
         assert_eq!(adopted, Adopted::InHistory);
         assert_eq!(selenita.asked(), [celestina_core::pathkey::encode(&copy)]);
@@ -432,17 +520,19 @@ mod tests {
 
     #[test]
     fn a_session_without_a_bus_still_keeps_the_copy() {
-        let scratch = Scratch::new("adopt-no-bus");
-        let folders = folders(&scratch);
-        let copy = scratch
-            .path()
-            .join("Videos/Recordings/Recording (editado).mp4");
+        let session = Session::new("adopt-no-bus");
+        let copy = session.recordings().join("Recording (editado).mp4");
         touch(&copy);
-        let file = scratch.path().join("data/selenita/history");
+        let file = session.history_file();
         let selenita = FakeSelenita::answering(Answer::Unreachable("no session bus".to_owned()));
 
         assert_eq!(
-            adopt(&copy, &selenita, Some(file.clone()), &folders),
+            adopt(
+                &copy,
+                &selenita,
+                Some(file.clone()),
+                session.places().as_ref()
+            ),
             Adopted::InHistory
         );
         let history = History::load(file).expect("the history");
@@ -451,17 +541,19 @@ mod tests {
 
     #[test]
     fn with_selenita_running_it_decides_and_the_file_is_left_alone() {
-        let scratch = Scratch::new("adopt-running");
-        let folders = folders(&scratch);
-        let copy = scratch
-            .path()
-            .join("Pictures/Capturas/Captura (editado).png");
+        let session = Session::new("adopt-running");
+        let copy = session.captures().join("Captura (editado).png");
         touch(&copy);
-        let file = scratch.path().join("data/selenita/history");
+        let file = session.history_file();
         let selenita = FakeSelenita::answering(Answer::Taken);
 
         assert_eq!(
-            adopt(&copy, &selenita, Some(file.clone()), &folders),
+            adopt(
+                &copy,
+                &selenita,
+                Some(file.clone()),
+                session.places().as_ref()
+            ),
             Adopted::BySelenita
         );
         assert_eq!(selenita.asked(), [celestina_core::pathkey::encode(&copy)]);
@@ -470,18 +562,17 @@ mod tests {
 
     #[test]
     fn a_copy_selenita_does_not_keep_is_left_out_of_its_history() {
-        let scratch = Scratch::new("adopt-elsewhere");
-        let folders = folders(&scratch);
-        let copy = scratch.path().join("Fotos/viaje (editado).png");
+        let session = Session::new("adopt-elsewhere");
+        let copy = session.scratch.path().join("Fotos/viaje (editado).png");
         touch(&copy);
-        let file = scratch.path().join("data/selenita/history");
+        let file = session.history_file();
 
         assert_eq!(
             adopt(
                 &copy,
                 &FakeSelenita::answering(Answer::NobodyRuns),
                 Some(file.clone()),
-                &folders
+                session.places().as_ref()
             ),
             Adopted::Ignored
         );
@@ -490,19 +581,21 @@ mod tests {
 
     #[test]
     fn a_running_selenita_that_refuses_is_reported_and_nothing_is_written() {
-        let scratch = Scratch::new("adopt-refused");
-        let folders = folders(&scratch);
-        let copy = scratch
-            .path()
-            .join("Pictures/Capturas/Captura (editado).png");
+        let session = Session::new("adopt-refused");
+        let copy = session.captures().join("Captura (editado).png");
         touch(&copy);
-        let file = scratch.path().join("data/selenita/history");
+        let file = session.history_file();
         let selenita = FakeSelenita::answering(Answer::Failed(
             "org.freedesktop.DBus.Error.NoReply: no answer in time".to_owned(),
         ));
 
         assert!(matches!(
-            adopt(&copy, &selenita, Some(file.clone()), &folders),
+            adopt(
+                &copy,
+                &selenita,
+                Some(file.clone()),
+                session.places().as_ref()
+            ),
             Adopted::Failed(_)
         ));
         assert!(!file.exists());
@@ -518,17 +611,14 @@ mod tests {
             seen.lock().expect("delivered").push(copy.to_path_buf());
         })
         .expect("a worker");
-        worker.send(Path::new("/p/Capturas/a (editado).png"));
-        worker.send(Path::new("/p/Capturas/b (editado).png"));
+        worker.send(Path::new("/p/a.png"));
+        worker.send(Path::new("/p/b.png"));
 
         assert!(worker.shutdown(Duration::from_secs(3)));
 
         assert_eq!(
             *delivered.lock().expect("delivered"),
-            [
-                PathBuf::from("/p/Capturas/a (editado).png"),
-                PathBuf::from("/p/Capturas/b (editado).png")
-            ]
+            [PathBuf::from("/p/a.png"), PathBuf::from("/p/b.png")]
         );
     }
 
@@ -536,7 +626,7 @@ mod tests {
     fn a_stuck_hand_off_holds_the_end_for_the_bound_only() {
         let worker =
             Worker::start(|_: &Path| std::thread::sleep(Duration::from_secs(5))).expect("a worker");
-        worker.send(Path::new("/p/Capturas/a (editado).png"));
+        worker.send(Path::new("/p/a.png"));
         let started = Instant::now();
 
         assert!(!worker.shutdown(Duration::from_millis(200)));

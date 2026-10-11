@@ -36,6 +36,14 @@ Item {
     // The render context is gone; the player may be dropped.
     signal released()
 
+    // How wide a host must be for the controls under the film to be seen
+    // whole: the wider of the times over the bar and the row of actions,
+    // with the surface's gutter on either side.
+    readonly property real wholeBarWidth: Math.max(
+        startClock.implicitWidth + kept.implicitWidth + endClock.implicitWidth
+            + CelestinaTheme.spaceSm * 2,
+        actions.implicitWidth) + CelestinaTheme.spaceLg * 2
+
     readonly property bool holdsSurface: video.rendererLive
     readonly property bool playing: surface.player.state === "reproduciendo"
     // Set while a save chosen on the way out is in flight.
@@ -185,6 +193,8 @@ Item {
             height: kept.implicitHeight
 
             CelestinaSectionLabel {
+                id: startClock
+
                 anchors.left: parent.left
                 text: trimBar.clock(surface.trim.trimStart)
             }
@@ -198,6 +208,8 @@ Item {
             }
 
             CelestinaSectionLabel {
+                id: endClock
+
                 anchors.right: parent.right
                 text: trimBar.clock(surface.trim.trimEnd)
             }
@@ -273,6 +285,9 @@ Item {
         }
 
         Row {
+            id: actions
+
+            objectName: "trimActions"
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: CelestinaTheme.spaceXs
 

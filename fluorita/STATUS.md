@@ -1,8 +1,12 @@
 # Fluorita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** `FLU-P1`, Fluorita's part of the suite's capture
-  preview `PRV-1`, is closed and delivered; no checkpoint is active.
+- **Implementation:** `FLU-P2` is active: `FLU-P2-A` fixes what the
+  author's first live use of the floating editor found (a toolbar cut off by
+  a window too narrow for it, and a second copy of Selenita's adoption rule)
+  ([active plan](docs/plans/active/2026-10-10-flu-p2-preview-fixes.md)).
+  `FLU-P1`, Fluorita's part of the suite's capture
+  preview `PRV-1`, is closed and delivered.
   `FLU-P1-A` (the floating editor on any path) landed as `1.6.0`, and
   `FLU-P1-B` (the frame-accurate video trim through an `ffmpeg` child) as
   `1.7.0`, the checkout's version
@@ -20,6 +24,20 @@
 
 ## Current checkout truth
 
+- `FLU-P2-A` (in a session worktree, not landed,
+  [evidence](docs/evidence/2026-10-10-editor-fixes.md)): the edit window
+  opens at its bottom bar's whole width plus a gutter each side — the
+  picture's toolbar, or the controls under a film — never less than
+  1280 × 800 and never more than nine tenths of the screen, and that width
+  is its minimum. On a screen whose nine tenths fall short of the toolbar,
+  the minimum is those nine tenths and the toolbar scrolls inside its pill
+  (drag, wheel, and Tab bringing a tool into sight) instead of clipping;
+  the library's own editor gains the same scroll in a narrow window. With
+  no Selenita on the bus, an edited copy is appended to Selenita's history
+  by `selenita_core::history::adopted` over the folders
+  `selenita_core::history::FolderPaths::inside` names, so the rule and both
+  folder names («Capturas», «Grabaciones») have one owner; the copy's time is now the moment it is adopted, as
+  Selenita's own `Adopt` writes it.
 - `FLU-P1-B` (capture preview, [evidence](docs/evidence/2026-10-10-video-trim.md)):
   a video handed to the floating editor is trimmed. The editor's opener
   decides it is a video off the Qt thread and the window shows a player over
@@ -97,7 +115,9 @@
 
 ## Active work
 
-No checkpoint is active. `FLU-P1` closed on 2026-10-10
+`FLU-P2` is active with one unit, `FLU-P2-A`
+([active plan](docs/plans/active/2026-10-10-flu-p2-preview-fixes.md)).
+`FLU-P1` closed on 2026-10-10
 ([archived plan](docs/plans/archive/2026-10-10-flu-p1-preview.md)):
 `FLU-P1-A` landed as `1.6.0` and `FLU-P1-B`, the trim, as `1.7.0`. `FLU-H1`, the post-audit
 hardening, closed on 2026-10-10 with its six units landed

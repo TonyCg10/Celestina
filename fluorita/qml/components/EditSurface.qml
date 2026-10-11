@@ -81,6 +81,11 @@ Item {
         return "#" + part(colour.r) + part(colour.g) + part(colour.b) + part(alpha)
     }
 
+    // How wide a host must be for the toolbar to be seen whole: its own width
+    // and the surface's gutter on either side. The edit window keeps at least
+    // this; given less, the toolbar scrolls rather than being cut.
+    readonly property real wholeBarWidth: toolbar.implicitWidth + CelestinaTheme.spaceLg * 2
+
     // The room left for the picture: everything the toolbar and the caption
     // under it do not occupy. Measured rather than guessed at with a constant,
     // which is what left a 16:9 photograph pinned to the top of the window with
@@ -464,6 +469,8 @@ Item {
     EditToolbar {
         id: toolbar
 
+        objectName: "editToolbar"
+        width: Math.min(toolbar.implicitWidth, surface.width - CelestinaTheme.spaceLg * 2)
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: CelestinaTheme.spaceLg

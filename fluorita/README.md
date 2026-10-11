@@ -39,11 +39,15 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
   key; anything but a regular file is refused with `InvalidArgs`), opens that
   one file in a window of its own titled «Editar — nombre», one window per
   file, the library window left as it is; started by `--edit`, Fluorita shows
-  only that window. Selenita's capture preview opens it on a click. A copy
-  saved with «Guardar ambas» joins Selenita's history when it is a capture
-  (through `Selenita1.Adopt`, or Selenita's history file when Selenita is not
-  running), and the saved result can be dragged out of the window into any
-  program as a file, offered as a copy only.
+  only that window. Selenita's capture preview opens it on a click. The
+  window opens wide enough for its whole bottom toolbar (at least
+  1280 × 800, at most nine tenths of the screen) and cannot be made
+  narrower than it; on a screen too narrow for it the toolbar scrolls. A
+  copy saved with «Guardar ambas» joins Selenita's history when it is a
+  capture by Selenita's own rule (through `Selenita1.Adopt`, or
+  `selenita_core::history::adopted` and Selenita's history file when
+  Selenita is not running), and the saved result can be dragged out of the
+  window into any program as a file, offered as a copy only.
 - The video trim (ADR 0009 as amended, `PRV-1`): a video opened in the
   floating editor plays above a bar with two handles, start and end; moving a
   handle shows that frame, the arrows move it one frame of the film's own

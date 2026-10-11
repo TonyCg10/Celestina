@@ -254,3 +254,4 @@ fluorita	1.6.0	milestone	FLU-P1-A	Add the floating editor that opens any path
 selenita	1.1.0	milestone	SEL-2-A	Add the corner preview with drag, edit and adopt
 fluorita	1.7.0	milestone	FLU-P1-B	Add the frame-accurate video trim through ffmpeg
 selenita	1.1.1	bug	SEL-3-A	Fix the preview's sharpness, capture the focused monitor and record into Grabaciones
+fluorita	1.7.1	bug	FLU-P2-A	Fix the edit window's size and take the adoption rule from Selenita

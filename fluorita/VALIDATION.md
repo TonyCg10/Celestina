@@ -44,7 +44,9 @@ This manual lane does not contain implementation and does not block
 
 - **Status:** pending
 - **Related implementation:** `FLU-P1-A`, recorded in
-  [the evidence](docs/evidence/2026-10-10-floating-editor.md)
+  [the evidence](docs/evidence/2026-10-10-floating-editor.md); `FLU-P2-A`
+  (the window's size against its toolbar), recorded in
+  [its evidence](docs/evidence/2026-10-10-editor-fixes.md)
 - **Requires:** the deployed Fluorita (and Selenita with `SEL-2-A` for the
   preview's click), niri with the `Editar — ` window rule of
   [the README](README.md#build-and-use), a picture outside every library
@@ -55,9 +57,15 @@ This manual lane does not contain implementation and does not block
   drag the saved result into Siderita, then into a chat in the browser; edit
   the capture, save it with «Guardar ambas» with and without Selenita
   running; close Fluorita's library and run `fluorita --edit` on a picture
-  with no Fluorita running, then close that window
+  with no Fluorita running, then close that window; open the editor from
+  Selenita's corner preview on a capture and on a recording, and try to drag
+  each window's edge narrower than its bottom bar
 - **Pass condition:** the editor opens floating and centred, titled
-  «Editar — name», and the library window does not move or change; closing
+  «Editar — name», and the library window does not move or change; opened
+  from the preview, the whole bottom toolbar is visible, from the turn
+  buttons to «Cerrar», with nothing cut at either end, and so are the
+  trim's controls under a recording; neither window can be made narrower
+  than its bar; closing
   with changes asks «Guardar ambas», «Guardar solo la editada» or
   «Descartar»; «Guardar ambas» leaves the original and a copy beside it,
   «Guardar solo la editada» leaves the result under the original's name and
@@ -65,7 +73,9 @@ This manual lane does not contain implementation and does not block
   where it is; the edited capture appears in Selenita's history both times;
   with no Fluorita running only the edit window appears, and closing it ends
   the process
-- **Result:** not run by hand
+- **Result:** partly seen. On 2026-10-10 the author's first live use opened
+  the editor from the preview 960 px wide and its bottom toolbar was cut
+  off; `FLU-P2-A` is the correction. The rest has not been run by hand
 - **Evidence:** a window that tiles, a library window that changed, a close
   that lost changes without asking, a drag that moved the file, or a copy
   missing from Selenita's history

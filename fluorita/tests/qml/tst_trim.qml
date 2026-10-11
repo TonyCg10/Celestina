@@ -101,8 +101,14 @@ TestCase {
         return host
     }
 
+    // On a screen with room for the editor's opening size: the offscreen one
+    // is smaller than any the editor opens on.
     function openFilm() {
-        const win = createTemporaryObject(windowComponent, testCase, { key: testCase.film })
+        const win = createTemporaryObject(windowComponent, testCase, {
+            key: testCase.film,
+            availableWidth: 2560,
+            availableHeight: 1440
+        })
         verify(win)
         tryVerify(function() { return win.visible })
         tryVerify(function() { return win.video })
@@ -193,6 +199,30 @@ TestCase {
         compare(surface.player.announced, false)
         // An MP4 keeps its container: nothing to say.
         verify(!findNamed(surface, "trimContainerNotice").visible)
+    }
+
+    // The controls under the film are the trim window's bar (FLU-P2-A): the
+    // window opens with them whole and its minimum keeps them so.
+    function test_the_film_window_holds_the_trim_controls_whole() {
+        const win = openFilm()
+        const surface = findNamed(win.contentItem, "trimSurface")
+        tryCompare(win.contentItem, "width", win.width)
+        const actions = findNamed(surface, "trimActions")
+        verify(actions && actions.implicitWidth > 0)
+        verify(surface.wholeBarWidth >= actions.implicitWidth + CelestinaTheme.spaceLg * 2)
+        compare(win.minimumWidth, Math.ceil(surface.wholeBarWidth))
+        verify(win.width >= surface.wholeBarWidth)
+        verify(win.width >= 1280 && win.height >= 800)
+        const last = button(surface, "Cerrar")
+        const end = last.mapToItem(win.contentItem, last.width, 0).x
+        verify(end <= win.width, "«Cerrar» ends at " + end + " of " + win.width)
+        // The minimum follows the times over the bar; the size it opened at
+        // holds, even when the screen it reads changes.
+        const opened = win.width
+        surface.trim.setSpan(1.25, 2.5)
+        compare(win.minimumWidth, Math.ceil(surface.wholeBarWidth))
+        win.availableWidth = 1000
+        compare(win.width, opened)
     }
 
     function test_the_arrows_step_one_frame_of_the_film() {

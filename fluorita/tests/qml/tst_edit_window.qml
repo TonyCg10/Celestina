@@ -65,12 +65,10 @@ TestCase {
         return found
     }
 
+    // On a screen with room for the whole toolbar: the offscreen one is
+    // smaller than any the editor opens on.
     function openWindow() {
-        const win = createTemporaryObject(windowComponent, testCase, { key: testCase.picture })
-        verify(win)
-        tryVerify(function() { return win.visible })
-        tryVerify(function() { return win.editor.open })
-        return win
+        return openOn(2560, 1440)
     }
 
     function test_the_title_names_the_file_after_an_em_dash() {
@@ -201,6 +199,149 @@ TestCase {
         // Nothing is left to ask about once the result is on disk.
         win.close()
         tryVerify(function() { return !win.visible })
+    }
+
+    // The window's size, against the bar along its bottom (FLU-P2-A). The
+    // offscreen screen is small, so each window is given the room of the
+    // screen it pretends to be on.
+    function openOn(screenWidth, screenHeight) {
+        const win = createTemporaryObject(windowComponent, testCase, {
+            key: testCase.picture,
+            availableWidth: screenWidth,
+            availableHeight: screenHeight
+        })
+        verify(win)
+        tryVerify(function() { return win.visible })
+        tryVerify(function() { return win.editor.open })
+        // The content follows the window's size a turn after it is shown.
+        tryCompare(win.contentItem, "width", win.width)
+        return win
+    }
+
+    function toolbarOf(win) {
+        const toolbar = findNamed(win.contentItem, "editToolbar")
+        verify(toolbar)
+        verify(toolbar.implicitWidth > 0)
+        return toolbar
+    }
+
+    function test_the_window_opens_with_the_whole_toolbar_in_it() {
+        const win = openOn(2560, 1440)
+        const toolbar = toolbarOf(win)
+        const whole = Math.ceil(toolbar.implicitWidth + CelestinaTheme.spaceLg * 2)
+        verify(win.width >= whole, "the window " + win.width + " holds the bar " + whole)
+        verify(win.width >= 1280)
+        verify(win.height >= 800)
+        compare(win.minimumWidth, whole)
+        compare(toolbar.width, toolbar.implicitWidth)
+        verify(!toolbar.cut)
+        verify(!findNamed(toolbar, "toolbarStrip").interactive)
+        // Every action is there to be seen: the last one ends inside the
+        // window.
+        const last = button(toolbar, "Cerrar")
+        const end = last.mapToItem(win.contentItem, last.width, 0).x
+        verify(end <= win.width, "«Cerrar» ends at " + end + " of " + win.width)
+    }
+
+    function test_the_window_takes_at_most_nine_tenths_of_the_screen() {
+        const win = openOn(1300, 860)
+        compare(win.width, 1170)
+        compare(win.height, 774)
+        verify(win.width >= toolbarOf(win).implicitWidth + CelestinaTheme.spaceLg * 2)
+    }
+
+    // The refusal itself is the compositor's, told through the window's
+    // minimum size (the offscreen platform ignores size hints, and takes a
+    // program's resize as given). What Qt does with the minimum is shown
+    // here: a window narrower than it is widened the moment it applies.
+    function test_narrower_than_the_toolbar_is_refused() {
+        const win = openOn(2560, 1440)
+        const whole = Math.ceil(toolbarOf(win).implicitWidth + CelestinaTheme.spaceLg * 2)
+        compare(win.minimumWidth, whole)
+        // A screen too narrow lowers the minimum, and the window is made
+        // narrower than the bar...
+        win.availableWidth = Math.floor((whole - 200) / 0.9)
+        verify(win.minimumWidth < whole)
+        win.width = win.minimumWidth
+        tryCompare(win, "width", win.minimumWidth)
+        // ...then the whole bar's minimum returns and the window is widened.
+        win.availableWidth = 2560
+        compare(win.minimumWidth, whole)
+        tryVerify(function() { return win.width >= whole },
+                  1000, "the window " + win.width + " is never narrower than " + whole)
+        tryVerify(function() { return !toolbarOf(win).cut })
+    }
+
+    function test_a_screen_narrower_than_the_toolbar_scrolls_it() {
+        const measured = openOn(2560, 1440)
+        const whole = Math.ceil(toolbarOf(measured).implicitWidth + CelestinaTheme.spaceLg * 2)
+        // A screen whose nine tenths fall short of the bar.
+        const win = openOn(Math.floor(whole * 0.8), 1440)
+        const toolbar = toolbarOf(win)
+        const strip = findNamed(toolbar, "toolbarStrip")
+        compare(win.minimumWidth, win.largestWidth)
+        verify(win.width < whole)
+        tryVerify(function() { return toolbar.cut })
+        verify(toolbar.width <= win.width - CelestinaTheme.spaceLg * 2)
+        verify(strip.interactive && strip.clip)
+        compare(strip.contentX, 0)
+        // The wheel moves the tools sideways...
+        mouseWheel(strip, strip.width / 2, strip.height / 2, 0, -120)
+        tryVerify(function() { return strip.contentX > 0 })
+        // ...and Tab to a tool out of sight brings it in.
+        strip.contentX = 0
+        const last = button(toolbar, "Cerrar")
+        last.forceActiveFocus()
+        tryVerify(function() {
+            const at = last.mapToItem(strip, 0, 0).x
+            return at >= 0 && at + last.width <= strip.width + 0.5
+        })
+        // Every action is still pressed where it is shown.
+        mouseClick(last)
+        tryVerify(function() { return !win.visible })
+    }
+
+    // The focus ring shown under `node`: the visible outline of a tool that
+    // has visual focus.
+    function shownRing(node) {
+        if (node.visible && node.shown === true && node.target !== undefined
+                && node.cornerRadius !== undefined)
+            return node
+        const kids = node.children !== undefined ? node.children : []
+        let found = null
+        let i = 0
+        while (found === null && i < kids.length) {
+            found = shownRing(kids[i])
+            i += 1
+        }
+        return found
+    }
+
+    // Reached by Tab in a cut toolbar, the first and the last tool show
+    // their whole ring inside the clipped strip.
+    function test_a_focused_tool_in_a_cut_toolbar_shows_its_whole_ring() {
+        const measured = openOn(2560, 1440)
+        const whole = Math.ceil(toolbarOf(measured).implicitWidth + CelestinaTheme.spaceLg * 2)
+        const win = openOn(Math.floor(whole * 0.8), 1440)
+        const toolbar = toolbarOf(win)
+        const strip = findNamed(toolbar, "toolbarStrip")
+        tryVerify(function() { return toolbar.cut && strip.clip })
+        win.requestActivate()
+        tryVerify(function() { return win.active })
+        const ends = [button(toolbar, "Girar a la izquierda"), button(toolbar, "Cerrar")]
+        let i = 0
+        while (i < ends.length) {
+            const tool = ends[i]
+            tool.forceActiveFocus(Qt.TabFocusReason)
+            let ring = null
+            tryVerify(function() { ring = shownRing(tool); return ring !== null },
+                      1000, "a ring on " + tool.helpText)
+            tryVerify(function() {
+                const at = ring.mapToItem(strip, 0, 0).x
+                return at >= -0.01 && at + ring.width <= strip.width + 0.01
+            }, 1000, "the ring of " + tool.helpText + " lies inside the strip")
+            i += 1
+        }
     }
 
     Component {

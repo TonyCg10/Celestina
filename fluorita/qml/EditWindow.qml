@@ -53,9 +53,38 @@ Window {
     // from inside this window's own handler.
     signal finished()
 
-    width: 960
-    height: 680
-    minimumWidth: 480
+    // The room the screen gives a window, of which the editor takes at most
+    // nine tenths. Read from the window's screen (on Wayland the whole
+    // output); a test gives its own.
+    property real availableWidth: Math.min(Screen.width, Screen.desktopAvailableWidth)
+    property real availableHeight: Math.min(Screen.height, Screen.desktopAvailableHeight)
+    readonly property real largestWidth: editWindow.availableWidth > 0
+        ? Math.floor(editWindow.availableWidth * 0.9) : editWindow.barWidth
+    readonly property real largestHeight: editWindow.availableHeight > 0
+        ? Math.floor(editWindow.availableHeight * 0.9) : editWindow.openingFloorHeight
+
+    // What the bar along the bottom needs to be seen whole, margins included,
+    // in whole pixels (a window's size is whole): the picture's toolbar, or
+    // the controls under a film.
+    readonly property real barWidth: Math.ceil(editWindow.video
+        ? trimSurface.wholeBarWidth : surface.wholeBarWidth)
+    // The least the window opens at: room for a picture beside the whole
+    // toolbar on any screen that has it.
+    readonly property real openingFloorWidth: 1280
+    readonly property real openingFloorHeight: 800
+    // The size it opens at: the whole bar, and never less than the floor,
+    // within nine tenths of the screen.
+    readonly property real openingWidth: Math.min(
+        Math.max(editWindow.openingFloorWidth, editWindow.barWidth), editWindow.largestWidth)
+    readonly property real openingHeight: Math.min(
+        Math.max(editWindow.openingFloorHeight, editWindow.minimumHeight), editWindow.largestHeight)
+
+    // Opened at that size; see `Component.onCompleted`.
+    width: editWindow.openingWidth
+    height: editWindow.openingHeight
+    // Narrower than the bar is refused, so it is never cut; only a screen
+    // narrower than the bar itself gives less, and then the bar scrolls.
+    minimumWidth: Math.min(editWindow.barWidth, editWindow.largestWidth)
     minimumHeight: 360
     visible: true
     // A window of its own, never a dialog of the library's: with a parent it
@@ -302,5 +331,11 @@ Window {
         editWindow.finished()
     }
 
-    Component.onCompleted: editorObject.openItem(editWindow.key)
+    Component.onCompleted: {
+        // The opening size holds from here on: kept bound, it would undo
+        // the person's own resize when the window moved to another screen.
+        editWindow.width = editWindow.openingWidth
+        editWindow.height = editWindow.openingHeight
+        editorObject.openItem(editWindow.key)
+    }
 }
