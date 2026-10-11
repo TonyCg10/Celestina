@@ -1,4 +1,5 @@
 mod activation;
+mod adopt;
 mod appearance;
 mod batch;
 mod copy;
@@ -11,6 +12,8 @@ mod mpris;
 mod player;
 mod rasteriser;
 mod recipes;
+#[cfg(test)]
+mod test_support;
 mod thumbnails;
 
 use cxx_qt_lib::{
@@ -28,9 +31,31 @@ fn main() {
     // Fluorita already running takes it (or comes to the front when there is
     // nothing) and this launch leaves, so a second file never opens a second
     // player. MPRIS keeps its own bus connection; this claim is another.
-    let requested = activation::requested_media();
-    let argv_paths: Vec<std::path::PathBuf> = requested.path.iter().cloned().collect();
-    activation::claim(&argv_paths);
+    //
+    // `--edit PATH` is the floating editor's door: the running Fluorita opens
+    // an edit window for it, or this launch starts with that window alone.
+    let launch = match activation::requested_launch() {
+        Ok(launch) => launch,
+        Err(error) => {
+            eprintln!("fluorita: {error}");
+            std::process::exit(2);
+        }
+    };
+    let (requested, edit_only) = match launch {
+        activation::Launch::Open(requested) => {
+            let argv_paths: Vec<std::path::PathBuf> = requested.path.iter().cloned().collect();
+            activation::claim(&argv_paths);
+            (requested, false)
+        }
+        activation::Launch::Edit(path) => {
+            if let Err(error) = activation::check_edit_path(&path) {
+                eprintln!("fluorita: cannot edit {}: {error}", path.display());
+                std::process::exit(2);
+            }
+            activation::claim_for_edit(&path);
+            (activation::RequestedMedia::default(), true)
+        }
+    };
 
     let mut app = QGuiApplication::new();
 
@@ -85,6 +110,9 @@ fn main() {
                     .as_str(),
             )),
         );
+        // Started by `--edit`: the library window stays hidden until
+        // something asks for it, and the edit window is the only one shown.
+        initial_properties.insert(QString::from("editOnly"), QVariant::from(&edit_only));
         engine.as_mut().set_initial_properties(&initial_properties);
         // Development only: scripts/qml-dev.sh lays the source QML out as an
         // import tree, so a QML change needs a restart instead of a build.
@@ -102,6 +130,11 @@ fn main() {
     if let Some(app) = app.as_mut() {
         app.exec();
     }
+
+    // An edited copy saved just before the last window closed is still on
+    // its way to Selenita's history: what is queued is delivered, waiting at
+    // most about one bus hand-off.
+    adopt::shutdown(adopt::SHUTDOWN_WAIT);
 
     // Thumbnail decodes hold no half-written file — the cache entry is
     // renamed into place whole — so they get a short wait: what is queued is

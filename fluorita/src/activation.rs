@@ -23,17 +23,33 @@
 //! kind from its name alone, so the scaffold can say *what* it was handed
 //! without starting a decoder. That is the same contract the library relies on
 //! while browsing.
+//!
+//! Beside the shared interface, the connection that owns the name serves
+//! Fluorita's own [`EDIT_INTERFACE`] at the same object path (ADR 0012,
+//! `PRV-1`): `Edit(s key)` opens one file in a floating edit window of its
+//! own, the library window left as it is. The key is a
+//! `celestina_core::pathkey` key; one that does not decode, is not absolute
+//! or names anything but a regular file is refused with `InvalidArgs`. That
+//! answer needs one `stat`, made on the bus's thread, never on Qt's.
+//! `fluorita --edit PATH` is the same request from a command line: it goes to
+//! a running Fluorita, or this launch becomes the instance and starts with
+//! that edit window only. An edit that arrives before the window started
+//! waits and is replayed by `start`.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError};
 
-use celestina_core::activation::{self, Activatable, Owner, Request};
+use celestina_core::activation::{self, Activatable, ActivationError, Owner, Request};
 use celestina_core::file_uri::{self, FileUriError};
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QStringList};
 use fluorita_core::MediaKind;
+
+/// Fluorita's own interface, served at the activation object path beside
+/// the shared one: `Edit(s key)`.
+pub const EDIT_INTERFACE: &str = "org.celestina.Fluorita1";
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -77,6 +93,11 @@ pub mod qobject {
         #[qsignal]
         fn drop_ignored(self: Pin<&mut FluoritaActivation>, count: i32);
 
+        /// Open this file, by its path key, in a floating edit window: an
+        /// `Edit` on the bus, or this launch's own `--edit`.
+        #[qsignal]
+        fn edit_requested(self: Pin<&mut FluoritaActivation>, key: QString);
+
         /// A `text/uri-list` dropped on the window, decided on the worker.
         #[qinvokable]
         fn open_dropped(self: Pin<&mut FluoritaActivation>, uris: &QStringList);
@@ -110,6 +131,10 @@ impl qobject::FluoritaActivation {
             // The replay only queues onto the adapter's worker, which asks
             // the filesystem; nothing here blocks the Qt thread.
             owner.attach();
+        }
+        let waiting = edits_waiting().take();
+        for key in waiting {
+            QtEdits.edit(key);
         }
     }
 
@@ -325,15 +350,263 @@ impl Activatable for Forward {
 
 /// Claims Fluorita's name before any window exists. A running window that
 /// takes this launch ends the process here (status 0); otherwise the owner is
-/// kept for `start` to attach.
+/// kept for `start` to attach, with [`EDIT_INTERFACE`] served beside the
+/// shared one.
 pub fn claim(argv_paths: &[PathBuf]) {
     let served = Forward::start(QtSink, Disk);
     let _ = DROPS.set(served.jobs.clone());
     if let Some(owner) =
         activation::claim_or_exit(activation::FLUORITA, Box::new(served), argv_paths)
     {
-        let _ = OWNER.set(owner);
+        keep(owner);
     }
+}
+
+/// `fluorita --edit PATH`: a running Fluorita opens the edit window and this
+/// launch ends (status 0); otherwise this launch claims the name, serves it,
+/// and queues the edit for its own window. The library window does not
+/// open: `Main.qml` stays hidden until something asks for it.
+///
+/// A running Fluorita that refuses or does not answer ends this launch with
+/// status 1: opening a second instance beside it would be the very thing
+/// the claim exists to prevent.
+pub fn claim_for_edit(path: &Path) {
+    match send_edit(path) {
+        Ok(true) => std::process::exit(0),
+        // No bus at all (the claim below says so once), or nobody owns the
+        // name, or its owner left between the question and the call.
+        Ok(false) | Err(ActivationError::Bus(_)) => {}
+        Err(error) if owner_left(&error) => {}
+        Err(error) => {
+            eprintln!("fluorita: the running instance did not take the edit: {error}");
+            std::process::exit(1);
+        }
+    }
+    let served = Forward::start(QtSink, Disk);
+    let _ = DROPS.set(served.jobs.clone());
+    match activation::claim(activation::FLUORITA, Box::new(served), &[]) {
+        activation::Claim::Owner(owner) => keep(owner),
+        // Another launch claimed the name between the question and the
+        // claim. The edit goes to it: a launch that has only just claimed
+        // may not serve `Fluorita1` yet, so the call is tried a few times.
+        activation::Claim::HandedOff => {
+            let sent = retry_edit(path, EDIT_ATTEMPTS, EDIT_RETRY_PAUSE, send_edit);
+            if let Err(error) = sent {
+                eprintln!("fluorita: the running instance did not take the edit: {error}");
+                std::process::exit(1);
+            }
+            std::process::exit(0);
+        }
+        activation::Claim::Unsettled(_) => {}
+    }
+    request_edit(celestina_core::pathkey::encode(path));
+}
+
+/// How many times an edit is offered to a launch that won the name while
+/// this one was asking, and how long apart.
+const EDIT_ATTEMPTS: u32 = 5;
+const EDIT_RETRY_PAUSE: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// Offers the edit up to `attempts` times, `pause` apart, until the owner
+/// takes it. `Ok(false)` (nobody owns the name any more) and every failure
+/// are tried again; the last failure is the answer.
+fn retry_edit(
+    path: &Path,
+    attempts: u32,
+    pause: std::time::Duration,
+    send: impl Fn(&Path) -> Result<bool, ActivationError>,
+) -> Result<(), ActivationError> {
+    let mut last = ActivationError::Refused("no attempt was made".to_owned());
+    for attempt in 0..attempts {
+        if attempt > 0 {
+            std::thread::sleep(pause);
+        }
+        match send(path) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {
+                last = ActivationError::Refused("the name has no owner any more".to_owned());
+            }
+            Err(error) => last = error,
+        }
+    }
+    Err(last)
+}
+
+/// Whether a failed call means nobody owns the name any more.
+fn owner_left(error: &ActivationError) -> bool {
+    matches!(error, ActivationError::Refused(detail)
+        if detail.contains("org.freedesktop.DBus.Error.ServiceUnknown")
+            || detail.contains("org.freedesktop.DBus.Error.NameHasNoOwner"))
+}
+
+/// Keeps the claimed name for the process and serves [`EDIT_INTERFACE`] on
+/// its connection.
+fn keep(owner: Owner) {
+    let path = activation::object_path(&activation::FLUORITA);
+    if let Err(error) = owner
+        .connection()
+        .object_server()
+        .at(path.as_str(), Editing(Box::new(Pending)))
+    {
+        eprintln!("fluorita: edit requests from other programs are unavailable: {error}");
+    }
+    let _ = OWNER.set(owner);
+}
+
+/// The file an `Edit` names: its key decoded, absolute, and a regular file
+/// once symlinks are followed. Anything else is the caller's mistake, said
+/// as `InvalidArgs`.
+fn edit_target(key: &str) -> zbus::fdo::Result<PathBuf> {
+    let path = celestina_core::pathkey::decode(key)
+        .map_err(|error| zbus::fdo::Error::InvalidArgs(format!("not a path key: {error}")))?;
+    if !path.is_absolute() {
+        return Err(zbus::fdo::Error::InvalidArgs(
+            "the path is not absolute".to_owned(),
+        ));
+    }
+    match std::fs::metadata(&path) {
+        Ok(metadata) if metadata.is_file() => Ok(path),
+        Ok(_) => Err(zbus::fdo::Error::InvalidArgs(
+            "the path is not a regular file".to_owned(),
+        )),
+        Err(error) => Err(zbus::fdo::Error::InvalidArgs(format!(
+            "the path cannot be read: {error}"
+        ))),
+    }
+}
+
+/// Where an accepted edit goes: the Qt thread in the binary, a tally under
+/// test.
+trait EditTarget: Send + Sync + 'static {
+    fn edit(&self, key: String);
+}
+
+/// The served `org.celestina.Fluorita1`: it checks the key and hands it on.
+struct Editing(Box<dyn EditTarget>);
+
+impl Editing {
+    fn take(&self, key: &str) -> zbus::fdo::Result<()> {
+        edit_target(key)?;
+        self.0.edit(key.to_owned());
+        Ok(())
+    }
+}
+
+#[zbus::interface(name = "org.celestina.Fluorita1")]
+impl Editing {
+    fn edit(&self, key: &str) -> zbus::fdo::Result<()> {
+        self.take(key)
+    }
+}
+
+/// How many edits may wait for the window: a peer flooding the method must
+/// not grow memory without bound.
+const EDITS_WAITING_LIMIT: usize = activation::INBOX_LIMIT;
+
+/// The edits that arrived before `start`, in arrival order, kept as the
+/// shared inbox keeps its requests: past the limit the oldest goes, and is
+/// counted and said.
+struct EditInbox {
+    waiting: std::collections::VecDeque<String>,
+    dropped: usize,
+}
+
+impl EditInbox {
+    const fn new() -> Self {
+        Self {
+            waiting: std::collections::VecDeque::new(),
+            dropped: 0,
+        }
+    }
+
+    fn hold(&mut self, key: String) {
+        if self.waiting.len() >= EDITS_WAITING_LIMIT {
+            self.waiting.pop_front();
+            self.dropped += 1;
+            eprintln!(
+                "fluorita: {} edit request(s) dropped before the window started",
+                self.dropped
+            );
+        }
+        self.waiting.push_back(key);
+    }
+
+    fn take(&mut self) -> Vec<String> {
+        self.waiting.drain(..).collect()
+    }
+}
+
+static EDITS_WAITING: Mutex<EditInbox> = Mutex::new(EditInbox::new());
+
+/// A poisoned lock still holds valid keys.
+fn edits_waiting() -> std::sync::MutexGuard<'static, EditInbox> {
+    EDITS_WAITING.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Hands an edit to the window, or keeps it until `start` when the window is
+/// not up yet.
+fn request_edit(key: String) {
+    if QT.get().is_some() {
+        QtEdits.edit(key);
+        return;
+    }
+    let mut waiting = edits_waiting();
+    // Checked again under the lock: `start` may have run meanwhile.
+    if QT.get().is_some() {
+        drop(waiting);
+        QtEdits.edit(key);
+    } else {
+        waiting.hold(key);
+    }
+}
+
+/// Where the bus's edits go in the binary: [`request_edit`].
+struct Pending;
+
+impl EditTarget for Pending {
+    fn edit(&self, key: String) {
+        request_edit(key);
+    }
+}
+
+struct QtEdits;
+
+impl EditTarget for QtEdits {
+    fn edit(&self, key: String) {
+        // The queue fails only while the window is going away.
+        if let Some(qt) = QT.get() {
+            let _ = qt.queue(move |activation: Pin<&mut qobject::FluoritaActivation>| {
+                activation.edit_requested(QString::from(key.as_str()));
+            });
+        }
+    }
+}
+
+/// Asks a running Fluorita to edit `path`. `Ok(true)` when it took it;
+/// `Ok(false)` when nobody owns the name.
+///
+/// # Errors
+///
+/// The bus failed, or the running instance refused.
+fn send_edit(path: &Path) -> Result<bool, ActivationError> {
+    let connection = zbus::blocking::connection::Builder::session()
+        .map(|builder| builder.method_timeout(activation::HAND_OFF_TIMEOUT))
+        .and_then(zbus::blocking::connection::Builder::build)?;
+    let bus = zbus::blocking::fdo::DBusProxy::new(&connection)?;
+    let name = zbus::names::BusName::try_from(activation::FLUORITA.0)
+        .map_err(|error| ActivationError::Bus(error.to_string()))?;
+    if !bus.name_has_owner(name).map_err(zbus::Error::from)? {
+        return Ok(false);
+    }
+    let object = activation::object_path(&activation::FLUORITA);
+    let proxy = zbus::blocking::Proxy::new(
+        &connection,
+        activation::FLUORITA.0,
+        object.as_str(),
+        EDIT_INTERFACE,
+    )?;
+    proxy.call::<_, _, ()>("Edit", &(celestina_core::pathkey::encode(path),))?;
+    Ok(true)
 }
 
 /// The item named on the command line, if any.
@@ -362,17 +635,88 @@ impl RequestedMedia {
     }
 }
 
-/// Reads the first argument that names something to open.
+/// What a launch was asked to do.
+#[derive(Debug)]
+pub enum Launch {
+    /// Play this item, or show the library when there is none.
+    Open(RequestedMedia),
+    /// `--edit PATH`: edit this file in a floating window, without the
+    /// library. The path is byte-exact and made absolute when it can be.
+    Edit(PathBuf),
+}
+
+/// A command line `--edit` cannot act on.
+#[derive(Debug, PartialEq, Eq)]
+pub enum EditArgumentError {
+    Missing,
+    SeveralPaths,
+    /// A `file://` URI this suite refuses to read as local.
+    NotLocal,
+}
+
+impl std::fmt::Display for EditArgumentError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Missing => "--edit needs the path of the file to edit",
+            Self::SeveralPaths => "--edit takes exactly one path",
+            Self::NotLocal => "--edit was given a URI that names no local file",
+        })
+    }
+}
+
+/// Reads this process's command line.
 ///
-/// Options are skipped rather than treated as filenames, and only the first
-/// item is taken: this window opens one item, so silently swallowing the rest
+/// # Errors
+///
+/// An `--edit` without exactly one usable path.
+pub fn requested_launch() -> Result<Launch, EditArgumentError> {
+    launch_from(std::env::args_os().skip(1))
+}
+
+/// Reads a command line, the program name already removed.
+///
+/// With `--edit`, the one other argument is the file to edit. Without it,
+/// the first argument that is not an option names the item to open: options
+/// are skipped rather than treated as filenames, and only the first item is
+/// taken, because this window opens one item and silently swallowing the rest
 /// would be worse than showing the one it took.
-#[must_use]
-pub fn requested_media() -> RequestedMedia {
-    std::env::args_os()
-        .skip(1)
-        .find(|argument| !is_option(argument))
-        .map_or_else(RequestedMedia::default, |argument| describe(&argument))
+fn launch_from(arguments: impl IntoIterator<Item = OsString>) -> Result<Launch, EditArgumentError> {
+    let arguments: Vec<OsString> = arguments.into_iter().collect();
+    if arguments.iter().any(|argument| argument == "--edit") {
+        let mut paths = arguments
+            .iter()
+            .filter(|argument| *argument != "--edit" && !is_option(argument));
+        let first = paths.next().ok_or(EditArgumentError::Missing)?;
+        if paths.next().is_some() {
+            return Err(EditArgumentError::SeveralPaths);
+        }
+        let path = local_path(first).ok_or(EditArgumentError::NotLocal)?;
+        // Absolute before it crosses the bus, as the running instance has its
+        // own working directory, and nothing more: no link is resolved, so
+        // the key is the spelling a bus `Edit` for the same file carries,
+        // and a window already open for it, or Selenita's folder rule, sees
+        // the same path.
+        let path = std::path::absolute(&path).unwrap_or(path);
+        return Ok(Launch::Edit(path));
+    }
+    Ok(Launch::Open(
+        arguments
+            .iter()
+            .find(|argument| !is_option(argument))
+            .map_or_else(RequestedMedia::default, describe),
+    ))
+}
+
+/// Checks a `--edit` path the way the bus checks an `Edit` key, so both
+/// doors refuse the same things.
+///
+/// # Errors
+///
+/// What `Edit` would answer, as text.
+pub fn check_edit_path(path: &Path) -> Result<(), String> {
+    edit_target(&celestina_core::pathkey::encode(path))
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }
 
 fn is_option(argument: &OsString) -> bool {
@@ -424,8 +768,9 @@ fn display_label(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        decide, decide_dropped, describe, local_path, Action, Forward, Handed, RequestedMedia,
-        Sink, World,
+        decide, decide_dropped, describe, edit_target, launch_from, local_path, retry_edit, Action,
+        EditArgumentError, EditInbox, EditTarget, Editing, Forward, Handed, Launch, RequestedMedia,
+        Sink, World, EDITS_WAITING_LIMIT,
     };
     use celestina_core::activation::Activatable;
     use fluorita_core::MediaKind;
@@ -612,6 +957,168 @@ mod tests {
         assert_eq!(
             std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str()),
             b"/d/\xFF"
+        );
+    }
+
+    #[test]
+    fn an_edit_key_outside_every_library_root_names_an_openable_picture() {
+        let scratch = crate::test_support::Scratch::new("edit-key");
+        let picture = scratch.picture("nowhere/in/a/library/captura.png");
+        let key = celestina_core::pathkey::encode(&picture);
+
+        let target = edit_target(&key).expect("a regular file is accepted");
+
+        assert_eq!(target, picture);
+        let kind = MediaKind::classify_path(&target).expect("a picture");
+        assert_eq!(kind, MediaKind::Image);
+        assert!(fluorita_core::EditCapabilities::of(kind, &target).is_editable());
+    }
+
+    #[test]
+    fn an_edit_key_that_is_not_a_regular_file_is_invalid_args() {
+        let scratch = crate::test_support::Scratch::new("edit-refused");
+        let folder = scratch.path().join("carpeta");
+        std::fs::create_dir_all(&folder).expect("a folder");
+        let missing = scratch.path().join("missing.png");
+        for key in [
+            celestina_core::pathkey::encode(&folder),
+            celestina_core::pathkey::encode(&missing),
+            // A relative path names nothing this process can find for sure.
+            "captura.png".to_owned(),
+            // Not a path key at all.
+            "/m/half%2".to_owned(),
+        ] {
+            assert!(
+                matches!(edit_target(&key), Err(zbus::fdo::Error::InvalidArgs(_))),
+                "{key} must be refused"
+            );
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct Edits(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+    impl EditTarget for Edits {
+        fn edit(&self, key: String) {
+            self.0.lock().expect("edits").push(key);
+        }
+    }
+
+    #[test]
+    fn the_edit_method_hands_an_accepted_key_on_and_nothing_else() {
+        let scratch = crate::test_support::Scratch::new("edit-method");
+        let picture = scratch.picture("captura.png");
+        let edits = Edits::default();
+        let editing = Editing(Box::new(edits.clone()));
+        let key = celestina_core::pathkey::encode(&picture);
+
+        assert!(editing.take(&key).is_ok());
+        assert!(editing
+            .take(&celestina_core::pathkey::encode(scratch.path()))
+            .is_err());
+
+        assert_eq!(*edits.0.lock().expect("edits"), [key]);
+    }
+
+    fn arguments(list: &[&str]) -> Vec<OsString> {
+        list.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn edit_takes_exactly_one_path() {
+        match launch_from(arguments(&["--edit", "/tmp/x/captura.png"])) {
+            Ok(Launch::Edit(path)) => assert_eq!(path, PathBuf::from("/tmp/x/captura.png")),
+            other => panic!("an edit launch, got {other:?}"),
+        }
+        match launch_from(arguments(&["--edit", "file:///tmp/x/a%20b.png"])) {
+            Ok(Launch::Edit(path)) => assert_eq!(path, PathBuf::from("/tmp/x/a b.png")),
+            other => panic!("an edit launch, got {other:?}"),
+        }
+        assert!(matches!(
+            launch_from(arguments(&["--edit"])),
+            Err(EditArgumentError::Missing)
+        ));
+        assert!(matches!(
+            launch_from(arguments(&["--edit", "/a.png", "/b.png"])),
+            Err(EditArgumentError::SeveralPaths)
+        ));
+        // Without `--edit` the first argument is media to play, as before.
+        match launch_from(arguments(&["/m/clip.mkv"])) {
+            Ok(Launch::Open(media)) => assert_eq!(media.kind, Some(MediaKind::Video)),
+            other => panic!("a media launch, got {other:?}"),
+        }
+        assert!(matches!(
+            launch_from(Vec::new()),
+            Ok(Launch::Open(RequestedMedia { path: None, .. }))
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_edit_path_through_a_linked_folder_keeps_its_spelling() {
+        let scratch = crate::test_support::Scratch::new("edit-link");
+        scratch.picture("real/captura.png");
+        let linked = scratch.path().join("link");
+        std::os::unix::fs::symlink(scratch.path().join("real"), &linked).expect("a link");
+        let spelled = linked.join("captura.png");
+
+        match launch_from(vec![
+            OsString::from("--edit"),
+            spelled.clone().into_os_string(),
+        ]) {
+            Ok(Launch::Edit(path)) => assert_eq!(path, spelled),
+            other => panic!("an edit launch, got {other:?}"),
+        }
+        // The bus takes the same spelling as the same file.
+        assert_eq!(
+            edit_target(&celestina_core::pathkey::encode(&spelled)).expect("a regular file"),
+            spelled
+        );
+    }
+
+    #[test]
+    fn edits_past_the_limit_drop_the_oldest_and_count_them() {
+        let mut inbox = EditInbox::new();
+        for index in 0..=EDITS_WAITING_LIMIT {
+            inbox.hold(format!("/k/{index}"));
+        }
+
+        assert_eq!(inbox.dropped, 1);
+        let kept = inbox.take();
+        assert_eq!(kept.len(), EDITS_WAITING_LIMIT);
+        assert_eq!(kept.first().map(String::as_str), Some("/k/1"));
+        assert_eq!(
+            kept.last().map(String::as_str),
+            Some(format!("/k/{EDITS_WAITING_LIMIT}").as_str())
+        );
+        assert!(inbox.take().is_empty());
+    }
+
+    #[test]
+    fn an_edit_is_offered_again_to_a_launch_that_just_won_the_name() {
+        use celestina_core::activation::ActivationError;
+        use std::cell::Cell;
+
+        // Not serving `Fluorita1` yet, then taking it.
+        let calls = Cell::new(0);
+        let late = |_: &Path| {
+            calls.set(calls.get() + 1);
+            if calls.get() < 3 {
+                Err(ActivationError::Refused(
+                    "org.freedesktop.DBus.Error.UnknownObject".to_owned(),
+                ))
+            } else {
+                Ok(true)
+            }
+        };
+        assert!(retry_edit(Path::new("/a.png"), 5, Duration::ZERO, late).is_ok());
+        assert_eq!(calls.get(), 3);
+
+        // Never taking it: bounded, and the last failure is the answer.
+        let never = |_: &Path| Err(ActivationError::Timeout);
+        assert_eq!(
+            retry_edit(Path::new("/a.png"), 3, Duration::ZERO, never),
+            Err(ActivationError::Timeout)
         );
     }
 }

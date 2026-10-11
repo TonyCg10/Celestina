@@ -1,20 +1,33 @@
 # Fluorita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** checkpoints F0-F15 and `FLU-H1`, the hardening that
-  followed the 2026-09-26 monorepo audit, are closed and delivered; no
-  checkpoint is active. `FLU-H1-A` (a Replace that trashes its original,
+- **Implementation:** `FLU-P1`, Fluorita's part of the suite's capture
+  preview `PRV-1`, is active: `FLU-P1-A` (the floating editor on any path) is
+  implemented in its session and awaits landing, `FLU-P1-B` (the video trim)
+  is planned ([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)).
+  Checkpoints F0-F15 and `FLU-H1`, the hardening that followed the 2026-09-26
+  monorepo audit, are closed and delivered. `FLU-H1-A` (a Replace that trashes its original,
   bounded file claims), `FLU-H1-B` (a true library off the GUI thread,
   reopenable copies, one owner for the playback handshake, threads that end)
   and the author's requests `FLU-H1-C` to `FLU-H1-F` landed
   ([archived plan](docs/plans/archive/2026-09-26-hardening.md))
 - **Author validation:** the version-1 playback and interaction pass is closed;
   `VAL-FLU-SOURCES`, `VAL-FLU-IMMERSIVE`, `VAL-FLU-TEARDOWN`, `VAL-FLU-BYTES`,
-  `VAL-FLU-EDIT` and `VAL-FLU-METADATA` are open, and the surfaces F11-F15
+  `VAL-FLU-EDIT`, `VAL-FLU-METADATA` and `VAL-FLU-EDIT-WINDOW` are open, and the surfaces F11-F15
   added have never been seen on a display — see [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
+- `FLU-P1-A` (capture preview, [evidence](docs/evidence/2026-10-10-floating-editor.md)):
+  `org.celestina.Fluorita1.Edit(s key)` is served beside the shared
+  activation and `fluorita --edit PATH` reaches it, or starts Fluorita with
+  that window alone; each file gets its own top-level `EditWindow`
+  («Editar — nombre») and the library window is left as it is. The save
+  outcomes are named «Guardar ambas» and «Guardar solo la editada», leaving
+  with unsaved changes asks those two and «Descartar», a copy joins
+  Selenita's history (`Selenita1.Adopt`, or `selenita_core::History` when no
+  Selenita runs), and the saved result drags out as a `text/uri-list` copy.
+  `VAL-FLU-EDIT-WINDOW` is the author's check.
 - Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
   `CONV-1`): Fluorita serves `org.celestina.Fluorita` through
   `celestina_core::activation`: a second launch or Siderita's «Abrir en» plays
@@ -65,8 +78,10 @@
 
 ## Active work
 
-No checkpoint is active. `FLU-H1`, the post-audit hardening, closed on
-2026-10-10 with its six units landed
+`FLU-P1` is active
+([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)): `FLU-P1-A` awaits
+its landing and `FLU-P1-B`, the trim, follows it. `FLU-H1`, the post-audit
+hardening, closed on 2026-10-10 with its six units landed
 ([archived plan](docs/plans/archive/2026-09-26-hardening.md)).
 
 What the products now do beyond playing and browsing is in the
@@ -83,6 +98,23 @@ Three things wait on the author rather than on work:
   what would open the pacing repair the roadmap has kept shut.
 - **Seeing any of it.** The whole of F11-F15 has been exercised by tests and by
   an offscreen smoke, never by a person watching a film.
+
+## Known issues
+
+- **A copy appended while Selenita starts can be lost** (`FLU-P1-A`,
+  deferred at review). With no Selenita on the bus, Fluorita appends an
+  edited capture to Selenita's history file itself; a Selenita that starts
+  at that instant may load the file just before the append and later write
+  back its own list without the row. The file stays valid and the picture is
+  on disk; only the history row is missing. A fix needs one writer for the
+  history file across both processes.
+- **An `--edit` that loses the name to a concurrent launch raises that
+  launch's library** (`FLU-P1-A`). Between `fluorita --edit` asking whether
+  Fluorita runs and claiming the name, another launch may claim it; the
+  shared claim then hands this launch's empty argument list on as
+  `Activate`, which shows the winner's library window, before the edit is
+  offered to it (up to five times). Avoiding the `Activate` needs a claim
+  without a hand-off in `celestina_core::activation`.
 
 ## Conditional work, not active debt
 

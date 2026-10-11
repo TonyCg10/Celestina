@@ -35,6 +35,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/BatchBar.qml",
     "qml/components/ContentDock.qml",
     "qml/components/ContentNavigator.qml",
+    "qml/components/EditCloseQuestion.qml",
     "qml/components/EditObjectLayer.qml",
     "qml/components/EditSurface.qml",
     "qml/components/EditToolbar.qml",
@@ -54,6 +55,8 @@ const QML_FILES: &[&str] = &[
     "qml/components/VolumeBar.qml",
     "qml/components/ZoomController.qml",
     "qml/Main.qml",
+    // The floating editor: a top-level window per file, beside the library.
+    "qml/EditWindow.qml",
 ];
 
 fn main() {

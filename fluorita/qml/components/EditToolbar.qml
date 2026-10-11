@@ -45,7 +45,7 @@ Item {
     signal turned(bool clockwise)
     signal mirrored(bool horizontal)
     signal saveRequested(bool replace)
-    signal discardRequested()
+    signal closeRequested()
 
     implicitHeight: row.implicitHeight + CelestinaTheme.spaceMd * 2
     implicitWidth: row.implicitWidth + CelestinaTheme.spaceLg * 2
@@ -321,10 +321,12 @@ Item {
             color: CelestinaTheme.divider
         }
 
-        // The two outcomes, and nothing between them.
+        // The two outcomes, and nothing between them, by the names the author
+        // gave them: both pictures kept, or only the edited one (the original
+        // goes to the Trash).
         CelestinaIconButton {
             iconName: "copy"
-            helpText: qsTr("Guardar una copia")
+            helpText: qsTr("Guardar ambas")
             enabled: bar.editor.edited && !bar.editor.saving
             role: CelestinaButton.Primary
             onClicked: bar.saveRequested(false)
@@ -332,16 +334,17 @@ Item {
 
         CelestinaIconButton {
             iconName: "check"
-            helpText: qsTr("Reemplazar el original")
+            helpText: qsTr("Guardar solo la editada")
             enabled: bar.editor.edited && !bar.editor.saving
             onClicked: bar.saveRequested(true)
         }
 
+        // Leaving: the surface asks first when there are unsaved changes.
         CelestinaIconButton {
             iconName: "x"
-            helpText: qsTr("Descartar los cambios")
+            helpText: qsTr("Cerrar")
             enabled: !bar.editor.saving
-            onClicked: bar.discardRequested()
+            onClicked: bar.closeRequested()
         }
     }
 }

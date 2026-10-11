@@ -22,12 +22,16 @@ ApplicationWindow {
     // name that is not UTF-8, and the only thing the player accepts. Never
     // rebuilt from the label, and never shown.
     required property string requestedKey
+    // Started by `fluorita --edit`: this window stays hidden, and the library
+    // is not scanned, until something asks for it; the edit window is what
+    // the launch shows.
+    required property bool editOnly
 
     width: 960
     height: 640
     minimumWidth: 420
     minimumHeight: 320
-    visible: true
+    visible: !window.editOnly
     // Transparent: the compositor blurs what lies behind the window and
     // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
     color: CelestinaTheme.clear
@@ -211,7 +215,7 @@ ApplicationWindow {
         id: activation
 
         function bringForward() {
-            window.show()
+            window.showLibrary()
             window.raise()
             window.requestActivate()
         }
@@ -229,6 +233,11 @@ ApplicationWindow {
         // it, so adding it is one confirmation.
         onFolderOffered: function(key) {
             mediaLibrary.addFolderAt(key)
+        }
+        // `Fluorita1.Edit` or a later `fluorita --edit`: a window of its own,
+        // and this one left exactly as it is.
+        onEditRequested: function(key) {
+            window.openEditWindow(key)
         }
         onDropIgnored: function(count) {
             window.dropNotice = qsTr("Solo se abren archivos locales: %n elemento(s) ignorado(s)",
@@ -786,6 +795,74 @@ ApplicationWindow {
         mediaPlayer.close()
     }
 
+    // The floating edit windows, one per file, each with its own editor. A
+    // ListModel rather than an array, so opening or closing one never
+    // rebuilds the others with their unsaved work.
+    ListModel {
+        id: editKeys
+    }
+
+    Instantiator {
+        id: editInstances
+
+        model: editKeys
+
+        delegate: EditWindow {
+            id: editWindow
+
+            onFinished: {
+                const key = editWindow.key
+                // Not from inside the window's own close handler: the row's
+                // delegate is this window.
+                Qt.callLater(function() { window.dropEditWindow(key) })
+            }
+        }
+    }
+
+    function editRow(key) {
+        for (let row = 0; row < editKeys.count; row++) {
+            if (editKeys.get(row).key === key) {
+                return row
+            }
+        }
+        return -1
+    }
+
+    // A file already being edited comes forward instead of opening twice:
+    // two documents over one file would each save over the other.
+    function openEditWindow(key) {
+        const row = window.editRow(key)
+        if (row < 0) {
+            editKeys.append({ "key": key })
+            return
+        }
+        const open = editInstances.objectAt(row) as EditWindow
+        if (open !== null) {
+            open.raise()
+            open.requestActivate()
+        }
+    }
+
+    function dropEditWindow(key) {
+        const row = window.editRow(key)
+        if (row >= 0) {
+            editKeys.remove(row)
+        }
+    }
+
+    // The library window, shown when something asks for it. A launch that
+    // came for an edit scans the library only then; every other launch
+    // scanned it at start or opened an item, exactly as before.
+    property bool libraryScanned: false
+
+    function showLibrary() {
+        if (window.editOnly && !window.libraryScanned && !window.playing) {
+            window.libraryScanned = true
+            mediaLibrary.scan()
+        }
+        window.show()
+    }
+
     // One door into the editor, wherever the request came from.
     function edit(key) {
         if (key.length === 0) {
@@ -797,9 +874,10 @@ ApplicationWindow {
     Component.onCompleted: {
         if (window.requestedKey.length > 0) {
             mediaPlayer.open(window.requestedKey)
-        } else {
+        } else if (!window.editOnly) {
             // No argument: the library. The scan runs on the engine's worker,
             // so this call returns at once.
+            window.libraryScanned = true
             mediaLibrary.scan()
         }
     }

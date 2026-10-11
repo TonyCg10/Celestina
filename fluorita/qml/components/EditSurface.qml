@@ -42,7 +42,37 @@ Item {
     readonly property real strokeWidth: Math.max(2, surface.editor.canvasWidth / 320)
     readonly property real textSize: Math.max(12, surface.editor.canvasWidth / 24)
 
+    // The edit is over: discarded, unchanged, or saved on the way out.
     signal closed()
+
+    // Set while a save chosen on the way out is in flight: when it lands the
+    // surface closes; a save asked for from the toolbar clears it.
+    property bool leaving: false
+
+    // Leaving the editor: at once when nothing would be lost, through the
+    // three choices when something would. The window's own close and the
+    // toolbar's × and Escape all come here.
+    function leave() {
+        if (surface.editor.saving) {
+            return
+        }
+        if (!surface.editor.edited) {
+            surface.closed()
+            return
+        }
+        closeQuestion.shown = true
+    }
+
+    function saveAndStay(replace) {
+        surface.leaving = false
+        surface.editor.save(replace)
+    }
+
+    function saveAndLeave(replace) {
+        closeQuestion.shown = false
+        surface.leaving = true
+        surface.editor.save(replace)
+    }
 
     function hex(colour, alphaOverride) {
         const part = value => Math.round(Math.max(0, Math.min(1, value)) * 255)
@@ -134,6 +164,7 @@ Item {
             }
 
             Image {
+                objectName: "editPicture"
                 source: surface.editor.sourceUrl
                 asynchronous: true
                 autoTransform: true
@@ -382,6 +413,29 @@ Item {
         target: surface.editor
         function onCanvasWidthChanged() { zoomer.reset() }
         function onCanvasHeightChanged() { zoomer.reset() }
+        // A save landed closes the editor; if it was chosen on the way out,
+        // the way out is taken.
+        function onOpenChanged() {
+            if (!surface.editor.open && surface.leaving) {
+                surface.leaving = false
+                surface.closed()
+            }
+        }
+        // A save that failed leaves the editor open with its notice: the way
+        // out was not taken, and a later close must not take it twice. Asked
+        // a turn later, because a save that lands stops "saving" a moment
+        // before the editor closes.
+        function onSavingChanged() {
+            if (!surface.editor.saving && surface.leaving) {
+                Qt.callLater(surface.settleLeaving)
+            }
+        }
+    }
+
+    function settleLeaving() {
+        if (surface.leaving && surface.editor.open && !surface.editor.saving) {
+            surface.leaving = false
+        }
     }
 
     // What the picture will become, said before it is saved rather than after.
@@ -423,8 +477,8 @@ Item {
         onInkPicked: function(colour) { surface.inkColour = colour }
         onTurned: function(clockwise) { surface.editor.rotate(clockwise) }
         onMirrored: function(horizontal) { surface.editor.flip(horizontal) }
-        onSaveRequested: function(replace) { surface.editor.save(replace) }
-        onDiscardRequested: surface.closed()
+        onSaveRequested: function(replace) { surface.saveAndStay(replace) }
+        onCloseRequested: surface.leave()
     }
 
     // What happened, in words, wherever it happened.
@@ -537,6 +591,21 @@ Item {
         }
     }
 
+    // What leaving with unsaved changes asks, over everything else here.
+    EditCloseQuestion {
+        id: closeQuestion
+
+        objectName: "closeQuestion"
+        anchors.fill: parent
+        z: 2
+        onCopyChosen: surface.saveAndLeave(false)
+        onReplaceChosen: surface.saveAndLeave(true)
+        onDiscardChosen: {
+            closeQuestion.shown = false
+            surface.closed()
+        }
+    }
+
     // The keyboard reaches everything the pointer does. `]` and `[` step the
     // selection through the marks in drawing order, so one placed earlier can
     // be reached without a pointer; Delete acts on the selection, the arrows
@@ -553,7 +622,7 @@ Item {
             } else if (surface.editor.selected !== 0) {
                 surface.editor.selectObject(0)
             } else {
-                surface.closed()
+                surface.leave()
             }
             event.accepted = true
         } else if (event.key === Qt.Key_BracketRight || event.key === Qt.Key_BracketLeft) {
@@ -578,7 +647,7 @@ Item {
             surface.editor.redo()
             event.accepted = true
         } else if (event.matches(StandardKey.Save)) {
-            surface.editor.save(false)
+            surface.saveAndStay(false)
             event.accepted = true
         } else if (surface.editor.selected !== 0
                    && (event.key === Qt.Key_Left || event.key === Qt.Key_Right

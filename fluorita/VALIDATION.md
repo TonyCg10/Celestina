@@ -3,6 +3,36 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-FLU-EDIT-WINDOW — The floating editor on a real session
+
+- **Status:** pending
+- **Related implementation:** `FLU-P1-A`, recorded in
+  [the evidence](docs/evidence/2026-10-10-floating-editor.md)
+- **Requires:** the deployed Fluorita (and Selenita with `SEL-2-A` for the
+  preview's click), niri with the `Editar — ` window rule of
+  [the README](README.md#build-and-use), a picture outside every library
+  folder and a capture in the pictures folder's «Capturas»
+- **Procedure:** with the library window open, run `fluorita --edit` on the
+  outside picture; turn it and close the window; choose «Guardar ambas»; run
+  it again, draw on it and choose «Guardar solo la editada» from the toolbar;
+  drag the saved result into Siderita, then into a chat in the browser; edit
+  the capture, save it with «Guardar ambas» with and without Selenita
+  running; close Fluorita's library and run `fluorita --edit` on a picture
+  with no Fluorita running, then close that window
+- **Pass condition:** the editor opens floating and centred, titled
+  «Editar — name», and the library window does not move or change; closing
+  with changes asks «Guardar ambas», «Guardar solo la editada» or
+  «Descartar»; «Guardar ambas» leaves the original and a copy beside it,
+  «Guardar solo la editada» leaves the result under the original's name and
+  the original in the Trash; the drag delivers a copy and the file stays
+  where it is; the edited capture appears in Selenita's history both times;
+  with no Fluorita running only the edit window appears, and closing it ends
+  the process
+- **Result:** not run by hand
+- **Evidence:** a window that tiles, a library window that changed, a close
+  that lost changes without asking, a drag that moved the file, or a copy
+  missing from Selenita's history
+
 ## VAL-FLU-OPEN — A second file from Siderita into a running Fluorita
 
 - **Status:** pending

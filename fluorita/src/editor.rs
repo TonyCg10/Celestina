@@ -30,8 +30,16 @@
 //! produced it: rendered from its original, its objects selectable again and
 //! its steps undoable, and saved beside — or over — the copy itself, never
 //! the original.
+//!
+//! **Any path opens.** A key is all the editor needs: the floating edit
+//! window (`Fluorita1.Edit`, `fluorita --edit`) hands it files the catalogue
+//! has never seen, and the measurement above decides them exactly as it
+//! decides a library row. Once a save lands, the written file's key and URL
+//! stay published until the next open, so a window can offer the result to
+//! be dragged out; a copy beside the original is also handed to Selenita's
+//! adoption (`crate::adopt`), which never holds the save up.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
 
 use celestina_core::{pathkey, CancellationToken};
@@ -40,10 +48,10 @@ use cxx_qt_lib::{QString, QStringList};
 
 use fluorita_core::{
     Annotation, Area, Axis, Canvas, EditCapabilities, EditClass, EditDocument, EditLimits,
-    EditRejected, Ink, MediaKind, ObjectId, Point, Quarter, Redaction, SaveChoice, ShapeKind,
-    Transform,
+    EditRejected, Ink, MediaKind, ObjectId, OutputFormat, Point, Quarter, Redaction, SaveChoice,
+    ShapeKind, Transform,
 };
-use fluorita_engine::{DesktopTrash, SaveRequest};
+use fluorita_engine::{edit_store, Bin, DesktopTrash, EngineError, SaveRequest, Saved};
 
 use crate::image;
 use crate::rasteriser::ToolkitRasteriser;
@@ -122,7 +130,17 @@ pub mod qobject {
         #[qproperty(QStringList, object_inks)]
         #[qproperty(QStringList, object_widths)]
         #[qproperty(QStringList, object_details)]
+        /// The file the last save wrote, as its path key and as a `file://`
+        /// URL for a drag, until the next open. Empty before any save.
+        #[qproperty(QString, saved_key)]
+        #[qproperty(QString, saved_url)]
         type FluoritaEditor = super::EditorRust;
+
+        /// The name a person reads for a path key, for a window title: lossy,
+        /// bounded and stripped like every name a file claims. Empty for a
+        /// value that is not a key. Pure: no file is touched.
+        #[qinvokable]
+        fn name_of(self: &FluoritaEditor, key: &QString) -> QString;
 
         /// Opens a picture for editing. Takes a row's path key; a value that is
         /// not one, an item that is not an editable image, and one past the
@@ -275,6 +293,8 @@ pub struct EditorRust {
     object_inks: QStringList,
     object_widths: QStringList,
     object_details: QStringList,
+    saved_key: QString,
+    saved_url: QString,
 
     /// The picture the document renders from, byte-exact. Never published:
     /// the key is. For a copy reopened from its recipe this is the copy's
@@ -336,6 +356,8 @@ impl Default for EditorRust {
             object_inks: QStringList::default(),
             object_widths: QStringList::default(),
             object_details: QStringList::default(),
+            saved_key: QString::default(),
+            saved_url: QString::default(),
             source: None,
             target: None,
             document: None,
@@ -381,6 +403,9 @@ impl qobject::FluoritaEditor {
             self.as_mut().refuse(copy::NOT_EDITABLE);
             return;
         }
+        // A new open: the last save's result is no longer what is shown.
+        self.as_mut().set_saved_key(QString::default());
+        self.as_mut().set_saved_url(QString::default());
 
         // Whatever an earlier measurement finds is no longer wanted.
         let generation = self.rust().opening.wrapping_add(1);
@@ -396,7 +421,8 @@ impl qobject::FluoritaEditor {
         let opener = std::thread::Builder::new()
             .name("fluorita-editor-open".to_owned())
             .spawn(move || {
-                let prepared = prepare(&path, capabilities);
+                let store = edit_store::default_path();
+                let prepared = prepare(&path, capabilities, store.as_deref());
                 let _ = qt_thread.queue(move |editor| {
                     editor.opened(generation, &QString::from(&published), prepared);
                 });
@@ -449,6 +475,11 @@ impl qobject::FluoritaEditor {
         self.as_mut().set_open(true);
         self.as_mut().set_notice(QString::default());
         self.publish();
+    }
+
+    #[must_use]
+    pub fn name_of(&self, key: &QString) -> QString {
+        QString::from(&name_of(&key.to_string()))
     }
 
     #[must_use]
@@ -750,7 +781,13 @@ impl qobject::FluoritaEditor {
                 .set_notice(QString::from(copy::NOTHING_TO_SAVE));
             return;
         }
-        let Some(format) = capabilities.output_format() else {
+        let choice = if replace {
+            SaveChoice::Replace
+        } else {
+            SaveChoice::Copy
+        };
+        let Some(job) = SaveJob::new(&source, target.as_deref(), document, capabilities, choice)
+        else {
             self.as_mut().refuse(copy::NOT_EDITABLE);
             return;
         };
@@ -759,62 +796,35 @@ impl qobject::FluoritaEditor {
         self.as_mut().set_saving(true);
         self.as_mut().set_notice(QString::default());
 
-        let choice = if replace {
-            SaveChoice::Replace
-        } else {
-            SaveChoice::Copy
-        };
         let cancellation = self.rust().cancellation.clone();
         let qt_thread = self.qt_thread();
         let worker = std::thread::Builder::new()
             .name("fluorita-editor-save".to_owned())
             .spawn(move || {
-                let composition = document.composition();
-                let request = SaveRequest {
-                    source: &source,
-                    composition: &composition,
-                    orientation: document.orientation_only(),
-                    format,
-                    choice,
-                    copy_marker: copy::COPY_MARKER,
-                    target: target.as_deref(),
+                let store = edit_store::default_path();
+                let seams = SaveSeams {
+                    bin: &DesktopTrash,
+                    store: store.as_deref(),
+                    adopt: &crate::adopt::request,
                 };
-                // Measured before the save, while the name still holds the file a
-                // replacement is about to send to the Trash.
-                let replaced = recipes::identity_at(target.as_deref().unwrap_or(&source));
-                let outcome = fluorita_engine::save_edit(
-                    &request,
-                    &ToolkitRasteriser,
-                    &DesktopTrash,
-                    &cancellation,
-                );
-                let remembered = match (&outcome, choice) {
-                    (Ok(saved), SaveChoice::Copy) => {
-                        recipes::remember(&source, &saved.written, document.base(), &composition)
-                    }
-                    // A replacement flattened the result, and the file it replaced
-                    // is in the Trash: whatever recipe it had describes nothing now.
-                    (Ok(_), SaveChoice::Replace) => {
-                        if let Some(replaced) = replaced.as_ref() {
-                            recipes::forget(replaced);
-                        }
-                        false
-                    }
-                    _ => false,
-                };
-                let message = match &outcome {
-                    Ok(saved) => copy::saved(saved, remembered),
-                    Err(error) => copy::failure(error),
-                };
-                let landed = outcome.is_ok();
+                let report = land(&job, &seams, &cancellation);
+                let written = report.outcome.as_ref().ok().map(|saved| {
+                    (
+                        pathkey::encode(&saved.written),
+                        celestina_core::file_uri::from_path(&saved.written).unwrap_or_default(),
+                    )
+                });
+                let message = report.message;
                 let _ = qt_thread.queue(move |mut editor| {
                     editor.as_mut().set_saving(false);
                     editor.as_mut().set_notice(QString::from(&message));
-                    if landed {
+                    if let Some((key, url)) = written {
                         // A replacement flattened the result and the copy is a
                         // different file: either way the document that produced it
                         // is no longer the document for what is now on disk.
-                        editor.close();
+                        editor.as_mut().close();
+                        editor.as_mut().set_saved_key(QString::from(&key));
+                        editor.as_mut().set_saved_url(QString::from(&url));
                     }
                 });
             });
@@ -831,6 +841,106 @@ impl qobject::FluoritaEditor {
     }
 }
 
+/// The name a person reads for a path key; empty for a value that is not one.
+fn name_of(key: &str) -> String {
+    pathkey::decode(key)
+        .map(|path| fluorita_core::displayed_name(&path))
+        .unwrap_or_default()
+}
+
+/// One save, as the worker runs it: what to render and where it lands.
+struct SaveJob {
+    source: PathBuf,
+    target: Option<PathBuf>,
+    document: EditDocument,
+    format: OutputFormat,
+    choice: SaveChoice,
+}
+
+impl SaveJob {
+    /// `None` when the picture has no format its result can be written in.
+    fn new(
+        source: &Path,
+        target: Option<&Path>,
+        document: EditDocument,
+        capabilities: EditCapabilities,
+        choice: SaveChoice,
+    ) -> Option<Self> {
+        Some(Self {
+            source: source.to_path_buf(),
+            target: target.map(Path::to_path_buf),
+            document,
+            format: capabilities.output_format()?,
+            choice,
+        })
+    }
+}
+
+/// What a save touches besides the picture: where a replaced original goes,
+/// where recipes are kept (`None` when this desktop names no data home), and
+/// who hears of a copy that landed. The desktop's in the application; scratch
+/// ones under test.
+struct SaveSeams<'a> {
+    bin: &'a dyn Bin,
+    store: Option<&'a Path>,
+    adopt: &'a dyn Fn(&Path),
+}
+
+/// What a save did, and the sentence that says so.
+struct SaveReport {
+    outcome: Result<Saved, EngineError>,
+    message: String,
+}
+
+/// Runs one save on the calling thread, which is the save worker: renders,
+/// lands through the engine (the original reaches the Trash only after the
+/// result is on disk), keeps or forgets the recipe, and hands a copy that
+/// landed to adoption.
+fn land(job: &SaveJob, seams: &SaveSeams<'_>, cancellation: &CancellationToken) -> SaveReport {
+    let composition = job.document.composition();
+    let request = SaveRequest {
+        source: &job.source,
+        composition: &composition,
+        orientation: job.document.orientation_only(),
+        format: job.format,
+        choice: job.choice,
+        copy_marker: copy::COPY_MARKER,
+        target: job.target.as_deref(),
+    };
+    // Measured before the save, while the name still holds the file a
+    // replacement is about to send to the Trash.
+    let replaced = recipes::identity_at(job.target.as_deref().unwrap_or(&job.source));
+    let outcome = fluorita_engine::save_edit(&request, &ToolkitRasteriser, seams.bin, cancellation);
+    let remembered = match (&outcome, job.choice) {
+        (Ok(saved), SaveChoice::Copy) => seams.store.is_some_and(|store| {
+            recipes::remember_in(
+                store,
+                &job.source,
+                &saved.written,
+                job.document.base(),
+                &composition,
+            )
+        }),
+        // A replacement flattened the result, and the file it replaced is in
+        // the Trash: whatever recipe it had describes nothing now.
+        (Ok(_), SaveChoice::Replace) => {
+            if let (Some(store), Some(replaced)) = (seams.store, replaced.as_ref()) {
+                recipes::forget_in(store, replaced);
+            }
+            false
+        }
+        _ => false,
+    };
+    if let (Ok(saved), SaveChoice::Copy) = (&outcome, job.choice) {
+        (seams.adopt)(&saved.written);
+    }
+    let message = match &outcome {
+        Ok(saved) => copy::saved(saved, remembered),
+        Err(error) => copy::failure(error),
+    };
+    SaveReport { outcome, message }
+}
+
 /// Measures a picture to open and looks for the recipe behind it. Runs on the
 /// opener's thread: every step here touches a file.
 ///
@@ -838,9 +948,15 @@ impl qobject::FluoritaEditor {
 /// it; everything else opens as the picture it is, measured by the same probe
 /// the viewer uses, so the canvas is the picture as it is shown — orientation
 /// applied — and the budget is judged on what would actually be allocated.
-fn prepare(path: &std::path::Path, capabilities: EditCapabilities) -> Result<Prepared, String> {
+/// `store` is where recipes are kept; `None` when this desktop names no data
+/// home.
+fn prepare(
+    path: &Path,
+    capabilities: EditCapabilities,
+    store: Option<&Path>,
+) -> Result<Prepared, String> {
     let limits = EditLimits::new(image::MAX_PIXELS);
-    if let Some(reopened) = recipes::reopen(path, limits) {
+    if let Some(reopened) = store.and_then(|store| recipes::reopen_in(store, path, limits)) {
         return Ok(Prepared {
             source: reopened.base,
             target: Some(path.to_path_buf()),
@@ -1255,8 +1371,114 @@ fn reshape(annotation: &mut Annotation, width: f32, height: f32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_ink, parse_points, reshape, shift, step_selection, write_ink};
-    use fluorita_core::{Annotation, Area, Ink, Point, Redaction};
+    use super::{
+        land, name_of, parse_ink, parse_points, prepare, reshape, shift, step_selection, write_ink,
+        SaveJob, SaveSeams,
+    };
+    use celestina_core::CancellationToken;
+    use fluorita_core::{
+        Annotation, Area, EditCapabilities, Ink, MediaKind, Point, Quarter, Redaction, SaveChoice,
+        Transform,
+    };
+    use fluorita_engine::Bin;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    use crate::test_support::Scratch;
+
+    /// A Trash that is a folder in the test's scratch space.
+    struct ScratchBin(PathBuf);
+
+    impl Bin for ScratchBin {
+        fn send(
+            &self,
+            path: &Path,
+            _cancellation: &CancellationToken,
+        ) -> Result<PathBuf, siderita_ops::OpError> {
+            std::fs::create_dir_all(&self.0)
+                .map_err(|error| siderita_ops::OpError::io(path, &error))?;
+            let trashed = self.0.join(path.file_name().unwrap_or_default());
+            std::fs::rename(path, &trashed)
+                .map_err(|error| siderita_ops::OpError::io(path, &error))?;
+            Ok(trashed)
+        }
+    }
+
+    #[test]
+    fn a_picture_outside_every_library_root_saves_both_ways_and_only_a_copy_is_adopted() {
+        let scratch = Scratch::new("edit-any-path");
+        let picture = scratch.picture("no/library/here/captura.png");
+        let original = std::fs::read(&picture).expect("the original");
+        let store = scratch.path().join("edits.tsv");
+        let trash = ScratchBin(scratch.path().join("trash"));
+        let adopted = Mutex::new(Vec::<PathBuf>::new());
+        let adopt = |copy: &Path| adopted.lock().expect("adopted").push(copy.to_path_buf());
+        let seams = SaveSeams {
+            bin: &trash,
+            store: Some(&store),
+            adopt: &adopt,
+        };
+        let capabilities = EditCapabilities::of(MediaKind::Image, &picture);
+        let turned = || {
+            let prepared =
+                prepare(&picture, capabilities, Some(&store)).expect("a plain path opens");
+            assert_eq!(prepared.source, picture);
+            assert!(prepared.target.is_none());
+            assert_eq!(
+                (
+                    prepared.document.canvas().width(),
+                    prepared.document.canvas().height()
+                ),
+                (32, 24)
+            );
+            let mut document = prepared.document;
+            document
+                .transform(Transform::Rotate(Quarter::Clockwise), &capabilities)
+                .expect("a turn");
+            document
+        };
+
+        // «Guardar ambas»: a copy beside, the original untouched, adopted.
+        let copy = SaveJob::new(&picture, None, turned(), capabilities, SaveChoice::Copy)
+            .expect("a writable format");
+        let report = land(&copy, &seams, &CancellationToken::new());
+        let saved = report.outcome.expect("the copy lands");
+        assert_eq!(saved.written.parent(), picture.parent());
+        assert_ne!(saved.written, picture);
+        assert!(saved.trashed_original.is_none());
+        assert_eq!(std::fs::read(&picture).expect("the original"), original);
+        assert!(saved.written.is_file());
+        assert_eq!(
+            *adopted.lock().expect("adopted"),
+            std::slice::from_ref(&saved.written)
+        );
+        assert!(!report.message.is_empty());
+
+        // «Guardar solo la editada»: the original's name holds the result and
+        // the original is in the Trash, byte for byte; nothing is adopted.
+        let replace = SaveJob::new(&picture, None, turned(), capabilities, SaveChoice::Replace)
+            .expect("a writable format");
+        let saved = land(&replace, &seams, &CancellationToken::new())
+            .outcome
+            .expect("the replacement lands");
+        assert_eq!(saved.written, picture);
+        let trashed = saved
+            .trashed_original
+            .expect("the original went to the Trash");
+        assert!(trashed.starts_with(scratch.path().join("trash")));
+        assert_eq!(
+            std::fs::read(&trashed).expect("the trashed original"),
+            original
+        );
+        assert_ne!(std::fs::read(&picture).expect("the result"), original);
+        assert_eq!(adopted.lock().expect("adopted").len(), 1);
+    }
+
+    #[test]
+    fn a_window_is_titled_by_the_file_it_edits() {
+        assert_eq!(name_of("/tmp/x/Captura%201.png"), "Captura 1.png");
+        assert_eq!(name_of("not a key %"), "");
+    }
 
     fn redaction() -> Annotation {
         Annotation::Redact {

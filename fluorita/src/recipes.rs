@@ -59,23 +59,13 @@ fn measured(path: &Path) -> Option<SourceIdentity> {
     ))
 }
 
-/// Writes down the recipe behind a copy that just landed at `written`,
-/// computed from `base`. Returns whether it was remembered: a failure is not
-/// a failed save — the picture is on disk either way — so the caller says
-/// "saved, but it will reopen flat" rather than reporting an error.
-pub fn remember(
-    base: &Path,
-    written: &Path,
-    base_canvas: Canvas,
-    composition: &Composition,
-) -> bool {
-    let Some(store_path) = edit_store::default_path() else {
-        return false;
-    };
-    remember_in(&store_path, base, written, base_canvas, composition)
-}
-
-fn remember_in(
+/// Writes down, in the store at `store_path`, the recipe behind a copy that
+/// just landed at `written`, computed from `base`. Returns whether it was
+/// remembered: a failure is not a failed save — the picture is on disk either
+/// way — so the caller says "saved, but it will reopen flat" rather than
+/// reporting an error. The editor names the store (`edit_store::default_path`
+/// in the application, a scratch file under test).
+pub(crate) fn remember_in(
     store_path: &Path,
     base: &Path,
     written: &Path,
@@ -108,7 +98,7 @@ pub fn forget(identity: &MediaId) {
     }
 }
 
-fn forget_in(store_path: &Path, identity: &MediaId) {
+pub(crate) fn forget_in(store_path: &Path, identity: &MediaId) {
     update(store_path, |store| {
         if store.get(identity).is_none() {
             // Nothing to write: most files never had a recipe.
@@ -119,17 +109,12 @@ fn forget_in(store_path: &Path, identity: &MediaId) {
     });
 }
 
-/// Looks for the recipe behind `opened` and rebuilds its document, or
-/// `None` when there is none, its original is gone or has changed, or the
-/// current rules would not admit it — in every one of which the copy opens
-/// as the flat picture it is.
+/// Looks in the store at `store_path` for the recipe behind `opened` and
+/// rebuilds its document, or `None` when there is none, its original is gone
+/// or has changed, or the current rules would not admit it — in every one of
+/// which the copy opens as the flat picture it is.
 #[must_use]
-pub fn reopen(opened: &Path, limits: EditLimits) -> Option<Reopened> {
-    let store_path = edit_store::default_path()?;
-    reopen_in(&store_path, opened, limits)
-}
-
-fn reopen_in(store_path: &Path, opened: &Path, limits: EditLimits) -> Option<Reopened> {
+pub(crate) fn reopen_in(store_path: &Path, opened: &Path, limits: EditLimits) -> Option<Reopened> {
     let identity = identity_at(opened)?;
     let store = read(store_path)?;
     let recipe = store.get(&identity)?;

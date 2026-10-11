@@ -18,18 +18,30 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
 - In Siderita, `Space` views/plays media in place and double-click/`Enter`
   launches standalone Fluorita. The canonical mapping is the
   [content-activation contract](../docs/contracts/content-activation.md).
-- Editing acts on the media the library already holds, in the standalone
-  application, under
+- Editing acts on the media the library already holds, and on any file
+  handed to the floating editor, in the standalone application, under
   [ADR 0009](../docs/decisions/0009-editing-without-an-encoder.md). Every
   operation is either *lossless* — it reorders the original bytes — or
   *raster* — it produces a new image, and the interface says which. A picture
   can be turned, cropped, resized, written on, drawn on and redacted, and every
-  mark stays selectable and undoable. Saving offers exactly two outcomes: a
-  copy beside the original, which stays reopenable, or a replacement, which
-  flattens the result and sends the original to the desktop Trash. The output
-  format follows a fixed rule and is never a question. The same operations
-  apply to a chosen set of pictures at once, with progress, cancellation and an
-  honest count of what could not be done.
+  mark stays selectable and undoable. Saving offers exactly two outcomes:
+  «Guardar ambas», a copy beside the original, which stays reopenable, or
+  «Guardar solo la editada», a replacement, which flattens the result and
+  sends the original to the desktop Trash. Leaving with unsaved changes asks
+  those two or «Descartar». The output format follows a fixed rule and is
+  never a question. The same operations apply to a chosen set of pictures at
+  once, with progress, cancellation and an honest count of what could not be
+  done.
+- The floating editor (ADR 0012, `PRV-1`): `fluorita --edit PATH`, or
+  `org.celestina.Fluorita1.Edit(s key)` on the bus (a `celestina_core::pathkey`
+  key; anything but a regular file is refused with `InvalidArgs`), opens that
+  one file in a window of its own titled «Editar — nombre», one window per
+  file, the library window left as it is; started by `--edit`, Fluorita shows
+  only that window. Selenita's capture preview opens it on a click. A copy
+  saved with «Guardar ambas» joins Selenita's history when it is a capture
+  (through `Selenita1.Adopt`, or Selenita's history file when Selenita is not
+  running), and the saved result can be dragged out of the window into any
+  program as a file, offered as a copy only.
 - What a file says about itself can be read and corrected: a track's title,
   artist, album and album artist, the cover art embedded beside them, and the
   EXIF a photograph carries — including where it was taken, which can be
@@ -68,8 +80,8 @@ bounded session, never a file; showing a row never starts playback.
 | `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth, the session/surface handshake and generation-stamped resource contracts; no Qt/decode |
 | `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue and edit recipes, metadata, artwork and the libmpv playback session loop |
 | `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv and the freedesktop-thumbnail image provider |
-| `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, argv reading and the adapter of the shared single-instance activation (`celestina_core::activation`), and MPRIS2 |
-| `qml/` | Source sidebar, Gallery, Music and complete player composition |
+| `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, argv reading, the adapter of the shared single-instance activation (`celestina_core::activation`) with Fluorita's own `Fluorita1` interface, the adoption of an edited capture into Selenita's history, and MPRIS2 |
+| `qml/` | Source sidebar, Gallery, Music, complete player composition and the floating edit window |
 | `cpp/` | The narrow toolkit seams unavailable through CXX-Qt: the image probe and the edit canvas that draws and encodes a picture |
 | `../siderita/src/media.rs`, `../siderita/qml/dialogs/` | Separate thin adapter and minimal embedded player |
 | `../celestina-style` | Canonical visual tokens, controls and assets |
@@ -106,7 +118,18 @@ agent must report the observed handler change. A preference pinned by the user
 in `mimeapps.list` remains authoritative.
 
 After completion, launch `fluorita [PATH]`, use the desktop entry
-or control the active session through MPRIS2.
+or control the active session through MPRIS2. `fluorita --edit PATH` opens the
+floating editor on one file.
+
+niri places the editor, not Fluorita: a window rule matches its title and
+floats it (the suite exit `PRV-1-E` adds it to the author's configuration):
+
+```kdl
+window-rule {
+    match app-id=r#"^org\.celestina\.Fluorita$"# title="^Editar — "
+    open-floating true
+}
+```
 
 ## Project documents
 

@@ -227,6 +227,46 @@ case "$still" in
         fail "una imagen arrancó el motor multimedia (hilos: $still)" "$scratch/imagen.log" ;;
 esac
 
+# ── 5b) `--edit`: the floating editor alone ─────────────────────────────────
+# `fluorita --edit PATH` (PRV-1) starts with one edit window and no library:
+# the process stays up, the QML loads, no engine thread starts (an edit is the
+# toolkit's) and the library is not scanned, so no folder configuration is
+# written. A path that is not a regular file is refused before any window.
+isolated() {
+    HOME=$scratch \
+    XDG_CONFIG_HOME=$scratch/config \
+    XDG_DATA_HOME=$scratch/data \
+    XDG_CACHE_HOME=$scratch/cache \
+    XDG_STATE_HOME=$scratch/state \
+    XDG_RUNTIME_DIR=$scratch/run \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+    QT_QPA_PLATFORM=offscreen \
+    QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+        "$bin" "$@"
+}
+
+mv "$sources" "$scratch/sources.kept"
+isolated --edit "$scratch/foto.png" >"$scratch/edit.log" 2>&1 &
+pid=$!
+sleep 5
+kill -0 "$pid" 2>/dev/null || fail "an edit launch ended by itself" "$scratch/edit.log"
+editing=$(cat /proc/"$pid"/task/*/comm 2>/dev/null | sort -u | tr '\n' ' ')
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+errores=$(qml_errors "$scratch/edit.log")
+[ -z "$errores" ] || fail "QML errors in an edit launch: $errores" "$scratch/edit.log"
+case "$editing" in
+    *core*|*fluorita-player*)
+        fail "an edit launch started the media engine (threads: $editing)" "$scratch/edit.log" ;;
+esac
+[ ! -e "$sources" ] || fail "an edit launch scanned the library" "$scratch/edit.log"
+mv "$scratch/sources.kept" "$sources"
+if isolated --edit "$scratch" >"$scratch/edit-folder.log" 2>&1; then
+    fail "--edit accepted a folder" "$scratch/edit-folder.log"
+fi
+grep -q 'cannot edit' "$scratch/edit-folder.log" || \
+    fail "--edit refused a folder without saying why" "$scratch/edit-folder.log"
+
 # ── 6) Automatic thumbnails ─────────────────────────────────────────────────
 # The cache key the provider and the engine share: MD5 of the file:// URI as
 # Qt spells it (celestina_core::percent::encode_qt_path).
@@ -291,4 +331,4 @@ library_until "$scratch/poster.log" "$photo_entry" "$clip_entry" >/dev/null
 errores=$(qml_errors "$scratch/poster.log")
 [ -z "$errores" ] || fail "QML errors in a library with a clip: $errores"
 
-echo "smoke: OK — QML carga, un vídeo abre sesión fuera del hilo GUI, ni la biblioteca ni una imagen ni un archivo desconocido arrancan el motor, y las miniaturas llegan solas"
+echo "smoke: OK — QML carga, un vídeo abre sesión fuera del hilo GUI, ni la biblioteca ni una imagen ni un archivo desconocido arrancan el motor, --edit abre solo el editor, y las miniaturas llegan solas"

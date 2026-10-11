@@ -1,17 +1,46 @@
 # Fluorita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** FLU-P1
 - **Authorised sequence:** F7-F15, opened by author decision on 2026-08-19 and
   delivered on 2026-08-20 in a single commit. `FLU-H1` is the hardening the
-  author asked for after the 2026-09-26 monorepo audit
-- **Related author validation:** `VAL-FLU-EDIT`, `VAL-FLU-METADATA` and
-  `VAL-FLU-TEARDOWN` for `FLU-H1`, none blocking; completed observations are in
-  [VALIDATION.md](VALIDATION.md)
+  author asked for after the 2026-09-26 monorepo audit. `FLU-P1` is
+  Fluorita's part of the suite's capture preview program `PRV-1`, approved by
+  the author on 2026-10-10
+- **Related author validation:** `VAL-FLU-EDIT-WINDOW` for `FLU-P1`;
+  `VAL-FLU-EDIT`, `VAL-FLU-METADATA` and `VAL-FLU-TEARDOWN` for `FLU-H1`, none
+  blocking; completed observations are in [VALIDATION.md](VALIDATION.md)
 
 Fluorita 1.0 is implemented and its F0-F4 arc is closed. Do not reopen it,
 repeat completed perceptual tests in this file or treat a manual check as
 unfinished implementation.
+
+## FLU-P1 — The floating editor of the capture preview
+
+The measured need: a capture is most often touched up and sent at once, and
+Selenita's corner preview (`SEL-2-A`) needs somewhere to send it. Fluorita
+already edits pictures with the two outcomes the author wants, but only items
+its library holds, and only inside the library window.
+
+The boundary is Fluorita's own interface beside the shared activation
+(ADR 0012's `PRV-1` follow-up: `org.celestina.Fluorita1.Edit(s key)`), the
+app's editor adapter, which already opens by path key, and its QML. The
+bounded resource model is the editor's own: the measurement and every save
+stay on its workers; the `Edit` answer is one `stat` on the bus's thread; a
+copy's adoption into Selenita's history runs on one worker of its own and
+never holds the save up.
+
+The tangible outcome: `Fluorita1.Edit` and `fluorita --edit PATH` open one
+file in a floating window «Editar — nombre» beside an untouched library
+window, with «Guardar ambas» and «Guardar solo la editada», the close
+question, and the saved result dragged out as a copy; then a video trimmed
+frame-accurately by an `ffmpeg` child.
+
+The plan is
+[the floating editor of the capture preview](docs/plans/active/2026-10-10-flu-p1-preview.md):
+
+- [ ] `FLU-P1-A` — the floating editor on any path.
+- [ ] `FLU-P1-B` — the video trim, and ADR 0009's amendment.
 
 ## FLU-H1 — Hardening after the monorepo audit, closed 2026-10-10
 
