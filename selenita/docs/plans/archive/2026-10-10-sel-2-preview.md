@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-10
 - **Plan ID:** sel-2-preview
-- **Status:** active
+- **Closed:** 2026-10-10
+- **Successor:** none; the author named no next Selenita checkpoint. Its one delivery row (SEL-2-A) is done
+- **Status:** done
 - **Authorization:** the author approved the capture preview design in
   brainstorming on 2026-10-10 and asked for the program to be implemented;
   the design is
@@ -68,3 +70,4 @@ and `Adopt` are in with their tests, the smoke reports the preview, and
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | SEL-2-A | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-2-preview/SEL-2-A.numstat.tsv) | 33 files, +3075/-143 | Add the corner preview with drag, edit and adopt: the frameless `Vista previa` window after every published capture and recording (picture or poster, length, film glyph, five seconds held by the pointer, × and trash close it), the `text/uri-list` copy-only drag, the click's hand-off to Fluorita (`Fluorita1.Edit` or `fluorita --edit`), `Selenita1.Adopt`, and no main window after a key-binding launch | [evidence](../../evidence/2026-10-10-preview.md) | VAL-SEL-PREVIEW pending |
+| SEL-2-B | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-2-preview/SEL-2-B.numstat.tsv) | 8 files, +171/-91 | Archive the delivered SEL-2 preview plan through its own administrative unit and reconcile the Selenita roadmap, status and plan index | [evidence](../../evidence/2026-10-10-sel-2-preview-archive.md) | None |

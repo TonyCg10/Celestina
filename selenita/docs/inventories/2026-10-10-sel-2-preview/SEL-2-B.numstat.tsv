@@ -1,0 +1,23 @@
+# SEL-2-B exact change inventory
+
+Base revision	e8348ece44e09696c45c49f65b4c4a3805a3effa
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/docs/evidence/2026-10-10-preview.md
+Pathspec	selenita/docs/evidence/2026-10-10-sel-2-preview-archive.md
+Pathspec	selenita/docs/inventories/2026-10-10-sel-2-preview/SEL-2-B.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-10-sel-2-preview.md
+Pathspec	selenita/docs/plans/active/README.md
+Pathspec	selenita/docs/plans/archive/2026-10-10-sel-2-preview.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+7	5	d3a834437d955573e827841ab12aae5dfa6cc94564f8c2c8172962028ffbaa63	selenita/ROADMAP.md
+13	12	efee04bccbdcd453e53e9a3c51e4b3696d6672c3e9dc6ed975bab0bb38f80009	selenita/STATUS.md
+1	1	82dd479ec339499b6fb523582acd0ff8d909aaa6a09212e5cbf331f6aee62228	selenita/docs/evidence/2026-10-10-preview.md
+51	0	6d49c5c0cb590df2cbe87125c4d49079c52203c338da1dfdf1f4f4d2921fdab3	selenita/docs/evidence/2026-10-10-sel-2-preview-archive.md
+23	0	self	selenita/docs/inventories/2026-10-10-sel-2-preview/SEL-2-B.numstat.tsv
+0	70	deleted	selenita/docs/plans/active/2026-10-10-sel-2-preview.md
+3	3	f859f52a2010e3939d3e591d278f669eb3061feec85f9949bace17ba67906b42	selenita/docs/plans/active/README.md
+73	0	ad5c392a76605da2ab8c4952c4da8eb93ae9ce8a910fceeaf26d7cd49800554e	selenita/docs/plans/archive/2026-10-10-sel-2-preview.md

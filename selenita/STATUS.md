@@ -1,12 +1,13 @@
 # Selenita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** SEL-2 is active, with its
-  [plan](docs/plans/active/2026-10-10-sel-2-preview.md): SEL-2-A (the corner
-  preview after every capture and recording, its drag and its hand-off to
-  Fluorita, `Selenita1.Adopt`, no main window after a key-binding launch) is
-  implemented and verified offscreen over the fakes, sealed at its landing;
-  see the [preview evidence](docs/evidence/2026-10-10-preview.md). SEL-1 is
+- **Implementation:** SEL-2 is closed and its
+  [plan](docs/plans/archive/2026-10-10-sel-2-preview.md) archived; no
+  checkpoint is active. SEL-2-A (the corner preview after every capture and
+  recording, its drag and its hand-off to Fluorita, `Selenita1.Adopt`, no
+  main window after a key-binding launch) is implemented, verified offscreen
+  over the fakes and landed as 1.1.0; see the
+  [preview evidence](docs/evidence/2026-10-10-preview.md). SEL-1 is
   closed and its
   [plan](docs/plans/archive/2026-10-09-sel-1-foundation.md) archived. Its
   three units are implemented and verified
@@ -37,7 +38,7 @@
 
 ## Current checkout truth
 
-- Version 1.0.2 in the checkout. The
+- Version 1.1.0 in the checkout. The
   window is transparent over the backdrop, follows the suite's appearance
   file and scrolls three cards: capture, recording and history.
 - The capture card takes the screen (every output, or one when there are
@@ -190,11 +191,11 @@
   as `trashing_one_entry_keeps_the_others_lines_in_the_file` shows.)
 - A `--screenshot` or `--record` launch that races an instance still
   starting finds the name taken, only raises it, and its request is lost.
-- Until the niri rule of the README is in the configuration (the suite's
-  PRV-1-E adds it after the author's approval), niri opens the preview as
-  any new window: tiled and focused. `Qt.WindowDoesNotAcceptFocus` is only
-  a hint on Wayland; the rule's `open-focused false` is what keeps the
-  focus where it was.
+- The preview's place and focus depend on niri's rule of the README, which
+  is in the author's configuration since 2026-10-10 (the suite's PRV-1-E,
+  67b45f52). Without it niri opens the preview as any new window: tiled and
+  focused. `Qt.WindowDoesNotAcceptFocus` is only a hint on Wayland; the
+  rule's `open-focused false` is what keeps the focus where it was.
 - A `--record` launch shows nothing while it records (the main window
   stays hidden by design); the portal's own dialog and the key bindings
   are the only signs until the preview shows the result.

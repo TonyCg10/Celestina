@@ -1,7 +1,7 @@
 # Selenita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** SEL-2
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** VAL-SEL-SHOT, VAL-SEL-REC and
   VAL-SEL-PREVIEW pending in [VALIDATION.md](VALIDATION.md) (they do not
   block)
@@ -38,15 +38,17 @@ the terminal: one window with the capture, the recording and the history.
 | SEL-1-A | done | EXT-1-B | capture and history cards, delay, destinations, flags | [screenshots](docs/evidence/2026-10-09-screenshots.md) |
 | SEL-1-B | done | SEL-1-A | recording card, portal, pipeline, sound, `--record`, `--stop` | [recording](docs/evidence/2026-10-09-recording.md) |
 | SEL-1-C | done | SEL-1-B | keyboard, accessibility, 1.0.0 | [exit](docs/evidence/2026-10-09-exit.md) |
-| SEL-2-A | active | SEL-1-C, PRV-1-A | the corner preview, the hand-off to Fluorita, `Adopt` | [preview](docs/evidence/2026-10-10-preview.md) |
+| SEL-2-A | done | SEL-1-C, PRV-1-A | the corner preview, the hand-off to Fluorita, `Adopt` | [preview](docs/evidence/2026-10-10-preview.md) |
 
 SEL-1 closed on 2026-10-10 at 1.0.2, after the bug units SEL-1-D and SEL-1-E
 and the capture portal of SEL-1-F. The build order, exclusions, exit and
 ledger are in the
 [archived plan](docs/plans/archive/2026-10-09-sel-1-foundation.md).
 
-SEL-2 is Selenita's part of the suite's capture preview program `PRV-1`;
-its ledger is the [active plan](docs/plans/active/2026-10-10-sel-2-preview.md).
+SEL-2, Selenita's part of the suite's capture preview program `PRV-1`,
+closed on 2026-10-10 at 1.1.0 with SEL-2-A. Its build order, exclusions, exit
+and ledger are in the
+[archived plan](docs/plans/archive/2026-10-10-sel-2-preview.md).
 
 ## Implementation exit
 
