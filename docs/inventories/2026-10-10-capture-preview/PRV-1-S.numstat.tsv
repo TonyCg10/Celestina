@@ -1,0 +1,15 @@
+# PRV-1-S exact change inventory
+
+Base revision	6358440dcb8fd3304b02f46141edb89b58554e17
+Pathspec	docs/evidence/2026-10-10-capture-preview-support.md
+Pathspec	docs/inventories/2026-10-10-capture-preview/PRV-1-S.numstat.tsv
+Pathspec	docs/plans/active/2026-10-10-capture-preview.md
+Pathspec	docs/projects.toml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+44	0	759b2b83b6f9d7bfb5da598a3eef4c03f460b5357c5a7101a54f6d0d6cb9eb66	docs/evidence/2026-10-10-capture-preview-support.md
+15	0	self	docs/inventories/2026-10-10-capture-preview/PRV-1-S.numstat.tsv
+1	0	f08893f606e15914acac2784916b166f5cfca8acc3cbb4f65d53642dbcce0837	docs/plans/active/2026-10-10-capture-preview.md
+1	1	6451b8a84a867caadf38f859dd483d2c44fb2653b5d53f8b0f1fe85d42cbb749	docs/projects.toml

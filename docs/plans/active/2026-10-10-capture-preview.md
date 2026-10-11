@@ -79,4 +79,5 @@ rows are `done` and, on the landed `main`,
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | PRV-1-A | `suite:` | done | [inventory](../../inventories/2026-10-10-capture-preview/PRV-1-A.numstat.tsv) | 11 files, +646/-11 | Fix the capture preview's interfaces between Selenita and Fluorita | [evidence](../../evidence/2026-10-10-capture-preview-interfaces.md) | None |
+| PRV-1-S | `suite:` | done | [inventory](../../inventories/2026-10-10-capture-preview/PRV-1-S.numstat.tsv) | 4 files, +61/-1 | Support edit FLU-P1-A needs before it can land: `celestina-rs/crates/selenita-core` added to Fluorita's `production_inputs` in `docs/projects.toml`, because Fluorita links `selenita-core` to append an edited copy to Selenita's history when Selenita is not running | [evidence](../../evidence/2026-10-10-capture-preview-support.md) | None |
 | PRV-1-E | `suite:` | planned | — | — | Close the capture preview program with the niri window rules, the host-hygiene record and the README cross-references. | — | None |

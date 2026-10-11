@@ -356,7 +356,7 @@ status_script = "fluorita/scripts/status-production.sh"
 artifact_manifest = "fluorita/target/production-artifact.toml"
 artifact_paths = ["fluorita/target/release/fluorita"]
 cargo_manifests = ["fluorita/Cargo.toml"]
-production_inputs = ["fluorita/Cargo.toml", "fluorita/Cargo.lock", "fluorita/build.rs", "fluorita/src", "fluorita/cpp", "fluorita/qml", "fluorita/org.celestina.Fluorita.desktop", "celestina-style/icons/apps/org.celestina.Fluorita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt", "celestina-rs/crates/siderita-ops"]
+production_inputs = ["fluorita/Cargo.toml", "fluorita/Cargo.lock", "fluorita/build.rs", "fluorita/src", "fluorita/cpp", "fluorita/qml", "fluorita/org.celestina.Fluorita.desktop", "celestina-style/icons/apps/org.celestina.Fluorita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/fluorita-core", "celestina-rs/crates/fluorita-engine", "celestina-rs/crates/fluorita-qt", "celestina-rs/crates/selenita-core", "celestina-rs/crates/siderita-ops"]
 verification_inputs = ["fluorita/scripts/smoke.sh", "celestina-rs/crates/fluorita-engine/tests", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "fluorita-core", roots = ["celestina-rs/crates/fluorita-core/"], include_workspace_manifests = true },
