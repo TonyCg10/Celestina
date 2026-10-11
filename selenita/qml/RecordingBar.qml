@@ -2,11 +2,15 @@ import QtQuick
 import org.celestina.selenita 1.0
 import "components"
 
-// The recording bar (SEL-4-A): while a recording is under way, however it
-// started (the window, `--record`, `--record-focused`, the bus), a small
-// glass pill shows the red dot, the elapsed time and two actions:
-// «Detener» stops and saves (the corner preview follows, as from the card)
-// and «Descartar» stops and deletes the file (no history row, no preview).
+// The recording bar (SEL-4-A): while a recording is under way or paused,
+// however it started (the window, `--record`, `--record-focused`, the bus),
+// a small glass pill shows the red dot, the recorded time and three
+// actions: «Pausar» / «Reanudar» (SEL-4-B: a pause closes the current
+// segment and keeps the portal's session, so the resume asks nothing; the
+// clock and the dot stand still meanwhile), «Detener» stops and saves (the
+// segments joined into one file; the corner preview follows, as from the
+// card) and «Descartar» stops and deletes every file (no history row, no
+// preview).
 // It is its own frameless top-level window, titled «Grabando», which niri's
 // rule (matching Selenita's app id and that title) places at the top centre
 // of the focused output without the focus; after a key-binding launch it is
@@ -14,13 +18,17 @@ import "components"
 // focus: the card's «Detener» and `R` are the keyboard's way. A
 // compositor's close is refused while it shows (closing is not a stop);
 // once hidden, the application's quit closes it. The state is the
-// controller's; the bar only shows it and asks. The actions are one row, so
-// the next unit's pause button joins them and the pill grows to fit.
+// controller's; the bar only shows it and asks. The pause button keeps the
+// width of its wider label, so the pill does not change size between the
+// two.
 Window {
     id: bar
     objectName: "recordingBar"
 
     readonly property bool recording: SelenitaController.recordingState === "recording"
+    readonly property bool paused: SelenitaController.recordingState === "paused"
+    // Recording or paused: the bar shows either way.
+    readonly property bool underWay: bar.recording || bar.paused
     // Set once the main window closes: the bar goes at once so Qt finds no
     // window left and quits (the recording is finished on the way out).
     property bool closingDown: false
@@ -38,7 +46,7 @@ Window {
     // Its own top-level window: not a dialog of the main window, which may
     // be hidden (a key-binding launch never shows it).
     transientParent: null
-    visible: bar.recording && !bar.closingDown
+    visible: bar.underWay && !bar.closingDown
     width: pill.implicitWidth
     height: pill.implicitHeight
     // Transparent: the compositor blurs what lies behind it and the pill
@@ -52,7 +60,21 @@ Window {
 
     RecordingClock {
         id: clock
-        active: bar.recording
+        active: bar.underWay
+        paused: bar.paused
+    }
+
+    // The pause button's two labels, so it keeps the wider one's width.
+    TextMetrics {
+        id: pauseLabel
+        font: pauseButton.font
+        text: qsTr("Pausar")
+    }
+
+    TextMetrics {
+        id: resumeLabel
+        font: pauseButton.font
+        text: qsTr("Reanudar")
     }
 
     // The widest time the bar shows, so the pill does not change width as
@@ -74,6 +96,7 @@ Window {
         color: CelestinaTheme.glassTint
         Accessible.role: Accessible.ToolBar
         Accessible.name: bar.title
+        Accessible.description: bar.paused ? qsTr("En pausa") : ""
 
         Row {
             id: content
@@ -90,7 +113,8 @@ Window {
                 color: CelestinaTheme.danger
                 Accessible.ignored: true
 
-                // A slow pulse while it records; still under reduced motion.
+                // A slow pulse while it records; still while paused and
+                // under reduced motion.
                 SequentialAnimation on opacity {
                     id: pulse
                     running: bar.recording && !CelestinaTheme.reducedMotion
@@ -108,7 +132,7 @@ Window {
                 width: Math.ceil(widest.advanceWidth)
                 horizontalAlignment: Text.AlignHCenter
                 text: clock.text
-                color: CelestinaTheme.text
+                color: bar.paused ? CelestinaTheme.textMuted : CelestinaTheme.text
                 font.family: CelestinaTheme.monoFamily
                 font.pixelSize: CelestinaTheme.fontRowTitle
                 font.features: { "tnum": 1 }
@@ -121,6 +145,28 @@ Window {
                 objectName: "recordingBarActions"
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: CelestinaTheme.spaceXs
+
+                CelestinaButton {
+                    id: pauseButton
+                    objectName: "recordingBarPause"
+                    width: Math.max(implicitWidth,
+                                    Math.ceil(Math.max(pauseLabel.advanceWidth,
+                                                       resumeLabel.advanceWidth))
+                                    + leftPadding + rightPadding)
+                    role: CelestinaButton.Tonal
+                    backgroundRadius: CelestinaTheme.radiusPill
+                    focusPolicy: Qt.NoFocus
+                    text: bar.paused ? qsTr("Reanudar") : qsTr("Pausar")
+                    Accessible.description: bar.paused
+                                            ? qsTr("Sigue grabando la misma pantalla")
+                                            : qsTr("Detiene la grabación sin terminarla")
+                    onClicked: {
+                        if (bar.paused)
+                            SelenitaController.resumeRecording()
+                        else
+                            SelenitaController.pauseRecording()
+                    }
+                }
 
                 CelestinaButton {
                     objectName: "recordingBarStop"

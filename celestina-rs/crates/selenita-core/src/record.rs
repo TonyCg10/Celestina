@@ -15,6 +15,11 @@
 //! the worker sends becomes an EOS and the muxer writes its index before the
 //! child exits, and a muxer pad that never saw a buffer never reaches that
 //! EOS (measured in the SEL-1-D evidence).
+//!
+//! A pause (SEL-4-B) finishes the current child's file as a stop does and
+//! keeps the portal's session; the resume starts a new child on the same
+//! node into the next segment. The state machine has `Paused` for that:
+//! `Recording` and `Paused` go back and forth, and both stop or fail.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -31,6 +36,8 @@ pub const AUDIO_BED: &str = "audiotestsrc";
 pub const AUDIO_MIXER: &str = "audiomixer";
 /// The keyframe interval, in frames: one a second at 60 fps.
 pub const KEY_INTERVAL: u32 = 60;
+/// `filesink`'s `buffer-mode=unbuffered`: every buffer reaches the file.
+pub const FILESINK_UNBUFFERED: &str = "buffer-mode=2";
 /// The child that runs the pipeline.
 pub const LAUNCHER: &str = "gst-launch-1.0";
 /// The tool that says whether an element exists (`--exists`, status 0 or 1).
@@ -109,7 +116,10 @@ pub struct Pipeline {
 impl Pipeline {
     /// The description as `gst-launch-1.0` tokens: the muxer and its file
     /// first, then the video branch and, when asked, the audio branch, both
-    /// linking to `mux.`.
+    /// linking to `mux.`. The file is written unbuffered
+    /// ([`FILESINK_UNBUFFERED`]): `filesink` holds 64 KiB by default, so a
+    /// quiet screen's first seconds would sit in memory, and the file's
+    /// size is what tells the worker whether the node ever streamed.
     #[must_use]
     pub fn description(&self) -> Vec<String> {
         let mut tokens: Vec<String> = vec![
@@ -117,6 +127,7 @@ impl Pipeline {
             "name=mux".to_owned(),
             "!".to_owned(),
             "filesink".to_owned(),
+            FILESINK_UNBUFFERED.to_owned(),
             format!("location={}", quoted(&self.out)),
         ];
         tokens.push("pipewiresrc".to_owned());
@@ -229,6 +240,9 @@ pub enum State {
     /// output in its dialog).
     Preparing,
     Recording,
+    /// The current segment is finished and the portal's session kept; no
+    /// child runs until the resume.
+    Paused,
     /// The child was told to finish the file.
     Stopping,
     /// Something went wrong; the notice said what.
@@ -242,6 +256,10 @@ pub enum Event {
     /// The portal answered and the child runs.
     Prepared,
     Stop,
+    /// The current segment was finished; the session stays.
+    Pause,
+    /// A new segment's child runs.
+    Resume,
     /// The child exited after the stop.
     Stopped,
     Failure,
@@ -277,6 +295,7 @@ impl State {
             Self::Idle => "idle",
             Self::Preparing => "preparing",
             Self::Recording => "recording",
+            Self::Paused => "paused",
             Self::Stopping => "stopping",
             Self::Failed => "failed",
         }
@@ -285,7 +304,17 @@ impl State {
     /// Whether a recording is under way in any of its steps.
     #[must_use]
     pub fn is_busy(self) -> bool {
-        matches!(self, Self::Preparing | Self::Recording | Self::Stopping)
+        matches!(
+            self,
+            Self::Preparing | Self::Recording | Self::Paused | Self::Stopping
+        )
+    }
+
+    /// Whether a recording holds the portal's session and can be stopped,
+    /// discarded or paused and resumed: recording, or paused.
+    #[must_use]
+    pub fn is_under_way(self) -> bool {
+        matches!(self, Self::Recording | Self::Paused)
     }
 
     /// The state after `event`.
@@ -297,9 +326,11 @@ impl State {
         match (self, event) {
             (Self::Idle | Self::Failed, Event::Start) => Ok(Self::Preparing),
             (Self::Preparing, Event::Prepared) => Ok(Self::Recording),
-            (Self::Recording, Event::Stop) => Ok(Self::Stopping),
+            (Self::Recording, Event::Pause) => Ok(Self::Paused),
+            (Self::Paused, Event::Resume) => Ok(Self::Recording),
+            (Self::Recording | Self::Paused, Event::Stop) => Ok(Self::Stopping),
             (Self::Stopping, Event::Stopped) => Ok(Self::Idle),
-            (Self::Preparing | Self::Recording | Self::Stopping, Event::Failure) => {
+            (Self::Preparing | Self::Recording | Self::Paused | Self::Stopping, Event::Failure) => {
                 Ok(Self::Failed)
             }
             (Self::Failed, Event::Acknowledged) => Ok(Self::Idle),

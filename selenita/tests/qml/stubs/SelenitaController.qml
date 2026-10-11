@@ -8,7 +8,8 @@ import QtQuick
 // is a 1×1 PNG beside this file. A recording toggles between `idle` and
 // `recording` at once, as the fake recorder does, and its stop lands a
 // recording row; a discard goes back to `idle` with no row, as the worker's
-// discard does. With `previewOnResult`, a capture saved to a file and a
+// discard does. A pause holds the recorded time in `recordingRecorded` and
+// a resume moves the origin back by it, as the worker reports them. With `previewOnResult`, a capture saved to a file and a
 // finished recording show the corner preview, as the capture worker's
 // preview report does: the picture itself, or for a recording its poster
 // (the same PNG) and its duration. It is off unless a test asks: the
@@ -42,6 +43,7 @@ QtObject {
     property string recordingState: "idle"
     property bool withAudio: false
     property real recordingStartedAt: 0
+    property real recordingRecorded: 0
     property string lastRecordingId: ""
     property string lastRecordingName: ""
     property string recorderMissing: ""
@@ -80,6 +82,7 @@ QtObject {
         recordingState = "idle"
         withAudio = false
         recordingStartedAt = 0
+        recordingRecorded = 0
         lastRecordingId = ""
         lastRecordingName = ""
         recorderMissing = ""
@@ -157,7 +160,7 @@ QtObject {
 
     function toggleRecording() {
         record("toggleRecording", withAudio)
-        if (recordingState === "recording") {
+        if (recordingState === "recording" || recordingState === "paused") {
             finishRecording()
             return
         }
@@ -169,7 +172,7 @@ QtObject {
     // own name (the focused monitor is the Rust worker's to find).
     function toggleFocusedRecording() {
         record("toggleFocusedRecording", withAudio)
-        if (recordingState === "recording") {
+        if (recordingState === "recording" || recordingState === "paused") {
             finishRecording()
             return
         }
@@ -179,13 +182,29 @@ QtObject {
 
     function discardRecording() {
         record("discardRecording", recordingState)
-        if (recordingState === "recording")
+        if (recordingState === "recording" || recordingState === "paused")
             recordingState = "idle"
+    }
+
+    function pauseRecording() {
+        record("pauseRecording", recordingState)
+        if (recordingState !== "recording")
+            return
+        recordingRecorded = Date.now() - recordingStartedAt
+        recordingState = "paused"
+    }
+
+    function resumeRecording() {
+        record("resumeRecording", recordingState)
+        if (recordingState !== "paused")
+            return
+        recordingStartedAt = Date.now() - recordingRecorded
+        recordingState = "recording"
     }
 
     function stopRecording() {
         record("stopRecording", recordingState)
-        if (recordingState === "recording")
+        if (recordingState === "recording" || recordingState === "paused")
             finishRecording()
     }
 

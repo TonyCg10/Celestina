@@ -1,19 +1,23 @@
 import QtQuick
 import org.celestina.selenita 1.0
 
-// The recording's elapsed time, as the recording card and the recording bar
+// The recording's recorded time, as the recording card and the recording bar
 // both show it: whole seconds since the controller's `recordingStartedAt`
-// while `active`, 0 otherwise; `text` is `m:ss`, with the hours only once
-// there are some. A new origin (the next recording's start) resets it at
-// once rather than on the next second. It looks four times a second: a
-// timer may fire a little early, and a one-second tick that lands just
-// before a second turns would skip that second on the next.
+// while it records (an origin a resume moves back by the time recorded
+// before it), the controller's `recordingRecorded` held while it is paused,
+// 0 otherwise; `text` is `m:ss`, with the hours only once there are some. A
+// new origin (the next recording's start, a resume) resets it at once
+// rather than on the next second. It looks four times a second while it
+// records: a timer may fire a little early, and a one-second tick that lands
+// just before a second turns would skip that second on the next.
 QtObject {
     id: clock
 
-    // Whether a recording is under way.
+    // Whether a recording is under way, recording or paused.
     required property bool active
-    // Whole seconds since the recording began.
+    // Whether it is paused: the clock stands still.
+    required property bool paused
+    // Whole seconds recorded.
     property int elapsed: 0
     readonly property string text: clock.format(clock.elapsed)
 
@@ -28,20 +32,26 @@ QtObject {
     }
 
     function tick() {
-        clock.elapsed = clock.active
-                        ? Math.max(0, Math.floor(
-                              (Date.now() - SelenitaController.recordingStartedAt) / 1000))
-                        : 0
+        const since = clock.paused
+                      ? SelenitaController.recordingRecorded
+                      : Date.now() - SelenitaController.recordingStartedAt
+        clock.elapsed = clock.active ? Math.max(0, Math.floor(since / 1000)) : 0
     }
 
     onActiveChanged: clock.tick()
+    onPausedChanged: clock.tick()
     Component.onCompleted: clock.tick()
 
     readonly property Connections origin: Connections {
         target: SelenitaController
 
         function onRecordingStartedAtChanged() {
-            if (clock.active)
+            if (clock.active && !clock.paused)
+                clock.tick()
+        }
+
+        function onRecordingRecordedChanged() {
+            if (clock.paused)
                 clock.tick()
         }
     }
@@ -49,7 +59,7 @@ QtObject {
     readonly property Timer ticker: Timer {
         interval: 250
         repeat: true
-        running: clock.active
+        running: clock.active && !clock.paused
         onTriggered: clock.tick()
     }
 }

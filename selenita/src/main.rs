@@ -8,6 +8,7 @@ mod picker;
 mod portal;
 mod preview;
 mod record;
+mod recorder;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 
@@ -117,9 +118,11 @@ fn main() {
     if let Some(app) = app.as_mut() {
         app.exec();
     }
-    // The window is gone: a recording under way is finished and published
-    // (or the portal's dialog closed) before the process ends.
-    record::quit(record::STOP_DEADLINE);
+    // The window is gone: the name goes at once, so a new launch starts
+    // afresh, then a recording under way is finished and published (or the
+    // portal's dialog closed) before the process ends.
+    activation::release();
+    record::quit(record::QUIT_DEADLINE);
 }
 
 /// `selenita --stop`: asks the running instance to stop its recording; when

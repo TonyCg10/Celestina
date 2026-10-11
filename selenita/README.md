@@ -10,8 +10,9 @@ terminal command.
   delay, to the clipboard and to the pictures folder.
 - Records the screen to MP4, with the system sound when asked; from a key
   binding it can record the monitor in focus without asking which.
-- While it records, a small bar at the top of the screen shows the time
-  and stops the recording, keeping it or throwing it away.
+- While it records, a small bar at the top of the screen shows the time,
+  pauses and resumes the recording (one file in the end), and stops it,
+  keeping it or throwing it away.
 - Keeps a history of the last captures and recordings, with open, show in
   Siderita and delete, and copy for a capture.
 - Shows each new capture and recording in a small preview in the corner of
@@ -29,7 +30,7 @@ terminal command.
 Screenshots, the history and the key-binding flags are in (SEL-1-A), so is
 recording (SEL-1-B), and the keyboard and accessibility pass closes the
 foundation at 1.0 (SEL-1-C). The corner preview comes with SEL-2-A, the
-recording bar and the focused recording with SEL-4-A. See the
+recording bar and the focused recording with SEL-4-A, pausing with SEL-4-B. See the
 [design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md)
 and the
 [capture preview design](../docs/superpowers/specs/2026-10-10-capture-preview-design.md).
@@ -130,16 +131,21 @@ movie header.
 
 ## The recording bar
 
-While a recording is under way, however it started (the window's
-«Grabar», `R`, `--record`, `--record-focused`, the bus), a small frameless
-window titled «Grabando» shows a glass pill: the red dot (a slow pulse,
-still with reduced motion), the elapsed time (the recording card's clock)
-and two buttons. «Detener» stops and saves, and the corner preview shows
-the result as from the card; «Descartar» stops and deletes the file: the
-child is killed rather than finished, the hidden file removed, and
-nothing joins the history and no preview shows (when the file stays, the
-window's notice says the discarded recording could not be deleted). The bar hides as soon as
-the recording stops. It never takes the keyboard focus (the card's
+While a recording is under way or paused, however it started (the
+window's «Grabar», `R`, `--record`, `--record-focused`, the bus), a small
+frameless window titled «Grabando» shows a glass pill: the red dot (a slow
+pulse; still while paused and with reduced motion), the recorded time (the
+recording card's clock, which stands still while paused) and three
+buttons. «Pausar» pauses and becomes «Reanudar», which resumes on the
+same monitor without asking again (SEL-4-B, below); the button keeps the
+wider label's width, so the pill does not change size. «Detener» stops
+and saves, recording or paused, and the corner preview shows the result
+as from the card; «Descartar» stops and deletes every file: the child is
+killed rather than finished, the hidden segments removed, and nothing
+joins the history and no preview shows (when a file stays, the window's
+notice says the discarded recording could not be deleted). The bar hides
+as soon as the recording stops. While paused the recording card says so
+beside the held time, and its «Detener» (or `R`) stops it too. It never takes the keyboard focus (the card's
 «Detener» and `R` are the keyboard's way), a compositor's close is refused
 (closing it is not a stop), and closing the main window takes it with
 it. After a key-binding launch it is the only window while it records;
@@ -221,6 +227,57 @@ is being captured. The muxer is probed at start with
 `gst-inspect-1.0 --exists mp4mux`; when it is missing the card says so, the
 button is disabled and the notice names the package.
 
+### Pausing (SEL-4-B)
+
+`gst-launch-1.0` cannot be paused, so a recording is written in segments:
+«Pausar» stops the child as a stop does (SIGINT, EOS, the muxer's index)
+and keeps its hidden segment (`.selenita-<pid>-<n>-part1.mp4`, then
+`-part2`… beside the hidden file) while the portal's session stays open;
+«Reanudar» asks that session for a fresh PipeWire remote
+(`OpenPipeWireRemote`; no `SelectSources`, no `Start`, no chooser) and
+starts a new child on the same node, with the same sound choice, into the
+next segment. Each segment is written unbuffered (`filesink
+buffer-mode=2`), and a pause or a stop always asks the child to finish
+first; a child that has not reached its EOS within a second with its file
+still empty never received a buffer (a pause or a stop right after a
+resume): it is killed and its segment dropped, and the recording pauses
+(or stops) with what it had; a segment
+whose child fails at the pause is dropped too and the recording stays
+paused with the earlier ones, with a notice. The stop says `stopping` at
+once (the bar hides, the card reads «Terminando el archivo…» and its
+clock stops) while it finishes the last segment and joins: it publishes a
+single segment as before and joins two or more losslessly with an
+`ffmpeg` child, `ffmpeg -hide_banner -nostdin -y -f concat -safe 0 -i
+<list> -c copy <hidden file>` (no `+faststart`: the published file is
+played and sent whole, as the single-segment file `mp4mux` writes, and
+moving the index would rewrite the file a second time), within 60 s and
+10 s more per GiB of segments, 5 min at most
+(`selenita_core::segments::join_deadline`), the concat list written privately in
+`$XDG_RUNTIME_DIR/selenita/join-<tag>.txt` (each path single-quoted, a
+quote as `'\''`) and removed after: one file, one history row, one
+preview (`selenita_core::segments` owns the names, the list and the
+argv). The time shown is the recorded time; the pauses are not in the
+file. When the join, or the joined file's publish, fails (or there is no
+runtime folder for the list) nothing recorded is lost: each segment is
+published on its own as `<name> (1).mp4`, `(2)`… and the notice says so;
+a file that cannot be published at all is never removed, it stays in
+`Grabaciones` under its hidden name and the notice names it. A
+«Descartar» asked while the stop finishes or joins is honoured as soon
+as that step returns (nothing is published), and a second press of the
+stop (`R`, a toggle) asked while it ran never starts another recording. When a resume cannot
+reopen the session, or the segment after a resume fails (its child dies,
+its node sends nothing), what was recorded before is published and the
+notice says that too. `selenita --stop`, `StopRecording()` and the
+window's close act on a paused recording as on a running one; once the
+window has quit, every entry published (the quit's own, a child that
+ended in that turn, a join that finished after the close) is written to
+the history file directly. The bus name is released as soon as the window
+has closed, so a new `selenita` meanwhile starts a fresh instance.
+Quitting waits up to `QUIT_DEADLINE`: the
+last segment's finish (10 s), the longest join (5 min) and 15 s for the
+publish and the history, 5 min 25 s at most, only as long as the work
+takes.
+
 ## Runtime dependencies
 
 | Dependency | Used for | From |
@@ -236,6 +293,7 @@ button is disabled and the notice names the package.
 | Fluorita with `org.celestina.Fluorita1` (FLU-P1-A) | the preview's click: the floating editor | SEL-2-A |
 | `gst-plugins-good` (`mp4mux`) | muxing the recording; probed at start, said in the card and the notice when missing | SEL-1-B |
 | `gst-plugins-ugly` (`x264enc`), `gst-plugin-va` (`vah264enc`, optional), `gst-libav` (`avenc_aac`) | encoding the picture and the sound | SEL-1-B |
+| `ffmpeg` (installed with libmpv) | joining a paused recording's segments (`-f concat -c copy`); without it the segments are published one by one | SEL-4-B |
 
 A missing tool is said in the window's notice. None is used under
 `SELENITA_FAKE=1`; `SELENITA_TOOLS_DIR` makes the real backend run stubs
@@ -268,8 +326,8 @@ service, or copy `.prev` back.
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/selenita-core` | Targets, file names, history and the `Adopt` rule, niri client, tool argv and the deadline runner, the recording pipeline, its state machine and the stop file, the focused recording's pick request (`pick`), the poster's argv, a PNG's size and an MP4's length; no Qt |
-| `src/` | The CXX-Qt controller, the capture worker and its backends (real and fake), the preview's poster and its hand-off to Fluorita (`preview.rs`), the ScreenCast portal client, the recording worker and its recorders (real and fake) with the discard and the focused start, the portal's output chooser (`picker.rs`), the activation adapter with `org.celestina.Selenita1`, the key-binding flags, the appearance follower |
+| `../celestina-rs/crates/selenita-core` | Targets, file names, history and the `Adopt` rule, niri client, tool argv and the deadline runner, the recording pipeline, its state machine and the stop file, the focused recording's pick request (`pick`), a paused recording's segment names, concat list and join argv (`segments`), the poster's argv, a PNG's size and an MP4's length; no Qt |
+| `src/` | The CXX-Qt controller, the capture worker and its backends (real and fake), the preview's poster and its hand-off to Fluorita (`preview.rs`), the ScreenCast portal client, the recording worker with the discard, the focused start, pausing and the join, its recorders (real and fake, `recorder.rs`), the portal's output chooser (`picker.rs`), the activation adapter with `org.celestina.Selenita1`, the key-binding flags, the appearance follower |
 | `qml/` | The window with its key map, the capture, recording and history cards and their rows, the recording clock they share with the recording bar's window, and the corner preview's window |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Selenita.desktop` | Desktop discovery |

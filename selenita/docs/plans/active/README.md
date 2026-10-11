@@ -2,7 +2,8 @@
 
 - [SEL-4 — Recording controls](2026-10-10-sel-4-recording-controls.md):
   the recording bar and recording the focused monitor without the
-  portal's dialog (SEL-4-A), then pausing by segments (SEL-4-B).
+  portal's dialog (SEL-4-A, landed as 1.2.0), then pausing by segments
+  (SEL-4-B).
 
 SEL-3, SEL-2 and SEL-1 closed on 2026-10-10 and moved to
 [`../archive/`](../archive/). A dated plan is added here only when the

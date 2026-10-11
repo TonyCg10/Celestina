@@ -192,8 +192,9 @@ ApplicationWindow {
         anchors.bottomMargin: CelestinaTheme.windowMargin
     }
 
-    // Development only: the smoke takes one capture over the fakes, starts
-    // and stops one fake recording, and reads what the window shows after.
+    // Development only: the smoke takes one capture over the fakes, starts,
+    // pauses, resumes and stops one fake recording, and reads what the
+    // window shows after.
     Timer {
         id: smokeCapture
         interval: 1000
@@ -215,14 +216,39 @@ ApplicationWindow {
     }
 
     // Development only: the smoke reads the recording bar while the fake
-    // recording runs.
+    // recording runs (at 1.65 s) and while it is paused (at 1.95 s): the
+    // recording pauses at 1.75 s and resumes at 2.15 s, so its stop joins
+    // two segments (SEL-4-B).
+    function logSmokeBar() {
+        console.log("selenita-smoke-bar:"
+                    + " recording=" + SelenitaController.recordingState
+                    + " bar=" + (recordingBarWindow.visible ? "shown" : "hidden")
+                    + " title=" + recordingBarWindow.title
+                    + " elapsed=" + recordingBarWindow.elapsed)
+    }
+
     Timer {
-        interval: 2000
+        interval: 1650
         running: SelenitaController.smokeReport && SelenitaController.fake
-        onTriggered: console.log("selenita-smoke-bar:"
-                                 + " recording=" + SelenitaController.recordingState
-                                 + " bar=" + (recordingBarWindow.visible ? "shown" : "hidden")
-                                 + " title=" + recordingBarWindow.title)
+        onTriggered: window.logSmokeBar()
+    }
+
+    Timer {
+        interval: 1750
+        running: SelenitaController.smokeReport && SelenitaController.fake
+        onTriggered: SelenitaController.pauseRecording()
+    }
+
+    Timer {
+        interval: 1950
+        running: SelenitaController.smokeReport && SelenitaController.fake
+        onTriggered: window.logSmokeBar()
+    }
+
+    Timer {
+        interval: 2150
+        running: SelenitaController.smokeReport && SelenitaController.fake
+        onTriggered: SelenitaController.resumeRecording()
     }
 
     // Development only: a `--record-focused` launch's smoke reads the bar

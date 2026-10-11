@@ -1,13 +1,16 @@
 # Selenita status
 
-- **Updated:** 2026-10-10
+- **Updated:** 2026-10-11
 - **Implementation:** SEL-4 (the recording controls) is active; see its
   [plan](docs/plans/active/2026-10-10-sel-4-recording-controls.md).
   SEL-4-A (the recording bar with «Detener» and «Descartar», the discard,
-  `--record-focused` and `--pick-output` as the portal's chooser) is
-  implemented and verified offscreen over the fakes, awaiting its landing;
-  see the [recording bar evidence](docs/evidence/2026-10-10-recording-bar.md).
-  SEL-4-B (pausing by segments) is planned. SEL-3 is closed and its
+  `--record-focused` and `--pick-output` as the portal's chooser) landed
+  as 1.2.0; see the
+  [recording bar evidence](docs/evidence/2026-10-10-recording-bar.md).
+  SEL-4-B (pausing by segments: «Pausar»/«Reanudar» in the bar, the
+  segments joined by `ffmpeg` at the stop) is implemented and verified
+  offscreen over the fakes, awaiting its landing; see the
+  [recording pause evidence](docs/evidence/2026-10-11-recording-pause.md). SEL-3 is closed and its
   [plan](docs/plans/archive/2026-10-10-sel-3-preview-fixes.md) archived.
   SEL-3-A answers the author's first live use of the
   corner preview (a blurred preview, a screen key binding that took every
@@ -33,9 +36,10 @@
   recording's line after a trash, and the window no longer hiding for a
   capture; see the
   [recording fixes evidence](docs/evidence/2026-10-10-recording-fixes.md)
-- **Author validation:** VAL-SEL-BAR (SEL-4-A: the bar at the top centre
-  without the focus, «Detener» and «Descartar», `V` recording the focused
-  monitor with no dialog, `R` still showing it) pending, once the
+- **Author validation:** VAL-SEL-BAR (SEL-4-A and SEL-4-B: the bar at the
+  top centre without the focus, «Pausar»/«Reanudar», «Detener» and
+  «Descartar», a paused recording joined into one file, `V` recording the
+  focused monitor with no dialog, `R` still showing it) pending, once the
   coordinator has put the bar's rule, the `V` binding and the portal's
   `chooser_cmd` in place. VAL-SEL-FIXES (SEL-3-A: a sharp preview of a
   three-monitor capture, the screen key binding taking the focused
@@ -57,7 +61,7 @@
 
 ## Current checkout truth
 
-- Version 1.1.1 in the checkout. The
+- Version 1.2.0 in the checkout. The
   window is transparent over the backdrop, follows the suite's appearance
   file and scrolls three cards: capture, recording and history.
 - The capture card takes the screen (every output, or one when there are
@@ -87,10 +91,12 @@
   for a recording, each with «Abrir en Fluorita», «Mostrar en Siderita» and
   «Mover a la papelera»; a capture also has «Copiar» (a recording is not a
   picture for the clipboard, so the row hides it and the worker refuses it).
-- Closing the window while it records finishes the recording as a stop
-  would (SIGINT, the muxer's index, the file published and written to the
-  history file directly, up to 10 s); a portal dialog still open is closed
-  and the child, if any, killed with its hidden file removed.
+- Closing the window while it records or is paused finishes the
+  recording as a stop would (SIGINT, the muxer's index, the segments
+  joined, the file published and written to the history file directly,
+  up to `QUIT_DEADLINE`, 5 min 25 s); every entry published once the
+  window has quit goes to the history file; a portal dialog still open is
+  closed and the child, if any, killed with its hidden files removed.
 - `selenita --screenshot screen|window|region` (for niri key bindings) asks
   the running instance over `org.celestina.Selenita1.Capture`, or starts one
   that captures with its main window hidden and stays running; a key
@@ -145,18 +151,20 @@
   window with its notice; from then on, or once a plain launch has raised
   the window, the instance is a plain one and ends when the window is
   closed.
-- The recording bar (SEL-4-A): while a recording is in the `recording`
-  state, however it started, a frameless window titled «Grabando»
+- The recording bar (SEL-4-A, SEL-4-B): while a recording is in the
+  `recording` or `paused` state, however it started, a frameless window titled «Grabando»
   (`RecordingBar.qml`, `Qt.WindowDoesNotAcceptFocus`, no transient
   parent) shows a glass pill with the red dot (pulsing, still under
-  reduced motion), the elapsed time (`RecordingClock.qml`, the same clock
-  the recording card now uses) and «Detener» (`stopRecording`: saved,
-  the preview follows) and «Descartar» (`discardRecording`: the worker's
-  discard job kills the child, removes the hidden file, publishes
-  nothing, adds no history row and shows no preview; a key-binding
-  launch then ends; a file that stays is said in the notice,
-  `RecordError::Discard`). The actions are one row the pill grows with,
-  for SEL-4-B's pause button. A compositor's close is refused while it
+  reduced motion and while paused), the recorded time
+  (`RecordingClock.qml`, the same clock the recording card uses; it stands
+  still while paused), «Pausar»/«Reanudar» (`pauseRecording`,
+  `resumeRecording`; the button keeps the wider label's width), «Detener»
+  (`stopRecording`: saved, the preview follows) and «Descartar»
+  (`discardRecording`: the worker's discard job kills the child, removes
+  every hidden segment, publishes nothing, adds no history row and shows
+  no preview; a key-binding launch then ends; a file that stays is said
+  in the notice, `RecordError::Discard`). The card shows a paused
+  recording's held time with «en pausa» and still stops it. A compositor's close is refused while it
   shows; closing the main window or the end of a key-binding launch
   hides it at once so Qt can quit. A key-binding launch keeps the main
   window hidden: the bar is its only window while it records.
@@ -173,6 +181,35 @@
   and `exec`s `/bin/sh -c` with `SELENITA_FALLBACK_CHOOSER` or
   `"$HOME/.local/bin/celestina" --pick-output`, keeping its standard
   streams.
+- Pausing (SEL-4-B): a pause finishes the current child (SIGINT, EOS)
+  into its hidden segment (`selenita_core::segments::segment_file`,
+  `-part<n>`) and keeps the portal's session; a resume asks the session
+  for a fresh remote (`portal::Session::remote`, `OpenPipeWireRemote`)
+  and starts the next child on the same node with the same pipeline. The
+  stop (recording or paused, from the bar, the card, `R`, `--stop`, the
+  stop file, `StopRecording()` or the quit) publishes one segment as it
+  is and joins more with `ffmpeg -f concat -c copy` (no `+faststart`)
+  over a private list in `runtime_dir/selenita/join-<tag>.txt`, within
+  `join_deadline` (60 s + 10 s per GiB, 5 min at most); a failed join (or
+  a failed publish of the joined file) publishes each segment as
+  `<name> (n).mp4` with a notice, and a file that cannot be published
+  stays where it is, named in the notice (`RecordError::Unpublished`); a
+  failed resume, or a segment that dies after a resume, publishes what
+  came before with a notice. The stop says `stopping` before it finishes
+  the last segment; a «Descartar» asked during the finish or the join
+  (`Signals`) drops everything; a toggle asked while a stop ran is
+  dropped. Every segment's file is written unbuffered (`filesink
+  buffer-mode=2`, `record::FILESINK_UNBUFFERED`), and a pause or a stop
+  always asks the child to finish first (SIGINT, EOS): only a child that
+  has not exited within `EOS_GRACE` (1 s) with its file still empty is
+  killed and its segment dropped (it never received a buffer; when it was
+  the first segment, the recording fails with the no-signal notice); one
+  whose child fails at a pause is dropped and the recording stays paused with
+  the earlier ones (`RecordError::SegmentLost`). The clock's origin moves back by the recorded
+  time at each resume (`Report::Started`), and the pause reports the time
+  held (`Report::Paused`, `recordingRecorded`). The recorders (real and
+  fake) moved to `recorder.rs`; the fake joins its segments' bytes after
+  checking the list names them.
 - A second launch raises the window; a path on the command line or in an
   `Open` is ignored.
 - `SELENITA_FAKE=1` routes niri, the tools, the clipboard, the portal, the
@@ -233,22 +270,42 @@
   blocking iterator has no deadline) together with its connection until the
   process ends; a bounded wait needs the async API and two more
   dependencies, so it stays recorded here.
-- Quitting while a recording is being finished can take up to about 20 s in
-  the worst case: the muxer gets `STOP_DEADLINE` (10 s) after the interrupt
-  and the quitting window waits the same deadline for the worker on top of
-  it.
+- Quitting while a recording is being finished can take, in the worst
+  case, the muxer's `STOP_DEADLINE` (10 s), the longest join
+  (`segments::JOIN_MAX`, 5 min, for 24 GiB of segments) and 15 s for the
+  publish: `QUIT_DEADLINE`, 5 min 25 s. A quit past that ends the process
+  with the segments still hidden in `Grabaciones`; a join past its own
+  deadline is killed and the segments published one by one.
+- A child killed after `EOS_GRACE` with an empty file is judged by the
+  file alone: with `filesink` unbuffered, an empty file after a second
+  of EOS means no encoded frame reached the muxer.
+- A pause and a resume each take a child's finish (the muxer's index) and
+  start: the bar shows «Pausar» until the segment is finished, and a few
+  frames at each join may differ from what was on screen at the click.
+  The join copies the streams; segments from one pipeline share their
+  codecs, so `ffmpeg` needs no re-encoding (proved on real files in
+  `selenita-core`'s tests, not on a real recording).
 - A quit that arrives between two of the portal's calls (`CreateSession`,
   `SelectSources`, `Start`) finds no pending request to close; the next call
   goes out and the worker only notices the quit when it returns.
 - The recording worker checks the child first on each tick: when the child
-  has just exited on its own, a job received in that same tick (a toggle or
-  a stop) is dropped with the `continue` that reports the end.
+  has just exited on its own, a toggle, stop, pause or resume received in
+  that same tick is dropped (it asked for what has just happened); a
+  discard in that tick wins (nothing is published, SEL-4-B), and a quit
+  still ends the worker.
 - The history file is written from two places at quit: the recording worker
   loads, appends and saves it directly while the capture worker still holds
   its own copy; whichever saves last wins, so an entry can be lost in that
   window. (The empty history of 2026-10-10 was not this: every file it
   listed had been moved to the trash, and a trash keeps the other lines,
   as `trashing_one_entry_keeps_the_others_lines_in_the_file` shows.)
+  SEL-4-B sends every entry published after the quit to the file this
+  way too, so the window is the same; its fix (one owner of the file at
+  quit) is deferred by the SEL-4-B review (round 2).
+- Once the main window has closed, `org.celestina.Selenita` is released
+  at once (`activation::release`, before `record::quit` waits up to
+  `QUIT_DEADLINE`), so a launch while the old process still finishes a
+  recording starts a fresh instance; the old one serves nothing more.
 - A `--screenshot` or `--record` launch that races an instance still
   starting finds the name taken, only raises it, and its request is lost.
 - The preview's place and focus depend on niri's rule of the README, which

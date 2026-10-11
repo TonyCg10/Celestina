@@ -27,12 +27,17 @@ set -u
 #     main window never shows, dismisses its preview at 5 s as the × does
 #     (offscreen, the pointer rests on the preview and holds its timer) and
 #     must then end by itself, within 14 s.
-#     In both runs the recording bar shows at 2 s, while the fake recording
-#     runs, titled «Grabando», and is hidden again in the report (SEL-4-A).
+#     In both runs the recording bar shows at 1.65 s, while the fake
+#     recording runs, titled «Grabando», and again at 1.95 s, paused (the
+#     recording pauses at 1.75 s and resumes at 2.15 s); it is hidden again
+#     in the report (SEL-4-A). The published MP4 is the fake's two segments
+#     joined in order behind the join seam (SEL-4-B), and neither a hidden
+#     segment nor the join's list is left behind.
 #  4) A plain launch that closes its window at 2 s (SELENITA_SMOKE_CLOSE),
 #     while the capture's preview shows and a fake recording runs, must end
 #     by itself (the preview and the bar may not keep it alive) with the
-#     recording finished: the PNG, the MP4 and both history lines are there.
+#     recording, paused at that moment, finished: the PNG, the MP4 (its one
+#     segment) and both history lines are there.
 #  5) A `--record-focused` launch (SELENITA_SMOKE_DISCARD) records over the
 #     fakes with its main window hidden: the fake niri names `FAKE-1`, the
 #     worker leaves the pick request and the fake portal's chooser takes it
@@ -45,6 +50,12 @@ set -u
 #     prints `Monitor: FAKE-1` and is consumed; with none, and with a stale
 #     one (removed), the fallback in SELENITA_FALLBACK_CHOOSER answers
 #     `Monitor: FAKE-2` with its own status.
+#  7) On a private bus of its own (a `dbus-daemon` with no service folders,
+#     so nothing is activated; skipped when `dbus-daemon` is missing), a
+#     plain launch that closes its window while a fake recording is paused
+#     releases `org.celestina.Selenita` before it waits for the recording
+#     (the log line follows a successful `ReleaseName`), and ends by itself
+#     with the recording published.
 #
 # Startup only. Keyboard, focus and assistive technology need a real Wayland
 # session.
@@ -141,9 +152,14 @@ smoke_run() {
             ;;
     esac
 
-    if ! grep -q "selenita-smoke-bar: recording=recording bar=shown title=Grabando" "$log"; then
-        echo "smoke: the recording bar did not show while the fake recording ran ($*)" >&2
+    if ! grep -q "selenita-smoke-bar: recording=recording bar=shown title=Grabando" "$log" \
+        || ! grep -q "selenita-smoke-bar: recording=paused bar=shown title=Grabando" "$log"; then
+        echo "smoke: the recording bar did not show while the fake recording ran and while it was paused ($*)" >&2
         grep 'selenita-smoke-bar' "$log" >&2
+        return 1
+    fi
+    if ! grep -q "selenita-fake: join 2 segments to " "$log"; then
+        echo "smoke: the paused and resumed recording's two segments were not joined ($*)" >&2
         return 1
     fi
 
@@ -160,6 +176,17 @@ smoke_run() {
     clips=$(find "$scratch/videos/Grabaciones" -name '*.mp4' 2>/dev/null | wc -l)
     if [ "$clips" -ne 1 ]; then
         echo "smoke: expected one fake recording in the videos folder's Grabaciones, found $clips" >&2
+        return 1
+    fi
+    joined=$(find "$scratch/videos/Grabaciones" -name '*.mp4' -exec cat {} \;)
+    if [ "$joined" != "fake mp4 finishedfake mp4 finished" ]; then
+        echo "smoke: the published recording is not the two segments joined: '$joined'" >&2
+        return 1
+    fi
+    hidden=$(find "$scratch/videos" -name '.selenita-*' | wc -l)
+    lists=$(find "$scratch/run" -name 'join-*' | wc -l)
+    if [ "$hidden" -ne 0 ] || [ "$lists" -ne 0 ]; then
+        echo "smoke: $hidden hidden segment(s) and $lists join list(s) were left behind" >&2
         return 1
     fi
     if [ -e "$scratch/videos/Recordings" ]; then
@@ -220,6 +247,15 @@ smoke_close() {
     lines=$(wc -l < "$scratch/data/selenita/history" 2>/dev/null || echo 0)
     if [ "$shots" -ne 1 ] || [ "$clips" -ne 1 ] || [ "$lines" -ne 2 ]; then
         echo "smoke: after the close: $shots capture(s), $clips recording(s), $lines history line(s); expected 1, 1, 2" >&2
+        return 1
+    fi
+    if ! grep -q "selenita-smoke-bar: recording=paused" "$log"; then
+        echo "smoke: the close run's recording was not paused when the window closed" >&2
+        return 1
+    fi
+    kept=$(find "$scratch/videos/Grabaciones" -name '*.mp4' -exec cat {} \;)
+    if [ "$kept" != "fake mp4 finished" ]; then
+        echo "smoke: the recording paused at the quit was not published as its one segment: '$kept'" >&2
         return 1
     fi
     rm -rf "$scratch"
@@ -286,6 +322,68 @@ smoke_discard() {
     rm -rf "$scratch"
 }
 
+# The bus name goes as soon as the window has closed, before the quit waits
+# for the recording, on a private bus that activates nothing.
+smoke_release() {
+    if ! command -v dbus-daemon >/dev/null 2>&1; then
+        echo "smoke: dbus-daemon is missing; the name's release is not checked" >&2
+        return 0
+    fi
+    scratch=$(mktemp -d)
+    mkdir -p "$scratch/config" "$scratch/data" "$scratch/cache" \
+        "$scratch/state" "$scratch/run" "$scratch/pictures" "$scratch/videos"
+    chmod 0700 "$scratch/run"
+    log=$scratch/output.log
+    printf '%s\n' \
+        '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"' \
+        ' "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">' \
+        '<busconfig>' \
+        '  <type>session</type>' \
+        "  <listen>unix:path=$scratch/run/bus</listen>" \
+        '  <policy context="default">' \
+        '    <allow send_destination="*" eavesdrop="true"/>' \
+        '    <allow eavesdrop="true"/>' \
+        '    <allow own="*"/>' \
+        '  </policy>' \
+        '</busconfig>' > "$scratch/bus.conf"
+    if ! bus_pid=$(dbus-daemon --config-file="$scratch/bus.conf" --fork --print-pid); then
+        echo "smoke: the private bus did not start" >&2
+        return 1
+    fi
+    XDG_CONFIG_HOME=$scratch/config \
+    XDG_DATA_HOME=$scratch/data \
+    XDG_CACHE_HOME=$scratch/cache \
+    XDG_STATE_HOME=$scratch/state \
+    XDG_RUNTIME_DIR=$scratch/run \
+    XDG_PICTURES_DIR=$scratch/pictures \
+    XDG_VIDEOS_DIR=$scratch/videos \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/bus \
+    SELENITA_FAKE=1 \
+    SELENITA_SMOKE_REPORT=1 \
+    SELENITA_SMOKE_CLOSE=1 \
+    QT_QPA_PLATFORM=offscreen \
+    QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+        timeout 8 "$bin" >"$log" 2>&1
+    rc=$?
+    kill "$bus_pid" 2>/dev/null
+    if [ "$rc" -ne 0 ]; then
+        echo "smoke: the launch on a private bus did not end by itself (rc=$rc); last lines:" >&2
+        tail -20 "$log" >&2
+        return 1
+    fi
+    if ! grep -q "selenita: released org.celestina.Selenita before the quit wait" "$log"; then
+        echo "smoke: the bus name was not released before the quit wait; last lines:" >&2
+        tail -20 "$log" >&2
+        return 1
+    fi
+    clips=$(find "$scratch/videos/Grabaciones" -name '*.mp4' 2>/dev/null | wc -l)
+    if [ "$clips" -ne 1 ]; then
+        echo "smoke: the private-bus run published $clips recording(s), not 1" >&2
+        return 1
+    fi
+    rm -rf "$scratch"
+}
+
 # `--pick-output` as the portal runs it: answered from a fresh request, else
 # by the fallback chooser, and never through Qt (the platform named here
 # does not exist, so a Qt start would abort).
@@ -336,5 +434,6 @@ smoke_run false false 14 0 FAKE-1 --screenshot screen || exit 1
 smoke_close || exit 1
 smoke_discard || exit 1
 smoke_pick || exit 1
+smoke_release || exit 1
 
-echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings, one fake capture and one fake recording in the history, the preview shown, the main window hidden after a key-binding launch that ends with its preview and took the focused output, the window's close ending Selenita with its recording finished, the recording bar shown while recording, a --record-focused launch handing FAKE-1 to the chooser and discarded from its bar with no file left, --pick-output answering a fresh request and falling back otherwise ($report)"
+echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings, one fake capture and one fake recording in the history, the preview shown, the main window hidden after a key-binding launch that ends with its preview and took the focused output, the window's close ending Selenita with its recording finished, the recording bar shown while recording, a --record-focused launch handing FAKE-1 to the chooser and discarded from its bar with no file left, a paused and resumed recording joined into one file and a paused one published at the quit, --pick-output answering a fresh request and falling back otherwise, the bus name released before the quit wait ($report)"

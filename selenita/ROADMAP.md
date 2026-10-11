@@ -23,7 +23,7 @@ the terminal: one window with the capture, the recording and the history.
 | SEL-2-A | The corner preview after every capture and recording: drag the file out, click to edit in Fluorita, `Adopt` for the edited copy; no main window after a key-binding launch |
 | SEL-3-A | The fixes after the author's first live use of the preview: a sharp preview, the screen key binding on the focused monitor, recordings into `Grabaciones`, the `Adopt` rule's folders named by `selenita_core::names` |
 | SEL-4-A | The recording bar («Grabando»: dot, time, «Detener», «Descartar»), the discard, `--record-focused` and `--pick-output` as the portal's chooser |
-| SEL-4-B | Pausing a recording by segments, from the bar |
+| SEL-4-B | Pausing a recording by segments from the bar («Pausar»/«Reanudar»), the segments joined by `ffmpeg` into one file at the stop |
 
 ## Exclusions
 
@@ -46,8 +46,8 @@ the terminal: one window with the capture, the recording and the history.
 | SEL-1-C | done | SEL-1-B | keyboard, accessibility, 1.0.0 | [exit](docs/evidence/2026-10-09-exit.md) |
 | SEL-2-A | done | SEL-1-C, PRV-1-A | the corner preview, the hand-off to Fluorita, `Adopt` | [preview](docs/evidence/2026-10-10-preview.md) |
 | SEL-3-A | done | SEL-2-A | the preview decoded at its shown size, `FocusedOutput` for the screen binding, `Grabaciones`, `FolderPaths` | [preview fixes](docs/evidence/2026-10-10-preview-fixes.md) |
-| SEL-4-A | active | SEL-3-A | the recording bar, the discard job, the focused start's pick request, `--pick-output` | [recording bar](docs/evidence/2026-10-10-recording-bar.md) |
-| SEL-4-B | planned | SEL-4-A | pausing by segments | — |
+| SEL-4-A | done | SEL-3-A | the recording bar, the discard job, the focused start's pick request, `--pick-output` | [recording bar](docs/evidence/2026-10-10-recording-bar.md) |
+| SEL-4-B | active | SEL-4-A | the `Paused` state, segments on one portal session, the `ffmpeg` join and its fallbacks, the bar's pause button | [recording pause](docs/evidence/2026-10-11-recording-pause.md) |
 
 SEL-1 closed on 2026-10-10 at 1.0.2, after the bug units SEL-1-D and SEL-1-E
 and the capture portal of SEL-1-F. The build order, exclusions, exit and

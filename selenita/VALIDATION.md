@@ -7,7 +7,8 @@ landing installs (`scripts/complete-production.sh`); SEL-1-C added the
 keyboard and the screen-reader steps to them rather than a third entry, so
 one session covers the window. VAL-SEL-PREVIEW is run on the binary the
 SEL-2-A landing installs, VAL-SEL-FIXES on the one the SEL-3-A landing
-installs, VAL-SEL-BAR on the one the SEL-4-A landing installs.
+installs, VAL-SEL-BAR on the one the SEL-4-B landing installs (it covers
+SEL-4-A's bar and SEL-4-B's pause).
 
 ## VAL-SEL-SHOT — Capture the screen, a window and a region
 
@@ -194,11 +195,12 @@ installs, VAL-SEL-BAR on the one the SEL-4-A landing installs.
 - **Result:** not run
 - **Evidence:** none
 
-## VAL-SEL-BAR — The recording bar and the focused monitor without the dialog
+## VAL-SEL-BAR — The recording bar, pausing, and the focused monitor without the dialog
 
 - **Status:** pending
-- **Related implementation:** SEL-4-A
-- **Requires:** the deployed Selenita (the SEL-4-A landing); in niri's
+- **Related implementation:** SEL-4-A, SEL-4-B
+- **Requires:** the deployed Selenita (the SEL-4-B landing); `ffmpeg`
+  installed (`ffmpeg -version`; it comes with libmpv); in niri's
   config the README's rule for the bar (`title="^Grabando"`) and the `V`
   binding (`--record-focused`) in the `tools` mode beside `S` and `R`; in
   xdg-desktop-portal-wlr's config
@@ -213,10 +215,22 @@ installs, VAL-SEL-BAR on the one the SEL-4-A landing installs.
   for a preview, then run `pgrep -x selenita`; open Selenita, press
   «Grabar» in the card, choose an output in the dialog, try to close the
   bar with niri's close-window key while the pointer is on it, then press
-  `R` in the window to stop; with Selenita closed press `R` in the
+  `R` in the window to stop; record with `V`, press «Pausar» after about
+  5 s, wait 10 s while moving a window, press «Reanudar», record 5 s more,
+  pause again, resume, record 5 s and press «Detener», then play the file
+  in Fluorita; record once more, pause and press «Detener» while paused;
+  record, pause and press «Descartar» while paused; record, pause, run
+  `selenita --stop` from a terminal; record, pause and close Selenita's
+  main window (from a window launch); record, pause, press «Reanudar» and
+  at once «Pausar», then «Detener»; record, press `R` in the window to
+  stop and press `R` again at once; record on a still screen (nothing
+  moving, no sound), pause after 2 s, resume, stop after 2 s more and play
+  the file; record, pause, resume, close the main window and at once run
+  `selenita` again; with Selenita closed press `R` in the
   `tools` mode (`--record`) and stop it from the bar; turn reduced motion
   on in the suite's appearance and record once more; with Orca running,
-  move to the bar's buttons; finally put the old `chooser_cmd` back as
+  read the bar with Orca's flat review (the bar never takes the focus, so
+  Tab and focus navigation do not reach it); finally put the old `chooser_cmd` back as
   the README's rollback says and press `V` once
 - **Pass condition:** `V` records the focused monitor at once, with no
   output dialog, and the second `V` records the other monitor; the bar
@@ -231,8 +245,24 @@ installs, VAL-SEL-BAR on the one the SEL-4-A landing installs.
   finds no Selenita afterwards; a recording started from the card shows
   the bar too, niri's close does not close the bar or stop the
   recording, and `R` stops it; `R` (`--record`) still shows the portal's
-  dialog; with reduced motion the dot does not pulse; Orca reads «Grabando»
-  and the two buttons with their descriptions; after the rollback `V`
+  dialog; «Pausar» turns into «Reanudar» without the pill changing size,
+  the dot stops pulsing and the time stands still while paused, no portal
+  dialog appears at the resume and the time goes on from where it stopped;
+  the three-part recording is one file in `Grabaciones`, one history row
+  and one preview, its length the recorded time without the pauses, the
+  paused stretches absent, picture and sound continuous at each join (a
+  frame or two of difference at a join is noted, not a failure); a stop
+  while paused publishes what was recorded; a discard while paused leaves
+  no file, hidden or not; `selenita --stop` and closing the window while
+  paused both publish the recording; a pause at once after a resume
+  leaves the bar paused within a second (no 10 s wait) and the stop then
+  publishes what was recorded before; the second `R` during a stop starts
+  no new recording, and the card reads «Terminando el archivo…» while it
+  finishes; the still-screen recording holds both 2 s stretches (nothing
+  dropped); the `selenita` run while the old one finishes opens a new
+  window at once; with reduced motion the dot does not
+  pulse; Orca's flat review reads «Grabando» (and «En pausa» while paused)
+  and the three buttons; after the rollback `V`
   shows the previous chooser's dialog; the pill's corners show no square
   blur behind them (if they do, the rule wants a corner radius: report
   it)

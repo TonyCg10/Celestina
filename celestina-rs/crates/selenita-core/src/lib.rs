@@ -3,7 +3,8 @@
 //! `slurp` and `wl-copy`, the deadline process runner those tools run under,
 //! the recording pipeline with its state machine and stop file, the argv
 //! that takes a recording's first frame for the preview, and the one-shot
-//! output request a focused recording leaves for the portal's chooser.
+//! output request a focused recording leaves for the portal's chooser, and
+//! a paused recording's segments with their join.
 //!
 //! Every function that touches the filesystem, a socket or a process blocks
 //! and belongs on a worker thread.
@@ -16,6 +17,7 @@ pub mod pick;
 pub mod poster;
 pub mod record;
 pub mod runner;
+pub mod segments;
 pub mod target;
 pub mod tools;
 

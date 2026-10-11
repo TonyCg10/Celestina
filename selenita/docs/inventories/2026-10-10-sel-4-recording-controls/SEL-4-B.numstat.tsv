@@ -1,0 +1,67 @@
+# SEL-4-B exact change inventory
+
+Base revision	43b05d1da9067fd00813c31caebc39d0627f236d
+Pathspec	celestina-rs/crates/selenita-core/src/lib.rs
+Pathspec	celestina-rs/crates/selenita-core/src/record.rs
+Pathspec	celestina-rs/crates/selenita-core/src/segments.rs
+Pathspec	celestina-rs/crates/selenita-core/tests/record.rs
+Pathspec	celestina-rs/crates/selenita-core/tests/segments.rs
+Pathspec	docs/version-history.tsv
+Pathspec	selenita/Cargo.lock
+Pathspec	selenita/Cargo.toml
+Pathspec	selenita/README.md
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/VALIDATION.md
+Pathspec	selenita/docs/evidence/2026-10-11-recording-pause.md
+Pathspec	selenita/docs/inventories/2026-10-10-sel-4-recording-controls/SEL-4-B.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-10-sel-4-recording-controls.md
+Pathspec	selenita/docs/plans/active/README.md
+Pathspec	selenita/qml/Main.qml
+Pathspec	selenita/qml/RecordingBar.qml
+Pathspec	selenita/qml/RecordingCard.qml
+Pathspec	selenita/qml/components/RecordingClock.qml
+Pathspec	selenita/scripts/smoke.sh
+Pathspec	selenita/src/activation.rs
+Pathspec	selenita/src/controller.rs
+Pathspec	selenita/src/main.rs
+Pathspec	selenita/src/portal.rs
+Pathspec	selenita/src/record.rs
+Pathspec	selenita/src/recorder.rs
+Pathspec	selenita/tests/qml/stubs/SelenitaController.qml
+Pathspec	selenita/tests/qml/tst_recording.qml
+Pathspec	selenita/tests/qml/tst_recording_bar.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	1	c819b0f9cc4f46c81b95ef08280188d985cfca884df24d5a1116b3b65de4012d	celestina-rs/crates/selenita-core/src/lib.rs
+35	4	a25272c29067390af381820eab1efd719012622b9098fc3e259f19be934dea58	celestina-rs/crates/selenita-core/src/record.rs
+162	0	2c624b8c0aacd506a32728f1b54afcbdee7dcd519bbb1ed949cf9d7fc188de6f	celestina-rs/crates/selenita-core/src/segments.rs
+48	4	8ae7c2e631603fc729ba8fa5734cb0ce83755b3baeb3e75d09f279916eebeb08	celestina-rs/crates/selenita-core/tests/record.rs
+191	0	127c5a706d7f284da3f28c4a792502625c6c4cb6047ae5947180fa9fb005e100	celestina-rs/crates/selenita-core/tests/segments.rs
+1	0	9083a81b79b6c81217dae5d0b57abf6ef007aced9696be3d7e8bf9c73303b1ad	docs/version-history.tsv
+1	1	cd4d4614b884f146bd5b76e04be51071add73809116676aa7bc889eead84856b	selenita/Cargo.lock
+1	1	4233a889c0ae7ef5255214404d672ca50621ca22f83087a15cb1117886ef2246	selenita/Cargo.toml
+73	15	69c900719fd7b83fb3fc07b1271be8d64aea7244b62598ec6b48afeb6e5192c1	selenita/README.md
+3	3	0f56980026d0533b7532f1d313068b6793b7b7d67a3d8316e8a58dd6f3a33154	selenita/ROADMAP.md
+86	29	c20b963ad7de905c145f7f73a297f9f903003f837bd9c6438970d77b5750c62e	selenita/STATUS.md
+38	8	ceecae429e469aef458f8290e3f1233b56b052a360f886d0f080756d2db3a3d1	selenita/VALIDATION.md
+289	0	9327fc542aa740a2d8a08ac031065d75d6370d3447f0fed70017679983db6c15	selenita/docs/evidence/2026-10-11-recording-pause.md
+67	0	self	selenita/docs/inventories/2026-10-10-sel-4-recording-controls/SEL-4-B.numstat.tsv
+15	5	27cc8f4eedee3fd57b3315a8406fd9dff62fd77e0cb87088f9330e01a4939fb3	selenita/docs/plans/active/2026-10-10-sel-4-recording-controls.md
+2	1	7903537dba83f1cc5b2d2753453209632b3e6246afb62d55a247d160c54c8fdf	selenita/docs/plans/active/README.md
+34	8	7debfa9470685232e3009b9d5f26335b1f5c8b67b34fdcd034650b933291d867	selenita/qml/Main.qml
+57	11	9fde81b18fcdf3af11e999a4008ecf7631e4dbbc178b9c17cf363e6caa555727	selenita/qml/RecordingBar.qml
+12	6	a678059216eb4721f4e21ca1c4392ed57f0910a1018fce5c9dbed5cace119993	selenita/qml/RecordingCard.qml
+24	14	2a60e4a7da66a905f5253e474e5186bf307fa6ce7b00d1bcbafa8aba3d320148	selenita/qml/components/RecordingClock.qml
+105	6	87ce10767f83b1c3feb8629df6123291aacb5adf951d2aa166009d5b4be7ec1c	selenita/scripts/smoke.sh
+17	0	ec99fd30c6904f697cb81e6ddc2a624b4fd44cd1905680fd0d7970f2d1d299c2	selenita/src/activation.rs
+44	17	083e7567e7845120277be7151b7a7402ecd7aefe5d87577969925f6b28cee22d	selenita/src/controller.rs
+6	3	5011a1fa01a74bd455b3d114bbbaeabd89df4a88161cb20189c31e048b08ec14	selenita/src/main.rs
+31	16	6af9b021fd25a6626b361ebed55f38fe9fbc4655faf82cb2ebcd62e7e285c5e1	selenita/src/portal.rs
+1996	581	bb0a8565d025746f660e3d44630477c93da3fba0ee8cea0cbe2f5289ed1daadd	selenita/src/record.rs
+525	0	0bed3961e2bc77a206ed7023672c4eebe370e6cb89448cf66d9dcac66ec79245	selenita/src/recorder.rs
+24	5	2bd5ece3d5e6412d30728a0992df98f69c3263e625f0ae1930e6d7d19431a741	selenita/tests/qml/stubs/SelenitaController.qml
+39	0	89ddb4a487ac813f2c1aaf5502491d29199f2e351a011ab77869dd180fbb8c86	selenita/tests/qml/tst_recording.qml
+91	7	99d035392133006875744cf31f4c0b36afd1d3f687ffbffd63eac9d4d802d17e	selenita/tests/qml/tst_recording_bar.qml

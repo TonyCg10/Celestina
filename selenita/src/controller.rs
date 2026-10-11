@@ -103,10 +103,12 @@ pub mod qobject {
         // A capture is under way.
         #[qproperty(bool, busy, READ, NOTIFY)]
         // The recording: `idle`, `preparing` (the portal's dialog),
-        // `recording` or `stopping`; the system's sound switch; when the
-        // recording under way began (milliseconds since the epoch); the
-        // last recording's history id and file name; what the host lacks
-        // for recording (an element name, empty when nothing).
+        // `recording`, `paused` or `stopping`; the system's sound switch;
+        // the clock's origin while it records (milliseconds since the
+        // epoch: now less the time recorded, so a resume moves it); the
+        // time recorded when it paused (milliseconds); the last
+        // recording's history id and file name; what the host lacks for
+        // recording (an element name, empty when nothing).
         #[qproperty(QString, recording_state, cxx_name = "recordingState", READ, NOTIFY)]
         #[qproperty(bool, with_audio, cxx_name = "withAudio", READ, WRITE, NOTIFY)]
         #[qproperty(
@@ -116,6 +118,7 @@ pub mod qobject {
             READ,
             NOTIFY
         )]
+        #[qproperty(f64, recording_recorded, cxx_name = "recordingRecorded", READ, NOTIFY)]
         #[qproperty(QString, last_recording_id, cxx_name = "lastRecordingId", READ, NOTIFY)]
         #[qproperty(
             QString,
@@ -226,8 +229,18 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "stopRecording"]
         fn stop_recording(self: Pin<&mut SelenitaController>);
-        /// Stops the recording under way and deletes its file: no history
-        /// row, no preview. Nothing happens when none records.
+        /// Pauses the recording under way: its segment is finished, the
+        /// portal's session kept. Nothing happens unless it records.
+        #[qinvokable]
+        #[cxx_name = "pauseRecording"]
+        fn pause_recording(self: Pin<&mut SelenitaController>);
+        /// Resumes the paused recording into a new segment. Nothing happens
+        /// unless it is paused.
+        #[qinvokable]
+        #[cxx_name = "resumeRecording"]
+        fn resume_recording(self: Pin<&mut SelenitaController>);
+        /// Stops the recording under way or paused and deletes its files:
+        /// no history row, no preview. Nothing happens when none records.
         #[qinvokable]
         #[cxx_name = "discardRecording"]
         fn discard_recording(self: Pin<&mut SelenitaController>);
@@ -273,6 +286,7 @@ pub struct SelenitaControllerRust {
     recording_state: QString,
     with_audio: bool,
     recording_started_at: f64,
+    recording_recorded: f64,
     last_recording_id: QString,
     last_recording_name: QString,
     recorder_missing: QString,
@@ -318,6 +332,7 @@ impl Default for SelenitaControllerRust {
             recording_state: QString::from(record_state_word(selenita_core::record::State::Idle)),
             with_audio: false,
             recording_started_at: 0.0,
+            recording_recorded: 0.0,
             last_recording_id: QString::default(),
             last_recording_name: QString::default(),
             recorder_missing: QString::default(),
@@ -496,6 +511,10 @@ impl qobject::SelenitaController {
                     self.as_mut().say_error(&error.message_es());
                 }
                 self.as_mut().recording_finished(QString::from(id.as_str()));
+            }
+            record::Report::Paused(recorded) => {
+                self.as_mut().rust_mut().recording_recorded = recorded.as_millis() as f64;
+                self.as_mut().recording_recorded_changed();
             }
             // Nothing to show: a key-binding launch ends here, as one whose
             // preview has gone.
@@ -754,24 +773,32 @@ impl qobject::SelenitaController {
     }
 
     pub fn stop_recording(self: Pin<&mut Self>) {
-        let queued = self
-            .rust()
-            .recorder
-            .as_ref()
-            .ok_or(record::RecordError::WorkerGone)
-            .and_then(record::Worker::stop);
-        if let Err(error) = queued {
-            self.say_error(&error.message_es());
-        }
+        self.ask_recorder(record::Worker::stop);
     }
 
     pub fn discard_recording(self: Pin<&mut Self>) {
+        self.ask_recorder(record::Worker::discard);
+    }
+
+    pub fn pause_recording(self: Pin<&mut Self>) {
+        self.ask_recorder(record::Worker::pause);
+    }
+
+    pub fn resume_recording(self: Pin<&mut Self>) {
+        self.ask_recorder(record::Worker::resume);
+    }
+
+    /// Hands the recording worker one job; a gone worker is said.
+    fn ask_recorder(
+        self: Pin<&mut Self>,
+        job: fn(&record::Worker) -> Result<(), record::RecordError>,
+    ) {
         let queued = self
             .rust()
             .recorder
             .as_ref()
             .ok_or(record::RecordError::WorkerGone)
-            .and_then(record::Worker::discard);
+            .and_then(job);
         if let Err(error) = queued {
             self.say_error(&error.message_es());
         }
@@ -965,7 +992,7 @@ mod tests {
         assert!(!launch_over(false, false, false, "idle"));
         assert!(!launch_over(true, true, false, "idle"), "the preview shows");
         assert!(!launch_over(true, false, true, "idle"), "a capture runs");
-        for state in ["preparing", "recording", "stopping"] {
+        for state in ["preparing", "recording", "paused", "stopping"] {
             assert!(!launch_over(true, false, false, state), "{state}");
         }
     }

@@ -51,8 +51,17 @@ otherwise becomes the previous chooser, so `R` keeps its dialog.
   `toggleFocusedRecording` and `discardRecording`, the activation's
   `RecordFocused`, the flags `--record-focused` and `--pick-output`, the
   chooser (`picker.rs`); the QML tests and stub, the smoke, the documents.
-- `SEL-4-B` — pausing a recording by segments: a pause button in the
-  bar, the segments joined into one file at the stop.
+- `SEL-4-B` — pausing a recording by segments, as the author approved on
+  2026-10-10: «Pausar»/«Reanudar» in the bar; a pause finishes the current
+  child's segment and keeps the portal's session, a resume starts the
+  next child on a fresh remote of the same session; the stop joins the
+  segments with `ffmpeg -f concat -c copy` (one segment published as it
+  is; a failed join publishes each segment as `<name> (n).mp4`); the
+  `Paused` state in `selenita_core::record`, `selenita_core::segments`
+  (names, concat list, join argv) with its tests, the recorders moved to
+  `recorder.rs` with the join seam, the clock counting recorded time; and
+  SEL-4-A's review minors: a discard queued with a child that ended on
+  its own wins, and VAL-SEL-BAR reads the bar with Orca's flat review.
 
 ## Exclusions
 
@@ -61,8 +70,9 @@ otherwise becomes the previous chooser, so `R` keeps its dialog.
 - The suite's `scripts/activation_contract.py`: its `Selenita1` reason
   names the methods in prose; listing `RecordFocused` there is a suite
   follow-up, and the allowlist itself does not change.
-- Pausing (SEL-4-B), recording one window alone, and anything in the
-  halted shell beyond running its installed chooser as the fallback.
+- Recording one window alone, pausing without a new child (the launcher
+  has no runtime control), and anything in the halted shell beyond running
+  its installed chooser as the fallback.
 
 ## Build order
 
@@ -82,4 +92,4 @@ landed tree.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | SEL-4-A | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-4-recording-controls/SEL-4-A.numstat.tsv) | 31 files, +2542/-114 | Add the recording bar and recording the focused monitor without the chooser | [evidence](../../evidence/2026-10-10-recording-bar.md) | VAL-SEL-BAR pending |
-| SEL-4-B | `selenita:` | planned | `selenita/qml/RecordingBar.qml`, `selenita/src/record.rs`, `celestina-rs/crates/selenita-core/src/record.rs` | — | Add pausing a recording by segments | — | None yet |
+| SEL-4-B | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-4-recording-controls/SEL-4-B.numstat.tsv) | 30 files, +4020/-746 | Add pause and resume to recordings by joining segments | [evidence](../../evidence/2026-10-11-recording-pause.md) | VAL-SEL-BAR pending |

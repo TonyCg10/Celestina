@@ -319,6 +319,23 @@ pub fn claim() {
     }
 }
 
+/// The window is gone: gives up `org.celestina.Selenita` at once, before
+/// the process waits for a recording to finish (up to
+/// `record::QUIT_DEADLINE`), so a launch meanwhile becomes a fresh instance
+/// instead of handing its request to one that is ending. The connection
+/// stays open; nothing is served to anyone any more.
+pub fn release() {
+    let Some(owner) = OWNER.get() else {
+        return;
+    };
+    let name = activation::SELENITA.0;
+    match owner.connection().release_name(name) {
+        Ok(true) => eprintln!("selenita: released {name} before the quit wait"),
+        Ok(false) => {}
+        Err(error) => eprintln!("selenita: {name} was not released: {error}"),
+    }
+}
+
 /// `selenita --screenshot <target>`'s first step: asks a running Selenita to
 /// take the capture. `Ok(true)` when it did; `Ok(false)` when nobody runs
 /// (this launch then becomes the instance and takes it itself).

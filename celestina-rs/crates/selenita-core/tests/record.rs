@@ -5,8 +5,8 @@ use selenita_core::names::user_dir_from;
 use selenita_core::names::{recordings_dir_in, RECORDINGS_FOLDER};
 use selenita_core::record::{
     inspect_argv, quoted, request_stop, stop_file, take_stop_request, Event, Pipeline, Source,
-    State, VideoEncoder, AUDIO_BED, AUDIO_ENCODER, AUDIO_MIXER, INSPECTOR, KEY_INTERVAL, LAUNCHER,
-    MUXER,
+    State, VideoEncoder, AUDIO_BED, AUDIO_ENCODER, AUDIO_MIXER, FILESINK_UNBUFFERED, INSPECTOR,
+    KEY_INTERVAL, LAUNCHER, MUXER,
 };
 
 fn pipeline(encoder: VideoEncoder, audio: bool) -> Pipeline {
@@ -27,6 +27,7 @@ fn joined(pipeline: &Pipeline) -> String {
 
 #[test]
 fn the_four_combinations_build_their_branches() {
+    assert_eq!(FILESINK_UNBUFFERED, "buffer-mode=2");
     for (encoder, element) in [
         (VideoEncoder::X264, "x264enc"),
         (VideoEncoder::VaH264, "vah264enc"),
@@ -35,7 +36,9 @@ fn the_four_combinations_build_their_branches() {
             let text = joined(&pipeline(encoder, audio));
             assert!(text.contains(&format!(" ! {element} ")), "{text}");
             assert!(
-                text.starts_with(&format!("{MUXER} name=mux ! filesink location=")),
+                text.starts_with(&format!(
+                    "{MUXER} name=mux ! filesink {FILESINK_UNBUFFERED} location="
+                )),
                 "{text}"
             );
             assert!(text.contains("pipewiresrc fd=0 path=42 "), "{text}");
@@ -158,9 +161,37 @@ fn the_state_machine_walks_a_recording() {
     assert!(!state.is_busy());
 }
 
+/// SEL-4-B: a recording goes back and forth between recording and paused,
+/// and stops or fails from either.
+#[test]
+fn a_recording_pauses_and_resumes_and_stops_from_either() {
+    let state = State::Recording.next(Event::Pause).expect("paused");
+    assert_eq!(state, State::Paused);
+    assert_eq!(state.as_str(), "paused");
+    assert!(state.is_busy());
+    assert!(state.is_under_way());
+    assert_eq!(state.next(Event::Resume), Ok(State::Recording));
+    assert_eq!(state.next(Event::Stop), Ok(State::Stopping));
+    assert_eq!(state.next(Event::Failure), Ok(State::Failed));
+    assert!(State::Recording.is_under_way());
+    for other in [
+        State::Idle,
+        State::Preparing,
+        State::Stopping,
+        State::Failed,
+    ] {
+        assert!(!other.is_under_way(), "{other:?}");
+    }
+}
+
 #[test]
 fn a_failure_lands_in_failed_and_leaves_it() {
-    for busy in [State::Preparing, State::Recording, State::Stopping] {
+    for busy in [
+        State::Preparing,
+        State::Recording,
+        State::Paused,
+        State::Stopping,
+    ] {
         assert_eq!(busy.next(Event::Failure), Ok(State::Failed), "{busy:?}");
     }
     assert_eq!(State::Failed.next(Event::Start), Ok(State::Preparing));
@@ -186,6 +217,19 @@ fn the_other_transitions_are_refused() {
         (State::Stopping, Event::Prepared),
         (State::Failed, Event::Stop),
         (State::Failed, Event::Prepared),
+        // A pause only from recording, a resume only from paused.
+        (State::Idle, Event::Pause),
+        (State::Preparing, Event::Pause),
+        (State::Stopping, Event::Pause),
+        (State::Paused, Event::Pause),
+        (State::Failed, Event::Pause),
+        (State::Idle, Event::Resume),
+        (State::Preparing, Event::Resume),
+        (State::Recording, Event::Resume),
+        (State::Stopping, Event::Resume),
+        (State::Paused, Event::Start),
+        (State::Paused, Event::Prepared),
+        (State::Paused, Event::Stopped),
     ];
     for (state, event) in refused {
         let error = state.next(event).expect_err("refused");

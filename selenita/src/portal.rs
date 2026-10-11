@@ -7,7 +7,10 @@
 //! sends its real answer later as a `Response` signal on that handle, so the
 //! signal is subscribed to before the call and waited for with a deadline
 //! (long enough for the person to choose). The session is closed when the
-//! [`Session`] is dropped, so the compositor stops casting. Everything here
+//! [`Session`] is dropped, so the compositor stops casting. While it is open
+//! [`Session::remote`] hands out a fresh PipeWire remote for the same node:
+//! a paused recording's next segment (SEL-4-B) reads through it, without
+//! asking the person again. Everything here
 //! blocks and runs on the recording worker; [`cancel_pending`] is the one
 //! call for another thread, which closes the request the worker waits on
 //! (the window is quitting) so the worker comes back at once.
@@ -97,6 +100,31 @@ pub struct Session {
     path: OwnedObjectPath,
 }
 
+impl Session {
+    /// A new PipeWire remote that sees this session's node
+    /// (`OpenPipeWireRemote`), close-on-exec.
+    ///
+    /// # Errors
+    ///
+    /// [`PortalError::Bus`] when the portal refused, or the session is gone.
+    pub fn remote(&self) -> Result<OwnedFd, PortalError> {
+        let portal = Proxy::new(&self.connection, PORTAL_NAME, PORTAL_PATH, SCREENCAST)?;
+        let fd: zbus::zvariant::OwnedFd = portal.call(
+            "OpenPipeWireRemote",
+            &(self.path.clone(), HashMap::<&str, Value<'_>>::new()),
+        )?;
+        let fd = OwnedFd::from(fd);
+        // The bus hands the descriptor over without close-on-exec: set it,
+        // so a `grim` or `wl-copy` forked meanwhile by the capture worker
+        // does not inherit the remote. The child that needs it gets it on
+        // its standard input, which `Command` dups anew.
+        if let Err(error) = rustix::io::fcntl_setfd(fd.as_fd(), rustix::io::FdFlags::CLOEXEC) {
+            eprintln!("selenita: the PipeWire remote keeps no close-on-exec: {error}");
+        }
+        Ok(fd)
+    }
+}
+
 impl Drop for Session {
     fn drop(&mut self) {
         let closed = Proxy::new(&self.connection, PORTAL_NAME, &self.path, SESSION)
@@ -178,21 +206,8 @@ pub fn open_monitor() -> Result<(Session, Stream), PortalError> {
         .map(|(node, _)| *node)
         .ok_or(PortalError::Malformed("stream"))?;
 
-    let fd = match portal.call::<_, _, zbus::zvariant::OwnedFd>(
-        "OpenPipeWireRemote",
-        &(session.path.clone(), HashMap::<&str, Value<'_>>::new()),
-    ) {
-        Ok(fd) => {
-            let fd = OwnedFd::from(fd);
-            // The bus hands the descriptor over without close-on-exec: set
-            // it, so a `grim` or `wl-copy` forked meanwhile by the capture
-            // worker does not inherit the remote. The child that needs it
-            // gets it on its standard input, which `Command` dups anew.
-            if let Err(error) = rustix::io::fcntl_setfd(fd.as_fd(), rustix::io::FdFlags::CLOEXEC) {
-                eprintln!("selenita: the PipeWire remote keeps no close-on-exec: {error}");
-            }
-            Some(fd)
-        }
+    let fd = match session.remote() {
+        Ok(fd) => Some(fd),
         // Without the remote `pipewiresrc` connects to the session's own
         // daemon, where the node is visible under the wlr backend.
         Err(error) => {

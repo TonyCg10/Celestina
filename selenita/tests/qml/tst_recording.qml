@@ -138,6 +138,45 @@ TestCase {
         compare(SelenitaController.calls[0], "toggleRecording:true")
     }
 
+    // Paused from the bar: the card holds the time, says it is paused and
+    // its button still stops.
+    function test_a_paused_recording_holds_its_time_and_still_stops() {
+        const card = createTemporaryObject(cardComponent, testCase)
+        const clock = named(card, "elapsedText")
+        SelenitaController.recordingStartedAt = Date.now() - 7300
+        SelenitaController.recordingState = "recording"
+        compare(clock.text, "0:07")
+        SelenitaController.pauseRecording()
+        compare(clock.text, qsTr("%1 · en pausa").arg("0:07"))
+        verify(named(card, "recordingDot").visible)
+        const button = named(card, "recordButton")
+        compare(button.text, qsTr("Detener"))
+        verify(button.enabled)
+        mouseClick(button)
+        compare(SelenitaController.recordingState, "idle")
+        compare(SelenitaController.history.length, 1)
+    }
+
+    // The stop says `stopping` before it finishes the last segment and
+    // joins: the card says so and its clock stops, whether it stopped from
+    // recording or from paused.
+    function test_the_finish_and_the_join_read_as_stopping() {
+        const card = createTemporaryObject(cardComponent, testCase)
+        const clock = named(card, "elapsedText")
+        for (const from of ["recording", "paused"]) {
+            SelenitaController.recordingStartedAt = Date.now() - 4200
+            SelenitaController.recordingRecorded = 4200
+            SelenitaController.recordingState = from
+            verify(clock.text.indexOf("0:04") === 0, from + ": " + clock.text)
+            SelenitaController.recordingState = "stopping"
+            compare(clock.text, qsTr("Terminando el archivo…"))
+            compare(card.elapsed, 0, "the clock stops")
+            verify(!named(card, "recordingDot").visible)
+            verify(!named(card, "recordButton").enabled)
+            SelenitaController.recordingState = "idle"
+        }
+    }
+
     function test_the_transit_states_disable_the_button() {
         const card = createTemporaryObject(cardComponent, testCase)
         SelenitaController.recordingState = "preparing"

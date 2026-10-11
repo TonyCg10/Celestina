@@ -3,7 +3,8 @@ import org.celestina.selenita 1.0
 import "components"
 
 // The recording card (design §5.3): record or stop, with a red dot and the
-// elapsed time while it records; the system's sound switch; what the host
+// recorded time while it records (the dot still and the time held, said as
+// paused, while the recording bar has it paused); the system's sound switch; what the host
 // lacks when it cannot record; the last recording and «Abrir en Fluorita».
 // The state lives in the controller; this card only shows it and asks.
 SectionCard {
@@ -11,6 +12,9 @@ SectionCard {
 
     readonly property string phase: SelenitaController.recordingState
     readonly property bool recording: card.phase === "recording"
+    readonly property bool paused: card.phase === "paused"
+    // Recording or paused: the button stops it either way.
+    readonly property bool underWay: card.recording || card.paused
     // Between the ask and the answer: the portal's dialog, or the muxer
     // finishing the file.
     readonly property bool inTransit: card.phase === "preparing" || card.phase === "stopping"
@@ -28,7 +32,8 @@ SectionCard {
 
     RecordingClock {
         id: clock
-        active: card.recording
+        active: card.underWay
+        paused: card.paused
     }
 
     // The dot, the time and the button.
@@ -46,7 +51,7 @@ SectionCard {
             height: width
             radius: width / 2
             color: CelestinaTheme.danger
-            visible: card.recording
+            visible: card.underWay
             Accessible.ignored: true
 
             // A slow blink while it records, still under reduced motion.
@@ -67,6 +72,7 @@ SectionCard {
             anchors.rightMargin: CelestinaTheme.spaceMd
             anchors.verticalCenter: parent.verticalCenter
             text: card.recording ? clock.text
+                  : card.paused ? qsTr("%1 · en pausa").arg(clock.text)
                   : card.phase === "preparing" ? qsTr("Elige la pantalla en el diálogo del portal…")
                   : card.phase === "stopping" ? qsTr("Terminando el archivo…")
                   : card.unavailable ? qsTr("Falta «%1»: instala gst-plugins-good para grabar.")
@@ -74,7 +80,7 @@ SectionCard {
                   : qsTr("Graba la pantalla en MP4.")
             elide: Text.ElideRight
             color: card.recording ? CelestinaTheme.text : CelestinaTheme.textMuted
-            font.family: card.recording ? CelestinaTheme.monoFamily : CelestinaTheme.sansFamily
+            font.family: card.underWay ? CelestinaTheme.monoFamily : CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontRowTitle
             Accessible.role: Accessible.StaticText
             Accessible.name: text
@@ -87,10 +93,10 @@ SectionCard {
             anchors.rightMargin: card.rowInset
             anchors.verticalCenter: parent.verticalCenter
             height: CelestinaTheme.controlHeightLg
-            role: card.recording ? CelestinaButton.Destructive : CelestinaButton.Primary
+            role: card.underWay ? CelestinaButton.Destructive : CelestinaButton.Primary
             density: CelestinaButton.Regular
             enabled: !card.inTransit && !card.unavailable
-            text: card.recording ? qsTr("Detener") : qsTr("Grabar")
+            text: card.underWay ? qsTr("Detener") : qsTr("Grabar")
             Accessible.description: qsTr("Tecla R")
             onClicked: SelenitaController.toggleRecording()
         }
