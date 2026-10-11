@@ -15,6 +15,7 @@ mod recipes;
 #[cfg(test)]
 mod test_support;
 mod thumbnails;
+mod trim;
 
 use cxx_qt_lib::{
     QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString,

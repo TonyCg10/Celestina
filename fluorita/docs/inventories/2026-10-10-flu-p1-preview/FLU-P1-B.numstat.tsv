@@ -1,0 +1,85 @@
+# FLU-P1-B exact change inventory
+
+Base revision	9efca5e8dd0e951c7ba638dd14b0f416e3319f5c
+Pathspec	celestina-rs/crates/fluorita-core/src/lib.rs
+Pathspec	celestina-rs/crates/fluorita-core/src/trim.rs
+Pathspec	celestina-rs/crates/fluorita-core/src/trim/copy.rs
+Pathspec	celestina-rs/crates/fluorita-core/tests/trim.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/landing.rs
+Pathspec	celestina-rs/crates/fluorita-engine/src/lib.rs
+Pathspec	docs/version-history.tsv
+Pathspec	fluorita/Cargo.lock
+Pathspec	fluorita/Cargo.toml
+Pathspec	fluorita/README.md
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/VALIDATION.md
+Pathspec	fluorita/build.rs
+Pathspec	fluorita/docs/evidence/2026-10-10-video-trim.md
+Pathspec	fluorita/docs/inventories/2026-10-10-flu-p1-preview/FLU-P1-B.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-10-10-flu-p1-preview.md
+Pathspec	fluorita/qml/EditWindow.qml
+Pathspec	fluorita/qml/components/EditCloseQuestion.qml
+Pathspec	fluorita/qml/components/TrimBar.qml
+Pathspec	fluorita/qml/components/TrimSurface.qml
+Pathspec	fluorita/scripts/qml-tests.sh
+Pathspec	fluorita/scripts/smoke.sh
+Pathspec	fluorita/src/activation.rs
+Pathspec	fluorita/src/editor.rs
+Pathspec	fluorita/src/editor/copy.rs
+Pathspec	fluorita/src/main.rs
+Pathspec	fluorita/src/player.rs
+Pathspec	fluorita/src/test_support.rs
+Pathspec	fluorita/src/trim.rs
+Pathspec	fluorita/src/trim/copy.rs
+Pathspec	fluorita/src/trim/run.rs
+Pathspec	fluorita/tests/fixtures/make-three-seconds.sh
+Pathspec	fluorita/tests/fixtures/three-seconds.mp4
+Pathspec	fluorita/tests/qml/render/MpvVideo.qml
+Pathspec	fluorita/tests/qml/stubs/FluoritaEditor.qml
+Pathspec	fluorita/tests/qml/stubs/FluoritaPlayer.qml
+Pathspec	fluorita/tests/qml/stubs/FluoritaTrim.qml
+Pathspec	fluorita/tests/qml/tst_trim.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	fd2e9160758ec90311dc775f0822e50836522a58cf82d3219ad1f879c0b2d3b2	celestina-rs/crates/fluorita-core/src/lib.rs
+447	0	d88192ffb53a64fd3a4f3a4edccef8a2beeafdaef662e6620fbc90f5fdb30ea8	celestina-rs/crates/fluorita-core/src/trim.rs
+38	0	a22096be1abba73898625c024eba000a8f4185833306a7da5bbb5ef61197e425	celestina-rs/crates/fluorita-core/src/trim/copy.rs
+318	0	4356be38f596e66bfc7069d3e81459d0343f3e8191c7bcbbe0bb1b2255eb54e5	celestina-rs/crates/fluorita-core/tests/trim.rs
+310	4	7c72a4bf52decf8a2f2a9f43c210eca4da88be84bc83d25b651107bfc93540af	celestina-rs/crates/fluorita-engine/src/landing.rs
+1	0	2b0fb18040572ea6b330cf2312b5932ca29033e18b37d2e5b4ae4803652425df	celestina-rs/crates/fluorita-engine/src/lib.rs
+1	0	810a319a41a357ea63620244bcf9ecb2b9e8102643e906cd5d258db85a12d21c	docs/version-history.tsv
+1	1	48bacad4d752a55ad801b86dc14e4ecc3c3825d7629aa498241df31e8bdccac7	fluorita/Cargo.lock
+1	1	5efffa27b13f02a7f3f318f3cc68cd710f088deddac6034242a421882237ed54	fluorita/Cargo.toml
+27	8	7eaf348f7226726050b6d454e240f90c79775a586924374654fb75e5f775e879	fluorita/README.md
+14	9	b8d0a901fa6c69ba3a4c87382d25448fec5938e2b8c58f4471f5462e365af724	fluorita/ROADMAP.md
+41	9	76084c984ecb118c1cbf75b989555635f56b10a7d956ffe8394ec0b5c948d3a9	fluorita/STATUS.md
+37	0	abadf1255391d8d56dc4a0a896fe0c607d4eb01133011296fb040a48797cd820	fluorita/VALIDATION.md
+5	0	613d7554e777df69ab3caa74a3ad4e6ff4459a058025021d560bd0fd3ae39d56	fluorita/build.rs
+283	0	5b189dfab2b24fe861267eb2a9cf7f16d1158cc57129cef5f87db19773a19660	fluorita/docs/evidence/2026-10-10-video-trim.md
+85	0	self	fluorita/docs/inventories/2026-10-10-flu-p1-preview/FLU-P1-B.numstat.tsv
+3	3	5c75846a52a1bb5baf20fa9c7df22cd0a2650223500e5e879552b4b64a02b10e	fluorita/docs/plans/active/2026-10-10-flu-p1-preview.md
+126	12	1cabd0c99e329256163b949963084c67e6e4b42fc34eb21e71f403e2f0225007	fluorita/qml/EditWindow.qml
+5	1	ced412e1dc19682bc5d2e3629ebb3c612a8d7ecef1d38bb5266123170a4aaa0c	fluorita/qml/components/EditCloseQuestion.qml
+215	0	5c353d61733cb0879ace576d3d7a924a50ca1cbe03431986917fdcc8b7310aaa	fluorita/qml/components/TrimBar.qml
+350	0	82c550468fb3ffe4413c596a666d2f03cc8cff1d5255fa708c92624320c04cc1	fluorita/qml/components/TrimSurface.qml
+12	1	6a90ec1b1156ce0bc224f66946b79245f079c70cc7fe352c1e6ae79f2c9640c4	fluorita/scripts/qml-tests.sh
+43	2	ce70f18a8bfbfe3d0cd43c87728cdd951eb8320e51c047b513a860457dfa3ab1	fluorita/scripts/smoke.sh
+119	12	31ba3f87d0940abe93c02ac7c3626c15be6dd99089f7731299389abdfd34fc15	fluorita/src/activation.rs
+65	8	c8503bc73bd72c62f6353e68dfe579ee564f104ebd80996699628ba15170ee2d	fluorita/src/editor.rs
+3	3	c8732b14291b473744bc34dbd2cf407e6ba902e804a4739cae18f17c1a3680cd	fluorita/src/editor/copy.rs
+1	0	85df5fdd4df2be7c6aa1adba7acf44a2853e4a0a80e6e3074756e0dcca4bde26	fluorita/src/main.rs
+29	3	4af4e10beca8ba0d45f4e9cf06624aed8142f289d04c16e12f3d651d88ffecb0	fluorita/src/player.rs
+17	1	60f0b362bd8ba80c47b355eadc4d95215fb6ac08398158fba2571eecf76256b8	fluorita/src/test_support.rs
+428	0	706181f2e99c70c587971bd4c304aee15bff391f2f09df5558282f2d92a1f0ac	fluorita/src/trim.rs
+73	0	1efd4f85181eb5ffce7018a24cdb3defb8e733c4371fb5892194fb69be26bc57	fluorita/src/trim/copy.rs
+1116	0	13e3bbcf73ebf637bd81109e6e10e69f0d1cfc713e4a5a281cc755a154a89515	fluorita/src/trim/run.rs
+17	0	f741d84b2f38c9122c3726efd0c54568f74c9c94a25db9c883e46d62d526d0a3	fluorita/tests/fixtures/make-three-seconds.sh
+-	-	4a98589280f668c7b93d76ae3ce7e18623e0c830cfb0f1b2f53754297e431f46	fluorita/tests/fixtures/three-seconds.mp4
+33	0	654a734a36d4a4e3cb7254651a21945060113437c09b8a083292180d10d95bdc	fluorita/tests/qml/render/MpvVideo.qml
+9	0	f8cda8fae8f9b929299c9de8346378a5bc9ef1a67b1cda7e5d2f74c45eecd9b7	fluorita/tests/qml/stubs/FluoritaEditor.qml
+71	0	f33a49e37836cbe7761ec9a2e931f841c5c58307f54609363b77fd0f6f66eccc	fluorita/tests/qml/stubs/FluoritaPlayer.qml
+112	0	65e66515434aff81e138b7b7433075187508f27e66df63d34760f0820bf3c770	fluorita/tests/qml/stubs/FluoritaTrim.qml
+347	0	6c8befd61020d7d5f05d6feba3d5adfcd6350a38a85aadb5c6cee718461a3320	fluorita/tests/qml/tst_trim.qml

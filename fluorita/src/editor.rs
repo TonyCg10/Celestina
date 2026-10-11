@@ -38,6 +38,11 @@
 //! stay published until the next open, so a window can offer the result to
 //! be dragged out; a copy beside the original is also handed to Selenita's
 //! adoption (`crate::adopt`), which never holds the save up.
+//!
+//! **A video opens too, for the trim.** The same measurement on the opener's
+//! thread decides it (the kind by name, then one `stat`), and publishes
+//! `video` instead of a document: the window trims it with `crate::trim`,
+//! and nothing of the picture editor is held for it.
 
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
@@ -57,7 +62,7 @@ use crate::image;
 use crate::rasteriser::ToolkitRasteriser;
 use crate::recipes;
 
-mod copy;
+pub(crate) mod copy;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -75,6 +80,10 @@ pub mod qobject {
         #[qml_element]
         /// True while a picture is open for editing.
         #[qproperty(bool, open)]
+        /// True when the file opened is a video: the window trims it
+        /// (`crate::trim`) instead of editing a picture. Decided by the same
+        /// measurement on the opener's thread, never on Qt's.
+        #[qproperty(bool, video)]
         /// The path key of the picture being edited. The preview renders this
         /// file and draws the objects over it.
         #[qproperty(QString, key)]
@@ -267,6 +276,7 @@ pub mod qobject {
 
 pub struct EditorRust {
     open: bool,
+    video: bool,
     key: QString,
     canvas_width: i32,
     canvas_height: i32,
@@ -317,6 +327,13 @@ pub struct EditorRust {
     waiting: Option<QString>,
 }
 
+/// What opening a file found, measured on the opener's thread.
+enum Opening {
+    Picture(Prepared),
+    /// A video, which the window trims rather than edits.
+    Video,
+}
+
 /// What opening a picture found, measured on the opener's thread.
 struct Prepared {
     /// What the document renders from.
@@ -331,6 +348,7 @@ impl Default for EditorRust {
     fn default() -> Self {
         Self {
             open: false,
+            video: false,
             key: QString::default(),
             canvas_width: 0,
             canvas_height: 0,
@@ -399,7 +417,8 @@ impl qobject::FluoritaEditor {
             return;
         };
         let capabilities = EditCapabilities::of(kind, &path);
-        if !capabilities.is_editable() {
+        let video = kind == MediaKind::Video;
+        if !video && !capabilities.is_editable() {
             self.as_mut().refuse(copy::NOT_EDITABLE);
             return;
         }
@@ -421,8 +440,12 @@ impl qobject::FluoritaEditor {
         let opener = std::thread::Builder::new()
             .name("fluorita-editor-open".to_owned())
             .spawn(move || {
-                let store = edit_store::default_path();
-                let prepared = prepare(&path, capabilities, store.as_deref());
+                let prepared = if video {
+                    measure_video(&path).map(|()| Opening::Video)
+                } else {
+                    let store = edit_store::default_path();
+                    prepare(&path, capabilities, store.as_deref()).map(Opening::Picture)
+                };
                 let _ = qt_thread.queue(move |editor| {
                     editor.opened(generation, &QString::from(&published), prepared);
                 });
@@ -441,7 +464,7 @@ impl qobject::FluoritaEditor {
         mut self: std::pin::Pin<&mut Self>,
         generation: u64,
         key: &QString,
-        prepared: Result<Prepared, String>,
+        prepared: Result<Opening, String>,
     ) {
         if let Some(opener) = self.as_mut().rust_mut().opener.take() {
             let _ = opener.join();
@@ -455,7 +478,16 @@ impl qobject::FluoritaEditor {
             return;
         }
         let prepared = match prepared {
-            Ok(prepared) => prepared,
+            Ok(Opening::Picture(prepared)) => prepared,
+            // Nothing of the picture editor's is held for a video: the window
+            // hands the key to its trim.
+            Ok(Opening::Video) => {
+                self.as_mut().close();
+                self.as_mut().set_key(key.clone());
+                self.as_mut().set_notice(QString::default());
+                self.as_mut().set_video(true);
+                return;
+            }
             Err(message) => {
                 self.as_mut().refuse(&message);
                 return;
@@ -472,6 +504,7 @@ impl qobject::FluoritaEditor {
         }
         self.as_mut().set_source_url(QString::from(&url));
         self.as_mut().set_key(key.clone());
+        self.as_mut().set_video(false);
         self.as_mut().set_open(true);
         self.as_mut().set_notice(QString::default());
         self.publish();
@@ -505,6 +538,7 @@ impl qobject::FluoritaEditor {
             editor.selected = 0;
         }
         self.as_mut().set_open(false);
+        self.as_mut().set_video(false);
         self.as_mut().set_key(QString::default());
         self.as_mut().set_source_url(QString::default());
         self.as_mut().set_saving(false);
@@ -980,6 +1014,16 @@ fn prepare(
     })
 }
 
+/// Whether a video can be opened for the trim: a regular file once links are
+/// followed. Runs on the opener's thread: it is a `stat`, and a mapped
+/// network folder can hold one for as long as it likes.
+fn measure_video(path: &Path) -> Result<(), String> {
+    match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => Ok(()),
+        _ => Err(copy::NOT_EDITABLE.to_owned()),
+    }
+}
+
 /// The handle after `current` in drawing order, or before it, wrapping
 /// around; the first (or last) when nothing is selected, and `0` when there
 /// is nothing to select.
@@ -1372,8 +1416,8 @@ fn reshape(annotation: &mut Annotation, width: f32, height: f32) {
 #[cfg(test)]
 mod tests {
     use super::{
-        land, name_of, parse_ink, parse_points, prepare, reshape, shift, step_selection, write_ink,
-        SaveJob, SaveSeams,
+        land, measure_video, name_of, parse_ink, parse_points, prepare, reshape, shift,
+        step_selection, write_ink, SaveJob, SaveSeams,
     };
     use celestina_core::CancellationToken;
     use fluorita_core::{
@@ -1472,6 +1516,19 @@ mod tests {
         );
         assert_ne!(std::fs::read(&picture).expect("the result"), original);
         assert_eq!(adopted.lock().expect("adopted").len(), 1);
+    }
+
+    #[test]
+    fn a_video_outside_every_library_root_opens_for_the_trim() {
+        let scratch = Scratch::new("edit-video");
+        // A name that is not ASCII, as a recording's often is.
+        let film = scratch.video("no/library/here/grabaci\u{f3}n.mp4");
+        assert_eq!(measure_video(&film), Ok(()));
+        assert!(measure_video(&scratch.path().join("missing.mp4")).is_err());
+        assert!(
+            measure_video(scratch.path()).is_err(),
+            "a folder is not a film"
+        );
     }
 
     #[test]

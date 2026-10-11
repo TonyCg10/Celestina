@@ -2,9 +2,10 @@
 
 - **Updated:** 2026-10-10
 - **Implementation:** `FLU-P1`, Fluorita's part of the suite's capture
-  preview `PRV-1`, is active: `FLU-P1-A` (the floating editor on any path) is
-  implemented in its session and awaits landing, `FLU-P1-B` (the video trim)
-  is planned ([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)).
+  preview `PRV-1`, is active: `FLU-P1-A` (the floating editor on any path)
+  landed as `1.6.0`, and `FLU-P1-B` (the frame-accurate video trim through an
+  `ffmpeg` child) is implemented in its session and awaits landing
+  ([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)).
   Checkpoints F0-F15 and `FLU-H1`, the hardening that followed the 2026-09-26
   monorepo audit, are closed and delivered. `FLU-H1-A` (a Replace that trashes its original,
   bounded file claims), `FLU-H1-B` (a true library off the GUI thread,
@@ -13,11 +14,28 @@
   ([archived plan](docs/plans/archive/2026-09-26-hardening.md))
 - **Author validation:** the version-1 playback and interaction pass is closed;
   `VAL-FLU-SOURCES`, `VAL-FLU-IMMERSIVE`, `VAL-FLU-TEARDOWN`, `VAL-FLU-BYTES`,
-  `VAL-FLU-EDIT`, `VAL-FLU-METADATA` and `VAL-FLU-EDIT-WINDOW` are open, and the surfaces F11-F15
+  `VAL-FLU-EDIT`, `VAL-FLU-METADATA`, `VAL-FLU-EDIT-WINDOW` and `VAL-FLU-TRIM` are open, and the surfaces F11-F15
   added have never been seen on a display — see [VALIDATION.md](VALIDATION.md)
 
 ## Current checkout truth
 
+- `FLU-P1-B` (capture preview, [evidence](docs/evidence/2026-10-10-video-trim.md)):
+  a video handed to the floating editor is trimmed. The editor's opener
+  decides it is a video off the Qt thread and the window shows a player over
+  `TrimBar` (two handles, keyboard-reachable, the start never past the end);
+  moving a handle seeks to that frame and play keeps to the span. Saving runs
+  `ffmpeg` as a child (ADR 0009, amended for this one operation): VA-API
+  H.264 when a render node and `h264_vaapi` exist, else x264 CRF 21, AAC
+  160 kbit/s, into `.<name>.trim-<pid>.mp4` beside the original, landed by
+  `fluorita_engine::land_file` after exit 0 with the two outcomes of a
+  picture; progress and cancel show while it runs. The fixture's [1 s, 2 s)
+  measures 1.000000 s with both encoders; a VA-API run that fails is tried
+  once with x264. The result is always MP4 with the main video and one audio
+  track, and a film that loses its container or tracks says so first; the
+  handles step one frame of the film's own rate (`ffprobe`). The trim's
+  player is not announced on MPRIS. `fluorita --edit` now retries an
+  owner that does not serve `Fluorita1` yet, and stops at once on a hung
+  one. `VAL-FLU-TRIM` is the author's check.
 - `FLU-P1-A` (capture preview, [evidence](docs/evidence/2026-10-10-floating-editor.md)):
   `org.celestina.Fluorita1.Edit(s key)` is served beside the shared
   activation and `fluorita --edit PATH` reaches it, or starts Fluorita with
@@ -79,8 +97,8 @@
 ## Active work
 
 `FLU-P1` is active
-([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)): `FLU-P1-A` awaits
-its landing and `FLU-P1-B`, the trim, follows it. `FLU-H1`, the post-audit
+([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)): `FLU-P1-A` landed
+as `1.6.0` and `FLU-P1-B`, the trim, awaits its landing. `FLU-H1`, the post-audit
 hardening, closed on 2026-10-10 with its six units landed
 ([archived plan](docs/plans/archive/2026-09-26-hardening.md)).
 
@@ -91,9 +109,10 @@ checkpoint set out to fix is in the [roadmap](ROADMAP.md).
 
 Three things wait on the author rather than on work:
 
-- **The encoder decision.** Trimming, dropping a track, converting a format and
-  exporting a clip all need a muxer. Every one of them is refused today rather
-  than approximated, and each refusal says so.
+- **The encoder decision.** A video's duration trim is decided (ADR 0009's
+  amendment of 2026-10-10: re-encoded by an `ffmpeg` child, never linked).
+  Dropping a track, converting a format and exporting a clip still need their
+  own decision; each is refused today rather than approximated.
 - **A captured judder.** F15 is the instrument; a report from a real session is
   what would open the pacing repair the roadmap has kept shut.
 - **Seeing any of it.** The whole of F11-F15 has been exercised by tests and by
@@ -115,6 +134,19 @@ Three things wait on the author rather than on work:
   `Activate`, which shows the winner's library window, before the edit is
   offered to it (up to five times). Avoiding the `Activate` needs a claim
   without a hand-off in `celestina_core::activation`.
+
+- **A crash during a trim leaves `ffmpeg` and its hidden file behind**
+  (`FLU-P1-B`). A cancel, a close and an orderly exit kill the child and
+  remove `.<name>.trim-<pid>-<n>.mp4`; a Fluorita that crashes or is killed
+  does not, because tying the child to the parent's death
+  (`PR_SET_PDEATHSIG`) needs `unsafe` in a `pre_exec` hook, which Fluorita
+  has no justified exception for. The child then runs to its end and its
+  hidden file stays beside the original; the original is untouched.
+- **The frame shown under a handle and the first frame cut may differ by
+  one** (`FLU-P1-B`). The player shows the frame at the handle's time; the
+  cut keeps the first frame at or after it (to the millisecond, truncated).
+  A handle that falls between two frames can show one and cut from the
+  next. `VAL-FLU-TRIM` checks it on real recordings.
 
 ## Conditional work, not active debt
 

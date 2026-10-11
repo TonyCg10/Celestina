@@ -9,6 +9,7 @@ QtObject {
     id: editor
 
     property bool open: false
+    property bool video: false
     property string key: ""
     property int canvasWidth: 0
     property int canvasHeight: 0
@@ -59,6 +60,13 @@ QtObject {
         editor.savedKey = ""
         editor.savedUrl = ""
         editor.key = key
+        // A film opens for the trim, as the opener's measurement decides.
+        if (/\.(mp4|mkv|webm|mov)$/i.test(key)) {
+            editor.open = false
+            editor.video = true
+            return
+        }
+        editor.video = false
         editor.sourceUrl = "file://" + key
         editor.baseWidth = 32
         editor.baseHeight = 24
@@ -74,6 +82,7 @@ QtObject {
     function close() {
         editor.closes += 1
         editor.open = false
+        editor.video = false
         editor.key = ""
         editor.sourceUrl = ""
         editor.edited = false

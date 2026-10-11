@@ -150,6 +150,12 @@ pub mod qobject {
         /// crosses the seam as a token, and the words for it belong to the
         /// surface.
         #[qproperty(i32, continuation)]
+        /// Whether what this player plays is announced on MPRIS as what the
+        /// desktop is playing. True by default; the edit window's player
+        /// sets it false: a film being trimmed is a document being edited,
+        /// and a second announcer would take the bus name from the library's
+        /// player for the rest of the process.
+        #[qproperty(bool, announced)]
         type FluoritaPlayer = super::PlayerRust;
 
         /// Opens the item a path key names and starts it. A second call
@@ -285,6 +291,7 @@ pub struct PlayerRust {
     choosable_subtitles: bool,
     speed: f64,
     continuation: i32,
+    announced: bool,
     previewing: bool,
     capturing_pacing: bool,
     pacing_line: QString,
@@ -338,6 +345,7 @@ impl cxx_qt::Initialize for qobject::FluoritaPlayer {
     fn initialize(self: core::pin::Pin<&mut Self>) {
         let mut this = self;
         this.as_mut().set_state(QString::from("inactivo"));
+        this.as_mut().set_announced(true);
     }
 }
 
@@ -907,8 +915,9 @@ impl qobject::FluoritaPlayer {
         path: &std::path::Path,
         kind: MediaKind,
     ) {
-        // A preview is not what this desktop is playing.
-        if *self.previewing() {
+        // A preview is not what this desktop is playing, and neither is a
+        // player that was told not to announce itself.
+        if !publishes(*self.previewing(), *self.announced()) {
             return;
         }
         if self.rust().mpris.is_none() {
@@ -1104,6 +1113,12 @@ fn shaped(mut request: SessionRequest, previewing: bool) -> SessionRequest {
     request
 }
 
+/// Whether a player's session reaches MPRIS: never for a hover preview, never
+/// for a player set not to be announced.
+const fn publishes(previewing: bool, announced: bool) -> bool {
+    announced && !previewing
+}
+
 /// Where a session's output goes: the player, on the GUI thread, through the
 /// queue — and only while the session that produced it is still the current
 /// one, because a queued closure can outlive the worker that queued it.
@@ -1289,7 +1304,7 @@ fn report_pacing(stats: &fluorita_engine::backend::FrameStats) {
 
 #[cfg(test)]
 mod tests {
-    use super::{shaped, state_label};
+    use super::{publishes, shaped, state_label};
     use cxx_qt_lib::QString;
     use fluorita_core::PlaybackState;
     use std::ffi::OsString;
@@ -1411,5 +1426,16 @@ mod tests {
         assert_eq!(state_label(PlaybackState::Paused), "pausado");
         assert_eq!(state_label(PlaybackState::Ended), "terminado");
         assert_eq!(state_label(PlaybackState::Failed), "error");
+    }
+
+    #[test]
+    fn only_an_announced_player_that_is_not_previewing_reaches_mpris() {
+        assert!(publishes(false, true));
+        assert!(!publishes(true, true), "a hover preview is never announced");
+        assert!(
+            !publishes(false, false),
+            "the trim's player is not announced"
+        );
+        assert!(!publishes(true, false));
     }
 }

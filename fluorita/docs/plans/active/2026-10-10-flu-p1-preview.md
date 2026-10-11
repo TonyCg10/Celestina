@@ -13,8 +13,8 @@
   [PRV-1](../../../../docs/plans/active/2026-10-10-capture-preview.md)
 - **Scope:** fluorita
 - **Implementation checkpoint:** FLU-P1
-- **Author-validation checkpoint:** `VAL-FLU-EDIT-WINDOW` in
-  [`../../../VALIDATION.md`](../../../VALIDATION.md); the trim adds its own
+- **Author-validation checkpoint:** `VAL-FLU-EDIT-WINDOW` and
+  `VAL-FLU-TRIM` in [`../../../VALIDATION.md`](../../../VALIDATION.md)
 
 ## Hypothesis
 
@@ -66,6 +66,6 @@ Fluorita's `scripts/complete-production.sh` at landing.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | FLU-P1-A | `fluorita:` | done | [inventory](../../inventories/2026-10-10-flu-p1-preview/FLU-P1-A.numstat.tsv) | 28 files, +2961/-143 | Add the floating editor that opens any path: `org.celestina.Fluorita1.Edit` beside the shared activation, `fluorita --edit`, one `EditWindow` per file beside an untouched library window, «Guardar ambas» and «Guardar solo la editada» with the close question, a copy adopted into Selenita's history, and the saved result dragged out as a copy | [evidence](../../evidence/2026-10-10-floating-editor.md) | `VAL-FLU-EDIT-WINDOW` |
-| FLU-P1-B | `fluorita:` | planned | — | — | Add the frame-accurate video trim through an `ffmpeg` child, and amend ADR 0009 for that one operation | — | — |
+| FLU-P1-B | `fluorita:` | done | [inventory](../../inventories/2026-10-10-flu-p1-preview/FLU-P1-B.numstat.tsv) | 39 files, +4804/-78 | Add the frame-accurate video trim through an `ffmpeg` child, and amend ADR 0009 for that one operation; `--edit` retries an owner not yet serving `Fluorita1` and stops at once on a hung one | [evidence](../../evidence/2026-10-10-video-trim.md) | `VAL-FLU-TRIM` |
 
 This plan records intent; it grants no authority.

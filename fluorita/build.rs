@@ -52,6 +52,9 @@ const QML_FILES: &[&str] = &[
     "qml/components/PlayerTransport.qml",
     "qml/components/SeekBar.qml",
     "qml/components/StreamMenu.qml",
+    // The video trim: the span bar and the surface that holds the film.
+    "qml/components/TrimBar.qml",
+    "qml/components/TrimSurface.qml",
     "qml/components/VolumeBar.qml",
     "qml/components/ZoomController.qml",
     "qml/Main.qml",
@@ -135,6 +138,8 @@ fn main() {
             "src/editor.rs",
             "src/metadata.rs",
             "src/rasteriser.rs",
+            // The video trim of the edit window (`PRV-1`).
+            "src/trim.rs",
             // Registers the shared thumbnail provider and binds the helpers
             // its tests reach it through; declares no QObject.
             "src/thumbnails.rs",

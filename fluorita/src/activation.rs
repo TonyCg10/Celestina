@@ -369,16 +369,27 @@ pub fn claim(argv_paths: &[PathBuf]) {
 ///
 /// A running Fluorita that refuses or does not answer ends this launch with
 /// status 1: opening a second instance beside it would be the very thing
-/// the claim exists to prevent.
+/// the claim exists to prevent. One that answers that it has no `Fluorita1`
+/// yet — it claimed the name a moment ago — is asked again, a few times.
 pub fn claim_for_edit(path: &Path) {
-    match send_edit(path) {
-        Ok(true) => std::process::exit(0),
-        // No bus at all (the claim below says so once), or nobody owns the
-        // name, or its owner left between the question and the call.
-        Ok(false) | Err(ActivationError::Bus(_)) => {}
-        Err(error) if owner_left(&error) => {}
-        Err(error) => {
-            eprintln!("fluorita: the running instance did not take the edit: {error}");
+    let first = send_edit(path);
+    match first_answer(&first) {
+        FirstAnswer::Taken => std::process::exit(0),
+        FirstAnswer::Claim => {}
+        // The owner has only just claimed the name and does not serve
+        // `Fluorita1` yet: offered again, a few times, as to a launch that
+        // won the name below.
+        FirstAnswer::Retry => {
+            if let Err(error) = retry_edit(path, EDIT_ATTEMPTS, EDIT_RETRY_PAUSE, send_edit) {
+                eprintln!("fluorita: the running instance did not take the edit: {error}");
+                std::process::exit(1);
+            }
+            std::process::exit(0);
+        }
+        FirstAnswer::Fail => {
+            if let Err(error) = first {
+                eprintln!("fluorita: the running instance did not take the edit: {error}");
+            }
             std::process::exit(1);
         }
     }
@@ -402,6 +413,40 @@ pub fn claim_for_edit(path: &Path) {
     request_edit(celestina_core::pathkey::encode(path));
 }
 
+/// What the first `Edit` sent to a running Fluorita comes to.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FirstAnswer {
+    /// It took the edit: this launch is done.
+    Taken,
+    /// Nobody owns the name, its owner left, or there is no bus: this launch
+    /// claims the name itself.
+    Claim,
+    /// The owner exists but does not serve `Fluorita1` yet (it claimed the
+    /// name a moment ago): the edit is offered again.
+    Retry,
+    /// The owner refused the edit, or did not answer in time.
+    Fail,
+}
+
+fn first_answer(sent: &Result<bool, ActivationError>) -> FirstAnswer {
+    match sent {
+        Ok(true) => FirstAnswer::Taken,
+        Ok(false) | Err(ActivationError::Bus(_)) => FirstAnswer::Claim,
+        Err(error) if owner_left(error) => FirstAnswer::Claim,
+        Err(error) if not_serving_yet(error) => FirstAnswer::Retry,
+        Err(_) => FirstAnswer::Fail,
+    }
+}
+
+/// Whether a refusal means the owner has not put `Fluorita1` on its
+/// connection yet.
+fn not_serving_yet(error: &ActivationError) -> bool {
+    matches!(error, ActivationError::Refused(detail)
+        if detail.contains("org.freedesktop.DBus.Error.UnknownMethod")
+            || detail.contains("org.freedesktop.DBus.Error.UnknownInterface")
+            || detail.contains("org.freedesktop.DBus.Error.UnknownObject"))
+}
+
 /// How many times an edit is offered to a launch that won the name while
 /// this one was asking, and how long apart.
 const EDIT_ATTEMPTS: u32 = 5;
@@ -409,7 +454,9 @@ const EDIT_RETRY_PAUSE: std::time::Duration = std::time::Duration::from_millis(2
 
 /// Offers the edit up to `attempts` times, `pause` apart, until the owner
 /// takes it. `Ok(false)` (nobody owns the name any more) and every failure
-/// are tried again; the last failure is the answer.
+/// are tried again, and the last failure is the answer — except a timeout:
+/// an owner that did not answer in time is hung, and asking it again would
+/// hold this launch for one more timeout each time.
 fn retry_edit(
     path: &Path,
     attempts: u32,
@@ -426,6 +473,7 @@ fn retry_edit(
             Ok(false) => {
                 last = ActivationError::Refused("the name has no owner any more".to_owned());
             }
+            Err(ActivationError::Timeout) => return Err(ActivationError::Timeout),
             Err(error) => last = error,
         }
     }
@@ -1115,10 +1163,69 @@ mod tests {
         assert_eq!(calls.get(), 3);
 
         // Never taking it: bounded, and the last failure is the answer.
-        let never = |_: &Path| Err(ActivationError::Timeout);
-        assert_eq!(
+        let refusals = Cell::new(0);
+        let never = |_: &Path| {
+            refusals.set(refusals.get() + 1);
+            Err(ActivationError::Refused(
+                "org.freedesktop.DBus.Error.UnknownMethod".to_owned(),
+            ))
+        };
+        assert!(matches!(
             retry_edit(Path::new("/a.png"), 3, Duration::ZERO, never),
+            Err(ActivationError::Refused(_))
+        ));
+        assert_eq!(refusals.get(), 3);
+    }
+
+    #[test]
+    fn a_hung_owner_is_not_asked_again() {
+        use celestina_core::activation::ActivationError;
+        use std::cell::Cell;
+
+        // Each attempt already waited the whole hand-off timeout: five more
+        // would hold the launch for as many timeouts.
+        let calls = Cell::new(0);
+        let hung = |_: &Path| {
+            calls.set(calls.get() + 1);
             Err(ActivationError::Timeout)
+        };
+        assert_eq!(
+            retry_edit(Path::new("/a.png"), 5, Duration::ZERO, hung),
+            Err(ActivationError::Timeout)
+        );
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn a_first_edit_refused_by_an_owner_not_yet_serving_fluorita1_is_retried() {
+        use super::{first_answer, FirstAnswer};
+        use celestina_core::activation::ActivationError;
+
+        let refused = |name: &str| Err(ActivationError::Refused(format!("{name}: not yet")));
+        for name in [
+            "org.freedesktop.DBus.Error.UnknownMethod",
+            "org.freedesktop.DBus.Error.UnknownInterface",
+            "org.freedesktop.DBus.Error.UnknownObject",
+        ] {
+            assert_eq!(first_answer(&refused(name)), FirstAnswer::Retry, "{name}");
+        }
+        assert_eq!(first_answer(&Ok(true)), FirstAnswer::Taken);
+        assert_eq!(first_answer(&Ok(false)), FirstAnswer::Claim);
+        assert_eq!(
+            first_answer(&Err(ActivationError::Bus("no bus".to_owned()))),
+            FirstAnswer::Claim
+        );
+        assert_eq!(
+            first_answer(&refused("org.freedesktop.DBus.Error.ServiceUnknown")),
+            FirstAnswer::Claim
+        );
+        assert_eq!(
+            first_answer(&refused("org.freedesktop.DBus.Error.InvalidArgs")),
+            FirstAnswer::Fail
+        );
+        assert_eq!(
+            first_answer(&Err(ActivationError::Timeout)),
+            FirstAnswer::Fail
         );
     }
 }

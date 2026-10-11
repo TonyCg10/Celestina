@@ -33,6 +33,7 @@ pub mod search;
 pub mod source;
 pub mod streams;
 pub mod surface;
+pub mod trim;
 
 pub use artwork::{
     cache_key, file_uri, large_thumbnail_path, thumbnail_keys, with_thumbnail_keys,

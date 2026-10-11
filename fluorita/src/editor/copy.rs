@@ -14,7 +14,7 @@ use fluorita_engine::{EngineError, Saved};
 
 /// The word a saved copy's name is marked with. The domain owns the collision
 /// search; the application owns the wording.
-pub(super) const COPY_MARKER: &str = "editado";
+pub(crate) const COPY_MARKER: &str = "editado";
 pub(super) const NOT_EDITABLE: &str = "Este archivo no se puede editar";
 pub(super) const UNREADABLE_KEY: &str = "Fluorita no pudo interpretar la ruta de este elemento";
 pub(super) const NOTHING_TO_SAVE: &str = "No hay cambios que guardar";
@@ -26,7 +26,7 @@ pub(super) fn class_label(class: EditClass) -> &'static str {
     }
 }
 
-pub(super) fn container_change(extension: &str) -> String {
+pub(crate) fn container_change(extension: &str) -> String {
     format!("Se guardará como {}", extension.to_uppercase())
 }
 
@@ -42,7 +42,7 @@ pub(super) fn saved(saved: &Saved, remembered: bool) -> String {
 /// What a failed save says. The Trash case is the one the engine cannot word
 /// on its own: the result *is* on disk and only the original stayed put, which
 /// is a different sentence from a write that failed.
-pub(super) fn failure(error: &EngineError) -> String {
+pub(crate) fn failure(error: &EngineError) -> String {
     match error {
         EngineError::Trash { .. } => {
             "Se guardó el resultado, pero el original sigue donde estaba".to_owned()

@@ -1,5 +1,5 @@
 //! What the unit tests of several modules share: a scratch folder that
-//! removes itself, and the fixture picture copied into it.
+//! removes itself, and the fixture picture and film copied into it.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -35,6 +35,17 @@ impl Scratch {
         std::fs::copy(fixture_picture(), &path).expect("the fixture picture");
         path
     }
+
+    /// The fixture film (three seconds, 30 fps, H.264 and AAC) copied to
+    /// `relative` inside this folder, its parents made.
+    pub fn video(&self, relative: &str) -> PathBuf {
+        let path = self.0.join(relative);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("the film's folder");
+        }
+        std::fs::copy(fixture_video(), &path).expect("the fixture film");
+        path
+    }
 }
 
 impl Drop for Scratch {
@@ -46,4 +57,9 @@ impl Drop for Scratch {
 /// `tests/fixtures/picture.png`, a 32 × 24 RGB PNG.
 pub fn fixture_picture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/picture.png")
+}
+
+/// `tests/fixtures/three-seconds.mp4`, written by `make-three-seconds.sh`.
+pub fn fixture_video() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/three-seconds.mp4")
 }

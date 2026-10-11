@@ -7,7 +7,8 @@
   author asked for after the 2026-09-26 monorepo audit. `FLU-P1` is
   Fluorita's part of the suite's capture preview program `PRV-1`, approved by
   the author on 2026-10-10
-- **Related author validation:** `VAL-FLU-EDIT-WINDOW` for `FLU-P1`;
+- **Related author validation:** `VAL-FLU-EDIT-WINDOW` and `VAL-FLU-TRIM`
+  for `FLU-P1`;
   `VAL-FLU-EDIT`, `VAL-FLU-METADATA` and `VAL-FLU-TEARDOWN` for `FLU-H1`, none
   blocking; completed observations are in [VALIDATION.md](VALIDATION.md)
 
@@ -331,6 +332,10 @@ strongest argument for the encoder decision ADR 0009 deferred, because the
 person asking for a trim is asking for the one thing this suite has decided
 twice not to fake.
 
+Since 2026-10-10 a duration trim is no longer shut: ADR 0009's amendment
+opens that one operation, re-encoded frame-accurately by an `ffmpeg` child
+(`FLU-P1-B`). Removing a track still is.
+
 ## F10 — The same small change, to many files
 
 **Measured need.** Two things a folder of photographs actually needs, and
@@ -500,14 +505,14 @@ A new checkpoint must begin with a measured user need, a bounded resource and
 lifecycle model, and a tangible result. Three of the four ideas this section
 used to hold are now above it, delivered; what remains conditional is:
 
-- **Trimming, dropping a track, converting a format and exporting a clip** all
-  need a muxer, and this suite has none. That is one decision — whether FFmpeg
-  enters the dependency closure — with a cost the author has not been asked to
-  pay yet: a second media stack, a new hostile-input surface, long jobs needing
-  their own progress model, and a much heavier production verification. Until
-  it is taken, every one of those operations is refused rather than
-  approximated, and F8 and F9 are written so that taking it later adds a writer
-  instead of rewriting them.
+- **Dropping a track, converting a format and exporting a clip** all need a
+  muxer, and this suite links none. A video's duration trim was decided on
+  2026-10-10 (ADR 0009's amendment: `ffmpeg` as a child, never linked,
+  `FLU-P1-B`) and is not a precedent for these: each needs its own decision,
+  with its cost — a hostile-input surface, long jobs with their own progress
+  model, a heavier verification. Until then every one of them is refused
+  rather than approximated, and F8 and F9 are written so that taking it later
+  adds a writer instead of rewriting them.
 - **Correcting tags in MP3, M4A and Ogg**, which F8 reads, reports and refuses.
   Each needs its own container writer — an atom tree rebuilt with every offset
   corrected, or page checksums recomputed — and each is either done properly or

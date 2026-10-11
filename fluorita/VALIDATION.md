@@ -3,6 +3,43 @@
 This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-FLU-TRIM — Trimming a recording on a real session
+
+- **Status:** pending
+- **Related implementation:** `FLU-P1-B`, recorded in
+  [the evidence](docs/evidence/2026-10-10-video-trim.md)
+- **Requires:** the deployed Fluorita, niri with the `Editar — ` window rule
+  of [the README](README.md#build-and-use), a Selenita recording of at least
+  ten seconds in the videos folder's `Recordings`, and a film from another
+  source (a phone's MP4, or an MKV)
+- **Procedure:** run `fluorita --edit` on the recording (or click its corner
+  preview); drag the start handle a few seconds in and the end handle a few
+  seconds before the end, watching the picture follow; reach both handles
+  with Tab and move them with the arrows and with Shift and the arrows; press
+  play and watch it stop at the end handle; close the window and choose
+  «Guardar ambas»; open the copy in a player and step to its first and last
+  frames; trim the other film (one with a second audio track or subtitles)
+  with «Guardar solo la editada» from the toolbar, reading the notice of what
+  it leaves out, and cancel one save half-way; check that `playerctl -l`
+  does not list the trim's player; trim once more with `reducedMotion` on;
+  drag a saved result into a chat in the browser
+- **Pass condition:** the picture shows the frame each handle stands on (a
+  handle dragged between two frames may show one and cut from the next —
+  note any such case); play
+  stays inside the span; the copy beside the recording starts on the frame
+  the start handle showed and ends on the one before the end handle's (not
+  on a keyframe a second away), plays with its sound in sync, and appears in
+  Selenita's history; «Guardar solo la editada» leaves the trimmed film under
+  the original's name (as `.mp4`) and the original in the Trash; the
+  progress moves while saving, the cancel leaves no file beside the film, and
+  the window can be closed after it; the handles' colours change without
+  animation under reduced motion; the drag delivers a copy
+- **Result:** not run by hand
+- **Evidence:** a cut off by more than a frame, a copy without sound or out
+  of sync, a hidden `.…trim-….mp4` left beside the film, an original changed
+  or deleted rather than trashed, a frozen window while saving, or a
+  recording missing from Selenita's history
+
 ## VAL-FLU-EDIT-WINDOW — The floating editor on a real session
 
 - **Status:** pending

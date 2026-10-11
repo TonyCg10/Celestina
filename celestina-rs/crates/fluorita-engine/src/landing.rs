@@ -24,6 +24,11 @@
 //! Either way the person loses neither file: what is not at its name is in the
 //! Trash or beside it.
 //!
+//! [`land_file`] takes the same order for a result another process already
+//! wrote — the video trim's `ffmpeg` child writes its file beside the original
+//! under a hidden name — so a film is never read into memory to be landed,
+//! and a trimmed film and an edited picture reach their names by one rule.
+//!
 //! [ADR 0009](../../../../docs/decisions/0009-editing-without-an-encoder.md)
 //! states the contract: a copy lands beside the original, a replacement sends
 //! the original to the desktop Trash.
@@ -39,12 +44,12 @@ use crate::error::{EngineError, EngineResult};
 
 /// What a landing did.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct Landed {
+pub struct Landed {
     /// The name now holding the new bytes.
-    pub(crate) written: PathBuf,
+    pub written: PathBuf,
     /// Where the original went. `Some` for every replacement, `None` for a
     /// copy.
-    pub(crate) trashed_original: Option<PathBuf>,
+    pub trashed_original: Option<PathBuf>,
 }
 
 /// The order a landing takes, decided before anything touches the disk.
@@ -125,6 +130,123 @@ pub(crate) fn land(
         written: destination.to_path_buf(),
         trashed_original: Some(trashed),
     })
+}
+
+/// Lands a file already written beside `source`, at `written`, under
+/// `destination` and `choice`: the order [`land`] takes, for bytes that are
+/// on disk rather than in memory. `written` is a hidden sibling the caller
+/// owns; it either takes its name or is removed, except in the one case the
+/// error names it as the result kept.
+///
+/// Before anything moves, `written` takes `source`'s permission bits (a
+/// `0600` film stays `0600`, whatever umask the writer had) and is synced.
+///
+/// # Errors
+///
+/// As [`land`]: [`EngineError::Landing`] when the result could not be
+/// prepared or could not take its name (a name that appeared meanwhile is
+/// [`atomic_file::WriteError::TargetExists`]), [`EngineError::Cancelled`]
+/// before the original is touched, [`EngineError::NotReplaced`] when a
+/// same-name replacement could not trash the original, [`EngineError::Trash`]
+/// when a replacement under a new name could not (the result is written and
+/// the original stays), and [`EngineError::ReplacementNotPublished`] when the
+/// original is in the Trash and the result could not take its name (it is
+/// kept at `written`).
+pub fn land_file(
+    source: &Path,
+    written: &Path,
+    destination: &Path,
+    choice: SaveChoice,
+    bin: &dyn Bin,
+    cancellation: &CancellationToken,
+    operation: &'static str,
+) -> EngineResult<Landed> {
+    let discard = |error| {
+        let _ = std::fs::remove_file(written);
+        error
+    };
+    let landing = |source| EngineError::Landing { operation, source };
+    prepare_written(source, written).map_err(|error| discard(landing(error)))?;
+    // The last point at which stopping leaves every file as it was.
+    if cancellation.is_cancelled() {
+        return Err(discard(EngineError::Cancelled));
+    }
+    // A refused publish, as the write error [`land`] reports for one.
+    let refused = |target: &Path, error: std::io::Error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            WriteError::TargetExists {
+                path: target.to_path_buf(),
+            }
+        } else {
+            WriteError::Io {
+                step: atomic_file::WriteStep::Publish,
+                path: target.to_path_buf(),
+                source: error,
+            }
+        }
+    };
+    let publish = |target: &Path| atomic_file::publish_without_replacing(written, target);
+    match Order::of(source, destination, choice) {
+        Order::Copy => {
+            publish(destination).map_err(|error| discard(landing(refused(destination, error))))?;
+            Ok(Landed {
+                written: destination.to_path_buf(),
+                trashed_original: None,
+            })
+        }
+        Order::PublishThenTrash => {
+            publish(destination).map_err(|error| discard(landing(refused(destination, error))))?;
+            let trashed = bin
+                .send(source, cancellation)
+                .map_err(|error| EngineError::Trash {
+                    path: source.to_path_buf(),
+                    source: error,
+                })?;
+            Ok(Landed {
+                written: destination.to_path_buf(),
+                trashed_original: Some(trashed),
+            })
+        }
+        // The result is already an ordinary file under its hidden name, so
+        // it survives whatever happens next; only then does the original
+        // move, and the result takes the name it left.
+        Order::TrashThenPublish => {
+            let trashed = bin.send(source, cancellation).map_err(|error| {
+                discard(EngineError::NotReplaced {
+                    path: source.to_path_buf(),
+                    source: error,
+                })
+            })?;
+            match publish(source) {
+                Ok(()) => Ok(Landed {
+                    written: source.to_path_buf(),
+                    trashed_original: Some(trashed),
+                }),
+                Err(error) => Err(EngineError::ReplacementNotPublished {
+                    path: source.to_path_buf(),
+                    trashed,
+                    kept: written.to_path_buf(),
+                    source: error,
+                }),
+            }
+        }
+    }
+}
+
+/// Gives `written` the original's permission bits and syncs its bytes.
+fn prepare_written(source: &Path, written: &Path) -> Result<(), WriteError> {
+    let io = |step, path: &Path| {
+        let path = path.to_path_buf();
+        move |source| WriteError::Io { step, path, source }
+    };
+    let permissions = std::fs::metadata(source)
+        .map_err(io(atomic_file::WriteStep::ReadSourceMode, source))?
+        .permissions();
+    std::fs::set_permissions(written, permissions)
+        .map_err(io(atomic_file::WriteStep::SetMode, written))?;
+    std::fs::File::open(written)
+        .and_then(|file| file.sync_all())
+        .map_err(io(atomic_file::WriteStep::Sync, written))
 }
 
 /// How many hidden result names are tried before a same-name replacement
@@ -231,7 +353,7 @@ mod tests {
     use fluorita_core::SaveChoice;
     use siderita_ops::OpError;
 
-    use super::{land, Order};
+    use super::{land, land_file, Order};
     use crate::edit::Bin;
     use crate::error::EngineError;
 
@@ -556,5 +678,189 @@ mod tests {
         assert!(matches!(failure, EngineError::Cancelled));
         assert_eq!(std::fs::read(&source).expect("kept"), b"original");
         assert_eq!(directory.names(), vec!["foto.jpg".to_owned()]);
+    }
+
+    /// A file another process wrote, hidden beside `source`, as a child
+    /// leaves it: the umask's mode, not the original's.
+    fn written(directory: &TestDir, bytes: &[u8]) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = directory.file(".foto.mp4.trim-1.mp4", bytes);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644))
+            .expect("a child's mode");
+        path
+    }
+
+    #[test]
+    fn a_written_copy_takes_a_free_name_and_the_original_s_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = TestDir::new("file-copy");
+        let source = directory.file("foto.mp4", b"original");
+        std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o600))
+            .expect("a private film");
+        let hidden = written(&directory, b"result");
+        let destination = directory.0.join("foto (editado).mp4");
+
+        let landed = land_file(
+            &source,
+            &hidden,
+            &destination,
+            SaveChoice::Copy,
+            &RefusingBin,
+            &CancellationToken::new(),
+            "writing the trimmed film",
+        )
+        .expect("the copy lands");
+
+        assert_eq!(landed.written, destination);
+        assert_eq!(landed.trashed_original, None);
+        assert_eq!(std::fs::read(&destination).expect("the copy"), b"result");
+        assert_eq!(mode(&destination), 0o600, "a private film stays private");
+        assert_eq!(std::fs::read(&source).expect("kept"), b"original");
+        assert_eq!(
+            directory.names(),
+            vec!["foto (editado).mp4".to_owned(), "foto.mp4".to_owned()]
+        );
+    }
+
+    #[test]
+    fn a_written_copy_never_replaces_a_name_that_appeared() {
+        let directory = TestDir::new("file-copy-taken");
+        let source = directory.file("foto.mp4", b"original");
+        let hidden = written(&directory, b"result");
+        let destination = directory.file("foto (editado).mp4", b"someone else's");
+
+        let failure = land_file(
+            &source,
+            &hidden,
+            &destination,
+            SaveChoice::Copy,
+            &RefusingBin,
+            &CancellationToken::new(),
+            "writing the trimmed film",
+        )
+        .expect_err("the name is taken");
+
+        assert!(matches!(
+            failure,
+            EngineError::Landing {
+                source: WriteError::TargetExists { .. },
+                ..
+            }
+        ));
+        assert_eq!(
+            std::fs::read(&destination).expect("untouched"),
+            b"someone else's"
+        );
+        assert_eq!(
+            directory.names(),
+            vec!["foto (editado).mp4".to_owned(), "foto.mp4".to_owned()],
+            "the hidden result is removed"
+        );
+    }
+
+    #[test]
+    fn a_written_same_name_replacement_exists_before_the_original_moves() {
+        let directory = TestDir::new("file-in-place");
+        let source = directory.file("foto.mp4", b"original");
+        let hidden = written(&directory, b"result");
+        let bin = WatchingBin::new(&directory);
+
+        let landed = land_file(
+            &source,
+            &hidden,
+            &source,
+            SaveChoice::Replace,
+            &bin,
+            &CancellationToken::new(),
+            "writing the trimmed film",
+        )
+        .expect("the replacement lands");
+
+        assert!(bin
+            .seen_at_send
+            .borrow()
+            .iter()
+            .any(|(name, bytes)| name == ".foto.mp4.trim-1.mp4" && bytes == b"result"));
+        assert_eq!(landed.written, source);
+        assert_eq!(std::fs::read(&source).expect("the result"), b"result");
+        let trashed = landed.trashed_original.expect("the original is trashed");
+        assert_eq!(std::fs::read(trashed).expect("the original"), b"original");
+        assert_eq!(directory.names(), vec!["foto.mp4".to_owned()]);
+    }
+
+    #[test]
+    fn a_written_replacement_under_a_new_name_publishes_before_it_trashes() {
+        let directory = TestDir::new("file-renamed");
+        let source = directory.file("foto.mkv", b"original");
+        let hidden = written(&directory, b"result");
+        let destination = directory.0.join("foto.mp4");
+        let bin = WatchingBin::new(&directory);
+
+        let landed = land_file(
+            &source,
+            &hidden,
+            &destination,
+            SaveChoice::Replace,
+            &bin,
+            &CancellationToken::new(),
+            "writing the trimmed film",
+        )
+        .expect("the replacement lands");
+
+        assert!(bin
+            .seen_at_send
+            .borrow()
+            .iter()
+            .any(|(name, bytes)| name == "foto.mp4" && bytes == b"result"));
+        assert!(landed.trashed_original.is_some());
+        assert_eq!(directory.names(), vec!["foto.mp4".to_owned()]);
+    }
+
+    #[test]
+    fn a_written_replacement_the_trash_refuses_leaves_only_the_original() {
+        let directory = TestDir::new("file-in-place-refused");
+        let source = directory.file("foto.mp4", b"original");
+        let hidden = written(&directory, b"result");
+
+        let failure = land_file(
+            &source,
+            &hidden,
+            &source,
+            SaveChoice::Replace,
+            &RefusingBin,
+            &CancellationToken::new(),
+            "writing the trimmed film",
+        )
+        .expect_err("refused");
+
+        assert!(matches!(failure, EngineError::NotReplaced { .. }));
+        assert_eq!(std::fs::read(&source).expect("the original"), b"original");
+        assert_eq!(directory.names(), vec!["foto.mp4".to_owned()]);
+    }
+
+    #[test]
+    fn a_cancelled_written_landing_removes_the_result_and_nothing_else() {
+        let directory = TestDir::new("file-cancelled");
+        let source = directory.file("foto.mp4", b"original");
+        let hidden = written(&directory, b"result");
+        let cancellation = CancellationToken::new();
+        cancellation.cancel();
+
+        let failure = land_file(
+            &source,
+            &hidden,
+            &source,
+            SaveChoice::Replace,
+            &WatchingBin::new(&directory),
+            &cancellation,
+            "writing the trimmed film",
+        )
+        .expect_err("cancelled");
+
+        assert!(matches!(failure, EngineError::Cancelled));
+        assert_eq!(std::fs::read(&source).expect("kept"), b"original");
+        assert_eq!(directory.names(), vec!["foto.mp4".to_owned()]);
     }
 }

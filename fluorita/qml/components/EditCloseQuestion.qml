@@ -14,6 +14,10 @@ import org.celestina.fluorita 1.0
 CelestinaModalLayer {
     id: question
 
+    // What has changes: the picture editor's words unless the host says
+    // otherwise (the video trim does).
+    property string message: qsTr("Esta imagen tiene cambios sin guardar.")
+
     // A copy beside the original («Guardar ambas»).
     signal copyChosen()
     // The original replaced and sent to the Trash («Guardar solo la editada»).
@@ -51,7 +55,7 @@ CelestinaModalLayer {
             anchors.margins: CelestinaTheme.spaceLg
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
-            text: qsTr("Esta imagen tiene cambios sin guardar.")
+            text: question.message
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
             font.pixelSize: CelestinaTheme.fontBody

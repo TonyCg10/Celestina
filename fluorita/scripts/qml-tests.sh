@@ -7,7 +7,8 @@ set -eu
 # it the module is rebuilt here without a plugin: a `qmldir` generated from the
 # tree's own .qml files, so the source is what gets tested. The types the
 # binary registers from Rust are replaced by the QML stand-ins in
-# `tests/qml/stubs`, appended to the same `qmldir`; a stub stands in for what
+# `tests/qml/stubs`, appended to the same `qmldir` (and the C++ video
+# surface by `tests/qml/render`); a stub stands in for what
 # the Rust type publishes and records what it is asked, and what the Rust
 # side then does on disk is the business of its own crate tests. Selenita's
 # harness is the model; nothing here reaches a decoder or a bus.
@@ -68,6 +69,16 @@ list_types() {
     list_types "$src" qml
     list_types "$stubs" stubs
 } > "$module/qmldir"
+
+# The video surface is hand-written C++ in a module of its own,
+# `org.celestina.fluorita.render`; its stand-in lives in `tests/qml/render`.
+render=$module/render
+mkdir -p "$render"
+ln -s "$root/tests/qml/render" "$render/stubs"
+{
+    echo "module org.celestina.fluorita.render"
+    list_types "$root/tests/qml/render" stubs
+} > "$render/qmldir"
 
 QT_QPA_PLATFORM=offscreen QT_ASSUME_STDERR_HAS_CONSOLE=1 \
     "$runner" -input "$root/tests/qml" -import "$scratch/imports" "$@"

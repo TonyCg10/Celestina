@@ -29,9 +29,11 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
   «Guardar solo la editada», a replacement, which flattens the result and
   sends the original to the desktop Trash. Leaving with unsaved changes asks
   those two or «Descartar». The output format follows a fixed rule and is
-  never a question. The same operations apply to a chosen set of pictures at
-  once, with progress, cancellation and an honest count of what could not be
-  done.
+  never a question. A video handed to the floating editor is trimmed
+  instead: two handles choose the span kept, to the frame, and the result is
+  a new, re-encoded film (*raster*) saved by the same two outcomes. The same
+  operations apply to a chosen set of pictures at once, with progress,
+  cancellation and an honest count of what could not be done.
 - The floating editor (ADR 0012, `PRV-1`): `fluorita --edit PATH`, or
   `org.celestina.Fluorita1.Edit(s key)` on the bus (a `celestina_core::pathkey`
   key; anything but a regular file is refused with `InvalidArgs`), opens that
@@ -42,6 +44,19 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
   (through `Selenita1.Adopt`, or Selenita's history file when Selenita is not
   running), and the saved result can be dragged out of the window into any
   program as a file, offered as a copy only.
+- The video trim (ADR 0009 as amended, `PRV-1`): a video opened in the
+  floating editor plays above a bar with two handles, start and end; moving a
+  handle shows that frame, the arrows move it one frame of the film's own
+  rate, and play plays the chosen span only. A span that is the whole film
+  saves nothing. Saving runs `/usr/bin/ffmpeg` as a child, never linked: the
+  span is re-encoded to H.264 (VA-API when the machine has it, else x264,
+  and x264 again when a VA-API run fails) with AAC sound, into a hidden file
+  beside the original that takes its name only once `ffmpeg` succeeded; the
+  progress shows and the save can be cancelled. The result is always an MP4
+  holding the main video and one audio track: a film in another container,
+  or with more tracks or subtitles, says so before it is saved. Without
+  `ffmpeg` or an H.264 encoder the window says so and the original is
+  untouched.
 - What a file says about itself can be read and corrected: a track's title,
   artist, album and album artist, the cover art embedded beside them, and the
   EXIF a photograph carries — including where it was taken, which can be
@@ -63,8 +78,9 @@ application, plus a bounded image/video/audio surface embedded in Siderita.
 - Fluorita is not a streaming service, editing suite, social catalogue, general
   file manager or codec implementation. No layers, masks or blend modes, no
   configurable brushes, no per-channel colour correction, no rich text, and no
-  encoder: video and audio editing is bounded to demux and remux, so a cut
-  lands where the keyframes are.
+  linked encoder: the one re-encoding operation, a video's duration trim, runs
+  `ffmpeg` as a child process; every other video and audio edit is bounded to
+  demux and remux.
 
 Static image thumbnails, video posters and embedded covers use the freedesktop
 PNG cache, and carry the spec's `Thumb::URI` and `Thumb::MTime` keys. Thumbnails
@@ -80,7 +96,7 @@ bounded session, never a file; showing a row never starts playback.
 | `../celestina-rs/crates/fluorita-core` | Media identity/kind, catalogue projections, capabilities, playback truth, the session/surface handshake and generation-stamped resource contracts; no Qt/decode |
 | `../celestina-rs/crates/fluorita-engine` | Bounded scan/watch, persisted catalogue and edit recipes, metadata, artwork and the libmpv playback session loop |
 | `../celestina-rs/crates/fluorita-qt` | Shared C++/Qt Quick framebuffer/render seam for libmpv and the freedesktop-thumbnail image provider |
-| `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, argv reading, the adapter of the shared single-instance activation (`celestina_core::activation`) with Fluorita's own `Fluorita1` interface, the adoption of an edited capture into Selenita's history, and MPRIS2 |
+| `src/` | Standalone CXX-Qt adapters, owned workers, the folder-chooser portal client, argv reading, the adapter of the shared single-instance activation (`celestina_core::activation`) with Fluorita's own `Fluorita1` interface, the adoption of an edited capture into Selenita's history, the video trim's `ffmpeg` worker, and MPRIS2 |
 | `qml/` | Source sidebar, Gallery, Music, complete player composition and the floating edit window |
 | `cpp/` | The narrow toolkit seams unavailable through CXX-Qt: the image probe and the edit canvas that draws and encodes a picture |
 | `../siderita/src/media.rs`, `../siderita/qml/dialogs/` | Separate thin adapter and minimal embedded player |
@@ -93,7 +109,10 @@ replacing a new selection and every host owns deterministic shutdown.
 ## Build and use
 
 Fluorita needs Rust, a compatible Qt 6 development environment and libmpv
-development/runtime support. The canonical production workflow is:
+development/runtime support. The video trim runs `/usr/bin/ffmpeg` (the
+`ffmpeg` package libmpv already depends on); its tests run it and `ffprobe`
+on the committed fixture `tests/fixtures/three-seconds.mp4`, which
+`tests/fixtures/make-three-seconds.sh` wrote once. The canonical production workflow is:
 
 ```sh
 scripts/build-production.sh
@@ -119,7 +138,7 @@ in `mimeapps.list` remains authoritative.
 
 After completion, launch `fluorita [PATH]`, use the desktop entry
 or control the active session through MPRIS2. `fluorita --edit PATH` opens the
-floating editor on one file.
+floating editor on one file: a picture to edit, or a video to trim.
 
 niri places the editor, not Fluorita: a window rule matches its title and
 floats it (the suite exit `PRV-1-E` adds it to the author's configuration):

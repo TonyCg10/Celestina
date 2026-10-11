@@ -66,6 +66,7 @@ pub use error::{EngineError, EngineResult};
 pub use frame::{
     extract as extract_frame, FrameExtracted, FrameRequest, DEFAULT_DEADLINE as FRAME_DEADLINE,
 };
+pub use landing::{land_file, Landed};
 pub use library::{scan, ScanLimits, ScanOutcome, MAX_UNEXPLORED_PER_ROOT};
 pub use metadata::{
     embed_flac_cover, judge as judge_metadata, private_facts, read_flac_tags, strip_jpeg_exif,

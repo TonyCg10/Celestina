@@ -245,8 +245,25 @@ isolated() {
         "$bin" "$@"
 }
 
+# The same launch in the background, as the process `$!` names: `isolated &`
+# forks a shell that runs Fluorita as its child, so `$!` was that shell, the
+# threads read were the shell's, and the kill left Fluorita running. Here the
+# forked shell becomes Fluorita.
+isolated_background() {
+    HOME=$scratch \
+    XDG_CONFIG_HOME=$scratch/config \
+    XDG_DATA_HOME=$scratch/data \
+    XDG_CACHE_HOME=$scratch/cache \
+    XDG_STATE_HOME=$scratch/state \
+    XDG_RUNTIME_DIR=$scratch/run \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=$scratch/run/no-session-bus \
+    QT_QPA_PLATFORM=offscreen \
+    QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+        exec "$bin" "$@"
+}
+
 mv "$sources" "$scratch/sources.kept"
-isolated --edit "$scratch/foto.png" >"$scratch/edit.log" 2>&1 &
+isolated_background --edit "$scratch/foto.png" >"$scratch/edit.log" 2>&1 &
 pid=$!
 sleep 5
 kill -0 "$pid" 2>/dev/null || fail "an edit launch ended by itself" "$scratch/edit.log"
@@ -266,6 +283,30 @@ if isolated --edit "$scratch" >"$scratch/edit-folder.log" 2>&1; then
 fi
 grep -q 'cannot edit' "$scratch/edit-folder.log" || \
     fail "--edit refused a folder without saying why" "$scratch/edit-folder.log"
+
+# ── 5c) `--edit` on a film: the trim ────────────────────────────────────────
+# A video opens in the same window for the trim (PRV-1, FLU-P1-B): the QML
+# loads, the film plays in a session off the GUI thread, the library is not
+# scanned, and nothing is written beside the film until a save is asked for.
+cp "$media" "$scratch/film.mp4"
+mv "$sources" "$scratch/sources.kept"
+isolated_background --edit "$scratch/film.mp4" >"$scratch/trim.log" 2>&1 &
+pid=$!
+sleep 5
+kill -0 "$pid" 2>/dev/null || fail "a trim launch ended by itself" "$scratch/trim.log"
+trimming=$(cat /proc/"$pid"/task/*/comm 2>/dev/null | sort -u | tr '\n' ' ')
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+errores=$(qml_errors "$scratch/trim.log")
+[ -z "$errores" ] || fail "QML errors in a trim launch: $errores" "$scratch/trim.log"
+case "$trimming" in
+    *fluorita-player*) ;;
+    *) fail "a trim launch has no playback session off the GUI thread (threads: $trimming)" "$scratch/trim.log" ;;
+esac
+[ ! -e "$sources" ] || fail "a trim launch scanned the library" "$scratch/trim.log"
+mv "$scratch/sources.kept" "$sources"
+written=$(find "$scratch" -maxdepth 1 -name '*film*' ! -name 'film.mp4' | head -n 1)
+[ -z "$written" ] || fail "a trim launch wrote $written without a save" "$scratch/trim.log"
 
 # ── 6) Automatic thumbnails ─────────────────────────────────────────────────
 # The cache key the provider and the engine share: MD5 of the file:// URI as
@@ -331,4 +372,4 @@ library_until "$scratch/poster.log" "$photo_entry" "$clip_entry" >/dev/null
 errores=$(qml_errors "$scratch/poster.log")
 [ -z "$errores" ] || fail "QML errors in a library with a clip: $errores"
 
-echo "smoke: OK — QML carga, un vídeo abre sesión fuera del hilo GUI, ni la biblioteca ni una imagen ni un archivo desconocido arrancan el motor, --edit abre solo el editor, y las miniaturas llegan solas"
+echo "smoke: OK — QML carga, un vídeo abre sesión fuera del hilo GUI, ni la biblioteca ni una imagen ni un archivo desconocido arrancan el motor, --edit abre solo el editor (y el recorte de un vídeo), y las miniaturas llegan solas"
