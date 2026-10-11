@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** PRV-2
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -250,11 +250,11 @@ every monitor, and the English recordings folder name.
 **Tangible outcome:** a sharp floating preview, a whole toolbar, the focused
 monitor for `S`, recordings in the videos folder's `Grabaciones`.
 
-- [ ] Fix the preview rule and the folder name in the suite documents (`PRV-2-A`).
-- [ ] Fix the preview's sharpness, the focused monitor and `Grabaciones` (`SEL-3-A`).
-- [ ] Fix the edit window's size and take the adoption rule from Selenita (`FLU-P2-A`).
+- [x] Fix the preview rule and the folder name in the suite documents (`PRV-2-A`).
+- [x] Fix the preview's sharpness, the focused monitor and `Grabaciones` (`SEL-3-A`).
+- [x] Fix the edit window's size and take the adoption rule from Selenita (`FLU-P2-A`).
 
-The plan is [preview fixes](docs/plans/active/2026-10-10-preview-fixes.md).
+The plan is [preview fixes](docs/plans/archive/2026-10-10-preview-fixes.md).
 
 ## PRV-1 — Capture preview
 

@@ -1,0 +1,23 @@
+# PRV-2-B exact change inventory
+
+Base revision	6f5d65af3569dd309360776704a8175e46a152ea
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-10-10-preview-fixes-archive.md
+Pathspec	docs/evidence/2026-10-10-preview-fixes.md
+Pathspec	docs/inventories/2026-10-10-preview-fixes/PRV-2-B.numstat.tsv
+Pathspec	docs/plans/active/2026-10-10-preview-fixes.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-10-10-preview-fixes.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	6	d1906e42dbdf358e27039a2cecaeabe27e90f14aed30667cd7ff663556a0e43e	ROADMAP.md
+13	8	8110cf81f22ca3f7b38e2676ec9d8a570a4e1208d28d895c601f95c81c5aedb0	STATUS.md
+50	0	dc66b140bc4cb744ac5f738ae341865716b61e85e4f23668a0ceb9e159b5a707	docs/evidence/2026-10-10-preview-fixes-archive.md
+1	1	208291a9ddafa73695c08c1c6edeed9c42c1051e4b7c264518155cc80273bcea	docs/evidence/2026-10-10-preview-fixes.md
+23	0	self	docs/inventories/2026-10-10-preview-fixes/PRV-2-B.numstat.tsv
+0	64	deleted	docs/plans/active/2026-10-10-preview-fixes.md
+4	5	b8dd0a3486bcfc9ee90066643baaec4de588e7fd5b1f7e89f369119b43ea48b1	docs/plans/active/README.md
+67	0	76053bf360c283f2c441f2d4542ee89ffd54f723e17cbfc7e6baef708aa79a00	docs/plans/archive/2026-10-10-preview-fixes.md

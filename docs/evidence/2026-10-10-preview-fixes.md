@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** PRV-2-A of the
-  [preview fixes plan](../plans/active/2026-10-10-preview-fixes.md): the
+  [preview fixes plan](../plans/archive/2026-10-10-preview-fixes.md): the
   spec, ADR 0012's PRV-1 follow-up, `HOST-HYGIENE.md`, the roadmap, status
   and active-plans index
 - **Environment:** main at 9fc57abf (PRV-1 closed); niri fork 26.04

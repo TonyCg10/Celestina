@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-10
 - **Plan ID:** preview-fixes
-- **Status:** active
+- **Closed:** 2026-10-10
+- **Successor:** none; the author named no next suite checkpoint. Its one ledger row, PRV-2-A, is done; SEL-3-A and FLU-P2-A are done in their own plans
+- **Status:** done
 - **Authorization:** the author reported five problems after the first live
   use of PRV-1 on 2026-10-10 and approved the fixes the same day
 - **Scope:** suite
@@ -60,5 +62,6 @@ corrected rule (done on 2026-10-10).
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | PRV-2-A | `suite:` | done | [inventory](../../inventories/2026-10-10-preview-fixes/PRV-2-A.numstat.tsv) | 9 files, +186/-13 | Fix the preview rule and the recordings folder name in the suite documents and open PRV-2 | [evidence](../../evidence/2026-10-10-preview-fixes.md) | None |
+| PRV-2-B | `suite:` | done | [inventory](../../inventories/2026-10-10-preview-fixes/PRV-2-B.numstat.tsv) | 8 files, +164/-84 | Archive the delivered preview fixes plan through its own administrative unit and reconcile the suite roadmap, status and plan indexes | [evidence](../../evidence/2026-10-10-preview-fixes-archive.md) | None |
 
 This plan records intent; it grants no authority.
