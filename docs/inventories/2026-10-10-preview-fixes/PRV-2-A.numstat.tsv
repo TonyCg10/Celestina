@@ -1,0 +1,25 @@
+# PRV-2-A exact change inventory
+
+Base revision	9fc57abfccb8b0717244c2fc34bf4edbdb0dc345
+Pathspec	HOST-HYGIENE.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/decisions/0012-suite-conventions.md
+Pathspec	docs/evidence/2026-10-10-preview-fixes.md
+Pathspec	docs/inventories/2026-10-10-preview-fixes/PRV-2-A.numstat.tsv
+Pathspec	docs/plans/active/2026-10-10-preview-fixes.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/superpowers/specs/2026-10-10-capture-preview-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	0	42c332de0a27ee7fb210000122899898a9cfb508417b671b73182c259c3889f3	HOST-HYGIENE.md
+17	2	51c105793bbc8ec247f74d094bc71970413b1690f3f913b52d9d0a26ee816e2c	ROADMAP.md
+8	6	f0eef189a68e3f7a27334208b203056f2002a54cda378cecf577bbfbda29bf80	STATUS.md
+2	1	8046fe4075b336b6ee2b682f19456b681e7bcfe5b2149f01359560d177ec5810	docs/decisions/0012-suite-conventions.md
+53	0	d5662bc8c1da89b9e1ac873fd0b1230fcf135cd548aa9525523158c65c0ee834	docs/evidence/2026-10-10-preview-fixes.md
+25	0	self	docs/inventories/2026-10-10-preview-fixes/PRV-2-A.numstat.tsv
+64	0	ea5a43ec0c9857c7a30c2f85634416467eda95574955e1df59827d1b1d0e4cf4	docs/plans/active/2026-10-10-preview-fixes.md
+2	1	bad87086b52ef1eec7663a5b8ac1a861cd422e36c5599663c6aba967d24d28b7	docs/plans/active/README.md
+7	3	22785a76063555700f7690e2d89921bafe36cfb53af7523d6140f3174b0a371f	docs/superpowers/specs/2026-10-10-capture-preview-design.md

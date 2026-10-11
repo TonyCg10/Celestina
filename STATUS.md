@@ -1,9 +1,9 @@
 # Suite status
 
 - **Updated:** 2026-10-10
-- **Current focus:** no suite checkpoint is active; the next suite work starts
-  from an accepted decision, and all project work follows each local roadmap
-- **Implementation checkpoint:** none
+- **Current focus:** PRV-2, the capture preview fixes from the author's first
+  live use ([plan](docs/plans/active/2026-10-10-preview-fixes.md))
+- **Implementation checkpoint:** PRV-2
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -35,9 +35,11 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
-No suite checkpoint is active. New cross-project work starts only when an
-accepted decision promotes it, as the root roadmap's later suite-level section
-requires.
+PRV-2 fixes what the first live use of the capture preview showed: the
+preview's niri rule (Qt appends the display name to the title), its
+sharpness, Fluorita's toolbar cut off, `S` capturing every monitor, and the
+recordings folder renamed `Grabaciones`; see the
+[plan](docs/plans/active/2026-10-10-preview-fixes.md).
 
 ## Completed cross-project work
 

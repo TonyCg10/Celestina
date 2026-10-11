@@ -116,7 +116,8 @@ the delivery is
     is refused with `org.freedesktop.DBus.Error.InvalidArgs`.
   - Selenita's `org.celestina.Selenita1` gains `Adopt(s key)` → `()`: a
     regular file inside Selenita's pictures `Capturas` folder or videos
-    `Recordings` folder joins the history, its kind taken from the
+    `Grabaciones` folder (named `Recordings` until PRV-2, 2026-10-10) joins
+    the history, its kind taken from the
     extension (`.png` a screenshot, `.mp4` a recording); any other key is
     ignored without error.
 

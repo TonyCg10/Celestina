@@ -18,7 +18,8 @@ any program that takes files (WhatsApp, Slack, the browser, Siderita): this
 is how a video, which the clipboard cannot carry, reaches a chat. Clicking
 the preview opens the file in a floating Fluorita editor; leaving it alone
 changes nothing, because the normal flow (the file in `Capturas` or
-`Recordings`, the history, the clipboard) has already happened.
+`Grabaciones` — named `Recordings` until PRV-2 —, the history, the
+clipboard) has already happened.
 
 An edit ends with the author's choice between the two outcomes Fluorita
 already offers, named as the author named them: «Guardar ambas» (a copy
@@ -179,11 +180,14 @@ atomic replace the record worker uses).
 ## 7. niri window rules (`PRV-1-E`)
 
 Added to the author's `~/.config/niri/config.kdl` by the exit unit, after
-the author's approval, and documented in both READMEs:
+the author's approval, and documented in both READMEs. Amended by PRV-2:
+Qt on Wayland appends the application's display name to a window title,
+so the preview's real title is «Vista previa — Selenita» and the first
+rule's title pattern must not end in `$`:
 
 ```kdl
 window-rule {
-    match app-id=r#"^org\.celestina\.Selenita$"# title="^Vista previa$"
+    match app-id=r#"^org\.celestina\.Selenita$"# title="^Vista previa"
     open-floating true
     open-focused false
     default-floating-position x=24 y=24 relative-to="bottom-right"

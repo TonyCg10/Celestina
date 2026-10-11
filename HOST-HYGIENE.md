@@ -1194,3 +1194,11 @@ Missing evidence: `VAL-FLU-TRIM` in `fluorita/VALIDATION.md` on real
 recordings.
 
 Decision: nothing to install; recorded on 2026-10-10.
+
+Addendum 2026-10-10 (PRV-2): the first rule never matched. Qt on Wayland
+appends the application's display name to a window title, so the preview's
+title is «Vista previa — Selenita» and `^Vista previa$` left it tiled and
+focused. The rule in the author's configuration now reads `title` `^Vista
+previa` (corrected by the coordinator on 2026-10-10 at the author's
+request; the running niri reports the configuration valid). Selenita's
+recordings folder is renamed `Grabaciones` in the same program.
