@@ -66,7 +66,15 @@ Calcita and a folder in Hematita, and its send-to-phone entry sends through
 Magnetita; a file dragged from Siderita onto Grafita, Fluorita, Calcita or a
 Magnetita device opens or sends it. Selenita also serves
 `org.celestina.Selenita1`, so a niri key binding's `selenita --screenshot` or
-`--record` reaches the running window.
+`--record` reaches the running window. After a capture or a recording,
+Selenita's corner preview («Vista previa») offers the file to drag into any
+program and hands it on a click to Fluorita's floating editor
+(`org.celestina.Fluorita1.Edit`, or `fluorita --edit`), which edits a picture
+or trims a video and saves both versions or only the edited one; an edited
+copy joins Selenita's history through `Selenita1.Adopt`. Two niri window
+rules place the preview and the editor; they are in
+[Selenita's](selenita/README.md) and [Fluorita's](fluorita/README.md)
+READMEs.
 Reduced motion and the text size live in one file,
 `~/.config/celestina/appearance.toml`, edited in Cuprita's Apariencia section
 and followed by every open window. The rules are

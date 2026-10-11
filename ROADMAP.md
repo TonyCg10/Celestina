@@ -254,14 +254,16 @@ offers the file as a copy; clicking it opens Fluorita's floating editor,
 which saves both versions or only the edited one and can trim a video
 frame-accurately; an edited copy joins Selenita's history.
 
-- [ ] Fix the interfaces between Selenita and Fluorita (`PRV-1-A`).
-- [ ] Add the corner preview with drag, edit and adopt (`SEL-2-A`).
-- [ ] Add the floating editor that opens any path (`FLU-P1-A`).
-- [ ] Add the frame-accurate video trim through ffmpeg (`FLU-P1-B`).
+- [x] Fix the interfaces between Selenita and Fluorita (`PRV-1-A`).
+- [x] Add the corner preview with drag, edit and adopt (`SEL-2-A`).
+- [x] Add the floating editor that opens any path (`FLU-P1-A`).
+- [x] Add the frame-accurate video trim through ffmpeg (`FLU-P1-B`).
 - [ ] Close the program with the niri window rules (`PRV-1-E`).
 
-The application units are rows of each project's own plan; the build order,
-exclusions and suite ledger are in
+Two support units landed beside them: `PRV-1-S` (`selenita-core` among
+Fluorita's production inputs) and `PRV-1-T` (ADR 0009's amendment for the
+video trim). The application units are rows of each project's own plan; the
+build order, exclusions and suite ledger are in
 [the active plan](docs/plans/active/2026-10-10-capture-preview.md), and the
 design in [the spec](docs/superpowers/specs/2026-10-10-capture-preview-design.md).
 

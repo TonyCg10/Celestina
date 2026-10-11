@@ -1,0 +1,19 @@
+# PRV-1-E exact change inventory
+
+Base revision	6a05c7f632478531d00649b02d1d19c1a5bd4bcc
+Pathspec	HOST-HYGIENE.md
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	docs/evidence/2026-10-10-capture-preview-exit.md
+Pathspec	docs/inventories/2026-10-10-capture-preview/PRV-1-E.numstat.tsv
+Pathspec	docs/plans/active/2026-10-10-capture-preview.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+124	0	64e14e54aaf9654e83ffe7c8f19e8c7b98c6e45bf39cd7d4539e4b6283d2dde1	HOST-HYGIENE.md
+9	1	a9ee965e54501002e16a9a048d4a230098be1ad717db5b0e6a882475fa48a323	README.md
+8	6	2bf5a4c84d66d35d4a40fd10541779b1a119b4e533a2958bbbd35619286f06af	ROADMAP.md
+187	0	afd1090cb3098d6f0a525d37f9ccc42762a10632459b030bf159616724554751	docs/evidence/2026-10-10-capture-preview-exit.md
+19	0	self	docs/inventories/2026-10-10-capture-preview/PRV-1-E.numstat.tsv
+1	1	d1e4213de51aa7105f88304bc3cc1cd25f751e8d3ddec972c79eecc9cb3d4fea	docs/plans/active/2026-10-10-capture-preview.md

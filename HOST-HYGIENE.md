@@ -1070,3 +1070,127 @@ on the real session; `VAL-SEL-REC` needs the package above.
 
 Decision: pending — installing `gst-plugins-good` and binding the keys are the
 author's actions; this record grants no authority to install anything.
+
+Addendum 2026-10-10 (SEL-1-F): `gst-plugins-good` is installed and the keys
+are bound in the author's niri `tools` mode. The ScreenCast backend is now
+the suite's own build of xdg-desktop-portal-wlr, made by
+`selenita/scripts/build-portal.sh` from upstream `c0255d7b` and the patches
+in `selenita/packaging/xdg-desktop-portal-wlr/` (a frameless buffer
+stamped with time 0 stalled every GStreamer consumer; see
+`selenita/docs/evidence/2026-10-10-capture-portal.md`). It installs to
+`~/.local/libexec` and runs through the same systemd user drop-in as
+before; the distribution's `/usr/lib/xdg-desktop-portal-wlr` stays
+installed. The September recipe kept in the halted shell's tree
+(`celestina/scripts/build-patched-xdpw.sh`) is superseded by it and left as
+it is. `xdg-desktop-portal-gnome`, which would capture through niri's own
+`org.gnome.Mutter.ScreenCast`, stays out by the author's choice: the suite
+carries no foreign capture stack.
+
+## Host change record — 2026-10-10, the preview role and the edit role
+
+PRV-1 (capture preview) ends with a capture shown in a corner of the screen
+after it is taken and a floating editor one click away. This record states
+what the suite provides and what changed on the host; it was written by the
+program's exit unit (`PRV-1-E`), which installs nothing. The one host change,
+two niri window rules, was approved by the author and made in the author's
+configuration on 2026-10-10 before this record.
+
+Component: the corner preview (Selenita 1.1.0, its «Vista previa» window)
+and two niri window rules in `~/.config/niri/config.kdl`
+
+Observed role: after every capture saved to a file and every finished
+recording, Selenita shows a frameless window titled «Vista previa» with the
+picture or the recording's first frame for five seconds; it can be dragged
+into any program that takes files (a `text/uri-list` copy) and a click hands
+the file to Fluorita (`org.celestina.Fluorita1.Edit`, or `fluorita --edit`).
+
+Installed because: a capture is most often taken to be sent or touched up at
+once, and a video cannot travel through the clipboard; the drag is how it
+reaches a chat.
+
+Native dependency closure: none new. niri cannot let a client place its own
+window, and layer-shell-qt was ruled out as a new dependency; the window is
+placed by two window rules in the author's configuration instead. The
+recording's first frame comes from a short `gst-launch-1.0` child through
+Selenita's existing tool seam (`qtdemux` and `pngenc` from
+`gst-plugins-good`, installed since the SEL-1-F addendum above, and an
+H.264 decoder from `gst-libav` or `gst-plugin-va`, both already present).
+
+Session authority: the rules match only Celestina's own windows. The first
+(`app-id` `^org\.celestina\.Selenita$`, `title` `^Vista previa$`) opens the
+preview floating, without focus (`open-focused false`), 24 px from the
+bottom-right corner of the output; the second (`app-id`
+`^org\.celestina\.Fluorita$`, `title` `^Editar — `) opens Fluorita's edit
+windows floating. Selenita's and Fluorita's main windows and every other
+application are untouched. Selenita gains `Adopt` on its own
+`org.celestina.Selenita1` and Fluorita serves its own
+`org.celestina.Fluorita1` with `Edit` ([ADR
+0012](docs/decisions/0012-suite-conventions.md#follow-ups)).
+
+Flatpak containment: not applicable.
+
+Current consumers: Selenita's preview and Fluorita's floating editor; the
+author's `Print` family of key bindings, which now end in the preview.
+
+Classification: Celestina platform (Selenita, Fluorita); session
+configuration (the two window rules).
+
+Proposal: keep the rules. The diff and its validation are in
+`docs/evidence/2026-10-10-capture-preview-exit.md`; the running niri build
+reports the configuration valid with them.
+
+Risk: none beyond Celestina's windows. A title other than these two (another
+language for the product copy) would match no rule and open the window tiled
+and focused, as any new window.
+
+Rollback: remove the two `window-rule` blocks; without them the preview
+opens tiled and focused, as any new window, and the editor tiled.
+
+Missing evidence: `VAL-SEL-PREVIEW` in `selenita/VALIDATION.md` and
+`VAL-FLU-EDIT-WINDOW` in `fluorita/VALIDATION.md` on the real session.
+
+Decision: accepted by the author on 2026-10-10; the two rules are in the
+configuration.
+
+Component: video trimming (Fluorita 1.7.0, through `/usr/bin/ffmpeg`)
+
+Observed role: Fluorita's floating editor trims a video's duration
+frame-accurately: it runs `/usr/bin/ffmpeg` as a child process (VA-API H.264
+when a render node and `h264_vaapi` exist, else x264 at CRF 21, retried once
+with x264 after a VA-API failure; AAC audio) into a hidden file beside the
+original, published only after the child exits 0.
+
+Installed because: a recording is often cut before it is sent; the H.264
+keyframe every second of Selenita's recordings makes a lossless cut a second
+coarse, so the trim re-encodes ([ADR
+0009](docs/decisions/0009-editing-without-an-encoder.md), amended on
+2026-10-10 for this one operation).
+
+Native dependency closure: none new. `/usr/bin/ffmpeg` belongs to the
+`ffmpeg` package (`pacman -Qo /usr/bin/ffmpeg`: ffmpeg 2:9.0.2-2.1), which
+`mpv`, the package that provides the libmpv Fluorita links, already depends
+on; Fluorita links no FFmpeg library of its own and runs the program only as
+a child.
+
+Session authority: none; a child process of the editor, killed on a cancel,
+a close or an orderly exit.
+
+Flatpak containment: not applicable.
+
+Current consumers: Fluorita's edit window for videos.
+
+Classification: Celestina platform (Fluorita); an existing package used as a
+tool.
+
+Proposal: nothing to install or remove.
+
+Risk: a Fluorita that crashes during a trim leaves the child to run to its
+end and its hidden file beside the original (`fluorita/STATUS.md`); the
+original is never touched.
+
+Rollback: not applicable; the package is required by `mpv` regardless.
+
+Missing evidence: `VAL-FLU-TRIM` in `fluorita/VALIDATION.md` on real
+recordings.
+
+Decision: nothing to install; recorded on 2026-10-10.
