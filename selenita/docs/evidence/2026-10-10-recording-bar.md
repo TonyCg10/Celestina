@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** SEL-4-A of
-  [SEL-4's plan](../plans/active/2026-10-10-sel-4-recording-controls.md):
+  [SEL-4's plan](../plans/archive/2026-10-10-sel-4-recording-controls.md):
   `celestina-rs/crates/selenita-core` (the new `pick.rs` and its tests)
   and `selenita/` (`RecordingBar.qml`, `components/RecordingClock.qml`,
   `RecordingCard.qml`, `Main.qml`, `components/ActivationRoute.qml`,

@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-10
 - **Plan ID:** sel-4-recording-controls
-- **Status:** active
+- **Closed:** 2026-10-11
+- **Successor:** none; the author named no next Selenita checkpoint. Its two delivery rows (SEL-4-A, SEL-4-B) are done
+- **Status:** done
 - **Authorization:** the author approved the design on 2026-10-10: a
   floating recording bar (title «Grabando», «Detener» and «Descartar»,
   room for a pause button), `selenita --record-focused` recording the
@@ -93,3 +95,4 @@ landed tree.
 |---|---|---|---|---|---|---|---|
 | SEL-4-A | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-4-recording-controls/SEL-4-A.numstat.tsv) | 31 files, +2542/-114 | Add the recording bar and recording the focused monitor without the chooser | [evidence](../../evidence/2026-10-10-recording-bar.md) | VAL-SEL-BAR pending |
 | SEL-4-B | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-4-recording-controls/SEL-4-B.numstat.tsv) | 30 files, +4020/-746 | Add pause and resume to recordings by joining segments | [evidence](../../evidence/2026-10-11-recording-pause.md) | VAL-SEL-BAR pending |
+| SEL-4-C | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-4-recording-controls/SEL-4-C.numstat.tsv) | 9 files, +219/-128 | Archive the delivered SEL-4 recording controls plan through its own administrative unit and reconcile the Selenita roadmap, status and plan index | [evidence](../../evidence/2026-10-11-sel-4-recording-controls-archive.md) | None |

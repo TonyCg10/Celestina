@@ -1,15 +1,16 @@
 # Selenita status
 
 - **Updated:** 2026-10-11
-- **Implementation:** SEL-4 (the recording controls) is active; see its
-  [plan](docs/plans/active/2026-10-10-sel-4-recording-controls.md).
-  SEL-4-A (the recording bar with «Detener» and «Descartar», the discard,
+- **Implementation:** SEL-4 (the recording controls) is closed and its
+  [plan](docs/plans/archive/2026-10-10-sel-4-recording-controls.md)
+  archived; no checkpoint is active. SEL-4-A (the recording bar with
+  «Detener» and «Descartar», the discard,
   `--record-focused` and `--pick-output` as the portal's chooser) landed
   as 1.2.0; see the
   [recording bar evidence](docs/evidence/2026-10-10-recording-bar.md).
   SEL-4-B (pausing by segments: «Pausar»/«Reanudar» in the bar, the
-  segments joined by `ffmpeg` at the stop) is implemented and verified
-  offscreen over the fakes, awaiting its landing; see the
+  segments joined by `ffmpeg` at the stop) is implemented, verified
+  offscreen over the fakes and landed as 1.3.0; see the
   [recording pause evidence](docs/evidence/2026-10-11-recording-pause.md). SEL-3 is closed and its
   [plan](docs/plans/archive/2026-10-10-sel-3-preview-fixes.md) archived.
   SEL-3-A answers the author's first live use of the
@@ -39,9 +40,10 @@
 - **Author validation:** VAL-SEL-BAR (SEL-4-A and SEL-4-B: the bar at the
   top centre without the focus, «Pausar»/«Reanudar», «Detener» and
   «Descartar», a paused recording joined into one file, `V` recording the
-  focused monitor with no dialog, `R` still showing it) pending, once the
-  coordinator has put the bar's rule, the `V` binding and the portal's
-  `chooser_cmd` in place. VAL-SEL-FIXES (SEL-3-A: a sharp preview of a
+  focused monitor with no dialog, `R` still showing it) pending; the
+  coordinator put the bar's rule, the `V` binding and the portal's
+  `chooser_cmd` in place on 2026-10-11 (the suite's HOST-HYGIENE,
+  87067c0a). VAL-SEL-FIXES (SEL-3-A: a sharp preview of a
   three-monitor capture, the screen key binding taking the focused
   monitor only, a recording in `Grabaciones`, the preview floating at the
   corner under the corrected rule) pending. VAL-SEL-PREVIEW (the corner without the focus,
@@ -61,7 +63,7 @@
 
 ## Current checkout truth
 
-- Version 1.2.0 in the checkout. The
+- Version 1.3.0 in the checkout. The
   window is transparent over the backdrop, follows the suite's appearance
   file and scrolls three cards: capture, recording and history.
 - The capture card takes the screen (every output, or one when there are
@@ -317,8 +319,10 @@
   the author's configuration; the README shows `title="^Vista previa"`. `Qt.WindowDoesNotAcceptFocus` is only a hint on Wayland; the
   rule's `open-focused false` is what keeps the focus where it was.
 - A `--record` launch's only sign while it records is the recording bar
-  (SEL-4-A), placed by niri's rule of the README; without the rule niri
-  opens the bar as any new window (tiled and focused).
+  (SEL-4-A), placed by niri's rule of the README, which is in the
+  author's configuration since 2026-10-11 (the suite's HOST-HYGIENE,
+  87067c0a); without the rule niri opens the bar as any new window (tiled
+  and focused).
   `Qt.WindowDoesNotAcceptFocus` is only a hint on Wayland, as for the
   preview. The bar never takes the keyboard, so «Descartar» has no key
   of its own: the keyboard stops from the card (`R`, «Detener»).
@@ -330,15 +334,16 @@
   the compositor's blur stops at the pill's rounded corners is the
   author's to see (VAL-SEL-BAR).
 - `--record-focused` depends on the portal's chooser being
-  `selenita --pick-output` (`chooser_cmd`, the coordinator's edit); with
-  any other chooser it shows the dialog like `--record`, and its request
-  is removed once the portal has answered. A screencast another program
+  `selenita --pick-output` (`chooser_cmd`, which the coordinator set to
+  `/home/toni/.local/bin/selenita --pick-output` in the author's
+  configuration on 2026-10-11); with any other chooser it shows the
+  dialog like `--record`, and its request is removed once the portal has
+  answered. A screencast another program
   starts within the instant between a focused start's request and the
   portal's question would take the request instead.
 - The suite's `scripts/activation_contract.py` describes
-  `org.celestina.Selenita1`'s methods in prose without `RecordFocused`;
-  updating that reason is a suite follow-up (the allowlisted interface is
-  unchanged).
+  `org.celestina.Selenita1`'s methods in prose and names `RecordFocused`
+  since 87067c0a (the allowlisted interface is unchanged).
 - The last recording's poster stays in `runtime_dir/selenita` until the
   next preview replaces it or the session ends (the runtime folder is
   cleared at logout); a poster left by an earlier process is not removed

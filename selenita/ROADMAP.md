@@ -1,7 +1,7 @@
 # Selenita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** SEL-4
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** VAL-SEL-SHOT, VAL-SEL-REC,
   VAL-SEL-PREVIEW, VAL-SEL-FIXES and VAL-SEL-BAR pending in
   [VALIDATION.md](VALIDATION.md) (they do not block)
@@ -47,7 +47,7 @@ the terminal: one window with the capture, the recording and the history.
 | SEL-2-A | done | SEL-1-C, PRV-1-A | the corner preview, the hand-off to Fluorita, `Adopt` | [preview](docs/evidence/2026-10-10-preview.md) |
 | SEL-3-A | done | SEL-2-A | the preview decoded at its shown size, `FocusedOutput` for the screen binding, `Grabaciones`, `FolderPaths` | [preview fixes](docs/evidence/2026-10-10-preview-fixes.md) |
 | SEL-4-A | done | SEL-3-A | the recording bar, the discard job, the focused start's pick request, `--pick-output` | [recording bar](docs/evidence/2026-10-10-recording-bar.md) |
-| SEL-4-B | active | SEL-4-A | the `Paused` state, segments on one portal session, the `ffmpeg` join and its fallbacks, the bar's pause button | [recording pause](docs/evidence/2026-10-11-recording-pause.md) |
+| SEL-4-B | done | SEL-4-A | the `Paused` state, segments on one portal session, the `ffmpeg` join and its fallbacks, the bar's pause button | [recording pause](docs/evidence/2026-10-11-recording-pause.md) |
 
 SEL-1 closed on 2026-10-10 at 1.0.2, after the bug units SEL-1-D and SEL-1-E
 and the capture portal of SEL-1-F. The build order, exclusions, exit and
@@ -65,9 +65,11 @@ closed on 2026-10-10 at 1.1.1 with SEL-3-A. Its build order, exclusions, exit
 and ledger are in the
 [archived plan](docs/plans/archive/2026-10-10-sel-3-preview-fixes.md).
 
-SEL-4, the recording controls the author approved on 2026-10-10, is
-active: its build order, exclusions, exit and ledger are in the
-[active plan](docs/plans/active/2026-10-10-sel-4-recording-controls.md).
+SEL-4, the recording controls the author approved on 2026-10-10, added
+the recording bar, the focused recording without the portal's dialog and
+pausing by segments, and closed on 2026-10-11 at 1.3.0 with SEL-4-A and
+SEL-4-B. Its build order, exclusions, exit and ledger are in the
+[archived plan](docs/plans/archive/2026-10-10-sel-4-recording-controls.md).
 
 ## Implementation exit
 

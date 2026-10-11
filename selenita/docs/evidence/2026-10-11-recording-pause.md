@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-11
 - **Scope:** SEL-4-B of
-  [SEL-4's plan](../plans/active/2026-10-10-sel-4-recording-controls.md):
+  [SEL-4's plan](../plans/archive/2026-10-10-sel-4-recording-controls.md):
   `celestina-rs/crates/selenita-core` (`record.rs`'s `Paused` state, the
   new `segments.rs`, their tests) and `selenita/` (the recording worker,
   the recorders moved to `recorder.rs`, `portal.rs`'s `Session::remote`,

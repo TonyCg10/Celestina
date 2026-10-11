@@ -1,0 +1,25 @@
+# SEL-4-C exact change inventory
+
+Base revision	87067c0a62241e9bf74a4128616aab316f016086
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/docs/evidence/2026-10-10-recording-bar.md
+Pathspec	selenita/docs/evidence/2026-10-11-recording-pause.md
+Pathspec	selenita/docs/evidence/2026-10-11-sel-4-recording-controls-archive.md
+Pathspec	selenita/docs/inventories/2026-10-10-sel-4-recording-controls/SEL-4-C.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-10-sel-4-recording-controls.md
+Pathspec	selenita/docs/plans/active/README.md
+Pathspec	selenita/docs/plans/archive/2026-10-10-sel-4-recording-controls.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	6	ec340a58a47f38b5832c07fb530ac08f6b8a6d76a0b1a55c19ab4e473913d62b	selenita/ROADMAP.md
+22	17	528cce3b7e653d4127e9e7732f2299f63f1d579d8127d9dd0341b4b05e140739	selenita/STATUS.md
+1	1	f7b54ca2d2befa144ce773af54376f3797c74334288ad7d331a62c1acc0d11e4	selenita/docs/evidence/2026-10-10-recording-bar.md
+1	1	b15a93e2b919350428aa0ee8e6103e910bde430baf2ed8720716e08e6ee69fb0	selenita/docs/evidence/2026-10-11-recording-pause.md
+60	0	ab322c3d4c1979f59443e9d89749d7bcb6aa8d7e9420de41a8bbabc4aa901250	selenita/docs/evidence/2026-10-11-sel-4-recording-controls-archive.md
+25	0	self	selenita/docs/inventories/2026-10-10-sel-4-recording-controls/SEL-4-C.numstat.tsv
+0	95	deleted	selenita/docs/plans/active/2026-10-10-sel-4-recording-controls.md
+4	8	28196178444437980f195bdff234475d63f273f66bed2f4376fabd21d1758f6c	selenita/docs/plans/active/README.md
+98	0	aa66248bc161cebae6fe1eaa7188d40d893ef48224ec3b8b7c4e78ed06b8c480	selenita/docs/plans/archive/2026-10-10-sel-4-recording-controls.md
