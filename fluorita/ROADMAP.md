@@ -1,7 +1,7 @@
 # Fluorita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** FLU-P2
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Authorised sequence:** F7-F15, opened by author decision on 2026-08-19 and
   delivered on 2026-08-20 in a single commit. `FLU-H1` is the hardening the
   author asked for after the 2026-09-26 monorepo audit. `FLU-P1` is
@@ -17,7 +17,7 @@ Fluorita 1.0 is implemented and its F0-F4 arc is closed. Do not reopen it,
 repeat completed perceptual tests in this file or treat a manual check as
 unfinished implementation.
 
-## FLU-P2 — Fixes to the floating editor after its first live use, active
+## FLU-P2 — Fixes to the floating editor after its first live use, closed 2026-10-10
 
 The measured need, from the author's first live use on 2026-10-10: the edit
 window opened 960 px wide and its bottom toolbar, wider than that, was cut
@@ -39,10 +39,10 @@ toolbar is refused, a screen too narrow for it gets a toolbar that scrolls
 rather than clips, the trim follows the same rule with its own controls,
 and an edited copy joins Selenita's history by Selenita's one rule.
 
-The active plan is
-[fixes to the floating editor](docs/plans/active/2026-10-10-flu-p2-preview-fixes.md):
+The archived plan is
+[fixes to the floating editor](docs/plans/archive/2026-10-10-flu-p2-preview-fixes.md):
 
-- [ ] `FLU-P2-A` — the edit window's size, and the adoption rule taken from
+- [x] `FLU-P2-A` — the edit window's size, and the adoption rule taken from
   Selenita.
 
 ## FLU-P1 — The floating editor of the capture preview, closed 2026-10-10

@@ -1,15 +1,17 @@
 # Fluorita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** `FLU-P2` is active: `FLU-P2-A` fixes what the
-  author's first live use of the floating editor found (a toolbar cut off by
-  a window too narrow for it, and a second copy of Selenita's adoption rule)
-  ([active plan](docs/plans/active/2026-10-10-flu-p2-preview-fixes.md)).
+- **Implementation:** `FLU-P2`, Fluorita's part of the suite's preview
+  fixes `PRV-2`, is closed and delivered; no checkpoint is active.
+  `FLU-P2-A` fixes what the author's first live use of the floating editor
+  found (a toolbar cut off by a window too narrow for it, and a second copy
+  of Selenita's adoption rule) and landed as `1.7.1`, the checkout's version
+  ([archived plan](docs/plans/archive/2026-10-10-flu-p2-preview-fixes.md)).
   `FLU-P1`, Fluorita's part of the suite's capture
   preview `PRV-1`, is closed and delivered.
   `FLU-P1-A` (the floating editor on any path) landed as `1.6.0`, and
   `FLU-P1-B` (the frame-accurate video trim through an `ffmpeg` child) as
-  `1.7.0`, the checkout's version
+  `1.7.0`
   ([archived plan](docs/plans/archive/2026-10-10-flu-p1-preview.md)).
   Checkpoints F0-F15 and `FLU-H1`, the hardening that followed the 2026-09-26
   monorepo audit, are closed and delivered. `FLU-H1-A` (a Replace that trashes its original,
@@ -24,7 +26,7 @@
 
 ## Current checkout truth
 
-- `FLU-P2-A` (in a session worktree, not landed,
+- `FLU-P2-A` (preview fixes, landed as `1.7.1`,
   [evidence](docs/evidence/2026-10-10-editor-fixes.md)): the edit window
   opens at its bottom bar's whole width plus a gutter each side — the
   picture's toolbar, or the controls under a film — never less than
@@ -115,9 +117,10 @@
 
 ## Active work
 
-`FLU-P2` is active with one unit, `FLU-P2-A`
-([active plan](docs/plans/active/2026-10-10-flu-p2-preview-fixes.md)).
-`FLU-P1` closed on 2026-10-10
+No checkpoint is active. `FLU-P2` closed on 2026-10-10
+([archived plan](docs/plans/archive/2026-10-10-flu-p2-preview-fixes.md)):
+`FLU-P2-A`, the edit window's size and the adoption rule taken from
+Selenita, landed as `1.7.1`. `FLU-P1` closed on 2026-10-10
 ([archived plan](docs/plans/archive/2026-10-10-flu-p1-preview.md)):
 `FLU-P1-A` landed as `1.6.0` and `FLU-P1-B`, the trim, as `1.7.0`. `FLU-H1`, the post-audit
 hardening, closed on 2026-10-10 with its six units landed

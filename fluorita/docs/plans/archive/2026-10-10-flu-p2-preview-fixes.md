@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-10
 - **Plan ID:** flu-p2-preview-fixes
-- **Status:** active
+- **Closed:** 2026-10-10
+- **Successor:** none; the author named no next Fluorita checkpoint. Its one delivery row (FLU-P2-A) is done
+- **Status:** done
 - **Authorization:** the author used the floating editor of the capture
   preview live on 2026-10-10 and approved two fixes: the edit window opens
   wide enough for its whole toolbar and never lets it be cut, and Fluorita
@@ -62,5 +64,6 @@ Fluorita's `scripts/complete-production.sh` at landing.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | FLU-P2-A | `fluorita:` | done | [inventory](../../inventories/2026-10-10-flu-p2-preview-fixes/FLU-P2-A.numstat.tsv) | 18 files, +1117/-390 | Fix the edit window's size and take the adoption rule from Selenita: the window opens at its toolbar's whole width (at least 1280 × 800, at most nine tenths of the screen) with that width as its minimum, the toolbar scrolls rather than clip on a narrower screen, the trim's controls follow the same rule, and `adopt.rs` applies `selenita_core::history::adopted` over the folders `selenita_core::names` names | [evidence](../../evidence/2026-10-10-editor-fixes.md) | `VAL-FLU-EDIT-WINDOW` |
+| FLU-P2-B | `fluorita:` | done | [inventory](../../inventories/2026-10-10-flu-p2-preview-fixes/FLU-P2-B.numstat.tsv) | 7 files, +158/-87 | Archive the delivered FLU-P2 preview fixes plan through its own administrative unit and reconcile the Fluorita roadmap, status and plan index | [evidence](../../evidence/2026-10-10-flu-p2-preview-fixes-archive.md) | None |
 
 This plan records intent; it grants no authority.

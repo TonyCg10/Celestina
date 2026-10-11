@@ -1,0 +1,21 @@
+# FLU-P2-B exact change inventory
+
+Base revision	6a3e0212dd1d65dccf2e103dcb3e5ac8cef01496
+Pathspec	fluorita/ROADMAP.md
+Pathspec	fluorita/STATUS.md
+Pathspec	fluorita/docs/evidence/2026-10-10-flu-p2-preview-fixes-archive.md
+Pathspec	fluorita/docs/inventories/2026-10-10-flu-p2-preview-fixes/FLU-P2-B.numstat.tsv
+Pathspec	fluorita/docs/plans/active/2026-10-10-flu-p2-preview-fixes.md
+Pathspec	fluorita/docs/plans/active/README.md
+Pathspec	fluorita/docs/plans/archive/2026-10-10-flu-p2-preview-fixes.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	6	85af1ebaf610ae4a06d672ea89ce2f5b2328d3fa6313d550661018a02e976147	fluorita/ROADMAP.md
+12	9	742fa238ed1e520e7a110f0ce23908b315595261f77334a027d954ffd7742cc2	fluorita/STATUS.md
+47	0	1153dda7b8f20902e877835330a184b38b10119f5943db2c84978ed473b90512	fluorita/docs/evidence/2026-10-10-flu-p2-preview-fixes-archive.md
+21	0	self	fluorita/docs/inventories/2026-10-10-flu-p2-preview-fixes/FLU-P2-B.numstat.tsv
+0	66	deleted	fluorita/docs/plans/active/2026-10-10-flu-p2-preview-fixes.md
+3	6	2911e7e89993223b78f91e222394c4d6c6ab0bc94aaef4a9d8c448338c0ad0b6	fluorita/docs/plans/active/README.md
+69	0	6a9c9fc7e4480cfd1048649f50590239bc5cc14a558a7284e3d964ddabf2b026	fluorita/docs/plans/archive/2026-10-10-flu-p2-preview-fixes.md
