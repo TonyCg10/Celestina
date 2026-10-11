@@ -469,7 +469,7 @@ status_script = "calcita/scripts/status-production.sh"
 artifact_manifest = "calcita/target/production-artifact.toml"
 artifact_paths = ["calcita/target/release/calcita"]
 cargo_manifests = ["calcita/Cargo.toml"]
-production_inputs = ["calcita/Cargo.toml", "calcita/Cargo.lock", "calcita/build.rs", "calcita/src", "calcita/qml", "calcita/org.celestina.Calcita.desktop", "celestina-style/icons/apps/org.celestina.Calcita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/calcita-core"]
+production_inputs = ["calcita/Cargo.toml", "calcita/Cargo.lock", "calcita/build.rs", "calcita/src", "calcita/cpp", "calcita/qml", "calcita/org.celestina.Calcita.desktop", "celestina-style/icons/apps/org.celestina.Calcita.svg", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/calcita-core"]
 verification_inputs = ["calcita/scripts/smoke.sh", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "calcita-core", roots = ["celestina-rs/crates/calcita-core/"], include_workspace_manifests = true },
