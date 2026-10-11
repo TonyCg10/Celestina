@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-09
 - **Scope:** `CAL-1-B` of
-  [CAL-1's plan](../plans/active/2026-10-09-cal-1-foundation.md):
+  [CAL-1's plan](../plans/archive/2026-10-09-cal-1-foundation.md):
   `calcita-core::search` (`SearchRequest`, `next_hit`), the controller's
   `copySelection` (through the `cpp/` clipboard shim) and `openExternal`,
   `CalcitaDocument`'s `searchQuery` and `nextHit`, Calcita's own continuous

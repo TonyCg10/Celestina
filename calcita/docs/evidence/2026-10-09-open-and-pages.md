@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-09
 - **Scope:** `CAL-1-A` of
-  [CAL-1's plan](../plans/active/2026-10-09-cal-1-foundation.md):
+  [CAL-1's plan](../plans/archive/2026-10-09-cal-1-foundation.md):
   `calcita-core` (zoom ladder, page grammar, recent store, reading position),
   the controller's document set and recents, the per-window
   `CalcitaDocument`, the activation adapter's `Open`, the document window

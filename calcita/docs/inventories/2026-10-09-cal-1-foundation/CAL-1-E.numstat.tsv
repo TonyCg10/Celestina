@@ -1,0 +1,31 @@
+# CAL-1-E exact change inventory
+
+Base revision	76419e9947ba56a3f37c7d4421b5fb19428c6a20
+Pathspec	calcita/ROADMAP.md
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/docs/evidence/2026-10-09-exit.md
+Pathspec	calcita/docs/evidence/2026-10-09-open-and-pages.md
+Pathspec	calcita/docs/evidence/2026-10-09-search-outline-links.md
+Pathspec	calcita/docs/evidence/2026-10-09-skeleton.md
+Pathspec	calcita/docs/evidence/2026-10-10-page-contrast.md
+Pathspec	calcita/docs/evidence/2026-10-11-cal-1-foundation-archive.md
+Pathspec	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-E.numstat.tsv
+Pathspec	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+Pathspec	calcita/docs/plans/active/README.md
+Pathspec	calcita/docs/plans/archive/2026-10-09-cal-1-foundation.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+13	7	2ce88f00418eb091f59137f7bb5e468b077da18350b4e0596d4570cd4bf0d34e	calcita/ROADMAP.md
+13	11	151748ada8dc90a964809759b02971e3700c5096f0f32b5c5470c220b9a0d304	calcita/STATUS.md
+1	1	86cbd535ce62ea1e50f8de9a1ce629031fde645d3ad05ca4415ddda5c217e255	calcita/docs/evidence/2026-10-09-exit.md
+1	1	5d2a76c66aa8e4eabdcd5e44ca7bd7cedcd6832a6e42ab49ff06d9b89fd07cd9	calcita/docs/evidence/2026-10-09-open-and-pages.md
+1	1	119a81bd95c7a7cfebafa95c3a5fb122ac056531830162d1ff5480c79913e2e6	calcita/docs/evidence/2026-10-09-search-outline-links.md
+1	1	b41563c559dcaaed0f894338896c9418c9c0fa1726fd11b98252fcaa59edd64c	calcita/docs/evidence/2026-10-09-skeleton.md
+1	1	0fe00aea65a622695c405ae538ebe0c8aed5778d802c0ae84aa9f53a78c9f3be	calcita/docs/evidence/2026-10-10-page-contrast.md
+61	0	99f68c29a65b0b6b11d1029dfc9aaab4d7797ce91569b8af383ce28a330b471e	calcita/docs/evidence/2026-10-11-cal-1-foundation-archive.md
+31	0	self	calcita/docs/inventories/2026-10-09-cal-1-foundation/CAL-1-E.numstat.tsv
+0	66	deleted	calcita/docs/plans/active/2026-10-09-cal-1-foundation.md
+3	2	fed61ab84406f343f010427605d8bdbbf23514a7a067b956a22a15f15fdaf9d3	calcita/docs/plans/active/README.md
+69	0	abc82d1b00bf649133cb9238fe8cc2b880f92a813a5abbc662072d7cb27ab994	calcita/docs/plans/archive/2026-10-09-cal-1-foundation.md

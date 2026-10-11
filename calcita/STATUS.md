@@ -1,21 +1,23 @@
 # Calcita status
 
-- **Updated:** 2026-10-09
-- **Implementation:** CAL-1's three units are implemented and checked
-  offscreen: CAL-1-A (opening, continuous pages, zoom and navigation),
-  CAL-1-B (search, the outline, selection and copy, links) and CAL-1-C (the
-  dark reading mode, the recents card's menu, the `application/pdf` entry,
-  the accessibility pass); the CAL-1-C landing releases 1.0.0 and closes the
-  foundation
+- **Updated:** 2026-10-11
+- **Implementation:** CAL-1 is closed and its
+  [plan](docs/plans/archive/2026-10-09-cal-1-foundation.md) archived; no
+  checkpoint is active. Its four units are implemented, checked offscreen
+  and landed: CAL-1-A (opening, continuous pages, zoom and navigation) as
+  0.2.0, CAL-1-B (search, the outline, selection and copy, links) as 0.3.0,
+  CAL-1-C (the dark reading mode, the recents card's menu, the
+  `application/pdf` entry, the accessibility pass) as 1.0.0, and the bug
+  unit CAL-1-D (every page on opaque paper over the glass) as 1.0.1
 - **Author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH and VAL-CAL-DARK
   pending
 
 ## Current checkout truth
 
-- Version 0.2.0 in the checkout (the CAL-1-C landing sets 1.0.0), not
-  installed. The empty window «Sin documento» offers «Abrir…» (the
-  FileChooser portal, filtered to PDF), the recent documents and a drop
-  area. A click, Enter or Space on a recent row opens it; its menu (a right
+- Version 1.0.1 in the checkout, installed under the author's prefix
+  (`~/.local/bin/calcita`). The empty window «Sin documento» offers
+  «Abrir…» (the FileChooser portal, filtered to PDF), the recent documents
+  and a drop area. A click, Enter or Space on a recent row opens it; its menu (a right
   click, the Menu key or Shift+F10) has «Quitar de recientes».
 - Each document opens in a window of its own in the same process: the bar
   (name, the page field «n / N», zoom out/in with the factor, fit width, fit

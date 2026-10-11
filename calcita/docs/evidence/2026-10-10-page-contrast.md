@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** `CAL-1-D` of
-  [CAL-1's plan](../plans/active/2026-10-09-cal-1-foundation.md), a bug
+  [CAL-1's plan](../plans/archive/2026-10-09-cal-1-foundation.md), a bug
   unit: `qml/components/PageView.qml` (the `paper` token and the paper
   rectangle under every page's image), `tests/qml/tst_paper.qml` (new),
   STATUS, VALIDATION (VAL-CAL-OPEN) and the plan's ledger
