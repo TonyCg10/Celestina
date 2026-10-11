@@ -4,6 +4,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 
 const FOCUSED: &str = include_str!("fixtures/niri-focused-window.json");
+const FOCUSED_OUTPUT: &str = include_str!("fixtures/niri-focused-output.json");
 const OUTPUTS: &str = include_str!("fixtures/niri-outputs.json");
 const WINDOWS: &str = include_str!("fixtures/niri-windows.json");
 const WORKSPACES: &str = include_str!("fixtures/niri-workspaces.json");
@@ -83,6 +84,43 @@ fn a_disabled_output_is_left_out() {
     assert_eq!(outputs[0].name, "Y-1");
 }
 
+/// `niri msg --json focused-output` prints one output, as `outputs` lists
+/// them: the monitor a key binding's screen capture takes.
+#[test]
+fn the_focused_output_reads_from_niris_reply() {
+    let output = niri::parse_focused_output(FOCUSED_OUTPUT).expect("the fixture");
+    assert_eq!(output.name, "DP-1");
+    assert_eq!(
+        output.logical,
+        Geometry {
+            x: 1920,
+            y: 0,
+            w: 2560,
+            h: 1440
+        }
+    );
+}
+
+#[test]
+fn no_focused_output_and_garbage_are_typed() {
+    assert_eq!(
+        niri::parse_focused_output("null"),
+        Err(NiriError::NoFocusedOutput)
+    );
+    assert!(matches!(
+        niri::parse_focused_output("{"),
+        Err(NiriError::Protocol(_))
+    ));
+    assert!(matches!(
+        niri::parse_focused_output(r#"{"logical":{"x":0,"y":0,"width":10,"height":10}}"#),
+        Err(NiriError::Protocol(_))
+    ));
+    assert!(matches!(
+        niri::parse_focused_output(r#"{"name":"DP-1","logical":null}"#),
+        Err(NiriError::Protocol(_))
+    ));
+}
+
 #[test]
 fn replies_unwrap_or_say_why_not() {
     assert_eq!(
@@ -124,6 +162,30 @@ fn the_client_speaks_one_line_each_way() {
         niri::outputs(&dir.join("absent.sock")),
         Err(NiriError::Io(_))
     ));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_focused_output_is_one_request_line() {
+    let dir = std::env::temp_dir().join(format!("selenita-niri-output-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("scratch");
+    let socket = dir.join("niri.sock");
+    let listener = UnixListener::bind(&socket).expect("listen");
+    let compact: serde_json::Value = serde_json::from_str(FOCUSED_OUTPUT).expect("fixture");
+    let reply = format!("{{\"Ok\":{{\"FocusedOutput\":{compact}}}}}\n");
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("accept");
+        let mut request = String::new();
+        BufReader::new(&stream)
+            .read_line(&mut request)
+            .expect("request");
+        (&stream).write_all(reply.as_bytes()).expect("reply");
+        request
+    });
+    let output = niri::focused_output(&socket).expect("the fake niri");
+    assert_eq!(server.join().expect("server"), "\"FocusedOutput\"\n");
+    assert_eq!(output.name, "DP-1");
     let _ = std::fs::remove_dir_all(dir);
 }
 

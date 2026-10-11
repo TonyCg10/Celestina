@@ -1,5 +1,7 @@
 use chrono::NaiveDate;
-use selenita_core::names::{file_name_at, numbered, user_dir_from};
+use selenita_core::names::{
+    captures_dir_in, file_name_at, numbered, user_dir_from, CAPTURES_FOLDER,
+};
 use std::ffi::OsStr;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -78,5 +80,16 @@ fn a_pictures_folder_that_is_not_utf8_comes_back_exact() {
     assert_eq!(
         user_dir_from(&bytes, "XDG_PICTURES_DIR", home),
         Some(PathBuf::from(OsStr::from_bytes(&expected)))
+    );
+}
+
+/// A capture lands in the pictures folder's «Capturas», the folder the
+/// capture card names; the name is the crate's, not the window's.
+#[test]
+fn a_capture_lands_in_the_captures_folder_of_the_pictures_folder() {
+    assert_eq!(CAPTURES_FOLDER, "Capturas");
+    assert_eq!(
+        captures_dir_in(Path::new("/home/ana/Pictures")),
+        PathBuf::from("/home/ana/Pictures/Capturas")
     );
 }

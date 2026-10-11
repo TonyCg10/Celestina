@@ -1,4 +1,4 @@
-use selenita_core::history::{adopted, Folders, CAPACITY};
+use selenita_core::history::{adopted, FolderPaths, Folders, CAPACITY};
 use selenita_core::{Entry, EntryKind, History};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -130,7 +130,7 @@ fn damaged_lines_are_skipped_and_a_missing_file_is_empty() {
 fn only_a_capture_or_a_recording_in_selenitas_folders_is_adopted() {
     let dir = scratch("adopt");
     let captures = dir.join("Pictures").join("Capturas");
-    let recordings = dir.join("Videos").join("Recordings");
+    let recordings = dir.join("Videos").join("Grabaciones");
     std::fs::create_dir_all(&captures).expect("captures");
     std::fs::create_dir_all(&recordings).expect("recordings");
     let folders = Folders {
@@ -177,5 +177,47 @@ fn only_a_capture_or_a_recording_in_selenitas_folders_is_adopted() {
         adopted(std::path::Path::new("relative.png"), folders, now),
         None
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The folders come from the caller's pictures and videos folders with the
+/// crate's names: «Capturas» and `Grabaciones`. A file in each is adopted
+/// with its kind, and one in the old `Recordings` or in the pictures root is
+/// not (SEL-3-A).
+#[test]
+fn the_folders_inside_the_pictures_and_videos_folders_use_the_crates_names() {
+    let dir = scratch("adopt-names");
+    let pictures = dir.join("Pictures");
+    let videos = dir.join("Videos");
+    let paths = FolderPaths::inside(&pictures, &videos);
+    assert_eq!(paths.captures, pictures.join("Capturas"));
+    assert_eq!(paths.recordings, videos.join("Grabaciones"));
+    let folders = paths.folders();
+    assert_eq!(folders.captures, paths.captures.as_path());
+    assert_eq!(folders.recordings, paths.recordings.as_path());
+    let old = videos.join("Recordings");
+    for folder in [&paths.captures, &paths.recordings, &old] {
+        std::fs::create_dir_all(folder).expect("folder");
+    }
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(2_000);
+
+    let shot = paths.captures.join("Captura 2026-10-10 20.00.00 (2).png");
+    std::fs::write(&shot, b"png").expect("shot");
+    assert_eq!(
+        adopted(&shot, folders, now).map(|entry| entry.kind),
+        Some(EntryKind::Screenshot)
+    );
+    let clip = paths.recordings.join("Clip 2026-10-10 20.00.00 (2).mp4");
+    std::fs::write(&clip, b"mp4").expect("clip");
+    let entry = adopted(&clip, folders, now).expect("a recording");
+    assert_eq!(entry.kind, EntryKind::Recording);
+    assert_eq!(entry.size, 3);
+
+    let stale = old.join("Clip 2026-10-09 20.00.00.mp4");
+    std::fs::write(&stale, b"mp4").expect("stale");
+    assert_eq!(adopted(&stale, folders, now), None);
+    let loose = pictures.join("Captura.png");
+    std::fs::write(&loose, b"png").expect("loose");
+    assert_eq!(adopted(&loose, folders, now), None);
     let _ = std::fs::remove_dir_all(&dir);
 }

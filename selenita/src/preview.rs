@@ -327,11 +327,11 @@ mod tests {
     fn without_fluorita_or_a_bus_a_new_one_is_started() {
         for running in [Ok(false), Err("no bus".to_owned())] {
             let mut fluorita = Tally::new(running);
-            let path = Path::new("/videos/Recordings/Clip 1.mp4");
+            let path = Path::new("/videos/Grabaciones/Clip 1.mp4");
             assert_eq!(hand_off(&mut fluorita, path).ok(), Some(Route::Spawned));
             assert_eq!(
                 fluorita.seen,
-                ["spawn --edit /videos/Recordings/Clip 1.mp4"]
+                ["spawn --edit /videos/Grabaciones/Clip 1.mp4"]
             );
         }
     }
@@ -455,6 +455,9 @@ mod tests {
         impl crate::backend::Backend for Broken {
             fn outputs(&mut self) -> Result<Vec<selenita_core::niri::Output>, CaptureError> {
                 Ok(Vec::new())
+            }
+            fn focused_output(&mut self) -> Result<String, CaptureError> {
+                Ok(String::new())
             }
             fn windows(&mut self) -> Result<Vec<selenita_core::niri::Window>, CaptureError> {
                 Ok(Vec::new())

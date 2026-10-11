@@ -6,7 +6,8 @@ The first two entries below are run on the Selenita 1.0.0 binary the SEL-1-C
 landing installs (`scripts/complete-production.sh`); SEL-1-C added the
 keyboard and the screen-reader steps to them rather than a third entry, so
 one session covers the window. VAL-SEL-PREVIEW is run on the binary the
-SEL-2-A landing installs.
+SEL-2-A landing installs, VAL-SEL-FIXES on the one the SEL-3-A landing
+installs.
 
 ## VAL-SEL-SHOT — Capture the screen, a window and a region
 
@@ -91,8 +92,8 @@ SEL-2-A landing installs.
 - **Pass condition:** the card shows the red dot and the time counting
   from 0:00 while it records (the second recording too), and «Grabar»
   again afterwards within a second of each «Detener»; each recording is a
-  `<recording stem> <date> <time>.mp4` in the videos folder's `Recordings`
-  (nothing in the videos root) that Fluorita plays with the pointer drawn,
+  `<recording stem> <date> <time>.mp4` in the videos folder's `Grabaciones`
+  (nothing in the videos root, and no new `Recordings`; SEL-3-A) that Fluorita plays with the pointer drawn,
   text legible at the screen's own resolution, the silent one with a
   silent audio track and the last with the sound heard; a recording whose
   portal node sends nothing ends by itself within about 8 s with «El
@@ -160,5 +161,35 @@ SEL-2-A landing installs.
   abrir Fluorita.» on the preview); the saved copy is a new history row;
   neither `pgrep` finds a Selenita (a key-binding launch ends with its
   preview, and closing the window ends Selenita and its preview)
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-SEL-FIXES — A sharp preview, the focused monitor and `Grabaciones`
+
+- **Status:** pending
+- **Related implementation:** SEL-3-A (the author's first live use of the
+  corner preview, 2026-10-10)
+- **Requires:** the deployed Selenita (the SEL-3-A landing), the README's
+  key bindings and its corrected preview rule (`title="^Vista previa"`,
+  no closing `$`) in niri's config, two or more monitors, and the
+  coordinator's move of the old `Recordings` files done or not (either
+  works)
+- **Procedure:** with Selenita closed and the focus on one monitor, press
+  the screen key binding (`--screenshot screen`); look at the preview and
+  open the saved capture; move the focus to another monitor and press it
+  again; open Selenita, choose «Pantalla» and «Todas» and press
+  «Capturar», then choose one output's chip and capture again; record 5 s
+  with the recording key bindings and look in the videos folder; look at
+  the preview of a capture of all the monitors (from the window with
+  «Todas») up close, text included, on a monitor with a scale above 1 and
+  on one at 1
+- **Pass condition:** each key-binding capture holds only the monitor that
+  had the focus (the second one the other monitor), at that monitor's
+  size; the window's «Todas» still takes every monitor and an output chip
+  only that output; the recording is in the videos folder's `Grabaciones`
+  and no `Recordings` folder is made again; the preview opens floating at
+  the bottom-right corner without the focus (not tiled), and its picture is
+  sharp at every scale, edges and text without the jagged or blurred look
+  of 1.1.0, a wide three-monitor capture included
 - **Result:** not run
 - **Evidence:** none

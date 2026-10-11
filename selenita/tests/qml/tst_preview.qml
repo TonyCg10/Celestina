@@ -92,6 +92,42 @@ TestCase {
         compare(preview.holdTime, 5000)
     }
 
+    // The picture is decoded at the size it is shown at in device pixels,
+    // both dimensions, and smoothed with mipmaps on the way down (SEL-3-A):
+    // a capture and a recording's poster alike, following the window's
+    // height as the shape changes.
+    function test_the_picture_is_decoded_at_its_shown_size_and_smoothed() {
+        const preview = makePreview()
+        testCase.showShot()
+        const picture = findNamed(preview.contentItem, "previewPicture")
+        verify(preview.pixelRatio > 0)
+        verify(picture.smooth, "smooth")
+        verify(picture.mipmap, "mipmap")
+        compare(picture.fillMode, Image.PreserveAspectCrop)
+        const frame = picture.parent
+        function expectFrame() {
+            // The window's size settles when the platform confirms it.
+            const inset = preview.frameMargin * 2
+            tryVerify(function() {
+                return picture.sourceSize.width
+                        === Math.ceil((preview.width - inset) * preview.pixelRatio)
+                    && picture.sourceSize.height
+                        === Math.ceil((preview.height - inset) * preview.pixelRatio)
+            }, 1000, "decoded at the frame's size times the pixel ratio")
+            // Once laid out, that is the frame the picture fills.
+            tryCompare(frame, "width", preview.width - inset)
+            tryCompare(frame, "height", preview.height - inset)
+        }
+        compare(preview.height, preview.highestHeight)
+        expectFrame()
+        verify(picture.sourceSize.width < preview.previewWidth * 2,
+               "no longer twice the window's width")
+        testCase.showClip(Qt.resolvedUrl("stubs/pixel.png"))
+        tryCompare(preview, "height", preview.lowestHeight)
+        expectFrame()
+        verify(picture.sourceSize.height < picture.sourceSize.width, "the poster's shape")
+    }
+
     function test_it_closes_five_seconds_later() {
         const preview = makePreview()
         testCase.showShot()

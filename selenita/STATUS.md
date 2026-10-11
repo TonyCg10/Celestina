@@ -1,9 +1,15 @@
 # Selenita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** SEL-2 is closed and its
-  [plan](docs/plans/archive/2026-10-10-sel-2-preview.md) archived; no
-  checkpoint is active. SEL-2-A (the corner preview after every capture and
+- **Implementation:** SEL-3 is active, with its
+  [plan](docs/plans/active/2026-10-10-sel-3-preview-fixes.md): SEL-3-A
+  answers the author's first live use of the corner preview (a blurred
+  preview, a screen key binding that took every monitor, the recordings
+  folder's name) and is implemented and verified offscreen over the fakes,
+  not landed; see the
+  [preview fixes evidence](docs/evidence/2026-10-10-preview-fixes.md).
+  SEL-2 is closed and its
+  [plan](docs/plans/archive/2026-10-10-sel-2-preview.md) archived. SEL-2-A (the corner preview after every capture and
   recording, its drag and its hand-off to Fluorita, `Selenita1.Adopt`, no
   main window after a key-binding launch) is implemented, verified offscreen
   over the fakes and landed as 1.1.0; see the
@@ -21,7 +27,10 @@
   recording's line after a trash, and the window no longer hiding for a
   capture; see the
   [recording fixes evidence](docs/evidence/2026-10-10-recording-fixes.md)
-- **Author validation:** VAL-SEL-PREVIEW (the corner without the focus,
+- **Author validation:** VAL-SEL-FIXES (SEL-3-A: a sharp preview of a
+  three-monitor capture, the screen key binding taking the focused
+  monitor only, a recording in `Grabaciones`, the preview floating at the
+  corner under the corrected rule) pending. VAL-SEL-PREVIEW (the corner without the focus,
   dragging a capture and a recording into WhatsApp and Slack, the click
   into Fluorita) pending, with the niri rule of the README in place.
   VAL-SEL-SHOT (a real capture) and VAL-SEL-REC (a
@@ -44,12 +53,16 @@
 - The capture card takes the screen (every output, or one when there are
   several), the focused window or a region drawn with `slurp`, after no delay
   or 3, 5 or 10 s, to the clipboard and to the pictures folder's «Capturas»
+  (`selenita_core::names::CAPTURES_FOLDER` on disk; the card's switch
+  names it with its own `qsTr`)
   (`Captura 2026-10-09 14.32.05.png`, numbered on a collision). The window
   stays where it is while it captures: a capture may be of Selenita itself
   (SEL-1-D); a key-binding launch never shows it (SEL-2-A).
 - The recording card records one monitor (chosen in the ScreenCast
   portal's dialog) to `<recording stem> <date> <time>.mp4` in the videos
-  folder's `Recordings` through `gst-launch-1.0 -e` (`pipewiresrc`,
+  folder's `Grabaciones` (`selenita_core::names::RECORDINGS_FOLDER`, since
+  SEL-3-A; Selenita no longer makes `Recordings`, and what is already
+  there is not moved) through `gst-launch-1.0 -e` (`pipewiresrc`,
   `vah264enc` at CQP 20/22 or `x264enc` at CRF 21, one keyframe a second,
   `mp4mux`), with the system's sound (`avenc_aac`) when the switch is on:
   the default sink's monitor mixed over a silent live bed in an
@@ -70,14 +83,19 @@
   and the child, if any, killed with its hidden file removed.
 - `selenita --screenshot screen|window|region` (for niri key bindings) asks
   the running instance over `org.celestina.Selenita1.Capture`, or starts one
-  that captures with its main window hidden and stays running; `--record`
+  that captures with its main window hidden and stays running; a key
+  binding's screen capture takes only the monitor niri has focused
+  (`FocusedOutput`, then `grim -o`), the card's output choice when niri
+  cannot say (logged), while the window's own «Pantalla» keeps its chips
+  («Todas» and each output) (SEL-3-A); `--record`
   asks `ToggleRecording()` or starts an instance that records, its main
   window hidden too; `--stop` asks `StopRecording()` and,
   when nobody answers, touches `runtime_dir/selenita/stop`.
 - The corner preview (SEL-2-A): after every capture saved to a file and
   every finished recording, a frameless window titled «Vista previa»
   (240 px wide, 140–240 px high at the picture's shape, the glass canvas)
-  shows the picture, or the recording's first frame (a `gst-launch-1.0`
+  shows the picture, decoded at the frame's size times the screen's pixel
+  ratio and drawn with smoothing and mipmaps (SEL-3-A), or the recording's first frame (a `gst-launch-1.0`
   child, 3 s at most, into `runtime_dir/selenita/poster-<n>.png`; the film
   glyph alone when it fails) with its length (the MP4's movie header) and
   the film glyph. It fades and slides in and out in 200 ms (at once with
@@ -95,8 +113,11 @@
   clipboard-only capture has no file and no preview.
 - `org.celestina.Selenita1.Adopt(key)` adds a regular `.png` or `.mp4`
   directly in the pictures folder's «Capturas» or the videos folder's
-  `Recordings` to the history (once); anything else is ignored without
-  error (ADR 0012, PRV-1).
+  `Grabaciones` to the history (once); anything else is ignored without
+  error (ADR 0012, PRV-1). The rule is `selenita_core::history::adopted`
+  over `Folders`, which `FolderPaths::inside(pictures, videos)` builds with
+  the names of `selenita_core::names`; Fluorita's fallback applies the same
+  rule.
 - How Selenita ends: closing the main window ends it, as before the
   preview (the preview goes at once with it, so Qt finds no window left;
   a recording under way is finished and published on the way out, up to
@@ -194,7 +215,10 @@
 - The preview's place and focus depend on niri's rule of the README, which
   is in the author's configuration since 2026-10-10 (the suite's PRV-1-E,
   67b45f52). Without it niri opens the preview as any new window: tiled and
-  focused. `Qt.WindowDoesNotAcceptFocus` is only a hint on Wayland; the
+  focused. The first rule's `title="^Vista previa$"` never matched, as Qt
+  on Wayland appends the display name («Vista previa — Selenita»); that is
+  why the author's first preview opened tiled. The coordinator corrected
+  the author's configuration; the README shows `title="^Vista previa"`. `Qt.WindowDoesNotAcceptFocus` is only a hint on Wayland; the
   rule's `open-focused false` is what keeps the focus where it was.
 - A `--record` launch shows nothing while it records (the main window
   stays hidden by design); the portal's own dialog and the key bindings
@@ -208,9 +232,15 @@
   that makes the preview say «No se ha podido abrir Fluorita.» although
   the editor is on screen.
 - Fluorita's side of `Adopt` without a running Selenita writes the history
-  itself (FLU-P1-A) and has to name the captures folder, whose name
-  («Capturas») is Selenita's product copy; `selenita_core::history::adopted`
-  takes both folders from its caller.
+  itself (FLU-P1-A). Since SEL-3-A both folder names are
+  `selenita_core::names`'s (`CAPTURES_FOLDER`, `RECORDINGS_FOLDER`) and
+  `FolderPaths::inside` applies them; Fluorita adopting that constructor
+  is its own unit (FLU-P2-A).
+- Recordings made before SEL-3-A stay in the videos folder's `Recordings`;
+  `Adopt` no longer takes a file from there and the history keeps the rows
+  it already had until their files move. Moving them is the coordinator's
+  step after landing; the moved files' rows then drop out at the next start
+  (a row whose file is gone is pruned) and can come back through `Adopt`.
 
 ## Blockers
 

@@ -52,6 +52,9 @@ pub const PIXEL_PNG: &[u8] = &[
 pub trait Backend: Send {
     /// The enabled outputs, left to right.
     fn outputs(&mut self) -> Result<Vec<Output>, CaptureError>;
+    /// The name of the output niri has focused: a key binding's screen
+    /// capture takes it.
+    fn focused_output(&mut self) -> Result<String, CaptureError>;
     /// Every window, with when each last had the focus.
     fn windows(&mut self) -> Result<Vec<Window>, CaptureError>;
     /// Lets the person draw a region; `None` when they cancelled.
@@ -108,6 +111,13 @@ impl Backend for Real {
     fn outputs(&mut self) -> Result<Vec<Output>, CaptureError> {
         let socket = niri::socket().map_err(CaptureError::Niri)?;
         niri::outputs(&socket).map_err(CaptureError::Niri)
+    }
+
+    fn focused_output(&mut self) -> Result<String, CaptureError> {
+        let socket = niri::socket().map_err(CaptureError::Niri)?;
+        niri::focused_output(&socket)
+            .map(|output| output.name)
+            .map_err(CaptureError::Niri)
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, CaptureError> {
@@ -224,17 +234,33 @@ fn written(path: &Path) -> bool {
 
 /// `SELENITA_FAKE=1`: nothing leaves the process but a file in the folder
 /// the test chose and a line on stderr. Selenita (window 1) has the focus
-/// after a fake window (2); both are on `FAKE-1`. `grabbed` keeps every
-/// target taken, for the tests.
-#[derive(Default)]
+/// after a fake window (2); both are on `FAKE-1`, the focused output.
+/// `grabbed` keeps every target taken and `focused_asked` counts the
+/// questions about the focused output, for the tests; a test sets
+/// `focused_output` to `None` for a niri that cannot say.
 pub struct Fake {
     pub grabbed: Vec<Target>,
+    pub focused_output: Option<String>,
+    pub focused_asked: usize,
 }
+
+impl Default for Fake {
+    fn default() -> Self {
+        Self {
+            grabbed: Vec::new(),
+            focused_output: Some(FAKE_OUTPUT.to_owned()),
+            focused_asked: 0,
+        }
+    }
+}
+
+/// The fake session's one output.
+const FAKE_OUTPUT: &str = "FAKE-1";
 
 impl Backend for Fake {
     fn outputs(&mut self) -> Result<Vec<Output>, CaptureError> {
         Ok(vec![Output {
-            name: "FAKE-1".to_owned(),
+            name: FAKE_OUTPUT.to_owned(),
             logical: Geometry {
                 x: 0,
                 y: 0,
@@ -242,6 +268,13 @@ impl Backend for Fake {
                 h: 1080,
             },
         }])
+    }
+
+    fn focused_output(&mut self) -> Result<String, CaptureError> {
+        self.focused_asked += 1;
+        self.focused_output
+            .clone()
+            .ok_or(CaptureError::Niri(niri::NiriError::NoFocusedOutput))
     }
 
     fn windows(&mut self) -> Result<Vec<Window>, CaptureError> {
@@ -274,7 +307,20 @@ impl Backend for Fake {
     }
 
     fn grab(&mut self, target: &Target, out: &Path) -> Result<(), CaptureError> {
-        eprintln!("selenita-fake: grab {} to {}", target.kind(), out.display());
+        // A screen names its output, so the smoke can tell a key binding's
+        // focused output from the card's every output.
+        match target {
+            Target::Screen { output } if output.is_empty() => {
+                eprintln!(
+                    "selenita-fake: grab screen (every output) to {}",
+                    out.display()
+                );
+            }
+            Target::Screen { output } => {
+                eprintln!("selenita-fake: grab screen ({output}) to {}", out.display());
+            }
+            _ => eprintln!("selenita-fake: grab {} to {}", target.kind(), out.display()),
+        }
         self.grabbed.push(target.clone());
         std::fs::write(out, PIXEL_PNG).map_err(|error| CaptureError::Write(error.to_string()))
     }

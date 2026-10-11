@@ -60,9 +60,27 @@ TestCase {
         window.activation.captureRequested("window")
         compare(SelenitaController.target, "window")
         compare(SelenitaController.calls.length, 1)
-        verify(SelenitaController.calls[0].startsWith("capture:window,"))
+        verify(SelenitaController.calls[0].startsWith("captureFromBinding:window,"))
         compare(SelenitaController.fileStem, qsTr("Captura"))
         compare(SelenitaController.folderName, qsTr("Capturas"))
+    }
+
+    // `S` (`--screenshot screen`, `Selenita1.Capture("screen")`) is a key
+    // binding's capture, which takes the focused monitor; the window's own
+    // capture keeps the card's output (SEL-3-A).
+    function test_a_key_bindings_screen_capture_is_not_the_cards() {
+        SelenitaController.reset()
+        const window = createTemporaryObject(mainComponent, testCase)
+        tryVerify(function() { return window.visible })
+        SelenitaController.screenOutput = "DP-2"
+        window.activation.captureRequested("screen")
+        window.startCapture()
+        compare(SelenitaController.calls.length, 2)
+        verify(SelenitaController.calls[0].startsWith("captureFromBinding:screen,"),
+               SelenitaController.calls[0])
+        verify(SelenitaController.calls[1].startsWith("capture:screen,"),
+               SelenitaController.calls[1])
+        compare(SelenitaController.screenOutput, "DP-2", "the card's choice is kept")
     }
 
     function test_a_key_binding_toggles_and_stops_the_recording() {

@@ -18,6 +18,13 @@ SectionCard {
         SelenitaController.capture(String(CelestinaTheme.accent), String(CelestinaTheme.scrim))
     }
 
+    // A key binding's capture: a screen capture takes the focused monitor
+    // rather than the output chosen here.
+    function captureFromBinding() {
+        SelenitaController.captureFromBinding(String(CelestinaTheme.accent),
+                                              String(CelestinaTheme.scrim))
+    }
+
     title: qsTr("Captura")
 
     Connections {

@@ -23,6 +23,8 @@ Window {
     // A recording without a poster has no picture to measure: the screen's
     // usual shape.
     readonly property real fallbackAspect: 9 / 16
+    // The picture's frame inside the canvas.
+    readonly property int frameMargin: CelestinaTheme.spaceSm
     readonly property real aspect: SelenitaController.previewAspect > 0
                                    ? SelenitaController.previewAspect
                                    : preview.fallbackAspect
@@ -34,6 +36,21 @@ Window {
     // How far below its place the card starts as it enters.
     readonly property int slide: CelestinaTheme.spaceLg
     readonly property int motion: CelestinaTheme.reducedMotion ? 0 : CelestinaTheme.motionNormal
+    // The screen's device pixels per logical pixel, for the picture's
+    // decoded size.
+    readonly property real pixelRatio: Screen.devicePixelRatio
+    // The picture decoded at the size it is shown at, in device pixels
+    // (SEL-3-A): a capture of three monitors is 9600 px wide, and decoding
+    // it at a fixed width and letting the scene graph shrink it further
+    // without smoothing left the preview blurred and jagged. With both
+    // dimensions and the crop fill, Qt decodes at the smallest size that
+    // still covers the frame, keeping the picture's shape. Taken from the
+    // window's own size rather than the frame's laid-out one, which is
+    // empty until the window is first laid out and would decode the
+    // picture whole.
+    readonly property size pictureSize: Qt.size(
+        Math.ceil((preview.width - preview.frameMargin * 2) * preview.pixelRatio),
+        Math.ceil((preview.height - preview.frameMargin * 2) * preview.pixelRatio))
     // For the tests: whether the pointer rests on it and whether the five
     // seconds run.
     readonly property alias hovered: hover.hovered
@@ -213,7 +230,7 @@ Window {
         Rectangle {
             id: frame
             anchors.fill: parent
-            anchors.margins: CelestinaTheme.spaceSm
+            anchors.margins: preview.frameMargin
             radius: CelestinaTheme.radiusMd
             color: CelestinaTheme.controlFill
             clip: true
@@ -224,8 +241,11 @@ Window {
                 anchors.fill: parent
                 visible: preview.hasPicture
                 source: SelenitaController.previewSource
-                sourceSize.width: preview.previewWidth * 2
+                // The capture or the recording's poster alike.
+                sourceSize: preview.pictureSize
                 fillMode: Image.PreserveAspectCrop
+                smooth: true
+                mipmap: true
                 asynchronous: true
                 cache: false
                 Accessible.ignored: true

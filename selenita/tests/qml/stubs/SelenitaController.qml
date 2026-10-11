@@ -123,7 +123,17 @@ QtObject {
     }
 
     function capture(accent, background) {
-        record("capture", target + "," + delay + "," + toClipboard + "," + toFile
+        take("capture", accent, background)
+    }
+
+    // A key binding's capture: the same, recorded under its own name (the
+    // focused monitor is the Rust worker's to find).
+    function captureFromBinding(accent, background) {
+        take("captureFromBinding", accent, background)
+    }
+
+    function take(name, accent, background) {
+        record(name, target + "," + delay + "," + toClipboard + "," + toFile
                + "," + accent.length + "," + background.length)
         if (!toFile)
             return

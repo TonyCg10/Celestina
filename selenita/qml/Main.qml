@@ -22,6 +22,12 @@ ApplicationWindow {
         captureCard.capture()
     }
 
+    // Takes a key binding's capture: the card's choices, but a screen
+    // capture takes the monitor niri has focused.
+    function startBindingCapture() {
+        captureCard.captureFromBinding()
+    }
+
     width: 560
     height: 720
     minimumWidth: 420
@@ -60,6 +66,8 @@ ApplicationWindow {
         value: qsTr("Captura")
     }
 
+    // The captures folder as the card names it; the folder on disk is
+    // `selenita_core::names::CAPTURES_FOLDER`, whatever this text says.
     Binding {
         target: SelenitaController
         property: "folderName"

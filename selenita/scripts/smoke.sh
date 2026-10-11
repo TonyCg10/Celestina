@@ -18,10 +18,12 @@ set -u
 #     latest result (its window is still up for its five seconds, so the
 #     process outlives its first preview) and the appearance reached the
 #     theme. The fake's 1×1 PNG must be in the scratch pictures folder's
-#     `Capturas`, the fake MP4 in the scratch videos folder's `Recordings`
-#     (never in its root), both lines in the scratch history and the fake
-#     recording's poster in the scratch runtime folder's `selenita`. The
-#     plain launch must still run at 8 s; the `--screenshot` launch, whose
+#     `Capturas`, the fake MP4 in the scratch videos folder's `Grabaciones`
+#     (never in its root, and no `Recordings` made), both lines in the
+#     scratch history and the fake recording's poster in the scratch
+#     runtime folder's `selenita`. The window's capture takes every output
+#     (the card chose none) and the `--screenshot screen` launch's takes the
+#     fake's focused output, `FAKE-1`. The plain launch must still run at 8 s; the `--screenshot` launch, whose
 #     main window never shows, dismisses its preview at 5 s as the × does
 #     (offscreen, the pointer rests on the preview and holds its timer) and
 #     must then end by itself, within 14 s.
@@ -75,7 +77,9 @@ smoke_run() {
     # ended by the timeout) or 0 (ended by itself).
     seconds=$3
     expected_rc=$4
-    shift 4
+    # The output the screen capture took, as the fake says it.
+    grabbed=$5
+    shift 5
     scratch=$(mktemp -d)
     mkdir -p "$scratch/config" "$scratch/data" "$scratch/cache" \
         "$scratch/state" "$scratch/run" "$scratch/pictures" "$scratch/videos"
@@ -123,14 +127,23 @@ smoke_run() {
             ;;
     esac
 
+    if ! grep -q "selenita-fake: grab screen ($grabbed) to " "$log"; then
+        echo "smoke: the screen capture did not take $grabbed ($*)" >&2
+        return 1
+    fi
+
     shots=$(find "$scratch/pictures" -name '*.png' | wc -l)
     if [ "$shots" -ne 1 ]; then
         echo "smoke: expected one fake capture in the pictures folder, found $shots" >&2
         return 1
     fi
-    clips=$(find "$scratch/videos/Recordings" -name '*.mp4' 2>/dev/null | wc -l)
+    clips=$(find "$scratch/videos/Grabaciones" -name '*.mp4' 2>/dev/null | wc -l)
     if [ "$clips" -ne 1 ]; then
-        echo "smoke: expected one fake recording in the videos folder's Recordings, found $clips" >&2
+        echo "smoke: expected one fake recording in the videos folder's Grabaciones, found $clips" >&2
+        return 1
+    fi
+    if [ -e "$scratch/videos/Recordings" ]; then
+        echo "smoke: the old Recordings folder was made" >&2
         return 1
     fi
     loose=$(find "$scratch/videos" -maxdepth 1 -name '*.mp4' | wc -l)
@@ -183,7 +196,7 @@ smoke_close() {
         return 1
     fi
     shots=$(find "$scratch/pictures" -name '*.png' | wc -l)
-    clips=$(find "$scratch/videos/Recordings" -name '*.mp4' 2>/dev/null | wc -l)
+    clips=$(find "$scratch/videos/Grabaciones" -name '*.mp4' 2>/dev/null | wc -l)
     lines=$(wc -l < "$scratch/data/selenita/history" 2>/dev/null || echo 0)
     if [ "$shots" -ne 1 ] || [ "$clips" -ne 1 ] || [ "$lines" -ne 2 ]; then
         echo "smoke: after the close: $shots capture(s), $clips recording(s), $lines history line(s); expected 1, 1, 2" >&2
@@ -192,8 +205,8 @@ smoke_close() {
     rm -rf "$scratch"
 }
 
-smoke_run true true 8 124 || exit 1
-smoke_run false false 14 0 --screenshot screen || exit 1
+smoke_run true true 8 124 "every output" || exit 1
+smoke_run false false 14 0 FAKE-1 --screenshot screen || exit 1
 smoke_close || exit 1
 
-echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings, one fake capture and one fake recording in the history, the preview shown, the main window hidden after a key-binding launch that ends with its preview, the window's close ending Selenita with its recording finished ($report)"
+echo "smoke: OK — binary alive for 8 s, no QML errors, no auto-bindings, one fake capture and one fake recording in the history, the preview shown, the main window hidden after a key-binding launch that ends with its preview and took the focused output, the window's close ending Selenita with its recording finished ($report)"

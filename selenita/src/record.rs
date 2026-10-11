@@ -6,7 +6,7 @@
 //!
 //! A recording runs here: the portal is asked for a monitor (the person
 //! chooses in its dialog), the pipeline is started into a hidden file in
-//! the videos folder's `Recordings`, the child is watched (an early exit is a failure)
+//! the videos folder's `Grabaciones` (`names::RECORDINGS_FOLDER`), the child is watched (an early exit is a failure)
 //! together with the stop file `selenita --stop` touches when no instance
 //! answers on the bus and with the hidden file's size (a source that never
 //! streams leaves the muxer nothing to write: past [`SIGNAL_DEADLINE`] with
@@ -401,19 +401,24 @@ pub struct Places {
 }
 
 impl Places {
-    /// `Recordings` in the videos folder (else in the home), and the runtime
-    /// folder's stop file. Blocking. The capture worker reads the
-    /// recordings folder here too, for `Adopt`.
+    /// `Grabaciones` in the [`videos_folder`], and the runtime folder's
+    /// stop file. Blocking.
     pub(crate) fn resolve() -> Self {
-        let videos = videos_dir()
-            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
-            .unwrap_or_else(std::env::temp_dir);
         let runtime = xdg::runtime_dir().unwrap_or_else(|_| std::env::temp_dir());
         Self {
-            recordings: recordings_dir_in(&videos),
+            recordings: recordings_dir_in(&videos_folder()),
             stop_file: record::stop_file(&runtime),
         }
     }
+}
+
+/// The videos folder (else the home, else the system temporary folder),
+/// where the recordings folder is. Blocking. The capture worker reads it
+/// too, for `Adopt`.
+pub(crate) fn videos_folder() -> PathBuf {
+    videos_dir()
+        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+        .unwrap_or_else(std::env::temp_dir)
 }
 
 static NEXT_HIDDEN: AtomicU64 = AtomicU64::new(1);
@@ -882,9 +887,10 @@ mod tests {
             }
         }
 
-        /// The recordings folder, `videos/Recordings`.
+        /// The recordings folder, `videos/Grabaciones`, spelled out so the
+        /// name itself is under test.
         fn recordings(&self) -> PathBuf {
-            self.0.join("videos").join("Recordings")
+            self.0.join("videos").join("Grabaciones")
         }
     }
 
@@ -955,6 +961,10 @@ mod tests {
                 .join(entry.path.file_name().unwrap())
                 .exists(),
             "nothing lands in the videos root"
+        );
+        assert!(
+            !scratch.0.join("videos").join("Recordings").exists(),
+            "the old recordings folder is never made"
         );
         let name = entry
             .path

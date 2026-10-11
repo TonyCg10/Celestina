@@ -47,6 +47,13 @@ binds {
 }
 ```
 
+The screen binding (`--screenshot screen`, here Print; any key the
+configuration binds to it, such as `S`) takes only the monitor niri has
+focused (`FocusedOutput` over `$NIRI_SOCKET`, then `grim -o <name>`), not
+every output. When niri cannot say, it takes the window's own choice
+(«Todas» or one output) and says so on stderr. Inside the window,
+«Pantalla» keeps its output chips, «Todas» and each output, as before.
+
 `--record` starts a recording (the portal's dialog asks which output) or
 stops the one under way; `--stop` only stops, and when no instance answers
 on the bus it touches `$XDG_RUNTIME_DIR/selenita/stop`, which the recording
@@ -55,8 +62,10 @@ worker watches. The same requests are `Capture(s)`, `ToggleRecording()` and
 `/org/celestina/Selenita` beside the shared activation interface. The same
 interface has `Adopt(s key)` (ADR 0012, PRV-1): Fluorita hands back an
 edited copy by its `pathkey` key, and a regular `.png` or `.mp4` directly in
-the pictures folder's «Capturas» or the videos folder's `Recordings` joins
-the history; anything else is ignored.
+the pictures folder's «Capturas» or the videos folder's `Grabaciones` joins
+the history; anything else is ignored. The rule is
+`selenita_core::history::adopted`, the one Fluorita applies too when no
+Selenita answers, and both folder names are `selenita_core::names`'s.
 
 ## La vista previa
 
@@ -84,12 +93,21 @@ without the focus:
 
 ```kdl
 window-rule {
-    match app-id=r#"^org\.celestina\.Selenita$"# title="^Vista previa$"
+    match app-id=r#"^org\.celestina\.Selenita$"# title="^Vista previa"
     open-floating true
     open-focused false
     default-floating-position x=24 y=24 relative-to="bottom-right"
 }
 ```
+
+The title has no closing `$`: Qt on Wayland appends the application's
+display name, so the window's real title is «Vista previa — Selenita», and
+`^Vista previa$` never matched (the preview opened tiled and focused).
+
+The picture (or the recording's first frame) is decoded at the size it is
+shown at, in device pixels (the frame's size times the screen's pixel
+ratio, both dimensions, the picture's shape kept), and drawn with smoothing
+and mipmaps, so a capture many times wider than the preview stays sharp.
 
 A recording's first frame is taken by a `gst-launch-1.0` child (`filesrc !
 qtdemux ! decodebin ! videoconvert ! pngenc snapshot=true`, 3 s at most)
@@ -112,9 +130,9 @@ sink's monitor, mixed over a silent live `audiotestsrc` in an `audiomixer`
 silent or absent) and encoded with `avenc_aac`. The stop sends SIGINT,
 which `-e` turns into an EOS so the muxer writes its index; the file is
 then published as `<stem> 2026-10-09 14.32.05.mp4` (the stem is the
-recording card's product copy) in the videos folder's `Recordings`
-(`XDG_VIDEOS_DIR` or `user-dirs.dirs`, then `Recordings` inside it, made
-when needed), numbered on a collision, and joins the history. The window
+recording card's product copy) in the videos folder's `Grabaciones`
+(`XDG_VIDEOS_DIR` or `user-dirs.dirs`, then `Grabaciones` inside it, made
+when needed; `selenita_core::names::RECORDINGS_FOLDER`), numbered on a collision, and joins the history. The window
 stays on screen for a capture and a recording alike: Selenita may be what
 is being captured. The muxer is probed at start with
 `gst-inspect-1.0 --exists mp4mux`; when it is missing the card says so, the

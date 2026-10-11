@@ -24,7 +24,7 @@ use selenita_core::tools::slurp_colour;
 use selenita_core::{Entry, TargetKind};
 
 use crate::appearance::{self, Values};
-use crate::capture::{Action, CaptureError, Report, Request, Worker};
+use crate::capture::{Action, CaptureError, Report, Request, ScreenOutput, Worker};
 use crate::preview::Preview;
 use crate::record;
 
@@ -75,15 +75,19 @@ pub mod qobject {
         #[qproperty(bool, launch_capture, cxx_name = "launchCapture", READ, CONSTANT)]
         // The capture card's choices: `screen`, `window` or `region`; the
         // delay in seconds (0, 3, 5 or 10); the two destinations; the output
-        // a screen capture takes (empty: every output).
+        // the card's screen capture takes (empty: every output; a key
+        // binding's takes the focused output instead).
         #[qproperty(QString, target, READ, WRITE, NOTIFY)]
         #[qproperty(i32, delay, READ, WRITE, NOTIFY)]
         #[qproperty(bool, to_clipboard, cxx_name = "toClipboard", READ, WRITE, NOTIFY)]
         #[qproperty(bool, to_file, cxx_name = "toFile", READ, WRITE, NOTIFY)]
         #[qproperty(QString, screen_output, cxx_name = "screenOutput", READ, WRITE, NOTIFY)]
-        // Product copy from QML (`qsTr`): the file name's stem and the
-        // folder inside the pictures folder.
+        // Product copy from QML (`qsTr`): the file name's stem.
         #[qproperty(QString, file_stem, cxx_name = "fileStem", READ, WRITE, NOTIFY)]
+        // Product copy from QML (`qsTr`): the captures folder as the card
+        // names it. Display only: the folder on disk is
+        // `selenita_core::names::CAPTURES_FOLDER`, which the capture worker
+        // and `Adopt` use.
         #[qproperty(QString, folder_name, cxx_name = "folderName", READ, WRITE, NOTIFY)]
         // The enabled outputs' names, left to right.
         #[qproperty(QVariant, outputs, READ, NOTIFY)]
@@ -179,6 +183,16 @@ pub mod qobject {
         /// The window stays where it is: a capture may include it.
         #[qinvokable]
         fn capture(self: Pin<&mut SelenitaController>, accent: &QString, background: &QString);
+        /// A key binding's capture (`--screenshot`, `Selenita1.Capture`):
+        /// as [`capture`](Self::capture), but a screen capture takes the
+        /// output niri has focused, the card's output when niri cannot say.
+        #[qinvokable]
+        #[cxx_name = "captureFromBinding"]
+        fn capture_from_binding(
+            self: Pin<&mut SelenitaController>,
+            accent: &QString,
+            background: &QString,
+        );
         #[qinvokable]
         #[cxx_name = "openInFluorita"]
         fn open_in_fluorita(self: Pin<&mut SelenitaController>, id: &QString);
@@ -608,7 +622,22 @@ impl qobject::SelenitaController {
         }
     }
 
-    pub fn capture(mut self: Pin<&mut Self>, accent: &QString, background: &QString) {
+    pub fn capture(self: Pin<&mut Self>, accent: &QString, background: &QString) {
+        self.queue_capture(accent, background, false);
+    }
+
+    pub fn capture_from_binding(self: Pin<&mut Self>, accent: &QString, background: &QString) {
+        self.queue_capture(accent, background, true);
+    }
+
+    /// Queues a capture with the card's choices; `binding` when a key
+    /// binding asked for it.
+    fn queue_capture(
+        mut self: Pin<&mut Self>,
+        accent: &QString,
+        background: &QString,
+        binding: bool,
+    ) {
         if self.rust().busy {
             self.say_error(&CaptureError::Busy.message_es());
             return;
@@ -621,7 +650,7 @@ impl qobject::SelenitaController {
             .unwrap_or(TargetKind::Screen);
         let request = Request {
             kind,
-            output: self.rust().screen_output.to_string(),
+            output: screen_output(self.rust().screen_output.to_string(), binding),
             delay: delay_from_seconds(i64::from(self.rust().delay)),
             to_clipboard: self.rust().to_clipboard,
             to_file: self.rust().to_file,
@@ -629,7 +658,6 @@ impl qobject::SelenitaController {
             background: slurp_colour(&background.to_string())
                 .unwrap_or_else(|| FALLBACK_BACKGROUND.to_owned()),
             stem: self.rust().file_stem.to_string(),
-            folder: self.rust().folder_name.to_string(),
         };
         if !request.to_clipboard && !request.to_file && kind != TargetKind::Window {
             self.say_error(&CaptureError::NoDestination.message_es());
@@ -732,10 +760,20 @@ impl qobject::SelenitaController {
             .worker
             .as_ref()
             .ok_or(CaptureError::WorkerGone)
-            .and_then(|worker| worker.adopt(key.to_string(), self.rust().folder_name.to_string()));
+            .and_then(|worker| worker.adopt(key.to_string()));
         if let Err(error) = queued {
             self.say_error(&error.message_es());
         }
+    }
+}
+
+/// The output a screen capture takes: the card's `chosen` one, or for a key
+/// binding the focused output with `chosen` as the fallback.
+fn screen_output(chosen: String, binding: bool) -> ScreenOutput {
+    if binding {
+        ScreenOutput::Focused { fallback: chosen }
+    } else {
+        ScreenOutput::Chosen(chosen)
     }
 }
 
@@ -817,12 +855,33 @@ fn fake_requested(value: Option<&std::ffi::OsStr>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{failure_reveals, fake_requested, launch_over, still_listed};
-    use crate::capture::Report;
+    use super::{failure_reveals, fake_requested, launch_over, screen_output, still_listed};
+    use crate::capture::{Report, ScreenOutput};
     use selenita_core::{Entry, EntryKind};
     use std::ffi::OsStr;
     use std::path::PathBuf;
     use std::time::SystemTime;
+
+    /// A key binding's screen capture asks for the focused output and keeps
+    /// the card's choice as its fallback; the card's own capture takes its
+    /// choice as it is.
+    #[test]
+    fn a_key_binding_asks_for_the_focused_output() {
+        assert_eq!(
+            screen_output("DP-2".to_owned(), true),
+            ScreenOutput::Focused {
+                fallback: "DP-2".to_owned()
+            }
+        );
+        assert_eq!(
+            screen_output(String::new(), false),
+            ScreenOutput::Chosen(String::new())
+        );
+        assert_eq!(
+            screen_output("DP-2".to_owned(), false),
+            ScreenOutput::Chosen("DP-2".to_owned())
+        );
+    }
 
     /// A key-binding launch shows its hidden window for a capture's failure
     /// and for a later one (the clipboard, the history file), never for a
@@ -879,7 +938,7 @@ mod tests {
     #[test]
     fn the_last_recording_is_forgotten_with_its_row() {
         let clip = Entry {
-            path: PathBuf::from("/videos/Recordings/Clip 1.mp4"),
+            path: PathBuf::from("/videos/Grabaciones/Clip 1.mp4"),
             kind: EntryKind::Recording,
             taken_at: SystemTime::UNIX_EPOCH,
             size: 3,

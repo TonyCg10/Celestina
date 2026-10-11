@@ -100,6 +100,8 @@ pub enum NiriError {
     Protocol(String),
     /// No window has the focus.
     NoFocusedWindow,
+    /// No output has the focus (niri has none enabled).
+    NoFocusedOutput,
 }
 
 impl fmt::Display for NiriError {
@@ -110,6 +112,7 @@ impl fmt::Display for NiriError {
             Self::Refused(detail) => write!(formatter, "niri refused: {detail}"),
             Self::Protocol(detail) => write!(formatter, "unexpected niri reply: {detail}"),
             Self::NoFocusedWindow => formatter.write_str("no window has the focus"),
+            Self::NoFocusedOutput => formatter.write_str("no output has the focus"),
         }
     }
 }
@@ -211,6 +214,39 @@ fn workspaces_from(value: &Value) -> Result<Vec<Workspace>, NiriError> {
 pub fn outputs(socket: &Path) -> Result<Vec<Output>, NiriError> {
     let value = request(socket, "Outputs")?;
     outputs_from(&value)
+}
+
+/// Asks niri for the focused output: the monitor a screen capture from a
+/// key binding takes.
+///
+/// # Errors
+///
+/// The exchange's failure, or [`NiriError::NoFocusedOutput`].
+pub fn focused_output(socket: &Path) -> Result<Output, NiriError> {
+    focused_output_from(&request(socket, "FocusedOutput")?)
+}
+
+/// The focused output in `niri msg --json focused-output`'s text.
+///
+/// # Errors
+///
+/// [`NiriError::NoFocusedOutput`] for `null`, [`NiriError::Protocol`] for
+/// text that is not that reply or an output without a name or a logical
+/// rectangle.
+pub fn parse_focused_output(json: &str) -> Result<Output, NiriError> {
+    focused_output_from(&parse(json)?)
+}
+
+fn focused_output_from(value: &Value) -> Result<Output, NiriError> {
+    if value.is_null() {
+        return Err(NiriError::NoFocusedOutput);
+    }
+    let name = value
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| NiriError::Protocol("focused output without a name".to_owned()))?;
+    output_from(name, value)
+        .ok_or_else(|| NiriError::Protocol("focused output without a logical size".to_owned()))
 }
 
 /// The focused window in `niri msg --json focused-window`'s text.
@@ -319,30 +355,33 @@ fn outputs_from(value: &Value) -> Result<Vec<Output>, NiriError> {
         .ok_or_else(|| NiriError::Protocol("outputs are not an object".to_owned()))?;
     let mut outputs: Vec<Output> = map
         .iter()
-        .filter_map(|(key, output)| {
-            // A disabled output has no logical rectangle and cannot be
-            // captured.
-            let logical = output.get("logical").filter(|logical| !logical.is_null())?;
-            let number = |key: &str| logical.get(key).and_then(Value::as_i64);
-            let geometry = Geometry {
-                x: i32::try_from(number("x")?).ok()?,
-                y: i32::try_from(number("y")?).ok()?,
-                w: u32::try_from(number("width")?).ok()?,
-                h: u32::try_from(number("height")?).ok()?,
-            };
-            let name = output
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or(key)
-                .to_owned();
-            Some(Output {
-                name,
-                logical: geometry,
-            })
-        })
+        .filter_map(|(key, output)| output_from(key, output))
         .collect();
     outputs.sort_by_key(|output| (output.logical.x, output.logical.y));
     Ok(outputs)
+}
+
+/// One output of niri's reply, named `key` unless it names itself; `None`
+/// for a disabled output, which has no logical rectangle and cannot be
+/// captured.
+fn output_from(key: &str, output: &Value) -> Option<Output> {
+    let logical = output.get("logical").filter(|logical| !logical.is_null())?;
+    let number = |key: &str| logical.get(key).and_then(Value::as_i64);
+    let geometry = Geometry {
+        x: i32::try_from(number("x")?).ok()?,
+        y: i32::try_from(number("y")?).ok()?,
+        w: u32::try_from(number("width")?).ok()?,
+        h: u32::try_from(number("height")?).ok()?,
+    };
+    let name = output
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or(key)
+        .to_owned();
+    Some(Output {
+        name,
+        logical: geometry,
+    })
 }
 
 fn pair(value: Option<&Value>) -> Option<(f64, f64)> {

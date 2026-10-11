@@ -222,12 +222,17 @@ fn the_videos_folder_reads_like_the_pictures_one() {
     );
 }
 
-/// A recording lands in the videos folder's `Recordings`, as a capture lands
-/// in the pictures folder's «Capturas», never in the videos root.
+/// A recording lands in the videos folder's `Grabaciones`, as a capture
+/// lands in the pictures folder's «Capturas», never in the videos root and
+/// no longer in `Recordings` (SEL-3-A).
 #[test]
 fn a_recording_lands_in_the_recordings_folder_of_the_videos_folder() {
-    assert_eq!(RECORDINGS_FOLDER, "Recordings");
+    assert_eq!(RECORDINGS_FOLDER, "Grabaciones");
     assert_eq!(
+        recordings_dir_in(Path::new("/home/ana/Videos")),
+        PathBuf::from("/home/ana/Videos/Grabaciones")
+    );
+    assert_ne!(
         recordings_dir_in(Path::new("/home/ana/Videos")),
         PathBuf::from("/home/ana/Videos/Recordings")
     );

@@ -1,8 +1,13 @@
+// language-contract: product-copy
 //! Where a capture or a recording lands and what it is called.
 //!
 //! The name is `<stem> YYYY-MM-DD HH.MM.SS.<ext>` in local time. The stem is
-//! product copy («Captura» for a screenshot) and comes from the Qt seam, so
-//! this crate holds no Spanish. A name already taken in the folder gets ` (2)`,
+//! product copy («Captura» for a screenshot) and comes from the Qt seam. The
+//! two folders are product copy too, but they are names on disk that other
+//! applications look for (Fluorita's side of `Adopt`), not words a surface
+//! translates, so they live here as [`CAPTURES_FOLDER`] and
+//! [`RECORDINGS_FOLDER`], their one owner; they are this file's only Spanish
+//! literals. A window's text that names a folder stays its own `qsTr`. A name already taken in the folder gets ` (2)`,
 //! ` (3)`… before the extension ([`numbered`]); the caller publishes without
 //! replacing and walks that sequence, so two captures in the same second
 //! never overwrite each other.
@@ -61,17 +66,37 @@ pub fn videos_dir() -> Option<PathBuf> {
     user_dir("XDG_VIDEOS_DIR")
 }
 
-/// The folder inside the videos folder where a recording lands, as a
-/// capture lands in the pictures folder's «Capturas»: the author's choice
-/// of 2026-10-10 (the design's §5.1 wrote «Grabaciones»; the folder the
-/// session already had is this one).
-pub const RECORDINGS_FOLDER: &str = "Recordings";
+/// The folder inside the pictures folder where a capture lands. The
+/// window's text that names it stays its own `qsTr`; the folder on disk is
+/// this.
+pub const CAPTURES_FOLDER: &str = "Capturas";
+
+/// The folder inside the videos folder where a recording lands, beside the
+/// pictures folder's [`CAPTURES_FOLDER`]: the design's §5.1 name, which the
+/// author restored on 2026-10-10 (SEL-3-A) after a day of `Recordings`.
+/// Selenita no longer makes `Recordings`; the files already there stay
+/// where they are.
+pub const RECORDINGS_FOLDER: &str = "Grabaciones";
+
+/// Where a capture lands: [`CAPTURES_FOLDER`] inside `pictures`; the caller
+/// makes it.
+#[must_use]
+pub fn captures_dir_in(pictures: &Path) -> PathBuf {
+    pictures.join(CAPTURES_FOLDER)
+}
 
 /// Where a recording lands: [`RECORDINGS_FOLDER`] inside `videos`; the
 /// caller makes it, as it makes the captures folder.
 #[must_use]
 pub fn recordings_dir_in(videos: &Path) -> PathBuf {
     videos.join(RECORDINGS_FOLDER)
+}
+
+/// [`captures_dir_in`] the person's [`pictures_dir`]; `None` when no
+/// pictures folder is named.
+#[must_use]
+pub fn captures_dir() -> Option<PathBuf> {
+    pictures_dir().map(|pictures| captures_dir_in(&pictures))
 }
 
 /// [`recordings_dir_in`] the person's [`videos_dir`]; `None` when no videos

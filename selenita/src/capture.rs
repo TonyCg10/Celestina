@@ -4,10 +4,12 @@
 //! Qt thread never waits on a tool, a socket or a file.
 //!
 //! A capture runs its plan here: note the window a window capture means
-//! (the latest focused one that is not Selenita), count the delay down (one
+//! (the latest focused one that is not Selenita) or, for a key binding's
+//! screen capture, the output niri has focused, count the delay down (one
 //! `Countdown` a second), resolve the target (niri's outputs or focused
 //! window, or `slurp` for a region), take the picture into a hidden file,
-//! publish it under its name in the captures folder without replacing
+//! publish it under its name in the captures folder
+//! (`names::CAPTURES_FOLDER`) without replacing
 //! anything, put it on the clipboard when asked, push it to the history and
 //! report it, then report its corner preview (`preview.rs`). A recording
 //! the recording worker published joins the history here too, with its
@@ -29,7 +31,7 @@ use std::time::{Duration, SystemTime};
 
 use celestina_core::activation::SELENITA;
 use celestina_core::{atomic_file, pathkey, xdg};
-use selenita_core::history::{adopted, Folders, HistoryError};
+use selenita_core::history::{adopted, FolderPaths, Folders, HistoryError};
 use selenita_core::niri::{self, NiriError};
 use selenita_core::runner::RunError;
 use selenita_core::{capture_file_name, names, pictures_dir};
@@ -125,22 +127,32 @@ impl std::fmt::Display for CaptureError {
     }
 }
 
+/// Which output a screen capture takes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScreenOutput {
+    /// The capture card's choice: one output by name, or every output when
+    /// empty. The window's «Capturar» and its key take this.
+    Chosen(String),
+    /// A key binding's (`--screenshot screen`, `Selenita1.Capture`): the
+    /// output niri has focused, or `fallback` (the card's choice) when niri
+    /// cannot say, which is logged.
+    Focused { fallback: String },
+}
+
 /// One capture as the controller asked for it.
 #[derive(Clone, Debug)]
 pub struct Request {
     pub kind: TargetKind,
-    /// The output for a screen capture; empty for every output.
-    pub output: String,
+    /// The output for a screen capture.
+    pub output: ScreenOutput,
     pub delay: Duration,
     pub to_clipboard: bool,
     pub to_file: bool,
     /// slurp's colours, `#RRGGBBAA`.
     pub accent: String,
     pub background: String,
-    /// Product copy from the Qt seam: the file name's stem («Captura») and
-    /// the folder inside the pictures folder («Capturas»).
+    /// Product copy from the Qt seam: the file name's stem («Captura»).
     pub stem: String,
-    pub folder: String,
 }
 
 /// What a finished capture came to.
@@ -156,9 +168,9 @@ pub enum Outcome {
     Cancelled,
 }
 
-/// Where a capture's files go: the pictures folder (the captures folder is
-/// made inside it) and a private folder for a picture that only goes to the
-/// clipboard.
+/// Where a capture's files go: the pictures folder (the captures folder,
+/// `names::CAPTURES_FOLDER`, is made inside it) and a private folder for a
+/// picture that only goes to the clipboard.
 pub struct Places {
     pub pictures: PathBuf,
     pub staging: PathBuf,
@@ -214,6 +226,14 @@ pub fn capture(
     if !request.to_clipboard && !request.to_file && !window_kind {
         return Err(CaptureError::NoDestination);
     }
+    // A key binding's screen capture takes the monitor the person is on
+    // when the key is pressed, as the window target takes the window.
+    let output = match &request.output {
+        ScreenOutput::Focused { fallback } if request.kind == TargetKind::Screen => {
+            focused_output(backend, fallback)
+        }
+        ScreenOutput::Focused { fallback } | ScreenOutput::Chosen(fallback) => fallback.clone(),
+    };
     // Selenita is focused while the person presses its button, so the
     // window meant is the latest one focused before it.
     let meant = if window_kind {
@@ -248,13 +268,11 @@ pub fn capture(
                 None => return Ok(Outcome::Cancelled),
             }
         }
-        _ => Target::Screen {
-            output: request.output.clone(),
-        },
+        _ => Target::Screen { output },
     };
 
     let folder = if request.to_file {
-        places.pictures.join(&request.folder)
+        names::captures_dir_in(&places.pictures)
     } else {
         places.staging.clone()
     };
@@ -263,6 +281,24 @@ pub fn capture(
     let result = take(backend, history, request, &target, &folder, &hidden);
     let _ = std::fs::remove_file(&hidden);
     result
+}
+
+/// The output niri has focused, or `fallback` (empty: every output) when
+/// niri cannot say; the fallback is logged, as it is not what the key
+/// binding meant.
+fn focused_output(backend: &mut dyn Backend, fallback: &str) -> String {
+    match backend.focused_output() {
+        Ok(name) => name,
+        Err(error) => {
+            let instead = if fallback.is_empty() {
+                "every output"
+            } else {
+                fallback
+            };
+            eprintln!("selenita: no focused output ({error}); capturing {instead}");
+            fallback.to_owned()
+        }
+    }
 }
 
 fn take(
@@ -367,12 +403,9 @@ enum Job {
     Push(Entry),
     /// The preview's file, by its key, goes to Fluorita's editor.
     Edit(String),
-    /// Another application hands a file back (`Selenita1.Adopt`): its key
-    /// and the captures folder's name inside the pictures folder.
-    Adopt {
-        key: String,
-        folder: String,
-    },
+    /// Another application hands a file back (`Selenita1.Adopt`), by its
+    /// key.
+    Adopt(String),
 }
 
 /// The sending half of the capture worker.
@@ -459,21 +492,12 @@ impl Worker {
                                 });
                             }
                         },
-                        Job::Adopt { key, folder } => {
-                            let pictures = Places::resolve().pictures;
-                            let recordings = crate::record::Places::resolve().recordings;
-                            // Without the captures folder's name only the
-                            // recordings folder adopts.
-                            let captures = if folder.is_empty() {
-                                recordings.clone()
-                            } else {
-                                pictures.join(&folder)
-                            };
-                            let folders = Folders {
-                                captures: &captures,
-                                recordings: &recordings,
-                            };
-                            if adopt(&mut history, folders, &key, SystemTime::now()) {
+                        Job::Adopt(key) => {
+                            let paths = FolderPaths::inside(
+                                &Places::resolve().pictures,
+                                &crate::record::videos_folder(),
+                            );
+                            if adopt(&mut history, paths.folders(), &key, SystemTime::now()) {
                                 report(Report::History(history.entries().to_vec()));
                             }
                         }
@@ -539,15 +563,14 @@ impl Worker {
             .map_err(|_| CaptureError::WorkerGone)
     }
 
-    /// Queues a file handed back by another application; `folder` is the
-    /// captures folder's name.
+    /// Queues a file handed back by another application.
     ///
     /// # Errors
     ///
     /// [`CaptureError::WorkerGone`] when the thread is gone.
-    pub fn adopt(&self, key: String, folder: String) -> Result<(), CaptureError> {
+    pub fn adopt(&self, key: String) -> Result<(), CaptureError> {
         self.jobs
-            .send(Job::Adopt { key, folder })
+            .send(Job::Adopt(key))
             .map_err(|_| CaptureError::WorkerGone)
     }
 }
@@ -655,7 +678,7 @@ fn act(
 mod tests {
     use super::{
         act, adopt, capture, edit, publish, Action, CaptureError, Outcome, Places, Progress,
-        Request,
+        Request, ScreenOutput,
     };
     use crate::backend::{self, Backend, PIXEL_PNG};
     use selenita_core::niri::{Output, Window};
@@ -692,14 +715,13 @@ mod tests {
     fn request(kind: TargetKind) -> Request {
         Request {
             kind,
-            output: String::new(),
+            output: ScreenOutput::Chosen(String::new()),
             delay: Duration::ZERO,
             to_clipboard: true,
             to_file: true,
             accent: "#3e91ffff".to_owned(),
             background: "#00000040".to_owned(),
             stem: "Captura".to_owned(),
-            folder: "Capturas".to_owned(),
         }
     }
 
@@ -793,7 +815,7 @@ mod tests {
         let mut heard = Vec::new();
         for output in ["", "FAKE-1", "OTHER-2"] {
             let mut asked = request(TargetKind::Screen);
-            asked.output = output.to_owned();
+            asked.output = ScreenOutput::Chosen(output.to_owned());
             asked.to_file = false;
             capture(
                 &mut fake,
@@ -831,6 +853,105 @@ mod tests {
         assert!(!scratch.0.join("pictures").exists());
     }
 
+    /// A key binding's screen capture takes the output niri has focused,
+    /// whatever the card chose; the card's own capture keeps its choice.
+    #[test]
+    fn a_key_bindings_screen_capture_takes_the_focused_output() {
+        let scratch = Scratch::new("focused");
+        let mut fake = backend::Fake::default();
+        for output in [
+            ScreenOutput::Focused {
+                fallback: String::new(),
+            },
+            ScreenOutput::Focused {
+                fallback: "OTHER-2".to_owned(),
+            },
+            ScreenOutput::Chosen(String::new()),
+            ScreenOutput::Chosen("OTHER-2".to_owned()),
+        ] {
+            let mut asked = request(TargetKind::Screen);
+            asked.output = output;
+            asked.to_file = false;
+            capture(
+                &mut fake,
+                &mut History::default(),
+                &scratch.places(),
+                &asked,
+                &|_| {},
+                &mut |_| {},
+            )
+            .expect("captured");
+        }
+        let taken: Vec<_> = fake
+            .grabbed
+            .iter()
+            .map(|target| match target {
+                Target::Screen { output } => output.as_str(),
+                _ => "not a screen",
+            })
+            .collect();
+        assert_eq!(taken, ["FAKE-1", "FAKE-1", "", "OTHER-2"]);
+    }
+
+    /// When niri cannot say which output has the focus, the card's choice
+    /// is taken (every output when it chose none).
+    #[test]
+    fn without_a_focused_output_the_cards_choice_is_taken() {
+        let scratch = Scratch::new("unfocused");
+        let mut fake = backend::Fake {
+            focused_output: None,
+            ..backend::Fake::default()
+        };
+        for fallback in ["", "OTHER-2"] {
+            let mut asked = request(TargetKind::Screen);
+            asked.output = ScreenOutput::Focused {
+                fallback: fallback.to_owned(),
+            };
+            asked.to_file = false;
+            capture(
+                &mut fake,
+                &mut History::default(),
+                &scratch.places(),
+                &asked,
+                &|_| {},
+                &mut |_| {},
+            )
+            .expect("captured");
+        }
+        assert!(matches!(
+            fake.grabbed.as_slice(),
+            [Target::Screen { output: every }, Target::Screen { output: chosen }]
+                if every.is_empty() && chosen == "OTHER-2"
+        ));
+    }
+
+    /// A window or a region from a key binding is not about an output:
+    /// niri is not asked for one.
+    #[test]
+    fn only_a_screen_capture_asks_for_the_focused_output() {
+        let scratch = Scratch::new("focused-region");
+        let mut fake = backend::Fake {
+            focused_output: None,
+            ..backend::Fake::default()
+        };
+        let mut asked = request(TargetKind::Region);
+        asked.output = ScreenOutput::Focused {
+            fallback: String::new(),
+        };
+        asked.to_file = false;
+        capture(
+            &mut fake,
+            &mut History::default(),
+            &scratch.places(),
+            &asked,
+            &|_| {},
+            &mut |_| {},
+        )
+        .expect("captured");
+        assert_eq!(fake.focused_asked, 0);
+        assert!(matches!(fake.grabbed.as_slice(), [Target::Region { .. }]));
+    }
+
     #[test]
     fn no_destination_is_refused_before_anything_runs() {
         let scratch = Scratch::new("nowhere");
@@ -855,6 +976,9 @@ mod tests {
     impl Backend for Cancelling {
         fn outputs(&mut self) -> Result<Vec<Output>, CaptureError> {
             Ok(Vec::new())
+        }
+        fn focused_output(&mut self) -> Result<String, CaptureError> {
+            Ok("CANCEL-1".to_owned())
         }
         fn windows(&mut self) -> Result<Vec<Window>, CaptureError> {
             Ok(Vec::new())
@@ -1083,18 +1207,21 @@ mod tests {
     }
 
     /// An edited copy beside a capture, or a trimmed recording, joins the
-    /// history once, in the scratch home's folders; anything else does not.
+    /// history once, in the scratch home's «Capturas» and `Grabaciones`;
+    /// anything else (the old `Recordings` too) does not.
     #[test]
     fn an_adopted_file_joins_the_history_once() {
         let scratch = Scratch::new("adopt");
-        let captures = scratch.0.join("pictures").join("Capturas");
-        let recordings = scratch.0.join("videos").join("Recordings");
+        let paths = selenita_core::history::FolderPaths::inside(
+            &scratch.0.join("pictures"),
+            &scratch.0.join("videos"),
+        );
+        let captures = paths.captures.clone();
+        let recordings = paths.recordings.clone();
+        assert_eq!(recordings, scratch.0.join("videos").join("Grabaciones"));
         std::fs::create_dir_all(&captures).expect("captures");
         std::fs::create_dir_all(&recordings).expect("recordings");
-        let folders = selenita_core::history::Folders {
-            captures: &captures,
-            recordings: &recordings,
-        };
+        let folders = paths.folders();
         let file = scratch.0.join("history");
         let mut history = History::at(file.clone());
         let now = std::time::SystemTime::now();
@@ -1122,6 +1249,17 @@ mod tests {
             history.entries()[0].kind,
             selenita_core::EntryKind::Recording
         );
+
+        let old = scratch.0.join("videos").join("Recordings");
+        std::fs::create_dir_all(&old).expect("old");
+        let stale = old.join("Clip 1.mp4");
+        std::fs::write(&stale, b"mp4").expect("stale");
+        assert!(!adopt(
+            &mut history,
+            folders,
+            &celestina_core::pathkey::encode(&stale),
+            now
+        ));
 
         let elsewhere = scratch.0.join("elsewhere.png");
         std::fs::write(&elsewhere, PIXEL_PNG).expect("elsewhere");
