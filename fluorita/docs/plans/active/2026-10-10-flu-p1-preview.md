@@ -10,7 +10,7 @@
   (§5 and §6 are Fluorita's), the task breakdown is
   [the plan](../../../../docs/superpowers/plans/2026-10-10-capture-preview.md)
   and the suite program is
-  [PRV-1](../../../../docs/plans/active/2026-10-10-capture-preview.md)
+  [PRV-1](../../../../docs/plans/archive/2026-10-10-capture-preview.md)
 - **Scope:** fluorita
 - **Implementation checkpoint:** FLU-P1
 - **Author-validation checkpoint:** `VAL-FLU-EDIT-WINDOW` and

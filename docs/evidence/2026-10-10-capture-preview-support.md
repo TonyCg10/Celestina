@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** PRV-1-S of the
-  [capture preview plan](../plans/active/2026-10-10-capture-preview.md):
+  [capture preview plan](../plans/archive/2026-10-10-capture-preview.md):
   `docs/projects.toml`
 - **Environment:** main at 6358440d (PRV-1-A landed)
 - **Artifact:** none; a registry edit, no build output changes

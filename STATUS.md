@@ -1,10 +1,9 @@
 # Suite status
 
 - **Updated:** 2026-10-10
-- **Current focus:** PRV-1, the capture preview: Selenita's corner preview
-  after every capture and recording, and Fluorita's floating editor with a
-  video trim ([plan](docs/plans/active/2026-10-10-capture-preview.md))
-- **Implementation checkpoint:** PRV-1
+- **Current focus:** no suite checkpoint is active; the next suite work starts
+  from an accepted decision, and all project work follows each local roadmap
+- **Implementation checkpoint:** none
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -36,16 +35,21 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
-PRV-1 adds the capture preview: after every capture or finished recording,
-Selenita shows the result in the corner of the screen, where it can be dragged
-out as a file or clicked into a floating Fluorita editor that saves both
-versions or only the edited one and can trim a video. The two applications
-meet only at `org.celestina.Fluorita1.Edit` and
-`org.celestina.Selenita1.Adopt`, fixed in
-[ADR 0012](docs/decisions/0012-suite-conventions.md#follow-ups). The suite
-ledger is [the active plan](docs/plans/active/2026-10-10-capture-preview.md).
+No suite checkpoint is active. New cross-project work starts only when an
+accepted decision promotes it, as the root roadmap's later suite-level section
+requires.
 
 ## Completed cross-project work
+
+PRV-1 added the capture preview: after every capture or finished recording,
+Selenita shows the result in the corner of the screen, where it can be dragged
+out as a file or clicked into a floating Fluorita editor that saves both
+versions or only the edited one and can trim a video; niri's two window rules
+in the author's configuration place both windows. The two applications meet
+only at `org.celestina.Fluorita1.Edit` and `org.celestina.Selenita1.Adopt`,
+fixed in [ADR 0012](docs/decisions/0012-suite-conventions.md#follow-ups). The
+suite ledger is
+[the archived plan](docs/plans/archive/2026-10-10-capture-preview.md).
 
 EXT-1 added two applications in the suite's grammar: Calcita, the PDF viewer,
 and Selenita, the screen capture and recording tool, each registered by a suite

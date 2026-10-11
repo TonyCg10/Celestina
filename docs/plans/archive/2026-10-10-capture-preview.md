@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-10
 - **Plan ID:** capture-preview
-- **Status:** active
+- **Closed:** 2026-10-10
+- **Successor:** none; the author named no next suite checkpoint. All 4 ledger rows are done
+- **Status:** done
 - **Authorization:** the author approved the design in brainstorming on
   2026-10-10 and asked for the program to be implemented; the design is
   [the spec](../../superpowers/specs/2026-10-10-capture-preview-design.md)
@@ -82,3 +84,4 @@ rows are `done` and, on the landed `main`,
 | PRV-1-S | `suite:` | done | [inventory](../../inventories/2026-10-10-capture-preview/PRV-1-S.numstat.tsv) | 4 files, +61/-1 | Support edit FLU-P1-A needs before it can land: `celestina-rs/crates/selenita-core` added to Fluorita's `production_inputs` in `docs/projects.toml`, because Fluorita links `selenita-core` to append an edited copy to Selenita's history when Selenita is not running | [evidence](../../evidence/2026-10-10-capture-preview-support.md) | None |
 | PRV-1-T | `suite:` | done | [inventory](../../inventories/2026-10-10-capture-preview/PRV-1-T.numstat.tsv) | 4 files, +100/-0 | ADR 0009's amendment for FLU-P1-B: a video's duration trim is the one editing operation that re-encodes, raster-class, by an `ffmpeg` child never linked; pictures keep every rule | [evidence](../../evidence/2026-10-10-capture-preview-adr-0009.md) | None |
 | PRV-1-E | `suite:` | done | [inventory](../../inventories/2026-10-10-capture-preview/PRV-1-E.numstat.tsv) | 6 files, +348/-8 | Close the capture preview program with the niri window rules, the host-hygiene record and the README cross-references. | [evidence](../../evidence/2026-10-10-capture-preview-exit.md) | None |
+| PRV-1-F | `suite:` | done | [inventory](../../inventories/2026-10-10-capture-preview/PRV-1-F.numstat.tsv) | 12 files, +197/-109 | Archive the delivered capture preview plan through its own administrative unit and reconcile the suite roadmap, status and plan indexes | [evidence](../../evidence/2026-10-10-capture-preview-archive.md) | None |

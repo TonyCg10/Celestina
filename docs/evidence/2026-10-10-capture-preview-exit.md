@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** PRV-1-E — suite, the exit of the
-  [capture preview plan](../plans/active/2026-10-10-capture-preview.md)
+  [capture preview plan](../plans/archive/2026-10-10-capture-preview.md)
 - **Environment:** CachyOS, niri 26.04 (the author's running build), main at
   `6a05c7f6` (FLU-P1-B landed)
 - **Artifact:** none; documentation only, no build output changes

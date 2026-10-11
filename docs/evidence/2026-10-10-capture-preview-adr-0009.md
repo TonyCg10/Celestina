@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** PRV-1-T of the
-  [capture preview plan](../plans/active/2026-10-10-capture-preview.md):
+  [capture preview plan](../plans/archive/2026-10-10-capture-preview.md):
   `docs/decisions/0009-editing-without-an-encoder.md`
 - **Environment:** main with FLU-P1-A (Fluorita 1.6.0) and SEL-2-A (Selenita
   1.1.0) landed

@@ -10,7 +10,7 @@
   (§4 is Selenita's) and the task breakdown is
   [the plan](../../../../docs/superpowers/plans/2026-10-10-capture-preview.md)
   (Task 2). The program is the suite's `PRV-1`, whose ledger is
-  [the suite plan](../../../../docs/plans/active/2026-10-10-capture-preview.md)
+  [the suite plan](../../../../docs/plans/archive/2026-10-10-capture-preview.md)
 - **Scope:** selenita
 - **Implementation checkpoint:** SEL-2
 - **Author-validation checkpoint:** VAL-SEL-PREVIEW in

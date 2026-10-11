@@ -1,0 +1,31 @@
+# PRV-1-F exact change inventory
+
+Base revision	67b45f523c075ed90ae3605eeb76742648a248dc
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-10-10-capture-preview-adr-0009.md
+Pathspec	docs/evidence/2026-10-10-capture-preview-archive.md
+Pathspec	docs/evidence/2026-10-10-capture-preview-exit.md
+Pathspec	docs/evidence/2026-10-10-capture-preview-support.md
+Pathspec	docs/inventories/2026-10-10-capture-preview/PRV-1-F.numstat.tsv
+Pathspec	docs/plans/active/2026-10-10-capture-preview.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-10-10-capture-preview.md
+Pathspec	fluorita/docs/plans/active/2026-10-10-flu-p1-preview.md
+Pathspec	selenita/docs/plans/active/2026-10-10-sel-2-preview.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	4	e24fd4cc26e1f9f826dca687c82b31aded525d6b5767804bf110bbc093fbba8a	ROADMAP.md
+16	12	a9d4cffff282abb8eb91fbae6ff820a32939be2647706503280c4ea7c1d0f228	STATUS.md
+1	1	14f0b92f2f7217ca3016a5f28bab684769a37dcca17802ccd9ceb97d31058c8e	docs/evidence/2026-10-10-capture-preview-adr-0009.md
+51	0	c447f90f37138a137d1014ed41543d10483ad9c8d8cebe5f477ddba5bf68b145	docs/evidence/2026-10-10-capture-preview-archive.md
+1	1	17d05fa80244863f7b3924cffd1c29551427442ba79c5f8c4f2133f786dcd589	docs/evidence/2026-10-10-capture-preview-exit.md
+1	1	bf74a6c6cc3afd7e7b584630b9b636daa56f3ebefa1b2e08fc608134e3fc0529	docs/evidence/2026-10-10-capture-preview-support.md
+31	0	self	docs/inventories/2026-10-10-capture-preview/PRV-1-F.numstat.tsv
+0	84	deleted	docs/plans/active/2026-10-10-capture-preview.md
+3	4	71d94e5626724829f33804ce78add980427c192abb1a7010481e553dbec6f7e5	docs/plans/active/README.md
+87	0	331f662aa9357be8bec6198588be06ef8a7fb16abbb4e75c2f4c4ff3a22e21db	docs/plans/archive/2026-10-10-capture-preview.md
+1	1	a5898db9ce233c5ef2dc63bfa7c78b629c139898b29e901aa3e69f42df0602d8	fluorita/docs/plans/active/2026-10-10-flu-p1-preview.md
+1	1	a6c0a0e395e3f5ba08632b700598f77ac339437e735b3cfd208718ffb18936c9	selenita/docs/plans/active/2026-10-10-sel-2-preview.md
