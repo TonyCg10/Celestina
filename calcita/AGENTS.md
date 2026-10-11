@@ -20,23 +20,31 @@ Calcita's constraints; it cannot relax the root or grant authority.
 - `celestina-rs/crates/calcita-core` is the only owner of the domain: recent
   documents, the zoom ladder, reading positions, the page field's grammar,
   the order a search walks its hits in, the annotation model and form
-  fields (read with `lopdf`) and the one conversion between PDF user space
-  and the displayed page (`annot::coords`).
+  fields (read with `lopdf`), the one conversion between PDF user space
+  and the displayed page (`annot::coords`), what an edit may change with
+  its undo and redo (`annot::edit`), and the appearance streams and the
+  incremental update that write the edits (`annot::{appearance, write}`).
   It has no Qt.
 - `src/` owns the Qt adaptation: the controller (open documents, recents,
   the clipboard and `xdg-open` for a confirmed external link),
-  the per-window `CalcitaDocument`, the activation adapter and the
-  appearance follower; `cpp/` holds the one-function clipboard shim
-  cxx-qt-lib lacks and the page image provider cxx-qt cannot subclass. `qml/`
-  presents. QtPdf renders through the page provider, which opens its own
-  documents on its one render thread; the controller never touches page
-  rendering, and QML never decides what a path or a recent entry means.
+  the per-window `CalcitaDocument` and `CalcitaEditor`, the landing of a
+  saved edit (`saving.rs`, over `atomic_file` and `siderita_ops`), the
+  activation adapter and the appearance follower; `cpp/` holds the
+  one-function clipboard shim cxx-qt-lib lacks and the page image provider
+  cxx-qt cannot subclass. `qml/` presents. QtPdf renders through the page
+  provider, which opens its own documents (and the in-memory copy an edit
+  is drawn over) on its one render thread; the controller never touches
+  page rendering, and QML never decides what a path, a recent entry or an
+  edit means.
 - One document per window. Activation goes through
   `celestina_core::activation` (`Open` with paths byte-exact); the appearance
   comes from `celestina-settings`. No private copy of either.
 - No blocking IO on the Qt thread: file and store work runs on a worker and
   reports back through cxx-qt `Threading` queues.
-- Calcita reads documents; it never writes to them and needs no privilege.
+- Calcita writes a document only when the person saves an edit: one
+  incremental update (the original's bytes a prefix), landed as a copy
+  beside it or replacing it with the original sent to the Trash, never in
+  place. It needs no privilege.
 - The Celestina shell is halted by the author's order: never read, reuse or
   reference `celestina/` or `celestina-shell-core`.
 

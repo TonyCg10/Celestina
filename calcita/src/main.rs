@@ -2,7 +2,9 @@ mod activation;
 mod appearance;
 mod controller;
 mod document;
+mod editor;
 mod pages;
+mod saving;
 
 use std::path::PathBuf;
 

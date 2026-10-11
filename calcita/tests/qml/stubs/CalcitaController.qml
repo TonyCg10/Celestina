@@ -14,6 +14,7 @@ QtObject {
     property real appearanceTextScale: 1.0
     readonly property bool smokeReport: false
     readonly property string smokeGrab: ""
+    readonly property bool smokeEdit: false
     property var documents: []
     property var recents: []
     property var recentNames: []
@@ -24,6 +25,7 @@ QtObject {
 
     signal openDocument(string key)
     signal raiseDocument(string key)
+    signal documentRenamed(string from, string to)
     signal notice(string kind, string text, string origin)
 
     function reset() {
@@ -62,6 +64,13 @@ QtObject {
 
     function closeDocument(key) {
         documents = documents.filter(open => open !== key)
+    }
+
+    function renameDocument(from, to) {
+        if (from === to || documents.indexOf(from) < 0)
+            return
+        documents = documents.filter(open => open !== from && open !== to).concat([to])
+        documentRenamed(from, to)
     }
 
     function publishNames() {

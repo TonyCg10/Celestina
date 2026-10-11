@@ -20,6 +20,13 @@ set -u
 #     drawn (CALCITA_SMOKE_GRAB, a PPM) shows another program's highlight in
 #     yellow and its ink in red where the file puts them, over paper where
 #     it puts nothing: the page provider renders annotations.
+#  6) The same start with a scratch copy of three-pages.pdf and
+#     CALCITA_SMOKE_EDIT: the window enters edit mode, adds a text box through
+#     its editor and saves «Guardar ambas». The copy lands beside as
+#     «sample (editado).pdf», the original is untouched and is a byte prefix
+#     of the copy (an incremental update), the window moves to the copy and
+#     its model, read again, finds the one annotation, and its first page as
+#     drawn shows the text in ink where it was placed.
 #
 # Startup only. Keyboard, focus and assistive technology need a real Wayland
 # session.
@@ -84,7 +91,7 @@ run() {
     CALCITA_SMOKE_GRAB=${grab:-} \
     QT_QPA_PLATFORM=offscreen \
     QT_ASSUME_STDERR_HAS_CONSOLE=1 \
-        timeout 8 "$bin" "$@" >"$log" 2>&1
+        ${edit:+env CALCITA_SMOKE_EDIT=1} timeout 8 "$bin" "$@" >"$log" 2>&1
     rc=$?
     if [ "$rc" -ne 124 ]; then
         echo "smoke: the binary exited on its own (rc=$rc); last lines:" >&2
@@ -189,4 +196,93 @@ PY
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 8 s three times, no QML errors, no auto-bindings ($empty_report; $pages_report; $report; $pixels)"
+annotated_report=$report
+annotated_pixels=$pixels
+
+# 6) Edit and save beside, on a scratch copy.
+mkdir -p "$scratch/docs"
+document=$scratch/docs/sample.pdf
+saved="$scratch/docs/sample (editado).pdf"
+cp "$fixture" "$document"
+grab=$scratch/edited-page.ppm
+edit=1
+run "$document"
+edit=
+case $report in
+    *" empty=false pageCount=3 textScale=1 fontBody=13 annotations=1") ;;
+    *)
+        echo "smoke: the edited copy did not open with its one annotation: ${report:-no report}" >&2
+        exit 1
+        ;;
+esac
+if [ ! -f "$saved" ]; then
+    echo "smoke: «Guardar ambas» left no copy beside the original" >&2
+    ls -la "$scratch/docs" >&2
+    exit 1
+fi
+if ! cmp -s "$fixture" "$document"; then
+    echo "smoke: the original changed on a save that keeps both" >&2
+    exit 1
+fi
+original_bytes=$(wc -c < "$document")
+if ! cmp -s -n "$original_bytes" "$document" "$saved"; then
+    echo "smoke: the original's bytes are not a prefix of the edited copy" >&2
+    exit 1
+fi
+if [ "$(wc -c < "$saved")" -le "$original_bytes" ]; then
+    echo "smoke: the edited copy adds nothing" >&2
+    exit 1
+fi
+if [ ! -s "$grab" ]; then
+    echo "smoke: the edited page was not grabbed: $grab" >&2
+    exit 1
+fi
+# The text box was placed at (72, 72) as the page is shown, 200 points
+# wide, «Calcita smoke» at 12 pt: its first line lies within 72-200 across
+# and 74-90 down. Ink is any dark pixel.
+if ! edited_pixels=$(python3 -I - "$grab" <<'PY'
+import sys
+
+data = open(sys.argv[1], "rb").read()
+fields = []
+at = 0
+while len(fields) < 4:
+    while data[at:at + 1].isspace():
+        at += 1
+    if data[at:at + 1] == b"#":
+        at = data.index(b"\n", at)
+        continue
+    end = at
+    while not data[end:end + 1].isspace():
+        end += 1
+    fields.append(data[at:end])
+    at = end
+magic, width, height, depth = fields[0], int(fields[1]), int(fields[2]), int(fields[3])
+if magic != b"P6" or depth != 255:
+    sys.exit(f"not a binary 8-bit PPM: {magic!r} depth {depth}")
+pixels = data[at + 1:]
+
+
+def share(x0, y0, x1, y1, test):
+    left, right = round(x0 / 595 * width), round(x1 / 595 * width)
+    top, bottom = round(y0 / 842 * height), round(y1 / 842 * height)
+    colours = []
+    for y in range(top, bottom):
+        for x in range(left, right):
+            offset = (y * width + x) * 3
+            colours.append((pixels[offset], pixels[offset + 1], pixels[offset + 2]))
+    return sum(1 for colour in colours if test(*colour)) / max(1, len(colours))
+
+
+ink = share(72, 74, 200, 90, lambda r, g, b: max(r, g, b) < 160)
+paper = share(300, 400, 500, 500, lambda r, g, b: min(r, g, b) > 200)
+print(f"{width}x{height} text={ink:.3f} paper={paper:.2f}")
+if ink < 0.02 or paper < 0.99:
+    sys.exit(1)
+PY
+); then
+    echo "smoke: the edited page does not show its text box: ${edited_pixels:-no measure}" >&2
+    exit 1
+fi
+
+echo "smoke: OK — binary alive for 8 s four times, no QML errors, no auto-bindings ($empty_report; $pages_report; $annotated_report; $annotated_pixels; $report; $edited_pixels; edited copy $(wc -c < "$saved") bytes over $original_bytes)"

@@ -60,19 +60,40 @@ pub enum AnnotError {
     Encrypted,
     /// `lopdf` cannot parse the document.
     Unparseable(lopdf::Error),
+    /// The document's cross-reference table is broken and `lopdf` rebuilt
+    /// it by scanning: shown, but an update could not point back at it
+    /// (`/Prev`), so it is not edited.
+    Damaged,
+    /// A text box's text holds a character Helvetica in WinAnsi (the one
+    /// font Calcita writes, nothing embedded) cannot show.
+    Unencodable(char),
+    /// The edit names no annotation Calcita may change that way: one that
+    /// is not there (any more), one of a kind Calcita only shows, or the
+    /// text or colour of a text box with rich text.
+    NotEditable,
+    /// `lopdf` could not write the update.
+    Write(std::io::Error),
 }
 
 impl AnnotError {
     /// What the window says, in Spanish.
     #[must_use]
-    pub fn message_es(&self) -> &'static str {
+    pub fn message_es(&self) -> String {
         match self {
-            Self::Io(_) => "No se pudo leer el documento.",
+            Self::Io(_) => "No se pudo leer el documento.".to_owned(),
             Self::TooLarge { .. } | Self::InflatesTooMuch { .. } => {
-                "El documento es demasiado grande para editarlo."
+                "El documento es demasiado grande para editarlo.".to_owned()
             }
-            Self::Encrypted => "Este documento está cifrado y no se puede editar.",
-            Self::Unparseable(_) => "Calcita no puede editar este documento.",
+            Self::Encrypted => "Este documento está cifrado y no se puede editar.".to_owned(),
+            Self::Unparseable(_) => "Calcita no puede editar este documento.".to_owned(),
+            Self::Damaged => {
+                "Este documento está dañado: se puede leer, pero no editar.".to_owned()
+            }
+            Self::Unencodable(character) => {
+                format!("El carácter «{character}» no se puede escribir en un cuadro de texto.")
+            }
+            Self::NotEditable => "Esa anotación no se puede cambiar así.".to_owned(),
+            Self::Write(_) => "No se pudo escribir el documento editado.".to_owned(),
         }
     }
 }
@@ -93,6 +114,17 @@ impl fmt::Display for AnnotError {
             Self::Unparseable(error) => {
                 write!(formatter, "the document could not be parsed: {error}")
             }
+            Self::Damaged => formatter.write_str(
+                "the document's cross-reference table was rebuilt by scanning; an update could not point back at it",
+            ),
+            Self::Unencodable(character) => write!(
+                formatter,
+                "{character:?} has no code in WinAnsiEncoding, Helvetica's encoding"
+            ),
+            Self::NotEditable => {
+                formatter.write_str("the edit names no annotation that can change that way")
+            }
+            Self::Write(error) => write!(formatter, "the update could not be written: {error}"),
         }
     }
 }
@@ -100,9 +132,14 @@ impl fmt::Display for AnnotError {
 impl std::error::Error for AnnotError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Io(error) => Some(error),
+            Self::Io(error) | Self::Write(error) => Some(error),
             Self::Unparseable(error) => Some(error),
-            Self::TooLarge { .. } | Self::InflatesTooMuch { .. } | Self::Encrypted => None,
+            Self::TooLarge { .. }
+            | Self::InflatesTooMuch { .. }
+            | Self::Encrypted
+            | Self::Damaged
+            | Self::Unencodable(_)
+            | Self::NotEditable => None,
         }
     }
 }
@@ -121,16 +158,7 @@ impl From<std::io::Error> for AnnotError {
 /// [`AnnotError`] when the file cannot be read, is too large, is encrypted
 /// or cannot be parsed.
 pub fn read_annotations(path: &Path) -> Result<Vec<Annotation>, AnnotError> {
-    let document = load(path)?;
-    let mut annotations = Vec::new();
-    for (page, page_id) in pages(&document) {
-        for (index, id, dictionary) in page_annotations(&document, page_id) {
-            if let Some(annotation) = annotation(&document, page, index, id, dictionary) {
-                annotations.push(annotation);
-            }
-        }
-    }
-    Ok(annotations)
+    Ok(model_of(&load(path)?).0)
 }
 
 /// Every terminal field of the document's form, in the form's order; empty
@@ -178,15 +206,83 @@ pub fn read_fields(path: &Path) -> Result<Vec<Field>, AnnotError> {
 ///
 /// As [`read_annotations`].
 pub fn read_page_boxes(path: &Path) -> Result<Vec<PageBox>, AnnotError> {
-    let document = load(path)?;
-    Ok(pages(&document)
-        .into_iter()
-        .map(|(_, page_id)| page_box(&document, page_id))
-        .collect())
+    Ok(model_of(&load(path)?).1)
 }
 
 fn load(path: &Path) -> Result<Document, AnnotError> {
-    load_within(path, MAX_INFLATED_BYTES)
+    load_within(path, MAX_INFLATED_BYTES).map(|loaded| loaded.document)
+}
+
+/// A document as read for an edit: the file's bytes, which an incremental
+/// update keeps as its prefix, and what `lopdf` made of them.
+pub(crate) struct Loaded {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) document: Document,
+}
+
+impl fmt::Debug for Loaded {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Loaded")
+            .field("bytes", &self.bytes.len())
+            .field("objects", &self.document.objects.len())
+            .finish()
+    }
+}
+
+/// Every annotation of `document` and each page's box, as
+/// [`read_annotations`] and [`read_page_boxes`] give them.
+pub(crate) fn model_of(document: &Document) -> (Vec<Annotation>, Vec<PageBox>) {
+    let mut annotations = Vec::new();
+    let mut boxes = Vec::new();
+    for (page, page_id) in pages(document) {
+        boxes.push(page_box(document, page_id));
+        for (index, id, dictionary) in page_annotations(document, page_id) {
+            if let Some(annotation) = annotation(document, page, index, id, dictionary) {
+                annotations.push(annotation);
+            }
+        }
+    }
+    (annotations, boxes)
+}
+
+/// Where an annotation is in its file: the page object listing it, its
+/// place in that page's `/Annots`, and its own object when it has one.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Location {
+    pub(crate) page: ObjectId,
+    pub(crate) index: u32,
+    pub(crate) object: Option<ObjectId>,
+}
+
+/// The [`Location`] of each annotation of `document` the model names.
+pub(crate) fn locations(document: &Document) -> HashMap<AnnotId, Location> {
+    let mut found = HashMap::new();
+    for (page, page_id) in pages(document) {
+        for (index, object, dictionary) in page_annotations(document, page_id) {
+            if let Some(annotation) = annotation(document, page, index, object, dictionary) {
+                found.entry(annotation.id).or_insert(Location {
+                    page: page_id,
+                    index,
+                    object,
+                });
+            }
+        }
+    }
+    found
+}
+
+/// [`read_annotations`]'s load, keeping the bytes for an update, for a
+/// document that can take one: one whose cross-reference table `lopdf`
+/// found where the file says (a table rebuilt by scanning leaves no offset
+/// for the update's `/Prev`, so it is [`AnnotError::Damaged`]; the reader
+/// still shows its annotations).
+pub(crate) fn load_for_edit(path: &Path) -> Result<Loaded, AnnotError> {
+    let loaded = load_within(path, MAX_INFLATED_BYTES)?;
+    if loaded.document.xref_start == 0 {
+        return Err(AnnotError::Damaged);
+    }
+    Ok(loaded)
 }
 
 /// What one read may still inflate, for [`count_inflation`].
@@ -285,7 +381,7 @@ fn count_inflation(id: ObjectId, object: &mut Object) -> Option<(ObjectId, Objec
 }
 
 /// [`load`] with `limit` bytes for the object streams to inflate to.
-fn load_within(path: &Path, limit: u64) -> Result<Document, AnnotError> {
+fn load_within(path: &Path, limit: u64) -> Result<Loaded, AnnotError> {
     let file = File::open(path)?;
     let bytes = file.metadata()?.len();
     if bytes > MAX_FILE_BYTES {
@@ -314,7 +410,10 @@ fn load_within(path: &Path, limit: u64) -> Result<Document, AnnotError> {
         Ok(document) if document.is_encrypted() || document.was_encrypted() => {
             Err(AnnotError::Encrypted)
         }
-        Ok(document) => Ok(document),
+        Ok(document) => Ok(Loaded {
+            bytes: buffer,
+            document,
+        }),
         Err(
             lopdf::Error::Decryption(_)
             | lopdf::Error::InvalidPassword
@@ -326,7 +425,7 @@ fn load_within(path: &Path, limit: u64) -> Result<Document, AnnotError> {
 }
 
 /// The pages, 0-based, in order.
-fn pages(document: &Document) -> Vec<(u32, ObjectId)> {
+pub(crate) fn pages(document: &Document) -> Vec<(u32, ObjectId)> {
     document
         .get_pages()
         .into_values()
@@ -450,7 +549,7 @@ fn intersection(a: Rect, b: Rect) -> Rect {
     }
 }
 
-fn page_box(document: &Document, page: ObjectId) -> PageBox {
+pub(crate) fn page_box(document: &Document, page: ObjectId) -> PageBox {
     let usable = |key: &[u8]| {
         inherited(document, page, key)
             .and_then(|object| rect_of(document, object))
@@ -481,7 +580,7 @@ fn page_box(document: &Document, page: ObjectId) -> PageBox {
 /// (counting every entry, so a `null` or a dangling reference before it
 /// still counts) and its object id when it is an indirect object. An entry
 /// that is not a dictionary is skipped.
-fn page_annotations(
+pub(crate) fn page_annotations(
     document: &Document,
     page: ObjectId,
 ) -> Vec<(u32, Option<ObjectId>, &Dictionary)> {
@@ -510,7 +609,7 @@ fn page_annotations(
         .collect()
 }
 
-fn annotation(
+pub(crate) fn annotation(
     document: &Document,
     page: u32,
     index: u32,
@@ -536,6 +635,7 @@ fn annotation(
             let kind = Kind::Text {
                 contents: text(document, dictionary, b"Contents").unwrap_or_default(),
                 size_pt: appearance.size.unwrap_or(DEFAULT_TEXT_SIZE),
+                rich: dictionary.has(b"RC"),
             };
             (kind, appearance.color.or(declared).unwrap_or(Rgb::BLACK))
         }
@@ -546,7 +646,7 @@ fn annotation(
                 .unwrap_or_default()
                 .chunks_exact(8)
                 .map(|corners| Quad {
-                    points: [
+                    points: outline_order([
                         Point {
                             x: corners[0],
                             y: corners[1],
@@ -563,7 +663,7 @@ fn annotation(
                             x: corners[6],
                             y: corners[7],
                         },
-                    ],
+                    ]),
                 })
                 .collect();
             (Kind::Highlight { quads }, declared.unwrap_or(Rgb::YELLOW))
@@ -585,7 +685,8 @@ fn annotation(
                         .collect()
                 })
                 .unwrap_or_default();
-            (Kind::Ink { strokes }, declared.unwrap_or(Rgb::BLACK))
+            let width = ink_width(document, dictionary);
+            (Kind::Ink { strokes, width }, declared.unwrap_or(Rgb::BLACK))
         }
         _ => (Kind::Other { subtype }, declared.unwrap_or(Rgb::BLACK)),
     };
@@ -597,6 +698,54 @@ fn annotation(
         color,
         author: text(document, dictionary, b"T"),
     })
+}
+
+/// Which side of the line `a`→`b` the point `c` lies on: positive, negative
+/// or 0 when on it.
+fn turn(a: Point, b: Point, c: Point) -> f64 {
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+}
+
+/// Whether the segments `a`–`b` and `c`–`d` cross at a point inside both.
+fn cross(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let opposite = |one: f64, other: f64| (one > 0.0 && other < 0.0) || (one < 0.0 && other > 0.0);
+    opposite(turn(a, b, c), turn(a, b, d)) && opposite(turn(c, d, a), turn(c, d, b))
+}
+
+/// A quadrilateral's corners in the order Calcita keeps them: the order
+/// Acrobat writes (upper left, upper right, lower left, lower right), in
+/// which the outline runs 0, 1, 3, 2. ISO 32000-1 asks for the corners
+/// counter-clockwise, and some programs write them so; read as Acrobat's
+/// order, that outline would cross itself (an hourglass), so the order is
+/// the one of the three ways round four points whose outline does not.
+fn outline_order(points: [Point; 4]) -> [Point; 4] {
+    let simple = |[a, b, c, d]: [Point; 4]| !cross(a, b, d, c) && !cross(b, d, c, a);
+    [[0, 1, 2, 3], [0, 1, 3, 2], [0, 2, 1, 3]]
+        .into_iter()
+        .map(|order| order.map(|index| points[index]))
+        .find(|candidate| simple(*candidate))
+        .unwrap_or(points)
+}
+
+/// An ink's line width: `/BS /W`, else the third number of `/Border`, else
+/// 1 (ISO 32000-1, 12.5.2 and 12.5.4).
+fn ink_width(document: &Document, dictionary: &Dictionary) -> f64 {
+    let border_style = dictionary
+        .get(b"BS")
+        .ok()
+        .and_then(|style| resolve_dictionary(document, style))
+        .and_then(|style| style.get(b"W").ok())
+        .and_then(|width| number(document, width));
+    let border = || {
+        dictionary
+            .get(b"Border")
+            .ok()
+            .and_then(|border| numbers(document, border).get(2).copied())
+    };
+    border_style
+        .or_else(border)
+        .filter(|width| width.is_finite() && *width >= 0.0)
+        .unwrap_or(1.0)
 }
 
 /// A colour array of 1 (grey), 3 (RGB) or 4 (CMYK) components in `0..=1`;

@@ -2,7 +2,12 @@
 //! the zoom. QtPdf renders and reports; this object decides what the page
 //! field and the zoom controls mean (`calcita_core`'s grammar and ladder).
 //! It also reads the document's annotation model on a worker
-//! (`calcita_core::annot`), which editing (CAL-2-B) builds on.
+//! (`calcita_core::annot`), and names the version of the file the window
+//! shows (`revision`, part of each page's address): a new one when the
+//! document is set, when the window finds the file changed on disk
+//! (`checkFile`, answered by the same worker) and after a save that
+//! replaced it (`reload`), so no page the image cache holds from another
+//! version is shown again.
 
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -17,6 +22,8 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QUrl};
 
 use crate::controller::display_name;
+use crate::pages;
+use crate::saving::Stamp;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -40,6 +47,7 @@ pub mod qobject {
         #[qproperty(f64, zoom_factor, cxx_name = "zoomFactor", READ, NOTIFY)]
         #[qproperty(bool, loaded, READ, NOTIFY)]
         #[qproperty(i32, annotation_count, cxx_name = "annotationCount", READ, NOTIFY)]
+        #[qproperty(i32, revision, READ, NOTIFY)]
         type CalcitaDocument = super::CalcitaDocumentRust;
 
         /// Sets the document this window shows (a pathkey).
@@ -52,6 +60,22 @@ pub mod qobject {
         /// Something to tell the person: `kind` is `error` or `info`.
         #[qsignal]
         fn notice(self: Pin<&mut CalcitaDocument>, kind: QString, text: QString);
+
+        /// The file is a new version (changed on disk, or saved over): the
+        /// window loads it again. `revision` is already the new one.
+        #[qsignal]
+        fn reload_requested(self: Pin<&mut CalcitaDocument>);
+
+        /// Looks on the worker whether the file changed on disk since it was
+        /// last read; when it did, the model is read again and
+        /// `reloadRequested` follows.
+        #[qinvokable]
+        fn check_file(self: Pin<&mut CalcitaDocument>);
+
+        /// The file was replaced by a save: a new revision, the model read
+        /// again, and `reloadRequested`.
+        #[qinvokable]
+        fn reload(self: Pin<&mut CalcitaDocument>);
 
         /// Goes to the page `text` names (`12`, `+3`, `-2`, `inicio`, `fin`).
         #[qinvokable]
@@ -125,6 +149,8 @@ pub struct CalcitaDocumentRust {
     /// How many annotations the document carries; -1 until the model is
     /// read, and when it cannot be (encrypted, unparseable, too large).
     annotation_count: i32,
+    /// The version of the file the pages show, in their address.
+    revision: i32,
     zoom: ZoomMode,
     /// The annotation model last read for this document.
     annotations: Vec<Annotation>,
@@ -138,6 +164,17 @@ pub struct CalcitaDocumentRust {
 struct ModelRequest {
     generation: u64,
     path: PathBuf,
+    /// Only when the file changed since the reader last read it.
+    only_if_changed: bool,
+}
+
+/// What the model reader hands back for one read.
+struct ModelRead {
+    generation: u64,
+    annotations: Vec<Annotation>,
+    count: i32,
+    /// The read was a check, and the file had changed.
+    changed: bool,
 }
 
 /// The newest of `first` and the requests already waiting behind it: the
@@ -151,17 +188,32 @@ fn newest(first: ModelRequest, waiting: &mpsc::Receiver<ModelRequest>) -> ModelR
 }
 
 /// Starts a window's model reader: one thread reading one document at a
-/// time, the newest asked for, handing each result to `publish`. It ends
-/// when its sender is dropped. `None` when the thread did not start.
+/// time, the newest asked for, handing each result to `publish`. A check
+/// (`only_if_changed`) reads only when the file's size or modification
+/// time differs from the last read of the same path, and publishes nothing
+/// otherwise. It ends when its sender is dropped. `None` when the thread
+/// did not start.
 fn start_model_reader(
-    publish: impl Fn(u64, Vec<Annotation>, i32) + Send + 'static,
+    publish: impl Fn(ModelRead) + Send + 'static,
 ) -> Option<mpsc::Sender<ModelRequest>> {
     let (sender, receiver) = mpsc::channel::<ModelRequest>();
     let spawned = std::thread::Builder::new()
         .name("calcita-annotations".to_owned())
         .spawn(move || {
+            let mut last: Option<(PathBuf, Option<Stamp>)> = None;
             while let Ok(first) = receiver.recv() {
                 let request = newest(first, &receiver);
+                // Taken before the read, so a change during it is seen by
+                // the next check.
+                let stamp = Stamp::of(&request.path).ok();
+                let known = last.as_ref().filter(|(path, _)| *path == request.path);
+                if request.only_if_changed && known.is_some_and(|(_, seen)| *seen == stamp) {
+                    continue;
+                }
+                // A check of a path never read (its first read overtaken)
+                // is that first read, not a change.
+                let changed = request.only_if_changed && known.is_some();
+                last = Some((request.path.clone(), stamp));
                 let (annotations, count) = match annot::read_annotations(&request.path) {
                     Ok(annotations) => {
                         let count = i32::try_from(annotations.len()).unwrap_or(i32::MAX);
@@ -175,7 +227,12 @@ fn start_model_reader(
                         (Vec::new(), -1)
                     }
                 };
-                publish(request.generation, annotations, count);
+                publish(ModelRead {
+                    generation: request.generation,
+                    annotations,
+                    count,
+                    changed,
+                });
             }
         });
     match spawned {
@@ -199,6 +256,7 @@ impl Default for CalcitaDocumentRust {
             zoom_factor: 1.0,
             loaded: false,
             annotation_count: -1,
+            revision: 0,
             zoom: ZoomMode::FitWidth,
             annotations: Vec::new(),
             model_generation: 0,
@@ -250,7 +308,27 @@ impl qobject::CalcitaDocument {
         self.as_mut().document_key_changed();
         self.as_mut().document_name_changed();
         self.as_mut().document_url_changed();
-        self.read_model(path);
+        self.as_mut().renew_revision();
+        self.read_model(path, false);
+    }
+
+    fn renew_revision(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().revision = pages::next_revision();
+        self.revision_changed();
+    }
+
+    pub fn check_file(self: Pin<&mut Self>) {
+        let path = pathkey::decode(&self.rust().document_key.to_string()).ok();
+        if path.is_some() {
+            self.read_model(path, true);
+        }
+    }
+
+    pub fn reload(mut self: Pin<&mut Self>) {
+        let path = pathkey::decode(&self.rust().document_key.to_string()).ok();
+        self.as_mut().renew_revision();
+        self.as_mut().read_model(path, false);
+        self.reload_requested();
     }
 
     /// Reads the annotation model of `path` on this window's reader (`lopdf`
@@ -258,14 +336,34 @@ impl qobject::CalcitaDocument {
     /// another document came in the meantime. The reader takes one request
     /// at a time and only the newest of those waiting, so a document
     /// replaced before its read started is never read.
-    fn read_model(mut self: Pin<&mut Self>, path: Option<PathBuf>) {
-        let generation = self.rust().model_generation.wrapping_add(1);
+    ///
+    /// A check (`only_if_changed`) keeps the model shown until the reader
+    /// finds the file changed.
+    fn read_model(mut self: Pin<&mut Self>, path: Option<PathBuf>, only_if_changed: bool) {
+        // A check answers for the document already asked for, under its
+        // generation.
+        let generation = if only_if_changed {
+            self.rust().model_generation
+        } else {
+            self.rust().model_generation.wrapping_add(1)
+        };
         self.as_mut().rust_mut().model_generation = generation;
-        self.as_mut().apply_model(generation, Vec::new(), -1);
+        if !only_if_changed {
+            self.as_mut().apply_model(ModelRead {
+                generation,
+                annotations: Vec::new(),
+                count: -1,
+                changed: false,
+            });
+        }
         let Some(path) = path else {
             return;
         };
-        let request = ModelRequest { generation, path };
+        let request = ModelRequest {
+            generation,
+            path,
+            only_if_changed,
+        };
         let request = match self.rust().model_reader.as_ref() {
             Some(reader) => match reader.send(request) {
                 Ok(()) => return,
@@ -274,9 +372,9 @@ impl qobject::CalcitaDocument {
             None => request,
         };
         let qt = self.qt_thread();
-        let reader = start_model_reader(move |generation, annotations, count| {
+        let reader = start_model_reader(move |read| {
             let _ = qt.queue(move |document: Pin<&mut qobject::CalcitaDocument>| {
-                document.apply_model(generation, annotations, count);
+                document.apply_model(read);
             });
         });
         if let Some(reader) = reader {
@@ -286,19 +384,18 @@ impl qobject::CalcitaDocument {
         }
     }
 
-    fn apply_model(
-        mut self: Pin<&mut Self>,
-        generation: u64,
-        annotations: Vec<Annotation>,
-        count: i32,
-    ) {
-        if self.rust().model_generation != generation {
+    fn apply_model(mut self: Pin<&mut Self>, read: ModelRead) {
+        if self.rust().model_generation != read.generation {
             return;
         }
-        self.as_mut().rust_mut().annotations = annotations;
-        if self.rust().annotation_count != count {
-            self.as_mut().rust_mut().annotation_count = count;
+        self.as_mut().rust_mut().annotations = read.annotations;
+        if self.rust().annotation_count != read.count {
+            self.as_mut().rust_mut().annotation_count = read.count;
             self.as_mut().annotation_count_changed();
+        }
+        if read.changed {
+            self.as_mut().renew_revision();
+            self.reload_requested();
         }
     }
 
@@ -533,6 +630,7 @@ mod tests {
         ModelRequest {
             generation,
             path: PathBuf::from(format!("/nowhere/{generation}.pdf")),
+            only_if_changed: false,
         }
     }
 
@@ -550,14 +648,15 @@ mod tests {
     fn the_reader_reads_one_document_at_a_time_and_publishes_each() {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
         let (published, results) = mpsc::channel();
-        let reader = start_model_reader(move |generation, _annotations, count| {
-            let _ = published.send((generation, count));
+        let reader = start_model_reader(move |read| {
+            let _ = published.send((read.generation, read.count));
         })
         .expect("the reader starts");
         reader
             .send(ModelRequest {
                 generation: 1,
                 path: fixtures.join("annotated.pdf"),
+                only_if_changed: false,
             })
             .expect("queued");
         let first = results.recv().expect("published");
@@ -570,5 +669,42 @@ mod tests {
         );
         drop(reader);
         assert!(results.recv().is_err(), "the reader ends with its sender");
+    }
+
+    #[test]
+    fn a_check_reads_again_only_when_the_file_changed() {
+        let dir = std::env::temp_dir().join(format!("calcita-check-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("scratch");
+        let path = dir.join("doc.pdf");
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        std::fs::copy(fixtures.join("three-pages.pdf"), &path).expect("copied");
+        let (published, results) = mpsc::channel();
+        let reader = start_model_reader(move |read| {
+            let _ = published.send((read.generation, read.count, read.changed));
+        })
+        .expect("the reader starts");
+        let ask = |generation, only_if_changed| ModelRequest {
+            generation,
+            path: path.clone(),
+            only_if_changed,
+        };
+        reader.send(ask(1, false)).expect("queued");
+        assert_eq!(results.recv().expect("published"), (1, 0, false));
+        // An unchanged file: the check publishes nothing, so the read
+        // queued after it is the next to publish.
+        reader.send(ask(2, true)).expect("queued");
+        reader.send(ask(3, false)).expect("queued");
+        assert_eq!(results.recv().expect("published"), (3, 0, false));
+        std::fs::copy(fixtures.join("annotated.pdf"), &path).expect("replaced outside");
+        reader.send(ask(4, true)).expect("queued");
+        assert_eq!(results.recv().expect("published"), (4, 4, true));
+        reader.send(ask(5, true)).expect("queued");
+        drop(reader);
+        assert!(
+            results.recv().is_err(),
+            "an unchanged file publishes nothing"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

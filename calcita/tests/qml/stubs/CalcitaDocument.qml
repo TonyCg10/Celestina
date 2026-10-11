@@ -17,11 +17,25 @@ QtObject {
     property bool loaded: false
     // The annotation model is read by the Rust object; the stand-in has none.
     readonly property int annotationCount: -1
+    // The version of the file the pages show; `reload` takes a new one.
+    property int revision: 1
+    // How many times the window asked whether the file changed.
+    property int checks: 0
 
     readonly property var ladder: [0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0]
 
     signal pageRequested(int page)
     signal notice(string kind, string text)
+    signal reloadRequested()
+
+    function checkFile() {
+        checks += 1
+    }
+
+    function reload() {
+        revision += 1
+        reloadRequested()
+    }
 
     function parsePage(text) {
         const word = text.trim().toLowerCase()

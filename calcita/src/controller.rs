@@ -58,6 +58,7 @@ pub mod qobject {
         )]
         #[qproperty(bool, smoke_report, cxx_name = "smokeReport", READ, CONSTANT)]
         #[qproperty(QString, smoke_grab, cxx_name = "smokeGrab", READ, CONSTANT)]
+        #[qproperty(bool, smoke_edit, cxx_name = "smokeEdit", READ, CONSTANT)]
         #[qproperty(QStringList, documents, READ, NOTIFY)]
         #[qproperty(QStringList, recents, READ, NOTIFY)]
         #[qproperty(QStringList, recent_names, cxx_name = "recentNames", READ, NOTIFY)]
@@ -70,6 +71,11 @@ pub mod qobject {
         /// `key` is already open: its window comes forward.
         #[qsignal]
         fn raise_document(self: Pin<&mut CalcitaController>, key: QString);
+
+        /// The window of `from` shows `to` now (a copy a save landed
+        /// beside it).
+        #[qsignal]
+        fn document_renamed(self: Pin<&mut CalcitaController>, from: QString, to: QString);
 
         /// Something to tell the person: `kind` is `error` or `info`;
         /// `origin` names the window that asked (a document's key, `main`),
@@ -89,6 +95,11 @@ pub mod qobject {
         /// The window of `key` closed.
         #[qinvokable]
         fn close_document(self: Pin<&mut CalcitaController>, key: &QString);
+
+        /// The window of `from` moves to `to`, a copy a save landed beside
+        /// it; `documentRenamed` tells the window's owner.
+        #[qinvokable]
+        fn rename_document(self: Pin<&mut CalcitaController>, from: &QString, to: &QString);
 
         /// Remembers where `key` is being read and whether in the dark
         /// reading mode; saved on the store's worker.
@@ -135,12 +146,15 @@ pub mod qobject {
 /// `smokeReport` is `CALCITA_SMOKE_REPORT` set: `scripts/smoke.sh` asks the
 /// window to print what it shows once it is up. `smokeGrab` is
 /// `CALCITA_SMOKE_GRAB`, a file the smoke asks the front document's first
-/// page to be saved to as drawn, so it can look at its pixels.
+/// page to be saved to as drawn, so it can look at its pixels. `smokeEdit`
+/// is `CALCITA_SMOKE_EDIT` set: the first document opened adds a text box
+/// through its editor and saves it beside itself («Guardar ambas»).
 pub struct CalcitaControllerRust {
     appearance_reduced_motion: bool,
     appearance_text_scale: f64,
     smoke_report: bool,
     smoke_grab: QString,
+    smoke_edit: bool,
     documents: QStringList,
     recents: QStringList,
     recent_names: QStringList,
@@ -164,6 +178,7 @@ impl Default for CalcitaControllerRust {
             smoke_grab: std::env::var("CALCITA_SMOKE_GRAB")
                 .map(|path| QString::from(path.as_str()))
                 .unwrap_or_default(),
+            smoke_edit: std::env::var_os("CALCITA_SMOKE_EDIT").is_some(),
             documents: QStringList::default(),
             recents: QStringList::default(),
             recent_names: QStringList::default(),
@@ -355,8 +370,10 @@ impl qobject::CalcitaController {
             .collect();
         self.as_mut().rust_mut().recents = keys;
         self.as_mut().rust_mut().recent_names = names;
-        self.as_mut().recents_changed();
+        // The names first: the empty state's rows are built from the keys,
+        // and a row built for a new key reads its name at once.
         self.as_mut().recent_names_changed();
+        self.as_mut().recents_changed();
     }
 
     fn refuse(self: Pin<&mut Self>, refusal: &Refusal, origin: QString) {
@@ -426,6 +443,22 @@ impl qobject::CalcitaController {
             self.as_mut().rust_mut().documents.remove(index);
             self.as_mut().documents_changed();
         }
+    }
+
+    pub fn rename_document(mut self: Pin<&mut Self>, from: &QString, to: &QString) {
+        if from == to {
+            return;
+        }
+        let index = self.rust().documents.iter().position(|open| open == from);
+        let Some(index) = index.and_then(|index| isize::try_from(index).ok()) else {
+            return;
+        };
+        self.as_mut().rust_mut().documents.remove(index);
+        if !self.rust().documents.iter().any(|open| open == to) {
+            self.as_mut().rust_mut().documents.append(to.clone());
+        }
+        self.as_mut().documents_changed();
+        self.document_renamed(from.clone(), to.clone());
     }
 
     pub fn remember(

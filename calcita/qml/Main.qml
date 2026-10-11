@@ -177,6 +177,12 @@ ApplicationWindow {
             openDocuments.append({ "key": key, "slot": window.pdfDocuments.indexOf(pdf) })
             window.retired = true
         }
+        // A save kept both: the window moves to the copy beside.
+        function onDocumentRenamed(from, to) {
+            const row = window.rowOf(from)
+            if (row >= 0)
+                openDocuments.setProperty(row, "key", to)
+        }
     }
 
     // The FileChooser portal (Siderita's backend), through Qt's dialog.

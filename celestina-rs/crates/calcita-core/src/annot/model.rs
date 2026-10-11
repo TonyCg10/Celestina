@@ -46,9 +46,11 @@ impl Rect {
     }
 }
 
-/// One quadrilateral of a highlight, its four corners in `/QuadPoints`
-/// order (upper left, upper right, lower left, lower right as most programs
-/// write them; the order is kept as read).
+/// One quadrilateral of a highlight, its four corners in the order Acrobat
+/// writes `/QuadPoints` (upper left, upper right, lower left, lower right),
+/// so its outline runs 0, 1, 3, 2. Corners a program wrote counter-clockwise,
+/// as ISO 32000-1 asks, are put in that order when read, so the outline
+/// never crosses itself.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Quad {
     pub points: [Point; 4],
@@ -87,13 +89,22 @@ pub enum AnnotId {
 /// What an annotation is.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
-    /// A text box: its plain text (`/Contents`) and font size in points
-    /// (from `/DA`; 12 when it names none).
-    Text { contents: String, size_pt: f64 },
+    /// A text box: its plain text (`/Contents`), font size in points (from
+    /// `/DA`; 12 when it names none) and whether it also carries rich text
+    /// (`/RC`), whose styling Calcita cannot rewrite.
+    Text {
+        contents: String,
+        size_pt: f64,
+        rich: bool,
+    },
     /// A highlight over the quadrilaterals it covers.
     Highlight { quads: Vec<Quad> },
-    /// A freehand drawing: each stroke a run of points.
-    Ink { strokes: Vec<Vec<Point>> },
+    /// A freehand drawing: each stroke a run of points, drawn `width` points
+    /// wide (`/BS /W`, else the third `/Border` number; 1 without either).
+    Ink {
+        strokes: Vec<Vec<Point>>,
+        width: f64,
+    },
     /// Anything else, by its `/Subtype` (`Link`, `Widget`, `Popup`…).
     Other { subtype: String },
 }

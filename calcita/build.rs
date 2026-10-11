@@ -47,6 +47,14 @@ const QML_FILES: &[&str] = &[
     "qml/components/ReadingEffect.qml",
     "qml/components/WindowChrome.qml",
     "qml/DocumentWindow.qml",
+    // Editing: the bottom toolbar, the layer each page draws its editable
+    // annotations in, one item per kind, and the question leaving asks.
+    "qml/edit/AnnotationLayer.qml",
+    "qml/edit/EditToolbar.qml",
+    "qml/edit/HighlightItem.qml",
+    "qml/edit/InkItem.qml",
+    "qml/edit/SaveQuestion.qml",
+    "qml/edit/TextBoxItem.qml",
     "qml/Main.qml",
     "qml/OutlinePanel.qml",
     "qml/SearchCard.qml",
@@ -188,7 +196,9 @@ fn main() {
             "src/activation.rs",
             "src/controller.rs",
             "src/document.rs",
-            // Registers the page provider and drains it; declares no QObject.
+            "src/editor.rs",
+            // Registers the page provider, hands it the copies edits are
+            // drawn over and drains it; declares no QObject.
             "src/pages.rs",
         ]);
     // SAFETY: only adds the shims' include directory, so the generated

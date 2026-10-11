@@ -3,8 +3,9 @@ import org.celestina.calcita 1.0
 
 // The bar over the pages, a glass pill: the document's name, the page field
 // «n / N» (type a page, +n, -n, «inicio» or «fin» and press Enter), the zoom
-// controls, the search, outline and reading-mode toggles and «Abrir…». It only reports what the person asked; the window
-// hands each request to its `CalcitaDocument`.
+// controls, the search, outline and reading-mode toggles, «Editar» and
+// «Abrir…». It only reports what the person asked; the window hands each
+// request to its `CalcitaDocument` or its `CalcitaEditor`.
 Item {
     id: bar
 
@@ -16,6 +17,8 @@ Item {
     property bool searchOpen: false
     property bool outlineOpen: false
     property bool readingDark: false
+    // The window is editing: «Editar» shows it, and the reading mode waits.
+    property bool editing: false
 
     signal goToRequested(string text)
     signal zoomInRequested()
@@ -26,6 +29,7 @@ Item {
     signal searchToggled()
     signal outlineToggled()
     signal readingToggled()
+    signal editToggled()
     // Enter or Escape in the page field: focus goes back to the pages.
     signal fieldDone()
 
@@ -176,12 +180,24 @@ Item {
         CelestinaIconButton {
             objectName: "readingButton"
             anchors.verticalCenter: parent.verticalCenter
-            role: bar.readingDark ? CelestinaButton.Selected : CelestinaButton.Ghost
+            role: bar.readingDark && !bar.editing ? CelestinaButton.Selected : CelestinaButton.Ghost
+            enabled: !bar.editing
             iconName: "sun"
             helpText: bar.readingDark ? qsTr("Lectura clara") : qsTr("Lectura oscura")
             Accessible.checkable: true
             Accessible.checked: bar.readingDark
             onClicked: bar.readingToggled()
+        }
+
+        CelestinaIconButton {
+            objectName: "editButton"
+            anchors.verticalCenter: parent.verticalCenter
+            role: bar.editing ? CelestinaButton.Selected : CelestinaButton.Ghost
+            iconName: "pencil"
+            helpText: qsTr("Editar")
+            Accessible.checkable: true
+            Accessible.checked: bar.editing
+            onClicked: bar.editToggled()
         }
 
         CelestinaIconButton {

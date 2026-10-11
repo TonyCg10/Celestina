@@ -7,10 +7,15 @@
 #include <list>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include <QtCore/QAtomicInt>
+#include <QtCore/QBuffer>
 #include <QtCore/QByteArray>
 #include <QtCore/QFile>
+#include <QtCore/QMutex>
+#include <QtCore/QMutexLocker>
+#include <QtCore/QString>
 #include <QtCore/QRunnable>
 #include <QtCore/QSize>
 #include <QtCore/QSizeF>
@@ -41,6 +46,13 @@
 // rather than allocating gigabytes. At most `kOpenDocuments` documents stay
 // open, the most recently used first, and a document whose file changed on
 // disk is opened again.
+//
+// Copies. While a window edits, its pages render from an in-memory copy of
+// the document (the editable annotations hidden, so the window draws them
+// itself). The window registers the copy's bytes under its key and a
+// revision from any thread (`copies()`, behind a mutex); the render thread
+// opens a `QPdfDocument` over a `QBuffer` sharing those bytes, kept with
+// the open documents like a file's.
 //
 // Everything here is internal to this translation unit.
 namespace {
@@ -84,10 +96,57 @@ FileStamp stampOf(const QByteArray& pathBytes)
     return {qint64(file.st_size), qint64(file.st_mtim.tv_sec), qint64(file.st_mtim.tv_nsec)};
 }
 
+// A copy registered for a document's key at one revision.
+struct RegisteredCopy
+{
+    QByteArray pathBytes;
+    int revision = 0;
+    QByteArray bytes;
+};
+
+// The registered copies; written from any thread, read from the render
+// thread, always under `copiesMutex()`. Never destroyed.
+std::vector<RegisteredCopy>& copies()
+{
+    static auto* const registered = new std::vector<RegisteredCopy>();
+    return *registered;
+}
+
+QMutex& copiesMutex()
+{
+    static auto* const mutex = new QMutex();
+    return *mutex;
+}
+
+// The bytes registered for `pathBytes` at `revision`, or a null array. The
+// array shares the registered bytes (implicitly shared, so the copy out is
+// cheap and safe across threads).
+QByteArray registeredCopy(const QByteArray& pathBytes, int revision)
+{
+    QMutexLocker locker(&copiesMutex());
+    for (const auto& copy : copies()) {
+        if (copy.revision == revision && copy.pathBytes == pathBytes) {
+            return copy.bytes;
+        }
+    }
+    return {};
+}
+
+// The path bytes a path key names (its percent-encoding undone).
+QByteArray pathBytesOfKey(const QString& key)
+{
+    return QByteArray::fromPercentEncoding(key.toUtf8());
+}
+
 struct OpenDocument
 {
     QByteArray pathBytes;
+    // The copy's revision, or -1 for the file itself.
+    int revision = -1;
     FileStamp stamp;
+    // A copy's bytes, which the document reads; declared before it, so it
+    // outlives it.
+    std::unique_ptr<QBuffer> buffer;
     std::unique_ptr<QPdfDocument> document;
 };
 
@@ -100,10 +159,53 @@ std::list<OpenDocument>& openDocuments()
     return *documents;
 }
 
+// Keeps `opened` first among the open documents, within the bound.
+QPdfDocument* keep(OpenDocument opened)
+{
+    auto& documents = openDocuments();
+    documents.push_front(std::move(opened));
+    while (documents.size() > kOpenDocuments) {
+        documents.pop_back();
+    }
+    return documents.front().document.get();
+}
+
+// The copy of `pathBytes` registered at `revision`, opened or reused; null
+// when none is registered or QtPdf cannot load it.
+QPdfDocument* copyFor(const QByteArray& pathBytes, int revision)
+{
+    const QByteArray bytes = registeredCopy(pathBytes, revision);
+    if (bytes.isNull()) {
+        return nullptr;
+    }
+    auto& documents = openDocuments();
+    for (auto it = documents.begin(); it != documents.end(); ++it) {
+        if (it->revision == revision && it->pathBytes == pathBytes) {
+            documents.splice(documents.begin(), documents, it);
+            return documents.front().document.get();
+        }
+    }
+    OpenDocument opened;
+    opened.pathBytes = pathBytes;
+    opened.revision = revision;
+    opened.buffer = std::make_unique<QBuffer>();
+    opened.buffer->setData(bytes);
+    if (!opened.buffer->open(QIODevice::ReadOnly)) {
+        return nullptr;
+    }
+    opened.document = std::make_unique<QPdfDocument>();
+    // A random-access device loads at once, on this thread.
+    opened.document->load(opened.buffer.get());
+    if (opened.document->status() != QPdfDocument::Status::Ready) {
+        return nullptr;
+    }
+    return keep(std::move(opened));
+}
+
 // The document at `pathBytes`, opened or reused; null when it is not a
 // regular file or QtPdf cannot load it (a password-protected document
 // included, as in the window).
-QPdfDocument* documentFor(const QByteArray& pathBytes)
+QPdfDocument* fileFor(const QByteArray& pathBytes)
 {
     const FileStamp stamp = stampOf(pathBytes);
     if (!stamp.valid()) {
@@ -111,7 +213,7 @@ QPdfDocument* documentFor(const QByteArray& pathBytes)
     }
     auto& documents = openDocuments();
     for (auto it = documents.begin(); it != documents.end(); ++it) {
-        if (it->pathBytes != pathBytes) {
+        if (it->revision != -1 || it->pathBytes != pathBytes) {
             continue;
         }
         if (it->stamp == stamp) {
@@ -123,15 +225,24 @@ QPdfDocument* documentFor(const QByteArray& pathBytes)
     }
     // QPdfDocument takes a QString name, as the window's PdfDocument does
     // through its URL, so the two open the same file the same way.
-    auto document = std::make_unique<QPdfDocument>();
-    if (document->load(QFile::decodeName(pathBytes)) != QPdfDocument::Error::None) {
+    OpenDocument opened;
+    opened.pathBytes = pathBytes;
+    opened.stamp = stamp;
+    opened.document = std::make_unique<QPdfDocument>();
+    if (opened.document->load(QFile::decodeName(pathBytes)) != QPdfDocument::Error::None) {
         return nullptr;
     }
-    documents.push_front({pathBytes, stamp, std::move(document)});
-    while (documents.size() > kOpenDocuments) {
-        documents.pop_back();
+    return keep(std::move(opened));
+}
+
+// What the pages of `pathBytes` at `revision` render from: the copy
+// registered there, else the file.
+QPdfDocument* documentFor(const QByteArray& pathBytes, int revision)
+{
+    if (QPdfDocument* copy = copyFor(pathBytes, revision)) {
+        return copy;
     }
-    return documents.front().document.get();
+    return fileFor(pathBytes);
 }
 
 // The pixel size to render a page of `points` at for a `requested` source
@@ -172,9 +283,9 @@ QSize renderSize(const QSizeF& points, const QSize& requested)
 // render thread; a null image for a page that does not exist or a document
 // that does not open. The background stays clear, as QtPdf renders it: the
 // page view lays the paper under it.
-QImage renderPage(const QByteArray& pathBytes, int page, const QSize& requested)
+QImage renderPage(const QByteArray& pathBytes, int revision, int page, const QSize& requested)
 {
-    QPdfDocument* document = documentFor(pathBytes);
+    QPdfDocument* document = documentFor(pathBytes, revision);
     if (document == nullptr || page < 0 || page >= document->pageCount()) {
         return {};
     }
@@ -202,7 +313,8 @@ QThreadPool& renderPool()
     return *pool;
 }
 
-// The page and the raw path bytes an image id names, `<page>/<key>`.
+// The page, the revision and the raw path bytes an image id names,
+// `<page>/<revision>/<key>`.
 //
 // Qt derives the id with PrettyDecoded formatting, which has already turned
 // every escape of the key that spells valid UTF-8 back into its character,
@@ -210,16 +322,19 @@ QThreadPool& renderPool()
 // the id is spelled back to UTF-8 and only then percent-decoded, and the
 // path travels as bytes from there on, as the suite's thumbnail provider
 // does with the same keys.
-bool parseId(const QString& id, int* page, QByteArray* pathBytes)
+bool parseId(const QString& id, int* page, int* revision, QByteArray* pathBytes)
 {
-    const qsizetype slash = id.indexOf(QLatin1Char('/'));
-    if (slash <= 0) {
+    const qsizetype first = id.indexOf(QLatin1Char('/'));
+    const qsizetype second = first > 0 ? id.indexOf(QLatin1Char('/'), first + 1) : -1;
+    if (first <= 0 || second <= first + 1) {
         return false;
     }
-    bool number = false;
-    *page = id.left(slash).toInt(&number);
-    *pathBytes = QByteArray::fromPercentEncoding(id.mid(slash + 1).toUtf8());
-    return number && *page >= 0 && !pathBytes->isEmpty();
+    bool pageNumber = false;
+    bool revisionNumber = false;
+    *page = id.left(first).toInt(&pageNumber);
+    *revision = id.mid(first + 1, second - first - 1).toInt(&revisionNumber);
+    *pathBytes = pathBytesOfKey(id.mid(second + 1));
+    return pageNumber && revisionNumber && *page >= 0 && !pathBytes->isEmpty();
 }
 
 // One request: rendered on the pool and handed back when done.
@@ -230,8 +345,9 @@ bool parseId(const QString& id, int* page, QByteArray* pathBytes)
 class PageResponse : public QQuickImageResponse, public QRunnable
 {
 public:
-    PageResponse(QByteArray pathBytes, int page, QSize requested)
+    PageResponse(QByteArray pathBytes, int revision, int page, QSize requested)
         : m_pathBytes(std::move(pathBytes))
+        , m_revision(revision)
         , m_page(page)
         , m_requested(requested)
     {
@@ -258,13 +374,14 @@ public:
     void run() override
     {
         if (!m_cancelled.loadAcquire()) {
-            m_image = renderPage(m_pathBytes, m_page, m_requested);
+            m_image = renderPage(m_pathBytes, m_revision, m_page, m_requested);
         }
         Q_EMIT finished();
     }
 
 private:
     QByteArray m_pathBytes;
+    int m_revision;
     int m_page;
     QSize m_requested;
     QImage m_image;
@@ -277,13 +394,14 @@ public:
     QQuickImageResponse* requestImageResponse(const QString& id, const QSize& requestedSize) override
     {
         int page = -1;
+        int revision = 0;
         QByteArray pathBytes;
-        if (!parseId(id, &page, &pathBytes)) {
+        if (!parseId(id, &page, &revision, &pathBytes)) {
             // An id that names no page renders nothing: an empty path opens
             // no document, and the Image item reports the null image.
-            return new PageResponse(QByteArray(), -1, requestedSize);
+            return new PageResponse(QByteArray(), 0, -1, requestedSize);
         }
-        return new PageResponse(std::move(pathBytes), page, requestedSize);
+        return new PageResponse(std::move(pathBytes), revision, page, requestedSize);
     }
 };
 
@@ -293,6 +411,37 @@ void calcita_register_page_provider(QQmlApplicationEngine& engine)
 {
     // The engine takes ownership of the provider.
     engine.addImageProvider(QStringLiteral("calcitapage"), new PageProvider());
+}
+
+void calcita_page_provider_show_copy(const QString& key, ::std::int32_t revision,
+                                     ::rust::Slice<const ::std::uint8_t> bytes)
+{
+    RegisteredCopy copy;
+    copy.pathBytes = pathBytesOfKey(key);
+    copy.revision = revision;
+    copy.bytes = QByteArray(reinterpret_cast<const char*>(bytes.data()), qsizetype(bytes.size()));
+    QMutexLocker locker(&copiesMutex());
+    auto& registered = copies();
+    for (auto& existing : registered) {
+        if (existing.revision == revision && existing.pathBytes == copy.pathBytes) {
+            existing.bytes = std::move(copy.bytes);
+            return;
+        }
+    }
+    registered.push_back(std::move(copy));
+}
+
+void calcita_page_provider_drop_copy(const QString& key, ::std::int32_t revision)
+{
+    const QByteArray pathBytes = pathBytesOfKey(key);
+    QMutexLocker locker(&copiesMutex());
+    auto& registered = copies();
+    registered.erase(std::remove_if(registered.begin(), registered.end(),
+                                    [&](const RegisteredCopy& copy) {
+                                        return copy.revision == revision &&
+                                               copy.pathBytes == pathBytes;
+                                    }),
+                     registered.end());
 }
 
 void calcita_page_provider_shutdown(::std::int32_t milliseconds)

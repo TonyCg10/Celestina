@@ -53,7 +53,8 @@ fn the_annotated_fixture_reads_as_the_three_kinds_and_a_link() {
         text.kind,
         Kind::Text {
             contents: "Hello Calcita".to_owned(),
-            size_pt: 16.0
+            size_pt: 16.0,
+            rich: false
         }
     );
     assert_eq!(text.rect, Rect::new(300.0, 700.0, 520.0, 760.0));
@@ -77,9 +78,10 @@ fn the_annotated_fixture_reads_as_the_three_kinds_and_a_link() {
     assert_eq!(highlight.color, Rgb::YELLOW);
 
     let ink = &annotations[2];
-    let Kind::Ink { strokes } = &ink.kind else {
+    let Kind::Ink { strokes, width } = &ink.kind else {
         panic!("an ink drawing: {ink:?}");
     };
+    assert_eq!(*width, 4.0, "the /BS width");
     assert_eq!(strokes.len(), 1);
     assert_eq!(strokes[0].len(), 5);
     assert_eq!(strokes[0][1], Point { x: 360.0, y: 620.0 });

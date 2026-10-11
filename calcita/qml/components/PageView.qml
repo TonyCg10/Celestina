@@ -11,11 +11,17 @@ import org.celestina.calcita 1.0
 // (`externalLinkRequested`) so the window can ask before anything leaves.
 //
 // A page's image comes from Calcita's page provider
-// (`image://calcitapage/<page>/<key>`), which has QtPdf render it with its
-// annotations: QtPdf's own `PdfPageImage` renders without them, so every
-// highlight, note and drawing of another program was hidden. The provider
-// opens the file itself on its render thread; the hits, the selection and
-// the links still come from `document`.
+// (`image://calcitapage/<page>/<revision>/<key>`), which has QtPdf render it
+// with its annotations: QtPdf's own `PdfPageImage` renders without them, so
+// every highlight, note and drawing of another program was hidden. The
+// provider opens the file itself on its render thread (or, while editing,
+// the copy registered under the revision); the hits, the selection and the
+// links still come from `document`.
+//
+// While editing (`editTool` set), each built page loads `pageLayer` over
+// itself (the window's annotation layer), links do nothing, and the
+// pointer's text selection serves only «Resaltar»: when such a drag ends,
+// `highlightDragged` hands the selection's outlines to the window.
 //
 // QtPdf's own `PdfMultiPageView` opens an external link at once and paints
 // hits and selection in its own colours, not the theme's, so Calcita lays
@@ -38,6 +44,14 @@ Flickable {
     // The document's path key (ADR 0008), which names it to the page
     // provider.
     required property string documentKey
+    // The version of the document the pages show (src/pages.rs).
+    property int revision: 0
+    // The armed edit tool (`select`, `text`, `highlight`, `ink`), or "" when
+    // not editing.
+    property string editTool: ""
+    // What each built page lays over itself while editing; it gets `page`
+    // and `renderScale`.
+    property Component pageLayer: null
     // Pixels per point.
     property real renderScale: 1
     // The 0-based page a jump went to, or the page under the reading line
@@ -92,6 +106,9 @@ Flickable {
     signal externalLinkRequested(string url)
     // `grabPage` asked for `page`, as drawn, in the file `path`.
     signal pageGrabRequested(int page, string path)
+    // «Resaltar» selected text on the 0-based `page`: QtPdf's outlines of the
+    // selection, in the page's points.
+    signal highlightDragged(int page, var outlines)
 
     // Development only: saves the 0-based `page` as drawn (its paper, its
     // image and what lies over it) to `path`, when the page is built, once
@@ -352,7 +369,8 @@ Flickable {
                         id: pageImage
                         objectName: "pageImage"
                         anchors.fill: parent
-                        source: "image://calcitapage/" + pageItem.index + "/" + pageArea.documentKey
+                        source: "image://calcitapage/" + pageItem.index + "/" + pageArea.revision
+                                + "/" + pageArea.documentKey
                         asynchronous: true
                         fillMode: Image.PreserveAspectFit
                         sourceSize.width: paper.width * Screen.devicePixelRatio
@@ -443,11 +461,18 @@ Flickable {
                     DragHandler {
                         id: selectionDrag
                         acceptedDevices: PointerDevice.Mouse | PointerDevice.Stylus
+                        enabled: pageArea.editTool === "" || pageArea.editTool === "highlight"
                         target: null
                         cursorShape: Qt.IBeamCursor
                         onActiveChanged: {
-                            if (!selectionDrag.active)
+                            if (!selectionDrag.active) {
+                                if (pageArea.editTool === "highlight"
+                                        && pageArea.selectionPage === pageItem.index) {
+                                    pageArea.highlightDragged(pageItem.index, selection.geometry)
+                                    pageArea.clearSelection()
+                                }
                                 return
+                            }
                             if (pageArea.selectionPage !== pageItem.index)
                                 pageArea.clearSelection()
                             selection.from = selectionDrag.centroid.pressPosition
@@ -498,14 +523,39 @@ Flickable {
                             Accessible.onPressAction: linkItem.activate()
 
                             HoverHandler {
+                                enabled: pageArea.editTool === ""
                                 cursorShape: Qt.PointingHandCursor
                             }
 
                             TapHandler {
+                                enabled: pageArea.editTool === ""
                                 gesturePolicy: TapHandler.ReleaseWithinBounds
                                 onTapped: linkItem.activate()
                             }
                         }
+                    }
+
+                    // The window's annotation layer while editing, over
+                    // everything else on the page.
+                    Loader {
+                        id: layerLoader
+                        anchors.fill: parent
+                        active: pageArea.pageLayer !== null
+                        sourceComponent: pageArea.pageLayer
+                    }
+
+                    Binding {
+                        target: layerLoader.item
+                        property: "page"
+                        value: pageItem.index
+                        when: layerLoader.item !== null
+                    }
+
+                    Binding {
+                        target: layerLoader.item
+                        property: "renderScale"
+                        value: pageArea.renderScale
+                        when: layerLoader.item !== null
                     }
                 }
             }

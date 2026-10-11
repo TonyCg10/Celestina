@@ -1,6 +1,6 @@
 [package]
 name = "calcita"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 rust-version = "1.85"
 license = "GPL-3.0-or-later"
@@ -27,17 +27,25 @@ cxx-qt-lib = { version = "=0.9.1", default-features = false, features = [
     "qt_qml",
     "qt_quickcontrols",
 ] }
-# Calcita's domain (recents, zoom, reading positions, page input), tested
-# without Qt; a stub until CAL-1-A fills it.
+# Calcita's domain (recents, zoom, reading positions, page input, the
+# annotation model and its edits written as incremental updates), tested
+# without Qt.
 calcita-core = { path = "../celestina-rs/crates/calcita-core" }
 # Single instance: a second `calcita` hands its paths to the running process.
 # The claim-first hand-off is the suite's one owner in `celestina-core`
-# (feature `activation`, which brings zbus 5 for the session bus); nothing
-# else of the crate is used yet.
+# (feature `activation`, which brings zbus 5 for the session bus). Its path
+# keys and file URIs name documents, and `atomic_file` lands a saved edit
+# beside the original without replacing anything.
 celestina-core = { path = "../celestina-rs/crates/celestina-core", features = ["activation"] }
 # The suite's appearance file (reduced motion, text scale) and its follower,
 # so this window follows the same choice as every other one.
 celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
+# «Guardar solo la editada» sends the original to the freedesktop Trash
+# through the suite's one implementation, so Siderita can restore it, and a
+# copy beside the original takes the suite's «(editado)» name
+# (`next_available`). A pure crate whose only dependency, celestina-core, is
+# already here.
+siderita-ops = { path = "../celestina-rs/crates/siderita-ops" }
 
 [build-dependencies]
 # Generates the C++ half of the bridges, compiles it and builds the QML module

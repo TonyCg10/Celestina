@@ -96,8 +96,9 @@ TestCase {
         tryVerify(() => page.item !== null, 2000, "the second page is built")
         const image = findNamed(page.item, "pageImage")
         verify(image, "the page image")
-        compare(String(image.source), "image://calcitapage/1/" + testCase.fixture,
-                "the 0-based page, then the document's key")
+        compare(String(image.source),
+                "image://calcitapage/1/" + window.reader.revision + "/" + testCase.fixture,
+                "the 0-based page, the revision shown, then the document's key")
         verify(image.asynchronous, "rendered off the Qt thread")
         compare(image.sourceSize.width, Math.floor(page.item.width * Screen.devicePixelRatio),
                 "rendered at the size it is shown")

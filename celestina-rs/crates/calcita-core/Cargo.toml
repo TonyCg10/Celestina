@@ -2,7 +2,7 @@
 name = "calcita-core"
 version = "0.1.0"
 edition = "2021"
-description = "Calcita's domain: recent documents, zoom, reading positions, page input, search order and the annotation model, without Qt"
+description = "Calcita's domain: recent documents, zoom, reading positions, page input, search order, the annotation model and its edits written as incremental updates, without Qt"
 license = "MIT"
 
 [dependencies]
@@ -10,8 +10,8 @@ license = "MIT"
 # spells a path byte-exact in one text line, `atomic_file` replaces the store
 # privately and reads it bounded, `xdg` names the data home.
 celestina-core.workspace = true
-# The annotation model is read (and, from CAL-2-B, written as incremental
-# updates) by a pure-Rust PDF object parser; QtPdf renders but exposes no
+# The annotation model is read, and its edits written as incremental updates,
+# by a pure-Rust PDF object parser; QtPdf renders but exposes no
 # annotation objects, and nothing in the suite parses PDF. lopdf reads a
 # page's `/Annots`, the AcroForm and the trailer (refusing `/Encrypt`), and
 # its `IncrementalDocument` appends an update that keeps every original byte

@@ -11,6 +11,9 @@ Item {
 
     required property string origin
     property bool fallback: false
+    // How far above its place the notice pill rises, so it clears a bar
+    // the window lays at the bottom (the edit toolbar).
+    property real noticeLift: 0
 
     // Ctrl+O: the owner shows the file chooser.
     signal openRequested()
@@ -34,7 +37,7 @@ Item {
     NoticePill {
         id: noticePill
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: CelestinaTheme.spaceXl
+        anchors.bottomMargin: CelestinaTheme.spaceXl + chrome.noticeLift
         anchors.horizontalCenter: parent.horizontalCenter
     }
 

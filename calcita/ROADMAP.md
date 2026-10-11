@@ -3,8 +3,8 @@
 - **Status:** active
 - **Active implementation checkpoint:** CAL-2
 - **Related author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH,
-  VAL-CAL-DARK and VAL-CAL-ANNOT pending in [VALIDATION.md](VALIDATION.md)
-  (they do not block)
+  VAL-CAL-DARK, VAL-CAL-ANNOT and VAL-CAL-EDIT pending in
+  [VALIDATION.md](VALIDATION.md) (they do not block)
 
 ## Hypothesis and tangible outcome
 
@@ -48,8 +48,8 @@ PDF already carries, saved as incremental updates. Its ledger is the
 | CAL-1-B | done | CAL-1-A | search, outline, selection and copy, links | [evidence](docs/evidence/2026-10-09-search-outline-links.md) |
 | CAL-1-C | done | CAL-1-B | reading mode, recents, handler entry, 1.0.0 | [evidence](docs/evidence/2026-10-09-exit.md) |
 | CAL-1-D | done | CAL-1-C | the pages on opaque paper, 1.0.1 | [evidence](docs/evidence/2026-10-10-page-contrast.md) |
-| CAL-2-A | active | CAL-1-D | every annotation shown; the model and the coordinates | [evidence](docs/evidence/2026-10-11-annotations-shown.md) |
-| CAL-2-B | planned | CAL-2-A | edit mode, the three tools, saving | none yet |
+| CAL-2-A | done | CAL-1-D | every annotation shown; the model and the coordinates | [evidence](docs/evidence/2026-10-11-annotations-shown.md) |
+| CAL-2-B | active | CAL-2-A | edit mode, the three tools, saving | [evidence](docs/evidence/2026-10-11-editing.md) |
 | CAL-2-C | planned | CAL-2-B | forms filled and saved | none yet |
 
 CAL-1 closed on 2026-10-11 at 1.0.1, after the bug unit CAL-1-D. Its build

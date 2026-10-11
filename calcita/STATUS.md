@@ -4,22 +4,23 @@
 - **Implementation:** CAL-2, editing (annotations and forms), is the
   active checkpoint ([plan](docs/plans/active/2026-10-11-cal-2-editing.md)).
   CAL-2-A (every annotation shown, the annotation model and the
-  coordinates) is implemented and checked offscreen in its session
-  worktree, not yet landed; CAL-2-B (the edit mode and saving) and CAL-2-C
-  (forms) are planned. CAL-1 is closed and its
+  coordinates) landed as 1.1.0; CAL-2-B (the edit mode, the three tools and
+  saving) is implemented and checked offscreen in its session worktree,
+  not yet landed; CAL-2-C (forms) is planned. CAL-1 is closed and its
   [plan](docs/plans/archive/2026-10-09-cal-1-foundation.md) archived: CAL-1-A
   (opening, continuous pages, zoom and navigation) as 0.2.0, CAL-1-B
   (search, the outline, selection and copy, links) as 0.3.0, CAL-1-C (the
   dark reading mode, the recents card's menu, the `application/pdf` entry,
   the accessibility pass) as 1.0.0, and the bug unit CAL-1-D (every page
   on opaque paper over the glass) as 1.0.1
-- **Author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH, VAL-CAL-DARK and
-  VAL-CAL-ANNOT pending
+- **Author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH, VAL-CAL-DARK,
+  VAL-CAL-ANNOT and VAL-CAL-EDIT pending
 
 ## Current checkout truth
 
-- Version 1.0.1 in the checkout, installed under the author's prefix
-  (`~/.local/bin/calcita`). The empty window «Sin documento» offers
+- Version 1.1.0 in the checkout, installed under the author's prefix
+  (`~/.local/bin/calcita`) by CAL-2-A's landing; the edit mode below is
+  in the CAL-2-B worktree, not installed. The empty window «Sin documento» offers
   «Abrir…» (the FileChooser portal, filtered to PDF), the recent documents
   and a drop area. A click, Enter or Space on a recent row opens it; its menu (a right
   click, the Menu key or Shift+F10) has «Quitar de recientes».
@@ -41,8 +42,10 @@
   it with its annotations on one render thread of its own, so another
   program's highlights, notes and drawings show; form widgets do not
   (QtPdf never draws them; CAL-2-C). The window reads the document's
-  annotation model with `lopdf` on a worker (`calcita_core::annot`); nothing
-  shows it yet, and nothing is edited or written. Search: Ctrl+F or the bar's button opens a card
+  annotation model with `lopdf` on a worker (`calcita_core::annot`). A
+  page's address carries the revision of the file shown, renewed when the
+  file changed on disk (checked when the window is activated) or was saved
+  over, so the image cache never shows another version. Search: Ctrl+F or the bar's button opens a card
   under the bar; the hits are marked, the current one in the selection
   colour and scrolled into view, with «n de N»; Enter/Shift+Enter, F3/Shift+F3
   and the card's arrows walk them round the ends; Escape closes. The outline
@@ -59,6 +62,19 @@
   too. It fades in and out over 200 ms, at once under reduced motion.
 - The recent documents (50, `~/.local/share/calcita/recent`) remember the
   page, the zoom and the reading mode each one is reopened at.
+- Editing (Ctrl+E or «Editar»; CAL-2-B, not landed): the pages render from
+  an in-memory copy with the editable annotations hidden and the window
+  draws those itself; a bottom toolbar holds «Seleccionar», «Texto»,
+  «Resaltar», «Dibujar», the six accent colours, three sizes, undo and
+  redo, delete and the two save outcomes. Text boxes (Helvetica in
+  WinAnsi, a character outside it refused with a notice), highlights from
+  the text selection and freehand strokes are added; any program's three
+  kinds are moved, recoloured or deleted, a plain text box retyped. Saving
+  appends one incremental update: «Guardar ambas» lands «… (editado).pdf»
+  beside and the window moves to it; «Guardar solo la editada» sends the
+  original to the Trash and reloads. Leaving or closing with changes asks,
+  with «Descartar». The reading mode waits while editing; encrypted and
+  unparseable documents refuse edit mode with a notice.
 - The desktop entry declares `MimeType=application/pdf;`; the author pins
   Calcita as the PDF handler by hand after VAL-CAL-DARK.
 - Every control of the bar, the page field, the search card, the outline

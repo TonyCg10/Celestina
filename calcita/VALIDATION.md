@@ -96,3 +96,49 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   and the link still work and draw over the annotations
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-CAL-EDIT — Text boxes, highlights and drawings saved as annotations
+
+- **Status:** pending
+- **Related implementation:** CAL-2-B
+- **Requires:** the Calcita release binary of CAL-2-B on the real session;
+  a real PDF with selectable text (a copy kept elsewhere), one annotated by
+  another program (a highlight, a text box, a drawing), and an encrypted
+  one if at hand; another viewer (Okular, or a web browser's PDF viewer)
+- **Procedure:** open the PDF; press Ctrl+E (and once «Editar» on the bar):
+  the bottom toolbar appears and the reading mode, if on, waits. With
+  «Texto», click on the page and type a Spanish sentence with accents, the
+  euro and «guillemets», then click elsewhere; double-click it and change a
+  word; with «Seleccionar» drag it, then drag a corner handle; pick another
+  colour while it is selected. With «Resaltar», drag over a line of text,
+  and over two lines. With «Dibujar», draw a stroke with the mouse (and a
+  stylus if at hand). Pick each size once. Select another program's
+  highlight and move it, recolour its drawing, delete its text box with
+  Supr. Reopen a file Calcita saved in an earlier session: move one of
+  its text boxes, then try to resize it (no handles), recolour or retype
+  it and resize it. Undo everything with Ctrl+Z and redo it with
+  Ctrl+Shift+Z. Type a
+  character outside Spanish (a Greek or Chinese letter) in a text box.
+  Save with «Guardar ambas»; edit again and save with «Guardar solo la
+  editada»; edit once more and leave with Ctrl+E, answering «Descartar»;
+  edit, then close the window and answer «Guardar ambas». Try Ctrl+E on
+  the encrypted PDF. Open each saved file in the other viewer; open the
+  Trash in Siderita
+- **Pass condition:** every tool places its mark where the pointer was, at
+  every zoom and on a rotated page; the text looks the same while typing
+  and once saved (same font, same lines); the selection shows its frame
+  and four handles and moves and resizes smoothly; undo and redo walk
+  every step; another program's text box, and one Calcita saved in an
+  earlier session, moves at its own size and is resized only once
+  recoloured or retyped (then redrawn, never stretched); the outside
+  character is refused with a notice and nothing
+  else is lost; «Guardar ambas» leaves the original untouched and opens the
+  copy «… (editado).pdf» in the same window at the same page and reading
+  mode; «Guardar solo la editada» keeps the name, reloads with the edits
+  and puts the original in the Trash, restorable from Siderita;
+  «Descartar» leaves the file as it was; closing with changes asks first;
+  the encrypted PDF refuses edit mode with a notice; in the other viewer
+  every text box, highlight and drawing shows where Calcita put it, in its
+  colour, and can be selected and edited there as an annotation
+- **Result:** not run
+- **Evidence:** none

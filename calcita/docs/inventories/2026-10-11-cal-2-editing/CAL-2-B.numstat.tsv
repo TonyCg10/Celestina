@@ -1,0 +1,107 @@
+# CAL-2-B exact change inventory
+
+Base revision	141e39f5fb4f8f3e25ec4d961788c9e508793eaf
+Pathspec	calcita/AGENTS.md
+Pathspec	calcita/Cargo.lock
+Pathspec	calcita/Cargo.toml
+Pathspec	calcita/README.md
+Pathspec	calcita/ROADMAP.md
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/VALIDATION.md
+Pathspec	calcita/build.rs
+Pathspec	calcita/cpp/calcita/page_provider.h
+Pathspec	calcita/cpp/page_provider.cpp
+Pathspec	calcita/docs/evidence/2026-10-11-editing.md
+Pathspec	calcita/docs/inventories/2026-10-11-cal-2-editing/CAL-2-B.numstat.tsv
+Pathspec	calcita/docs/plans/active/2026-10-11-cal-2-editing.md
+Pathspec	calcita/qml/DocumentWindow.qml
+Pathspec	calcita/qml/Main.qml
+Pathspec	calcita/qml/components/DocumentBar.qml
+Pathspec	calcita/qml/components/PageView.qml
+Pathspec	calcita/qml/components/WindowChrome.qml
+Pathspec	calcita/qml/edit/AnnotationLayer.qml
+Pathspec	calcita/qml/edit/EditToolbar.qml
+Pathspec	calcita/qml/edit/HighlightItem.qml
+Pathspec	calcita/qml/edit/InkItem.qml
+Pathspec	calcita/qml/edit/SaveQuestion.qml
+Pathspec	calcita/qml/edit/TextBoxItem.qml
+Pathspec	calcita/scripts/smoke.sh
+Pathspec	calcita/src/controller.rs
+Pathspec	calcita/src/document.rs
+Pathspec	calcita/src/editor.rs
+Pathspec	calcita/src/main.rs
+Pathspec	calcita/src/pages.rs
+Pathspec	calcita/src/saving.rs
+Pathspec	calcita/tests/qml/stubs/CalcitaController.qml
+Pathspec	calcita/tests/qml/stubs/CalcitaDocument.qml
+Pathspec	calcita/tests/qml/stubs/CalcitaEditor.qml
+Pathspec	calcita/tests/qml/tst_edit.qml
+Pathspec	calcita/tests/qml/tst_edit_tools.qml
+Pathspec	calcita/tests/qml/tst_paper.qml
+Pathspec	celestina-rs/crates/calcita-core/Cargo.toml
+Pathspec	celestina-rs/crates/calcita-core/src/annot/appearance.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/edit.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/mod.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/model.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/read.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/write.rs
+Pathspec	celestina-rs/crates/calcita-core/src/lib.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/annot_appearance.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/annot_edit.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/annot_read.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/annot_write.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+17	9	dde8d71fb24338744794cfff542093695b1e72ffbe73c2b5948fb8b54aff7839	calcita/AGENTS.md
+9	1	47b8bd9f442de366cb3c2bc6440a03d74df736bb4e64a41942b4d4bbe510e6d2	calcita/Cargo.lock
+13	5	3507aae1f538d99591b2dfc9a5a9c69686e98ecbcc3b5ca140eee0ff51f5a706	calcita/Cargo.toml
+16	9	b015cf67939d5cadfe47a633f02fcabf6f9623915ab9575b0042b39c6d0f26ff	calcita/README.md
+4	4	485b40e871617d45d2d2cb12fcc93a6dfdb6f5068213cbd270c8eeb755395928	calcita/ROADMAP.md
+25	9	e0d3ab7205257640f82e80e0fd13e90df799c4a30ecd2c22509ddbadcf81aabd	calcita/STATUS.md
+46	0	393191f9f60b7963e4af1eefd1d4166602a0ba338e4db643ea8d4a8f899e1153	calcita/VALIDATION.md
+11	1	eef4bbcdcf4635e2b47d7c0403b70fd01a4c609e3041eb97643b2e120958b1ac	calcita/build.rs
+17	4	81d7735820ed0e9375cc14f6a852b86e90d047c021b4cf248e6d543954137d2b	calcita/cpp/calcita/page_provider.h
+172	23	fad8e6ed032a8862c9fc0e958edf9d4d4bed54259905cedae53f5c1810264bd3	calcita/cpp/page_provider.cpp
+405	0	4fe1b2a2347255386a5d8e8a159a7eb3997b0ac88f7fc67b025bab8908cd5493	calcita/docs/evidence/2026-10-11-editing.md
+107	0	self	calcita/docs/inventories/2026-10-11-cal-2-editing/CAL-2-B.numstat.tsv
+1	1	493c0fabf7fc9883cb8de5ad12de4092af7d31ca73789da76ad24f852d35d68f	calcita/docs/plans/active/2026-10-11-cal-2-editing.md
+321	5	b24ff3f96c7d849bb92ab1a1e472803796f7da9b7f4298f3ba0e6b95ed26c176	calcita/qml/DocumentWindow.qml
+6	0	3af6bd592565ce7562864a143310f509f8432bd18aa42fbba3d9dd8a3d6ecaf8	calcita/qml/Main.qml
+19	3	ca955a74c8dfea1578673b687a648ab3b2675d2404074913a58d9695238c036e	calcita/qml/components/DocumentBar.qml
+57	7	cede834687e613e4c13a5368bb16539ec9ebd7f6305f13b43a8e06acdb13989b	calcita/qml/components/PageView.qml
+4	1	ed5522e7c936b29d6f8936701d571544bfa8bd6e102d57dcf37f3fd6a2d012bf	calcita/qml/components/WindowChrome.qml
+242	0	da3910d28df7d20340dde66e05173762dd51100735ac6af8fa90fb43263b0e64	calcita/qml/edit/AnnotationLayer.qml
+318	0	99f1bd90bf3d896bf58240b1d9dd72989047a860aa81c171557746b483c1dd10	calcita/qml/edit/EditToolbar.qml
+96	0	161e8cafe084bfc7aa27bb7036bbc744f1323fe4feb2dddc2a45202cdf71d623	calcita/qml/edit/HighlightItem.qml
+100	0	e7b76533bc0eff58bcc2bbf3114e1abce6cbf7cc24ff1d890db843dc28b05cbf	calcita/qml/edit/InkItem.qml
+88	0	8cbfebdc6542745aec424b45a5e81fe96f83bcbb41664f57a86861b0de8027ec	calcita/qml/edit/SaveQuestion.qml
+230	0	b2481c75aca8474d1eebbbf9f611ed61034f9f6f5470e07f9af9dc5afd1954d3	calcita/qml/edit/TextBoxItem.qml
+98	2	56f3b3b69fe05694675a664963b00a665f12856bc19808a6e0fa70e26d1aaae6	calcita/scripts/smoke.sh
+35	2	8e9436bf689b45550ab585f6e9342b0f3af39415b68e82b646ea6a7e7b4f1148	calcita/src/controller.rs
+160	24	a1d57c851c4e1ce6a5ed7bc74a76ea508935a4ed3aa9d1999997bbbf402f2f89	calcita/src/document.rs
+968	0	db1b77d105e58eb255d277e1de8cea5c3737ed58dac15ea1c61fa09031a7be83	calcita/src/editor.rs
+2	0	00ea3ad6fab73088e41a036a2bad798cc7091fc85b1eec956ca78e9ef75f3599	calcita/src/main.rs
+31	2	b91fa7fa6e0ccf91b5422b19eed01af61679c99b697a672bf88cef02da61656d	calcita/src/pages.rs
+523	0	965d4b5a63dc095e929ac4e67ab6696f98d6f30d6e64da3d3c4af5c9c322557e	calcita/src/saving.rs
+9	0	3bb6a77afb62b6a6ad1471eb812ab253baa8e399fc429aa7faeee292d60e857a	calcita/tests/qml/stubs/CalcitaController.qml
+14	0	54daf24f84b90f0f5e4248c24b3a5170b7baf1939ad0ce0989ceeadfee023e09	calcita/tests/qml/stubs/CalcitaDocument.qml
+169	0	b1de8bd26fb7c7cee01986ebfb548bb38274dc44f27f4b392da1164065e36cd6	calcita/tests/qml/stubs/CalcitaEditor.qml
+308	0	dc57cf0503cc5c528f43f3586ec45421b105350e9fdbe0ca05f136dce90b5163	calcita/tests/qml/tst_edit.qml
+281	0	5e5848bea82e8bb524ada290cd6fe52cc9f4c0b121d13c9e88f24db7aaaa2960	calcita/tests/qml/tst_edit_tools.qml
+3	2	37ff9de21d8f22d0262e40bf3a4d1b69f5715cdd617dbcd4cdfb85ce60fc7e22	calcita/tests/qml/tst_paper.qml
+3	3	a85a53f8eeb53249610b41e215018b38d1118ce7666684ec235b12656e546101	celestina-rs/crates/calcita-core/Cargo.toml
+420	0	55820bdf2f66062e6d48a06ac2f60157ec8cf7253ec63b1ea633644f8d307ee8	celestina-rs/crates/calcita-core/src/annot/appearance.rs
+488	0	fe285c757403d4bb50e23d8e025f781eab1874e371e6e60ef96921cd6d8e5496	celestina-rs/crates/calcita-core/src/annot/edit.rs
+7	2	6bab79c4e0517cc0dd219d5d0ab8632c32f9be55f9cc4b57aa65d2119ba11d45	celestina-rs/crates/calcita-core/src/annot/mod.rs
+19	8	1b6676a1f3cad1f5b8bf425b4334dabe78c463774317662d10fde1bd0f02c51b	celestina-rs/crates/calcita-core/src/annot/model.rs
+181	32	e16551af3b82d519c2fe829df77842e446fe052f39502084e3c80774e614bc37	celestina-rs/crates/calcita-core/src/annot/read.rs
+606	0	e9d89f5635d05c715b0b27efa9d2fcb1740f91bbd8e8015340bfeaccd4d67d26	celestina-rs/crates/calcita-core/src/annot/write.rs
+2	1	f219e6be49e73f0d379d4470bf4e1e831953f8cb9198a6961bfd5b2ce8707d94	celestina-rs/crates/calcita-core/src/lib.rs
+183	0	1e5f9750914df5d5904802788c3a6fe8733417c8a57334a8517f03bc1d77c137	celestina-rs/crates/calcita-core/tests/annot_appearance.rs
+428	0	e752b6b239c5d30d9c032cb657cf789ab3899eae50910d022214f66e0589132d	celestina-rs/crates/calcita-core/tests/annot_edit.rs
+4	2	e44123661111fdc401ba4b7e752705a0ef47e6b49d8c56ce11536d3da72b9636	celestina-rs/crates/calcita-core/tests/annot_read.rs
+1035	0	7e0062bca4b4aeab2d9a521a435867099e2ee4ab858bc2364aed78444fb231da	celestina-rs/crates/calcita-core/tests/annot_write.rs
+1	0	0eb801173dc856d1eaaa936de3d4df2a96bd5fa5ccd6832f300be8a28b4211a6	docs/version-history.tsv
