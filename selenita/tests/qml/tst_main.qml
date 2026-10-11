@@ -6,8 +6,8 @@ import org.celestina.selenita 1.0
 // starts its activation adapter, shows the three cards in order, a second
 // launch brings it forward, a key binding's capture is taken, the window
 // stays for a capture, a key-binding launch shows only the corner preview
-// (the window only when it fails), and a file handed back goes to the
-// controller.
+// (the window only when it fails) and, while it records, only the
+// recording bar, and a file handed back goes to the controller.
 TestCase {
     id: testCase
     name: "Main"
@@ -151,6 +151,43 @@ TestCase {
         verify(!window.preview.visible, "the preview went with the window, at once")
         verify(!SelenitaController.previewVisible)
         verify(SelenitaController.calls.indexOf("dismissPreview:/fake/Captura 1.png") >= 0)
+    }
+
+    // `--record-focused` (`Selenita1.RecordFocused`) toggles the focused
+    // recording; while it records the bar is the only window of a
+    // key-binding launch (SEL-4-A).
+    function test_a_focused_key_binding_records_with_only_the_bar() {
+        SelenitaController.reset()
+        SelenitaController.launchCapture = true
+        const window = createTemporaryObject(mainComponent, testCase)
+        verify(!window.visible)
+        window.activation.recordingRequested("focused")
+        compare(SelenitaController.calls, ["toggleFocusedRecording:false"])
+        compare(SelenitaController.recordingState, "recording")
+        verify(window.recordingBar.visible, "the bar shows")
+        compare(window.recordingBar.title, qsTr("Grabando"))
+        wait(100)
+        verify(!window.visible, "the main window stays hidden")
+        verify(!window.preview.visible)
+        window.activation.recordingRequested("focused")
+        compare(SelenitaController.recordingState, "idle")
+        verify(!window.recordingBar.visible)
+        compare(SelenitaController.history.length, 1)
+        SelenitaController.launchCapture = false
+    }
+
+    // Closing the window while it records hides the bar at once, so Qt
+    // finds no window left and quits (the recording is finished then).
+    function test_closing_the_window_takes_the_bar_with_it() {
+        SelenitaController.reset()
+        const window = createTemporaryObject(mainComponent, testCase)
+        tryVerify(function() { return window.visible })
+        window.activation.recordingRequested("toggle")
+        verify(window.recordingBar.visible)
+        window.close()
+        verify(!window.visible)
+        verify(!window.recordingBar.visible, "the bar went with the window, at once")
+        compare(SelenitaController.recordingState, "recording", "the quit finishes it, not the bar")
     }
 
     function test_a_file_handed_back_goes_to_the_controller() {

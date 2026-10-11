@@ -10,7 +10,9 @@
 //! [`CAPTURE_INTERFACE`] on the connection that owns the name: `Capture(s)`
 //! takes `screen`, `window` or `region` (the niri key bindings' `selenita
 //! --screenshot`), `ToggleRecording()` starts a recording or stops the one
-//! under way (`selenita --record`), `StopRecording()` only stops
+//! under way (`selenita --record`), `RecordFocused()` does the same but
+//! records the monitor niri has focused without the output dialog
+//! (`selenita --record-focused`, SEL-4-A), `StopRecording()` only stops
 //! (`selenita --stop`) and `Adopt(s key)` hands back a file another
 //! application wrote (Fluorita's edited copy, ADR 0012 PRV-1): its
 //! `pathkey` key goes on to the window, which lets the capture worker
@@ -52,7 +54,8 @@ pub mod qobject {
         #[qsignal]
         fn capture_requested(self: Pin<&mut SelenitaActivation>, target: QString);
 
-        /// A key binding asked about the recording: `toggle` or `stop`.
+        /// A key binding asked about the recording: `toggle`, `focused`
+        /// (toggle, a start recording the focused monitor) or `stop`.
         #[qsignal]
         fn recording_requested(self: Pin<&mut SelenitaActivation>, action: QString);
 
@@ -99,6 +102,9 @@ impl qobject::SelenitaActivation {
 pub enum RecordingAction {
     /// Start, or stop the one under way.
     Toggle,
+    /// Start a recording of the focused monitor without the output dialog,
+    /// or stop the one under way.
+    ToggleFocused,
     /// Stop the one under way, if any.
     Stop,
 }
@@ -109,6 +115,7 @@ impl RecordingAction {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Toggle => "toggle",
+            Self::ToggleFocused => "focused",
             Self::Stop => "stop",
         }
     }
@@ -117,6 +124,7 @@ impl RecordingAction {
     fn method(self) -> &'static str {
         match self {
             Self::Toggle => "ToggleRecording",
+            Self::ToggleFocused => "RecordFocused",
             Self::Stop => "StopRecording",
         }
     }
@@ -147,9 +155,9 @@ fn inbox() -> std::sync::MutexGuard<'static, Inbox> {
 }
 
 /// Whether a key binding's request waits for the window: this launch came
-/// from `--screenshot` or `--record` and the window has not started yet.
-/// Such a launch never shows the main window; the corner preview shows the
-/// result.
+/// from `--screenshot`, `--record` or `--record-focused` and the window has
+/// not started yet. Such a launch never shows the main window; the recording
+/// bar shows while it records and the corner preview shows the result.
 pub fn launch_waiting() -> bool {
     inbox()
         .waiting
@@ -266,6 +274,10 @@ impl Capturer {
         self.recording(RecordingAction::Toggle);
     }
 
+    fn record_focused(&self) {
+        self.recording(RecordingAction::ToggleFocused);
+    }
+
     fn stop_recording(&self) {
         self.recording(RecordingAction::Stop);
     }
@@ -318,7 +330,7 @@ pub fn send_capture(kind: TargetKind) -> Result<bool, ActivationError> {
     send("Capture", &(kind.as_str(),))
 }
 
-/// `selenita --record`'s and `--stop`'s first step: asks a running Selenita.
+/// `selenita --record`'s, `--record-focused`'s and `--stop`'s first step: asks a running Selenita.
 /// `Ok(true)` when it answered; `Ok(false)` when nobody runs.
 ///
 /// # Errors
@@ -418,9 +430,14 @@ mod tests {
         let tally = Tally::default();
         let capturer = Capturer(Box::new(tally.clone()));
         capturer.recording(RecordingAction::Toggle);
+        capturer.recording(RecordingAction::ToggleFocused);
         capturer.recording(RecordingAction::Stop);
-        assert_eq!(tally.seen(), ["recording:toggle", "recording:stop"]);
+        assert_eq!(
+            tally.seen(),
+            ["recording:toggle", "recording:focused", "recording:stop"]
+        );
         assert_eq!(RecordingAction::Toggle.method(), "ToggleRecording");
+        assert_eq!(RecordingAction::ToggleFocused.method(), "RecordFocused");
         assert_eq!(RecordingAction::Stop.method(), "StopRecording");
     }
 

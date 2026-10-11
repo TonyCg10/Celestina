@@ -19,6 +19,16 @@
 //! start the recorder is probed for the muxer, so a missing
 //! `gst-plugins-good` is said before anything is recorded.
 //!
+//! A focused start (`selenita --record-focused`, SEL-4-A) first asks niri
+//! for the focused output and leaves a one-shot pick request for the
+//! portal's chooser (`selenita_core::pick`), so `selenita --pick-output`
+//! answers it without the dialog; when niri cannot say, the start goes on
+//! without one and the dialog asks. Whatever start it is, a request nobody
+//! consumed is removed before and after the portal is asked, so a plain
+//! start always shows the dialog. A discard (the recording bar's
+//! «Descartar») kills the child and removes the hidden file: nothing is
+//! published, nothing joins the history and no preview shows.
+//!
 //! When the window quits ([`quit`], after the event loop ends) a recording
 //! under way is stopped the same way and its entry written to the history
 //! file directly, the Qt thread being gone; a portal dialog still open is
@@ -34,6 +44,8 @@ use std::time::{Duration, SystemTime};
 
 use celestina_core::xdg;
 use selenita_core::names::recordings_dir_in;
+use selenita_core::niri::{self, NiriError};
+use selenita_core::pick;
 use selenita_core::record::{
     self, inspect_argv, take_stop_request, Event, Pipeline, Source, State, VideoEncoder, INSPECTOR,
     LAUNCHER, MUXER,
@@ -79,6 +91,8 @@ pub enum RecordError {
     Busy,
     /// Nothing is recording.
     NotRecording,
+    /// A discarded recording's hidden file could not be removed.
+    Discard(String),
     /// The worker thread is gone.
     WorkerGone,
 }
@@ -109,6 +123,7 @@ impl RecordError {
             Self::Write(_) => "No se ha podido guardar la grabación.".to_owned(),
             Self::Busy => "Ya hay una grabación en curso.".to_owned(),
             Self::NotRecording => "No hay ninguna grabación en curso.".to_owned(),
+            Self::Discard(_) => "No se ha podido borrar la grabación descartada.".to_owned(),
             Self::WorkerGone => "La grabación no está disponible.".to_owned(),
         }
     }
@@ -121,6 +136,9 @@ impl std::fmt::Display for RecordError {
             Self::Tool(error) => write!(formatter, "{error}"),
             Self::Exited(exit) => write!(formatter, "exited {:?}: {}", exit.code, exit.stderr),
             Self::Write(detail) | Self::Missing(detail) => write!(formatter, "{self:?}: {detail}"),
+            Self::Discard(detail) => {
+                write!(formatter, "cannot remove the discarded file: {detail}")
+            }
             other => write!(formatter, "{other:?}"),
         }
     }
@@ -165,8 +183,13 @@ pub struct Prepared {
 pub trait Recorder: Send {
     /// What is installed; run once at start.
     fn probe(&mut self) -> Probe;
-    /// Asks for the monitor (the person may be choosing).
-    fn prepare(&mut self) -> Result<Prepared, RecordError>;
+    /// The name of the output niri has focused: a focused start's monitor.
+    fn focused_output(&mut self) -> Result<String, NiriError>;
+    /// Asks for the monitor (the person may be choosing). `pick` is where a
+    /// focused start left its request: the real portal's chooser reads it
+    /// itself (`selenita --pick-output`); the fake reads it as that chooser
+    /// would.
+    fn prepare(&mut self, pick: Option<&Path>) -> Result<Prepared, RecordError>;
     /// Starts the pipeline into `pipeline.out`, handing `fd` to the child.
     fn start(&mut self, pipeline: &Pipeline, fd: Option<OwnedFd>) -> Result<(), RecordError>;
     /// `Some` once the child exited on its own.
@@ -231,7 +254,12 @@ impl Recorder for Real {
         }
     }
 
-    fn prepare(&mut self) -> Result<Prepared, RecordError> {
+    fn focused_output(&mut self) -> Result<String, NiriError> {
+        let socket = niri::socket()?;
+        niri::focused_output(&socket).map(|output| output.name)
+    }
+
+    fn prepare(&mut self, _pick: Option<&Path>) -> Result<Prepared, RecordError> {
         let (session, stream) = portal::open_monitor().map_err(RecordError::Portal)?;
         self.session = Some(session);
         // The one line a live diagnosis needs: the node the `Start` response
@@ -298,17 +326,37 @@ impl Recorder for Real {
 
 /// `SELENITA_FAKE=1`: no portal, no child. A start writes a few bytes to the
 /// file and the stop a few more, so the recording lands in the history like
-/// a real one; nothing leaves the process but a line on stderr.
-#[derive(Default)]
+/// a real one; nothing leaves the process but a line on stderr. Its niri has
+/// `FAKE-1` focused (a test sets `focused` to `None` for a niri that cannot
+/// say), and its portal consumes a pick request as `selenita --pick-output`
+/// would, keeping the output it named in `chosen`.
 pub struct Fake {
     out: Option<PathBuf>,
     pub started: Vec<Pipeline>,
-    /// Every call, in order: `prepare`, `start`, `stop`, `abandon`.
+    /// Every call, in order: `focused_output`, `prepare`, `start`, `stop`,
+    /// `abandon`.
     pub calls: Vec<&'static str>,
+    pub focused: Option<String>,
+    /// The output the last `prepare` took from a pick request, if any.
+    pub chosen: Option<String>,
+}
+
+impl Default for Fake {
+    fn default() -> Self {
+        Self {
+            out: None,
+            started: Vec::new(),
+            calls: Vec::new(),
+            focused: Some(FAKE_OUTPUT.to_owned()),
+            chosen: None,
+        }
+    }
 }
 
 /// The node the fake portal answers with.
 pub const FAKE_NODE: u32 = 1;
+/// The output the fake niri has focused, as the capture backend's fake.
+pub const FAKE_OUTPUT: &str = "FAKE-1";
 
 impl Recorder for Fake {
     fn probe(&mut self) -> Probe {
@@ -321,8 +369,23 @@ impl Recorder for Fake {
         }
     }
 
-    fn prepare(&mut self) -> Result<Prepared, RecordError> {
+    fn focused_output(&mut self) -> Result<String, NiriError> {
+        self.calls.push("focused_output");
+        self.focused.clone().ok_or(NiriError::NoFocusedOutput)
+    }
+
+    fn prepare(&mut self, pick: Option<&Path>) -> Result<Prepared, RecordError> {
         self.calls.push("prepare");
+        self.chosen = match pick.map(|file| pick::take_request(file, SystemTime::now())) {
+            Some(Ok(pick::Taken::Fresh(request))) => Some(request.output().to_owned()),
+            _ => None,
+        };
+        match &self.chosen {
+            Some(output) => {
+                eprintln!("selenita-fake: the chooser took {output} without its dialog")
+            }
+            None => eprintln!("selenita-fake: the chooser's dialog asks"),
+        }
         Ok(Prepared {
             source: Source {
                 node: FAKE_NODE,
@@ -368,6 +431,9 @@ pub struct Request {
     pub audio: bool,
     /// Product copy from the Qt seam: the file name's stem (the recording word).
     pub stem: String,
+    /// The monitor niri has focused, without the output dialog
+    /// (`--record-focused`).
+    pub focused: bool,
 }
 
 /// What the worker reports to the Qt thread.
@@ -381,6 +447,8 @@ pub enum Report {
     Started(SystemTime),
     /// The file is published: its entry, for the history.
     Finished(Entry),
+    /// The recording was discarded: its file is gone, nothing to show.
+    Discarded,
     /// The recording failed, in Spanish.
     Failed(String),
 }
@@ -388,26 +456,35 @@ pub enum Report {
 enum Job {
     Toggle(Request),
     Stop,
+    /// Stop and delete the file.
+    Discard,
     /// The window quits: finish what records, then end; the sender hears
     /// when it is done.
     Quit(Sender<()>),
 }
 
-/// Where a recording's files go and where the stop file is.
+/// Where a recording's files go, where the stop file is and where a focused
+/// start leaves its pick request.
 pub struct Places {
     /// The recordings folder inside the videos folder; made at start.
     pub recordings: PathBuf,
     pub stop_file: PathBuf,
+    /// The runtime folder's pick request; `None` without a runtime folder
+    /// (the chooser reads only that one, so no other place would do).
+    pub pick_request: Option<PathBuf>,
 }
 
 impl Places {
-    /// `Grabaciones` in the [`videos_folder`], and the runtime folder's
-    /// stop file. Blocking.
+    /// `Grabaciones` in the [`videos_folder`], the runtime folder's stop
+    /// file and pick request. Blocking.
     pub(crate) fn resolve() -> Self {
-        let runtime = xdg::runtime_dir().unwrap_or_else(|_| std::env::temp_dir());
+        let runtime = xdg::runtime_dir();
+        let pick_request = runtime.as_deref().ok().map(pick::request_file);
+        let runtime = runtime.unwrap_or_else(|_| std::env::temp_dir());
         Self {
             recordings: recordings_dir_in(&videos_folder()),
             stop_file: record::stop_file(&runtime),
+            pick_request,
         }
     }
 }
@@ -558,7 +635,27 @@ impl Session {
         places: &Places,
         request: &Request,
     ) -> Result<(), RecordError> {
-        let prepared = recorder.prepare()?;
+        let pick = places.pick_request.as_deref();
+        match pick {
+            // A request nobody consumed must not answer this start's chooser.
+            Some(file) => {
+                remove_unconsumed(file);
+                if request.focused {
+                    aim(recorder, file);
+                }
+            }
+            None if request.focused => eprintln!(
+                "selenita: recording: no runtime folder for a pick request; the chooser's dialog asks"
+            ),
+            None => {}
+        }
+        let prepared = recorder.prepare(pick);
+        // The chooser consumed it, or never ran (a backend without
+        // Selenita's chooser): either way it goes now.
+        if let Some(file) = pick {
+            remove_unconsumed(file);
+        }
+        let prepared = prepared?;
         std::fs::create_dir_all(&places.recordings)
             .map_err(|error| RecordError::Write(error.to_string()))?;
         let hidden = hidden_file(&places.recordings);
@@ -608,6 +705,46 @@ impl Session {
             Err(_) => self.fail(report),
         }
         result
+    }
+
+    /// Stops the recording without keeping it: the child is killed (its
+    /// file is going, so there is nothing for the muxer to finish) and the
+    /// hidden file removed. Nothing is published and no entry made.
+    ///
+    /// # Errors
+    ///
+    /// [`RecordError::NotRecording`] when nothing records, and
+    /// [`RecordError::Discard`] when the hidden file could not be removed;
+    /// the session is idle either way.
+    pub fn discard(
+        &mut self,
+        recorder: &mut dyn Recorder,
+        report: &mut dyn FnMut(Report),
+    ) -> Result<(), RecordError> {
+        if self.state != State::Recording {
+            return Err(RecordError::NotRecording);
+        }
+        self.step(Event::Stop, report);
+        recorder.abandon();
+        let removed = match self.active.take() {
+            Some(active) => match std::fs::remove_file(&active.hidden) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(format!("{}: {error}", active.hidden.display())),
+            },
+            None => Ok(()),
+        };
+        match removed {
+            Ok(()) => {
+                self.step(Event::Stopped, report);
+                report(Report::Discarded);
+                Ok(())
+            }
+            Err(detail) => {
+                self.fail(report);
+                Err(RecordError::Discard(detail))
+            }
+        }
     }
 
     /// The child ended on its own. With status 0 the source sent EOS and
@@ -701,6 +838,36 @@ impl Session {
         }
         self.step(Event::Failure, report);
         self.step(Event::Acknowledged, report);
+    }
+}
+
+/// Asks the recorder's niri for the focused output and leaves the pick
+/// request for it in `file`; when either fails the start goes on without
+/// one (the chooser's dialog asks), which is logged.
+fn aim(recorder: &mut dyn Recorder, file: &Path) {
+    let output = match recorder.focused_output() {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!(
+                "selenita: recording: niri did not name the focused output ({error}); the chooser's dialog asks"
+            );
+            return;
+        }
+    };
+    match pick::write_request(file, &output, SystemTime::now()) {
+        Ok(()) => eprintln!("selenita: recording: the chooser is asked for {output}"),
+        Err(error) => eprintln!(
+            "selenita: recording: no pick request for {output} ({error}); the chooser's dialog asks"
+        ),
+    }
+}
+
+/// Removes a pick request nobody consumed, saying so.
+fn remove_unconsumed(file: &Path) {
+    match pick::clear_request(file) {
+        Ok(true) => eprintln!("selenita: recording: an unconsumed pick request was removed"),
+        Ok(false) => {}
+        Err(error) => eprintln!("selenita: recording: {error}"),
     }
 }
 
@@ -813,6 +980,10 @@ impl Worker {
                         Job::Stop => session
                             .stop(recorder.as_mut(), &places, &mut tell)
                             .map(|_| ()),
+                        // As a stop, a discard with nothing recording says
+                        // nothing.
+                        Job::Discard if session.state() != State::Recording => Ok(()),
+                        Job::Discard => session.discard(recorder.as_mut(), &mut tell),
                         Job::Quit(done) => {
                             if let Some(entry) = session.quit(recorder.as_mut(), &places, &mut tell)
                             {
@@ -854,6 +1025,18 @@ impl Worker {
             .send(Job::Stop)
             .map_err(|_| RecordError::WorkerGone)
     }
+
+    /// Stops the recording under way and deletes its file; nothing happens
+    /// when none is.
+    ///
+    /// # Errors
+    ///
+    /// [`RecordError::WorkerGone`] when the thread is gone.
+    pub fn discard(&self) -> Result<(), RecordError> {
+        self.jobs
+            .send(Job::Discard)
+            .map_err(|_| RecordError::WorkerGone)
+    }
 }
 
 #[cfg(test)]
@@ -862,11 +1045,12 @@ mod tests {
         make, Fake, Places, Probe, RecordError, Recorder, Report, Request, Session, FAKE_NODE,
     };
     use selenita_core::names::recordings_dir_in;
+    use selenita_core::niri::NiriError;
     use selenita_core::record::{Pipeline, State};
     use selenita_core::runner::Exit;
     use selenita_core::EntryKind;
     use std::os::fd::OwnedFd;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     struct Scratch(PathBuf);
@@ -884,7 +1068,13 @@ mod tests {
             Places {
                 recordings: recordings_dir_in(&self.0.join("videos")),
                 stop_file: self.0.join("run").join("selenita").join("stop"),
+                pick_request: Some(self.pick_request()),
             }
+        }
+
+        /// The runtime folder's pick request, `run/selenita/pick-output`.
+        fn pick_request(&self) -> PathBuf {
+            selenita_core::pick::request_file(&self.0.join("run"))
         }
 
         /// The recordings folder, `videos/Grabaciones`, spelled out so the
@@ -904,6 +1094,7 @@ mod tests {
         Request {
             audio,
             stem: "Recording".to_owned(),
+            focused: false,
         }
     }
 
@@ -1008,7 +1199,11 @@ mod tests {
                 heard.push(r)
             })
             .expect("started");
-        assert_eq!(fake.calls, ["prepare", "start"]);
+        assert_eq!(
+            fake.calls,
+            ["prepare", "start"],
+            "a plain start asks niri nothing"
+        );
         assert_eq!(fake.started[0].source.node, FAKE_NODE);
         assert_eq!(fake.started[0].source.fd, None, "no remote: no fd= token");
         let argv: Vec<String> = fake.started[0]
@@ -1036,7 +1231,10 @@ mod tests {
             fn probe(&mut self) -> Probe {
                 Fake::default().probe()
             }
-            fn prepare(&mut self) -> Result<super::Prepared, RecordError> {
+            fn focused_output(&mut self) -> Result<String, NiriError> {
+                Err(NiriError::NoSocket)
+            }
+            fn prepare(&mut self, _pick: Option<&Path>) -> Result<super::Prepared, RecordError> {
                 Ok(super::Prepared {
                     source: selenita_core::record::Source { node: 57, fd: None },
                     fd: None,
@@ -1205,7 +1403,10 @@ mod tests {
                 va_element: true,
             }
         }
-        fn prepare(&mut self) -> Result<super::Prepared, RecordError> {
+        fn focused_output(&mut self) -> Result<String, NiriError> {
+            Err(NiriError::NoSocket)
+        }
+        fn prepare(&mut self, _pick: Option<&Path>) -> Result<super::Prepared, RecordError> {
             if self.cancel {
                 return Err(RecordError::Portal(crate::portal::PortalError::Cancelled));
             }
@@ -1308,7 +1509,10 @@ mod tests {
         fn probe(&mut self) -> Probe {
             Fake::default().probe()
         }
-        fn prepare(&mut self) -> Result<super::Prepared, RecordError> {
+        fn focused_output(&mut self) -> Result<String, NiriError> {
+            Err(NiriError::NoSocket)
+        }
+        fn prepare(&mut self, _pick: Option<&Path>) -> Result<super::Prepared, RecordError> {
             Ok(super::Prepared {
                 source: selenita_core::record::Source { node: 7, fd: None },
                 fd: None,
@@ -1450,6 +1654,264 @@ mod tests {
         );
     }
 
+    fn focused(audio: bool) -> Request {
+        Request {
+            focused: true,
+            ..request(audio)
+        }
+    }
+
+    /// «Descartar»: the child is killed rather than finished, the hidden
+    /// file goes, nothing is published and the session is idle again, with
+    /// a report of its own and no `Finished`.
+    #[test]
+    fn a_discard_removes_the_hidden_file_and_publishes_nothing() {
+        let scratch = Scratch::new("discard");
+        let mut fake = Fake::default();
+        let mut session = Session::new(fake.probe());
+        let mut heard = Vec::new();
+        session
+            .start(&mut fake, &scratch.places(), &request(false), &mut |r| {
+                heard.push(r)
+            })
+            .expect("started");
+        let hidden = fake.started[0].out.clone();
+        assert!(hidden.exists());
+        session
+            .discard(&mut fake, &mut |r| heard.push(r))
+            .expect("discarded");
+        assert_eq!(session.state(), State::Idle);
+        assert!(session.active.is_none());
+        assert_eq!(
+            fake.calls,
+            ["prepare", "start", "abandon"],
+            "killed, not stopped"
+        );
+        assert!(!hidden.exists(), "the hidden file is gone");
+        assert!(std::fs::read_dir(scratch.recordings())
+            .expect("folder")
+            .next()
+            .is_none());
+        assert_eq!(
+            states(&heard),
+            [
+                State::Preparing,
+                State::Recording,
+                State::Stopping,
+                State::Idle
+            ]
+        );
+        assert!(heard.iter().any(|r| matches!(r, Report::Discarded)));
+        assert!(!heard.iter().any(|r| matches!(r, Report::Finished(_))));
+        // Nothing left to discard.
+        assert!(matches!(
+            session.discard(&mut fake, &mut |_| {}),
+            Err(RecordError::NotRecording)
+        ));
+        // The next recording starts and publishes as usual.
+        session
+            .start(&mut fake, &scratch.places(), &request(false), &mut |_| {})
+            .expect("started again");
+        session
+            .stop(&mut fake, &scratch.places(), &mut |_| {})
+            .expect("published");
+    }
+
+    /// A hidden file that cannot be removed fails the discard with its own
+    /// notice; the session is idle all the same.
+    #[test]
+    fn a_discard_that_cannot_remove_the_file_says_so() {
+        /// A child whose output is a folder with something in it, which
+        /// `remove_file` refuses.
+        struct Stubborn;
+        impl Recorder for Stubborn {
+            fn probe(&mut self) -> Probe {
+                Fake::default().probe()
+            }
+            fn focused_output(&mut self) -> Result<String, NiriError> {
+                Err(NiriError::NoSocket)
+            }
+            fn prepare(&mut self, _pick: Option<&Path>) -> Result<super::Prepared, RecordError> {
+                Ok(super::Prepared {
+                    source: selenita_core::record::Source { node: 7, fd: None },
+                    fd: None,
+                })
+            }
+            fn start(
+                &mut self,
+                pipeline: &Pipeline,
+                _fd: Option<OwnedFd>,
+            ) -> Result<(), RecordError> {
+                std::fs::create_dir_all(pipeline.out.join("inside"))
+                    .map_err(|e| RecordError::Write(e.to_string()))
+            }
+            fn exited(&mut self) -> Option<Exit> {
+                None
+            }
+            fn stop(&mut self) -> Result<(), RecordError> {
+                panic!("a discard never stops")
+            }
+            fn abandon(&mut self) {}
+        }
+        let scratch = Scratch::new("stubborn");
+        let mut stubborn = Stubborn;
+        let mut session = Session::new(stubborn.probe());
+        let mut heard = Vec::new();
+        session
+            .start(
+                &mut stubborn,
+                &scratch.places(),
+                &request(false),
+                &mut |r| heard.push(r),
+            )
+            .expect("started");
+        let error = session
+            .discard(&mut stubborn, &mut |r| heard.push(r))
+            .expect_err("the folder stays");
+        assert!(matches!(error, RecordError::Discard(_)), "{error}");
+        assert_eq!(
+            error.message_es(),
+            "No se ha podido borrar la grabación descartada."
+        );
+        assert_eq!(session.state(), State::Idle);
+        assert_eq!(
+            states(&heard),
+            [
+                State::Preparing,
+                State::Recording,
+                State::Stopping,
+                State::Failed,
+                State::Idle
+            ]
+        );
+        assert!(!heard.iter().any(|r| matches!(r, Report::Discarded)));
+    }
+
+    /// A focused start asks niri first and leaves the request the chooser
+    /// takes, so the portal casts that output without its dialog; the
+    /// request is gone once the portal answered.
+    #[test]
+    fn a_focused_start_leaves_the_request_for_the_chooser() {
+        let scratch = Scratch::new("focused");
+        let mut fake = Fake::default();
+        let mut session = Session::new(fake.probe());
+        session
+            .start(&mut fake, &scratch.places(), &focused(false), &mut |_| {})
+            .expect("started");
+        assert_eq!(fake.calls, ["focused_output", "prepare", "start"]);
+        assert_eq!(fake.chosen.as_deref(), Some("FAKE-1"));
+        assert!(!scratch.pick_request().exists(), "consumed");
+        assert_eq!(session.state(), State::Recording);
+        session
+            .stop(&mut fake, &scratch.places(), &mut |_| {})
+            .expect("stopped");
+    }
+
+    /// When niri cannot name the focused output the start goes on without a
+    /// request: the chooser's dialog asks, as for a plain start.
+    #[test]
+    fn without_niri_a_focused_start_leaves_no_request() {
+        let scratch = Scratch::new("no-niri");
+        let mut fake = Fake {
+            focused: None,
+            ..Fake::default()
+        };
+        let mut session = Session::new(fake.probe());
+        session
+            .start(&mut fake, &scratch.places(), &focused(false), &mut |_| {})
+            .expect("started all the same");
+        assert_eq!(fake.calls, ["focused_output", "prepare", "start"]);
+        assert_eq!(fake.chosen, None, "no request reached the chooser");
+        assert!(!scratch.pick_request().exists());
+        assert_eq!(session.state(), State::Recording);
+        session
+            .stop(&mut fake, &scratch.places(), &mut |_| {})
+            .expect("stopped");
+        // Without a runtime folder there is nowhere to leave one either.
+        let mut fake = Fake::default();
+        let mut session = Session::new(fake.probe());
+        let places = Places {
+            pick_request: None,
+            ..scratch.places()
+        };
+        session
+            .start(&mut fake, &places, &focused(false), &mut |_| {})
+            .expect("started");
+        assert_eq!(fake.calls, ["prepare", "start"]);
+        assert_eq!(fake.chosen, None);
+    }
+
+    /// A plain start never meets a request: one left over (fresh, from a
+    /// start whose chooser never ran) is removed before the portal is
+    /// asked, and one the portal's chooser never consumed is removed after.
+    #[test]
+    fn a_plain_start_shows_the_dialog_whatever_was_left_over() {
+        let scratch = Scratch::new("leftover");
+        selenita_core::pick::write_request(
+            &scratch.pick_request(),
+            "DP-9",
+            std::time::SystemTime::now(),
+        )
+        .expect("left over");
+        let mut fake = Fake::default();
+        let mut session = Session::new(fake.probe());
+        session
+            .start(&mut fake, &scratch.places(), &request(false), &mut |_| {})
+            .expect("started");
+        assert_eq!(fake.chosen, None, "the leftover never answered");
+        assert!(!scratch.pick_request().exists());
+        session
+            .stop(&mut fake, &scratch.places(), &mut |_| {})
+            .expect("stopped");
+
+        /// A portal whose chooser is not Selenita's: it never reads the
+        /// request, which is there while it is asked.
+        struct Deaf {
+            saw: bool,
+            pick: PathBuf,
+        }
+        impl Recorder for Deaf {
+            fn probe(&mut self) -> Probe {
+                Fake::default().probe()
+            }
+            fn focused_output(&mut self) -> Result<String, NiriError> {
+                Ok("DP-3".to_owned())
+            }
+            fn prepare(&mut self, pick: Option<&Path>) -> Result<super::Prepared, RecordError> {
+                assert_eq!(pick, Some(self.pick.as_path()));
+                self.saw = self.pick.exists();
+                Ok(super::Prepared {
+                    source: selenita_core::record::Source { node: 7, fd: None },
+                    fd: None,
+                })
+            }
+            fn start(
+                &mut self,
+                pipeline: &Pipeline,
+                _fd: Option<OwnedFd>,
+            ) -> Result<(), RecordError> {
+                std::fs::write(&pipeline.out, b"x").map_err(|e| RecordError::Write(e.to_string()))
+            }
+            fn exited(&mut self) -> Option<Exit> {
+                None
+            }
+            fn stop(&mut self) -> Result<(), RecordError> {
+                Ok(())
+            }
+            fn abandon(&mut self) {}
+        }
+        let mut deaf = Deaf {
+            saw: false,
+            pick: scratch.pick_request(),
+        };
+        let mut session = Session::new(deaf.probe());
+        session
+            .start(&mut deaf, &scratch.places(), &focused(false), &mut |_| {})
+            .expect("started");
+        assert!(deaf.saw, "the request was there while the portal was asked");
+        assert!(!scratch.pick_request().exists(), "and gone after");
+    }
+
     #[test]
     fn every_error_has_spanish_words() {
         for error in [
@@ -1458,6 +1920,7 @@ mod tests {
             RecordError::NoFile,
             RecordError::NoSignal,
             RecordError::Missing("mp4mux".to_owned()),
+            RecordError::Discard("/videos/.selenita-1-1.mp4: busy".to_owned()),
             RecordError::Portal(crate::portal::PortalError::Cancelled),
         ] {
             assert!(!error.message_es().is_empty());

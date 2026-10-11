@@ -5,10 +5,12 @@ import "components"
 
 // Selenita's window: one window, no strip, the cards stacked and scrolled as
 // one (design §5.3): the capture, the recording and the history; beside it
-// the corner preview of the latest result, a window of its own.
+// the corner preview of the latest result and, while it records, the
+// recording bar, each a window of its own.
 // The window stays on screen while it captures (a capture may be of Selenita
-// itself); a key-binding launch (`--screenshot`, `--record`) keeps it hidden
-// and shows only the preview, unless the capture fails.
+// itself); a key-binding launch (`--screenshot`, `--record`,
+// `--record-focused`) keeps it hidden and shows only the bar and the
+// preview, unless the capture or the recording fails.
 ApplicationWindow {
     id: window
 
@@ -16,6 +18,8 @@ ApplicationWindow {
     readonly property alias activation: activationAdapter
     // The corner preview, for the smoke and the tests.
     readonly property alias preview: previewWindow
+    // The recording bar, for the smoke and the tests.
+    readonly property alias recordingBar: recordingBarWindow
 
     // Takes a capture with the card's choices, as the button does.
     function startCapture() {
@@ -36,10 +40,12 @@ ApplicationWindow {
     // recording without the window: the corner preview shows the result.
     visible: !SelenitaController.launchCapture
     // Closing the window ends Selenita, as it did before the preview: the
-    // preview, a top-level window of its own, goes at once so Qt finds no
-    // window left and quits (a recording under way is finished then).
+    // preview and the recording bar, top-level windows of their own, go at
+    // once so Qt finds no window left and quits (a recording under way is
+    // finished then).
     onClosing: {
         previewWindow.hideNow()
+        recordingBarWindow.hideNow()
         if (SelenitaController.previewVisible)
             SelenitaController.dismissPreview()
     }
@@ -109,6 +115,7 @@ ApplicationWindow {
         function onLaunchFinished() {
             if (!window.visible) {
                 previewWindow.hideNow()
+                recordingBarWindow.hideNow()
                 Qt.quit()
             }
         }
@@ -173,6 +180,11 @@ ApplicationWindow {
         id: previewWindow
     }
 
+    // The recording bar: its own frameless window, placed by niri's rule.
+    RecordingBar {
+        id: recordingBarWindow
+    }
+
     NoticePill {
         id: notice
         anchors.horizontalCenter: parent.horizontalCenter
@@ -200,6 +212,33 @@ ApplicationWindow {
         interval: 2500
         running: SelenitaController.smokeReport && SelenitaController.fake
         onTriggered: SelenitaController.stopRecording()
+    }
+
+    // Development only: the smoke reads the recording bar while the fake
+    // recording runs.
+    Timer {
+        interval: 2000
+        running: SelenitaController.smokeReport && SelenitaController.fake
+        onTriggered: console.log("selenita-smoke-bar:"
+                                 + " recording=" + SelenitaController.recordingState
+                                 + " bar=" + (recordingBarWindow.visible ? "shown" : "hidden")
+                                 + " title=" + recordingBarWindow.title)
+    }
+
+    // Development only: a `--record-focused` launch's smoke reads the bar
+    // while the fake recording runs, discards the recording from it as its
+    // «Descartar» does and expects the process to end with no file.
+    Timer {
+        interval: 1500
+        running: SelenitaController.smokeDiscard && SelenitaController.fake
+        onTriggered: {
+            console.log("selenita-smoke-discard:"
+                        + " recording=" + SelenitaController.recordingState
+                        + " bar=" + (recordingBarWindow.visible ? "shown" : "hidden")
+                        + " shown=" + window.visible
+                        + " preview=" + (previewWindow.visible ? "shown" : "hidden"))
+            SelenitaController.discardRecording()
+        }
     }
 
     // Development only: a key-binding launch's smoke dismisses the preview
@@ -231,6 +270,7 @@ ApplicationWindow {
                                  + " lastRecording=" + (SelenitaController.lastRecordingName !== "")
                                  + " shown=" + window.visible
                                  + " preview=" + (previewWindow.visible ? "shown" : "hidden")
+                                 + " bar=" + (recordingBarWindow.visible ? "shown" : "hidden")
                                  + " fake=" + SelenitaController.fake
                                  + " textScale=" + CelestinaTheme.textScale
                                  + " fontBody=" + CelestinaTheme.fontBody)

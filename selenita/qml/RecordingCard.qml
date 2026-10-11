@@ -15,49 +15,20 @@ SectionCard {
     // finishing the file.
     readonly property bool inTransit: card.phase === "preparing" || card.phase === "stopping"
     readonly property bool unavailable: SelenitaController.recorderMissing !== ""
-    // Whole seconds since the recording began, kept by the clock below.
-    property int elapsed: 0
+    // Whole seconds since the recording began, kept by the clock the
+    // recording bar shares.
+    readonly property alias elapsed: clock.elapsed
 
     // `m:ss`, the hours only once there are some.
     function elapsedText(seconds: int): string {
-        const hours = Math.floor(seconds / 3600)
-        const minutes = Math.floor((seconds % 3600) / 60)
-        const rest = seconds % 60
-        const two = value => (value < 10 ? "0" : "") + value
-        return hours > 0 ? hours + ":" + two(minutes) + ":" + two(rest)
-                         : minutes + ":" + two(rest)
-    }
-
-    function tick() {
-        card.elapsed = Math.max(0, Math.floor(
-            (Date.now() - SelenitaController.recordingStartedAt) / 1000))
+        return clock.format(seconds)
     }
 
     title: qsTr("Grabación")
 
-    onRecordingChanged: {
-        if (card.recording)
-            card.tick()
-        else
-            card.elapsed = 0
-    }
-
-    // A new origin (the next recording's start) resets the clock at once
-    // rather than on the next second.
-    Connections {
-        target: SelenitaController
-
-        function onRecordingStartedAtChanged() {
-            if (card.recording)
-                card.tick()
-        }
-    }
-
-    Timer {
-        interval: 1000
-        repeat: true
-        running: card.recording
-        onTriggered: card.tick()
+    RecordingClock {
+        id: clock
+        active: card.recording
     }
 
     // The dot, the time and the button.
@@ -95,7 +66,7 @@ SectionCard {
             anchors.right: recordButton.left
             anchors.rightMargin: CelestinaTheme.spaceMd
             anchors.verticalCenter: parent.verticalCenter
-            text: card.recording ? card.elapsedText(card.elapsed)
+            text: card.recording ? clock.text
                   : card.phase === "preparing" ? qsTr("Elige la pantalla en el diálogo del portal…")
                   : card.phase === "stopping" ? qsTr("Terminando el archivo…")
                   : card.unavailable ? qsTr("Falta «%1»: instala gst-plugins-good para grabar.")

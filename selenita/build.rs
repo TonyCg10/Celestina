@@ -40,6 +40,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/KeyMap.qml",
     "qml/components/NoticePill.qml",
     "qml/components/PageScroll.qml",
+    "qml/components/RecordingClock.qml",
     "qml/components/RowDivider.qml",
     "qml/components/SectionCard.qml",
     "qml/components/SettingRow.qml",
@@ -47,6 +48,7 @@ const QML_FILES: &[&str] = &[
     "qml/HistoryCard.qml",
     "qml/HistoryRow.qml",
     "qml/PreviewWindow.qml",
+    "qml/RecordingBar.qml",
     "qml/RecordingCard.qml",
     "qml/Main.qml",
 ];

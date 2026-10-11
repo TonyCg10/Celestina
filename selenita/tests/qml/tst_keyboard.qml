@@ -63,6 +63,16 @@ TestCase {
         return window
     }
 
+    // The offscreen platform activates every window it shows and ignores
+    // `Qt.WindowDoesNotAcceptFocus`, so the recording bar (SEL-4-A) takes
+    // the keyboard when a recording starts; on the session niri's rule
+    // (`open-focused false`) leaves the focus where it was. The window
+    // takes it back here, as it never lost it there.
+    function keepTheKeyboard(window) {
+        window.requestActivate()
+        tryVerify(() => window.active, 5000, "the window keeps the keyboard")
+    }
+
     function takeTwo() {
         SelenitaController.capture(true, "#3e91ff", "#40000000")
         SelenitaController.capture(true, "#3e91ff", "#40000000")
@@ -114,6 +124,7 @@ TestCase {
         // The last recording's button opens it.
         SelenitaController.toggleRecording()
         SelenitaController.stopRecording()
+        testCase.keepTheKeyboard(window)
         SelenitaController.calls = []
         const open = named(content, "openLastRecording")
         tryVerify(() => open.visible)
@@ -133,9 +144,11 @@ TestCase {
     }
 
     function test_r_toggles_the_recording() {
-        openWindow()
+        const window = openWindow()
         keyClick(Qt.Key_R)
         compare(SelenitaController.recordingState, "recording")
+        verify(window.recordingBar.visible, "the bar shows while it records")
+        testCase.keepTheKeyboard(window)
         keyClick(Qt.Key_R)
         compare(SelenitaController.recordingState, "idle")
         compare(SelenitaController.calls, ["toggleRecording:false", "toggleRecording:false"])

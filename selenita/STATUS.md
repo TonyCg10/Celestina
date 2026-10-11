@@ -1,9 +1,15 @@
 # Selenita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** SEL-3 is closed and its
-  [plan](docs/plans/archive/2026-10-10-sel-3-preview-fixes.md) archived; no
-  checkpoint is active. SEL-3-A answers the author's first live use of the
+- **Implementation:** SEL-4 (the recording controls) is active; see its
+  [plan](docs/plans/active/2026-10-10-sel-4-recording-controls.md).
+  SEL-4-A (the recording bar with «Detener» and «Descartar», the discard,
+  `--record-focused` and `--pick-output` as the portal's chooser) is
+  implemented and verified offscreen over the fakes, awaiting its landing;
+  see the [recording bar evidence](docs/evidence/2026-10-10-recording-bar.md).
+  SEL-4-B (pausing by segments) is planned. SEL-3 is closed and its
+  [plan](docs/plans/archive/2026-10-10-sel-3-preview-fixes.md) archived.
+  SEL-3-A answers the author's first live use of the
   corner preview (a blurred preview, a screen key binding that took every
   monitor, the recordings folder's name) and is implemented, verified
   offscreen over the fakes and landed as 1.1.1; see the
@@ -27,7 +33,11 @@
   recording's line after a trash, and the window no longer hiding for a
   capture; see the
   [recording fixes evidence](docs/evidence/2026-10-10-recording-fixes.md)
-- **Author validation:** VAL-SEL-FIXES (SEL-3-A: a sharp preview of a
+- **Author validation:** VAL-SEL-BAR (SEL-4-A: the bar at the top centre
+  without the focus, «Detener» and «Descartar», `V` recording the focused
+  monitor with no dialog, `R` still showing it) pending, once the
+  coordinator has put the bar's rule, the `V` binding and the portal's
+  `chooser_cmd` in place. VAL-SEL-FIXES (SEL-3-A: a sharp preview of a
   three-monitor capture, the screen key binding taking the focused
   monitor only, a recording in `Grabaciones`, the preview floating at the
   corner under the corrected rule) pending. VAL-SEL-PREVIEW (the corner without the focus,
@@ -126,14 +136,43 @@
   its result: once its preview has gone (its five seconds, its ×, a trash,
   or a click whose hand-off to Fluorita has returned), with nothing
   capturing and nothing recording; a cancelled region or a capture with no
-  file ends it at once. A `--record` launch therefore lives while it
-  records, `selenita --stop` or Shift+Print stops and publishes the
-  recording, and the recording's preview ends it. Until then it takes
+  file ends it at once. A `--record` (or `--record-focused`) launch therefore lives while it
+  records, `selenita --stop`, Shift+Print or the bar's «Detener» stops and
+  publishes the recording, and the recording's preview ends it; the
+  bar's «Descartar» ends it at once (SEL-4-A). Until then it takes
   the next key binding itself. A failed capture, a failure after it (the
   clipboard, the history file) or a failed recording shows the main
   window with its notice; from then on, or once a plain launch has raised
   the window, the instance is a plain one and ends when the window is
   closed.
+- The recording bar (SEL-4-A): while a recording is in the `recording`
+  state, however it started, a frameless window titled «Grabando»
+  (`RecordingBar.qml`, `Qt.WindowDoesNotAcceptFocus`, no transient
+  parent) shows a glass pill with the red dot (pulsing, still under
+  reduced motion), the elapsed time (`RecordingClock.qml`, the same clock
+  the recording card now uses) and «Detener» (`stopRecording`: saved,
+  the preview follows) and «Descartar» (`discardRecording`: the worker's
+  discard job kills the child, removes the hidden file, publishes
+  nothing, adds no history row and shows no preview; a key-binding
+  launch then ends; a file that stays is said in the notice,
+  `RecordError::Discard`). The actions are one row the pill grows with,
+  for SEL-4-B's pause button. A compositor's close is refused while it
+  shows; closing the main window or the end of a key-binding launch
+  hides it at once so Qt can quit. A key-binding launch keeps the main
+  window hidden: the bar is its only window while it records.
+- `selenita --record-focused` (`Selenita1.RecordFocused()` for a running
+  instance; a toggle like `--record`) asks niri for the focused output
+  and writes the one-shot request `runtime_dir/selenita/pick-output`
+  (`selenita_core::pick`: `output=` and `written=` in ms, private folder,
+  atomic `0600` file) before asking the portal; without an answer from
+  niri, or without a runtime folder, it starts without one and logs it.
+  Any start removes a request nobody consumed before and after the
+  portal is asked. `selenita --pick-output`, handled first in `main`
+  (no Qt, no bus, no settings), consumes a request at most 30 s old and
+  prints `Monitor: <name>`; otherwise it drops a stale or broken request
+  and `exec`s `/bin/sh -c` with `SELENITA_FALLBACK_CHOOSER` or
+  `"$HOME/.local/bin/celestina" --pick-output`, keeping its standard
+  streams.
 - A second launch raises the window; a path on the command line or in an
   `Open` is ignored.
 - `SELENITA_FAKE=1` routes niri, the tools, the clipboard, the portal, the
@@ -220,9 +259,29 @@
   why the author's first preview opened tiled. The coordinator corrected
   the author's configuration; the README shows `title="^Vista previa"`. `Qt.WindowDoesNotAcceptFocus` is only a hint on Wayland; the
   rule's `open-focused false` is what keeps the focus where it was.
-- A `--record` launch shows nothing while it records (the main window
-  stays hidden by design); the portal's own dialog and the key bindings
-  are the only signs until the preview shows the result.
+- A `--record` launch's only sign while it records is the recording bar
+  (SEL-4-A), placed by niri's rule of the README; without the rule niri
+  opens the bar as any new window (tiled and focused).
+  `Qt.WindowDoesNotAcceptFocus` is only a hint on Wayland, as for the
+  preview. The bar never takes the keyboard, so «Descartar» has no key
+  of its own: the keyboard stops from the card (`R`, «Detener»).
+- The offscreen platform the tests use activates every window it shows
+  and ignores `Qt.WindowDoesNotAcceptFocus`, so a test that records gives
+  the main window the keyboard back after the bar appears
+  (`tst_keyboard.qml`); on the session niri's `open-focused false` does.
+- The bar's pill is drawn inside a transparent rectangular window; whether
+  the compositor's blur stops at the pill's rounded corners is the
+  author's to see (VAL-SEL-BAR).
+- `--record-focused` depends on the portal's chooser being
+  `selenita --pick-output` (`chooser_cmd`, the coordinator's edit); with
+  any other chooser it shows the dialog like `--record`, and its request
+  is removed once the portal has answered. A screencast another program
+  starts within the instant between a focused start's request and the
+  portal's question would take the request instead.
+- The suite's `scripts/activation_contract.py` describes
+  `org.celestina.Selenita1`'s methods in prose without `RecordFocused`;
+  updating that reason is a suite follow-up (the allowlisted interface is
+  unchanged).
 - The last recording's poster stays in `runtime_dir/selenita` until the
   next preview replaces it or the session ends (the runtime folder is
   cleared at logout); a poster left by an earlier process is not removed

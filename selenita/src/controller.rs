@@ -3,7 +3,9 @@
 //! It carries the appearance to the window (`appearanceReducedMotion` and
 //! `appearanceTextScale`, handed to `CelestinaAppearance`), the smoke and
 //! fake switches, the capture card's choices, the recording card's state,
-//! the history, the outputs and the corner preview of the latest result.
+//! the history, the outputs and the corner preview of the latest result; the
+//! recording bar reads the same recording state and asks for the same stop,
+//! or for a discard.
 //! Every capture, every history action, the preview's hand-off to Fluorita
 //! and every file handed back (`Adopt`) is queued to the capture worker
 //! (`capture.rs`) and every recording to the recording worker
@@ -67,11 +69,15 @@ pub mod qobject {
         // `SELENITA_SMOKE_CLOSE` set: the smoke closes the window while the
         // preview shows and expects the process to end.
         #[qproperty(bool, smoke_close, cxx_name = "smokeClose", READ, CONSTANT)]
+        // `SELENITA_SMOKE_DISCARD` set: the smoke reads the recording bar of
+        // a key-binding recording and discards the recording from it.
+        #[qproperty(bool, smoke_discard, cxx_name = "smokeDiscard", READ, CONSTANT)]
         #[qproperty(bool, fake, READ, CONSTANT)]
-        // This launch came from `--screenshot` or `--record` with no
-        // Selenita running: the main window starts hidden and stays hidden
-        // (the corner preview shows the result) unless the capture fails or
-        // another launch raises it.
+        // This launch came from `--screenshot`, `--record` or
+        // `--record-focused` with no Selenita running: the main window
+        // starts hidden and stays hidden (the recording bar shows while it
+        // records, the corner preview shows the result) unless the capture
+        // fails or another launch raises it.
         #[qproperty(bool, launch_capture, cxx_name = "launchCapture", READ, CONSTANT)]
         // The capture card's choices: `screen`, `window` or `region`; the
         // delay in seconds (0, 3, 5 or 10); the two destinations; the output
@@ -210,10 +216,21 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "toggleRecording"]
         fn toggle_recording(self: Pin<&mut SelenitaController>);
+        /// As [`toggle_recording`](Self::toggle_recording), but a start
+        /// records the monitor niri has focused without the portal's output
+        /// dialog (`--record-focused`, `Selenita1.RecordFocused`).
+        #[qinvokable]
+        #[cxx_name = "toggleFocusedRecording"]
+        fn toggle_focused_recording(self: Pin<&mut SelenitaController>);
         /// Stops the recording under way; nothing happens when none is.
         #[qinvokable]
         #[cxx_name = "stopRecording"]
         fn stop_recording(self: Pin<&mut SelenitaController>);
+        /// Stops the recording under way and deletes its file: no history
+        /// row, no preview. Nothing happens when none records.
+        #[qinvokable]
+        #[cxx_name = "discardRecording"]
+        fn discard_recording(self: Pin<&mut SelenitaController>);
         /// The preview goes: its × or its five seconds.
         #[qinvokable]
         #[cxx_name = "dismissPreview"]
@@ -241,6 +258,7 @@ pub struct SelenitaControllerRust {
     appearance_text_scale: f64,
     smoke_report: bool,
     smoke_close: bool,
+    smoke_discard: bool,
     fake: bool,
     target: QString,
     delay: i32,
@@ -284,6 +302,7 @@ impl Default for SelenitaControllerRust {
             appearance_text_scale: initial.text_scale,
             smoke_report: std::env::var_os("SELENITA_SMOKE_REPORT").is_some(),
             smoke_close: std::env::var_os("SELENITA_SMOKE_CLOSE").is_some(),
+            smoke_discard: std::env::var_os("SELENITA_SMOKE_DISCARD").is_some(),
             fake: fake_requested(std::env::var_os("SELENITA_FAKE").as_deref()),
             target: QString::from(TargetKind::Screen.as_str()),
             delay: 0,
@@ -478,6 +497,9 @@ impl qobject::SelenitaController {
                 }
                 self.as_mut().recording_finished(QString::from(id.as_str()));
             }
+            // Nothing to show: a key-binding launch ends here, as one whose
+            // preview has gone.
+            record::Report::Discarded => self.as_mut().finish_launch_if_over(),
             record::Report::Failed(text) => {
                 self.as_mut().say_error(&text);
                 // As a capture's failure: the notice needs the window.
@@ -705,9 +727,20 @@ impl qobject::SelenitaController {
     }
 
     pub fn toggle_recording(self: Pin<&mut Self>) {
+        self.queue_toggle(false);
+    }
+
+    pub fn toggle_focused_recording(self: Pin<&mut Self>) {
+        self.queue_toggle(true);
+    }
+
+    /// Queues a start with the card's choices, or the stop of the recording
+    /// under way; `focused` when the start records the focused monitor.
+    fn queue_toggle(self: Pin<&mut Self>, focused: bool) {
         let request = record::Request {
             audio: self.rust().with_audio,
             stem: self.rust().recording_stem.to_string(),
+            focused,
         };
         let queued = self
             .rust()
@@ -727,6 +760,18 @@ impl qobject::SelenitaController {
             .as_ref()
             .ok_or(record::RecordError::WorkerGone)
             .and_then(record::Worker::stop);
+        if let Err(error) = queued {
+            self.say_error(&error.message_es());
+        }
+    }
+
+    pub fn discard_recording(self: Pin<&mut Self>) {
+        let queued = self
+            .rust()
+            .recorder
+            .as_ref()
+            .ok_or(record::RecordError::WorkerGone)
+            .and_then(record::Worker::discard);
         if let Err(error) = queued {
             self.say_error(&error.message_es());
         }

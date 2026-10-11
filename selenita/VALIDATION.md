@@ -7,7 +7,7 @@ landing installs (`scripts/complete-production.sh`); SEL-1-C added the
 keyboard and the screen-reader steps to them rather than a third entry, so
 one session covers the window. VAL-SEL-PREVIEW is run on the binary the
 SEL-2-A landing installs, VAL-SEL-FIXES on the one the SEL-3-A landing
-installs.
+installs, VAL-SEL-BAR on the one the SEL-4-A landing installs.
 
 ## VAL-SEL-SHOT — Capture the screen, a window and a region
 
@@ -191,5 +191,50 @@ installs.
   the bottom-right corner without the focus (not tiled), and its picture is
   sharp at every scale, edges and text without the jagged or blurred look
   of 1.1.0, a wide three-monitor capture included
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-SEL-BAR — The recording bar and the focused monitor without the dialog
+
+- **Status:** pending
+- **Related implementation:** SEL-4-A
+- **Requires:** the deployed Selenita (the SEL-4-A landing); in niri's
+  config the README's rule for the bar (`title="^Grabando"`) and the `V`
+  binding (`--record-focused`) in the `tools` mode beside `S` and `R`; in
+  xdg-desktop-portal-wlr's config
+  `chooser_cmd=/home/toni/.local/bin/selenita --pick-output` with the
+  backend restarted (the coordinator's edits after the landing); two or
+  more monitors; a text editor open on one of them
+- **Procedure:** with Selenita closed and the focus in the editor on one
+  monitor, press `V`; keep typing in the editor for a few seconds; look at
+  the top of that monitor and watch the time; press «Detener» on the bar;
+  press `V` again on the other monitor, wait 5 s and press «Descartar»;
+  look in the videos folder's `Grabaciones`, at Selenita's history and
+  for a preview, then run `pgrep -x selenita`; open Selenita, press
+  «Grabar» in the card, choose an output in the dialog, try to close the
+  bar with niri's close-window key while the pointer is on it, then press
+  `R` in the window to stop; with Selenita closed press `R` in the
+  `tools` mode (`--record`) and stop it from the bar; turn reduced motion
+  on in the suite's appearance and record once more; with Orca running,
+  move to the bar's buttons; finally put the old `chooser_cmd` back as
+  the README's rollback says and press `V` once
+- **Pass condition:** `V` records the focused monitor at once, with no
+  output dialog, and the second `V` records the other monitor; the bar
+  appears at the top centre of the monitor in focus, about 16 px from its
+  edge, floating, never tiled, and the editor keeps the keyboard (the
+  typing goes on); it is the only Selenita window while a key-binding
+  recording runs, its dot pulses slowly and its time counts from 0:00
+  like the card's; «Detener» ends the recording, the bar goes and the
+  corner preview shows the recording, which is in `Grabaciones` and the
+  history; «Descartar» ends it with no file in `Grabaciones` (no hidden
+  `.selenita-*.mp4` either), no history row, no preview, and `pgrep`
+  finds no Selenita afterwards; a recording started from the card shows
+  the bar too, niri's close does not close the bar or stop the
+  recording, and `R` stops it; `R` (`--record`) still shows the portal's
+  dialog; with reduced motion the dot does not pulse; Orca reads «Grabando»
+  and the two buttons with their descriptions; after the rollback `V`
+  shows the previous chooser's dialog; the pill's corners show no square
+  blur behind them (if they do, the rule wants a corner radius: report
+  it)
 - **Result:** not run
 - **Evidence:** none

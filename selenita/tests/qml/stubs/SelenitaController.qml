@@ -7,7 +7,8 @@ import QtQuick
 // answers at once as the fake backend does: a history row whose thumbnail
 // is a 1×1 PNG beside this file. A recording toggles between `idle` and
 // `recording` at once, as the fake recorder does, and its stop lands a
-// recording row. With `previewOnResult`, a capture saved to a file and a
+// recording row; a discard goes back to `idle` with no row, as the worker's
+// discard does. With `previewOnResult`, a capture saved to a file and a
 // finished recording show the corner preview, as the capture worker's
 // preview report does: the picture itself, or for a recording its poster
 // (the same PNG) and its duration. It is off unless a test asks: the
@@ -22,6 +23,7 @@ QtObject {
     property real appearanceTextScale: 1.0
     readonly property bool smokeReport: false
     readonly property bool smokeClose: false
+    readonly property bool smokeDiscard: false
     readonly property bool fake: true
     // Writable here so a test can build the window as a key-binding launch.
     property bool launchCapture: false
@@ -161,6 +163,24 @@ QtObject {
         }
         recordingStartedAt = Date.now()
         recordingState = "recording"
+    }
+
+    // A key binding's focused recording: the same toggle, recorded under its
+    // own name (the focused monitor is the Rust worker's to find).
+    function toggleFocusedRecording() {
+        record("toggleFocusedRecording", withAudio)
+        if (recordingState === "recording") {
+            finishRecording()
+            return
+        }
+        recordingStartedAt = Date.now()
+        recordingState = "recording"
+    }
+
+    function discardRecording() {
+        record("discardRecording", recordingState)
+        if (recordingState === "recording")
+            recordingState = "idle"
     }
 
     function stopRecording() {

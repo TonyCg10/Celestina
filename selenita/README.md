@@ -8,7 +8,10 @@ terminal command.
 
 - Captures the screen, the focused window or a region, after an optional
   delay, to the clipboard and to the pictures folder.
-- Records the screen to MP4, with the system sound when asked.
+- Records the screen to MP4, with the system sound when asked; from a key
+  binding it can record the monitor in focus without asking which.
+- While it records, a small bar at the top of the screen shows the time
+  and stops the recording, keeping it or throwing it away.
 - Keeps a history of the last captures and recordings, with open, show in
   Siderita and delete, and copy for a capture.
 - Shows each new capture and recording in a small preview in the corner of
@@ -25,7 +28,8 @@ terminal command.
 
 Screenshots, the history and the key-binding flags are in (SEL-1-A), so is
 recording (SEL-1-B), and the keyboard and accessibility pass closes the
-foundation at 1.0 (SEL-1-C). The corner preview comes with SEL-2-A. See the
+foundation at 1.0 (SEL-1-C). The corner preview comes with SEL-2-A, the
+recording bar and the focused recording with SEL-4-A. See the
 [design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md)
 and the
 [capture preview design](../docs/superpowers/specs/2026-10-10-capture-preview-design.md).
@@ -47,6 +51,14 @@ binds {
 }
 ```
 
+In the author's `tools` mode, beside `S` (`--screenshot screen`) and `R`
+(`--record`), `V` records the focused monitor without the portal's dialog
+(SEL-4-A; see «Recording the focused monitor» below):
+
+```kdl
+V { spawn "selenita" "--record-focused"; }
+```
+
 The screen binding (`--screenshot screen`, here Print; any key the
 configuration binds to it, such as `S`) takes only the monitor niri has
 focused (`FocusedOutput` over `$NIRI_SOCKET`, then `grim -o <name>`), not
@@ -58,7 +70,8 @@ every output. When niri cannot say, it takes the window's own choice
 stops the one under way; `--stop` only stops, and when no instance answers
 on the bus it touches `$XDG_RUNTIME_DIR/selenita/stop`, which the recording
 worker watches. The same requests are `Capture(s)`, `ToggleRecording()` and
-`StopRecording()` on `org.celestina.Selenita1`, served at
+`StopRecording()` on `org.celestina.Selenita1` (and `RecordFocused()` for
+`--record-focused`, which starts or stops like `ToggleRecording()`), served at
 `/org/celestina/Selenita` beside the shared activation interface. The same
 interface has `Adopt(s key)` (ADR 0012, PRV-1): Fluorita hands back an
 edited copy by its `pathkey` key, and a regular `.png` or `.mp4` directly in
@@ -114,6 +127,76 @@ qtdemux ! decodebin ! videoconvert ! pngenc snapshot=true`, 3 s at most)
 into `$XDG_RUNTIME_DIR/selenita/poster-<n>.png` (a private folder; with no
 runtime folder there is no poster); its length is read from the MP4's own
 movie header.
+
+## The recording bar
+
+While a recording is under way, however it started (the window's
+«Grabar», `R`, `--record`, `--record-focused`, the bus), a small frameless
+window titled «Grabando» shows a glass pill: the red dot (a slow pulse,
+still with reduced motion), the elapsed time (the recording card's clock)
+and two buttons. «Detener» stops and saves, and the corner preview shows
+the result as from the card; «Descartar» stops and deletes the file: the
+child is killed rather than finished, the hidden file removed, and
+nothing joins the history and no preview shows (when the file stays, the
+window's notice says the discarded recording could not be deleted). The bar hides as soon as
+the recording stops. It never takes the keyboard focus (the card's
+«Detener» and `R` are the keyboard's way), a compositor's close is refused
+(closing it is not a stop), and closing the main window takes it with
+it. After a key-binding launch it is the only window while it records;
+a discard ends that launch as the preview's end would.
+
+Qt appends the display name to the title («Grabando — Selenita»), so
+niri's rule matches its beginning only. It puts the bar at the top centre
+of the focused output, 16 px from the edge, floating and without the
+focus:
+
+```kdl
+window-rule {
+    match app-id=r#"^org\.celestina\.Selenita$"# title="^Grabando"
+    open-floating true
+    open-focused false
+    default-floating-position x=0 y=16 relative-to="top"
+}
+```
+
+## Recording the focused monitor
+
+`selenita --record-focused` (`V` above) records the monitor niri has
+focused without the portal's output dialog. xdg-desktop-portal-wlr asks
+its configured chooser which output to cast (it runs `chooser_cmd`
+through `/bin/sh -c` and reads one line, `Monitor: <name>` or the bare
+name), so Selenita is that chooser:
+
+```ini
+[screencast]
+chooser_cmd=/home/toni/.local/bin/selenita --pick-output
+```
+
+(the line goes in the backend's configuration,
+`~/.config/xdg-desktop-portal-wlr/config`, beside the `chooser_type`
+already there; the backend reads it when it starts:
+`systemctl --user restart xdg-desktop-portal-wlr.service`).
+
+- A focused start asks niri for the focused output (`FocusedOutput`, as
+  the screen key binding does) and writes a one-shot request,
+  `$XDG_RUNTIME_DIR/selenita/pick-output` (a private `0700` folder, the
+  file `0600`, written atomically: `output=<name>` and `written=<ms since
+  the epoch>`), then asks the portal as before.
+- `selenita --pick-output` answers before any Qt, bus or settings work: a
+  request at most 30 s old is consumed (renamed away, then removed) and
+  answered with `Monitor: <name>`, status 0. With no request, or a stale
+  or broken one (removed), it becomes the previous chooser with the same
+  standard input and output, so its dialog asks exactly as before:
+  `"$HOME/.local/bin/celestina" --pick-output`, or the command line in
+  `SELENITA_FALLBACK_CHOOSER` (run through `/bin/sh -c`).
+- A plain start (`R`, «Grabar», `--record`) writes no request and removes
+  any left over before and after the portal is asked, so it always shows
+  the dialog. When niri cannot name the focused output, a focused start
+  goes on without a request (the dialog asks) and says so on stderr.
+
+Rollback: put the previous line back,
+`chooser_cmd=/home/toni/.local/bin/celestina --pick-output`, and restart
+the backend; `--record-focused` then shows the dialog like `--record`.
 
 ## Recording
 
@@ -185,9 +268,9 @@ service, or copy `.prev` back.
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/selenita-core` | Targets, file names, history and the `Adopt` rule, niri client, tool argv and the deadline runner, the recording pipeline, its state machine and the stop file, the poster's argv, a PNG's size and an MP4's length; no Qt |
-| `src/` | The CXX-Qt controller, the capture worker and its backends (real and fake), the preview's poster and its hand-off to Fluorita (`preview.rs`), the ScreenCast portal client, the recording worker and its recorders (real and fake), the activation adapter with `org.celestina.Selenita1`, the key-binding flags, the appearance follower |
-| `qml/` | The window with its key map, the capture, recording and history cards and their rows, and the corner preview's window |
+| `../celestina-rs/crates/selenita-core` | Targets, file names, history and the `Adopt` rule, niri client, tool argv and the deadline runner, the recording pipeline, its state machine and the stop file, the focused recording's pick request (`pick`), the poster's argv, a PNG's size and an MP4's length; no Qt |
+| `src/` | The CXX-Qt controller, the capture worker and its backends (real and fake), the preview's poster and its hand-off to Fluorita (`preview.rs`), the ScreenCast portal client, the recording worker and its recorders (real and fake) with the discard and the focused start, the portal's output chooser (`picker.rs`), the activation adapter with `org.celestina.Selenita1`, the key-binding flags, the appearance follower |
+| `qml/` | The window with its key map, the capture, recording and history cards and their rows, the recording clock they share with the recording bar's window, and the corner preview's window |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Selenita.desktop` | Desktop discovery |
 

@@ -1,10 +1,13 @@
 //! The command line niri's key bindings use: `--screenshot
 //! <screen|window|region>` takes a capture through the running instance (or
 //! this launch, when none runs); `--record` starts a recording or stops the
-//! one under way (`ToggleRecording()`); `--stop` only stops
-//! (`StopRecording()`, or the stop file when no instance answers). Anything
-//! else on the line is ignored: a path handed to Selenita never triggers
-//! anything.
+//! one under way (`ToggleRecording()`); `--record-focused` does the same
+//! but records the monitor niri has focused without the portal's output
+//! dialog (`RecordFocused()`, SEL-4-A); `--stop` only stops
+//! (`StopRecording()`, or the stop file when no instance answers);
+//! `--pick-output` is the portal's output chooser, answered before any Qt,
+//! bus or settings work (`picker.rs`). Anything else on the line is
+//! ignored: a path handed to Selenita never triggers anything.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -15,6 +18,8 @@ use selenita_core::TargetKind;
 pub const SCREENSHOT: &str = "--screenshot";
 pub const RECORD: &str = "--record";
 pub const STOP: &str = "--stop";
+pub const RECORD_FOCUSED: &str = "--record-focused";
+pub const PICK_OUTPUT: &str = "--pick-output";
 
 /// What a launch was asked to do.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,8 +30,12 @@ pub enum Launch {
     Screenshot(TargetKind),
     /// Start a recording, or stop the one under way.
     Record,
+    /// Start a recording of the focused monitor, or stop the one under way.
+    RecordFocused,
     /// Stop the recording under way, if any.
     Stop,
+    /// Answer the portal's output chooser.
+    PickOutput,
 }
 
 /// A flag used wrongly.
@@ -78,8 +87,14 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Launch, FlagErr
         if arg == RECORD {
             return Ok(Launch::Record);
         }
+        if arg == RECORD_FOCUSED {
+            return Ok(Launch::RecordFocused);
+        }
         if arg == STOP {
             return Ok(Launch::Stop);
+        }
+        if arg == PICK_OUTPUT {
+            return Ok(Launch::PickOutput);
         }
     }
     Ok(Launch::Window)
@@ -134,11 +149,31 @@ mod tests {
         assert_eq!(parse(args(&["--record"])), Ok(Launch::Record));
         assert_eq!(parse(args(&["--stop"])), Ok(Launch::Stop));
         assert_eq!(parse(args(&["--stop", "--record"])), Ok(Launch::Stop));
+        assert_eq!(
+            parse(args(&["--record-focused"])),
+            Ok(Launch::RecordFocused)
+        );
+        assert_eq!(
+            parse(args(&["--record-focused", "--record"])),
+            Ok(Launch::RecordFocused)
+        );
+        assert_eq!(parse(args(&["--record=focused"])), Ok(Launch::Window));
         assert_eq!(parse(args(&["/tmp/captura.png"])), Ok(Launch::Window));
         assert_eq!(parse(args(&[])), Ok(Launch::Window));
         assert_eq!(
             parse(args(&["/tmp/a.png", "--screenshot", "screen"])),
             Ok(Launch::Screenshot(TargetKind::Screen))
+        );
+    }
+
+    /// The portal runs the chooser with nothing else on the line; a path
+    /// before it changes nothing.
+    #[test]
+    fn the_chooser_flag_is_read() {
+        assert_eq!(parse(args(&["--pick-output"])), Ok(Launch::PickOutput));
+        assert_eq!(
+            parse(args(&["/tmp/a.png", "--pick-output"])),
+            Ok(Launch::PickOutput)
         );
     }
 }

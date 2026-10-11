@@ -4,6 +4,7 @@ mod backend;
 mod capture;
 mod controller;
 mod flags;
+mod picker;
 mod portal;
 mod preview;
 mod record;
@@ -19,6 +20,13 @@ const APP_ID: &str = celestina_core::activation::SELENITA.0;
 const MAIN_QML: &str = "qrc:/qt/qml/org/celestina/selenita/qml/Main.qml";
 
 fn main() {
+    let launch = flags::parse(std::env::args_os().skip(1));
+    // The portal's output chooser answers before anything else: no Qt, no
+    // bus name, no settings, no window.
+    if launch == Ok(flags::Launch::PickOutput) {
+        picker::run();
+    }
+
     // A platform theme routes dialogs through this session's portal; without
     // one Qt draws its own. An explicit choice in the environment still wins.
     if std::env::var_os("QT_QPA_PLATFORMTHEME").is_none() {
@@ -27,11 +35,14 @@ fn main() {
 
     // Selenita opens no files: apart from the key-binding flags the command
     // line is ignored, so a path handed to it never triggers anything.
-    let asked = match flags::parse(std::env::args_os().skip(1)) {
-        Ok(flags::Launch::Window) => None,
+    let asked = match launch {
+        Ok(flags::Launch::Window | flags::Launch::PickOutput) => None,
         Ok(flags::Launch::Screenshot(kind)) => Some(activation::Request::Capture(kind)),
         Ok(flags::Launch::Record) => Some(activation::Request::Recording(
             activation::RecordingAction::Toggle,
+        )),
+        Ok(flags::Launch::RecordFocused) => Some(activation::Request::Recording(
+            activation::RecordingAction::ToggleFocused,
         )),
         Ok(flags::Launch::Stop) => {
             stop_recording();
