@@ -1,7 +1,7 @@
 # Fluorita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** FLU-P1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Authorised sequence:** F7-F15, opened by author decision on 2026-08-19 and
   delivered on 2026-08-20 in a single commit. `FLU-H1` is the hardening the
   author asked for after the 2026-09-26 monorepo audit. `FLU-P1` is
@@ -16,7 +16,7 @@ Fluorita 1.0 is implemented and its F0-F4 arc is closed. Do not reopen it,
 repeat completed perceptual tests in this file or treat a manual check as
 unfinished implementation.
 
-## FLU-P1 — The floating editor of the capture preview
+## FLU-P1 — The floating editor of the capture preview, closed 2026-10-10
 
 The measured need: a capture is most often touched up and sent at once, and
 Selenita's corner preview (`SEL-2-A`) needs somewhere to send it. Fluorita
@@ -37,11 +37,11 @@ window, with «Guardar ambas» and «Guardar solo la editada», the close
 question, and the saved result dragged out as a copy; then a video trimmed
 frame-accurately by an `ffmpeg` child.
 
-The plan is
-[the floating editor of the capture preview](docs/plans/active/2026-10-10-flu-p1-preview.md):
+The archived plan is
+[the floating editor of the capture preview](docs/plans/archive/2026-10-10-flu-p1-preview.md):
 
-- [ ] `FLU-P1-A` — the floating editor on any path.
-- [ ] `FLU-P1-B` — the video trim, and ADR 0009's amendment.
+- [x] `FLU-P1-A` — the floating editor on any path.
+- [x] `FLU-P1-B` — the video trim, and ADR 0009's amendment.
 
 ## FLU-H1 — Hardening after the monorepo audit, closed 2026-10-10
 

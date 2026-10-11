@@ -2,10 +2,11 @@
 
 - **Updated:** 2026-10-10
 - **Implementation:** `FLU-P1`, Fluorita's part of the suite's capture
-  preview `PRV-1`, is active: `FLU-P1-A` (the floating editor on any path)
-  landed as `1.6.0`, and `FLU-P1-B` (the frame-accurate video trim through an
-  `ffmpeg` child) is implemented in its session and awaits landing
-  ([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)).
+  preview `PRV-1`, is closed and delivered; no checkpoint is active.
+  `FLU-P1-A` (the floating editor on any path) landed as `1.6.0`, and
+  `FLU-P1-B` (the frame-accurate video trim through an `ffmpeg` child) as
+  `1.7.0`, the checkout's version
+  ([archived plan](docs/plans/archive/2026-10-10-flu-p1-preview.md)).
   Checkpoints F0-F15 and `FLU-H1`, the hardening that followed the 2026-09-26
   monorepo audit, are closed and delivered. `FLU-H1-A` (a Replace that trashes its original,
   bounded file claims), `FLU-H1-B` (a true library off the GUI thread,
@@ -96,9 +97,9 @@
 
 ## Active work
 
-`FLU-P1` is active
-([plan](docs/plans/active/2026-10-10-flu-p1-preview.md)): `FLU-P1-A` landed
-as `1.6.0` and `FLU-P1-B`, the trim, awaits its landing. `FLU-H1`, the post-audit
+No checkpoint is active. `FLU-P1` closed on 2026-10-10
+([archived plan](docs/plans/archive/2026-10-10-flu-p1-preview.md)):
+`FLU-P1-A` landed as `1.6.0` and `FLU-P1-B`, the trim, as `1.7.0`. `FLU-H1`, the post-audit
 hardening, closed on 2026-10-10 with its six units landed
 ([archived plan](docs/plans/archive/2026-09-26-hardening.md)).
 
