@@ -2,6 +2,7 @@ mod activation;
 mod appearance;
 mod controller;
 mod document;
+mod pages;
 
 use std::path::PathBuf;
 
@@ -53,6 +54,9 @@ fn main() {
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
+        // The page view names its pages `image://calcitapage/…`, so the
+        // provider must be on the engine before that QML loads.
+        pages::ffi::register_page_provider(engine.as_mut());
         // Development only: scripts/qml-dev.sh serves the source QML as an
         // import tree, so a QML edit needs a restart rather than a build.
         if let Some(import) = std::env::var_os("CELESTINA_QML_DEV_IMPORT") {
@@ -67,4 +71,9 @@ fn main() {
     if let Some(app) = app.as_mut() {
         app.exec();
     }
+
+    // A render holds no file open for writing, so a short wait is enough:
+    // what is queued is dropped and the documents the renderer holds are
+    // closed on its thread.
+    pages::ffi::page_provider_shutdown(1000);
 }

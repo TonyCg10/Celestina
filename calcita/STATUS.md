@@ -1,16 +1,20 @@
 # Calcita status
 
 - **Updated:** 2026-10-11
-- **Implementation:** CAL-1 is closed and its
-  [plan](docs/plans/archive/2026-10-09-cal-1-foundation.md) archived; no
-  checkpoint is active. Its four units are implemented, checked offscreen
-  and landed: CAL-1-A (opening, continuous pages, zoom and navigation) as
-  0.2.0, CAL-1-B (search, the outline, selection and copy, links) as 0.3.0,
-  CAL-1-C (the dark reading mode, the recents card's menu, the
-  `application/pdf` entry, the accessibility pass) as 1.0.0, and the bug
-  unit CAL-1-D (every page on opaque paper over the glass) as 1.0.1
-- **Author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH and VAL-CAL-DARK
-  pending
+- **Implementation:** CAL-2, editing (annotations and forms), is the
+  active checkpoint ([plan](docs/plans/active/2026-10-11-cal-2-editing.md)).
+  CAL-2-A (every annotation shown, the annotation model and the
+  coordinates) is implemented and checked offscreen in its session
+  worktree, not yet landed; CAL-2-B (the edit mode and saving) and CAL-2-C
+  (forms) are planned. CAL-1 is closed and its
+  [plan](docs/plans/archive/2026-10-09-cal-1-foundation.md) archived: CAL-1-A
+  (opening, continuous pages, zoom and navigation) as 0.2.0, CAL-1-B
+  (search, the outline, selection and copy, links) as 0.3.0, CAL-1-C (the
+  dark reading mode, the recents card's menu, the `application/pdf` entry,
+  the accessibility pass) as 1.0.0, and the bug unit CAL-1-D (every page
+  on opaque paper over the glass) as 1.0.1
+- **Author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH, VAL-CAL-DARK and
+  VAL-CAL-ANNOT pending
 
 ## Current checkout truth
 
@@ -32,7 +36,13 @@
   scroller and scroll bar; a pointer drag selects text rather than
   scrolling). Each page lies on opaque paper (the suite's `iconSheet`) over
   the glass canvas, since QtPdf renders a page with a clear background;
-  the gaps between pages stay glass. Search: Ctrl+F or the bar's button opens a card
+  the gaps between pages stay glass. Each page's image comes from
+  Calcita's page provider (`cpp/page_provider.cpp`), which has QtPdf render
+  it with its annotations on one render thread of its own, so another
+  program's highlights, notes and drawings show; form widgets do not
+  (QtPdf never draws them; CAL-2-C). The window reads the document's
+  annotation model with `lopdf` on a worker (`calcita_core::annot`); nothing
+  shows it yet, and nothing is edited or written. Search: Ctrl+F or the bar's button opens a card
   under the bar; the hits are marked, the current one in the selection
   colour and scrolled into view, with «n de N»; Enter/Shift+Enter, F3/Shift+F3
   and the card's arrows walk them round the ends; Escape closes. The outline

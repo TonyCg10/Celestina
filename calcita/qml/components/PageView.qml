@@ -10,6 +10,13 @@ import org.celestina.calcita 1.0
 // places. Internal links move the view; an external link is only reported
 // (`externalLinkRequested`) so the window can ask before anything leaves.
 //
+// A page's image comes from Calcita's page provider
+// (`image://calcitapage/<page>/<key>`), which has QtPdf render it with its
+// annotations: QtPdf's own `PdfPageImage` renders without them, so every
+// highlight, note and drawing of another program was hidden. The provider
+// opens the file itself on its render thread; the hits, the selection and
+// the links still come from `document`.
+//
 // QtPdf's own `PdfMultiPageView` opens an external link at once and paints
 // hits and selection in its own colours, not the theme's, so Calcita lays
 // its pages out itself. Each page's top is computed once per document and
@@ -28,6 +35,9 @@ Flickable {
     // Owned by the window's owner and never destroyed while Calcita runs
     // (QtPdf's image reader thread may still be reading one of its pages).
     required property PdfDocument document
+    // The document's path key (ADR 0008), which names it to the page
+    // provider.
+    required property string documentKey
     // Pixels per point.
     property real renderScale: 1
     // The 0-based page a jump went to, or the page under the reading line
@@ -43,6 +53,8 @@ Flickable {
     property var tops: []
     property real laidOutScale: 1
     readonly property int pageGap: 6
+    // How long a grab waits for the page's image, in milliseconds.
+    readonly property int grabWait: 3000
     // The paper every page is drawn on. QtPdf renders a page with a clear
     // background, so without it the ink would sit on the window's glass:
     // the canvas is glass, but a page is content and is opaque paper. The
@@ -78,6 +90,16 @@ Flickable {
 
     // An external link was tapped; nothing has been opened.
     signal externalLinkRequested(string url)
+    // `grabPage` asked for `page`, as drawn, in the file `path`.
+    signal pageGrabRequested(int page, string path)
+
+    // Development only: saves the 0-based `page` as drawn (its paper, its
+    // image and what lies over it) to `path`, when the page is built, once
+    // its image is ready or `grabWait` has passed. The smoke looks at its
+    // pixels.
+    function grabPage(page, path) {
+        pageArea.pageGrabRequested(page, path)
+    }
 
     function scaleToWidth(width, height) {
         pageArea.renderScale = width / pageArea.firstPageSize.width
@@ -290,6 +312,21 @@ Flickable {
 
                     // How many hits are marked on this page.
                     readonly property int markedHits: pageHits.paths.length
+                    // Where a grab asked for waits to be saved, or "".
+                    property string pendingGrab: ""
+
+                    // Saves the pending grab once the image is ready, or at
+                    // once when `waited` (the bound passed).
+                    function finishGrab(waited) {
+                        if (paper.pendingGrab === "")
+                            return
+                        if (!waited && pageImage.status !== Image.Ready)
+                            return
+                        const path = paper.pendingGrab
+                        paper.pendingGrab = ""
+                        grabBound.stop()
+                        paper.grabToImage(result => result.saveToFile(path))
+                    }
 
                     // QtPdf reports a page's hits through a call, not a
                     // property.
@@ -309,14 +346,18 @@ Flickable {
                         radius: CelestinaTheme.radiusNone
                     }
 
-                    PdfPageImage {
+                    // The page with its annotations, rendered off the Qt
+                    // thread at the size it is shown.
+                    Image {
+                        id: pageImage
+                        objectName: "pageImage"
                         anchors.fill: parent
-                        document: pageArea.document
-                        currentFrame: pageItem.index
+                        source: "image://calcitapage/" + pageItem.index + "/" + pageArea.documentKey
                         asynchronous: true
                         fillMode: Image.PreserveAspectFit
                         sourceSize.width: paper.width * Screen.devicePixelRatio
                         sourceSize.height: 0
+                        onStatusChanged: paper.finishGrab(false)
                     }
 
                     // Every hit on this page, then the current one and the
@@ -337,6 +378,23 @@ Flickable {
                         target: hits
                         function onCountChanged() { paper.refreshHits() }
                         function onSearchStringChanged() { paper.refreshHits() }
+                    }
+
+                    Connections {
+                        target: pageArea
+                        function onPageGrabRequested(page, path) {
+                            if (page !== pageItem.index)
+                                return
+                            paper.pendingGrab = path
+                            grabBound.restart()
+                            paper.finishGrab(false)
+                        }
+                    }
+
+                    Timer {
+                        id: grabBound
+                        interval: pageArea.grabWait
+                        onTriggered: paper.finishGrab(true)
                     }
 
                     Shape {

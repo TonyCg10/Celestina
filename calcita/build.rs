@@ -130,8 +130,9 @@ fn main() {
     // alias and break type resolution at run time.
     let module = QmlModule::new("org.celestina.calcita")
         .version(1, 0)
-        // The page area is QtPdf's `PdfMultiPageView` over a `PdfDocument`;
-        // without the dependency qmllint cannot resolve them.
+        // The page area uses QtPdf's `PdfDocument`, `PdfSelection`,
+        // `PdfSearchModel` and `PdfLinkModel`; without the dependency
+        // qmllint cannot resolve them.
         .depend("QtQuick.Pdf")
         .qml_file(
             QmlFile::from("qml/CelestinaTheme.qml")
@@ -158,8 +159,14 @@ fn main() {
     println!("cargo::rerun-if-changed={READING_SHADER}");
     println!("cargo::rerun-if-env-changed=QSB");
     let shader_qrc = bake_shaders();
-    println!("cargo::rerun-if-changed=cpp/clipboard.cpp");
-    println!("cargo::rerun-if-changed=cpp/calcita/clipboard.h");
+    for cpp in [
+        "cpp/clipboard.cpp",
+        "cpp/calcita/clipboard.h",
+        "cpp/page_provider.cpp",
+        "cpp/calcita/page_provider.h",
+    ] {
+        println!("cargo::rerun-if-changed={cpp}");
+    }
 
     let builder = CxxQtBuilder::new_qml_module(module)
         // The shared icons and Inter Variable, compiled in.
@@ -171,9 +178,22 @@ fn main() {
         // QClipboard, so a one-function shim under cpp/ does it on the Qt
         // thread.
         .cpp_file("cpp/clipboard.cpp")
-        .files(["src/activation.rs", "src/controller.rs", "src/document.rs"]);
-    // SAFETY: only adds the shim's include directory, so the generated bridge
-    // and clipboard.cpp both resolve "calcita/clipboard.h".
+        // The pages are rendered with their annotations by an image provider
+        // (`image://calcitapage/…`): QML's `PdfPageImage` never asks QtPdf
+        // for annotations and cxx-qt cannot subclass an image provider. No
+        // Q_OBJECT, so compiled and not moc'd; it links QtPdf itself.
+        .cpp_file("cpp/page_provider.cpp")
+        .qt_module("Pdf")
+        .files([
+            "src/activation.rs",
+            "src/controller.rs",
+            "src/document.rs",
+            // Registers the page provider and drains it; declares no QObject.
+            "src/pages.rs",
+        ]);
+    // SAFETY: only adds the shims' include directory, so the generated
+    // bridges and the C++ files resolve "calcita/clipboard.h" and
+    // "calcita/page_provider.h".
     let builder = unsafe {
         builder.cc_builder(|cc| {
             cc.include("cpp");

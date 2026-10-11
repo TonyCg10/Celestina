@@ -233,6 +233,7 @@ ApplicationWindow {
         anchors.leftMargin: documentWindow.outlineOpen
                             ? outlinePanel.width + CelestinaTheme.spaceMd * 2 : 0
         document: documentWindow.pdf
+        documentKey: documentWindow.documentKey
         focus: true
         layer.enabled: documentWindow.readingAmount > 0
         layer.effect: ReadingEffect {

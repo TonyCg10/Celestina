@@ -57,6 +57,7 @@ pub mod qobject {
             NOTIFY
         )]
         #[qproperty(bool, smoke_report, cxx_name = "smokeReport", READ, CONSTANT)]
+        #[qproperty(QString, smoke_grab, cxx_name = "smokeGrab", READ, CONSTANT)]
         #[qproperty(QStringList, documents, READ, NOTIFY)]
         #[qproperty(QStringList, recents, READ, NOTIFY)]
         #[qproperty(QStringList, recent_names, cxx_name = "recentNames", READ, NOTIFY)]
@@ -132,11 +133,14 @@ pub mod qobject {
 }
 
 /// `smokeReport` is `CALCITA_SMOKE_REPORT` set: `scripts/smoke.sh` asks the
-/// window to print what it shows once it is up.
+/// window to print what it shows once it is up. `smokeGrab` is
+/// `CALCITA_SMOKE_GRAB`, a file the smoke asks the front document's first
+/// page to be saved to as drawn, so it can look at its pixels.
 pub struct CalcitaControllerRust {
     appearance_reduced_motion: bool,
     appearance_text_scale: f64,
     smoke_report: bool,
+    smoke_grab: QString,
     documents: QStringList,
     recents: QStringList,
     recent_names: QStringList,
@@ -157,6 +161,9 @@ impl Default for CalcitaControllerRust {
             appearance_reduced_motion: initial.reduced_motion,
             appearance_text_scale: initial.text_scale,
             smoke_report: std::env::var_os("CALCITA_SMOKE_REPORT").is_some(),
+            smoke_grab: std::env::var("CALCITA_SMOKE_GRAB")
+                .map(|path| QString::from(path.as_str()))
+                .unwrap_or_default(),
             documents: QStringList::default(),
             recents: QStringList::default(),
             recent_names: QStringList::default(),

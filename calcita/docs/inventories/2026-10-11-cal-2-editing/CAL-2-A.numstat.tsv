@@ -1,0 +1,87 @@
+# CAL-2-A exact change inventory
+
+Base revision	38206e8b785bdd5a079f5906f4433213261ed207
+Pathspec	calcita/AGENTS.md
+Pathspec	calcita/Cargo.lock
+Pathspec	calcita/Cargo.toml
+Pathspec	calcita/README.md
+Pathspec	calcita/ROADMAP.md
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/VALIDATION.md
+Pathspec	calcita/build.rs
+Pathspec	calcita/cpp/calcita/page_provider.h
+Pathspec	calcita/cpp/page_provider.cpp
+Pathspec	calcita/docs/evidence/2026-10-11-annotations-shown.md
+Pathspec	calcita/docs/inventories/2026-10-11-cal-2-editing/CAL-2-A.numstat.tsv
+Pathspec	calcita/docs/plans/active/2026-10-11-cal-2-editing.md
+Pathspec	calcita/docs/plans/active/README.md
+Pathspec	calcita/docs/specs/2026-10-11-editing-design.md
+Pathspec	calcita/docs/specs/2026-10-11-editing-plan.md
+Pathspec	calcita/qml/DocumentWindow.qml
+Pathspec	calcita/qml/Main.qml
+Pathspec	calcita/qml/components/PageView.qml
+Pathspec	calcita/scripts/make-fixture-pdf.py
+Pathspec	calcita/scripts/smoke.sh
+Pathspec	calcita/src/controller.rs
+Pathspec	calcita/src/document.rs
+Pathspec	calcita/src/main.rs
+Pathspec	calcita/src/pages.rs
+Pathspec	calcita/tests/fixtures/annotated.pdf
+Pathspec	calcita/tests/fixtures/rotated.pdf
+Pathspec	calcita/tests/qml/stubs/CalcitaController.qml
+Pathspec	calcita/tests/qml/stubs/CalcitaDocument.qml
+Pathspec	calcita/tests/qml/tst_paper.qml
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/calcita-core/Cargo.toml
+Pathspec	celestina-rs/crates/calcita-core/src/annot/coords.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/mod.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/model.rs
+Pathspec	celestina-rs/crates/calcita-core/src/annot/read.rs
+Pathspec	celestina-rs/crates/calcita-core/src/lib.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/annot_read.rs
+Pathspec	celestina-rs/crates/calcita-core/tests/coords.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	5	667f28749cadc2f138cf0b41399d43a1645062e32e93a51478e30a02816fb092	calcita/AGENTS.md
+396	5	62be6f536f054ea79edcc5f8d50e460653c06644cbcf44e7f849805966298c29	calcita/Cargo.lock
+1	1	86d4dde5d60a817154751831e380156d69f1c8279fe6b5477c5a771ecf154ad7	calcita/Cargo.toml
+11	5	64156f1649bd26ab77d685269a95474e48b4e076eeb2913c65f929f465e941f1	calcita/README.md
+26	6	bcb76bca1c7ff0e039b184cde5bdeb1001493d17e29d21efaf9a00f046271a97	calcita/ROADMAP.md
+21	11	3d55838bc29aa72ccfbf841c08e07367f5faf89db682c48b5d01bd7dc09439c6	calcita/STATUS.md
+22	0	cfe900b3e22b660cdf9c94380310e1f6667487b24148e5ce3fa950767aaf0df4	calcita/VALIDATION.md
+27	7	3e5413c5bd8b30842bca831d7cf7017b4dc6199ce271a1051e8f2f8c347315f7	calcita/build.rs
+28	0	bf5e6949c1873cca2fde8f13c0e7be8104e009cc675faff88d365e22dcea9f33	calcita/cpp/calcita/page_provider.h
+304	0	36465b4506bed2681a89b0ae98ef7c6d11d2d9affe45bd5a157c7cec51bea968	calcita/cpp/page_provider.cpp
+220	0	a4246c126a549efd78e538a1f015c45305d27bb5a049c9f34cd38ec2232e3a57	calcita/docs/evidence/2026-10-11-annotations-shown.md
+87	0	self	calcita/docs/inventories/2026-10-11-cal-2-editing/CAL-2-A.numstat.tsv
+69	0	8722484c33581620d6b0a947eae7400fa2f492ae7516ab2674f7248cce275651	calcita/docs/plans/active/2026-10-11-cal-2-editing.md
+3	3	2cd6b24499df55043d5df00102e86d7398ce8a13c54c5f89d654982745480c00	calcita/docs/plans/active/README.md
+105	0	dc418178ea24bb086cce606ec20914c54bcd716055d657ece1da837b237ece85	calcita/docs/specs/2026-10-11-editing-design.md
+57	0	5686f01138b204732b926ffbfc3b068f4aa5434f851ccc9e9234faefcd1e14a9	calcita/docs/specs/2026-10-11-editing-plan.md
+1	0	fd179d4975f9a027996c0e7608febce64cfee2fe0784d66dca361070d103b57c	calcita/qml/DocumentWindow.qml
+5	2	1692642eceaa1784b4dfc74678b99beb2d5de4c05a4f7a0f50666590e9f24433	calcita/qml/Main.qml
+61	3	335a8a4d3bdb62b910ebb8c7a3fad7759170a176cade33293892526d0d63b181	calcita/qml/components/PageView.qml
+108	1	aaded743a8a5b12c4922d4ed865075aeaef24209f913a8ac29a857bd569d0fd2	calcita/scripts/make-fixture-pdf.py
+84	7	8914ad676c27597c133599308b407635758502396b249e53efa92d74c0aeeccf	calcita/scripts/smoke.sh
+8	1	69f44c7ab24a8a695f9964cb39a7b786d11c53c97d8ebb6329b723dd5da10c3d	calcita/src/controller.rs
+218	2	bbbdfc2df5d47b38c5416c8a0603d956b7f4df34d7a644d5b8ef714d153de227	calcita/src/document.rs
+9	0	210b54070478a17cd769950e59f30ce01dd217a962cd5c8660472e4c1c124ebc	calcita/src/main.rs
+27	0	731b89e176c0fc00fbd04b5ed0b936f9c5cae241b693a6081fe43c85c2781182	calcita/src/pages.rs
+70	0	d6308393423d0341dc7e2a42d84288a767b693abbada77d8bc8dd7198b55eca2	calcita/tests/fixtures/annotated.pdf
+88	0	f264122ab007657f9327208e872f8841ae5fc1be11b383beba6904baa6526663	calcita/tests/fixtures/rotated.pdf
+1	0	b14c01d135eb1af963134b314b506b7357f3db578cc3e6ee12ea5352a039ed50	calcita/tests/qml/stubs/CalcitaController.qml
+6	0	34334ae2238caa5bc372bff3b83f7dd740b454bda9051ead1a7c441431df714a	calcita/tests/qml/stubs/CalcitaDocument.qml
+17	0	b54df6b410847b9da630b2c3c5433aaaa13066aa2b2b3024e1a2b7d6f9821556	calcita/tests/qml/tst_paper.qml
+279	12	fbfcc04afc60f2f0fcc04eb738f7720d537ea7783ec84fa7122839fb09c5f0f3	celestina-rs/Cargo.lock
+11	1	3753070d6f9c0e432acd645628a788db00bcded183f0c3c280629e9da8cd5d9a	celestina-rs/crates/calcita-core/Cargo.toml
+165	0	1cc805c3f0cc7ae5d6067053d066ce2ac41f68bf47bda62c2d7f3cee799b10c4	celestina-rs/crates/calcita-core/src/annot/coords.rs
+14	0	4b793f9721e92b87b9b321e85f5a893c2b104ae4cc1952ddbac9e0f102582d23	celestina-rs/crates/calcita-core/src/annot/mod.rs
+139	0	4290995f32cbeec5f93ea7806b65514571b1699252ee0191fd7565f59033cae9	celestina-rs/crates/calcita-core/src/annot/model.rs
+865	0	ed78fa34521217504088b745a10a18326366994e45a7706ac6edf8d2a7d5da5d	celestina-rs/crates/calcita-core/src/annot/read.rs
+4	2	dc2a670d776d5f44f3c64b909224d660f1664a5848f7b4273e8b27738bbb6d91	celestina-rs/crates/calcita-core/src/lib.rs
+482	0	f2f5df72f9d97f125aed1ad311964b34d3320ccc9c2926406066b4df4ec50c4a	celestina-rs/crates/calcita-core/tests/annot_read.rs
+154	0	c3e67fedac43729b7135e8e42a2fc9c016c10f95cd323d150c358d4135cb1e04	celestina-rs/crates/calcita-core/tests/coords.rs
+1	0	9261033b2669f8c2513a8702396f443174ee934171c961d8620580cea0ca8627	docs/version-history.tsv

@@ -257,3 +257,4 @@ selenita	1.1.1	bug	SEL-3-A	Fix the preview's sharpness, capture the focused moni
 fluorita	1.7.1	bug	FLU-P2-A	Fix the edit window's size and take the adoption rule from Selenita
 selenita	1.2.0	milestone	SEL-4-A	Add the recording bar and recording the focused monitor without the chooser
 selenita	1.3.0	milestone	SEL-4-B	Add pause and resume to recordings by joining segments
+calcita	1.1.0	milestone	CAL-2-A	Make every annotation visible and read the annotation model

@@ -86,6 +86,23 @@ TestCase {
         verify(findNamed(page.item, "currentHit"), "the hit overlay is above the paper")
     }
 
+    // The page provider renders each page with its annotations; under
+    // qmltestrunner it does not exist (the binary registers it), so only the
+    // address is checked here and scripts/smoke.sh looks at the pixels.
+    function test_each_page_image_comes_from_the_page_provider() {
+        const window = openFixture()
+        const page = findNamed(window.view, "page1")
+        verify(page, "the second page's shell")
+        tryVerify(() => page.item !== null, 2000, "the second page is built")
+        const image = findNamed(page.item, "pageImage")
+        verify(image, "the page image")
+        compare(String(image.source), "image://calcitapage/1/" + testCase.fixture,
+                "the 0-based page, then the document's key")
+        verify(image.asynchronous, "rendered off the Qt thread")
+        compare(image.sourceSize.width, Math.floor(page.item.width * Screen.devicePixelRatio),
+                "rendered at the size it is shown")
+    }
+
     function test_the_reading_layer_covers_the_paper() {
         const window = openFixture()
         const page = findNamed(window.view, "page0")

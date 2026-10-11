@@ -13,6 +13,7 @@ QtObject {
     property bool appearanceReducedMotion: false
     property real appearanceTextScale: 1.0
     readonly property bool smokeReport: false
+    readonly property string smokeGrab: ""
     property var documents: []
     property var recents: []
     property var recentNames: []

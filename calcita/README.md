@@ -18,7 +18,9 @@ grammar instead of the web browser.
   on a recent row of the empty window, Enter or Space opens it and the Menu
   key or Shift+F10 opens its menu («Quitar de recientes»).
 - The `application/pdf` handler once the author pins it in `mimeapps.list`.
-- No annotation, signing, forms or printing.
+- Every annotation a document carries is shown (another program's
+  highlights, notes and drawings); adding and editing them and filling
+  forms are being built (CAL-2). No signing or printing.
 
 Opening, continuous pages, zoom, the page field, the drop, `Open` and the
 recents are in place (CAL-1-A), and so are search, the outline, selection
@@ -26,16 +28,20 @@ and copy, and links, an external one only after a confirmation (CAL-1-B),
 and the dark reading mode, the recents' menu and the `application/pdf`
 entry (CAL-1-C, 1.0). See the
 [design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
+Pages are drawn with their annotations, and the annotation model is read
+(CAL-2-A); editing follows the
+[editing design](docs/specs/2026-10-11-editing-design.md).
 
 ## Architecture
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/calcita-core` | Recents, zoom, reading positions, page input; no Qt |
-| `src/` | The CXX-Qt controller (open documents, recents, clipboard, confirmed external links), the per-window `CalcitaDocument`, the activation adapter, the appearance follower |
-| `cpp/` | The clipboard shim cxx-qt-lib lacks (`QClipboard` on the Qt thread) |
+| `../celestina-rs/crates/calcita-core` | Recents, zoom, reading positions, page input, search order; the annotation model and form fields read with `lopdf` and the conversion between PDF user space and the displayed page (`annot`); no Qt |
+| `src/` | The CXX-Qt controller (open documents, recents, clipboard, confirmed external links), the per-window `CalcitaDocument` (which reads the annotation model on a worker), the activation adapter, the appearance follower, the page provider's seam (`pages.rs`) |
+| `cpp/` | The clipboard shim cxx-qt-lib lacks (`QClipboard` on the Qt thread) and the page image provider (`image://calcitapage/…`, QtPdf with its annotations flag, one render thread owning its own documents) |
 | `qml/` | The empty window, one `DocumentWindow` per document: its bar, its own continuous `PageView` over QtPdf, the search card, the outline card, the link confirmation and the reading mode's layer effect (`shaders/reading.frag`, baked by `build.rs` with Qt's `qsb`) |
-| `tests/` | QML tests over stand-ins and the fixtures `three-pages.pdf`, `outline.pdf` and `many-pages.pdf` (`scripts/make-fixture-pdf.py`) |
+| `tests/` | QML tests over stand-ins and the fixtures `three-pages.pdf`, `outline.pdf`, `many-pages.pdf`, `annotated.pdf` and `rotated.pdf` (`scripts/make-fixture-pdf.py`) |
+| `docs/specs/` | The CAL-2 editing design and its task plan |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Calcita.desktop` | Desktop discovery |
 

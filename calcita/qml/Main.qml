@@ -210,7 +210,7 @@ ApplicationWindow {
     }
 
     // Development only: the smoke reads what the windows show once they are
-    // up.
+    // up, and may ask for the front document's first page as drawn.
     Timer {
         interval: 3000
         running: CalcitaController.smokeReport
@@ -220,7 +220,10 @@ ApplicationWindow {
                         + " empty=" + window.visible
                         + " pageCount=" + (document ? document.reader.pageCount : 0)
                         + " textScale=" + CelestinaTheme.textScale
-                        + " fontBody=" + CelestinaTheme.fontBody)
+                        + " fontBody=" + CelestinaTheme.fontBody
+                        + " annotations=" + (document ? document.reader.annotationCount : -1))
+            if (document && CalcitaController.smokeGrab !== "")
+                document.view.grabPage(0, CalcitaController.smokeGrab)
         }
     }
 

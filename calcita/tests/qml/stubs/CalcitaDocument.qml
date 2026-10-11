@@ -15,6 +15,8 @@ QtObject {
     property string zoomMode: "fitWidth"
     property real zoomFactor: 1
     property bool loaded: false
+    // The annotation model is read by the Rust object; the stand-in has none.
+    readonly property int annotationCount: -1
 
     readonly property var ladder: [0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 3.0, 4.0]
 
@@ -109,5 +111,9 @@ QtObject {
     function reportScale(factor) {
         if (factor > 0)
             zoomFactor = factor
+    }
+
+    function annotationsOnPage(page) {
+        return 0
     }
 }

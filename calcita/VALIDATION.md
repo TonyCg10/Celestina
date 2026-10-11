@@ -74,3 +74,25 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   selection stay clearly visible
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-CAL-ANNOT — Another program's annotations are visible
+
+- **Status:** pending
+- **Related implementation:** CAL-2-A
+- **Requires:** the Calcita release binary of CAL-2-A on the real session;
+  a real PDF annotated in another program (a highlight, a sticky or text
+  note, a freehand drawing; Okular or Firefox's PDF editor write them), on
+  a page with `/Rotate` if one is at hand; `tests/fixtures/annotated.pdf`
+- **Procedure:** open the annotated PDF and the fixture; look at each
+  annotated page at fit width, then zoom in to the ladder's top (Ctrl+Plus)
+  and back; scroll through a long annotated document; press Ctrl+I over an
+  annotated page and again; search a highlighted word with Ctrl+F; drag
+  over highlighted text and press Ctrl+C; click a link on an annotated
+  page; open the same file in the other program
+- **Pass condition:** every highlight, note and drawing shows where the
+  other program shows it, in its colour, sharp at every zoom and on rotated
+  pages; pages appear as quickly as before while scrolling; in the reading
+  mode the annotations invert with the page; the search hit, the selection
+  and the link still work and draw over the annotations
+- **Result:** not run
+- **Evidence:** none
