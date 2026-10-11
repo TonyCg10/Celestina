@@ -63,7 +63,8 @@ ALLOWED_LITERALS = {
         "activation (not part of CONV-1-A)",
     ("selenita/src/activation.rs", "org.celestina.Selenita1"):
         "Selenita's own capture interface (`Capture`, `ToggleRecording`, "
-        "`StopRecording`, and `Adopt` for an edited copy joining the history), "
+        "`RecordFocused`, `StopRecording`, and `Adopt` for an edited copy "
+        "joining the history), "
         "served beside the shared one on the activation connection for the "
         "niri key bindings and Fluorita; an interface, not a name",
     ("selenita/src/preview.rs", "org.celestina.Fluorita1"):

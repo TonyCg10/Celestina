@@ -1202,3 +1202,24 @@ focused. The rule in the author's configuration now reads `title` `^Vista
 previa` (corrected by the coordinator on 2026-10-10 at the author's
 request; the running niri reports the configuration valid). Selenita's
 recordings folder is renamed `Grabaciones` in the same program.
+
+Addendum 2026-10-11 (SEL-4): Selenita's recording controls change two
+host settings, both applied by the coordinator at the author's request on
+2026-10-11 with backups in the session scratchpad. The ScreenCast
+backend's output chooser (`~/.config/xdg-desktop-portal-wlr/config`,
+`chooser_cmd`) is now `/home/toni/.local/bin/selenita --pick-output`:
+it answers at once with the focused monitor when Selenita has just asked
+for one (`selenita --record-focused`, the `V` binding, a one-shot request
+in `$XDG_RUNTIME_DIR/selenita/pick-output` that lives at most 30 s), and
+otherwise runs the previous chooser, `celestina --pick-output`, unchanged,
+so every other screencast (a browser sharing a screen) still asks.
+Rollback: set `chooser_cmd` back to
+`/home/toni/.local/bin/celestina --pick-output` and restart
+`xdg-desktop-portal-wlr.service`. The niri configuration gains a third
+window rule (`app-id` `^org\.celestina\.Selenita$`, `title` `^Grabando`,
+floating at the top centre without focus) for the recording bar, and
+`V { spawn "selenita" "--record-focused"; }` in the author's `tools` mode;
+the running niri reports the configuration valid. Selenita's own
+`org.celestina.Selenita1` gains `RecordFocused`. The recording's pause
+joins segments with `ffmpeg -f concat -c copy`, the `ffmpeg` already
+present through libmpv: nothing new is installed.
