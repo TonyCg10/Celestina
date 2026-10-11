@@ -38,7 +38,7 @@ Siderita offers Calcita for PDF files.
 
 The application units are rows of each project's own plan:
 `CAL-1-A` to `CAL-1-C` in
-[Calcita's plan](../../../calcita/docs/plans/active/2026-10-09-cal-1-foundation.md),
+[Calcita's plan](../../../calcita/docs/plans/archive/),
 `SEL-1-A` to `SEL-1-C` in Selenita's (created by `EXT-1-B`).
 
 ## Exclusions
