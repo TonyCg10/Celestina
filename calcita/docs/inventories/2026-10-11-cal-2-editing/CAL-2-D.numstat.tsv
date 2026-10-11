@@ -1,0 +1,31 @@
+# CAL-2-D exact change inventory
+
+Base revision	b512cd504a4b854fdbcd3c4fb90a8ae1a4bce6c1
+Pathspec	calcita/ROADMAP.md
+Pathspec	calcita/STATUS.md
+Pathspec	calcita/docs/evidence/2026-10-11-annotations-shown.md
+Pathspec	calcita/docs/evidence/2026-10-11-cal-2-editing-archive.md
+Pathspec	calcita/docs/evidence/2026-10-11-editing.md
+Pathspec	calcita/docs/evidence/2026-10-11-forms.md
+Pathspec	calcita/docs/inventories/2026-10-11-cal-2-editing/CAL-2-D.numstat.tsv
+Pathspec	calcita/docs/plans/active/2026-10-11-cal-2-editing.md
+Pathspec	calcita/docs/plans/active/README.md
+Pathspec	calcita/docs/plans/archive/2026-10-11-cal-2-editing.md
+Pathspec	calcita/docs/specs/2026-10-11-editing-design.md
+Pathspec	calcita/docs/specs/2026-10-11-editing-plan.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	4	8c11c44ba9d0b6af9f2287aef0bdc1fdfb79d0bf63cc935021a786809a7bc3e5	calcita/ROADMAP.md
+11	12	34448362bacf24d0607ec270b287689db015cfecabc2bedccba1f2e8006fbe3f	calcita/STATUS.md
+1	1	58705e0b51fced5275d19b7d8ee5d2a672d5684677804976fe4498bc0cf24cbc	calcita/docs/evidence/2026-10-11-annotations-shown.md
+63	0	0f1bf09573794a3daebb0028c21131d0bd5f76bf940d4a0c44bafe168349557d	calcita/docs/evidence/2026-10-11-cal-2-editing-archive.md
+1	1	a1d980fa7e10a076ef7c51c03c4fda1ef5d370e4f58e60cab4ed366ae8913330	calcita/docs/evidence/2026-10-11-editing.md
+1	1	6ed7dced8a636c6dad0931e8cf01016ba562b260a691d9c7e7de079ab4323fbb	calcita/docs/evidence/2026-10-11-forms.md
+31	0	self	calcita/docs/inventories/2026-10-11-cal-2-editing/CAL-2-D.numstat.tsv
+0	69	deleted	calcita/docs/plans/active/2026-10-11-cal-2-editing.md
+4	3	9c081a0fe099180508105fbe7d30e6aeae85665abc59b0b8e27c9d76824c034f	calcita/docs/plans/active/README.md
+72	0	03e4963dfbdd4168716bcfdb8385e464d633fc4ad153885daa34ada759537df1	calcita/docs/plans/archive/2026-10-11-cal-2-editing.md
+1	1	54d514f3455650f5b6e9e859b8a3b3a98e4c152675a56347d4ff89fb20629f27	calcita/docs/specs/2026-10-11-editing-design.md
+1	1	297152751d32bd34834deb8372de3295deae951e890c8c59815a18e6145fa5ab	calcita/docs/specs/2026-10-11-editing-plan.md

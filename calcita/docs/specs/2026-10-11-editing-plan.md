@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Checkpoint `CAL-2`; ledger `calcita/docs/plans/active/2026-10-11-cal-2-editing.md` (rows CAL-2-A, CAL-2-B, CAL-2-C), created by Task 1; prefix `calcita:` (session commits `calcita-maintenance:`); each unit lands `--kind milestone`.
+- Checkpoint `CAL-2`; ledger `calcita/docs/plans/archive/2026-10-11-cal-2-editing.md` (rows CAL-2-A, CAL-2-B, CAL-2-C), created by Task 1; prefix `calcita:` (session commits `calcita-maintenance:`); each unit lands `--kind milestone`.
 - One new dependency: `lopdf = { version = "=0.45.0", default-features = false }` in `calcita-core`, justified in its `Cargo.toml`. No system package.
 - Writing is always an incremental update: the original bytes are a prefix of the result (tests `cmp` it). Encrypted or unparseable documents refuse edit mode with a notice.
 - Save outcomes: «Guardar ambas» (copy beside, default) and «Guardar solo la editada» (replace; original to the Trash via `siderita_ops`, never deleted); close with changes adds «Descartar».

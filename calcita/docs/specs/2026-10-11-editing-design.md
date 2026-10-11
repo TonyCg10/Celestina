@@ -5,7 +5,7 @@
   2026-10-11), who asked for the program to be implemented straight through
 - **Product:** Calcita, the suite's PDF viewer (1.0.1)
 - **Identifiers:** checkpoint `CAL-2`, units `CAL-2-A`, `CAL-2-B`, `CAL-2-C`,
-  ledger `calcita/docs/plans/active/2026-10-11-cal-2-editing.md`
+  ledger `calcita/docs/plans/archive/2026-10-11-cal-2-editing.md`
 
 ## 1. Goal and scope
 

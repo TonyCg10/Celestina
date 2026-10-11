@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-11
 - **Scope:** `CAL-2-A` of
-  [CAL-2's plan](../plans/active/2026-10-11-cal-2-editing.md):
+  [CAL-2's plan](../plans/archive/2026-10-11-cal-2-editing.md):
   `cpp/page_provider.cpp` and `cpp/calcita/page_provider.h` (new),
   `src/pages.rs` (new), `src/main.rs`, `src/document.rs`
   (`annotationCount`, `annotationsOnPage`), `src/controller.rs`

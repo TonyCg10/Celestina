@@ -1,7 +1,7 @@
 # Calcita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** CAL-2
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH,
   VAL-CAL-DARK, VAL-CAL-ANNOT, VAL-CAL-EDIT and VAL-CAL-FORM pending in
   [VALIDATION.md](VALIDATION.md) (they do not block)
@@ -15,7 +15,7 @@ a second launch, with the reading tools a person reaches for every day.
 CAL-2 adds light editing without rewriting a document: text boxes,
 highlights and freehand drawings as standard PDF annotations and the forms a
 PDF already carries, saved as incremental updates. Its ledger is the
-[active plan](docs/plans/active/2026-10-11-cal-2-editing.md), from
+[archived plan](docs/plans/archive/2026-10-11-cal-2-editing.md), from
 [the spec](docs/specs/2026-10-11-editing-design.md) and
 [the plan](docs/specs/2026-10-11-editing-plan.md).
 
@@ -50,11 +50,15 @@ PDF already carries, saved as incremental updates. Its ledger is the
 | CAL-1-D | done | CAL-1-C | the pages on opaque paper, 1.0.1 | [evidence](docs/evidence/2026-10-10-page-contrast.md) |
 | CAL-2-A | done | CAL-1-D | every annotation shown; the model and the coordinates | [evidence](docs/evidence/2026-10-11-annotations-shown.md) |
 | CAL-2-B | done | CAL-2-A | edit mode, the three tools, saving | [evidence](docs/evidence/2026-10-11-editing.md) |
-| CAL-2-C | active | CAL-2-B | forms shown, text fields and checkboxes filled and saved | [evidence](docs/evidence/2026-10-11-forms.md) |
+| CAL-2-C | done | CAL-2-B | forms shown, text fields and checkboxes filled and saved | [evidence](docs/evidence/2026-10-11-forms.md) |
 
 CAL-1 closed on 2026-10-11 at 1.0.1, after the bug unit CAL-1-D. Its build
 order, exclusions, exit and ledger are in the
 [archived plan](docs/plans/archive/2026-10-09-cal-1-foundation.md).
+
+CAL-2 closed on 2026-10-11 at 1.3.0, after CAL-2-C's forms. Its build order,
+exclusions, exit and ledger are in the
+[archived plan](docs/plans/archive/2026-10-11-cal-2-editing.md).
 
 ## Later
 

@@ -1,13 +1,13 @@
 # Calcita status
 
 - **Updated:** 2026-10-11
-- **Implementation:** CAL-2, editing (annotations and forms), is the
-  active checkpoint ([plan](docs/plans/active/2026-10-11-cal-2-editing.md)).
-  CAL-2-A (every annotation shown, the annotation model and the
-  coordinates) landed as 1.1.0 and CAL-2-B (the edit mode, the three tools
-  and saving) as 1.2.0; CAL-2-C (forms shown, text fields and checkboxes
-  filled and saved) is implemented and checked offscreen in its session
-  worktree, not yet landed. CAL-1 is closed and its
+- **Implementation:** no checkpoint is active. CAL-2, editing
+  (annotations and forms), is closed and its
+  [plan](docs/plans/archive/2026-10-11-cal-2-editing.md) archived: CAL-2-A
+  (every annotation shown, the annotation model and the coordinates) landed
+  as 1.1.0, CAL-2-B (the edit mode, the three tools and saving) as 1.2.0
+  and CAL-2-C (forms shown, text fields and checkboxes filled and saved) as
+  1.3.0. CAL-1 is closed and its
   [plan](docs/plans/archive/2026-10-09-cal-1-foundation.md) archived: CAL-1-A
   (opening, continuous pages, zoom and navigation) as 0.2.0, CAL-1-B
   (search, the outline, selection and copy, links) as 0.3.0, CAL-1-C (the
@@ -19,9 +19,8 @@
 
 ## Current checkout truth
 
-- Version 1.2.0 in the checkout, installed under the author's prefix
-  (`~/.local/bin/calcita`) by CAL-2-B's landing; filling forms below is in
-  the CAL-2-C worktree, not installed. The empty window «Sin documento» offers
+- Version 1.3.0 in the checkout, installed under the author's prefix
+  (`~/.local/bin/calcita`) by CAL-2-C's landing. The empty window «Sin documento» offers
   «Abrir…» (the FileChooser portal, filtered to PDF), the recent documents
   and a drop area. A click, Enter or Space on a recent row opens it; its menu (a right
   click, the Menu key or Shift+F10) has «Quitar de recientes».
@@ -43,7 +42,7 @@
   it with its annotations on one render thread of its own, so another
   program's highlights, notes and drawings show. QtPdf never draws form
   widgets, so a document with a form is shown from an in-memory copy with
-  each widget's appearance stamped into its page (CAL-2-C, not landed).
+  each widget's appearance stamped into its page (CAL-2-C).
   The window reads the document's annotation model and form with `lopdf`
   on a worker (`calcita_core::annot`). A
   page's address carries the revision of the file shown, renewed when the
@@ -78,7 +77,7 @@
   original to the Trash and reloads. Leaving or closing with changes asks,
   with «Descartar». The reading mode waits while editing; encrypted and
   unparseable documents refuse edit mode with a notice.
-- Forms (CAL-2-C, not landed): a click on a text field or a checkbox
+- Forms (CAL-2-C): a click on a text field or a checkbox
   starts editing on it; while editing they are controls over their
   widgets (Tab and Shift+Tab in the form's order, across pages; Space
   checks), and their values join the same undo, redo and save: a text
