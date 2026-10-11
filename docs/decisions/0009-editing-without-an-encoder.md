@@ -1,5 +1,9 @@
 # ADR 0009: Fluorita edits the media it indexes, and adds no encoder
 
+> Amended on 2026-10-10 for one operation, a video's duration trim by an
+> `ffmpeg` child process: see
+> [the amendment](#amendment-2026-10-10-a-videos-duration-trim-prv-1).
+
 - **Date:** 2026-08-19
 - **Status:** accepted
 
@@ -128,3 +132,41 @@ something the author actually does; or the toolkit's image writer is measured
 losing quality or metadata a lossless path would have kept. The first two are
 the evidence an encoder decision would need. The third is a defect in this one,
 and is repaired here rather than answered with FFmpeg.
+
+## Amendment 2026-10-10: a video's duration trim (PRV-1)
+
+The author's capture preview (`PRV-1`, the
+[design](../superpowers/specs/2026-10-10-capture-preview-design.md) §6)
+names the case the "Revisit when" above foresaw: a screen recording has a
+keyframe a second, so a cut at the keyframes lands up to a second away from
+the frame chosen, which for a clip about to be sent is the real obstacle.
+
+**One operation is opened, and only one: trimming a video's duration,
+frame-accurately.** It is *raster*-class: the span kept is re-encoded into a
+new file (H.264 and AAC in MP4) and the surface says so, a new film, before
+it is saved. The encoder is `/usr/bin/ffmpeg`, run as a **child process
+and never linked**: it ships in the `ffmpeg` package libmpv already needs, so
+nothing new is installed and no encoder enters Fluorita's link closure. The
+child gets a null standard input, writes a hidden sibling of the original,
+reports its progress on a pipe, is killed and its file removed on a cancel,
+and its file takes a name only after it exits 0 having written a frame. A
+trim always writes MP4 holding the film's main video and one audio stream;
+every other stream (further audio tracks, subtitles, cover pictures, data)
+is left out, and the surface says so, with any change of container, before
+the save. The video encoder is chosen the way Selenita's recorder chooses
+between its own: VA-API when a render node exists and `ffmpeg` lists
+`h264_vaapi`, else `libx264`, each at a constant quality (QP 20, CRF 21).
+Unlike the recorder, which uses GStreamer's encoders and a fixed render
+node, the trim takes the first render node it finds, and a VA-API run that
+fails before anything is published is tried once more with `libx264`. A
+missing `ffmpeg`, a missing encoder and a failing child are each said in
+Spanish, and none of them touches the original.
+
+Everything else in this decision stands. The two save outcomes apply to a
+trim exactly as to a picture: «Guardar ambas» lands a copy beside the
+original, «Guardar solo la editada» sends the original to the desktop Trash
+once the result exists, never an `unlink`. Pictures keep every rule above
+unchanged — the toolkit is still their only writer. Cropping a video's area,
+removing its sound, changing its speed, joining clips, format conversion and
+clip or GIF export remain refused here, each needing its own decision; the
+child process is not a licence for them.

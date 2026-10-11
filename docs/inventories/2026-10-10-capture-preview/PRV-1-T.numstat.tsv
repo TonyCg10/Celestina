@@ -1,0 +1,15 @@
+# PRV-1-T exact change inventory
+
+Base revision	4c03e5ce07cc0d2ade92a229ff129bbbf6cd5ec8
+Pathspec	docs/decisions/0009-editing-without-an-encoder.md
+Pathspec	docs/evidence/2026-10-10-capture-preview-adr-0009.md
+Pathspec	docs/inventories/2026-10-10-capture-preview/PRV-1-T.numstat.tsv
+Pathspec	docs/plans/active/2026-10-10-capture-preview.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+42	0	e8c61ae4e268cd74954b6bb4affec2487c52c5473eac22e96b760438d2b70c0d	docs/decisions/0009-editing-without-an-encoder.md
+42	0	7a66d536c29801ecf9dc9cba406d30cd027b70e883eac563b3ba0fe9b0e7aa98	docs/evidence/2026-10-10-capture-preview-adr-0009.md
+15	0	self	docs/inventories/2026-10-10-capture-preview/PRV-1-T.numstat.tsv
+1	0	3c47e4633f495282beed8ed2cacccedb27d4d033bae2f7bddca4e46d0328a3c5	docs/plans/active/2026-10-10-capture-preview.md
