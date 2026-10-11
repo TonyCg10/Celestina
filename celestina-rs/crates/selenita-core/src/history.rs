@@ -6,6 +6,10 @@
 //! (byte-exact, `celestina_core::pathkey`). A line that does not read is
 //! skipped, so a damaged file loses lines rather than the whole list. An entry
 //! whose file is gone is dropped on load ([`History::prune_missing`]).
+//!
+//! A file another application wrote into Selenita's folders (Fluorita's
+//! edited copy beside a capture) joins the history through [`adopted`], the
+//! rule `org.celestina.Selenita1.Adopt` applies (ADR 0012, PRV-1).
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -212,4 +216,45 @@ impl History {
             .map(|_| ())
             .map_err(HistoryError::Write)
     }
+}
+
+/// Selenita's two folders, as [`adopted`] reads them: the captures folder
+/// inside the pictures folder and the recordings folder inside the videos
+/// folder. The captures folder's name is product copy, so the caller names
+/// both.
+#[derive(Clone, Copy, Debug)]
+pub struct Folders<'a> {
+    pub captures: &'a Path,
+    pub recordings: &'a Path,
+}
+
+/// The entry `path` becomes when another application hands it to Selenita
+/// (`Adopt`), taken `now`: a regular file (not a link) directly inside one
+/// of `folders`, a screenshot for a `.png` and a recording for a `.mp4`
+/// (either case). `None` for anything else, which is ignored. Blocking: it
+/// reads the file's metadata.
+#[must_use]
+pub fn adopted(path: &Path, folders: Folders<'_>, now: SystemTime) -> Option<Entry> {
+    let parent = path.parent()?;
+    if !path.is_absolute() || (parent != folders.captures && parent != folders.recordings) {
+        return None;
+    }
+    let extension = path.extension()?;
+    let kind = if extension.eq_ignore_ascii_case("png") {
+        EntryKind::Screenshot
+    } else if extension.eq_ignore_ascii_case("mp4") {
+        EntryKind::Recording
+    } else {
+        return None;
+    };
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    if !meta.file_type().is_file() {
+        return None;
+    }
+    Some(Entry {
+        path: path.to_path_buf(),
+        kind,
+        taken_at: now,
+        size: meta.len(),
+    })
 }

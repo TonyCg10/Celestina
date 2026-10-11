@@ -1,0 +1,73 @@
+# SEL-2-A exact change inventory
+
+Base revision	cf2668ac6661fc0068bb25e7734332daaf43b8a9
+Pathspec	celestina-rs/crates/selenita-core/src/history.rs
+Pathspec	celestina-rs/crates/selenita-core/src/lib.rs
+Pathspec	celestina-rs/crates/selenita-core/src/poster.rs
+Pathspec	celestina-rs/crates/selenita-core/tests/history.rs
+Pathspec	celestina-rs/crates/selenita-core/tests/poster.rs
+Pathspec	docs/version-history.tsv
+Pathspec	selenita/AGENTS.md
+Pathspec	selenita/Cargo.lock
+Pathspec	selenita/Cargo.toml
+Pathspec	selenita/README.md
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/VALIDATION.md
+Pathspec	selenita/build.rs
+Pathspec	selenita/docs/evidence/2026-10-10-preview.md
+Pathspec	selenita/docs/inventories/2026-10-10-sel-2-preview/SEL-2-A.numstat.tsv
+Pathspec	selenita/docs/plans/active/2026-10-10-sel-2-preview.md
+Pathspec	selenita/docs/plans/active/README.md
+Pathspec	selenita/qml/Main.qml
+Pathspec	selenita/qml/PreviewWindow.qml
+Pathspec	selenita/qml/components/ActivationRoute.qml
+Pathspec	selenita/scripts/smoke.sh
+Pathspec	selenita/src/activation.rs
+Pathspec	selenita/src/backend.rs
+Pathspec	selenita/src/capture.rs
+Pathspec	selenita/src/controller.rs
+Pathspec	selenita/src/main.rs
+Pathspec	selenita/src/preview.rs
+Pathspec	selenita/src/record.rs
+Pathspec	selenita/tests/qml/stubs/SelenitaActivation.qml
+Pathspec	selenita/tests/qml/stubs/SelenitaController.qml
+Pathspec	selenita/tests/qml/tst_main.qml
+Pathspec	selenita/tests/qml/tst_preview.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+45	0	b7b4f93afea4519108837b1e6b808ff21f6d616e4d709b6b9c19bcc5d2028dec	celestina-rs/crates/selenita-core/src/history.rs
+3	1	d477c506d236c7fbd72a131f9f8f0e1294cc3f035545aae4597d3ecbfc082b80	celestina-rs/crates/selenita-core/src/lib.rs
+160	0	639ea49aa003cb60f24e2377ad36cfb030b9d7d2369acd097c303593778a0943	celestina-rs/crates/selenita-core/src/poster.rs
+58	1	8d4b9d8af06faec86537142631b6a6ae7b552204e27423f2c78926be43dd742d	celestina-rs/crates/selenita-core/tests/history.rs
+195	0	a1bce596aa0ed713a2fd1cc78dac82e9b97687ee6379814f469bdd3b326aa556	celestina-rs/crates/selenita-core/tests/poster.rs
+1	0	a0e284862bd938fe82604e3f74451b4bfe62cada6d0ace774f5798e349fbbeb0	docs/version-history.tsv
+7	4	fd845d7e1882b0b7690a0389e9a2398bf35dba5b40af9609967086dbe68bfcb6	selenita/AGENTS.md
+1	1	9f72839a4132eb4badcf6b1aca223456571ebf212e3565444e567fa7240ef892	selenita/Cargo.lock
+1	1	f073f39d9205c3f0e17c1432d30794e6ae196718a8b8493db788d33ebb66ab23	selenita/Cargo.toml
+60	8	72bdbda5a608203b555a32646beb310071a867bd0ec33ac899c5372dba3412f7	selenita/README.md
+17	5	86dae525219904f3d5723062e9c26d2bbf3f3897010d93e3231382abd3724e73	selenita/ROADMAP.md
+79	10	51a4ca239a5402c55493ba4d297ae3f6b7a65791366e42bcb0cad02694859173	selenita/STATUS.md
+54	4	f204569888c698e35bf57af6c390d92f47b4c6dadf9b40cf426ae0ac60d7089d	selenita/VALIDATION.md
+1	0	8181b5681f014a5438fabb670b6c480a6a9e96dee3725f42dc05f0e5cbc09461	selenita/build.rs
+261	0	6f70f2e836fb415726030dc2765b292a0cefd366aeb2a0f648a47c5f4903baa1	selenita/docs/evidence/2026-10-10-preview.md
+73	0	self	selenita/docs/inventories/2026-10-10-sel-2-preview/SEL-2-A.numstat.tsv
+70	0	e2d860667ca6800b704a2225fbb514721075bfb79d0aff08dfebe2ec88799b58	selenita/docs/plans/active/2026-10-10-sel-2-preview.md
+3	3	a242255bc03aa70b27ea3d087841d6b3d3c326907ff23ebf686b690c40c8ca95	selenita/docs/plans/active/README.md
+52	4	18689f36e1cd26bf1e72e10e78c3ffc518388ffa98b50f2b8d2140726fc8aebb	selenita/qml/Main.qml
+348	0	76aa8b9be6ccc2bc7f4617794b144a4298f7e20ec10a2b7dfecba99109e54abb	selenita/qml/PreviewWindow.qml
+8	3	877b817ad394b768e41ab72ff0cffa6f656ad0052ebab1fa1e9f8c58f83e0e03	selenita/qml/components/ActivationRoute.qml
+78	16	7c293b8d00061f0e6fc35a418d05c9a7fd426f4082dcdb1da0f5eec473cdf017	selenita/scripts/smoke.sh
+50	10	b49587c3db4f4caefb12fd95c34daedb8ac2101e5f07d9f6d77af9b9379e9418	selenita/src/activation.rs
+36	6	8fd99c54be826de6748170eb339eb288310e1c5f6ed0011f966604dfc9640f5c	selenita/src/backend.rs
+222	11	15dde42daee5735eaaab578ab664cc68ef4ca787e219818133f34cd101c6b154	selenita/src/capture.rs
+332	36	3671d2298b1601a173ef7126c2515442b6136d94f8c191611531bb7b27f07e2d	selenita/src/controller.rs
+8	5	3ef352103db48450979eedafaba0c5a744f796b2c70a87170f1150a26ceaff21	selenita/src/main.rs
+512	0	eae0e92ba22afc4df771a35b7d4956cdf06b256e63de4b4c1247adc723d65e71	selenita/src/preview.rs
+3	2	8040cdf49d48523d34e22963e2b2832012c92bcb8cfb32aa250aa95cae2142f8	selenita/src/record.rs
+3	2	fe8e74ffed0fb10c12fb3c8e4290483e76d849f240619280213e6ed001fdb826	selenita/tests/qml/stubs/SelenitaActivation.qml
+63	3	fa21477363e864e7e52814cb1533ee0e3de165e6e7d98d1ea8fbef1f311c1fde	selenita/tests/qml/stubs/SelenitaController.qml
+57	7	9c33bd782d06905ef25a1304aa62d8022d2b71c5535e3721207a332128db9368	selenita/tests/qml/tst_main.qml
+214	0	a95e7c67a7ca1ce74a63a2d142ecd5ab8b6e23050d7d72df1b8067d414e0e5d4	selenita/tests/qml/tst_preview.qml

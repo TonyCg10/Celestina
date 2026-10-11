@@ -5,14 +5,17 @@
 //! `wl-copy` and niri's `screenshot-window` under deadlines, hands a file to
 //! Fluorita through the suite's activation, asks the file manager to show one
 //! (`org.freedesktop.FileManager1.ShowItems`, which Siderita serves) and moves
-//! a file to the freedesktop trash through `siderita_ops`. Its tools are
+//! a file to the freedesktop trash through `siderita_ops`; for the corner
+//! preview it hands a file to Fluorita's editor and takes a recording's
+//! poster with `gst-launch-1.0` (both in `preview.rs`). Its tools are
 //! looked up in `SELENITA_TOOLS_DIR` when that is set: a folder of shell
-//! stubs named `grim`, `slurp`, `wl-copy` and `niri` (the test seam beside
-//! the fakes).
+//! stubs named `grim`, `slurp`, `wl-copy`, `niri` and `gst-launch-1.0` (the
+//! test seam beside the fakes).
 //!
-//! The fake takes nothing from the session: a capture writes a 1×1 PNG, the
-//! clipboard and the other applications are lines on stderr, and a delete
-//! removes the file. Every method blocks and runs on the capture worker.
+//! The fake takes nothing from the session: a capture and a poster write a
+//! 1×1 PNG, the clipboard and the other applications are lines on stderr,
+//! and a delete removes the file. Every method blocks and runs on the
+//! capture worker.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -24,6 +27,7 @@ use selenita_core::niri::{self, Output, Window};
 use selenita_core::{runner, tools, Geometry, Target};
 
 use crate::capture::CaptureError;
+use crate::preview;
 
 /// How long `grim` and niri's window action may take.
 const GRAB_DEADLINE: Duration = Duration::from_secs(10);
@@ -62,9 +66,13 @@ pub trait Backend: Send {
     /// Puts `png` on the clipboard.
     fn copy_png(&mut self, png: &[u8]) -> Result<(), CaptureError>;
     fn open_in_fluorita(&mut self, path: &Path) -> Result<(), CaptureError>;
+    /// Hands `path` to Fluorita's floating editor (the preview's click).
+    fn edit_in_fluorita(&mut self, path: &Path) -> Result<(), CaptureError>;
     fn show_in_siderita(&mut self, path: &Path) -> Result<(), CaptureError>;
     /// Moves `path` to the trash.
     fn trash(&mut self, path: &Path) -> Result<(), CaptureError>;
+    /// Writes the first frame of the recording `video` to `out` as a PNG.
+    fn poster(&mut self, video: &Path, out: &Path) -> Result<(), CaptureError>;
 }
 
 /// The backend `fake` asks for.
@@ -172,6 +180,10 @@ impl Backend for Real {
         Ok(())
     }
 
+    fn edit_in_fluorita(&mut self, path: &Path) -> Result<(), CaptureError> {
+        preview::hand_off(&mut preview::Session::default(), path).map(|_| ())
+    }
+
     fn show_in_siderita(&mut self, path: &Path) -> Result<(), CaptureError> {
         let uri = file_uri::from_path(path).ok_or_else(|| CaptureError::Show(String::new()))?;
         let show = || -> zbus::Result<()> {
@@ -193,6 +205,10 @@ impl Backend for Real {
         siderita_ops::trash(path, &CancellationToken::new(), &mut |_| {})
             .map(|_| ())
             .map_err(|error| CaptureError::Trash(error.to_string()))
+    }
+
+    fn poster(&mut self, video: &Path, out: &Path) -> Result<(), CaptureError> {
+        preview::extract_poster(self.tools_dir.as_deref(), video, out).map_err(CaptureError::Tool)
     }
 }
 
@@ -273,6 +289,11 @@ impl Backend for Fake {
         Ok(())
     }
 
+    fn edit_in_fluorita(&mut self, path: &Path) -> Result<(), CaptureError> {
+        eprintln!("selenita-fake: edit in Fluorita {}", path.display());
+        Ok(())
+    }
+
     fn show_in_siderita(&mut self, path: &Path) -> Result<(), CaptureError> {
         eprintln!("selenita-fake: show in Siderita {}", path.display());
         Ok(())
@@ -280,6 +301,15 @@ impl Backend for Fake {
 
     fn trash(&mut self, path: &Path) -> Result<(), CaptureError> {
         std::fs::remove_file(path).map_err(|error| CaptureError::Trash(error.to_string()))
+    }
+
+    fn poster(&mut self, video: &Path, out: &Path) -> Result<(), CaptureError> {
+        eprintln!(
+            "selenita-fake: poster of {} to {}",
+            video.display(),
+            out.display()
+        );
+        std::fs::write(out, PIXEL_PNG).map_err(|error| CaptureError::Write(error.to_string()))
     }
 }
 

@@ -4,8 +4,10 @@ import org.celestina.selenita 1.0
 
 // The whole window, over QML stand-ins for the Rust types: it constructs,
 // starts its activation adapter, shows the three cards in order, a second
-// launch brings it forward, a key binding's capture is taken, and the window
-// stays for a capture and shows after a launch's capture.
+// launch brings it forward, a key binding's capture is taken, the window
+// stays for a capture, a key-binding launch shows only the corner preview
+// (the window only when it fails), and a file handed back goes to the
+// controller.
 TestCase {
     id: testCase
     name: "Main"
@@ -77,19 +79,67 @@ TestCase {
         compare(SelenitaController.history[0].kind, "recording")
     }
 
-    // A launch's capture shows the window when it ends; a capture asked from
-    // the window never hides it (the person may be capturing Selenita).
-    function test_the_window_stays_for_a_capture_and_shows_after_a_launch_capture() {
+    // A capture asked from the window never hides it (the person may be
+    // capturing Selenita); its preview shows beside it.
+    function test_the_window_stays_for_a_capture_and_the_preview_shows() {
         SelenitaController.reset()
+        SelenitaController.previewOnResult = true
         const window = createTemporaryObject(mainComponent, testCase)
         tryVerify(function() { return window.visible })
         window.startCapture()
         verify(window.visible)
         compare(SelenitaController.history.length, 1)
-        window.hide()
+        verify(window.preview.visible)
+    }
+
+    // A key-binding launch (`--screenshot`, `--record`) never shows the
+    // main window when its capture ends: only the preview shows. A failed
+    // capture shows the window, so its notice can be read.
+    function test_a_key_binding_launch_shows_only_the_preview() {
+        SelenitaController.reset()
+        SelenitaController.launchCapture = true
+        SelenitaController.previewOnResult = true
+        const window = createTemporaryObject(mainComponent, testCase)
+        verify(!window.visible)
+        window.activation.captureRequested("screen")
+        compare(SelenitaController.history.length, 1)
+        const preview = window.preview
+        verify(preview.visible, "the preview shows the capture")
+        wait(100)
+        verify(!window.visible, "the main window stays hidden")
+        window.activation.recordingRequested("toggle")
+        window.activation.recordingRequested("stop")
+        verify(preview.visible)
+        compare(SelenitaController.previewKind, "recording")
         verify(!window.visible)
         SelenitaController.showWindowRequested()
-        verify(window.visible)
+        verify(window.visible, "a failure shows the window")
+        SelenitaController.launchCapture = false
+    }
+
+    // Closing the window with the preview on screen hides the preview at
+    // once (Qt then finds no window left and quits Selenita, which
+    // finishes a recording under way) and tells the controller.
+    function test_closing_the_window_takes_the_preview_with_it() {
+        SelenitaController.reset()
+        SelenitaController.previewOnResult = true
+        const window = createTemporaryObject(mainComponent, testCase)
+        tryVerify(function() { return window.visible })
+        window.startCapture()
+        verify(window.preview.visible)
+        verify(SelenitaController.previewVisible)
+        window.close()
+        verify(!window.visible)
+        verify(!window.preview.visible, "the preview went with the window, at once")
+        verify(!SelenitaController.previewVisible)
+        verify(SelenitaController.calls.indexOf("dismissPreview:/fake/Captura 1.png") >= 0)
+    }
+
+    function test_a_file_handed_back_goes_to_the_controller() {
+        SelenitaController.reset()
+        const window = createTemporaryObject(mainComponent, testCase)
+        window.activation.adoptRequested("/pictures/Capturas/Captura%201.png")
+        compare(SelenitaController.calls, ["adopt:/pictures/Capturas/Captura%201.png"])
     }
 
     function test_a_second_launch_raises_the_window() {

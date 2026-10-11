@@ -5,6 +5,7 @@ mod capture;
 mod controller;
 mod flags;
 mod portal;
+mod preview;
 mod record;
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
@@ -43,12 +44,14 @@ fn main() {
     };
 
     // A key binding's request goes to the running instance when there is
-    // one; otherwise this launch becomes the instance, does it and stays
-    // open on the history.
-    if let Some(request) = asked {
+    // one; otherwise this launch becomes the instance and does it with the
+    // main window hidden: the corner preview shows the result.
+    if let Some(request) = &asked {
         let sent = match request {
-            activation::Request::Capture(kind) => activation::send_capture(kind),
-            activation::Request::Recording(action) => activation::send_recording(action),
+            activation::Request::Capture(kind) => activation::send_capture(*kind),
+            activation::Request::Recording(action) => activation::send_recording(*action),
+            // Only the bus hands a file back; the command line never does.
+            activation::Request::Adopt(_) => Ok(false),
         };
         match sent {
             Ok(true) => return,

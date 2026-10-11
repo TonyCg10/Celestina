@@ -11,6 +11,9 @@ terminal command.
 - Records the screen to MP4, with the system sound when asked.
 - Keeps a history of the last captures and recordings, with open, show in
   Siderita and delete, and copy for a capture.
+- Shows each new capture and recording in a small preview in the corner of
+  the screen, which can be dragged into any program that takes files or
+  clicked to edit the file in Fluorita.
 - Opens no files: launching it with a path only brings the window forward.
 
 - The keyboard: `1`, `2`, `3` choose the target, Enter captures (or presses
@@ -22,13 +25,17 @@ terminal command.
 
 Screenshots, the history and the key-binding flags are in (SEL-1-A), so is
 recording (SEL-1-B), and the keyboard and accessibility pass closes the
-foundation at 1.0 (SEL-1-C). See the
-[design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md).
+foundation at 1.0 (SEL-1-C). The corner preview comes with SEL-2-A. See the
+[design](../docs/superpowers/specs/2026-10-09-reading-and-capture-design.md)
+and the
+[capture preview design](../docs/superpowers/specs/2026-10-10-capture-preview-design.md).
 
 ## Key bindings
 
-niri runs the flags; the running window takes the capture, or a new one
-starts, takes it and stays open on the history:
+niri runs the flags; the running Selenita takes the capture, or a new one
+starts and takes it without showing its window (the corner preview shows
+the result; a failure shows the window with its notice) and ends once the
+preview has gone and nothing records:
 
 ```kdl
 binds {
@@ -45,7 +52,50 @@ stops the one under way; `--stop` only stops, and when no instance answers
 on the bus it touches `$XDG_RUNTIME_DIR/selenita/stop`, which the recording
 worker watches. The same requests are `Capture(s)`, `ToggleRecording()` and
 `StopRecording()` on `org.celestina.Selenita1`, served at
-`/org/celestina/Selenita` beside the shared activation interface.
+`/org/celestina/Selenita` beside the shared activation interface. The same
+interface has `Adopt(s key)` (ADR 0012, PRV-1): Fluorita hands back an
+edited copy by its `pathkey` key, and a regular `.png` or `.mp4` directly in
+the pictures folder's «Capturas» or the videos folder's `Recordings` joins
+the history; anything else is ignored.
+
+## La vista previa
+
+After every capture saved to a file and every finished recording, however
+it was started, the result shows in a small frameless window titled «Vista
+previa»: the picture, or the recording's first frame with its length and
+the film glyph. It stays 5 s (the pointer resting on it holds it; it starts
+again when the pointer leaves) and leaves with a 200 ms fade and slide
+(none with reduced motion); a new result replaces it, the × closes it, and
+so does trashing its file from the history.
+
+- **Drag** it into any program that takes files (a chat, a mail, Siderita):
+  it offers the file as `text/uri-list`, as a copy only.
+- **Click** it to edit the file in Fluorita's floating editor:
+  `org.celestina.Fluorita1.Edit(key)` when Fluorita runs, else
+  `fluorita --edit <path>`. «No se ha podido abrir Fluorita.» says when
+  that failed.
+
+It never takes the keyboard focus, and it never keeps Selenita running:
+closing the main window ends Selenita and takes the preview with it.
+Selenita cannot place its own window
+under niri; this window rule (spec §7, added to niri's configuration by the
+suite's PRV-1-E) puts it at the bottom-right corner of the focused output
+without the focus:
+
+```kdl
+window-rule {
+    match app-id=r#"^org\.celestina\.Selenita$"# title="^Vista previa$"
+    open-floating true
+    open-focused false
+    default-floating-position x=24 y=24 relative-to="bottom-right"
+}
+```
+
+A recording's first frame is taken by a `gst-launch-1.0` child (`filesrc !
+qtdemux ! decodebin ! videoconvert ! pngenc snapshot=true`, 3 s at most)
+into `$XDG_RUNTIME_DIR/selenita/poster-<n>.png` (a private folder; with no
+runtime folder there is no poster); its length is read from the MP4's own
+movie header.
 
 ## Recording
 
@@ -81,6 +131,8 @@ button is disabled and the notice names the package.
 | Fluorita, Siderita | «Abrir en Fluorita» and «Mostrar en Siderita» (`org.freedesktop.FileManager1`) | SEL-1-A |
 | `xdg-desktop-portal` with a ScreenCast backend (`wlr` under niri, the suite's build: see below) | the recording's monitor and PipeWire node | SEL-1-B, SEL-1-F |
 | GStreamer (`gst-launch-1.0`, `gst-inspect-1.0`) with `gst-plugin-pipewire` (`pipewiresrc`) | running the recording pipeline | SEL-1-B |
+| GStreamer's `qtdemux` and `pngenc` (`gst-plugins-good`) and an H.264 decoder (`gst-libav` or `gst-plugin-va`) | a recording's first frame for the preview; without them the preview shows the film glyph | SEL-2-A |
+| Fluorita with `org.celestina.Fluorita1` (FLU-P1-A) | the preview's click: the floating editor | SEL-2-A |
 | `gst-plugins-good` (`mp4mux`) | muxing the recording; probed at start, said in the card and the notice when missing | SEL-1-B |
 | `gst-plugins-ugly` (`x264enc`), `gst-plugin-va` (`vah264enc`, optional), `gst-libav` (`avenc_aac`) | encoding the picture and the sound | SEL-1-B |
 
@@ -115,9 +167,9 @@ service, or copy `.prev` back.
 
 | Area | Responsibility |
 |---|---|
-| `../celestina-rs/crates/selenita-core` | Targets, file names, history, niri client, tool argv and the deadline runner, the recording pipeline, its state machine and the stop file; no Qt |
-| `src/` | The CXX-Qt controller, the capture worker and its backends (real and fake), the ScreenCast portal client, the recording worker and its recorders (real and fake), the activation adapter with `org.celestina.Selenita1`, the key-binding flags, the appearance follower |
-| `qml/` | The window with its key map, the capture, recording and history cards and their rows |
+| `../celestina-rs/crates/selenita-core` | Targets, file names, history and the `Adopt` rule, niri client, tool argv and the deadline runner, the recording pipeline, its state machine and the stop file, the poster's argv, a PNG's size and an MP4's length; no Qt |
+| `src/` | The CXX-Qt controller, the capture worker and its backends (real and fake), the preview's poster and its hand-off to Fluorita (`preview.rs`), the ScreenCast portal client, the recording worker and its recorders (real and fake), the activation adapter with `org.celestina.Selenita1`, the key-binding flags, the appearance follower |
+| `qml/` | The window with its key map, the capture, recording and history cards and their rows, and the corner preview's window |
 | `../celestina-style` | Canonical visual tokens, controls and assets, linked |
 | `org.celestina.Selenita.desktop` | Desktop discovery |
 

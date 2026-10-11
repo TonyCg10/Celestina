@@ -1,4 +1,4 @@
-use selenita_core::history::CAPACITY;
+use selenita_core::history::{adopted, Folders, CAPACITY};
 use selenita_core::{Entry, EntryKind, History};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -121,4 +121,61 @@ fn damaged_lines_are_skipped_and_a_missing_file_is_empty() {
         .entries()
         .is_empty());
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// `Selenita1.Adopt`'s rule (ADR 0012, PRV-1): a regular file directly in
+/// the captures or the recordings folder is an entry, its kind from the
+/// extension; anything else is not.
+#[test]
+fn only_a_capture_or_a_recording_in_selenitas_folders_is_adopted() {
+    let dir = scratch("adopt");
+    let captures = dir.join("Pictures").join("Capturas");
+    let recordings = dir.join("Videos").join("Recordings");
+    std::fs::create_dir_all(&captures).expect("captures");
+    std::fs::create_dir_all(&recordings).expect("recordings");
+    let folders = Folders {
+        captures: &captures,
+        recordings: &recordings,
+    };
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000);
+
+    let edited = captures.join("Captura 2026-10-10 19.00.00 (2).png");
+    std::fs::write(&edited, b"edited png").expect("edited");
+    let entry = adopted(&edited, folders, now).expect("a capture");
+    assert_eq!(entry.path, edited);
+    assert_eq!(entry.kind, EntryKind::Screenshot);
+    assert_eq!(entry.size, 10);
+    assert_eq!(entry.taken_at, now);
+
+    let trimmed = recordings.join("Clip 2026-10-10 19.00.00 (2).MP4");
+    std::fs::write(&trimmed, b"mp4").expect("trimmed");
+    assert_eq!(
+        adopted(&trimmed, folders, now).map(|entry| entry.kind),
+        Some(EntryKind::Recording)
+    );
+
+    // Outside the folders, below them, of another kind, not a regular file
+    // or not there at all: nothing.
+    let elsewhere = dir.join("Captura.png");
+    std::fs::write(&elsewhere, b"png").expect("elsewhere");
+    assert_eq!(adopted(&elsewhere, folders, now), None);
+    let below = captures.join("sub");
+    std::fs::create_dir_all(&below).expect("below");
+    std::fs::write(below.join("Captura.png"), b"png").expect("below file");
+    assert_eq!(adopted(&below.join("Captura.png"), folders, now), None);
+    let text = captures.join("notes.txt");
+    std::fs::write(&text, b"text").expect("text");
+    assert_eq!(adopted(&text, folders, now), None);
+    let folder = captures.join("folder.png");
+    std::fs::create_dir_all(&folder).expect("folder");
+    assert_eq!(adopted(&folder, folders, now), None);
+    let link = captures.join("link.png");
+    std::os::unix::fs::symlink(&edited, &link).expect("link");
+    assert_eq!(adopted(&link, folders, now), None);
+    assert_eq!(adopted(&captures.join("gone.png"), folders, now), None);
+    assert_eq!(
+        adopted(std::path::Path::new("relative.png"), folders, now),
+        None
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

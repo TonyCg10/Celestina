@@ -3,25 +3,29 @@
 //! It carries the appearance to the window (`appearanceReducedMotion` and
 //! `appearanceTextScale`, handed to `CelestinaAppearance`), the smoke and
 //! fake switches, the capture card's choices, the recording card's state,
-//! the history and the outputs. Every capture and every history action is
-//! queued to the capture worker (`capture.rs`) and every recording to the
-//! recording worker (`record.rs`); their reports come back through the Qt
-//! thread's queue. The singleton lives as long as the engine, so its
-//! follower and its workers live until the process exits.
+//! the history, the outputs and the corner preview of the latest result.
+//! Every capture, every history action, the preview's hand-off to Fluorita
+//! and every file handed back (`Adopt`) is queued to the capture worker
+//! (`capture.rs`) and every recording to the recording worker
+//! (`record.rs`); their reports come back through the Qt thread's queue.
+//! The singleton lives as long as the engine, so its follower and its
+//! workers live until the process exits.
 
 use std::pin::Pin;
 use std::time::UNIX_EPOCH;
 
-use celestina_core::file_uri;
+use celestina_core::{file_uri, pathkey};
 use celestina_settings::Follower;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QVariant};
+use cxx_qt_lib::{QList, QMap, QMapPair_QString_QVariant, QString, QUrl, QVariant};
+use selenita_core::poster::clock_text;
 use selenita_core::target::delay_from_seconds;
 use selenita_core::tools::slurp_colour;
 use selenita_core::{Entry, TargetKind};
 
 use crate::appearance::{self, Values};
 use crate::capture::{Action, CaptureError, Report, Request, Worker};
+use crate::preview::Preview;
 use crate::record;
 
 /// slurp's colours when QML hands over something that is not a colour: the
@@ -36,6 +40,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qvariant.h");
         type QVariant = cxx_qt_lib::QVariant;
+        include!("cxx-qt-lib/qurl.h");
+        type QUrl = cxx_qt_lib::QUrl;
     }
 
     #[auto_cxx_name]
@@ -58,9 +64,14 @@ pub mod qobject {
             NOTIFY
         )]
         #[qproperty(bool, smoke_report, cxx_name = "smokeReport", READ, CONSTANT)]
+        // `SELENITA_SMOKE_CLOSE` set: the smoke closes the window while the
+        // preview shows and expects the process to end.
+        #[qproperty(bool, smoke_close, cxx_name = "smokeClose", READ, CONSTANT)]
         #[qproperty(bool, fake, READ, CONSTANT)]
-        // This launch came from `--screenshot` with no Selenita running: the
-        // window starts hidden, takes the capture and shows on the history.
+        // This launch came from `--screenshot` or `--record` with no
+        // Selenita running: the main window starts hidden and stays hidden
+        // (the corner preview shows the result) unless the capture fails or
+        // another launch raises it.
         #[qproperty(bool, launch_capture, cxx_name = "launchCapture", READ, CONSTANT)]
         // The capture card's choices: `screen`, `window` or `region`; the
         // delay in seconds (0, 3, 5 or 10); the two destinations; the output
@@ -113,6 +124,21 @@ pub mod qobject {
             WRITE,
             NOTIFY
         )]
+        // The corner preview of the latest result: whether it shows; the
+        // file's key (`pathkey`) and its `file://` URI (what a drag
+        // offers); `screenshot` or `recording`; what it shows (the picture,
+        // or a recording's poster, empty when there is none); a
+        // recording's length as `m:ss` (empty for a picture or when
+        // unknown); height over width of what it shows (0 when unknown);
+        // why the hand-off to Fluorita failed (empty when it did not).
+        #[qproperty(bool, preview_visible, cxx_name = "previewVisible", READ, NOTIFY)]
+        #[qproperty(QString, preview_key, cxx_name = "previewKey", READ, NOTIFY)]
+        #[qproperty(QString, preview_file_uri, cxx_name = "previewFileUri", READ, NOTIFY)]
+        #[qproperty(QString, preview_kind, cxx_name = "previewKind", READ, NOTIFY)]
+        #[qproperty(QUrl, preview_source, cxx_name = "previewSource", READ, NOTIFY)]
+        #[qproperty(QString, preview_duration, cxx_name = "previewDuration", READ, NOTIFY)]
+        #[qproperty(f64, preview_aspect, cxx_name = "previewAspect", READ, NOTIFY)]
+        #[qproperty(QString, preview_notice, cxx_name = "previewNotice", READ, NOTIFY)]
         type SelenitaController = super::SelenitaControllerRust;
 
         /// A sentence for the window's notice pill; `kind` is `info` or
@@ -126,11 +152,23 @@ pub mod qobject {
         /// went to the clipboard only.
         #[qsignal]
         fn captured(self: Pin<&mut SelenitaController>, entry_id: QString);
-        /// A launch's capture is over: the window, hidden until now, shows
-        /// on the history.
+        /// A key-binding launch's capture or recording failed: the window,
+        /// hidden until now, shows so its notice can be read.
         #[qsignal]
         #[cxx_name = "showWindowRequested"]
         fn show_window_requested(self: Pin<&mut SelenitaController>);
+        /// A key-binding launch has nothing left to show or finish: its
+        /// preview is gone (and its file handed to Fluorita, if clicked),
+        /// nothing captures and nothing records. The process ends unless
+        /// its main window is on screen.
+        #[qsignal]
+        #[cxx_name = "launchFinished"]
+        fn launch_finished(self: Pin<&mut SelenitaController>);
+        /// A result is in the preview's properties: the preview shows it,
+        /// replacing whatever it showed.
+        #[qsignal]
+        #[cxx_name = "previewShown"]
+        fn preview_shown(self: Pin<&mut SelenitaController>);
         /// A recording was published; `entry_id` is its history row.
         #[qsignal]
         #[cxx_name = "recordingFinished"]
@@ -162,6 +200,18 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "stopRecording"]
         fn stop_recording(self: Pin<&mut SelenitaController>);
+        /// The preview goes: its × or its five seconds.
+        #[qinvokable]
+        #[cxx_name = "dismissPreview"]
+        fn dismiss_preview(self: Pin<&mut SelenitaController>);
+        /// The preview goes and its file opens in Fluorita's editor.
+        #[qinvokable]
+        #[cxx_name = "editPreview"]
+        fn edit_preview(self: Pin<&mut SelenitaController>);
+        /// A file handed back by another application (`Selenita1.Adopt`,
+        /// by its key) joins the history when it is one of Selenita's.
+        #[qinvokable]
+        fn adopt(self: Pin<&mut SelenitaController>, key: &QString);
     }
 
     impl cxx_qt::Threading for SelenitaController {}
@@ -176,6 +226,7 @@ pub struct SelenitaControllerRust {
     appearance_reduced_motion: bool,
     appearance_text_scale: f64,
     smoke_report: bool,
+    smoke_close: bool,
     fake: bool,
     target: QString,
     delay: i32,
@@ -195,9 +246,16 @@ pub struct SelenitaControllerRust {
     recorder_missing: QString,
     recording_stem: QString,
     launch_capture: bool,
-    /// The window has not shown yet and shows when the launch's capture
-    /// ends.
-    reveal: bool,
+    /// `launchFinished` was emitted: the process is ending, once.
+    launch_finished: bool,
+    preview_visible: bool,
+    preview_key: QString,
+    preview_file_uri: QString,
+    preview_kind: QString,
+    preview_source: QUrl,
+    preview_duration: QString,
+    preview_aspect: f64,
+    preview_notice: QString,
     worker: Option<Worker>,
     recorder: Option<record::Worker>,
     /// Held for the singleton's life; dropping it stops the follower.
@@ -211,6 +269,7 @@ impl Default for SelenitaControllerRust {
             appearance_reduced_motion: initial.reduced_motion,
             appearance_text_scale: initial.text_scale,
             smoke_report: std::env::var_os("SELENITA_SMOKE_REPORT").is_some(),
+            smoke_close: std::env::var_os("SELENITA_SMOKE_CLOSE").is_some(),
             fake: fake_requested(std::env::var_os("SELENITA_FAKE").as_deref()),
             target: QString::from(TargetKind::Screen.as_str()),
             delay: 0,
@@ -230,8 +289,16 @@ impl Default for SelenitaControllerRust {
             last_recording_name: QString::default(),
             recorder_missing: QString::default(),
             recording_stem: QString::default(),
-            launch_capture: crate::activation::capture_waiting(),
-            reveal: crate::activation::capture_waiting(),
+            launch_capture: crate::activation::launch_waiting(),
+            launch_finished: false,
+            preview_visible: false,
+            preview_key: QString::default(),
+            preview_file_uri: QString::default(),
+            preview_kind: QString::default(),
+            preview_source: QUrl::default(),
+            preview_duration: QString::default(),
+            preview_aspect: 0.0,
+            preview_notice: QString::default(),
             worker: None,
             recorder: None,
             follower: None,
@@ -280,13 +347,22 @@ impl qobject::SelenitaController {
     }
 
     fn apply(mut self: Pin<&mut Self>, report: Report) {
+        if failure_reveals(&report, self.rust().launch_capture) {
+            self.as_mut().show_window_requested();
+        }
         match report {
             Report::History(entries) => {
                 // The last recording's line and «Abrir en Fluorita» follow
                 // the history: trashed (or gone), they go.
                 let last = self.rust().last_recording_id.to_string();
-                if !last_recording_listed(&last, &entries) {
+                if !still_listed(&last, &entries) {
                     self.as_mut().forget_last_recording();
+                }
+                // The preview follows its file too: trashed, it goes.
+                let shown = self.rust().preview_key.to_string();
+                if self.rust().preview_visible && !still_listed(&shown, &entries) {
+                    self.as_mut().hide_preview();
+                    self.as_mut().finish_launch_if_over();
                 }
                 self.as_mut().rust_mut().history = history_rows(&entries);
                 self.as_mut().history_changed();
@@ -300,15 +376,36 @@ impl qobject::SelenitaController {
             }
             Report::Captured(id) => {
                 self.as_mut().end_capture();
+                // A capture with a file has its preview on the way; one
+                // without has nothing more to show.
+                let to_preview = id.is_some();
                 let id = id.unwrap_or_default();
                 self.as_mut().captured(QString::from(id.as_str()));
+                if !to_preview {
+                    self.as_mut().finish_launch_if_over();
+                }
             }
-            Report::Cancelled => self.as_mut().end_capture(),
+            Report::Cancelled => {
+                self.as_mut().end_capture();
+                self.as_mut().finish_launch_if_over();
+            }
             Report::CaptureFailed(text) => {
                 self.as_mut().end_capture();
                 self.as_mut().say_error(&text);
             }
             Report::Failed(text) => self.as_mut().say_error(&text),
+            Report::Preview(preview) => self.as_mut().show_preview(preview),
+            Report::Edited => self.as_mut().finish_launch_if_over(),
+            Report::EditFailed { key, message } => {
+                self.as_mut().say_error(&message);
+                // Said in the preview too: the main window may be hidden.
+                if self.rust().preview_key.to_string() == key {
+                    self.as_mut()
+                        .set_preview_notice(QString::from(message.as_str()));
+                    self.as_mut().set_preview_visible(true);
+                    self.as_mut().preview_shown();
+                }
+            }
         }
     }
 
@@ -367,7 +464,13 @@ impl qobject::SelenitaController {
                 }
                 self.as_mut().recording_finished(QString::from(id.as_str()));
             }
-            record::Report::Failed(text) => self.as_mut().say_error(&text),
+            record::Report::Failed(text) => {
+                self.as_mut().say_error(&text);
+                // As a capture's failure: the notice needs the window.
+                if self.rust().launch_capture {
+                    self.as_mut().show_window_requested();
+                }
+            }
         }
     }
 
@@ -382,12 +485,114 @@ impl qobject::SelenitaController {
         }
     }
 
-    /// The capture is over, however it ended: a launch's window, hidden
-    /// until its capture, shows now.
-    fn end_capture(mut self: Pin<&mut Self>) {
-        self.as_mut().set_busy(false);
-        if std::mem::take(&mut self.as_mut().rust_mut().reveal) {
-            self.as_mut().show_window_requested();
+    /// The capture is over, however it ended.
+    fn end_capture(self: Pin<&mut Self>) {
+        self.set_busy(false);
+    }
+
+    /// A key-binding launch whose work is over says so, once; QML ends the
+    /// process when the main window is not on screen. Said once: the quit
+    /// closes the windows, which would ask again.
+    fn finish_launch_if_over(mut self: Pin<&mut Self>) {
+        let rust = self.rust();
+        let over = !rust.launch_finished
+            && launch_over(
+                rust.launch_capture,
+                rust.preview_visible,
+                rust.busy,
+                &rust.recording_state.to_string(),
+            );
+        if over {
+            self.as_mut().rust_mut().launch_finished = true;
+            self.as_mut().launch_finished();
+        }
+    }
+
+    /// The preview shows `preview`, replacing whatever it showed.
+    fn show_preview(mut self: Pin<&mut Self>, preview: Preview) {
+        let uri = |path: &std::path::Path| file_uri::from_path(path).unwrap_or_default();
+        let file_uri = uri(&preview.path);
+        let shown = match preview.kind {
+            selenita_core::EntryKind::Screenshot => file_uri.clone(),
+            selenita_core::EntryKind::Recording => {
+                preview.poster.as_deref().map(uri).unwrap_or_default()
+            }
+        };
+        let duration = preview.length.map(clock_text).unwrap_or_default();
+        self.as_mut()
+            .set_preview_key(QString::from(pathkey::encode(&preview.path).as_str()));
+        self.as_mut()
+            .set_preview_file_uri(QString::from(file_uri.as_str()));
+        self.as_mut()
+            .set_preview_kind(QString::from(preview.kind.as_str()));
+        self.as_mut()
+            .set_preview_source(QUrl::from(&QString::from(shown.as_str())));
+        self.as_mut()
+            .set_preview_duration(QString::from(duration.as_str()));
+        self.as_mut()
+            .set_preview_aspect(preview.aspect.unwrap_or(0.0));
+        self.as_mut().set_preview_notice(QString::default());
+        self.as_mut().set_preview_visible(true);
+        self.as_mut().preview_shown();
+    }
+
+    fn hide_preview(self: Pin<&mut Self>) {
+        self.set_preview_visible(false);
+    }
+
+    fn set_preview_visible(mut self: Pin<&mut Self>, visible: bool) {
+        if self.rust().preview_visible != visible {
+            self.as_mut().rust_mut().preview_visible = visible;
+            self.as_mut().preview_visible_changed();
+        }
+    }
+
+    fn set_preview_key(mut self: Pin<&mut Self>, key: QString) {
+        if self.rust().preview_key != key {
+            self.as_mut().rust_mut().preview_key = key;
+            self.as_mut().preview_key_changed();
+        }
+    }
+
+    fn set_preview_file_uri(mut self: Pin<&mut Self>, uri: QString) {
+        if self.rust().preview_file_uri != uri {
+            self.as_mut().rust_mut().preview_file_uri = uri;
+            self.as_mut().preview_file_uri_changed();
+        }
+    }
+
+    fn set_preview_kind(mut self: Pin<&mut Self>, kind: QString) {
+        if self.rust().preview_kind != kind {
+            self.as_mut().rust_mut().preview_kind = kind;
+            self.as_mut().preview_kind_changed();
+        }
+    }
+
+    fn set_preview_source(mut self: Pin<&mut Self>, source: QUrl) {
+        if self.rust().preview_source != source {
+            self.as_mut().rust_mut().preview_source = source;
+            self.as_mut().preview_source_changed();
+        }
+    }
+
+    fn set_preview_duration(mut self: Pin<&mut Self>, duration: QString) {
+        if self.rust().preview_duration != duration {
+            self.as_mut().rust_mut().preview_duration = duration;
+            self.as_mut().preview_duration_changed();
+        }
+    }
+
+    fn set_preview_aspect(mut self: Pin<&mut Self>, aspect: f64) {
+        if self.rust().preview_aspect != aspect {
+            self.as_mut().rust_mut().preview_aspect = aspect;
+            self.as_mut().preview_aspect_changed();
+        }
+    }
+
+    fn set_preview_notice(mut self: Pin<&mut Self>, notice: QString) {
+        if self.rust().preview_notice != notice {
+            self.as_mut().rust_mut().preview_notice = notice;
+            self.as_mut().preview_notice_changed();
         }
     }
 
@@ -498,6 +703,56 @@ impl qobject::SelenitaController {
             self.say_error(&error.message_es());
         }
     }
+
+    pub fn dismiss_preview(mut self: Pin<&mut Self>) {
+        self.as_mut().hide_preview();
+        self.finish_launch_if_over();
+    }
+
+    pub fn edit_preview(mut self: Pin<&mut Self>) {
+        let key = self.rust().preview_key.to_string();
+        self.as_mut().hide_preview();
+        if key.is_empty() {
+            return;
+        }
+        let queued = self
+            .rust()
+            .worker
+            .as_ref()
+            .ok_or(CaptureError::WorkerGone)
+            .and_then(|worker| worker.edit(key));
+        if let Err(error) = queued {
+            self.say_error(&error.message_es());
+        }
+    }
+
+    pub fn adopt(self: Pin<&mut Self>, key: &QString) {
+        let queued = self
+            .rust()
+            .worker
+            .as_ref()
+            .ok_or(CaptureError::WorkerGone)
+            .and_then(|worker| worker.adopt(key.to_string(), self.rust().folder_name.to_string()));
+        if let Err(error) = queued {
+            self.say_error(&error.message_es());
+        }
+    }
+}
+
+/// Whether a capture worker's report shows a key-binding launch's hidden
+/// main window: a failed capture, or a failure after it (the clipboard,
+/// the history file), whose notice would otherwise never be read. A failed
+/// hand-off to Fluorita is said on the preview instead.
+fn failure_reveals(report: &Report, launch: bool) -> bool {
+    launch && matches!(report, Report::CaptureFailed(_) | Report::Failed(_))
+}
+
+/// Whether a key-binding launch (`launch`) has nothing left to do: no
+/// preview on screen, no capture under way and the recording (`recording`,
+/// its state word) idle. A recording's preview comes after its `idle`, so
+/// the preview going is what ends a `--record` launch.
+fn launch_over(launch: bool, preview_visible: bool, busy: bool, recording: &str) -> bool {
+    launch && !preview_visible && !busy && recording == selenita_core::record::State::Idle.as_str()
 }
 
 /// The word QML reads for a recording state.
@@ -505,9 +760,10 @@ fn record_state_word(state: selenita_core::record::State) -> &'static str {
     state.as_str()
 }
 
-/// Whether the last recording (`id`, empty when there is none) still has
-/// its row in `entries`; an empty id has nothing to lose.
-fn last_recording_listed(id: &str, entries: &[Entry]) -> bool {
+/// Whether the entry `id` (the last recording's, or the preview's; empty
+/// when there is none) still has its row in `entries`; an empty id has
+/// nothing to lose.
+fn still_listed(id: &str, entries: &[Entry]) -> bool {
     id.is_empty() || entries.iter().any(|entry| entry.id() == id)
 }
 
@@ -561,11 +817,54 @@ fn fake_requested(value: Option<&std::ffi::OsStr>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{fake_requested, last_recording_listed};
+    use super::{failure_reveals, fake_requested, launch_over, still_listed};
+    use crate::capture::Report;
     use selenita_core::{Entry, EntryKind};
     use std::ffi::OsStr;
     use std::path::PathBuf;
     use std::time::SystemTime;
+
+    /// A key-binding launch shows its hidden window for a capture's failure
+    /// and for a later one (the clipboard, the history file), never for a
+    /// success or a failed hand-off (said on the preview); a plain launch's
+    /// window is on screen already.
+    #[test]
+    fn a_launchs_failure_reveals_the_main_window() {
+        let failed = |text: &str| Report::Failed(text.to_owned());
+        assert!(failure_reveals(
+            &Report::CaptureFailed("x".to_owned()),
+            true
+        ));
+        assert!(failure_reveals(&failed("clipboard"), true));
+        assert!(!failure_reveals(&failed("clipboard"), false));
+        assert!(!failure_reveals(
+            &Report::CaptureFailed("x".to_owned()),
+            false
+        ));
+        assert!(!failure_reveals(&Report::Captured(None), true));
+        assert!(!failure_reveals(&Report::Cancelled, true));
+        assert!(!failure_reveals(&Report::Edited, true));
+        assert!(!failure_reveals(
+            &Report::EditFailed {
+                key: "/x.png".to_owned(),
+                message: "x".to_owned()
+            },
+            true
+        ));
+    }
+
+    /// A key-binding launch is over once nothing shows, captures or
+    /// records; a plain launch never ends this way.
+    #[test]
+    fn a_launch_is_over_when_nothing_shows_or_runs() {
+        assert!(launch_over(true, false, false, "idle"));
+        assert!(!launch_over(false, false, false, "idle"));
+        assert!(!launch_over(true, true, false, "idle"), "the preview shows");
+        assert!(!launch_over(true, false, true, "idle"), "a capture runs");
+        for state in ["preparing", "recording", "stopping"] {
+            assert!(!launch_over(true, false, false, state), "{state}");
+        }
+    }
 
     #[test]
     fn only_one_asks_for_the_fakes() {
@@ -591,12 +890,9 @@ mod tests {
             taken_at: SystemTime::UNIX_EPOCH,
             size: 3,
         };
-        assert!(last_recording_listed(
-            &clip.id(),
-            &[shot.clone(), clip.clone()]
-        ));
-        assert!(!last_recording_listed(&clip.id(), &[shot]));
-        assert!(!last_recording_listed(&clip.id(), &[]));
-        assert!(last_recording_listed("", &[]));
+        assert!(still_listed(&clip.id(), &[shot.clone(), clip.clone()]));
+        assert!(!still_listed(&clip.id(), &[shot]));
+        assert!(!still_listed(&clip.id(), &[]));
+        assert!(still_listed("", &[]));
     }
 }

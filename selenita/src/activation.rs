@@ -10,15 +10,19 @@
 //! [`CAPTURE_INTERFACE`] on the connection that owns the name: `Capture(s)`
 //! takes `screen`, `window` or `region` (the niri key bindings' `selenita
 //! --screenshot`), `ToggleRecording()` starts a recording or stops the one
-//! under way (`selenita --record`) and `StopRecording()` only stops
-//! (`selenita --stop`). A request that arrives before the window started
-//! waits and is replayed by `start`.
+//! under way (`selenita --record`), `StopRecording()` only stops
+//! (`selenita --stop`) and `Adopt(s key)` hands back a file another
+//! application wrote (Fluorita's edited copy, ADR 0012 PRV-1): its
+//! `pathkey` key goes on to the window, which lets the capture worker
+//! decide; a key that does not decode is ignored without error. A request
+//! that arrives before the window started waits and is replayed by `start`.
 
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{Mutex, OnceLock, PoisonError};
 
 use celestina_core::activation::{self, Activatable, ActivationError, Owner};
+use celestina_core::pathkey;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use selenita_core::TargetKind;
@@ -51,6 +55,10 @@ pub mod qobject {
         /// A key binding asked about the recording: `toggle` or `stop`.
         #[qsignal]
         fn recording_requested(self: Pin<&mut SelenitaActivation>, action: QString);
+
+        /// Another application handed back the file `key` (`Adopt`).
+        #[qsignal]
+        fn adopt_requested(self: Pin<&mut SelenitaActivation>, key: QString);
 
         /// Connects this object to the claim `main` made, once; requests that
         /// waited in the inbox are replayed then.
@@ -114,11 +122,13 @@ impl RecordingAction {
     }
 }
 
-/// A key binding's request, as the window receives it.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// A request from the bus or a key binding, as the window receives it.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Request {
     Capture(TargetKind),
     Recording(RecordingAction),
+    /// A file handed back, by its `pathkey` key.
+    Adopt(String),
 }
 
 /// The requests that arrived before `start`.
@@ -136,14 +146,15 @@ fn inbox() -> std::sync::MutexGuard<'static, Inbox> {
     INBOX.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Whether a capture waits for the window: this launch came from
-/// `--screenshot` and the window has not started yet. A waiting recording
-/// does not count: the window shows for it.
-pub fn capture_waiting() -> bool {
+/// Whether a key binding's request waits for the window: this launch came
+/// from `--screenshot` or `--record` and the window has not started yet.
+/// Such a launch never shows the main window; the corner preview shows the
+/// result.
+pub fn launch_waiting() -> bool {
     inbox()
         .waiting
         .iter()
-        .any(|request| matches!(request, Request::Capture(_)))
+        .any(|request| matches!(request, Request::Capture(_) | Request::Recording(_)))
 }
 
 /// How many requests may wait for the window: a key held down must not grow
@@ -187,6 +198,7 @@ impl Target for QtTarget {
                     Request::Recording(action) => {
                         activation.recording_requested(QString::from(action.as_str()));
                     }
+                    Request::Adopt(key) => activation.adopt_requested(QString::from(&key)),
                 },
             );
         }
@@ -228,6 +240,14 @@ impl Capturer {
     fn recording(&self, action: RecordingAction) {
         self.0.handle(Request::Recording(action));
     }
+
+    /// Hands on a key that names a path; anything else is ignored, as the
+    /// contract says, so a stray caller learns nothing and changes nothing.
+    fn hand_back(&self, key: &str) {
+        if pathkey::decode(key).is_ok() {
+            self.0.handle(Request::Adopt(key.to_owned()));
+        }
+    }
 }
 
 /// A `Capture` word that is not a target, as the bus answers it.
@@ -248,6 +268,10 @@ impl Capturer {
 
     fn stop_recording(&self) {
         self.recording(RecordingAction::Stop);
+    }
+
+    fn adopt(&self, key: &str) {
+        self.hand_back(key);
     }
 }
 
@@ -353,6 +377,7 @@ mod tests {
             let word = match request {
                 Request::Capture(kind) => format!("capture:{kind}"),
                 Request::Recording(action) => format!("recording:{}", action.as_str()),
+                Request::Adopt(key) => format!("adopt:{key}"),
             };
             self.0.lock().expect("tally").push(word);
         }
@@ -397,5 +422,20 @@ mod tests {
         assert_eq!(tally.seen(), ["recording:toggle", "recording:stop"]);
         assert_eq!(RecordingAction::Toggle.method(), "ToggleRecording");
         assert_eq!(RecordingAction::Stop.method(), "StopRecording");
+    }
+
+    /// `Adopt` hands on a key that decodes, byte for byte, and ignores the
+    /// rest without an error.
+    #[test]
+    fn adopt_hands_on_a_path_key_and_ignores_anything_else() {
+        let tally = Tally::default();
+        let capturer = Capturer(Box::new(tally.clone()));
+        let key = celestina_core::pathkey::encode(std::path::Path::new(
+            "/pictures/Capturas/Captura 1 (2).png",
+        ));
+        capturer.hand_back(&key);
+        capturer.hand_back("");
+        capturer.hand_back("not a key");
+        assert_eq!(tally.seen(), [format!("adopt:{key}")]);
     }
 }

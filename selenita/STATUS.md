@@ -1,9 +1,15 @@
 # Selenita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** SEL-1 is closed and its
-  [plan](docs/plans/archive/2026-10-09-sel-1-foundation.md) archived; no
-  checkpoint is active. Its three units are implemented and verified
+- **Implementation:** SEL-2 is active, with its
+  [plan](docs/plans/active/2026-10-10-sel-2-preview.md): SEL-2-A (the corner
+  preview after every capture and recording, its drag and its hand-off to
+  Fluorita, `Selenita1.Adopt`, no main window after a key-binding launch) is
+  implemented and verified offscreen over the fakes, sealed at its landing;
+  see the [preview evidence](docs/evidence/2026-10-10-preview.md). SEL-1 is
+  closed and its
+  [plan](docs/plans/archive/2026-10-09-sel-1-foundation.md) archived. Its
+  three units are implemented and verified
   offscreen over the fakes: SEL-1-A (screenshots, delay, destinations, the
   history and the key-binding flags), SEL-1-B (recording through the portal
   and GStreamer, the sound option, `--record` and `--stop`) and SEL-1-C
@@ -14,7 +20,10 @@
   recording's line after a trash, and the window no longer hiding for a
   capture; see the
   [recording fixes evidence](docs/evidence/2026-10-10-recording-fixes.md)
-- **Author validation:** VAL-SEL-SHOT (a real capture) and VAL-SEL-REC (a
+- **Author validation:** VAL-SEL-PREVIEW (the corner without the focus,
+  dragging a capture and a recording into WhatsApp and Slack, the click
+  into Fluorita) pending, with the niri rule of the README in place.
+  VAL-SEL-SHOT (a real capture) and VAL-SEL-REC (a
   real recording) pending; both re-run after SEL-1-D. The 1.0.1 run of
   2026-10-10 recorded nothing: the portal's node never streamed, which the
   child could not say (SEL-1-E adds the no-signal watchdog, the node line
@@ -36,7 +45,7 @@
   or 3, 5 or 10 s, to the clipboard and to the pictures folder's «Capturas»
   (`Captura 2026-10-09 14.32.05.png`, numbered on a collision). The window
   stays where it is while it captures: a capture may be of Selenita itself
-  (SEL-1-D); only a `--screenshot` launch keeps it hidden until its capture.
+  (SEL-1-D); a key-binding launch never shows it (SEL-2-A).
 - The recording card records one monitor (chosen in the ScreenCast
   portal's dialog) to `<recording stem> <date> <time>.mp4` in the videos
   folder's `Recordings` through `gst-launch-1.0 -e` (`pipewiresrc`,
@@ -60,9 +69,49 @@
   and the child, if any, killed with its hidden file removed.
 - `selenita --screenshot screen|window|region` (for niri key bindings) asks
   the running instance over `org.celestina.Selenita1.Capture`, or starts one
-  that captures and stays open; `--record` asks `ToggleRecording()` or
-  starts an instance that records; `--stop` asks `StopRecording()` and,
+  that captures with its main window hidden and stays running; `--record`
+  asks `ToggleRecording()` or starts an instance that records, its main
+  window hidden too; `--stop` asks `StopRecording()` and,
   when nobody answers, touches `runtime_dir/selenita/stop`.
+- The corner preview (SEL-2-A): after every capture saved to a file and
+  every finished recording, a frameless window titled «Vista previa»
+  (240 px wide, 140–240 px high at the picture's shape, the glass canvas)
+  shows the picture, or the recording's first frame (a `gst-launch-1.0`
+  child, 3 s at most, into `runtime_dir/selenita/poster-<n>.png`; the film
+  glyph alone when it fails) with its length (the MP4's movie header) and
+  the film glyph. It fades and slides in and out in 200 ms (at once with
+  reduced motion), stays 5 s, held while the pointer is on it or a drag
+  is under way; a new result replaces it, the × closes it and so does
+  trashing its file. Dragging it offers the file's URI as `text/uri-list`
+  with the copy action only; a click hands the file to Fluorita
+  (`org.celestina.Fluorita1.Edit(key)` when Fluorita runs, else
+  `fluorita --edit <path>` detached) and a failure says «No se ha podido
+  abrir Fluorita.» in the preview and in the window's notice. Without a
+  runtime folder there is no poster (the film glyph); the poster folder is
+  made private (`0700`). It never
+  asks for the keyboard focus (`Qt.WindowDoesNotAcceptFocus`); niri's rule
+  in the README places it at the bottom-right without the focus. A
+  clipboard-only capture has no file and no preview.
+- `org.celestina.Selenita1.Adopt(key)` adds a regular `.png` or `.mp4`
+  directly in the pictures folder's «Capturas» or the videos folder's
+  `Recordings` to the history (once); anything else is ignored without
+  error (ADR 0012, PRV-1).
+- How Selenita ends: closing the main window ends it, as before the
+  preview (the preview goes at once with it, so Qt finds no window left;
+  a recording under way is finished and published on the way out, up to
+  `STOP_DEADLINE`). A key-binding launch (`--screenshot`, `--record`) with
+  no Selenita running keeps the main window hidden and ends by itself with
+  its result: once its preview has gone (its five seconds, its ×, a trash,
+  or a click whose hand-off to Fluorita has returned), with nothing
+  capturing and nothing recording; a cancelled region or a capture with no
+  file ends it at once. A `--record` launch therefore lives while it
+  records, `selenita --stop` or Shift+Print stops and publishes the
+  recording, and the recording's preview ends it. Until then it takes
+  the next key binding itself. A failed capture, a failure after it (the
+  clipboard, the history file) or a failed recording shows the main
+  window with its notice; from then on, or once a plain launch has raised
+  the window, the instance is a plain one and ends when the window is
+  closed.
 - A second launch raises the window; a path on the command line or in an
   `Open` is ignored.
 - `SELENITA_FAKE=1` routes niri, the tools, the clipboard, the portal, the
@@ -76,8 +125,6 @@
   times) through niri's own `screenshot-window --id`. niri copies it to the clipboard whatever is
   asked, so with that target the clipboard switch shows on and disabled
   with a hint saying so.
-- A `--screenshot` launch with no Selenita running starts with the window
-  hidden, takes the capture and then shows the window on the history.
 - The output choice is an inline row of buttons, not a popup menu
   (accepted in review).
 - The keyboard: `1`, `2` and `3` choose the screen, the window or the
@@ -99,7 +146,9 @@
   their key.
 - Not yet proven on the session: VAL-SEL-SHOT and VAL-SEL-REC (the portal's
   dialog, the PipeWire node handed on the child's standard input, the
-  pipeline's audio branch and the MP4's playback).
+  pipeline's audio branch and the MP4's playback), and VAL-SEL-PREVIEW
+  (the preview's place and focus under niri, a real drag into other
+  programs, Fluorita's `Edit`).
 
 ## Known issues
 
@@ -141,6 +190,26 @@
   as `trashing_one_entry_keeps_the_others_lines_in_the_file` shows.)
 - A `--screenshot` or `--record` launch that races an instance still
   starting finds the name taken, only raises it, and its request is lost.
+- Until the niri rule of the README is in the configuration (the suite's
+  PRV-1-E adds it after the author's approval), niri opens the preview as
+  any new window: tiled and focused. `Qt.WindowDoesNotAcceptFocus` is only
+  a hint on Wayland; the rule's `open-focused false` is what keeps the
+  focus where it was.
+- A `--record` launch shows nothing while it records (the main window
+  stays hidden by design); the portal's own dialog and the key bindings
+  are the only signs until the preview shows the result.
+- The last recording's poster stays in `runtime_dir/selenita` until the
+  next preview replaces it or the session ends (the runtime folder is
+  cleared at logout); a poster left by an earlier process is not removed
+  by the next one.
+- The hand-off's `Edit` call waits up to `HAND_OFF_TIMEOUT` (3 s) for
+  Fluorita's reply. A Fluorita that opens the file but answers later than
+  that makes the preview say «No se ha podido abrir Fluorita.» although
+  the editor is on screen.
+- Fluorita's side of `Adopt` without a running Selenita writes the history
+  itself (FLU-P1-A) and has to name the captures folder, whose name
+  («Capturas») is Selenita's product copy; `selenita_core::history::adopted`
+  takes both folders from its caller.
 
 ## Blockers
 

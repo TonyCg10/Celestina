@@ -251,3 +251,4 @@ calcita	1.0.1	bug	CAL-1-D	Keep every page on opaque paper over the glass canvas
 selenita	1.0.1	bug	SEL-1-D	Fix the recording folder, the first second, the second recording and the capture of its own window
 selenita	1.0.2	bug	SEL-1-E	Fix the recording that never receives a frame and pin the start order
 fluorita	1.6.0	milestone	FLU-P1-A	Add the floating editor that opens any path
+selenita	1.1.0	milestone	SEL-2-A	Add the corner preview with drag, edit and adopt

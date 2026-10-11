@@ -402,8 +402,9 @@ pub struct Places {
 
 impl Places {
     /// `Recordings` in the videos folder (else in the home), and the runtime
-    /// folder's stop file. Blocking.
-    fn resolve() -> Self {
+    /// folder's stop file. Blocking. The capture worker reads the
+    /// recordings folder here too, for `Adopt`.
+    pub(crate) fn resolve() -> Self {
         let videos = videos_dir()
             .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
             .unwrap_or_else(std::env::temp_dir);

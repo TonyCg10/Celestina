@@ -9,10 +9,15 @@
 //! window, or `slurp` for a region), take the picture into a hidden file,
 //! publish it under its name in the captures folder without replacing
 //! anything, put it on the clipboard when asked, push it to the history and
-//! report it. Every failure is a [`CaptureError`] whose `message_es` the
-//! window shows in its notice. Selenita's window stays where it is: the
-//! person may want it in the picture (SEL-1-D), and a window capture is the
-//! window focused before Selenita in any case.
+//! report it, then report its corner preview (`preview.rs`). A recording
+//! the recording worker published joins the history here too, with its
+//! preview and poster; the preview's click hands the file to Fluorita here;
+//! and a file another application hands back (`Selenita1.Adopt`) joins the
+//! history when it is one of Selenita's. Every failure is a
+//! [`CaptureError`] whose `message_es` the window shows in its notice.
+//! Selenita's window stays where it is: the person may want it in the
+//! picture (SEL-1-D), and a window capture is the window focused before
+//! Selenita in any case.
 //!
 //! The thread is detached and never joined, as Cuprita's workers: a tool
 //! still running when the window closes is abandoned with the process.
@@ -23,14 +28,15 @@ use std::sync::mpsc::{self, Sender};
 use std::time::{Duration, SystemTime};
 
 use celestina_core::activation::SELENITA;
-use celestina_core::{atomic_file, xdg};
-use selenita_core::history::HistoryError;
+use celestina_core::{atomic_file, pathkey, xdg};
+use selenita_core::history::{adopted, Folders, HistoryError};
 use selenita_core::niri::{self, NiriError};
 use selenita_core::runner::RunError;
 use selenita_core::{capture_file_name, names, pictures_dir};
 use selenita_core::{Entry, EntryKind, History, Target, TargetKind};
 
 use crate::backend::Backend;
+use crate::preview::{self, Preview};
 
 /// How many numbered names a capture tries before giving up.
 const NAME_ATTEMPTS: u32 = 1000;
@@ -55,6 +61,8 @@ pub enum CaptureError {
     /// «Copiar» on a recording: only a picture goes to the clipboard.
     NotAPicture,
     Open(String),
+    /// The preview's file could not be handed to Fluorita's editor.
+    Edit(String),
     Show(String),
     Trash(String),
     /// The worker thread is gone.
@@ -93,6 +101,7 @@ impl CaptureError {
             Self::UnknownEntry => "Esa captura ya no está en el historial.".to_owned(),
             Self::NotAPicture => "Una grabación no se copia al portapapeles.".to_owned(),
             Self::Open(_) => "No se ha podido abrir en Fluorita.".to_owned(),
+            Self::Edit(_) => "No se ha podido abrir Fluorita.".to_owned(),
             Self::Show(_) => "No se ha podido mostrar en Siderita.".to_owned(),
             Self::Trash(_) => "No se ha podido mover a la papelera.".to_owned(),
             Self::WorkerGone => "La captura no está disponible.".to_owned(),
@@ -106,9 +115,11 @@ impl std::fmt::Display for CaptureError {
             Self::Niri(error) => write!(formatter, "{error}"),
             Self::Tool(error) => write!(formatter, "{error}"),
             Self::History(error) => write!(formatter, "{error}"),
-            Self::Write(detail) | Self::Open(detail) | Self::Show(detail) | Self::Trash(detail) => {
-                write!(formatter, "{self:?}: {detail}")
-            }
+            Self::Write(detail)
+            | Self::Open(detail)
+            | Self::Edit(detail)
+            | Self::Show(detail)
+            | Self::Trash(detail) => write!(formatter, "{self:?}: {detail}"),
             other => write!(formatter, "{other:?}"),
         }
     }
@@ -331,6 +342,13 @@ pub enum Report {
     CaptureFailed(String),
     /// A history action failed, in Spanish.
     Failed(String),
+    /// A result was published: the corner preview shows it.
+    Preview(Preview),
+    /// The preview's file went to Fluorita.
+    Edited,
+    /// The preview's file (its key) could not be handed to Fluorita, in
+    /// Spanish.
+    EditFailed { key: String, message: String },
 }
 
 /// A history row action.
@@ -347,6 +365,14 @@ enum Job {
     Entry(Action, String),
     /// A recording finished elsewhere joins the history, which lives here.
     Push(Entry),
+    /// The preview's file, by its key, goes to Fluorita's editor.
+    Edit(String),
+    /// Another application hands a file back (`Selenita1.Adopt`): its key
+    /// and the captures folder's name inside the pictures folder.
+    Adopt {
+        key: String,
+        folder: String,
+    },
 }
 
 /// The sending half of the capture worker.
@@ -372,6 +398,9 @@ impl Worker {
                 report(Report::Outputs(
                     outputs.into_iter().map(|output| output.name).collect(),
                 ));
+                // The last recording's poster, removed when a new preview
+                // replaces it.
+                let mut poster = None;
                 for job in inbox {
                     match job {
                         Job::Capture(request) => {
@@ -388,15 +417,65 @@ impl Worker {
                                     });
                                 },
                             );
+                            let saved = match &outcome {
+                                Ok(Outcome::Captured {
+                                    entry: Some(entry), ..
+                                }) => Some(entry.clone()),
+                                _ => None,
+                            };
                             finish(outcome, &history, &report);
+                            if let Some(entry) = saved {
+                                // A picture needs no poster folder.
+                                report(Report::Preview(preview::of(
+                                    backend.as_mut(),
+                                    &entry,
+                                    None,
+                                    &mut poster,
+                                )));
+                            }
                         }
                         Job::Push(entry) => {
-                            history.push(entry);
+                            history.push(entry.clone());
                             if let Err(error) = history.save() {
                                 eprintln!("selenita: {error}");
                                 report(Report::Failed(CaptureError::History(error).message_es()));
                             }
                             report(Report::History(history.entries().to_vec()));
+                            let staging = preview::poster_folder();
+                            report(Report::Preview(preview::of(
+                                backend.as_mut(),
+                                &entry,
+                                staging.as_deref(),
+                                &mut poster,
+                            )));
+                        }
+                        Job::Edit(key) => match edit(backend.as_mut(), &key) {
+                            Ok(()) => report(Report::Edited),
+                            Err(error) => {
+                                eprintln!("selenita: edit: {error}");
+                                report(Report::EditFailed {
+                                    key,
+                                    message: error.message_es(),
+                                });
+                            }
+                        },
+                        Job::Adopt { key, folder } => {
+                            let pictures = Places::resolve().pictures;
+                            let recordings = crate::record::Places::resolve().recordings;
+                            // Without the captures folder's name only the
+                            // recordings folder adopts.
+                            let captures = if folder.is_empty() {
+                                recordings.clone()
+                            } else {
+                                pictures.join(&folder)
+                            };
+                            let folders = Folders {
+                                captures: &captures,
+                                recordings: &recordings,
+                            };
+                            if adopt(&mut history, folders, &key, SystemTime::now()) {
+                                report(Report::History(history.entries().to_vec()));
+                            }
                         }
                         Job::Entry(action, id) => {
                             match act(backend.as_mut(), &mut history, action, &id) {
@@ -448,6 +527,29 @@ impl Worker {
             .send(Job::Push(entry))
             .map_err(|_| CaptureError::WorkerGone)
     }
+
+    /// Queues the hand-off of the file `key` names to Fluorita's editor.
+    ///
+    /// # Errors
+    ///
+    /// [`CaptureError::WorkerGone`] when the thread is gone.
+    pub fn edit(&self, key: String) -> Result<(), CaptureError> {
+        self.jobs
+            .send(Job::Edit(key))
+            .map_err(|_| CaptureError::WorkerGone)
+    }
+
+    /// Queues a file handed back by another application; `folder` is the
+    /// captures folder's name.
+    ///
+    /// # Errors
+    ///
+    /// [`CaptureError::WorkerGone`] when the thread is gone.
+    pub fn adopt(&self, key: String, folder: String) -> Result<(), CaptureError> {
+        self.jobs
+            .send(Job::Adopt { key, folder })
+            .map_err(|_| CaptureError::WorkerGone)
+    }
 }
 
 fn load_history(report: &impl Fn(Report)) -> History {
@@ -488,6 +590,33 @@ fn finish(outcome: Result<Outcome, CaptureError>, history: &History, report: &im
     }
 }
 
+/// Hands the file `key` names to Fluorita's editor, when it is still there.
+fn edit(backend: &mut dyn Backend, key: &str) -> Result<(), CaptureError> {
+    let path = pathkey::decode(key).map_err(|_| CaptureError::UnknownEntry)?;
+    if std::fs::symlink_metadata(&path).is_err() {
+        return Err(CaptureError::UnknownEntry);
+    }
+    backend.edit_in_fluorita(&path)
+}
+
+/// `Selenita1.Adopt`: the file `key` names joins the history, taken `now`,
+/// when it is a capture or a recording in Selenita's `folders`
+/// ([`adopted`]); anything else is ignored. Whether it joined.
+fn adopt(history: &mut History, folders: Folders<'_>, key: &str, now: SystemTime) -> bool {
+    let Ok(path) = pathkey::decode(key) else {
+        return false;
+    };
+    let Some(entry) = adopted(&path, folders, now) else {
+        return false;
+    };
+    history.push(entry);
+    if let Err(error) = history.save() {
+        // The entry is listed; only its line in the file may be lost.
+        eprintln!("selenita: {error}");
+    }
+    true
+}
+
 /// Runs a row action; whether the history changed.
 fn act(
     backend: &mut dyn Backend,
@@ -524,7 +653,10 @@ fn act(
 
 #[cfg(test)]
 mod tests {
-    use super::{act, capture, publish, Action, CaptureError, Outcome, Places, Progress, Request};
+    use super::{
+        act, adopt, capture, edit, publish, Action, CaptureError, Outcome, Places, Progress,
+        Request,
+    };
     use crate::backend::{self, Backend, PIXEL_PNG};
     use selenita_core::niri::{Output, Window};
     use selenita_core::{Geometry, History, Target, TargetKind};
@@ -739,10 +871,16 @@ mod tests {
         fn open_in_fluorita(&mut self, _: &Path) -> Result<(), CaptureError> {
             Ok(())
         }
+        fn edit_in_fluorita(&mut self, _: &Path) -> Result<(), CaptureError> {
+            Ok(())
+        }
         fn show_in_siderita(&mut self, _: &Path) -> Result<(), CaptureError> {
             Ok(())
         }
         fn trash(&mut self, _: &Path) -> Result<(), CaptureError> {
+            Ok(())
+        }
+        fn poster(&mut self, _: &Path, _: &Path) -> Result<(), CaptureError> {
             Ok(())
         }
     }
@@ -944,11 +1082,84 @@ mod tests {
         );
     }
 
+    /// An edited copy beside a capture, or a trimmed recording, joins the
+    /// history once, in the scratch home's folders; anything else does not.
+    #[test]
+    fn an_adopted_file_joins_the_history_once() {
+        let scratch = Scratch::new("adopt");
+        let captures = scratch.0.join("pictures").join("Capturas");
+        let recordings = scratch.0.join("videos").join("Recordings");
+        std::fs::create_dir_all(&captures).expect("captures");
+        std::fs::create_dir_all(&recordings).expect("recordings");
+        let folders = selenita_core::history::Folders {
+            captures: &captures,
+            recordings: &recordings,
+        };
+        let file = scratch.0.join("history");
+        let mut history = History::at(file.clone());
+        let now = std::time::SystemTime::now();
+        let copy = captures.join("Captura 1 (2).png");
+        std::fs::write(&copy, PIXEL_PNG).expect("copy");
+        let key = celestina_core::pathkey::encode(&copy);
+        assert!(adopt(&mut history, folders, &key, now));
+        assert!(adopt(&mut history, folders, &key, now));
+        assert_eq!(history.entries().len(), 1, "once");
+        assert_eq!(history.entries()[0].path, copy);
+        assert_eq!(
+            History::load(file.clone()).expect("saved").entries().len(),
+            1
+        );
+
+        let clip = recordings.join("Clip 1 (2).mp4");
+        std::fs::write(&clip, b"mp4").expect("clip");
+        assert!(adopt(
+            &mut history,
+            folders,
+            &celestina_core::pathkey::encode(&clip),
+            now
+        ));
+        assert_eq!(
+            history.entries()[0].kind,
+            selenita_core::EntryKind::Recording
+        );
+
+        let elsewhere = scratch.0.join("elsewhere.png");
+        std::fs::write(&elsewhere, PIXEL_PNG).expect("elsewhere");
+        assert!(!adopt(
+            &mut history,
+            folders,
+            &celestina_core::pathkey::encode(&elsewhere),
+            now
+        ));
+        assert!(!adopt(&mut history, folders, "not a key", now));
+        assert_eq!(History::load(file).expect("saved").entries().len(), 2);
+    }
+
+    #[test]
+    fn a_vanished_file_is_not_handed_to_fluorita() {
+        let scratch = Scratch::new("edit");
+        let mut fake = backend::make(true);
+        let shot = scratch.0.join("Captura 1.png");
+        std::fs::write(&shot, PIXEL_PNG).expect("shot");
+        let key = celestina_core::pathkey::encode(&shot);
+        assert!(edit(fake.as_mut(), &key).is_ok());
+        std::fs::remove_file(&shot).expect("vanish");
+        assert!(matches!(
+            edit(fake.as_mut(), &key),
+            Err(CaptureError::UnknownEntry)
+        ));
+        assert!(matches!(
+            edit(fake.as_mut(), "not a key"),
+            Err(CaptureError::UnknownEntry)
+        ));
+    }
+
     #[test]
     fn every_error_has_spanish_words() {
         for error in [
             CaptureError::NoDestination,
             CaptureError::Busy,
+            CaptureError::Edit("UnknownMethod".to_owned()),
             CaptureError::Tool(selenita_core::runner::RunError::Missing(
                 "/stubs/grim".to_owned(),
             )),

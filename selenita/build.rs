@@ -46,6 +46,7 @@ const QML_FILES: &[&str] = &[
     "qml/CaptureCard.qml",
     "qml/HistoryCard.qml",
     "qml/HistoryRow.qml",
+    "qml/PreviewWindow.qml",
     "qml/RecordingCard.qml",
     "qml/Main.qml",
 ];

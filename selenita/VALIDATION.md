@@ -2,10 +2,11 @@
 
 This queue contains no implementation work and never blocks `ROADMAP.md`.
 
-Both entries below are run on the Selenita 1.0.0 binary the SEL-1-C landing
-installs (`scripts/complete-production.sh`); SEL-1-C added the keyboard and
-the screen-reader steps to them rather than a third entry, so one session
-covers the window.
+The first two entries below are run on the Selenita 1.0.0 binary the SEL-1-C
+landing installs (`scripts/complete-production.sh`); SEL-1-C added the
+keyboard and the screen-reader steps to them rather than a third entry, so
+one session covers the window. VAL-SEL-PREVIEW is run on the binary the
+SEL-2-A landing installs.
 
 ## VAL-SEL-SHOT — Capture the screen, a window and a region
 
@@ -110,5 +111,54 @@ covers the window.
   dialog) and the recording is in the history on the next launch; `R`
   starts and stops like the button; Orca reads «Grabar» with «Tecla R» and
   the last recording's line as the last recording with the file's name
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-SEL-PREVIEW — The corner preview: place, focus, drag and edit
+
+- **Status:** pending
+- **Related implementation:** SEL-2-A
+- **Requires:** the deployed Selenita (`scripts/complete-production.sh`),
+  the niri window rule of the README («La vista previa») in niri's config
+  (the suite's PRV-1-E adds it after the author's approval), the key
+  bindings of the README, `gst-plugins-good` (`qtdemux`, `pngenc`) and a
+  decoder for H.264 (`gst-libav` or `gst-plugin-va`), WhatsApp (web or
+  desktop) and Slack open in another window, and for the last steps
+  Fluorita with `org.celestina.Fluorita1.Edit` installed (FLU-P1-A)
+- **Procedure:** with Selenita closed, press Print and keep typing in a
+  text editor while the preview shows; wait without touching it; press
+  Print again and rest the pointer on the preview for ten seconds, then
+  move it away; press Print and press the preview's ×; open Selenita,
+  capture from the window and look at both windows; press Print, drag the
+  preview into a WhatsApp chat and into a Slack message, and drop it once
+  on a Siderita folder while holding Shift (a move); start one more drag
+  and hold it over the desktop for ten seconds before dropping it; record 5 s with
+  Shift+Print and Ctrl+Shift+Print and drag its preview into WhatsApp and
+  Slack; capture, then «Mover a la papelera» on its history row while its
+  preview shows; with reduced motion on in the suite's appearance, press
+  Print; once Fluorita's floating editor is installed, press Print and
+  click the preview, then quit Fluorita, press Print and click again;
+  save a copy with «Guardar ambas» and look at Selenita's history; after a
+  key-binding capture's preview has gone, run `pgrep -x selenita`; open
+  Selenita, capture, and close its window while the preview shows, then
+  run `pgrep -x selenita` again
+- **Pass condition:** the preview appears at the bottom-right corner of
+  the focused output, 24 px from its edges, about 240 px wide, and the
+  editor keeps the keyboard focus (the typing goes on); a key-binding
+  launch never shows Selenita's main window; the preview leaves after
+  about 5 s with a short fade and slide, stays while the pointer rests on
+  it and leaves about 5 s after the pointer does; the × closes it at
+  once; a capture from the window leaves the window where it was and shows
+  the preview too; WhatsApp and Slack receive the PNG and the MP4 as
+  files (the recording plays), Siderita copies rather than moves (the
+  original stays in `Capturas`); a drag held longer than 5 s keeps the
+  preview on screen until the drop; a recording's preview shows its first
+  frame, its length and the film glyph; the trash closes the preview;
+  with reduced motion it appears and leaves without moving; the click
+  closes the preview and opens the file in Fluorita's floating editor,
+  whether Fluorita was running or not (a failure says «No se ha podido
+  abrir Fluorita.» on the preview); the saved copy is a new history row;
+  neither `pgrep` finds a Selenita (a key-binding launch ends with its
+  preview, and closing the window ends Selenita and its preview)
 - **Result:** not run
 - **Evidence:** none

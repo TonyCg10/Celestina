@@ -7,16 +7,24 @@ import QtQuick
 // answers at once as the fake backend does: a history row whose thumbnail
 // is a 1×1 PNG beside this file. A recording toggles between `idle` and
 // `recording` at once, as the fake recorder does, and its stop lands a
-// recording row. `calls` records every invokable, and `reset()` puts
-// everything back between tests.
+// recording row. With `previewOnResult`, a capture saved to a file and a
+// finished recording show the corner preview, as the capture worker's
+// preview report does: the picture itself, or for a recording its poster
+// (the same PNG) and its duration. It is off unless a test asks: the
+// offscreen platform activates every window it shows, so the preview would
+// take the keyboard focus from the main window, which on the session niri's
+// rule (`open-focused false`) prevents. `calls` records every invokable,
+// and `reset()` puts everything back between tests.
 QtObject {
     id: stub
 
     property bool appearanceReducedMotion: false
     property real appearanceTextScale: 1.0
     readonly property bool smokeReport: false
+    readonly property bool smokeClose: false
     readonly property bool fake: true
-    readonly property bool launchCapture: false
+    // Writable here so a test can build the window as a key-binding launch.
+    property bool launchCapture: false
 
     property string target: "screen"
     property int delay: 0
@@ -37,6 +45,16 @@ QtObject {
     property string recorderMissing: ""
     property string recordingStem: ""
 
+    property bool previewOnResult: false
+    property bool previewVisible: false
+    property string previewKey: ""
+    property string previewKind: ""
+    property url previewSource: ""
+    property string previewDuration: ""
+    property string previewFileUri: ""
+    property real previewAspect: 0
+    property string previewNotice: ""
+
     property var calls: []
     property int taken: 0
 
@@ -45,6 +63,8 @@ QtObject {
     signal captured(string entryId)
     signal showWindowRequested()
     signal recordingFinished(string entryId)
+    signal previewShown()
+    signal launchFinished()
 
     function reset() {
         target = "screen"
@@ -61,8 +81,41 @@ QtObject {
         lastRecordingId = ""
         lastRecordingName = ""
         recorderMissing = ""
+        previewVisible = false
+        previewKey = ""
+        previewKind = ""
+        previewSource = ""
+        previewDuration = ""
+        previewFileUri = ""
+        previewAspect = 0
+        previewNotice = ""
+        launchCapture = false
+        previewOnResult = false
         calls = []
         taken = 0
+    }
+
+    // What the controller does on the worker's preview report.
+    function showPreview(key, kind, source, duration, fileUri, aspect) {
+        previewKey = key
+        previewKind = kind
+        previewSource = source
+        previewDuration = duration
+        previewFileUri = fileUri
+        previewAspect = aspect
+        previewNotice = ""
+        previewVisible = true
+        previewShown()
+    }
+
+    function dismissPreview() {
+        record("dismissPreview", previewKey)
+        previewVisible = false
+    }
+
+    function editPreview() {
+        record("editPreview", previewKey)
+        previewVisible = false
     }
 
     function record(name, argument) {
@@ -86,6 +139,8 @@ QtObject {
         }
         history = [row].concat(history)
         captured(id)
+        if (previewOnResult)
+            showPreview(id, "screenshot", row.url, "", "file://" + encodeURI(id), 1)
     }
 
     function toggleRecording() {
@@ -120,8 +175,11 @@ QtObject {
         lastRecordingId = id
         lastRecordingName = row.name
         recordingFinished(id)
+        if (previewOnResult)
+            showPreview(id, "recording", Qt.resolvedUrl("pixel.png"), "0:01", row.url, 0.5625)
     }
 
+    function adopt(key) { record("adopt", key) }
     function openInFluorita(id) { record("openInFluorita", id) }
     function copy(id) { record("copy", id) }
     function showInSiderita(id) { record("showInSiderita", id) }
@@ -133,5 +191,7 @@ QtObject {
             lastRecordingId = ""
             lastRecordingName = ""
         }
+        if (previewKey === id)
+            previewVisible = false
     }
 }

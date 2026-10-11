@@ -25,10 +25,13 @@ Selenita's constraints; it cannot relax the root or grant authority.
   appearance follower and, from SEL-1-A/B, the capture and recording workers.
   `qml/` presents and never decides what a target, a file or a history entry
   means.
-- One window. Activation goes through `celestina_core::activation`:
-  `Activate` raises, `Open` is ignored, and a file argument never triggers
-  anything. The appearance comes from `celestina-settings`. No private copy
-  of either.
+- One main window, and beside it the corner preview of the latest result
+  (SEL-2-A), a frameless window niri places by its title. Activation goes
+  through `celestina_core::activation`: `Activate` raises, `Open` is
+  ignored, and a file argument never triggers anything; `Adopt` on
+  `org.celestina.Selenita1` hands back a file another application wrote.
+  The appearance comes from `celestina-settings`. No private copy of
+  either.
 - No blocking IO on the Qt thread: child processes, the portal, files and the
   history run on workers and report back through cxx-qt `Threading` queues.
 - `SELENITA_FAKE=1` routes every external tool (niri, `grim`, `slurp`,
