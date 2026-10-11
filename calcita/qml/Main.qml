@@ -222,12 +222,19 @@ ApplicationWindow {
         running: CalcitaController.smokeReport
         onTriggered: {
             const document = window.front === window ? null : window.front
+            // Each field Calcita fills, once, with its value as read.
+            const fields = document ? JSON.parse(document.reader.fields).filter(
+                                          entry => entry.widget === 0 && entry.fillable) : []
             console.log("calcita-smoke:"
                         + " empty=" + window.visible
                         + " pageCount=" + (document ? document.reader.pageCount : 0)
                         + " textScale=" + CelestinaTheme.textScale
                         + " fontBody=" + CelestinaTheme.fontBody
-                        + " annotations=" + (document ? document.reader.annotationCount : -1))
+                        + " annotations=" + (document ? document.reader.annotationCount : -1)
+                        + " fields=" + fields.length
+                        + " values=" + fields.map(entry => entry.name + ":"
+                                                  + (entry.kind === "checkbox" ? entry.checked : entry.value))
+                                             .join("|"))
             if (document && CalcitaController.smokeGrab !== "")
                 document.view.grabPage(0, CalcitaController.smokeGrab)
         }

@@ -59,6 +59,7 @@ pub mod qobject {
         #[qproperty(bool, smoke_report, cxx_name = "smokeReport", READ, CONSTANT)]
         #[qproperty(QString, smoke_grab, cxx_name = "smokeGrab", READ, CONSTANT)]
         #[qproperty(bool, smoke_edit, cxx_name = "smokeEdit", READ, CONSTANT)]
+        #[qproperty(bool, smoke_fill, cxx_name = "smokeFill", READ, CONSTANT)]
         #[qproperty(QStringList, documents, READ, NOTIFY)]
         #[qproperty(QStringList, recents, READ, NOTIFY)]
         #[qproperty(QStringList, recent_names, cxx_name = "recentNames", READ, NOTIFY)]
@@ -149,12 +150,16 @@ pub mod qobject {
 /// page to be saved to as drawn, so it can look at its pixels. `smokeEdit`
 /// is `CALCITA_SMOKE_EDIT` set: the first document opened adds a text box
 /// through its editor and saves it beside itself («Guardar ambas»).
+/// `smokeFill` is `CALCITA_SMOKE_FILL` set: the first document opened
+/// fills its text field `name` and checks its checkbox `agree` (the form
+/// fixture's) through its editor and saves them beside itself.
 pub struct CalcitaControllerRust {
     appearance_reduced_motion: bool,
     appearance_text_scale: f64,
     smoke_report: bool,
     smoke_grab: QString,
     smoke_edit: bool,
+    smoke_fill: bool,
     documents: QStringList,
     recents: QStringList,
     recent_names: QStringList,
@@ -179,6 +184,7 @@ impl Default for CalcitaControllerRust {
                 .map(|path| QString::from(path.as_str()))
                 .unwrap_or_default(),
             smoke_edit: std::env::var_os("CALCITA_SMOKE_EDIT").is_some(),
+            smoke_fill: std::env::var_os("CALCITA_SMOKE_FILL").is_some(),
             documents: QStringList::default(),
             recents: QStringList::default(),
             recent_names: QStringList::default(),

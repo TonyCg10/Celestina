@@ -14,11 +14,15 @@
 //! text, size or colour changed is laid out again by Calcita
 //! ([`lays_out_again`]), and so is every highlight and drawing that changed.
 //! Every edit the edit set accepted can be written: what is laid out again
-//! was checked when it was pushed.
+//! was checked when it was pushed. A filled form field takes `/V`, and a
+//! text field a new appearance on each of its widgets, a checkbox `/AS`
+//! ([`super::form`]).
 //!
 //! The same machinery makes the copy the page provider shows while editing
 //! ([`hidden_copy`]): the editable annotations marked hidden, so QtPdf
-//! draws the rest and Calcita draws those itself.
+//! draws the rest and Calcita draws those itself, and the form's widgets
+//! Calcita does not fill stamped into their pages, since QtPdf draws no
+//! widget (the ones it fills are its own controls while editing).
 
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
@@ -33,6 +37,9 @@ use super::appearance::{
 };
 use super::coords::PageBox;
 use super::edit::{lays_out_again, Base, EditSet};
+use super::form::{
+    self, fields_of, fillable_widgets, stamp_plans, text_field_ap, FieldValue, Fill, FormField,
+};
 use super::model::{AnnotId, Annotation, Kind, Rect, Rgb};
 use super::read::{
     load_for_edit, locations, model_of, page_annotations, pages, AnnotError, Loaded, Location,
@@ -75,7 +82,12 @@ pub fn apply(original: &Path, edits: &EditSet, out: &Path) -> Result<(), AnnotEr
 pub fn apply_to_bytes(original: &Path, edits: &EditSet) -> Result<Vec<u8>, AnnotError> {
     let loaded = load_for_edit(original)?;
     let (annotations, boxes) = model_of(&loaded.document);
-    let base = Base { annotations, boxes };
+    let fields = fields_of(&loaded.document);
+    let base = Base {
+        annotations,
+        boxes,
+        fields,
+    };
     let resolved = edits.resolve(&base);
     let places = locations(&loaded.document);
     let page_ids: Vec<ObjectId> = pages(&loaded.document)
@@ -107,20 +119,28 @@ pub fn apply_to_bytes(original: &Path, edits: &EditSet) -> Result<Vec<u8>, Annot
             .ok_or(AnnotError::NotEditable)?;
         update.add(annotation, page_id, page)?;
     }
+    for field in &resolved.filled {
+        update.fill(field)?;
+    }
     update.finish()
 }
 
-/// The bytes of `original` with each annotation of `ids` marked hidden, as
-/// one incremental update kept in memory: what the page provider renders
-/// while editing, so QtPdf draws every other annotation and Calcita draws
-/// these over the page. Without an id to hide, the original's bytes.
+/// The bytes of `original` with each annotation of `ids` marked hidden and
+/// every shown form widget Calcita does not fill stamped into its page
+/// ([`form::stamped_view`]'s stamping), as one incremental update kept in
+/// memory: what the page provider renders while editing, so QtPdf draws
+/// every other annotation and the read-only fields, and Calcita draws the
+/// hidden annotations and its own controls for the fields it fills over the
+/// page. With nothing to hide or stamp, the original's bytes.
 ///
 /// # Errors
 ///
 /// As [`apply_to_bytes`].
 pub fn hidden_copy(original: &Path, ids: &[AnnotId]) -> Result<Vec<u8>, AnnotError> {
     let loaded = load_for_edit(original)?;
-    if ids.is_empty() {
+    let skip = fillable_widgets(&fields_of(&loaded.document));
+    let plans = stamp_plans(&loaded.document, &skip);
+    if ids.is_empty() && plans.is_empty() {
         return Ok(loaded.bytes);
     }
     let places = locations(&loaded.document);
@@ -138,6 +158,7 @@ pub fn hidden_copy(original: &Path, ids: &[AnnotId]) -> Result<Vec<u8>, AnnotErr
             dictionary.set("F", flags | FLAG_HIDDEN);
         })?;
     }
+    form::stamp(&mut update.document, &plans)?;
     update.finish()
 }
 
@@ -181,10 +202,12 @@ fn color_object(color: Rgb) -> Object {
     )
 }
 
-/// A text string (ISO 32000-1, 7.9.2.2): ASCII as it is, anything else as
-/// UTF-16 big-endian after its byte-order mark.
+/// A text string (ISO 32000-1, 7.9.2.2): printable ASCII as it is, anything
+/// else as UTF-16 big-endian after its byte-order mark (PDFDocEncoding
+/// leaves the line feed of a multiline value undefined, so a reader may
+/// drop it).
 fn text_string(text: &str) -> Object {
-    if text.is_ascii() {
+    if text.bytes().all(|byte| (0x20..0x7F).contains(&byte)) {
         return Object::String(text.as_bytes().to_vec(), StringFormat::Literal);
     }
     let mut bytes = vec![0xFE, 0xFF];
@@ -349,16 +372,7 @@ impl Update {
         change: impl FnOnce(&mut Dictionary),
     ) -> Result<(), AnnotError> {
         if let Some(object) = place.object {
-            self.document
-                .opt_clone_object_to_new_document(object)
-                .map_err(structure)?;
-            let dictionary = self
-                .document
-                .new_document
-                .get_dictionary_mut(object)
-                .map_err(structure)?;
-            change(dictionary);
-            return Ok(());
+            return self.rewrite_object(object, change);
         }
         let index = usize::try_from(place.index).map_err(|_| AnnotError::NotEditable)?;
         self.with_annots(place.page, |array| {
@@ -373,6 +387,59 @@ impl Update {
                 None => Err(AnnotError::NotEditable),
             }
         })?
+    }
+
+    /// Runs `change` on the object `id` as this update writes it.
+    fn rewrite_object(
+        &mut self,
+        id: ObjectId,
+        change: impl FnOnce(&mut Dictionary),
+    ) -> Result<(), AnnotError> {
+        self.document
+            .opt_clone_object_to_new_document(id)
+            .map_err(structure)?;
+        let dictionary = self
+            .document
+            .new_document
+            .get_dictionary_mut(id)
+            .map_err(structure)?;
+        change(dictionary);
+        Ok(())
+    }
+
+    /// Writes `field`'s value (as the edit set ends with it): `/V` on the
+    /// field, and on each of its widgets a new appearance for a text field
+    /// or the state for a checkbox.
+    fn fill(&mut self, field: &FormField) -> Result<(), AnnotError> {
+        let node = field.node.ok_or(AnnotError::NotEditable)?;
+        match (&field.fill, field.current()) {
+            (Fill::Text(format), Some(FieldValue::Text(text))) => {
+                let value = text_string(&text);
+                self.rewrite_object(node, |dictionary| dictionary.set("V", value))?;
+                for widget in &field.widgets {
+                    let object = widget.object.ok_or(AnnotError::NotEditable)?;
+                    let appearance = text_field_ap(widget, format, &text)?;
+                    let appearance = self.appearance(appearance);
+                    self.rewrite_object(object, |dictionary| {
+                        dictionary.set("AP", dictionary! { "N" => Object::Reference(appearance) });
+                    })?;
+                }
+                Ok(())
+            }
+            (Fill::Checkbox { on }, Some(FieldValue::Checked(checked))) => {
+                let state = if checked { on.as_str() } else { "Off" };
+                let state = Object::Name(state.as_bytes().to_vec());
+                let value = state.clone();
+                self.rewrite_object(node, |dictionary| dictionary.set("V", value))?;
+                for widget in &field.widgets {
+                    let object = widget.object.ok_or(AnnotError::NotEditable)?;
+                    let state = state.clone();
+                    self.rewrite_object(object, |dictionary| dictionary.set("AS", state))?;
+                }
+                Ok(())
+            }
+            _ => Err(AnnotError::NotEditable),
+        }
     }
 
     /// Rewrites an annotation another program, or an earlier save, wrote, so

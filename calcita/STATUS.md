@@ -4,9 +4,10 @@
 - **Implementation:** CAL-2, editing (annotations and forms), is the
   active checkpoint ([plan](docs/plans/active/2026-10-11-cal-2-editing.md)).
   CAL-2-A (every annotation shown, the annotation model and the
-  coordinates) landed as 1.1.0; CAL-2-B (the edit mode, the three tools and
-  saving) is implemented and checked offscreen in its session worktree,
-  not yet landed; CAL-2-C (forms) is planned. CAL-1 is closed and its
+  coordinates) landed as 1.1.0 and CAL-2-B (the edit mode, the three tools
+  and saving) as 1.2.0; CAL-2-C (forms shown, text fields and checkboxes
+  filled and saved) is implemented and checked offscreen in its session
+  worktree, not yet landed. CAL-1 is closed and its
   [plan](docs/plans/archive/2026-10-09-cal-1-foundation.md) archived: CAL-1-A
   (opening, continuous pages, zoom and navigation) as 0.2.0, CAL-1-B
   (search, the outline, selection and copy, links) as 0.3.0, CAL-1-C (the
@@ -14,13 +15,13 @@
   the accessibility pass) as 1.0.0, and the bug unit CAL-1-D (every page
   on opaque paper over the glass) as 1.0.1
 - **Author validation:** VAL-CAL-OPEN, VAL-CAL-SEARCH, VAL-CAL-DARK,
-  VAL-CAL-ANNOT and VAL-CAL-EDIT pending
+  VAL-CAL-ANNOT, VAL-CAL-EDIT and VAL-CAL-FORM pending
 
 ## Current checkout truth
 
-- Version 1.1.0 in the checkout, installed under the author's prefix
-  (`~/.local/bin/calcita`) by CAL-2-A's landing; the edit mode below is
-  in the CAL-2-B worktree, not installed. The empty window «Sin documento» offers
+- Version 1.2.0 in the checkout, installed under the author's prefix
+  (`~/.local/bin/calcita`) by CAL-2-B's landing; filling forms below is in
+  the CAL-2-C worktree, not installed. The empty window «Sin documento» offers
   «Abrir…» (the FileChooser portal, filtered to PDF), the recent documents
   and a drop area. A click, Enter or Space on a recent row opens it; its menu (a right
   click, the Menu key or Shift+F10) has «Quitar de recientes».
@@ -40,9 +41,11 @@
   the gaps between pages stay glass. Each page's image comes from
   Calcita's page provider (`cpp/page_provider.cpp`), which has QtPdf render
   it with its annotations on one render thread of its own, so another
-  program's highlights, notes and drawings show; form widgets do not
-  (QtPdf never draws them; CAL-2-C). The window reads the document's
-  annotation model with `lopdf` on a worker (`calcita_core::annot`). A
+  program's highlights, notes and drawings show. QtPdf never draws form
+  widgets, so a document with a form is shown from an in-memory copy with
+  each widget's appearance stamped into its page (CAL-2-C, not landed).
+  The window reads the document's annotation model and form with `lopdf`
+  on a worker (`calcita_core::annot`). A
   page's address carries the revision of the file shown, renewed when the
   file changed on disk (checked when the window is activated) or was saved
   over, so the image cache never shows another version. Search: Ctrl+F or the bar's button opens a card
@@ -62,7 +65,7 @@
   too. It fades in and out over 200 ms, at once under reduced motion.
 - The recent documents (50, `~/.local/share/calcita/recent`) remember the
   page, the zoom and the reading mode each one is reopened at.
-- Editing (Ctrl+E or «Editar»; CAL-2-B, not landed): the pages render from
+- Editing (Ctrl+E or «Editar»; CAL-2-B): the pages render from
   an in-memory copy with the editable annotations hidden and the window
   draws those itself; a bottom toolbar holds «Seleccionar», «Texto»,
   «Resaltar», «Dibujar», the six accent colours, three sizes, undo and
@@ -75,10 +78,24 @@
   original to the Trash and reloads. Leaving or closing with changes asks,
   with «Descartar». The reading mode waits while editing; encrypted and
   unparseable documents refuse edit mode with a notice.
+- Forms (CAL-2-C, not landed): a click on a text field or a checkbox
+  starts editing on it; while editing they are controls over their
+  widgets (Tab and Shift+Tab in the form's order, across pages; Space
+  checks), and their values join the same undo, redo and save: a text
+  field's `/V` with its appearance redrawn (Helvetica in WinAnsi, its size
+  or fitted, its alignment, length and comb), a checkbox's `/V` and `/AS`
+  with its own on-state. Radio buttons, lists, signatures and read-only
+  fields are shown and say why they are not filled.
 - The desktop entry declares `MimeType=application/pdf;`; the author pins
   Calcita as the PDF handler by hand after VAL-CAL-DARK.
 - Every control of the bar, the page field, the search card, the outline
   rows and the recent rows carries a Spanish accessible name.
+
+## Known issues
+
+- A form widget's own rotation (`/MK /R`) is not honoured when Calcita
+  redraws a filled text field: the text is drawn in the page's user
+  space, so on a widget a form turns it reads turned (CAL-2-C, deferred).
 
 ## Deferred
 

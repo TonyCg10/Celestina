@@ -16,7 +16,9 @@
 //!   points** (top-left origin, after `/Rotate`); `calcita_core` converts.
 //! - **The annotations are published as one JSON array** (`annotations`),
 //!   so QML rebuilds from one consistent value rather than from columns
-//!   published one after another.
+//!   published one after another; so are the form's widgets (`fields`),
+//!   with the values the edit set gives them. A value filled joins the same
+//!   edit set, undo, redo and save as an annotation.
 //! - **Saving runs on a worker** and lands through `crate::saving`; the
 //!   window hears `saved` only once the bytes are on disk.
 
@@ -26,6 +28,7 @@ use std::pin::Pin;
 use calcita_core::annot::appearance::{self, number};
 use calcita_core::annot::coords::{to_pdf_rect, to_view, to_view_rect, PageBox};
 use calcita_core::annot::edit::{self, is_editable, lays_out_again, Base, Edit, EditSet};
+use calcita_core::annot::form::{font_size, Align, FieldId, FieldValue, Fill, FormField};
 use calcita_core::annot::write::hidden_copy;
 use calcita_core::annot::{AnnotError, AnnotId, Annotation, Kind, Point, Rect, Rgb};
 use celestina_core::pathkey;
@@ -59,6 +62,7 @@ pub mod qobject {
         #[qproperty(bool, can_redo, cxx_name = "canRedo", READ, NOTIFY)]
         #[qproperty(i32, revision, READ, NOTIFY)]
         #[qproperty(QString, annotations, READ, NOTIFY)]
+        #[qproperty(QString, fields, READ, NOTIFY)]
         #[qproperty(f64, text_padding, cxx_name = "textPadding", READ, CONSTANT)]
         #[qproperty(f64, line_height, cxx_name = "lineHeight", READ, CONSTANT)]
         type CalcitaEditor = super::CalcitaEditorRust;
@@ -144,6 +148,15 @@ pub mod qobject {
         #[qinvokable]
         fn remove(self: Pin<&mut CalcitaEditor>, id: &QString) -> bool;
 
+        /// The text field `field` (its published id) now reads `text`; a
+        /// refusal is a notice, and false.
+        #[qinvokable]
+        fn fill_text(self: Pin<&mut CalcitaEditor>, field: &QString, text: &QString) -> bool;
+
+        /// The checkbox `field` is now checked or not.
+        #[qinvokable]
+        fn set_checked(self: Pin<&mut CalcitaEditor>, field: &QString, checked: bool) -> bool;
+
         #[qinvokable]
         fn undo(self: Pin<&mut CalcitaEditor>);
 
@@ -192,6 +205,8 @@ pub struct CalcitaEditorRust {
     /// 0 otherwise.
     revision: i32,
     annotations: QString,
+    /// The form's widgets with their values as edited, one JSON array.
+    fields: QString,
     /// A text box's layout, as the saved appearance lays it out: the
     /// padding around the text in points, and the line height in font
     /// sizes.
@@ -219,6 +234,7 @@ impl Default for CalcitaEditorRust {
             can_redo: false,
             revision: 0,
             annotations: QString::from("[]"),
+            fields: QString::from("[]"),
             text_padding: appearance::TEXT_PADDING,
             line_height: appearance::LINE_HEIGHT,
             session: None,
@@ -327,7 +343,7 @@ fn outline_boxes(outlines: &QList<QVariant>) -> Vec<Rect> {
 }
 
 /// `text` as a JSON string.
-fn json_string(text: &str) -> String {
+pub(crate) fn json_string(text: &str) -> String {
     let mut quoted = String::with_capacity(text.len() + 2);
     quoted.push('"');
     for character in text.chars() {
@@ -414,6 +430,96 @@ fn json_annotation(annotation: &Annotation, page: PageBox, laid_out: bool) -> St
         number(bounds.height()),
         color_text(annotation.color),
     )
+}
+
+/// The text a field id is published as, and looked up by.
+fn field_id_text(id: &FieldId) -> String {
+    match id {
+        FieldId::Object { number, generation } => format!("o{number}.{generation}"),
+        FieldId::Walk(place) => format!("w{place}"),
+    }
+}
+
+/// `align` as QML's text spells it.
+fn align_text(align: Align) -> &'static str {
+    match align {
+        Align::Left => "left",
+        Align::Center => "center",
+        Align::Right => "right",
+    }
+}
+
+/// The form's widgets as one JSON array, for QML, each in its page's
+/// displayed points, in the form's order (`order`, which Tab follows): its
+/// field's id (`field`, which a fill names; two fields may share a name),
+/// name and label, what Calcita does with it (`kind` `text`, `checkbox` or
+/// `other`; `fillable`, else the `notice` that says why), the field's value
+/// (`value`, and `checked` for a checkbox), and how a text field shows it
+/// on this widget (the size its text is drawn at, the alignment and colour
+/// of the widget's own `/DA` and `/Q` or the field's, whether it takes
+/// several lines, its most characters). A widget on no page, or not shown
+/// (invisible, hidden, `NoView`), is left out: it takes no tap, no control
+/// and no place in the order.
+pub(crate) fn json_fields(fields: &[FormField], boxes: &[PageBox]) -> String {
+    let mut order = 0_usize;
+    let mut items: Vec<String> = Vec::new();
+    for field in fields {
+        let value = field.value.clone().unwrap_or_default();
+        let label = field.label.clone().unwrap_or_else(|| {
+            field
+                .name
+                .0
+                .rsplit('.')
+                .next()
+                .unwrap_or_default()
+                .to_owned()
+        });
+        for (index, widget) in field.widgets.iter().enumerate() {
+            let Some(page) = widget.page.filter(|_| widget.shown) else {
+                continue;
+            };
+            let Some(page_box) = usize::try_from(page).ok().and_then(|at| boxes.get(at)) else {
+                continue;
+            };
+            let bounds = to_view_rect(*page_box, widget.rect);
+            let details = match &field.fill {
+                Fill::Text(format) => {
+                    let own = format.of(widget);
+                    format!(
+                        "\"kind\":\"text\",\"fillable\":true,\"notice\":\"\",\"checked\":false,\"multiline\":{},\"maxLen\":{},\"size\":{},\"align\":\"{}\",\"color\":\"{}\"",
+                        format.multiline,
+                        format.max_len.unwrap_or(0),
+                        number(font_size(widget, format, &value)),
+                        align_text(own.align),
+                        color_text(own.color),
+                    )
+                }
+                // Drawn in black, as the check of a form's own appearance.
+                Fill::Checkbox { on } => format!(
+                    "\"kind\":\"checkbox\",\"fillable\":true,\"notice\":\"\",\"checked\":{},\"color\":\"{}\"",
+                    field.value.as_deref() == Some(on.as_str()),
+                    color_text(Rgb::BLACK)
+                ),
+                Fill::No(why) => format!(
+                    "\"kind\":\"other\",\"fillable\":false,\"notice\":{},\"checked\":false",
+                    json_string(why.message_es())
+                ),
+            };
+            items.push(format!(
+                "{{\"field\":{},\"name\":{},\"label\":{},\"order\":{order},\"widget\":{index},\"page\":{page},\"x\":{},\"y\":{},\"w\":{},\"h\":{},\"value\":{},{details}}}",
+                json_string(&field_id_text(&field.id)),
+                json_string(&field.name.0),
+                json_string(&label),
+                number(bounds.x0),
+                number(bounds.y0),
+                number(bounds.width()),
+                number(bounds.height()),
+                json_string(&value),
+            ));
+            order += 1;
+        }
+    }
+    format!("[{}]", items.join(","))
 }
 
 /// The editable annotations as one JSON array, for QML.
@@ -523,8 +629,10 @@ impl qobject::CalcitaEditor {
                     edits: EditSet::new(),
                 });
                 set_property!(self, revision, revision_changed, revision);
+                // Published before `editing` turns, so the window moves to
+                // the editor's fields and annotations in one step.
+                self.as_mut().publish();
                 set_property!(self, editing, editing_changed, true);
-                self.publish();
             }
             Err(message) => self.refuse(&message),
         }
@@ -546,14 +654,15 @@ impl qobject::CalcitaEditor {
 
     /// Publishes the annotations as they are now and what can be done.
     fn publish(mut self: Pin<&mut Self>) {
-        let (model, edited, can_undo, can_redo) = match self.rust().session.as_ref() {
+        let (model, fields, edited, can_undo, can_redo) = match self.rust().session.as_ref() {
             Some(session) => (
                 json_model(&session.edits.apply(&session.base), &session.base),
+                json_fields(&session.edits.fields(&session.base), &session.base.boxes),
                 !session.edits.is_empty(),
                 session.edits.can_undo(),
                 session.edits.can_redo(),
             ),
-            None => ("[]".to_owned(), false, false, false),
+            None => ("[]".to_owned(), "[]".to_owned(), false, false, false),
         };
         set_property!(
             self,
@@ -561,6 +670,7 @@ impl qobject::CalcitaEditor {
             annotations_changed,
             QString::from(&model)
         );
+        set_property!(self, fields, fields_changed, QString::from(&fields));
         set_property!(self, edited, edited_changed, edited);
         set_property!(self, can_undo, can_undo_changed, can_undo);
         set_property!(self, can_redo, can_redo_changed, can_redo);
@@ -706,6 +816,35 @@ impl qobject::CalcitaEditor {
         self.push(|session| Some(Edit::Delete(Self::find(session, &id)?.id)))
     }
 
+    /// Pushes `value` for the field whose id is spelled `field`, unless the
+    /// field already holds it (a control that lost the keyboard unchanged
+    /// adds nothing). A refusal is a notice, and false.
+    fn fill(self: Pin<&mut Self>, field: &str, value: FieldValue) -> bool {
+        let found = self.rust().session.as_ref().and_then(|session| {
+            session
+                .edits
+                .fields(&session.base)
+                .into_iter()
+                .find(|shown| field_id_text(&shown.id) == field)
+        });
+        let Some(found) = found else {
+            self.refuse(&AnnotError::NotFillable.message_es());
+            return false;
+        };
+        if found.current().as_ref() == Some(&value) {
+            return true;
+        }
+        self.push(|_| Some(Edit::Fill(found.id, value)))
+    }
+
+    pub fn fill_text(self: Pin<&mut Self>, field: &QString, text: &QString) -> bool {
+        self.fill(&field.to_string(), FieldValue::Text(text.to_string()))
+    }
+
+    pub fn set_checked(self: Pin<&mut Self>, field: &QString, checked: bool) -> bool {
+        self.fill(&field.to_string(), FieldValue::Checked(checked))
+    }
+
     pub fn undo(mut self: Pin<&mut Self>) {
         if self.rust().saving {
             return;
@@ -805,11 +944,12 @@ impl qobject::CalcitaEditor {
 #[cfg(test)]
 mod tests {
     use super::{
-        color_text, id_text, json_model, json_string, orphans, outline_boxes, parse_color,
-        parse_points, settle,
+        color_text, id_text, json_fields, json_model, json_string, orphans, outline_boxes,
+        parse_color, parse_points, settle,
     };
     use calcita_core::annot::coords::{PageBox, Rotation};
-    use calcita_core::annot::edit::Base;
+    use calcita_core::annot::edit::{Base, Edit, EditSet};
+    use calcita_core::annot::form::{FieldName, FieldValue};
     use calcita_core::annot::{read_annotations, AnnotId, Point, Rect, Rgb};
     use cxx_qt_lib::{QList, QPointF, QPolygonF, QRectF, QString, QVariant};
     use std::path::Path;
@@ -914,6 +1054,67 @@ mod tests {
     }
 
     #[test]
+    fn the_fields_are_published_with_their_edited_values() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/form.pdf");
+        let base = Base::read(&path).expect("readable");
+        let mut edits = EditSet::new();
+        for (name, value) in [
+            ("name", FieldValue::Text("Ada".to_owned())),
+            ("agree", FieldValue::Checked(true)),
+        ] {
+            let id = base
+                .fields
+                .iter()
+                .find(|field| field.name.0 == name)
+                .expect("the field")
+                .id
+                .clone();
+            edits.push(&base, Edit::Fill(id, value)).expect("filled");
+        }
+        let fields = json_fields(&edits.fields(&base), &base.boxes);
+        assert!(
+            fields.contains("{\"field\":\"o8.0\",\"name\":\"name\",\"label\":\"Full name\",\"order\":0,\"widget\":0,\"page\":0,\"x\":72,\"y\":162,\"w\":300,\"h\":30,\"value\":\"Ada\",\"kind\":\"text\",\"fillable\":true,\"notice\":\"\",\"checked\":false,\"multiline\":false,\"maxLen\":0,\"size\":12,\"align\":\"left\",\"color\":\"#000000\"}"),
+            "{fields}"
+        );
+        assert!(
+            fields.contains("{\"field\":\"o11.0\",\"name\":\"agree\",\"label\":\"I agree\",\"order\":1,\"widget\":0,\"page\":0,\"x\":72,\"y\":232,\"w\":20,\"h\":20,\"value\":\"Si\",\"kind\":\"checkbox\",\"fillable\":true,\"notice\":\"\",\"checked\":true"),
+            "{fields}"
+        );
+        assert!(
+            fields.contains("\"name\":\"address.city\",\"label\":\"city\"")
+                && fields.contains("\"size\":12,\"align\":\"center\",\"color\":\"#000099\""),
+            "the inherited /DA and /Q: {fields}"
+        );
+        assert!(fields.contains("\"maxLen\":5"), "{fields}");
+        assert_eq!(
+            fields.matches("\"name\":\"copy\"").count(),
+            2,
+            "one per widget"
+        );
+        assert_eq!(json_fields(&[], &base.boxes), "[]");
+    }
+
+    #[test]
+    fn a_hidden_field_over_a_visible_one_takes_no_tap_and_no_place() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/form.pdf");
+        let mut base = Base::read(&path).expect("readable");
+        // «ghost» lies hidden (`calcita_core` reads `/F` into `shown`) over
+        // «name», and comes first in the form.
+        let mut ghost = base.fields[0].clone();
+        ghost.name = FieldName("ghost".to_owned());
+        ghost.widgets[0].shown = false;
+        base.fields.insert(0, ghost);
+        let fields = json_fields(&base.fields, &base.boxes);
+        assert!(!fields.contains("ghost"), "{fields}");
+        assert!(
+            fields.starts_with(
+                "[{\"field\":\"o8.0\",\"name\":\"name\",\"label\":\"Full name\",\"order\":0,"
+            ),
+            "the visible field is the first in the order: {fields}"
+        );
+    }
+
+    #[test]
     fn json_strings_escape_what_json_needs() {
         assert_eq!(
             json_string("a\"b\\c\nd\u{1}é"),
@@ -962,6 +1163,7 @@ mod tests {
                 h: 10.0,
                 rotate: Rotation::R90,
             }],
+            fields: Vec::new(),
         };
         assert_eq!(json_model(&[], &turned), "[]");
     }

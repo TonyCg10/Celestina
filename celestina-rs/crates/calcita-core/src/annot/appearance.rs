@@ -28,7 +28,7 @@ pub const LINE_HEIGHT: f64 = 1.2;
 /// How far the first baseline sits below the padding, in font sizes: the
 /// line's share above its baseline (Helvetica's ascender is 0.718, the rest
 /// of the line height split over and under it).
-const FIRST_BASELINE: f64 = 0.95;
+pub(crate) const FIRST_BASELINE: f64 = 0.95;
 
 /// The name of the font in a text box's resources and in its `/DA`.
 pub const FONT_RESOURCE: &str = "Helv";
@@ -141,7 +141,7 @@ pub fn win_ansi(text: &str) -> Result<Vec<u8>, AnnotError> {
 }
 
 /// The advance of `bytes` in thousandths of the font size.
-fn advance(bytes: &[u8]) -> u32 {
+pub(crate) fn advance(bytes: &[u8]) -> u32 {
     bytes
         .iter()
         .map(|byte| u32::from(HELVETICA_WIDTHS[usize::from(*byte)]))
@@ -245,13 +245,13 @@ pub fn number(value: f64) -> String {
 }
 
 /// A colour's three components for `rg` or `RG`.
-fn components(color: Rgb) -> String {
+pub(crate) fn components(color: Rgb) -> String {
     let unit = |channel: u8| number(f64::from(channel) / 255.0);
     format!("{} {} {}", unit(color.r), unit(color.g), unit(color.b))
 }
 
 /// `bytes` as a PDF hexadecimal string.
-fn hex_string(bytes: &[u8]) -> String {
+pub(crate) fn hex_string(bytes: &[u8]) -> String {
     let mut text = String::with_capacity(bytes.len() * 2 + 2);
     text.push('<');
     for byte in bytes {

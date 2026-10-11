@@ -27,6 +27,17 @@ set -u
 #     of the copy (an incremental update), the window moves to the copy and
 #     its model, read again, finds the one annotation, and its first page as
 #     drawn shows the text in ink where it was placed.
+#  7) The same start with tests/fixtures/form.pdf: the window reports its
+#     ten widgets as annotations and its five fields Calcita fills with
+#     their values, and the first page as drawn shows the widgets QtPdf
+#     never draws itself (the field «copy» reading «Twice», the radio
+#     button that is on), stamped into the copy the provider renders.
+#  8) The same start with a scratch copy of form.pdf and CALCITA_SMOKE_FILL:
+#     the window fills «name» with «Calcita smoke» and checks «agree»
+#     through its editor and saves «Guardar ambas». The copy lands beside,
+#     the original untouched and a byte prefix of it; the window moves to
+#     the copy, whose form, read again, holds both values, and whose first
+#     page as drawn shows the text in the field and the check in the box.
 #
 # Startup only. Keyboard, focus and assistive technology need a real Wayland
 # session.
@@ -61,7 +72,8 @@ fi
 
 fixture=$root/tests/fixtures/three-pages.pdf
 annotated=$root/tests/fixtures/annotated.pdf
-for required in "$fixture" "$annotated"; do
+form=$root/tests/fixtures/form.pdf
+for required in "$fixture" "$annotated" "$form"; do
     if [ ! -f "$required" ]; then
         echo "smoke: the fixture is missing: $required" >&2
         exit 1
@@ -91,7 +103,7 @@ run() {
     CALCITA_SMOKE_GRAB=${grab:-} \
     QT_QPA_PLATFORM=offscreen \
     QT_ASSUME_STDERR_HAS_CONSOLE=1 \
-        ${edit:+env CALCITA_SMOKE_EDIT=1} timeout 8 "$bin" "$@" >"$log" 2>&1
+        ${edit:+env CALCITA_SMOKE_EDIT=1} ${fill:+env CALCITA_SMOKE_FILL=1} timeout 8 "$bin" "$@" >"$log" 2>&1
     rc=$?
     if [ "$rc" -ne 124 ]; then
         echo "smoke: the binary exited on its own (rc=$rc); last lines:" >&2
@@ -111,7 +123,7 @@ run() {
 
 run
 case $report in
-    *" empty=true pageCount=0 textScale=1 fontBody=13 annotations=-1") ;;
+    *" empty=true pageCount=0 textScale=1 fontBody=13 annotations=-1 fields=0 values=") ;;
     *)
         echo "smoke: the window did not report the empty state: ${report:-no report}" >&2
         exit 1
@@ -121,7 +133,7 @@ empty_report=$report
 
 run "$fixture"
 case $report in
-    *" empty=false pageCount=3 textScale=1 fontBody=13 annotations=0") ;;
+    *" empty=false pageCount=3 textScale=1 fontBody=13 annotations=0 fields=0 values=") ;;
     *)
         echo "smoke: the fixture did not open with three pages: ${report:-no report}" >&2
         exit 1
@@ -132,7 +144,7 @@ pages_report=$report
 grab=$scratch/annotated-page.ppm
 run "$annotated"
 case $report in
-    *" empty=false pageCount=1 textScale=1 fontBody=13 annotations=4") ;;
+    *" empty=false pageCount=1 textScale=1 fontBody=13 annotations=4 fields=0 values=") ;;
     *)
         echo "smoke: the annotated fixture did not report its four annotations: ${report:-no report}" >&2
         exit 1
@@ -209,7 +221,7 @@ edit=1
 run "$document"
 edit=
 case $report in
-    *" empty=false pageCount=3 textScale=1 fontBody=13 annotations=1") ;;
+    *" empty=false pageCount=3 textScale=1 fontBody=13 annotations=1 fields=0 values=") ;;
     *)
         echo "smoke: the edited copy did not open with its one annotation: ${report:-no report}" >&2
         exit 1
@@ -285,4 +297,114 @@ PY
     exit 1
 fi
 
-echo "smoke: OK — binary alive for 8 s four times, no QML errors, no auto-bindings ($empty_report; $pages_report; $annotated_report; $annotated_pixels; $report; $edited_pixels; edited copy $(wc -c < "$saved") bytes over $original_bytes)"
+edited_report=$report
+
+# Measures a grabbed A4 page (a PPM): for each `name:x0,y0,x1,y1:share`
+# region, in PDF points (y up, the whole page 595 x 842), the share of dark
+# pixels (every channel under 160) must reach `share`.
+measure() {
+    python3 -I - "$@" <<'PY'
+import sys
+
+data = open(sys.argv[1], "rb").read()
+fields = []
+at = 0
+while len(fields) < 4:
+    while data[at:at + 1].isspace():
+        at += 1
+    if data[at:at + 1] == b"#":
+        at = data.index(b"\n", at)
+        continue
+    end = at
+    while not data[end:end + 1].isspace():
+        end += 1
+    fields.append(data[at:end])
+    at = end
+magic, width, height, depth = fields[0], int(fields[1]), int(fields[2]), int(fields[3])
+if magic != b"P6" or depth != 255:
+    sys.exit(f"not a binary 8-bit PPM: {magic!r} depth {depth}")
+pixels = data[at + 1:]
+report = [f"{width}x{height}"]
+failed = False
+for spec in sys.argv[2:]:
+    name, box, wanted = spec.split(":")
+    x0, y0, x1, y1 = (float(value) for value in box.split(","))
+    left, right = round(x0 / 595 * width), round(x1 / 595 * width)
+    top, bottom = round((842 - y1) / 842 * height), round((842 - y0) / 842 * height)
+    dark = total = 0
+    for y in range(top, bottom):
+        for x in range(left, right):
+            offset = (y * width + x) * 3
+            total += 1
+            dark += max(pixels[offset], pixels[offset + 1], pixels[offset + 2]) < 160
+    share = dark / max(1, total)
+    report.append(f"{name}={share:.3f}")
+    failed = failed or share < float(wanted)
+print(" ".join(report))
+sys.exit(1 if failed else 0)
+PY
+}
+
+# 7) A form, shown with its widgets.
+grab=$scratch/form-page.ppm
+run "$form"
+case $report in
+    *" empty=false pageCount=2 textScale=1 fontBody=13 annotations=10 fields=5 values=name:|agree:false|address.city:|address.zip:|copy:Twice") ;;
+    *)
+        echo "smoke: the form did not report its widgets and fields: ${report:-no report}" >&2
+        exit 1
+        ;;
+esac
+if [ ! -s "$grab" ]; then
+    echo "smoke: the form's page was not grabbed: $grab" >&2
+    exit 1
+fi
+# «Twice» at 10 pt from (404, 676) in the field «copy»; the radio button B,
+# on, a black square at (126, 406)-(134, 414); paper where nothing is.
+if ! form_pixels=$(measure "$grab" "copy:403,672,440,686:0.05" "radio:127,407,133,413:0.8"); then
+    echo "smoke: the form's widgets are not drawn: ${form_pixels:-no measure}" >&2
+    exit 1
+fi
+form_report=$report
+
+# 8) Fill the form and save beside, on a scratch copy.
+document=$scratch/docs/form.pdf
+filled="$scratch/docs/form (editado).pdf"
+cp "$form" "$document"
+grab=$scratch/filled-page.ppm
+fill=1
+run "$document"
+fill=
+case $report in
+    *" empty=false pageCount=2 textScale=1 fontBody=13 annotations=10 fields=5 values=name:Calcita smoke|agree:true|address.city:|address.zip:|copy:Twice") ;;
+    *)
+        echo "smoke: the filled copy did not read back its values: ${report:-no report}" >&2
+        exit 1
+        ;;
+esac
+if [ ! -f "$filled" ]; then
+    echo "smoke: «Guardar ambas» left no filled copy beside the form" >&2
+    ls -la "$scratch/docs" >&2
+    exit 1
+fi
+if ! cmp -s "$form" "$document"; then
+    echo "smoke: the form changed on a save that keeps both" >&2
+    exit 1
+fi
+form_bytes=$(wc -c < "$document")
+if ! cmp -s -n "$form_bytes" "$document" "$filled"; then
+    echo "smoke: the form's bytes are not a prefix of the filled copy" >&2
+    exit 1
+fi
+if [ ! -s "$grab" ]; then
+    echo "smoke: the filled page was not grabbed: $grab" >&2
+    exit 1
+fi
+# «Calcita smoke» at 12 pt in «name» (72, 650)-(372, 680); the check, a
+# cross, in «agree» (72, 590)-(92, 610).
+if ! filled_pixels=$(measure "$grab" "name:75,658,160,674:0.05" "check:76,594,88,606:0.1"); then
+    echo "smoke: the filled page does not show the values: ${filled_pixels:-no measure}" >&2
+    exit 1
+fi
+
+echo "smoke: OK — binary alive for 8 s six times, no QML errors, no auto-bindings ($empty_report; $pages_report; $annotated_report; $annotated_pixels; $edited_report; $edited_pixels; edited copy $(wc -c < "$saved") bytes over $original_bytes; $form_report; $form_pixels; $report; $filled_pixels; filled copy $(wc -c < "$filled") bytes over $form_bytes)"

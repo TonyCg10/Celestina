@@ -142,3 +142,37 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
   colour, and can be selected and edited there as an annotation
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-CAL-FORM — A real form filled and reopened elsewhere
+
+- **Status:** pending
+- **Related implementation:** CAL-2-C
+- **Requires:** the Calcita release binary of CAL-2-C on the real session;
+  a real fillable PDF (a public administration's form, kept as a copy
+  elsewhere) with text fields, a checkbox and ideally a radio group, a
+  list, a comb or multiline field and a field repeated on two pages;
+  `tests/fixtures/form.pdf`; a web browser's PDF viewer and Okular
+- **Procedure:** open the form: look at every field before editing (the
+  values and boxes the form draws); click a text field (edit mode begins
+  with the keyboard in it), type a Spanish name with accents and the euro,
+  press Tab through every field to the end and round again, check a
+  checkbox with Space and another with a click, press Shift+Tab; click a
+  radio button and a list; fill a field repeated on two pages and look at
+  both; type past a field's length; press Ctrl+Z and Ctrl+Shift+Z outside
+  a field; save with «Guardar ambas»; reopen the copy in Calcita, then in
+  the browser and in Okular; fill again and save with «Guardar solo la
+  editada»; fill, then close the window and answer «Descartar»; zoom in and
+  out while a field has the keyboard
+- **Pass condition:** every field shows as the form draws it, in Calcita
+  as in the other viewers, before and after filling; the click starts
+  editing on the field tapped; Tab follows the form's order, onto the
+  next page too, and the field in view; what is typed shows in the field's
+  font and size and nothing is lost when leaving or saving; the radio
+  button and the list say they are not filled; the repeated field shows
+  the same value on both pages; a field refuses characters past its
+  length; undo and redo walk the values; in the browser and Okular the
+  saved values show in the fields and can be edited there, checkboxes
+  checked with the form's own mark; «Guardar solo la editada» puts the
+  original in the Trash; «Descartar» leaves the file as it was
+- **Result:** not run
+- **Evidence:** none

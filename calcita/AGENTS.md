@@ -22,8 +22,10 @@ Calcita's constraints; it cannot relax the root or grant authority.
   the order a search walks its hits in, the annotation model and form
   fields (read with `lopdf`), the one conversion between PDF user space
   and the displayed page (`annot::coords`), what an edit may change with
-  its undo and redo (`annot::edit`), and the appearance streams and the
-  incremental update that write the edits (`annot::{appearance, write}`).
+  its undo and redo (`annot::edit`), the appearance streams and the
+  incremental update that write the edits (`annot::{appearance, write}`),
+  and the form: its fields, the copy that stamps the widgets QtPdf cannot
+  draw, and what filling a field writes (`annot::form`).
   It has no Qt.
 - `src/` owns the Qt adaptation: the controller (open documents, recents,
   the clipboard and `xdg-open` for a confirmed external link),

@@ -22,6 +22,12 @@ import "edit"
 // asks `SaveQuestion`. The reading mode waits while editing. A save that
 // kept both lands a copy beside the original, and the window moves to it;
 // one that replaced the original reloads it.
+//
+// Forms: the pages show every widget (from the copy the reader stamps), and
+// each page's `FormLayer` lays the fields over it. A tap on a field while
+// reading starts editing on it; while editing, text fields and checkboxes
+// are controls whose values go to the editor, in the same edit set, undo
+// and save as the annotations; Tab follows the form's order across pages.
 ApplicationWindow {
     id: documentWindow
 
@@ -80,11 +86,20 @@ ApplicationWindow {
     property string editTextOf: ""
     // A text box's field has the keyboard, so the edit keys are its own.
     readonly property bool editTyping: documentWindow.activeFocusItem !== null
-                                       && ["draftField", "textBoxField"].indexOf(
+                                       && ["draftField", "textBoxField", "formText"].indexOf(
                                            documentWindow.activeFocusItem.objectName) >= 0
     // The text sizes and stroke widths of the three steps, in points.
     readonly property var textSizes: [10, 14, 20]
     readonly property var strokeWidths: [1.5, 3, 6]
+    // The form's widgets, from the editor while editing (with the values
+    // edited), else from the document.
+    readonly property var formFields: JSON.parse(documentWindow.editing ? editorState.fields
+                                                                        : readerState.fields)
+    // The field (its `order`) to give the keyboard, while `formFocusPending`;
+    // each ask changes `formFocusSerial`.
+    property int formFocusOrder: -1
+    property bool formFocusPending: false
+    property int formFocusSerial: 0
     // The window closes once the answer to the save question lands.
     property bool closeAfterAnswer: false
     // The file changed on disk while editing: loaded again once edit mode
@@ -265,6 +280,33 @@ ApplicationWindow {
         editorState.addHighlight(page, outlines, String(documentWindow.tintFor(documentWindow.editColorKey)))
     }
 
+    // Gives the field at `order` the keyboard once its control exists.
+    function focusField(order) {
+        documentWindow.formFocusOrder = order
+        documentWindow.formFocusPending = true
+        documentWindow.formFocusSerial += 1
+    }
+
+    // A tap on a field while reading: editing starts on it.
+    function fillFrom(order) {
+        documentWindow.focusField(order)
+        if (!editorState.editing)
+            documentWindow.toggleEditing()
+    }
+
+    // Tab or Shift+Tab from the field at `order`: the next field Calcita
+    // fills in the form's order, round the ends, brought into view.
+    function tabField(order, forward) {
+        const fillable = documentWindow.formFields.filter(entry => entry.fillable)
+        if (fillable.length === 0)
+            return
+        const at = fillable.findIndex(entry => entry.order === order)
+        const step = forward ? 1 : fillable.length - 1
+        const next = fillable[at < 0 ? 0 : (at + step) % fillable.length]
+        pageView.reveal(next.page, next.x, next.y, next.w, next.h)
+        documentWindow.focusField(next.order)
+    }
+
     // A save landed at `key`: a copy beside the original becomes this
     // window's document, keeping where it was being read; a replaced
     // original is loaded again.
@@ -368,10 +410,20 @@ ApplicationWindow {
                     if (documentWindow.reloadPending)
                         documentWindow.reloadDocument()
                 })
+            if (!editorState.editing)
+                documentWindow.formFocusPending = false
             if (editorState.editing && CalcitaController.smokeEdit && !documentWindow.smokeEdited) {
                 documentWindow.smokeEdited = true
                 editorState.addText(0, Qt.point(72, 72), 200, "Calcita smoke",
                                     String(documentWindow.inkFor(documentWindow.editColorKey)), 12)
+                editorState.save(false)
+            }
+            if (editorState.editing && CalcitaController.smokeFill && !documentWindow.smokeEdited) {
+                documentWindow.smokeEdited = true
+                // The fixture's fields, found by name.
+                const field = name => documentWindow.formFields.find(entry => entry.name === name).field
+                editorState.fillText(field("name"), "Calcita smoke")
+                editorState.setChecked(field("agree"), true)
                 editorState.save(false)
             }
         }
@@ -421,7 +473,8 @@ ApplicationWindow {
                 if (page > 1 && page <= pdf.pageCount)
                     readerState.goTo(String(page))
                 documentWindow.remember()
-                if (CalcitaController.smokeEdit && !documentWindow.smokeEdited)
+                if ((CalcitaController.smokeEdit || CalcitaController.smokeFill)
+                        && !documentWindow.smokeEdited)
                     editorState.begin()
             } else if (pdf.status === PdfDocument.Error) {
                 readerState.reportLoaded(-1)
@@ -443,6 +496,7 @@ ApplicationWindow {
         revision: editorState.revision > 0 ? editorState.revision : readerState.revision
         editTool: documentWindow.editing ? documentWindow.editTool : ""
         pageLayer: documentWindow.editing ? layerComponent : null
+        formLayer: documentWindow.formFields.length > 0 ? formComponent : null
         onHighlightDragged: (page, outlines) => documentWindow.addHighlight(page, outlines)
         focus: true
         layer.enabled: documentWindow.readingAmount > 0
@@ -474,6 +528,31 @@ ApplicationWindow {
             textSize: documentWindow.textSizes[documentWindow.editSizeIndex]
             strokeWidth: documentWindow.strokeWidths[documentWindow.editSizeIndex]
             onSelectRequested: id => documentWindow.editSelected = id
+        }
+    }
+
+    // What each page lays over itself when the document has a form.
+    Component {
+        id: formComponent
+
+        FormLayer {
+            fields: documentWindow.formFields
+            editor: editorState
+            editing: documentWindow.editing
+            interactive: !documentWindow.editing || documentWindow.editTool === "select"
+                         || documentWindow.editTool === "text"
+            focusOrder: documentWindow.formFocusOrder
+            focusPending: documentWindow.formFocusPending
+            focusSerial: documentWindow.formFocusSerial
+            textPadding: editorState.textPadding
+            onActivated: order => documentWindow.fillFrom(order)
+            onNoticeRequested: text => chrome.showNotice("info", text)
+            onTabbed: (order, forward) => documentWindow.tabField(order, forward)
+            onFocused: order => {
+                documentWindow.formFocusOrder = order
+                documentWindow.formFocusPending = false
+            }
+            onDoneTyping: documentWindow.focusPages()
         }
     }
 

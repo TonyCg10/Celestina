@@ -18,6 +18,10 @@ import org.celestina.calcita 1.0
 // the copy registered under the revision); the hits, the selection and the
 // links still come from `document`.
 //
+// A document with a form has each built page load `formLayer` over
+// everything else (the window's form fields: taps while reading, controls
+// while editing).
+//
 // While editing (`editTool` set), each built page loads `pageLayer` over
 // itself (the window's annotation layer), links do nothing, and the
 // pointer's text selection serves only «Resaltar»: when such a drag ends,
@@ -52,6 +56,9 @@ Flickable {
     // What each built page lays over itself while editing; it gets `page`
     // and `renderScale`.
     property Component pageLayer: null
+    // What each built page lays over itself when the document has a form;
+    // it gets `page` and `renderScale` too.
+    property Component formLayer: null
     // Pixels per point.
     property real renderScale: 1
     // The 0-based page a jump went to, or the page under the reading line
@@ -139,6 +146,19 @@ Flickable {
         pageArea.jumping = true
         pageArea.contentY = Math.max(0, Math.min(pageArea.maxContentY(), y))
         pageArea.jumping = false
+    }
+
+    // Brings the rectangle `x`, `y`, `width`, `height` (in points) of the
+    // 0-based `page` into view, scrolling as little as it takes.
+    function reveal(page, x, y, width, height) {
+        if (page < 0 || page >= pageArea.tops.length)
+            return
+        const top = pageArea.tops[page] + y * pageArea.renderScale
+        const bottom = top + height * pageArea.renderScale
+        if (top < pageArea.contentY)
+            pageArea.moveTo(top - pageArea.jumpMargin)
+        else if (bottom > pageArea.contentY + pageArea.height)
+            pageArea.moveTo(bottom - pageArea.height + pageArea.jumpMargin)
     }
 
     // Shows `location` (in points) of the 0-based `page` near the top.
@@ -556,6 +576,28 @@ Flickable {
                         property: "renderScale"
                         value: pageArea.renderScale
                         when: layerLoader.item !== null
+                    }
+
+                    // The window's form fields, over the annotations.
+                    Loader {
+                        id: formLoader
+                        anchors.fill: parent
+                        active: pageArea.formLayer !== null
+                        sourceComponent: pageArea.formLayer
+                    }
+
+                    Binding {
+                        target: formLoader.item
+                        property: "page"
+                        value: pageItem.index
+                        when: formLoader.item !== null
+                    }
+
+                    Binding {
+                        target: formLoader.item
+                        property: "renderScale"
+                        value: pageArea.renderScale
+                        when: formLoader.item !== null
                     }
                 }
             }

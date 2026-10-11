@@ -1,14 +1,15 @@
-//! Edits to a document's annotations, with undo and redo.
+//! Edits to a document's annotations and form fields, with undo and redo.
 //!
 //! An edit names what changes and nothing about the file: a new annotation,
-//! a move, a colour, a text box's text, a deletion. The [`EditSet`] keeps
+//! a move, a colour, a text box's text, a deletion, a field's value. The [`EditSet`] keeps
 //! them in order; applied to the [`Base`] (the annotations as the file has
 //! them, and its page boxes) they give the annotations as the person sees
 //! them while editing, and [`EditSet::resolve`] tells the writer what to
 //! add, change and remove. Every rule about what may change lives here:
 //! only the three kinds Calcita draws, of any author; a text box's text and
 //! colour only when it carries no rich text; text only in what Helvetica in
-//! WinAnsi can show; a text box always as tall as its lines.
+//! WinAnsi can show; a text box always as tall as its lines; only text
+//! fields and checkboxes filled ([`super::form::check_fill`]).
 //!
 //! Geometry arrives from the page as it is shown and goes through
 //! [`super::coords`] once, in the constructors below.
@@ -20,6 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::appearance::{self, fit_text_rect, win_ansi};
 use super::coords::{to_pdf, to_pdf_rect, PageBox};
+use super::form::{check_fill, fields_of, folded, FieldId, FieldValue, FormField};
 use super::model::{AnnotId, Annotation, Kind, Point, Quad, Rect, Rgb};
 use super::read::{load_for_edit, model_of, AnnotError};
 
@@ -44,19 +46,23 @@ pub enum Edit {
     /// A text box's new text.
     SetText(AnnotId, String),
     Delete(AnnotId),
+    /// A form field's new value: a text field's text or a checkbox's state.
+    /// The field is named by its id: two fields may share a name.
+    Fill(FieldId, FieldValue),
 }
 
 /// What edits apply to: the document's annotations as read, in page and
-/// `/Annots` order, and each page's box.
+/// `/Annots` order, each page's box, and its form's fields.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Base {
     pub annotations: Vec<Annotation>,
     pub boxes: Vec<PageBox>,
+    pub fields: Vec<FormField>,
 }
 
 impl Base {
-    /// The annotations and page boxes of the document at `path`, from one
-    /// read.
+    /// The annotations, page boxes and form fields of the document at
+    /// `path`, from one read.
     ///
     /// # Errors
     ///
@@ -64,7 +70,12 @@ impl Base {
     pub fn read(path: &Path) -> Result<Self, AnnotError> {
         let loaded = load_for_edit(path)?;
         let (annotations, boxes) = model_of(&loaded.document);
-        Ok(Self { annotations, boxes })
+        let fields = fields_of(&loaded.document);
+        Ok(Self {
+            annotations,
+            boxes,
+            fields,
+        })
     }
 
     /// The box of the 0-based `page`.
@@ -74,6 +85,12 @@ impl Base {
             .ok()
             .and_then(|page| self.boxes.get(page))
             .copied()
+    }
+
+    /// The field `id` names.
+    #[must_use]
+    pub fn field(&self, id: &FieldId) -> Option<&FormField> {
+        self.fields.iter().find(|field| &field.id == id)
     }
 
     /// The ids of the annotations Calcita may edit (its three kinds).
@@ -88,18 +105,23 @@ impl Base {
 }
 
 /// What the writer does to the file: the annotations to add, the existing
-/// ones to rewrite (as they must end), and the existing ones to remove.
+/// ones to rewrite (as they must end), the existing ones to remove, and the
+/// fields whose value changed (with their new value).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Resolved {
     pub added: Vec<Annotation>,
     pub changed: Vec<Annotation>,
     pub deleted: Vec<AnnotId>,
+    pub filled: Vec<FormField>,
 }
 
 impl Resolved {
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.added.is_empty() && self.changed.is_empty() && self.deleted.is_empty()
+        self.added.is_empty()
+            && self.changed.is_empty()
+            && self.deleted.is_empty()
+            && self.filled.is_empty()
     }
 }
 
@@ -131,7 +153,24 @@ impl EditSet {
     /// [`AnnotError::NotEditable`] when it names no annotation that may
     /// change that way, [`AnnotError::Unencodable`] for text Helvetica in
     /// WinAnsi cannot show. Nothing is added then.
+    ///
+    /// A fill that changes a single-line text field takes its value
+    /// [`folded`] (line breaks and tabs as spaces); one that gives the field
+    /// the value it shows is kept as it is, so it rewrites nothing.
     pub fn push(&mut self, base: &Base, edit: Edit) -> Result<(), AnnotError> {
+        let edit = match edit {
+            Edit::Fill(id, value) => {
+                let shown = self.fields(base).into_iter().find(|field| field.id == id);
+                let value = match shown {
+                    Some(field) if field.current().as_ref() != Some(&value) => {
+                        folded(&field, value)
+                    }
+                    _ => value,
+                };
+                Edit::Fill(id, value)
+            }
+            other => other,
+        };
         let mut shown = self.apply(base);
         apply_one(&mut shown, base, &edit)?;
         self.applied.push(edit);
@@ -195,10 +234,29 @@ impl EditSet {
         shown
     }
 
+    /// The form's fields as the person sees them: the base's with every
+    /// fill in effect applied in order (the last one of a field wins).
+    #[must_use]
+    pub fn fields(&self, base: &Base) -> Vec<FormField> {
+        let mut shown = base.fields.clone();
+        for edit in &self.applied {
+            if let Edit::Fill(id, value) = edit {
+                let accepted = base.field(id).is_some_and(|field| accepts(field, value));
+                if let Some(field) = shown.iter_mut().find(|field| &field.id == id) {
+                    if accepted {
+                        field.set(value);
+                    }
+                }
+            }
+        }
+        shown
+    }
+
     /// What the writer must do so the file holds [`EditSet::apply`]'s
-    /// annotations: new ones to add, edited ones as they end, removed ones.
-    /// An annotation added and then deleted, or edited back to what it
-    /// was, costs nothing.
+    /// annotations and [`EditSet::fields`]' values: new annotations to add,
+    /// edited ones as they end, removed ones, filled fields. An annotation
+    /// added and then deleted, or edited back to what it was, and a field
+    /// filled back with its value, cost nothing.
     #[must_use]
     pub fn resolve(&self, base: &Base) -> Resolved {
         let shown = self.apply(base);
@@ -222,6 +280,13 @@ impl EditSet {
             .iter()
             .filter(|original| !shown_ids.contains(&original.id))
             .map(|original| original.id.clone())
+            .collect();
+        resolved.filled = self
+            .fields(base)
+            .into_iter()
+            .zip(&base.fields)
+            .filter(|(shown, original)| shown.current() != original.current())
+            .map(|(shown, _)| shown)
             .collect();
         resolved
     }
@@ -335,8 +400,27 @@ fn apply_one(shown: &mut Vec<Annotation>, base: &Base, edit: &Edit) -> Result<()
             let index = editable(shown, id)?;
             shown.remove(index);
         }
+        // A value changes no annotation; it is checked against its field.
+        Edit::Fill(id, value) => {
+            let field = base.field(id).ok_or(AnnotError::NotFillable)?;
+            if !accepts_own(field, value) {
+                check_fill(field, value)?;
+            }
+        }
     }
     Ok(())
+}
+
+/// Whether `field` (as the file has it) takes `value`: its own value
+/// always, else what [`check_fill`] allows.
+fn accepts(field: &FormField, value: &FieldValue) -> bool {
+    accepts_own(field, value) || check_fill(field, value).is_ok()
+}
+
+/// `value` is the one the file gives `field`, which is never refused (a
+/// single-line field another program filled with a line break included).
+fn accepts_own(field: &FormField, value: &FieldValue) -> bool {
+    field.current().as_ref() == Some(value)
 }
 
 /// Whether the writer lays `edited` out again (a new appearance from its

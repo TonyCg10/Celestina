@@ -188,6 +188,31 @@ fn a_text_box_is_appended_and_reads_back_as_written() {
 }
 
 #[test]
+fn a_text_box_of_two_lines_keeps_its_line_break() {
+    let scratch = Scratch::new("lines");
+    let original = fixture("three-pages.pdf");
+    let out = scratch.path("edited.pdf");
+    let base = Base::read(&original).expect("readable");
+    let added = edit::text_box(
+        page_box(&original, 0),
+        0,
+        Rect::new(72.0, 100.0, 272.0, 110.0),
+        "uno\ndos",
+        12.0,
+        BLUE,
+    );
+    let mut edits = EditSet::new();
+    edits.push(&base, Edit::Add(added)).expect("added");
+    apply(&original, &edits, &out).expect("written");
+    let reread = only_added(&out, 0);
+    assert!(
+        matches!(&reread.kind, Kind::Text { contents, .. } if contents == "uno\ndos"),
+        "a line feed is written where PDFDocEncoding cannot drop it: {:?}",
+        reread.kind
+    );
+}
+
+#[test]
 fn a_highlight_is_appended_with_its_quads_and_a_multiply_appearance() {
     let scratch = Scratch::new("highlight");
     let original = fixture("three-pages.pdf");

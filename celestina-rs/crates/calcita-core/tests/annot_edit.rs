@@ -150,6 +150,7 @@ fn rich_text_moves_and_goes_but_keeps_its_text_and_colour() {
     let base = Base {
         annotations: vec![rich],
         boxes: vec![a4()],
+        fields: Vec::new(),
     };
     let mut edits = EditSet::new();
     assert!(matches!(
@@ -220,6 +221,7 @@ fn an_edit_on_what_was_undone_is_refused() {
     let base = Base {
         annotations: Vec::new(),
         boxes: vec![a4()],
+        fields: Vec::new(),
     };
     let added = edit::text_box(
         a4(),
@@ -288,6 +290,7 @@ fn a_new_text_box_grows_to_its_lines_and_keeps_its_corner() {
     let base = Base {
         annotations: Vec::new(),
         boxes: vec![a4()],
+        fields: Vec::new(),
     };
     let view = Rect::new(72.0, 72.0, 272.0, 80.0);
     let added = edit::text_box(a4(), 0, view, "uno\ndos", 14.0, BLUE);

@@ -1,19 +1,26 @@
 //! One window's reading state: which document, which page of how many, and
 //! the zoom. QtPdf renders and reports; this object decides what the page
 //! field and the zoom controls mean (`calcita_core`'s grammar and ladder).
-//! It also reads the document's annotation model on a worker
+//! It also reads the document's annotation model and form on a worker
 //! (`calcita_core::annot`), and names the version of the file the window
 //! shows (`revision`, part of each page's address): a new one when the
 //! document is set, when the window finds the file changed on disk
 //! (`checkFile`, answered by the same worker) and after a save that
 //! replaced it (`reload`), so no page the image cache holds from another
 //! version is shown again.
+//!
+//! A document with a form is shown from a copy with its widgets stamped
+//! into the pages (QtPdf draws no widget): the worker registers that copy
+//! with the page provider under a revision of its own, and the window
+//! moves to that revision when the read is published (until then its
+//! pages show the file, without the widgets). The copy is dropped when the
+//! window moves to another revision or goes.
 
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex, PoisonError};
 
-use calcita_core::annot::{self, Annotation};
+use calcita_core::annot::{form, Annotation};
 use calcita_core::pagelabel::GoTo;
 use calcita_core::search::{self, Direction, SearchRequest};
 use calcita_core::zoom::{self, ZoomMode};
@@ -22,6 +29,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QString, QUrl};
 
 use crate::controller::display_name;
+use crate::editor::json_fields;
 use crate::pages;
 use crate::saving::Stamp;
 
@@ -48,6 +56,7 @@ pub mod qobject {
         #[qproperty(bool, loaded, READ, NOTIFY)]
         #[qproperty(i32, annotation_count, cxx_name = "annotationCount", READ, NOTIFY)]
         #[qproperty(i32, revision, READ, NOTIFY)]
+        #[qproperty(QString, fields, READ, NOTIFY)]
         type CalcitaDocument = super::CalcitaDocumentRust;
 
         /// Sets the document this window shows (a pathkey).
@@ -151,6 +160,15 @@ pub struct CalcitaDocumentRust {
     annotation_count: i32,
     /// The version of the file the pages show, in their address.
     revision: i32,
+    /// The form's widgets as last read, one JSON array (`[]` without a
+    /// form), for the window to place what a tap on a field does.
+    fields: QString,
+    /// The stamped copy registered for this window (its key and
+    /// revision), while the pages show it.
+    stamped: Option<(String, i32)>,
+    /// The stamped copies the reader registered whose read has not reached
+    /// this object yet: a window destroyed in between drops them.
+    in_flight: InFlight,
     zoom: ZoomMode,
     /// The annotation model last read for this document.
     annotations: Vec<Annotation>,
@@ -163,6 +181,8 @@ pub struct CalcitaDocumentRust {
 /// One read the model reader is asked for.
 struct ModelRequest {
     generation: u64,
+    /// The document's path key, which names a stamped copy to the provider.
+    key: String,
     path: PathBuf,
     /// Only when the file changed since the reader last read it.
     only_if_changed: bool,
@@ -173,6 +193,11 @@ struct ModelRead {
     generation: u64,
     annotations: Vec<Annotation>,
     count: i32,
+    /// The form's widgets, as `json_fields` gives them.
+    fields: String,
+    /// The stamped copy the reader registered for this read: its key and
+    /// revision.
+    stamped: Option<(String, i32)>,
     /// The read was a check, and the file had changed.
     changed: bool,
 }
@@ -191,9 +216,12 @@ fn newest(first: ModelRequest, waiting: &mpsc::Receiver<ModelRequest>) -> ModelR
 /// time, the newest asked for, handing each result to `publish`. A check
 /// (`only_if_changed`) reads only when the file's size or modification
 /// time differs from the last read of the same path, and publishes nothing
-/// otherwise. It ends when its sender is dropped. `None` when the thread
-/// did not start.
+/// otherwise. A document whose widgets can be stamped has its copy handed
+/// to `register` (with its key), which gives the revision it is shown at.
+/// It ends when its sender is dropped. `None` when the thread did not
+/// start.
 fn start_model_reader(
+    register: impl Fn(&str, &[u8]) -> i32 + Send + 'static,
     publish: impl Fn(ModelRead) + Send + 'static,
 ) -> Option<mpsc::Sender<ModelRequest>> {
     let (sender, receiver) = mpsc::channel::<ModelRequest>();
@@ -214,25 +242,33 @@ fn start_model_reader(
                 // is that first read, not a change.
                 let changed = request.only_if_changed && known.is_some();
                 last = Some((request.path.clone(), stamp));
-                let (annotations, count) = match annot::read_annotations(&request.path) {
-                    Ok(annotations) => {
-                        let count = i32::try_from(annotations.len()).unwrap_or(i32::MAX);
-                        (annotations, count)
-                    }
+                let read = match form::view(&request.path) {
+                    Ok(viewed) => ModelRead {
+                        generation: request.generation,
+                        count: i32::try_from(viewed.annotations.len()).unwrap_or(i32::MAX),
+                        annotations: viewed.annotations,
+                        fields: json_fields(&viewed.fields, &viewed.boxes),
+                        stamped: viewed
+                            .stamped
+                            .map(|copy| (request.key.clone(), register(&request.key, &copy))),
+                        changed,
+                    },
                     Err(error) => {
                         eprintln!(
                             "calcita: annotations of {}: {error}",
                             request.path.display()
                         );
-                        (Vec::new(), -1)
+                        ModelRead {
+                            generation: request.generation,
+                            annotations: Vec::new(),
+                            count: -1,
+                            fields: "[]".to_owned(),
+                            stamped: None,
+                            changed,
+                        }
                     }
                 };
-                publish(ModelRead {
-                    generation: request.generation,
-                    annotations,
-                    count,
-                    changed,
-                });
+                publish(read);
             }
         });
     match spawned {
@@ -257,12 +293,57 @@ impl Default for CalcitaDocumentRust {
             loaded: false,
             annotation_count: -1,
             revision: 0,
+            fields: QString::from("[]"),
+            stamped: None,
+            in_flight: Arc::default(),
             zoom: ZoomMode::FitWidth,
             annotations: Vec::new(),
             model_generation: 0,
             model_reader: None,
         }
     }
+}
+
+/// The stamped copies registered and not yet applied, shared with the
+/// reader.
+type InFlight = Arc<Mutex<Vec<(String, i32)>>>;
+
+/// Takes `copy` out of `in_flight` (it reached the window, or nobody).
+fn landed(in_flight: &InFlight, copy: &(String, i32)) {
+    in_flight
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .retain(|pending| pending != copy);
+}
+
+impl CalcitaDocumentRust {
+    /// The stamped copies this window still holds in the provider: the one
+    /// its pages show and those whose read is on its way, each taken.
+    fn take_copies(&mut self) -> Vec<(String, i32)> {
+        let pending = std::mem::take(
+            &mut *self
+                .in_flight
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+        );
+        self.stamped.take().into_iter().chain(pending).collect()
+    }
+}
+
+impl Drop for CalcitaDocumentRust {
+    /// A window gone takes its stamped copies out of the provider.
+    fn drop(&mut self) {
+        for (key, revision) in self.take_copies() {
+            pages::ffi::drop_copy(&QString::from(&key), revision);
+        }
+    }
+}
+
+/// Registers a stamped copy with the page provider under a new revision.
+fn register_copy(key: &str, copy: &[u8]) -> i32 {
+    let revision = pages::next_revision();
+    pages::ffi::show_copy(&QString::from(key), revision, copy);
+    revision
 }
 
 /// The `zoomMode` property's value: `fitWidth`, `fitPage` or `free`.
@@ -312,8 +393,18 @@ impl qobject::CalcitaDocument {
         self.read_model(path, false);
     }
 
-    fn renew_revision(mut self: Pin<&mut Self>) {
-        self.as_mut().rust_mut().revision = pages::next_revision();
+    fn renew_revision(self: Pin<&mut Self>) {
+        self.show_revision(pages::next_revision(), None);
+    }
+
+    /// The pages move to `revision`, which shows `stamped` when it is the
+    /// stamped copy's; the copy shown until now is dropped.
+    fn show_revision(mut self: Pin<&mut Self>, revision: i32, stamped: Option<(String, i32)>) {
+        if let Some((key, old)) = self.as_mut().rust_mut().stamped.take() {
+            pages::ffi::drop_copy(&QString::from(&key), old);
+        }
+        self.as_mut().rust_mut().stamped = stamped;
+        self.as_mut().rust_mut().revision = revision;
         self.revision_changed();
     }
 
@@ -353,6 +444,8 @@ impl qobject::CalcitaDocument {
                 generation,
                 annotations: Vec::new(),
                 count: -1,
+                fields: "[]".to_owned(),
+                stamped: None,
                 changed: false,
             });
         }
@@ -361,6 +454,7 @@ impl qobject::CalcitaDocument {
         };
         let request = ModelRequest {
             generation,
+            key: self.rust().document_key.to_string(),
             path,
             only_if_changed,
         };
@@ -372,10 +466,27 @@ impl qobject::CalcitaDocument {
             None => request,
         };
         let qt = self.qt_thread();
-        let reader = start_model_reader(move |read| {
-            let _ = qt.queue(move |document: Pin<&mut qobject::CalcitaDocument>| {
+        let registered = Arc::clone(&self.rust().in_flight);
+        let unclaimed = Arc::clone(&self.rust().in_flight);
+        let register = move |key: &str, copy: &[u8]| {
+            let revision = register_copy(key, copy);
+            registered
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push((key.to_owned(), revision));
+            revision
+        };
+        let reader = start_model_reader(register, move |read| {
+            // A window gone before the read is queued leaves its copy to
+            // the reader; one gone after takes it in `Drop`.
+            let orphan = read.stamped.clone();
+            let queued = qt.queue(move |document: Pin<&mut qobject::CalcitaDocument>| {
                 document.apply_model(read);
             });
+            if let (Err(_), Some(copy)) = (queued, orphan) {
+                landed(&unclaimed, &copy);
+                pages::ffi::drop_copy(&QString::from(&copy.0), copy.1);
+            }
         });
         if let Some(reader) = reader {
             if reader.send(request).is_ok() {
@@ -385,7 +496,13 @@ impl qobject::CalcitaDocument {
     }
 
     fn apply_model(mut self: Pin<&mut Self>, read: ModelRead) {
+        if let Some(copy) = &read.stamped {
+            landed(&self.rust().in_flight, copy);
+        }
         if self.rust().model_generation != read.generation {
+            if let Some((key, revision)) = read.stamped {
+                pages::ffi::drop_copy(&QString::from(&key), revision);
+            }
             return;
         }
         self.as_mut().rust_mut().annotations = read.annotations;
@@ -393,8 +510,19 @@ impl qobject::CalcitaDocument {
             self.as_mut().rust_mut().annotation_count = read.count;
             self.as_mut().annotation_count_changed();
         }
+        let fields = QString::from(&read.fields);
+        if self.rust().fields != fields {
+            self.as_mut().rust_mut().fields = fields;
+            self.as_mut().fields_changed();
+        }
+        // The stamped copy has its own revision; a changed file without one
+        // takes a new one.
+        match read.stamped {
+            Some((key, revision)) => self.as_mut().show_revision(revision, Some((key, revision))),
+            None if read.changed => self.as_mut().renew_revision(),
+            None => {}
+        }
         if read.changed {
-            self.as_mut().renew_revision();
             self.reload_requested();
         }
     }
@@ -552,13 +680,15 @@ fn count_on_page(annotations: &[Annotation], page: i32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        accepts_scale, count_on_page, mode_name, newest, start_model_reader, step_hit,
-        zoom_word_for, ModelRequest,
+        accepts_scale, count_on_page, landed, mode_name, newest, start_model_reader, step_hit,
+        zoom_word_for, CalcitaDocumentRust, ModelRequest,
     };
+    use calcita_core::annot::form::ReadOnly;
     use calcita_core::annot::{self, Annotation};
     use calcita_core::zoom::ZoomMode;
     use std::path::{Path, PathBuf};
     use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn a_restored_word_names_the_mode_qml_sees() {
@@ -626,9 +756,26 @@ mod tests {
         );
     }
 
+    /// What the provider stand-in was handed: each copy's key and size.
+    type Handed = Arc<Mutex<Vec<(String, usize)>>>;
+
+    /// A provider stand-in: records what it is handed, by key, and gives
+    /// revisions from 100.
+    fn recorder() -> (Handed, impl Fn(&str, &[u8]) -> i32) {
+        let handed = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&handed);
+        let register = move |key: &str, copy: &[u8]| {
+            let mut seen = seen.lock().expect("unpoisoned");
+            seen.push((key.to_owned(), copy.len()));
+            99 + i32::try_from(seen.len()).expect("few")
+        };
+        (handed, register)
+    }
+
     fn request(generation: u64) -> ModelRequest {
         ModelRequest {
             generation,
+            key: format!("/nowhere/{generation}.pdf"),
             path: PathBuf::from(format!("/nowhere/{generation}.pdf")),
             only_if_changed: false,
         }
@@ -648,13 +795,15 @@ mod tests {
     fn the_reader_reads_one_document_at_a_time_and_publishes_each() {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
         let (published, results) = mpsc::channel();
-        let reader = start_model_reader(move |read| {
+        let (handed, register) = recorder();
+        let reader = start_model_reader(register, move |read| {
             let _ = published.send((read.generation, read.count));
         })
         .expect("the reader starts");
         reader
             .send(ModelRequest {
                 generation: 1,
+                key: "annotated".to_owned(),
                 path: fixtures.join("annotated.pdf"),
                 only_if_changed: false,
             })
@@ -669,6 +818,76 @@ mod tests {
         );
         drop(reader);
         assert!(results.recv().is_err(), "the reader ends with its sender");
+        assert!(
+            handed.lock().expect("unpoisoned").is_empty(),
+            "no form, no stamped copy"
+        );
+    }
+
+    #[test]
+    fn a_window_going_away_drops_its_copies_shown_and_on_their_way() {
+        let mut document = CalcitaDocumentRust::default();
+        let copy = |revision| ("/form.pdf".to_owned(), revision);
+        document.stamped = Some(copy(3));
+        document
+            .in_flight
+            .lock()
+            .expect("unpoisoned")
+            .extend([copy(4), copy(5)]);
+        landed(&document.in_flight, &copy(4));
+        assert_eq!(
+            document.take_copies(),
+            vec![copy(3), copy(5)],
+            "the one shown and the one whose read never arrived, not the landed one"
+        );
+        assert!(document.take_copies().is_empty(), "each once");
+    }
+
+    #[test]
+    fn a_form_is_read_with_its_widgets_and_its_stamped_copy() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        let (published, results) = mpsc::channel();
+        let (handed, register) = recorder();
+        let reader = start_model_reader(register, move |read| {
+            let _ = published.send((read.count, read.fields, read.stamped));
+        })
+        .expect("the reader starts");
+        reader
+            .send(ModelRequest {
+                generation: 1,
+                key: "form-key".to_owned(),
+                path: fixtures.join("form.pdf"),
+                only_if_changed: false,
+            })
+            .expect("queued");
+        let (count, fields, stamped) = results.recv().expect("published");
+        assert_eq!(count, 10, "every widget is an annotation");
+        assert_eq!(stamped, Some(("form-key".to_owned(), 100)));
+        let handed = handed.lock().expect("unpoisoned").clone();
+        assert_eq!(handed.len(), 1);
+        assert_eq!(handed[0].0, "form-key");
+        let original = std::fs::metadata(fixtures.join("form.pdf"))
+            .expect("the fixture")
+            .len();
+        assert!(
+            u64::try_from(handed[0].1).expect("a size") > original,
+            "the copy appends to the file"
+        );
+        assert!(
+            fields.starts_with("[{\"field\":\"o8.0\",\"name\":\"name\",\"label\":\"Full name\",\"order\":0,\"widget\":0,\"page\":0,\"x\":72,\"y\":162,\"w\":300,\"h\":30,\"value\":\"\",\"kind\":\"text\",\"fillable\":true"),
+            "{fields}"
+        );
+        assert!(
+            fields.contains(
+                "\"name\":\"copy\",\"label\":\"copy\",\"order\":5,\"widget\":1,\"page\":1"
+            ),
+            "{fields}"
+        );
+        let radio = crate::editor::json_string(ReadOnly::Radio.message_es());
+        assert!(
+            fields.contains(&radio),
+            "the radio group's notice: {fields}"
+        );
     }
 
     #[test]
@@ -680,12 +899,14 @@ mod tests {
         let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
         std::fs::copy(fixtures.join("three-pages.pdf"), &path).expect("copied");
         let (published, results) = mpsc::channel();
-        let reader = start_model_reader(move |read| {
+        let (_, register) = recorder();
+        let reader = start_model_reader(register, move |read| {
             let _ = published.send((read.generation, read.count, read.changed));
         })
         .expect("the reader starts");
         let ask = |generation, only_if_changed| ModelRequest {
             generation,
+            key: "doc".to_owned(),
             path: path.clone(),
             only_if_changed,
         };

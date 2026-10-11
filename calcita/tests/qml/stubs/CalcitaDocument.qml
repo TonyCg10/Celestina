@@ -19,6 +19,9 @@ QtObject {
     readonly property int annotationCount: -1
     // The version of the file the pages show; `reload` takes a new one.
     property int revision: 1
+    // The form's widgets as the Rust object publishes them; a test sets
+    // them.
+    property string fields: "[]"
     // How many times the window asked whether the file changed.
     property int checks: 0
 

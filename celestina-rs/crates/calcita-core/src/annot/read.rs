@@ -11,7 +11,7 @@
 //! opens with the empty password, because Calcita never edits one.
 
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
@@ -23,7 +23,8 @@ use lopdf::{
 };
 
 use super::coords::{PageBox, Rotation};
-use super::model::{AnnotId, Annotation, Field, FieldKind, Kind, Point, Quad, Rect, Rgb};
+use super::form::{fields_of, ReadOnly};
+use super::model::{AnnotId, Annotation, Field, Kind, Point, Quad, Rect, Rgb};
 
 /// The largest file read: a PDF past this is not parsed into memory.
 pub const MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
@@ -38,14 +39,10 @@ pub const MAX_INFLATED_BYTES: u64 = 256 * 1024 * 1024;
 
 /// How deep the `/Parent` chain of a page and the `/Kids` tree of a form
 /// are followed.
-const MAX_DEPTH: usize = 32;
+pub(crate) const MAX_DEPTH: usize = 32;
 
 /// The size of a text box's font when its `/DA` names none.
 const DEFAULT_TEXT_SIZE: f64 = 12.0;
-
-/// `/Ff` bits of a button field (ISO 32000-1, table 226).
-const FLAG_RADIO: i64 = 1 << 15;
-const FLAG_PUSHBUTTON: i64 = 1 << 16;
 
 /// Why a document's annotations could not be read.
 #[derive(Debug)]
@@ -71,6 +68,13 @@ pub enum AnnotError {
     /// is not there (any more), one of a kind Calcita only shows, or the
     /// text or colour of a text box with rich text.
     NotEditable,
+    /// The form field cannot be filled in Calcita, and why.
+    ReadOnlyField(ReadOnly),
+    /// The fill names no field there is, or a value the field cannot take
+    /// (text for a checkbox, a check for a text field).
+    NotFillable,
+    /// The text is longer than the field's `/MaxLen` characters.
+    TooLong(usize),
     /// `lopdf` could not write the update.
     Write(std::io::Error),
 }
@@ -93,6 +97,11 @@ impl AnnotError {
                 format!("El carácter «{character}» no se puede escribir en un cuadro de texto.")
             }
             Self::NotEditable => "Esa anotación no se puede cambiar así.".to_owned(),
+            Self::ReadOnlyField(why) => why.message_es().to_owned(),
+            Self::NotFillable => "Ese campo no se puede rellenar así.".to_owned(),
+            Self::TooLong(most) => {
+                format!("Este campo admite como máximo {most} caracteres.")
+            }
             Self::Write(_) => "No se pudo escribir el documento editado.".to_owned(),
         }
     }
@@ -124,6 +133,9 @@ impl fmt::Display for AnnotError {
             Self::NotEditable => {
                 formatter.write_str("the edit names no annotation that can change that way")
             }
+            Self::ReadOnlyField(why) => write!(formatter, "the field cannot be filled: {why:?}"),
+            Self::NotFillable => formatter.write_str("the fill names no field that takes that value"),
+            Self::TooLong(most) => write!(formatter, "the field holds at most {most} characters"),
             Self::Write(error) => write!(formatter, "the update could not be written: {error}"),
         }
     }
@@ -139,7 +151,10 @@ impl std::error::Error for AnnotError {
             | Self::Encrypted
             | Self::Damaged
             | Self::Unencodable(_)
-            | Self::NotEditable => None,
+            | Self::NotEditable
+            | Self::ReadOnlyField(_)
+            | Self::NotFillable
+            | Self::TooLong(_) => None,
         }
     }
 }
@@ -169,32 +184,19 @@ pub fn read_annotations(path: &Path) -> Result<Vec<Annotation>, AnnotError> {
 /// As [`read_annotations`].
 pub fn read_fields(path: &Path) -> Result<Vec<Field>, AnnotError> {
     let document = load(path)?;
-    let Some(form) = document
-        .catalog()
-        .ok()
-        .and_then(|catalog| catalog.get(b"AcroForm").ok())
-        .and_then(|form| resolve_dictionary(&document, form))
-    else {
-        return Ok(Vec::new());
-    };
-    let Some(roots) = form
-        .get(b"Fields")
-        .ok()
-        .and_then(|fields| resolve(&document, fields).as_array().ok())
-    else {
-        return Ok(Vec::new());
-    };
-    let widget_pages = widget_pages(&document);
-    let mut walk = FieldWalk {
-        document: &document,
-        widget_pages: &widget_pages,
-        visited: HashSet::new(),
-        fields: Vec::new(),
-    };
-    for root in roots {
-        walk.visit(root, &Inherited::default(), 0);
-    }
-    Ok(walk.fields)
+    Ok(fields_of(&document)
+        .into_iter()
+        .map(|field| {
+            let first = field.widgets.first();
+            Field {
+                name: field.name.0,
+                kind: field.kind,
+                value: field.value,
+                rect: first.map_or(Rect::new(0.0, 0.0, 0.0, 0.0), |widget| widget.rect),
+                page: first.and_then(|widget| widget.page),
+            }
+        })
+        .collect())
 }
 
 /// Each page's box and rotation, in page order, as PDFium takes them: the
@@ -381,7 +383,7 @@ fn count_inflation(id: ObjectId, object: &mut Object) -> Option<(ObjectId, Objec
 }
 
 /// [`load`] with `limit` bytes for the object streams to inflate to.
-fn load_within(path: &Path, limit: u64) -> Result<Loaded, AnnotError> {
+pub(crate) fn load_within(path: &Path, limit: u64) -> Result<Loaded, AnnotError> {
     let file = File::open(path)?;
     let bytes = file.metadata()?.len();
     if bytes > MAX_FILE_BYTES {
@@ -435,21 +437,24 @@ pub(crate) fn pages(document: &Document) -> Vec<(u32, ObjectId)> {
 }
 
 /// `object` with references followed (a bounded chain).
-fn resolve<'a>(document: &'a Document, object: &'a Object) -> &'a Object {
+pub(crate) fn resolve<'a>(document: &'a Document, object: &'a Object) -> &'a Object {
     document
         .dereference(object)
         .map_or(object, |(_, target)| target)
 }
 
-fn resolve_dictionary<'a>(document: &'a Document, object: &'a Object) -> Option<&'a Dictionary> {
+pub(crate) fn resolve_dictionary<'a>(
+    document: &'a Document,
+    object: &'a Object,
+) -> Option<&'a Dictionary> {
     resolve(document, object).as_dict().ok()
 }
 
-fn number(document: &Document, object: &Object) -> Option<f64> {
+pub(crate) fn number(document: &Document, object: &Object) -> Option<f64> {
     resolve(document, object).as_float().ok().map(f64::from)
 }
 
-fn numbers(document: &Document, object: &Object) -> Vec<f64> {
+pub(crate) fn numbers(document: &Document, object: &Object) -> Vec<f64> {
     resolve(document, object)
         .as_array()
         .map(|items| {
@@ -461,14 +466,14 @@ fn numbers(document: &Document, object: &Object) -> Vec<f64> {
         .unwrap_or_default()
 }
 
-fn rect_of(document: &Document, object: &Object) -> Option<Rect> {
+pub(crate) fn rect_of(document: &Document, object: &Object) -> Option<Rect> {
     match numbers(document, object).as_slice() {
         [ax, ay, bx, by] => Some(Rect::new(*ax, *ay, *bx, *by)),
         _ => None,
     }
 }
 
-fn text(document: &Document, dictionary: &Dictionary, key: &[u8]) -> Option<String> {
+pub(crate) fn text(document: &Document, dictionary: &Dictionary, key: &[u8]) -> Option<String> {
     let object = resolve(document, dictionary.get(key).ok()?);
     object.as_str().ok().map(decode_text)
 }
@@ -478,7 +483,12 @@ fn text(document: &Document, dictionary: &Dictionary, key: &[u8]) -> Option<Stri
 /// do), UTF-8 after its mark, PDFDocEncoding otherwise. The mark is never
 /// part of the text, and a malformed string is decoded as far as it goes
 /// with U+FFFD for what does not decode (an odd last byte, a lone
-/// surrogate, a byte PDFDocEncoding leaves undefined), never dropped.
+/// surrogate, a byte PDFDocEncoding leaves undefined), never dropped. In
+/// PDFDocEncoding the tab, line feed and carriage return are themselves
+/// (ISO 32000-2, Annex D), which `lopdf`'s table leaves undefined. A line
+/// break reads as a line feed whatever ends it (CR LF, CR or LF), so a
+/// multiline value or a text box's text from any program reads with its
+/// lines.
 pub(crate) fn decode_text(bytes: &[u8]) -> String {
     let utf16 = |rest: &[u8], unit: fn([u8; 2]) -> u16| {
         let pairs = rest.chunks_exact(2);
@@ -491,28 +501,52 @@ pub(crate) fn decode_text(bytes: &[u8]) -> String {
         }
         text
     };
-    if let Some(rest) = bytes.strip_prefix(b"\xFE\xFF") {
+    let text = if let Some(rest) = bytes.strip_prefix(b"\xFE\xFF") {
         utf16(rest, u16::from_be_bytes)
     } else if let Some(rest) = bytes.strip_prefix(b"\xFF\xFE") {
         utf16(rest, u16::from_le_bytes)
     } else if let Some(rest) = bytes.strip_prefix(b"\xEF\xBB\xBF") {
         String::from_utf8_lossy(rest).into_owned()
     } else {
-        let string = Object::String(bytes.to_vec(), StringFormat::Literal);
-        decode_text_string(&string).unwrap_or_else(|_| {
-            bytes
-                .iter()
-                .map(|&byte| {
-                    let decoded =
-                        decode_text_string(&Object::String(vec![byte], StringFormat::Literal));
-                    decoded.unwrap_or_else(|_| char::REPLACEMENT_CHARACTER.to_string())
-                })
-                .collect()
-        })
-    }
+        pdf_doc_text(bytes)
+    };
+    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
-fn name(document: &Document, dictionary: &Dictionary, key: &[u8]) -> Option<String> {
+/// `bytes` in PDFDocEncoding, its tabs and line breaks kept.
+fn pdf_doc_text(bytes: &[u8]) -> String {
+    let control = |byte: &u8| matches!(byte, b'\t' | b'\n' | b'\r');
+    let mut text = String::new();
+    for run in bytes.split_inclusive(control) {
+        let (body, end) = match run.split_last() {
+            Some((last, body)) if control(last) => (body, Some(char::from(*last))),
+            _ => (run, None),
+        };
+        if !body.is_empty() {
+            text.push_str(&pdf_doc_run(body));
+        }
+        text.extend(end);
+    }
+    text
+}
+
+/// A run of PDFDocEncoding without tabs or line breaks: whole, else byte
+/// by byte with U+FFFD for an undefined one.
+fn pdf_doc_run(bytes: &[u8]) -> String {
+    let string = Object::String(bytes.to_vec(), StringFormat::Literal);
+    decode_text_string(&string).unwrap_or_else(|_| {
+        bytes
+            .iter()
+            .map(|&byte| {
+                let decoded =
+                    decode_text_string(&Object::String(vec![byte], StringFormat::Literal));
+                decoded.unwrap_or_else(|_| char::REPLACEMENT_CHARACTER.to_string())
+            })
+            .collect()
+    })
+}
+
+pub(crate) fn name(document: &Document, dictionary: &Dictionary, key: &[u8]) -> Option<String> {
     let object = resolve(document, dictionary.get(key).ok()?);
     object
         .as_name()
@@ -521,7 +555,11 @@ fn name(document: &Document, dictionary: &Dictionary, key: &[u8]) -> Option<Stri
 }
 
 /// An attribute a page inherits from the page tree when it lacks it.
-fn inherited<'a>(document: &'a Document, page: ObjectId, key: &[u8]) -> Option<&'a Object> {
+pub(crate) fn inherited<'a>(
+    document: &'a Document,
+    page: ObjectId,
+    key: &[u8],
+) -> Option<&'a Object> {
     let mut node = document.get_dictionary(page).ok()?;
     for _ in 0..MAX_DEPTH {
         if let Ok(value) = node.get(key) {
@@ -750,7 +788,7 @@ fn ink_width(document: &Document, dictionary: &Dictionary) -> f64 {
 
 /// A colour array of 1 (grey), 3 (RGB) or 4 (CMYK) components in `0..=1`;
 /// none for an empty array (transparent) or any other length.
-fn color_of(components: &[f64]) -> Option<Rgb> {
+pub(crate) fn color_of(components: &[f64]) -> Option<Rgb> {
     // Clamped to 0..=255 first, so the cast cannot truncate or wrap.
     let channel = |value: f64| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
     match *components {
@@ -776,13 +814,13 @@ fn color_of(components: &[f64]) -> Option<Rgb> {
 /// What a `/DA` string says: the font size of its `Tf` and the colour of its
 /// last fill-colour operator (`g`, `rg` or `k`).
 #[derive(Default)]
-struct DefaultAppearance {
-    size: Option<f64>,
-    color: Option<Rgb>,
+pub(crate) struct DefaultAppearance {
+    pub(crate) size: Option<f64>,
+    pub(crate) color: Option<Rgb>,
 }
 
 impl DefaultAppearance {
-    fn parse(da: &str) -> Self {
+    pub(crate) fn parse(da: &str) -> Self {
         let mut parsed = Self::default();
         let mut operands: Vec<f64> = Vec::new();
         for token in da.split_ascii_whitespace() {
@@ -813,139 +851,6 @@ impl DefaultAppearance {
             operands.clear();
         }
         parsed
-    }
-}
-
-/// The page of each widget a page lists in `/Annots`.
-fn widget_pages(document: &Document) -> HashMap<ObjectId, u32> {
-    let mut found = HashMap::new();
-    for (page, page_id) in pages(document) {
-        for (_, id, _) in page_annotations(document, page_id) {
-            if let Some(id) = id {
-                found.entry(id).or_insert(page);
-            }
-        }
-    }
-    found
-}
-
-/// What a field inherits from its ancestors (ISO 32000-1, 12.7.3.1).
-#[derive(Clone, Default)]
-struct Inherited {
-    name: String,
-    field_type: Option<String>,
-    flags: i64,
-    value: Option<Object>,
-}
-
-struct FieldWalk<'a> {
-    document: &'a Document,
-    widget_pages: &'a HashMap<ObjectId, u32>,
-    visited: HashSet<ObjectId>,
-    fields: Vec<Field>,
-}
-
-impl FieldWalk<'_> {
-    fn visit(&mut self, node: &Object, parent: &Inherited, depth: usize) {
-        if depth > MAX_DEPTH {
-            return;
-        }
-        let id = node.as_reference().ok();
-        if let Some(id) = id {
-            if !self.visited.insert(id) {
-                return;
-            }
-        }
-        let Some(dictionary) = resolve_dictionary(self.document, node) else {
-            return;
-        };
-        let partial = text(self.document, dictionary, b"T");
-        let mut own = parent.clone();
-        if let Some(partial) = partial {
-            own.name = if own.name.is_empty() {
-                partial
-            } else {
-                format!("{}.{partial}", own.name)
-            };
-        }
-        if let Some(field_type) = name(self.document, dictionary, b"FT") {
-            own.field_type = Some(field_type);
-        }
-        if let Some(flags) = dictionary
-            .get(b"Ff")
-            .ok()
-            .and_then(|flags| resolve(self.document, flags).as_i64().ok())
-        {
-            own.flags = flags;
-        }
-        if let Ok(value) = dictionary.get(b"V") {
-            own.value = Some(resolve(self.document, value).clone());
-        }
-        let kids: Vec<&Object> = dictionary
-            .get(b"Kids")
-            .ok()
-            .and_then(|kids| resolve(self.document, kids).as_array().ok())
-            .map(|kids| kids.iter().collect())
-            .unwrap_or_default();
-        // A kid with a `/T` is a field of its own; one without is a widget of
-        // this field.
-        let (fields, widgets): (Vec<&Object>, Vec<&Object>) = kids.into_iter().partition(|kid| {
-            resolve_dictionary(self.document, kid).is_some_and(|kid| kid.has(b"T"))
-        });
-        for kid in fields {
-            self.visit(kid, &own, depth + 1);
-        }
-        let first_widget = if widgets.is_empty() {
-            dictionary.has(b"Rect").then_some((id, dictionary))
-        } else {
-            widgets.first().and_then(|widget| {
-                resolve_dictionary(self.document, widget)
-                    .map(|dict| (widget.as_reference().ok(), dict))
-            })
-        };
-        let Some((widget_id, widget)) = first_widget else {
-            return;
-        };
-        self.fields.push(self.field(&own, widget_id, widget));
-    }
-
-    fn field(&self, own: &Inherited, widget_id: Option<ObjectId>, widget: &Dictionary) -> Field {
-        let kind = match own.field_type.as_deref() {
-            Some("Tx") => FieldKind::Text,
-            Some("Btn") if own.flags & (FLAG_RADIO | FLAG_PUSHBUTTON) == 0 => FieldKind::Checkbox,
-            _ => FieldKind::Other,
-        };
-        let value = own
-            .value
-            .as_ref()
-            .and_then(|value| match value {
-                Object::Name(state) => Some(String::from_utf8_lossy(state).into_owned()),
-                other => other.as_str().ok().map(decode_text),
-            })
-            .or_else(|| {
-                (kind == FieldKind::Checkbox)
-                    .then(|| name(self.document, widget, b"AS"))
-                    .flatten()
-            });
-        let page = widget_id
-            .and_then(|id| self.widget_pages.get(&id).copied())
-            .or_else(|| {
-                let target = widget.get(b"P").ok()?.as_reference().ok()?;
-                pages(self.document)
-                    .into_iter()
-                    .find_map(|(page, id)| (id == target).then_some(page))
-            });
-        Field {
-            name: own.name.clone(),
-            kind,
-            value,
-            rect: widget
-                .get(b"Rect")
-                .ok()
-                .and_then(|rect| rect_of(self.document, rect))
-                .unwrap_or(Rect::new(0.0, 0.0, 0.0, 0.0)),
-            page,
-        }
     }
 }
 

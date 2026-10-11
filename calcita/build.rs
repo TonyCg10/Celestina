@@ -48,9 +48,11 @@ const QML_FILES: &[&str] = &[
     "qml/components/WindowChrome.qml",
     "qml/DocumentWindow.qml",
     // Editing: the bottom toolbar, the layer each page draws its editable
-    // annotations in, one item per kind, and the question leaving asks.
+    // annotations in, one item per kind, the question leaving asks, and the
+    // layer of a form's fields.
     "qml/edit/AnnotationLayer.qml",
     "qml/edit/EditToolbar.qml",
+    "qml/edit/FormLayer.qml",
     "qml/edit/HighlightItem.qml",
     "qml/edit/InkItem.qml",
     "qml/edit/SaveQuestion.qml",

@@ -15,6 +15,7 @@ QtObject {
     readonly property bool smokeReport: false
     readonly property string smokeGrab: ""
     readonly property bool smokeEdit: false
+    readonly property bool smokeFill: false
     property var documents: []
     property var recents: []
     property var recentNames: []
