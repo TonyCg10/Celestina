@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-10
 - **Plan ID:** sel-3-preview-fixes
-- **Status:** active
+- **Closed:** 2026-10-10
+- **Successor:** none; the author named no next Selenita checkpoint. Its one delivery row (SEL-3-A) is done
+- **Status:** done
 - **Authorization:** the author used the corner preview live on
   2026-10-10 and reported three faults; the coordinator approved the fixes
   of this plan's one unit (a preview decoded at its shown size, the screen
@@ -79,3 +81,4 @@ and `scripts/complete-production.sh` succeeds on the landed tree.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | SEL-3-A | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-3-preview-fixes/SEL-3-A.numstat.tsv) | 33 files, +1254/-172 | Fix the preview's sharpness, capture the focused monitor and record into Grabaciones | [evidence](../../evidence/2026-10-10-preview-fixes.md) | VAL-SEL-FIXES pending |
+| SEL-3-B | `selenita:` | done | [inventory](../../inventories/2026-10-10-sel-3-preview-fixes/SEL-3-B.numstat.tsv) | 8 files, +178/-102 | Archive the delivered SEL-3 preview fixes plan through its own administrative unit and reconcile the Selenita roadmap, status and plan index | [evidence](../../evidence/2026-10-10-sel-3-preview-fixes-archive.md) | None |

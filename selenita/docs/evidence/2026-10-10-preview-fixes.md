@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-10
 - **Scope:** SEL-3-A of
-  [SEL-3's plan](../plans/active/2026-10-10-sel-3-preview-fixes.md):
+  [SEL-3's plan](../plans/archive/2026-10-10-sel-3-preview-fixes.md):
   `celestina-rs/crates/selenita-core` (`niri.rs`, `names.rs`,
   `history.rs`, their tests and the `niri-focused-output.json` fixture) and
   `selenita/` (`PreviewWindow.qml`, `CaptureCard.qml`, `Main.qml`,

@@ -1,12 +1,12 @@
 # Selenita status
 
 - **Updated:** 2026-10-10
-- **Implementation:** SEL-3 is active, with its
-  [plan](docs/plans/active/2026-10-10-sel-3-preview-fixes.md): SEL-3-A
-  answers the author's first live use of the corner preview (a blurred
-  preview, a screen key binding that took every monitor, the recordings
-  folder's name) and is implemented and verified offscreen over the fakes,
-  not landed; see the
+- **Implementation:** SEL-3 is closed and its
+  [plan](docs/plans/archive/2026-10-10-sel-3-preview-fixes.md) archived; no
+  checkpoint is active. SEL-3-A answers the author's first live use of the
+  corner preview (a blurred preview, a screen key binding that took every
+  monitor, the recordings folder's name) and is implemented, verified
+  offscreen over the fakes and landed as 1.1.1; see the
   [preview fixes evidence](docs/evidence/2026-10-10-preview-fixes.md).
   SEL-2 is closed and its
   [plan](docs/plans/archive/2026-10-10-sel-2-preview.md) archived. SEL-2-A (the corner preview after every capture and
@@ -47,7 +47,7 @@
 
 ## Current checkout truth
 
-- Version 1.1.0 in the checkout. The
+- Version 1.1.1 in the checkout. The
   window is transparent over the backdrop, follows the suite's appearance
   file and scrolls three cards: capture, recording and history.
 - The capture card takes the screen (every output, or one when there are
@@ -234,8 +234,8 @@
 - Fluorita's side of `Adopt` without a running Selenita writes the history
   itself (FLU-P1-A). Since SEL-3-A both folder names are
   `selenita_core::names`'s (`CAPTURES_FOLDER`, `RECORDINGS_FOLDER`) and
-  `FolderPaths::inside` applies them; Fluorita adopting that constructor
-  is its own unit (FLU-P2-A).
+  `FolderPaths::inside` applies them; Fluorita adopts that constructor
+  since FLU-P2-A (6f5d65af, Fluorita 1.7.1).
 - Recordings made before SEL-3-A stay in the videos folder's `Recordings`;
   `Adopt` no longer takes a file from there and the history keeps the rows
   it already had until their files move. Moving them is the coordinator's
