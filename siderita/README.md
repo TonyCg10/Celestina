@@ -24,6 +24,13 @@ and bounded in-place Grafita/Fluorita actions.
   is not offered, and with no phone connected there is no send entry. The
   desktop entries are looked up once, on a worker at start, so the application
   entries appear once that lookup has answered.
+- Renaming happens in place, as on Windows and macOS: a second, slow click on
+  the name of the entry that already is the only selection (after the
+  double-click interval, so a double click still opens), F2 or the entry
+  menu's «Renombrar» open a field over the name with the base name selected;
+  Return renames, Escape or a click elsewhere cancels, and a name the folder
+  refuses keeps the field open with its notice. The name dialog is only for
+  creating a folder or a file.
 - Compressing and extracting are ordinary loss-free file operations: `.zip`,
   `.tar` and `.tar.gz` are read and `.zip` and `.tar.gz` are written in
   process; `.rar` and `.7z` are extracted by an installed `7z`, `7za`, `7zz`

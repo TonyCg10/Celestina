@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
-    // ── Name prompt (new folder / new file / rename) ─────────────────
+    // ── Name prompt (new folder / new file; renaming happens in place) ──
 CelestinaModalLayer {
     id: namePrompt
     required property SideritaController controller
@@ -16,26 +16,15 @@ CelestinaModalLayer {
     z: 60
     onDismissRequested: namePrompt.dismiss()
 
-    property string mode: "folder"   // "folder" | "file" | "rename"
-    property string targetPath: ""
+    property string mode: "folder"   // "folder" | "file"
     property string heading: ""
 
     function openCreate(kind) {
         namePrompt.mode = kind
-        namePrompt.targetPath = ""
         namePrompt.heading = kind === "folder" ? "Nueva carpeta" : "Nuevo archivo"
         promptField.text = ""
         namePrompt.shown = true
         promptField.forceActiveFocus()
-    }
-    function openRename(path, currentName) {
-        namePrompt.mode = "rename"
-        namePrompt.targetPath = path
-        namePrompt.heading = "Renombrar"
-        promptField.text = currentName
-        namePrompt.shown = true
-        promptField.forceActiveFocus()
-        promptField.selectAll()
     }
     function dismiss() {
         namePrompt.shown = false
@@ -50,10 +39,8 @@ CelestinaModalLayer {
         }
         if (namePrompt.mode === "folder")
             namePrompt.controller.newFolder(value)
-        else if (namePrompt.mode === "file")
-            namePrompt.controller.newFile(value)
         else
-            namePrompt.controller.renamePath(namePrompt.targetPath, value)
+            namePrompt.controller.newFile(value)
         namePrompt.dismiss()
     }
 

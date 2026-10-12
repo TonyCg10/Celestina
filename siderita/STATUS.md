@@ -1,6 +1,6 @@
 # Siderita status
 
-- **Updated:** 2026-09-28
+- **Updated:** 2026-10-11
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4`, `SID-B1`, `SID-U1`, `SID-U1-B` and `SID-U1-C` are closed and archived;
   `SID-H1`, the hardening that follows the 2026-09-26 monorepo audit, is the
@@ -15,6 +15,16 @@
 
 ## Current checkout truth
 
+- `SID-H1-S` (author report and design of 2026-10-11): an entry is renamed in
+  place over its name in the list and the grid, from a slow click on the name
+  of the only selected entry, F2 or the menu's «Renombrar»; the name dialog
+  keeps only the create modes. A drag over the name now selects text while
+  renaming. The drag that selected nothing in the old rename dialog comes from
+  the shared `CelestinaInputShield` under every modal card, which takes the
+  pointer from a text field on its first pixel; it still affects the create,
+  format, password, compress and batch-rename dialogs until a
+  `celestina-style` unit fixes it. The hand check is `VAL-SID-19`. See
+  [the evidence](docs/evidence/2026-10-11-inline-rename.md).
 - Suite conventions ([ADR 0012](../docs/decisions/0012-suite-conventions.md),
   `CONV-1`): Siderita serves `org.celestina.Siderita` through
   `celestina_core::activation` (claim first, `Open(as paths)` with byte-exact

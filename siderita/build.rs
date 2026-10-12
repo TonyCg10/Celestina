@@ -77,6 +77,7 @@ const QML_FILES: &[&str] = &[
     "qml/components/folder/FolderListView.qml",
     "qml/components/folder/FolderGridView.qml",
     "qml/components/folder/FolderWheelHandler.qml",
+    "qml/components/folder/EntryNameEditor.qml",
     "qml/components/folder/FolderShortcuts.qml",
     "qml/components/folder/FolderBottomStatus.qml",
     "qml/components/folder/FolderBottomChrome.qml",

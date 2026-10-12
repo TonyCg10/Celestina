@@ -26,7 +26,23 @@ GridView {
 
     readonly property int columns: Math.max(1, Math.floor(width / panel.gridCellWidth))
 
+    // Renaming in place: F2, the entry menu and a slow click on a selected
+    // name start it. While it is open nothing scrolls and the view's keys
+    // stay with the field.
+    readonly property alias renamer: nameEditor
+    readonly property bool renaming: nameEditor.editing
+    function beginRename(index) { nameEditor.begin(index) }
+
+    EntryNameEditor {
+        id: nameEditor
+        view: root
+        controller: root.controller
+        panel: root.panel
+        centered: true
+    }
+
     FolderWheelHandler {
+        enabled: !root.renaming
         view: root
         heading: root.heading
     }
@@ -41,6 +57,7 @@ GridView {
     topMargin: contentTopMargin
 
     boundsBehavior: Flickable.StopAtBounds
+    interactive: !root.renaming
     activeFocusOnTab: true
     keyNavigationEnabled: false
     currentIndex: -1
@@ -68,6 +85,10 @@ GridView {
     }
 
     Keys.onPressed: function(event) {
+        // The rename field's unclaimed keys (arrows, pages) travel up to here;
+        // they must not move the selection from under it.
+        if (root.renaming)
+            return
         if (event.key === Qt.Key_Escape && root.controller.searchActive) {
             root.controller.closeSearch()
             event.accepted = true

@@ -6,11 +6,11 @@ import QtQuick.Controls
 import org.celestina.siderita 1.0
 
 // ─── EntryContextMenu ───────────────────────────────────────────────────────
-// Menú contextual de una entrada (fila o celda). El delegado que lo abre fija
-// las propiedades `target*` sobre esta instancia y llama `popup`. El controlador,
-// el panel (ayudas de selección y medios) y los tres diálogos (renombrar,
-// renombrar en lote, cambiar icono) llegan por propiedad; "abrir en pestaña
-// nueva" sale como señal. Así el componente no alcanza ningún id de fuera.
+// The context menu of one entry (a row or a cell). The delegate that opens it
+// sets the `target*` properties on this instance and calls `popup`. The
+// controller, the panel (selection and media helpers), the view that renames
+// in place and the dialogs (batch rename, change icon) arrive as properties;
+// "open in a new tab" leaves as a signal. The component reaches no outside id.
 // ──────────────────────────────────────────────────────────────────────────────
 GlassContextMenu {
     id: root
@@ -23,7 +23,18 @@ GlassContextMenu {
 
     property var controller
     property var panel        // mainPanel: selección y medios
-    property var namePrompt   // diálogo de nombre (renombrar uno)
+    // The folder view on screen; renaming one entry happens over its name.
+    property var renameView
+    // Set by «Renombrar» and acted on once the menu has closed: a closing
+    // menu hands the focus back to where it was, which would take it straight
+    // from the rename field and end the edit.
+    property bool renameOnClose: false
+    onClosed: {
+        if (!root.renameOnClose)
+            return
+        root.renameOnClose = false
+        root.renameView.beginRename(root.controller.indexForToken(root.targetToken))
+    }
     property var batchRename  // diálogo de renombrado en lote
     property var iconPicker   // diálogo de cambiar icono
     property var compressPrompt  // the compress dialog
@@ -230,12 +241,13 @@ GlassContextMenu {
     }
 
     GlassMenuItem {
+        objectName: "renameEntry"
         text: "Renombrar"
         visible: !root.multi && !root.controller.trashActive
         height: visible ? implicitHeight : 0
         icon.name: "edit-rename"
         icon.source: CelestinaTheme.fallbackIcon("file")
-        onTriggered: root.namePrompt.openRename(root.targetPath, root.targetName)
+        onTriggered: root.renameOnClose = true
     }
 
     GlassMenuItem {

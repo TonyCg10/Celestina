@@ -7,12 +7,14 @@ Item {
     required property var controller
     required property Item owner
     required property Item panel
+    // The list or the grid, whichever is on screen: the entry menu renames in
+    // place over it, and a rename open there blocks navigation like a menu.
+    required property var activeView
 
     property alias viewSortMenu: viewSortMenuItem
     property alias entryMenu: entryContextMenu
     property alias pathMenu: breadcrumbMenu
     property alias folderMenu: folderContextMenu
-    property alias namePrompt: namePromptDialog
     readonly property bool modalBlocked:
             namePromptDialog.shown || namePromptDialog.visible
             || batchRenameDialog.shown || batchRenameDialog.visible
@@ -28,7 +30,7 @@ Item {
     readonly property bool navigationBlocked:
             viewSortMenuItem.visible || entryContextMenu.visible
             || breadcrumbMenu.visible || folderContextMenu.visible
-            || modalBlocked
+            || modalBlocked || root.activeView.renaming
 
     signal newTabRequested(string path, bool foreground)
 
@@ -71,7 +73,7 @@ Item {
         backdropSource: root.owner
         controller: root.controller
         panel: root.panel
-        namePrompt: namePromptDialog
+        renameView: root.activeView
         batchRename: batchRenameDialog
         iconPicker: iconPickerDialog
         compressPrompt: compressDialog

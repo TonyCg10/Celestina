@@ -163,7 +163,6 @@ Item {
         controller: tabController
         panel: mainPanel
         topBar: viewTopBar
-        namePrompt: folderActions.namePrompt
         onGoBackOrLeaveRequested: root.goBackOrLeave()
     }
 
@@ -720,6 +719,7 @@ Item {
         controller: tabController
         owner: root
         panel: mainPanel
+        activeView: root.bottomView
         onNewTabRequested: function(path, foreground) {
             root.requestNewTab(path, foreground)
         }

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Window
 import org.celestina.siderita 1.0
 
 // ─── FolderCellDelegate ─────────────────────────────────────────────────────
@@ -41,6 +40,12 @@ Item {
     // dimmed dotfile.
     readonly property bool cut: root.controller
                                 ? root.controller.cutPaths.indexOf(path) >= 0 : false
+    // The view's rename field sits over this cell's name while it renames
+    // this entry; the name it covers steps aside.
+    readonly property bool renaming: root.view.renamer.editing
+                                     && root.view.renamer.path === root.path
+    // The name the field is laid over, and a slow click must land on.
+    readonly property Item nameLabel: cellName
 
     width: root.view.cellWidth
     height: root.view.cellHeight
@@ -203,7 +208,9 @@ Item {
         }
 
         Text {
+            id: cellName
             width: root.panel.gridCellWidth - 22
+            opacity: root.renaming ? 0 : 1
             horizontalAlignment: Text.AlignHCenter
             text: root.name
             color: CelestinaTheme.text
@@ -222,7 +229,13 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         hoverEnabled: true
 
+        onPressed: function(mouse) {
+            root.view.renamer.press(root.token, root.nameLabel, cellMouse,
+                                    mouse.x, mouse.y, mouse.button, mouse.modifiers)
+        }
+
         onClicked: function(mouse) {
+            root.view.renamer.click(root.token)
             if (mouse.button === Qt.MiddleButton) {
                 // Middle-click a folder → new background tab.
                 if (root.isDirectory)
@@ -253,8 +266,9 @@ Item {
         }
 
         onDoubleClicked: function(mouse) {
+            root.view.renamer.doubleClick()
             if (mouse.button === Qt.LeftButton)
-                root.Window.window.activateEntry(root.controller, root.token)
+                root.hostWindow.activateEntry(root.controller, root.token)
         }
     }
 
@@ -262,7 +276,8 @@ Item {
         id: cellDrag
         target: null
         dragThreshold: 8
-        enabled: true
+        // Not while a rename is open: a drag over the field selects its text.
+        enabled: !root.view.renaming
         onActiveChanged: {
             if (active)
                 root.panel.startEntryDrag(

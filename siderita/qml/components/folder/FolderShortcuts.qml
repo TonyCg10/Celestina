@@ -8,7 +8,6 @@ Item {
     required property var controller
     required property var panel
     required property var topBar
-    required property var namePrompt
 
     signal goBackOrLeaveRequested
 
@@ -57,12 +56,8 @@ Item {
     Shortcut {
         sequence: "F2"
         enabled: root.viewActive && !root.controller.loading
-        onActivated: {
-            const index = root.topBar.activeView.currentIndex
-            if (index >= 0)
-                root.namePrompt.openRename(root.controller.entryPath(index),
-                                           root.controller.entryNames[index])
-        }
+        // Renames in place, over the entry's own name.
+        onActivated: root.topBar.activeView.beginRename(root.topBar.activeView.currentIndex)
     }
 
     Shortcut {

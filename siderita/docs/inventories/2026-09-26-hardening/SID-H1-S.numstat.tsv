@@ -1,0 +1,53 @@
+# SID-H1-S exact change inventory
+
+Base revision	45b22f4609ab92969c5a95e1f1805b8cd79e0c3e
+Pathspec	docs/version-history.tsv
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	siderita/Cargo.lock
+Pathspec	siderita/Cargo.toml
+Pathspec	siderita/README.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/VALIDATION.md
+Pathspec	siderita/build.rs
+Pathspec	siderita/docs/evidence/2026-10-11-inline-rename.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-S.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/qml/components/entry/FolderCellDelegate.qml
+Pathspec	siderita/qml/components/entry/FolderRowDelegate.qml
+Pathspec	siderita/qml/components/folder/EntryNameEditor.qml
+Pathspec	siderita/qml/components/folder/FolderActions.qml
+Pathspec	siderita/qml/components/folder/FolderGridView.qml
+Pathspec	siderita/qml/components/folder/FolderListView.qml
+Pathspec	siderita/qml/components/folder/FolderShortcuts.qml
+Pathspec	siderita/qml/dialogs/NamePromptDialog.qml
+Pathspec	siderita/qml/menus/EntryContextMenu.qml
+Pathspec	siderita/qml/views/FolderView.qml
+Pathspec	siderita/tests/qml/tst_inline_rename.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	35c0b0bbfe5d7bd35c022bc1ec1988900a524ca14f8a6f938642403b0a079841	docs/version-history.tsv
+1	1	e003c797d1174a655d65ce4067e081f01da030f8a05afc37b920b37b656d29a3	scripts/language-baseline.tsv
+1	1	2fd008647e419aa2546af3f748a2d4f610421e4634a68bbc7340a10c7487724e	scripts/qmllint-baseline.tsv
+1	1	f26020fd79f3efc5dc84ba605ab9ab6fcfe60b85b2a9084517a78db4e30380ab	siderita/Cargo.lock
+1	1	c7015c763b48a92fc358b06be4e6ac081ef57102ea3409b824c79393d554c6c5	siderita/Cargo.toml
+7	0	cfcb2c7a92ca5909a02ba3b5a45190cbb05a4903c7c387be3fa630dbd4982f35	siderita/README.md
+11	1	71db931e6efa7adf17d27b59d062f59ec163f5a702ea9a095b6cd837b10c3382	siderita/STATUS.md
+29	0	4d5809ac38ef400d1a0488a3cb26444b6bf7c7008111be1dc8483409684470ab	siderita/VALIDATION.md
+1	0	9c7e09840509f76dbc8c379bfb3aa881a01affd028b21527e33aa3882c7a1cee	siderita/build.rs
+185	0	c93457209e6f56b2922fad556394706e60a89cfa21da555e3e3029c1f98b7b85	siderita/docs/evidence/2026-10-11-inline-rename.md
+53	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-S.numstat.tsv
+1	0	2e67dc81c93fb0b2fc521c8278f411c5777c031754c8788aca8cb73492b8bd5f	siderita/docs/plans/active/2026-09-26-hardening.md
+18	3	1e4d84de9a0df67d38ad98cc4104f7c4343863704861d3149ec82d8859c66e17	siderita/qml/components/entry/FolderCellDelegate.qml
+22	4	d47c6a3d2c521dde9cc57e3c970d7947106cb022591902424740bcb22c044116	siderita/qml/components/entry/FolderRowDelegate.qml
+410	0	7beec95c00cc0ec7b22091be547009a6f52879f2c62305b33a5382d475700412	siderita/qml/components/folder/EntryNameEditor.qml
+5	3	22a628f61f3b11d57eb73b26ec0ec2e98b902cb520d71b30268d8740e5d5f6b2	siderita/qml/components/folder/FolderActions.qml
+21	0	f203410f15534796e1faacee047391360c6e2315fdd27c4714b7180745a6f207	siderita/qml/components/folder/FolderGridView.qml
+20	0	f5a33b24e54626b50ef08f154bb63fddb779194baa0fdd0fde36cec79746c76d	siderita/qml/components/folder/FolderListView.qml
+2	7	2df1a35e7b2273f1ee47af7e791d08d7c66ce1f9b2c3c70ed48a8d0a273a4f01	siderita/qml/components/folder/FolderShortcuts.qml
+3	16	8603ee6da3548d91ff4ce43d8dc401131593cad0ca5cfcb904b17b1c57c9942d	siderita/qml/dialogs/NamePromptDialog.qml
+19	7	a343d9633e2b3ea013f0988b50d161993b52290c041d387a980c575e03066b4f	siderita/qml/menus/EntryContextMenu.qml
+1	1	d7a732b45345a7a779eb566c8e41a1229f0d858801d81135c4cac1d4a06c74c6	siderita/qml/views/FolderView.qml
+593	0	d63b759f2f881cdeb40e2836b8c0ea93c91400d9d345ac1b94fa9711e35942d4	siderita/tests/qml/tst_inline_rename.qml

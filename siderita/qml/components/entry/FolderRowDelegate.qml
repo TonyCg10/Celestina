@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Window
 import QtQuick.Layouts
 import org.celestina.siderita 1.0
 
@@ -48,6 +47,12 @@ Item {
     // italic name tells it apart from a mere dotfile.
     readonly property bool cut: root.controller
                                 ? root.controller.cutPaths.indexOf(path) >= 0 : false
+    // The view's rename field sits over this row's name while it renames this
+    // entry; the name it covers steps aside.
+    readonly property bool renaming: root.view.renamer.editing
+                                     && root.view.renamer.path === root.path
+    // The name the field is laid over, and a slow click must land on.
+    readonly property Item nameLabel: root.view.detailsMode ? detailsName : listName
 
     width: root.view.width
     height: root.panel.listRowHeight
@@ -230,7 +235,9 @@ Item {
         spacing: 1
 
         Text {
+            id: listName
             width: parent.width
+            opacity: root.renaming ? 0 : 1
             text: root.name
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
@@ -260,7 +267,9 @@ Item {
         spacing: 12
 
         Text {
+            id: detailsName
             Layout.fillWidth: true
+            opacity: root.renaming ? 0 : 1
             text: root.name
             color: CelestinaTheme.text
             font.family: CelestinaTheme.sansFamily
@@ -303,7 +312,13 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         hoverEnabled: true
 
+        onPressed: function(mouse) {
+            root.view.renamer.press(root.token, root.nameLabel, pointer,
+                                    mouse.x, mouse.y, mouse.button, mouse.modifiers)
+        }
+
         onClicked: function(mouse) {
+            root.view.renamer.click(root.token)
             if (mouse.button === Qt.MiddleButton) {
                 // Middle-click a folder → new background tab.
                 if (root.isDirectory)
@@ -334,8 +349,9 @@ Item {
         }
 
         onDoubleClicked: function(mouse) {
+            root.view.renamer.doubleClick()
             if (mouse.button === Qt.LeftButton)
-                root.Window.window.activateEntry(root.controller, root.token)
+                root.hostWindow.activateEntry(root.controller, root.token)
         }
     }
 
@@ -344,8 +360,10 @@ Item {
         target: null
         dragThreshold: 8
         // Any entry is draggable (a file to move onto a folder, a folder to
-        // move or to bookmark on the sidebar).
-        enabled: true
+        // move or to bookmark on the sidebar) — except while a rename is open:
+        // a drag over the field selects its text, and this handler would take
+        // the press from the field on its eighth pixel.
+        enabled: !root.view.renaming
         onActiveChanged: {
             if (active)
                 root.panel.startEntryDrag(

@@ -4,6 +4,35 @@ This manual lane does not contain implementation and does not block
 [ROADMAP.md](ROADMAP.md). Each failed row keeps its result and opens a new
 corrective implementation unit.
 
+## VAL-SID-19 — Renaming in place: slow click, F2 and a drag over the name
+
+- **Status:** pending
+- **Related implementation:** `SID-H1-S`, recorded in
+  [the evidence](docs/evidence/2026-10-11-inline-rename.md)
+- **Requires:** a verified Siderita artifact on the real Niri/Wayland session,
+  a scratch folder with a file `report.final.pdf`, a file `notes.txt` and a
+  folder `Photos.2024`, a physical mouse, and Orca for the last step
+- **Procedure:** in the list, click `notes.txt` once, wait a second and click
+  its name again; then double-click a selected file; click the icon of the
+  selected file once more; press F2 on `report.final.pdf`; right-click
+  `Photos.2024` and choose «Renombrar»; in each open field drag the pointer
+  slowly across the name, type a name and press Return, or Escape, or click
+  another file; rename `notes.txt` to `report.final.pdf`; repeat the slow
+  click, F2 and the drag in the grid at the largest text size; with Orca on,
+  press F2
+- **Pass condition:** the second slow click opens a field over the name after
+  the double-click interval with `notes` selected and the extension not; the
+  double click opens the file and no field appears; the icon click opens no
+  field; F2 selects `report.final` and the menu selects the whole folder
+  name; the slow drag selects the text under the pointer and never picks the
+  entry up; Return renames and the renamed entry stays selected and visible,
+  Escape and the click elsewhere leave the old name; the clash shows the
+  existing notice and leaves the field open with the typed name; the grid
+  field is legible and sits over the name; Orca reads «Nuevo nombre»
+- **Result:** not run by hand
+- **Evidence:** a screen recording of the slow click and the drag, and the
+  notice text of the clash
+
 ## VAL-SID-SEND — Send to the phone from the context menu
 
 - **Status:** pending
