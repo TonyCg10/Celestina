@@ -4,6 +4,26 @@ This queue contains only checks that need the author's real compositor,
 perception, input devices or assistive-technology stack. It does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-STYLE-10 — A slow drag selects in a dialog's field
+
+- **Status:** pending
+- **Related implementation:** `STYLE-G7-AE`, recorded in
+  [the evidence](docs/evidence/2026-10-11-modal-text-drag.md)
+- **Requires:** the deployed Siderita on the real session, with the
+  author's mouse
+- **Procedure:** in a folder listing, open the new-folder prompt, type a
+  long name, then press inside the name and drag slowly across it, a few
+  pixels at a time; repeat the drag running out of the dialog over the
+  files behind it; finally sweep from an empty part of the dialog card
+  out over the files
+- **Pass condition:** the slow drag selects the text under it as it goes,
+  as it does in a field outside a dialog, and the field takes the focus;
+  the drag that runs out of the dialog keeps selecting up to the end of the
+  name and moves no file; the sweep from the empty card moves no file and
+  selects nothing
+- **Result:** not run by hand
+- **Evidence:** what the author sees
+
 ## VAL-STYLE-09 — A wheel notch moves two rows
 
 - **Status:** pending

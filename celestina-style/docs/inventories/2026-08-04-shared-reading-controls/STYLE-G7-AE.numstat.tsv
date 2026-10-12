@@ -1,0 +1,27 @@
+# STYLE-G7-AE exact change inventory
+
+Base revision	244f546dcfbb14b5b0d32673ee3740c6476754c4
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaInputShield.qml
+Pathspec	celestina-style/DESIGN.md
+Pathspec	celestina-style/VALIDATION.md
+Pathspec	celestina-style/docs/evidence/2026-10-11-modal-text-drag.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AE.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/tests/tst_inputshield.qml
+Pathspec	celestina-style/tests/tst_modal.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	0955deba0f04e071aa648dd537b4477e8f28b9c9cff8961e5e505a0ce4da47e7	celestina-style/CMakeLists.txt
+116	2	4d0aa7b0105424a2456d94226b89ae02fdf5005b57003e73e1e1ee59a0f0c0d3	celestina-style/CelestinaInputShield.qml
+1	1	e7c9ec370b96cdf9c0ebfc547e09815e34acc4d58459374ffa3311afefc521fa	celestina-style/DESIGN.md
+20	0	6bc9c3ce2b7d004bb1d64bdad6a74b631475bdc52d1358a785a14d0f27a86abb	celestina-style/VALIDATION.md
+164	0	3efa4dce7885e35b8ee8f42bb04d5c89584f20baff3eacc396c4a689019ffda3	celestina-style/docs/evidence/2026-10-11-modal-text-drag.md
+27	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AE.numstat.tsv
+1	0	65405ed9af680975ec112dbf1f816e720c568ccb7a38b6597e2937bcc1a1ac8a	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+33	0	dbd6df5ed47feecd02e7d22b790078aea29f2eef2f41eb8613f08be3ab8b1995	celestina-style/tests/tst_inputshield.qml
+208	0	a01a653bc6043acc77720dcff08bd9c287259b9718ff3909115fb53395d88cea	celestina-style/tests/tst_modal.qml
+1	0	9eeadc9b31ffe0e109e76a3e1cd14e9429f030b949ecbe90c991f62c691eeb62	docs/version-history.tsv

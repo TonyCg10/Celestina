@@ -262,3 +262,4 @@ calcita	1.2.0	milestone	CAL-2-B	Add text boxes, highlights and drawing saved as 
 calcita	1.3.0	milestone	CAL-2-C	Add filling of text fields and checkboxes in forms
 celestina-style	1.13.3	bug	STYLE-G7-AD	Fix wheel notches that carry pixel deltas so each moves a full step
 siderita	1.12.0	milestone	SID-H1-S	Add renaming in place on a slow click and fix drag selection while renaming
+celestina-style	1.13.4	bug	STYLE-G7-AE	Fix slow drag selection in text fields inside modals

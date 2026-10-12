@@ -44,6 +44,27 @@ TestCase {
             }
         }
 
+        // A field of the content, and a bare pill floating over it: nothing
+        // of the pill takes the press, so the field below does — and the
+        // shield then takes the drag from it, which must not select there.
+        TextField {
+            id: coveredField
+            x: 10
+            y: 120
+            width: 160
+            text: "content under the pill"
+        }
+
+        Item {
+            id: barePill
+            x: 10
+            y: 120
+            width: 160
+            height: 40
+
+            CelestinaInputShield { swallowClicks: false }
+        }
+
         // A pill that yields the drag to its own press: the shape every
         // floating button in Siderita has.
         Button {
@@ -84,6 +105,18 @@ TestCase {
         mouseMove(host, host.width / 2, host.height / 2)
         tryCompare(host, "hovered", true)
         compare(shield.hovered, true)
+    }
+
+    // The shield carries the selection of a field that is its surface's own;
+    // one of the content it covers is exactly what it keeps from reacting.
+    function test_a_covered_field_does_not_select_through_the_shield() {
+        coveredField.select(0, 0)
+        const y = barePill.height / 2
+        mousePress(barePill, 4, y)
+        for (let x = 6; x <= 120; x += 2)
+            mouseMove(barePill, x, y)
+        mouseRelease(barePill, 120, y)
+        compare(coveredField.selectedText, "")
     }
 
     // The drag handler on the shield claims the press with a zero threshold.
