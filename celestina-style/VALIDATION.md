@@ -4,6 +4,23 @@ This queue contains only checks that need the author's real compositor,
 perception, input devices or assistive-technology stack. It does not block
 [ROADMAP.md](ROADMAP.md).
 
+## VAL-STYLE-09 — A wheel notch moves two rows
+
+- **Status:** pending
+- **Related implementation:** `STYLE-G7-AD`, recorded in
+  [the evidence](docs/evidence/2026-10-11-wheel-notches.md)
+- **Requires:** the deployed Siderita, Calcita and Grafita on the real
+  session, with the author's mouse
+- **Procedure:** in a long folder listing in Siderita, a long document in
+  Calcita and a long file in Grafita, turn the wheel one notch at a time,
+  then spin it hard
+- **Pass condition:** every notch moves two rows (`compWheelStep`, the
+  height of two list rows, also in Calcita's pages), the same in all three
+  applications; a hard spin travels as far as its notches add up to, with
+  no inertia after the wheel stops and no brake while it turns
+- **Result:** not run by hand
+- **Evidence:** what the author feels and sees
+
 ## VAL-STYLE-08 — The bar reads as one frame
 
 - **Status:** pending

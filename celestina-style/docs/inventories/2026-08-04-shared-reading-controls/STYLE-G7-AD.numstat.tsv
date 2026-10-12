@@ -1,0 +1,23 @@
+# STYLE-G7-AD exact change inventory
+
+Base revision	1f6d3725cf7209810e5e8d2a51a4a1639d95c918
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaWheelScroll.qml
+Pathspec	celestina-style/VALIDATION.md
+Pathspec	celestina-style/docs/evidence/2026-10-11-wheel-notches.md
+Pathspec	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AD.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/tests/tst_wheelscroll.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	04e064a113f664c9b239e127956c327090b007d25df29f274aace422804ddc0e	celestina-style/CMakeLists.txt
+43	23	a3ded5158d99e2a8e5c583c6e8150a5dbb7411bf2e94cdd367daf5a820c9b064	celestina-style/CelestinaWheelScroll.qml
+17	0	733902919aba868dd1ca26d1fc1878fd7728a5bc18a78a466b286d7ec5d9ae47	celestina-style/VALIDATION.md
+101	0	b0ff243284e00bde2ff00a1798c22c77d0749cce98e481e7beb049a1f0002819	celestina-style/docs/evidence/2026-10-11-wheel-notches.md
+23	0	self	celestina-style/docs/inventories/2026-08-04-shared-reading-controls/STYLE-G7-AD.numstat.tsv
+1	0	880e731fece50ea7cc98ad5ed526c9ab944090d7db4e5f8acd2afab0596bdabf	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+105	0	e3f052aefbd1b7aad869c492da03d3ce56026c79711b4f6bcfa2c8caf54373dc	celestina-style/tests/tst_wheelscroll.qml
+1	0	da8cb21aba6aec033183aadeba5ff43d685ab2d1cdb20fb95986521400e649bb	docs/version-history.tsv

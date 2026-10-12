@@ -8,6 +8,11 @@ import CelestinaStyle
 // exactly. Qt's own wheel handling turns a notch into a decelerating flick:
 // about 27 px on the first frame, 72 px in all, settling after ~300 ms, and a
 // burst of ten notches 15 ms apart only covers about a third of ten steps.
+//
+// Under Qt 6.12 a wheel notch also carries a pixel delta (angle 120, pixel 15)
+// with no scroll phase, and the device reports itself as a touchpad, so the
+// tests at the end call `take` with the fields a real event carries:
+// `mouseWheel` cannot set a pixel delta or a phase.
 TestCase {
     id: testCase
 
@@ -87,6 +92,23 @@ TestCase {
         CelestinaWheelScroll {
             id: plainWheel
             view: plain
+        }
+    }
+
+    // A view that scrolls sideways too, for the horizontal pass-on.
+    Flickable {
+        id: wide
+
+        parent: testWindow.contentItem
+        width: 100
+        height: 100
+        contentWidth: 400
+        contentHeight: 5000
+        boundsBehavior: Flickable.StopAtBounds
+
+        CelestinaWheelScroll {
+            id: wideWheel
+            view: wide
         }
     }
 
@@ -214,5 +236,88 @@ TestCase {
         verify(plain.flicking, "an in-bounds idle retarget ended the flick")
         plain.cancelFlick()
         plain.contentHeight = 5000
+    }
+
+    // What Qt 6.12 delivers for one notch of a mouse wheel: angle and pixel
+    // deltas together, no phase. It is a notch: one full step, glided.
+    function test_i_a_notch_with_a_pixel_delta_moves_a_full_step() {
+        verify(wheel.take(0, -120, 0, -15, Qt.NoScrollPhase, Qt.NoModifier))
+        compare(list.contentY, 0, "the notch jumped instead of gliding")
+        tryCompare(list, "contentY", step, 200)
+        wait(150)
+        compare(list.contentY, step)
+        compare(steppedSpy.count, 1)
+        compare(steppedSpy.signalArguments[0][0], -step)
+        compare(steppedSpy.signalArguments[0][1], true)
+    }
+
+    function test_j_a_burst_of_pixel_carrying_notches_adds_up() {
+        for (let i = 0; i < 10; ++i) {
+            verify(wheel.take(0, -120, 0, -15, Qt.NoScrollPhase, Qt.NoModifier))
+            if (i < 9)
+                wait(15)
+        }
+        tryCompare(list, "contentY", 10 * step, 1000)
+        wait(150)
+        compare(list.contentY, 10 * step)
+        compare(outer.seen, 0)
+    }
+
+    // A touchpad on Wayland sends a phased stream: its pixels go straight
+    // through, whatever angle Qt derived from them.
+    function test_k_a_phased_pixel_stream_applies_pixels_straight() {
+        verify(wheel.take(0, -120, 0, -15, Qt.ScrollUpdate, Qt.NoModifier))
+        compare(list.contentY, 15)
+        wait(100)
+        compare(list.contentY, 15)
+        compare(steppedSpy.count, 1)
+        compare(steppedSpy.signalArguments[0][0], -15)
+        compare(steppedSpy.signalArguments[0][1], false)
+    }
+
+    function test_l_pixels_without_an_angle_apply_straight() {
+        verify(wheel.take(0, 0, 0, -15, Qt.NoScrollPhase, Qt.NoModifier))
+        compare(list.contentY, 15)
+        wait(100)
+        compare(list.contentY, 15)
+        compare(steppedSpy.signalArguments[0][1], false)
+    }
+
+    // A high-resolution wheel reports a fraction of a notch: it moves the
+    // same fraction of a step.
+    function test_m_a_half_notch_moves_half_a_step() {
+        verify(wheel.take(0, -60, 0, -7.5, Qt.NoScrollPhase, Qt.NoModifier))
+        compare(list.contentY, 0, "the half notch jumped instead of gliding")
+        tryCompare(list, "contentY", step / 2, 200)
+        compare(steppedSpy.signalArguments[0][0], -step / 2)
+        compare(steppedSpy.signalArguments[0][1], true)
+    }
+
+    // Sideways is judged with the same rule: a tilt notch by its angle, a
+    // touchpad swipe by its pixels.
+    function test_n_sideways_follows_the_same_rule() {
+        wide.contentY = 0
+        verify(!wideWheel.take(-120, 0, -15, 0, Qt.NoScrollPhase, Qt.NoModifier),
+               "a sideways notch was taken by a view that scrolls sideways")
+        verify(!wideWheel.take(-120, -40, -30, -5, Qt.ScrollUpdate, Qt.NoModifier),
+               "a mostly sideways swipe was taken by a view that scrolls sideways")
+        // The notch's pixels are smaller than its angle; the angles decide.
+        verify(wideWheel.take(-60, -120, -40, -15, Qt.NoScrollPhase, Qt.NoModifier),
+               "a mostly vertical notch was passed on")
+        tryCompare(wide, "contentY", step, 200)
+        compare(wide.contentX, 0)
+    }
+
+    function test_o_ctrl_and_bounds_still_pass_through_take() {
+        verify(!wheel.take(0, -120, 0, -15, Qt.NoScrollPhase, Qt.ControlModifier))
+        verify(!wheel.take(0, 120, 0, 15, Qt.NoScrollPhase, Qt.NoModifier),
+               "an upward notch at the top was taken")
+        compare(steppedSpy.count, 1, "only the in-modifier notch reports a step")
+    }
+
+    function test_p_reduced_motion_jumps_one_step_for_a_pixel_carrying_notch() {
+        CelestinaTheme.reducedMotion = true
+        verify(wheel.take(0, -120, 0, -15, Qt.NoScrollPhase, Qt.NoModifier))
+        compare(list.contentY, step)
     }
 }

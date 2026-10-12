@@ -7,11 +7,26 @@ import QtQuick
 // wheel handling turns a notch into a decelerating flick (a ~300 ms tail
 // that loses most of a fast burst), which is what the author felt as a
 // brake. Touchpad pixel deltas go straight through. At a bound the event is
-// left for an outer scroller, and so is a touchpad swipe that is mostly
-// horizontal, which belongs to whatever scrolls sideways, but only when the
-// view can scroll sideways itself (contentWidth > width); on any other view
-// that swipe counts as vertical (its y part is applied and `stepped` emitted)
-// so rows never move without the signal.
+// left for an outer scroller, and so is a gesture that is mostly horizontal,
+// which belongs to whatever scrolls sideways, but only when the view can
+// scroll sideways itself (contentWidth > width); on any other view that
+// gesture counts as vertical (its y part is applied and `stepped` emitted) so
+// rows never move without the signal.
+//
+// Notch or touchpad is decided by the scroll phase, not by the pixel delta.
+// Under Qt 6.12 on the author's session (2026-10-11, 779 traced events in
+// Siderita) a mouse-wheel notch arrives with angleDelta.y = ±120 AND
+// pixelDelta.y = ±15, phase Qt.NoScrollPhase, and its device reports type
+// TouchPad and the name "touchpad", so neither the pixel delta nor the device
+// tells a wheel from a touchpad. Taking every event with a pixel delta as a
+// touchpad moved each notch 15 px straight instead of a step and a glide,
+// the brake the author still felt in every app. A touchpad on Wayland sends
+// a phased stream (ScrollBegin, ScrollUpdate, ScrollEnd, ScrollMomentum):
+// only a phased event, or one with pixels and no angle at all, is applied in
+// pixels. Anything else is a notch: angleDelta / 120 * step, so the fraction
+// a high-resolution wheel reports moves the same fraction of a step, and the
+// sideways test compares the angles too. `take` holds the whole decision so
+// the tests can feed it the fields a real event carries.
 //
 // It is a MouseArea, not a WheelHandler: a WheelHandler decides whether the
 // event goes on before its `wheel` signal runs (`blocking`), so it cannot
@@ -60,28 +75,27 @@ MouseArea {
         }
     }
 
-    onWheel: function(event) {
-        if (!root.view || event.modifiers !== root.acceptedModifiers) {
-            event.accepted = false
-            return
-        }
-        if (Math.abs(event.pixelDelta.x) > Math.abs(event.pixelDelta.y)
-                && root.view.contentWidth > root.view.width) {
-            event.accepted = false
-            return
-        }
-        const pixel = Math.abs(event.pixelDelta.y) >= 0.01
-        const delta = pixel ? event.pixelDelta.y : event.angleDelta.y / 120 * root.step
-        if (Math.abs(delta) < 0.01) { event.accepted = false; return }
+    // Takes one wheel event, given its fields; returns whether it was used.
+    // A false return leaves the event for whatever is behind this area.
+    function take(angleX, angleY, pixelX, pixelY, phase, modifiers) {
+        if (!root.view || modifiers !== root.acceptedModifiers)
+            return false
+        const pixel = phase !== Qt.NoScrollPhase
+                || (Math.abs(angleX) < 0.01 && Math.abs(angleY) < 0.01)
+        const dx = pixel ? pixelX : angleX
+        const dy = pixel ? pixelY : angleY
+        if (Math.abs(dx) > Math.abs(dy) && root.view.contentWidth > root.view.width)
+            return false
+        const delta = pixel ? pixelY : angleY / 120 * root.step
+        if (Math.abs(delta) < 0.01)
+            return false
         root.stepped(delta, !pixel)
         if (!glide.running)
             root.targetY = root.view.contentY
         const next = root.clampY(root.targetY - delta)
         if (Math.abs(next - root.targetY) < 0.01
-                && Math.abs(next - root.view.contentY) < 0.5) {
-            event.accepted = false
-            return
-        }
+                && Math.abs(next - root.view.contentY) < 0.5)
+            return false
         root.view.cancelFlick()
         root.targetY = next
         if (pixel || CelestinaTheme.reducedMotion) {
@@ -90,7 +104,13 @@ MouseArea {
         } else {
             glide.start()
         }
-        event.accepted = true
+        return true
+    }
+
+    onWheel: function(event) {
+        event.accepted = root.take(event.angleDelta.x, event.angleDelta.y,
+                                   event.pixelDelta.x, event.pixelDelta.y,
+                                   event.phase, event.modifiers)
     }
 
     property FrameAnimation glide: FrameAnimation {
