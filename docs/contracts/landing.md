@@ -140,7 +140,11 @@ A plan that a renamed halted owner (`history_owner` and `halted` in the
 branch's registry, as `check-staged-units.py` pairs the moves) moves
 byte-identically from its old `active_plans` directory to the new one is not
 a plan the branch changes: its old path is left out before the deletion stop
-(`moved_plan_paths`). While the branch renames such an owner, and only then,
+(`moved_plan_paths`). Likewise, an inventory such an owner moves
+byte-identically from its old `<docs root>/inventories/` to the new one is not
+an edit of a tracked inventory: its old path is left out of `preflight`'s
+immutable-inventory stop (`moved_inventory_paths`). While the branch renames
+such an owner, and only then,
 a plan the branch adds, which neither `origin/main` nor the fork point has,
 with no open row is set aside as documentation the rename delivers (the new
 project's plan with only `planned` rows), and so is a plan that differs from

@@ -56,6 +56,7 @@ from landing import (
     merge_other_evidence,
     merge_ratchet,
     merge_settled_plan,
+    moved_inventory_paths,
     moved_plan_paths,
     numstat_rows,
     other_unit_record,
@@ -525,9 +526,18 @@ def preflight(ctx: LandContext) -> None:
             f"`{unit.prefix}:` does not own: {', '.join(violations)}",
             violations[0],
         )
+    # A halted owner's inventories moved byte-identically with its renamed
+    # tree are the unit's change, not edits of tracked inventories.
+    moved_inventories = moved_inventory_paths(
+        ctx.registry,
+        registry_at(ctx, state.branch),
+        changed,
+        lambda path: blob(ctx, f"{state.branch}:{path}"),
+        lambda path: blob(ctx, f"origin/main:{path}"),
+    )
     tracked_inventories = sorted(
         path
-        for path in changed
+        for path in changed - moved_inventories
         if path.endswith(".numstat.tsv") and blob(ctx, f"origin/main:{path}") is not None
     )
     if tracked_inventories:

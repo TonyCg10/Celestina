@@ -320,6 +320,44 @@ def moved_plan_paths(
     return moved
 
 
+def moved_inventory_paths(
+    main_registry: Mapping[str, object],
+    branch_registry: Mapping[str, object],
+    changed_paths: Collection[str],
+    read_branch: Callable[[str], bytes | str | None],
+    read_main: Callable[[str], bytes | str | None],
+) -> set[str]:
+    """The old-path inventories a renamed halted owner moved unchanged: deletions that are moves.
+
+    For each root pair of `renamed_owner_roots`, the owners' inventory roots
+    are `<docs root>/inventories/` (`owner_docs_root`). A changed
+    `.numstat.tsv` under the former root that the branch lacks, whose content
+    on main is the content the branch holds at the same place under the new
+    root, where main has nothing, moved with the owner's tree: it is not an
+    edit of a tracked inventory (check-staged-units.py `renamed_owner_moves`
+    pairs the same files when they are staged). An inventory whose copy
+    differs, or whose copy main already tracks, pairs with nothing.
+    """
+    moved: set[str] = set()
+    for old_plans, new_plans in renamed_owner_roots(main_registry, branch_registry).items():
+        old_root, new_root = (
+            posixpath.join(posixpath.dirname(posixpath.dirname(plans)), "inventories") + "/"
+            for plans in (old_plans, new_plans)
+        )
+        for path in sorted(changed_paths):
+            if not path.startswith(old_root) or not path.endswith(".numstat.tsv"):
+                continue
+            if read_branch(path) is not None:
+                continue
+            new_path = new_root + path[len(old_root):]
+            if new_path not in changed_paths or read_main(new_path) is not None:
+                continue
+            original = read_main(path)
+            if original is not None and read_branch(new_path) == original:
+                moved.add(path)
+    return moved
+
+
 def follow_renamed_links(text: str, plan_path: str, renamed_roots: Mapping[str, str]) -> str:
     """`text` with each inline link into a renamed halted owner's `docs/` at its new path.
 

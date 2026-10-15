@@ -586,6 +586,68 @@ class LandingFunctions(unittest.TestCase):
             set(),
         )
 
+    def test_moved_inventory_paths_pairs_only_unchanged_moves_of_a_renamed_halted_owner(
+        self,
+    ) -> None:
+        main_registry = {"projects": [{"id": "app", "active_plans": "app/docs/plans/active"}]}
+        renamed = {
+            "id": "app-qt",
+            "history_owner": "app",
+            "halted": "2026-09-27",
+            "active_plans": "app-qt/docs/plans/active",
+        }
+        branch_registry = {
+            "projects": [renamed, {"id": "app", "active_plans": "app/docs/plans/active"}]
+        }
+        moved, edited, tracked = (
+            f"docs/inventories/2026-08-20-carriers/{name}.numstat.tsv"
+            for name in ("APP-A", "APP-B", "APP-C")
+        )
+        # Inventory-shaped, but not under the inventory root.
+        stray = "docs/evidence/APP-D.numstat.tsv"
+        main = {
+            f"app/{moved}": b"1\t0\tapp/src/main.rs\n",
+            f"app/{edited}": b"2\t0\tapp/src/lib.rs\n",
+            f"app/{tracked}": b"3\t0\tapp/src/ui.rs\n",
+            f"app-qt/{tracked}": b"3\t0\tapp/src/ui.rs\n",
+            f"app/{stray}": b"4\t0\tapp/src/bus.rs\n",
+        }
+        branch = {
+            f"app-qt/{moved}": b"1\t0\tapp/src/main.rs\n",
+            f"app-qt/{edited}": b"2\t1\tapp/src/lib.rs\n",
+            f"app-qt/{tracked}": b"3\t0\tapp/src/ui.rs\n",
+            f"app-qt/{stray}": b"4\t0\tapp/src/bus.rs\n",
+        }
+        changed = set(main) | set(branch) | {"app/src/main.rs"}
+        self.assertEqual(
+            landing.moved_inventory_paths(
+                main_registry, branch_registry, changed, branch.get, main.get
+            ),
+            {f"app/{moved}"},
+        )
+        # Without `halted`, or without a former owner on main, nothing moved.
+        for case, owner in {
+            "not halted": {key: value for key, value in renamed.items() if key != "halted"},
+            "unknown former owner": dict(renamed, history_owner="other"),
+            "former owner renamed before": renamed,
+        }.items():
+            with self.subTest(case=case):
+                former = dict(main_registry["projects"][0])
+                if case == "former owner renamed before":
+                    former["history_owner"] = "older"
+                self.assertEqual(
+                    landing.moved_inventory_paths(
+                        {"projects": [former]}, {"projects": [owner]}, changed, branch.get, main.get
+                    ),
+                    set(),
+                )
+        self.assertEqual(
+            landing.moved_inventory_paths(
+                main_registry, main_registry, changed, branch.get, main.get
+            ),
+            set(),
+        )
+
     def test_discover_unit_leaves_out_the_plans_a_renamed_owner_moved(self) -> None:
         moved = "lib/docs/plans/active/2026-08-20-carriers.md"
         own = ledger_row("FX-B", "active", evidence="[evidence](../../evidence/2026-09-25-fx-b.md)")
