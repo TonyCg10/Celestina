@@ -45,6 +45,9 @@ set -u
 #     window exists, so exactly one must still be alive at the end (124) and
 #     the other must have handed off and left on its own with 0; both opening
 #     is the duplicate window a double-pressed key binding used to leave.
+#     The exit codes are read from the one line of that shape in the log, not
+#     from its last line: a bus-activated service may still print after the
+#     shell has, and GIO_USE_VFS=local keeps gvfs from being activated at all.
 #     Skipped, and said so, where dbus-run-session is missing.
 #
 # This catches *startup* errors only. Keyboard, focus and accessibility need a
@@ -173,6 +176,7 @@ if command -v dbus-run-session >/dev/null 2>&1; then
     XDG_RUNTIME_DIR=$scratch/run \
     QT_QPA_PLATFORM=offscreen \
     QT_ASSUME_STDERR_HAS_CONSOLE=1 \
+    GIO_USE_VFS=local \
         dbus-run-session -- sh -c '
             timeout 8 "$1" >"$2/race-a.log" 2>&1 &
             a=$!
@@ -183,12 +187,12 @@ if command -v dbus-run-session >/dev/null 2>&1; then
             wait "$b"
             rb=$?
             echo "$ra $rb"' race "$bin" "$scratch" >"$race_log" 2>&1
-    codes=$(tail -1 "$race_log")
+    codes=$(grep -E '^[0-9]+ [0-9]+$' "$race_log" | tail -n 1)
     case $codes in
         "124 0" | "0 124") ;;
         *)
             echo "smoke: two launches on one bus did not end as one window (expected exit codes 124 and 0; got '$codes'); last lines:" >&2
-            tail -5 "$scratch/race-a.log" "$scratch/race-b.log" >&2
+            for f in "$scratch/race-a.log" "$scratch/race-b.log"; do tail -n 5 "$f" >&2; done
             exit 1
             ;;
     esac

@@ -1,0 +1,17 @@
+# HEM-H1-G exact change inventory
+
+Base revision	e79dffb8e6eaee52a7699a0f7360dde7700208e7
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-10-15-smoke-race-log.md
+Pathspec	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-G.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	hematita/scripts/smoke.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	0	d308610a8e98eedb21d86f45cb4d87092836f595307a41974f5c7bfa2022908b	hematita/STATUS.md
+47	0	3435b0fad6a3a078cc40a4f7feed926c05abd915b4cb162005206e05e51cc953	hematita/docs/evidence/2026-10-15-smoke-race-log.md
+17	0	self	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-G.numstat.tsv
+1	0	a676667314a3c5e195ee9feacff6a1a6e481f0ac8fe8ba8cb9c25764c92bd44e	hematita/docs/plans/active/2026-09-26-hardening.md
+6	2	ac1449751b5fada794f599db9504199bdc3d68316df1d9ea231e36a45c32fa5b	hematita/scripts/smoke.sh

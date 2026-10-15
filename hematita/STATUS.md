@@ -23,6 +23,10 @@
   second for the sampler; application names come from the shared bounded
   `.desktop` lookup on the sampler thread; one byte formatter; not landed
   ([evidence](docs/evidence/2026-09-26-storage-page-and-readers.md))
+- **Smoke fix in `HEM-H1-G`:** the smoke's race gate reads its two exit codes
+  from their own line and keeps gvfs off the private bus, so a bus-activated
+  service's shutdown message can no longer fail it
+  ([evidence](docs/evidence/2026-10-15-smoke-race-log.md))
 - **Follow-ups recorded by `HEM-H1-B`, not scheduled:** a deadline for
   opening a bus connection (the sampler's listing and a unit action open
   theirs with a blocking handshake that has none; a hung bus stalls the
