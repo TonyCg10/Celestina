@@ -1,18 +1,11 @@
 # Active Celestina plans
 
-The project is halted by the author's decision of 2026-09-27; see
-[Halted projects](../../../../AGENTS.md#halted-projects). Nothing here is
-current work.
+| Plan | Checkpoint | Scope |
+|---|---|---|
+| [CEL-1 — the Island](2026-10-14-cel-1-island.md) | CEL-1 | The shell's first release: the Island, the launcher, notifications and the tray |
 
-[`2026-08-20-persistent-carriers.md`](2026-08-20-persistent-carriers.md) is
-the plan the halt interrupted: checkpoint `SURF-1`, Plan ID
-`persistent-carriers`, whose ledger is kept exactly as the halt found it and
-whose unfinished rows the halt freezes. It stays in this
-directory only because a plan with unfinished rows cannot be archived. It was
-to end the per-popup whole-output map/unmap churn the author measured as a
-physical monitor flicker by making every popup carrier persistent and parked,
-and by replacing the dense-glass companions' timed unpark with Niri fullscreen
-state.
-
-`UX-2` is halted and will not start. Earlier delivered plans are archived under
-[`../archive/`](../archive/).
+A dated plan is added here only when the project roadmap names the same active
+implementation checkpoint. Unit inventories live under
+`celestina/docs/inventories/<plan-slug>/<unit>.numstat.tsv` (the landing
+creates the first) and do not move when the completed plan moves to
+`../archive/`.

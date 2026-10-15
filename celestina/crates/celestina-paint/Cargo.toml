@@ -1,0 +1,10 @@
+[package]
+name = "celestina-paint"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The shell's painter: the Painter contract over femtovg, the Haze material, text and icons"
+
+[lints]
+workspace = true

@@ -29,7 +29,7 @@ Cuprita constraints; it cannot relax the root or grant authority.
   a Bluetooth code goes straight to BlueZ through the pairing agent; polkit
   prompts in its own window.
 - The Celestina shell is halted by the author's order: never read, reuse or
-  reference `celestina/` or `celestina-shell-core`, however similar. Cuprita has
+  reference `celestina-qt/` or `celestina-shell-core`, however similar. Cuprita has
   no tray, indicator or daemon.
 
 ## Local verification

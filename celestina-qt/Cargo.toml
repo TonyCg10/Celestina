@@ -1,0 +1,85 @@
+[package]
+name = "celestina-shell"
+version = "1.3.2"
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[[bin]]
+name = "celestina-niri-adapter"
+path = "src/niri_adapter.rs"
+
+# One helper carries every bar provider that needs long-lived, non-Qt IO —
+# never one process per widget. Later shell-owned non-Qt services extend this
+# binary rather than adding a third runtime.
+[[bin]]
+name = "celestina-provider-adapter"
+path = "src/provider_adapter/main.rs"
+
+[dependencies]
+# What every Celestina helper shares with its Qt host: bounded line framing, the
+# one serialized writer a multi-threaded helper emits through, the provider
+# envelope and the command vocabulary. Extracted from this adapter rather than
+# invented for it — the framing and writer below were its own until a second
+# helper needed exactly them.
+celestina-shell-core = { path = "../celestina-rs/crates/celestina-shell-core" }
+# Niri does not promise semver-stable Rust types. Pinning the compositor's exact
+# IPC version keeps the wire model aligned with the installed 26.04 session.
+niri-ipc = "=26.4.0"
+# The helper exposes a deliberately narrow, line-delimited snapshot protocol to
+# the Qt host. Derive keeps that boundary explicit instead of forwarding Niri's
+# entire event vocabulary into QML.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The suite already has one MPRIS vocabulary — `PlayerState`, `MediaAction`,
+# `playback_progress()` — and one parser for playerctl's metadata format. The
+# panel's media widget reads the same players the phone bridge does, so it
+# reuses them rather than growing a second dialect of the same thing.
+magnetita-core = { path = "../celestina-rs/crates/magnetita-core" }
+# Cover art from a media player is bytes this shell did not write. The suite
+# already decides what counts as one — a bounded size and a known image
+# signature — and the panel answers to the same two questions the phone bridge
+# does.
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
+# The clipboard history provider is a data-control client: it watches and sets
+# the desktop selection over Wayland directly, because that role has no
+# subprocess tool to shell out to the way sysmon or audio do. `ext-data-control`
+# is the standardized successor to wlroots' own protocol; niri advertises both,
+# and the standardized one is the one to prefer going forward.
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+# Night light needs one persistent gamma-control owner so activation and
+# release can cross several compositor commits instead of flashing in the
+# single commit of an external process starting or dying. The wlroots binding
+# uses the same wayland-client runtime already owned by the clipboard worker.
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+# Already a transitive dependency of `wayland-backend`; used directly only for
+# `pipe()` and `memfd_create()`, so clipboard reception and native gamma tables
+# need no raw libc call in a workspace that forbids unsafe code.
+rustix = { version = "1", features = ["fs", "pipe"] }
+# The notification server is a session-bus service, not a tool this helper can
+# shell out to: it must own a well-known name, answer method calls and emit
+# signals. zbus is already the suite's D-Bus client and server — magnetitad
+# serves `org.celestina.Devices1` with it — so this is the established
+# dependency rather than a second dialect. The blocking API is used because this
+# helper is threads and blocking IO, with no async runtime anywhere in it.
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+# The host restarts this helper with SIGTERM when its channel fails. Catching
+# that ordinary Unix shutdown signal lets the helper restore its owned gamma
+# tables and release systemd-inhibit before leaving session-wide state orphaned.
+# `signal-hook` is a narrow signal delivery seam and adds no runtime framework.
+signal-hook = "0.3"
+# Wallpaper gallery validation decodes the same four raster families the Qt
+# surface accepts before a file becomes selectable or is imported. The
+# aggregate provider owns this long-lived, non-Qt IO; a feature-limited decoder
+# keeps the work off the GUI thread and avoids pulling encoders, rayon or
+# unrelated formats into the session helper.
+# 0.25.6 is pinned because the shell's declared Rust 1.85 must remain sufficient.
+image = { version = "=0.25.6", default-features = false, features = ["png", "jpeg", "webp", "avif-native"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

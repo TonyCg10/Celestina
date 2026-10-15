@@ -19,7 +19,7 @@
 The branch first stopped at the landing's `preflight` with
 `the branch must change exactly one active plan; found 2`, because it also
 rewrote the ledger of the shell's
-[SURF-1 plan](../../celestina/docs/plans/active/2026-08-20-persistent-carriers.md),
+[SURF-1 plan](../../celestina-qt/docs/plans/active/2026-08-20-persistent-carriers.md),
 setting its five unfinished rows to `blocked`, and it had no ledger row or
 evidence record of its own. The correction restores that plan byte for byte
 to `origin/main`, so its ledger stays exactly as the halt found it

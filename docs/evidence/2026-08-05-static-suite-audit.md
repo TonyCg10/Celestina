@@ -3,7 +3,7 @@
 - **Date:** 2026-08-05
 - **Scope:** read-only defect audit of every project in the suite except the
   Celestina shell, which has its own record in
-  [`../../celestina/docs/evidence/2026-08-05-static-shell-audit.md`](../../celestina/docs/evidence/2026-08-05-static-shell-audit.md)
+  [`../../celestina/docs/evidence/2026-08-05-static-shell-audit.md`](../../celestina-qt/docs/evidence/2026-08-05-static-shell-audit.md)
   and is under active correction. Covered: `magnetita/` with
   `celestina-rs/crates/{magnetita-core,magnetita-net,magnetitad}`, `fluorita/`
   with `crates/{fluorita-core,fluorita-engine,fluorita-qt}`, `grafita/` with

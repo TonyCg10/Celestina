@@ -30,7 +30,7 @@ Hematita constraints; it cannot relax the root or grant authority.
   thresholds and every Qt object; `qml/` presents. QML never reads a file,
   spawns a process or decides what "high" means.
 - The Celestina shell is in standby by the author's order: never read, reuse
-  or reference `celestina/` or `celestina-shell-core`, however similar.
+  or reference `celestina-qt/` or `celestina-shell-core`, however similar.
 - Absence is a state: a source that cannot be read leaves its section of the
   snapshot unavailable with a reason while the others keep publishing. Every
   row carries its own state and its own typed reason, and the page composes

@@ -434,6 +434,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "celestina-shell"
+version = "0.1.0"
+dependencies = [
+ "celestina-core",
+]
+
+[[package]]
 name = "celestina-shell-core"
 version = "0.1.0"
 dependencies = [
@@ -441,6 +448,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "celestina-tokens"
+version = "0.1.0"
 
 [[package]]
 name = "cfg-if"

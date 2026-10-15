@@ -1,0 +1,15 @@
+[package]
+name = "celestina-shell"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The pure domain of the Celestina shell: notifications, launcher ranking, workspaces, coalescing, settings"
+
+[dependencies]
+# Desktop entries for the launcher's ranking: the suite's one reader of
+# `.desktop` files, reused rather than copied (design §6.2).
+celestina-core.workspace = true
+
+[lints]
+workspace = true

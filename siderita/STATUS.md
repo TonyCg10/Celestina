@@ -233,7 +233,7 @@
   tried by hand: that is `VAL-SID-11`. The release binary was built at `1.5.2`
   but **not** verified or deployed: `verify-production.sh` runs the shared
   architecture guard, whose `celestina-style` visual rule fails on another
-  unit's uncommitted `celestina/qml/MenuSection.qml`. The author's normal test
+  unit's uncommitted `celestina-qt/qml/MenuSection.qml`. The author's normal test
   prefix therefore still holds `1.5.1`; re-run
   `siderita/scripts/complete-production.sh` once that file is settled.
 

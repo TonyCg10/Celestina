@@ -1,20 +1,20 @@
 [Desktop Entry]
 Type=Application
 Name=Celestina
-GenericName=Desktop shell
-Comment=The Celestina panel and session
+GenericName=Desktop shell for niri
+Comment=The Celestina Island, launcher, notifications and tray
 # Locale-qualified keys are how a desktop entry carries product copy; the
 # unqualified ones above stay English, as the language standard requires.
-GenericName[es]=Escritorio
-Comment[es]=El panel y la sesión de Celestina
+GenericName[es]=Shell de escritorio para niri
+Comment[es]=La isla, el lanzador, las notificaciones y la bandeja de Celestina
 Exec=celestina
 Terminal=false
 Categories=System;
 # Not for a launcher: this is the session's shell, not something to start twice.
 # The entry exists so the desktop can answer "what application is this?" about
-# the running process — xdg-desktop-portal refused to register the host without
-# it, logging `App info not found for 'celestina'` on every start.
+# the running process; xdg-desktop-portal refuses to register a host it cannot
+# find an entry for (the halted shell learned it in celestina-qt).
 NoDisplay=true
-# What the host declares through `setDesktopFileName`, and what the compositor
-# sees as the app id. All three have to agree or the lookup fails again.
+# The app id the shell's surfaces declare and the compositor sees. The two
+# have to agree or the lookup fails.
 StartupWMClass=celestina

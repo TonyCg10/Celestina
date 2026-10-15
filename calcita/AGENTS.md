@@ -48,7 +48,7 @@ Calcita's constraints; it cannot relax the root or grant authority.
   beside it or replacing it with the original sent to the Trash, never in
   place. It needs no privilege.
 - The Celestina shell is halted by the author's order: never read, reuse or
-  reference `celestina/` or `celestina-shell-core`.
+  reference `celestina-qt/` or `celestina-shell-core`.
 
 ## Local verification
 

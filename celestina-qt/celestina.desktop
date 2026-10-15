@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=Celestina
+GenericName=Desktop shell
+Comment=The Celestina panel and session
+# Locale-qualified keys are how a desktop entry carries product copy; the
+# unqualified ones above stay English, as the language standard requires.
+GenericName[es]=Escritorio
+Comment[es]=El panel y la sesión de Celestina
+Exec=celestina
+Terminal=false
+Categories=System;
+# Not for a launcher: this is the session's shell, not something to start twice.
+# The entry exists so the desktop can answer "what application is this?" about
+# the running process — xdg-desktop-portal refused to register the host without
+# it, logging `App info not found for 'celestina'` on every start.
+NoDisplay=true
+# What the host declares through `setDesktopFileName`, and what the compositor
+# sees as the app id. All three have to agree or the lookup fails again.
+StartupWMClass=celestina

@@ -1,0 +1,10 @@
+[package]
+name = "celestina-tokens"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The Celestina style tokens as Rust constants, generated from celestina-style/tokens.toml"
+
+[lints]
+workspace = true

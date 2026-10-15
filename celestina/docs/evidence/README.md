@@ -1,8 +1,7 @@
 # Celestina evidence
 
-Dated records in this directory contain agent-executable evidence for Celestina
-shell implementation units. Author-only session checks remain in
-`celestina/VALIDATION.md`.
+Dated records here hold the agent-executable evidence for the shell's
+implementation units. Author-only checks stay in `celestina/VALIDATION.md`.
 
-Use `YYYY-MM-DD-short-topic.md` and the suite
+Name each record `YYYY-MM-DD-short-topic.md` and follow the suite
 [evidence template](../../../docs/templates/evidence.md).

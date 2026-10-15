@@ -1,8 +1,8 @@
-# Shell Rust adapter: fmt, clippy, and package tests.
+# Rust shell: fmt, clippy, and the workspace tests of `celestina/`.
 #
-# Include all of `celestina-rs/` because the package consumes path-based cores.
-# A fixed crate list would silently become stale when Cargo.toml gains a new
-# dependency. Running extra checks is recoverable; silently skipping them is not.
+# The shell's own workspace (`celestina/Cargo.toml`, members `crates/*` and the
+# binary) plus the two `celestina-rs` crates registered for it, whose changes
+# the shell will consume. The halted Qt shell runs in `celestina-qt.yml`.
 name: celestina
 
 on:
@@ -10,17 +10,19 @@ on:
     branches: [main]
     paths:
       - 'celestina/**'
-      - 'celestina-rs/**'
+      - 'celestina-rs/crates/celestina-shell/**'
+      - 'celestina-rs/crates/celestina-tokens/**'
       - '.github/workflows/celestina.yml'
   pull_request:
     branches: [main]
     paths:
       - 'celestina/**'
-      - 'celestina-rs/**'
+      - 'celestina-rs/crates/celestina-shell/**'
+      - 'celestina-rs/crates/celestina-tokens/**'
       - '.github/workflows/celestina.yml'
 
 jobs:
-  celestina-rust:
+  celestina:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -46,7 +48,7 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --all-targets --locked -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Tests
-        run: cargo test --all-targets --locked
+        run: cargo test --workspace --locked

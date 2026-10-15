@@ -1,0 +1,10 @@
+[package]
+name = "celestina-wayland"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The shell's Wayland runtime: outputs, layer surfaces, popups, scale, regions and EGL"
+
+[lints]
+workspace = true

@@ -24,10 +24,11 @@ another language. See
 
 ## Halted projects
 
-The Celestina shell is halted by the author's decision of 2026-09-27. The halt
-covers the `celestina/` project, the crate registered only for it
+The Qt/QML Celestina shell is halted by the author's decision of 2026-09-27.
+The halt covers the `celestina-qt/` project (moved from `celestina/` on
+2026-10-14; id and prefix `celestina-qt`), the crate registered only for it
 (`celestina-rs/crates/celestina-shell-core`), their commit prefixes
-`celestina:` and `celestina-shell-core:`, the shell's scripts, and its
+`celestina-qt:` and `celestina-shell-core:`, the shell's scripts, and its
 registered production entries.
 
 - No agent plans, audits, implements, refactors, adopts shared owners into,
@@ -41,6 +42,18 @@ registered production entries.
 - `docs/projects.toml` marks it `halted`. `scripts/agent-context.py` announces
   the halt, `scripts/commit_scope.py` refuses its prefixes and paths, and the
   landing drops it from every production run.
+
+**Salvage by copy.** The Rust shell at `celestina/` may copy, never edit,
+these files of the halted tree and adapt them in its own crates, recording in
+each copy's head comment the source path and the commit it came from:
+`celestina-rs/crates/celestina-shell-core/src/{notifications,launcher,coalesce,workspace_groups,workspace_map,settings,calendar}.rs`
+and the `bounded` helper of that crate's `src/lib.rs` (there is no
+`bounded.rs`) into `celestina-rs/crates/celestina-shell`;
+`celestina-qt/src/provider_adapter/{worker,notifications,launcher}.rs`
+and `celestina-qt/src/niri_adapter.rs` as reference for
+`celestina/src/providers`; `celestina-qt/scripts/dev-session.kdl` and
+`dev-session.sh` for `celestina/scripts`. Later deliveries extend this list by
+the same edit.
 
 The halt is lifted only by the author editing this section. The commit guard
 accepts a change to a halted project only in a commit that also changes this

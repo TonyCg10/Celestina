@@ -1081,7 +1081,7 @@ stamped with time 0 stalled every GStreamer consumer; see
 `~/.local/libexec` and runs through the same systemd user drop-in as
 before; the distribution's `/usr/lib/xdg-desktop-portal-wlr` stays
 installed. The September recipe kept in the halted shell's tree
-(`celestina/scripts/build-patched-xdpw.sh`) is superseded by it and left as
+(`celestina-qt/scripts/build-patched-xdpw.sh`) is superseded by it and left as
 it is. `xdg-desktop-portal-gnome`, which would capture through niri's own
 `org.gnome.Mutter.ScreenCast`, stays out by the author's choice: the suite
 carries no foreign capture stack.

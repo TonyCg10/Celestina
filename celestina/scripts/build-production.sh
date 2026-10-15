@@ -3,8 +3,6 @@ set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 suite_root=$(CDPATH= cd -- "$project_root/.." && pwd)
-build_dir=$project_root/build
-style_root=$suite_root/celestina-style
 artifact_tool=$suite_root/scripts/production_artifact.py
 
 if [ "$#" -eq 0 ]; then
@@ -16,12 +14,6 @@ if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
     exit 2
 fi
 
-. "$project_root/scripts/session-interlock.sh"
-celestina_refuse_if_running "$project_root" "${HOME}/.local"
+(cd "$project_root" && cargo build --release --locked --bin celestina)
 
-"$style_root/scripts/build-production.sh" --production-runner-internal
-cmake -S "$project_root" -B "$build_dir" \
-    -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
-cmake --build "$build_dir" --parallel
-
-echo ">> release bundle build steps completed (not activated or installed)"
+echo ">> Celestina release build steps completed (not installed)"

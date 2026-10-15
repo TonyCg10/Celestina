@@ -324,8 +324,8 @@ check_qml_registration() {
     done
 
     if ! python3 "$architecture_scanner" cmake-qml-registration \
-        celestina/CMakeLists.txt celestina/qml celestina; then
-        fail "celestina/CMakeLists.txt: incomplete or invalid QML registration"
+        celestina-qt/CMakeLists.txt celestina-qt/qml celestina; then
+        fail "celestina-qt/CMakeLists.txt: incomplete or invalid QML registration"
     fi
 }
 

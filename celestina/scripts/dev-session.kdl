@@ -1,3 +1,8 @@
+// Copied from celestina-qt/scripts/dev-session.kdl at 6cb0bd4a (salvage by
+// copy, AGENTS.md "Halted projects"). Changed in the copy: the dense-glass
+// companion rule is gone (this shell has no dense companions) and one rule
+// covers the namespaces this shell uses, `^celestina-(panel|overlay|toasts)$`.
+//
 // Niri configuration for the nested development session only.
 //
 // It is deliberately not the author's live configuration. That one declares the
@@ -119,77 +124,18 @@ blur {
 
 // Niri 26.04 enables xray automatically whenever a background effect is
 // active. Xray deliberately reuses the blurred wallpaper and ignores windows
-// below the surface. Celestina's ext-background-effect request can describe
+// below the surface. The shell's ext-background-effect request can describe
 // the finite glass shape but cannot override that compositor policy, so the
-// reference session disables xray only for Celestina's glass layers. The
-// toasts and the on-screen display joined the list when they joined the
-// membrane material: a drop out of the bar that blurred only the wallpaper
-// while the menus beside it blurred real windows would read as two glasses.
-// Only the wallpaper stays outside this visual-language unit.
-//
+// reference session disables xray for the shell's glass layers: the Island
+// (`celestina-panel`), the launcher (`celestina-overlay`) and the banners
+// (`celestina-toasts`). Menus are `xdg_popup` children, not layer surfaces,
+// and need no rule of their own. Only the wallpaper stays outside this
+// visual-language unit.
 layer-rule {
-    match namespace="^celestina-(panel-menu|panel-child-menu|overlay|toasts|osd|polkit-prompt)$"
+    match namespace="^celestina-(panel|overlay|toasts)$"
 
     background-effect {
         xray false
-    }
-}
-
-// SIMPLE-1 (2026-08-27): the bar's pills are mica cards like every menu
-// section, and the panel arms its own blur with exactly those capsule
-// regions — so its namespace takes the same strong colour-summary profile
-// the dense companions get, instead of the weak veil profile it kept while
-// the whole strip was one sample. Stock niri rejects the strength keys and
-// dev-session.sh strips them from this rule the same way it strips the
-// companions'.
-layer-rule {
-    match namespace="^celestina-panel$"
-
-    background-effect {
-        xray false
-        passes 4
-        offset 6
-        noise 0.02
-        saturation 1.25
-    }
-}
-
-// The dense sections' extra blur, at a strength the veil never gets. The
-// shell stacks several invisible companion surfaces per output whose regions
-// are exactly the dark content cards; each composes one more sample of the
-// blur profile above, so the dark cards *summarize* the colours behind them —
-// Windows 11's Mica, One UI 8.5's frosted panels, the author's direction of
-// 2026-08-14 — while the colourless veil above keeps the session's slight
-// sample and the background stays exactly as it always was.
-//
-// The strength below is Celestina's own compositor patch speaking:
-// `packaging/niri/` carries it and `scripts/build-patched-niri.sh` builds it.
-// Stacking companion surfaces was measured as the way to need no patch at
-// all, and rejected on the numbers — blur radius grows with the square root
-// of the sample count, so reaching this strength from the profile above would
-// take about twenty-five stacked surfaces.
-//
-// `blur` is left unset on purpose. Forced true, the rule kept blurring the
-// whole surface — the whole output, bar included — once the client withdrew
-// its region. Unset, the effect exists exactly while a companion publishes
-// rectangles.
-layer-rule {
-    match namespace="^celestina-dense-glass$"
-
-    background-effect {
-        xray false
-        // `blur` stays unset on purpose. Forced true, the rule kept blurring
-        // the whole surface — the whole output, bar included — once the
-        // client withdrew its region. Unset, the effect exists exactly while
-        // a companion publishes rectangles.
-        //
-        // The four below are the patched compositor's contribution; a stock
-        // niri rejects them, and `dev-session.sh` answers that by dropping
-        // these very lines before it starts, so this profile runs either way.
-        passes 4
-        offset 6
-        noise 0.02
-        saturation 1.25
     }
 }
 

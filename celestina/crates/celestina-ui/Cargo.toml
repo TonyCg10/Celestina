@@ -1,0 +1,10 @@
+[package]
+name = "celestina-ui"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The shell's UI tree: taffy layout, keyed reconciliation, animation, hit-test, focus and the text field"
+
+[lints]
+workspace = true

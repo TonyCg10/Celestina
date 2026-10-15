@@ -8,7 +8,7 @@
 - **Scope:** suite
 - **Implementation checkpoint:** PRD-1
 - **Author-validation checkpoint:** `VAL-SHELL-03` in
-  [`../../../celestina/VALIDATION.md`](../../../celestina/VALIDATION.md)
+  [`../../../celestina/VALIDATION.md`](../../../celestina-qt/VALIDATION.md)
 
 ## Hypothesis
 

@@ -7,14 +7,15 @@ because it verifies relationships across projects.
 |---|---|---|
 | `contracts.yml` | every push/PR | architecture/style, documentation/language, versions, agent context, commit scope, hermetic fixtures |
 | `celestina-rs.yml` | `celestina-rs/` | Rust workspace formatting, lint, tests, backend coverage |
-| `celestina.yml` | shell or shared Rust changes | shell Rust-helper formatting, lint and tests; no Qt/C++ host build |
+| `celestina.yml` | `celestina/`, `celestina-rs/crates/celestina-{shell,tokens}/` | Rust shell workspace formatting, lint and tests |
+| `celestina-qt.yml` | halted Qt shell or shared Rust changes | halted shell's Rust-helper formatting, lint and tests; no Qt/C++ host build |
 
 The Qt/C++ shell host, the CXX-Qt applications and `celestina-style` have no
 workflow. Building them in CI needs Qt, and their registered
 `verify-production.sh` runs the corresponding matrices locally against the
 exact release artifact. Until such workflows exist, their compilation evidence
-is local only; do not read a green `contracts` or `celestina` run as proof that
-the shell host, Siderita, Magnetita, Grafita, Fluorita or the style module
+is local only; do not read a green `contracts` or `celestina-qt` run as proof that
+the Qt shell host, Siderita, Magnetita, Grafita, Fluorita or the style module
 builds.
 
 `scripts/check-architecture-contract.sh` checks dependency direction, QML
@@ -77,7 +78,7 @@ checked-out tree, not against each commit in the range. A pushed tree that is
 red is caught; an intermediate commit that was red is not.
 
 `contracts.yml` intentionally has no path filter: a change in one project can
-break another project's shared-style or dependency contract. The two Rust
+break another project's shared-style or dependency contract. The Rust
 workflows include their associated `celestina-rs/` inputs because omitting a
 newly added crate would silently stop testing those Rust consumers.
 

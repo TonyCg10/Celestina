@@ -38,7 +38,7 @@ Selenita's constraints; it cannot relax the root or grant authority.
   `wl-copy`, the portal, GStreamer) to fakes; tests and the smoke run with it.
   A real capture or recording on the session is never run by an agent.
 - The Celestina shell is halted by the author's order: never read, reuse or
-  reference `celestina/` or `celestina-shell-core`.
+  reference `celestina-qt/` or `celestina-shell-core`.
 
 ## Local verification
 
