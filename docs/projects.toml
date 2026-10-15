@@ -115,10 +115,10 @@ name = "Celestina shell"
 path = "celestina"
 kind = "rust-shell"
 commit_prefix = "celestina"
-# Registered unversioned: a landing cannot append a baseline row (its unbump
-# step returns the history to the fork point), so the author adopts the
-# 0.1.0 version by hand after this unit lands, as Cuprita's registration did.
-versioned = false
+version_source = { kind = "cargo-package", path = "celestina/Cargo.toml", package = "celestina" }
+version_mirrors = [
+  { kind = "cargo-lock", path = "celestina/Cargo.lock", package = "celestina" },
+]
 agents = "celestina/AGENTS.md"
 readme = "celestina/README.md"
 status = "celestina/STATUS.md"
