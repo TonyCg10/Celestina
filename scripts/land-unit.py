@@ -56,11 +56,13 @@ from landing import (
     merge_other_evidence,
     merge_ratchet,
     merge_settled_plan,
+    moved_plan_paths,
     numstat_rows,
     other_unit_record,
     owner_docs_root,
     owner_tables,
     render_inventory,
+    renamed_owner_roots,
     scope_violations,
     sealed_diffstat,
     subject,
@@ -322,7 +324,15 @@ def stacked_on(ctx: LandContext, unit: str) -> bool:
 
 
 def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
-    """The branch's unit; plans and rows that `main` (origin/main or the base) settles are set aside."""
+    """The branch's unit; plans and rows that `main` (origin/main or the base) settles are set aside.
+
+    The registry is `main`'s (`ctx.registry`); the branch's registry only says
+    which halted owner the branch renames, so that the plans the rename moved
+    unchanged are not read as deletions and the links that follow it are not
+    read as changes (`moved_plan_paths`, `renamed_owner_roots`). The moved
+    files stay in `changed`: they are the unit's change, in its inventory and
+    its scope check, which the suite prefix allows.
+    """
     branch = ctx.state.branch
     fork = run(ctx, "merge-base", main, branch).stdout.strip()
 
@@ -337,6 +347,7 @@ def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
     # must carry that unit, which tells it from the dependencies it carries.
     parts = branch.split("/")
     branch_unit = parts[2] if len(parts) == 3 and parts[0] == "unit" else None
+    branch_registry = registry_at(ctx, branch)
     return discover_unit(
         ctx.registry,
         changed,
@@ -345,6 +356,10 @@ def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
         branch_unit,
         read_base_plan=reader(fork),
         stacked_on=lambda unit: stacked_on(ctx, unit),
+        moved_plans=moved_plan_paths(
+            ctx.registry, branch_registry, changed, reader(branch), reader(main)
+        ),
+        renamed_roots=renamed_owner_roots(ctx.registry, branch_registry),
     )
 
 

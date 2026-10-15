@@ -529,6 +529,213 @@ class LandingFunctions(unittest.TestCase):
         self.assertIn(f"{library_plan} is no longer under active/ on origin/main", message)
         self.assertNotIn("has not closed LIB-B", message)
 
+    def test_moved_plan_paths_pairs_only_unchanged_moves_of_a_renamed_halted_owner(self) -> None:
+        main_registry = {"projects": [{"id": "app", "active_plans": "app/docs/plans/active"}]}
+        renamed = {
+            "id": "app-qt",
+            "history_owner": "app",
+            "halted": "2026-09-27",
+            "active_plans": "app-qt/docs/plans/active",
+        }
+        branch_registry = {
+            "projects": [renamed, {"id": "app", "active_plans": "app/docs/plans/active"}]
+        }
+        moved, edited, tracked = (
+            f"docs/plans/active/2026-08-20-{name}.md" for name in ("carriers", "edited", "tracked")
+        )
+        main = {
+            f"app/{moved}": "carriers\n",
+            f"app/{edited}": "edited\n",
+            f"app/{tracked}": "tracked\n",
+            f"app-qt/{tracked}": "tracked\n",
+            "app/docs/plans/active/README.md": "readme\n",
+        }
+        branch = {
+            f"app-qt/{moved}": "carriers\n",
+            f"app-qt/{edited}": "edited by the branch\n",
+            f"app-qt/{tracked}": "tracked\n",
+            "app-qt/docs/plans/active/README.md": "readme\n",
+        }
+        changed = set(main) | set(branch) | {"app/src/main.rs"}
+        self.assertEqual(
+            landing.renamed_owner_roots(main_registry, branch_registry),
+            {"app/docs/plans/active": "app-qt/docs/plans/active"},
+        )
+        self.assertEqual(
+            landing.moved_plan_paths(main_registry, branch_registry, changed, branch.get, main.get),
+            {f"app/{moved}"},
+        )
+        # Without `halted`, or without a former owner on main, nothing moved.
+        for case, owner in {
+            "not halted": {key: value for key, value in renamed.items() if key != "halted"},
+            "unknown former owner": dict(renamed, history_owner="other"),
+            "former owner renamed before": renamed,
+        }.items():
+            with self.subTest(case=case):
+                former = dict(main_registry["projects"][0])
+                if case == "former owner renamed before":
+                    former["history_owner"] = "older"
+                self.assertEqual(
+                    landing.moved_plan_paths(
+                        {"projects": [former]}, {"projects": [owner]}, changed, branch.get, main.get
+                    ),
+                    set(),
+                )
+        self.assertEqual(
+            landing.moved_plan_paths(main_registry, main_registry, changed, branch.get, main.get),
+            set(),
+        )
+
+    def test_discover_unit_leaves_out_the_plans_a_renamed_owner_moved(self) -> None:
+        moved = "lib/docs/plans/active/2026-08-20-carriers.md"
+        own = ledger_row("FX-B", "active", evidence="[evidence](../../evidence/2026-09-25-fx-b.md)")
+        branch = {PLAN: plan_text(own)}
+        main = {PLAN: plan_text(ledger_row("FX-B", "planned")), moved: plan_text()}
+        new_path = "lib-qt/docs/plans/active/2026-08-20-carriers.md"
+        changed = {PLAN, moved, new_path, "app/src/main.rs"}
+
+        with self.assertRaises(landing.LandingStop) as raised:
+            landing.discover_unit(REGISTRY, changed, branch.get, main.get, "FX-B")
+        self.assertEqual(str(raised.exception), f"the branch deletes its plan {moved}")
+        unit = landing.discover_unit(
+            REGISTRY, changed, branch.get, main.get, "FX-B", moved_plans={moved}
+        )
+        self.assertEqual((unit.unit, unit.plan_path, unit.settled_plans), ("FX-B", PLAN, ()))
+
+    def test_discover_unit_sets_aside_a_new_plan_without_open_rows(self) -> None:
+        new_plan = "lib/docs/plans/active/2026-10-14-island.md"
+        own = ledger_row("FX-B", "active", evidence="[evidence](../../evidence/2026-09-25-fx-b.md)")
+        planned_only = plan_text(
+            ledger_row("LIB-B", "planned", prefix="`lib:`"),
+            ledger_row("LIB-D", "planned", prefix="`lib:`"),
+        )
+        main = {PLAN: plan_text(ledger_row("FX-B", "planned"))}
+        changed = {PLAN, new_plan, "lib/src/lib.rs"}
+        roots = {"app/docs/plans/active": "app-qt/docs/plans/active"}
+
+        unit = landing.discover_unit(
+            REGISTRY,
+            changed,
+            {PLAN: plan_text(own), new_plan: planned_only}.get,
+            main.get,
+            "FX-B",
+            renamed_roots=roots,
+        )
+        self.assertEqual(
+            (unit.unit, unit.plan_path, unit.settled_plans), ("FX-B", PLAN, (new_plan,))
+        )
+        # The rule is dormant without a renamed halted owner, and a new plan
+        # with an open row or with a `done` row the seal has not closed is a
+        # candidate either way; one without a ledger stops as before.
+        found_two = f"exactly one active plan; found 2: {PLAN}, {new_plan}"
+        cases = {
+            "no renamed owner": (planned_only, {}, found_two),
+            "open row": (
+                plan_text(ledger_row("LIB-B", "active", prefix="`lib:`")), roots, found_two
+            ),
+            "done without an inventory link": (
+                plan_text(ledger_row("LIB-B", "done", prefix="`lib:`", diffstat="—")),
+                roots,
+                found_two,
+            ),
+            "no ledger": (
+                "# A plan without a ledger\n",
+                roots,
+                f"{new_plan} has no single `Change and commit ledger` table",
+            ),
+        }
+        for case, (text, renamed_roots, message) in cases.items():
+            with self.subTest(case=case):
+                with self.assertRaises(landing.LandingStop) as raised:
+                    landing.discover_unit(
+                        REGISTRY,
+                        changed,
+                        {PLAN: plan_text(own), new_plan: text}.get,
+                        main.get,
+                        "FX-B",
+                        renamed_roots=renamed_roots,
+                    )
+                self.assertIn(message, str(raised.exception))
+        # A plan the fork point had and main lacks was archived on main, which
+        # the stop still names.
+        with self.assertRaises(landing.LandingStop) as raised:
+            landing.discover_unit(
+                REGISTRY,
+                changed,
+                {PLAN: plan_text(own), new_plan: planned_only}.get,
+                main.get,
+                "FX-B",
+                read_base_plan={new_plan: planned_only}.get,
+                renamed_roots=roots,
+            )
+        self.assertIn(
+            f"{new_plan} is no longer under active/ on origin/main", str(raised.exception)
+        )
+
+    def test_discover_unit_sets_aside_a_plan_that_only_follows_a_renamed_owner(self) -> None:
+        library_plan = "lib/docs/plans/active/2026-09-25-lib.md"
+        roots = {"app/docs/plans/active": "app-qt/docs/plans/active"}
+        own = ledger_row("FX-B", "active", evidence="[evidence](../../evidence/2026-09-25-fx-b.md)")
+        old_link = ledger_row(
+            "LIB-K", "active", prefix="`lib:`", evidence="[k](../../../../app/docs/evidence/k.md)"
+        )
+        new_link = ledger_row(
+            "LIB-K",
+            "active",
+            prefix="`lib:`",
+            evidence="[k](../../../../app-qt/docs/evidence/k.md)",
+        )
+        main = {PLAN: plan_text(ledger_row("FX-B", "planned")), library_plan: plan_text(old_link)}
+        branch = {PLAN: plan_text(own), library_plan: plan_text(new_link)}
+        changed = {PLAN, library_plan, "app/src/main.rs"}
+
+        followed = landing.follow_renamed_links(plan_text(old_link), library_plan, roots)
+        self.assertEqual(
+            followed, landing.follow_renamed_links(plan_text(new_link), library_plan, roots)
+        )
+        self.assertIn("](app-qt/docs/evidence/k.md)", followed)
+        self.assertEqual(
+            landing.follow_renamed_links(plan_text(old_link), library_plan, {}), plan_text(old_link)
+        )
+        # A target that is a prefix of another link's target rewrites only
+        # its own link.
+        prefixed = "[d](../../../../app/docs) and [o](../../../../app/docs-other/x.md)\n"
+        self.assertEqual(
+            landing.follow_renamed_links(prefixed, library_plan, roots),
+            "[d](app-qt/docs) and [o](../../../../app/docs-other/x.md)\n",
+        )
+        unit = landing.discover_unit(
+            REGISTRY, changed, branch.get, main.get, "FX-B", renamed_roots=roots
+        )
+        self.assertEqual(
+            (unit.unit, unit.plan_path, unit.settled_plans), ("FX-B", PLAN, (library_plan,))
+        )
+        # Without a renamed owner the edited row of LIB-K is the branch's.
+        with self.assertRaises(landing.LandingStop) as raised:
+            landing.discover_unit(REGISTRY, changed, branch.get, main.get, "FX-B")
+        self.assertIn("exactly one active plan; found 2", str(raised.exception))
+        self.assertIn("origin/main has not closed LIB-K", str(raised.exception))
+        # Any other difference keeps the plan a candidate: edited prose, or
+        # the row's status changed along with its link.
+        closed_link = ledger_row(
+            "LIB-K",
+            "done",
+            prefix="`lib:`",
+            diffstat="—",
+            evidence="[k](../../../../app-qt/docs/evidence/k.md)",
+        )
+        for case, text in {
+            "prose edit": plan_text(new_link, prose="Edited by the branch."),
+            "status change with the retarget": plan_text(closed_link),
+        }.items():
+            with self.subTest(case=case):
+                edited = dict(branch, **{library_plan: text})
+                with self.assertRaises(landing.LandingStop) as raised:
+                    landing.discover_unit(
+                        REGISTRY, changed, edited.get, main.get, "FX-B", renamed_roots=roots
+                    )
+                self.assertIn("exactly one active plan; found 2", str(raised.exception))
+
     def test_merge_settled_plan_takes_main_or_stops(self) -> None:
         path = "lib/docs/plans/active/2026-09-25-lib.md"
         planned = ledger_row("LIB-A", "planned", prefix="`lib:`")

@@ -136,6 +136,18 @@ a [stacked branch](#stacked-branches) land:
   (`done` with an inventory link) is set aside while another open row
   remains.
 
+A plan that a renamed halted owner (`history_owner` and `halted` in the
+branch's registry, as `check-staged-units.py` pairs the moves) moves
+byte-identically from its old `active_plans` directory to the new one is not
+a plan the branch changes: its old path is left out before the deletion stop
+(`moved_plan_paths`). While the branch renames such an owner, and only then,
+a plan the branch adds, which neither `origin/main` nor the fork point has,
+with no open row is set aside as documentation the rename delivers (the new
+project's plan with only `planned` rows), and so is a plan that differs from
+`origin/main`'s only in links that follow the renamed owner's `docs/` tree;
+both are set aside while another changed plan remains and count as settled
+plans afterwards.
+
 The row of the unit a branch `unit/<project>/<unit>` is named after is never
 set aside: when `origin/main` closed it, in any changed plan, it is the unit,
 and `preflight` then refuses it as landed. The unit found must be the one

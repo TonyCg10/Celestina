@@ -9,7 +9,7 @@ project_registry.py; nothing here restates their rules.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import asdict, dataclass, fields
 import hashlib
 import json
@@ -85,8 +85,10 @@ class UnitRef:
     unit: str
     summary: str
     evidence_path: str | None
-    # Other active plans the branch changes that hold only rows origin/main
-    # settles: the plans of the units a stacked branch depends on.
+    # Other active plans the branch changes that discover_unit set aside: the
+    # plans of the units a stacked branch depends on, which hold only rows
+    # origin/main settles; a plan main lacks with no open row; and a plan that
+    # only follows links into a renamed halted owner's tree.
     settled_plans: tuple[str, ...] = ()
 
 
@@ -259,6 +261,129 @@ def is_active_plan(registry: Mapping[str, object], path: str) -> bool:
     )
 
 
+def renamed_owner_roots(
+    main_registry: Mapping[str, object], branch_registry: Mapping[str, object]
+) -> dict[str, str]:
+    """{former owner's `active_plans`: renamed owner's} for each halted owner the branch renames.
+
+    A branch owner that declares `history_owner` and `halted` carries the
+    history of the origin/main owner of that id with its tree
+    (check-staged-units.py `renamed_owner_moves`). The pairing holds only in
+    the commit that renames the owner: the branch owner is absent on main, the
+    main owner declares no `history_owner` itself, and the two plan
+    directories differ. Empty for a branch that renames nothing.
+    """
+    main_owners = {
+        str(owner.get("id")): owner for owner in owner_tables(main_registry) if "id" in owner
+    }
+    roots: dict[str, str] = {}
+    for owner in owner_tables(branch_registry):
+        former = owner.get("history_owner")
+        if not isinstance(former, str) or "halted" not in owner or owner.get("id") in main_owners:
+            continue
+        main_owner = main_owners.get(former)
+        if main_owner is None or main_owner.get("history_owner") is not None:
+            continue
+        old_root, new_root = main_owner.get("active_plans"), owner.get("active_plans")
+        if isinstance(old_root, str) and isinstance(new_root, str) and old_root != new_root:
+            roots[old_root] = new_root
+    return roots
+
+
+def moved_plan_paths(
+    main_registry: Mapping[str, object],
+    branch_registry: Mapping[str, object],
+    changed_paths: Collection[str],
+    read_branch: Callable[[str], str | None],
+    read_main: Callable[[str], str | None],
+) -> set[str]:
+    """The old-path plans a renamed halted owner moved unchanged: deletions that are moves.
+
+    For each root pair of `renamed_owner_roots`, a changed plan file under the
+    former `active_plans` directory that the branch lacks, whose text on main
+    is the text the branch holds at the same place under the new directory,
+    where main has nothing, moved with the owner's tree: it is not a plan the
+    branch changes. A plan whose copy differs, or whose copy main already
+    tracks, pairs with nothing.
+    """
+    moved: set[str] = set()
+    for old_root, new_root in renamed_owner_roots(main_registry, branch_registry).items():
+        for path in sorted(changed_paths):
+            if not is_plan_file(path, old_root) or read_branch(path) is not None:
+                continue
+            new_path = new_root + path[len(old_root):]
+            if new_path not in changed_paths or read_main(new_path) is not None:
+                continue
+            original = read_main(path)
+            if original is not None and read_branch(new_path) == original:
+                moved.add(path)
+    return moved
+
+
+def follow_renamed_links(text: str, plan_path: str, renamed_roots: Mapping[str, str]) -> str:
+    """`text` with each inline link into a renamed halted owner's `docs/` at its new path.
+
+    Each pair of `renamed_roots` names the owner's old and new `active_plans`
+    directories, whose `docs/` roots `owner_docs_root` derives the same way. A
+    link target that resolves under the old root is read under the new one;
+    one already under the new root is written in the same form. Other links
+    and all other text are untouched, so two texts that differ only in where
+    such links point compare equal.
+    """
+    directory = posixpath.dirname(plan_path)
+    roots = [
+        (posixpath.dirname(posixpath.dirname(old)), posixpath.dirname(posixpath.dirname(new)))
+        for old, new in renamed_roots.items()
+    ]
+    rewritten: dict[int, dict[str, str]] = {}
+    for line_number, target in extract_inline_links(text):
+        resolved = posixpath.normpath(posixpath.join(directory, target))
+        for old_docs, new_docs in roots:
+            if not old_docs or not new_docs:
+                continue
+            if resolved == old_docs or resolved.startswith(old_docs + "/"):
+                rewritten.setdefault(line_number, {})[target] = new_docs + resolved[len(old_docs):]
+            elif resolved == new_docs or resolved.startswith(new_docs + "/"):
+                rewritten.setdefault(line_number, {})[target] = resolved
+    if not rewritten:
+        return text
+    lines = text.splitlines(keepends=True)
+    for line_number, targets in rewritten.items():
+        line = lines[line_number - 1]
+        for target, new_target in targets.items():
+            # Anchored on the closing delimiter, so a target that is a prefix
+            # of another link's target rewrites only its own link.
+            line = line.replace(f"](<{target}>)", f"](<{new_target}>)").replace(
+                f"]({target})", f"]({new_target})"
+            )
+        lines[line_number - 1] = line
+    return "".join(lines)
+
+
+def only_follows_renamed_links(
+    main_text: str | None, branch_text: str, plan_path: str, renamed_roots: Mapping[str, str]
+) -> bool:
+    """Whether the branch's plan differs from main's only in links into a renamed owner's tree.
+
+    Such a plan (another owner's, linking a record the rename moved) changes no
+    row of its own, and is set aside while another changed plan remains. False
+    without a renamed owner, for a plan main lacks, and for an unchanged plan.
+    """
+    if not renamed_roots or main_text is None or main_text == branch_text:
+        return False
+    return follow_renamed_links(main_text, plan_path, renamed_roots) == follow_renamed_links(
+        branch_text, plan_path, renamed_roots
+    )
+
+
+def has_open_row(text: str, label: str) -> bool:
+    """Whether the plan has an open row on the branch; a plan without a ledger counts as open."""
+    try:
+        return bool(open_units(text, label))
+    except LandingStop:
+        return True
+
+
 def discover_unit(
     registry: Mapping[str, object],
     changed_paths: set[str],
@@ -268,16 +393,26 @@ def discover_unit(
     *,
     read_base_plan: Callable[[str], str | None] | None = None,
     stacked_on: Callable[[str], bool] | None = None,
+    moved_plans: Collection[str] = (),
+    renamed_roots: Mapping[str, str] | None = None,
 ) -> UnitRef:
     """Find the one open ledger row of the one active plan a branch changes.
 
     Plan texts come from `read_plan` (the branch), `read_main_plan`
     (origin/main) and `read_base_plan` (the fork point), so the caller decides
-    which revisions are read. A changed plan that `plan_settled` finds holds
+    which revisions are read. `moved_plans` are the old-path plans a renamed
+    halted owner moved unchanged (`moved_plan_paths`): the branch deletes them
+    only as paths, so they are not its plans and are left out before the
+    deletion stop. A changed plan that `plan_settled` finds holds
     nothing main lacks belongs to units that already landed, such as the
     dependencies of a stacked branch, and is set aside while another plan
-    remains. In the unit's plan, a row whose line equals main's is not the
-    branch's (main's own open rows, such as the author's in-flight work), and
+    remains; so are, only while `renamed_roots` (from `renamed_owner_roots`)
+    names a renamed halted owner, a plan that main and the fork point lack and
+    whose branch text has no open row, which the rename delivers as
+    documentation (the new project's plan with only `planned` rows), and a
+    plan that differs from main's only in links that follow the renamed
+    owner's tree (`only_follows_renamed_links`). In the unit's plan, a row
+    whose line equals main's is not the branch's (main's own open rows, such as the author's in-flight work), and
     a row open on the branch that main closed is set aside the same way, except the row of `branch_unit`, the unit the
     branch is named after: when main closed it, in any plan, it is the unit,
     which preflight then refuses as landed, and the unit found must be it.
@@ -287,12 +422,18 @@ def discover_unit(
     """
     read_main = read_main_plan or (lambda _path: None)
     read_base = read_base_plan or (lambda _path: None)
+    moved = set(moved_plans)
+    renamed = dict(renamed_roots or {})
     plans: list[tuple[str, Mapping[str, object]]] = []
     for owner in owner_tables(registry):
         directory = owner.get("active_plans")
         if not isinstance(directory, str):
             continue
-        plans.extend((path, owner) for path in sorted(changed_paths) if is_plan_file(path, directory))
+        plans.extend(
+            (path, owner)
+            for path in sorted(changed_paths)
+            if is_plan_file(path, directory) and path not in moved
+        )
     texts: dict[str, str] = {}
     for path, _owner in plans:
         text = read_plan(path)
@@ -312,10 +453,28 @@ def discover_unit(
         for path, owner in own_plans
         if branch_unit in closed_units(read_main(path), path)
     ]
+    # Set aside while another plan remains: the plans of landed units and,
+    # only while a halted owner is renamed, a new plan with no open row and a
+    # plan that only follows the renamed owner.
+    documentation = {
+        path
+        for path, _owner in plans
+        if renamed
+        and read_main(path) is None
+        and read_base(path) is None
+        and not has_open_row(texts[path], path)
+    }
+    retargeted = {
+        path
+        for path, _owner in plans
+        if only_follows_renamed_links(read_main(path), texts[path], path, renamed)
+    }
     unsettled = [
         (path, owner)
         for path, owner in plans
-        if not plan_settled(read_base(path), read_main(path), texts[path])
+        if path not in documentation
+        and path not in retargeted
+        and not plan_settled(read_base(path), read_main(path), texts[path])
     ]
     chosen = landed_own or unsettled or own_plans or plans
     if len(chosen) != 1:

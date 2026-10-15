@@ -31,6 +31,9 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
   language scanner migration against HEAD's rows; dormant until `CEL-1-A1`.
 - `CEL-1-A1` — the two guard rules, the halted-tree language rule, the rehearsal;
   stacked on `CEL-1-A0`, whose runner judges its scanner migration.
+- `CEL-1-A2` — the landing tool's rename awareness: the plans the rename moves
+  unchanged, the links that follow them, a new plan with no open row; dormant
+  until `CEL-1-A`.
 - `CEL-1-A` — the author's rename and registration.
 - `CEL-1-C` — `celestina-style/tokens.toml`, the generator, both outputs and the drift checks.
 
@@ -42,7 +45,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 
 ## Build order
 
-1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`.
+1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`.
 
 ## Implementation exit
 
@@ -56,5 +59,6 @@ and the shell reads `celestina-tokens`.
 |---|---|---|---|---|---|---|---|
 | CEL-1-A0 | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-1-A0.numstat.tsv) | 9 files, +359/-11 | Allow a language scanner migration through the pre-commit hook | [evidence](../../evidence/2026-10-15-scanner-migration-hook.md) | None |
 | CEL-1-A1 | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-1-A1.numstat.tsv) | 20 files, +1396/-93 | Add the history_owner alias to the version contract, inventory moves under a renamed halted owner, halted trees as history for the language scanner, and rehearse the shell rename | [evidence](../../evidence/2026-10-14-rename-rules.md) | None |
+| CEL-1-A2 | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-1-A2.numstat.tsv) | 8 files, +582/-11 | Allow the landing to accept a halted project's plans moved with its renamed tree and the links that follow them, and set aside a new plan with no open row | [evidence](../../evidence/2026-10-15-landing-renamed-owner.md) | None |
 | CEL-1-A | `suite:` | planned | `celestina-qt/` (moved), `celestina/` (new), `docs/projects.toml`, `AGENTS.md`, `docs/version-history.tsv`, the references of the evidence's list | — | Move the halted shell to celestina-qt and register the Rust shell | `docs/evidence/2026-10-14-shell-rename.md` | None |
 | CEL-1-C | `suite:` | planned | `celestina-style/tokens.toml`, `celestina-style/scripts/gen-tokens.py`, `celestina-style/CelestinaTokenData.qml`, `celestina-style/CelestinaTheme.qml`, `celestina-rs/crates/celestina-tokens`, both verifies, `docs/projects.toml`, `celestina/crates/celestina-paint/src/theme.rs` | — | Generate the style's tokens from one data file into QML and Rust under a drift check, and read them in the shell | `docs/evidence/2026-10-14-tokens-as-data.md` | None |

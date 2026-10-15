@@ -1,0 +1,23 @@
+# CEL-1-A2 exact change inventory
+
+Base revision	af3abd9683225fac35263a31cca67bf8995cce2f
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/evidence/2026-10-15-landing-renamed-owner.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-1-A2.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/superpowers/plans/2026-10-14-celestina-rust-shell.md
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	0	6acca8824539eeacfb18ba69ef4699993a7c26dbe8765a8691aa1893301996c6	docs/contracts/landing.md
+150	0	9296f34906c0751498b38a16d6f765805cc58cd2a041e9dffd1200649de0a284	docs/evidence/2026-10-15-landing-renamed-owner.md
+23	0	self	docs/inventories/2026-10-14-rust-shell/CEL-1-A2.numstat.tsv
+5	1	cf879ee848d7498b9aaacd4e1a08ed67d1f0ba0d8fe47c4c389ab4704b24ebbe	docs/plans/active/2026-10-14-rust-shell.md
+2	1	5e8776b4883c2dbba1a6ba079cb579b621f481b7495cc2dd23b3673e9eb1ac60	docs/superpowers/plans/2026-10-14-celestina-rust-shell.md
+16	1	d3ddadf888a228e33df79d1fad34517e1b759d0fc4a1f513d8c8b313da8b4618	scripts/land-unit.py
+167	8	a1401443a56ab0065955b16fe94d098fc6c58a7c5aa0bb8ad34f4224e6d73964	scripts/landing.py
+207	0	d7a0ac5bc4dca34386df72c29b7e4f078caee06ec2e2f9b3055d6250cee95645	scripts/test-land-unit.py
