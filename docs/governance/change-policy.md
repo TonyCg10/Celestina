@@ -147,7 +147,14 @@ inventory must use that base as direct parent and contain the whole unit.
 the author requests the landing; see [the landing contract](../contracts/landing.md).
 
 Tracked inventories are immutable. Never edit, move, rename, recalculate, or
-reuse one. A correction or later delivery gets a new unit and inventory.
+reuse one. A correction or later delivery gets a new unit and inventory. A
+halted project renamed through `history_owner` (see
+[the versioning contract](../contracts/versioning.md), "Renaming a project")
+moves its inventories and plans unchanged with its tree; in the commit that
+registers the renamed owner, the guard treats a deleted path and an added
+path with the same bytes under the two owners' inventory roots, or their
+active or archive plan directories, as one move, not as an edit or an
+archival.
 
 ## Multiple units and batches
 

@@ -198,10 +198,8 @@ def inventory_references(text: str, plan_path: str) -> set[str]:
     return references
 
 
-def registry_delivery_layouts(
-    root: Path,
-    revision: str,
-) -> dict[str, tuple[str, str, str]]:
+def registry_tables(root: Path, revision: str) -> dict:
+    """The raw `docs/projects.toml` tables of HEAD or INDEX."""
     if revision == "INDEX":
         raw = index_bytes(root, "docs/projects.toml")
     elif revision == "HEAD":
@@ -211,12 +209,29 @@ def registry_delivery_layouts(
     if raw is None:
         raise StagedUnitError(f"{revision}:docs/projects.toml: registry is missing")
     try:
-        registry = tomllib.loads(raw.decode("utf-8"))
+        return tomllib.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise StagedUnitError(
             f"{revision}:docs/projects.toml: invalid registry: {error}"
         ) from error
 
+
+def owner_delivery_roots(active_plans: str) -> dict[str, str]:
+    """The roots an owner's `active_plans` fixes: inventories, active and archived plans."""
+    active = normalized_repo_path(active_plans)
+    plans = posixpath.dirname(active)
+    return {
+        "inventories": posixpath.join(posixpath.dirname(plans), "inventories"),
+        "active": active,
+        "archive": posixpath.join(plans, "archive"),
+    }
+
+
+def registry_delivery_layouts(
+    root: Path,
+    revision: str,
+) -> dict[str, tuple[str, str, str]]:
+    registry = registry_tables(root, revision)
     suite = registry.get("suite")
     projects = registry.get("projects")
     if registry.get("schema_version") != 1:
@@ -246,19 +261,88 @@ def registry_delivery_layouts(
             raise StagedUnitError(
                 f"{revision}:docs/projects.toml owner {index} lacks id, prefix, or active plans"
             )
-        active = normalized_repo_path(active)
-        docs_root = posixpath.dirname(posixpath.dirname(active))
-        inventory_root = posixpath.join(docs_root, "inventories")
-        for plan_directory in (
-            active,
-            posixpath.join(posixpath.dirname(active), "archive"),
-        ):
+        roots = owner_delivery_roots(active)
+        inventory_root = roots["inventories"]
+        for plan_directory in (roots["active"], roots["archive"]):
             if plan_directory in layouts:
                 raise StagedUnitError(
                     f"plan directory registered by multiple owners: {plan_directory}"
                 )
             layouts[plan_directory] = (owner_id, prefix, inventory_root)
     return layouts
+
+
+def registry_owner_roots(
+    root: Path, revision: str
+) -> dict[str, tuple[str, str | None, bool]]:
+    """{owner id: (active plans, history_owner or None, halted)} for one registry revision."""
+    projects = registry_tables(root, revision).get("projects")
+    roots: dict[str, tuple[str, str | None, bool]] = {}
+    for owner in projects if isinstance(projects, list) else []:
+        if not isinstance(owner, dict):
+            continue
+        owner_id, active = owner.get("id"), owner.get("active_plans")
+        former = owner.get("history_owner")
+        if not isinstance(owner_id, str) or not isinstance(active, str):
+            continue
+        roots[owner_id] = (
+            active, former if isinstance(former, str) else None, "halted" in owner
+        )
+    return roots
+
+
+def renamed_owner_moves(root: Path, staged_paths: set[str]) -> dict[str, str]:
+    """Inventories and plans moved unchanged by a rename, {deleted HEAD path: added INDEX path}.
+
+    An INDEX owner that declares `history_owner` and `halted` carries the
+    HEAD owner's history with its tree: a `.numstat.tsv` under the old
+    inventory root, or a plan in the old active or archive directory, that the
+    index deletes and adds, in this batch and at a place HEAD lacks, under the
+    new owner with the bytes HEAD holds is one move, not an edit and not an
+    archival. A copy already committed at the destination pairs with nothing.
+    The pairing holds only in the commit that renames the owner: the INDEX
+    owner is absent at HEAD, and the HEAD owner it carries on declares no
+    `history_owner` itself. Once the rename is committed the old id may be
+    registered again as a live project, whose files never move into the
+    halted tree.
+    """
+    head = registry_owner_roots(root, "HEAD")
+    moves: dict[str, str] = {}
+    for owner, (new_active, former, halted) in registry_owner_roots(root, "INDEX").items():
+        if former is None or former not in head or not halted:
+            continue
+        if owner in head or head[former][1] is not None:
+            continue
+        old_roots = owner_delivery_roots(head[former][0])
+        new_roots = owner_delivery_roots(new_active)
+        for kind, old_root in old_roots.items():
+            new_root = new_roots[kind]
+            if old_root == new_root:
+                continue
+            for path in sorted(staged_paths):
+                if kind == "inventories":
+                    if not path.startswith(f"{old_root}/") or not path.endswith(".numstat.tsv"):
+                        continue
+                elif not is_plan(path, {old_root}):
+                    continue
+                if index_bytes(root, path) is not None or not path_exists_at_head(root, path):
+                    continue
+                new_path = new_root + path[len(old_root):]
+                if new_path not in staged_paths or path_exists_at_head(root, new_path):
+                    continue
+                if index_bytes(root, new_path) == git(root, "show", f"HEAD:{path}"):
+                    moves[path] = new_path
+    return moves
+
+
+def report_moves(moves: dict[str, str], quiet: bool) -> None:
+    if not moves or quiet:
+        return
+    inventories = sum(1 for path in moves if path.endswith(".numstat.tsv"))
+    print(
+        f"staged-unit: {inventories} inventory file(s) and {len(moves) - inventories} "
+        "plan(s) moved with their renamed owner"
+    )
 
 
 def delivery_layouts(root: Path) -> dict[str, tuple[str, str, str]]:
@@ -541,7 +625,12 @@ def validate_batch(
     layouts = delivery_layouts(root)
     plan_dirs = set(layouts)
     inventory_dirs = {layout[2] for layout in layouts.values()}
-    partially_staged = unstaged_new_inventory_references(root, staged_paths, plan_dirs)
+    # Both halves of a renamed owner's move stay in the batch and must be
+    # claimed by its inventory, but neither is a plan edit, an archival, nor a
+    # staged inventory of its own.
+    moves = renamed_owner_moves(root, staged_paths)
+    unmoved = staged_paths - set(moves) - set(moves.values())
+    partially_staged = unstaged_new_inventory_references(root, unmoved, plan_dirs)
     if partially_staged:
         rendered = "; ".join(
             f"{plan}: {', '.join(sorted(references))}"
@@ -551,9 +640,9 @@ def validate_batch(
             "host plan leaves done inventories outside the index: " + rendered
         )
 
-    new_references = newly_referenced_inventories(root, staged_paths, plan_dirs)
-    hosts = staged_inventory_hosts(root, staged_paths, plan_dirs)
-    ledger_records = staged_ledger_records(root, staged_paths, layouts)
+    new_references = newly_referenced_inventories(root, unmoved, plan_dirs)
+    hosts = staged_inventory_hosts(root, unmoved, plan_dirs)
+    ledger_records = staged_ledger_records(root, unmoved, layouts)
     noncanonical_references = sorted(
         reference
         for reference in hosts
@@ -579,12 +668,12 @@ def validate_batch(
     # merge carries that delivery, it does not close one of its own.
     all_staged_inventories = {
         path
-        for path in staged_paths
+        for path in unmoved
         if is_inventory(path, inventory_dirs) and not merged_in(root, path)
     }
     deleted_plans = sorted(
         path
-        for path in staged_paths
+        for path in unmoved
         if is_plan(path, plan_dirs)
         and index_bytes(root, path) is None
         and path_exists_at_head(root, path)
@@ -640,6 +729,7 @@ def validate_batch(
                 "deleted inventories require a destination inventory that claims "
                 "their path as deleted: " + ", ".join(sorted(deleted_inventories))
             )
+        report_moves(moves, quiet)
         if not quiet:
             print("staged-unit: no staged unit closure")
         return
@@ -729,6 +819,7 @@ def validate_batch(
                     f"staged SHA-256 mismatch for {path} in {source}: "
                     f"inventory {content}, index {digest}"
                 )
+    report_moves(moves, quiet)
     if not quiet:
         print(
             f"staged-unit: OK ({len(selected)} inventory file(s), "

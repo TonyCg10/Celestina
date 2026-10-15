@@ -242,7 +242,14 @@ class StaticAndSourceTests(unittest.TestCase):
         }
         self.assertTrue(expected, "the registry declares no versioned product")
         self.assertEqual(set(snapshot.versions), expected)
-        self.assertEqual({row.owner for row in snapshot.history}, expected)
+        # A renamed project's rows carry the name it had (`history_owner`);
+        # validate_snapshot has already proved every owner its own baseline.
+        carried_names = {
+            project.get("history_owner", project["id"])
+            for project in registry["projects"]
+            if project["id"] in expected
+        }
+        self.assertEqual({row.owner for row in snapshot.history}, carried_names)
 
     def test_semver_uses_exact_patch_minor_and_major_transitions(self) -> None:
         current = contract.SemVer.parse("0.5.4", "fixture")
@@ -749,6 +756,123 @@ class PublishedHistoryAuditTests(unittest.TestCase):
             )
             self.assertNotEqual(legacy.returncode, 0)
             self.assertIn("must declare a change kind", legacy.stderr)
+
+
+class RenameTests(unittest.TestCase):
+    """A project may change its registry id once, keeping its history rows."""
+
+    def renamed_fixture(self) -> TransitionFixture:
+        fixture = TransitionFixture()
+        beta = next(p for p in fixture.index_registry["projects"] if p["id"] == "beta")
+        beta["id"] = "beta-old"
+        beta["commit_prefix"] = "beta-old"
+        beta["history_owner"] = "beta"
+        beta["version_source"] = {
+            "kind": "cmake-project",
+            "path": "beta-old/CMakeLists.txt",
+            "project": "beta",
+        }
+        fixture.blobs["INDEX"].pop("beta/CMakeLists.txt")
+        fixture.stage("beta-old/CMakeLists.txt", cmake_project("beta", "2.3.4"))
+        fixture.changed_paths.update({"beta/CMakeLists.txt", "docs/projects.toml"})
+        return fixture
+
+    def new_beta(self, fixture: TransitionFixture) -> None:
+        fixture.index_registry["projects"].append(
+            {
+                "id": "beta",
+                "commit_prefix": "beta",
+                "version_source": {
+                    "kind": "cargo-package",
+                    "path": "beta/Cargo.toml",
+                    "package": "beta",
+                },
+                "component_commit_scopes": [],
+            }
+        )
+        fixture.stage("beta/Cargo.toml", cargo_package("beta", "0.1.0"))
+
+    def test_rename_passes_as_suite_maintenance_without_touching_the_history(self) -> None:
+        fixture = self.renamed_fixture()
+        fixture.validate("suite-maintenance", "maintenance", "Rename beta")
+        self.assertEqual(fixture.blobs["INDEX"][HISTORY_PATH], fixture.blobs["HEAD"][HISTORY_PATH])
+        model = contract.parse_registry(fixture.index_registry, "fixture")
+        self.assertEqual(model.owner_map()["beta-old"].history_owner, "beta")
+
+    def test_reusing_the_old_id_needs_a_baseline_after_the_old_chain(self) -> None:
+        fixture = self.renamed_fixture()
+        self.new_beta(fixture)
+        with self.assertRaises(contract.VersionHistoryError):
+            fixture.validate("suite-maintenance", "maintenance", "Rename beta")
+        fixture.append_history("beta", contract.SemVer(0, 1, 0), "baseline", "R-1", "Adopt the new beta")
+        fixture.validate("suite-maintenance", "maintenance", "Rename beta")
+        snapshot = contract.validate_snapshot(
+            contract.parse_registry(fixture.index_registry, "fixture"), "INDEX", fixture.read_blob
+        )
+        self.assertEqual(snapshot.versions["beta-old"], contract.SemVer(2, 3, 4))
+        self.assertEqual(snapshot.versions["beta"], contract.SemVer(0, 1, 0))
+
+    def test_a_later_delivery_of_the_new_owner_chains_from_its_own_baseline(self) -> None:
+        fixture = self.renamed_fixture()
+        self.new_beta(fixture)
+        fixture.append_history("beta", contract.SemVer(0, 1, 0), "baseline", "R-1", "Adopt the new beta")
+        fixture.validate("suite-maintenance", "maintenance", "Rename beta")
+        fixture.head_registry = deepcopy(fixture.index_registry)
+        fixture.blobs["HEAD"] = dict(fixture.blobs["INDEX"])
+        fixture.changed_paths = set()
+        fixture.deliver("beta", "milestone", "Add the first checkpoint", unit="B-1")
+        fixture.validate("beta-milestone", "milestone", "Add the first checkpoint")
+
+    def test_rename_rejections(self) -> None:
+        with self.subTest(case="a rename that bumps"):
+            fixture = self.renamed_fixture()
+            fixture.stage("beta-old/CMakeLists.txt", cmake_project("beta", "2.4.0"))
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("suite-maintenance", "maintenance", "Rename beta")
+        with self.subTest(case="a rename under a product prefix"):
+            fixture = self.renamed_fixture()
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("alpha-maintenance", "maintenance", "Rename beta")
+        with self.subTest(case="an alias with no rows behind it"):
+            fixture = self.renamed_fixture()
+            beta_old = next(p for p in fixture.index_registry["projects"] if p["id"] == "beta-old")
+            beta_old["history_owner"] = "gamma"
+            model = contract.parse_registry(fixture.index_registry, "fixture")
+            with self.assertRaises(contract.VersionHistoryError):
+                contract.validate_snapshot(model, "INDEX", fixture.read_blob)
+        with self.subTest(case="an alias that no row carries beside the owner's own rows"):
+            fixture = TransitionFixture()
+            fixture.index_registry["projects"].append(
+                {
+                    "id": "delta",
+                    "commit_prefix": "delta",
+                    "history_owner": "ghost",
+                    "version_source": {
+                        "kind": "cargo-package",
+                        "path": "delta/Cargo.toml",
+                        "package": "delta",
+                    },
+                    "component_commit_scopes": [],
+                }
+            )
+            fixture.stage("delta/Cargo.toml", cargo_package("delta", "0.1.0"))
+            fixture.append_history("delta", contract.SemVer(0, 1, 0), "baseline", "D-1", "Adopt delta")
+            fixture.changed_paths.add("docs/projects.toml")
+            model = contract.parse_registry(fixture.index_registry, "fixture")
+            with self.assertRaises(contract.VersionHistoryError):
+                contract.validate_snapshot(model, "INDEX", fixture.read_blob)
+            with self.assertRaises(contract.VersionHistoryError):
+                fixture.validate("suite-maintenance", "maintenance", "Add delta")
+        with self.subTest(case="two projects naming one history owner"):
+            fixture = self.renamed_fixture()
+            fixture.index_registry["projects"][0]["history_owner"] = "beta"
+            with self.assertRaises(contract.VersionRegistryError):
+                contract.parse_registry(fixture.index_registry, "fixture")
+        with self.subTest(case="an alias naming itself"):
+            fixture = self.renamed_fixture()
+            fixture.index_registry["projects"][0]["history_owner"] = "alpha"
+            with self.assertRaises(contract.VersionRegistryError):
+                contract.parse_registry(fixture.index_registry, "fixture")
 
 
 if __name__ == "__main__":

@@ -326,6 +326,9 @@ class DocumentationContract:
         self.inventory_group_paths: dict[str, set[str]] = {}
         self.owner_plan_directories: dict[str, tuple[str, str]] = {}
         self.owner_inventory_roots: dict[str, str] = {}
+        # Halted owners registered under another id before (`history_owner`):
+        # their plans and inventories are history written under that identity.
+        self.renamed_halted_owners: set[str] = set()
         self.owner_plan_ids: dict[tuple[str, str], Path] = {}
         self.historical_plan_inventories: dict[
             str, list[tuple[str, Path, str, dict[str, str]]]
@@ -672,6 +675,9 @@ class DocumentationContract:
             if project_root is not None and not project_root.is_dir():
                 self.error(project_root, "registered project directory does not exist")
             owner_id = project_id if isinstance(project_id, str) and project_id else label
+            history_owner = project.get("history_owner")
+            if "halted" in project and isinstance(history_owner, str) and history_owner:
+                self.renamed_halted_owners.add(owner_id)
             if project_root is not None:
                 self.owner_evidence_directories[owner_id] = (
                     project_root / "docs" / "evidence"
@@ -1440,7 +1446,12 @@ class DocumentationContract:
                     self.error(path, f"active plan requires `{field.title()}` metadata")
             scope = fields.get("scope", "")
             expected_scope = owner_id
-            if not scope_matches_owner(scope, expected_scope, str(owner.get("name", ""))):
+            # A renamed halted owner's plans name the identity they were
+            # written under; the move kept their bytes (check-staged-units.py).
+            history = owner_id in self.renamed_halted_owners
+            if not history and not scope_matches_owner(
+                scope, expected_scope, str(owner.get("name", ""))
+            ):
                 self.error(path, f"Scope does not match active directory for `{expected_scope}`")
 
             checkpoint = checkpoint_value(fields.get("implementation checkpoint", ""))
@@ -1466,7 +1477,7 @@ class DocumentationContract:
                 if required not in normalized:
                     self.error(path, f"active plan requires heading `{required.title()}`")
             ledger_line = normalized.get("change and commit ledger")
-            if ledger_line is not None:
+            if ledger_line is not None and not history:
                 self.check_ledger(path, text, ledger_line, owner_id)
 
     def check_archived_plan_directory(
@@ -1505,7 +1516,8 @@ class DocumentationContract:
             ):
                 if not fields.get(field):
                     self.error(path, f"archived plan requires `{field.title()}` metadata")
-            if not scope_matches_owner(
+            history = owner_id in self.renamed_halted_owners
+            if not history and not scope_matches_owner(
                 fields.get("scope", ""), owner_id, str(owner.get("name", ""))
             ):
                 self.error(path, f"Scope does not match file owner `{owner_id}`")
@@ -1523,7 +1535,7 @@ class DocumentationContract:
                 if required not in normalized:
                     self.error(path, f"archived plan requires heading `{required.title()}`")
             ledger_line = normalized.get("change and commit ledger")
-            if ledger_line is not None:
+            if ledger_line is not None and not history:
                 self.check_ledger(path, text, ledger_line, owner_id, require_done=True)
                 self.pending_archive_transitions.append((path, owner_id))
             if re.search(r"PENDING FINAL|pending final split|0 files, \+0/-0", text, re.IGNORECASE):

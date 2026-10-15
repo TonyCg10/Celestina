@@ -1,0 +1,69 @@
+schema_version = 1
+
+[suite]
+id = "suite"
+name = "Fixture suite"
+root = "."
+commit_prefix = "suite"
+agents = "AGENTS.md"
+readme = "README.md"
+status = "STATUS.md"
+roadmap = "ROADMAP.md"
+validation = "VALIDATION.md"
+active_plans = "docs/plans/active"
+allow_all_commit_paths = true
+shared_rules = ["CONTRIBUTING.md", "docs/standards/fixture.md"]
+
+[[projects]]
+id = "app-qt"
+name = "App (halted)"
+path = "app-qt"
+kind = "fixture"
+commit_prefix = "app-qt"
+# Registered as `app` until the move; its plans and inventories carry that
+# identity in their bytes.
+history_owner = "app"
+halted = "2026-09-27"
+agents = "app-qt/AGENTS.md"
+readme = "app-qt/README.md"
+status = "app-qt/STATUS.md"
+roadmap = "app-qt/ROADMAP.md"
+validation = "app-qt/VALIDATION.md"
+active_plans = "app-qt/docs/plans/active"
+context_documents = ["app-qt/docs/context.md"]
+source_roots = ["app-qt/src", "core/crates/app-core"]
+commit_roots = ["app-qt/", "core/crates/app-core/"]
+production_role = "desktop-application"
+deployable = true
+build_script = "app-qt/scripts/build-production.sh"
+verify_script = "app-qt/scripts/verify-production.sh"
+status_script = "app-qt/scripts/status-production.sh"
+deploy_script = "app-qt/scripts/deploy-production.sh"
+complete_script = "app-qt/scripts/complete-production.sh"
+artifact_manifest = "app-qt/target/production-artifact.toml"
+artifact_paths = ["app-qt/target/release/app"]
+component_commit_scopes = [
+  { prefix = "app-core", roots = ["core/crates/app-core/"] },
+]
+
+[[projects]]
+id = "core"
+name = "Core workspace"
+path = "core"
+kind = "rust-workspace"
+commit_prefix = "core"
+agents = "core/AGENTS.md"
+readme = "core/README.md"
+status = "core/STATUS.md"
+roadmap = "core/ROADMAP.md"
+validation = "core/VALIDATION.md"
+context_documents = []
+source_roots = ["core/crates"]
+commit_roots = ["core/"]
+production_role = "rust-workspace"
+deployable = false
+build_script = "core/scripts/build-production.sh"
+verify_script = "core/scripts/verify-production.sh"
+status_script = "core/scripts/status-production.sh"
+artifact_manifest = "core/target/production-artifact.toml"
+artifact_paths = ["core/target/release"]

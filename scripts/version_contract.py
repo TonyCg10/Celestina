@@ -102,6 +102,7 @@ class OwnerConfig:
     versioned: bool
     source: SourceSpec | None = None
     mirrors: tuple[SourceSpec, ...] = ()
+    history_owner: str = ""
 
     @property
     def sources(self) -> tuple[SourceSpec, ...]:
@@ -236,6 +237,7 @@ def parse_registry(registry: Mapping[str, object], label: str = "registry") -> R
     owners: list[OwnerConfig] = []
     component_prefixes: set[str] = set()
     seen_ids: set[str] = set()
+    seen_aliases: set[str] = set()
     seen_prefixes: set[str] = {suite_prefix}
     for index, raw_project in enumerate(raw_projects):
         project_label = f"{label}.projects[{index}]"
@@ -251,6 +253,15 @@ def parse_registry(registry: Mapping[str, object], label: str = "registry") -> R
             raise VersionRegistryError(f'{label} repeats commit prefix "{prefix}"')
         seen_ids.add(owner)
         seen_prefixes.add(prefix)
+        raw_alias = raw_project.get("history_owner")
+        history_owner = owner
+        if raw_alias is not None:
+            history_owner = _required_string(raw_alias, f"{project_label}.history_owner")
+            if history_owner == owner:
+                raise VersionRegistryError(f"{project_label}.history_owner names itself")
+            if history_owner in seen_aliases:
+                raise VersionRegistryError(f'{label} repeats history_owner "{history_owner}"')
+            seen_aliases.add(history_owner)
 
         raw_versioned = raw_project.get("versioned")
         if raw_versioned is not None and not isinstance(raw_versioned, bool):
@@ -288,7 +299,7 @@ def parse_registry(registry: Mapping[str, object], label: str = "registry") -> R
             }
             if len(identities) != 1 + len(mirrors):
                 raise VersionRegistryError(f"{project_label} repeats a version source")
-        owners.append(OwnerConfig(owner, prefix, versioned, source, mirrors))
+        owners.append(OwnerConfig(owner, prefix, versioned, source, mirrors, history_owner))
 
         raw_components = raw_project.get("component_commit_scopes", [])
         if not isinstance(raw_components, Sequence) or isinstance(
@@ -453,14 +464,33 @@ def _validate_history(
     label: str,
 ) -> None:
     owners = model.owner_map()
+    alias = {c.history_owner: c.owner for c in model.owners if c.history_owner != c.owner}
     grouped: dict[str, list[HistoryRow]] = defaultdict(list)
+    carried: set[str] = set()
     for row in rows:
-        config = owners.get(row.owner)
+        owner_id = row.owner
+        target = alias.get(row.owner)
+        if target is not None:
+            if row.kind == "baseline" and grouped.get(target):
+                # The aliased chain already has its baseline: a second
+                # baseline under this name starts the project registered
+                # under the name itself.
+                del alias[row.owner]
+            else:
+                owner_id = target
+                carried.add(row.owner)
+        config = owners.get(owner_id)
         if config is None:
             raise VersionHistoryError(f'{label}: history names unknown owner "{row.owner}"')
         if not config.versioned:
             raise VersionHistoryError(f'{label}: unversioned owner "{row.owner}" has history')
-        grouped[row.owner].append(row)
+        grouped[owner_id].append(row)
+    for config in model.owners:
+        if config.history_owner != config.owner and config.history_owner not in carried:
+            raise VersionHistoryError(
+                f'{label}: "{config.owner}" declares history_owner "{config.history_owner}" '
+                "but no history row carries that name"
+            )
 
     for owner in model.owners:
         if not owner.versioned:
@@ -633,9 +663,36 @@ def _validate_policy_addition(
         )
     head_owners = head.owner_map()
     index_owners = index.owner_map()
+    # A project renames itself by declaring the head id it carried as its
+    # history_owner; the renamed config keeps the old chain and version.
+    successors = {
+        config.history_owner: config
+        for config in index.owners
+        if config.history_owner != config.owner and config.history_owner in head_owners
+        and config.owner not in head_owners
+    }
     adopted: list[OwnerConfig] = []
+    renamed: dict[str, OwnerConfig] = {}
     for owner, config in head_owners.items():
         after_config = index_owners.get(owner)
+        successor = successors.get(owner)
+        if successor is not None:
+            same_shape = (
+                successor.versioned == config.versioned
+                and [(s.kind, s.name) for s in successor.sources]
+                == [(s.kind, s.name) for s in config.sources]
+                and (not config.versioned
+                     or before.versions.get(owner) == after.versions.get(successor.owner))
+            )
+            if not same_shape:
+                raise VersionRegistryError(
+                    f'suite-maintenance rename "{owner}" -> "{successor.owner}" '
+                    "must keep the version and the source shape"
+                )
+            renamed[owner] = successor
+            if after_config is not None:
+                adopted.append(after_config)  # the old id is a new owner now
+            continue
         if after_config == config:
             continue
         # An unversioned owner may adopt a version: the only change is the
@@ -651,8 +708,11 @@ def _validate_policy_addition(
                 f'suite-maintenance cannot change or remove existing owner config "{owner}"'
             )
         adopted.append(after_config)
-    added = [owner for owner in index.owners if owner.owner not in head_owners] + adopted
-    if not added:
+    added = [
+        owner for owner in index.owners
+        if owner.owner not in head_owners and owner not in renamed.values()
+    ] + adopted
+    if not added and not renamed:
         _validate_no_delta(head, index, before, after)
         return
 
@@ -668,10 +728,12 @@ def _validate_policy_addition(
             raise VersionHistoryError(
                 f'new owner "{row.owner}" requires a baseline at {after.versions[row.owner]}'
             )
-    if any(before.versions[owner] != after.versions[owner] for owner in before.versions):
-        raise VersionTransitionError(
-            "suite-maintenance owner additions cannot bump existing versions"
-        )
+    for owner, version in before.versions.items():
+        current = renamed[owner].owner if owner in renamed else owner
+        if after.versions.get(current) != version:
+            raise VersionTransitionError(
+                "suite-maintenance owner additions cannot bump existing versions"
+            )
     if new_rows and history_path not in changed_paths:
         raise VersionTransitionError(f"{history_path} must be staged with new baselines")
 

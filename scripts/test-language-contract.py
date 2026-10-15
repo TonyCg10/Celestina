@@ -6,14 +6,25 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 
 SCRIPT = Path(__file__).resolve().with_name("check-language-contract.py")
+
+
+def load_scanner():
+    """The scanner as a module, the way commit_scope.py reads its rules."""
+    sys.path.insert(0, str(SCRIPT.parent))
+    spec = importlib.util.spec_from_file_location("language_contract", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class LanguageContractTests(unittest.TestCase):
@@ -280,6 +291,64 @@ class LanguageContractTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("new non-English repository text", result.stdout)
 
+    def test_a_halted_tree_is_history(self) -> None:
+        # A halted project is frozen history: its bytes never change again, so
+        # its legacy prose is neither debt to ratchet nor a canonical error.
+        (self.root / "docs/projects.toml").write_text(
+            "schema_version = 1\n\n"
+            "[[projects]]\n"
+            'id = "halted"\n'
+            'path = "halted"\n'
+            'commit_prefix = "halted"\n'
+            'commit_roots = ["halted/"]\n'
+            'halted = "2026-09-27"\n\n'
+            "[[projects]]\n"
+            'id = "live"\n'
+            'path = "live"\n'
+            'commit_prefix = "live"\n'
+            'commit_roots = ["live/"]\n',
+            encoding="utf-8",
+        )
+        (self.root / "halted").mkdir()
+        (self.root / "halted/README.md").write_text(
+            "# Reglas\nEl agente ejecuta la verificación.\n", encoding="utf-8"
+        )
+        (self.root / "live").mkdir()
+        (self.root / "live/notes.md").write_text(
+            "El agente ejecuta la verificación.\n", encoding="utf-8"
+        )
+        self.write_baseline("1\tlive/notes.md\n")
+        scanner = load_scanner()
+        legacy, errors = scanner.scan(self.root)
+        self.assertEqual(errors, [])
+        self.assertEqual(legacy, {"live/notes.md": 1})
+        self.assertTrue(scanner.is_history("halted/README.md", ("halted/",)))
+        self.assertFalse(scanner.is_history("halted-twin/README.md", ("halted/",)))
+        self.assertFalse(scanner.is_history("live/notes.md", ("halted/",)))
+        self.assertEqual(self.run_guard().returncode, 0)
+
+        # commit_scope.py calls `is_history(path)` with one argument on the
+        # HEAD scanner; it then reads the staged registry of the repository it
+        # runs in.
+        self.git("add", "-A")
+        probe = subprocess.run(
+            [
+                "python3",
+                "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]);"
+                "import importlib.util as u;"
+                "s = u.spec_from_file_location('scanner', sys.argv[2]);"
+                "m = u.module_from_spec(s); s.loader.exec_module(m);"
+                "print(m.is_history('halted/README.md'), m.is_history('live/notes.md'))",
+                str(SCRIPT.parent),
+                str(SCRIPT),
+            ],
+            cwd=self.root,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(probe.returncode, 0, probe.stderr)
+        self.assertEqual(probe.stdout.strip(), "True False")
 
     def test_a_resolvable_compare_ref_still_ratchets_the_baseline(self) -> None:
         (self.root / "src/example.rs").write_text(

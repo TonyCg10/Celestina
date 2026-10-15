@@ -736,4 +736,112 @@ fi
 git -C "$hooks_root" reset -q --hard "$migration_base"
 restart_hooks
 
+# A renamed halted owner (docs/projects.toml `history_owner` + `halted`) may
+# move its historical inventories with its tree; a moved copy with different
+# bytes is an edit.
+fail() {
+    printf 'FAIL: %s\n' "$1" >&2
+    exit 1
+}
+rename_root=$temporary/renamed-owner
+mkdir -p "$rename_root/docs/plans/active" "$rename_root/app/docs/plans/archive" \
+    "$rename_root/app/docs/inventories/2026-08-03-unit" "$rename_root/scripts"
+cp "$case_root/scripts/"*.py "$rename_root/scripts/"
+cp "$case_root/docs/projects.toml" "$rename_root/docs/projects.toml"
+printf 'Base revision\t%s\nPathspec\tapp/\n' "$base" \
+    > "$rename_root/app/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv"
+printf '# Old plan\n' > "$rename_root/app/docs/plans/archive/2026-08-03-unit.md"
+git -C "$rename_root" init -q
+git -C "$rename_root" config user.name "Staged Fixture"
+git -C "$rename_root" config user.email "fixture@example.invalid"
+git -C "$rename_root" add .
+git -C "$rename_root" commit -qm "fixture: an owner with history"
+git -C "$rename_root" mv app app-old
+sed -i 's|^id = "app"$|id = "app-old"\nhistory_owner = "app"\nhalted = "2026-09-27"|; s|^commit_prefix = "app"$|commit_prefix = "app-old"|; s|^path = "app"$|path = "app-old"|; s|app/docs/plans/active|app-old/docs/plans/active|; s|commit_roots = \["app/"\]|commit_roots = ["app-old/"]|' \
+    "$rename_root/docs/projects.toml"
+git -C "$rename_root" add -A
+if ! python3 "$checker" --root "$rename_root" --quiet; then
+    fail "inventories moved with their renamed owner were refused"
+fi
+printf 'tampered\n' >> "$rename_root/app-old/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv"
+git -C "$rename_root" add -A
+if python3 "$checker" --root "$rename_root" --quiet 2>"$temporary/tampered.err"; then
+    fail "a moved inventory with changed bytes was accepted"
+elif ! grep -q 'historical inventories are immutable' "$temporary/tampered.err"; then
+    fail "the tampered move produced no immutability diagnostic"
+fi
+
+# The owner's plans move with it under the same rule; a moved plan with
+# changed bytes is not a move and still needs an administrative unit.
+git -C "$rename_root" show HEAD:app/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv \
+    > "$rename_root/app-old/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv"
+printf 'Edited on the way.\n' >> "$rename_root/app-old/docs/plans/archive/2026-08-03-unit.md"
+git -C "$rename_root" add -A
+if python3 "$checker" --root "$rename_root" --quiet 2>"$temporary/edited-plan.err"; then
+    fail "a moved plan with changed bytes was accepted"
+elif ! grep -q 'deleting or archiving a plan requires an administrative unit' "$temporary/edited-plan.err"; then
+    fail "the edited plan move produced no administrative-unit diagnostic"
+fi
+
+# A copy already committed under the renamed owner is not a destination:
+# deleting the original alone is still an archival or an inventory edit.
+git -C "$rename_root" reset -q --hard
+mkdir -p "$rename_root/app-old/docs/plans/archive" \
+    "$rename_root/app-old/docs/inventories/2026-08-03-unit"
+cp "$rename_root/app/docs/plans/archive/2026-08-03-unit.md" \
+    "$rename_root/app-old/docs/plans/archive/2026-08-03-unit.md"
+cp "$rename_root/app/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv" \
+    "$rename_root/app-old/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv"
+{
+    printf '\n[[projects]]\n'
+    printf 'id = "app-old"\n'
+    printf 'commit_prefix = "app-old"\n'
+    printf 'path = "app-old"\n'
+    printf 'active_plans = "app-old/docs/plans/active"\n'
+    printf 'commit_roots = ["app-old/"]\n'
+    printf 'include_workspace_manifests = false\n'
+    printf 'history_owner = "app"\n'
+    printf 'halted = "2026-09-27"\n'
+} >> "$rename_root/docs/projects.toml"
+git -C "$rename_root" add -A
+git -C "$rename_root" commit -qm "fixture: a copy already committed at the destination"
+git -C "$rename_root" rm -q app/docs/plans/archive/2026-08-03-unit.md
+if python3 "$checker" --root "$rename_root" --quiet 2>"$temporary/copied-plan.err"; then
+    fail "deleting a plan whose copy was already committed was accepted as a move"
+elif ! grep -q 'app/docs/plans/archive/2026-08-03-unit.md' "$temporary/copied-plan.err"; then
+    fail "the refused plan deletion does not name the deleted path"
+fi
+git -C "$rename_root" reset -q --hard
+git -C "$rename_root" rm -q app/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv
+if python3 "$checker" --root "$rename_root" --quiet 2>"$temporary/copied-inventory.err"; then
+    fail "deleting an inventory whose copy was already committed was accepted as a move"
+elif ! grep -q 'app/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv' "$temporary/copied-inventory.err"; then
+    fail "the refused inventory deletion does not name the deleted path"
+fi
+
+# Once the rename is committed, the alias pairs nothing more: a live owner's
+# plan and inventory moved into the renamed halted tree are a plan deletion
+# and a new inventory, not a move.
+git -C "$rename_root" reset -q --hard
+mkdir -p "$rename_root/app/docs/plans/active" \
+    "$rename_root/app/docs/inventories/2026-08-04-live"
+printf '# Live plan\n' > "$rename_root/app/docs/plans/active/2026-08-04-live.md"
+printf 'Base revision\t%s\nPathspec\tapp/\n' "$base" \
+    > "$rename_root/app/docs/inventories/2026-08-04-live/UNIT-C.numstat.tsv"
+git -C "$rename_root" add -A
+git -C "$rename_root" commit -qm "fixture: the live owner delivers after the rename"
+mkdir -p "$rename_root/app-old/docs/plans/active" \
+    "$rename_root/app-old/docs/inventories/2026-08-04-live"
+git -C "$rename_root" mv app/docs/plans/active/2026-08-04-live.md \
+    app-old/docs/plans/active/2026-08-04-live.md
+git -C "$rename_root" mv app/docs/inventories/2026-08-04-live/UNIT-C.numstat.tsv \
+    app-old/docs/inventories/2026-08-04-live/UNIT-C.numstat.tsv
+if python3 "$checker" --root "$rename_root" --quiet 2>"$temporary/post-rename.err"; then
+    fail "a live owner's plan and inventory moved into the renamed halted tree after the rename were accepted as a move"
+elif ! grep -q 'historical inventories are immutable.*app/docs/inventories/2026-08-04-live/UNIT-C.numstat.tsv' \
+    "$temporary/post-rename.err"; then
+    cat "$temporary/post-rename.err" >&2
+    fail "the refused post-rename move produced no immutability diagnostic naming the inventory"
+fi
+
 printf 'Staged inventories: OK\n'

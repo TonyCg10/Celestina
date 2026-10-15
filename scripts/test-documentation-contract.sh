@@ -986,6 +986,34 @@ elif ! grep -F 'suite.shared_rules: must be a non-empty list' \
     fail "agent-context had no stable empty suite.shared_rules diagnostic"
 fi
 
+# A renamed halted owner (`history_owner` + `halted`) keeps the plans and
+# inventories it wrote under its old identity byte for byte: their Scope,
+# ledger prefix, Pathspecs and `self` rows still name `app`. They are history,
+# validated when they landed and moved unchanged (check-staged-units.py proves
+# the move), so the contract does not judge them against the new identity.
+renamed_owner_case() {
+    work=$temporary/$1
+    cp -R "$valid" "$work"
+    mv "$work/app" "$work/app-qt"
+    cp -R "$fixture_root/renamed-halted-owner/." "$work/"
+}
+renamed_owner_case renamed-halted-owner
+if ! python3 "$checker" --root "$temporary/renamed-halted-owner" --quiet \
+    > "$temporary/renamed-halted-owner.out" 2>&1; then
+    fail "a renamed halted owner's records were judged against its new identity: $(cat "$temporary/renamed-halted-owner.out")"
+fi
+for key in history_owner halted; do
+    renamed_owner_case "renamed-without-$key"
+    sed -i "/^$key = /d" "$temporary/renamed-without-$key/docs/projects.toml"
+    if python3 "$checker" --root "$temporary/renamed-without-$key" --quiet \
+        > "$temporary/renamed-without-$key.out" 2>&1; then
+        fail "a moved owner without $key kept its records out of the contract"
+    elif ! grep -F 'Scope does not match active directory for `app-qt`' \
+        "$temporary/renamed-without-$key.out" >/dev/null; then
+        fail "the moved owner without $key had no stable diagnostic"
+    fi
+done
+
 expect_failure() {
     case_name=$1
     expected_text=$2

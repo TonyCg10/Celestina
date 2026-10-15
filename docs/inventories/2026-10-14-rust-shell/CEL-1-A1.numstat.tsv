@@ -1,0 +1,47 @@
+# CEL-1-A1 exact change inventory
+
+Base revision	bcad4c27f5b50838d180b713e0bacf95cb5575dc
+Pathspec	docs/contracts/versioning.md
+Pathspec	docs/evidence/2026-10-14-rename-rules.md
+Pathspec	docs/governance/change-policy.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-1-A1.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/superpowers/plans/2026-10-14-celestina-rust-shell.md
+Pathspec	docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md
+Pathspec	scripts/check-language-contract.py
+Pathspec	scripts/check-staged-units.py
+Pathspec	scripts/commit_scope.py
+Pathspec	scripts/documentation_contract.py
+Pathspec	scripts/fixtures/documentation/renamed-halted-owner/docs/projects.toml
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/test-commit-scope.sh
+Pathspec	scripts/test-documentation-contract.sh
+Pathspec	scripts/test-language-contract.py
+Pathspec	scripts/test-production-artifacts.py
+Pathspec	scripts/test-staged-units.sh
+Pathspec	scripts/test-version-contract.py
+Pathspec	scripts/version_contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	0	e9095087eea077336c7d404c925d3deae8ee8a6ef6858fd6ea9b9ca530f08290	docs/contracts/versioning.md
+449	0	d5ce60b22bf8e7f49ded859ebf9d6412f14d711462706766728cd83145cbe1db	docs/evidence/2026-10-14-rename-rules.md
+8	1	ecb95795a745bcb5b9df3d50b394ac57feae5af07bf0eb4ca28247b575b78207	docs/governance/change-policy.md
+47	0	self	docs/inventories/2026-10-14-rust-shell/CEL-1-A1.numstat.tsv
+1	1	5c7986bf9baa12bfda68f2492d27d0b939c58a879e179fdd15405213b225d1b7	docs/plans/active/2026-10-14-rust-shell.md
+16	14	d5ccdbc25e65506650f04e132e6f15accbc4d9a9484abaffc297a056a0b6efeb	docs/superpowers/plans/2026-10-14-celestina-rust-shell.md
+4	3	6b5d9098d21df49195f27eb79ee3fb3274aff5a78016afc7a07e5d1813db6233	docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md
+74	3	c6fcbd7d935d197e4da37cd72a1f93d8169ec5268c791d7d2825d97e5182cc44	scripts/check-language-contract.py
+109	18	f008ad4e17a80c722d1cfa027e2b66ff63b138046836a944362531be9060a845	scripts/check-staged-units.py
+65	5	e15ef3973cdb4c77474b4f512f7004640386bbb2ddf9bccd0d98e20f21c25da7	scripts/commit_scope.py
+16	4	9090975a72b564956283514bb2aefc86f15fe7a38fa96537e2b2c7b5f66d6e58	scripts/documentation_contract.py
+69	0	93b9e12a4c4916e22caf8e9892f29cf32a6f3cab81161a9a435813d0c56c2a65	scripts/fixtures/documentation/renamed-halted-owner/docs/projects.toml
+0	8	7dafb331dfd074eb1a7b2387b5ced2cbdfb8562953d4ac820a4025c0dc6a58a2	scripts/language-baseline.tsv
+120	26	2b68e562875ab39d3904549fc5e16ed8257341aa5aca15d3b6ec88719dcd16db	scripts/test-commit-scope.sh
+28	0	1fa0e61cc05c66fe66a609b5b7b0196f632b9076c7f027c3e4a76ce40c01da0a	scripts/test-documentation-contract.sh
+69	0	7fb6de98d1e9f64c5977b9f177851856be4ec17e9a05ebeaab931cd35ba5b352	scripts/test-language-contract.py
+5	0	418443aec40da50b0cf915fe3baf993176e10b8ec5fc798d5d37f0d95f8240bf	scripts/test-production-artifacts.py
+108	0	689615b75bca7c4186b8a4a3e13c6fbef4b4c96e330665c6b4a0c8feb26a1791	scripts/test-staged-units.sh
+125	1	29531ff06e7522767e6d8b5248790b053333560c86e5df5b5fb7a5e28f5b0881	scripts/test-version-contract.py
+71	9	371bfca93e1f08e6d8d379e4c8ed9bf8781ef3106c53dd50d9f8706a3652c24c	scripts/version_contract.py

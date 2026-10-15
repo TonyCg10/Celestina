@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import inspect
 import re
@@ -230,6 +231,35 @@ def load_scopes(
     if not isinstance(scopes, dict):
         fail(f"{PROJECT_REGISTRY} returned invalid commit scopes")
     return scopes, namespace, data
+
+
+def history_scopes(scopes: dict[str, Any], registry: dict[str, Any]) -> dict[str, Any]:
+    """The scopes old commits are replayed against.
+
+    A renamed project's old commits carry its old prefix: the name its history
+    rows carry (`history_owner`; the suite keeps every id equal to its
+    prefix). HEAD may register that name again for a new project, so in a
+    replay the old prefix covers the renamed project's scope as well as its
+    own. Only the replay widens; a new commit is judged by HEAD's scopes.
+    """
+    replay = dict(scopes)
+    for project in registry.get("projects", ()):
+        if not isinstance(project, dict):
+            continue
+        alias = project.get("history_owner")
+        renamed = scopes.get(project.get("commit_prefix"))
+        if not isinstance(alias, str) or not alias or renamed is None:
+            continue
+        current = replay.get(alias)
+        if current is None:
+            replay[alias] = renamed
+        else:
+            replay[alias] = dataclasses.replace(
+                current,
+                roots=tuple(dict.fromkeys((*current.roots, *renamed.roots))),
+                files=tuple(dict.fromkeys((*current.files, *renamed.files))),
+            )
+    return replay
 
 
 def git_run(root: Path, *args: str):
@@ -562,6 +592,8 @@ def validate_language_index(
     after: dict[str, int],
     staged: set[str],
     language_namespace: dict[str, object],
+    registry: dict[str, Any],
+    registry_namespace: dict[str, object],
 ) -> None:
     text_suffixes = language_namespace.get("TEXT_SUFFIXES")
     is_localization = language_namespace.get("is_localization")
@@ -571,6 +603,26 @@ def validate_language_index(
         fail("language contract does not expose TEXT_SUFFIXES")
     if not all(callable(rule) for rule in (is_localization, is_history, is_canonical)):
         fail("language contract does not expose path classification rules")
+    # A halted project's tree is history. The staged registry names the trees,
+    # read with HEAD's halt reader, so the commit that moves a halted project
+    # moves its legacy prose with it. A HEAD scanner from before that rule
+    # takes no roots.
+    history_arguments: tuple[object, ...] = ()
+    if "halted_roots" in inspect.signature(is_history).parameters:
+        halted_roots_rule = language_namespace.get("registry_halted_roots")
+        halted_projects_rule = registry_namespace.get("halted_projects")
+        if not callable(halted_roots_rule) or not callable(halted_projects_rule):
+            fail("language contract does not expose the halted trees")
+        try:
+            halted_roots = call_dynamic_rule(
+                f"HEAD:{LANGUAGE_SCANNER} registry_halted_roots over INDEX:{REGISTRY}",
+                halted_roots_rule,
+                registry,
+                halted_projects_rule,
+            )
+        except ValueError as error:
+            fail(f"INDEX:{REGISTRY}: {error}")
+        history_arguments = (tuple(halted_roots),)
 
     candidates = (set(after) & staged) | {
         path
@@ -595,6 +647,7 @@ def validate_language_index(
             f"HEAD:{LANGUAGE_SCANNER} is_history",
             is_history,
             source,
+            *history_arguments,
         ):
             actual = 0
         else:
@@ -734,7 +787,12 @@ def validate_ratchet_updates(
                 root, prefix, staged, registry, architecture_namespace
             ),
         )
-    validate_language_index(root, language_after, staged, language_namespace)
+    registry_namespace = next(
+        namespace for label, _scope, namespace in authorities if label == "INDEX"
+    )
+    validate_language_index(
+        root, language_after, staged, language_namespace, registry, registry_namespace
+    )
 
 
 def comment_marker(root: Path, lines: list[str]) -> str:
@@ -1181,7 +1239,7 @@ def validate_merge(root: Path, paths: list[str]) -> None:
         )
 
     committed_registry_rules = head_python_namespace(root, PROJECT_REGISTRY)
-    _scopes, _registry_namespace, registry = load_scopes(
+    _scopes, registry_namespace, registry = load_scopes(
         root,
         registry_source="INDEX",
         rule_namespace=committed_registry_rules,
@@ -1212,7 +1270,9 @@ def validate_merge(root: Path, paths: list[str]) -> None:
         registry,
         architecture_namespace,
     )
-    validate_language_index(root, language, staged, language_namespace)
+    validate_language_index(
+        root, language, staged, language_namespace, registry, registry_namespace
+    )
 
 
 def main() -> None:
@@ -1254,7 +1314,7 @@ def main() -> None:
 
     if args.history_scope_only is not None:
         committed_registry_rules = head_python_namespace(root, PROJECT_REGISTRY)
-        scopes, registry_namespace, _registry = load_scopes(
+        scopes, registry_namespace, registry = load_scopes(
             root,
             registry_source="HEAD",
             rule_namespace=committed_registry_rules,
@@ -1262,7 +1322,7 @@ def main() -> None:
         validate(
             args.history_scope_only,
             stdin_paths(),
-            scopes,
+            history_scopes(scopes, registry),
             registry_namespace,
             require_imperative=False,
             require_kind=False,

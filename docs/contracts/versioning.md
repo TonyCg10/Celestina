@@ -112,6 +112,18 @@ Crate package versions are not silently promoted to public release promises.
 Independent crate release policy requires a separate accepted decision because
 one crate can appear in several application lockfiles.
 
+## Renaming a project
+
+A registered project changes its id once, in a `suite-maintenance` commit, by
+declaring `history_owner = "<old id>"` in its registry table: the history rows
+that carry the old name are its rows, the version is unchanged and the sources
+keep their kinds and names (their paths may change). History is never
+rewritten. The old id may be registered again in the same commit as a new
+project; its own baseline row, appended after the old chain, is where the old
+name stops meaning the renamed project. `scripts/version_contract.py` refuses
+a rename that bumps, a `history_owner` with no rows behind it, two projects
+naming one history owner, and a rename under a product prefix.
+
 ## Git edge cases
 
 - `fixup!`, `squash!` and `amend!` commits are temporary and must not add

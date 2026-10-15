@@ -226,6 +226,11 @@ esac
         with (SUITE_ROOT / "docs/projects.toml").open("rb") as stream:
             registry = tomllib.load(stream)
         for project in registry["projects"]:
+            if "halted" in project and project.get("history_owner"):
+                # A renamed halted project's entries keep the bytes they were
+                # written with, under its old id; the halt keeps every tool
+                # from running them (AGENTS.md "Halted projects").
+                continue
             for phase, key, command in (
                 ("build", "build_script", "run-build"),
                 ("verify", "verify_script", "run-verification"),

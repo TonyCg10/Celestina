@@ -10,6 +10,7 @@ import argparse
 import os
 import re
 from pathlib import Path
+from typing import Any, Callable
 
 import repo_git
 
@@ -58,8 +59,69 @@ def is_localization(path: str) -> bool:
     return bool(parts & {"i18n", "l10n", "locale", "locales", "translations"})
 
 
-def is_history(path: str) -> bool:
-    return "/docs/history/" in f"/{path}" or "/docs/plans/archive/" in f"/{path}"
+def registry_halted_roots(
+    registry: dict[str, Any],
+    halted_projects: Callable[[dict[str, Any]], Any] | None = None,
+) -> tuple[str, ...]:
+    """The tree of every halted project, as its `path` with a trailing slash.
+
+    `halted_projects` is the one reader of the marker. commit_scope.py passes
+    HEAD's `project_registry.halted_projects`, because the hook never imports
+    a staged or unstaged registry module; the repository scan imports the one
+    next to this file.
+    """
+    if halted_projects is None:
+        import project_registry
+
+        halted_projects = project_registry.halted_projects
+    halted = {project.id for project in halted_projects(registry)}
+    roots: list[str] = []
+    for project in registry.get("projects", ()):
+        if isinstance(project, dict) and project.get("id") in halted:
+            path = project.get("path")
+            if isinstance(path, str) and path.strip("/"):
+                roots.append(path.strip("/") + "/")
+    return tuple(roots)
+
+
+_STAGED_HALTED_ROOTS: tuple[str, ...] | None = None
+
+
+def staged_halted_roots() -> tuple[str, ...]:
+    """The halted roots of the registry staged where this process runs.
+
+    The default of `is_history(path)` for a caller that passes no roots: the
+    commit hook runs at the repository's top level, whose index holds the
+    registry the commit will publish. Read once per process. A registry that
+    cannot be read leaves only the history directories, which measures more,
+    never less.
+    """
+    global _STAGED_HALTED_ROOTS
+    if _STAGED_HALTED_ROOTS is None:
+        roots: tuple[str, ...] = ()
+        result = repo_git.run(Path.cwd(), "show", ":docs/projects.toml")
+        if result.returncode == 0:
+            import project_registry
+
+            roots = registry_halted_roots(
+                project_registry.parse_registry(result.stdout, "INDEX:docs/projects.toml")
+            )
+        _STAGED_HALTED_ROOTS = roots
+    return _STAGED_HALTED_ROOTS
+
+
+def is_history(path: str, halted_roots: tuple[str, ...] | None = None) -> bool:
+    """Whether `path` is history: never measured, never canonical.
+
+    The history directories, and the tree of every halted project: its bytes
+    are frozen until the author lifts the halt, so its legacy prose is neither
+    debt the ratchet could lower nor canonical text anyone may correct.
+    Without `halted_roots` the staged registry names the halted trees.
+    """
+    if "/docs/history/" in f"/{path}" or "/docs/plans/archive/" in f"/{path}":
+        return True
+    roots = staged_halted_roots() if halted_roots is None else halted_roots
+    return any(path.startswith(root) for root in roots)
 
 
 def is_canonical(path: str) -> bool:
@@ -177,11 +239,20 @@ def repository_paths(root: Path) -> list[str]:
 def scan(root: Path) -> tuple[dict[str, int], list[str]]:
     legacy: dict[str, int] = {}
     errors: list[str] = []
+    halted_roots: tuple[str, ...] = ()
+    registry_path = root / "docs/projects.toml"
+    if registry_path.is_file():
+        import project_registry
+
+        try:
+            halted_roots = registry_halted_roots(project_registry.load_registry(registry_path))
+        except ValueError as error:
+            errors.append(str(error))
     for relative in repository_paths(root):
         path = root / relative
         if path.is_symlink() or not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
             continue
-        if is_localization(relative) or is_history(relative):
+        if is_localization(relative) or is_history(relative, halted_roots):
             continue
         try:
             text = path.read_text(encoding="utf-8")
