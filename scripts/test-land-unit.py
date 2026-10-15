@@ -1360,7 +1360,7 @@ class LandingFunctions(unittest.TestCase):
         def reader(files: dict[str, str]):
             return lambda path: files[path].encode("utf-8") if path in files else None
 
-        rewrites = landing.unbumped_files(REGISTRY, reader(base), reader(branch))
+        rewrites = landing.unbumped_files(REGISTRY, REGISTRY, reader(base), reader(branch))
         self.assertEqual(
             rewrites,
             {
@@ -1377,7 +1377,108 @@ class LandingFunctions(unittest.TestCase):
         dependency_only["app/Cargo.lock"] = base["app/Cargo.lock"]
         dependency_only["docs/version-history.tsv"] = history
         self.assertEqual(
-            landing.unbumped_files(REGISTRY, reader(base), reader(dependency_only)), {}
+            landing.unbumped_files(REGISTRY, REGISTRY, reader(base), reader(dependency_only)), {}
+        )
+
+    def test_unbumped_files_follow_a_renamed_owner(self) -> None:
+        """A renamed halted owner is unbumped at its new paths against the former's."""
+        history = "# history\napp\t0.1.0\tbaseline\tFX-0\tAdopt the fixture baseline\n"
+        base = {
+            "app/Cargo.toml": cargo_toml("0.1.0", 'serde = "1"\n'),
+            "app/Cargo.lock": cargo_lock("0.1.0"),
+            "docs/version-history.tsv": history,
+        }
+        renamed = REGISTRY_TOML.replace(
+            'id = "app"\ncommit_prefix = "app"\n',
+            'id = "app-qt"\ncommit_prefix = "app-qt"\nhistory_owner = "app"\n'
+            'halted = "2026-09-27"\n',
+        ).replace("app/Cargo.toml", "app-qt/Cargo.toml").replace(
+            "app/Cargo.lock", "app-qt/Cargo.lock"
+        )
+        self.assertNotEqual(renamed, REGISTRY_TOML)
+        new_unversioned = '[[projects]]\nid = "app"\ncommit_prefix = "app"\nversioned = false\n'
+        new_versioned = (
+            '[[projects]]\nid = "app"\ncommit_prefix = "app"\n'
+            'version_source = { kind = "cargo-package", path = "app/Cargo.toml", package = "app" }\n'
+        )
+
+        def reader(files: dict[str, str]):
+            return lambda path: files[path].encode("utf-8") if path in files else None
+
+        # (a) Moved with the version kept: nothing to rewrite, no error.
+        moved = {
+            "app-qt/Cargo.toml": cargo_toml("0.1.0", 'serde = "1"\n'),
+            "app-qt/Cargo.lock": cargo_lock("0.1.0"),
+            "docs/version-history.tsv": history,
+        }
+        branch_registry = tomllib.loads(renamed)
+        self.assertEqual(
+            landing.unbumped_files(REGISTRY, branch_registry, reader(base), reader(moved)), {}
+        )
+        # (b) Moved and bumped: the new paths return to the base version.
+        bumped = dict(moved)
+        bumped["app-qt/Cargo.toml"] = cargo_toml("0.1.1", 'serde = "1"\nsyn = "2"\n')
+        bumped["app-qt/Cargo.lock"] = cargo_lock("0.1.1")
+        self.assertEqual(
+            landing.unbumped_files(REGISTRY, branch_registry, reader(base), reader(bumped)),
+            {
+                "app-qt/Cargo.toml": cargo_toml("0.1.0", 'serde = "1"\nsyn = "2"\n').encode(),
+                "app-qt/Cargo.lock": cargo_lock("0.1.0").encode(),
+            },
+        )
+        # (c) The old id re-registered as a new unversioned owner is ignored,
+        # whatever the branch holds at the old paths.
+        reused = dict(moved)
+        reused["app/Cargo.toml"] = 'name = "app"\nversion = "0.0.1"\n'
+        branch_registry = tomllib.loads(renamed + "\n" + new_unversioned)
+        self.assertEqual(
+            landing.unbumped_files(REGISTRY, branch_registry, reader(base), reader(reused)), {}
+        )
+        # (d) The old id re-registered as a new versioned owner has no base:
+        # its version is the session's, even where the former owner's manifest
+        # stood with the same package name.
+        reused["app/Cargo.toml"] = cargo_toml("0.0.1")
+        branch_registry = tomllib.loads(renamed + "\n" + new_versioned)
+        self.assertEqual(
+            landing.unbumped_files(REGISTRY, branch_registry, reader(base), reader(reused)), {}
+        )
+        # Read with main's registry alone, as before, the former owner's paths
+        # would take the new project's manifest for the former's.
+        self.assertEqual(
+            landing.unbumped_files(REGISTRY, REGISTRY, reader(base), reader(reused)),
+            {"app/Cargo.toml": cargo_toml("0.1.0").encode()},
+        )
+
+    def test_unbumped_files_read_a_listed_owner_by_main_s_sources(self) -> None:
+        """A branch forked before an owner adopted a version still has its bump dropped."""
+        base = {
+            "app/Cargo.toml": cargo_toml("0.1.0"),
+            "app/Cargo.lock": cargo_lock("0.1.0"),
+        }
+        bumped = {
+            "app/Cargo.toml": cargo_toml("0.1.1"),
+            "app/Cargo.lock": cargo_lock("0.1.1"),
+        }
+        stale = REGISTRY_TOML.replace(
+            'version_source = { kind = "cargo-package", path = "app/Cargo.toml", package = "app" }\n'
+            'version_mirrors = [{ kind = "cargo-lock", path = "app/Cargo.lock", package = "app" }]\n',
+            "versioned = false\n",
+        )
+        self.assertNotEqual(stale, REGISTRY_TOML)
+
+        def reader(files: dict[str, str]):
+            return lambda path: files[path].encode("utf-8") if path in files else None
+
+        expected = {
+            "app/Cargo.toml": cargo_toml("0.1.0").encode(),
+            "app/Cargo.lock": cargo_lock("0.1.0").encode(),
+        }
+        self.assertEqual(
+            landing.unbumped_files(REGISTRY, tomllib.loads(stale), reader(base), reader(bumped)),
+            expected,
+        )
+        self.assertEqual(
+            landing.unbumped_files(REGISTRY, REGISTRY, reader(base), reader(bumped)), expected
         )
 
 

@@ -227,7 +227,10 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    land-unit: warning: the session bumped <paths>; the landing drops that change and computes the version itself
    ```
 
-   Other edits in the same manifest, such as an added dependency, stay.
+   Other edits in the same manifest, such as an added dependency, stay. The
+   branch's registry says where each owner's sources are: an owner the branch
+   renames (`history_owner`) is unbumped at its new paths against the former
+   owner's at the fork point, and a new owner has nothing to unbump.
 3. **`rebase`.** Records `origin/main` as the base. Stops when the base
    tracks the unit's inventory, with the preflight's message
    `<unit> already landed: origin/main tracks <inventory>`: a retry after a

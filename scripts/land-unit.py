@@ -600,6 +600,7 @@ def unbump(ctx: LandContext) -> None:
     fork = run(ctx, "merge-base", "origin/main", state.branch).stdout.strip()
     rewrites = unbumped_files(
         ctx.registry,
+        registry_at(ctx, state.branch),
         lambda path: blob(ctx, f"{fork}:{path}"),
         lambda path: blob(ctx, f"{state.branch}:{path}"),
     )

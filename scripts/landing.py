@@ -38,7 +38,13 @@ from production_artifact import (
 from project_registry import build_commit_scopes, halted_projects, path_allowed
 from repo_git import GitError
 import repo_git
-from version_contract import VersionContractError, parse_registry, read_source_version
+from version_contract import (
+    OwnerConfig,
+    SourceSpec,
+    VersionContractError,
+    parse_registry,
+    read_source_version,
+)
 from version_tool import replace_source_version
 
 
@@ -1158,44 +1164,89 @@ def lockfile_upgrades(main_lock: str, merged_lock: str) -> list[str]:
 # Version sources.
 
 
+def paired_sources(
+    former: OwnerConfig, owner: OwnerConfig
+) -> list[tuple[SourceSpec, SourceSpec]]:
+    """(base source, branch source) for each source of the renamed `owner` that `former` also has.
+
+    A source kept at its path pairs with itself; one the rename moved pairs
+    with the former's source of the same kind and name, which the version
+    contract keeps through a rename. A source without a counterpart is new
+    and has nothing to unbump.
+    """
+    remaining = list(former.sources)
+    pairs: list[tuple[SourceSpec, SourceSpec]] = []
+    for spec in owner.sources:
+        match = next((item for item in remaining if item == spec), None) or next(
+            (item for item in remaining if (item.kind, item.name) == (spec.kind, spec.name)),
+            None,
+        )
+        if match is None:
+            continue
+        remaining.remove(match)
+        pairs.append((match, spec))
+    return pairs
+
+
 def unbumped_files(
-    registry: Mapping[str, object],
+    main_registry: Mapping[str, object],
+    branch_registry: Mapping[str, object],
     read_base: Callable[[str], bytes | None],
     read_branch: Callable[[str], bytes | None],
 ) -> dict[str, bytes]:
     """Branch files with every registered version moved back to the base's.
 
     Only the version assignments and the history file return to the base; a
-    dependency the branch added to the same manifest stays.
+    dependency the branch added to the same manifest stays. An owner main
+    lists is read by main's sources at their own paths, whatever the branch's
+    registry says of it: a branch forked before the owner adopted a version
+    still has its bump dropped. The branch's registry says where a renamed
+    owner's sources are: an owner the branch renames (`history_owner` names a
+    main id the branch's owner carried before the rename) is read at its new
+    paths against the former owner's at the base, since a rename keeps the
+    version; a new owner, including one that takes a renamed owner's id, has
+    no base and nothing to unbump.
     """
     try:
-        model = parse_registry(registry, "docs/projects.toml")
+        main_model = parse_registry(main_registry, "origin/main's docs/projects.toml")
+        branch_model = parse_registry(branch_registry, "the branch's docs/projects.toml")
     except VersionContractError as error:
         raise LandingError(f"cannot read the version registry: {error}") from error
-    if model.policy is None:
+    if main_model.policy is None:
         return {}
     rewrites: dict[str, bytes] = {}
-    history = model.policy.history_file
+    history = main_model.policy.history_file
     base_history = read_base(history)
     branch_history = read_branch(history)
     if base_history is not None and branch_history != base_history:
         rewrites[history] = base_history
+    main_owners = main_model.owner_map()
+    renamed = {
+        owner.history_owner: owner
+        for owner in branch_model.owners
+        if owner.owner not in main_owners and owner.history_owner in main_owners
+    }
+    pairs: list[tuple[SourceSpec, SourceSpec]] = []
+    for former in main_model.owners:
+        if former.owner in renamed:
+            pairs.extend(paired_sources(former, renamed[former.owner]))
+        else:
+            pairs.extend((spec, spec) for spec in former.sources)
     current: dict[str, bytes] = {}
-    for owner in model.owners:
-        for spec in owner.sources:
-            base_raw = read_base(spec.path)
-            branch_raw = current.get(spec.path, read_branch(spec.path))
-            if base_raw is None or branch_raw is None:
-                continue
-            try:
-                base_version = read_source_version(spec, base_raw, f"base:{spec.path}")
-                branch_version = read_source_version(spec, branch_raw, f"branch:{spec.path}")
-                if base_version != branch_version:
-                    current[spec.path] = replace_source_version(
-                        spec, branch_raw, branch_version, base_version, spec.path
-                    )
-            except VersionContractError as error:
-                raise LandingError(f"cannot read the version of {spec.path}: {error}") from error
+    for base_spec, spec in pairs:
+        base_raw = read_base(base_spec.path)
+        branch_raw = current.get(spec.path, read_branch(spec.path))
+        if base_raw is None or branch_raw is None:
+            continue
+        try:
+            base_version = read_source_version(base_spec, base_raw, f"base:{base_spec.path}")
+            branch_version = read_source_version(spec, branch_raw, f"branch:{spec.path}")
+            if base_version != branch_version:
+                current[spec.path] = replace_source_version(
+                    spec, branch_raw, branch_version, base_version, spec.path
+                )
+        except VersionContractError as error:
+            raise LandingError(f"cannot read the version of {spec.path}: {error}") from error
     for path, raw in current.items():
         if raw != read_branch(path):
             rewrites[path] = raw
