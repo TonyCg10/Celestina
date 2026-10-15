@@ -255,7 +255,12 @@ and its evidence contains the exact field
 without its source only for a declared scanner migration, which needs both
 `scripts/check-language-contract.py` staged and the exact field
 ``- **Resolved language debt:** `scripts/check-language-contract.py` `` in the
-same unit's evidence. This is qualitative
+same unit's evidence. While a migration is staged, `pre-commit` measures the
+index against HEAD's language rows, so a migration is a commit of its own: one
+that also deletes a file with a row, or lowers the row of a file it edits, is
+refused; and a row it lowers for a file it does not stage is checked by no
+hook of that commit, only afterwards by the new scanner (CI, or the next
+commit's `pre-commit`). This is qualitative
 architectural closure, not a line threshold. Local evidence lives under the
 project's canonical `docs/evidence/`; suite evidence lives under root
 `docs/evidence/`. A component prefix cannot create a nested lookalike evidence

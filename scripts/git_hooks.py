@@ -119,6 +119,42 @@ def run_guard(argv: list[str], cwd: Path, env: dict[str, str] | None = None) -> 
         raise SystemExit(result.returncode)
 
 
+LANGUAGE_SCANNER = "scripts/check-language-contract.py"
+LANGUAGE_RATCHET = "scripts/language-baseline.tsv"
+
+
+def committed_language_rows(root: Path) -> bytes | None:
+    """HEAD's language ratchet when the index changes the language scanner.
+
+    A scanner migration stages the scanner with the rows it retires, and HEAD's
+    scanner still measures what it was built to measure: against the staged
+    rows it would call every retired row new debt, so no migration could ever
+    commit. It measures the index against HEAD's rows instead, which still
+    refuses new or grown debt; whether the retired rows may go is the
+    commit-msg guard's verdict (the declared evidence field).
+
+    Two consequences. A migration is a commit of its own: against HEAD's rows,
+    a file it also deletes reads as "language debt is gone" and a row it lowers
+    for a file it edits as "debt fell; lower the baseline", so either refuses
+    the commit. And the commit-msg guard lets a row fall without its source
+    while it measures only staged files, so a row a migration lowers for a
+    file it does not stage is checked by no hook; only the new scanner in CI
+    (or the next commit's pre-commit) measures it.
+    """
+    changed = git(root, "diff", "--cached", "--name-only", "--no-renames", "--", LANGUAGE_SCANNER)
+    if not changed:
+        return None
+    result = subprocess.run(
+        ["git", "show", f"HEAD:{LANGUAGE_RATCHET}"],
+        cwd=root,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
 def contracts_over_index(root: Path, rules: Path) -> None:
     """The language and documentation contracts, over the index."""
     python = sys.executable
@@ -126,11 +162,22 @@ def contracts_over_index(root: Path, rules: Path) -> None:
         scratch = Path(temporary).resolve()
         environment = index_snapshot(root, scratch)
         tree = scratch / "tree"
+        ratchet = tree / LANGUAGE_RATCHET
+        committed_rows = committed_language_rows(root)
+        staged_rows = ratchet.read_bytes() if ratchet.is_file() else None
+        if committed_rows is not None:
+            ratchet.write_bytes(committed_rows)
         run_guard(
             [python, str(guard(root, rules, "check-language-contract.py")), "--root", str(tree)],
             tree,
             environment,
         )
+        # The documentation contract reads the index as staged.
+        if committed_rows is not None:
+            if staged_rows is None:
+                ratchet.unlink()
+            else:
+                ratchet.write_bytes(staged_rows)
         # The documentation contract used to run only in CI, so a red result
         # did not stop anything: five commits reached published `main` while it
         # was failing on ten committed files.

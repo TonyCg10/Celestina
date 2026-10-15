@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** RSH-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -281,6 +281,26 @@ video trim). The application units are rows of each project's own plan; the
 build order, exclusions and suite ledger are in
 [the archived plan](docs/plans/archive/2026-10-10-capture-preview.md), and the
 design in [the spec](docs/superpowers/specs/2026-10-10-capture-preview-design.md).
+
+## RSH-1 — Register the Celestina shell in pure Rust
+
+**Hypothesis:** the halted Qt shell can move to `celestina-qt/` and the Rust
+shell take `celestina/` without rewriting any inventory, history row or halted
+byte, once the version contract knows a renamed owner and the staged-units
+guard knows a moved inventory.
+
+**Tangible outcome:** `celestina-qt/` registered, halted and byte-identical to
+the old tree; `celestina/` registered as `rust-shell` with its document set and
+a stub binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
+
+- [ ] Let a language scanner migration through the pre-commit hook (`CEL-1-A0`).
+- [ ] Add the guard rules for the rename and rehearse it (`CEL-1-A1`).
+- [ ] Move the halted shell and register the Rust shell (`CEL-1-A`, the author).
+- [ ] Generate the style's tokens from one data file (`CEL-1-C`).
+
+The build order, exclusions and ledger are in
+[the active plan](docs/plans/active/2026-10-14-rust-shell.md), and the design in
+[the spec](docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md).
 
 ## Project implementation fronts
 

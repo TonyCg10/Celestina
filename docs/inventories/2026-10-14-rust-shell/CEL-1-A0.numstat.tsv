@@ -1,0 +1,25 @@
+# CEL-1-A0 exact change inventory
+
+Base revision	da4647fc02f9c9f8645282772ae69b4304172725
+Pathspec	AGENTS.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-10-15-scanner-migration-hook.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-1-A0.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/plans/active/README.md
+Pathspec	scripts/git_hooks.py
+Pathspec	scripts/test-staged-units.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	1	e756e97a72eeb31602e57d4f6e23d0dbf527d9a998d3ef43b953471aeee6ecb5	AGENTS.md
+22	2	26457decb2929a20b46295d4420b5c8a0267cca19bcc8fccf6d2c4421afb5276	ROADMAP.md
+11	7	867acc84f07295afababd03d37491f774cb1540dfff34cdcef48a706130dcb51	STATUS.md
+135	0	11845fde62ec74e9347fac8b129eb8d85fac911ec1bdba66e21204afc74180d1	docs/evidence/2026-10-15-scanner-migration-hook.md
+25	0	self	docs/inventories/2026-10-14-rust-shell/CEL-1-A0.numstat.tsv
+60	0	9078e771864e8962805116ee5b4c71ee635f12859f19eddf3d0810a29014aaf4	docs/plans/active/2026-10-14-rust-shell.md
+3	1	47d51b9a42542d7b5cde5ded9e494619d9b64fa9faa95ae8830cd4facde3ca0f	docs/plans/active/README.md
+47	0	9f0ea96514f58d993894feb71f108ad0b00f0b10a8cecf7159693b21e81ca8cb	scripts/git_hooks.py
+50	0	efd01669e562c892c419af58125ecddfa599a3fd0480ca56938d1485fa183fb5	scripts/test-staged-units.sh

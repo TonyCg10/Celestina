@@ -686,4 +686,54 @@ elif ! grep -F 'broken local link' "$temporary/disabled-guards.out" >/dev/null; 
 fi
 restart_hooks
 
+# A language scanner migration (the scanner and the rows it retires, with the
+# declared evidence field) commits through the hooks. HEAD's scanner still
+# measures the index, against the rows HEAD's scanner was built for, so the
+# rows the staged scanner retires do not stop the commit and new debt still
+# does; the commit-msg guard judges the retired rows.
+legacy_word_one=arch
+legacy_word_one=${legacy_word_one}ivo
+legacy_word_two=prue
+legacy_word_two=${legacy_word_two}ba
+printf '// %s %s\n' "$legacy_word_one" "$legacy_word_two" > "$hooks_root/app/src/legacy.rs"
+printf '1\tapp/src/legacy.rs\n' >> "$hooks_root/scripts/language-baseline.tsv"
+git -C "$hooks_root" add -A
+git -C "$hooks_root" -c core.hooksPath=/dev/null commit -qm \
+    'suite-maintenance: Establish fixture language debt'
+migration_base=$(git -C "$hooks_root" rev-parse HEAD)
+stage_language_migration() {
+    git -C "$hooks_root" reset -q --hard "$migration_base"
+    printf '%s\n' '' \
+        '_fixture_is_history = is_history' \
+        'def is_history(path, *arguments, **keywords):' \
+        '    return path == "app/src/legacy.rs" or _fixture_is_history(path, *arguments, **keywords)' \
+        >> "$hooks_root/scripts/check-language-contract.py"
+    sed -i '/app\/src\/legacy.rs/d' "$hooks_root/scripts/language-baseline.tsv"
+    printf '%s\n' '' '- **Resolved language debt:** `scripts/check-language-contract.py`' \
+        >> "$hooks_root/docs/evidence/2026-08-03-fixture.md"
+    git -C "$hooks_root" add -A
+}
+stage_language_migration
+if ! git -C "$hooks_root" commit -qm 'suite-maintenance: Retire the fixture language debt' \
+    > "$temporary/language-migration.out" 2>&1; then
+    printf 'FAIL: the hooks refused a declared language scanner migration:\n' >&2
+    cat "$temporary/language-migration.out" >&2
+    exit 1
+fi
+stage_language_migration
+printf '// %s %s\n' "$legacy_word_one" "$legacy_word_two" > "$hooks_root/app/src/fresh.rs"
+git -C "$hooks_root" add app/src/fresh.rs
+if git -C "$hooks_root" commit -qm 'suite-maintenance: Retire the fixture language debt' \
+    > "$temporary/language-migration-debt.out" 2>&1; then
+    printf 'FAIL: a language scanner migration brought new debt through the hooks\n' >&2
+    exit 1
+elif ! grep -F 'app/src/fresh.rs: new non-English repository text' \
+    "$temporary/language-migration-debt.out" >/dev/null; then
+    printf 'FAIL: the debt in a migration produced no stable diagnostic\n' >&2
+    cat "$temporary/language-migration-debt.out" >&2
+    exit 1
+fi
+git -C "$hooks_root" reset -q --hard "$migration_base"
+restart_hooks
+
 printf 'Staged inventories: OK\n'
