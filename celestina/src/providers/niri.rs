@@ -36,6 +36,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use celestina_core::desktop_entry;
 use celestina_shell::bounded::{bounded, MAX_TEXT_UNITS};
 use celestina_shell::coalesce::Coalescer;
 use celestina_shell::workspace_groups::MAX_NAME_CHARS;
@@ -94,6 +95,10 @@ pub struct Window {
     pub app_id: Option<String>,
     pub workspace_id: Option<u64>,
     pub is_focused: bool,
+    /// The icon name of the window's `.desktop` entry (see [`AppIcons`]);
+    /// `None` out of [`reduce`], which is pure, and for an application
+    /// without an entry or icon.
+    pub icon: Option<String>,
 }
 
 /// The compositor's state, reduced to what the shell draws.
@@ -107,6 +112,78 @@ pub struct NiriModel {
     /// `EventStreamState` carries no output list of its own, and every
     /// connected output holds at least one workspace.
     pub outputs: Vec<String>,
+}
+
+/// How many application ids [`AppIcons`] remembers. A session has tens of
+/// distinct ones; past this the memory is dropped whole and rebuilt as the
+/// windows ask again.
+pub const MAX_ICON_CACHE: usize = 512;
+
+/// The application id → icon name lookup of the Activity page's rows: the
+/// `Icon` of the `.desktop` entry whose id is the window's `app_id`, found
+/// through [`celestina_core::desktop_entry::find`] in the XDG application
+/// directories. Each id is read at most once while remembered (a miss too),
+/// and the stream worker owns it, so the UI thread only ever reads
+/// [`Window::icon`]: it never touches the filesystem.
+#[derive(Debug)]
+pub struct AppIcons {
+    dirs: Vec<PathBuf>,
+    cache: HashMap<String, Option<String>>,
+}
+
+impl AppIcons {
+    /// A lookup over the session's XDG application directories.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::with_dirs(desktop_entry::application_search_dirs())
+    }
+
+    /// A lookup over `dirs`, most specific first.
+    #[must_use]
+    pub fn with_dirs(dirs: Vec<PathBuf>) -> Self {
+        Self {
+            dirs,
+            cache: HashMap::new(),
+        }
+    }
+
+    /// The icon name for `app_id`, or `None` when no entry names one. An
+    /// absolute path is not a theme name and counts as none.
+    pub fn icon_name(&mut self, app_id: &str) -> Option<String> {
+        if let Some(known) = self.cache.get(app_id) {
+            return known.clone();
+        }
+        if self.cache.len() >= MAX_ICON_CACHE {
+            self.cache.clear();
+        }
+        let found = self.lookup(app_id);
+        self.cache.insert(app_id.to_owned(), found.clone());
+        found
+    }
+
+    fn lookup(&self, app_id: &str) -> Option<String> {
+        let exact = format!("{app_id}.desktop");
+        let lower = format!("{}.desktop", app_id.to_lowercase());
+        let entry = desktop_entry::find(&self.dirs, &exact)
+            .or_else(|| desktop_entry::find(&self.dirs, &lower))?;
+        (!entry.icon.is_empty() && !entry.icon.starts_with('/')).then_some(entry.icon)
+    }
+
+    /// Sets the icon of every window of `model` that has an `app_id`.
+    pub fn fill(&mut self, model: &mut NiriModel) {
+        for window in &mut model.windows {
+            window.icon = window
+                .app_id
+                .as_deref()
+                .and_then(|app_id| self.icon_name(app_id));
+        }
+    }
+}
+
+impl Default for AppIcons {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// What the shell may ask the compositor to do.
@@ -293,6 +370,7 @@ pub fn reduce(state: &EventStreamState) -> NiriModel {
                 .map(|app_id| bounded(app_id, MAX_APP_ID_CHARS)),
             workspace_id: window.workspace_id,
             is_focused: window.is_focused,
+            icon: None,
         })
         .collect();
     windows.sort_by(|a, b| a.workspace_id.cmp(&b.workspace_id).then(a.id.cmp(&b.id)));
@@ -636,9 +714,11 @@ fn session(
     let mut state = EventStreamState::default();
     let mut dirty = false;
     let mut last: Option<NiriModel> = None;
+    let mut icons = AppIcons::new();
     loop {
         if dirty && coalescer.due(millis_since(start)) {
-            let model = reduce(&state);
+            let mut model = reduce(&state);
+            icons.fill(&mut model);
             if last.as_ref() != Some(&model) {
                 if !publish(model.clone()) {
                     return Ok(Ended::RuntimeGone);
@@ -1334,5 +1414,74 @@ mod tests {
         assert_eq!(calls, 2);
         assert_eq!(models.len(), 1);
         assert_eq!(models[0].workspaces.len(), 2);
+    }
+
+    fn desktop_dir(name: &str, files: &[(&str, &str)]) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("celestina-icons-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a test directory");
+        for (file, content) in files {
+            std::fs::write(dir.join(file), content).expect("a test entry");
+        }
+        dir
+    }
+
+    fn entry(icon: &str) -> String {
+        format!("[Desktop Entry]\nType=Application\nName=App\nExec=app\nIcon={icon}\n")
+    }
+
+    #[test]
+    fn app_icons_resolve_the_desktop_entry_of_the_app_id_once() {
+        let dir = desktop_dir(
+            "resolve",
+            &[
+                ("firefox.desktop", &entry("firefox-icon")),
+                ("org.Example.Term.desktop", &entry("term")),
+                ("pathy.desktop", &entry("/opt/pathy.png")),
+                (
+                    "bare.desktop",
+                    "[Desktop Entry]\nType=Application\nName=B\nExec=b\n",
+                ),
+            ],
+        );
+        let mut icons = AppIcons::with_dirs(vec![dir.clone()]);
+        assert_eq!(icons.icon_name("firefox").as_deref(), Some("firefox-icon"));
+        // Case differs from the file name: the lowercase id is tried too.
+        assert_eq!(icons.icon_name("Firefox").as_deref(), Some("firefox-icon"));
+        assert_eq!(icons.icon_name("org.Example.Term").as_deref(), Some("term"));
+        assert_eq!(icons.icon_name("pathy"), None, "a path is not a theme name");
+        assert_eq!(icons.icon_name("bare"), None);
+        assert_eq!(icons.icon_name("ghost"), None);
+        // A remembered answer survives the file going away.
+        std::fs::remove_dir_all(&dir).expect("the directory is removed");
+        assert_eq!(icons.icon_name("firefox").as_deref(), Some("firefox-icon"));
+        assert_eq!(icons.icon_name("ghost"), None);
+    }
+
+    #[test]
+    fn app_icons_fill_every_window_and_stay_bounded() {
+        let dir = desktop_dir("fill", &[("kitty.desktop", &entry("kitty"))]);
+        let mut icons = AppIcons::with_dirs(vec![dir]);
+        let mut model = NiriModel {
+            windows: (0..3)
+                .map(|id| Window {
+                    id,
+                    title: None,
+                    app_id: (id != 2).then(|| "kitty".to_owned()),
+                    workspace_id: Some(1),
+                    is_focused: false,
+                    icon: None,
+                })
+                .collect(),
+            ..NiriModel::default()
+        };
+        icons.fill(&mut model);
+        let names: Vec<Option<&str>> = model.windows.iter().map(|w| w.icon.as_deref()).collect();
+        assert_eq!(names, [Some("kitty"), Some("kitty"), None]);
+        for n in 0..(MAX_ICON_CACHE + 10) {
+            icons.icon_name(&format!("app{n}"));
+        }
+        assert!(icons.cache.len() <= MAX_ICON_CACHE);
     }
 }

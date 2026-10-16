@@ -45,7 +45,9 @@ use crate::{
     geometry::Rect,
     input::{CursorShape, InputEvent, Modifiers},
     metrics::{self, Metrics},
-    popup::{CloseReason, Placement, PopupAction, PopupEntry, PopupId, PopupQueue, WmBase},
+    popup::{
+        CloseReason, GrabSerial, Placement, PopupAction, PopupEntry, PopupId, PopupQueue, WmBase,
+    },
     surface::{NoEvents, OutputRef, Protocols, Role, Surface},
 };
 
@@ -188,6 +190,7 @@ pub struct SurfaceCtl<'a> {
     surface: &'a mut Surface,
     popups: &'a mut PopupQueue,
     cursor: &'a mut Option<CursorShape>,
+    signal: &'a LoopSignal,
 }
 
 impl SurfaceCtl<'_> {
@@ -260,6 +263,13 @@ impl SurfaceCtl<'_> {
     /// Closes popup `id` (no-op if it is already gone).
     pub fn close_popup(&mut self, id: PopupId) {
         self.popups.close(id);
+    }
+
+    /// Stops the loop once the current shell call returns; `run` returns
+    /// after the shutdown. For an input that ends the shell (a menu's quit
+    /// row), where no `RuntimeCtl` is at hand.
+    pub fn stop(&mut self) {
+        self.signal.stop();
     }
 }
 
@@ -423,10 +433,9 @@ pub(crate) struct Core<S: Shell> {
     pub(crate) pointer: Option<wl_pointer::WlPointer>,
     /// The modifiers of the last `update_modifiers`.
     pub(crate) modifiers: Modifiers,
-    /// Serial of the most recent pointer button press or key press: the
-    /// popup grab serial (a menu opened from the keyboard grabs with the
-    /// key's serial, not a stale click's).
-    pub(crate) last_input_serial: Option<u32>,
+    /// The last pointer and key press serials: the popup grab serial is
+    /// the newer of the two.
+    pub(crate) grab_serial: GrabSerial,
     /// Layer surface or popup surface.
     pub(crate) keyboard_focus: Option<SurfaceId>,
     pub(crate) next_surface_id: u32,
@@ -584,7 +593,7 @@ impl<S: Shell> Core<S> {
             keyboard: None,
             pointer: None,
             modifiers: Modifiers::default(),
-            last_input_serial: None,
+            grab_serial: GrabSerial::default(),
             keyboard_focus: None,
             next_surface_id: 1,
             frames_drawn: 0,
@@ -898,6 +907,7 @@ impl<S: Shell> RuntimeOps for Core<S> {
             popups,
             popup_queue,
             pending_cursor,
+            signal,
             ..
         } = self;
         let surface = surfaces
@@ -908,6 +918,7 @@ impl<S: Shell> RuntimeOps for Core<S> {
             surface,
             popups: popup_queue,
             cursor: pending_cursor,
+            signal,
         })
     }
 
@@ -953,6 +964,7 @@ impl<S: Shell> Runtime<S> {
             signal,
             ..
         } = core;
+        let signal: &LoopSignal = signal;
         let mut shell_frame = |cx: &mut FrameCx<'_>| shell.frame(cx);
         let (surface, sink) = match target {
             Target::Layer(idx) => (&mut surfaces[idx], Sink::Shell(&mut shell_frame)),
@@ -988,6 +1000,7 @@ impl<S: Shell> Runtime<S> {
                     surface,
                     popups: popup_queue,
                     cursor: pending_cursor,
+                    signal,
                 },
             };
             match sink {
@@ -1040,6 +1053,7 @@ impl<S: Shell> Runtime<S> {
                     surface: &mut core.surfaces[idx],
                     popups: &mut core.popup_queue,
                     cursor: &mut core.pending_cursor,
+                    signal: &core.signal,
                 };
                 shell.input(ev, &mut ctl);
             }
@@ -1055,6 +1069,7 @@ impl<S: Shell> Runtime<S> {
             surface,
             popups: &mut core.popup_queue,
             cursor: &mut core.pending_cursor,
+            signal: &core.signal,
         };
         if shell.input(ev, &mut ctl) == PopupAction::Close {
             core.close_popup_at(idx, CloseReason::Shell);

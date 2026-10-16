@@ -3,9 +3,14 @@
 //! of the process (created on the first frame of any surface, when the GL
 //! context exists), the last niri model and the appearance, and routes the
 //! workers' messages: the model to every Island, the appearance to the
-//! painter and the trees, a verb to the Island of the focused output.
+//! painter and the trees, a verb to the Island of the focused output. It
+//! also opens the Island's overflow menu and makes the menu's choices:
+//! quit, do-not-disturb (the shell's own settings file) and reopen.
 
-use std::{cell::OnceCell, rc::Rc};
+use std::{
+    cell::{OnceCell, RefCell},
+    rc::Rc,
+};
 
 use celestina_paint::{Painter, TextSystem, Theme};
 use celestina_settings::Appearance;
@@ -17,9 +22,16 @@ use celestina_wayland::{
 use crate::{
     command::Verb,
     error_chain,
-    island::{Island, IslandAction},
+    island::{
+        menu::{self, ChoiceSlot, Menu, MenuChoice, MenuState, SharedPainter},
+        pages::NameOwner,
+        Island, IslandAction,
+    },
     message::Message,
-    providers::niri::{NiriModel, NiriProvider, NiriRequest},
+    providers::{
+        niri::{NiriModel, NiriProvider, NiriRequest},
+        settings::ShellSettings,
+    },
 };
 
 /// The Island's layer-shell namespace.
@@ -115,14 +127,40 @@ fn focused_output(model: Option<&NiriModel>) -> Option<&str> {
         .and_then(|w| w.output.as_deref())
 }
 
+/// What the overflow menu shows: the do-not-disturb setting in force, and
+/// whether another program holds the notifications name (the row is then
+/// disabled and says so).
+fn menu_state(settings: &ShellSettings, owners: &NameOwner) -> MenuState {
+    MenuState {
+        do_not_disturb: settings.current().do_not_disturb,
+        dnd_held: owners.notifications.is_some(),
+    }
+}
+
+/// The slot a new menu writes its choice into, emptied first: a choice
+/// left by an earlier menu must never fire on a later, unrelated popup
+/// close.
+fn fresh_choice(slot: &ChoiceSlot) -> ChoiceSlot {
+    slot.set(None);
+    Rc::clone(slot)
+}
+
 /// The product's `Shell`.
 pub struct App {
     islands: Islands,
     /// The fonts, until the painter takes them on the first frame.
     fonts: Option<TextSystem>,
-    painter: Option<Painter>,
+    /// The one painter, shared with the open menu.
+    painter: Option<SharedPainter>,
     appearance: Appearance,
+    /// The shell's own settings (do-not-disturb).
+    settings: ShellSettings,
+    /// Where the open menu leaves the row chosen in it.
+    menu_choice: ChoiceSlot,
     model: Option<NiriModel>,
+    /// Who holds the bus names the Notifications and Tray pages depend on;
+    /// nobody until the owner detection of CEL-1-F / CEL-1-G fills it.
+    owners: NameOwner,
     /// The Island surface holding the keyboard.
     keyboard: Option<SurfaceId>,
     /// The compositor's request queue, set once the provider runs.
@@ -145,13 +183,15 @@ impl std::fmt::Debug for App {
 
 impl App {
     /// The app before any output: `fonts` for the painter, the appearance
-    /// read at start, the slot the niri provider is put in once it runs,
+    /// and the shell's settings read at start, the slot the niri provider
+    /// is put in once it runs,
     /// the slot the app writes why it stopped the run into, and whether
     /// `--metrics` asked for the atlas's occupancy at exit.
     #[must_use]
     pub fn new(
         fonts: TextSystem,
         appearance: Appearance,
+        settings: ShellSettings,
         niri: Rc<OnceCell<NiriProvider>>,
         fatal: Rc<OnceCell<String>>,
         metrics: bool,
@@ -161,13 +201,25 @@ impl App {
             fonts: Some(fonts),
             painter: None,
             appearance,
+            settings,
+            menu_choice: ChoiceSlot::default(),
             model: None,
+            owners: NameOwner::default(),
             keyboard: None,
             niri,
             fatal,
             refusal_logged: false,
             metrics,
         }
+    }
+
+    /// Records who holds the bus names the pages depend on; the Islands
+    /// pick it up on their next frame. Detecting the owners on the bus is
+    /// the job of the notification server and the tray host (CEL-1-F,
+    /// CEL-1-G). Returns whether anything changed, so the caller knows to
+    /// ask for a redraw.
+    pub fn set_owners(&mut self, owners: NameOwner) -> bool {
+        self.owners.replace(owners)
     }
 
     fn theme(&self) -> Theme {
@@ -229,15 +281,71 @@ impl App {
         }
     }
 
-    fn act(&mut self, action: IslandAction) {
-        let request = match action {
-            IslandAction::FocusWorkspace(id) => NiriRequest::FocusWorkspace(id),
-            IslandAction::FocusWindow(id) => NiriRequest::FocusWindow(id),
-            IslandAction::OpenMenu(anchor) => {
-                tracing::debug!(?anchor, "the overflow menu arrives with CEL-1-D");
-                return;
+    /// The Island's actions after its input: compositor requests, and the
+    /// overflow menu built here (it needs the shared painter, the settings
+    /// and the choice slot) and handed to the Island to open.
+    fn act(
+        &mut self,
+        actions: Vec<IslandAction>,
+        surface: SurfaceId,
+        shared: &SharedPainter,
+        ctl: &mut SurfaceCtl<'_>,
+    ) {
+        for action in actions {
+            match action {
+                IslandAction::FocusWorkspace(id) => self.request(NiriRequest::FocusWorkspace(id)),
+                IslandAction::FocusWindow(id) => self.request(NiriRequest::FocusWindow(id)),
+                IslandAction::OpenMenu { more, keyboard } => {
+                    let Ok(painter) = shared.try_borrow() else {
+                        tracing::warn!("the painter is in use; the menu is not opened");
+                        continue;
+                    };
+                    let theme = painter.theme().clone();
+                    drop(painter);
+                    let menu = Menu::new(
+                        Rc::clone(shared),
+                        &theme,
+                        menu_state(&self.settings, &self.owners),
+                        self.appearance.reduced_motion,
+                        keyboard,
+                        fresh_choice(&self.menu_choice),
+                    );
+                    if let Some(island) = self.islands.get_mut(surface) {
+                        island.open_menu(more, menu::menu_size(&theme), Box::new(menu), ctl);
+                    }
+                }
             }
-        };
+        }
+    }
+
+    /// Makes the overflow menu's choice, once its popup is gone.
+    fn menu_chose(&mut self, choice: MenuChoice, surface: SurfaceId, ctl: &mut SurfaceCtl<'_>) {
+        match choice {
+            MenuChoice::Quit => {
+                tracing::info!("quit chosen in the menu");
+                ctl.stop();
+            }
+            // Only the setting changes: nothing honours it until the
+            // notification server (CEL-1-F) reads it at its start and on
+            // this choice, through its own do-not-disturb flag.
+            MenuChoice::DoNotDisturb(on) => match self.settings.set_do_not_disturb(on) {
+                Ok(changed) => {
+                    tracing::info!(on, changed, "do-not-disturb chosen in the menu");
+                    // The open page shows the switch: draw it again. Other
+                    // outputs' Islands pick it up on their next frame.
+                    ctl.request_redraw();
+                }
+                Err(err) => tracing::warn!(on, "do-not-disturb not changed: {}", error_chain(&err)),
+            },
+            MenuChoice::ReopenPage => {
+                if let Some(island) = self.islands.get_mut(surface) {
+                    island.reopen(ctl);
+                }
+            }
+        }
+    }
+
+    fn request(&mut self, request: NiriRequest) {
         let Some(niri) = self.niri.get() else {
             tracing::debug!(?request, "no niri provider: the request is dropped");
             return;
@@ -291,7 +399,7 @@ impl Shell for App {
                 return;
             };
             match Painter::new(cx.proc_address, self.theme(), fonts) {
-                Ok(painter) => self.painter = Some(painter),
+                Ok(painter) => self.painter = Some(Rc::new(RefCell::new(painter))),
                 Err(err) => {
                     // Blank Islands holding their exclusive zones help
                     // nobody: the run ends and the binary reports why.
@@ -303,15 +411,22 @@ impl Shell for App {
                 }
             }
         }
-        let (Some(painter), Some(island)) =
-            (self.painter.as_mut(), self.islands.get_mut(cx.surface))
+        let (Some(shared), Some(island)) =
+            (self.painter.as_ref(), self.islands.get_mut(cx.surface))
         else {
+            return;
+        };
+        let Ok(mut painter) = shared.try_borrow_mut() else {
+            tracing::warn!("the painter is in use; the Island's frame is skipped");
+            cx.ctl.request_redraw();
             return;
         };
         island.frame(
             cx,
-            painter,
+            &mut painter,
             self.model.as_ref(),
+            &self.owners,
+            self.settings.current().do_not_disturb,
             self.appearance.reduced_motion,
         );
     }
@@ -323,12 +438,25 @@ impl Shell for App {
             InputEvent::FocusLost if self.keyboard == Some(surface) => self.keyboard = None,
             _ => {}
         }
-        let (Some(painter), Some(island)) = (self.painter.as_mut(), self.islands.get_mut(surface))
+        let closed = matches!(ev, InputEvent::PopupClosed { .. });
+        let (Some(shared), Some(island)) = (self.painter.clone(), self.islands.get_mut(surface))
         else {
             return;
         };
-        for action in island.input(ev, ctl, painter) {
-            self.act(action);
+        let actions = match shared.try_borrow_mut() {
+            Ok(mut painter) => island.input(ev, ctl, &mut painter),
+            Err(_) => {
+                tracing::warn!("the painter is in use; the input is dropped");
+                return;
+            }
+        };
+        self.act(actions, surface, &shared, ctl);
+        // The menu is gone: a row chosen in it is made now. The Island has
+        // one popup at a time, so the slot is that popup's.
+        if closed {
+            if let Some(choice) = self.menu_choice.take() {
+                self.menu_chose(choice, surface, ctl);
+            }
         }
     }
 
@@ -350,8 +478,10 @@ impl Shell for App {
                 }
                 self.appearance = appearance;
                 let theme = self.theme();
-                if let Some(painter) = &mut self.painter {
-                    painter.set_theme(theme);
+                match self.painter.as_ref().map(|p| p.try_borrow_mut()) {
+                    Some(Ok(mut painter)) => painter.set_theme(theme),
+                    Some(Err(_)) => tracing::warn!("the painter is in use; the theme waits"),
+                    None => {}
                 }
                 self.redraw_all(ctl);
             }
@@ -366,7 +496,7 @@ impl Drop for App {
         if !self.metrics {
             return;
         }
-        if let Some(painter) = &self.painter {
+        if let Some(Ok(painter)) = self.painter.as_ref().map(|p| p.try_borrow()) {
             let usage = painter.atlas_usage();
             tracing::info!(
                 glyphs = usage.glyphs,
@@ -432,6 +562,41 @@ mod tests {
             islands.target(Some(SurfaceId(99)), None),
             Some(SurfaceId(10))
         );
+    }
+
+    #[test]
+    fn the_menu_shows_the_setting_and_disables_it_while_the_name_is_held() {
+        let settings = ShellSettings::load_from(None);
+        let free = menu_state(&settings, &NameOwner::default());
+        assert_eq!(
+            free,
+            MenuState {
+                do_not_disturb: false,
+                dnd_held: false
+            }
+        );
+        let held = NameOwner {
+            notifications: Some("org.freedesktop.Notifications is held by :1.42 (noctalia)".into()),
+            tray: None,
+        };
+        assert!(menu_state(&settings, &held).dnd_held);
+        // The tray's holder does not concern do-not-disturb.
+        let tray = NameOwner {
+            notifications: None,
+            tray: Some(":1.7".into()),
+        };
+        assert!(!menu_state(&settings, &tray).dnd_held);
+    }
+
+    #[test]
+    fn a_new_menu_starts_from_an_empty_choice_slot() {
+        let slot = ChoiceSlot::default();
+        slot.set(Some(MenuChoice::Quit));
+        let handed = fresh_choice(&slot);
+        assert!(Rc::ptr_eq(&slot, &handed), "the menu writes the app's slot");
+        assert_eq!(slot.take(), None, "the stale quit is gone");
+        handed.set(Some(MenuChoice::ReopenPage));
+        assert_eq!(slot.take(), Some(MenuChoice::ReopenPage));
     }
 
     #[test]

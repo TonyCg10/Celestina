@@ -13,6 +13,8 @@ pub struct Row {
     pub text: String,
     /// The workspace shown on the output.
     pub active: bool,
+    /// How many columns of the scrolling layout hold its tiled windows.
+    pub columns: u16,
 }
 
 /// The workspaces of `output`, in niri's order (by index).
@@ -29,6 +31,7 @@ pub fn rows_for(model: &NiriModel, output: &str) -> Vec<Row> {
                 .clone()
                 .unwrap_or_else(|| copy::workspace_number(w.idx)),
             active: w.is_active,
+            columns: w.columns,
         })
         .collect()
 }

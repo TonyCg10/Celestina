@@ -310,7 +310,7 @@ impl<S: Shell> KeyboardHandler for Runtime<S> {
     ) {
         // Before dispatch: Enter on a menu button opens the menu inside this
         // call, grabbing with this serial.
-        self.core.last_input_serial = Some(serial);
+        self.core.grab_serial.key_press(serial);
         self.key_event(event, true, serial);
     }
 
@@ -386,7 +386,7 @@ impl<S: Shell> PointerHandler for Runtime<S> {
     ) {
         for event in events {
             if let PointerEventKind::Press { serial, .. } = event.kind {
-                self.core.last_input_serial = Some(serial);
+                self.core.grab_serial.pointer_press(serial);
             }
             let Some(target) = self.core.target_by_wl(&event.surface) else {
                 continue;

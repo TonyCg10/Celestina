@@ -9,7 +9,8 @@ use celestina_ui::{view, Key, View};
 use taffy::{AlignItems, JustifyContent};
 
 use super::{
-    state::{CAPSULE_H, PAGE_SIZE, TOP_GAP},
+    pages::tabs,
+    state::{CAPSULE_H, TOP_GAP},
     workspaces::Row,
 };
 use crate::{command::Page, copy};
@@ -45,12 +46,6 @@ pub fn more_key() -> Key {
     Key::named("more")
 }
 
-/// The Activity page's row of workspace `id`.
-#[must_use]
-pub fn workspace_key(id: u64) -> Key {
-    Key::indexed("workspace", id)
-}
-
 /// The page's title.
 #[must_use]
 pub fn page_title(page: Page) -> &'static str {
@@ -61,12 +56,17 @@ pub fn page_title(page: Page) -> &'static str {
     }
 }
 
-fn centred(mut v: View) -> View {
+pub(in crate::island) fn centred(mut v: View) -> View {
     v.style.align_items = AlignItems::CENTER;
     v
 }
 
-fn style(size: f32, weight: Weight, tabular: bool, role: Role) -> TextStyle {
+pub(in crate::island) fn text_style(
+    size: f32,
+    weight: Weight,
+    tabular: bool,
+    role: Role,
+) -> TextStyle {
     TextStyle {
         size,
         weight,
@@ -81,7 +81,7 @@ fn style(size: f32, weight: Weight, tabular: bool, role: Role) -> TextStyle {
 /// none. Centred on the top edge, [`TOP_GAP`] below it.
 #[must_use]
 pub fn capsule(theme: &Theme, clock: &str, rows: &[Row], surface_w: f32) -> View {
-    let clock_style = style(
+    let clock_style = text_style(
         theme.type_scale.row_title,
         Weight::Semibold,
         true,
@@ -91,7 +91,7 @@ pub fn capsule(theme: &Theme, clock: &str, rows: &[Row], surface_w: f32) -> View
         view::text(
             Key::named("fallback"),
             copy::WORKSPACES_FALLBACK,
-            style(theme.type_scale.body, Weight::Regular, false, Role::TextLo),
+            text_style(theme.type_scale.body, Weight::Regular, false, Role::TextLo),
         )
     } else {
         centred(view::row(Key::named("dots")).gap(DOT_GAP)).children(rows.iter().map(|r| {
@@ -121,6 +121,41 @@ pub fn capsule(theme: &Theme, clock: &str, rows: &[Row], surface_w: f32) -> View
     root.child(body)
 }
 
+/// A switch's track, logical px.
+pub const SWITCH_TRACK: (f32, f32) = (36.0, 20.0);
+/// A switch's knob diameter, logical px.
+pub const SWITCH_KNOB: f32 = 16.0;
+
+/// A switch keyed `key`: the knob at the right on an accent track when
+/// `on`, at the left on the control fill when off; a switch that is not
+/// `enabled` keeps the control fill and a faint knob. The switch only
+/// shows the state: the row holding it is the control.
+pub(in crate::island) fn switch(key: Key, on: bool, enabled: bool) -> View {
+    let knob_role = match (enabled, on) {
+        (false, _) => Role::TextFaint,
+        (true, true) => Role::AccentInk,
+        (true, false) => Role::TextHi,
+    };
+    let track_role = if enabled && on {
+        Role::Accent
+    } else {
+        Role::ControlFill
+    };
+    let knob = view::row(Key::named("switch-knob"))
+        .fill(knob_role)
+        .radius(SWITCH_KNOB / 2.0)
+        .size(SWITCH_KNOB, SWITCH_KNOB);
+    let mut track = centred(view::row(key))
+        .fill(track_role)
+        .radius(SWITCH_TRACK.1 / 2.0)
+        .size(SWITCH_TRACK.0, SWITCH_TRACK.1)
+        .padding_xy((SWITCH_TRACK.1 - SWITCH_KNOB) / 2.0, 0.0);
+    if on {
+        track.style.justify_content = JustifyContent::FLEX_END;
+    }
+    track.child(knob)
+}
+
 fn button(theme: &Theme, key: Key, label_key: &str, label: &str) -> View {
     centred(view::row(key))
         .height(BUTTON_H)
@@ -132,49 +167,37 @@ fn button(theme: &Theme, key: Key, label_key: &str, label: &str) -> View {
         .child(view::text(
             Key::named(label_key),
             label,
-            style(theme.type_scale.body, Weight::Regular, false, Role::TextHi),
+            text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi),
         ))
 }
 
-fn workspace_row(theme: &Theme, row: &Row) -> View {
-    let mut v = centred(view::row(workspace_key(row.id)))
-        .height(theme.row_height)
-        .padding_xy(theme.spacing.md, 0.0)
-        .gap(theme.spacing.md)
-        .radius(theme.radius_md)
-        .interactive()
-        .focusable();
-    if row.active {
-        v = v.fill(Role::ControlFill);
-    }
-    let dot = if row.active {
-        Role::Accent
-    } else {
-        Role::TextLo
-    };
-    v.child(
-        view::row(Key::indexed("workspace-dot", row.id))
-            .fill(dot)
-            .radius(DOT / 2.0)
-            .size(DOT, DOT),
-    )
-    .child(view::text(
-        Key::indexed("workspace-name", row.id),
-        &row.text,
-        style(theme.type_scale.body, Weight::Regular, false, Role::TextHi),
-    ))
+/// What the page spends on everything but its content: the padding, the
+/// title row, the tabs and the gaps between them. A page of height `h` has
+/// `h - chrome_height` for its content.
+#[must_use]
+pub fn chrome_height(theme: &Theme) -> f32 {
+    2.0 * theme.spacing.lg + TITLE_ROW_H + tabs::TABS_H + 2.0 * theme.spacing.sm
 }
 
-/// The page at its final size, centred where the grown Island ends: the
-/// title row (title, the overflow button, close) over the page's content.
-/// The Activity page lists the output's workspaces; the other pages are
-/// filled by CEL-1-D, F and G.
+/// The page at `size`, centred where the grown Island ends: the title row
+/// (title, the overflow button, close), the page's `content` in a clipped
+/// body, and the row of page tabs under it with `open` selected. `slide`
+/// (−1..1, in body widths) offsets the content horizontally; the title row
+/// and the tabs stay where they are.
 #[must_use]
-pub fn page(theme: &Theme, page: Page, rows: &[Row], surface_w: f32) -> View {
+pub fn page(
+    theme: &Theme,
+    open: Page,
+    title: &str,
+    content: View,
+    surface_w: f32,
+    size: (f32, f32),
+    slide: f32,
+) -> View {
     let title = view::text(
         Key::named("title"),
-        page_title(page),
-        style(
+        title,
+        text_style(
             theme.type_scale.title,
             Weight::Semibold,
             false,
@@ -188,17 +211,27 @@ pub fn page(theme: &Theme, page: Page, rows: &[Row], surface_w: f32) -> View {
         .child(title)
         .child(button(theme, more_key(), "more-label", copy::MORE))
         .child(button(theme, close_key(), "close-label", copy::CLOSE));
-    let body = view::col(Key::named("body")).children(match page {
-        Page::Activity => rows.iter().map(|r| workspace_row(theme, r)).collect(),
-        Page::Notifications | Page::Tray => Vec::new(),
-    });
+    let body_w = (size.0 - 2.0 * theme.spacing.lg).max(0.0);
+    let body_h =
+        (size.1 - 2.0 * theme.spacing.lg - TITLE_ROW_H - tabs::TABS_H - 2.0 * theme.spacing.sm)
+            .max(0.0);
+    let body = view::col(Key::named("body"))
+        .size(body_w, body_h)
+        .clip()
+        .child(
+            view::col(Key::named("slide"))
+                .absolute(slide * body_w, 0.0)
+                .size(body_w, body_h)
+                .child(content),
+        );
     view::col(Key::named("page-root"))
-        .absolute((surface_w - PAGE_SIZE.0) / 2.0, TOP_GAP)
-        .size(PAGE_SIZE.0, PAGE_SIZE.1)
+        .absolute((surface_w - size.0) / 2.0, TOP_GAP)
+        .size(size.0, size.1)
         .padding(theme.spacing.lg)
         .gap(theme.spacing.sm)
         .child(title_row)
         .child(body)
+        .child(tabs::tabs(theme, open, body_w))
 }
 
 #[cfg(test)]
@@ -235,6 +268,7 @@ mod tests {
             id,
             text: copy::workspace_number(u8::try_from(id).unwrap_or(0)),
             active,
+            columns: 0,
         }
     }
 
@@ -262,25 +296,51 @@ mod tests {
         assert!(tree.node_by_key(Key::named("dots")).is_none());
     }
 
+    fn content() -> View {
+        view::col(Key::named("content")).child(view::row(Key::named("probe")).height(40.0))
+    }
+
+    fn page_at(slide: f32) -> Tree {
+        laid_out(page(
+            &Theme::dark(),
+            Page::Activity,
+            copy::PAGE_ACTIVITY,
+            content(),
+            SURFACE_W,
+            (420.0, 300.0),
+            slide,
+        ))
+    }
+
     #[test]
-    fn the_page_fills_the_grown_island_with_its_buttons_at_the_right() {
+    fn the_page_fills_the_grown_island_with_buttons_at_the_right_and_tabs_below() {
         let theme = Theme::dark();
-        let rows = [row(1, true), row(2, false)];
-        let tree = laid_out(page(&theme, Page::Activity, &rows, SURFACE_W));
+        let tree = page_at(0.0);
         let root = rect_of(&tree, Key::named("page-root"));
         assert_eq!((root.x, root.y, root.w, root.h), (170.0, 8.0, 420.0, 300.0));
         let close = rect_of(&tree, close_key());
         assert_eq!(close.x + close.w, root.x + root.w - theme.spacing.lg);
         let more = rect_of(&tree, more_key());
         assert!(more.x + more.w <= close.x);
-        for id in [1, 2] {
-            let r = rect_of(&tree, workspace_key(id));
-            assert_eq!(r.h, theme.row_height);
-            assert_eq!(r.x, root.x + theme.spacing.lg);
-            assert!(r.y + r.h <= root.y + root.h - theme.spacing.lg);
+        let body = rect_of(&tree, Key::named("body"));
+        let probe = rect_of(&tree, Key::named("probe"));
+        assert_eq!((probe.x, probe.y), (body.x, body.y), "content at rest");
+        let tab = rect_of(&tree, tabs::tab_key(Page::Activity));
+        assert_eq!(tab.y + tab.h, root.y + root.h - theme.spacing.lg);
+        assert!(body.y + body.h <= tab.y, "the body ends above the tabs");
+    }
+
+    #[test]
+    fn the_slide_offsets_the_content_in_body_widths_and_leaves_the_chrome() {
+        let rest = page_at(0.0);
+        let left = page_at(-1.0);
+        let right = page_at(0.5);
+        let body = rect_of(&rest, Key::named("body"));
+        let x = |tree: &Tree, key| rect_of(tree, key).x;
+        assert_eq!(x(&left, Key::named("probe")), body.x - body.w);
+        assert_eq!(x(&right, Key::named("probe")), body.x + body.w / 2.0);
+        for key in [close_key(), tabs::tab_key(Page::Tray), Key::named("body")] {
+            assert_eq!(x(&rest, key), x(&left, key));
         }
-        // The other pages have their own title and no rows yet.
-        let tray = laid_out(page(&theme, Page::Tray, &rows, SURFACE_W));
-        assert!(tray.node_by_key(workspace_key(1)).is_none());
     }
 }

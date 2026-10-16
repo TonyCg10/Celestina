@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "celestina"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "celestina-core",
  "celestina-paint",
@@ -268,6 +268,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "tracing-subscriber",
+ "unicode-segmentation",
  "zbus",
 ]
 

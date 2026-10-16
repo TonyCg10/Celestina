@@ -29,7 +29,7 @@ use celestina::{
     command::{self, Mode, Verb, USAGE},
     error_chain,
     island::clock,
-    providers::{self, Worker},
+    providers::{self, settings::ShellSettings, Worker},
 };
 use celestina_paint::{default_font_dirs, TextSystem, Theme};
 use celestina_wayland::Config;
@@ -115,6 +115,7 @@ fn shell(cfg: Config) -> ExitCode {
     let app = App::new(
         fonts,
         appearance,
+        ShellSettings::load(),
         Rc::clone(&niri),
         Rc::clone(&fatal),
         cfg.metrics,

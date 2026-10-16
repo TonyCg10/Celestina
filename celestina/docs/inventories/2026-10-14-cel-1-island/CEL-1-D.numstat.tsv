@@ -1,0 +1,59 @@
+# CEL-1-D exact change inventory
+
+Base revision	08949c341bb87fd125c35ca792fc369a7b9654e0
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-wayland/src/handlers.rs
+Pathspec	celestina/crates/celestina-wayland/src/popup.rs
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/docs/evidence/2026-10-16-island-pages.md
+Pathspec	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-D.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/menu.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/notifications.rs
+Pathspec	celestina/src/island/pages/tabs.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/island/state.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/island/workspaces.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/providers/niri.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	1	e787a08f1cd6885c902f4584c5a7f53efb616efb5f77e8214b437036ae843dba	celestina/Cargo.lock
+5	1	79ca9daa48f0fbf0356b6ea9e04332a330422f5839606a7f03c34993806666d0	celestina/Cargo.toml
+1	1	7230ffac8bc153f105708825c2f8693b873ffae2df15cf440921ac2ded1d3e1f	celestina/ROADMAP.md
+10	6	38debec3e54da5ddbc71c1c9beb04124a1143d66ef86f4cbc82a574dd4a033c7	celestina/STATUS.md
+37	9	15ae7887c8c4811ba2cd062801e0649f0fc8ad4282cd3d2e0fe81c73379feba6	celestina/VALIDATION.md
+2	2	85592fb8af3bf25fe9e8931e9f020c0d7f4839747df22bf755ce65993839a787	celestina/crates/celestina-wayland/src/handlers.rs
+86	1	0a5133c3be8b7c50b7fae1b0d9abc4fe72e6162ed695ec021e7630142f2fcba3	celestina/crates/celestina-wayland/src/popup.rs
+21	6	062acae586a93cf1d6d2c4f58b43d45b26f5b2f9f7c568b2a54305f99904fb38	celestina/crates/celestina-wayland/src/runtime.rs
+130	0	a9256df7daa928754ae17b22a8d32a00836ad834d7e252ede5aa17c6422cf075	celestina/docs/evidence/2026-10-16-island-pages.md
+59	0	self	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-D.numstat.tsv
+1	1	5d8a9d602b7ebdb89dc73293f0ca64f4d6943481bf8093ce68ab92e5d25c6c25	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+189	24	70e61ff8a404d79c37d280142aec4e678313c7136d7a0eafdb4ba7fd4c893e7a	celestina/src/app.rs
+58	0	443ca97f661db603079d79756bc932223f3e85b8e0977e61ce951351a68da9ab	celestina/src/copy.rs
+646	0	15f00d9f5579f29677ee2c4cc34ed06e577c7238c5dab8a9ed3a3fd4ea144a3f	celestina/src/island/menu.rs
+392	28	74ad7edc0e2334e0d9beaa49bb847f0579d2812b5228189e287898ed974d69cc	celestina/src/island/mod.rs
+549	0	e52036e5999fdff00868261e1f9f7e7d99769388e3ce29659dd92a0b67699ec2	celestina/src/island/pages/activity.rs
+221	0	0fccbd047f2433a9cc18bc2f229f7f11420cadac661bdf0dcc7dccd7bc2eda13	celestina/src/island/pages/mod.rs
+176	0	66126e976b32623a897e5d7cfd2cf633a46f802d9c77eee06970bee4797809da	celestina/src/island/pages/notifications.rs
+130	0	ce6b31254241ce84ba510c55c7d4e7169d61c4557137b38ec6965a5abcd0c4a3	celestina/src/island/pages/tabs.rs
+90	0	4d10203b88b81680c56ccd00244902da9676e9d72c407a72273d116523bbf722	celestina/src/island/pages/tray.rs
+331	6	c8a8cbdc15e017228c38a403a2bdca97d06660c8c4af7a22b738b84c3d822f82	celestina/src/island/state.rs
+123	63	b1a2e05879a04820a3abef9dfb4062445114abeb1a3144fc1e1e047ff1cc29f3	celestina/src/island/view.rs
+3	0	aac66f721c4cb2272a0c3d80458908558bc8abef980ab4de4562cbc9a2f12e4a	celestina/src/island/workspaces.rs
+2	1	11f8ff874e2abe2799b94e08e11e3f846c80f41435bc9b34832e4b07cf0a87fc	celestina/src/main.rs
+150	1	f41e71a13140ace81defc5c0725e2b697acf95329cd3c4ab5c55daedfbfe815e	celestina/src/providers/niri.rs
+1	0	0c18b3e55211cac03918bba084b2600f8f75e54a578d6d4738c2d2473dcbe80b	docs/version-history.tsv

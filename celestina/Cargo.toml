@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "0.2.0"
+version = "0.3.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -73,5 +73,9 @@ celestina-shell = { path = "../celestina-rs/crates/celestina-shell" }
 tracing = "0.1"
 # The binary's subscriber: stderr, filtered by `RUST_LOG` (default `info`).
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std", "ansi"] }
+# Window titles on the Activity page are cut at 48 extended grapheme
+# clusters, so an emoji sequence or an accented letter is never split;
+# `str::chars` cannot count that. Already in the lockfile through cosmic-text.
+unicode-segmentation = "1"
 # Typed errors with their sources, as in the toolkit crates.
 thiserror = "2"

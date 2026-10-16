@@ -189,6 +189,66 @@ pub fn positioner(
     Ok(positioner)
 }
 
+/// One input serial and its place in the order the presses arrived in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Arrival {
+    pub serial: u32,
+    /// Counts up from 1 with every press the seat delivers.
+    pub order: u64,
+}
+
+/// The serials of the last pointer press and the last key press. A popup
+/// grabs with the newer of the two by arrival, never by serial value
+/// (serials wrap): a menu opened from the keyboard grabs with the key's
+/// serial, not a stale click's, and a click after a key press wins again.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GrabSerial {
+    pointer: Option<Arrival>,
+    key: Option<Arrival>,
+    arrivals: u64,
+}
+
+impl GrabSerial {
+    /// A pointer button press arrived with `serial`.
+    pub fn pointer_press(&mut self, serial: u32) {
+        self.pointer = Some(self.arrive(serial));
+    }
+
+    /// A key press arrived with `serial`.
+    pub fn key_press(&mut self, serial: u32) {
+        self.key = Some(self.arrive(serial));
+    }
+
+    fn arrive(&mut self, serial: u32) -> Arrival {
+        self.arrivals = self.arrivals.saturating_add(1);
+        Arrival {
+            serial,
+            order: self.arrivals,
+        }
+    }
+
+    /// The serial a popup opened now grabs with; `None` before any press.
+    #[must_use]
+    pub fn current(&self) -> Option<u32> {
+        GrabSerial::latest(self.pointer, self.key)
+    }
+
+    /// The serial of whichever press arrived last.
+    #[must_use]
+    pub fn latest(pointer: Option<Arrival>, key: Option<Arrival>) -> Option<u32> {
+        match (pointer, key) {
+            (Some(p), Some(k)) => Some(if k.order > p.order {
+                k.serial
+            } else {
+                p.serial
+            }),
+            (Some(p), None) => Some(p.serial),
+            (None, Some(k)) => Some(k.serial),
+            (None, None) => None,
+        }
+    }
+}
+
 /// Popup requests made through `SurfaceCtl`; the runtime applies them right
 /// after the shell call that made them returns.
 #[derive(Default)]
@@ -385,7 +445,7 @@ impl<S: Shell> Core<S> {
             }
         };
 
-        let grab_serial = match (&self.seat, self.last_input_serial) {
+        let grab_serial = match (&self.seat, self.grab_serial.current()) {
             (Some(seat), Some(serial)) => {
                 popup.xdg_popup().grab(seat, serial);
                 Some(serial)
@@ -564,6 +624,31 @@ mod tests {
         );
         let g = positioner_geometry(p.anchor, (200.0, 136.0));
         assert_eq!(unconstrained_origin(g.anchor, &p), (480, 66));
+    }
+
+    #[test]
+    fn menu_grabs_with_the_last_input_serial_pointer_or_key() {
+        let pointer = |serial, order| Some(Arrival { serial, order });
+        let key = pointer;
+        // Nothing pressed yet: no grab.
+        assert_eq!(GrabSerial::latest(None, None), None);
+        assert_eq!(GrabSerial::latest(pointer(40, 1), None), Some(40));
+        assert_eq!(GrabSerial::latest(None, key(41, 1)), Some(41));
+        // The newer arrival wins, whatever the serials' values (they wrap).
+        assert_eq!(GrabSerial::latest(pointer(900, 1), key(5, 2)), Some(5));
+        assert_eq!(GrabSerial::latest(pointer(5, 3), key(900, 2)), Some(5));
+
+        // The recorder numbers the arrivals itself.
+        let mut grab = GrabSerial::default();
+        assert_eq!(grab.current(), None);
+        grab.pointer_press(u32::MAX);
+        assert_eq!(grab.current(), Some(u32::MAX));
+        // A key press after the click (Enter on the overflow button): the key's serial.
+        grab.key_press(3);
+        assert_eq!(grab.current(), Some(3));
+        // Then a click again: the click's.
+        grab.pointer_press(2);
+        assert_eq!(grab.current(), Some(2));
     }
 
     #[test]
