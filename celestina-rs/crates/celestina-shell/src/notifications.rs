@@ -54,8 +54,8 @@ pub const MAX_ACTION_LABEL_CHARS: usize = 48;
 
 /// How long a notification stays when its producer asked for the server's
 /// default. Critical is not in this list on purpose: see [`Urgency`].
-const DEFAULT_LOW_MS: u64 = 4_000;
-const DEFAULT_NORMAL_MS: u64 = 6_000;
+const DEFAULT_LOW_MS: u64 = 5_000;
+const DEFAULT_NORMAL_MS: u64 = 10_000;
 /// The longest a producer may pin something on screen. A program asking for an
 /// hour is either broken or helping itself to the session's attention; it gets
 /// a long time, not an unbounded one.
@@ -206,6 +206,59 @@ pub enum CloseReason {
 pub struct Closed {
     pub id: u32,
     pub reason: CloseReason,
+}
+
+/// A millisecond clock that can be held still.
+///
+/// While the pointer rests on the banner stack nothing should expire, so the
+/// notification worker reads time through this instead of the real clock:
+/// logical time is real time minus every moment spent paused. It never reads
+/// the system clock itself; the caller passes real milliseconds in, which keeps
+/// the rule testable.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PausableClock {
+    /// Total real milliseconds spent paused so far.
+    paused_total_ms: u64,
+    /// The real stamp the current pause began at, while paused.
+    paused_since_ms: Option<u64>,
+    /// The latest logical time handed out, so it never goes backwards.
+    latest_ms: u64,
+}
+
+impl PausableClock {
+    /// A running clock whose logical time starts at the real time given.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The logical time at this real stamp. Frozen while paused, and never
+    /// less than a value returned before.
+    pub fn now_ms(&mut self, real_ms: u64) -> u64 {
+        let effective_real = self.paused_since_ms.unwrap_or(real_ms);
+        let logical = effective_real.saturating_sub(self.paused_total_ms);
+        self.latest_ms = self.latest_ms.max(logical);
+        self.latest_ms
+    }
+
+    /// Pauses or resumes at this real stamp. Pausing while paused, or resuming
+    /// while running, changes nothing.
+    pub fn set_paused(&mut self, real_ms: u64, paused: bool) {
+        match (paused, self.paused_since_ms) {
+            (true, None) => {
+                // Remember where logical time stands before freezing it.
+                let _ = self.now_ms(real_ms);
+                self.paused_since_ms = Some(real_ms);
+            }
+            (false, Some(since)) => {
+                self.paused_total_ms = self
+                    .paused_total_ms
+                    .saturating_add(real_ms.saturating_sub(since));
+                self.paused_since_ms = None;
+            }
+            _ => {}
+        }
+    }
 }
 
 /// What this server tells `GetCapabilities`.
@@ -373,6 +426,15 @@ impl Notifications {
             .collect()
     }
 
+    /// Ends every live notification as dismissed, oldest first. Critical ones
+    /// go too: this is the person clearing the stack, not a timeout.
+    pub fn dismiss_all(&mut self) -> Vec<Closed> {
+        let ids: Vec<u32> = self.live.iter().map(|entry| entry.id).collect();
+        ids.into_iter()
+            .filter_map(|id| self.close(id, CloseReason::Dismissed))
+            .collect()
+    }
+
     /// Confirms that this action belongs to this notification.
     ///
     /// A key the producer never offered is refused: invoking one would send an
@@ -445,6 +507,103 @@ mod tests {
             expire_timeout: -1,
             ..Incoming::default()
         }
+    }
+
+    #[test]
+    fn urgency_expiry_low_5s_normal_10s_critical_never() {
+        let mut server = Notifications::new();
+        let mut low = incoming("low");
+        low.urgency = Urgency::Low;
+        let mut normal = incoming("normal");
+        normal.urgency = Urgency::Normal;
+        let mut critical = incoming("critical");
+        critical.urgency = Urgency::Critical;
+        let low_id = server.post(&low, 0);
+        let normal_id = server.post(&normal, 0);
+        let critical_id = server.post(&critical, 0);
+
+        assert!(server.expire(4_999).is_empty());
+        assert_eq!(
+            server.expire(5_000),
+            vec![Closed {
+                id: low_id,
+                reason: CloseReason::Expired
+            }]
+        );
+        assert!(server.expire(9_999).is_empty());
+        assert_eq!(
+            server.expire(10_000),
+            vec![Closed {
+                id: normal_id,
+                reason: CloseReason::Expired
+            }]
+        );
+        assert!(server.expire(u64::MAX).is_empty());
+        assert_eq!(server.live()[0].id, critical_id);
+    }
+
+    #[test]
+    fn hover_pauses_expiry() {
+        let mut clock = PausableClock::new();
+        let mut server = Notifications::new();
+        let id = server.post(&incoming("x"), clock.now_ms(0));
+        clock.set_paused(6_000, true);
+        assert_eq!(clock.now_ms(20_000), 6_000);
+        clock.set_paused(20_000, false);
+        assert_eq!(clock.now_ms(20_000), 6_000);
+        assert!(server.expire(clock.now_ms(23_900)).is_empty());
+        assert_eq!(
+            server.expire(clock.now_ms(24_000)),
+            vec![Closed {
+                id,
+                reason: CloseReason::Expired
+            }]
+        );
+    }
+
+    #[test]
+    fn the_pausable_clock_is_idempotent_and_saturating() {
+        let mut clock = PausableClock::new();
+        clock.set_paused(1_000, false);
+        assert_eq!(clock.now_ms(2_000), 2_000);
+        clock.set_paused(2_000, true);
+        clock.set_paused(5_000, true);
+        assert_eq!(clock.now_ms(9_000), 2_000);
+        clock.set_paused(10_000, false);
+        clock.set_paused(11_000, false);
+        assert_eq!(clock.now_ms(12_000), 4_000);
+        // A real clock going backwards never lowers logical time or panics.
+        assert_eq!(clock.now_ms(0), 4_000);
+        clock.set_paused(1, true);
+        clock.set_paused(0, false);
+        assert_eq!(clock.now_ms(0), 4_000);
+    }
+
+    #[test]
+    fn dismiss_all_closes_every_live_notification_with_reason_dismissed() {
+        let mut server = Notifications::new();
+        let first = server.post(&incoming("a"), 0);
+        let mut critical = incoming("b");
+        critical.urgency = Urgency::Critical;
+        let second = server.post(&critical, 0);
+
+        let closed = server.dismiss_all();
+        assert_eq!(
+            closed,
+            vec![
+                Closed {
+                    id: first,
+                    reason: CloseReason::Dismissed
+                },
+                Closed {
+                    id: second,
+                    reason: CloseReason::Dismissed
+                },
+            ]
+        );
+        assert!(server.live().is_empty());
+        assert_eq!(server.history().len(), 2);
+        assert!(server.dismiss_all().is_empty());
     }
 
     #[test]

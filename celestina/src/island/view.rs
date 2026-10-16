@@ -56,17 +56,12 @@ pub fn page_title(page: Page) -> &'static str {
     }
 }
 
-pub(in crate::island) fn centred(mut v: View) -> View {
+pub(crate) fn centred(mut v: View) -> View {
     v.style.align_items = AlignItems::CENTER;
     v
 }
 
-pub(in crate::island) fn text_style(
-    size: f32,
-    weight: Weight,
-    tabular: bool,
-    role: Role,
-) -> TextStyle {
+pub(crate) fn text_style(size: f32, weight: Weight, tabular: bool, role: Role) -> TextStyle {
     TextStyle {
         size,
         weight,

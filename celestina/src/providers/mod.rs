@@ -5,6 +5,7 @@
 
 pub mod desktop;
 pub mod niri;
+pub mod notifications;
 pub mod settings;
 pub mod worker;
 

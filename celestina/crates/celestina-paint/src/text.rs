@@ -23,8 +23,9 @@ use crate::theme::Role;
 /// The face the style ships (`celestina-style/fonts`).
 const INTER_FILE: &str = "InterVariable.ttf";
 
-/// Line height as a multiple of the font size.
-const LINE_HEIGHT: f32 = 1.25;
+/// Line height as a multiple of the font size; a view that clamps text to
+/// whole lines sizes its clip with it.
+pub const LINE_HEIGHT: f32 = 1.25;
 
 /// The two weights of the style: 400 for body, 600 for titles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

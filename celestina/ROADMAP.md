@@ -35,7 +35,7 @@ Celestina visual language over the compositor's glass. The plan is
 | CEL-1-C | planned | CEL-1-B | `celestina-style/tokens.toml`, the generator, `CelestinaDesignTokens.qml`, `celestina-tokens` and the drift check in both verifies; the shell switches from local constants to the crate (a `celestina-style` and `celestina-rs` unit) | its owners' evidence |
 | CEL-1-D | done pending landing | CEL-1-C | The Island pages: Activity, Notifications, Tray, page tabs, the overflow popup | `celestina/docs/evidence/2026-10-16-island-pages.md` |
 | CEL-1-E | done pending landing | CEL-1-D | The launcher: overlay, `Field` with IME and paste, index, ranking, `/` commands, spawn | `celestina/docs/evidence/2026-10-16-launcher.md` |
-| CEL-1-F | planned | CEL-1-D | Notifications: server (claimed if free), banners, history, actions, do-not-disturb | evidence record of the unit |
+| CEL-1-F | active | CEL-1-D | Notifications: server (claimed if free), banners, history, actions, do-not-disturb | `celestina/docs/evidence/2026-10-16-notifications.md` |
 | CEL-1-G | planned | CEL-1-D | The tray: watcher and host (claimed if free), items, icons, nested DBusMenu popups, scroll | evidence record of the unit |
 | CEL-1-H | planned | CEL-1-E, F, G | The exit: live rows closed, 1.0.0, a handover note on what Noctalia still does | evidence record of the unit |
 

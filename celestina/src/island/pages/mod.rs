@@ -46,10 +46,40 @@ impl NameOwner {
     }
 }
 
-/// One notification of the history the Notifications page lists. A
-/// placeholder: its fields are filled by CEL-1-F (the notification server).
+/// One notification the Notifications page lists, live or ended
+/// (`crate::notifications::history::history_rows` builds them).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct HistoryRow {}
+pub struct HistoryRow {
+    /// The server's id: a live row's dismiss names it.
+    pub id: u32,
+    /// The producer's name, bounded by the server.
+    pub app_name: String,
+    pub summary: String,
+    /// The body's excerpt, never the whole body.
+    pub body: String,
+    /// The themed icon or the path the producer named; never read here.
+    pub image: Option<celestina_shell::notifications::Image>,
+    /// Still on screen (live), or ended (history).
+    pub live: bool,
+    /// The person has seen it.
+    pub read: bool,
+    /// When it arrived, as the row shows it: the clock time for today, else
+    /// the day and month before it; empty when the arrival is unknown.
+    pub when: String,
+    /// The buttons a live row offers (the producer's actions but the
+    /// default, which belongs to the banner's body), at most the machine's
+    /// bound; ended rows offer none.
+    pub actions: Vec<RowAction>,
+}
+
+/// One action button of a live notification's row.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RowAction {
+    /// The key the producer offered; what `ActionInvoked` carries.
+    pub key: String,
+    /// The label the producer gave it.
+    pub label: String,
+}
 
 /// One status notifier item the Tray page lists. A placeholder: its fields
 /// are filled by CEL-1-G (the tray host).

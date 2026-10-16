@@ -18,6 +18,11 @@
   editor, IME preedit and bounded paste, the overlay with the desktop index,
   ranking, `/` switches and spawn, and it awaits landing after CEL-1-D
   ([evidence](docs/evidence/2026-10-16-launcher.md)).
+  CEL-1-F, the notifications, is also implemented on its unit branch: the
+  notification server (claimed only when the name is free), the banners with
+  their actions and hover pause, the history page, and do-not-disturb; it
+  awaits landing after CEL-1-D
+  ([evidence](docs/evidence/2026-10-16-notifications.md)).
 - **Focus:** landing CEL-1-D after CEL-1-C, then CEL-1-E, then CEL-1-F and CEL-1-G of
   the [CEL-1 plan](docs/plans/active/2026-10-14-cel-1-island.md).
 - **Author validation:** VAL-CEL-GLASS, VAL-CEL-REST and VAL-CEL-SCALE in

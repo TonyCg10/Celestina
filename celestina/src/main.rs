@@ -30,6 +30,7 @@ use celestina::{
     error_chain,
     island::clock,
     launcher::recent::RecentLaunches,
+    providers::notifications::NotificationsCommand,
     providers::{self, settings::ShellSettings, Worker},
 };
 use celestina_paint::{default_font_dirs, TextSystem, Theme};
@@ -112,13 +113,17 @@ fn shell(cfg: Config) -> ExitCode {
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let niri = Rc::new(OnceCell::new());
+    let notifications = Rc::new(OnceCell::new());
     let fatal = Rc::new(OnceCell::new());
     let own_sender = Rc::new(OnceCell::new());
+    let settings = ShellSettings::load();
+    let quiet = settings.current().do_not_disturb;
     let app = App::new(
         fonts,
         appearance,
-        ShellSettings::load(),
+        settings,
         Rc::clone(&niri),
+        Rc::clone(&notifications),
         Rc::clone(&fatal),
         cfg.metrics,
     )
@@ -152,6 +157,26 @@ fn shell(cfg: Config) -> ExitCode {
         }
         // The slot is empty: `setup` runs once.
         let _ = own_sender.set(sender.clone());
+        match providers::notifications::spawn(sender.clone(), &shutdown) {
+            Ok((provider, worker)) => {
+                // The do-not-disturb setting in force at start; the menu
+                // sends its changes. Queued before the worker serves.
+                if provider
+                    .send(NotificationsCommand::SetQuiet(quiet))
+                    .is_err()
+                {
+                    tracing::warn!(
+                        "the notification worker did not take the do-not-disturb setting"
+                    );
+                }
+                // The slot is empty: `setup` runs once.
+                let _ = notifications.set(provider);
+                workers.push(worker);
+            }
+            Err(err) => {
+                tracing::warn!(%err, "no notification server; notifications are not served")
+            }
+        }
         follower = Some(providers::settings::follow_appearance(sender));
     });
 

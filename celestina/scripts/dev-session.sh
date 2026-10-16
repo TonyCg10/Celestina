@@ -23,6 +23,10 @@ set -eu
 #                               stderr and exit status written to
 #                               PREFIX.out, PREFIX.err and PREFIX.status,
 #                               then close the nest
+#   --probe SCRIPT              with --once: run SCRIPT inside the nest beside
+#                               the shell (same bus and display), its output
+#                               and status in PREFIX.probe and
+#                               PREFIX.probe.status
 #
 # The nest reproduces the author's own working monitor by default: its window
 # is placed fullscreen on `DP-1`, the 3840x2160 output, and the nested `winit`
@@ -54,10 +58,11 @@ monitor=DP-1
 own_bus=no
 binary=$project_root/target/release/celestina
 once=
+probe=
 
 usage() {
     echo "usage: dev-session.sh [--shell]" >&2
-    echo "                      [--own-bus] [--binary PATH] [--once PREFIX]" >&2
+    echo "                      [--own-bus] [--binary PATH] [--once PREFIX [--probe SCRIPT]]" >&2
     echo "                      [--scale FACTOR] [--monitor NAME|none]" >&2
     echo "                      [-- shell arguments...]" >&2
 }
@@ -72,6 +77,7 @@ while [ "$#" -gt 0 ]; do
         --scale) [ "$#" -ge 2 ] || { usage; exit 2; }; scale=$2; shift 2 ;;
         --monitor) [ "$#" -ge 2 ] || { usage; exit 2; }; monitor=$2; shift 2 ;;
         --binary) [ "$#" -ge 2 ] || { usage; exit 2; }; binary=$2; shift 2 ;;
+        --probe) [ "$#" -ge 2 ] || { usage; exit 2; }; probe=$2; shift 2 ;;
         --once) [ "$#" -ge 2 ] || { usage; exit 2; }; once=$2; shift 2 ;;
         --own-bus) own_bus=yes; shift ;;
         --help|-h) usage; exit 0 ;;
@@ -230,9 +236,20 @@ fi
 # so the nest's own child is what records them (the long-lived nest) or runs
 # the shell once and closes the nest (`--once`).
 if [ -n "$once" ]; then
-    inside="
+    probe_start=
+    probe_wait=
+    if [ -n "$probe" ]; then
+        probe_start="
+        '$probe' > '$once.probe' 2>&1 &
+        probe_pid=\$!"
+        probe_wait="
+        probe_status=0
+        wait \"\$probe_pid\" || probe_status=\$?
+        printf '%s\n' \"\$probe_status\" > '$once.probe.status'"
+    fi
+    inside="$probe_start
         '$binary' \"\$@\" > '$once.out' 2> '$once.err'
-        printf '%s\n' \"\$?\" > '$once.status'
+        printf '%s\n' \"\$?\" > '$once.status'$probe_wait
         exec '$niri_binary' msg action quit --skip-confirmation
     "
 else

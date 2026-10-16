@@ -26,15 +26,15 @@ use celestina_wayland::{
 
 use crate::{
     command::{Page, Verb},
-    providers::niri::NiriModel,
+    providers::{niri::NiriModel, notifications::NotificationsCommand},
 };
 use clock::ClockTick;
-use pages::{activity, page_view, tabs, NameOwner, PageCx};
+use pages::{activity, notifications, page_view, tabs, HistoryRow, NameOwner, PageCx};
 use state::IslandState;
 use workspaces::{rows_for, Row};
 
 /// What the Island asks the app to do: talk to the compositor, open a menu.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum IslandAction {
     FocusWorkspace(u64),
     FocusWindow(u64),
@@ -45,6 +45,12 @@ pub enum IslandAction {
         more: Rect,
         keyboard: bool,
     },
+    /// A row's dismiss or action button, or dismiss all, on the
+    /// Notifications page: the notification server runs the command.
+    Notification(NotificationsCommand),
+    /// The Notifications page's switch: the app flips the do-not-disturb
+    /// setting, the one owner of the choice.
+    ToggleDoNotDisturb,
 }
 
 /// One output's Island.
@@ -71,6 +77,8 @@ pub struct Island {
     owners: NameOwner,
     /// The do-not-disturb setting the Notifications page shows.
     do_not_disturb: bool,
+    /// The notification rows the Notifications page lists.
+    history: Vec<HistoryRow>,
     /// The page slide the page view was built with.
     applied_slide: f32,
     /// The theme the views were built with.
@@ -107,6 +115,7 @@ impl Island {
             model: None,
             owners: NameOwner::default(),
             do_not_disturb: false,
+            history: Vec::new(),
             applied_slide: 0.0,
             theme,
             reduced: false,
@@ -126,6 +135,13 @@ impl Island {
     #[must_use]
     pub fn exclusive_zone(&self) -> i32 {
         self.state.exclusive_zone()
+    }
+
+    /// Whether the Notifications page is on screen (or growing): what the
+    /// person sees there counts as seen.
+    #[must_use]
+    pub fn shows_notifications(&self) -> bool {
+        self.page() == Some(Page::Notifications)
     }
 
     /// The open page, if any.
@@ -155,7 +171,8 @@ impl Island {
 
     /// Draws one frame of the Island's surface with `model` (the last niri
     /// model, if any), the bus-name `owners` and the `do_not_disturb`
-    /// setting in force, under `reduced` motion.
+    /// setting in force and the notification `history` rows, under
+    /// `reduced` motion.
     pub fn frame(
         &mut self,
         cx: &mut FrameCx<'_>,
@@ -163,6 +180,7 @@ impl Island {
         model: Option<&NiriModel>,
         owners: &NameOwner,
         do_not_disturb: bool,
+        history: &[HistoryRow],
         reduced: bool,
     ) {
         let now = cx.now;
@@ -194,6 +212,10 @@ impl Island {
         }
         if do_not_disturb != self.do_not_disturb {
             self.do_not_disturb = do_not_disturb;
+            self.stale |= self.state.is_open();
+        }
+        if history != self.history {
+            self.history = history.to_vec();
             self.stale |= self.state.is_open();
         }
         self.tick_clock(now, &mut cx.ctl);
@@ -251,7 +273,7 @@ impl Island {
             output: &self.output,
             owners: &self.owners,
             do_not_disturb: self.do_not_disturb,
-            history: &[],
+            history: &self.history,
             items: &[],
         };
         self.state
@@ -543,6 +565,14 @@ impl Island {
         } else if let Some(page) = tabs::page_of(key) {
             self.open(page, now);
             None
+        } else if let Some(action) = notifications::action_for(
+            &self.history,
+            &self.owners,
+            &self.theme,
+            self.state.max_page_size(),
+            key,
+        ) {
+            Some(action)
         } else {
             // No optimistic state: the compositor's event closes the loop.
             activity::action_for(

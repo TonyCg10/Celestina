@@ -13,7 +13,11 @@ the binary the landing of its related unit deploys.
 - **Requires:** the deployed shell started by hand in the author's niri
   session with blur armed
 - **Procedure:** look at the Island capsule, an open page, a banner and an
-  overflow popup over a busy window and over the wallpaper
+  overflow popup over a busy window and over the wallpaper. For the banner,
+  stop Noctalia, then send one normal notification with
+  `notify-send "Celestina" "Glass check"` so the shell claims the name, and
+  look at that banner over the same windows (the banner's other urgencies are
+  in VAL-CEL-BANNERS)
 - **Pass condition:** each surface shows the Haze material over the
   compositor's blur of the real windows below, with no outline, no lit edge
   and no opaque plate
@@ -160,9 +164,38 @@ the binary the landing of its related unit deploys.
 - **Related implementation:** CEL-1-F, CEL-1-G
 - **Requires:** the deployed shell; Noctalia running, then stopped
 - **Procedure:** start the shell while Noctalia runs and open the
-  Notifications and Tray pages; stop Noctalia, restart the shell, send a
-  notification and open the tray
+  Notifications and Tray pages; beside Noctalia the Notifications page shows
+  the owner line with Noctalia's unique name and its process, and its switch
+  is disabled. Stop Noctalia, restart the shell, send a notification and open
+  the tray
 - **Pass condition:** beside Noctalia the pages say who owns each name and
   nothing is claimed; without it the shell serves notifications and the tray
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL-BANNERS — Banners, actions, hover and do-not-disturb
+
+- **Status:** pending
+- **Related implementation:** CEL-1-F (the banners, the history page and the
+  do-not-disturb switch)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session, Noctalia stopped so the shell owns the notifications name
+- **Procedure:** send one low, one normal and one critical notification with
+  `notify-send -u low`, `-u normal` and `-u critical`, and check that the low
+  banner leaves after 5 s, the normal one after 10 s and the critical one
+  stays. Send a notification with an action (for example
+  `notify-send --action=open=Open "Celestina" "Actions"`), click its button and
+  check that the action runs. Click a banner body without a default action:
+  the Notifications page opens on that output. Send four notifications and
+  check that three banners show. Point at the banner stack and check that
+  the expiry pauses; move the pointer away and check that it resumes. Dismiss
+  one banner with its icon button. Turn on do-not-disturb from the overflow
+  menu, send a normal notification and check that no banner shows, while the
+  Notifications page keeps it in its history
+- **Pass condition:** each step does what is described: 5 s, 10 s and a
+  staying critical banner; the action button and the body click behave as
+  described; four notifications show three banners; hover pauses the expiry
+  and leaving resumes it; the dismiss button closes the banner; do-not-disturb
+  hides banners and keeps history
 - **Result:** not run
 - **Evidence:** none

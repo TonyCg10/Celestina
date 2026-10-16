@@ -120,3 +120,15 @@ pub const SWITCH_ACTIVITY_LABEL: &str = "Abre la página Actividad";
 
 /// What the tray command does, beside it ("Opens the Tray page").
 pub const SWITCH_TRAY_LABEL: &str = "Abre la página Bandeja";
+// Banners (CEL-1-F).
+
+/// The name of the small button that dismisses one banner; the button
+/// shows only its icon (the suite has no tooltips), so this is the name an
+/// assistive technology reads ("Dismiss").
+pub const BANNER_DISMISS: &str = "Descartar";
+
+// The Notifications page's rows (CEL-1-F).
+
+/// The button above the live notifications that dismisses all of them
+/// ("Dismiss all").
+pub const NOTIFICATIONS_DISMISS_ALL: &str = "Descartar todo";

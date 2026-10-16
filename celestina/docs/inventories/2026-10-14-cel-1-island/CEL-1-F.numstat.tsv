@@ -1,0 +1,69 @@
+# CEL-1-F exact change inventory
+
+Base revision	fa1546d39039957a3570887fc082f7a65aa20aa0
+Pathspec	celestina-rs/crates/celestina-shell/src/notifications.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/clippy.toml
+Pathspec	celestina/crates/celestina-paint/src/lib.rs
+Pathspec	celestina/crates/celestina-paint/src/text.rs
+Pathspec	celestina/docs/evidence/2026-10-16-notifications.md
+Pathspec	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-F.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+Pathspec	celestina/scripts/dev-session.sh
+Pathspec	celestina/scripts/smoke-notify.sh
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/notifications.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/notifications/banners.rs
+Pathspec	celestina/src/notifications/history.rs
+Pathspec	celestina/src/notifications/mod.rs
+Pathspec	celestina/src/providers/mod.rs
+Pathspec	celestina/src/providers/notifications.rs
+Pathspec	celestina/tests/notifications_bus.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+161	2	43c67f14bd36a11d9a565f61b0998e096ae8bf32e7453018cc5c8a3a42c6d324	celestina-rs/crates/celestina-shell/src/notifications.rs
+1	1	6683a0b737c6bc09c8ca5948d032db7d2206585527c5ae991abfa563657f86ca	celestina/Cargo.lock
+1	1	8fd3eb8ebf196e053fe785eac2cb4549df597fd3db9d75ca4c89e72ba7a04be3	celestina/Cargo.toml
+1	1	50dfe7662b804d84cc536c55c82dda0594669a8f0573bd528cbe539c2a7b97c8	celestina/ROADMAP.md
+5	0	ae2c643ce56768b417e11214ec435821ced07a3d13bad0405b99927b72c0ebf5	celestina/STATUS.md
+36	3	432eb84511cdeb0fb352bf3eb98ed624bdd7b95b00df49cdf39285367a26b718	celestina/VALIDATION.md
+8	0	8bca4c1647286961bf017aa4ad526320bd2ad64c7612e9ba7e3c532563c4a24a	celestina/clippy.toml
+1	1	e6d344a43f5db4dd5b0643be4c08edfc7aa36509db5c50887184871bc6f1511f	celestina/crates/celestina-paint/src/lib.rs
+3	2	2b431f72b0148afb8215270032284e547bbf26f7f9fc07d755d0c6b405ab6ef1	celestina/crates/celestina-paint/src/text.rs
+224	0	fa3ceaa938732430183ccad7349117628fd359478d65ab231e406cdf0c9aec86	celestina/docs/evidence/2026-10-16-notifications.md
+69	0	self	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-F.numstat.tsv
+1	1	6bc963c9b37c72c79ea3503fb0fa3f4c2769bd250c636ce8bab8195d3065137b	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+20	3	64a0544b44b1f24395d1af2603cf15f782ce4b543d16d2d7004eec53c871d677	celestina/scripts/dev-session.sh
+67	0	8e1b727b02715e849d2570f2dad01e050124b09e43ee55d39ab8836f82af9afc	celestina/scripts/smoke-notify.sh
+57	20	6ccdfcb625e010517ecb6388029a68104c5e110426eeada2a7046b7c747bd698	celestina/scripts/smoke.sh
+306	11	80d665350d10d9903fa9d2f0fd04993a55f96e3089b374528c9ac581aeb444c9	celestina/src/app.rs
+12	0	eb400b8a945f406d234dfc6dd571a45344b6c1ddc960e4fec884440c6f842a96	celestina/src/copy.rs
+35	5	3d93b6ce7d2755d517117acdcda766e44728c043eb70f02227db758db617b7b7	celestina/src/island/mod.rs
+33	3	46a1ca62886a177404826867103d039ee3427b13ecb9764633f0a0d5eff8828f	celestina/src/island/pages/mod.rs
+563	49	f3d68d2cbfd1ac12e0e051e7eb0d6357f271822f5e246b77e66f4bf96b35cffa	celestina/src/island/pages/notifications.rs
+2	7	6b8655ac5965acac12e042e8b37944ad887c864621d2b3eda6562be72a322840	celestina/src/island/view.rs
+1	0	d84b2a7b32ac04b743ffe7f0f6316622eb88c53bd6896b8688e8439ecc7ccf1e	celestina/src/lib.rs
+26	1	b7d7ef1a46181e1ab9d4d860ecd6d10acd4fbcca8c13130350c3ab625ce4ade9	celestina/src/main.rs
+9	2	dc0064d2f2bca644f017a7910e3d026465c1f9aff3557d1b1c8adfe0b963fe94	celestina/src/message.rs
+827	0	f516940670fa1cbbd3a3cc6187308937eb90f00d0bc1470f2dd7e666b10242f6	celestina/src/notifications/banners.rs
+226	0	b1763049b60ff6919bf7c4dd48bec041d6bd81b1c50a53dc0f8857900f012e84	celestina/src/notifications/history.rs
+280	0	9cca8ba03436950a61455c8c268fe8a9ef443f3fc7f839eb2f9346c065b34614	celestina/src/notifications/mod.rs
+1	0	6d061afba252b44c5decc60c997e000028249feb61f10a5060da61b8f023010c	celestina/src/providers/mod.rs
+883	0	bd914321deb86de9fc9713f64edfbd784345616c0042f6f9d2a5c739f84ef874	celestina/src/providers/notifications.rs
+346	0	82852f1c0f3ca469456ca874cca225ab3e28257b312079724e68d73b2f56abcd	celestina/tests/notifications_bus.rs
+1	0	7d0fda5bf6e4736839ea010b88a33c36e89c0884afb8cbfc8d4440290c35ea42	docs/version-history.tsv

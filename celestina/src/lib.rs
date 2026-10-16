@@ -13,6 +13,7 @@ pub mod island;
 pub mod launcher;
 pub mod message;
 pub mod metrics;
+pub mod notifications;
 pub mod providers;
 
 /// `err` and its sources, outermost first, joined by `: `: how the shell

@@ -23,8 +23,9 @@ use celestina_wayland::{
     RuntimeCtl, Sender, Shell, SurfaceCtl, SurfaceId,
 };
 
+use crate::notifications::banners::{self, BannerAction, BannerStack};
 use crate::{
-    command::Verb,
+    command::{Page, Verb},
     error_chain,
     island::{
         menu::{self, ChoiceSlot, Menu, MenuChoice, MenuState, SharedPainter},
@@ -33,8 +34,10 @@ use crate::{
     },
     launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
     message::Message,
+    notifications::{self, NotificationsState},
     providers::{
         niri::{NiriModel, NiriProvider, NiriRequest},
+        notifications::{NotificationsCommand, NotificationsProvider},
         settings::ShellSettings,
     },
 };
@@ -139,6 +142,40 @@ impl Islands {
     fn iter(&self) -> impl Iterator<Item = &Slot> {
         self.slots.iter()
     }
+
+    /// The output the banners go to: niri's focused output when an Island
+    /// is on it, else the first Island's.
+    #[must_use]
+    pub fn banner_output(&self, focused_output: Option<&str>) -> Option<OutputId> {
+        focused_output
+            .and_then(|name| self.slots.iter().find(|s| s.island.output() == name))
+            .or_else(|| self.slots.first())
+            .map(|s| s.output)
+    }
+
+    /// The exclusive zone of `output`'s Island.
+    fn zone_of(&self, output: OutputId) -> Option<i32> {
+        self.slots
+            .iter()
+            .find(|s| s.output == output)
+            .map(|s| s.island.exclusive_zone())
+    }
+
+    /// The surface of `output`'s Island.
+    fn surface_of(&self, output: OutputId) -> Option<SurfaceId> {
+        self.slots
+            .iter()
+            .find(|s| s.output == output)
+            .map(|s| s.surface)
+    }
+}
+
+/// The banners' surface and the output it is on.
+#[derive(Debug)]
+struct BannerSurface {
+    output: OutputId,
+    surface: SurfaceId,
+    stack: BannerStack,
 }
 
 /// The output niri's focused workspace is on.
@@ -157,6 +194,15 @@ fn menu_state(settings: &ShellSettings, owners: &NameOwner) -> MenuState {
     MenuState {
         do_not_disturb: settings.current().do_not_disturb,
         dnd_held: owners.notifications.is_some(),
+    }
+}
+
+/// `owners` with the notifications holder replaced by `holder`; the tray's
+/// is kept.
+fn with_notifications_owner(owners: &NameOwner, holder: Option<&str>) -> NameOwner {
+    NameOwner {
+        notifications: holder.map(str::to_owned),
+        tray: owners.tray.clone(),
     }
 }
 
@@ -195,8 +241,15 @@ pub struct App {
     /// The applications launched last, which the ranking lifts.
     recent: RecentLaunches,
     /// The loop's own sender, set once the loop runs: the launcher's close
-    /// is posted through it (see [`Message::LauncherClosed`]).
+    /// is posted through it (see [`Message::LauncherClosed`]), and so is a
+    /// banner's click asking for the page (see
+    /// [`Message::OpenNotificationsPage`]), because an input handler
+    /// controls only its own surface.
     sender: Rc<OnceCell<Sender<Message>>>,
+    /// The notification server's latest snapshot, holder and queue.
+    notifications: NotificationsState,
+    /// The banners' surface, while a banner shows.
+    banners: Option<BannerSurface>,
     /// Why the run stopped on a failure, for the binary to report.
     fatal: Rc<OnceCell<String>>,
     refusal_logged: bool,
@@ -215,8 +268,8 @@ impl std::fmt::Debug for App {
 
 impl App {
     /// The app before any output: `fonts` for the painter, the appearance
-    /// and the shell's settings read at start, the slot the niri provider
-    /// is put in once it runs,
+    /// and the shell's settings read at start, the slots the niri provider
+    /// and the notification worker's handle are put in once they run,
     /// the slot the app writes why it stopped the run into, and whether
     /// `--metrics` asked for the atlas's occupancy at exit.
     #[must_use]
@@ -225,6 +278,7 @@ impl App {
         appearance: Appearance,
         settings: ShellSettings,
         niri: Rc<OnceCell<NiriProvider>>,
+        notifications: Rc<OnceCell<NotificationsProvider>>,
         fatal: Rc<OnceCell<String>>,
         metrics: bool,
     ) -> App {
@@ -243,6 +297,8 @@ impl App {
             index: Vec::new(),
             recent: RecentLaunches::default(),
             sender: Rc::new(OnceCell::new()),
+            notifications: NotificationsState::new(notifications),
+            banners: None,
             fatal,
             refusal_logged: false,
             metrics,
@@ -275,6 +331,122 @@ impl App {
         Theme::dark().scaled(self.appearance.text_scale.factor())
     }
 
+    /// The notification state changed: every Island draws it again. The
+    /// banners and the Notifications page extend this.
+    fn notifications_changed(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        self.mark_read_if_viewed();
+        self.redraw_all(ctl);
+        self.sync_banners(ctl);
+    }
+
+    /// The banners follow the snapshot's toasts: the surface is created on
+    /// the focused output when the first banner shows, redrawn when the
+    /// stack changes and destroyed when none remains.
+    fn sync_banners(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let toasts = &self.notifications.snapshot().toasts;
+        if banners::shown(toasts).is_empty() {
+            if let Some(gone) = self.banners.take() {
+                ctl.destroy_surface(gone.surface);
+                self.banners_gone(gone);
+                tracing::info!("banners surface released: no toast left");
+            }
+            return;
+        }
+        if self.banners.is_none() {
+            self.banners = self.create_banners(ctl);
+            // The smoke reads this line from stderr.
+            tracing::info!(
+                created = self.banners.is_some(),
+                toasts = self.notifications.snapshot().toasts.len(),
+                "banners surface requested"
+            );
+        }
+        let toasts = &self.notifications.snapshot().toasts;
+        let Some(banners) = self.banners.as_mut() else {
+            return;
+        };
+        if banners.stack.set_toasts(toasts) {
+            if let Some(mut surface) = ctl.surface(banners.surface) {
+                surface.request_redraw();
+            }
+        }
+    }
+
+    /// The banners' surface on the output niri has focused (else the
+    /// first), under that output's Island.
+    fn create_banners(&self, ctl: &mut RuntimeCtl<'_>) -> Option<BannerSurface> {
+        let output = self
+            .islands
+            .banner_output(focused_output(self.model.as_ref()))?;
+        let zone = self.islands.zone_of(output)?;
+        let theme = self.theme();
+        let spec = LayerSpec {
+            output,
+            namespace: banners::NAMESPACE,
+            layer: Layer::Overlay,
+            anchor: Anchoring::Top,
+            size: banners::surface_size(&theme, zone),
+            // The stack is painted under the Island inside the surface;
+            // the surface itself ignores every exclusive zone.
+            exclusive_zone: -1,
+            keyboard: KeyboardInteractivity::None,
+        };
+        match ctl.create_layer_surface(spec) {
+            Ok(surface) => Some(BannerSurface {
+                output,
+                surface,
+                stack: BannerStack::new(
+                    &theme,
+                    banners::top_offset(&theme, zone),
+                    self.appearance.reduced_motion,
+                ),
+            }),
+            Err(err) => {
+                tracing::error!(output = output.0, %err, "no banners on this output");
+                None
+            }
+        }
+    }
+
+    /// The banners' surface is gone: a hover it held ends with it, so the
+    /// server's expiry runs again.
+    fn banners_gone(&mut self, mut gone: BannerSurface) {
+        if let Some(command) = gone.stack.release_hover() {
+            self.notifications.send(command);
+        }
+    }
+
+    /// What a gesture on the banners asks for.
+    fn banners_act(&mut self, actions: Vec<BannerAction>, output: OutputId) {
+        for action in actions {
+            match action {
+                BannerAction::Send(command) => {
+                    self.notifications.send(command);
+                }
+                BannerAction::OpenPage => match self.sender.get() {
+                    Some(sender) => {
+                        if sender.send(Message::OpenNotificationsPage(output)).is_err() {
+                            tracing::debug!("the loop is gone: the page is not opened");
+                        }
+                    }
+                    None => tracing::debug!("no loop sender: the page is not opened"),
+                },
+            }
+        }
+    }
+
+    /// Opens the Notifications page on `output`'s Island.
+    fn open_notifications_page(&mut self, output: OutputId, ctl: &mut RuntimeCtl<'_>) {
+        let Some(surface) = self.islands.surface_of(output) else {
+            tracing::debug!(output = output.0, "the output is gone: no page to open");
+            return;
+        };
+        if let (Some(island), Some(mut ctl)) = (self.islands.get_mut(surface), ctl.surface(surface))
+        {
+            island.command(&Verb::IslandOpen(Page::Notifications), &mut ctl);
+        }
+    }
+
     fn redraw_all(&self, ctl: &mut RuntimeCtl<'_>) {
         for slot in self.islands.iter() {
             if let Some(mut surface) = ctl.surface(slot.surface) {
@@ -302,6 +474,8 @@ impl App {
             Ok(surface) => self.islands.add(info.id, surface, island),
             Err(err) => tracing::error!(output = %info.name, %err, "no Island on this output"),
         }
+        // A toast that arrived before any Island existed has no banner yet.
+        self.sync_banners(ctl);
     }
 
     fn command(&mut self, verb: Verb, ctl: &mut RuntimeCtl<'_>) {
@@ -325,8 +499,23 @@ impl App {
                 }
             }
             Verb::LauncherToggle => self.toggle_launcher(ctl),
-            Verb::NotificationsToggle | Verb::NotificationsDismissAll => {
-                tracing::info!(verb = %verb.words().join(" "), "not delivered yet (CEL-1-F)");
+            Verb::NotificationsDismissAll => {
+                self.notifications.send(NotificationsCommand::DismissAll);
+            }
+            Verb::NotificationsToggle => {
+                let target = self
+                    .islands
+                    .target(self.keyboard, focused_output(self.model.as_ref()));
+                let Some(surface) = target else {
+                    tracing::info!(?verb, "no output: the verb has no Island");
+                    return;
+                };
+                if let (Some(island), Some(mut ctl)) =
+                    (self.islands.get_mut(surface), ctl.surface(surface))
+                {
+                    let toggle = notifications::toggle_verb(island.page());
+                    island.command(&toggle, &mut ctl);
+                }
             }
         }
     }
@@ -451,11 +640,16 @@ impl App {
         }
     }
 
-    /// Sets do-not-disturb durably; whether it is now `on` and changed.
+    /// Sets do-not-disturb durably and tells the notification server, which
+    /// holds the banners back while it is on (it also reads the setting once
+    /// at its start); whether it is now `on` and changed. The one owner of
+    /// the flag: the menu, the Notifications page and the launcher's switch
+    /// all come here, and each redraws with the control it holds.
     fn set_do_not_disturb(&mut self, on: bool) -> bool {
         match self.settings.set_do_not_disturb(on) {
             Ok(changed) => {
                 tracing::info!(on, changed, "do-not-disturb set");
+                self.notifications.send(NotificationsCommand::SetQuiet(on));
                 changed
             }
             Err(err) => {
@@ -479,6 +673,24 @@ impl App {
             match action {
                 IslandAction::FocusWorkspace(id) => self.request(NiriRequest::FocusWorkspace(id)),
                 IslandAction::FocusWindow(id) => self.request(NiriRequest::FocusWindow(id)),
+                IslandAction::Notification(command) => {
+                    self.notifications.send(command);
+                }
+                IslandAction::ToggleDoNotDisturb => {
+                    // The page disables its switch while another program
+                    // holds the flag; this keeps the rule if one slips by.
+                    if self.owners.notifications.is_some() {
+                        tracing::info!("do-not-disturb is held by another program; not changed");
+                        continue;
+                    }
+                    let on = !self.settings.current().do_not_disturb;
+                    if self.set_do_not_disturb(on) {
+                        // The open page shows the switch: draw it again.
+                        // Other outputs' Islands pick it up on their next
+                        // frame.
+                        ctl.request_redraw();
+                    }
+                }
                 IslandAction::OpenMenu { more, keyboard } => {
                     let Ok(painter) = shared.try_borrow() else {
                         tracing::warn!("the painter is in use; the menu is not opened");
@@ -509,9 +721,7 @@ impl App {
                 tracing::info!("quit chosen in the menu");
                 ctl.stop();
             }
-            // Only the setting changes: nothing honours it until the
-            // notification server (CEL-1-F) reads it at its start and on
-            // this choice, through its own do-not-disturb flag.
+            // The setting changes and the notification server hears it.
             MenuChoice::DoNotDisturb(on) => {
                 if self.set_do_not_disturb(on) {
                     // The open page shows the switch: draw it again. Other
@@ -524,6 +734,16 @@ impl App {
                     island.reopen(ctl);
                 }
             }
+        }
+    }
+
+    /// What is on the Notifications page counts as seen: while an Island
+    /// shows it, unread notifications are marked read.
+    fn mark_read_if_viewed(&mut self) {
+        if self.notifications.snapshot().unread > 0
+            && self.islands.iter().any(|s| s.island.shows_notifications())
+        {
+            self.notifications.send(NotificationsCommand::MarkRead);
         }
     }
 
@@ -592,6 +812,11 @@ impl Shell for App {
                     self.launcher = None;
                     tracing::info!("launcher: closed with its output");
                 }
+                // The banners' surface went with the output: no frame for
+                // it; they come back on another output if any remain.
+                if let Some(banners) = self.banners.take_if(|b| b.output == output) {
+                    self.banners_gone(banners);
+                }
                 let gone = self.islands.remove_output(output);
                 if self.keyboard.is_some_and(|k| gone.contains(&k)) {
                     self.keyboard = None;
@@ -601,6 +826,7 @@ impl Shell for App {
                     islands = self.islands.len(),
                     "output gone with its Island"
                 );
+                self.sync_banners(ctl);
             }
         }
     }
@@ -637,6 +863,22 @@ impl Shell for App {
                 return;
             }
         }
+        if let (Some(shared), Some(banners)) = (self.painter.as_ref(), self.banners.as_mut()) {
+            if banners.surface == cx.surface {
+                match shared.try_borrow_mut() {
+                    Ok(mut painter) => {
+                        banners
+                            .stack
+                            .frame(cx, &mut painter, self.appearance.reduced_motion);
+                    }
+                    Err(_) => {
+                        tracing::warn!("the painter is in use; the banners' frame is skipped");
+                        cx.ctl.request_redraw();
+                    }
+                }
+                return;
+            }
+        }
         let (Some(shared), Some(island)) =
             (self.painter.as_ref(), self.islands.get_mut(cx.surface))
         else {
@@ -653,12 +895,29 @@ impl Shell for App {
             self.model.as_ref(),
             &self.owners,
             self.settings.current().do_not_disturb,
+            self.notifications.rows(),
             self.appearance.reduced_motion,
         );
     }
 
     fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) {
         let surface = ctl.id();
+        if let Some(banners) = self.banners.as_mut().filter(|b| b.surface == surface) {
+            let Some(Ok(mut painter)) = self.painter.as_ref().map(|p| p.try_borrow_mut()) else {
+                tracing::warn!("no painter at hand; the banners' input is dropped");
+                return;
+            };
+            let now = std::time::Instant::now();
+            banners.stack.layout(&mut painter, now);
+            drop(painter);
+            let input = banners.stack.pointer(&ev, now);
+            if input.redraw {
+                ctl.request_redraw();
+            }
+            let output = banners.output;
+            self.banners_act(input.actions, output);
+            return;
+        }
         match ev {
             InputEvent::FocusEnter => self.keyboard = Some(surface),
             InputEvent::FocusLost if self.keyboard == Some(surface) => self.keyboard = None,
@@ -685,6 +944,7 @@ impl Shell for App {
             }
         };
         self.act(actions, surface, &shared, ctl);
+        self.mark_read_if_viewed();
         // The menu is gone: a row chosen in it is made now. The Island has
         // one popup at a time, so the slot is that popup's.
         if closed {
@@ -720,7 +980,14 @@ impl Shell for App {
                 self.redraw_all(ctl);
             }
             Message::NiriRequestRefused(request) => self.refused(request),
-            Message::Command(verb) => self.command(verb, ctl),
+            Message::Command(verb) => {
+                self.command(verb, ctl);
+                self.mark_read_if_viewed();
+            }
+            Message::OpenNotificationsPage(output) => {
+                self.open_notifications_page(output, ctl);
+                self.mark_read_if_viewed();
+            }
             Message::DesktopIndex(entries) => {
                 tracing::info!(entries = entries.len(), "desktop index received");
                 self.index = entries;
@@ -740,6 +1007,17 @@ impl Shell for App {
                 close_surface(surface, ctl);
                 if let Some(switch) = switch {
                     self.run_switch(switch, output, ctl);
+                    // `/notificaciones` may have opened the page.
+                    self.mark_read_if_viewed();
+                }
+            }
+            Message::Notifications(event) => {
+                let applied = self.notifications.apply(event);
+                // `set_owners` keeps the tray's holder.
+                let owners = with_notifications_owner(&self.owners, self.notifications.owner());
+                let owner_changed = self.set_owners(owners);
+                if applied.is_changed() || owner_changed {
+                    self.notifications_changed(ctl);
                 }
             }
         }
@@ -841,6 +1119,23 @@ mod tests {
             tray: Some(":1.7".into()),
         };
         assert!(!menu_state(&settings, &tray).dnd_held);
+    }
+
+    #[test]
+    fn the_notifications_holder_replaces_its_name_and_keeps_the_trays() {
+        let current = NameOwner {
+            notifications: None,
+            tray: Some(":1.7".into()),
+        };
+        let held = with_notifications_owner(&current, Some(":1.42 (noctalia)"));
+        assert_eq!(held.notifications.as_deref(), Some(":1.42 (noctalia)"));
+        assert_eq!(held.tray.as_deref(), Some(":1.7"));
+        let mut owners = current.clone();
+        assert!(owners.replace(held.clone()));
+        assert!(!owners.replace(held));
+        let freed = with_notifications_owner(&owners, None);
+        assert_eq!(freed.notifications, None);
+        assert_eq!(freed.tray.as_deref(), Some(":1.7"));
     }
 
     #[test]

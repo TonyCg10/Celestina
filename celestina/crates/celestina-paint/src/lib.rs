@@ -19,7 +19,7 @@ pub use haze::GrainError;
 pub use haze::{silhouette_slices, HazePlan};
 pub use icon::{default_icon_dirs, IconKey, PixmapId};
 pub use painter::{AtlasUsage, PaintError, Painter};
-pub use text::{default_font_dirs, TextError, TextRun, TextStyle, TextSystem, Weight};
+pub use text::{default_font_dirs, TextError, TextRun, TextStyle, TextSystem, Weight, LINE_HEIGHT};
 pub use theme::{MotionMs, Role, Spacing, Theme, TypeScale};
 
 /// The directories a style asset `kind` (`fonts`, `icons`) is looked for in,

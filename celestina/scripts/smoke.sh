@@ -2,16 +2,20 @@
 set -eu
 
 # Celestina smoke (design §8): with niri installed, a nested niri runs the
-# shell for three seconds with `--metrics` (`dev-session.sh --once`, on a
+# shell for four seconds with `--metrics` (`dev-session.sh --once`, on a
 # session bus of its own so no name of the desktop's bus is touched), and the
 # run must exit 0, draw at least one frame on the nested `winit` output,
 # report its late frames, and draw no frame at rest (`rest_frames=0`: no
-# frame while nothing animated, after the first second). A second nested run
-# then opens the launcher with `celestina launcher toggle`, keeps it open for
-# three seconds (the nest answers an idle client about once a second), closes
-# it the same way, and must still exit 0 with both toggles logged and a frame
-# drawn on the launcher's surface. Without niri the nested session is skipped
-# with a notice.
+# frame while nothing animated, after the first second). Inside the same nest
+# `smoke-notify.sh` sends one Notify (long body, one second timeout) to the
+# shell's server on the nest's own bus; the shell must answer with an id and
+# raise the banners' surface, and the banner is gone again before the run
+# ends. A second nested run then opens the launcher with `celestina launcher
+# toggle`, keeps it open for three seconds (the nest answers an idle client
+# about once a second), closes it the same way, and must still exit 0 with
+# both toggles logged and a frame drawn on the launcher's surface. Without
+# niri the nested session is skipped with a notice; without busctl and gdbus
+# the notification part is.
 usage() {
     echo "usage: scripts/smoke.sh --binary PATH" >&2
     exit 2
@@ -46,21 +50,32 @@ fi
 
 # The clock's minute tick is the one frame a shell at rest draws. The run
 # takes a few seconds, so it starts well clear of a minute boundary.
-while [ "$(date +%S)" -gt 50 ] || [ "$(date +%S)" -lt 2 ]; do
+while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
     sleep 1
 done
+
+probe_args=
+if command -v busctl >/dev/null 2>&1 || command -v gdbus >/dev/null 2>&1; then
+    probe_args="--probe $here/smoke-notify.sh"
+else
+    echo "smoke: neither busctl nor gdbus is installed; no notification sent"
+fi
+# The probe refuses the desktop's own bus: it must find a different address.
+CELESTINA_HOST_BUS=${DBUS_SESSION_BUS_ADDRESS:-}
+export CELESTINA_HOST_BUS
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/celestina-smoke.XXXXXX")
 trap 'rm -rf "$work"' EXIT INT TERM
 run=$work/run
 status=0
+# shellcheck disable=SC2086 # probe_args is two words or none
 timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$bin" \
-    --once "$run" -- --exit-after 3 --metrics \
+    $probe_args --once "$run" -- --exit-after 4 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 
 fail() {
     echo "smoke: $1" >&2
-    for f in "$run.out" "$run.err" "$work/niri.log"; do
+    for f in "$run.out" "$run.err" "$run.probe" "$work/niri.log"; do
         [ -f "$f" ] || continue
         echo "--- $(basename "$f")" >&2
         tail -n 40 "$f" >&2
@@ -73,19 +88,41 @@ fail() {
 shell_status=$(cat "$run.status")
 [ "$shell_status" = 0 ] || fail "the shell exited with $shell_status"
 
-line=$(grep '^winit ' "$run.out" || true)
-[ -n "$line" ] || fail "no metrics line for the winit output"
-field() {
-    printf '%s\n' "$line" | tr ' ' '\n' | sed -n "s/^$1=//p"
+# One metrics line per surface of the output (the panel's, and the banners'
+# once one was raised): frames and rest frames are summed, the rest is read
+# from the first.
+lines=$(grep '^winit ' "$run.out" || true)
+[ -n "$lines" ] || fail "no metrics line for the winit output"
+line=$(printf '%s\n' "$lines" | head -n 1)
+sum() {
+    printf '%s\n' "$lines" | tr ' ' '\n' | sed -n "s/^$1=//p" |
+        awk '{ n += $1 } END { print n + 0 }'
 }
-frames=$(field frames)
-rest=$(field rest_frames)
-late=$(field late)
-[ -n "$frames" ] && [ "$frames" -ge 1 ] || fail "no frame was drawn: $line"
+frames=$(sum frames)
+rest=$(sum rest_frames)
+late=$(printf '%s\n' "$line" | tr ' ' '\n' | sed -n 's/^late=//p')
+[ "$frames" -ge 1 ] || fail "no frame was drawn: $lines"
 [ -n "$late" ] || fail "late frames are not reported: $line"
-[ "$rest" = 0 ] || fail "frames were drawn at rest: $line"
+# A shell at rest draws nothing after the first second. The notification
+# changes the Island's state twice after it (posted, then expired): each is a
+# frame somebody needed, though nothing animates in it, so a run that sent one
+# allows exactly those two and any other frame at rest still fails.
+allowed=0
+[ -z "$probe_args" ] || allowed=2
+[ "$rest" -le "$allowed" ] || fail "frames were drawn at rest ($rest, at most $allowed): $lines"
 
-echo "smoke: $line"
+if [ -n "$probe_args" ]; then
+    [ "$(cat "$run.probe.status" 2>/dev/null)" = 0 ] ||
+        fail "the notification probe failed (it prints the nest's bus address)"
+    id=$(sed -n 's/^probe: id=//p' "$run.probe")
+    [ -n "$id" ] && [ "$id" -gt 0 ] || fail "Notify returned no id"
+    grep -q 'banners surface requested.*created=true' "$run.err" ||
+        fail "the shell did not raise the banners' surface for notification $id"
+    grep -q 'banners surface released' "$run.err" ||
+        fail "the banner of notification $id did not expire inside the run"
+    echo "smoke: notification $id raised the banners' surface and it expired"
+fi
+echo "smoke: $line (frames=$frames rest_frames=$rest over $(printf '%s\n' "$lines" | wc -l) surfaces)"
 grep '^rss_mib=' "$run.out" | sed 's/^/smoke: /' || true
 grep 'glyph atlas at exit' "$run.err" | sed 's/^.*metrics: /smoke: /' || true
 

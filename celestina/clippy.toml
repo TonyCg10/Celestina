@@ -1,0 +1,8 @@
+# The freedesktop `Notify` method takes eight flat arguments
+# (susssasa{sv}i) and zbus's served interface maps each D-Bus argument to one
+# Rust parameter, so its handler has nine with `&self`: the arity IS the bus
+# contract, and folding them into a struct would publish a different
+# signature in the introspection data. Raising the threshold here keeps the
+# source free of inline #[allow] (as siderita/clippy.toml does for its bridge
+# signals) while still catching a tenth argument.
+too-many-arguments-threshold = 9
