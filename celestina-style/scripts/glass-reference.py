@@ -22,7 +22,8 @@ from PIL import Image, ImageFilter
 
 HERE = pathlib.Path(__file__).resolve().parent
 STYLE = HERE.parent
-THEME = STYLE / "CelestinaTheme.qml"
+# The reference palette, generated from tokens.toml (scripts/gen-tokens.py).
+THEME = STYLE / "CelestinaDesignTokens.qml"
 OUT = STYLE / "gallery" / "reference"
 SIZE = (300, 130)
 SIGMA = 0.57735 * 20 + 0.5

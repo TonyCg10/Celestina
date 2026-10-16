@@ -17,7 +17,10 @@ constraints for `celestina-style/`; it cannot relax the root or grant authority.
 - The module owns reusable presentation: tokens, fonts, icons, assets, and
   generic controls. It knows no application controllers, paths, D-Bus, Niri, or
   workflows.
-- `CelestinaTheme.qml` is the only source of visual primitives and derivations.
+- `tokens.toml` is the only source of visual primitives; `scripts/gen-tokens.py`
+  generates `CelestinaDesignTokens.qml` and the Rust `celestina-tokens` crate from
+  it, and nothing edits those outputs by hand. `CelestinaTheme.qml` is the only
+  source of derivations and the API consumers read.
   New roles are semantic, define surface/ink pairs where relevant, and never
   force consumers to derive color, opacity, anatomy, or motion.
 - Every public type stays in parity across `qmldir`, `CMakeLists.txt`, QRC, and

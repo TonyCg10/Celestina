@@ -24,6 +24,12 @@ import QtQuick
 // build. Rosé Pine is retired. Scalars (radius, type, motion, spacing) are
 // declared straight as sys tokens — a ref ramp of scalars would be ceremony with
 // no second consumer.
+//
+// Values live in tokens.toml (spec 2026-10-14 §5.7): every colour and number
+// this file used to spell as a literal is a token there, generated into
+// CelestinaDesignTokens.qml (bound below) and into the Rust shell's
+// celestina-tokens crate by scripts/gen-tokens.py. This file keeps the public
+// API, the relations between tokens, the enums, the functions and the recipes.
 // ──────────────────────────────────────────────────────────────────────────────
 QtObject {
     id: theme
@@ -62,10 +68,10 @@ QtObject {
     // and chroma at the bottom, and a few degrees of turn so it reads as colour
     // rather than as shading. Bigger numbers than these stop looking like a
     // material and start looking like a poster.
-    readonly property real iconGradientLift: 0.05     // L, hacia arriba
-    readonly property real iconGradientDrop: 0.05     // L, hacia abajo
-    readonly property real iconGradientTurn: 5        // grados de giro, ±
-    readonly property real iconGradientChroma: 0.05   // croma que gana el bajo
+    readonly property real iconGradientLift: CelestinaDesignTokens.iconGradientLift  // L, hacia arriba
+    readonly property real iconGradientDrop: CelestinaDesignTokens.iconGradientDrop  // L, hacia abajo
+    readonly property real iconGradientTurn: CelestinaDesignTokens.iconGradientTurn  // grados de giro, ±
+    readonly property real iconGradientChroma: CelestinaDesignTokens.iconGradientChroma  // croma que gana el bajo
 
     function srgbToLinear(channel) {
         return channel <= 0.04045 ? channel / 12.92
@@ -161,12 +167,12 @@ QtObject {
     // Anatomía de la carpeta, compartida por cualquier consumidor que la pinte:
     // el redondeo, cuánto ocupa la pestaña y cuánto dura su hombro. Son del
     // tema porque definen la silueta de la suite, no una pantalla concreta.
-    readonly property real iconFolderCorner: 0.10
-    readonly property real iconFolderTab: 0.52
-    readonly property real iconFolderShoulder: 0.12
+    readonly property real iconFolderCorner: CelestinaDesignTokens.iconFolderCorner
+    readonly property real iconFolderTab: CelestinaDesignTokens.iconFolderTab
+    readonly property real iconFolderShoulder: CelestinaDesignTokens.iconFolderShoulder
     // La hoja que asoma y la tinta del emblema: casi blanca y cálida, para que
     // no compita con el tono de la carpeta ni se confunda con el texto.
-    readonly property color iconSheet: "#fbf7ee"
+    readonly property color iconSheet: CelestinaDesignTokens.iconSheet
 
     // La tinta del emblema forma par con el bolsillo sobre el que se pinta, no
     // con la ventana: sobre un tono claro —un ámbar de favoritos, el plata de
@@ -174,8 +180,8 @@ QtObject {
     // caza. Así que por encima de cierta claridad se cambia por una tinta
     // profunda del mismo tono, que es la misma regla de pares que el resto del
     // sistema.
-    readonly property real iconEmblemInkThreshold: 0.62
-    readonly property real iconEmblemInkLightness: 0.26
+    readonly property real iconEmblemInkThreshold: CelestinaDesignTokens.iconEmblemInkThreshold
+    readonly property real iconEmblemInkLightness: CelestinaDesignTokens.iconEmblemInkLightness
 
     function iconEmblemInk(value) {
         const pocket = toOklch(iconGradientBottom(value))
@@ -198,7 +204,7 @@ QtObject {
 
     // El fondo de la carpeta: el mismo tono, asentado. También en OKLCH, para
     // que no se vaya de familia respecto al bolsillo que lleva delante.
-    readonly property real iconBackdropDrop: 0.13
+    readonly property real iconBackdropDrop: CelestinaDesignTokens.iconBackdropDrop
 
     function iconBackdropTone(value) {
         const lch = toOklch(value)
@@ -207,32 +213,35 @@ QtObject {
                          lch[2], value.a)
     }
 
-    // Accent recipe. Change `ref.accent` once; links, interaction states and
-    // translucent selection/disabled roles all follow automatically.
-    readonly property real accentLinkMix: 0.24
-    readonly property real accentHoverMix: 0.08
-    readonly property real accentPressedMix: 0.14
-    readonly property real accentSelectedOpacity: 0.20
-    readonly property real accentMarqueeOpacity: 0.18
-    readonly property real accentBadgeOpacity: 0.15
-    readonly property real accentSoftOpacity: 0.14
-    readonly property real accentSoftBorderOpacity: 0.18
+    // Accent recipe: the mix amounts and opacities the accent roles are
+    // derived with. tokens.toml stores each derived role as its resolved
+    // colour and names its recipe; a change to `ref.accent` there re-resolves
+    // the links, interaction states and translucent selection/disabled roles,
+    // and scripts/test-gen-tokens.py fails until every recipe agrees.
+    readonly property real accentLinkMix: CelestinaDesignTokens.accentLinkMix
+    readonly property real accentHoverMix: CelestinaDesignTokens.accentHoverMix
+    readonly property real accentPressedMix: CelestinaDesignTokens.accentPressedMix
+    readonly property real accentSelectedOpacity: CelestinaDesignTokens.accentSelectedOpacity
+    readonly property real accentMarqueeOpacity: CelestinaDesignTokens.accentMarqueeOpacity
+    readonly property real accentBadgeOpacity: CelestinaDesignTokens.accentBadgeOpacity
+    readonly property real accentSoftOpacity: CelestinaDesignTokens.accentSoftOpacity
+    readonly property real accentSoftBorderOpacity: CelestinaDesignTokens.accentSoftBorderOpacity
     // The two interaction washes a row or cell paints in the accent's own hue,
     // so hover → press → selected is one ramp of one colour rather than a grey
     // that turns blue on the click. Hover sits below the selected wash and the
     // press above it: the release is felt as a settle, not a jump.
-    readonly property real accentContentHoverOpacity: 0.07
-    readonly property real accentPressedWashOpacity: 0.26
-    readonly property real accentDisabledInkOpacity: 0.75
+    readonly property real accentContentHoverOpacity: CelestinaDesignTokens.accentContentHoverOpacity
+    readonly property real accentPressedWashOpacity: CelestinaDesignTokens.accentPressedWashOpacity
+    readonly property real accentDisabledInkOpacity: CelestinaDesignTokens.accentDisabledInkOpacity
 
     // A colour swatch's outline: a faint ring of the text ink, so a swatch as
     // dark as the menu behind it still reads as a disc.
-    readonly property real swatchOutlineOpacity: 0.24
+    readonly property real swatchOutlineOpacity: CelestinaDesignTokens.opacitySwatchOutline
 
     // The panel body's balance: roughly half elevated tint, half of whatever
     // the surface sits on. One dial for every panel, menu section and context
     // menu — they held three identical copies of it before.
-    readonly property real panelTintOpacity: 0.55
+    readonly property real panelTintOpacity: CelestinaDesignTokens.opacityPanelTint
 
     // ══ ref.* — primitive colour ramps ═══════════════════════════════════════
     // Every neutral keeps a subtle cool cast (never pure grey); the accent is the
@@ -240,39 +249,37 @@ QtObject {
     component RefPalette: QtObject {
         // Near-black neutral ramp (dark scheme). `dN` are derived intermediate
         // steps the SESL table does not name but the surfaces need.
-        readonly property color night: "#050608"      // window / canvas
-        readonly property color d1: "#090b0f"         // input / backdrop floor
+        readonly property color night: CelestinaDesignTokens.ref.night
+        readonly property color d1: CelestinaDesignTokens.ref.d1
         // The black a Haze-tinted bar shows over the glass canvas, made
         // opaque: cards sit flat on the canvas in that same black.
-        readonly property color card: "#0b0c10"       // grouped card / box
-        readonly property color d2: "#1a1e25"         // strong tonal surface
-        readonly property color elevated: "#222831"   // elevated surface
-        readonly property color divider: "#16ffffff"  // quiet hairline
-        readonly property color d4: "#24ffffff"        // strong hairline
-        readonly property color textHi: "#f7f8fc"     // primary text
-        readonly property color textLo: "#9ba3af"     // secondary text
-        readonly property color textFaint: "#78818e"  // labels / metadata
-        // One UI accent seed. Every state is derived from this one value in the
-        // active scheme below; changing the suite accent is therefore one edit.
-        readonly property color accent: "#3e91ff"
+        readonly property color card: CelestinaDesignTokens.ref.card
+        readonly property color d2: CelestinaDesignTokens.ref.d2
+        readonly property color elevated: CelestinaDesignTokens.ref.elevated
+        readonly property color divider: CelestinaDesignTokens.ref.divider
+        readonly property color d4: CelestinaDesignTokens.ref.d4
+        readonly property color textHi: CelestinaDesignTokens.ref.textHi
+        readonly property color textLo: CelestinaDesignTokens.ref.textLo
+        readonly property color textFaint: CelestinaDesignTokens.ref.textFaint
+        // One UI accent seed. Every accent state of the scheme is derived from
+        // this one value (the recipes are in tokens.toml).
+        readonly property color accent: CelestinaDesignTokens.ref.accent
         // Ink painted on the bright accent must be dark enough for body-sized
         // labels and icons. `accentLift` remains the cool white used to derive
         // lighter accent states; it is not an on-accent foreground.
-        readonly property color accentInk: "#050608"
-        readonly property color accentLift: "#fcfcff"
-        // Semantic ramp (SESL dark).
-        readonly property color danger: "#ff746d"
-        readonly property color success: "#8ee0b4"
-        readonly property color warning: "#f7b27f"
-        // The one warm exception, spent on the star a favourite wears.
-        readonly property color favorite: "#f3cf8e"
+        readonly property color accentInk: CelestinaDesignTokens.ref.accentInk
+        readonly property color accentLift: CelestinaDesignTokens.ref.accentLift
+        readonly property color danger: CelestinaDesignTokens.ref.danger
+        readonly property color success: CelestinaDesignTokens.ref.success
+        readonly property color warning: CelestinaDesignTokens.ref.warning
+        readonly property color favorite: CelestinaDesignTokens.ref.favorite
         // Code colours. Muted on purpose: an editor is read for minutes at a
         // time, and four saturated hues fighting each other is what makes
         // syntax highlighting tiring. Each clears 4.5:1 on the input fill.
-        readonly property color codeComment: "#95a3b3"
-        readonly property color codeString: "#9ee0b8"
-        readonly property color codeNumber: "#f3cf8e"
-        readonly property color codeKeyword: "#c4b5fd"
+        readonly property color codeComment: CelestinaDesignTokens.ref.codeComment
+        readonly property color codeString: CelestinaDesignTokens.ref.codeString
+        readonly property color codeNumber: CelestinaDesignTokens.ref.codeNumber
+        readonly property color codeKeyword: CelestinaDesignTokens.ref.codeKeyword
     }
     readonly property RefPalette ref: RefPalette {}
 
@@ -333,6 +340,8 @@ QtObject {
         required property color inputBorder
         required property color controlFill
         required property color controlHover
+        // The plate of a pressed control, one step above controlHover.
+        required property color controlPressed
         required property color pillFill
         required property color badgeFill
         required property color badgeAccentFill
@@ -401,140 +410,122 @@ QtObject {
     }
 
     readonly property ColorScheme schemeDark: ColorScheme {
-        canvas: theme.ref.night
-        canvasInk: theme.ref.textHi
-        card: theme.ref.card
-        cardInk: theme.ref.textHi
-        elevated: theme.ref.elevated
-        elevatedInk: theme.ref.textHi
-        text: theme.ref.textHi
-        textMuted: theme.ref.textLo
-        textFaint: theme.ref.textFaint
-        divider: theme.ref.divider
-        dividerStrong: theme.ref.d4
-        accent: theme.ref.accent
-        accentInk: theme.ref.accentInk
-        accentLink: theme.mixColors(theme.ref.accent, theme.ref.accentLift,
-                                    theme.accentLinkMix)
-        accentHover: theme.mixColors(theme.ref.accent, theme.ref.accentLift,
-                                     theme.accentHoverMix)
-        accentPressed: theme.mixColors(theme.ref.accent, theme.ref.night,
-                                       theme.accentPressedMix)
+        canvas: CelestinaDesignTokens.schemeDark.canvas
+        canvasInk: CelestinaDesignTokens.schemeDark.canvasInk
+        card: CelestinaDesignTokens.schemeDark.card
+        cardInk: CelestinaDesignTokens.schemeDark.cardInk
+        elevated: CelestinaDesignTokens.schemeDark.elevated
+        elevatedInk: CelestinaDesignTokens.schemeDark.elevatedInk
+        text: CelestinaDesignTokens.schemeDark.text
+        textMuted: CelestinaDesignTokens.schemeDark.textMuted
+        textFaint: CelestinaDesignTokens.schemeDark.textFaint
+        divider: CelestinaDesignTokens.schemeDark.divider
+        dividerStrong: CelestinaDesignTokens.schemeDark.dividerStrong
+        accent: CelestinaDesignTokens.schemeDark.accent
+        accentInk: CelestinaDesignTokens.schemeDark.accentInk
+        accentLink: CelestinaDesignTokens.schemeDark.accentLink
+        accentHover: CelestinaDesignTokens.schemeDark.accentHover
+        accentPressed: CelestinaDesignTokens.schemeDark.accentPressed
         // Keyboard focus is an active state — the ring is the accent's lit tint.
-        focusRing: theme.mixColors(theme.ref.accent, theme.ref.accentLift,
-                                   theme.accentLinkMix)
-        danger: theme.ref.danger
-        dangerInk: theme.ref.night
-        success: theme.ref.success
-        successInk: theme.ref.night
-        warning: theme.ref.warning
-        warningInk: theme.ref.night
-        codeComment: theme.ref.codeComment
-        codeString: theme.ref.codeString
-        codeNumber: theme.ref.codeNumber
-        codeKeyword: theme.ref.codeKeyword
-        scrim: "#73000000"
+        focusRing: CelestinaDesignTokens.schemeDark.focusRing
+        danger: CelestinaDesignTokens.schemeDark.danger
+        dangerInk: CelestinaDesignTokens.schemeDark.dangerInk
+        success: CelestinaDesignTokens.schemeDark.success
+        successInk: CelestinaDesignTokens.schemeDark.successInk
+        warning: CelestinaDesignTokens.schemeDark.warning
+        warningInk: CelestinaDesignTokens.schemeDark.warningInk
+        codeComment: CelestinaDesignTokens.schemeDark.codeComment
+        codeString: CelestinaDesignTokens.schemeDark.codeString
+        codeNumber: CelestinaDesignTokens.schemeDark.codeNumber
+        codeKeyword: CelestinaDesignTokens.schemeDark.codeKeyword
+        scrim: CelestinaDesignTokens.schemeDark.scrim
         // State layers are translucent; actual work/group surfaces use the
         // opaque card/elevated roles through CelestinaSurface.
-        surface: "#d914171c"
-        surfaceStrong: "#f01a1e25"
+        surface: CelestinaDesignTokens.schemeDark.surface
+        surfaceStrong: CelestinaDesignTokens.schemeDark.surfaceStrong
         // A pointer lift that is seen on the #0b0c10 card: 5 % white was
         // 1.1:1 there, below any eye; 10 % is the step the guard enforces.
-        surfaceHover: "#1affffff"
-        contentHover: theme.withAlpha(theme.ref.accent,
-                                      theme.accentContentHoverOpacity)
-        pressedWash: theme.withAlpha(theme.ref.accent,
-                                     theme.accentPressedWashOpacity)
+        surfaceHover: CelestinaDesignTokens.schemeDark.surfaceHover
+        contentHover: CelestinaDesignTokens.schemeDark.contentHover
+        pressedWash: CelestinaDesignTokens.schemeDark.pressedWash
         // Selection reads as a soft accent wash — the One UI "selected" language.
-        surfaceSelected: theme.withAlpha(theme.ref.accent,
-                                         theme.accentSelectedOpacity)
-        selectionMarquee: theme.withAlpha(theme.ref.accent,
-                                          theme.accentMarqueeOpacity)
-        inputFill: "#8c14171c"
-        inputFillFocus: "#b31a1e25"
-        inputBorder: "#16ffffff"
+        surfaceSelected: CelestinaDesignTokens.schemeDark.surfaceSelected
+        selectionMarquee: CelestinaDesignTokens.schemeDark.selectionMarquee
+        inputFill: CelestinaDesignTokens.schemeDark.inputFill
+        inputFillFocus: CelestinaDesignTokens.schemeDark.inputFillFocus
+        inputBorder: CelestinaDesignTokens.schemeDark.inputBorder
         // The neutral control plate: a tonal button at rest, a switch track,
         // a disabled fill. `controlHover` is the lift the pointer gives it:
         // one visible step above the plate, never the same value.
-        controlFill: "#1affffff"
-        controlHover: "#29ffffff"
+        controlFill: CelestinaDesignTokens.schemeDark.controlFill
+        controlHover: CelestinaDesignTokens.schemeDark.controlHover
+        controlPressed: CelestinaDesignTokens.schemeDark.controlPressed
         // A floating pill wears the Haze tint over its own glass capture,
         // the same material as the bar and the menus. Not a control plate.
-        pillFill: "#b3050608"
-        badgeFill: "#0effffff"
+        pillFill: CelestinaDesignTokens.schemeDark.pillFill
+        badgeFill: CelestinaDesignTokens.schemeDark.badgeFill
         // Current/selected row wash: accent-tinted (alpha nudged up — blue reads
         // lighter than the old white at the same opacity).
-        badgeAccentFill: theme.withAlpha(theme.ref.accent,
-                                         theme.accentBadgeOpacity)
-        accentSoft: theme.withAlpha(theme.ref.accent,
-                                    theme.accentSoftOpacity)
-        accentSoftBorder: theme.withAlpha(
-                              theme.mixColors(theme.ref.accent,
-                                              theme.ref.accentLift,
-                                              theme.accentLinkMix),
-                              theme.accentSoftBorderOpacity)
-        successSoft: "#1c8ee0b4"
-        swatchOutline: theme.withAlpha(theme.ref.textHi,
-                                       theme.swatchOutlineOpacity)
-        accentDisabledFill: theme.withAlpha(theme.ref.accent,
-                                            theme.accentSelectedOpacity)
-        accentDisabledInk: theme.withAlpha(theme.ref.accent,
-                                           theme.accentDisabledInkOpacity)
+        badgeAccentFill: CelestinaDesignTokens.schemeDark.badgeAccentFill
+        accentSoft: CelestinaDesignTokens.schemeDark.accentSoft
+        accentSoftBorder: CelestinaDesignTokens.schemeDark.accentSoftBorder
+        successSoft: CelestinaDesignTokens.schemeDark.successSoft
+        swatchOutline: CelestinaDesignTokens.schemeDark.swatchOutline
+        accentDisabledFill: CelestinaDesignTokens.schemeDark.accentDisabledFill
+        accentDisabledInk: CelestinaDesignTokens.schemeDark.accentDisabledInk
         // Artwork is untrusted visual input. This floor keeps foreground text
         // readable even when a cover is almost white.
-        mediaScrim: "#cc000000"
-        mediaScrimInk: theme.ref.textHi
-        mediaSurfaceStart: "#242d3c"
-        mediaSurfaceMid: "#222634"
-        mediaSurfaceEnd: "#29232d"
-        mediaSurfaceInk: theme.ref.textHi
-        mediaArtworkStart: "#9eb9d3"
-        mediaArtworkMid: "#536d8e"
-        mediaArtworkEnd: "#d39a7f"
-        mediaArtworkInk: theme.ref.textHi
-        mediaProgress: "#e7edf6"
-        mediaProgressTrack: "#4de7edf6"
+        mediaScrim: CelestinaDesignTokens.schemeDark.mediaScrim
+        mediaScrimInk: CelestinaDesignTokens.schemeDark.mediaScrimInk
+        mediaSurfaceStart: CelestinaDesignTokens.schemeDark.mediaSurfaceStart
+        mediaSurfaceMid: CelestinaDesignTokens.schemeDark.mediaSurfaceMid
+        mediaSurfaceEnd: CelestinaDesignTokens.schemeDark.mediaSurfaceEnd
+        mediaSurfaceInk: CelestinaDesignTokens.schemeDark.mediaSurfaceInk
+        mediaArtworkStart: CelestinaDesignTokens.schemeDark.mediaArtworkStart
+        mediaArtworkMid: CelestinaDesignTokens.schemeDark.mediaArtworkMid
+        mediaArtworkEnd: CelestinaDesignTokens.schemeDark.mediaArtworkEnd
+        mediaArtworkInk: CelestinaDesignTokens.schemeDark.mediaArtworkInk
+        mediaProgress: CelestinaDesignTokens.schemeDark.mediaProgress
+        mediaProgressTrack: CelestinaDesignTokens.schemeDark.mediaProgressTrack
         // Icon ink stays within one cool family by default: vivid blue marks
         // content folders, silver-blue marks plain files, slate marks
         // navigation/sidebar chrome and cyan marks connected hardware.
-        glyphDirectory: theme.mixColors(theme.ref.accent,
-                                        theme.ref.accentLift,
-                                        theme.accentLinkMix)
-        glyphFile: "#b4c1d3"
-        glyphSymlink: "#c4b5fd"
-        glyphNavigation: "#9fb3cc"
-        glyphDevice: "#8dd8e3"
-        glyphAccentBlue: "#8bb8ff"
-        glyphAccentCyan: "#8dd8e3"
-        glyphAccentGreen: "#9ee0b8"
-        glyphAccentViolet: "#c4b5fd"
-        glyphAccentCoral: "#f5a8a0"
-        glyphAccentAmber: "#f3cf8e"
-        favorite: theme.ref.favorite
-        favoriteBadgeFill: "#b3090b0f"
+        glyphDirectory: CelestinaDesignTokens.schemeDark.glyphDirectory
+        glyphFile: CelestinaDesignTokens.schemeDark.glyphFile
+        glyphSymlink: CelestinaDesignTokens.schemeDark.glyphSymlink
+        glyphNavigation: CelestinaDesignTokens.schemeDark.glyphNavigation
+        glyphDevice: CelestinaDesignTokens.schemeDark.glyphDevice
+        glyphAccentBlue: CelestinaDesignTokens.schemeDark.glyphAccentBlue
+        glyphAccentCyan: CelestinaDesignTokens.schemeDark.glyphAccentCyan
+        glyphAccentGreen: CelestinaDesignTokens.schemeDark.glyphAccentGreen
+        glyphAccentViolet: CelestinaDesignTokens.schemeDark.glyphAccentViolet
+        glyphAccentCoral: CelestinaDesignTokens.schemeDark.glyphAccentCoral
+        glyphAccentAmber: CelestinaDesignTokens.schemeDark.glyphAccentAmber
+        favorite: CelestinaDesignTokens.schemeDark.favorite
+        favoriteBadgeFill: CelestinaDesignTokens.schemeDark.favoriteBadgeFill
         // Danger banner re-tinted around the new danger red.
-        dangerFill: "#4d571f1c"
-        dangerBorder: "#8ad4736c"
-        dangerFillInk: "#ffdad6"
-        gradientStart: "#080a0f"
-        gradientMid: "#0b0e14"
-        gradientEnd: "#08090d"
+        dangerFill: CelestinaDesignTokens.schemeDark.dangerFill
+        dangerBorder: CelestinaDesignTokens.schemeDark.dangerBorder
+        dangerFillInk: CelestinaDesignTokens.schemeDark.dangerFillInk
+        gradientStart: CelestinaDesignTokens.schemeDark.gradientStart
+        gradientMid: CelestinaDesignTokens.schemeDark.gradientMid
+        gradientEnd: CelestinaDesignTokens.schemeDark.gradientEnd
         // Dense enough for desktop text, but translucent enough for the
         // reference's pink/green backdrop colour to remain visible through the
         // blur. Strong is reserved for modal readability.
-        panelTint: theme.withAlpha(theme.ref.elevated, theme.panelTintOpacity)
+        panelTint: CelestinaDesignTokens.schemeDark.panelTint
         // Haze's tint: the background colour at 0.70 over the blur. One value;
         // `glassTintStrong` survives as a name for GlassCard's Strong density
         // and paints the same material.
-        glassTint: "#b3050608"
-        glassTintStrong: "#b3050608"
+        glassTint: CelestinaDesignTokens.schemeDark.glassTint
+        glassTintStrong: CelestinaDesignTokens.schemeDark.glassTintStrong
         // Wallpaper is untrusted visual input. Even with compositor blur the
         // tint must provide a contrast floor; the fallback is denser when the
         // host cannot arm blur at all.
-        compositorGlassTint: "#e61a1e25"
-        compositorGlassFallback: "#f51a1e25"
-        glassHighlight: "#2effffff"
-        shadow: "#a6000000"
+        compositorGlassTint: CelestinaDesignTokens.schemeDark.compositorGlassTint
+        compositorGlassFallback: CelestinaDesignTokens.schemeDark.compositorGlassFallback
+        glassHighlight: CelestinaDesignTokens.schemeDark.glassHighlight
+        shadow: CelestinaDesignTokens.schemeDark.shadow
     }
 
     // The active scheme — the single switch point. Bindings re-evaluate once if
@@ -585,6 +576,7 @@ QtObject {
     readonly property color inputBorder: scheme.inputBorder
     readonly property color controlFill: scheme.controlFill
     readonly property color controlHover: scheme.controlHover
+    readonly property color controlPressed: scheme.controlPressed
     readonly property color pillFill: scheme.pillFill
     readonly property color badgeFill: scheme.badgeFill
     readonly property color badgeAccentFill: scheme.badgeAccentFill
@@ -634,8 +626,8 @@ QtObject {
     readonly property color shadow: scheme.shadow
     // Compositing constants are scheme invariant; keeping them here prevents
     // visual implementations from spelling ad-hoc colour literals.
-    readonly property color clear: "#00000000"
-    readonly property color opaqueMask: "#ffffffff"
+    readonly property color clear: CelestinaDesignTokens.compositingClear
+    readonly property color opaqueMask: CelestinaDesignTokens.compositingOpaqueMask
 
     // The rank palette for share visualizations (treemap tiles, usage bars):
     // the entry at rank i paints usagePalette[i % 6]. Order is part of the
@@ -651,7 +643,7 @@ QtObject {
     // At 0.48 each hue is plainly itself while the light 11 px caption keeps
     // 4.5:1 on all six (amber, the lightest, measures 4.97:1 on the card).
     // Separate from `accentSoftOpacity`, which other surfaces keep at 0.14.
-    readonly property real usageTileOpacity: 0.48
+    readonly property real usageTileOpacity: CelestinaDesignTokens.opacityUsageTile
 
     // Stable keys are persisted by Siderita; colours remain tokens so a later
     // palette retune updates every customized item without rewriting config.
@@ -714,15 +706,15 @@ QtObject {
     // `rowHeight` and radii never scale (DESIGN §5.4).
     property real textScale: 1.0
     // The unscaled bases; consumers read the scaled roles below.
-    readonly property int fontMiniBase: 10
-    readonly property int fontCaptionBase: 11
-    readonly property int fontRowSecondaryBase: 12
-    readonly property int fontBodyBase: 13
-    readonly property int fontRowTitleBase: 15
-    readonly property int fontTitleBase: 17
-    readonly property int fontHeaderCollapsedBase: 20
-    readonly property int fontHeaderExpandedBase: 30
-    readonly property int fontDisplayBase: 34
+    readonly property int fontMiniBase: CelestinaDesignTokens.typeMini
+    readonly property int fontCaptionBase: CelestinaDesignTokens.typeCaption
+    readonly property int fontRowSecondaryBase: CelestinaDesignTokens.typeRowSecondary
+    readonly property int fontBodyBase: CelestinaDesignTokens.typeBody
+    readonly property int fontRowTitleBase: CelestinaDesignTokens.typeRowTitle
+    readonly property int fontTitleBase: CelestinaDesignTokens.typeTitle
+    readonly property int fontHeaderCollapsedBase: CelestinaDesignTokens.typeHeaderCollapsed
+    readonly property int fontHeaderExpandedBase: CelestinaDesignTokens.typeHeaderExpanded
+    readonly property int fontDisplayBase: CelestinaDesignTokens.typeDisplay
     readonly property int fontMini: Math.round(fontMiniBase * textScale)
     readonly property int fontCaption: Math.round(fontCaptionBase * textScale)
     readonly property int fontRowSecondary: Math.round(fontRowSecondaryBase * textScale)       // list-row subtitle
@@ -732,7 +724,7 @@ QtObject {
     readonly property int fontHeaderCollapsed: Math.round(fontHeaderCollapsedBase * textScale) // collapsed big header
     readonly property int fontHeaderExpanded: Math.round(fontHeaderExpandedBase * textScale)   // expanded big header (ready; CP4/S4)
     readonly property int fontDisplay: Math.round(fontDisplayBase * textScale)                 // display (ready)
-    readonly property real sectionLetterSpacing: 1.4
+    readonly property real sectionLetterSpacing: CelestinaDesignTokens.typeSectionLetterSpacing
 
     readonly property int weightRegular: Font.Normal    // 400 — body
     readonly property int weightMedium: Font.Medium     // 500 — kept until components settle to 400/600 (S4)
@@ -742,8 +734,8 @@ QtObject {
     // `geometry-corner-radius`, which is what a window in this session is
     // rounded by. It is not a radius to copy onto anything: it is the outer
     // curve that `concentricRadius` measures inwards from.
-    readonly property int radiusWindow: 14
-    readonly property int radiusPill: 9999   // full capsule
+    readonly property int radiusWindow: CelestinaDesignTokens.radiusWindow
+    readonly property int radiusPill: CelestinaDesignTokens.radiusPill  // full capsule
 
     // ── Radius scale ───────────────────────────────────────────────────────────
     // The desktop ladder (spec 2026-09-30 §3.2). Nested corners are concentric
@@ -751,12 +743,12 @@ QtObject {
     // (12 + 8 = 20); a radiusMd row or tile inset spaceXs holds radiusSm
     // thumbnails (8 + 4 = 12). `cornerInset` is the least a glyph or text may
     // sit from a corner without the arc clipping it.
-    readonly property int radiusNone: 0      // edge-to-edge surfaces with no exposed corner
-    readonly property int radiusXs: 3        // selection marquee / tiny indicators
-    readonly property int radiusSm: 8        // chips, thumbnails, small indicators
-    readonly property int radiusMd: 12       // rows, tiles, content surfaces
-    readonly property int radiusButton: 10   // text buttons (dialogs only)
-    readonly property int radiusLg: 20       // grouped cards, sidebars, dialogs, menus
+    readonly property int radiusNone: CelestinaDesignTokens.radiusNone  // edge-to-edge surfaces with no exposed corner
+    readonly property int radiusXs: CelestinaDesignTokens.radiusXs  // selection marquee / tiny indicators
+    readonly property int radiusSm: CelestinaDesignTokens.radiusSm  // chips, thumbnails, small indicators
+    readonly property int radiusMd: CelestinaDesignTokens.radiusMd  // rows, tiles, content surfaces
+    readonly property int radiusButton: CelestinaDesignTokens.radiusButton  // text buttons (dialogs only)
+    readonly property int radiusLg: CelestinaDesignTokens.radiusLg  // grouped cards, sidebars, dialogs, menus
     readonly property int radiusInput: radiusMd  // multi-line input areas; a single-line field is a pill (CelestinaTextField)
 
     // The gap every first-level box keeps from the window edge: the sidebar,
@@ -764,7 +756,7 @@ QtObject {
     // that share an edge have to share the distance to it — the content box
     // used to sit 8 px further in and 12 px higher, which is why it lined up
     // with nothing.
-    readonly property int windowMargin: 16
+    readonly property int windowMargin: CelestinaDesignTokens.sizeWindowMargin
 
     // The radius a box takes when it sits inside the window.
     //
@@ -791,44 +783,44 @@ QtObject {
     }
 
     // ── Spacing scale (4-based) ──────────────────────────────────────────────
-    readonly property int spaceXs: 4
-    readonly property int spaceSm: 8
-    readonly property int spaceMd: 12
-    readonly property int spaceLg: 16
-    readonly property int spaceXl: 20
-    readonly property int space2xl: 24
-    readonly property int space3xl: 32
+    readonly property int spaceXs: CelestinaDesignTokens.spacingXs
+    readonly property int spaceSm: CelestinaDesignTokens.spacingSm
+    readonly property int spaceMd: CelestinaDesignTokens.spacingMd
+    readonly property int spaceLg: CelestinaDesignTokens.spacingLg
+    readonly property int spaceXl: CelestinaDesignTokens.spacingXl
+    readonly property int space2xl: CelestinaDesignTokens.spacingXxl
+    readonly property int space3xl: CelestinaDesignTokens.spacingXxxl
     // Between sibling cards, and from a card's edge to its rows or tiles.
-    readonly property int spaceCardGap: 12
-    readonly property int spaceCardInset: 8
+    readonly property int spaceCardGap: CelestinaDesignTokens.spacingCardGap
+    readonly property int spaceCardInset: CelestinaDesignTokens.spacingCardInset
 
     // ── Control metrics ──────────────────────────────────────────────────────
-    readonly property int controlHeightXs: 30
-    readonly property int controlHeightSm: 34
-    readonly property int controlHeight: 38
-    readonly property int controlHeightLg: 42
-    readonly property int controlHeightXl: 52
-    readonly property int rowHeight: 40
-    readonly property int rowHeightLg: 52
-    readonly property int glyphTile: 34
-    readonly property int glyphTileLg: 56
-    readonly property int iconSm: 18
-    readonly property int iconMd: 20
-    readonly property int iconLg: 24         // navigation glyphs: sidebar rows, segments
+    readonly property int controlHeightXs: CelestinaDesignTokens.sizeControlHeightXs
+    readonly property int controlHeightSm: CelestinaDesignTokens.sizeControlHeightSm
+    readonly property int controlHeight: CelestinaDesignTokens.sizeControlHeight
+    readonly property int controlHeightLg: CelestinaDesignTokens.sizeControlHeightLg
+    readonly property int controlHeightXl: CelestinaDesignTokens.sizeControlHeightXl
+    readonly property int rowHeight: CelestinaDesignTokens.spacingRowHeight
+    readonly property int rowHeightLg: CelestinaDesignTokens.sizeRowHeightLg
+    readonly property int glyphTile: CelestinaDesignTokens.sizeGlyphTile
+    readonly property int glyphTileLg: CelestinaDesignTokens.sizeGlyphTileLg
+    readonly property int iconSm: CelestinaDesignTokens.iconSm
+    readonly property int iconMd: CelestinaDesignTokens.iconMd
+    readonly property int iconLg: CelestinaDesignTokens.iconLg  // navigation glyphs: sidebar rows, segments
     // The fixed top bar every application wears, and the segmented control
     // that sits in its leading slot with spaceSm of air above and below.
-    readonly property int topBarHeight: 48
-    readonly property int compSegmentHeight: 32
-    readonly property int borderHairline: 1
-    readonly property int borderFocus: 2
-    readonly property real disabledOpacity: 0.5
-    readonly property real disabledContentOpacity: 0.55
-    readonly property real unavailableContentOpacity: 0.4
-    readonly property real missingContentOpacity: 0.45
-    readonly property real draggedContentOpacity: 0.9
-    readonly property real mutedContentOpacity: 0.8
-    readonly property real decorationOpacitySoft: 0.7
-    readonly property real decorationOpacityStrong: 0.8
+    readonly property int topBarHeight: CelestinaDesignTokens.spacingTopBarHeight
+    readonly property int compSegmentHeight: CelestinaDesignTokens.controlSegmentHeight
+    readonly property int borderHairline: CelestinaDesignTokens.borderHairline
+    readonly property int borderFocus: CelestinaDesignTokens.borderFocus
+    readonly property real disabledOpacity: CelestinaDesignTokens.opacityDisabled
+    readonly property real disabledContentOpacity: CelestinaDesignTokens.opacityDisabledContent
+    readonly property real unavailableContentOpacity: CelestinaDesignTokens.opacityUnavailableContent
+    readonly property real missingContentOpacity: CelestinaDesignTokens.opacityMissingContent
+    readonly property real draggedContentOpacity: CelestinaDesignTokens.opacityDraggedContent
+    readonly property real mutedContentOpacity: CelestinaDesignTokens.opacityMutedContent
+    readonly property real decorationOpacitySoft: CelestinaDesignTokens.opacityDecorationSoft
+    readonly property real decorationOpacityStrong: CelestinaDesignTokens.opacityDecorationStrong
 
     // ── Motion ─────────────────────────────────────────────────────────────────
     // Host-controlled accessibility input. Consumers must bind this once from
@@ -839,18 +831,18 @@ QtObject {
     // 350, hard ceiling 500. The bezier tokens are the One UI curves, ready for
     // S2's motion retune (recoil, opacity→linear, bezier adoption); S1 keeps the
     // existing enum easing so the motion delta stays at "small".
-    readonly property int motionFast: 100
-    readonly property int motionNormal: 200
-    readonly property int motionSlow: 350
-    readonly property int motionCeiling: 500
+    readonly property int motionFast: CelestinaDesignTokens.motionFast
+    readonly property int motionNormal: CelestinaDesignTokens.motionNormal
+    readonly property int motionSlow: CelestinaDesignTokens.motionSlow
+    readonly property int motionCeiling: CelestinaDesignTokens.motionCeiling
     // Press recoil (DESIGN §2): the control sinks to this scale on press in
     // `motionFast` and settles back in `motionSlow`. A consumer applies it to a
     // control's fill and content, never to the hit box, so the pointer's
     // target does not shrink under the finger that is on it.
-    readonly property real pressRecoilScale: 0.96
+    readonly property real pressRecoilScale: CelestinaDesignTokens.motionPressScale
     // A row or cell is wide and sits among its siblings; the full button
     // recoil would make it lurch. Its plate sinks by less.
-    readonly property real rowRecoilScale: 0.985
+    readonly property real rowRecoilScale: CelestinaDesignTokens.motionRowRecoilScale
     // The universal departure. Every surface leaves the same way — shrinking
     // into the screen while it fades, on this one clock with `easeStandard`
     // and this one depth — whether it is a menu closing, a display's card
@@ -860,19 +852,19 @@ QtObject {
     // own exit — the menus at 100 ms to 0.92 under a second 150 ms window
     // fade, the quiet surfaces at 200 ms to 0.88 — and the author read the
     // drift as every close looking subtly unlike the others.
-    readonly property int motionExit: 150
-    readonly property real exitShrink: 0.9
+    readonly property int motionExit: CelestinaDesignTokens.motionExit
+    readonly property real exitShrink: CelestinaDesignTokens.motionExitShrink
     // How long a drag must rest on a folder before it springs open. Long enough
     // that crossing one on the way somewhere else never opens it, short enough
     // that deliberately waiting does not feel broken.
-    readonly property int springDelay: 800
+    readonly property int springDelay: CelestinaDesignTokens.motionSpringDelay
 
     // The official One UI curve (fast start, long settle) and its two sine
     // variants, as bezier control points for `easing.bezierCurve`. Ready for S2;
     // consume with `easing.type: Easing.Bezier; easing.bezierCurve: easeOneUi`.
-    readonly property var easeOneUi: [0.22, 0.25, 0, 1, 1, 1]
-    readonly property var easeSineInOut80: [0.33, 0, 0.2, 1, 1, 1]
-    readonly property var easeSineInOut90: [0.33, 0, 0.1, 1, 1, 1]
+    readonly property var easeOneUi: CelestinaDesignTokens.motionCurveStandard
+    readonly property var easeSineInOut80: CelestinaDesignTokens.motionCurveSineInOut80
+    readonly property var easeSineInOut90: CelestinaDesignTokens.motionCurveSineInOut90
 
     // Enum easing vocabulary in use today (retuned to the bezier curves in S2).
     // easeEmphasized is the One UI "settle" (mild overshoot) on popup reveals.
@@ -880,7 +872,7 @@ QtObject {
     readonly property int easeDecelerate: Easing.OutQuint
     readonly property int easeEmphasized: Easing.OutBack
     readonly property int easeExit: Easing.InCubic
-    readonly property real overshoot: 1.15
+    readonly property real overshoot: CelestinaDesignTokens.motionOvershoot
 
     // ── Glass parameters (scalars) ─────────────────────────────────────────────
     // The Haze recipe (spec 2026-09-30 §3.1): a 20 dp blur is a Gaussian of
@@ -889,25 +881,25 @@ QtObject {
     // calibrated against the σ = 12 reference the gallery renders with
     // scripts/glass-reference.py; the value below is the one recorded in the
     // 2026-09-30 evidence.
-    readonly property real glassBlur: 1.0
-    readonly property int glassBlurMax: 24
-    readonly property real glassBlurMultiplier: 1.0
-    readonly property real glassSaturation: 0
-    readonly property real glassSampleScale: 1.0
+    readonly property real glassBlur: CelestinaDesignTokens.glassBlur
+    readonly property int glassBlurMax: CelestinaDesignTokens.glassBlurMax
+    readonly property real glassBlurMultiplier: CelestinaDesignTokens.glassBlurMultiplier
+    readonly property real glassSaturation: CelestinaDesignTokens.glassSaturation
+    readonly property real glassSampleScale: CelestinaDesignTokens.glassSampleScale
 
     // Ambient light: a blurred copy of the content lighting the space around
     // it. Both values pull it back from the picture it sits behind — at full
     // strength the light competes with the thing it is meant to frame, and the
     // desaturation keeps a vivid photograph from washing the room in one hue.
-    readonly property real ambientBrightness: -0.30
-    readonly property real ambientSaturation: -0.20
+    readonly property real ambientBrightness: CelestinaDesignTokens.ambientBrightness
+    readonly property real ambientSaturation: CelestinaDesignTokens.ambientSaturation
     readonly property int glassSampleMargin:
             Math.ceil(glassBlurMax * (1 + glassBlurMultiplier))
     // Haze's grain: its texture drawn under the tint with alpha 0.15.
-    readonly property real glassNoiseOpacity: 0.15
+    readonly property real glassNoiseOpacity: CelestinaDesignTokens.hazeGrain
     // The canvas is one glass pane the size of the window: at 0.15 the
     // grain reads as texture, so the backdrop takes a third of it.
-    readonly property real glassCanvasNoiseOpacity: 0.05
+    readonly property real glassCanvasNoiseOpacity: CelestinaDesignTokens.glassCanvasNoiseOpacity
     // What Haze paints when it cannot blur: the opaque background colour.
     readonly property color glassFallback: canvas
     // Opt-in semantic strengths for compositor-backed shell surfaces. Samsung
@@ -915,16 +907,16 @@ QtObject {
     // measured from the supplied reference crop (roughly 0.63 neutral dim),
     // while the veil remains only an organizing trace. GlassSurface applies
     // each value to tint and noise as one material.
-    readonly property real glassContentSurfaceStrength: 0.64
-    readonly property real glassContextualVeilStrength: 0.12
+    readonly property real glassContentSurfaceStrength: CelestinaDesignTokens.hazeContentStrength
+    readonly property real glassContextualVeilStrength: CelestinaDesignTokens.hazeVeilStrength
 
     // ── Elevation (scalars) ──────────────────────────────────────────────────
     // The L2 drop shadow (RectangularShadow) under floating layers. Soft, large
     // blur, low opacity, little offset — "must not suggest 3D depth" (§2). The
     // colour is `shadow` in the scheme; on near-black the shadow is a faint halo.
-    readonly property int shadowBlur: 48
-    readonly property int shadowSpread: 0
-    readonly property int shadowOffsetY: 8
+    readonly property int shadowBlur: CelestinaDesignTokens.shadowBlur
+    readonly property int shadowSpread: CelestinaDesignTokens.shadowSpread
+    readonly property int shadowOffsetY: CelestinaDesignTokens.shadowOffsetY
     // The L2 shadow is TWO layers, the way macOS draws its control centre:
     // a tight contact shadow that seats the card, and a wide ambient wash
     // so faint it only reads as depth — never as a dark frame, whatever the
@@ -937,47 +929,47 @@ QtObject {
     // (`backdropDim` below, drawn by the surface field), and the cards
     // themselves cast almost nothing. These two layers are that almost
     // nothing: a contact line and a whisper of ambient.
-    readonly property int shadowContactBlur: 3
-    readonly property int shadowContactOffsetY: 1
-    readonly property color shadowContact: "#66000000"
-    readonly property int shadowAmbientBlur: 24
-    readonly property int shadowAmbientOffsetY: 8
-    readonly property int shadowAmbientSpread: 0
-    readonly property color shadowAmbient: "#2e000000"
+    readonly property int shadowContactBlur: CelestinaDesignTokens.shadowContactBlur
+    readonly property int shadowContactOffsetY: CelestinaDesignTokens.shadowContactOffsetY
+    readonly property color shadowContact: CelestinaDesignTokens.shadowContact
+    readonly property int shadowAmbientBlur: CelestinaDesignTokens.shadowAmbientBlur
+    readonly property int shadowAmbientOffsetY: CelestinaDesignTokens.shadowAmbientOffsetY
+    readonly property int shadowAmbientSpread: CelestinaDesignTokens.shadowAmbientSpread
+    readonly property color shadowAmbient: CelestinaDesignTokens.shadowAmbient
     // The scrim an open contextual surface lays over the whole output,
     // bar included.
-    readonly property color backdropDim: "#33000000"
+    readonly property color backdropDim: CelestinaDesignTokens.backdropDim
 
     // ── Component knobs (comp.*) ───────────────────────────────────────────────
     // Stable component anatomy belongs here; page placement and responsive
     // geometry stay with each screen. This is the QML equivalent of shared
     // component variables, without turning every coordinate into a token.
-    readonly property int compButtonPaddingHorizontal: 14
-    readonly property int compTextFieldPaddingHorizontal: 12
-    readonly property int compSwitchTrackWidth: 44
-    readonly property int compSwitchTrackHeight: 26
-    readonly property int compSwitchThumbSize: 20
-    readonly property int compSwitchThumbInset: 3
-    readonly property int compCheckboxIndicatorSize: 18
-    readonly property int compLinearTrackHeight: 4
-    readonly property int compSliderHandleSize: 15
-    readonly property int compStatusIndicatorSize: 8
-    readonly property int compDragIndicatorHeight: 2
-    readonly property int compSelectionIndicatorWidth: 3
-    readonly property int compSelectionIndicatorHeight: 18
-    readonly property int compMenuWidth: 232
-    readonly property int compMenuPadding: 6
-    readonly property int compMenuMargins: 24
+    readonly property int compButtonPaddingHorizontal: CelestinaDesignTokens.controlButtonPaddingHorizontal
+    readonly property int compTextFieldPaddingHorizontal: CelestinaDesignTokens.controlTextFieldPaddingHorizontal
+    readonly property int compSwitchTrackWidth: CelestinaDesignTokens.controlSwitchTrackWidth
+    readonly property int compSwitchTrackHeight: CelestinaDesignTokens.controlSwitchTrackHeight
+    readonly property int compSwitchThumbSize: CelestinaDesignTokens.controlSwitchThumbSize
+    readonly property int compSwitchThumbInset: CelestinaDesignTokens.controlSwitchThumbInset
+    readonly property int compCheckboxIndicatorSize: CelestinaDesignTokens.controlCheckboxIndicatorSize
+    readonly property int compLinearTrackHeight: CelestinaDesignTokens.controlLinearTrackHeight
+    readonly property int compSliderHandleSize: CelestinaDesignTokens.controlSliderHandleSize
+    readonly property int compStatusIndicatorSize: CelestinaDesignTokens.controlStatusIndicatorSize
+    readonly property int compDragIndicatorHeight: CelestinaDesignTokens.controlDragIndicatorHeight
+    readonly property int compSelectionIndicatorWidth: CelestinaDesignTokens.controlSelectionIndicatorWidth
+    readonly property int compSelectionIndicatorHeight: CelestinaDesignTokens.controlSelectionIndicatorHeight
+    readonly property int compMenuWidth: CelestinaDesignTokens.controlMenuWidth
+    readonly property int compMenuPadding: CelestinaDesignTokens.controlMenuPadding
+    readonly property int compMenuMargins: CelestinaDesignTokens.controlMenuMargins
     // A menu row's colour swatch: the disc, and the slash an automatic
     // (no colour chosen) swatch draws across it.
-    readonly property int compMenuSwatchSize: 14
-    readonly property int compMenuSwatchSlash: 11
+    readonly property int compMenuSwatchSize: CelestinaDesignTokens.controlMenuSwatchSize
+    readonly property int compMenuSwatchSlash: CelestinaDesignTokens.controlMenuSwatchSlash
     // Edge-attached glass scales only its vertical travel from the stable menu
     // width. The owner span, body landing and elastic tension depend on real
     // shell placement geometry and deliberately remain with that host.
-    readonly property real compEdgeAttachmentGapRatio: 0.06
-    readonly property int compEdgeAttachmentGapMin: 20
-    readonly property int compEdgeAttachmentGapMax: 36
+    readonly property real compEdgeAttachmentGapRatio: CelestinaDesignTokens.controlEdgeAttachmentGapRatio
+    readonly property int compEdgeAttachmentGapMin: CelestinaDesignTokens.controlEdgeAttachmentGapMin
+    readonly property int compEdgeAttachmentGapMax: CelestinaDesignTokens.controlEdgeAttachmentGapMax
     // Shared inset/gap for chrome floating inside a rounded content surface.
     // Keeping these semantic avoids each screen rebuilding the same 12/8 map.
     readonly property int compFloatingInset: spaceMd
@@ -989,7 +981,7 @@ QtObject {
     // destination: every frame covers 1 - exp(-frame / wheelFollowMs) of the
     // remaining distance, so a notch moves on the next frame, is 90 % there in
     // about 60 ms and has no tail, and a burst of notches adds up exactly.
-    readonly property int wheelFollowMs: 25
+    readonly property int wheelFollowMs: CelestinaDesignTokens.motionWheelFollow
 
     // Compatibility entry point for controls that expose `icon.source`.
     // Resolution itself belongs to the closed Lucide catalogue.

@@ -1,8 +1,12 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
-/// The two shared singletons, registered as such in `main`; watched like the
+/// The three shared singletons, registered as such in `main`; watched like the
 /// rest.
-const SINGLETONS: &[&str] = &["qml/CelestinaTheme.qml", "qml/CelestinaIcons.qml"];
+const SINGLETONS: &[&str] = &[
+    "qml/CelestinaTheme.qml",
+    "qml/CelestinaIcons.qml",
+    "qml/CelestinaDesignTokens.qml",
+];
 
 // One list both registers every QML file in the module and watches it for
 // rebuilds, so an edited file can never compile without reaching the binary.
@@ -66,6 +70,11 @@ fn main() {
         )
         .qml_file(
             QmlFile::from("qml/CelestinaIcons.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
+        .qml_file(
+            QmlFile::from("qml/CelestinaDesignTokens.qml")
                 .version(1, 0)
                 .singleton(true),
         )

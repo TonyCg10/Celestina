@@ -1,0 +1,117 @@
+# CEL-1-C exact change inventory
+
+Base revision	d6c78b1c4b2c85989d05f42c96125b966c1d20be
+Pathspec	calcita/build.rs
+Pathspec	calcita/qml/CelestinaDesignTokens.qml
+Pathspec	calcita/qml/Main.qml
+Pathspec	celestina-rs/crates/celestina-tokens/src/generated.rs
+Pathspec	celestina-rs/crates/celestina-tokens/src/lib.rs
+Pathspec	celestina-rs/scripts/verify-production.sh
+Pathspec	celestina-style/AGENTS.md
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaDesignTokens.qml
+Pathspec	celestina-style/CelestinaTheme.qml
+Pathspec	celestina-style/README.md
+Pathspec	celestina-style/qmldir
+Pathspec	celestina-style/scripts/check-contrast-contract.py
+Pathspec	celestina-style/scripts/check-style-contract.sh
+Pathspec	celestina-style/scripts/gen-tokens.py
+Pathspec	celestina-style/scripts/glass-reference.py
+Pathspec	celestina-style/scripts/test-gen-tokens.py
+Pathspec	celestina-style/scripts/verify-production.sh
+Pathspec	celestina-style/tests/tst_tokendata.qml
+Pathspec	celestina-style/tokens.toml
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/crates/celestina-paint/Cargo.toml
+Pathspec	celestina/crates/celestina-paint/src/theme.rs
+Pathspec	cuprita/build.rs
+Pathspec	cuprita/qml/CelestinaDesignTokens.qml
+Pathspec	cuprita/qml/Main.qml
+Pathspec	docs/evidence/2026-10-14-tokens-as-data.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-1-C.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/projects.toml
+Pathspec	fluorita/build.rs
+Pathspec	fluorita/qml/CelestinaDesignTokens.qml
+Pathspec	fluorita/qml/Main.qml
+Pathspec	grafita/build.rs
+Pathspec	grafita/qml/CelestinaDesignTokens.qml
+Pathspec	grafita/qml/Main.qml
+Pathspec	hematita/build.rs
+Pathspec	hematita/qml/CelestinaDesignTokens.qml
+Pathspec	hematita/qml/Main.qml
+Pathspec	magnetita/build.rs
+Pathspec	magnetita/qml/CelestinaDesignTokens.qml
+Pathspec	magnetita/qml/Main.qml
+Pathspec	scripts/architecture_scanners.py
+Pathspec	scripts/check-sealed-colours.py
+Pathspec	scripts/qmllint-baseline.tsv
+Pathspec	scripts/radius_contract.py
+Pathspec	scripts/test-architecture-scanners.sh
+Pathspec	scripts/test-radius-contract.py
+Pathspec	selenita/build.rs
+Pathspec	selenita/qml/CelestinaDesignTokens.qml
+Pathspec	selenita/qml/Main.qml
+Pathspec	siderita/build.rs
+Pathspec	siderita/qml/CelestinaDesignTokens.qml
+Pathspec	siderita/qml/Main.qml
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+11	2	4047cf69a6469f90a0bb280a65f5d15a5a695f756d6a4adece9c4779b177bb92	calcita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	calcita/qml/CelestinaDesignTokens.qml
+5	0	2c00419ecd1103ca4469d78c4b0b0572670588cd2ed4a4e8068265f9c8ad8dae	calcita/qml/Main.qml
+1436	0	9af6654cafb25f98b4ed2c386c620ebcb8580bda8796de137ea2a8d55e5a0df3	celestina-rs/crates/celestina-tokens/src/generated.rs
+57	2	3c7fabc0251cfe6896e6e98db9224b85c5a4f4942c0ef36b4a6768f397ca49f4	celestina-rs/crates/celestina-tokens/src/lib.rs
+2	0	0780a2e368e2edb78a44b32f876eb9bab9026f3e3b318ecaf3e4e4cd4c6d2c03	celestina-rs/scripts/verify-production.sh
+4	1	d66f372241396e0abfb8fa5026bebdebf7a9bc0cd013d57c6ee26078980a3458	celestina-style/AGENTS.md
+2	0	94f93b0b0cdc4e70bdf7b67679deb7c4ade31d3b797a1605c3a36fc6365dd2c7	celestina-style/CMakeLists.txt
+655	0	cbdbcb133c94b6b7271b22374821f8ef7460cb14050cbae954be2aafa4c460b4	celestina-style/CelestinaDesignTokens.qml
+261	269	6605ffff86b85e7c2a6647d912a3cc8d43bed74475972ac830fc45f361950701	celestina-style/CelestinaTheme.qml
+1	0	86f01edcacc9b141310bb572eccd500412bfe462e32339540f88af566b7632c1	celestina-style/README.md
+1	0	90dd163f068014488999982e418f7537e9620d9182541e740ca72c0c239eafc5	celestina-style/qmldir
+42	55	fc04cf29042f2ac2771882883dca41d4f5dcfe84c65ee654a5122d304adf55d3	celestina-style/scripts/check-contrast-contract.py
+9	3	3e5d8f3581345394af7ea7594487d0c09d82f3b58e16279213940d0737e2804b	celestina-style/scripts/check-style-contract.sh
+512	0	3d6687e9880c33f823e5fd1eaad066edb0ced6529d3998ff29d50ad5a623cefd	celestina-style/scripts/gen-tokens.py
+2	1	15404e451231aa2443c771d6e0e7c0ad416b290f5f5a372a6c302b3fddef98d3	celestina-style/scripts/glass-reference.py
+242	0	d3dcec2f23d9c620f6fdb176b4bf058158112f2b5dcaafad5ce549724ac22c50	celestina-style/scripts/test-gen-tokens.py
+3	0	231604cd31412a834c9c6c7104922676126839ca2c88f341ad6290ffebb10243	celestina-style/scripts/verify-production.sh
+52	0	6b91d0fb4a373963e14384939ab2b89d13ea3bc1013e307f2e4a8ba4f0fde963	celestina-style/tests/tst_tokendata.qml
+587	0	95478c840d3a9442c4cb02c04973fc76627fc0b597bb5a6059fdf591391b6da2	celestina-style/tokens.toml
+5	0	87c10255128359b0438465ded0de6ef7e249b25cd02f9ae99341b4047b2c5e3c	celestina/Cargo.lock
+1	1	a475bc62f70da4437d1e43b1b54b6ea90bb3e6905e7af74f32148a0881d26bdf	celestina/ROADMAP.md
+4	0	be744a0fc78057e9c94fabedc00935038adf413cc1f8998d91763beb6969ef9e	celestina/crates/celestina-paint/Cargo.toml
+112	179	9a6a76281147568a86db309b0f3992bb0534c6b8c449ad9c8c9d11b69e112b20	celestina/crates/celestina-paint/src/theme.rs
+6	0	e81ef79b8db31eab39b44a6c95ed2e48d696c6c21a1afd77da8cea892f36cd40	cuprita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	cuprita/qml/CelestinaDesignTokens.qml
+5	0	8f362dcba911613c114d7eb844d1395d27e9f1a9a9eb378ab0a3a41ef9839a8c	cuprita/qml/Main.qml
+230	0	9e7b6e1112eee8db6cc3763521ec0748e314e06af46783cecc7b2f4808d60abb	docs/evidence/2026-10-14-tokens-as-data.md
+117	0	self	docs/inventories/2026-10-14-rust-shell/CEL-1-C.numstat.tsv
+1	1	8755a13dd2d83153f80b8abb40149da5e7d3f368090b3d8e8f7b4944d1af6c14	docs/plans/active/2026-10-14-rust-shell.md
+4	4	07ebbbd244b6ee843af23d5d5a0f363cce275a44b16086077afa48bd8663ff21	docs/projects.toml
+6	0	2886f7adceca1e4bef4d7d60184e4cb3a364caaaa2b756715e0c5c71cd59fc00	fluorita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	fluorita/qml/CelestinaDesignTokens.qml
+5	0	aec627746c2e6b2bf239824e9e2199c99dc614a394dd914d30ce1412b2bd6ad9	fluorita/qml/Main.qml
+6	0	a2f7b60e3a7ed2a44b26f016c9d79a6b651af3d0f366d580598dc331cac845cb	grafita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	grafita/qml/CelestinaDesignTokens.qml
+5	0	5419f6627d1b350df3d8f2d68c22a6ab1a6c9f7d3d7c7fa71af1ac35fc4bd9ab	grafita/qml/Main.qml
+6	0	d08b0bde30903673f855605bfdc051e0972f97ba722c22678fe5a4fbddd45bd0	hematita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	hematita/qml/CelestinaDesignTokens.qml
+5	0	071116afa093371085143bd83ade4f1f8ed211eb72d804a46f660d3430e136a5	hematita/qml/Main.qml
+6	0	2a89438a425b397aa8c6f6f77efd19bc55452efd5cd92173b995c39d88b278b2	magnetita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	magnetita/qml/CelestinaDesignTokens.qml
+5	0	72b7a2ddf03f7f2e46f4e04fa4906bda8c221557576aa6ed6277017be59c9714	magnetita/qml/Main.qml
+22	7	e0fe3e5bf821c434da9447605c0312b575a4820307a4dcc637180fe36f4372c5	scripts/architecture_scanners.py
+46	9	f700afa09498a2f6bab7b9ae88cc6b6f00440dc9a5e6e910466eccbd79f3c242	scripts/check-sealed-colours.py
+15	8	9985a7bd218d9e60725ec65e5ab5981bd749f94adff7b24ec7be1b123d7e1e73	scripts/qmllint-baseline.tsv
+22	1	66471385f8d324d19704b69c3c911cb99a04e3985f4735bbfb7ac3b3d68d7fff	scripts/radius_contract.py
+18	0	a3a3b870d042f5b10801bebbbf8b86ad6bd68d25cac97beb74c6720a9e52124c	scripts/test-architecture-scanners.sh
+19	0	e3a5fdc2812a7edd37aee8c295a1278d5c1218ed053062c06bd94b12d1e3d471	scripts/test-radius-contract.py
+11	2	2dc0b0dc4313e0bd8528d76e01de8c2e619a83a157b0b443503756f443feb1c9	selenita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	selenita/qml/CelestinaDesignTokens.qml
+5	0	f1b1f3ea7a3581f68a8e85cfebd632ba7c8625bf842d021fece0a24d88de0f2b	selenita/qml/Main.qml
+6	0	ec505d6083e114b5b42c93820d8ba622912f819dbcd4265c324072c3d202f0bd	siderita/build.rs
+1	0	9232c04e3344652999008eb7e3a2440687464043cee3b97962c76b66f0e51e08	siderita/qml/CelestinaDesignTokens.qml
+5	0	8378e148df73b71e0f944070835a2812e8d768996992eb5445b5e727c790a542	siderita/qml/Main.qml

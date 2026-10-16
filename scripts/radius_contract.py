@@ -86,16 +86,37 @@ class Node:
     children: list["Node"] = dataclasses.field(default_factory=list)
 
 
+TOKEN_DATA = "CelestinaDesignTokens"
+
+
 def theme_tokens(theme: pathlib.Path) -> dict[str, int]:
+    """The theme's integer tokens, each alias resolved.
+
+    A token is a literal, another token's name, or a binding to the generated
+    token data beside the theme (`CelestinaDesignTokens.radiusLg`, from
+    tokens.toml), read from that file.
+    """
     text = strip_qml_comments(theme.read_text(encoding="utf-8"))
+    data: dict[str, int] = {}
+    data_file = theme.parent / f"{TOKEN_DATA}.qml"
+    if data_file.is_file():
+        for match in re.finditer(
+            r"readonly property int (\w+):\s*(-?[0-9]+)",
+            strip_qml_comments(data_file.read_text(encoding="utf-8")),
+        ):
+            data[match.group(1)] = int(match.group(2))
     tokens: dict[str, int] = {}
     aliases: dict[str, str] = {}
     for match in re.finditer(
-        r"readonly property int (\w+):\s*([A-Za-z_]\w*|-?[0-9]+)", text
+        rf"readonly property int (\w+):\s*({TOKEN_DATA}\.\w+|[A-Za-z_]\w*|-?[0-9]+)",
+        text,
     ):
         name, value = match.group(1), match.group(2)
         if NUMBER.match(value):
             tokens[name] = int(value)
+        elif value.startswith(f"{TOKEN_DATA}."):
+            if value[len(TOKEN_DATA) + 1 :] in data:
+                tokens[name] = data[value[len(TOKEN_DATA) + 1 :]]
         else:
             aliases[name] = value
     for name, target in aliases.items():

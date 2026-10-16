@@ -145,7 +145,7 @@ status_script = "celestina/scripts/status-production.sh"
 artifact_manifest = "celestina/target/production-artifact.toml"
 artifact_paths = ["celestina/target/release/celestina"]
 cargo_manifests = ["celestina/Cargo.toml"]
-production_inputs = ["celestina/Cargo.toml", "celestina/Cargo.lock", "celestina/rust-toolchain.toml", "celestina/src", "celestina/crates", "celestina/celestina.desktop", "celestina-style/fonts", "celestina-style/icons", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/celestina-shell", "celestina-rs/crates/celestina-tokens"]
+production_inputs = ["celestina/Cargo.toml", "celestina/Cargo.lock", "celestina/rust-toolchain.toml", "celestina/src", "celestina/crates", "celestina/celestina.desktop", "celestina-style/fonts", "celestina-style/icons", "celestina-rs/crates/celestina-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/celestina-shell", "celestina-rs/crates/celestina-tokens", "celestina-style/tokens.toml"]
 verification_inputs = ["celestina/scripts/smoke.sh", "celestina/scripts/dev-session.kdl", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "celestina-shell", roots = ["celestina-rs/crates/celestina-shell/"], include_workspace_manifests = true },
@@ -181,8 +181,8 @@ verify_script = "celestina-style/scripts/verify-production.sh"
 status_script = "celestina-style/scripts/status-production.sh"
 artifact_manifest = "celestina-style/build/production-artifact.toml"
 artifact_paths = ["celestina-style/build/libcelestina-style.so", "celestina-style/build/CelestinaStyle"]
-production_inputs = ["celestina-style/CMakeLists.txt", "celestina-style/*.qml", "celestina-style/qmldir", "celestina-style/fonts", "celestina-style/icons", "celestina-style/fonts.qrc", "celestina-style/icons.qrc"]
-verification_inputs = ["celestina-style/tests", "celestina-style/gallery", "celestina-style/scripts/check-style-contract.sh", "celestina-style/scripts/check-contrast-contract.py", "celestina-style/scripts/smoke-production.sh"]
+production_inputs = ["celestina-style/CMakeLists.txt", "celestina-style/*.qml", "celestina-style/qmldir", "celestina-style/fonts", "celestina-style/icons", "celestina-style/fonts.qrc", "celestina-style/icons.qrc", "celestina-style/tokens.toml", "celestina-style/scripts/gen-tokens.py"]
+verification_inputs = ["celestina-style/tests", "celestina-style/gallery", "celestina-style/scripts/check-style-contract.sh", "celestina-style/scripts/check-contrast-contract.py", "celestina-style/scripts/smoke-production.sh", "celestina-style/scripts/test-gen-tokens.py"]
 
 [[projects]]
 id = "celestina-rs"
@@ -211,7 +211,7 @@ artifact_manifest = "celestina-rs/target/production-artifact.toml"
 artifact_paths = ["celestina-rs/target/workspace/release/magnetitad"]
 cargo_manifests = ["celestina-rs/Cargo.toml"]
 production_inputs = ["celestina-rs/Cargo.toml", "celestina-rs/Cargo.lock", "celestina-rs/rust-toolchain.toml", "celestina-rs/crates/*/Cargo.toml", "celestina-rs/crates/*/src"]
-verification_inputs = ["celestina-rs/crates/*/tests"]
+verification_inputs = ["celestina-rs/crates/*/tests", "celestina-style/scripts/gen-tokens.py", "celestina-style/tokens.toml"]
 component_commit_scopes = [
   { prefix = "celestina-core", roots = ["celestina-rs/crates/celestina-core/"], include_workspace_manifests = true },
   { prefix = "celestina-settings", roots = ["celestina-rs/crates/celestina-settings/"], include_workspace_manifests = true },

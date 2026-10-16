@@ -45,6 +45,9 @@ for root in "${qml_roots[@]}" "$style_root"; do
     fi
 done
 readonly theme_file="$style_root/CelestinaTheme.qml"
+# The token data the theme binds to, generated from tokens.toml by
+# scripts/gen-tokens.py: it holds the primitive values by construction.
+readonly token_data_file="$style_root/CelestinaDesignTokens.qml"
 
 contract_manifest=''
 if ! contract_manifest=$(mktemp); then
@@ -57,6 +60,7 @@ if ! find "${qml_roots[@]}" "$style_root" \
     -path '*/build' -prune -o \
     -type f -name '*.qml' \
     ! -path "$theme_file" \
+    ! -path "$token_data_file" \
     -print0 > "$contract_manifest"; then
     echo "Could not enumerate the complete QML tree." >&2
     exit 1
@@ -75,7 +79,8 @@ fi
 failures=0
 
 if structural_hits=$(python3 "$scanner" qml-style-contract \
-    "$theme_file" "${qml_roots[@]}" "$style_root"); then
+    "$theme_file" --token-data "$token_data_file" \
+    "${qml_roots[@]}" "$style_root"); then
     if [[ -n $structural_hits ]]; then
         printf '%s\n' "$structural_hits"
         printf 'ERROR: the structural scanner found direct visual values.\n\n' >&2
@@ -121,8 +126,9 @@ check_pattern() {
     fi
 }
 
-# CelestinaTheme.qml is deliberately excluded: it is the canonical place where
-# primitive values and derivation recipes live. App and component QML consume
+# CelestinaTheme.qml and the CelestinaDesignTokens.qml it binds to are deliberately
+# excluded: they are the canonical place where primitive values (generated from
+# tokens.toml) and derivation recipes live. App and component QML consume
 # semantic tokens only.
 check_pattern \
     'hexadecimal literal outside CelestinaTheme.qml' \

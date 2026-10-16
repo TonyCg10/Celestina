@@ -10,12 +10,19 @@
 # shared celestina-style/CelestinaIcons.qml as "not declared as singleton in
 # qmldir" although every qmldir declares it, in every application that links
 # it; Calcita's own QML lints clean.
+# Every row rose by one on 2026-10-15 (CEL-1-C): Qt 6.12's qmllint reports the
+# second shared singleton, celestina-style/CelestinaDesignTokens.qml, as "not
+# declared as singleton in qmldir" in every application that links it,
+# although every qmldir declares it; a correction of the measurement, not new
+# debt. Hematita's +1 is assumed from the other seven, measured against their
+# release modules; no Hematita release module was available, and the landing's
+# own count confirms it.
 # warnings<TAB>project
-56	fluorita
-38	grafita
-38	magnetita
-220	siderita
-26	hematita
-9	cuprita
-1	calcita
-1	selenita
+57	fluorita
+39	grafita
+39	magnetita
+221	siderita
+27	hematita
+10	cuprita
+2	calcita
+2	selenita

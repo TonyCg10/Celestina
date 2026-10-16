@@ -14,6 +14,8 @@ if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
     exit 2
 fi
 
+# The generated token outputs must match tokens.toml before anything else runs.
+python3 "$suite_root/celestina-style/scripts/gen-tokens.py" --check
 "$suite_root/scripts/test-production-artifacts.sh"
 bash "$suite_root/scripts/check-architecture-contract.sh"
 (cd "$project_root" && cargo fmt --all --check)

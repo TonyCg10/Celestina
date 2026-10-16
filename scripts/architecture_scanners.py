@@ -528,14 +528,26 @@ def normalized_qml(text: str) -> bytes:
     return "".join(result).encode("utf-8")
 
 
-def scan_qml_style_contract(theme_raw: str, inputs: Iterable[str]) -> None:
-    theme = pathlib.Path(theme_raw)
-    if not theme.is_file():
-        raise ScannerError(f"missing QML theme: {theme}")
-    canonical_theme = theme.resolve()
+def scan_qml_style_contract(
+    theme_raw: str, inputs: Iterable[str], token_data_raw: str | None = None
+) -> None:
+    """Report direct visual values outside the theme.
+
+    `token_data_raw` names the token data the theme binds to
+    (CelestinaDesignTokens.qml, generated from tokens.toml): it holds the
+    primitive values by construction and is exempt like the theme.
+    """
+    exempt: set[pathlib.Path] = set()
+    for label, raw in (("QML theme", theme_raw), ("token data", token_data_raw)):
+        if raw is None:
+            continue
+        source = pathlib.Path(raw)
+        if not source.is_file():
+            raise ScannerError(f"missing {label}: {source}")
+        exempt.add(source.resolve())
 
     for path in qml_files(inputs):
-        if path.resolve() == canonical_theme:
+        if path.resolve() in exempt:
             continue
         text = strip_qml_comments(path.read_text(encoding="utf-8"))
         scan_named_color_bindings(path, text)
@@ -808,6 +820,7 @@ def parse_arguments() -> argparse.Namespace:
 
     style = subparsers.add_parser("qml-style-contract")
     style.add_argument("theme")
+    style.add_argument("--token-data")
     style.add_argument("inputs", nargs="+")
 
     copies = subparsers.add_parser("style-copies")
@@ -844,7 +857,9 @@ def main() -> int:
         elif arguments.command == "local-controls":
             scan_local_controls(arguments.inputs, arguments.style_root)
         elif arguments.command == "qml-style-contract":
-            scan_qml_style_contract(arguments.theme, arguments.inputs)
+            scan_qml_style_contract(
+                arguments.theme, arguments.inputs, arguments.token_data
+            )
         elif arguments.command == "style-copies":
             scan_style_copies(arguments.style_root, arguments.inputs)
         elif arguments.command == "shared-style-links":

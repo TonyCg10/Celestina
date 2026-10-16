@@ -1,12 +1,12 @@
 //! The theme the painter and the UI tree draw with: one colour per semantic
 //! role plus the shape, density, type and motion scalars.
 //!
-//! CEL-1-B carries the dark scheme as local constants: the spike's
-//! `tokens.rs` extended with every role, the values taken from
-//! `celestina-style/DESIGN.md` §2/§4/§5 and the scheme of
-//! `celestina-style/CelestinaTheme.qml` where DESIGN.md names no number.
-//! CEL-1-C replaces `Theme::dark` by `From<&celestina_tokens::Scheme>`.
+//! The theme is built from `celestina_tokens::DARK` and the crate's scalar
+//! modules (`radius`, `spacing`, `type_scale`, `motion`, `haze`), which are
+//! generated from `celestina-style/tokens.toml`; no value lives here.
 #![forbid(unsafe_code)]
+
+use celestina_tokens::{haze, motion, radius, spacing, type_scale, Rgba, Scheme};
 
 use crate::color::Color;
 
@@ -143,175 +143,80 @@ pub struct Theme {
     type_base: TypeScale,
 }
 
-/// One row of the dark scheme: a role, its `#rrggbb` colour and its alpha in
-/// `0.0..=1.0`. The white washes are the QML scheme's `#AAffffff` bytes written
-/// as `byte / 255`.
-const DARK: &[(Role, &str, f32)] = &[
-    // DESIGN.md §5.2 L1: the black a Haze-tinted bar shows over the canvas.
-    (Role::Card, "#0b0c10", 1.0),
-    (Role::Canvas, "#050608", 1.0),
-    (Role::TextHi, "#f7f8fc", 1.0),
-    (Role::TextLo, "#9ba3af", 1.0),
-    (Role::TextFaint, "#78818e", 1.0),
-    (Role::Accent, "#3e91ff", 1.0),
-    (Role::AccentInk, "#050608", 1.0),
-    (Role::Divider, "#ffffff", 22.0 / 255.0),
-    (Role::ControlFill, "#ffffff", 26.0 / 255.0),
-    (Role::ControlHover, "#ffffff", 41.0 / 255.0),
-    // The QML scheme has no pressed plate; one more hover step.
-    (Role::ControlPressed, "#ffffff", 56.0 / 255.0),
-    // The accent mixed 0.24 towards `accentLift` (#fcfcff).
-    (Role::FocusRing, "#6cabff", 1.0),
-    // Haze's tint: the canvas at 0.70 (`#b3050608`, spec §5.3).
-    (Role::GlassTint, "#050608", 0.70),
-    // What Haze paints when it cannot blur: the opaque canvas
-    // (`CelestinaTheme.glassFallback: canvas`).
-    (Role::GlassFallback, "#050608", 1.0),
-    (Role::Danger, "#ff746d", 1.0),
-];
-
-/// `#rrggbb` at `alpha` as a colour. It runs at compile time, so a malformed
-/// `DARK` row fails the build.
-const fn parse_row(hex: &str, alpha: f32) -> Color {
-    let b = hex.as_bytes();
-    assert!(b.len() == 7 && b[0] == b'#', "a colour is #rrggbb");
-    Color(
-        hex_pair(b[1], b[2]),
-        hex_pair(b[3], b[4]),
-        hex_pair(b[5], b[6]),
-        alpha,
-    )
+/// A token colour as the painter's colour: the same bytes and alpha.
+fn color_of(c: Rgba) -> Color {
+    Color(c.r, c.g, c.b, c.a)
 }
 
-const fn hex_pair(high: u8, low: u8) -> u8 {
-    hex_digit(high) * 16 + hex_digit(low)
-}
-
-const fn hex_digit(digit: u8) -> u8 {
-    match digit {
-        b'0'..=b'9' => digit - b'0',
-        b'a'..=b'f' => digit - b'a' + 10,
-        b'A'..=b'F' => digit - b'A' + 10,
-        _ => panic!("a colour digit is 0-9, a-f or A-F"),
-    }
-}
-
-/// `DARK` laid out by role and indexed by `Role as usize`. A role with no row,
-/// or with two, fails the build.
-const fn dark_palette() -> [Color; 15] {
-    let mut rows: [Option<Color>; 15] = [None; 15];
-    let mut i = 0;
-    while i < DARK.len() {
-        let (role, hex, alpha) = DARK[i];
-        let at = role as usize;
-        assert!(rows[at].is_none(), "a role has two rows in DARK");
-        rows[at] = Some(parse_row(hex, alpha));
-        i += 1;
-    }
-    let mut out = [Color(0, 0, 0, 0.0); 15];
-    let mut at = 0;
-    while at < 15 {
-        out[at] = match rows[at] {
-            Some(colour) => colour,
-            None => panic!("a role has no row in DARK"),
+impl From<&Scheme> for Theme {
+    /// The theme of `scheme`; the scalars are the crate's, the same for every
+    /// scheme.
+    fn from(scheme: &Scheme) -> Theme {
+        let type_base = TypeScale {
+            mini: type_scale::MINI,
+            caption: type_scale::CAPTION,
+            row_secondary: type_scale::ROW_SECONDARY,
+            body: type_scale::BODY,
+            row_title: type_scale::ROW_TITLE,
+            title: type_scale::TITLE,
+            header_collapsed: type_scale::HEADER_COLLAPSED,
+            header_expanded: type_scale::HEADER_EXPANDED,
+            display: type_scale::DISPLAY,
         };
-        at += 1;
+        Theme {
+            canvas: color_of(scheme.canvas),
+            card: color_of(scheme.card),
+            text_hi: color_of(scheme.text),
+            text_lo: color_of(scheme.text_muted),
+            text_faint: color_of(scheme.text_faint),
+            accent: color_of(scheme.accent),
+            accent_ink: color_of(scheme.accent_ink),
+            divider: color_of(scheme.divider),
+            control_fill: color_of(scheme.control_fill),
+            control_hover: color_of(scheme.control_hover),
+            control_pressed: color_of(scheme.control_pressed),
+            focus_ring: color_of(scheme.focus_ring),
+            glass_tint: color_of(scheme.glass_tint),
+            // What Haze paints when it cannot blur: the opaque canvas. The
+            // QML theme defines `glassFallback: canvas`, a relation and not a
+            // role of the scheme, so it follows the canvas here too.
+            glass_fallback: color_of(scheme.canvas),
+            danger: color_of(scheme.danger),
+            grain_alpha: haze::GRAIN,
+            radius_lg: radius::LG,
+            radius_md: radius::MD,
+            radius_sm: radius::SM,
+            radius_button: radius::BUTTON,
+            row_height: spacing::ROW_HEIGHT,
+            top_bar: spacing::TOP_BAR_HEIGHT,
+            spacing: Spacing {
+                xs: spacing::XS,
+                sm: spacing::SM,
+                md: spacing::MD,
+                lg: spacing::LG,
+                xl: spacing::XL,
+                xxl: spacing::XXL,
+                xxxl: spacing::XXXL,
+            },
+            type_scale: type_base,
+            motion: MotionMs {
+                fast: motion::FAST_MS,
+                normal: motion::NORMAL_MS,
+                slow: motion::SLOW_MS,
+                exit: motion::EXIT_MS,
+                ceiling: motion::CEILING_MS,
+            },
+            press_scale: motion::PRESS_SCALE,
+            type_base,
+        }
     }
-    out
 }
-
-/// The dark scheme's numeric scalars.
-struct Scalars {
-    /// Haze's grain alpha, drawn under the tint.
-    grain_alpha: f32,
-    radius_lg: f32,
-    radius_md: f32,
-    radius_sm: f32,
-    radius_button: f32,
-    row_height: f32,
-    top_bar: f32,
-    /// The spacing ladder in logical px (DESIGN.md §5.1, `CelestinaTheme.space*`).
-    spacing: Spacing,
-    /// The type ladder at text scale 1 (DESIGN.md §5.4).
-    type_base: TypeScale,
-    /// The duration ladder in milliseconds (DESIGN.md §5.5).
-    motion: MotionMs,
-    /// The press recoil scale.
-    press_scale: f32,
-}
-
-const SCALARS: Scalars = Scalars {
-    grain_alpha: 0.15,
-    radius_lg: 20.0,
-    radius_md: 12.0,
-    radius_sm: 8.0,
-    radius_button: 10.0,
-    row_height: 40.0,
-    top_bar: 48.0,
-    spacing: Spacing {
-        xs: 4.0,
-        sm: 8.0,
-        md: 12.0,
-        lg: 16.0,
-        xl: 20.0,
-        xxl: 24.0,
-        xxxl: 32.0,
-    },
-    type_base: TypeScale {
-        mini: 10.0,
-        caption: 11.0,
-        row_secondary: 12.0,
-        body: 13.0,
-        row_title: 15.0,
-        title: 17.0,
-        header_collapsed: 20.0,
-        header_expanded: 30.0,
-        display: 34.0,
-    },
-    motion: MotionMs {
-        fast: 100,
-        normal: 200,
-        slow: 350,
-        exit: 150,
-        ceiling: 500,
-    },
-    press_scale: 0.96,
-};
 
 impl Theme {
-    /// The dark scheme, the only one Celestina ships.
+    /// The dark scheme, the only one Celestina ships until `celestina-settings`
+    /// carries a `scheme` key.
     pub fn dark() -> Theme {
-        const PALETTE: [Color; 15] = dark_palette();
-        let colour = |role: Role| PALETTE[role as usize];
-        Theme {
-            canvas: colour(Role::Canvas),
-            card: colour(Role::Card),
-            text_hi: colour(Role::TextHi),
-            text_lo: colour(Role::TextLo),
-            text_faint: colour(Role::TextFaint),
-            accent: colour(Role::Accent),
-            accent_ink: colour(Role::AccentInk),
-            divider: colour(Role::Divider),
-            control_fill: colour(Role::ControlFill),
-            control_hover: colour(Role::ControlHover),
-            control_pressed: colour(Role::ControlPressed),
-            focus_ring: colour(Role::FocusRing),
-            glass_tint: colour(Role::GlassTint),
-            glass_fallback: colour(Role::GlassFallback),
-            danger: colour(Role::Danger),
-            grain_alpha: SCALARS.grain_alpha,
-            radius_lg: SCALARS.radius_lg,
-            radius_md: SCALARS.radius_md,
-            radius_sm: SCALARS.radius_sm,
-            radius_button: SCALARS.radius_button,
-            row_height: SCALARS.row_height,
-            top_bar: SCALARS.top_bar,
-            spacing: SCALARS.spacing,
-            type_scale: SCALARS.type_base,
-            motion: SCALARS.motion,
-            press_scale: SCALARS.press_scale,
-            type_base: SCALARS.type_base,
-        }
+        Theme::from(&celestina_tokens::DARK)
     }
 
     /// The colour of `role`.
@@ -404,21 +309,49 @@ mod tests {
     }
 
     #[test]
-    fn dark_table_rows_parse() {
-        for &(role, text, alpha) in DARK {
-            let runtime = hex(text).with_alpha(alpha);
-            assert_eq!(parse_row(text, alpha), runtime, "{role:?}");
-            assert!((0.0..=1.0).contains(&alpha), "{role:?} alpha {alpha}");
-        }
-    }
-
-    #[test]
-    fn dark_table_covers_every_role() {
+    fn theme_from_tokens_matches_the_generated_dark_scheme() {
+        use celestina_tokens::{motion, DARK};
+        let t = Theme::from(&DARK);
+        assert_eq!(t.color(Role::Accent), hex("#3e91ff"));
+        assert_eq!(t.color(Role::Card), hex("#0b0c10"));
+        assert_eq!(t.glass_tint, t.canvas.with_alpha(0.70));
+        assert_eq!(t.grain_alpha, 0.15);
+        assert_eq!(
+            (t.motion.fast, t.motion.normal, t.motion.slow, t.motion.exit),
+            (100, 200, 350, 150)
+        );
+        assert_eq!(t.motion.ceiling, 500);
+        assert_eq!(
+            (t.motion.fast, t.motion.ceiling),
+            (motion::FAST_MS, motion::CEILING_MS)
+        );
+        // Every role reads the matching field of the scheme, so a swapped
+        // assignment fails here and not only in the spot checks above.
         for role in Role::ALL {
-            let rows = DARK.iter().filter(|(r, _, _)| *r == role).count();
-            assert_eq!(rows, 1, "{role:?} has {rows} rows in DARK");
+            let field = match role {
+                Role::Canvas => DARK.canvas,
+                Role::Card => DARK.card,
+                Role::TextHi => DARK.text,
+                Role::TextLo => DARK.text_muted,
+                Role::TextFaint => DARK.text_faint,
+                Role::Accent => DARK.accent,
+                Role::AccentInk => DARK.accent_ink,
+                Role::Divider => DARK.divider,
+                Role::ControlFill => DARK.control_fill,
+                Role::ControlHover => DARK.control_hover,
+                Role::ControlPressed => DARK.control_pressed,
+                Role::FocusRing => DARK.focus_ring,
+                Role::GlassTint => DARK.glass_tint,
+                // `CelestinaTheme.glassFallback: canvas`, a relation.
+                Role::GlassFallback => DARK.canvas,
+                Role::Danger => DARK.danger,
+            };
+            assert_eq!(
+                t.color(role),
+                Color(field.r, field.g, field.b, field.a),
+                "{role:?}"
+            );
         }
-        assert_eq!(DARK.len(), Role::ALL.len());
     }
 
     #[test]

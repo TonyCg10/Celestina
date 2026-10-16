@@ -95,6 +95,11 @@ fn main() {
                 .version(1, 0)
                 .singleton(true),
         )
+        .qml_file(
+            QmlFile::from("qml/CelestinaDesignTokens.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
         .qml_files(QML_FILES);
 
     // Naming any rerun-if-changed stops cargo watching the whole package, so
@@ -102,6 +107,7 @@ fn main() {
     for qml in QML_FILES.iter().copied().chain([
         "qml/CelestinaTheme.qml",
         "qml/CelestinaIcons.qml",
+        "qml/CelestinaDesignTokens.qml",
         "qml/icons.qrc",
         "qml/fonts.qrc",
     ]) {

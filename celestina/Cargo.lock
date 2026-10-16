@@ -279,6 +279,7 @@ version = "0.1.0"
 name = "celestina-paint"
 version = "0.1.0"
 dependencies = [
+ "celestina-tokens",
  "celestina-wayland",
  "cosmic-text",
  "femtovg",
@@ -304,6 +305,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "celestina-tokens"
+version = "0.1.0"
 
 [[package]]
 name = "celestina-ui"

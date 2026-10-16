@@ -1,0 +1,587 @@
+# Celestina style tokens: the single source of every colour and number the
+# suite's style holds as a literal (spec 2026-10-14 §5.7).
+#
+# celestina-style/scripts/gen-tokens.py generates two committed files from
+# this one: celestina-style/CelestinaDesignTokens.qml, which CelestinaTheme.qml
+# binds its tokens to, and celestina-rs/crates/celestina-tokens/src/generated.rs.
+# Run it after every edit here; both verifies fail on a stale output.
+#
+# Rules the generator relies on:
+# - Every key has a one-line comment directly above it: its definition. A
+#   section's comment sits directly above its header.
+# - A colour is "#rrggbb", "#aarrggbb" (the QML spelling) or
+#   { color = "#rrggbb", alpha = 0.70 }. A number is an integer (QML int) or
+#   a float (QML real). A curve is four bezier control points.
+# - Relations (one token defined as another, or as arithmetic on others),
+#   strings, enums and functions stay in CelestinaTheme.qml; a scheme role the
+#   theme derives with a recipe is written here as its resolved colour, its
+#   comment names the recipe, and test-gen-tokens.py checks the two agree.
+
+# ref.*: the primitive colour ramps (RefPalette). Apps never read them; only a
+# scheme maps a primitive onto a role.
+[ref]
+# The near-black of the window and the canvas.
+night = "#050608"
+# The input and backdrop floor, one step above night.
+d1 = "#090b0f"
+# The black a Haze-tinted bar shows over the glass canvas, made opaque.
+card = "#0b0c10"
+# The strong tonal surface.
+d2 = "#1a1e25"
+# The elevated surface.
+elevated = "#222831"
+# The quiet hairline.
+divider = "#16ffffff"
+# The strong hairline.
+d4 = "#24ffffff"
+# Primary text.
+textHi = "#f7f8fc"
+# Secondary text.
+textLo = "#9ba3af"
+# Labels and metadata.
+textFaint = "#78818e"
+# The One UI accent seed every accent state is derived from.
+accent = "#3e91ff"
+# The ink painted on the bright accent, dark enough for body-sized labels.
+accentInk = "#050608"
+# The cool white lighter accent states are mixed towards; not a foreground.
+accentLift = "#fcfcff"
+# The danger tone (SESL dark).
+danger = "#ff746d"
+# The success tone (SESL dark).
+success = "#8ee0b4"
+# The warning tone (SESL dark).
+warning = "#f7b27f"
+# The one warm exception, spent on the star a favourite wears.
+favorite = "#f3cf8e"
+# Code comments; each code colour clears 4.5:1 on the input fill.
+codeComment = "#95a3b3"
+# Code string literals.
+codeString = "#9ee0b8"
+# Code number literals.
+codeNumber = "#f3cf8e"
+# Code keywords.
+codeKeyword = "#c4b5fd"
+
+# The dark scheme: one key per ColorScheme role of CelestinaTheme.qml, in its
+# declaration order. Opaque surfaces carry their ink pair; translucent washes
+# take text/textMuted as foreground by contract.
+[scheme.dark]
+# The window canvas: ref.night.
+canvas = "#050608"
+# Ink on the canvas: ref.textHi.
+canvasInk = "#f7f8fc"
+# A grouped card: ref.card.
+card = "#0b0c10"
+# Ink on a card: ref.textHi.
+cardInk = "#f7f8fc"
+# An elevated surface: ref.elevated.
+elevated = "#222831"
+# Ink on an elevated surface: ref.textHi.
+elevatedInk = "#f7f8fc"
+# Primary text: ref.textHi.
+text = "#f7f8fc"
+# Secondary text: ref.textLo.
+textMuted = "#9ba3af"
+# Labels and metadata: ref.textFaint.
+textFaint = "#78818e"
+# The quiet hairline: ref.divider.
+divider = "#16ffffff"
+# The strong hairline: ref.d4.
+dividerStrong = "#24ffffff"
+# The accent: ref.accent.
+accent = "#3e91ff"
+# Ink on the accent: ref.accentInk.
+accentInk = "#050608"
+# A link: ref.accent mixed 0.24 (accent.linkMix) towards ref.accentLift.
+accentLink = "#6cabff"
+# A hovered accent fill: ref.accent mixed 0.08 (accent.hoverMix) towards ref.accentLift.
+accentHover = "#4d9aff"
+# A pressed accent fill: ref.accent mixed 0.14 (accent.pressedMix) towards ref.night.
+accentPressed = "#367edc"
+# The keyboard focus ring, the accent's lit tint: ref.accent mixed 0.24 (accent.linkMix) towards ref.accentLift.
+focusRing = "#6cabff"
+# The danger tone: ref.danger.
+danger = "#ff746d"
+# Ink on danger: ref.night.
+dangerInk = "#050608"
+# The success tone: ref.success.
+success = "#8ee0b4"
+# Ink on success: ref.night.
+successInk = "#050608"
+# The warning tone: ref.warning.
+warning = "#f7b27f"
+# Ink on warning: ref.night.
+warningInk = "#050608"
+# Code comments: ref.codeComment.
+codeComment = "#95a3b3"
+# Code string literals: ref.codeString.
+codeString = "#9ee0b8"
+# Code number literals: ref.codeNumber.
+codeNumber = "#f3cf8e"
+# Code keywords: ref.codeKeyword.
+codeKeyword = "#c4b5fd"
+# The scrim under a modal layer.
+scrim = "#73000000"
+# A translucent state layer over a surface.
+surface = "#d914171c"
+# A stronger translucent state layer.
+surfaceStrong = "#f01a1e25"
+# The pointer lift a ghost control shows on the card; 10 % white, the step the contrast guard enforces.
+surfaceHover = "#1affffff"
+# The selected wash: ref.accent at alpha 0.20 (accent.selectedOpacity).
+surfaceSelected = "#333e91ff"
+# A row or cell under the pointer: ref.accent at alpha 0.07 (accent.contentHoverOpacity).
+contentHover = "#123e91ff"
+# A row or cell under a press: ref.accent at alpha 0.26 (accent.pressedWashOpacity).
+pressedWash = "#423e91ff"
+# The rubber-band selection: ref.accent at alpha 0.18 (accent.marqueeOpacity).
+selectionMarquee = "#2e3e91ff"
+# A text field's fill.
+inputFill = "#8c14171c"
+# A focused text field's fill.
+inputFillFocus = "#b31a1e25"
+# A text field's outline.
+inputBorder = "#16ffffff"
+# The neutral control plate: a tonal button at rest, a switch track, a disabled fill.
+controlFill = "#1affffff"
+# The plate under the pointer, one visible step above controlFill.
+controlHover = "#29ffffff"
+# The plate of a pressed control, one more step above controlHover.
+controlPressed = "#38ffffff"
+# A floating pill: the Haze tint over its own glass capture.
+pillFill = "#b3050608"
+# A neutral badge floor.
+badgeFill = "#0effffff"
+# The current or selected row's badge: ref.accent at alpha 0.15 (accent.badgeOpacity).
+badgeAccentFill = "#263e91ff"
+# A soft accent wash: ref.accent at alpha 0.14 (accent.softOpacity).
+accentSoft = "#243e91ff"
+# The outline of a soft accent wash: accentLink's recipe at alpha 0.18 (accent.softBorderOpacity).
+accentSoftBorder = "#2e6cabff"
+# A soft success wash.
+successSoft = "#1c8ee0b4"
+# A menu colour swatch's outline: ref.textHi at alpha 0.24 (opacity.swatchOutline).
+swatchOutline = "#3df7f8fc"
+# A disabled primary action's fill: ref.accent at alpha 0.20 (accent.selectedOpacity).
+accentDisabledFill = "#333e91ff"
+# A disabled primary action's ink: ref.accent at alpha 0.75 (accent.disabledInkOpacity).
+accentDisabledInk = "#bf3e91ff"
+# The floor that keeps text readable over untrusted artwork.
+mediaScrim = "#cc000000"
+# Ink on the media scrim: ref.textHi.
+mediaScrimInk = "#f7f8fc"
+# The media surface gradient's first stop.
+mediaSurfaceStart = "#242d3c"
+# The media surface gradient's middle stop.
+mediaSurfaceMid = "#222634"
+# The media surface gradient's last stop.
+mediaSurfaceEnd = "#29232d"
+# Ink on the media surface: ref.textHi.
+mediaSurfaceInk = "#f7f8fc"
+# The placeholder artwork gradient's first stop.
+mediaArtworkStart = "#9eb9d3"
+# The placeholder artwork gradient's middle stop.
+mediaArtworkMid = "#536d8e"
+# The placeholder artwork gradient's last stop.
+mediaArtworkEnd = "#d39a7f"
+# Ink on the placeholder artwork: ref.textHi.
+mediaArtworkInk = "#f7f8fc"
+# The played part of a media progress bar.
+mediaProgress = "#e7edf6"
+# The track of a media progress bar.
+mediaProgressTrack = "#4de7edf6"
+# A content folder's glyph: accentLink's recipe (ref.accent mixed 0.24 towards ref.accentLift).
+glyphDirectory = "#6cabff"
+# A symbolic link's glyph.
+glyphSymlink = "#c4b5fd"
+# A plain file's glyph, silver-blue.
+glyphFile = "#b4c1d3"
+# Navigation and sidebar chrome glyphs, slate.
+glyphNavigation = "#9fb3cc"
+# Connected hardware glyphs, cyan.
+glyphDevice = "#8dd8e3"
+# The user-selectable blue icon accent.
+glyphAccentBlue = "#8bb8ff"
+# The user-selectable cyan icon accent.
+glyphAccentCyan = "#8dd8e3"
+# The user-selectable green icon accent.
+glyphAccentGreen = "#9ee0b8"
+# The user-selectable violet icon accent.
+glyphAccentViolet = "#c4b5fd"
+# The user-selectable coral icon accent.
+glyphAccentCoral = "#f5a8a0"
+# The user-selectable amber icon accent.
+glyphAccentAmber = "#f3cf8e"
+# The favourite star: ref.favorite.
+favorite = "#f3cf8e"
+# The floor under a favourite badge.
+favoriteBadgeFill = "#b3090b0f"
+# The danger banner's fill.
+dangerFill = "#4d571f1c"
+# The danger banner's outline.
+dangerBorder = "#8ad4736c"
+# Text on the danger banner.
+dangerFillInk = "#ffdad6"
+# The canvas backdrop gradient's first stop.
+gradientStart = "#080a0f"
+# The canvas backdrop gradient's middle stop.
+gradientMid = "#0b0e14"
+# The canvas backdrop gradient's last stop.
+gradientEnd = "#08090d"
+# The opaque panel body: ref.elevated at alpha 0.55 (opacity.panelTint).
+panelTint = "#8c222831"
+# Haze's tint: the canvas at 0.70 over the blur (spec §5.3).
+glassTint = { color = "#050608", alpha = 0.70 }
+# GlassCard's Strong density; the same material as glassTint.
+glassTintStrong = { color = "#050608", alpha = 0.70 }
+# The tint over compositor-owned blur; a contrast floor over untrusted wallpaper.
+compositorGlassTint = "#e61a1e25"
+# The denser tint when the host cannot arm compositor blur.
+compositorGlassFallback = "#f51a1e25"
+# The highlight edge of a glass surface.
+glassHighlight = "#2effffff"
+# The drop shadow under floating layers (L2).
+shadow = "#a6000000"
+
+# Corner radii in logical px (the desktop ladder, spec 2026-09-30 §3.2).
+[radius]
+# Edge-to-edge surfaces with no exposed corner.
+none = 0
+# The selection marquee and tiny indicators.
+xs = 3
+# Chips, thumbnails and small indicators.
+sm = 8
+# Rows, tiles and content surfaces.
+md = 12
+# Text buttons (dialogs only).
+button = 10
+# Grouped cards, sidebars, dialogs and menus.
+lg = 20
+# The window corner the compositor draws; concentricRadius measures inwards from it.
+window = 14
+# A full capsule.
+pill = 9999
+
+# The type ladder in logical px at text scale 1 (DESIGN.md §5.4); only these
+# nine roles scale with the host's text scale.
+[type]
+# The smallest label.
+mini = 10
+# Captions.
+caption = 11
+# A list row's subtitle.
+rowSecondary = 12
+# Dialog and body text.
+body = 13
+# A list row's title and dialog headings.
+rowTitle = 15
+# A dialog title.
+title = 17
+# The collapsed big header.
+headerCollapsed = 20
+# The expanded big header.
+headerExpanded = 30
+# Display text.
+display = 34
+# The tracking of a section label, in px.
+sectionLetterSpacing = 1.4
+# The body weight (Font.Normal, CelestinaTheme.weightRegular).
+weightBody = 400
+# The title weight (Font.DemiBold, CelestinaTheme.weightDemiBold).
+weightTitle = 600
+
+# The host's text scale steps (DESIGN.md §5.4): the factor each type role is
+# multiplied by before rounding.
+[type.scales]
+# The compact step.
+compact = 0.9
+# The normal step.
+normal = 1.0
+# The large step.
+large = 1.15
+# The larger step.
+larger = 1.3
+
+# The spacing ladder in logical px (4-based).
+[spacing]
+# The extra-small step.
+xs = 4
+# The small step.
+sm = 8
+# The medium step.
+md = 12
+# The large step.
+lg = 16
+# The extra-large step.
+xl = 20
+# The 2xl step.
+xxl = 24
+# The 3xl step.
+xxxl = 32
+# The gap between sibling cards.
+cardGap = 12
+# From a card's edge to its rows or tiles.
+cardInset = 8
+# The standard list row height.
+rowHeight = 40
+# The fixed top bar every application wears.
+topBarHeight = 48
+
+# Motion: durations in ms (DESIGN §6.7), scales and the One UI curves.
+[motion]
+# Quick transitions and dialogs.
+fast = 100
+# The normal transition.
+normal = 200
+# The expressive transition.
+slow = 350
+# The universal departure; mirrors the host's closing beat in softclose.h.
+exit = 150
+# The hard ceiling no transition exceeds.
+ceiling = 500
+# The press recoil: a control sinks to this scale on press (DESIGN §2).
+pressScale = 0.96
+# The smaller recoil of a wide row or cell plate.
+rowRecoilScale = 0.985
+# The depth every surface shrinks to as it leaves.
+exitShrink = 0.9
+# The overshoot of the emphasized (OutBack) easing.
+overshoot = 1.15
+# How long a drag rests on a folder before it springs open, in ms.
+springDelay = 800
+# The time constant wheel scrolling closes on its destination with, in ms.
+wheelFollow = 25
+# The official One UI curve (fast start, long settle): bezier control points.
+curveStandard = [0.22, 0.25, 0.0, 1.0]
+# The One UI sine in-out 80 curve: bezier control points.
+curveSineInOut80 = [0.33, 0.0, 0.2, 1.0]
+# The One UI sine in-out 90 curve: bezier control points.
+curveSineInOut90 = [0.33, 0.0, 0.1, 1.0]
+
+# Haze, the phone's glass (spec 2026-10-14 §5.3): blur, grain, tint and the
+# two shell material strengths.
+[haze]
+# The blur's Gaussian sigma in px (DESIGN.md §5.3; no CelestinaTheme literal, the blur is calibrated by glass.blurMax).
+sigma = 12
+# The grain texture's alpha under the tint (CelestinaTheme.glassNoiseOpacity).
+grain = 0.15
+# The tint's alpha over the blur (DESIGN.md §5.3; QML spells it into scheme.dark.glassTint).
+tint = 0.70
+# The content surface strength of compositor-backed shell glass, measured from the reference crop.
+contentStrength = 0.64
+# The contextual veil strength, only an organizing trace.
+veilStrength = 0.12
+
+# Glass rendering parameters of GlassSurface (spec 2026-09-30 §3.1).
+[glass]
+# The blur amount passed to MultiEffect.
+blur = 1.0
+# MultiEffect's blurMax, calibrated against the sigma 12 reference (2026-09-30 evidence).
+blurMax = 24
+# The blur multiplier passed to MultiEffect.
+blurMultiplier = 1.0
+# The capture's saturation change; Haze does not desaturate.
+saturation = 0.0
+# The capture's sampling scale; full resolution.
+sampleScale = 1.0
+# The grain of the window-sized canvas pane, a third of Haze's.
+canvasNoiseOpacity = 0.05
+
+# Ambient light: a blurred copy of the content lighting the space around it.
+[ambient]
+# The brightness pull-back of the ambient light.
+brightness = -0.30
+# The desaturation of the ambient light.
+saturation = -0.20
+
+# Elevation: the L2 drop shadow under floating layers (soft, large, faint).
+[shadow]
+# The single-layer shadow's blur.
+blur = 48
+# The single-layer shadow's spread.
+spread = 0
+# The single-layer shadow's vertical offset.
+offsetY = 8
+# The contact layer's blur: a tight shadow that seats the card.
+contactBlur = 3
+# The contact layer's vertical offset.
+contactOffsetY = 1
+# The contact layer's colour.
+contact = "#66000000"
+# The ambient layer's blur: a wash so faint it only reads as depth.
+ambientBlur = 24
+# The ambient layer's vertical offset.
+ambientOffsetY = 8
+# The ambient layer's spread.
+ambientSpread = 0
+# The ambient layer's colour.
+ambient = "#2e000000"
+
+# The scrim an open contextual surface lays over the whole output.
+[backdrop]
+# The full-output dim, bar included.
+dim = "#33000000"
+
+# Scheme-invariant compositing constants.
+[compositing]
+# Fully transparent.
+clear = "#00000000"
+# The opaque mask colour.
+opaqueMask = "#ffffffff"
+
+# Emphasis and state opacities.
+[opacity]
+# A disabled control.
+disabled = 0.5
+# A disabled control's content.
+disabledContent = 0.55
+# Content that is unavailable.
+unavailableContent = 0.4
+# Content whose source is missing.
+missingContent = 0.45
+# Content being dragged.
+draggedContent = 0.9
+# Muted content.
+mutedContent = 0.8
+# A soft decoration.
+decorationSoft = 0.7
+# A strong decoration.
+decorationStrong = 0.8
+# A colour swatch's outline, a faint ring of the text ink.
+swatchOutline = 0.24
+# The panel body's balance: roughly half elevated tint, half what it sits on.
+panelTint = 0.55
+# How strongly a usage tile fills with its rank colour; keeps 4.5:1 for its caption.
+usageTile = 0.48
+
+# The accent recipe: mix amounts and opacities the derived accent roles use.
+[accent]
+# How far a link is mixed from ref.accent towards ref.accentLift.
+linkMix = 0.24
+# How far a hovered accent fill is mixed towards ref.accentLift.
+hoverMix = 0.08
+# How far a pressed accent fill is mixed towards ref.night.
+pressedMix = 0.14
+# The selected wash's alpha.
+selectedOpacity = 0.20
+# The selection marquee's alpha.
+marqueeOpacity = 0.18
+# The accent badge's alpha.
+badgeOpacity = 0.15
+# The soft accent wash's alpha.
+softOpacity = 0.14
+# The soft accent wash outline's alpha.
+softBorderOpacity = 0.18
+# The hover wash of a row or cell, below the selected wash.
+contentHoverOpacity = 0.07
+# The press wash of a row or cell, above the selected wash.
+pressedWashOpacity = 0.26
+# A disabled primary action's ink alpha.
+disabledInkOpacity = 0.75
+
+# Content icons: the OKLCH gradient recipe, the folder's anatomy and the sizes.
+[icon]
+# The lightness the gradient's top gains, in OKLCH L.
+gradientLift = 0.05
+# The lightness the gradient's bottom loses, in OKLCH L.
+gradientDrop = 0.05
+# The hue turn between the stops, in degrees either way.
+gradientTurn = 5.0
+# The chroma the bottom gains, as a fraction.
+gradientChroma = 0.05
+# The folder's corner, as a fraction of its size.
+folderCorner = 0.10
+# How much of the width the folder's tab takes.
+folderTab = 0.52
+# The length of the tab's shoulder.
+folderShoulder = 0.12
+# The near-white warm sheet that peeks out of a folder.
+sheet = "#fbf7ee"
+# The pocket lightness above which the emblem ink turns deep.
+emblemInkThreshold = 0.62
+# The lightness of the deep emblem ink.
+emblemInkLightness = 0.26
+# How much darker the folder's backdrop is than its pocket, in OKLCH L.
+backdropDrop = 0.13
+# A small icon in px.
+sm = 18
+# A medium icon in px.
+md = 20
+# A navigation glyph in px: sidebar rows and segments.
+lg = 24
+
+# Control and layout metrics in logical px.
+[size]
+# The extra-small control height.
+controlHeightXs = 30
+# The small control height.
+controlHeightSm = 34
+# The standard control height.
+controlHeight = 38
+# The large control height.
+controlHeightLg = 42
+# The extra-large control height.
+controlHeightXl = 52
+# A tall list row.
+rowHeightLg = 52
+# A glyph tile.
+glyphTile = 34
+# A large glyph tile.
+glyphTileLg = 56
+# The gap every first-level box keeps from the window edge.
+windowMargin = 16
+
+# Stroke widths in logical px.
+[border]
+# A hairline.
+hairline = 1
+# A focus ring's stroke.
+focus = 2
+
+# Component anatomy shared by every app (the comp* metrics of CelestinaTheme).
+[control]
+# A button's horizontal padding.
+buttonPaddingHorizontal = 14
+# A text field's horizontal padding.
+textFieldPaddingHorizontal = 12
+# A switch track's width.
+switchTrackWidth = 44
+# A switch track's height.
+switchTrackHeight = 26
+# A switch thumb's size.
+switchThumbSize = 20
+# A switch thumb's inset from the track.
+switchThumbInset = 3
+# A checkbox indicator's size.
+checkboxIndicatorSize = 18
+# A linear track's height (slider, progress).
+linearTrackHeight = 4
+# A slider handle's size.
+sliderHandleSize = 15
+# A status indicator's size.
+statusIndicatorSize = 8
+# A drag indicator's height.
+dragIndicatorHeight = 2
+# A selection indicator's width.
+selectionIndicatorWidth = 3
+# A selection indicator's height.
+selectionIndicatorHeight = 18
+# A menu's width.
+menuWidth = 232
+# A menu's padding.
+menuPadding = 6
+# A menu's margins from the screen.
+menuMargins = 24
+# A menu row's colour swatch disc.
+menuSwatchSize = 14
+# The slash an automatic swatch draws across its disc.
+menuSwatchSlash = 11
+# Edge-attached glass's gap, as a fraction of the menu width.
+edgeAttachmentGapRatio = 0.06
+# Edge-attached glass's smallest gap.
+edgeAttachmentGapMin = 20
+# Edge-attached glass's largest gap.
+edgeAttachmentGapMax = 36
+# The segmented control in the top bar's leading slot.
+segmentHeight = 32

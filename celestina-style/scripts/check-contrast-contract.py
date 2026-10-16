@@ -3,8 +3,9 @@
 
 The QML guard catches literals outside the theme, but a semantic token can still
 be unsafe when it is translucent over wallpaper or album artwork.  This script
-reads the canonical values from CelestinaTheme.qml and checks the hostile black
-and white backdrop extremes.  No duplicated palette snapshot lives here.
+reads the canonical values the theme binds to, from CelestinaDesignTokens.qml (the
+file scripts/gen-tokens.py generates from tokens.toml), and checks the hostile
+black and white backdrop extremes.  No duplicated palette snapshot lives here.
 """
 
 from __future__ import annotations
@@ -16,16 +17,38 @@ import sys
 from typing import Iterable
 
 
-THEME = pathlib.Path(__file__).resolve().parents[1] / "CelestinaTheme.qml"
-TEXT = THEME.read_text(encoding="utf-8")
+TOKENS = pathlib.Path(__file__).resolve().parents[1] / "CelestinaDesignTokens.qml"
+TEXT = TOKENS.read_text(encoding="utf-8")
 RGBA = tuple[float, float, float, float]
 
 
-def literal(name: str) -> RGBA:
+def block(component: str) -> str:
+    """The body of one generated colour block (`ref` or a scheme).
+
+    The reference palette and the scheme share names (`card`, `accent`,
+    `danger`), so each read names the block it means.
+    """
+    match = re.search(
+        rf"(?ms)^    component {re.escape(component)}: QtObject \{{\n(.*?)^    \}}$",
+        TEXT,
+    )
+    if not match:
+        raise ValueError(f"no {component} block in {TOKENS.name}")
+    return match.group(1)
+
+
+REF = block("RefTokens")
+SCHEME = block("SchemeDarkTokens")
+# Everything outside the colour blocks: the scalar and section-colour tokens.
+SCALARS = TEXT.replace(REF, "").replace(SCHEME, "")
+
+
+def literal(name: str, text: str = SCHEME) -> RGBA:
+    """A colour token of `text`: by default a role of the dark scheme."""
     match = re.search(
         rf"(?m)^\s*(?:readonly\s+property\s+color\s+)?{re.escape(name)}"
         rf"\s*:\s*\"(#[0-9a-fA-F]{{6}}|#[0-9a-fA-F]{{8}})\"\s*(?://.*)?$",
-        TEXT,
+        text,
     )
     if not match:
         raise ValueError(f"no direct literal found for {name}")
@@ -43,37 +66,11 @@ def literal(name: str) -> RGBA:
 def scalar(name: str) -> float:
     match = re.search(
         rf"(?m)^\s*readonly\s+property\s+real\s+{re.escape(name)}\s*:\s*([0-9.]+)",
-        TEXT,
+        SCALARS,
     )
     if not match:
         raise ValueError(f"scalar {name} not found")
     return float(match.group(1))
-
-
-def mixed_role(
-    name: str,
-    source_name: str,
-    target_name: str,
-    source: RGBA,
-    target: RGBA,
-    amount_name: str,
-    amount: float,
-) -> RGBA:
-    pattern = (
-        rf"\b{re.escape(name)}\s*:\s*theme\.mixColors\(\s*"
-        rf"theme\.ref\.{re.escape(source_name)}\s*,\s*"
-        rf"theme\.ref\.{re.escape(target_name)}\s*,\s*"
-        rf"theme\.{re.escape(amount_name)}\s*\)"
-    )
-    if not re.search(pattern, TEXT, flags=re.S):
-        raise ValueError(f"role {name} no longer uses the contractual recipe")
-    return mix(source, target, amount)
-
-
-def mix(source: RGBA, target: RGBA, amount: float) -> RGBA:
-    return tuple(
-        start + (end - start) * amount for start, end in zip(source, target)
-    )  # type: ignore[return-value]
 
 
 def composite(foreground: RGBA, background: RGBA) -> RGBA:
@@ -186,28 +183,21 @@ def extremes() -> Iterable[tuple[str, RGBA]]:
 
 
 try:
+    # The roles as the theme paints them. The derived ones (accentLink,
+    # focusRing, accentHover, accentPressed, glyphDirectory) are resolved
+    # colours in tokens.toml; test-gen-tokens.py ties each to its recipe.
     accent = literal("accent")
     accent_ink = literal("accentInk")
-    accent_lift = literal("accentLift")
-    night = literal("night")
-    text_hi = literal("textHi")
-    text_lo = literal("textLo")
+    night = literal("canvas")
+    text_hi = literal("text")
+    text_lo = literal("textMuted")
     text_faint = literal("textFaint")
     card = literal("card")
     elevated = literal("elevated")
     danger = literal("danger")
     warning = literal("warning")
-    link_mix = scalar("accentLinkMix")
-    hover_mix = scalar("accentHoverMix")
-    pressed_mix = scalar("accentPressedMix")
-    accent_link = mixed_role(
-        "accentLink", "accent", "accentLift", accent, accent_lift,
-        "accentLinkMix", link_mix,
-    )
-    focus_ring = mixed_role(
-        "focusRing", "accent", "accentLift", accent, accent_lift,
-        "accentLinkMix", link_mix,
-    )
+    accent_link = literal("accentLink")
+    focus_ring = literal("focusRing")
 
     panel_inks = {
         "text": text_hi,
@@ -256,8 +246,8 @@ try:
 
     primary_states = {
         "normal": accent,
-        "hover": mix(accent, accent_lift, hover_mix),
-        "pressed": mix(accent, night, pressed_mix),
+        "hover": literal("accentHover"),
+        "pressed": literal("accentPressed"),
     }
     for state, fill in primary_states.items():
         require(f"primary button/{state}", accent_ink, fill, 4.5)
@@ -283,10 +273,7 @@ try:
     # Glyph tones against their surfaces: an icon is not text, so its floor is
     # the 3:1 ratio for non-text graphics.
     glyph_tones = {
-        "folder": mixed_role(
-            "glyphDirectory", "accent", "accentLift", accent, accent_lift,
-            "accentLinkMix", link_mix,
-        ),
+        "folder": literal("glyphDirectory"),
         "file": literal("glyphFile"),
         "link": literal("glyphSymlink"),
         "navigation": literal("glyphNavigation"),
@@ -329,7 +316,7 @@ try:
     # The sheet and emblem are painted on the icon rather than the window, so
     # their pairs are the pocket and folder backdrop. Emblem ink is not fixed:
     # a light tone selects a deeper ink, which is reproduced here.
-    sheet = literal("iconSheet")
+    sheet = literal("iconSheet", SCALARS)
     ink_threshold = scalar("iconEmblemInkThreshold")
     ink_lightness = scalar("iconEmblemInkLightness")
     for tone_name, tone in glyph_tones.items():

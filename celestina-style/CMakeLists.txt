@@ -12,6 +12,7 @@ qt_standard_project_setup(REQUIRES 6.9)
 # Shared token and icon catalogues are singletons.
 set_source_files_properties(
     CelestinaTheme.qml
+    CelestinaDesignTokens.qml
     CelestinaIcons.qml
     CelestinaIconShapes.qml
     PROPERTIES QT_QML_SINGLETON_TYPE TRUE
@@ -31,6 +32,7 @@ qt_add_qml_module(celestina-style
     OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/CelestinaStyle
     QML_FILES
         CelestinaTheme.qml
+        CelestinaDesignTokens.qml
         CelestinaAppearance.qml
         CelestinaIcons.qml
         CelestinaSurface.qml

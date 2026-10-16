@@ -83,6 +83,11 @@ fn main() {
                 .singleton(true),
         )
         .qml_file(
+            QmlFile::from("qml/CelestinaDesignTokens.qml")
+                .version(1, 0)
+                .singleton(true),
+        )
+        .qml_file(
             QmlFile::from("qml/components/Sections.qml")
                 .version(1, 0)
                 .singleton(true),
@@ -94,6 +99,7 @@ fn main() {
     for qml in QML_FILES.iter().copied().chain([
         "qml/CelestinaTheme.qml",
         "qml/CelestinaIcons.qml",
+        "qml/CelestinaDesignTokens.qml",
         "qml/components/Sections.qml",
         "qml/icons.qrc",
         "qml/fonts.qrc",

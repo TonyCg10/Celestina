@@ -19,6 +19,7 @@ the shell.
 | Area | Responsibility |
 |---|---|
 | `CelestinaTheme.qml` | Semantic colour pairs, typography and its `textScale`, radii, anatomy, motion and `reducedMotion` |
+| `tokens.toml`, `CelestinaDesignTokens.qml`, `scripts/gen-tokens.py` | Every colour and number of the theme as data; the generator writes the QML singleton the theme binds to and the Rust `celestina-tokens` crate's `generated.rs`, and `--check` fails both verifies on drift |
 | `CelestinaAppearance.qml` | Binds the theme's `reducedMotion` and `textScale` from the host's appearance values |
 | `CelestinaIcons.qml`, `CelestinaIconShapes.qml` | Closed Lucide UI names and generated Phosphor content shapes |
 | `CelestinaSurface.qml`, `CelestinaBackdrop.qml` | Canonical opaque L0/L1 composition |

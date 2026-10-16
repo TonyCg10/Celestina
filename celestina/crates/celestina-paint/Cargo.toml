@@ -13,6 +13,10 @@ workspace = true
 # `Rect` and `egl::femtovg_renderer`, the one (unsafe) constructor of the GL
 # renderer; this crate forbids `unsafe` and never builds a renderer itself.
 celestina-wayland = { path = "../celestina-wayland" }
+# The style tokens as Rust constants (`DARK`, radius, type scale, spacing,
+# motion, Haze), generated from `celestina-style/tokens.toml`; `Theme` is built
+# from them so the shell and the QML style read one data file.
+celestina-tokens = { path = "../../../celestina-rs/crates/celestina-tokens" }
 # The painter backend: paths, scissors, images and the glyph quads of the
 # atlas. Text layout and image decoding come from cosmic-text and resvg, so
 # femtovg's own `textlayout` and `image-loading` stay off; `ImageSource::Rgba`

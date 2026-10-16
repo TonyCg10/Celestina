@@ -26,6 +26,11 @@ ApplicationWindow {
     // The mirror is its own window and keeps the opaque canvas: it is sized
     // to the phone's picture, and nothing of the desktop belongs around it.
     color: CelestinaTheme.clear
+    // The module registers a file singleton by URL only once an importer names it,
+    // and importers resolve names in alphabetical order. CelestinaTheme binds
+    // CelestinaDesignTokens without importing the module, so naming it here (it sorts before
+    // CelestinaTheme) registers it before the theme compiles.
+    readonly property bool designTokensRegistered: CelestinaDesignTokens !== undefined
 
     // `--send`: the window stays while the files go, so a failure is seen.
     onClosing: function(close) {

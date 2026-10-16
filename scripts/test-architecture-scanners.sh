@@ -111,6 +111,24 @@ elif [[ $output != *"named color"* || $output != *"direct numeric radius"* \
     fail "multiline/property color visual values were not detected"
 fi
 
+# The generated token data holds the primitive values by construction and is
+# exempt like the theme, but only when it is named as the token data.
+printf 'import QtQuick\nQtObject {\n    readonly property color night: "#050608"\n}\n' \
+    > "$fixture_tmp/TokenData.qml"
+if ! output=$(python3 "$scanner" qml-style-contract \
+    "$fixtures/style/CelestinaTheme.qml" --token-data "$fixture_tmp/TokenData.qml" \
+    "$fixture_tmp/TokenData.qml" "$fixtures/qml/StyleClean.qml"); then
+    fail "the visual scanner failed with token data"
+elif [[ -n $output ]]; then
+    fail "the token data was not exempt: $output"
+fi
+if ! output=$(python3 "$scanner" qml-style-contract \
+    "$fixtures/style/CelestinaTheme.qml" "$fixture_tmp/TokenData.qml"); then
+    fail "the visual scanner failed on unnamed token data"
+elif [[ $output != *"hexadecimal literal"* ]]; then
+    fail "a token file not named as the token data escaped the visual scanner"
+fi
+
 if ! output=$(python3 "$scanner" style-copies \
     "$fixtures/style" "$fixtures/style-copy"); then
     fail "the style-copy comparison failed"

@@ -61,6 +61,25 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(self.tokens["radiusInput"], 9999)
         self.assertEqual(self.tokens["radiusLg"], 20)
 
+    def test_theme_tokens_resolve_the_generated_token_data(self) -> None:
+        (self.root / "CelestinaDesignTokens.qml").write_text(
+            "pragma Singleton\nimport QtQuick\nQtObject {\n"
+            "    readonly property int radiusLg: 21\n"
+            "    readonly property int spacingXs: 5\n}\n",
+            encoding="utf-8",
+        )
+        (self.root / "CelestinaTheme.qml").write_text(
+            THEME.replace("radiusLg: 20", "radiusLg: CelestinaDesignTokens.radiusLg")
+            .replace("spaceXs: 4", "spaceXs: CelestinaDesignTokens.spacingXs")
+            .replace("radiusInput: radiusPill", "radiusInput: radiusLg"),
+            encoding="utf-8",
+        )
+        tokens = guard.theme_tokens(self.root / "CelestinaTheme.qml")
+        self.assertEqual(tokens["radiusLg"], 21)
+        self.assertEqual(tokens["spaceXs"], 5)
+        self.assertEqual(tokens["radiusInput"], 21)
+        self.assertEqual(tokens["radiusMd"], 12)
+
     def test_text_anchored_to_a_rounded_parent_without_inset_fails(self) -> None:
         findings = self.scan(
             """

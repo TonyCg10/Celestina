@@ -21,6 +21,11 @@ ApplicationWindow {
     // Transparent: the compositor blurs what lies behind the window and
     // CelestinaBackdrop paints the Haze canvas over it (DESIGN §5.2 L0).
     color: CelestinaTheme.clear
+    // The module registers a file singleton by URL only once an importer names it,
+    // and importers resolve names in alphabetical order. CelestinaTheme binds
+    // CelestinaDesignTokens without importing the module, so naming it here (it sorts before
+    // CelestinaTheme) registers it before the theme compiles.
+    readonly property bool designTokensRegistered: CelestinaDesignTokens !== undefined
     title: "Cuprita"
 
     property int currentSection: 0
