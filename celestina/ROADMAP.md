@@ -37,7 +37,7 @@ Celestina visual language over the compositor's glass. The plan is
 | CEL-1-E | done | CEL-1-D | The launcher: overlay, `Field` with IME and paste, index, ranking, `/` commands, spawn | `celestina/docs/evidence/2026-10-16-launcher.md` |
 | CEL-1-F | done | CEL-1-D | Notifications: server (claimed if free), banners, history, actions, do-not-disturb | `celestina/docs/evidence/2026-10-16-notifications.md` |
 | CEL-1-G | done | CEL-1-D | The tray over `zbus` blocking: watcher and host (claimed if free), items, icons, nested DBusMenu popups, scroll | `celestina/docs/evidence/2026-10-14-tray.md` |
-| CEL-1-H | active | CEL-1-E, F, G | The exit: the live rows queued in `VALIDATION.md` (the author runs them), the handover note on what Noctalia still does ([handover](docs/handover.md)), the documents up to date; the version is set by the landing's `--kind` | `celestina/docs/evidence/2026-10-16-exit.md` |
+| CEL-1-H | done | CEL-1-E, F, G | The exit: the live rows queued in `VALIDATION.md` (the author runs them), the handover note on what Noctalia still does ([handover](docs/handover.md)), the documents up to date; the version is set by the landing's `--kind` | `celestina/docs/evidence/2026-10-16-exit.md` |
 
 ## Implementation exit
 
@@ -52,5 +52,6 @@ live rows are queued in `VALIDATION.md`.
 - CEL-1-E: [launcher](docs/evidence/2026-10-16-launcher.md)
 - CEL-1-F: [notifications](docs/evidence/2026-10-16-notifications.md)
 - CEL-1-G: [tray](docs/evidence/2026-10-14-tray.md)
+- CEL-1-H: [exit](docs/evidence/2026-10-16-exit.md)
 
 The project was registered by CEL-1-A (suite).

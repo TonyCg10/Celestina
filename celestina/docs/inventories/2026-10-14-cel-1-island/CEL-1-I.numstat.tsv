@@ -1,0 +1,17 @@
+# CEL-1-I exact change inventory
+
+Base revision	4d15b03830259bd75d4e11be4587d57eddfcd1d0
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/evidence/2026-10-16-post-landing-docs.md
+Pathspec	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-I.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	1	ba944648fec645842c319d5499043222c05f108796dd599f9d4f8efe010f11e5	celestina/ROADMAP.md
+7	6	c913b642693401713bc8b2c67c4450819bec2bb78e26182685c938cb0bb8cbea	celestina/STATUS.md
+65	0	d31e489db7bcb926e148f85c790a1201896a64cf7491007ef5394bb273cdd739	celestina/docs/evidence/2026-10-16-post-landing-docs.md
+17	0	self	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-I.numstat.tsv
+1	0	eaadb895633aaab1a80cbd87a07c3a10cd0a939e0b76cebb9238e2358132ca3e	celestina/docs/plans/active/2026-10-14-cel-1-island.md
