@@ -1,0 +1,17 @@
+# RSH-1-DOCS exact change inventory
+
+Base revision	00c6d0bb9ce04ac46049a752339347ee38a88d14
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-10-16-rsh-1-docs.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/RSH-1-DOCS.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+4	4	f3d37d6acb5d24a65557a00cfee3fd9228efc3985ca19e63f224f280ea91e769	ROADMAP.md
+10	7	d076291d4833eff9ce83a19c79e4787a6f106c20a37d6d2cad690cd239fad08f	STATUS.md
+67	0	5413462960841e8e63a9c12b657e6393bb7600a1efc9f41b251e611b9c049f0a	docs/evidence/2026-10-16-rsh-1-docs.md
+17	0	self	docs/inventories/2026-10-14-rust-shell/RSH-1-DOCS.numstat.tsv
+3	1	910654eb8f617a3b8f51041307e030b95b83ad03c8c0a9732e9470fc786f9e9c	docs/plans/active/2026-10-14-rust-shell.md

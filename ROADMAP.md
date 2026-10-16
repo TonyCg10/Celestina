@@ -293,10 +293,10 @@ guard knows a moved inventory.
 the old tree; `celestina/` registered as `rust-shell` with its document set and
 a stub binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 
-- [ ] Let a language scanner migration through the pre-commit hook (`CEL-1-A0`).
-- [ ] Add the guard rules for the rename and rehearse it (`CEL-1-A1`).
-- [ ] Move the halted shell and register the Rust shell (`CEL-1-A`, the author).
-- [ ] Generate the style's tokens from one data file (`CEL-1-C`).
+- [x] Let a language scanner migration through the pre-commit hook (`CEL-1-A0`).
+- [x] Add the guard rules for the rename and rehearse it (`CEL-1-A1`).
+- [x] Move the halted shell and register the Rust shell (`CEL-1-A`, the author).
+- [x] Generate the style's tokens from one data file (`CEL-1-C`).
 
 The build order, exclusions and ledger are in
 [the active plan](docs/plans/active/2026-10-14-rust-shell.md), and the design in

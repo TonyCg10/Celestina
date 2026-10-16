@@ -42,6 +42,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
   point; dormant until `CEL-1-A`.
 - `CEL-1-A` — the author's rename and registration.
 - `CEL-1-C` — `celestina-style/tokens.toml`, the generator, both outputs and the drift checks.
+- `RSH-1-DOCS` — the root roadmap's boxes and the root status brought up to date after CEL-1 landed.
 
 ## Exclusions
 
@@ -51,7 +52,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 
 ## Build order
 
-1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`.
+1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`, then `RSH-1-DOCS` after CEL-1 landed.
 
 ## Implementation exit
 
@@ -70,3 +71,4 @@ and the shell reads `celestina-tokens`.
 | CEL-1-A4 | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-1-A4.numstat.tsv) | 8 files, +347/-26 | Allow the landing to unbump a renamed halted owner at its new paths | [evidence](../../evidence/2026-10-15-landing-unbump-renamed-owner.md) | None |
 | CEL-1-A | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-1-A.numstat.tsv) | 1019 files, +100484/-97065 | Move the halted shell to celestina-qt and register the Rust shell | [evidence](../../evidence/2026-10-14-shell-rename.md) | None |
 | CEL-1-C | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-1-C.numstat.tsv) | 55 files, +4590/-545 | Add the style's tokens as one data file generated into QML and Rust under a drift check, and read them in the shell | [evidence](../../evidence/2026-10-14-tokens-as-data.md) | None |
+| RSH-1-DOCS | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/RSH-1-DOCS.numstat.tsv) | 5 files, +101/-12 | Mark the root roadmap's boxes for the landed units and bring the root status up to date after CEL-1 | [evidence](../../evidence/2026-10-16-rsh-1-docs.md) | None |

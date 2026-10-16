@@ -1,9 +1,9 @@
 # Suite status
 
-- **Updated:** 2026-10-14
-- **Current focus:** RSH-1, registering the Celestina shell in pure Rust: the
-  suite guards learn the rename first (`CEL-1-A0`, `CEL-1-A1`); all project work follows
-  each local roadmap
+- **Updated:** 2026-10-16
+- **Current focus:** RSH-1 is implemented: every suite row has landed and the
+  Rust shell is at 1.0.0 (the first stable version, not the definitive one);
+  the plan awaits its archive. All project work follows each local roadmap
 - **Implementation checkpoint:** RSH-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
@@ -36,9 +36,12 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
-RSH-1 is active: the halted Qt shell moves to `celestina-qt/` and a Rust shell
-takes `celestina/`, with the shared style tokens becoming data that QML and Rust
-both read. The ledger is
+RSH-1 moved the halted Qt shell to `celestina-qt/`, registered a Rust shell at
+`celestina/` and made the shared style tokens data that QML and Rust both read;
+every suite row has landed, and the shell's own program, CEL-1, landed its last
+unit, CEL-1-H, as release 1.0.0 (`00c6d0bb`); its plan and roadmap are still
+active. The plan stays active until an administrative
+unit archives it. The ledger is
 [the active plan](docs/plans/active/2026-10-14-rust-shell.md). Other new
 cross-project work starts only when an accepted decision promotes it, as the
 root roadmap's later suite-level section requires.
