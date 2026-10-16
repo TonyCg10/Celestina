@@ -8,14 +8,14 @@ rust-version = "1.89"
 license = "GPL-3.0-or-later"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -23,3 +23,55 @@ description = "The Celestina shell for niri: the Island, the launcher, notificat
 
 [lints]
 workspace = true
+
+# The product is a library plus a thin binary: `src/lib.rs` holds the modules
+# (the app, the Island, the command surface, the bus and the providers), so
+# every module is public API exercised by its tests, and `src/main.rs` only
+# parses arguments and runs it.
+[lib]
+name = "celestina"
+path = "src/lib.rs"
+
+[[bin]]
+name = "celestina"
+path = "src/main.rs"
+
+[dependencies]
+# The runtime: outputs, the Island's layer surfaces, regions, frame pacing
+# and the loop's `Sender`, through which every provider worker publishes its
+# typed messages (design §5.1, §5.2).
+celestina-wayland = { path = "crates/celestina-wayland" }
+# The one painter of the process, the theme and the fonts the Island is drawn
+# with (design §5.3).
+celestina-paint = { path = "crates/celestina-paint" }
+# The keyed view tree the Island's capsule and page are described in, its
+# layout, animation and interaction (design §5.4).
+celestina-ui = { path = "crates/celestina-ui" }
+# The flex alignment (centring) of the Island's views, set on
+# `celestina_ui::View::style`, which is a `taffy::Style`; the version
+# `celestina-ui` lays out with.
+taffy = { version = "0.15", default-features = false, features = ["std", "flexbox"] }
+# `org.celestina.Shell1`: the shell serves the command surface and claims
+# `org.celestina.Shell` with `DoNotQueue` (single instance), and the client
+# verbs call it. Blocking API only, on zbus's own async-io thread: no async
+# executor in the shell (design §6.4), as `celestina-core`'s activation does.
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
+# The compositor's own event and request types, pinned to the release the
+# author's niri speaks; the stream is parsed line by line with serde_json so
+# an unknown variant is skipped instead of ending the stream (design §5.6).
+niri-ipc = "=26.4.0"
+serde_json = "1"
+# The suite's shared owners: the XDG base directory, the bounded read and the
+# atomic private write (celestina-core); the appearance file and its follower
+# (celestina-settings); the pure shell domain salvaged from the halted shell
+# (celestina-shell). Path dependencies into the suite workspace.
+celestina-core = { path = "../celestina-rs/crates/celestina-core" }
+celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
+celestina-shell = { path = "../celestina-rs/crates/celestina-shell" }
+# Diagnostics to stderr (journald under the session); the toolkit crates log
+# through the same facade.
+tracing = "0.1"
+# The binary's subscriber: stderr, filtered by `RUST_LOG` (default `info`).
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std", "ansi"] }
+# Typed errors with their sources, as in the toolkit crates.
+thiserror = "2"

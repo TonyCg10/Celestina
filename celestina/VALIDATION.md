@@ -23,12 +23,21 @@ the binary the landing of its related unit deploys.
 ## VAL-CEL-ISLAND — Capsule to page at 165 Hz without jank
 
 - **Status:** pending
-- **Related implementation:** CEL-1-D
-- **Requires:** the deployed shell on DP-1 at 3840x2160@165 Hz, scale 1.5
-- **Procedure:** open and close each page from the capsule and from `celestina
-  island open <page>` ten times, and switch pages while one is open
+- **Related implementation:** CEL-1-B (the growth into a page), CEL-1-D (the
+  pages and their switching)
+- **Requires:** the deployed shell on DP-1 at 3840x2160@165 Hz, scale 1.5,
+  started by hand with `celestina --metrics` from a terminal
+- **Procedure:** from CEL-1-B: click the capsule and close the page with
+  Escape, a click outside and `celestina island close`, ten times each, then
+  run `celestina island toggle` ten times from a key binding; stop the shell
+  with `celestina quit` and read the `DP-1` line it prints (`late` and
+  `comp_late` should stay 0). From CEL-1-D: open each page with
+  `celestina island open <page>` and switch pages while one is open
 - **Pass condition:** the growth takes 350 ms on the One UI curve with no
-  visible jump, no stutter and no flash of the old content
+  visible jump, no stutter and no flash of the old content. Escape closes a page
+  only after it has been clicked: niri gives an `OnDemand` layer surface the
+  keyboard on a click inside it, not when the page opens; a click outside
+  closes it regardless
 - **Result:** not run
 - **Evidence:** none
 
@@ -37,10 +46,12 @@ the binary the landing of its related unit deploys.
 - **Status:** pending
 - **Related implementation:** CEL-1-B
 - **Requires:** the deployed shell with two outputs connected
-- **Procedure:** leave the session idle for five minutes with no page open,
-  then read the shell's frame counter and resident memory
-- **Pass condition:** no frame is drawn in rest except the clock's once a
-  minute, and resident memory stays under 100 MB
+- **Procedure:** start the shell by hand with `celestina --metrics`, leave the
+  session idle for five minutes with no page open, then stop it with
+  `celestina quit` and read the report it prints: one line per output
+  (`frames=`, `rest_frames=`) and `rss_mib=`
+- **Pass condition:** `rest_frames` is at most one per output per minute (the
+  clock's), and `rss_mib` stays under 100
 - **Result:** not run
 - **Evidence:** none
 
@@ -88,8 +99,10 @@ the binary the landing of its related unit deploys.
 - **Status:** pending
 - **Related implementation:** CEL-1-B
 - **Requires:** the deployed shell on DP-1 (scale 1.5) and HDMI-A-1 (scale 1)
-- **Procedure:** compare the Island's clock and a page's text on both outputs
-  at close range
+- **Procedure:** compare the Island's clock in the capsule and the open
+  Activity page's title, buttons and workspace rows on both outputs at close
+  range, at the normal text scale and again with `text_scale = "large"` in
+  `~/.config/celestina/appearance.toml` (the shell follows the file live)
 - **Pass condition:** text is sharp on both outputs, with tabular figures in
   the clock and no blurred or doubled glyphs
 - **Result:** not run

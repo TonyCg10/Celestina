@@ -438,6 +438,8 @@ name = "celestina-shell"
 version = "0.1.0"
 dependencies = [
  "celestina-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

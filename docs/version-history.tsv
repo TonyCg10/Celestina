@@ -264,3 +264,4 @@ celestina-style	1.13.3	bug	STYLE-G7-AD	Fix wheel notches that carry pixel deltas
 siderita	1.12.0	milestone	SID-H1-S	Add renaming in place on a slow click and fix drag selection while renaming
 celestina-style	1.13.4	bug	STYLE-G7-AE	Fix slow drag selection in text fields inside modals
 celestina	0.1.0	baseline	CEL-1-A	Adopt the Rust shell skeleton as its verified baseline
+celestina	0.2.0	milestone	CEL-1-B	Add the skeleton: `celestina-wayland`, `celestina-paint` with the text atlas, `celestina-ui` with keyed reconciliation; one Island capsule per output with clock and workspace dots over the tolerant niri stream; the Shell1 command surface and single instance

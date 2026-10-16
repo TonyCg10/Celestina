@@ -8,3 +8,17 @@ description = "The shell's UI tree: taffy layout, keyed reconciliation, animatio
 
 [lints]
 workspace = true
+
+[dependencies]
+# `Rect`, the hit-test and paint geometry, and `InputEvent`, the pointer and
+# key events `Interaction` turns into `UiEvent`s.
+celestina-wayland = { path = "../celestina-wayland" }
+# The painter the paint walk draws through, the text system the layout
+# measures with, and the theme's roles, motion ladder and press scale.
+celestina-paint = { path = "../celestina-paint" }
+# Flexbox and block layout over the node tree. `taffy_tree` is the
+# `TaffyTree` container the tree keeps its layout twins in; grid, floats,
+# `calc` and the content-size and detailed-info extras are not used.
+taffy = { version = "0.15", default-features = false, features = ["std", "taffy_tree", "flexbox", "block_layout"] }
+# Typed errors with their sources.
+thiserror = "2"

@@ -31,7 +31,7 @@ Celestina visual language over the compositor's glass. The plan is
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| CEL-1-B | planned | CEL-1-A | The workspace, `celestina-wayland`, `celestina-paint` with the text atlas, `celestina-ui` with keyed reconciliation and its tests without GL; one Island capsule per output with clock and workspace dots over the tolerant niri stream; the Shell1 command surface and single instance | `celestina/docs/evidence/2026-10-14-skeleton.md` |
+| CEL-1-B | done pending landing | CEL-1-A | The workspace, `celestina-wayland`, `celestina-paint` with the text atlas, `celestina-ui` with keyed reconciliation and its tests without GL; one Island capsule per output with clock and workspace dots over the tolerant niri stream; the Shell1 command surface and single instance | `celestina/docs/evidence/2026-10-14-skeleton.md` |
 | CEL-1-C | planned | CEL-1-B | `celestina-style/tokens.toml`, the generator, `CelestinaTokenData.qml`, `celestina-tokens` and the drift check in both verifies; the shell switches from local constants to the crate (a `celestina-style` and `celestina-rs` unit) | its owners' evidence |
 | CEL-1-D | planned | CEL-1-C | The Island pages: Activity, Notifications, Tray, page tabs, the overflow popup | evidence record of the unit |
 | CEL-1-E | planned | CEL-1-D | The launcher: overlay, `Field` with IME, index, ranking, `/` commands, spawn | evidence record of the unit |

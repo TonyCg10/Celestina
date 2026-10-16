@@ -10,6 +10,11 @@ description = "The pure domain of the Celestina shell: notifications, launcher r
 # Desktop entries for the launcher's ranking: the suite's one reader of
 # `.desktop` files, reused rather than copied (design §6.2).
 celestina-core.workspace = true
+# `settings` (the shell's `shell.json`) and `workspace_groups` (the homes
+# memory) persist JSON: serde derives their schemas and serde_json is the one
+# reader and writer of those files, as in the module they were copied from.
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true

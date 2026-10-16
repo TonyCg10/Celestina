@@ -8,3 +8,27 @@ description = "The shell's painter: the Painter contract over femtovg, the Haze 
 
 [lints]
 workspace = true
+
+[dependencies]
+# `Rect` and `egl::femtovg_renderer`, the one (unsafe) constructor of the GL
+# renderer; this crate forbids `unsafe` and never builds a renderer itself.
+celestina-wayland = { path = "../celestina-wayland" }
+# The painter backend: paths, scissors, images and the glyph quads of the
+# atlas. Text layout and image decoding come from cosmic-text and resvg, so
+# femtovg's own `textlayout` and `image-loading` stay off; `ImageSource::Rgba`
+# and the `imgref`/`rgb` re-exports need no feature.
+femtovg = { version = "0.27", default-features = false }
+# Shaping, font fallback over the system's fonts (fontdb with the fontconfig
+# configuration), variable weights, `tnum`, and swash rasterisation through
+# its `SwashCache` re-export: the default features, spelled out.
+cosmic-text = { version = "0.19", default-features = false, features = ["std", "swash", "fontconfig"] }
+# SVG icons (Lucide and theme icons) rasterised at device size; it re-exports
+# `usvg` and `tiny-skia` (whose PNG decoder reads PNG theme icons and the
+# Haze grain). No text, fonts or raster-image embedding is needed.
+resvg = { version = "0.48", default-features = false }
+# Theme icon lookup by name (`.desktop` entries, tray items).
+freedesktop-icons = "0.4"
+# Typed errors with their sources.
+thiserror = "2"
+# Diagnostics; the binary installs the subscriber.
+tracing = "0.1"

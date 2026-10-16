@@ -8,3 +8,33 @@ description = "The shell's Wayland runtime: outputs, layer surfaces, popups, sca
 
 [lints]
 workspace = true
+
+[dependencies]
+# The Wayland client toolkit: registry, outputs, seat (keyboard through
+# xkbcommon, pointer, cursor shape), layer shell, xdg popups and the
+# background-effect state; `calloop` wires its sources into the loop.
+smithay-client-toolkit = { version = "0.21", features = ["calloop", "xkbcommon"] }
+# The Wayland connection, queue and core protocol objects sctk builds on.
+wayland-client = "0.31"
+# `wp_viewporter`, `wp_fractional_scale_v1`, `wp_cursor_shape_v1`,
+# `ext_background_effect_v1` and `xdg_shell` (`client` + `staging`).
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+# One `wl_egl_window` per surface, resized to the buffer size.
+wayland-egl = "0.32"
+# libEGL loaded at run time: display, config with a stencil, the shared
+# GLES 3 context, swap interval 0 and `eglGetProcAddress`.
+khronos-egl = { version = "6", features = ["dynamic"] }
+# The GL table bound to the shared context, used for the viewport only.
+glow = "0.18"
+# `egl::femtovg_renderer`: the one `unsafe` constructor of the painter's
+# renderer, kept here so the painter crate forbids `unsafe` outright.
+femtovg = { version = "0.27", default-features = false }
+# The event loop: the Wayland source, timers, the message channel and
+# SIGTERM/SIGINT through `signals`.
+calloop = { version = "0.14", features = ["signals"] }
+# Adapts the Wayland queue to a calloop source.
+calloop-wayland-source = "0.4"
+# Diagnostics; the binary installs the subscriber.
+tracing = "0.1"
+# Typed errors with their sources.
+thiserror = "2"
