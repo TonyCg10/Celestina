@@ -3,8 +3,8 @@
 - **Status:** active
 - **Active implementation checkpoint:** CEL-1
 - **Related author validation:** VAL-CEL-GLASS, VAL-CEL-ISLAND, VAL-CEL-REST,
-  VAL-CEL-POPUP, VAL-CEL-KEYBOARD, VAL-CEL-IME, VAL-CEL-SCALE and
-  VAL-CEL-NOCTALIA in [VALIDATION.md](VALIDATION.md) (they do not block)
+  VAL-CEL-POPUP, VAL-CEL-KEYBOARD, VAL-CEL-IME, VAL-CEL-SCALE,
+  VAL-CEL-NOCTALIA and VAL-CEL-BANNERS in [VALIDATION.md](VALIDATION.md) (they do not block)
 
 ## Hypothesis and tangible outcome
 
@@ -31,13 +31,13 @@ Celestina visual language over the compositor's glass. The plan is
 
 | Unit | Status | Dependency | Implementation result | Agent evidence |
 |---|---|---|---|---|
-| CEL-1-B | done pending landing | CEL-1-A | The workspace, `celestina-wayland`, `celestina-paint` with the text atlas, `celestina-ui` with keyed reconciliation and its tests without GL; one Island capsule per output with clock and workspace dots over the tolerant niri stream; the Shell1 command surface and single instance | `celestina/docs/evidence/2026-10-14-skeleton.md` |
-| CEL-1-C | planned | CEL-1-B | `celestina-style/tokens.toml`, the generator, `CelestinaDesignTokens.qml`, `celestina-tokens` and the drift check in both verifies; the shell switches from local constants to the crate (a `celestina-style` and `celestina-rs` unit) | its owners' evidence |
-| CEL-1-D | done pending landing | CEL-1-C | The Island pages: Activity, Notifications, Tray, page tabs, the overflow popup | `celestina/docs/evidence/2026-10-16-island-pages.md` |
-| CEL-1-E | done pending landing | CEL-1-D | The launcher: overlay, `Field` with IME and paste, index, ranking, `/` commands, spawn | `celestina/docs/evidence/2026-10-16-launcher.md` |
-| CEL-1-F | active | CEL-1-D | Notifications: server (claimed if free), banners, history, actions, do-not-disturb | `celestina/docs/evidence/2026-10-16-notifications.md` |
-| CEL-1-G | done pending landing | CEL-1-D | The tray over `zbus` blocking: watcher and host (claimed if free), items, icons, nested DBusMenu popups, scroll | `celestina/docs/evidence/2026-10-14-tray.md` |
-| CEL-1-H | planned | CEL-1-E, F, G | The exit: live rows closed, 1.0.0, a handover note on what Noctalia still does | evidence record of the unit |
+| CEL-1-B | done | CEL-1-A | The workspace, `celestina-wayland`, `celestina-paint` with the text atlas, `celestina-ui` with keyed reconciliation and its tests without GL; one Island capsule per output with clock and workspace dots over the tolerant niri stream; the Shell1 command surface and single instance | `celestina/docs/evidence/2026-10-14-skeleton.md` |
+| CEL-1-C | done | CEL-1-B | `celestina-style/tokens.toml`, the generator, `CelestinaDesignTokens.qml`, `celestina-tokens` and the drift check in both verifies; the shell switches from local constants to the crate (a `celestina-style` and `celestina-rs` unit) | its owners' evidence |
+| CEL-1-D | done | CEL-1-C | The Island pages: Activity, Notifications, Tray, page tabs, the overflow popup | `celestina/docs/evidence/2026-10-16-island-pages.md` |
+| CEL-1-E | done | CEL-1-D | The launcher: overlay, `Field` with IME and paste, index, ranking, `/` commands, spawn | `celestina/docs/evidence/2026-10-16-launcher.md` |
+| CEL-1-F | done | CEL-1-D | Notifications: server (claimed if free), banners, history, actions, do-not-disturb | `celestina/docs/evidence/2026-10-16-notifications.md` |
+| CEL-1-G | done | CEL-1-D | The tray over `zbus` blocking: watcher and host (claimed if free), items, icons, nested DBusMenu popups, scroll | `celestina/docs/evidence/2026-10-14-tray.md` |
+| CEL-1-H | active | CEL-1-E, F, G | The exit: the live rows queued in `VALIDATION.md` (the author runs them), the handover note on what Noctalia still does ([handover](docs/handover.md)), the documents up to date; the version is set by the landing's `--kind` | `celestina/docs/evidence/2026-10-16-exit.md` |
 
 ## Implementation exit
 
@@ -46,4 +46,11 @@ live rows are queued in `VALIDATION.md`.
 
 ## Closed evidence
 
-None yet. The project was registered by CEL-1-A (suite).
+- CEL-1-B: [skeleton](docs/evidence/2026-10-14-skeleton.md)
+- CEL-1-C: [tokens as data](../docs/evidence/2026-10-14-tokens-as-data.md) (suite)
+- CEL-1-D: [Island pages](docs/evidence/2026-10-16-island-pages.md)
+- CEL-1-E: [launcher](docs/evidence/2026-10-16-launcher.md)
+- CEL-1-F: [notifications](docs/evidence/2026-10-16-notifications.md)
+- CEL-1-G: [tray](docs/evidence/2026-10-14-tray.md)
+
+The project was registered by CEL-1-A (suite).

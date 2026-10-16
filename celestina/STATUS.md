@@ -2,36 +2,27 @@
 
 - **Updated:** 2026-10-16
 - **Version:** the one `celestina/Cargo.toml` carries, set by each landing
-- **Implementation:** CEL-1-B, the skeleton, is landed on `main`: the three toolkit crates (`celestina-wayland`,
-  `celestina-paint`, `celestina-ui`), one Island capsule per output with the
-  clock and the workspace dots over the tolerant niri stream, the growth into
-  a page, the `org.celestina.Shell1` command surface with single instance,
-  and the production scripts with a nested-niri smoke
-  ([evidence](docs/evidence/2026-10-14-skeleton.md)). The halted Qt/QML
-  shell this project replaces lives at
-  [`celestina-qt/`](../celestina-qt/README.md).
-  CEL-1-D, the Island pages, is also implemented on its unit branch: Activity,
-  Notifications and Tray, the page tabs with the slide, and the overflow menu
-  as an `xdg_popup`, and it awaits landing after CEL-1-C
-  ([evidence](docs/evidence/2026-10-16-island-pages.md)).
-  CEL-1-E, the launcher, is implemented on its unit branch: the `Field`
-  editor, IME preedit and bounded paste, the overlay with the desktop index,
-  ranking, `/` switches and spawn, and it awaits landing after CEL-1-D
-  ([evidence](docs/evidence/2026-10-16-launcher.md)).
-  CEL-1-F, the notifications, is also implemented on its unit branch: the
-  notification server (claimed only when the name is free), the banners with
-  their actions and hover pause, the history page, and do-not-disturb; it
-  awaits landing after CEL-1-D
-  ([evidence](docs/evidence/2026-10-16-notifications.md)).
-  CEL-1-G, the tray, is also implemented on its unit branch: our own
-  StatusNotifierWatcher, host, item and DBusMenu clients over `zbus`, the Tray
-  page and nested menu popups, and it awaits landing
-  ([evidence](docs/evidence/2026-10-14-tray.md)).
-- **Focus:** landing CEL-1-D after CEL-1-C, then CEL-1-E, then CEL-1-F and CEL-1-G of
-  the [CEL-1 plan](docs/plans/active/2026-10-14-cel-1-island.md).
-- **Author validation:** VAL-CEL-GLASS, VAL-CEL-REST and VAL-CEL-SCALE in
-  [VALIDATION.md](VALIDATION.md) can run on the binary B's landing deploys;
-  VAL-CEL-ISLAND, VAL-CEL-POPUP and VAL-CEL-KEYBOARD gain their CEL-1-D
-  procedures on D's, and VAL-CEL-IME and VAL-CEL-KEYBOARD their launcher
-  procedures on E's; the other rows wait for their units.
+- **Implementation:** the CEL-1 program is landed on `main` through CEL-1-G
+  (0.6.0), the tokens as data (CEL-1-C) included: the three toolkit crates
+  (`celestina-wayland`, `celestina-paint`, `celestina-ui`); one Island capsule
+  per output that grows into the Activity, Notifications and Tray pages, with
+  page tabs and the overflow popup; the launcher with IME and paste; the
+  notification server with banners, history, actions and do-not-disturb; and
+  the tray with nested DBusMenu popups. The shell claims
+  `org.freedesktop.Notifications` and `org.kde.StatusNotifierWatcher` only
+  when the name is free. Evidence per unit is in
+  [`docs/evidence/`](docs/evidence/README.md). The halted Qt/QML shell this
+  project replaces lives at [`celestina-qt/`](../celestina-qt/README.md).
+- **Exit (CEL-1-H):** prepared on its unit branch: the live rows queued in
+  [VALIDATION.md](VALIDATION.md), the
+  [handover note](docs/handover.md) on what Noctalia still does for the
+  session, and the documents up to date
+  ([evidence](docs/evidence/2026-10-16-exit.md)). The author chose on 2026-10-16 to land it as
+  `--kind release` (1.0.0): the first stable version, not the definitive one.
+- **Focus:** the author's live validation of the nine VAL-CEL rows, then the
+  deliveries the handover note lists before Noctalia can be stopped.
+- **Author validation:** all nine VAL-CEL rows are `pending`; the author has
+  not recorded a result in any of them. The author accepted 1.0.0 as stable
+  after trying the shell, without closing the rows; the recorded evidence is
+  unit tests, a private bus and a smoke over a nested niri.
 - **Blockers:** none.

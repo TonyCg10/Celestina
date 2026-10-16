@@ -1,0 +1,29 @@
+# CEL-1-H exact change inventory
+
+Base revision	ddc98055212be0ad2c548c94b1bb3a3e17bc3f30
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-10-16-exit.md
+Pathspec	celestina/docs/handover.md
+Pathspec	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-H.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	b31778a4959c6a6ff7326042689a3c0d12244cd800be7dc4bae216af55634669	celestina/Cargo.lock
+1	1	5ab34056953d8f5dae41cc58e8feeda48bc7ece93bcc209bdf1f8f5d40f80117	celestina/Cargo.toml
+9	5	62085601d53ff8750c34ac65c5dafd58ee417d1e7af134236c1b1b08e5b79d95	celestina/README.md
+17	10	e116e6ee8a3d09522f30035cedc6148471d85c3de4536412e0bf195c49d5489c	celestina/ROADMAP.md
+23	32	5231641f8b703146891eb8085570c363323c72b44de20feb3aec8b1952fa403e	celestina/STATUS.md
+3	1	2f60a048122d8f74216e9df4163c15f5072557d9c490cece83001bcb6ac04d6e	celestina/VALIDATION.md
+107	0	04254221befac9561d57f43f27ecf605f86a11a5e10961c56cf87516bdd91069	celestina/docs/evidence/2026-10-16-exit.md
+66	0	8a3389c9cc3ad72bcdb9133350a20d7b2724b2706217e327d41c9365f34281df	celestina/docs/handover.md
+29	0	self	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-H.numstat.tsv
+4	4	dbc445afc2ed1fe94ee73b7257b32a07c35e05bad79f6bfeec4a654aabbd631f	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+1	0	63ba4c07fa56cd1825d9b75e67ee03c9a41dac221a7bdee2ce0c04ffa6162a82	docs/version-history.tsv

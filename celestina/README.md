@@ -3,10 +3,13 @@
 The desktop shell of the suite for the author's niri session, in pure Rust on
 Wayland: an Island on the top edge of every output that grows into pages, a
 launcher, a notification server with banners, and a system tray, painted with
-the Celestina visual language over the compositor's glass. It is being built
-in [CEL-1](docs/plans/active/2026-10-14-cel-1-island.md); today it draws one
-Island capsule per output with the clock and the workspace dots, grows it
-into a page, and answers its command verbs.
+the Celestina visual language over the compositor's glass. It is built in
+[CEL-1](docs/plans/active/2026-10-14-cel-1-island.md), whose units are landed:
+today it draws one Island capsule per output that grows into the Activity,
+Notifications and Tray pages, opens the launcher, serves notifications and the
+tray when no other program owns those names, and answers its command verbs.
+What Noctalia still does for the session is in
+[the handover note](docs/handover.md).
 
 ## User contract
 
@@ -54,7 +57,8 @@ not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
 `island toggle`, `island open <activity|notifications|tray>`,
 `island close`, `launcher toggle`, `notifications toggle`,
 `notifications dismiss-all` and `quit`; `launcher toggle` opens or closes the
-launcher, and the notification verbs are accepted and do nothing until CEL-1-F. Bind them to keys in
+launcher, and `notifications toggle` opens or closes the Notifications page and
+`notifications dismiss-all` dismisses every notification. Bind them to keys in
 niri with `spawn "celestina" "island" "toggle"`. An open page asks for the
 keyboard on demand (`OnDemand`), and niri hands it the keyboard when the page
 is clicked: Escape closes a page once it has been clicked, while a click

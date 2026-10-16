@@ -4,7 +4,9 @@ This queue contains no implementation work and never blocks `ROADMAP.md`.
 
 Statuses: `pending`, `passed`, `failed`, `deferred`, `obsolete`. The rows below
 are the live checks of the design's §8 for the CEL-1 release; each is run on
-the binary the landing of its related unit deploys.
+the binary the landing of its related unit deploys. CEL-1-H checked that all
+nine rows below are queued and pending; none has been run and none is closed
+by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
 
