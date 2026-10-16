@@ -319,6 +319,17 @@ impl SurfaceCtl<'_> {
         self.popups.close(id);
     }
 
+    /// Popups only: asks the compositor for `size` (logical px) at the
+    /// placement this popup was opened with. Applied right after the
+    /// current shell call returns; the new size comes with a later frame's
+    /// `size`, and until then the popup keeps the old one. A no-op on a
+    /// layer surface, and on a shell older than `xdg_wm_base` version 3.
+    pub fn resize_popup(&mut self, size: (f32, f32)) {
+        if self.surface.is_popup() {
+            self.popups.resize(self.surface.id, size);
+        }
+    }
+
     /// Stops the loop once the current shell call returns; `run` returns
     /// after the shutdown. For an input that ends the shell (a menu's quit
     /// row), where no `RuntimeCtl` is at hand.
@@ -350,6 +361,13 @@ impl RuntimeCtl<'_> {
         self.ops.surface_ctl(id)
     }
 
+    /// The surface of a live popup, so a shell can reach a popup it opened
+    /// in an earlier call (to ask for its redraw when what it shows
+    /// changed); `None` for a popup that is gone or not yet applied.
+    pub fn popup_surface(&self, id: PopupId) -> Option<SurfaceId> {
+        self.ops.popup_surface(id)
+    }
+
     /// Ids of the live layer surfaces, in creation order.
     pub fn surfaces(&self) -> Vec<SurfaceId> {
         self.ops.surfaces()
@@ -366,6 +384,7 @@ trait RuntimeOps {
     fn create_layer_surface(&mut self, spec: LayerSpec) -> Result<SurfaceId, RuntimeError>;
     fn destroy_surface(&mut self, id: SurfaceId);
     fn surface_ctl(&mut self, id: SurfaceId) -> Option<SurfaceCtl<'_>>;
+    fn popup_surface(&self, id: PopupId) -> Option<SurfaceId>;
     fn surfaces(&self) -> Vec<SurfaceId>;
     fn stop(&mut self);
 }
@@ -483,6 +502,8 @@ pub(crate) struct Core<S: Shell> {
     pub(crate) surfaces: Vec<Surface>,
     pub(crate) popups: Vec<PopupEntry>,
     pub(crate) popup_queue: PopupQueue,
+    /// The token of the last `xdg_popup.reposition` sent; each one is new.
+    pub(crate) reposition_tokens: u32,
     /// Input events produced while a shell call was running (popup
     /// closures), delivered by the next flush.
     pub(crate) pending_events: Vec<(SurfaceId, InputEvent)>,
@@ -659,6 +680,7 @@ impl<S: Shell> Core<S> {
             surfaces: Vec::new(),
             popups: Vec::new(),
             popup_queue: PopupQueue::default(),
+            reposition_tokens: 0,
             pending_events: Vec::new(),
             seat: None,
             keyboard: None,
@@ -1006,6 +1028,13 @@ impl<S: Shell> RuntimeOps for Core<S> {
         })
     }
 
+    fn popup_surface(&self, id: PopupId) -> Option<SurfaceId> {
+        self.popups
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.surface.id)
+    }
+
     fn surfaces(&self) -> Vec<SurfaceId> {
         self.surfaces.iter().map(|s| s.id).collect()
     }
@@ -1277,7 +1306,78 @@ pub(crate) enum Destroy {
     Surface(SurfaceId),
 }
 
+/// What a popup is parented on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Parent {
+    /// A layer surface: `zwlr_layer_surface_v1.get_popup`.
+    Layer,
+    /// A live popup: the child's `xdg_popup` parent is that popup's
+    /// `xdg_surface`, and its grab nests in the parent's.
+    Popup(PopupId),
+}
+
 impl Targets {
+    /// What a popup opened on `surface` is parented on; a surface that is
+    /// not live (a closed or unknown popup) is refused.
+    pub(crate) fn parent_of(&self, surface: SurfaceId) -> Result<Parent, RuntimeError> {
+        if self.layers.iter().any(|(s, _)| *s == surface) {
+            return Ok(Parent::Layer);
+        }
+        self.popups
+            .iter()
+            .find(|row| row.surface == surface)
+            .map(|row| Parent::Popup(row.id))
+            .ok_or(RuntimeError::NoParent(surface))
+    }
+
+    /// The order popup `id` closes in: every descendant first, deepest
+    /// first, each with `CloseReason::Parent`, then `id` itself with
+    /// `reason`. Empty for an unknown popup.
+    pub(crate) fn close_popup(
+        &self,
+        id: PopupId,
+        reason: CloseReason,
+    ) -> Vec<(PopupId, CloseReason)> {
+        let Some(own) = self.popups.iter().find(|row| row.id == id) else {
+            return Vec::new();
+        };
+        let mut chain = vec![(id, reason)];
+        for descendant in self.descendants(own.surface) {
+            chain.push((descendant, CloseReason::Parent));
+        }
+        chain.reverse();
+        chain
+    }
+
+    /// The popup that gets the keys while `focus` has the keyboard: the
+    /// newest popup of the chain rooted on `focus` (the one holding the
+    /// grab), which is `focus` itself when it is a leaf popup; `None` when
+    /// nothing is open on it.
+    pub(crate) fn key_target(&self, focus: SurfaceId) -> Option<PopupId> {
+        self.descendants(focus).last().copied().or_else(|| {
+            self.popups
+                .iter()
+                .find(|row| row.surface == focus)
+                .map(|row| row.id)
+        })
+    }
+
+    /// Every popup rooted on `surface`, in creation order (parents before
+    /// children).
+    fn descendants(&self, surface: SurfaceId) -> Vec<PopupId> {
+        let mut rooted = vec![surface];
+        let mut found = Vec::new();
+        // A child is created after its parent, so one pass in creation
+        // order finds every descendant.
+        for row in &self.popups {
+            if rooted.contains(&row.parent) {
+                rooted.push(row.surface);
+                found.push(row.id);
+            }
+        }
+        found
+    }
+
     pub(crate) fn layer(&mut self, surface: SurfaceId, output: OutputId) {
         self.layers.push((surface, output));
     }
@@ -1302,19 +1402,13 @@ impl Targets {
             .filter(|(_, o)| *o == output)
             .map(|(s, _)| *s)
             .collect();
-        let mut doomed: Vec<SurfaceId> = layers.clone();
-        let mut popups = Vec::new();
-        // A child is created after its parent, so one pass in creation
-        // order finds every descendant.
-        for row in &self.popups {
-            if doomed.contains(&row.parent) {
-                doomed.push(row.surface);
-                popups.push(row.id);
-            }
-        }
+        let mut popups: Vec<PopupId> = layers
+            .iter()
+            .flat_map(|layer| self.descendants(*layer))
+            .collect();
+        popups.reverse();
         popups
             .into_iter()
-            .rev()
             .map(Destroy::Popup)
             .chain(layers.into_iter().map(Destroy::Surface))
             .collect()
@@ -1366,6 +1460,101 @@ mod tests {
             vec![Destroy::Popup(PopupId(3)), Destroy::Surface(SurfaceId(3))]
         );
         assert_eq!(targets.remove_output(OutputId(9)), Vec::new());
+    }
+
+    /// A menu on the Island (popup 1), its submenu (2), a sub-submenu (3)
+    /// and an unrelated menu on another surface (4).
+    fn nested() -> Targets {
+        let mut targets = Targets::default();
+        targets.layer(SurfaceId(1), OutputId(1));
+        targets.layer(SurfaceId(2), OutputId(1));
+        targets.popup(PopupId(1), SurfaceId(10), SurfaceId(1));
+        targets.popup(PopupId(2), SurfaceId(11), SurfaceId(10));
+        targets.popup(PopupId(3), SurfaceId(12), SurfaceId(11));
+        targets.popup(PopupId(4), SurfaceId(13), SurfaceId(2));
+        targets
+    }
+
+    #[test]
+    fn nested_popups_close_children_first() {
+        let targets = nested();
+        // Dismissing the menu: the deepest child goes first, each child
+        // because its parent closes, the menu itself for the given reason.
+        assert_eq!(
+            targets.close_popup(PopupId(1), CloseReason::Dismissed),
+            vec![
+                (PopupId(3), CloseReason::Parent),
+                (PopupId(2), CloseReason::Parent),
+                (PopupId(1), CloseReason::Dismissed),
+            ]
+        );
+        // Closing the submenu leaves the menu alone.
+        assert_eq!(
+            targets.close_popup(PopupId(2), CloseReason::Shell),
+            vec![
+                (PopupId(3), CloseReason::Parent),
+                (PopupId(2), CloseReason::Shell),
+            ]
+        );
+        // A leaf closes alone; an unknown popup closes nothing.
+        assert_eq!(
+            targets.close_popup(PopupId(3), CloseReason::Dismissed),
+            vec![(PopupId(3), CloseReason::Dismissed)]
+        );
+        assert_eq!(targets.close_popup(PopupId(9), CloseReason::Parent), vec![]);
+    }
+
+    #[test]
+    fn removing_an_output_destroys_a_popup_chain_deepest_first() {
+        assert_eq!(
+            nested().remove_output(OutputId(1)),
+            vec![
+                Destroy::Popup(PopupId(4)),
+                Destroy::Popup(PopupId(3)),
+                Destroy::Popup(PopupId(2)),
+                Destroy::Popup(PopupId(1)),
+                Destroy::Surface(SurfaceId(1)),
+                Destroy::Surface(SurfaceId(2)),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_popup_parents_on_a_layer_surface_or_a_live_popup_only() {
+        let targets = nested();
+        assert_eq!(targets.parent_of(SurfaceId(1)).ok(), Some(Parent::Layer));
+        assert_eq!(
+            targets.parent_of(SurfaceId(11)).ok(),
+            Some(Parent::Popup(PopupId(2)))
+        );
+        // A closed or never-opened popup's surface: a typed refusal.
+        assert!(matches!(
+            targets.parent_of(SurfaceId(99)),
+            Err(RuntimeError::NoParent(SurfaceId(99)))
+        ));
+        let mut closed = targets;
+        closed.popups.retain(|row| row.id != PopupId(3));
+        assert!(matches!(
+            closed.parent_of(SurfaceId(12)),
+            Err(RuntimeError::NoParent(SurfaceId(12)))
+        ));
+    }
+
+    #[test]
+    fn keys_go_to_the_newest_popup_of_the_focused_chain() {
+        let targets = nested();
+        // The keyboard on the Island: the sub-submenu holds the grab.
+        assert_eq!(targets.key_target(SurfaceId(1)), Some(PopupId(3)));
+        // On the menu or the submenu: still the deepest one.
+        assert_eq!(targets.key_target(SurfaceId(10)), Some(PopupId(3)));
+        assert_eq!(targets.key_target(SurfaceId(11)), Some(PopupId(3)));
+        // On the leaf: itself. On the other surface: its own menu.
+        assert_eq!(targets.key_target(SurfaceId(12)), Some(PopupId(3)));
+        assert_eq!(targets.key_target(SurfaceId(2)), Some(PopupId(4)));
+        // A surface without popups: the keys are its own.
+        let mut bare = Targets::default();
+        bare.layer(SurfaceId(5), OutputId(1));
+        assert_eq!(bare.key_target(SurfaceId(5)), None);
     }
 
     #[test]

@@ -31,8 +31,9 @@ const NOTE_MAX_W: f32 = PAGE_SIZE.0 - 64.0;
 pub struct NameOwner {
     /// The holder of `org.freedesktop.Notifications`, described for a person.
     pub notifications: Option<String>,
-    /// The holder of `org.kde.StatusNotifierWatcher`, described for a person.
-    pub tray: Option<String>,
+    /// The holder of `org.kde.StatusNotifierWatcher`; the Tray page's copy
+    /// describes it for a person.
+    pub tray: Option<crate::tray::NameHolder>,
 }
 
 impl NameOwner {
@@ -81,10 +82,8 @@ pub struct RowAction {
     pub label: String,
 }
 
-/// One status notifier item the Tray page lists. A placeholder: its fields
-/// are filled by CEL-1-G (the tray host).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct TrayItem {}
+/// One status notifier item as the Tray page lists it.
+pub use tray::TrayRow;
 
 /// Everything a page may read while it builds its view.
 #[derive(Clone, Copy, Debug)]
@@ -104,7 +103,7 @@ pub struct PageCx<'a> {
     /// The notification history, newest first (CEL-1-F).
     pub history: &'a [HistoryRow],
     /// The tray's items (CEL-1-G).
-    pub items: &'a [TrayItem],
+    pub items: &'a [TrayRow],
 }
 
 /// One of the Island's pages.
@@ -205,7 +204,7 @@ mod tests {
             tray: None,
         };
         let history = [HistoryRow::default()];
-        let items = [TrayItem::default(), TrayItem::default()];
+        let items = [TrayRow::default(), TrayRow::default()];
         let cx = PageCx {
             theme: &celestina_paint::Theme::dark(),
             max_size: (760.0, 560.0),

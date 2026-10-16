@@ -1,0 +1,67 @@
+# CEL-1-G exact change inventory
+
+Base revision	540fb03bc5dd1b56c96eae05e567b01cd77ee61c
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/icon.rs
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/crates/celestina-wayland/src/popup.rs
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/docs/evidence/2026-10-14-tray.md
+Pathspec	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-G.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/providers/mod.rs
+Pathspec	celestina/src/providers/tray.rs
+Pathspec	celestina/src/tray/dbusmenu.rs
+Pathspec	celestina/src/tray/item.rs
+Pathspec	celestina/src/tray/menu.rs
+Pathspec	celestina/src/tray/mod.rs
+Pathspec	celestina/src/tray/model.rs
+Pathspec	celestina/src/tray/test_bus.rs
+Pathspec	celestina/src/tray/watcher.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	99db8466a47dae1e115f04162681a33cd11efbb18038c6d33fa4943220d8a3fc	celestina/Cargo.lock
+1	1	0defcfbf68a7fb0138c668979a105c5b32828164614cd867de9678ade33a9b12	celestina/Cargo.toml
+1	1	67f8c5269911f2b7e275da52b2a29ed4aa313b18d2bd9c3125ee190f69f66a08	celestina/ROADMAP.md
+4	0	3aa4771a30fa3368e69ee4b99d32ef5e1d3718ac58460b8999d35e2f8249361a	celestina/STATUS.md
+30	3	90dc046597e93cf6a46b9adec476b8b3a39401d4e0e66a7adf39591e9104bbdd	celestina/VALIDATION.md
+4	2	0df7ba1d3a6be9d04e38a5dd20a870f22f725c0b8c31aea2444558195f6e44dd	celestina/crates/celestina-paint/src/icon.rs
+9	0	be6b4890af91a69d9180817db176c703ea4c71b1a204f88b4360260c7a4f97ce	celestina/crates/celestina-paint/src/painter.rs
+383	68	ab2be2fa4ac469f3e3d95d846c4b27047e0a9290a9e4b6c2b1e9be05fa9d8933	celestina/crates/celestina-wayland/src/popup.rs
+200	11	7a50bab242de13032efb86b09dfb8f854685659044756d695ca80e7ca47c5448	celestina/crates/celestina-wayland/src/runtime.rs
+333	0	124aaa1a6cdeeab171e8cc185c9d5d6040e5c6a2f021f3599ba8c67d7f0e372f	celestina/docs/evidence/2026-10-14-tray.md
+67	0	self	celestina/docs/inventories/2026-10-14-cel-1-island/CEL-1-G.numstat.tsv
+1	1	caecb1e03ce39ae7a52b335ed635513d479db101e1b6c1eb3e8a0b1950788352	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+242	11	8e3bfb555e3b9d5fe197e6d5512d2680d41e0f588488bdf195d0225376154485	celestina/src/app.rs
+20	4	eed55dd9ca55cae5f3980b9614fca6247c8342df380729e2b7dba4a9fd03e073	celestina/src/copy.rs
+471	18	c335e712445f0b056c33f10d55131fb6f8424e2311e5ff45429c246baf25cc06	celestina/src/island/mod.rs
+7	8	ff163a15c23c52b682bee8af48eba652d43c6cafdca426b799f28487cdf947bf	celestina/src/island/pages/mod.rs
+599	20	519cf274fa63906fa00ce83873333b1551a5777e569573be6ec55ee7fd6a5624	celestina/src/island/pages/tray.rs
+1	0	d30322f7a2b90fca4f457ea14d2911e3bdd2a2ccf33e861bb9f383f1fd943fa4	celestina/src/lib.rs
+12	1	f13b7aa1460106596c1246fca4ea19539bf5f36c46c7c2d9f0c75d46bd98a494	celestina/src/main.rs
+7	4	a04575b2c9782e7140abb15e9939b3aa719132933041f207ba313bdce925a60d	celestina/src/message.rs
+1	0	c8c84e5f6668096882fa175b9e53ace91a60a342c1579a8d442d77b15614f786	celestina/src/providers/mod.rs
+1627	0	e714472ed401d1b0c01eefea1dcd06ea60ef054efd9b29b508f0fb2d1a26416b	celestina/src/providers/tray.rs
+862	0	bc522520454bef9a0aa91c9a871ce33bb227ec3e6c64b336df056671c77b3552	celestina/src/tray/dbusmenu.rs
+742	0	76e4c92d6252e03b717f82d2109fb8336a184d27678f2f735d346a4cf2ee7b79	celestina/src/tray/item.rs
+1234	0	a113e356f441dd84c4f4ebff2f485604b6d35042dce6102d44dd4d2be86304df	celestina/src/tray/menu.rs
+19	0	07a20b8f3206c47090f5fc9081dc910f3c6ee99335e635366cd501fcbb92bcf8	celestina/src/tray/mod.rs
+641	0	ee15936d90bf3464558f74595541ed7359c7d4db850bec14421946be3c52cf79	celestina/src/tray/model.rs
+98	0	ef401cd4873a830ec8d2ab4d8bff0963ac10c1e2e4e0e8c4c0f328829743e47c	celestina/src/tray/test_bus.rs
+472	0	d26e79ad6cb2ff2c9eba4a860ed876908d47024b92eed9f2a28712db04c978bf	celestina/src/tray/watcher.rs
+1	0	bd7259f383a8e173996186f99c4e18def3f0ca7c503d9095fdb63438ccf740f9	docs/version-history.tsv

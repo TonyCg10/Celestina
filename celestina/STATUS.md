@@ -23,6 +23,10 @@
   their actions and hover pause, the history page, and do-not-disturb; it
   awaits landing after CEL-1-D
   ([evidence](docs/evidence/2026-10-16-notifications.md)).
+  CEL-1-G, the tray, is also implemented on its unit branch: our own
+  StatusNotifierWatcher, host, item and DBusMenu clients over `zbus`, the Tray
+  page and nested menu popups, and it awaits landing
+  ([evidence](docs/evidence/2026-10-14-tray.md)).
 - **Focus:** landing CEL-1-D after CEL-1-C, then CEL-1-E, then CEL-1-F and CEL-1-G of
   the [CEL-1 plan](docs/plans/active/2026-10-14-cel-1-island.md).
 - **Author validation:** VAL-CEL-GLASS, VAL-CEL-REST and VAL-CEL-SCALE in

@@ -4,10 +4,11 @@
 //! the loop's `celestina_wayland::Sender<Message>`; the loop is the only place
 //! that touches a surface (design §5.1). A variant arrives with the piece that
 //! owns its type: the command verbs came with the command surface
-//! (`command.rs`); notifications come with CEL-1-F, the tray with CEL-1-G and
-//! the desktop index with CEL-1-E. The launcher's close and a banner's request
-//! for the Notifications page are the messages the app sends itself (see
-//! [`Message::LauncherClosed`] and [`Message::OpenNotificationsPage`]).
+//! (`command.rs`) and the tray's news with the tray host (CEL-1-G);
+//! notifications come with CEL-1-F and the desktop index with CEL-1-E. The
+//! launcher's close and a banner's request for the Notifications page are the
+//! messages the app sends itself (see [`Message::LauncherClosed`] and
+//! [`Message::OpenNotificationsPage`]).
 
 use celestina_core::desktop_entry::DesktopEntry;
 use celestina_wayland::{OutputId, SurfaceId};
@@ -48,4 +49,6 @@ pub enum Message {
     /// A banner on this output was clicked without a default action: its
     /// Island opens the Notifications page. Sent by the loop to itself.
     OpenNotificationsPage(OutputId),
+    /// The tray host's news: the watcher's owner, the items, an item's menu.
+    Tray(crate::tray::TrayEvent),
 }

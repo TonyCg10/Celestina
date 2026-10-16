@@ -114,6 +114,7 @@ fn shell(cfg: Config) -> ExitCode {
     let shutdown = Arc::new(AtomicBool::new(false));
     let niri = Rc::new(OnceCell::new());
     let notifications = Rc::new(OnceCell::new());
+    let tray = Rc::new(OnceCell::new());
     let fatal = Rc::new(OnceCell::new());
     let own_sender = Rc::new(OnceCell::new());
     let settings = ShellSettings::load();
@@ -127,7 +128,8 @@ fn shell(cfg: Config) -> ExitCode {
         Rc::clone(&fatal),
         cfg.metrics,
     )
-    .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender));
+    .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender))
+    .with_tray(Rc::clone(&tray));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -176,6 +178,15 @@ fn shell(cfg: Config) -> ExitCode {
             Err(err) => {
                 tracing::warn!(%err, "no notification server; notifications are not served")
             }
+        }
+        // The host claims the watcher name only if it is free: with another
+        // program holding it, the Tray page says so and nothing else runs.
+        match providers::tray::spawn(sender.clone(), &shutdown) {
+            Ok((provider, worker)) => {
+                let _ = tray.set(provider);
+                workers.push(worker);
+            }
+            Err(err) => tracing::warn!(%err, "no tray host; the Tray page stays empty"),
         }
         follower = Some(providers::settings::follow_appearance(sender));
     });

@@ -78,7 +78,17 @@ the binary the landing of its related unit deploys.
   reopen it and click outside it, on the page and on another window; reopen it
   and choose each row in turn (reopen the page, do-not-disturb, quit); with another program holding the notifications name (Noctalia
   running), open the menu again. From CEL-1-G: open a tray item's menu with
-  its submenu, then press Escape, click outside and choose an item
+  its submenu (a submenu opens on a click, Enter or Right, not on hover),
+  then press Escape, click outside and choose an item; in a submenu press Left
+  and Escape; right-click an item, and scroll over an item's icon; on the
+  Tray page with the row focused, press Enter (the item activates, as on a
+  click) and the Menu key or Shift+F10 (its menu opens); with a submenu open,
+  make the item change its menu (toggle a check entry from the application)
+  and check that the open levels follow; make it add entries to the open
+  level (an application whose menu grows with its state) and check that the
+  popup grows with them and the new rows take the pointer and the keyboard;
+  open a submenu an application fills
+  only on demand (a GTK indicator with a lazy submenu, if one is at hand)
 - **Pass condition:** the overflow menu hangs directly under the More
   button, takes the grab, closes on Escape (the page stays open), on a click
   outside (the page closes with it when the click lands outside the whole
@@ -88,6 +98,12 @@ the binary the landing of its related unit deploys.
   another program holds the notifications name the do-not-disturb row is
   dimmed, says that another program manages it, and cannot be chosen by pointer
   or keyboard. Tray menus (CEL-1-G): nested submenus close with their parent
+  on Escape, on a click outside and on a choice, Left closes only the
+  submenu, a grab taken by a submenu opened from a click is accepted by niri,
+  a menu taller than the screen is cut (it has no scrolling yet) and a
+  checked entry shows its mark; Enter on a row activates and the Menu key
+  opens the menu; a republished menu updates the open levels without
+  closing them; a lazily filled submenu opens once its entries arrive
 - **Result:** not run
 - **Evidence:** none
 
@@ -167,9 +183,20 @@ the binary the landing of its related unit deploys.
   Notifications and Tray pages; beside Noctalia the Notifications page shows
   the owner line with Noctalia's unique name and its process, and its switch
   is disabled. Stop Noctalia, restart the shell, send a notification and open
-  the tray
+  the tray. Tray (CEL-1-G): with Noctalia stopped and
+  status icon, and one that publishes only a pixmap), check that its icon is
+  listed, left-click it (Activate), right-click it (its menu), scroll over it
+  on both axes (an item that reacts to a horizontal scroll, if one is at
+  hand: the shell sends it Qt's `angleDelta` sign, positive for a tilt to the
+  left, which is unverified against a real item), quit the program and see
+  the row leave; also start a libappindicator program whose icon name is
+  private to it (Steam, Dropbox) and check that its pixmap is drawn; then
+  start Noctalia again first and check that the shell claims nothing and the
+  Tray page names the owner in Spanish, with its process name
 - **Pass condition:** beside Noctalia the pages say who owns each name and
-  nothing is claimed; without it the shell serves notifications and the tray
+  nothing is claimed; without it the shell serves notifications and the tray;
+  tray items appear, activate, open their menus and disappear with their
+  program
 - **Result:** not run
 - **Evidence:** none
 

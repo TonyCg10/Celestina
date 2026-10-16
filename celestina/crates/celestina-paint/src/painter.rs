@@ -486,6 +486,15 @@ impl Painter {
         }
     }
 
+    /// Whether the icon theme has an icon `name` near `size` device px, so
+    /// a caller can choose a fallback before a frame draws nothing. A
+    /// filesystem lookup through the theme's index; call it when a list
+    /// changes, not per frame.
+    #[must_use]
+    pub fn has_theme_icon(&self, name: &str, size: u32) -> bool {
+        theme_path(self.icon_theme.as_deref(), name, size).is_some()
+    }
+
     /// Uploads an ARGB32 pixmap (network byte order, as StatusNotifierItem
     /// and notification images carry it).
     pub fn upload_pixmap(

@@ -16,11 +16,11 @@ use std::{
 };
 
 use celestina_core::desktop_entry::DesktopEntry;
-use celestina_paint::{Painter, TextSystem, Theme};
+use celestina_paint::{Painter, Rect, TextSystem, Theme};
 use celestina_settings::Appearance;
 use celestina_wayland::{
     Anchoring, FrameCx, InputEvent, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
-    RuntimeCtl, Sender, Shell, SurfaceCtl, SurfaceId,
+    PopupId, RuntimeCtl, Sender, Shell, SurfaceCtl, SurfaceId,
 };
 
 use crate::notifications::banners::{self, BannerAction, BannerStack};
@@ -29,8 +29,8 @@ use crate::{
     error_chain,
     island::{
         menu::{self, ChoiceSlot, Menu, MenuChoice, MenuState, SharedPainter},
-        pages::NameOwner,
-        Island, IslandAction,
+        pages::{tray::TrayList, NameOwner},
+        Island, IslandAction, Shared,
     },
     launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
     message::Message,
@@ -39,6 +39,11 @@ use crate::{
         niri::{NiriModel, NiriProvider, NiriRequest},
         notifications::{NotificationsCommand, NotificationsProvider},
         settings::ShellSettings,
+        tray::TrayProvider,
+    },
+    tray::{
+        menu::{AskSink, Chain, ChoiceSlot as TrayChoiceSlot, MenuContext, MenuModel, TrayMenu},
+        ItemId, MenuTree, TrayCommand, TrayEvent,
     },
 };
 
@@ -82,6 +87,13 @@ impl Islands {
             .collect();
         self.slots.retain(|s| s.output != output);
         gone
+    }
+
+    /// Gives the tray icons of `output`'s Islands back to `painter`.
+    pub fn release_icons(&mut self, output: OutputId, painter: &mut Painter) {
+        for slot in self.slots.iter_mut().filter(|s| s.output == output) {
+            slot.island.release_icons(painter);
+        }
     }
 
     pub fn get_mut(&mut self, surface: SurfaceId) -> Option<&mut Island> {
@@ -214,6 +226,27 @@ fn fresh_choice(slot: &ChoiceSlot) -> ChoiceSlot {
     Rc::clone(slot)
 }
 
+/// A tray menu asked for and not yet delivered: where to hang it once the
+/// host answers.
+#[derive(Debug)]
+struct PendingMenu {
+    surface: SurfaceId,
+    item: ItemId,
+    row: Rect,
+    keyboard: bool,
+}
+
+/// The tray menu chain that is open: its Island, its item, the model its
+/// levels show and its popups, so a republished menu reaches the levels
+/// and the host hears when the chain is gone.
+#[derive(Debug)]
+struct OpenTrayMenu {
+    surface: SurfaceId,
+    item: ItemId,
+    root: PopupId,
+    cx: MenuContext,
+}
+
 /// The product's `Shell`.
 pub struct App {
     islands: Islands,
@@ -254,6 +287,17 @@ pub struct App {
     fatal: Rc<OnceCell<String>>,
     refusal_logged: bool,
     metrics: bool,
+    /// The tray host's command queue, set once the host runs.
+    tray: Rc<OnceCell<TrayProvider>>,
+    /// The tray's items, shared by every Island.
+    tray_items: TrayList,
+    /// Where the open tray menu leaves the entry chosen in it.
+    tray_choice: TrayChoiceSlot,
+    /// The menu the last right click asked for.
+    pending_menu: Option<PendingMenu>,
+    /// The tray menu chain open right now.
+    open_tray_menu: Option<OpenTrayMenu>,
+    tray_refusal_logged: bool,
 }
 
 impl std::fmt::Debug for App {
@@ -302,6 +346,12 @@ impl App {
             fatal,
             refusal_logged: false,
             metrics,
+            tray: Rc::new(OnceCell::new()),
+            tray_items: TrayList::default(),
+            tray_choice: TrayChoiceSlot::default(),
+            pending_menu: None,
+            open_tray_menu: None,
+            tray_refusal_logged: false,
         }
     }
 
@@ -315,6 +365,13 @@ impl App {
     ) -> App {
         self.recent = recent;
         self.sender = sender;
+        self
+    }
+
+    /// Takes the slot the tray host's command queue is put in once it runs.
+    #[must_use]
+    pub fn with_tray(mut self, tray: Rc<OnceCell<TrayProvider>>) -> App {
+        self.tray = tray;
         self
     }
 
@@ -691,6 +748,20 @@ impl App {
                         ctl.request_redraw();
                     }
                 }
+                IslandAction::Tray(command) => self.tray_command(command),
+                IslandAction::OpenTrayMenu {
+                    item,
+                    row,
+                    keyboard,
+                } => {
+                    self.pending_menu = Some(PendingMenu {
+                        surface,
+                        item: item.clone(),
+                        row,
+                        keyboard,
+                    });
+                    self.tray_command(TrayCommand::OpenMenu(item));
+                }
                 IslandAction::OpenMenu { more, keyboard } => {
                     let Ok(painter) = shared.try_borrow() else {
                         tracing::warn!("the painter is in use; the menu is not opened");
@@ -744,6 +815,127 @@ impl App {
             && self.islands.iter().any(|s| s.island.shows_notifications())
         {
             self.notifications.send(NotificationsCommand::MarkRead);
+        }
+    }
+
+    /// Queues `command` for the tray host; a refusal (queue full, host
+    /// stopped because another program holds the watcher) is logged once.
+    fn tray_command(&mut self, command: TrayCommand) {
+        let Some(tray) = self.tray.get() else {
+            tracing::debug!(?command, "no tray host: the command is dropped");
+            return;
+        };
+        if let Err(refused) = tray.command(command) {
+            if !self.tray_refusal_logged {
+                self.tray_refusal_logged = true;
+                tracing::warn!(
+                    ?refused,
+                    "the tray host refused a command (its queue is full or it stopped); later refusals are not logged"
+                );
+            }
+        }
+    }
+
+    /// The tray host's news: the owner of the watcher name, the items, or a
+    /// menu the last right click asked for.
+    fn tray_event(&mut self, event: TrayEvent, ctl: &mut RuntimeCtl<'_>) {
+        match event {
+            TrayEvent::Owner(tray) => {
+                let owners = NameOwner {
+                    notifications: self.owners.notifications.clone(),
+                    tray,
+                };
+                if self.set_owners(owners) {
+                    self.redraw_all(ctl);
+                }
+            }
+            TrayEvent::Items(items) => {
+                if self.tray_items.replace(items) {
+                    self.redraw_all(ctl);
+                }
+            }
+            TrayEvent::Menu(item, menu) => self.open_tray_menu(&item, menu, ctl),
+        }
+    }
+
+    /// A menu of `item` from the host: the open chain of that item shows
+    /// it (a republished menu, or the submenu an `AboutToShow` filled);
+    /// else it hangs below the row that asked for it, if one did and its
+    /// Island still shows the Tray page.
+    fn open_tray_menu(&mut self, item: &ItemId, menu: MenuTree, ctl: &mut RuntimeCtl<'_>) {
+        if let Some(open) = self.open_tray_menu.as_ref().filter(|o| o.item == *item) {
+            open.cx.shared.borrow_mut().replace(menu);
+            let popups: Vec<PopupId> = std::iter::once(open.root)
+                .chain(open.cx.chain.borrow().iter().copied())
+                .collect();
+            for popup in popups {
+                if let Some(mut surface) = ctl.popup_surface(popup).and_then(|s| ctl.surface(s)) {
+                    surface.request_redraw();
+                }
+            }
+            return;
+        }
+        let Some(pending) = self.pending_menu.take_if(|p| p.item == *item) else {
+            tracing::debug!("a menu nobody asked for is dropped");
+            return;
+        };
+        if menu.entries.is_empty() {
+            tracing::debug!("the item's menu is empty; nothing opens");
+            return;
+        }
+        let (Some(shared), Some(mut surface)) =
+            (self.painter.clone(), ctl.surface(pending.surface))
+        else {
+            return;
+        };
+        let Ok(painter) = shared.try_borrow() else {
+            tracing::warn!("the painter is in use; the tray menu is not opened");
+            return;
+        };
+        let theme = painter.theme().clone();
+        drop(painter);
+        *self.tray_choice.borrow_mut() = None;
+        let ask: AskSink = {
+            let tray = Rc::clone(&self.tray);
+            Rc::new(move |command| {
+                if let Some(refused) = tray.get().and_then(|t| t.command(command).err()) {
+                    tracing::debug!(?refused, "the tray host refused a menu's request");
+                }
+            })
+        };
+        let cx = MenuContext {
+            painter: shared,
+            item: pending.item.clone(),
+            shared: Rc::new(RefCell::new(MenuModel {
+                tree: menu,
+                generation: 1,
+            })),
+            choice: Rc::clone(&self.tray_choice),
+            ask,
+            chain: Chain::default(),
+            reduced: self.appearance.reduced_motion,
+        };
+        let shell = TrayMenu::new(&cx, &theme, Vec::new(), pending.keyboard);
+        let size = shell.size();
+        let Some(island) = self.islands.get_mut(pending.surface) else {
+            return;
+        };
+        if let Some(root) = island.open_tray_menu(pending.row, size, Box::new(shell), &mut surface)
+        {
+            self.open_tray_menu = Some(OpenTrayMenu {
+                surface: pending.surface,
+                item: pending.item,
+                root,
+                cx,
+            });
+        }
+    }
+
+    /// The open chain is gone (its root popup closed, or its Island's
+    /// output went away): the host stops following the item's menu.
+    fn tray_menu_gone(&mut self) {
+        if let Some(open) = self.open_tray_menu.take() {
+            self.tray_command(TrayCommand::CloseMenu(open.item));
         }
     }
 
@@ -817,9 +1009,21 @@ impl Shell for App {
                 if let Some(banners) = self.banners.take_if(|b| b.output == output) {
                     self.banners_gone(banners);
                 }
+                if let Some(shared) = self.painter.clone() {
+                    if let Ok(mut painter) = shared.try_borrow_mut() {
+                        self.islands.release_icons(output, &mut painter);
+                    }
+                }
                 let gone = self.islands.remove_output(output);
                 if self.keyboard.is_some_and(|k| gone.contains(&k)) {
                     self.keyboard = None;
+                }
+                if self
+                    .open_tray_menu
+                    .as_ref()
+                    .is_some_and(|o| gone.contains(&o.surface))
+                {
+                    self.tray_menu_gone();
                 }
                 tracing::info!(
                     output = output.0,
@@ -889,13 +1093,17 @@ impl Shell for App {
             cx.ctl.request_redraw();
             return;
         };
+        let state = Shared {
+            owners: &self.owners,
+            do_not_disturb: self.settings.current().do_not_disturb,
+            history: self.notifications.rows(),
+            tray: &self.tray_items,
+        };
         island.frame(
             cx,
             &mut painter,
             self.model.as_ref(),
-            &self.owners,
-            self.settings.current().do_not_disturb,
-            self.notifications.rows(),
+            &state,
             self.appearance.reduced_motion,
         );
     }
@@ -943,6 +1151,7 @@ impl Shell for App {
                 return;
             }
         };
+        let tray_menu_open = island.tray_menu_open();
         self.act(actions, surface, &shared, ctl);
         self.mark_read_if_viewed();
         // The menu is gone: a row chosen in it is made now. The Island has
@@ -950,6 +1159,20 @@ impl Shell for App {
         if closed {
             if let Some(choice) = self.menu_choice.take() {
                 self.menu_chose(choice, surface, ctl);
+            }
+            // A tray menu's chosen entry goes to its item once the chain
+            // is gone, and the host hears that the chain closed.
+            let chosen = self.tray_choice.borrow_mut().take();
+            if let Some((item, entry)) = chosen {
+                self.tray_command(TrayCommand::MenuEvent(item, entry));
+            }
+            if !tray_menu_open
+                && self
+                    .open_tray_menu
+                    .as_ref()
+                    .is_some_and(|o| o.surface == surface)
+            {
+                self.tray_menu_gone();
             }
         }
     }
@@ -1020,6 +1243,7 @@ impl Shell for App {
                     self.notifications_changed(ctl);
                 }
             }
+            Message::Tray(event) => self.tray_event(event, ctl),
         }
     }
 }
@@ -1116,26 +1340,33 @@ mod tests {
         // The tray's holder does not concern do-not-disturb.
         let tray = NameOwner {
             notifications: None,
-            tray: Some(":1.7".into()),
+            tray: Some(crate::tray::NameHolder {
+                unique: ":1.7".into(),
+                comm: None,
+            }),
         };
         assert!(!menu_state(&settings, &tray).dnd_held);
     }
 
     #[test]
     fn the_notifications_holder_replaces_its_name_and_keeps_the_trays() {
+        let tray = crate::tray::NameHolder {
+            unique: ":1.7".into(),
+            comm: None,
+        };
         let current = NameOwner {
             notifications: None,
-            tray: Some(":1.7".into()),
+            tray: Some(tray.clone()),
         };
         let held = with_notifications_owner(&current, Some(":1.42 (noctalia)"));
         assert_eq!(held.notifications.as_deref(), Some(":1.42 (noctalia)"));
-        assert_eq!(held.tray.as_deref(), Some(":1.7"));
+        assert_eq!(held.tray.as_ref(), Some(&tray));
         let mut owners = current.clone();
         assert!(owners.replace(held.clone()));
         assert!(!owners.replace(held));
         let freed = with_notifications_owner(&owners, None);
         assert_eq!(freed.notifications, None);
-        assert_eq!(freed.tray.as_deref(), Some(":1.7"));
+        assert_eq!(freed.tray, Some(tray));
     }
 
     #[test]

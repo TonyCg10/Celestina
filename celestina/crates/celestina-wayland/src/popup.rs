@@ -18,7 +18,7 @@ use smithay_client_toolkit::{
 use wayland_client::{
     globals::{BindError, GlobalList},
     protocol::wl_surface::WlSurface,
-    Dispatch, QueueHandle,
+    Dispatch, Proxy, QueueHandle,
 };
 use wayland_protocols::xdg::shell::client::{
     xdg_positioner::{Anchor as XdgAnchor, ConstraintAdjustment, Gravity as XdgGravity},
@@ -28,7 +28,7 @@ use wayland_protocols::xdg::shell::client::{
 use crate::{
     geometry::{PixelRect, Rect},
     input::InputEvent,
-    runtime::{Core, PopupShell, Runtime, RuntimeError, Shell, SurfaceId, Target},
+    runtime::{Core, Parent, PopupShell, Runtime, RuntimeError, Shell, SurfaceId, Target},
     surface::{Role, Surface},
 };
 
@@ -48,7 +48,9 @@ pub enum PopupAction {
 pub enum CloseReason {
     /// The popup's shell returned `PopupAction::Close`.
     Shell,
-    /// The parent shell called `close_popup`.
+    /// The parent shell called `close_popup`, or the parent popup closed
+    /// (a nested popup closes before its parent, for whatever reason the
+    /// parent closes).
     Parent,
     /// The compositor sent `popup_done`.
     Dismissed,
@@ -107,6 +109,52 @@ pub enum AnchorEdge {
 }
 
 impl AnchorEdge {
+    /// The edge mirrored left-right (what `FlipX` does to it).
+    #[must_use]
+    pub fn flip_x(self) -> Self {
+        match self {
+            AnchorEdge::Left => AnchorEdge::Right,
+            AnchorEdge::Right => AnchorEdge::Left,
+            AnchorEdge::TopLeft => AnchorEdge::TopRight,
+            AnchorEdge::TopRight => AnchorEdge::TopLeft,
+            AnchorEdge::BottomLeft => AnchorEdge::BottomRight,
+            AnchorEdge::BottomRight => AnchorEdge::BottomLeft,
+            same @ (AnchorEdge::None | AnchorEdge::Top | AnchorEdge::Bottom) => same,
+        }
+    }
+
+    /// The edge mirrored top-bottom (what `FlipY` does to it).
+    #[must_use]
+    pub fn flip_y(self) -> Self {
+        match self {
+            AnchorEdge::Top => AnchorEdge::Bottom,
+            AnchorEdge::Bottom => AnchorEdge::Top,
+            AnchorEdge::TopLeft => AnchorEdge::BottomLeft,
+            AnchorEdge::BottomLeft => AnchorEdge::TopLeft,
+            AnchorEdge::TopRight => AnchorEdge::BottomRight,
+            AnchorEdge::BottomRight => AnchorEdge::TopRight,
+            same @ (AnchorEdge::None | AnchorEdge::Left | AnchorEdge::Right) => same,
+        }
+    }
+
+    /// The anchor point on `rect`: a corner, the middle of an edge, or
+    /// the centre for `None`.
+    fn point(self, rect: PixelRect) -> (i32, i32) {
+        let x = match self {
+            AnchorEdge::Left | AnchorEdge::TopLeft | AnchorEdge::BottomLeft => rect.x,
+            AnchorEdge::Right | AnchorEdge::TopRight | AnchorEdge::BottomRight => rect.x + rect.w,
+            AnchorEdge::None | AnchorEdge::Top | AnchorEdge::Bottom => rect.x + rect.w / 2,
+        };
+        let y = match self {
+            AnchorEdge::Top | AnchorEdge::TopLeft | AnchorEdge::TopRight => rect.y,
+            AnchorEdge::Bottom | AnchorEdge::BottomLeft | AnchorEdge::BottomRight => {
+                rect.y + rect.h
+            }
+            AnchorEdge::None | AnchorEdge::Left | AnchorEdge::Right => rect.y + rect.h / 2,
+        };
+        (x, y)
+    }
+
     pub fn to_xdg(self) -> XdgAnchor {
         match self {
             AnchorEdge::None => XdgAnchor::None,
@@ -137,6 +185,50 @@ pub enum Gravity {
 }
 
 impl Gravity {
+    /// The direction mirrored left-right (what `FlipX` does to it).
+    #[must_use]
+    pub fn flip_x(self) -> Self {
+        match self {
+            Gravity::Left => Gravity::Right,
+            Gravity::Right => Gravity::Left,
+            Gravity::TopLeft => Gravity::TopRight,
+            Gravity::TopRight => Gravity::TopLeft,
+            Gravity::BottomLeft => Gravity::BottomRight,
+            Gravity::BottomRight => Gravity::BottomLeft,
+            same @ (Gravity::None | Gravity::Top | Gravity::Bottom) => same,
+        }
+    }
+
+    /// The direction mirrored top-bottom (what `FlipY` does to it).
+    #[must_use]
+    pub fn flip_y(self) -> Self {
+        match self {
+            Gravity::Top => Gravity::Bottom,
+            Gravity::Bottom => Gravity::Top,
+            Gravity::TopLeft => Gravity::BottomLeft,
+            Gravity::BottomLeft => Gravity::TopLeft,
+            Gravity::TopRight => Gravity::BottomRight,
+            Gravity::BottomRight => Gravity::TopRight,
+            same @ (Gravity::None | Gravity::Left | Gravity::Right) => same,
+        }
+    }
+
+    /// The top-left of a popup of `size` growing from `point` in this
+    /// direction; a `None` component centres that axis on the point.
+    fn origin(self, point: (i32, i32), size: (i32, i32)) -> (i32, i32) {
+        let x = match self {
+            Gravity::Left | Gravity::TopLeft | Gravity::BottomLeft => point.0 - size.0,
+            Gravity::Right | Gravity::TopRight | Gravity::BottomRight => point.0,
+            Gravity::None | Gravity::Top | Gravity::Bottom => point.0 - size.0 / 2,
+        };
+        let y = match self {
+            Gravity::Top | Gravity::TopLeft | Gravity::TopRight => point.1 - size.1,
+            Gravity::Bottom | Gravity::BottomLeft | Gravity::BottomRight => point.1,
+            Gravity::None | Gravity::Left | Gravity::Right => point.1 - size.1 / 2,
+        };
+        (x, y)
+    }
+
     pub fn to_xdg(self) -> XdgGravity {
         match self {
             Gravity::None => XdgGravity::None,
@@ -164,12 +256,102 @@ pub struct Placement {
     pub offset: (i32, i32),
 }
 
+impl Placement {
+    /// The placement `FlipX` turns this one into: anchor edge and gravity
+    /// mirrored left-right, the offset kept (smithay's positioner, which
+    /// niri runs, keeps it).
+    #[must_use]
+    pub fn flip_x(self) -> Self {
+        Self {
+            anchor_edge: self.anchor_edge.flip_x(),
+            gravity: self.gravity.flip_x(),
+            ..self
+        }
+    }
+
+    /// The placement `FlipY` turns this one into.
+    #[must_use]
+    pub fn flip_y(self) -> Self {
+        Self {
+            anchor_edge: self.anchor_edge.flip_y(),
+            gravity: self.gravity.flip_y(),
+            ..self
+        }
+    }
+}
+
 /// Every popup may be slid and flipped on both axes to stay on the output.
 pub fn constraint_adjustment() -> ConstraintAdjustment {
     ConstraintAdjustment::SlideX
         | ConstraintAdjustment::SlideY
         | ConstraintAdjustment::FlipX
         | ConstraintAdjustment::FlipY
+}
+
+/// The rect a compositor gives the popup when nothing constrains it, in the
+/// parent surface's logical px: the anchor point of `geometry.anchor` for
+/// the placement's edge, the popup grown from it by the gravity, plus the
+/// offset (`xdg_positioner` semantics).
+pub fn unconstrained(placement: &Placement, geometry: PositionerGeometry) -> PixelRect {
+    let point = placement.anchor_edge.point(geometry.anchor);
+    let (x, y) = placement.gravity.origin(point, geometry.size);
+    PixelRect {
+        x: x + placement.offset.0,
+        y: y + placement.offset.1,
+        w: geometry.size.0,
+        h: geometry.size.1,
+    }
+}
+
+/// Where the popup lands inside `bounds` (the output, in the parent
+/// surface's logical px) under [`constraint_adjustment`]: per axis, the
+/// unconstrained rect if it fits, else the flipped placement if that fits,
+/// else the unconstrained rect slid into the bounds (aligned with the
+/// near edge when it is larger than them). This models the protocol's
+/// order (flip, then slide) so a product can predict a placement and tests
+/// can check one; the compositor's `configure` is the authority.
+pub fn resolve(
+    placement: &Placement,
+    geometry: PositionerGeometry,
+    bounds: PixelRect,
+) -> PixelRect {
+    let plain = unconstrained(placement, geometry);
+    let fits_x = |r: PixelRect| r.x >= bounds.x && r.x + r.w <= bounds.x + bounds.w;
+    let fits_y = |r: PixelRect| r.y >= bounds.y && r.y + r.h <= bounds.y + bounds.h;
+    let x = if fits_x(plain) {
+        plain.x
+    } else {
+        let flipped = unconstrained(&placement.flip_x(), geometry);
+        if fits_x(flipped) {
+            flipped.x
+        } else {
+            slide(plain.x, plain.w, bounds.x, bounds.w)
+        }
+    };
+    let y = if fits_y(plain) {
+        plain.y
+    } else {
+        let flipped = unconstrained(&placement.flip_y(), geometry);
+        if fits_y(flipped) {
+            flipped.y
+        } else {
+            slide(plain.y, plain.h, bounds.y, bounds.h)
+        }
+    };
+    PixelRect { x, y, ..plain }
+}
+
+/// Slides a span of `len` at `pos` into `[start, start + room)` by the
+/// shortest move; one that cannot fit keeps its start edge inside.
+fn slide(pos: i32, len: i32, start: i32, room: i32) -> i32 {
+    let far = start + room - len;
+    if pos + len > start + room {
+        far.max(start)
+    } else if pos < start {
+        start
+    } else {
+        pos
+    }
 }
 
 /// The positioner for `placement` at `geometry`.
@@ -266,6 +448,11 @@ enum PopupOp {
         shell: Box<dyn PopupShell>,
     },
     Close(PopupId),
+    /// The popup whose surface is `surface` wants `size` at its placement.
+    Resize {
+        surface: SurfaceId,
+        size: (f32, f32),
+    },
 }
 
 impl PopupQueue {
@@ -291,16 +478,22 @@ impl PopupQueue {
     pub fn close(&mut self, id: PopupId) {
         self.ops.push_back(PopupOp::Close(id));
     }
+
+    pub fn resize(&mut self, surface: SurfaceId, size: (f32, f32)) {
+        self.ops.push_back(PopupOp::Resize { surface, size });
+    }
 }
 
-/// A live popup: its surface (role `Popup`), its shell and the surface it
-/// belongs to (a layer surface, or another popup's surface when nested).
+/// A live popup: its surface (role `Popup`), its shell, the surface it
+/// belongs to (a layer surface, or another popup's surface when nested)
+/// and the placement it was opened at, which a resize repositions with.
 pub struct PopupEntry {
     pub id: PopupId,
     pub parent: SurfaceId,
     pub surface: Surface,
     pub shell: Box<dyn PopupShell>,
     pub frames: u64,
+    pub placement: Placement,
 }
 
 /// Integer positioner geometry: the anchor rect in parent-surface pixels
@@ -340,22 +533,13 @@ impl<S: Shell> Core<S> {
             .position(|p| p.surface.wl_surface() == wl_surface)
     }
 
-    /// The popup that gets a key while `focus` has the keyboard: the focused
-    /// popup itself, else the newest popup rooted on the focused surface
-    /// (the one holding the grab).
+    /// The popup that gets a key while `focus` has the keyboard: the newest
+    /// popup of the chain rooted on the focused surface (the one holding
+    /// the grab), whether the focus sits on the layer surface or on a popup
+    /// of the chain.
     pub(crate) fn popup_for_focus(&self, focus: SurfaceId) -> Option<usize> {
-        if let Some(idx) = self.popups.iter().position(|p| p.surface.id == focus) {
-            return Some(idx);
-        }
-        let mut rooted: Vec<SurfaceId> = vec![focus];
-        let mut newest = None;
-        for (idx, popup) in self.popups.iter().enumerate() {
-            if rooted.contains(&popup.parent) {
-                rooted.push(popup.surface.id);
-                newest = Some(idx);
-            }
-        }
-        newest
+        let id = self.targets().key_target(focus)?;
+        self.popups.iter().position(|p| p.id == id)
     }
 
     pub(crate) fn has_popup(&self, parent: SurfaceId) -> bool {
@@ -393,15 +577,62 @@ impl<S: Shell> Core<S> {
                         self.close_popup_at(idx, CloseReason::Parent);
                     }
                 }
+                PopupOp::Resize { surface, size } => self.resize_popup(surface, size),
             }
         }
     }
 
+    /// Asks the compositor to reposition the popup whose surface is
+    /// `surface` at its placement with `size` (`xdg_popup.reposition`, from
+    /// version 3 of the shell). The new size arrives with the configure
+    /// that follows; until then the popup keeps the old one. A popup that
+    /// is gone, a shell older than that, or a positioner the compositor
+    /// refuses leave the popup as it is.
+    fn resize_popup(&mut self, surface: SurfaceId, size: (f32, f32)) {
+        let Some(idx) = self.popups.iter().position(|p| p.surface.id == surface) else {
+            return;
+        };
+        let (id, placement) = (self.popups[idx].id, self.popups[idx].placement);
+        let Some(wm) = self.wm_base.as_ref() else {
+            return;
+        };
+        let geometry = positioner_geometry(placement.anchor, size);
+        let positioner = match positioner(wm, &placement, geometry) {
+            Ok(positioner) => positioner,
+            Err(err) => {
+                tracing::warn!(popup = id.0, %err, "popup: cannot reposition");
+                return;
+            }
+        };
+        self.reposition_tokens = self.reposition_tokens.wrapping_add(1);
+        let token = self.reposition_tokens;
+        let Some(popup) = self.popups[idx].surface.popup() else {
+            return;
+        };
+        if popup.xdg_popup().version() < 3 {
+            tracing::warn!(
+                popup = id.0,
+                version = popup.xdg_popup().version(),
+                "popup: the shell is too old to reposition; the popup keeps its size"
+            );
+            return;
+        }
+        popup.reposition(&positioner, token);
+        tracing::info!(
+            popup = id.0,
+            size = ?geometry.size,
+            token,
+            "popup: repositioned, waiting for configure"
+        );
+    }
+
     /// Creates the popup in protocol order: positioner, `xdg_surface` +
-    /// `xdg_popup` (parented to the popup's `xdg_surface` when nested, else
-    /// through `layer_surface.get_popup`), grab, scale and blur objects,
-    /// then the initial commit without a buffer. The EGL window waits for
-    /// the first `configure`.
+    /// `xdg_popup` (its parent the parent popup's `xdg_surface` when
+    /// nested, else set through `layer_surface.get_popup`; both before the
+    /// first commit), grab, scale and blur objects, then the initial commit
+    /// without a buffer. The EGL window waits for the first `configure`. A
+    /// parent that is not live (a popup already closed when its request is
+    /// applied) is refused with `RuntimeError::NoParent`.
     fn open_popup(
         &mut self,
         id: PopupId,
@@ -410,16 +641,17 @@ impl<S: Shell> Core<S> {
         size: (f32, f32),
         shell: Box<dyn PopupShell>,
     ) -> Result<(), RuntimeError> {
-        let parent_target = self
-            .target_of(parent)
-            .ok_or(RuntimeError::NoParent(parent))?;
+        let parent_kind = self.targets().parent_of(parent)?;
         let wm = self.wm_base.as_ref().ok_or(RuntimeError::NoWmBase)?;
         let geometry = positioner_geometry(placement.anchor, size);
         let positioner = positioner(wm, &placement, geometry).map_err(RuntimeError::Popup)?;
         let wl_surface = self.compositor.create_surface(&self.qh);
-        let (popup, output) = match parent_target {
-            Target::Layer(idx) => {
-                let parent_surface = &self.surfaces[idx];
+        let (popup, output) = match parent_kind {
+            Parent::Layer => {
+                let parent_surface = self
+                    .surface_index(parent)
+                    .map(|idx| &self.surfaces[idx])
+                    .ok_or(RuntimeError::NoParent(parent))?;
                 let layer = parent_surface
                     .layer()
                     .ok_or(RuntimeError::NoParent(parent))?;
@@ -428,8 +660,13 @@ impl<S: Shell> Core<S> {
                 layer.get_popup(popup.xdg_popup());
                 (popup, parent_surface.output().clone())
             }
-            Target::Popup(idx) => {
-                let parent_surface = &self.popups[idx].surface;
+            Parent::Popup(parent_id) => {
+                let parent_surface = self
+                    .popups
+                    .iter()
+                    .find(|p| p.id == parent_id)
+                    .map(|p| &p.surface)
+                    .ok_or(RuntimeError::NoParent(parent))?;
                 let parent_popup = parent_surface
                     .popup()
                     .ok_or(RuntimeError::NoParent(parent))?;
@@ -445,6 +682,9 @@ impl<S: Shell> Core<S> {
             }
         };
 
+        // A nested popup grabs too (a grabbing parent demands it, or the
+        // compositor answers `invalid_grab`), with the current serial: a
+        // submenu opened by hover reuses the press that opened its parent.
         let grab_serial = match (&self.seat, self.grab_serial.current()) {
             (Some(seat), Some(serial)) => {
                 popup.xdg_popup().grab(seat, serial);
@@ -495,35 +735,46 @@ impl<S: Shell> Core<S> {
             surface,
             shell,
             frames: 0,
+            placement,
         });
         Ok(())
     }
 
-    /// Destroys popup `idx` (its own nested popups first, then the EGL
-    /// window, the protocol objects, the role and its `wl_surface`) and
-    /// queues `PopupClosed` for the parent unless the parent is going too.
+    /// Closes popup `idx` for `reason`: its descendants first, deepest
+    /// first, each with `CloseReason::Parent` (`Targets::close_popup`), so
+    /// no `xdg_popup` outlives its parent. The parent of each closed popup
+    /// gets `PopupClosed` unless it is going too: a parent popup closed by
+    /// the same plan, a layer surface being destroyed (`ParentGone`) or
+    /// the runtime exiting (`Exit`).
     pub(crate) fn close_popup_at(&mut self, idx: usize, reason: CloseReason) {
-        let own_surface = self.popups[idx].surface.id;
-        self.close_popups_of(own_surface);
-        // Closing the children may have shifted the index.
-        let Some(idx) = self.popups.iter().position(|p| p.surface.id == own_surface) else {
-            return;
-        };
-        let entry = self.popups.remove(idx);
-        if self.keyboard_focus == Some(entry.surface.id) {
-            self.keyboard_focus = None;
-        }
-        tracing::info!(
-            popup = entry.id.0,
-            ?reason,
-            frames = entry.frames,
-            "popup: closed"
-        );
-        let (id, parent) = (entry.id, entry.parent);
-        self.destroy_surface_object(entry.surface);
-        if !matches!(reason, CloseReason::Exit | CloseReason::ParentGone) {
-            self.pending_events
-                .push((parent, InputEvent::PopupClosed { id, reason }));
+        let plan = self.targets().close_popup(self.popups[idx].id, reason);
+        let doomed: Vec<SurfaceId> = plan
+            .iter()
+            .filter_map(|(id, _)| self.popups.iter().find(|p| p.id == *id))
+            .map(|p| p.surface.id)
+            .collect();
+        for (id, reason) in plan {
+            let Some(idx) = self.popups.iter().position(|p| p.id == id) else {
+                continue;
+            };
+            let entry = self.popups.remove(idx);
+            if self.keyboard_focus == Some(entry.surface.id) {
+                self.keyboard_focus = None;
+            }
+            tracing::info!(
+                popup = entry.id.0,
+                ?reason,
+                frames = entry.frames,
+                "popup: closed"
+            );
+            let parent = entry.parent;
+            self.destroy_surface_object(entry.surface);
+            let parent_stays = !matches!(reason, CloseReason::Exit | CloseReason::ParentGone)
+                && !doomed.contains(&parent);
+            if parent_stays {
+                self.pending_events
+                    .push((parent, InputEvent::PopupClosed { id, reason }));
+            }
         }
     }
 
@@ -588,18 +839,80 @@ mod tests {
         PixelRect { x, y, w, h }
     }
 
-    /// Where an unconstrained compositor puts the popup's top-left for
-    /// the anchor/gravity pairs the menu uses (xdg_positioner semantics).
-    fn unconstrained_origin(anchor: PixelRect, p: &Placement) -> (i32, i32) {
-        let point = match p.anchor_edge {
-            AnchorEdge::BottomLeft => (anchor.x, anchor.y + anchor.h),
-            other => panic!("anchor edge {other:?} not modelled"),
+    fn origin(rect: PixelRect) -> (i32, i32) {
+        (rect.x, rect.y)
+    }
+
+    /// A submenu hangs from the top-right corner of its row, growing down
+    /// and right.
+    fn submenu(row: Rect) -> Placement {
+        Placement {
+            anchor: row,
+            anchor_edge: AnchorEdge::TopRight,
+            gravity: Gravity::BottomRight,
+            offset: (0, 0),
+        }
+    }
+
+    #[test]
+    fn submenu_opens_right_of_its_row_and_flips_left_at_the_output_edge() {
+        // A row of the menu at x 0..220, y 80..120; the menu's surface sits
+        // 500 px from the output's right edge.
+        let p = submenu(r(0.0, 80.0, 220.0, 40.0));
+        let g = positioner_geometry(p.anchor, (200.0, 136.0));
+        let wide = px(-700, -100, 1200, 700);
+        assert_eq!(unconstrained(&p, g), px(220, 80, 200, 136));
+        assert_eq!(resolve(&p, g, wide), px(220, 80, 200, 136));
+        // 320 px from the right edge (the submenu needs 420): it flips to
+        // the row's left.
+        let narrow = px(-700, -100, 1020, 700);
+        assert_eq!(resolve(&p, g, narrow), px(-200, 80, 200, 136));
+    }
+
+    #[test]
+    fn submenu_flips_up_at_the_bottom_and_slides_when_neither_way_fits() {
+        // The row at y 600..640 of a 700 px tall output: 60 px below it.
+        let p = submenu(r(0.0, 600.0, 220.0, 40.0));
+        let g = positioner_geometry(p.anchor, (200.0, 136.0));
+        let bounds = px(-100, 0, 1000, 700);
+        // Flipped on Y: the popup's bottom on the row's bottom.
+        assert_eq!(origin(resolve(&p, g, bounds)), (220, 504));
+        // A popup taller than the room above and below slides up instead.
+        let tall = positioner_geometry(p.anchor, (200.0, 650.0));
+        assert_eq!(origin(resolve(&p, tall, bounds)), (220, 50));
+        // One taller than the output aligns with its top edge.
+        let huge = positioner_geometry(p.anchor, (200.0, 900.0));
+        assert_eq!(origin(resolve(&p, huge, bounds)), (220, 0));
+    }
+
+    #[test]
+    fn flipping_swaps_the_horizontal_or_vertical_side_only() {
+        assert_eq!(AnchorEdge::TopRight.flip_x(), AnchorEdge::TopLeft);
+        assert_eq!(AnchorEdge::TopRight.flip_y(), AnchorEdge::BottomRight);
+        assert_eq!(AnchorEdge::Top.flip_x(), AnchorEdge::Top);
+        assert_eq!(AnchorEdge::None.flip_y(), AnchorEdge::None);
+        assert_eq!(Gravity::BottomRight.flip_x(), Gravity::BottomLeft);
+        assert_eq!(Gravity::BottomRight.flip_y(), Gravity::TopRight);
+        assert_eq!(Gravity::Left.flip_y(), Gravity::Left);
+    }
+
+    #[test]
+    fn centred_edges_and_gravities_centre_the_popup() {
+        let p = Placement {
+            anchor: r(100.0, 100.0, 50.0, 20.0),
+            anchor_edge: AnchorEdge::Bottom,
+            gravity: Gravity::Bottom,
+            offset: (0, 4),
         };
-        let origin = match p.gravity {
-            Gravity::BottomRight => point,
-            other => panic!("gravity {other:?} not modelled"),
+        let g = positioner_geometry(p.anchor, (30.0, 10.0));
+        assert_eq!(unconstrained(&p, g), px(110, 124, 30, 10));
+        let p = Placement {
+            anchor_edge: AnchorEdge::None,
+            gravity: Gravity::None,
+            offset: (0, 0),
+            ..p
         };
-        (origin.0 + p.offset.0, origin.1 + p.offset.1)
+        assert_eq!(unconstrained(&p, g), px(110, 105, 30, 10));
     }
 
     #[test]
@@ -623,7 +936,7 @@ mod tests {
                 | ConstraintAdjustment::FlipY
         );
         let g = positioner_geometry(p.anchor, (200.0, 136.0));
-        assert_eq!(unconstrained_origin(g.anchor, &p), (480, 66));
+        assert_eq!(origin(unconstrained(&p, g)), (480, 66));
     }
 
     #[test]
@@ -730,6 +1043,7 @@ mod tests {
         let a = queue.open(parent, placement, (10.0, 10.0), Box::new(Silent));
         let b = queue.open(parent, placement, (10.0, 10.0), Box::new(Silent));
         queue.close(a);
+        queue.resize(crate::runtime::SurfaceId(9), (10.0, 20.0));
         assert!(a.0 < b.0);
         let kinds: Vec<&str> = queue
             .ops
@@ -737,8 +1051,9 @@ mod tests {
             .map(|op| match op {
                 PopupOp::Open { .. } => "open",
                 PopupOp::Close(_) => "close",
+                PopupOp::Resize { .. } => "resize",
             })
             .collect();
-        assert_eq!(kinds, ["open", "open", "close"]);
+        assert_eq!(kinds, ["open", "open", "close", "resize"]);
     }
 }

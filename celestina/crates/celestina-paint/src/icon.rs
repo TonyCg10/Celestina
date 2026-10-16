@@ -23,9 +23,11 @@ const MAX_ICON_FILE: u64 = 4 << 20;
 /// Textures kept at once; the least recently drawn is dropped beyond this.
 const ICON_CACHE_LIMIT: usize = 256;
 
-/// A pixmap uploaded with [`crate::Painter::upload_pixmap`].
+/// A pixmap uploaded with [`crate::Painter::upload_pixmap`]. The number is
+/// public so a product can build views and tests without a GL context; a
+/// number the painter never handed out draws nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct PixmapId(pub(crate) u32);
+pub struct PixmapId(pub u32);
 
 /// What an icon is drawn from.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

@@ -268,3 +268,4 @@ celestina	0.2.0	milestone	CEL-1-B	Add the skeleton: `celestina-wayland`, `celest
 celestina	0.3.0	milestone	CEL-1-D	Add the Island's Activity, Notifications and Tray pages, page tabs and the overflow popup
 celestina	0.4.0	milestone	CEL-1-E	Add the launcher: overlay surface, Field with IME, the desktop-entry index, ranking, slash commands and spawn
 celestina	0.5.0	milestone	CEL-1-F	Add the notifications: the server claimed only if free, banners, history, actions and do-not-disturb
+celestina	0.6.0	milestone	CEL-1-G	Add the tray: watcher and host claimed only if free, items, pixmaps and theme icons, nested DBusMenu popups and scroll

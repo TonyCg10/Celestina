@@ -69,11 +69,17 @@ pub fn notifications_owner(owner: &str) -> String {
 }
 
 /// The Tray page's explanation while another program holds the tray's
-/// name; `owner` describes the holder
-/// ("Another program serves the tray: {owner}").
+/// name: the holder's process name `comm` with its unique bus name
+/// `unique`, or the unique name alone
+/// ("Another program serves the tray: noctalia (:1.42)").
 #[must_use]
-pub fn tray_owner(owner: &str) -> String {
-    format!("Otro programa atiende la bandeja: {owner}")
+pub fn tray_owner(unique: &str, comm: Option<&str>) -> String {
+    match comm {
+        Some(comm) if !comm.is_empty() => {
+            format!("Otro programa atiende la bandeja: {comm} ({unique})")
+        }
+        _ => format!("Otro programa atiende la bandeja: {unique}"),
+    }
 }
 
 /// The overflow menu's row that grows the open page again from the capsule
@@ -132,3 +138,13 @@ pub const BANNER_DISMISS: &str = "Descartar";
 /// The button above the live notifications that dismisses all of them
 /// ("Dismiss all").
 pub const NOTIFICATIONS_DISMISS_ALL: &str = "Descartar todo";
+
+/// The Tray page's title for an item that has none ("Untitled").
+pub const TRAY_ITEM_UNTITLED: &str = "Sin título";
+
+/// The Tray page's status word for an item that wants attention
+/// ("Needs attention").
+pub const TRAY_NEEDS_ATTENTION: &str = "Requiere atención";
+
+/// The Tray page's status word for a passive item ("Inactive").
+pub const TRAY_PASSIVE: &str = "Inactivo";
