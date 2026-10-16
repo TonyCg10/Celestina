@@ -8,6 +8,7 @@
 #![deny(unsafe_code)]
 
 pub mod blur;
+mod data_device;
 pub mod egl;
 pub mod geometry;
 mod handlers;
@@ -16,12 +17,13 @@ pub mod metrics;
 pub mod popup;
 pub mod runtime;
 pub mod surface;
+mod text_input;
 
 pub use geometry::{PixelRect, Rect};
 pub use input::{CursorShape, InputEvent, Modifiers};
 pub use popup::{AnchorEdge, CloseReason, Gravity, Placement, PopupAction, PopupId};
 pub use runtime::{
-    run, Config, FrameCx, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
-    OutputInfo, PopupShell, RunReport, Runtime, RuntimeCtl, RuntimeError, RuntimeGone, Sender,
-    Shell, SurfaceCtl, SurfaceId,
+    run, Anchoring, Config, FrameCx, KeyboardInteractivity, Layer, LayerSpec, OutputEvent,
+    OutputId, OutputInfo, PopupShell, RunReport, Runtime, RuntimeCtl, RuntimeError, RuntimeGone,
+    Sender, Shell, SurfaceCtl, SurfaceId,
 };

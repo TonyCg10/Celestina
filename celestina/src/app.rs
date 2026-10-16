@@ -5,18 +5,22 @@
 //! workers' messages: the model to every Island, the appearance to the
 //! painter and the trees, a verb to the Island of the focused output. It
 //! also opens the Island's overflow menu and makes the menu's choices:
-//! quit, do-not-disturb (the shell's own settings file) and reopen.
+//! quit, do-not-disturb (the shell's own settings file) and reopen. It opens
+//! the launcher on its own surface on the output with the keyboard, keeps the
+//! desktop index it searches, starts what it launches, records the launch,
+//! and runs the switches chosen in it.
 
 use std::{
     cell::{OnceCell, RefCell},
     rc::Rc,
 };
 
+use celestina_core::desktop_entry::DesktopEntry;
 use celestina_paint::{Painter, TextSystem, Theme};
 use celestina_settings::Appearance;
 use celestina_wayland::{
-    FrameCx, InputEvent, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
-    RuntimeCtl, Shell, SurfaceCtl, SurfaceId,
+    Anchoring, FrameCx, InputEvent, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
+    RuntimeCtl, Sender, Shell, SurfaceCtl, SurfaceId,
 };
 
 use crate::{
@@ -27,6 +31,7 @@ use crate::{
         pages::NameOwner,
         Island, IslandAction,
     },
+    launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
     message::Message,
     providers::{
         niri::{NiriModel, NiriProvider, NiriRequest},
@@ -113,6 +118,24 @@ impl Islands {
             .or_else(|| self.slots.first().map(|s| s.surface))
     }
 
+    /// The output of the Island on `surface`.
+    #[must_use]
+    pub fn output_of(&self, surface: SurfaceId) -> Option<OutputId> {
+        self.slots
+            .iter()
+            .find(|s| s.surface == surface)
+            .map(|s| s.output)
+    }
+
+    /// The surface of `output`'s Island.
+    #[must_use]
+    pub fn surface_on(&self, output: OutputId) -> Option<SurfaceId> {
+        self.slots
+            .iter()
+            .find(|s| s.output == output)
+            .map(|s| s.surface)
+    }
+
     fn iter(&self) -> impl Iterator<Item = &Slot> {
         self.slots.iter()
     }
@@ -165,6 +188,15 @@ pub struct App {
     keyboard: Option<SurfaceId>,
     /// The compositor's request queue, set once the provider runs.
     niri: Rc<OnceCell<NiriProvider>>,
+    /// The open launcher, if any.
+    launcher: Option<Launcher>,
+    /// The session's applications, from the desktop index's worker.
+    index: Vec<DesktopEntry>,
+    /// The applications launched last, which the ranking lifts.
+    recent: RecentLaunches,
+    /// The loop's own sender, set once the loop runs: the launcher's close
+    /// is posted through it (see [`Message::LauncherClosed`]).
+    sender: Rc<OnceCell<Sender<Message>>>,
     /// Why the run stopped on a failure, for the binary to report.
     fatal: Rc<OnceCell<String>>,
     refusal_logged: bool,
@@ -207,10 +239,27 @@ impl App {
             owners: NameOwner::default(),
             keyboard: None,
             niri,
+            launcher: None,
+            index: Vec::new(),
+            recent: RecentLaunches::default(),
+            sender: Rc::new(OnceCell::new()),
             fatal,
             refusal_logged: false,
             metrics,
         }
+    }
+
+    /// The launcher's parts: the `recent` launches read at start and the
+    /// slot the loop's own sender is put in once the loop runs.
+    #[must_use]
+    pub fn with_launcher(
+        mut self,
+        recent: RecentLaunches,
+        sender: Rc<OnceCell<Sender<Message>>>,
+    ) -> App {
+        self.recent = recent;
+        self.sender = sender;
+        self
     }
 
     /// Records who holds the bus names the pages depend on; the Islands
@@ -244,7 +293,7 @@ impl App {
             output: info.id,
             namespace: NAMESPACE,
             layer: Layer::Top,
-            anchor_top: true,
+            anchor: Anchoring::Top,
             size: (width, SURFACE_SIZE.1),
             exclusive_zone: island.exclusive_zone(),
             keyboard: KeyboardInteractivity::None,
@@ -275,8 +324,143 @@ impl App {
                     island.command(&verb, &mut ctl);
                 }
             }
-            Verb::LauncherToggle | Verb::NotificationsToggle | Verb::NotificationsDismissAll => {
-                tracing::info!(verb = %verb.words().join(" "), "not delivered yet (CEL-1-E, CEL-1-F)");
+            Verb::LauncherToggle => self.toggle_launcher(ctl),
+            Verb::NotificationsToggle | Verb::NotificationsDismissAll => {
+                tracing::info!(verb = %verb.words().join(" "), "not delivered yet (CEL-1-F)");
+            }
+        }
+    }
+
+    /// Closes the open launcher, or opens one on the output with the
+    /// keyboard: the Island holding it, else niri's focused output, else
+    /// the first. The surface is created now and destroyed on close.
+    fn toggle_launcher(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        if let Some(open) = self.launcher.take() {
+            tracing::info!("launcher: closed by the command");
+            close_surface(open.surface(), ctl);
+            return;
+        }
+        let output = self
+            .islands
+            .target(self.keyboard, focused_output(self.model.as_ref()))
+            .and_then(|surface| self.islands.output_of(surface));
+        let Some(output) = output else {
+            tracing::info!("launcher: no output to open on");
+            return;
+        };
+        let theme = self.theme();
+        // The whole output, the Island's band included: -1 ignores every
+        // exclusive zone and pushes no window; the card is centred inside.
+        let spec = LayerSpec {
+            output,
+            namespace: launcher::NAMESPACE,
+            layer: Layer::Overlay,
+            anchor: Anchoring::Fill,
+            size: (0, 0),
+            exclusive_zone: -1,
+            keyboard: KeyboardInteractivity::Exclusive,
+        };
+        let surface = match ctl.create_layer_surface(spec) {
+            Ok(surface) => surface,
+            Err(err) => {
+                tracing::error!(%err, "launcher: no surface");
+                return;
+            }
+        };
+        let open = Launcher::new(
+            surface,
+            output,
+            &theme,
+            self.appearance.reduced_motion,
+            self.recent.ids().to_vec(),
+            &self.index,
+        );
+        if let Some(mut s) = ctl.surface(surface) {
+            open.opened(&mut s);
+        }
+        tracing::info!(
+            output = output.0,
+            entries = self.index.len(),
+            "launcher: opened"
+        );
+        self.launcher = Some(open);
+    }
+
+    /// The launcher asked for `action` during an input call: it is closed
+    /// now (its text input off, the keyboard released) and its surface is
+    /// destroyed when the posted [`Message::LauncherClosed`] arrives, which
+    /// also runs a chosen switch.
+    fn launcher_acted(&mut self, action: LauncherAction, ctl: &mut SurfaceCtl<'_>) {
+        let Some(open) = self.launcher.take() else {
+            return;
+        };
+        Launcher::closing(ctl);
+        ctl.set_keyboard_interactivity(KeyboardInteractivity::None);
+        let switch = match action {
+            LauncherAction::Launch(entry) => {
+                match launcher::spawn::spawn(&entry) {
+                    Ok(()) => {
+                        tracing::info!(id = %entry.id, "launcher: launched");
+                        self.recent.record(&entry.id);
+                    }
+                    Err(err) => tracing::warn!("launcher: {}", error_chain(&err)),
+                }
+                None
+            }
+            LauncherAction::Switch(switch) => Some(switch),
+            LauncherAction::Close => None,
+        };
+        let closed = Message::LauncherClosed {
+            surface: open.surface(),
+            output: open.output(),
+            switch,
+        };
+        match self.sender.get().map(|sender| sender.send(closed)) {
+            Some(Ok(())) => {}
+            _ => {
+                tracing::warn!("launcher: the loop cannot be reached; its surface stays until exit")
+            }
+        }
+    }
+
+    /// Runs `switch` chosen in the launcher on `output`: opens the page on
+    /// that output's Island, or turns do-not-disturb over as the
+    /// Notifications page's switch does.
+    fn run_switch(&mut self, switch: Switch, output: OutputId, ctl: &mut RuntimeCtl<'_>) {
+        tracing::info!(?switch, "launcher: switch chosen");
+        let Some(page) = switch.page() else {
+            if self.owners.notifications.is_some() {
+                tracing::info!("do-not-disturb is held by another program; not changed");
+                return;
+            }
+            let on = !self.settings.current().do_not_disturb;
+            if self.set_do_not_disturb(on) {
+                self.redraw_all(ctl);
+            }
+            return;
+        };
+        let Some(surface) = self.islands.surface_on(output).or_else(|| {
+            self.islands
+                .target(None, focused_output(self.model.as_ref()))
+        }) else {
+            return;
+        };
+        if let (Some(island), Some(mut ctl)) = (self.islands.get_mut(surface), ctl.surface(surface))
+        {
+            island.command(&Verb::IslandOpen(page), &mut ctl);
+        }
+    }
+
+    /// Sets do-not-disturb durably; whether it is now `on` and changed.
+    fn set_do_not_disturb(&mut self, on: bool) -> bool {
+        match self.settings.set_do_not_disturb(on) {
+            Ok(changed) => {
+                tracing::info!(on, changed, "do-not-disturb set");
+                changed
+            }
+            Err(err) => {
+                tracing::warn!(on, "do-not-disturb not changed: {}", error_chain(&err));
+                false
             }
         }
     }
@@ -328,15 +512,13 @@ impl App {
             // Only the setting changes: nothing honours it until the
             // notification server (CEL-1-F) reads it at its start and on
             // this choice, through its own do-not-disturb flag.
-            MenuChoice::DoNotDisturb(on) => match self.settings.set_do_not_disturb(on) {
-                Ok(changed) => {
-                    tracing::info!(on, changed, "do-not-disturb chosen in the menu");
+            MenuChoice::DoNotDisturb(on) => {
+                if self.set_do_not_disturb(on) {
                     // The open page shows the switch: draw it again. Other
                     // outputs' Islands pick it up on their next frame.
                     ctl.request_redraw();
                 }
-                Err(err) => tracing::warn!(on, "do-not-disturb not changed: {}", error_chain(&err)),
-            },
+            }
             MenuChoice::ReopenPage => {
                 if let Some(island) = self.islands.get_mut(surface) {
                     island.reopen(ctl);
@@ -368,6 +550,33 @@ impl App {
     }
 }
 
+impl App {
+    /// Input on the launcher's surface.
+    fn launcher_input(&mut self, ev: &InputEvent, ctl: &mut SurfaceCtl<'_>) {
+        let (Some(shared), Some(open)) = (self.painter.clone(), self.launcher.as_mut()) else {
+            return;
+        };
+        let action = match shared.try_borrow_mut() {
+            Ok(mut painter) => open.input(ev, ctl, &mut painter, &self.index),
+            Err(_) => {
+                tracing::warn!("the painter is in use; the launcher's input is dropped");
+                return;
+            }
+        };
+        if let Some(action) = action {
+            self.launcher_acted(action, ctl);
+        }
+    }
+}
+
+/// Destroys the launcher's `surface`, its text input off first.
+fn close_surface(surface: SurfaceId, ctl: &mut RuntimeCtl<'_>) {
+    if let Some(mut s) = ctl.surface(surface) {
+        Launcher::closing(&mut s);
+    }
+    ctl.destroy_surface(surface);
+}
+
 impl Shell for App {
     type Message = Message;
 
@@ -378,6 +587,11 @@ impl Shell for App {
                 tracing::debug!(output = %info.name, "output changed; the Island keeps its surface");
             }
             OutputEvent::Removed(output) => {
+                if self.launcher.as_ref().is_some_and(|l| l.output() == output) {
+                    // Its surface went with the output.
+                    self.launcher = None;
+                    tracing::info!("launcher: closed with its output");
+                }
                 let gone = self.islands.remove_output(output);
                 if self.keyboard.is_some_and(|k| gone.contains(&k)) {
                     self.keyboard = None;
@@ -411,6 +625,18 @@ impl Shell for App {
                 }
             }
         }
+        if let (Some(shared), Some(open)) = (self.painter.as_ref(), self.launcher.as_mut()) {
+            if open.surface() == cx.surface {
+                match shared.try_borrow_mut() {
+                    Ok(mut painter) => open.frame(cx, &mut painter, self.appearance.reduced_motion),
+                    Err(_) => {
+                        tracing::warn!("the painter is in use; the launcher's frame is skipped");
+                        cx.ctl.request_redraw();
+                    }
+                }
+                return;
+            }
+        }
         let (Some(shared), Some(island)) =
             (self.painter.as_ref(), self.islands.get_mut(cx.surface))
         else {
@@ -437,6 +663,14 @@ impl Shell for App {
             InputEvent::FocusEnter => self.keyboard = Some(surface),
             InputEvent::FocusLost if self.keyboard == Some(surface) => self.keyboard = None,
             _ => {}
+        }
+        if self
+            .launcher
+            .as_ref()
+            .is_some_and(|l| l.surface() == surface)
+        {
+            self.launcher_input(&ev, ctl);
+            return;
         }
         let closed = matches!(ev, InputEvent::PopupClosed { .. });
         let (Some(shared), Some(island)) = (self.painter.clone(), self.islands.get_mut(surface))
@@ -487,6 +721,27 @@ impl Shell for App {
             }
             Message::NiriRequestRefused(request) => self.refused(request),
             Message::Command(verb) => self.command(verb, ctl),
+            Message::DesktopIndex(entries) => {
+                tracing::info!(entries = entries.len(), "desktop index received");
+                self.index = entries;
+                if let Some(open) = self.launcher.as_mut() {
+                    if open.set_index(&self.index) {
+                        if let Some(mut surface) = ctl.surface(open.surface()) {
+                            surface.request_redraw();
+                        }
+                    }
+                }
+            }
+            Message::LauncherClosed {
+                surface,
+                output,
+                switch,
+            } => {
+                close_surface(surface, ctl);
+                if let Some(switch) = switch {
+                    self.run_switch(switch, output, ctl);
+                }
+            }
         }
     }
 }

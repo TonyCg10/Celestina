@@ -17,8 +17,9 @@ smithay-client-toolkit = { version = "0.21", features = ["calloop", "xkbcommon"]
 # The Wayland connection, queue and core protocol objects sctk builds on.
 wayland-client = "0.31"
 # `wp_viewporter`, `wp_fractional_scale_v1`, `wp_cursor_shape_v1`,
-# `ext_background_effect_v1` and `xdg_shell` (`client` + `staging`).
-wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+# `ext_background_effect_v1` and `xdg_shell` (`client` + `staging`), and
+# `zwp_text_input_v3` for IME input (`unstable`).
+wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
 # One `wl_egl_window` per surface, resized to the buffer size.
 wayland-egl = "0.32"
 # libEGL loaded at run time: display, config with a stencil, the shared
@@ -34,6 +35,10 @@ femtovg = { version = "0.27", default-features = false }
 calloop = { version = "0.14", features = ["signals"] }
 # Adapts the Wayland queue to a calloop source.
 calloop-wayland-source = "0.4"
+# `poll` with a timeout on the clipboard pipe, so the paste worker honours
+# its deadline and stop flag and its join stays bounded; already in the
+# tree through sctk and calloop.
+rustix = { version = "1", features = ["event"] }
 # Diagnostics; the binary installs the subscriber.
 tracing = "0.1"
 # Typed errors with their sources.

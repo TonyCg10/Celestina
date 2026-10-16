@@ -516,7 +516,9 @@ impl Island {
                 self.close(now);
                 return None;
             }
-            UiEvent::HoverChanged(..) | UiEvent::Scroll(..) => return None,
+            UiEvent::HoverChanged(..) | UiEvent::Scroll(..) | UiEvent::FieldChanged(_) => {
+                return None
+            }
         };
         match self.activate(key, now)? {
             IslandAction::OpenMenu { more, .. } => Some(IslandAction::OpenMenu { more, keyboard }),

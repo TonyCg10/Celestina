@@ -1,7 +1,7 @@
-//! The Celestina shell as a library: the app and its Islands, the command
-//! surface and its bus, the provider workers and the messages they publish
-//! into the event loop. The binary (`src/main.rs`) parses the command line
-//! and runs it.
+//! The Celestina shell as a library: the app, its Islands and the launcher,
+//! the command surface and its bus, the provider workers and the messages
+//! they publish into the event loop. The binary (`src/main.rs`) parses the
+//! command line and runs it.
 
 #![forbid(unsafe_code)]
 
@@ -10,6 +10,7 @@ pub mod bus;
 pub mod command;
 pub mod copy;
 pub mod island;
+pub mod launcher;
 pub mod message;
 pub mod metrics;
 pub mod providers;

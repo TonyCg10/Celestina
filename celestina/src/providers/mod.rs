@@ -3,6 +3,7 @@
 //! values into the loop and, when it takes commands, receives them through
 //! its own bounded queue (design §5.1).
 
+pub mod desktop;
 pub mod niri;
 pub mod settings;
 pub mod worker;

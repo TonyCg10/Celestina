@@ -87,3 +87,36 @@ pub const MENU_QUIT: &str = "Salir";
 /// another program holds the notifications name
 /// ("Another program handles it").
 pub const DO_NOT_DISTURB_HELD: &str = "Lo gestiona otro programa";
+
+/// The launcher's field while it is empty
+/// ("Search applications or type /").
+pub const LAUNCHER_PLACEHOLDER: &str = "Buscar aplicaciones o escribir /";
+
+/// The launcher's only line while nothing answers the query ("No results").
+pub const LAUNCHER_EMPTY: &str = "Sin resultados";
+
+/// The launcher command that opens the Notifications page, as typed.
+pub const SWITCH_NOTIFICATIONS: &str = "/notificaciones";
+
+/// The launcher command that turns do-not-disturb on or off, as typed.
+pub const SWITCH_DO_NOT_DISTURB: &str = "/no-molestar";
+
+/// The launcher command that opens the Activity page, as typed.
+pub const SWITCH_ACTIVITY: &str = "/actividad";
+
+/// The launcher command that opens the Tray page, as typed.
+pub const SWITCH_TRAY: &str = "/bandeja";
+
+/// What the notifications command does, beside it
+/// ("Opens the Notifications page").
+pub const SWITCH_NOTIFICATIONS_LABEL: &str = "Abre la página Notificaciones";
+
+/// What the do-not-disturb command does, beside it
+/// ("Turns Do not disturb on or off").
+pub const SWITCH_DO_NOT_DISTURB_LABEL: &str = "Activa o desactiva No molestar";
+
+/// What the activity command does, beside it ("Opens the Activity page").
+pub const SWITCH_ACTIVITY_LABEL: &str = "Abre la página Actividad";
+
+/// What the tray command does, beside it ("Opens the Tray page").
+pub const SWITCH_TRAY_LABEL: &str = "Abre la página Bandeja";

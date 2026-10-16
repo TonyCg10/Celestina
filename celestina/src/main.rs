@@ -29,6 +29,7 @@ use celestina::{
     command::{self, Mode, Verb, USAGE},
     error_chain,
     island::clock,
+    launcher::recent::RecentLaunches,
     providers::{self, settings::ShellSettings, Worker},
 };
 use celestina_paint::{default_font_dirs, TextSystem, Theme};
@@ -112,6 +113,7 @@ fn shell(cfg: Config) -> ExitCode {
     let shutdown = Arc::new(AtomicBool::new(false));
     let niri = Rc::new(OnceCell::new());
     let fatal = Rc::new(OnceCell::new());
+    let own_sender = Rc::new(OnceCell::new());
     let app = App::new(
         fonts,
         appearance,
@@ -119,8 +121,10 @@ fn shell(cfg: Config) -> ExitCode {
         Rc::clone(&niri),
         Rc::clone(&fatal),
         cfg.metrics,
-    );
+    )
+    .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender));
     let mut workers: Vec<Worker> = Vec::new();
+    let mut indexer = None;
     let mut follower = None;
     let result = celestina_wayland::run(cfg.clone(), app, |sender, _| {
         // The name first: a second shell leaves before it starts anything.
@@ -142,11 +146,20 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!(%err, "no niri provider; the capsule shows its fallback"),
         }
+        match providers::desktop::spawn(sender.clone(), &shutdown) {
+            Ok(worker) => indexer = Some(worker),
+            Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
+        }
+        // The slot is empty: `setup` runs once.
+        let _ = own_sender.set(sender.clone());
         follower = Some(providers::settings::follow_appearance(sender));
     });
 
     shutdown.store(true, Ordering::Release);
     drop(follower);
+    if let Some(indexer) = indexer {
+        indexer.join_within(JOIN_WAIT);
+    }
     for worker in workers {
         worker.join_within(JOIN_WAIT);
     }

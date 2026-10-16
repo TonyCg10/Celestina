@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use cosmic_text::{
-    fontdb, Attrs, Buffer, CacheKey, Family, FeatureTag, FontFeatures, FontSystem, Metrics,
+    fontdb, Attrs, Buffer, CacheKey, Cursor, Family, FeatureTag, FontFeatures, FontSystem, Metrics,
     Shaping, SwashCache, SwashContent, Wrap,
 };
 
@@ -96,6 +96,45 @@ impl TextRun {
         &self.text
     }
 
+    /// The x, in logical px from the run's left edge, of the caret before
+    /// byte `index` of a single-line run (`index` is clamped to the text and
+    /// to a character boundary); 0 for an empty run.
+    pub fn caret_x(&self, index: usize) -> f32 {
+        let cursor = Cursor::new(0, boundary(&self.text, index));
+        self.buffer
+            .cursor_position(&cursor)
+            .map_or(0.0, |(x, _)| x / self.dpr)
+    }
+
+    /// The byte index of the caret nearest to `x` logical px from the
+    /// run's left edge in a single-line run: 0 left of the text, the text's
+    /// length right of it.
+    pub fn index_at(&self, x: f32) -> usize {
+        if !x.is_finite() {
+            return 0;
+        }
+        self.buffer
+            .hit(x * self.dpr, 0.0)
+            .map_or(0, |c| boundary(&self.text, c.index))
+    }
+
+    /// The span, in logical px from the run's left edge, covered by bytes
+    /// `start..end` of a single-line run; `None` for an empty range.
+    pub fn span(&self, start: usize, end: usize) -> Option<(f32, f32)> {
+        let (start, end) = (boundary(&self.text, start), boundary(&self.text, end));
+        if start >= end {
+            return None;
+        }
+        let (a, b) = (Cursor::new(0, start), Cursor::new(0, end));
+        let mut span: Option<(f32, f32)> = None;
+        for run in self.buffer.layout_runs() {
+            for (x, w) in run.highlight(a, b) {
+                span = Some(span.map_or((x, x + w), |(lo, hi)| (lo.min(x), hi.max(x + w))));
+            }
+        }
+        span.map(|(lo, hi)| (lo / self.dpr, hi / self.dpr))
+    }
+
     /// The run's glyphs, positioned from the layout (no reshaping).
     pub(crate) fn glyphs(&self) -> impl Iterator<Item = RunGlyph> + '_ {
         self.buffer.layout_runs().flat_map(|run| {
@@ -109,6 +148,15 @@ impl TextRun {
             })
         })
     }
+}
+
+/// `index` clamped to `text` and moved down to a character boundary.
+fn boundary(text: &str, index: usize) -> usize {
+    let mut i = index.min(text.len());
+    while !text.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
 }
 
 /// A glyph rasterised for the atlas: RGBA texels (coverage in every channel
@@ -418,5 +466,35 @@ mod tests {
             .rgba
             .chunks_exact(4)
             .any(|p| p == [255, 255, 255, 255]));
+    }
+
+    #[test]
+    fn caret_hit_and_span_follow_the_layout() {
+        let mut text = system();
+        let s = style(Weight::Regular, false);
+        let run = text.layout("hello world", &s, None, 1.5);
+        let width = run.size().0;
+        assert_eq!(run.caret_x(0), 0.0);
+        let end = run.caret_x(11);
+        assert!((end - width).abs() < 1.5, "{end} vs {width}");
+        let mid = run.caret_x(5);
+        assert!(mid > 0.0 && mid < end);
+        // Clamped past the end and off a character boundary.
+        assert_eq!(run.caret_x(99), end);
+        let accented = text.layout("\u{e9}!", &s, None, 1.0);
+        assert_eq!(accented.caret_x(1), accented.caret_x(0));
+        // Hit-testing returns the index of the nearest caret.
+        assert_eq!(run.index_at(-5.0), 0);
+        assert_eq!(run.index_at(width + 50.0), 11);
+        assert_eq!(run.index_at(mid + 0.5), 5);
+        assert_eq!(run.index_at(f32::NAN), 0);
+        // A span covers exactly the carets of its ends.
+        let (lo, hi) = run.span(0, 5).expect("a span");
+        assert!(lo.abs() < 0.5 && (hi - mid).abs() < 1.0, "{lo}..{hi}");
+        assert_eq!(run.span(3, 3), None);
+        assert_eq!(run.span(5, 2), None);
+        // Empty text has a caret at 0 and nothing to hit.
+        let empty = text.layout("", &s, None, 1.0);
+        assert_eq!((empty.caret_x(0), empty.index_at(10.0)), (0.0, 0));
     }
 }

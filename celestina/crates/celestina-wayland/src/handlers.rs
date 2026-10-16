@@ -26,10 +26,13 @@ use wayland_client::{
     Connection, QueueHandle,
 };
 
+use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3;
+
 use crate::{
     input::{InputEvent, Modifiers},
     runtime::{OutputEvent, Runtime, Shell, SurfaceId, Target},
     surface::PreferredScaleSink,
+    text_input::TextInputSink,
 };
 
 impl<S: Shell> PreferredScaleSink for Runtime<S> {
@@ -218,6 +221,9 @@ impl<S: Shell> SeatHandler for Runtime<S> {
                     Ok(keyboard) => self.core.keyboard = Some(keyboard),
                     Err(err) => tracing::warn!(%err, "cannot create the keyboard"),
                 }
+                // Text input and the selection follow the keyboard focus.
+                self.core.text_input.seat_added(&seat, qh);
+                self.core.clipboard.seat_added(&seat, qh);
             }
             Capability::Pointer if self.core.pointer.is_none() => {
                 match self.core.seat_state.get_pointer(qh, &seat) {
@@ -246,6 +252,10 @@ impl<S: Shell> SeatHandler for Runtime<S> {
                 if let Some(keyboard) = self.core.keyboard.take() {
                     keyboard.release();
                 }
+                self.core.clipboard.seat_removed();
+                let events = self.core.text_input.seat_removed();
+                self.core.pending_events.extend(events);
+                self.flush();
             }
             Capability::Pointer => self.core.pointer_removed(),
             _ => {}
@@ -437,6 +447,22 @@ impl<S: Shell> PointerHandler for Runtime<S> {
                 Target::Popup(idx) => self.dispatch_popup_input(idx, ev),
             }
         }
+    }
+}
+
+impl<S: Shell> TextInputSink for Runtime<S> {
+    fn text_input_event(&mut self, event: zwp_text_input_v3::Event) {
+        let surface = match &event {
+            zwp_text_input_v3::Event::Enter { surface }
+            | zwp_text_input_v3::Event::Leave { surface } => self
+                .core
+                .target_by_wl(surface)
+                .map(|target| self.core.surface_at(target).id),
+            _ => None,
+        };
+        let events = self.core.text_input.event(event, surface);
+        self.core.pending_events.extend(events);
+        self.flush();
     }
 }
 

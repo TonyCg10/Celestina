@@ -14,10 +14,15 @@
   Notifications and Tray, the page tabs with the slide, and the overflow menu
   as an `xdg_popup`, and it awaits landing after CEL-1-C
   ([evidence](docs/evidence/2026-10-16-island-pages.md)).
-- **Focus:** landing CEL-1-D after CEL-1-C, then CEL-1-E, CEL-1-F and CEL-1-G of
+  CEL-1-E, the launcher, is implemented on its unit branch: the `Field`
+  editor, IME preedit and bounded paste, the overlay with the desktop index,
+  ranking, `/` switches and spawn, and it awaits landing after CEL-1-D
+  ([evidence](docs/evidence/2026-10-16-launcher.md)).
+- **Focus:** landing CEL-1-D after CEL-1-C, then CEL-1-E, then CEL-1-F and CEL-1-G of
   the [CEL-1 plan](docs/plans/active/2026-10-14-cel-1-island.md).
 - **Author validation:** VAL-CEL-GLASS, VAL-CEL-REST and VAL-CEL-SCALE in
   [VALIDATION.md](VALIDATION.md) can run on the binary B's landing deploys;
   VAL-CEL-ISLAND, VAL-CEL-POPUP and VAL-CEL-KEYBOARD gain their CEL-1-D
-  procedures on D's; the other rows wait for their units.
+  procedures on D's, and VAL-CEL-IME and VAL-CEL-KEYBOARD their launcher
+  procedures on E's; the other rows wait for their units.
 - **Blockers:** none.

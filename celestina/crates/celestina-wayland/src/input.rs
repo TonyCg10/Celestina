@@ -2,7 +2,11 @@
 //! surface that received them.
 #![forbid(unsafe_code)]
 
-use crate::popup::{CloseReason, PopupId};
+use crate::{
+    geometry::Rect,
+    popup::{CloseReason, PopupId},
+    runtime::SurfaceId,
+};
 
 /// The modifier keys held while a key event happened, from xkb's effective
 /// state.
@@ -68,4 +72,31 @@ pub enum InputEvent {
         id: PopupId,
         reason: CloseReason,
     },
+    /// The input method's composition in progress, to show at the cursor in
+    /// place of the previous one, with the caret at byte `cursor` of `text`
+    /// (a character boundary); empty text ends the composition. Only while
+    /// the surface asked for text input (`SurfaceCtl::set_text_input_enabled`).
+    Preedit {
+        text: String,
+        cursor: usize,
+    },
+    /// The input method's final text, replacing the composition (if any).
+    CommitText(String),
+    /// The clipboard's text, read for `SurfaceCtl::request_paste`.
+    Paste(String),
 }
+
+/// What a shell asked of the seat through a `SurfaceCtl`, applied by the
+/// runtime right after the shell call returns.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum SeatRequest {
+    /// IME text input on (or off) while the surface has the text-input focus.
+    TextInput(bool),
+    /// The caret's rectangle, in logical px of the surface.
+    CursorRect(Rect),
+    /// Read the clipboard's text and deliver it as `InputEvent::Paste`.
+    Paste,
+}
+
+/// The seat requests recorded during shell calls, in order.
+pub(crate) type SeatRequests = Vec<(SurfaceId, SeatRequest)>;

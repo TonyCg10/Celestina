@@ -20,28 +20,49 @@ use celestina_paint::{Painter, Rect, Role, Theme};
 
 use crate::{
     highlight::{box_fill, focus_ring, FOCUS_WIDTH},
-    tree::{NodeId, Tree, Visit},
+    tree::{NodeId, Slot, Tree, Visit},
     view::ViewKind,
 };
+
+/// The alpha the accent is painted at behind selected text: a wash that
+/// leaves the text readable in both schemes.
+const SELECTION_ALPHA: f32 = 0.35;
+/// The text caret's width, and the preedit underline's thickness, in
+/// logical px.
+const CARET_WIDTH: f32 = 1.5;
+const UNDERLINE_WIDTH: f32 = 1.0;
 
 impl Tree {
     /// Paints the tree in `paint_order` at `now`. Per node: its slide as a
     /// translate, its recoil scale about its centre and its opacity, scoped
     /// to its subtree; a clip after its own fill; the focus ring on top of
-    /// its children. Leaving nodes whose fade settled are pruned first.
+    /// its children (a text field shows its caret instead). Leaving nodes whose fade settled are pruned first.
     pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
         self.prune(now);
         let dpr = self.dpr;
         for slot in self.slots.iter_mut().flatten() {
-            if let ViewKind::Text {
-                text,
-                style,
-                max_width,
-            } = &slot.kind
-            {
-                if slot.run.is_none() {
-                    slot.run = Some(painter.text().layout(text, style, *max_width, dpr));
+            match &slot.kind {
+                ViewKind::Text {
+                    text,
+                    style,
+                    max_width,
+                } => {
+                    if slot.run.is_none() {
+                        slot.run = Some(painter.text().layout(text, style, *max_width, dpr));
+                    }
                 }
+                ViewKind::Field {
+                    placeholder, style, ..
+                } => {
+                    if slot.run.is_none() {
+                        slot.run = Some(painter.text().layout(placeholder, style, None, dpr));
+                    }
+                    if let Some(field) = &mut slot.field {
+                        field.shape(painter.text(), style, dpr);
+                        field.reveal_caret(slot.rect.w);
+                    }
+                }
+                _ => {}
             }
         }
         let theme = painter.theme().clone();
@@ -104,6 +125,15 @@ impl Tree {
                     painter.glyphs(run, x, y, theme.color(style.role));
                 }
             }
+            ViewKind::Field { .. } => {
+                paint_field(
+                    slot,
+                    painter,
+                    theme,
+                    rect,
+                    self.highlight.focused == Some(id),
+                );
+            }
             ViewKind::Icon { key, tint, .. } => {
                 painter.icon(key, rect, tint.map(|r| theme.color(r)));
             }
@@ -120,7 +150,10 @@ impl Tree {
             if clip_of(&slot.kind, slot.clip, rect).is_some() {
                 painter.pop_clip();
             }
-            if self.highlight.focused == Some(id) {
+            // A focused field shows its caret instead: it holds the focus
+            // whenever its surface takes typing, not only after a key.
+            let field = matches!(slot.kind, ViewKind::Field { .. });
+            if self.highlight.focused == Some(id) && !field {
                 let radius = match slot.kind {
                     ViewKind::Box { radius, .. } => radius,
                     _ => theme.radius_sm,
@@ -131,6 +164,60 @@ impl Tree {
         }
         painter.pop_state();
     }
+}
+
+/// A field inside `rect`, clipped to it: the selection wash, the text (or
+/// the placeholder in the faint role while it is empty), the underline of
+/// the composition in progress, and the caret while the field has the focus.
+fn paint_field(slot: &Slot, painter: &mut Painter, theme: &Theme, rect: Rect, focused: bool) {
+    let (ViewKind::Field { style, .. }, Some(field)) = (&slot.kind, &slot.field) else {
+        return;
+    };
+    painter.push_clip(rect, 0.0);
+    if let Some(run) = field.run() {
+        let (_, y) = text_origin(rect, run.size());
+        let h = run.size().1;
+        let x = rect.x - field.scroll_x();
+        if let Some((lo, hi)) = field.selection_span().filter(|_| focused) {
+            let wash = theme.color(Role::Accent).with_alpha(SELECTION_ALPHA);
+            painter.fill_rounded(
+                Rect {
+                    x: x + lo,
+                    y,
+                    w: hi - lo,
+                    h,
+                },
+                0.0,
+                wash,
+            );
+        }
+        painter.glyphs(run, x, y, theme.color(style.role));
+        if let Some((lo, hi)) = field.preedit_span() {
+            let line = Rect {
+                x: x + lo,
+                y: y + h - UNDERLINE_WIDTH,
+                w: hi - lo,
+                h: UNDERLINE_WIDTH,
+            };
+            painter.fill_rounded(line, 0.0, theme.color(style.role));
+        }
+        if focused {
+            let caret = Rect {
+                x: x + field.caret_x() - CARET_WIDTH / 2.0,
+                y,
+                w: CARET_WIDTH,
+                h,
+            };
+            painter.fill_rounded(caret, 0.0, theme.color(style.role));
+        }
+    }
+    if field.text().is_empty() && field.preedit().is_none() {
+        if let Some(run) = &slot.run {
+            let (x, y) = text_origin(rect, run.size());
+            painter.glyphs(run, x, y, theme.color(Role::TextFaint));
+        }
+    }
+    painter.pop_clip();
 }
 
 /// The clip pushed around a node's subtree: its own rect and radius, for a

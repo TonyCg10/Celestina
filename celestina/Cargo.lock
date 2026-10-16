@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "celestina"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "celestina-core",
  "celestina-paint",
@@ -319,6 +319,7 @@ dependencies = [
  "celestina-wayland",
  "taffy",
  "thiserror 2.0.21",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -330,6 +331,7 @@ dependencies = [
  "femtovg",
  "glow",
  "khronos-egl",
+ "rustix",
  "smithay-client-toolkit",
  "thiserror 2.0.21",
  "tracing",

@@ -100,10 +100,24 @@ the binary the landing of its related unit deploys.
   Enter; in the menu press Down and Up (or Tab and Shift+Tab) through the
   rows, choose with Enter and with Space, and close with Escape. The menu
   opened by keyboard starts with its first row focused, so Enter at once
-  reopens the page; opened by the pointer it starts with no focused row
+  reopens the page; opened by the pointer it starts with no focused row.
+  From CEL-1-E: open the launcher by key binding, type a query, move the
+  selection with Down and Up (it wraps), launch with Enter, then reopen it and
+  close it with Escape and with the toggle; reopen it and click outside the
+  card on another window, on the Island and on an empty part of the output;
+  while it is open, try to click a window behind it. Open it, paste with Ctrl+V a clipboard holding
+  several lines and one holding more than 64 KiB
 - **Pass condition:** every surface is reachable and operable from the
   keyboard with a visible focus ring, and the focus returns to the author's
-  window on close. In the menu the focus ring is visible on the focused row
+  window on close. In the launcher the field shows a caret and no ring, the
+  selected row shows its ring only after an arrow key, Escape, Enter and the
+  toggle close it with the focus back on the previous window, and a click
+  anywhere outside the card closes it with the focus back on the previous
+  window. While it is open a window behind it cannot be clicked (the click
+  only closes the launcher; this is expected), and nothing outside the card
+  is dimmed or blurred: the rest of the output looks as it did before.
+  A multi-line paste arrives as one line with spaces, an oversized one is cut
+  and nothing hangs. In the menu the focus ring is visible on the focused row
   only after keyboard input, never from the pointer alone; the arrows skip the
   dimmed do-not-disturb row while another program holds the name; Escape
   closes the menu and leaves the page open
@@ -116,9 +130,13 @@ the binary the landing of its related unit deploys.
 - **Related implementation:** CEL-1-E
 - **Requires:** the deployed shell and an input method running in the session
 - **Procedure:** type a query with composed characters and a dead key in the
-  launcher
+  launcher; compose with a candidate window and cancel it with Escape; move
+  the caret with the arrows after committing and check that the candidate
+  window follows the caret
 - **Pass condition:** the preedit shows in place, the committed text is the
-  one typed, and the ranking follows it
+  one typed, and the ranking follows it; cancelling a composition leaves no
+  text behind, the candidate window sits at the caret, and no character is
+  lost while typing fast
 - **Result:** not run
 - **Evidence:** none
 

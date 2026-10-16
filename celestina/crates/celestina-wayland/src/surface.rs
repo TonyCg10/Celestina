@@ -26,6 +26,7 @@ use wayland_protocols::wp::{
         wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
         wp_fractional_scale_v1::{self, WpFractionalScaleV1},
     },
+    text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3,
     viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
 };
 
@@ -576,7 +577,12 @@ macro_rules! no_events {
     };
 }
 
-no_events!(WpFractionalScaleManagerV1, WpViewporter, WpViewport);
+no_events!(
+    WpFractionalScaleManagerV1,
+    WpViewporter,
+    WpViewport,
+    ZwpTextInputManagerV3,
+);
 
 #[cfg(test)]
 mod tests {

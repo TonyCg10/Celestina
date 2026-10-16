@@ -16,6 +16,7 @@ use taffy::{Display, TaffyTree};
 use crate::{
     anim::{Animated, Reduced},
     curve::Motion,
+    field::{Field, FieldId},
     highlight::Highlight,
     key::Key,
     view::ViewKind,
@@ -74,8 +75,12 @@ pub(crate) struct Slot {
     pub laid_out: bool,
     /// The rect before the last `apply`, for the slide `layout` starts.
     pub moved_from: Option<Rect>,
-    /// The shaped text of a `Text` node, built by the paint walk.
+    /// The shaped text of a `Text` node, or the placeholder of a `Field`,
+    /// built by the paint walk.
     pub run: Option<TextRun>,
+    /// The editor of a `Field` node; it outlives every update that keeps
+    /// the node's key and field id.
+    pub field: Option<Field>,
 }
 
 impl Slot {
@@ -254,6 +259,33 @@ impl Tree {
             stack.extend(slot.children.iter().rev());
         }
         leaving
+    }
+
+    /// The editor of the field the product named `id`: the first such node
+    /// in paint order that is not leaving.
+    pub fn field(&self, id: FieldId) -> Option<&Field> {
+        let node = self.field_node(id)?;
+        self.slot(node)?.field.as_ref()
+    }
+
+    /// [`Tree::field`], to set its text or edit it.
+    pub fn field_mut(&mut self, id: FieldId) -> Option<&mut Field> {
+        let node = self.field_node(id)?;
+        self.slot_mut(node)?.field.as_mut()
+    }
+
+    fn field_node(&self, id: FieldId) -> Option<NodeId> {
+        let mut stack: Vec<NodeId> = self.roots.iter().rev().copied().collect();
+        while let Some(node) = stack.pop() {
+            let Some(slot) = self.slot(node) else {
+                continue;
+            };
+            if !slot.leaving && matches!(&slot.kind, ViewKind::Field { id: f, .. } if *f == id) {
+                return Some(node);
+            }
+            stack.extend(slot.children.iter().rev());
+        }
+        None
     }
 
     /// Whether any opacity, scale or slide is in flight.

@@ -20,6 +20,7 @@ use std::{
 use crate::{
     anim::{Animated, Reduced},
     curve::{Motion, LINEAR},
+    field::Field,
     key::Key,
     tree::{NodeId, Slot, Tree},
     view::{View, ViewKind},
@@ -93,6 +94,12 @@ impl Tree {
         let mut relayout = false;
         if slot.kind != kind {
             relayout = measure_changed(&slot.kind, &kind);
+            match (&slot.kind, &kind) {
+                // The same field keeps its text, cursor and selection.
+                (ViewKind::Field { id: a, .. }, ViewKind::Field { id: b, .. }) if a == b => {}
+                (_, ViewKind::Field { .. }) => slot.field = Some(Field::new()),
+                _ => slot.field = None,
+            }
             if text_changed(&slot.kind, &kind) {
                 slot.run = None;
             }
@@ -189,6 +196,7 @@ impl Tree {
             opacity: target,
             children,
         } = view;
+        let field = matches!(kind, ViewKind::Field { .. }).then(Field::new);
         let id = self.next_id();
         let r = self.taffy.new_leaf_with_context(style.clone(), id);
         let taffy = self.checked("create a node", r)?;
@@ -216,6 +224,7 @@ impl Tree {
             laid_out: false,
             moved_from: None,
             run: None,
+            field,
         };
         let id = self.alloc(slot);
         let mut kids = Vec::with_capacity(children.len());
@@ -283,15 +292,29 @@ fn measure_changed(old: &ViewKind, new: &ViewKind) -> bool {
                 || sa.weight != sb.weight
                 || sa.tabular != sb.tabular
         }
+        (
+            ViewKind::Field {
+                placeholder: pa,
+                style: sa,
+                ..
+            },
+            ViewKind::Field {
+                placeholder: pb,
+                style: sb,
+                ..
+            },
+        ) => pa != pb || sa.size != sb.size || sa.weight != sb.weight || sa.tabular != sb.tabular,
         _ => true,
     }
 }
 
-/// Whether the shaped run of a `Text` node is stale (its colour role is
+/// Whether the shaped run of a `Text` node (or the placeholder of a
+/// `Field`) is stale (its colour role is
 /// applied at draw time and does not count).
 fn text_changed(old: &ViewKind, new: &ViewKind) -> bool {
     match (old, new) {
-        (ViewKind::Text { .. }, ViewKind::Text { .. }) => measure_changed(old, new),
+        (ViewKind::Text { .. }, ViewKind::Text { .. })
+        | (ViewKind::Field { .. }, ViewKind::Field { .. }) => measure_changed(old, new),
         _ => true,
     }
 }

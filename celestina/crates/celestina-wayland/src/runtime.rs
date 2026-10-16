@@ -41,14 +41,16 @@ use wayland_protocols::wp::{
 
 use crate::{
     blur::Blur,
+    data_device::Clipboard,
     egl::{Egl, EglError},
     geometry::Rect,
-    input::{CursorShape, InputEvent, Modifiers},
+    input::{CursorShape, InputEvent, Modifiers, SeatRequest, SeatRequests},
     metrics::{self, Metrics},
     popup::{
         CloseReason, GrabSerial, Placement, PopupAction, PopupEntry, PopupId, PopupQueue, WmBase,
     },
     surface::{NoEvents, OutputRef, Protocols, Role, Surface},
+    text_input::TextInput,
 };
 
 /// What a run of the shell is told from the command line.
@@ -108,15 +110,40 @@ pub enum KeyboardInteractivity {
     Exclusive,
 }
 
+/// Where a layer surface sits on its output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Anchoring {
+    /// Anchored to the top edge, at the spec's size.
+    Top,
+    /// Centred on the output, at the spec's size.
+    Centred,
+    /// Anchored to all four edges: the compositor sizes it to the output
+    /// and tells the size in the configure; the spec's size is not sent.
+    Fill,
+}
+
+impl Anchoring {
+    /// The layer-shell anchor and the size to request for `size`: a filling
+    /// surface asks for 0×0, which the protocol defines as "as large as the
+    /// anchors allow".
+    pub(crate) fn request(self, size: (u32, u32)) -> (Anchor, (u32, u32)) {
+        match self {
+            Anchoring::Top => (Anchor::TOP, size),
+            Anchoring::Centred => (Anchor::empty(), size),
+            Anchoring::Fill => (Anchor::all(), (0, 0)),
+        }
+    }
+}
+
 /// How a layer surface is created.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayerSpec {
     pub output: OutputId,
     pub namespace: &'static str,
     pub layer: Layer,
-    /// Anchored to the top edge; otherwise centred on the output.
-    pub anchor_top: bool,
-    /// Logical size.
+    pub anchor: Anchoring,
+    /// Logical size; a [`Anchoring::Fill`] surface learns its size from the
+    /// configure instead.
     pub size: (u32, u32),
     pub exclusive_zone: i32,
     pub keyboard: KeyboardInteractivity,
@@ -190,6 +217,7 @@ pub struct SurfaceCtl<'a> {
     surface: &'a mut Surface,
     popups: &'a mut PopupQueue,
     cursor: &'a mut Option<CursorShape>,
+    seat: &'a mut SeatRequests,
     signal: &'a LoopSignal,
 }
 
@@ -243,6 +271,32 @@ impl SurfaceCtl<'_> {
     /// on a compositor without `wp_cursor_shape_v1`.
     pub fn set_cursor(&mut self, shape: CursorShape) {
         *self.cursor = Some(shape);
+    }
+
+    /// IME text input for this surface while it has the keyboard focus:
+    /// on while a text field of it is focused, off otherwise (the default).
+    /// The input method's text then arrives as `InputEvent::Preedit` and
+    /// `InputEvent::CommitText`. A no-op without `zwp_text_input_v3`.
+    pub fn set_text_input_enabled(&mut self, enabled: bool) {
+        self.seat
+            .push((self.surface.id, SeatRequest::TextInput(enabled)));
+    }
+
+    /// The caret's rectangle in logical px of this surface, where the input
+    /// method places its candidates; sent when it changes while text input
+    /// is enabled.
+    pub fn set_text_input_rect(&mut self, rect: Rect) {
+        self.seat
+            .push((self.surface.id, SeatRequest::CursorRect(rect)));
+    }
+
+    /// Reads the clipboard's text off the loop and delivers it to this
+    /// surface as `InputEvent::Paste`. Nothing arrives when the clipboard
+    /// holds no UTF-8 text, the text is not valid UTF-8, its owner does not
+    /// answer in time, a read is already in flight, or the compositor has
+    /// no `wl_data_device_manager`.
+    pub fn request_paste(&mut self) {
+        self.seat.push((self.surface.id, SeatRequest::Paste));
     }
 
     /// Opens an `xdg_popup` of this surface at `placement` (logical px of
@@ -419,6 +473,10 @@ pub(crate) struct Core<S: Shell> {
     pub(crate) blur: Blur,
     pub(crate) egl: Egl,
     cursor_shape: Option<CursorShapeManager>,
+    pub(crate) text_input: TextInput,
+    pub(crate) clipboard: Clipboard,
+    /// Text-input and paste requests of the running shell call.
+    seat_requests: SeatRequests,
     shape_device: Option<WpCursorShapeDeviceV1>,
     pending_cursor: Option<CursorShape>,
     current_cursor: Option<CursorShape>,
@@ -563,6 +621,16 @@ impl<S: Shell> Core<S> {
         let cursor_shape = CursorShapeManager::bind(globals, qh)
             .inspect_err(|err| tracing::info!(%err, "no wp_cursor_shape_v1: set_cursor is a no-op"))
             .ok();
+        let text_input = TextInput::bind(globals, qh);
+        let (paste_tx, paste_rx) = channel::channel();
+        handle
+            .insert_source(paste_rx, |event, _, rt: &mut Runtime<S>| {
+                if let ChannelEvent::Msg(done) = event {
+                    rt.paste_done(done);
+                }
+            })
+            .map_err(insert_error("insert the paste channel"))?;
+        let clipboard = Clipboard::bind(globals, qh, paste_tx);
         let egl = Egl::new(&conn)?;
         let metrics = config.metrics.then(Metrics::default);
         Ok(Self {
@@ -582,6 +650,9 @@ impl<S: Shell> Core<S> {
             blur,
             egl,
             cursor_shape,
+            text_input,
+            clipboard,
+            seat_requests: SeatRequests::new(),
             shape_device: None,
             pending_cursor: None,
             current_cursor: None,
@@ -717,6 +788,7 @@ impl<S: Shell> Core<S> {
 
     /// Destroys a surface (layer or popup) after removing its redraw timer.
     pub(crate) fn destroy_surface_object(&mut self, mut surface: Surface) {
+        self.text_input.forget(surface.id);
         if let Some(token) = surface.redraw_timer_mut().take_token() {
             self.handle.remove(token);
         }
@@ -777,6 +849,19 @@ impl<S: Shell> Core<S> {
         {
             surface.flush_commit(qh);
         }
+    }
+
+    /// Applies the text-input and paste requests the shell calls recorded;
+    /// turning text input off may clear a composition (queued as events).
+    fn apply_seat_requests(&mut self) {
+        for (id, request) in std::mem::take(&mut self.seat_requests) {
+            match request {
+                SeatRequest::Paste => self.clipboard.request(id, &self.conn),
+                other => self.text_input.request(id, other),
+            }
+        }
+        let events = self.text_input.sync();
+        self.pending_events.extend(events);
     }
 
     /// Sends the cursor shape a shell asked for, through the shape device
@@ -851,12 +936,9 @@ impl<S: Shell> RuntimeOps for Core<S> {
             Some(spec.namespace),
             Some(&output),
         );
-        layer.set_anchor(if spec.anchor_top {
-            Anchor::TOP
-        } else {
-            Anchor::empty()
-        });
-        layer.set_size(spec.size.0, spec.size.1);
+        let (anchor, size) = spec.anchor.request(spec.size);
+        layer.set_anchor(anchor);
+        layer.set_size(size.0, size.1);
         layer.set_exclusive_zone(spec.exclusive_zone);
         layer.set_margin(0, 0, 0, 0);
 
@@ -869,7 +951,7 @@ impl<S: Shell> RuntimeOps for Core<S> {
         let mut surface = Surface::new(
             id,
             Role::Layer(layer),
-            spec.size,
+            size,
             output_ref,
             self.protocols(),
             blur,
@@ -907,6 +989,7 @@ impl<S: Shell> RuntimeOps for Core<S> {
             popups,
             popup_queue,
             pending_cursor,
+            seat_requests,
             signal,
             ..
         } = self;
@@ -918,6 +1001,7 @@ impl<S: Shell> RuntimeOps for Core<S> {
             surface,
             popups: popup_queue,
             cursor: pending_cursor,
+            seat: seat_requests,
             signal,
         })
     }
@@ -959,6 +1043,7 @@ impl<S: Shell> Runtime<S> {
             frames_drawn,
             popup_queue,
             pending_cursor,
+            seat_requests,
             metrics,
             config,
             signal,
@@ -1000,6 +1085,7 @@ impl<S: Shell> Runtime<S> {
                     surface,
                     popups: popup_queue,
                     cursor: pending_cursor,
+                    seat: seat_requests,
                     signal,
                 },
             };
@@ -1053,6 +1139,7 @@ impl<S: Shell> Runtime<S> {
                     surface: &mut core.surfaces[idx],
                     popups: &mut core.popup_queue,
                     cursor: &mut core.pending_cursor,
+                    seat: &mut core.seat_requests,
                     signal: &core.signal,
                 };
                 shell.input(ev, &mut ctl);
@@ -1069,6 +1156,7 @@ impl<S: Shell> Runtime<S> {
             surface,
             popups: &mut core.popup_queue,
             cursor: &mut core.pending_cursor,
+            seat: &mut core.seat_requests,
             signal: &core.signal,
         };
         if shell.input(ev, &mut ctl) == PopupAction::Close {
@@ -1117,12 +1205,13 @@ impl<S: Shell> Runtime<S> {
         self.output_event(OutputEvent::Removed(id));
     }
 
-    /// Applies everything the shell calls recorded: popup requests, the
-    /// input events they produced (until none remain), timers, the cursor
-    /// and the bare frame-request commits.
+    /// Applies everything the shell calls recorded: popup requests, text
+    /// input and paste requests, the input events they produced (until none
+    /// remain), timers, the cursor and the bare frame-request commits.
     pub(crate) fn flush(&mut self) {
         loop {
             self.core.flush_popup_ops();
+            self.core.apply_seat_requests();
             let events = std::mem::take(&mut self.core.pending_events);
             if events.is_empty() {
                 break;
@@ -1149,6 +1238,8 @@ impl<S: Shell> Runtime<S> {
             wm_base.destroy();
         }
         self.core.pointer_removed();
+        self.core.clipboard.shutdown();
+        self.core.text_input.destroy();
         self.core.fractional_scale.destroy();
         self.core.viewporter.destroy();
         self.core.egl.shutdown();
@@ -1233,6 +1324,21 @@ impl Targets {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_filling_surface_anchors_every_edge_and_asks_for_no_size() {
+        assert_eq!(Anchoring::Top.request((760, 40)), (Anchor::TOP, (760, 40)));
+        assert_eq!(
+            Anchoring::Centred.request((560, 400)),
+            (Anchor::empty(), (560, 400))
+        );
+        let (anchor, size) = Anchoring::Fill.request((560, 400));
+        assert_eq!(
+            anchor,
+            Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT
+        );
+        assert_eq!(size, (0, 0), "the compositor sizes it to the output");
+    }
 
     #[test]
     fn removing_an_output_destroys_its_popups_before_its_surfaces_and_nothing_else() {

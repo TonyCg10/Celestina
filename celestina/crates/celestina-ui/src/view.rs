@@ -8,7 +8,7 @@ use taffy::{
     Position,
 };
 
-use crate::key::Key;
+use crate::{field::FieldId, key::Key};
 
 /// What a node draws.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,6 +34,17 @@ pub enum ViewKind {
     },
     /// An uploaded pixmap stretched over the node at `alpha`.
     Image { id: PixmapId, alpha: f32 },
+    /// A single-line text field. Its text, cursor and selection live in the
+    /// node's [`crate::Field`] (read through `Tree::field`), which a view
+    /// never describes: it survives every update that keeps the node's key
+    /// and `id`, and starts empty when either changes. `placeholder` shows
+    /// in the faint text role while the field is empty; `style` sets the
+    /// text, whose colour is the style's role.
+    Field {
+        id: FieldId,
+        placeholder: String,
+        style: TextStyle,
+    },
 }
 
 /// One keyed node of a view and its children, in paint order (the last
@@ -242,6 +253,23 @@ pub fn text(key: Key, s: &str, style: TextStyle) -> View {
     )
 }
 
+/// A text field named `id` by the product, showing `placeholder` while it is
+/// empty. Interactive and focusable: a press focuses it and places the
+/// cursor; Escape, Enter and the up and down arrows pass through it. Size it
+/// with `.width(w)`; its height is one line of `style`.
+pub fn field(key: Key, id: FieldId, placeholder: &str, style: TextStyle) -> View {
+    View::new(
+        key,
+        ViewKind::Field {
+            id,
+            placeholder: placeholder.to_owned(),
+            style,
+        },
+    )
+    .interactive()
+    .focusable()
+}
+
 /// A semantic (Lucide) icon from `celestina-style/icons`, `size` square.
 pub fn icon(key: Key, name: &'static str, size: f32) -> View {
     View::new(
@@ -373,6 +401,22 @@ mod tests {
                 Key::indexed("r", 2)
             ]
         );
+    }
+
+    #[test]
+    fn a_field_is_an_interactive_focusable_leaf() {
+        let f = field(Key::named("f"), FieldId(7), "Buscar", body());
+        assert!(f.interactive && f.focusable);
+        assert_eq!(
+            f.kind,
+            ViewKind::Field {
+                id: FieldId(7),
+                placeholder: "Buscar".into(),
+                style: body()
+            }
+        );
+        // Box-only builders leave it alone.
+        assert_eq!(f.clone().fill(Role::Card).kind, f.kind);
     }
 
     #[test]

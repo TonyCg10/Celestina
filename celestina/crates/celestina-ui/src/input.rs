@@ -10,10 +10,11 @@
 use std::time::Instant;
 
 use celestina_paint::Rect;
-use celestina_wayland::InputEvent;
+use celestina_wayland::{InputEvent, Modifiers};
 
 use crate::{
     curve::{Motion, ONE_UI},
+    field::{EditOp, FieldId},
     highlight::Highlight,
     key::Key,
     tree::{NodeId, Tree},
@@ -28,6 +29,14 @@ pub(crate) const XKB_KEY_RETURN: u32 = 0xff0d;
 pub(crate) const XKB_KEY_KP_ENTER: u32 = 0xff8d;
 pub(crate) const XKB_KEY_ESCAPE: u32 = 0xff1b;
 pub(crate) const XKB_KEY_ISO_LEFT_TAB: u32 = 0xfe20;
+const XKB_KEY_BACKSPACE: u32 = 0xff08;
+const XKB_KEY_HOME: u32 = 0xff50;
+const XKB_KEY_LEFT: u32 = 0xff51;
+const XKB_KEY_RIGHT: u32 = 0xff53;
+const XKB_KEY_END: u32 = 0xff57;
+const XKB_KEY_DELETE: u32 = 0xffff;
+const XKB_KEY_LOWER_A: u32 = 0x61;
+const XKB_KEY_UPPER_A: u32 = 0x41;
 
 /// What the user did, naming the node by its key.
 #[derive(Clone, Debug, PartialEq)]
@@ -42,6 +51,10 @@ pub enum UiEvent {
     /// A scroll over the topmost interactive node: horizontal, vertical,
     /// in logical px.
     Scroll(Key, f32, f32),
+    /// An edit changed the text, the cursor, the selection or the
+    /// composition of the field the product named so; the product reads the
+    /// text through `Tree::field`.
+    FieldChanged(FieldId),
 }
 
 /// The pointer and keyboard state of one surface.
@@ -62,6 +75,8 @@ impl Interaction {
     /// the press recoil (scale → the theme's press scale, `Fast`) on a left
     /// press, restores it (→ 1, `Slow`) on release or leave, emits `Click`
     /// on a release inside the pressed node and `Scroll` for an axis event.
+    /// A left press on a text field focuses it and places its cursor (no
+    /// recoil), and motion while it is held selects (`FieldChanged`).
     pub fn pointer(&mut self, tree: &mut Tree, ev: &InputEvent, now: Instant) -> Vec<UiEvent> {
         self.sync(tree);
         let mut out = Vec::new();
@@ -69,6 +84,9 @@ impl Interaction {
             InputEvent::PointerMotion { x, y } => {
                 let hit = hit(tree, x, y, now);
                 self.hover(tree, hit, &mut out);
+                if let Some(id) = self.pressed.filter(|&p| is_field(tree, p)) {
+                    self.edit_at(tree, id, x, EditOp::PointerDrag, &mut out);
+                }
             }
             InputEvent::PointerPress { x, y, button, .. } => {
                 let hit = hit(tree, x, y, now);
@@ -76,7 +94,12 @@ impl Interaction {
                 if button == BTN_LEFT && self.pressed.is_none() {
                     if let Some(id) = hit {
                         self.pressed = Some(id);
-                        recoil(tree, id, tree.press_scale, Motion::Fast, now);
+                        if is_field(tree, id) {
+                            self.focused = Some(id);
+                            self.edit_at(tree, id, x, EditOp::PointerDown, &mut out);
+                        } else {
+                            recoil(tree, id, tree.press_scale, Motion::Fast, now);
+                        }
                     }
                 }
             }
@@ -120,9 +143,27 @@ impl Interaction {
     /// with Shift held) cycle the focus through the focusable nodes in tree
     /// order; Enter, keypad Enter and Space emit `Activate` for the focused
     /// node; Escape emits `Escape`; `FocusLost` clears the focus.
+    ///
+    /// While a text field has the focus it consumes the keys it edits with
+    /// (see [`Interaction::field_consumes`]) and they do nothing else:
+    /// printable keys, Space included, insert; the left and right arrows
+    /// (Ctrl by word, Shift to select), Home, End, Backspace and Delete move
+    /// and delete; Ctrl+A selects all. Tab, Enter, Escape and the up and down
+    /// arrows pass through to the rules above and to the surface. The input
+    /// method's `Preedit` and `CommitText` and the clipboard's `Paste` edit
+    /// the focused field too; without one they are dropped.
     pub fn key(&mut self, tree: &mut Tree, ev: &InputEvent) -> Vec<UiEvent> {
         self.sync(tree);
         let mut out = Vec::new();
+        if let Some((id, op)) = field_edit(tree, self.focused, ev) {
+            if let Some(field) = tree.slot_mut(id).and_then(|s| s.field.as_mut()) {
+                if field.edit(op) {
+                    out.extend(field_id(tree, id).map(UiEvent::FieldChanged));
+                }
+            }
+            self.publish(tree);
+            return out;
+        }
         match ev {
             InputEvent::Key {
                 keysym,
@@ -146,6 +187,33 @@ impl Interaction {
         }
         self.publish(tree);
         out
+    }
+
+    /// Whether the focused text field edits with the key event `ev`, so the
+    /// surface leaves it alone instead of treating it as a shortcut.
+    pub fn field_consumes(&self, tree: &Tree, ev: &InputEvent) -> bool {
+        field_edit(tree, tree.highlight().focused, ev).is_some()
+    }
+
+    /// Edits field node `id` with `op` for a pointer at window x `x`.
+    fn edit_at(
+        &self,
+        tree: &mut Tree,
+        id: NodeId,
+        x: f32,
+        op: fn(f32) -> EditOp,
+        out: &mut Vec<UiEvent>,
+    ) {
+        let Some(slot) = tree.slot_mut(id) else {
+            return;
+        };
+        let Some(field) = slot.field.as_mut() else {
+            return;
+        };
+        let local = x - slot.rect.x + field.scroll_x();
+        if field.edit(op(local)) {
+            out.extend(field_id(tree, id).map(UiEvent::FieldChanged));
+        }
     }
 
     /// Takes back the state published last time, as the tree has kept it:
@@ -197,6 +265,58 @@ impl Interaction {
             pressed: self.pressed,
             focused: self.focused,
         });
+    }
+}
+
+fn is_field(tree: &Tree, id: NodeId) -> bool {
+    tree.slot(id).is_some_and(|s| s.field.is_some())
+}
+
+fn field_id(tree: &Tree, id: NodeId) -> Option<FieldId> {
+    match tree.slot(id)?.kind {
+        crate::view::ViewKind::Field { id, .. } => Some(id),
+        _ => None,
+    }
+}
+
+/// The edit the focused node, when it is a shown text field, makes with the
+/// key event `ev`.
+fn field_edit(tree: &Tree, focused: Option<NodeId>, ev: &InputEvent) -> Option<(NodeId, EditOp)> {
+    let id = focused.filter(|&f| tree.is_shown(f) && is_field(tree, f))?;
+    let op = match ev {
+        InputEvent::Key {
+            keysym,
+            utf8,
+            modifiers,
+            pressed: true,
+            ..
+        } => key_to_edit(*keysym, utf8.as_deref(), *modifiers)?,
+        InputEvent::Preedit { text, cursor } => EditOp::Preedit {
+            text: text.clone(),
+            cursor: *cursor,
+        },
+        InputEvent::CommitText(text) => EditOp::CommitPreedit(text.clone()),
+        InputEvent::Paste(text) => EditOp::Paste(text.clone()),
+        _ => return None,
+    };
+    Some((id, op))
+}
+
+/// What a field does with a key press, if it takes the key at all.
+fn key_to_edit(keysym: u32, utf8: Option<&str>, m: Modifiers) -> Option<EditOp> {
+    let (select, word) = (m.shift, m.ctrl);
+    let plain = !m.ctrl && !m.alt && !m.logo;
+    match keysym {
+        XKB_KEY_LEFT if !m.alt && !m.logo => Some(EditOp::Left { select, word }),
+        XKB_KEY_RIGHT if !m.alt && !m.logo => Some(EditOp::Right { select, word }),
+        XKB_KEY_HOME if !m.alt && !m.logo => Some(EditOp::Home { select }),
+        XKB_KEY_END if !m.alt && !m.logo => Some(EditOp::End { select }),
+        XKB_KEY_BACKSPACE if plain => Some(EditOp::Backspace),
+        XKB_KEY_DELETE if plain => Some(EditOp::Delete),
+        XKB_KEY_LOWER_A | XKB_KEY_UPPER_A if m.ctrl && !m.alt && !m.logo => Some(EditOp::SelectAll),
+        _ => utf8
+            .filter(|s| plain && !s.is_empty() && !s.chars().any(char::is_control))
+            .map(|s| EditOp::Insert(s.to_owned())),
     }
 }
 

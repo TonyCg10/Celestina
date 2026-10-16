@@ -22,3 +22,7 @@ celestina-paint = { path = "../celestina-paint" }
 taffy = { version = "0.15", default-features = false, features = ["std", "taffy_tree", "flexbox", "block_layout"] }
 # Typed errors with their sources.
 thiserror = "2"
+# The text field moves and deletes by extended grapheme cluster (a letter
+# with a combining accent, a flag) and jumps by Unicode word boundary;
+# `str::chars` cannot do either. Already in the lockfile through cosmic-text.
+unicode-segmentation = "1"

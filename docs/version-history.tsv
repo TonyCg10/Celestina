@@ -266,3 +266,4 @@ celestina-style	1.13.4	bug	STYLE-G7-AE	Fix slow drag selection in text fields in
 celestina	0.1.0	baseline	CEL-1-A	Adopt the Rust shell skeleton as its verified baseline
 celestina	0.2.0	milestone	CEL-1-B	Add the skeleton: `celestina-wayland`, `celestina-paint` with the text atlas, `celestina-ui` with keyed reconciliation; one Island capsule per output with clock and workspace dots over the tolerant niri stream; the Shell1 command surface and single instance
 celestina	0.3.0	milestone	CEL-1-D	Add the Island's Activity, Notifications and Tray pages, page tabs and the overflow popup
+celestina	0.4.0	milestone	CEL-1-E	Add the launcher: overlay surface, Field with IME, the desktop-entry index, ranking, slash commands and spawn

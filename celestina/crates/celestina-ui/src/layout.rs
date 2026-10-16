@@ -26,6 +26,7 @@ impl Tree {
             self.dpr = dpr;
             self.remeasure_text();
         }
+        self.shape_fields(text, dpr);
         self.layout_measured(available, |s, style, max_width| {
             text.measure(s, style, max_width, dpr)
         });
@@ -77,6 +78,11 @@ impl Tree {
                                     style,
                                     max_width,
                                 }) => measure(text, style, max_width.filter(|w| w.is_finite())),
+                                // A field is one line of its style, as wide as
+                                // its placeholder unless the view sizes it.
+                                Some(ViewKind::Field {
+                                    placeholder, style, ..
+                                }) => measure(placeholder, style, None),
                                 Some(ViewKind::Icon { size, .. }) => (*size, *size),
                                 _ => (0.0, 0.0),
                             };
@@ -178,11 +184,22 @@ impl Tree {
         }
     }
 
+    /// Shapes the display text of every field whose text, style or device
+    /// ratio changed, so a pointer event between two layouts hit-tests the
+    /// text on screen.
+    fn shape_fields(&mut self, text: &mut TextSystem, dpr: f32) {
+        for slot in self.slots.iter_mut().flatten() {
+            if let (ViewKind::Field { style, .. }, Some(field)) = (&slot.kind, &mut slot.field) {
+                field.shape(text, style, dpr);
+            }
+        }
+    }
+
     /// Marks every text node for measuring and shaping again.
     fn remeasure_text(&mut self) {
         let mut stale = Vec::new();
         for slot in self.slots.iter_mut().flatten() {
-            if matches!(slot.kind, ViewKind::Text { .. }) {
+            if matches!(slot.kind, ViewKind::Text { .. } | ViewKind::Field { .. }) {
                 slot.run = None;
                 stale.push(slot.taffy);
             }

@@ -15,6 +15,7 @@
 
 mod anim;
 mod curve;
+mod field;
 mod highlight;
 mod input;
 mod key;
@@ -28,7 +29,8 @@ pub mod view;
 
 pub use anim::{Animated, Reduced};
 pub use curve::{CubicBezier, Motion, EXIT, LINEAR, ONE_UI, SINE_IN_OUT_80, SINE_IN_OUT_90};
-pub use highlight::Highlight;
+pub use field::{EditOp, Field, FieldId, MAX_CHARS};
+pub use highlight::{focus_ring, Highlight, FOCUS_WIDTH};
 pub use input::{Interaction, UiEvent, BTN_LEFT};
 pub use key::Key;
 pub use tree::{NodeId, Tree, TreeError};

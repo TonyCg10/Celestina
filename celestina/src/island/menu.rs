@@ -292,7 +292,7 @@ impl MenuCore {
                         return Outcome::Close(Some(choice));
                     }
                 }
-                UiEvent::HoverChanged(..) | UiEvent::Scroll(..) => {}
+                UiEvent::HoverChanged(..) | UiEvent::Scroll(..) | UiEvent::FieldChanged(_) => {}
             }
         }
         Outcome::Keep {

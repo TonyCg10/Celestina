@@ -26,7 +26,7 @@ impl Highlight {
 }
 
 /// The focus ring's stroke width.
-pub(crate) const FOCUS_WIDTH: f32 = 2.0;
+pub const FOCUS_WIDTH: f32 = 2.0;
 /// How far inside the node the ring's outer edge sits.
 pub(crate) const FOCUS_INSET: f32 = 2.0;
 
@@ -52,8 +52,10 @@ pub(crate) fn box_fill(
 
 /// The rect and radius the focus ring of a node at `rect` with corner
 /// `radius` is stroked on: the stroke is centred on that rect, so its outer
-/// edge is `FOCUS_INSET` inside the node.
-pub(crate) fn focus_ring(rect: Rect, radius: f32) -> (Rect, f32) {
+/// edge is `FOCUS_INSET` inside the node. Public so a product that marks a
+/// node the tree does not focus (the launcher's selected row) strokes the
+/// same ring.
+pub fn focus_ring(rect: Rect, radius: f32) -> (Rect, f32) {
     let inset = FOCUS_INSET + FOCUS_WIDTH / 2.0;
     let ring = Rect {
         x: rect.x + inset,

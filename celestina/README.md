@@ -53,8 +53,8 @@ and exits 0, or 1 when the shell is not running, refuses the verb or does
 not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
 `island toggle`, `island open <activity|notifications|tray>`,
 `island close`, `launcher toggle`, `notifications toggle`,
-`notifications dismiss-all` and `quit`; the launcher and notification verbs
-are accepted and do nothing until CEL-1-E and CEL-1-F. Bind them to keys in
+`notifications dismiss-all` and `quit`; `launcher toggle` opens or closes the
+launcher, and the notification verbs are accepted and do nothing until CEL-1-F. Bind them to keys in
 niri with `spawn "celestina" "island" "toggle"`. An open page asks for the
 keyboard on demand (`OnDemand`), and niri hands it the keyboard when the page
 is clicked: Escape closes a page once it has been clicked, while a click
