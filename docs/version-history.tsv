@@ -270,3 +270,4 @@ celestina	0.4.0	milestone	CEL-1-E	Add the launcher: overlay surface, Field with 
 celestina	0.5.0	milestone	CEL-1-F	Add the notifications: the server claimed only if free, banners, history, actions and do-not-disturb
 celestina	0.6.0	milestone	CEL-1-G	Add the tray: watcher and host claimed only if free, items, pixmaps and theme icons, nested DBusMenu popups and scroll
 celestina	1.0.0	release	CEL-1-H	Add the CEL-1 exit: the first stable shell, the Noctalia handover note and the live rows queued
+celestina	1.1.0	milestone	CEL-2-E	Add the wallpaper duty: a still image per output on a Background layer, bounded decoding, off by default

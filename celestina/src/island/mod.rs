@@ -876,6 +876,11 @@ impl Island {
             Verb::LauncherToggle
             | Verb::NotificationsToggle
             | Verb::NotificationsDismissAll
+            | Verb::WallpaperSet { .. }
+            | Verb::WallpaperNext(_)
+            | Verb::WallpaperPrev(_)
+            | Verb::WallpaperMode(_)
+            | Verb::WallpaperRetry
             | Verb::Quit => return,
         }
         self.sync_ctl(ctl, now);

@@ -20,6 +20,8 @@
 //! - [`settings`] — the shell's own durable choice (do-not-disturb) and the
 //!   rule that a choice is published only once it is written.
 //! - [`calendar`] — which day falls where in a month.
+//! - [`wallpaper`] — which image an output shows, how it is laid on the
+//!   output, and the next or previous image of a folder.
 
 #![forbid(unsafe_code)]
 
@@ -29,5 +31,6 @@ pub mod coalesce;
 pub mod launcher;
 pub mod notifications;
 pub mod settings;
+pub mod wallpaper;
 pub mod workspace_groups;
 pub mod workspace_map;

@@ -13,8 +13,20 @@ What Noctalia still does for the session is in
 
 ## User contract
 
-- The Island, the launcher, the banners and the tray are the shell's whole
-  surface; there is no dock ([ADR 0003](docs/decisions/0003-no-dock.md)).
+- The Island, the launcher, the banners and the tray are the shell's surfaces,
+  with the wallpaper when its duty is on; there is no dock
+  ([ADR 0003](docs/decisions/0003-no-dock.md)).
+- The wallpaper duty (`duties.wallpaper` in `~/.config/celestina/shell.json`)
+  is `off` by default. When it is on, the shell paints one still image per
+  output from the folder `wallpaper.folder` names, on a `celestina-wallpaper`
+  surface in the Background layer, scaled by `wallpaper.mode` (`fill`, `fit`,
+  `stretch` or `center`). An output that another client holds in the
+  Background layer, such as Noctalia's wallpaper, gets no surface and the
+  shell logs the holder. The shell checks the holder only when the duty turns
+  on, when an output appears and on `celestina wallpaper retry`; a holder that
+  arrives later is not detected. Accepted formats are PNG, JPEG and WebP; lossless
+  WebP is refused. A source is at most 8192 px a side and 40 MP, and the decode
+  needs at most about 322 MiB.
 - Surfaces take no keyboard at rest
   ([ADR 0007](docs/decisions/0007-focus-policy.md)); well-known bus names are
   claimed only when free, so the shell runs beside Noctalia
@@ -56,9 +68,15 @@ and exits 0, or 1 when the shell is not running, refuses the verb or does
 not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
 `island toggle`, `island open <activity|notifications|tray>`,
 `island close`, `launcher toggle`, `notifications toggle`,
-`notifications dismiss-all` and `quit`; `launcher toggle` opens or closes the
+`notifications dismiss-all`, `wallpaper set <output|all> <file>`,
+`wallpaper next [output]`, `wallpaper prev [output]`, `wallpaper mode <mode>`,
+`wallpaper retry` and `quit`; `launcher toggle` opens or closes the
 launcher, and `notifications toggle` opens or closes the Notifications page and
-`notifications dismiss-all` dismisses every notification. Bind them to keys in
+`notifications dismiss-all` dismisses every notification. `wallpaper set` and
+`wallpaper next`/`prev` choose the picture of one output (or of all, for `set`)
+from the folder's sorted image files; `wallpaper retry` checks the outputs
+again, for example after another client has released one. A choice is written
+to `shell.json` before it is applied. Bind them to keys in
 niri with `spawn "celestina" "island" "toggle"`. An open page asks for the
 keyboard on demand (`OnDemand`), and niri hands it the keyboard when the page
 is clicked: Escape closes a page once it has been clicked, while a click

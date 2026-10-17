@@ -1,0 +1,81 @@
+# CEL-2-E exact change inventory
+
+Base revision	5ccf48d7a080aeb90c881c3429a2ded533ee6f16
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/wallpaper.rs
+Pathspec	celestina-rs/crates/celestina-shell/tests/salvage.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/backend.rs
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/crates/celestina-paint/tests/painter_contract.rs
+Pathspec	celestina/crates/celestina-wayland/src/egl.rs
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/crates/celestina-wayland/src/surface.rs
+Pathspec	celestina/docs/evidence/2026-10-16-wallpaper.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-E.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/scripts/wallpaper-backdrop-probe.sh
+Pathspec	celestina/scripts/wallpaper-layers-probe.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/bus.rs
+Pathspec	celestina/src/command.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/providers/mod.rs
+Pathspec	celestina/src/providers/niri.rs
+Pathspec	celestina/src/providers/settings.rs
+Pathspec	celestina/src/providers/wallpaper.rs
+Pathspec	celestina/src/wallpaper/decode.rs
+Pathspec	celestina/src/wallpaper/mod.rs
+Pathspec	celestina/src/wallpaper/surface.rs
+Pathspec	celestina/tests/wallpaper_decode.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	0	d59ba8bedc53e7068e39bd34d6c883b5df709b78785c587602d3e579efd8b113	celestina-rs/crates/celestina-shell/src/lib.rs
+312	1	76ae97660cc5876b3049b6de8efee15790f3ba5ecb3f4d49e4b095931afbe3ec	celestina-rs/crates/celestina-shell/src/settings.rs
+537	0	98ceac3d0ad57b74323fbf6bb2a02ead66e48af8f56adbe25fa1c8a0aec52387	celestina-rs/crates/celestina-shell/src/wallpaper.rs
+6	3	cb5749cf0cd221a0744a62abd34a8f3a5140cafeab574b5470feebeec3aa032b	celestina-rs/crates/celestina-shell/tests/salvage.rs
+94	20	6649afe4673e632edd5e8f75baa584c4579663049215dc880b167e368d671c98	celestina/Cargo.lock
+18	1	e545bba2c06d52cc4b0df532cd62a46cd42d20c02dd7b10db0b4afd226b6d31b	celestina/Cargo.toml
+22	4	0c3bc4080546d8555da63d5fb1122c245860ef46903157d5def7dfe2bd2bef71	celestina/README.md
+6	0	e1f31fc8cd2afa399c78c82438de0308bd9bb1401b6ed36dca17d5b77dd66e58	celestina/STATUS.md
+36	4	34025724201e6b6145095c6e968606848a44892adc13c070fe230cd70681c7e4	celestina/VALIDATION.md
+11	0	41efb3842c8351cfd80ad4c1d09254fe943062f0447678f2061042728d07bf3c	celestina/crates/celestina-paint/src/backend.rs
+122	2	4c228c8b27abd737251fd17b0fbfca3de5426e1d7976db768f31352f719bdf4d	celestina/crates/celestina-paint/src/painter.rs
+15	0	b8360527e417a032a4183af79c7af504eeaa22b7a39d61d533004d66d3fcacb9	celestina/crates/celestina-paint/tests/painter_contract.rs
+16	0	c3bb0bd2b5b5ae56e41bd02841c7562366dcf48b0db16d468240a3f855892fad	celestina/crates/celestina-wayland/src/egl.rs
+30	4	22754be9f4503ffa0468ae143a4507c132b23b54da1fa89eb927f6750b10a11d	celestina/crates/celestina-wayland/src/runtime.rs
+28	0	08d1f32b915a5e2169bfcaee0bb604bf8cd9afeb801b1b68934c16429a083978	celestina/crates/celestina-wayland/src/surface.rs
+226	0	d786e07a0feb11a2bcebe87c02a4825f9c508fab87dacc922f3eff8d422b43db	celestina/docs/evidence/2026-10-16-wallpaper.md
+81	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-E.numstat.tsv
+1	1	40acd4abc1261367a2abf26f91a77a89d6d9b3d1a8647c56217238fd065dc4ba	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+90	0	0b2c25f824b6f31f44f0fcc0f707d382f810b992e955c32a8620e23587bfd436	celestina/scripts/smoke.sh
+199	0	a3882e77adf63387cb930b53da580c185e9c497b07b17a0306105137f1067c73	celestina/scripts/wallpaper-backdrop-probe.sh
+20	0	23c6ee7d80e50d44b87ddc9699c0fc84544ed7a016b28593d9315c544b23e44c	celestina/scripts/wallpaper-layers-probe.sh
+84	1	f15b708745a28585fbe831b5900c2d1c74e1ca68dc583d2b38fc6209605cdd31	celestina/src/app.rs
+25	4	f8991de7b91b3b548e77bca2c9d3e2a63b8fe3d91d7a1ea9601ff1317d11b586	celestina/src/bus.rs
+255	7	d95e9b7aca0b46ff4be8c675871cd66fcba999444f0ecacc007fc5ff4a538c74	celestina/src/command.rs
+5	0	b648a7451d47328bf2e561ffe1464ea0b48cb1edbb71f3d138a72ead5a52a0be	celestina/src/island/mod.rs
+1	0	4e51e01a7e05a671b2f1928941b61489326d1cfd7deb05d179fbaf383a13f36a	celestina/src/lib.rs
+34	2	f9e335cb5d6276dd280b11641fab4076663937e92652f6ac67da656d3f2e2a8e	celestina/src/main.rs
+6	0	d56c0b7be01abadfc874774436bee469910ddab84111722a0d3760723f903f19	celestina/src/message.rs
+1	0	0b5b63c4c90b64b26231960052270c8a2df23ccbae0901c8b00aeb53f836c41d	celestina/src/providers/mod.rs
+2	2	a10c5ce907a6a475cc6145560e61d284490b49c59d5137e67ab1b7b53f24b144	celestina/src/providers/niri.rs
+471	4	1cb8073e7761f1b414927f2ed8237b0687376bbc0c9940b5c36e4e1b276ecef0	celestina/src/providers/settings.rs
+1041	0	08756ddc4f3894521b5c5c6b04af73ca5a80a82b95aa1b77cfb867fc2890274c	celestina/src/providers/wallpaper.rs
+1271	0	58d92345d0d61908e445d322ce5d30f8d2533cd56dac5a1ce2b8bce23fd06220	celestina/src/wallpaper/decode.rs
+16	0	dfee1df66f071fb06747ff9d647b0da1d616cc01e29918447d577db36028c063	celestina/src/wallpaper/mod.rs
+1932	0	2f52b4c5e1358427a471ecea4506cb2b6eaa84eaa65c12badbd2469d892e3308	celestina/src/wallpaper/surface.rs
+733	0	60194cda38d6a239222885db651e844ed77f4829f8258fe339fbe04949653b04	celestina/tests/wallpaper_decode.rs
+1	0	053f1d8fd2bba9c8e5595e0e9c91a14d073970bf4b1647501a54b7398f691413	docs/version-history.tsv

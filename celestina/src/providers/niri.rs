@@ -516,7 +516,7 @@ pub fn check_applicable(state: &EventStreamState, event: &Event) -> Result<(), S
 
 /// What one bounded read produced.
 #[derive(Debug, PartialEq, Eq)]
-enum LineRead {
+pub(super) enum LineRead {
     /// `line` holds one whole line, newline included.
     Line,
     /// The read timed out; whatever arrived is kept in `line` for the next
@@ -528,7 +528,7 @@ enum LineRead {
 
 /// Reads at most up to the next newline into `line`, never letting it grow
 /// past [`MAX_LINE_BYTES`] + 1 bytes. A timeout keeps the partial line.
-fn read_line_bounded(
+pub(super) fn read_line_bounded(
     reader: &mut impl BufRead,
     line: &mut Vec<u8>,
 ) -> Result<LineRead, SessionError> {

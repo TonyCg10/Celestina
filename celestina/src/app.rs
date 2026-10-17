@@ -298,6 +298,8 @@ pub struct App {
     /// The tray menu chain open right now.
     open_tray_menu: Option<OpenTrayMenu>,
     tray_refusal_logged: bool,
+    /// The wallpaper duty: its surfaces, textures and requests.
+    wallpapers: crate::wallpaper::surface::Wallpapers,
 }
 
 impl std::fmt::Debug for App {
@@ -352,6 +354,7 @@ impl App {
             pending_menu: None,
             open_tray_menu: None,
             tray_refusal_logged: false,
+            wallpapers: crate::wallpaper::surface::Wallpapers::default(),
         }
     }
 
@@ -373,6 +376,38 @@ impl App {
     pub fn with_tray(mut self, tray: Rc<OnceCell<TrayProvider>>) -> App {
         self.tray = tray;
         self
+    }
+
+    /// Takes the slot the wallpaper worker's queue is put in once it runs.
+    #[must_use]
+    pub fn with_wallpaper(
+        mut self,
+        provider: Rc<OnceCell<crate::providers::wallpaper::WallpaperProvider>>,
+    ) -> App {
+        self.wallpapers = crate::wallpaper::surface::Wallpapers::new(provider);
+        self
+    }
+
+    /// `shell.json` changed on disk: its value is the one in force, and the
+    /// duties and do-not-disturb follow it live.
+    fn shell_settings_read(
+        &mut self,
+        read: crate::providers::settings::ShellRead,
+        ctl: &mut RuntimeCtl<'_>,
+    ) {
+        let before = self.settings.current().clone();
+        if !self.settings.adopt_read(read) {
+            return;
+        }
+        tracing::info!("shell settings changed on disk");
+        let after = self.settings.current().clone();
+        self.wallpapers
+            .settings_changed(&before, &after, ctl, self.painter.as_ref());
+        if before.do_not_disturb != after.do_not_disturb {
+            self.notifications
+                .send(NotificationsCommand::SetQuiet(after.do_not_disturb));
+            self.redraw_all(ctl);
+        }
     }
 
     /// Records who holds the bus names the pages depend on; the Islands
@@ -556,6 +591,14 @@ impl App {
                 }
             }
             Verb::LauncherToggle => self.toggle_launcher(ctl),
+            Verb::WallpaperSet { .. }
+            | Verb::WallpaperNext(_)
+            | Verb::WallpaperPrev(_)
+            | Verb::WallpaperMode(_)
+            | Verb::WallpaperRetry => {
+                self.wallpapers
+                    .command(&verb, &mut self.settings, ctl, self.painter.as_ref());
+            }
             Verb::NotificationsDismissAll => {
                 self.notifications.send(NotificationsCommand::DismissAll);
             }
@@ -994,11 +1037,27 @@ impl Shell for App {
 
     fn output(&mut self, ev: OutputEvent, ctl: &mut RuntimeCtl<'_>) {
         match ev {
-            OutputEvent::Added(info) => self.output_added(&info, ctl),
+            OutputEvent::Added(info) => {
+                self.output_added(&info, ctl);
+                self.wallpapers.output_added(
+                    &info,
+                    self.settings.current(),
+                    ctl,
+                    self.painter.as_ref(),
+                );
+            }
             OutputEvent::Changed(info) => {
                 tracing::debug!(output = %info.name, "output changed; the Island keeps its surface");
+                self.wallpapers.output_changed(
+                    &info,
+                    self.settings.current(),
+                    ctl,
+                    self.painter.as_ref(),
+                );
             }
             OutputEvent::Removed(output) => {
+                self.wallpapers
+                    .output_removed(output, ctl, self.painter.as_ref());
                 if self.launcher.as_ref().is_some_and(|l| l.output() == output) {
                     // Its surface went with the output.
                     self.launcher = None;
@@ -1055,6 +1114,25 @@ impl Shell for App {
                 }
             }
         }
+        if self.wallpapers.owns(cx.surface) {
+            if let Some(shared) = self.painter.as_ref() {
+                if let Some(failed) = self.wallpapers.frame(cx, shared, self.settings.current()) {
+                    // The surface goes when the posted failure arrives.
+                    if !self
+                        .sender
+                        .get()
+                        .is_some_and(|sender| sender.send(Message::Wallpaper(failed)).is_ok())
+                    {
+                        tracing::warn!(
+                            "wallpaper: the loop cannot be reached; the failed surface stays"
+                        );
+                    }
+                }
+            }
+            return;
+        }
+        self.wallpapers
+            .scale_seen(cx.output, cx.scale, self.settings.current());
         if let (Some(shared), Some(open)) = (self.painter.as_ref(), self.launcher.as_mut()) {
             if open.surface() == cx.surface {
                 match shared.try_borrow_mut() {
@@ -1244,6 +1322,11 @@ impl Shell for App {
                 }
             }
             Message::Tray(event) => self.tray_event(event, ctl),
+            Message::Wallpaper(event) => {
+                self.wallpapers
+                    .message(event, &mut self.settings, ctl, self.painter.as_ref());
+            }
+            Message::ShellSettings(read) => self.shell_settings_read(read, ctl),
         }
     }
 }

@@ -244,6 +244,22 @@ pub fn femtovg_renderer(
         .map_err(EglError::Renderer)
 }
 
+/// `GL_MAX_TEXTURE_SIZE` of the current GLES 3 context, the longest texture
+/// side it accepts; `None` when the driver answers a non-positive value.
+/// Called once, beside [`femtovg_renderer`], so the painter can refuse an
+/// oversize texture with a typed error before the driver does.
+pub fn max_texture_side(proc_address: &dyn Fn(&str) -> *const c_void) -> Option<u32> {
+    // SAFETY: same invariant as `femtovg_renderer`: called from
+    // `Shell::frame` with the shared GLES 3 context current on this thread,
+    // and `proc_address` resolves entry points of that context. The loader
+    // table is dropped before returning, so no pointer outlives the call.
+    let gl = unsafe { glow::Context::from_loader_function(|name| proc_address(name)) };
+    // SAFETY: `glGetIntegerv(GL_MAX_TEXTURE_SIZE)` only reads a context
+    // limit; the context is current (above).
+    let side = unsafe { gl.get_parameter_i32(glow::MAX_TEXTURE_SIZE) };
+    u32::try_from(side).ok().filter(|&side| side > 0)
+}
+
 fn proc_address(api: &Api, name: &str) -> *const c_void {
     match api.get_proc_address(name) {
         Some(f) => f as *const c_void,

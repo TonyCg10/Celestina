@@ -97,6 +97,8 @@ pub enum OutputEvent {
 /// The layer-shell layers the shell uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Layer {
+    /// Under every window: the wallpaper.
+    Background,
     Top,
     Overlay,
 }
@@ -253,6 +255,14 @@ impl SurfaceCtl<'_> {
 
     /// Input region in logical px; empty = pass-through. Sent with the next
     /// frame's commit.
+    ///
+    /// An empty slice is an explicit *empty* `wl_region`, never "the whole
+    /// surface": `PendingRegions` keeps `Some(vec![])` as a value, the
+    /// region cache reports it as a change, and `build_region` adds no
+    /// rectangle before `wl_surface.set_input_region(Some(..))` (a `None`,
+    /// which would mean the whole surface, is never sent). Every surface
+    /// also starts with that empty region (`Surface::new`), so a surface
+    /// that never calls this — a wallpaper — takes no pointer or touch.
     pub fn set_input_region(&mut self, rects: &[Rect]) {
         self.surface.pending_regions_mut().set_input(rects);
     }
@@ -931,6 +941,15 @@ impl<S: Shell> Core<S> {
     }
 }
 
+/// The `zwlr_layer_shell_v1` layer a [`Layer`] is created in.
+fn wlr_layer_of(layer: Layer) -> wlr_layer::Layer {
+    match layer {
+        Layer::Background => wlr_layer::Layer::Background,
+        Layer::Top => wlr_layer::Layer::Top,
+        Layer::Overlay => wlr_layer::Layer::Overlay,
+    }
+}
+
 fn wp_shape(shape: CursorShape) -> wp_cursor_shape_device_v1::Shape {
     match shape {
         CursorShape::Default => wp_cursor_shape_device_v1::Shape::Default,
@@ -951,10 +970,7 @@ impl<S: Shell> RuntimeOps for Core<S> {
         let layer = self.layer_shell.create_layer_surface(
             &self.qh,
             wl_surface,
-            match spec.layer {
-                Layer::Top => wlr_layer::Layer::Top,
-                Layer::Overlay => wlr_layer::Layer::Overlay,
-            },
+            wlr_layer_of(spec.layer),
             Some(spec.namespace),
             Some(&output),
         );
@@ -1418,6 +1434,16 @@ impl Targets {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_layer_maps_to_its_layer_shell_layer() {
+        assert_eq!(
+            wlr_layer_of(Layer::Background),
+            wlr_layer::Layer::Background
+        );
+        assert_eq!(wlr_layer_of(Layer::Top), wlr_layer::Layer::Top);
+        assert_eq!(wlr_layer_of(Layer::Overlay), wlr_layer::Layer::Overlay);
+    }
 
     #[test]
     fn a_filling_surface_anchors_every_edge_and_asks_for_no_size() {

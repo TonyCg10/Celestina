@@ -1,5 +1,5 @@
 //! The two contracts the salvage adds on top of the copied modules: the
-//! shell's own settings file carries only do-not-disturb, and the
+//! shell's own settings file carries only do-not-disturb, the duties and the wallpaper, and the
 //! notifications history keeps fifty while its page shows twenty.
 
 use celestina_shell::notifications::{
@@ -8,7 +8,7 @@ use celestina_shell::notifications::{
 use celestina_shell::settings::{Settings, Store, WriteOutcome, SCHEMA_VERSION};
 
 #[test]
-fn settings_round_trips_only_do_not_disturb() {
+fn settings_round_trips_only_the_shells_own_choices() {
     let settings = Settings {
         do_not_disturb: true,
         ..Settings::default()
@@ -23,7 +23,10 @@ fn settings_round_trips_only_do_not_disturb() {
         .keys()
         .map(String::as_str)
         .collect();
-    assert_eq!(keys, ["do_not_disturb", "schema_version"]);
+    assert_eq!(
+        keys,
+        ["do_not_disturb", "duties", "schema_version", "wallpaper"]
+    );
     assert_eq!(SCHEMA_VERSION, 1);
     assert_eq!(Settings::from_bytes(&bytes), Some(settings));
 

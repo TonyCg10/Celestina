@@ -210,6 +210,17 @@ impl Backend {
         self.canvas.fill_path(&rounded(rect, radius), &paint);
     }
 
+    /// Draws `image` stretched exactly over `rect` with no tint and no
+    /// antialiased fringe, so its edge texels are not blended with the
+    /// clear colour (the wallpaper).
+    pub(crate) fn blit_image(&mut self, rect: Rect, image: ImageHandle) {
+        let paint =
+            Paint::image(image.0, rect.x, rect.y, rect.w, rect.h, 0.0, 1.0).with_anti_alias(false);
+        let mut path = Path::new();
+        path.rect(rect.x, rect.y, rect.w, rect.h);
+        self.canvas.fill_path(&path, &paint);
+    }
+
     /// Uploads `width`×`height` RGBA texels as a new texture.
     pub(crate) fn create_image(
         &mut self,

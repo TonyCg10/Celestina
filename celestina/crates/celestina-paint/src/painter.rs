@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::path::PathBuf;
 
-use celestina_wayland::egl::EglError;
+use celestina_wayland::egl::{max_texture_side, EglError};
 use celestina_wayland::Rect;
 
 use crate::atlas::{Atlas, GlyphKey, PAGE};
@@ -24,6 +24,11 @@ use crate::theme::Theme;
 
 /// The longest side of an uploaded pixmap, in px.
 pub(crate) const MAX_PIXMAP_SIDE: u32 = 2048;
+
+/// The longest wallpaper side assumed when the driver does not report
+/// `GL_MAX_TEXTURE_SIZE`: an 8K output's 7680 px fit, and a driver that is
+/// smaller still refuses the upload with a typed `PaintError::Gpu`.
+pub(crate) const FALLBACK_WALLPAPER_SIDE: u32 = 8192;
 
 /// Transparent texels around each glyph in the atlas, so linear sampling
 /// under a transform never bleeds a neighbour in.
@@ -50,6 +55,14 @@ pub enum PaintError {
     Grain(#[from] GrainError),
     #[error("a {width}×{height} ARGB pixmap cannot be {len} bytes (sides 1..={MAX_PIXMAP_SIDE})")]
     Pixmap { width: u32, height: u32, len: usize },
+    #[error("a {width}×{height} wallpaper exceeds the GL texture side of {max_side} px")]
+    WallpaperTooLarge {
+        width: u32,
+        height: u32,
+        max_side: u32,
+    },
+    #[error("a {width}×{height} RGBA wallpaper cannot be {len} bytes")]
+    WallpaperTexels { width: u32, height: u32, len: usize },
 }
 
 fn gpu(what: &'static str) -> impl FnOnce(GpuError) -> PaintError {
@@ -75,6 +88,31 @@ pub(crate) fn argb_to_rgba(argb: &[u8], width: u32, height: u32) -> Result<Vec<u
         .chunks_exact(4)
         .flat_map(|p| [p[1], p[2], p[3], p[0]])
         .collect())
+}
+
+/// Checks a wallpaper's straight RGBA texels before they reach the GPU:
+/// both sides in `1..=max_side` (the GL limit) and exactly `width`×`height`
+/// texels.
+pub(crate) fn check_wallpaper(
+    len: usize,
+    width: u32,
+    height: u32,
+    max_side: u32,
+) -> Result<(), PaintError> {
+    if width == 0 || height == 0 || width > max_side || height > max_side {
+        return Err(PaintError::WallpaperTooLarge {
+            width,
+            height,
+            max_side,
+        });
+    }
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|n| n.checked_mul(4));
+    if expected != Some(len) {
+        return Err(PaintError::WallpaperTexels { width, height, len });
+    }
+    Ok(())
 }
 
 /// Tracks the global alpha so `opacity` can multiply and nest.
@@ -156,6 +194,8 @@ pub struct Painter {
     icon_theme: Option<String>,
     pixmaps: HashMap<PixmapId, ImageHandle>,
     next_pixmap: u32,
+    /// The longest texture side the GL context accepts (wallpapers).
+    max_texture_side: u32,
     grain: ImageHandle,
     alpha: AlphaStack,
     dpr: f32,
@@ -188,6 +228,13 @@ impl Painter {
                 source,
             },
         })?;
+        let max_texture_side = max_texture_side(proc_address).unwrap_or_else(|| {
+            tracing::warn!(
+                fallback = FALLBACK_WALLPAPER_SIDE,
+                "the driver reports no GL_MAX_TEXTURE_SIZE"
+            );
+            FALLBACK_WALLPAPER_SIDE
+        });
         let grain = grain_texels()?;
         let grain = backend
             .create_image(grain.width, grain.height, &grain.rgba, ImageKind::Tile)
@@ -208,6 +255,7 @@ impl Painter {
             icon_theme: freedesktop_icons::default_theme_gtk(),
             pixmaps: HashMap::new(),
             next_pixmap: 0,
+            max_texture_side,
             grain,
             alpha: AlphaStack::new(),
             dpr: 1.0,
@@ -508,12 +556,49 @@ impl Painter {
             .backend
             .create_image(width, height, &rgba, ImageKind::Straight)
             .map_err(gpu("upload a pixmap"))?;
+        Ok(self.register_pixmap(image))
+    }
+
+    /// Uploads a wallpaper: opaque straight RGBA texels at the output's
+    /// device size, each side up to the GL context's maximum texture side
+    /// (not the 2048 px of `upload_pixmap`). Freed with `release_pixmap`.
+    pub fn upload_wallpaper(
+        &mut self,
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<PixmapId, PaintError> {
+        check_wallpaper(rgba.len(), width, height, self.max_texture_side)?;
+        let image = self
+            .backend
+            .create_image(width, height, rgba, ImageKind::Straight)
+            .map_err(gpu("upload a wallpaper"))?;
+        Ok(self.register_pixmap(image))
+    }
+
+    /// Draws an uploaded wallpaper over `dest` as it is: no tint, at full
+    /// opacity whatever `opacity` is in effect, and without the
+    /// antialiased fringe a path fill adds at its edges. A released id
+    /// draws nothing.
+    pub fn draw_wallpaper(&mut self, id: PixmapId, dest: Rect) {
+        let Some(&image) = self.pixmaps.get(&id) else {
+            tracing::debug!(?id, "drawing a released wallpaper");
+            return;
+        };
+        self.backend.save();
+        self.backend.set_global_alpha(1.0);
+        self.backend.blit_image(dest, image);
+        self.backend.restore();
+    }
+
+    /// Keeps an uploaded texture under a fresh id.
+    fn register_pixmap(&mut self, image: ImageHandle) -> PixmapId {
         self.next_pixmap = self.next_pixmap.wrapping_add(1);
         let id = PixmapId(self.next_pixmap);
         if let Some(stale) = self.pixmaps.insert(id, image) {
             self.backend.delete_image(stale);
         }
-        Ok(id)
+        id
     }
 
     /// Frees an uploaded pixmap's texture; drawing it afterwards draws
@@ -609,6 +694,41 @@ mod tests {
         assert!(matches!(
             argb_to_rgba(&[], huge, 1),
             Err(PaintError::Pixmap { .. })
+        ));
+    }
+
+    #[test]
+    fn wallpapers_up_to_the_gl_side_pass_beyond_the_pixmap_limit() {
+        let (w, h) = (MAX_PIXMAP_SIDE * 2, 3);
+        let len = w as usize * h as usize * 4;
+        assert!(check_wallpaper(len, w, h, FALLBACK_WALLPAPER_SIDE).is_ok());
+        assert!(
+            check_wallpaper(4, 1, 1, 1).is_ok(),
+            "the limit is inclusive"
+        );
+    }
+
+    #[test]
+    fn oversize_or_empty_wallpapers_are_refused() {
+        let over = FALLBACK_WALLPAPER_SIDE + 1;
+        for (w, h) in [(over, 1), (1, over), (0, 1), (1, 0)] {
+            assert!(matches!(
+                check_wallpaper(0, w, h, FALLBACK_WALLPAPER_SIDE),
+                Err(PaintError::WallpaperTooLarge { max_side, .. })
+                    if max_side == FALLBACK_WALLPAPER_SIDE
+            ));
+        }
+    }
+
+    #[test]
+    fn wallpapers_of_the_wrong_length_are_refused() {
+        assert!(matches!(
+            check_wallpaper(7, 2, 1, 16),
+            Err(PaintError::WallpaperTexels { len: 7, .. })
+        ));
+        assert!(matches!(
+            check_wallpaper(usize::MAX, u32::MAX, u32::MAX, u32::MAX),
+            Err(PaintError::WallpaperTexels { .. })
         ));
     }
 }

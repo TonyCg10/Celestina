@@ -51,4 +51,10 @@ pub enum Message {
     OpenNotificationsPage(OutputId),
     /// The tray host's news: the watcher's owner, the items, an item's menu.
     Tray(crate::tray::TrayEvent),
+    /// The wallpaper worker's news: a decoded picture, a fallback, a failure,
+    /// an output another client holds, the folder's names.
+    Wallpaper(crate::providers::wallpaper::WallpaperEvent),
+    /// `shell.json` changed on disk (another program, or the shell's own
+    /// write coming back): the value now in it, read off the loop's thread.
+    ShellSettings(crate::providers::settings::ShellRead),
 }

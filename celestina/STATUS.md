@@ -23,6 +23,12 @@
   ([plan](docs/plans/active/2026-10-16-cel-2-parity.md)): the bar and the piece
   contract first, with CEL-2-B and CEL-2-E under way beside it; the author's
   live validation of the nine VAL-CEL rows stays queued.
+- **CEL-2-E (in progress, not landed):** the `wallpaper` duty, off by default,
+  on `unit/celestina/CEL-2-E`: one still image per output on a
+  `celestina-wallpaper` Background layer surface, bounded decoding, and owner
+  detection so an output another client holds is refused. Its evidence is
+  [`docs/evidence/2026-10-16-wallpaper.md`](docs/evidence/2026-10-16-wallpaper.md);
+  its author row is `VAL-CEL2-WALLPAPER`, pending.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

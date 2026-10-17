@@ -8,6 +8,7 @@ pub mod niri;
 pub mod notifications;
 pub mod settings;
 pub mod tray;
+pub mod wallpaper;
 pub mod worker;
 
 pub use worker::Worker;

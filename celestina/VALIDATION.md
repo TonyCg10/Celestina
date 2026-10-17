@@ -2,11 +2,13 @@
 
 This queue contains no implementation work and never blocks `ROADMAP.md`.
 
-Statuses: `pending`, `passed`, `failed`, `deferred`, `obsolete`. The rows below
-are the live checks of the design's §8 for the CEL-1 release; each is run on
+Statuses: `pending`, `passed`, `failed`, `deferred`, `obsolete`. The
+`VAL-CEL-*` rows are the live checks of the design's §8 for the CEL-1 release;
+each is run on
 the binary the landing of its related unit deploys. CEL-1-H checked that all
-nine rows below are queued and pending; none has been run and none is closed
-by an agent.
+nine `VAL-CEL-*` rows are queued and pending. The `VAL-CEL2-*` rows are queued
+by the CEL-2 units, each unit adding its own (as the CEL-2 ledger states), and
+are run the same way. None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
 
@@ -244,5 +246,35 @@ by an agent.
 - **Pass condition:** every capsule is blurred and clickable, nothing outside
   a capsule steals a click or the focus, and windows do not move when the bar
   is switched on
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-WALLPAPER — The wallpaper duty beside Noctalia's
+
+- **Status:** pending
+- **Related implementation:** CEL-2-E (the `wallpaper` duty, off by default,
+  one `celestina-wallpaper` surface per output on the Background layer)
+- **Requires:** the author's niri session with the deployed shell; Noctalia
+  running with its wallpaper first disabled through Noctalia's own verb, then
+  enabled again for the last step; a folder with one image per output
+- **Procedure:** with Noctalia's wallpaper disabled through its own verb, set
+  `duties.wallpaper` to `"on"` and `wallpaper.folder` to the folder in
+  `~/.config/celestina/shell.json` (the shell follows the file live). Check
+  that each output shows its image. On the 4K output at scale 1.5, check the
+  image is sharp, with no resample blur. Run `celestina wallpaper next DP-1`
+  and check that DP-1 changes picture and the other output keeps its own.
+  Change the mode with `celestina wallpaper mode fit`, then `stretch`, then
+  `center`, and check each one on both outputs. Unplug and replug an output
+  (hotplug) and check that it gets its image back. Restart the shell and check
+  that the saved choices are restored. Then turn Noctalia's wallpaper on again
+  while the duty stays on and run `celestina wallpaper retry`, and check that
+  the shell refuses the output that Noctalia holds: no `celestina-wallpaper`
+  surface on it, and the log names the holder. The shell checks the holder
+  only when the duty turns on, when an output appears and on `wallpaper
+  retry`, so without the retry a holder that arrived later is not noticed
+- **Pass condition:** each output shows its own image at the chosen mode, sharp
+  at scale 1.5; `next`, `mode`, hotplug and restart behave as described; after
+  `celestina wallpaper retry` with Noctalia's wallpaper still on an output, the
+  shell draws nothing on that output and names the holder
 - **Result:** not run
 - **Evidence:** none

@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.0.0"
+version = "1.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -79,3 +79,20 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 unicode-segmentation = "1"
 # Typed errors with their sources, as in the toolkit crates.
 thiserror = "2"
+# Wallpaper decoding (CEL-2-E): the still image of each output is read from a
+# file the author chose, so it is hostile input. Pinned to the release the
+# halted shell already audited; default features off so only the three
+# accepted formats are compiled (png, jpeg, webp — no AVIF, which would pull
+# a C decoder into the process), with `Limits` bounding dimensions and
+# allocation. Decoding and Lanczos scaling run on the wallpaper worker.
+image = { version = "=0.25.6", default-features = false, features = ["png", "jpeg", "webp"] }
+# The wallpaper file is opened with `O_NONBLOCK` so a FIFO named like an
+# image cannot block the worker before `fstat` rejects it; std has no flag
+# constant and the workspace forbids the unsafe a raw libc call needs. Already
+# in the lockfile through the Wayland stack.
+rustix = { version = "1", features = ["fs"] }
+# The shell follows its own `shell.json` live (CEL-2-E: the wallpaper duty
+# turns on and off without a restart), with the same debounced directory
+# watch `celestina-settings` uses for the appearance file; the version is the
+# one already in the lockfile through that crate.
+notify-debouncer-full = "0.5"

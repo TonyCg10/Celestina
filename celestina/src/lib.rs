@@ -16,6 +16,7 @@ pub mod metrics;
 pub mod notifications;
 pub mod providers;
 pub mod tray;
+pub mod wallpaper;
 
 /// `err` and its sources, outermost first, joined by `: `: how the shell
 /// reports a failure on stderr and in the journal.

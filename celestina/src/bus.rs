@@ -82,8 +82,13 @@ impl Shell1 {
     /// stopping.
     fn command(&self, words: Vec<String>) -> (bool, String) {
         match Verb::parse(&words) {
-            Ok(verb) if (self.sink)(verb) => (true, String::new()),
-            Ok(_) => (false, "the shell is stopping".to_owned()),
+            Ok(verb) => {
+                if (self.sink)(verb) {
+                    (true, String::new())
+                } else {
+                    (false, "the shell is stopping".to_owned())
+                }
+            }
             Err(err) => (false, err.to_string()),
         }
     }
@@ -160,7 +165,7 @@ fn send_on(builder: Builder<'static>, verb: &Verb) -> Result<(), BusError> {
     }
 }
 
-fn call(connection: &Connection, words: &[&str]) -> zbus::Result<(bool, String)> {
+fn call(connection: &Connection, words: &[String]) -> zbus::Result<(bool, String)> {
     let reply = connection.call_method(
         Some(BUS_NAME),
         OBJECT_PATH,
@@ -306,9 +311,25 @@ mod tests {
         send_on(bus.builder(), &verb).expect("the verb is delivered");
         assert_eq!(rx.recv_timeout(Duration::from_secs(1)), Ok(verb));
 
+        // A verb with text payloads crosses the bus word for word.
+        let verb = Verb::WallpaperSet {
+            target: crate::command::Target::Output("DP-1".to_owned()),
+            file: "sea.png".to_owned(),
+        };
+        send_on(bus.builder(), &verb).expect("the wallpaper verb is delivered");
+        assert_eq!(rx.recv_timeout(Duration::from_secs(1)), Ok(verb));
+
+        // A file name that is a path is refused before it is queued.
+        let connection = bus.builder().build().expect("a client connection");
+        let path = ["wallpaper", "set", "all", "../x.png"].map(str::to_owned);
+        let (done, _) = call(&connection, &path).expect("an answer");
+        assert!(!done);
+        assert!(rx.try_recv().is_err());
+
         // Words that are not a verb are refused with the reason.
         let connection = bus.builder().build().expect("a client connection");
-        let (done, why) = call(&connection, &["island", "fly"]).expect("an answer");
+        let (done, why) =
+            call(&connection, &["island".to_owned(), "fly".to_owned()]).expect("an answer");
         assert!(!done);
         assert_eq!(why, "unknown verb \"island fly\"");
         assert!(rx.try_recv().is_err());

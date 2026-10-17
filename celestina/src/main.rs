@@ -31,9 +31,10 @@ use celestina::{
     island::clock,
     launcher::recent::RecentLaunches,
     providers::notifications::NotificationsCommand,
-    providers::{self, settings::ShellSettings, Worker},
+    providers::{self, settings::ShellSettings, wallpaper::WallpaperCommand, Worker},
 };
 use celestina_paint::{default_font_dirs, TextSystem, Theme};
+use celestina_shell::settings::Duty;
 use celestina_wayland::Config;
 use tracing_subscriber::EnvFilter;
 
@@ -119,6 +120,9 @@ fn shell(cfg: Config) -> ExitCode {
     let own_sender = Rc::new(OnceCell::new());
     let settings = ShellSettings::load();
     let quiet = settings.current().do_not_disturb;
+    let wallpaper = Rc::new(OnceCell::new());
+    let settings_read = settings.current().clone();
+    let follow_from = settings.follow_from();
     let app = App::new(
         fonts,
         appearance,
@@ -129,10 +133,12 @@ fn shell(cfg: Config) -> ExitCode {
         cfg.metrics,
     )
     .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender))
-    .with_tray(Rc::clone(&tray));
+    .with_tray(Rc::clone(&tray))
+    .with_wallpaper(Rc::clone(&wallpaper));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
+    let mut shell_follower = None;
     let result = celestina_wayland::run(cfg.clone(), app, |sender, _| {
         // The name first: a second shell leaves before it starts anything.
         // Its layer surfaces have no buffer yet, so nothing was shown.
@@ -188,11 +194,37 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!(%err, "no tray host; the Tray page stays empty"),
         }
+        // The wallpaper worker; with the duty on, its first scan is asked
+        // now, and its answer asks for the outputs already announced.
+        match providers::wallpaper::spawn(sender.clone(), &shutdown) {
+            Ok((provider, worker)) => {
+                if settings_read.duties.wallpaper == Duty::On {
+                    let folder = settings_read.wallpaper.folder.clone();
+                    if provider
+                        .request(WallpaperCommand::Rescan { folder })
+                        .is_err()
+                    {
+                        tracing::warn!("the wallpaper worker did not take its first scan");
+                    }
+                }
+                let _ = wallpaper.set(provider);
+                workers.push(worker);
+            }
+            Err(err) => tracing::warn!(%err, "no wallpaper worker; no wallpaper is painted"),
+        }
+        // `shell.json` live: the duties and do-not-disturb follow the file.
+        match providers::settings::follow_shell(follow_from, sender.clone()) {
+            Ok(watch) => shell_follower = Some(watch),
+            Err(err) => {
+                tracing::warn!("the shell settings are not followed: {}", error_chain(&err))
+            }
+        }
         follower = Some(providers::settings::follow_appearance(sender));
     });
 
     shutdown.store(true, Ordering::Release);
     drop(follower);
+    drop(shell_follower);
     if let Some(indexer) = indexer {
         indexer.join_within(JOIN_WAIT);
     }

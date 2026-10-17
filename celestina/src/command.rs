@@ -9,14 +9,18 @@
 
 use std::time::Duration;
 
+use celestina_shell::settings::plain_name;
+#[cfg(test)]
+use celestina_shell::settings::MAX_NAME_BYTES;
+use celestina_shell::wallpaper::{is_showable, Mode as FitMode};
 use celestina_wayland::Config;
 
 /// Arguments the binary reads at most; a longer command line is a usage
 /// error before anything is parsed.
 pub const MAX_ARGS: usize = 16;
 
-/// The longest verb, `island open <page>`.
-const MAX_VERB_WORDS: usize = 3;
+/// The longest verb, `wallpaper set <output> <file>`.
+const MAX_VERB_WORDS: usize = 4;
 
 /// How much of a rejected command a usage error repeats.
 const MAX_ECHO_CHARS: usize = 64;
@@ -33,6 +37,11 @@ verbs: island toggle
        launcher toggle
        notifications toggle
        notifications dismiss-all
+       wallpaper set OUTPUT|all FILE
+       wallpaper next [OUTPUT]
+       wallpaper prev [OUTPUT]
+       wallpaper mode fill|fit|stretch|center
+       wallpaper retry
        quit";
 
 /// An Island page.
@@ -61,8 +70,17 @@ impl Page {
     }
 }
 
+/// What a wallpaper verb addresses.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Target {
+    /// Every output.
+    All,
+    /// The output of this name (bounded text, not interpreted here).
+    Output(String),
+}
+
 /// One command of `org.celestina.Shell1`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verb {
     IslandToggle,
     IslandOpen(Page),
@@ -70,7 +88,54 @@ pub enum Verb {
     LauncherToggle,
     NotificationsToggle,
     NotificationsDismissAll,
+    /// `wallpaper set <output|all> <file>`: `file` is a bare name in the
+    /// wallpaper folder.
+    WallpaperSet {
+        target: Target,
+        file: String,
+    },
+    /// `wallpaper next [output]`.
+    WallpaperNext(Option<String>),
+    /// `wallpaper prev [output]`.
+    WallpaperPrev(Option<String>),
+    /// `wallpaper mode <fill|fit|stretch|center>`.
+    WallpaperMode(FitMode),
+    /// `wallpaper retry`.
+    WallpaperRetry,
     Quit,
+}
+
+/// The word of a fit mode in a verb.
+fn mode_word(mode: FitMode) -> &'static str {
+    match mode {
+        FitMode::Fill => "fill",
+        FitMode::Fit => "fit",
+        FitMode::Stretch => "stretch",
+        FitMode::Center => "center",
+    }
+}
+
+fn mode_from_word(word: &str) -> Option<FitMode> {
+    [
+        FitMode::Fill,
+        FitMode::Fit,
+        FitMode::Stretch,
+        FitMode::Center,
+    ]
+    .into_iter()
+    .find(|m| mode_word(*m) == word)
+}
+
+/// An output name (or `all`): the settings' own plain-name predicate, so a
+/// verb is never accepted that the settings clamp would then drop.
+fn output_name(name: &str) -> bool {
+    plain_name(name)
+}
+
+/// A wallpaper file name: a plain name this shell can show, exactly what the
+/// settings clamp keeps.
+fn file_name(name: &str) -> bool {
+    plain_name(name) && is_showable(name)
 }
 
 /// A command line or a verb that is not one of the shell's.
@@ -102,6 +167,29 @@ impl Verb {
             ["launcher", "toggle"] => Verb::LauncherToggle,
             ["notifications", "toggle"] => Verb::NotificationsToggle,
             ["notifications", "dismiss-all"] => Verb::NotificationsDismissAll,
+            ["wallpaper", "set", target, file] if output_name(target) && file_name(file) => {
+                Verb::WallpaperSet {
+                    target: if *target == "all" {
+                        Target::All
+                    } else {
+                        Target::Output((*target).to_owned())
+                    },
+                    file: (*file).to_owned(),
+                }
+            }
+            ["wallpaper", "next"] => Verb::WallpaperNext(None),
+            ["wallpaper", "next", out] if output_name(out) => {
+                Verb::WallpaperNext(Some((*out).to_owned()))
+            }
+            ["wallpaper", "prev"] => Verb::WallpaperPrev(None),
+            ["wallpaper", "prev", out] if output_name(out) => {
+                Verb::WallpaperPrev(Some((*out).to_owned()))
+            }
+            ["wallpaper", "mode", word] => match mode_from_word(word) {
+                Some(mode) => Verb::WallpaperMode(mode),
+                None => return Err(unknown(&words)),
+            },
+            ["wallpaper", "retry"] => Verb::WallpaperRetry,
             ["quit"] => Verb::Quit,
             _ => return Err(unknown(&words)),
         };
@@ -110,7 +198,41 @@ impl Verb {
 
     /// The words that spell the verb; [`Verb::parse`] reads them back.
     #[must_use]
-    pub fn words(&self) -> Vec<&'static str> {
+    pub fn words(&self) -> Vec<String> {
+        let own = |words: Vec<&str>| words.into_iter().map(str::to_owned).collect();
+        match self {
+            Verb::WallpaperSet { target, file } => {
+                let target = match target {
+                    Target::All => "all",
+                    Target::Output(name) => name,
+                };
+                vec![
+                    "wallpaper".to_owned(),
+                    "set".to_owned(),
+                    target.to_owned(),
+                    file.clone(),
+                ]
+            }
+            Verb::WallpaperNext(out) | Verb::WallpaperPrev(out) => {
+                let mut words = vec![
+                    "wallpaper".to_owned(),
+                    if matches!(self, Verb::WallpaperNext(_)) {
+                        "next"
+                    } else {
+                        "prev"
+                    }
+                    .to_owned(),
+                ];
+                words.extend(out.clone());
+                words
+            }
+            Verb::WallpaperMode(mode) => own(vec!["wallpaper", "mode", mode_word(*mode)]),
+            Verb::WallpaperRetry => own(vec!["wallpaper", "retry"]),
+            other => own(other.fixed_words()),
+        }
+    }
+
+    fn fixed_words(&self) -> Vec<&'static str> {
         match self {
             Verb::IslandToggle => vec!["island", "toggle"],
             Verb::IslandOpen(page) => vec!["island", "open", page.word()],
@@ -119,6 +241,11 @@ impl Verb {
             Verb::NotificationsToggle => vec!["notifications", "toggle"],
             Verb::NotificationsDismissAll => vec!["notifications", "dismiss-all"],
             Verb::Quit => vec!["quit"],
+            Verb::WallpaperSet { .. }
+            | Verb::WallpaperNext(_)
+            | Verb::WallpaperPrev(_)
+            | Verb::WallpaperMode(_)
+            | Verb::WallpaperRetry => Vec::new(),
         }
     }
 }
@@ -230,13 +357,134 @@ mod tests {
             (Verb::NotificationsToggle, "notifications toggle"),
             (Verb::NotificationsDismissAll, "notifications dismiss-all"),
             (Verb::Quit, "quit"),
+            (
+                Verb::WallpaperSet {
+                    target: Target::All,
+                    file: "a b.png".to_owned(),
+                },
+                "wallpaper set all a b.png",
+            ),
+            (
+                Verb::WallpaperSet {
+                    target: Target::Output("DP-1".to_owned()),
+                    file: "sea.png".to_owned(),
+                },
+                "wallpaper set DP-1 sea.png",
+            ),
+            (Verb::WallpaperNext(None), "wallpaper next"),
+            (
+                Verb::WallpaperNext(Some("DP-1".to_owned())),
+                "wallpaper next DP-1",
+            ),
+            (Verb::WallpaperPrev(None), "wallpaper prev"),
+            (
+                Verb::WallpaperPrev(Some("DP-1".to_owned())),
+                "wallpaper prev DP-1",
+            ),
+            (Verb::WallpaperMode(FitMode::Fill), "wallpaper mode fill"),
+            (Verb::WallpaperMode(FitMode::Fit), "wallpaper mode fit"),
+            (
+                Verb::WallpaperMode(FitMode::Stretch),
+                "wallpaper mode stretch",
+            ),
+            (
+                Verb::WallpaperMode(FitMode::Center),
+                "wallpaper mode center",
+            ),
+            (Verb::WallpaperRetry, "wallpaper retry"),
         ];
         for (verb, spelled) in table {
             assert_eq!(verb.words().join(" "), spelled);
-            let words: Vec<String> = verb.words().into_iter().map(str::to_owned).collect();
-            assert_eq!(Verb::parse(&words), Ok(verb), "{spelled}");
+            let words = verb.words();
+            assert_eq!(Verb::parse(&words), Ok(verb.clone()), "{spelled}");
             let words: Vec<&str> = spelled.split(' ').collect();
-            assert_eq!(parse(&words), Ok(Mode::Client(verb)), "{spelled}");
+            // "a b.png" holds a space: compare through the word list instead.
+            if !spelled.contains("a b.png") {
+                assert_eq!(parse(&words), Ok(Mode::Client(verb)), "{spelled}");
+            }
+        }
+    }
+
+    #[test]
+    fn wallpaper_verbs_reject_bad_payloads() {
+        let long = "x".repeat(MAX_NAME_BYTES + 1);
+        let fits = format!("{}.png", "x".repeat(MAX_NAME_BYTES - 4));
+        for bad in [
+            &["wallpaper", "set", "all", "dir/a.png"][..],
+            &["wallpaper", "set", "all", ".sea.png"],
+            &["wallpaper", "set", "all", "a\\b.png"],
+            &["wallpaper", "set", "all", "notes.txt"],
+            &["wallpaper", "set", "a/b", "a.png"],
+            &["wallpaper", "set", ".x", "a.png"],
+            &["wallpaper", "set", "all", "../a.png"],
+            &["wallpaper", "set", "all", ".."],
+            &["wallpaper", "set", "all", "."],
+            &["wallpaper", "set", "all", "a\0.png"],
+            &["wallpaper", "set", "all", ""],
+            &["wallpaper", "set", "", "a.png"],
+            &["wallpaper", "set", "all", &long],
+            &["wallpaper", "set", &long, "a.png"],
+            &["wallpaper", "set", "all"],
+            &["wallpaper", "set"],
+            &["wallpaper", "set", "all", "a.png", "extra"],
+            &["wallpaper", "next", "DP-1", "extra"],
+            &["wallpaper", "next", ""],
+            &["wallpaper", "prev", "a\nb"],
+            &["wallpaper", "mode", "tile"],
+            &["wallpaper", "mode", "Fill"],
+            &["wallpaper", "mode"],
+            &["wallpaper", "retry", "now"],
+            &["wallpaper"],
+        ] {
+            assert!(Verb::parse(&strings(bad)).is_err(), "{bad:?}");
+        }
+        assert!(Verb::parse(&strings(&["wallpaper", "set", "all", &fits])).is_ok());
+        let err = Verb::parse(&strings(&["wallpaper", "mode", &long])).expect_err("mode");
+        assert!(err.to_string().len() < 100, "{err}");
+    }
+
+    #[test]
+    fn every_accepted_name_survives_the_settings_clamp() {
+        use celestina_shell::settings::{Settings, Store};
+        let names = [
+            "a.png",
+            "a b.png",
+            "DP-1",
+            "all",
+            ".sea.png",
+            "a\\b.png",
+            "notes.txt",
+            "a/b",
+            "..",
+            ".",
+            "x\ny",
+            "\u{e9}.webp",
+            "A.JPG",
+            "",
+        ];
+        for target in names {
+            for file in names {
+                let args = strings(&["wallpaper", "set", target, file]);
+                let Ok(Verb::WallpaperSet { .. }) = Verb::parse(&args) else {
+                    continue;
+                };
+                let store = Store::new(Settings::default());
+                let pending = store.stage(|s| {
+                    s.wallpaper
+                        .outputs
+                        .insert(target.to_owned(), file.to_owned());
+                });
+                assert_eq!(
+                    pending
+                        .wanted()
+                        .wallpaper
+                        .outputs
+                        .get(target)
+                        .map(String::as_str),
+                    Some(file),
+                    "{target:?} {file:?}"
+                );
+            }
         }
     }
 

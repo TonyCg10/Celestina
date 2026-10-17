@@ -44,6 +44,9 @@ fn frame(p: &mut Painter, run: &TextRun, pixmap: PixmapId) -> Result<(), PaintEr
     p.pop_state();
     let id = p.upload_pixmap(&[0; 16], 2, 2)?;
     p.release_pixmap(id);
+    let wallpaper = p.upload_wallpaper(&[0xff; 16], 2, 2)?;
+    p.draw_wallpaper(wallpaper, r);
+    p.release_pixmap(wallpaper);
     p.end();
     Ok(())
 }
@@ -61,6 +64,18 @@ fn the_contract_types_line_up() {
         role: Role::TextHi,
     };
     assert_eq!(style.weight, Weight::Semibold);
+    let oversize = PaintError::WallpaperTooLarge {
+        width: 16385,
+        height: 1,
+        max_side: 16384,
+    };
+    assert!(oversize.to_string().contains("16384"));
+    let texels = PaintError::WallpaperTexels {
+        width: 2,
+        height: 2,
+        len: 15,
+    };
+    assert!(texels.to_string().contains("15 bytes"));
     let theme = Theme::dark();
     assert_eq!(theme.color(Role::GlassFallback).3, 1.0);
     assert_eq!(Color(1, 2, 3, 1.0).with_alpha(0.5), Color(1, 2, 3, 0.5));

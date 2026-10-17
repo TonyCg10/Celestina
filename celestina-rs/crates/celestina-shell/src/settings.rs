@@ -25,9 +25,52 @@
 //! without a temporary directory, and the durable write itself stays with the
 //! provider that can actually fsync.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+
+use crate::wallpaper::{lenient_mode, Mode};
+
+/// Reads any field of a settings file without ever failing the file: a value of
+/// the wrong type or shape is the field's default, so one hand-edit typo cannot
+/// make the shell treat the whole file as unreadable.
+fn lenient<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DeserializeOwned + Default,
+{
+    let raw = Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(raw).unwrap_or_default())
+}
+
+fn lenient_folder<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<PathBuf>, D::Error> {
+    Ok(match Value::deserialize(deserializer)? {
+        Value::String(text) => Some(PathBuf::from(text)),
+        _ => None,
+    })
+}
+
+fn lenient_outputs<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<String, String>, D::Error> {
+    Ok(match Value::deserialize(deserializer)? {
+        Value::Object(entries) => entries
+            .into_iter()
+            .filter_map(|(key, value)| match value {
+                Value::String(file) => Some((key, file)),
+                _ => None,
+            })
+            .collect(),
+        _ => BTreeMap::new(),
+    })
+}
+
+fn lenient_duty<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duty, D::Error> {
+    lenient(deserializer)
+}
 
 /// The schema version written into the file. A file from the future is not
 /// read: an older shell guessing at a newer schema would be inventing the
@@ -46,6 +89,76 @@ pub fn path_in(config_home: &Path) -> PathBuf {
     config_home.join("celestina").join("shell.json")
 }
 
+/// The longest folder path kept, in bytes.
+pub const MAX_FOLDER_BYTES: usize = 4096;
+/// The most per-output wallpaper choices kept.
+pub const MAX_OUTPUTS: usize = 16;
+/// The longest output name or file name kept, in bytes.
+pub const MAX_NAME_BYTES: usize = 255;
+
+/// Whether a background duty is switched on. Off unless the person said so.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Duty {
+    #[default]
+    Off,
+    On,
+}
+
+/// The shell's optional duties. Later units add fields; each defaults to off.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Duties {
+    /// Whether this shell paints the wallpaper.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub wallpaper: Duty,
+}
+
+/// What the person chose for the wallpaper.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WallpaperSettings {
+    /// The folder images are taken from; absolute, or absent.
+    #[serde(deserialize_with = "lenient_folder")]
+    pub folder: Option<PathBuf>,
+    /// How an image is laid onto an output.
+    #[serde(deserialize_with = "lenient_mode")]
+    pub mode: Mode,
+    /// Output name to file name inside the folder.
+    #[serde(deserialize_with = "lenient_outputs")]
+    pub outputs: BTreeMap<String, String>,
+}
+
+impl WallpaperSettings {
+    fn clamped(mut self) -> Self {
+        self.folder = self.folder.filter(|folder| {
+            let bytes = folder.as_os_str().as_encoded_bytes();
+            folder.is_absolute() && bytes.len() <= MAX_FOLDER_BYTES && !bytes.contains(&0)
+        });
+        // Truncation here only bounds a file read from disk; a staged change is
+        // held to the cap by `Store::stage`, which keeps existing entries.
+        self.outputs = self
+            .outputs
+            .into_iter()
+            .filter(|(key, file)| plain_name(key) && plain_name(file))
+            .take(MAX_OUTPUTS)
+            .collect();
+        self
+    }
+}
+
+/// A name that cannot escape its directory or hide itself: non-empty, bounded,
+/// no leading dot, no separator, no control character. The one predicate the
+/// settings clamp and the command verbs share.
+#[must_use]
+pub fn plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_NAME_BYTES
+        && !name.starts_with('.')
+        && !name.contains(['/', '\\'])
+        && !name.chars().any(char::is_control)
+}
+
 /// Everything the person chose. Every field has a default that is the quietest
 /// possible behaviour: nothing here turns itself on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,7 +168,14 @@ pub struct Settings {
     pub schema_version: u32,
     /// Whether notification banners are being held back. Persisted because a
     /// person who silenced their session did not mean "until the next reboot".
+    #[serde(deserialize_with = "lenient")]
     pub do_not_disturb: bool,
+    /// Which optional duties this shell performs.
+    #[serde(deserialize_with = "lenient")]
+    pub duties: Duties,
+    /// The wallpaper choices.
+    #[serde(deserialize_with = "lenient")]
+    pub wallpaper: WallpaperSettings,
 }
 
 impl Default for Settings {
@@ -63,6 +183,8 @@ impl Default for Settings {
         Self {
             schema_version: SCHEMA_VERSION,
             do_not_disturb: false,
+            duties: Duties::default(),
+            wallpaper: WallpaperSettings::default(),
         }
     }
 }
@@ -73,6 +195,7 @@ impl Settings {
     /// unusable value in front of the person.
     fn clamped(mut self) -> Self {
         self.schema_version = SCHEMA_VERSION;
+        self.wallpaper = self.wallpaper.clamped();
         self
     }
 
@@ -158,6 +281,27 @@ impl Store {
     pub fn stage(&self, change: impl FnOnce(&mut Settings)) -> Pending {
         let mut wanted = self.current.clone();
         change(&mut wanted);
+        // A new output past the cap is the one refused; entries the person
+        // already has are never evicted to make room for it.
+        let current = &self.current.wallpaper.outputs;
+        let mut room = MAX_OUTPUTS.saturating_sub(
+            wanted
+                .wallpaper
+                .outputs
+                .keys()
+                .filter(|key| current.contains_key(*key))
+                .count(),
+        );
+        wanted.wallpaper.outputs.retain(|key, file| {
+            if current.contains_key(key) {
+                return true;
+            }
+            if room > 0 && plain_name(key) && plain_name(file) {
+                room -= 1;
+                return true;
+            }
+            false
+        });
         Pending {
             wanted: wanted.clamped(),
         }
@@ -283,5 +427,172 @@ mod tests {
         let store = Store::new(Settings::default());
         let pending = store.stage(|settings| settings.schema_version = SCHEMA_VERSION + 7);
         assert_eq!(pending.wanted().schema_version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn a_file_without_the_new_keys_reads_as_before() {
+        let old = br#"{"schema_version":1,"do_not_disturb":true}"#;
+        let read = Settings::from_bytes(old).expect("old file");
+        assert!(read.do_not_disturb);
+        assert_eq!(read.duties.wallpaper, Duty::Off);
+        assert_eq!(read.wallpaper, WallpaperSettings::default());
+    }
+
+    #[test]
+    fn wallpaper_settings_survive_a_round_trip() {
+        let mut settings = Settings::default();
+        settings.duties.wallpaper = Duty::On;
+        settings.wallpaper.folder = Some(PathBuf::from("/home/p/Pictures"));
+        settings.wallpaper.mode = Mode::Fit;
+        settings
+            .wallpaper
+            .outputs
+            .insert("DP-1".into(), "a.png".into());
+        let bytes = settings.to_bytes().expect("serialize");
+        assert!(String::from_utf8_lossy(&bytes).contains(r#""wallpaper": "on""#));
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+    }
+
+    #[test]
+    fn hostile_wallpaper_values_are_clamped() {
+        let mut outputs = BTreeMap::new();
+        for index in 0..20 {
+            outputs.insert(format!("O{index:02}"), "ok.png".to_owned());
+        }
+        for bad in ["../x.png", ".hidden", "a/b", "a\\b", "a\0b", ""] {
+            outputs.insert("BAD".into(), bad.into());
+            let kept = WallpaperSettings {
+                outputs: outputs.clone(),
+                ..WallpaperSettings::default()
+            }
+            .clamped();
+            assert!(!kept.outputs.contains_key("BAD"), "{bad:?}");
+        }
+        outputs.remove("BAD");
+        outputs.insert("a/b".into(), "x.png".into());
+        outputs.insert("n".repeat(256), "x.png".into());
+        outputs.insert("F".into(), "n".repeat(256));
+        let kept = WallpaperSettings {
+            folder: Some(PathBuf::from("relative/dir")),
+            outputs,
+            ..WallpaperSettings::default()
+        }
+        .clamped();
+        assert_eq!(kept.folder, None);
+        assert_eq!(kept.outputs.len(), MAX_OUTPUTS);
+        assert!(kept.outputs.keys().all(|key| key.starts_with('O')));
+        assert!(kept.outputs.contains_key("O00"));
+        assert!(!kept.outputs.contains_key("O16"));
+
+        let long = PathBuf::from(format!("/{}", "d".repeat(MAX_FOLDER_BYTES)));
+        let kept = WallpaperSettings {
+            folder: Some(long),
+            ..WallpaperSettings::default()
+        }
+        .clamped();
+        assert_eq!(kept.folder, None);
+        let kept = WallpaperSettings {
+            folder: Some(PathBuf::from("/ok/dir")),
+            ..WallpaperSettings::default()
+        }
+        .clamped();
+        assert_eq!(kept.folder, Some(PathBuf::from("/ok/dir")));
+    }
+
+    #[test]
+    fn clamping_applies_on_read_and_stage() {
+        let bytes = br#"{"wallpaper":{"folder":"rel","outputs":{"A":"../b"}}}"#;
+        let read = Settings::from_bytes(bytes).expect("parses");
+        assert_eq!(read.wallpaper, WallpaperSettings::default());
+        let store = Store::new(Settings::default());
+        let pending = store.stage(|s| {
+            s.wallpaper
+                .outputs
+                .insert("A".into(), ".x".into())
+                .map(drop)
+                .unwrap_or(())
+        });
+        assert!(pending.wanted().wallpaper.outputs.is_empty());
+    }
+
+    #[test]
+    fn unknown_keys_and_an_old_shells_bytes_still_parse() {
+        let bytes = br#"{"schema_version":1,"do_not_disturb":false,"duties":{"wallpaper":"on","future":"on"},"wallpaper":{"mode":"center","extra":1},"mystery":[1]}"#;
+        let read = Settings::from_bytes(bytes).expect("parses");
+        assert_eq!(read.duties.wallpaper, Duty::On);
+        assert_eq!(read.wallpaper.mode, Mode::Center);
+    }
+
+    #[test]
+    fn a_wrong_typed_value_never_fails_the_file() {
+        let read = Settings::from_bytes(br#"{"mode":"tile","do_not_disturb":true}"#).expect("read");
+        assert!(read.do_not_disturb);
+        assert_eq!(read.wallpaper.mode, Mode::Fill);
+
+        let bytes = br#"{"do_not_disturb":true,"duties":{"wallpaper":"yes"},
+            "wallpaper":{"mode":"tile","folder":42,"outputs":{"DP-1":5,"HDMI-A-1":"b.png"}}}"#;
+        let read = Settings::from_bytes(bytes).expect("read");
+        assert!(read.do_not_disturb);
+        assert_eq!(read.duties.wallpaper, Duty::Off);
+        assert_eq!(read.wallpaper.mode, Mode::Fill);
+        assert_eq!(read.wallpaper.folder, None);
+        assert_eq!(read.wallpaper.outputs.len(), 1);
+        assert_eq!(read.wallpaper.outputs["HDMI-A-1"], "b.png");
+
+        for bytes in [
+            &br#"{"do_not_disturb":"yes"}"#[..],
+            br#"{"duties":5,"wallpaper":"x"}"#,
+            br#"{"wallpaper":{"outputs":[1],"mode":7,"folder":null}}"#,
+            br#"{"duties":{"wallpaper":null}}"#,
+        ] {
+            assert_eq!(
+                Settings::from_bytes(bytes),
+                Some(Settings::default()),
+                "{}",
+                String::from_utf8_lossy(bytes)
+            );
+        }
+    }
+
+    #[test]
+    fn a_new_output_past_the_cap_is_refused_not_an_old_one_evicted() {
+        let mut store = Store::new(Settings::default());
+        for index in 0..MAX_OUTPUTS {
+            let pending = store.stage(|s| {
+                s.wallpaper
+                    .outputs
+                    .insert(format!("Z{index:02}"), "ok.png".into());
+            });
+            assert!(store.apply(pending, WriteOutcome::Durable));
+        }
+        assert_eq!(store.current().wallpaper.outputs.len(), MAX_OUTPUTS);
+        // "A-new" sorts before every kept key: key order must not matter.
+        let pending = store.stage(|s| {
+            s.wallpaper.outputs.insert("A-new".into(), "ok.png".into());
+        });
+        assert!(!pending.wanted().wallpaper.outputs.contains_key("A-new"));
+        assert_eq!(pending.wanted().wallpaper.outputs.len(), MAX_OUTPUTS);
+        assert!(!store.apply(pending, WriteOutcome::Durable));
+        // Changing or removing an existing entry still works at the cap.
+        let pending = store.stage(|s| {
+            s.wallpaper.outputs.insert("Z00".into(), "other.png".into());
+            s.wallpaper.outputs.remove("Z01");
+        });
+        assert_eq!(pending.wanted().wallpaper.outputs["Z00"], "other.png");
+        assert!(store.apply(pending, WriteOutcome::Durable));
+        let pending = store.stage(|s| {
+            s.wallpaper.outputs.insert("A-new".into(), "ok.png".into());
+        });
+        assert!(pending.wanted().wallpaper.outputs.contains_key("A-new"));
+    }
+
+    #[test]
+    fn plain_names_reject_control_characters_and_separators() {
+        for good in ["DP-1", "a b.png", "sea.png"] {
+            assert!(plain_name(good), "{good:?}");
+        }
+        for bad in ["", ".", "..", ".sea.png", "a\\b.png", "a/b", "a\nb", "a\0b"] {
+            assert!(!plain_name(bad), "{bad:?}");
+        }
     }
 }

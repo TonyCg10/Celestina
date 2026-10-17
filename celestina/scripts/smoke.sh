@@ -179,4 +179,94 @@ if grep -q 'panicked' "$run.err"; then
     fail "the shell panicked with the launcher open"
 fi
 echo "smoke: launcher opened and closed"
+# The wallpaper duty (CEL-2-E): the shell runs ten seconds with a private
+# XDG_CONFIG_HOME whose `celestina/shell.json` turns `duties.wallpaper` on and
+# points `wallpaper.folder` at a fixture folder holding one generated PNG
+# (the author's own configuration and pictures are never read). A probe inside
+# the nest lists the compositor's layers: (a) a `celestina-wallpaper` surface
+# must sit in `Background` on the nested output, (b) the metrics show no frame
+# at rest beyond an allowance of two, the same kind as the notification's: the
+# picture arriving (decoded off the loop, so after the first second) and its
+# redecode when the surface scale changes after the first configure are each a
+# frame somebody needed, though nothing animates in it; any other frame at
+# rest fails, and (c) is not run: no layer-shell client that could hold the Background
+# layer exists in the repository, and none is invented here; the owner
+# detection that makes the shell refuse such an output is covered by the unit
+# tests of `src/wallpaper` and `src/providers/wallpaper.rs`.
+if ! command -v python3 >/dev/null 2>&1; then
+    fail "python3 is absent: the wallpaper gate cannot run (it generates its fixture and reads the layers with it), so this smoke is not OK"
+fi
+fixture=$work/wallpapers
+config_home=$work/config
+mkdir -p "$fixture" "$config_home/celestina"
+python3 - "$fixture/default.png" <<'PNG'
+import struct, sys, zlib
+
+# A 64x36 gradient, 8-bit RGB: stdlib only.
+width, height = 64, 36
+rows = b"".join(
+    b"\x00" + bytes(c for x in range(width) for c in (x * 4, y * 7, 160))
+    for y in range(height)
+)
+
+def chunk(kind, data):
+    body = kind + data
+    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+png = (
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    + chunk(b"IDAT", zlib.compress(rows))
+    + chunk(b"IEND", b"")
+)
+open(sys.argv[1], "wb").write(png)
+PNG
+cat > "$config_home/celestina/shell.json" <<JSON
+{"schema_version":1,"duties":{"wallpaper":"on"},"wallpaper":{"folder":"$fixture"}}
+JSON
+run=$work/wallpaper
+status=0
+while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
+    sleep 1
+done
+XDG_CONFIG_HOME=$config_home timeout 60 "$here/dev-session.sh" --own-bus \
+    --monitor none --binary "$bin" --probe "$here/wallpaper-layers-probe.sh" \
+    --once "$run" -- --exit-after 10 --metrics \
+    > "$work/niri.log" 2>&1 || status=$?
+[ "$status" -eq 0 ] || fail "the nested niri exited with $status (wallpaper run)"
+[ -f "$run.status" ] || fail "the shell never ran inside the nest (wallpaper run)"
+shell_status=$(cat "$run.status")
+[ "$shell_status" = 0 ] || fail "the shell exited with $shell_status (wallpaper run)"
+[ "$(cat "$run.probe.status" 2>/dev/null)" = 0 ] ||
+    fail "the layers probe failed (wallpaper run)"
+python3 - "$run.probe" <<'LAYERS' || fail "no celestina-wallpaper surface in the Background layer of the nested output"
+import json, sys
+
+lines = open(sys.argv[1]).read().split("\n")
+at = lines.index("probe: layers (json)") + 1
+layers = json.loads(lines[at])
+found = [l for l in layers
+         if l["namespace"] == "celestina-wallpaper"
+         and l["layer"] == "Background" and l["output"] == "winit"]
+if not found:
+    sys.exit(1)
+print("smoke: celestina-wallpaper is in Background on winit")
+LAYERS
+wp_lines=$(grep '^winit ' "$run.out" || true)
+[ -n "$wp_lines" ] || fail "no metrics line for the winit output (wallpaper run)"
+wp_frames=$(printf '%s\n' "$wp_lines" | tr ' ' '\n' | sed -n 's/^frames=//p' |
+    awk '{ n += $1 } END { print n + 0 }')
+wp_rest=$(printf '%s\n' "$wp_lines" | tr ' ' '\n' | sed -n 's/^rest_frames=//p' |
+    awk '{ n += $1 } END { print n + 0 }')
+[ "$wp_frames" -ge 1 ] || fail "no frame was drawn (wallpaper run): $wp_lines"
+[ "$wp_rest" -le 2 ] ||
+    fail "frames were drawn at rest with the wallpaper present ($wp_rest, at most 2): $wp_lines"
+if grep -q 'wallpaper: output held by another client' "$run.err"; then
+    fail "the shell found the nested output held (wallpaper run)"
+fi
+if grep -q 'panicked' "$run.err"; then
+    fail "the shell panicked with the wallpaper on"
+fi
+echo "smoke: wallpaper present, frames=$wp_frames rest_frames=$wp_rest over $(printf '%s\n' "$wp_lines" | wc -l) surfaces"
+echo "smoke: wallpaper held-output variant skipped: no layer-shell client in the repository (covered by unit tests)"
 echo "smoke: OK"

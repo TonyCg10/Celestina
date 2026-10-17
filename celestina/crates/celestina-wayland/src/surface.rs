@@ -723,4 +723,32 @@ mod tests {
             "an empty region is a value, not an absence"
         );
     }
+
+    #[test]
+    fn an_empty_input_region_reaches_the_compositor_as_an_empty_region() {
+        // What `apply_pending_regions` does with `set_input_region(&[])`:
+        // the pending value is taken, the cache reports it (the first send,
+        // made by `Surface::new`, and any later change back to empty), and
+        // `build_region` gets no rectangle, so the `wl_region` passed with
+        // `set_input_region(Some(..))` is empty: pass-through, not the whole
+        // surface.
+        let mut pending = PendingRegions::default();
+        let mut cache = crate::blur::RegionCache::default();
+        assert_eq!(cache.update(&[]), Some(&[][..]), "Surface::new sends it");
+
+        pending.set_input(&[Rect::whole((100.0, 40.0))]);
+        let (_, input) = pending.take_for_frame();
+        let input = input.unwrap_or_default();
+        assert_eq!(cache.update(&input).map(<[_]>::len), Some(1));
+
+        pending.set_input(&[]);
+        let (_, input) = pending.take_for_frame();
+        assert_eq!(input.as_deref(), Some(&[][..]));
+        let input = input.unwrap_or_default();
+        assert_eq!(
+            cache.update(&input),
+            Some(&[][..]),
+            "back to empty is sent, with no rectangle"
+        );
+    }
 }
