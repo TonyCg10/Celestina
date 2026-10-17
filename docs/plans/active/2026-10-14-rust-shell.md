@@ -44,6 +44,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 - `CEL-1-C` — `celestina-style/tokens.toml`, the generator, both outputs and the drift checks.
 - `RSH-1-DOCS` — the root roadmap's boxes and the root status brought up to date after CEL-1 landed.
 - `CEL-2-OPEN` — opens the CEL-2 parity program: the salvage list for CEL-2-B and CEL-2-E, the CEL-2 plan, and the move of the CEL-1 plan to the archive.
+- `CEL-2-SALV` — extends the salvage list of `AGENTS.md` "Halted projects" for the remaining CEL-2 units (C, D, F, G, H, I, J, K, L).
 
 ## Exclusions
 
@@ -53,7 +54,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 
 ## Build order
 
-1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`, then `RSH-1-DOCS` after CEL-1 landed, then `CEL-2-OPEN`.
+1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`, then `RSH-1-DOCS` after CEL-1 landed, then `CEL-2-OPEN`, then `CEL-2-SALV`.
 
 ## Implementation exit
 
@@ -74,3 +75,4 @@ and the shell reads `celestina-tokens`.
 | CEL-1-C | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-1-C.numstat.tsv) | 55 files, +4590/-545 | Add the style's tokens as one data file generated into QML and Rust under a drift check, and read them in the shell | [evidence](../../evidence/2026-10-14-tokens-as-data.md) | None |
 | RSH-1-DOCS | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/RSH-1-DOCS.numstat.tsv) | 5 files, +101/-12 | Mark the root roadmap's boxes for the landed units and bring the root status up to date after CEL-1 | [evidence](../../evidence/2026-10-16-rsh-1-docs.md) | None |
 | CEL-2-OPEN | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-2-OPEN.numstat.tsv) | 14 files, +293/-98 | Open the Celestina parity program: extend the salvage list for CEL-2-B and CEL-2-E, add the CEL-2 plan and move the CEL-1 plan to the archive | [evidence](../../evidence/2026-10-16-cel-2-open.md) | None |
+| CEL-2-SALV | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-2-SALV.numstat.tsv) | 4 files, +89/-3 | Add the salvage list entries for the remaining CEL-2 units | [evidence](../../evidence/2026-10-17-cel-2-salv.md) | None |

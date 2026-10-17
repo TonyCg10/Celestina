@@ -1,0 +1,15 @@
+# CEL-2-SALV exact change inventory
+
+Base revision	98525498059db1db4e50cff5810c0c627289631b
+Pathspec	AGENTS.md
+Pathspec	docs/evidence/2026-10-17-cel-2-salv.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-2-SALV.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+30	2	4b6eefaa296cc3f15b03c9d1ed14a9be1f23d0ac7f896b125c2c579c8cc7e7f2	AGENTS.md
+41	0	5acbe77ebf237c2201f342092dc236211981ef6c3d54a9123e1e3577977ecd7f	docs/evidence/2026-10-17-cel-2-salv.md
+15	0	self	docs/inventories/2026-10-14-rust-shell/CEL-2-SALV.numstat.tsv
+3	1	27617e937d7d32a306f0202dfc2bf07f7d9fc5d452aa3109ea51edc166bb3344	docs/plans/active/2026-10-14-rust-shell.md

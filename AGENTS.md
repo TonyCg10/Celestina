@@ -53,8 +53,7 @@ and the `bounded` helper of that crate's `src/lib.rs` (there is no
 and `celestina-qt/src/niri_adapter.rs` as reference for
 `celestina/src/providers`; `celestina-qt/scripts/dev-session.kdl` and
 `dev-session.sh` for `celestina/scripts`. The CEL-2 parity program extends the
-list unit by unit, each in the same way and each before that unit's first
-commit:
+list in the same way and always before the first commit of the unit it serves:
 
 - CEL-2-B: `celestina-qt/src/provider_adapter/{nightlight,session,sessionholds}.rs`
   as reference for `celestina/src/providers`, and
@@ -64,6 +63,35 @@ commit:
   selection, as reference for `celestina/src/providers`, and
   `celestina-rs/crates/celestina-shell-core/src/wallpaper.rs` into
   `celestina-rs/crates/celestina-shell`.
+- CEL-2-C: `celestina-qt/src/provider_adapter/{audio,brightness}.rs` as
+  reference for `celestina/src/providers`, and
+  `celestina-rs/crates/celestina-shell-core/src/{audio,brightness}.rs` into
+  `celestina-rs/crates/celestina-shell`.
+- CEL-2-D: `celestina-qt/src/provider_adapter/media.rs` as reference for
+  `celestina/src/providers`, and
+  `celestina-rs/crates/celestina-shell-core/src/media.rs` into
+  `celestina-rs/crates/celestina-shell`.
+- CEL-2-F: `celestina-rs/crates/celestina-shell-core/src/{connectivity,network,bluetooth,power}.rs`
+  into `celestina-rs/crates/celestina-shell`, as far as read-only state needs.
+- CEL-2-G: `celestina-qt/src/provider_adapter/clipboard.rs` as reference for
+  `celestina/src/providers`, and
+  `celestina-rs/crates/celestina-shell-core/src/clipboard.rs` into
+  `celestina-rs/crates/celestina-shell`.
+- CEL-2-H: `celestina-qt/src/provider_adapter/session.rs` as reference only,
+  for `celestina/src/providers`; no code is copied. ADR 0004 of the halted
+  shell is re-decided in `celestina/docs/decisions/`, adapted and re-reviewed;
+  its file is not copied.
+- CEL-2-I: nothing is copied. ADR 0005 of the halted shell is re-decided in
+  `celestina/docs/decisions/`, adapted and re-reviewed; its file is not copied.
+- CEL-2-J: `celestina-qt/src/provider_adapter/melibea.rs` as reference for
+  `celestina/src/providers`, and
+  `celestina-rs/crates/celestina-shell-core/src/melibea.rs` into
+  `celestina-rs/crates/celestina-shell`.
+- CEL-2-K: `celestina-qt/src/provider_adapter/{sysmon,weather}.rs` as
+  reference for `celestina/src/providers`, and
+  `celestina-rs/crates/celestina-shell-core/src/{sysmon,weather}.rs` into
+  `celestina-rs/crates/celestina-shell`; `calendar.rs` is already listed.
+- CEL-2-L: nothing beyond `workspace_map.rs`, which is already listed.
 
 Later deliveries extend this list by the same edit.
 
