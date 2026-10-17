@@ -7,8 +7,10 @@ pub mod desktop;
 pub mod niri;
 pub mod notifications;
 pub mod settings;
+pub mod sysmon;
 pub mod tray;
 pub mod wallpaper;
+pub mod weather;
 pub mod worker;
 
-pub use worker::Worker;
+pub use worker::{Reaper, Worker};

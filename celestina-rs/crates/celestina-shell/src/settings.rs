@@ -10,7 +10,10 @@
 // over from Noctalia), both optional so a 1.0.0 file still reads, plus their
 // bounds in `clamped` and their tests. Unlike the other duties, whose `off`
 // is written once the file is, a bar value the person never set is never
-// written, so a later default still reaches them.
+// written, so a later default still reaches them. CEL-2-K then added `weather`
+// (where the weather reading is for), copied in shape from the core's
+// `Location` and stored in whole micro-degrees so `Settings` stays `Eq`; it is
+// optional, lenient and written only once chosen.
 
 //! What the person chose, and what it takes for that choice to be real.
 //!
@@ -104,6 +107,19 @@ fn lenient_ids<'de, D: Deserializer<'de>>(
         ),
         _ => None,
     })
+}
+
+/// A lenient `weather` value: a well-formed location, or no choice. A wrong
+/// type or an out-of-range coordinate is none of the file's business to fail
+/// on; an oversize label is shortened, never a reason to drop the place.
+fn lenient_location<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Location>, D::Error> {
+    let raw = Value::deserialize(deserializer)?;
+    let Ok(wire) = serde_json::from_value::<LocationWire>(raw) else {
+        return Ok(None);
+    };
+    Ok(Location::new(wire.latitude, wire.longitude, &wire.label))
 }
 
 /// The schema version written into the file. A file from the future is not
@@ -342,6 +358,101 @@ fn is_hidden_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= MAX_HIDDEN_ID_BYTES && id.chars().all(|c| !c.is_control())
 }
 
+/// The longest place label kept, in characters.
+pub const MAX_PLACE_CHARS: usize = 64;
+/// Micro-degrees in a degree.
+const MICRO: f64 = 1_000_000.0;
+
+/// Where the weather reading is for. Coordinates rather than a place lookup:
+/// this shell sends one pair of numbers to one service and nothing else, and a
+/// name that had to be resolved would be a second thing to send.
+///
+/// Coordinates are whole micro-degrees (about 0.11 m), so the type is `Eq` and
+/// a round trip through the file is exact; the file holds plain degrees.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Location {
+    latitude_micro: i32,
+    longitude_micro: i32,
+    /// What to call it on screen. Never sent anywhere.
+    pub label: String,
+}
+
+/// Where a person is is not a diagnostic: the formatter names the label's
+/// length and nothing else, so no log or assertion message carries a position.
+impl std::fmt::Debug for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Location")
+            .field("label_chars", &self.label.chars().count())
+            .finish_non_exhaustive()
+    }
+}
+
+/// The one rule for a place label: control characters removed, the ends
+/// trimmed, then cut to [`MAX_PLACE_CHARS`] Unicode scalar values. A label is
+/// shortened, never a reason to refuse the location it names.
+fn clean_label(label: &str) -> String {
+    let stripped: String = label.chars().filter(|c| !c.is_control()).collect();
+    let cut: String = stripped.trim().chars().take(MAX_PLACE_CHARS).collect();
+    cut.trim_end().to_owned()
+}
+
+/// The file's shape for a location.
+#[derive(Serialize, Deserialize)]
+struct LocationWire {
+    latitude: f64,
+    longitude: f64,
+    #[serde(default)]
+    label: String,
+}
+
+impl Location {
+    /// Reads one location, or nothing when it cannot be a place on earth.
+    ///
+    /// A NaN or out-of-range coordinate is refused rather than clamped: 0°,0°
+    /// is a real place in the Atlantic, and silently sending somebody there
+    /// would be worse than having no weather. The label goes through
+    /// [`clean_label`].
+    #[must_use]
+    pub fn new(latitude: f64, longitude: f64, label: &str) -> Option<Self> {
+        if !latitude.is_finite() || !longitude.is_finite() {
+            return None;
+        }
+        if !(-90.0..=90.0).contains(&latitude) || !(-180.0..=180.0).contains(&longitude) {
+            return None;
+        }
+
+        Some(Self {
+            // In range, so the products fit an i32 exactly.
+            latitude_micro: (latitude * MICRO).round() as i32,
+            longitude_micro: (longitude * MICRO).round() as i32,
+            label: clean_label(label),
+        })
+    }
+
+    /// Degrees north, as the file and the request carry them.
+    #[must_use]
+    pub fn latitude(&self) -> f64 {
+        f64::from(self.latitude_micro) / MICRO
+    }
+
+    /// Degrees east.
+    #[must_use]
+    pub fn longitude(&self) -> f64 {
+        f64::from(self.longitude_micro) / MICRO
+    }
+}
+
+impl Serialize for Location {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        LocationWire {
+            latitude: self.latitude(),
+            longitude: self.longitude(),
+            label: self.label.clone(),
+        }
+        .serialize(serializer)
+    }
+}
+
 /// What the person chose for the wallpaper.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -416,6 +527,13 @@ pub struct Settings {
     /// The wallpaper choices.
     #[serde(deserialize_with = "lenient")]
     pub wallpaper: WallpaperSettings,
+    /// Where the weather reading is for. Absent: no weather, and no request
+    /// ever leaves the machine. Written only once chosen.
+    #[serde(
+        deserialize_with = "lenient_location",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub weather: Option<Location>,
 }
 
 impl Default for Settings {
@@ -427,6 +545,7 @@ impl Default for Settings {
             duties: Duties::default(),
             energy: Energy::default(),
             wallpaper: WallpaperSettings::default(),
+            weather: None,
         }
     }
 }
@@ -459,6 +578,10 @@ impl Settings {
         self.schema_version = SCHEMA_VERSION;
         self.bar = self.bar.clamped();
         self.wallpaper = self.wallpaper.clamped();
+        self.weather = self.weather.map(|place| Location {
+            label: clean_label(&place.label),
+            ..place
+        });
         // The whitepoint's own range, so the file and the light never disagree.
         self.energy.night_light_kelvin = self
             .energy
@@ -1186,5 +1309,123 @@ mod tests {
         let store = Store::new(Settings::default());
         let pending = store.stage(|s| s.bar.start = Some(ids(&["a", "a", "BAD"])));
         assert_eq!(pending.wanted().bar.start, Some(ids(&["a"])));
+    }
+
+    #[test]
+    fn the_weather_location_is_unset_by_default_and_never_written_unset() {
+        assert_eq!(Settings::default().weather, None);
+        let bytes = Settings::default().to_bytes().expect("serialize");
+        assert!(!String::from_utf8_lossy(&bytes).contains("weather"));
+    }
+
+    #[test]
+    fn the_weather_location_survives_a_round_trip_as_plain_degrees() {
+        let settings = Settings {
+            weather: Location::new(53.35, -6.26, "Dublin"),
+            ..Settings::default()
+        };
+        let bytes = settings.to_bytes().expect("serialize");
+        let value: Value = serde_json::from_slice(&bytes).expect("JSON");
+        assert_eq!(value["weather"]["latitude"], 53.35);
+        assert_eq!(value["weather"]["longitude"], -6.26);
+        assert_eq!(value["weather"]["label"], "Dublin");
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+        assert_eq!(SCHEMA_VERSION, 1);
+    }
+
+    #[test]
+    fn an_invalid_weather_location_is_none_and_the_rest_of_the_file_holds() {
+        let hostile = [
+            r#""weather":{"latitude":90.5,"longitude":0,"label":"a"}"#.to_owned(),
+            r#""weather":{"latitude":0,"longitude":-180.5,"label":"a"}"#.to_owned(),
+            r#""weather":{"latitude":"53","longitude":0,"label":"a"}"#.to_owned(),
+            r#""weather":{"latitude":53.0,"longitude":-6.0,"label":7}"#.to_owned(),
+            r#""weather":{"latitude":53.0}"#.to_owned(),
+            r#""weather":"Dublin""#.to_owned(),
+            r#""weather":5"#.to_owned(),
+            r#""weather":null"#.to_owned(),
+        ];
+        for fragment in hostile {
+            let text = format!(r#"{{"do_not_disturb":true,{fragment}}}"#);
+            let read = Settings::from_bytes(text.as_bytes()).expect("the file still reads");
+            assert!(read.do_not_disturb, "{fragment}");
+            assert_eq!(read.weather, None, "{fragment}");
+        }
+    }
+
+    #[test]
+    fn an_oversize_or_dirty_label_is_cleaned_never_a_reason_to_drop_the_place() {
+        let long = "x".repeat(MAX_PLACE_CHARS + 1);
+        let text = format!(r#"{{"weather":{{"latitude":1.0,"longitude":2.0,"label":"{long}"}}}}"#);
+        let place = Settings::from_bytes(text.as_bytes())
+            .expect("reads")
+            .weather
+            .expect("the place is kept");
+        assert_eq!(place.label, "x".repeat(MAX_PLACE_CHARS));
+        // Scalar values, not UTF-16 units: astral characters count once.
+        let astral = "\u{1F600}".repeat(MAX_PLACE_CHARS + 5);
+        let built = Location::new(1.0, 2.0, &astral).expect("a place");
+        assert_eq!(built.label.chars().count(), MAX_PLACE_CHARS);
+        // The file path and the constructor share the rule.
+        let dirty = "  Du\u{7}bl\nin\u{0}  ";
+        let json = serde_json::to_string(dirty).expect("JSON");
+        let wire = format!(r#"{{"weather":{{"latitude":1.0,"longitude":2.0,"label":{json}}}}}"#);
+        let read = Settings::from_bytes(wire.as_bytes()).expect("reads");
+        assert_eq!(read.weather.expect("place").label, "Dublin");
+        assert_eq!(
+            Location::new(1.0, 2.0, dirty).expect("place").label,
+            "Dublin"
+        );
+        // Trimming comes after the control strip and the cut leaves no tail space.
+        let spaced = format!("{} tail", "a".repeat(MAX_PLACE_CHARS - 1));
+        assert_eq!(
+            Location::new(1.0, 2.0, &spaced).expect("place").label,
+            "a".repeat(MAX_PLACE_CHARS - 1)
+        );
+    }
+
+    #[test]
+    fn debugging_a_location_never_prints_where_it_is() {
+        let place = Location::new(53.349_805, -6.260_31, "Dublin").expect("place");
+        let shown = format!("{place:?}");
+        let settings = format!(
+            "{:?}",
+            Settings {
+                weather: Some(place),
+                ..Settings::default()
+            }
+        );
+        for text in [shown, settings] {
+            assert!(!text.contains("53.3") && !text.contains("6.26"), "{text}");
+            assert!(!text.contains("Dublin"), "{text}");
+            assert!(text.contains("label_chars"), "{text}");
+        }
+    }
+
+    #[test]
+    fn the_weather_boundaries_are_kept_and_a_label_at_the_cap_survives() {
+        let label = "w".repeat(MAX_PLACE_CHARS);
+        let text = format!(r#"{{"weather":{{"latitude":-90,"longitude":180,"label":"{label}"}}}}"#);
+        let read = Settings::from_bytes(text.as_bytes()).expect("reads");
+        let place = read.weather.expect("a place");
+        assert_eq!(place.latitude(), -90.0);
+        assert_eq!(place.longitude(), 180.0);
+        assert_eq!(place.label.chars().count(), MAX_PLACE_CHARS);
+        // A caller-built label is bounded, and non-finite coordinates are refused.
+        let built = Location::new(0.0, 0.0, &"y".repeat(500)).expect("a place");
+        assert_eq!(built.label.chars().count(), MAX_PLACE_CHARS);
+        assert_eq!(Location::new(f64::NAN, 0.0, "x"), None);
+        assert_eq!(Location::new(0.0, f64::INFINITY, "x"), None);
+    }
+
+    #[test]
+    fn a_staged_weather_location_is_written_and_clearing_it_removes_the_key() {
+        let mut store = Store::new(Settings::default());
+        let pending = store.stage(|s| s.weather = Location::new(40.4, -3.7, "Madrid"));
+        assert!(store.apply(pending, WriteOutcome::Durable));
+        assert!(store.current().weather.is_some());
+        let pending = store.stage(|s| s.weather = None);
+        let bytes = pending.bytes().expect("bytes");
+        assert!(!String::from_utf8_lossy(&bytes).contains("weather"));
     }
 }

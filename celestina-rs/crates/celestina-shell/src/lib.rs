@@ -28,12 +28,16 @@
 //!   cannot take back.
 //! - [`wallpaper`] — which image an output shows, how it is laid on the
 //!   output, and the next or previous image of a folder.
+//! - [`weather`] — the one request the shell makes, how its answer is read, and
+//!   when a reading stops counting.
+//! - [`glance`] — load levels and today's date for the bar's readings.
 
 #![forbid(unsafe_code)]
 
 pub mod bounded;
 pub mod calendar;
 pub mod coalesce;
+pub mod glance;
 pub mod idle;
 pub mod launcher;
 pub mod nightlight;
@@ -41,5 +45,6 @@ pub mod notifications;
 pub mod session;
 pub mod settings;
 pub mod wallpaper;
+pub mod weather;
 pub mod workspace_groups;
 pub mod workspace_map;

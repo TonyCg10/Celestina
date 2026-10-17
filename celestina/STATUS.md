@@ -35,6 +35,16 @@
   detection so an output another client holds is refused. Its evidence is
   [`docs/evidence/2026-10-16-wallpaper.md`](docs/evidence/2026-10-16-wallpaper.md);
   its author row is `VAL-CEL2-WALLPAPER`, pending.
+- **CEL-2-K (in progress, not landed):** the glance pieces on
+  `unit/celestina/CEL-2-K`: `sysmon` (CPU and memory through
+  `hematita-core`), `weather` (Open-Meteo, only with a location written in
+  `shell.json`) and `clock` (the short date), none in the default zones, plus
+  the Sistema and Reloj pages of the Island. No location, no request
+  ([ADR 0016](docs/decisions/0016-weather-is-the-only-network-and-manual.md)).
+  Its evidence is
+  [`docs/evidence/2026-10-17-glance.md`](docs/evidence/2026-10-17-glance.md);
+  its author rows are `VAL-CEL2-SYSMON`, `VAL-CEL2-WEATHER`,
+  `VAL-CEL2-CALENDAR` and `VAL-CEL2-GLANCE-TABS`, pending. Review pending.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

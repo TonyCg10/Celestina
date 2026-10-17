@@ -61,4 +61,10 @@ pub enum Message {
     ShellSettings(Box<crate::providers::settings::ShellRead>),
     /// News from the energy workers: idle, caffeine, night light, session.
     Energy(crate::energy::EnergyEvent),
+    /// The system monitor's reading, or `None` once when its counters can no
+    /// longer be read.
+    Sysmon(Option<crate::providers::sysmon::SysReading>),
+    /// The weather worker's reading, or `None` once when it is withdrawn (no
+    /// location, or the last reading stopped being fresh).
+    Weather(Option<crate::providers::weather::WeatherReading>),
 }

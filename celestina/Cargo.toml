@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.3.0"
+version = "1.4.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -105,3 +105,8 @@ notify-debouncer-full = "0.5"
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+# CEL-2-K: the `sysmon` piece reads /proc/stat, /proc/meminfo and hwmon
+# through Hematita's pure parsers (`cpu`, `memory`, `sensors`) instead of a
+# second copy of that parsing; Celestina is a narrow consumer of those
+# modules only (docs/standards/architecture.md).
+hematita-core = { path = "../celestina-rs/crates/hematita-core" }

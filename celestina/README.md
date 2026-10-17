@@ -27,6 +27,37 @@ What Noctalia still does for the session is in
   arrives later is not detected. Accepted formats are PNG, JPEG and WebP; lossless
   WebP is refused. A source is at most 8192 px a side and 40 MP, and the decode
   needs at most about 322 MiB.
+- The glance pieces `sysmon`, `weather` and `clock` are in no default zone.
+  Place them by id in the `bar` zones of `~/.config/celestina/shell.json`,
+  for example `{"bar": {"end": ["sysmon", "weather", "clock", "tray"]}}`
+  (zones are `start`, `centre` and `end`). `sysmon` shows `CPU n% · RAM m%`,
+  coloured at 80 % and 90 %, and opens the Sistema page; `clock` shows the
+  short date and opens the Reloj page (a Monday-first month calendar with
+  Previous, Today and Next, and the weather reading); `weather` shows the
+  temperature and opens the Reloj page, and is absent without a fresh reading.
+  The Spanish condition words are fixed by Open-Meteo's code:
+
+  | Code | Words shown |
+  |---|---|
+  | 0 | Despejado |
+  | 1 | Mayormente despejado |
+  | 2 | Parcialmente nublado |
+  | 3 | Nublado |
+  | 45, 48 | Niebla |
+  | 51 to 57 | Llovizna |
+  | 61 to 67 | Lluvia |
+  | 71 to 77 | Nieve |
+  | 80 to 82 | Chubascos |
+  | 85, 86 | Chubascos de nieve |
+  | 95 to 99 | Tormenta |
+  | any other | Sin determinar |
+
+- The weather is the only thing in the shell that uses the network, and only
+  with a manual location: `"weather": {"latitude": 40.42, "longitude": -3.70,
+  "label": "Madrid"}` in `shell.json`. Without a valid location there is no
+  request, no `curl` and no piece content; the shell never works out where the
+  person is, and a reading older than 15 minutes is hidden
+  ([ADR 0016](docs/decisions/0016-weather-is-the-only-network-and-manual.md)).
 - Surfaces take no keyboard at rest
   ([ADR 0007](docs/decisions/0007-focus-policy.md)); well-known bus names are
   claimed only when free, so the shell runs beside Noctalia
@@ -40,7 +71,7 @@ What Noctalia still does for the session is in
 | `crates/celestina-wayland` | Outputs, layer surfaces, popups, scale, regions, frame pacing, EGL (design §5.2) |
 | `crates/celestina-paint` | The `Painter` contract over femtovg, the Haze material, text and icons (§5.3) |
 | `crates/celestina-ui` | The node tree, taffy layout, keyed reconciliation, animation, hit-test, focus, the text field (§5.4) |
-| `src/` | The product: Island, launcher, notifications, tray, and the providers on worker threads |
+| `src/` | The product: Island, launcher, notifications, tray, the bar and its pieces (including sysmon, weather and clock), and the providers on worker threads |
 | `../celestina-rs/crates/celestina-shell` | The pure domain the product consumes |
 
 The design is
@@ -69,7 +100,7 @@ With a shell running, `celestina <verb>` calls `Command` on
 `org.celestina.Shell1` (`/org/celestina/Shell`, name `org.celestina.Shell`)
 and exits 0, or 1 when the shell is not running, refuses the verb or does
 not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
-`island toggle`, `island open <activity|notifications|tray>`,
+`island toggle`, `island open <activity|notifications|tray|sysmon|clock>`,
 `island close`, `launcher toggle`, `notifications toggle`,
 `notifications dismiss-all`, `wallpaper set <output|all> <file>`,
 `wallpaper next [output]`, `wallpaper prev [output]`, `wallpaper mode <mode>`,

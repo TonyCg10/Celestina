@@ -181,6 +181,9 @@ mod tests {
             history: &[],
             items,
             tray_hidden: &hidden,
+            sysmon: None,
+            weather: None,
+            today: None,
         })
     }
 

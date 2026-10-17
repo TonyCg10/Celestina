@@ -2,7 +2,8 @@
 
 Accepted shell decisions and their falsifiers live here, one record each. ADR
 0001 to 0009 are the decisions of the CEL-1 design's §10; ADR 0010 to 0015 are
-the decisions of the parity program's §10. Open questions belong to the
+the decisions of the parity program's §10; ADR 0016 is the one of the
+CEL-2-K design's §9. Open questions belong to the
 [discussion queue](../discussions/README.md).
 
 | ADR | Status | Decision |
@@ -22,5 +23,6 @@ the decisions of the parity program's §10. Open questions belong to the
 | [0013](0013-everything-is-a-piece.md) | accepted | Everything the bar holds is a piece behind one contract |
 | [0014](0014-lock-and-polkit-carry-over.md) | accepted | Lock and polkit carry ADR 0004 and 0005 over, with their own review |
 | [0015](0015-clock-rests-at-minutes.md) | accepted | The clock rests at minutes; seconds run only while the Island is open |
+| [0016](0016-weather-is-the-only-network-and-manual.md) | proposed | The weather is the only network use and its location is manual |
 
 New records use the suite [decision template](../../../docs/templates/decision.md).

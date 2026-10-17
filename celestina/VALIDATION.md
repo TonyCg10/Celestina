@@ -10,7 +10,8 @@ nine `VAL-CEL-*` rows are queued and pending. The `VAL-CEL2-*` rows are queued
 by the CEL-2 units, each unit adding its own (as the CEL-2 ledger states), and
 are run the same way; among them CEL-2-E queues VAL-CEL2-WALLPAPER and
 CEL-2-B queues VAL-CEL2-IDLE, VAL-CEL2-CAFFEINE, VAL-CEL2-NIGHTLIGHT and
-VAL-CEL2-SESSION. None has been run and none is closed by an agent.
+VAL-CEL2-SESSION; CEL-2-K queues VAL-CEL2-SYSMON, VAL-CEL2-WEATHER,
+VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS. None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
 
@@ -394,5 +395,84 @@ VAL-CEL2-SESSION. None has been run and none is closed by an agent.
   machine stays awake; the logind probe answers; log out goes to niri's
   confirmation and not to logind; reboot and power off are never exercised
   by this row
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-SYSMON — The system monitor piece and page
+
+- **Status:** pending
+- **Related implementation:** CEL-2-K (the `sysmon` piece and the Sistema
+  page)
+- **Requires:** the author's niri session with the deployed shell; `"sysmon"`
+  added to a zone of `bar` in `~/.config/celestina/shell.json`; Hematita or any
+  other monitor to compare against; a way to load the CPU (a stress run)
+- **Procedure:** place `sysmon`, check that `CPU n% · RAM m%` appears within a
+  few seconds and agrees with the monitor to a few points. Run `celestina island
+  open sysmon`, and check the CPU and memory rows (used and total), the
+  temperature row when the machine has a CPU sensor, the two history graphs, and
+  that the row that opens the monitor starts Hematita. Load the CPU above 80 %
+  and above 90 % and check the colour changes to the elevated and then the
+  critical tone. Remove `sysmon` from the file and check the piece disappears
+  and the shell stops sampling (`top -H -p $(pidof celestina)`)
+- **Pass condition:** the numbers agree with the monitor; the colour follows the
+  thresholds; the page and its monitor row work; with the piece removed there is
+  no sysmon thread and no periodic wakeup
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-WEATHER — The weather piece and the network rule
+
+- **Status:** pending
+- **Related implementation:** CEL-2-K (the `weather` piece, the Reloj page's
+  reading and ADR 0016)
+- **Requires:** the author's niri session with the deployed shell; network
+  access; `ss` to watch connections
+- **Procedure:** start the shell with `weather` placed and no `weather` key, and
+  check with `ss -tnp` and a short capture that the shell makes no connection and
+  starts no `curl`; the piece draws nothing. Add `"weather": {"latitude": ...,
+  "longitude": ..., "label": "..."}` to `shell.json` and check that the
+  temperature and the condition appear within a minute and that the Reloj page
+  shows the reading, the place and the update time. Compare the temperature with
+  another source. Block the network and check that the reading disappears after
+  15 minutes rather than showing a stale value. Remove the `weather` key and
+  check that the piece disappears at once and no further connection is opened. Try
+  an out-of-range latitude and a label over 64 characters and check that no
+  request is made
+- **Pass condition:** no request without a valid manual location; with one, a
+  correct reading; stale readings are absent; removing the key stops requests
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-CALENDAR — The clock piece and the Reloj page
+
+- **Status:** pending
+- **Related implementation:** CEL-2-K (the `clock` piece, the Reloj page)
+- **Requires:** the author's niri session with the deployed shell; `"clock"`
+  placed in a zone of `bar`
+- **Procedure:** check that the short date in the bar matches today. Run
+  `celestina island open clock` and check the title, the seconds clock, the
+  month grid (Monday first, today highlighted, six rows), and Previous, Next and
+  Today moving between months. Close the page, open it again and check that it
+  shows the current month. Leave the shell running across midnight, or change
+  the clock, and check that the date and the highlight move to the new day. Check
+  the bar still rests at about one frame a minute with `clock` placed
+- **Pass condition:** the date, the grid and the highlight are right; navigation
+  works and resets on close; the day change is picked up
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-GLANCE-TABS — Five tabs on the Island page
+
+- **Status:** pending
+- **Related implementation:** CEL-2-K (the Sistema and Reloj tabs beside
+  Activity, Notifications and Tray)
+- **Requires:** the author's niri session with the deployed shell, at scale 1.5
+  on the 4K output and at scale 1 on the other
+- **Procedure:** open the Island and look at the tab row with the five pages. Each
+  tab is about 71 px wide, so check whether "Notificaciones" is cut off or
+  overflows its tab, whether the tabs are readable and hit-testable, and whether
+  the overflow popup behaves
+- **Pass condition:** every tab label is fully visible and every tab is easy to
+  hit; otherwise record the failure and open a corrective unit
 - **Result:** not run
 - **Evidence:** none

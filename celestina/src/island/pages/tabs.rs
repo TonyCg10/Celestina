@@ -7,6 +7,7 @@ use celestina_ui::{view, Key, View};
 use taffy::JustifyContent;
 
 use crate::{
+    copy,
     island::view::{centred, page_title, text_style},
     pieces::{self, PageId},
 };
@@ -26,6 +27,17 @@ pub fn page_of(key: Key) -> Option<PageId> {
     pieces::pages()
         .map(|entry| entry.id)
         .find(|page| tab_key(*page) == key)
+}
+
+/// What the tab says: the page's title, or its short form where the title
+/// does not fit the pill. The toolkit has no ellipsis, so a long title is
+/// shortened here, in the copy, and the page keeps its full title.
+fn tab_label(page: PageId) -> &'static str {
+    if page == PageId::NOTIFICATIONS {
+        copy::TAB_NOTIFICATIONS
+    } else {
+        page_title(page)
+    }
 }
 
 fn index(page: PageId) -> u64 {
@@ -57,7 +69,7 @@ pub fn tabs(theme: &Theme, open: PageId, width: f32) -> View {
                 .focusable()
                 .child(view::text(
                     Key::indexed("tab-label", index(page)),
-                    page_title(page),
+                    tab_label(page),
                     text_style(theme.type_scale.body, Weight::Semibold, false, ink),
                 ));
             tab.style.justify_content = JustifyContent::CENTER;
@@ -86,11 +98,11 @@ mod tests {
     }
 
     #[test]
-    fn tabs_show_three_pages_with_the_open_one_selected() {
+    fn tabs_show_one_pill_per_page_with_the_open_one_selected() {
         let theme = Theme::dark();
         for open in PageId::all() {
             let row = tabs(&theme, open, 388.0);
-            assert_eq!(row.children.len(), 3);
+            assert_eq!(row.children.len(), PageId::all().len());
             let keys: Vec<Key> = row.children.iter().map(|t| t.key).collect();
             let want: Vec<Key> = PageId::all().into_iter().map(tab_key).collect();
             assert_eq!(keys, want, "one tab per page, in order");
@@ -117,11 +129,16 @@ mod tests {
             .filter_map(|p| tree.node_by_key(tab_key(p)))
             .map(|id| tree.rect(id))
             .collect();
-        assert_eq!(rects.len(), 3);
-        assert!(rects.iter().all(|r| r.w == rects[0].w && r.h == TABS_H));
-        assert!(rects[0].x + rects[0].w <= rects[1].x);
-        assert!(rects[1].x + rects[1].w <= rects[2].x);
-        assert_eq!(rects[2].x + rects[2].w, 388.0);
+        assert_eq!(rects.len(), PageId::all().len());
+        // Layout rounds to whole px, so five tabs agree to within one.
+        assert!(rects
+            .iter()
+            .all(|r| (r.w - rects[0].w).abs() <= 1.0 && r.h == TABS_H));
+        for pair in rects.windows(2) {
+            assert!(pair[0].x + pair[0].w <= pair[1].x);
+        }
+        let last = rects.last().expect("tabs");
+        assert!((last.x + last.w - 388.0).abs() <= 1.0);
         assert_eq!(
             page_of(tab_key(PageId::NOTIFICATIONS)),
             Some(PageId::NOTIFICATIONS)
@@ -138,19 +155,57 @@ mod tests {
             (PageId::ACTIVITY, Key::indexed("tab", 0)),
             (PageId::NOTIFICATIONS, Key::indexed("tab", 1)),
             (PageId::TRAY, Key::indexed("tab", 2)),
+            (PageId::SYSMON, Key::indexed("tab", 3)),
+            (PageId::CLOCK, Key::indexed("tab", 4)),
         ];
         for (page, key) in want {
             assert_eq!(tab_key(page), key, "{page:?}");
             assert_eq!(page_of(key), Some(page), "{page:?}");
         }
         for foreign in [
-            Key::indexed("tab", 3),
+            Key::indexed("tab", 5),
             Key::indexed("tab-label", 0),
             Key::named("tab"),
             Key::named("tabs"),
             Key::STALE,
         ] {
             assert_eq!(page_of(foreign), None, "{foreign:?}");
+        }
+    }
+
+    #[test]
+    fn no_tab_label_is_wider_than_its_pill() {
+        use crate::island::{pages::measure_real, state::PAGE_SIZE};
+
+        let theme = Theme::dark();
+        // The row the page draws: the page's width less its padding.
+        let width = PAGE_SIZE.0 - 2.0 * theme.spacing.lg;
+        for open in PageId::all() {
+            let mut tree = Tree::new(false, &theme);
+            tree.apply(tabs(&theme, open, width), Instant::now());
+            tree.layout_measured((600.0, 100.0), measure_real);
+            for page in PageId::all() {
+                let pill = tree
+                    .node_by_key(tab_key(page))
+                    .map(|id| tree.rect(id))
+                    .expect("a pill");
+                let label = tree
+                    .node_by_key(Key::indexed("tab-label", index(page)))
+                    .map(|id| tree.rect(id))
+                    .expect("a label");
+                let want = measure_real(
+                    tab_label(page),
+                    &text_style(theme.type_scale.body, Weight::Semibold, false, Role::TextLo),
+                    None,
+                )
+                .0;
+                assert!(
+                    want <= pill.w,
+                    "{page:?} is {want} px in a {} px pill",
+                    pill.w
+                );
+                assert!(label.x >= pill.x - 0.5 && label.x + label.w <= pill.x + pill.w + 0.5);
+            }
         }
     }
 
@@ -171,12 +226,15 @@ mod tests {
             .map(|(i, page)| {
                 (
                     Key::indexed("tab-label", i as u64),
-                    page_title(page).to_owned(),
+                    tab_label(page).to_owned(),
                 )
             })
             .collect();
         assert_eq!(labels, want);
         let names: Vec<&str> = labels.iter().map(|(_, t)| t.as_str()).collect();
-        assert_eq!(names, ["Actividad", "Notificaciones", "Bandeja"]);
+        assert_eq!(
+            names,
+            ["Actividad", "Notific.", "Bandeja", "Sistema", "Reloj"]
+        );
     }
 }

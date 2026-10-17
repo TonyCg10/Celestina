@@ -119,6 +119,12 @@ impl BarTree {
         self.stale = true;
     }
 
+    /// Whether the views are built again at the next update (tests).
+    #[cfg(test)]
+    pub fn is_stale(&self) -> bool {
+        self.stale
+    }
+
     pub fn set_theme(&mut self, theme: &Theme) {
         self.tree.set_theme(theme);
         self.measure.set_theme(theme);
@@ -419,6 +425,9 @@ mod tests {
             history: &[],
             items: &[],
             tray_hidden: &[],
+            sysmon: None,
+            weather: None,
+            today: None,
         })
     }
 

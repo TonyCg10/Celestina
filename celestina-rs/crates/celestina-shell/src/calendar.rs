@@ -43,7 +43,7 @@ pub fn days_in_month(year: i32, month: u8) -> u8 {
 #[must_use]
 pub fn weekday(year: i32, month: u8, day: u8) -> u8 {
     let (year, month) = if month <= 2 {
-        (year - 1, i32::from(month) + 12)
+        (year.saturating_sub(1), i32::from(month) + 12)
     } else {
         (year, i32::from(month))
     };
@@ -96,7 +96,7 @@ impl Month {
     #[must_use]
     pub fn previous(&self) -> Self {
         let (year, month) = if self.month == 1 {
-            (self.year - 1, 12)
+            (self.year.saturating_sub(1), 12)
         } else {
             (self.year, self.month - 1)
         };
@@ -107,7 +107,7 @@ impl Month {
     #[must_use]
     pub fn next(&self) -> Self {
         let (year, month) = if self.month == 12 {
-            (self.year + 1, 1)
+            (self.year.saturating_add(1), 1)
         } else {
             (self.year, self.month + 1)
         };
@@ -171,5 +171,15 @@ mod tests {
 
         let december = Month::new(2026, 12).expect("a month");
         assert_eq!(december.next(), Month::new(2027, 1).expect("january"));
+    }
+
+    #[test]
+    fn the_extremes_of_the_year_range_never_overflow() {
+        assert!(weekday(i32::MIN, 1, 1) < 7);
+        assert!(weekday(i32::MAX, 12, 31) < 7);
+        let first = Month::new(i32::MIN, 1).expect("a month");
+        assert_eq!(first.previous().month, 12);
+        let last = Month::new(i32::MAX, 12).expect("a month");
+        assert_eq!(last.next().month, 1);
     }
 }

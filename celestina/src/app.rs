@@ -32,6 +32,7 @@ use crate::{
     command::Verb,
     energy::{self, EnergyHandle},
     error_chain,
+    glance::{self, GlanceHandle},
     island::{
         self,
         menu::{self, ChoiceSlot, Menu, MenuChoice, MenuState, SharedPainter},
@@ -46,7 +47,9 @@ use crate::{
         niri::{NiriModel, NiriProvider, NiriRequest},
         notifications::{NotificationsCommand, NotificationsProvider},
         settings::ShellSettings,
+        sysmon::SysReading,
         tray::TrayProvider,
+        weather::WeatherReading,
     },
     tray::{
         menu::{AskSink, Chain, ChoiceSlot as TrayChoiceSlot, MenuContext, MenuModel, TrayMenu},
@@ -451,6 +454,12 @@ pub struct App {
     wallpapers: crate::wallpaper::surface::Wallpapers,
     /// The energy duties' workers, set once the loop runs.
     energy: Rc<OnceCell<EnergyHandle>>,
+    /// The glance workers (system monitor, weather), set once the loop runs.
+    glance: Rc<OnceCell<GlanceHandle>>,
+    /// The system monitor's newest reading, while its worker runs.
+    sysmon: Option<SysReading>,
+    /// The weather's reading, while its worker runs.
+    weather: Option<WeatherReading>,
 }
 
 impl std::fmt::Debug for App {
@@ -507,6 +516,62 @@ impl App {
             tray_refusal_logged: false,
             wallpapers: crate::wallpaper::surface::Wallpapers::default(),
             energy: Rc::new(OnceCell::new()),
+            glance: Rc::new(OnceCell::new()),
+            sysmon: None,
+            weather: None,
+        }
+    }
+
+    /// Takes the slot the glance handle is put in once the loop runs.
+    #[must_use]
+    pub fn with_glance(mut self, glance: Rc<OnceCell<GlanceHandle>>) -> App {
+        self.glance = glance;
+        self
+    }
+
+    /// The system monitor's reading arrived (or was withdrawn). Each Island
+    /// is woken only as far as it shows the change ([`Island::sysmon_wake`]):
+    /// a sample every two seconds must not redraw a bar at rest. A reading
+    /// from a worker no longer running is dropped.
+    fn sysmon_read(&mut self, reading: Option<SysReading>, ctl: &mut RuntimeCtl<'_>) {
+        let running = self.glance.get().is_some_and(|g| g.running().sysmon);
+        self.sysmon = glance::admit(running, reading);
+        let now = std::time::Instant::now();
+        for slot in self.islands.iter() {
+            let wake = slot.island.sysmon_wake(self.sysmon.as_ref(), now);
+            if let Some(mut surface) = ctl.surface(slot.surface) {
+                match wake {
+                    island::cadence::Wake::Nothing => {}
+                    island::cadence::Wake::Now => surface.request_redraw(),
+                    island::cadence::Wake::After(wait) => surface.redraw_after(wait),
+                }
+            }
+        }
+    }
+
+    /// The weather's reading arrived (or was withdrawn); a reading from a
+    /// worker no longer running is dropped.
+    fn weather_read(&mut self, reading: Option<WeatherReading>, ctl: &mut RuntimeCtl<'_>) {
+        let running = self.glance.get().is_some_and(|g| g.running().weather);
+        let reading = glance::admit(running, reading);
+        if reading != self.weather {
+            self.weather = reading;
+            self.redraw_all(ctl);
+        }
+    }
+
+    /// The glance workers follow `settings`; a reading whose worker stopped
+    /// is withdrawn.
+    fn apply_glance(&mut self, settings: &Settings, ctl: &mut RuntimeCtl<'_>) {
+        let Some(handle) = self.glance.get() else {
+            return;
+        };
+        let running = handle.apply(settings);
+        if !running.sysmon && self.sysmon.is_some() {
+            self.sysmon_read(None, ctl);
+        }
+        if !running.weather {
+            self.weather_read(None, ctl);
         }
     }
 
@@ -586,6 +651,10 @@ impl App {
                 handle.apply(&after);
             }
         }
+        // Every change: the workers follow the bar duty, the layout and the
+        // location, and an apply that changes nothing is free; it is also
+        // what starts again a weather worker found gone.
+        self.apply_glance(&after, ctl);
     }
 
     /// Records who holds the bus names the pages depend on; the Islands
@@ -900,6 +969,20 @@ impl App {
         self.launcher = Some(open);
     }
 
+    /// Starts the application with desktop id `id` the way the launcher does
+    /// (never recorded as a launch). An id the session's applications lack is
+    /// logged and nothing starts.
+    fn open_app(&self, id: &str) {
+        let Some(entry) = self.index.iter().find(|entry| entry.id == id) else {
+            tracing::warn!(%id, "an Island row names an application the session lacks");
+            return;
+        };
+        match launcher::spawn::spawn(entry) {
+            Ok(()) => tracing::info!(%id, "island: application started"),
+            Err(err) => tracing::warn!("island: {}", error_chain(&err)),
+        }
+    }
+
     /// The launcher asked for `action` during an input call: it is closed
     /// now (its text input off, the keyboard released) and its surface is
     /// destroyed when the posted [`Message::LauncherClosed`] arrives, which
@@ -1017,6 +1100,7 @@ impl App {
                     }
                 }
                 IslandAction::Tray(command) => self.tray_command(command),
+                IslandAction::OpenApp(id) => self.open_app(id),
                 IslandAction::OpenTrayMenu {
                     item,
                     row,
@@ -1403,6 +1487,8 @@ impl Shell for App {
             do_not_disturb: self.settings.current().do_not_disturb,
             history: self.notifications.rows(),
             tray: &self.tray_items,
+            sysmon: self.sysmon.as_ref(),
+            weather: self.weather.as_ref(),
         };
         island.frame(
             cx,
@@ -1555,6 +1641,8 @@ impl Shell for App {
             }
             Message::ShellSettings(read) => self.shell_settings_read(*read, ctl),
             Message::Energy(event) => event.log(),
+            Message::Sysmon(reading) => self.sysmon_read(reading, ctl),
+            Message::Weather(reading) => self.weather_read(reading, ctl),
         }
     }
 }

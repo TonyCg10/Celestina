@@ -348,6 +348,11 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items,
+            sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
+            utc_offset: 0,
         })
     }
 
@@ -517,6 +522,11 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items: &many,
+            sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
+            utc_offset: 0,
         });
         assert_eq!(wants.0, PAGE_SIZE.0);
         assert!(wants.1 >= PAGE_SIZE.1);

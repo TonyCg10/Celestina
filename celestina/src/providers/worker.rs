@@ -5,7 +5,9 @@
 // 7175df087e4f2c7dda33e6ca3dfc05d0e3926ce9), adapted: the panic is reported
 // through `tracing` instead of the helper's stderr line, the prose names the
 // shell's in-process workers, tests are added, and `join_within` bounds the
-// join for the shell's exit.
+// join for the shell's exit. `Reaper` (the off-loop stop of a worker whose
+// duty was turned off) moved here from `celestina/src/energy/mod.rs` when
+// CEL-2-K's glance workers became its second user.
 
 //! One owned, cancellable provider thread.
 //!
@@ -124,10 +126,70 @@ impl Drop for Worker {
     }
 }
 
+/// A short-lived named thread running the stop of a worker whose duty was
+/// turned off, so the event loop never waits for the join itself.
+///
+/// The stop is expected to be bounded ([`Worker::join_within`]). Whoever may
+/// start the same worker again calls [`Reaper::wait`] first, so an old and a
+/// new instance never overlap; the exit path waits for every reaper too.
+#[derive(Debug, Default)]
+pub struct Reaper(Option<JoinHandle<()>>);
+
+impl Reaper {
+    /// Runs `stop` on a thread named `reap-{what}`. Without a thread, `stop`
+    /// is dropped unrun, which drops what it owns: a [`Worker`] in it is then
+    /// joined by its `Drop`, on this thread.
+    pub fn spawn(what: &'static str, stop: impl FnOnce() + Send + 'static) -> Reaper {
+        match thread::Builder::new()
+            .name(format!("reap-{what}"))
+            .spawn(stop)
+        {
+            Ok(handle) => Reaper(Some(handle)),
+            Err(err) => {
+                tracing::warn!(%err, "no thread to reap the {what} worker; it was joined here");
+                Reaper(None)
+            }
+        }
+    }
+
+    /// Waits for the pending stop, if any.
+    pub fn wait(&mut self) {
+        if let Some(handle) = self.0.take() {
+            if handle.join().is_err() {
+                tracing::error!("a worker reaper panicked");
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn a_reaper_runs_the_stop_off_the_caller_and_wait_waits_for_it() {
+        let done = Arc::new(AtomicBool::new(false));
+        let release = Arc::new(AtomicBool::new(false));
+        let mut reaper = {
+            let done = Arc::clone(&done);
+            let release = Arc::clone(&release);
+            Reaper::spawn("test", move || {
+                while !release.load(Ordering::Acquire) {
+                    thread::sleep(Duration::from_millis(2));
+                }
+                done.store(true, Ordering::Release);
+            })
+        };
+        // `spawn` returned while the stop is still held.
+        assert!(!done.load(Ordering::Acquire));
+        release.store(true, Ordering::Release);
+        reaper.wait();
+        assert!(done.load(Ordering::Acquire));
+        // Waiting again, or on a default reaper, is nothing.
+        reaper.wait();
+        Reaper::default().wait();
+    }
 
     fn until_shutdown(shutdown: &Arc<AtomicBool>) -> impl FnOnce() + Send + 'static {
         let shutdown = Arc::clone(shutdown);

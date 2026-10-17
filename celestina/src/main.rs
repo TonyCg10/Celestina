@@ -29,6 +29,7 @@ use celestina::{
     command::{self, Mode, Verb, USAGE},
     energy::EnergyHandle,
     error_chain,
+    glance::GlanceHandle,
     island::clock,
     launcher::recent::RecentLaunches,
     providers::notifications::NotificationsCommand,
@@ -123,6 +124,7 @@ fn shell(cfg: Config) -> ExitCode {
     let quiet = settings.current().do_not_disturb;
     let wallpaper = Rc::new(OnceCell::new());
     let energy = Rc::new(OnceCell::new());
+    let glance = Rc::new(OnceCell::new());
     let settings_read = settings.current().clone();
     let follow_from = settings.follow_from();
     let app = App::new(
@@ -137,7 +139,8 @@ fn shell(cfg: Config) -> ExitCode {
     .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender))
     .with_tray(Rc::clone(&tray))
     .with_wallpaper(Rc::clone(&wallpaper))
-    .with_energy(Rc::clone(&energy));
+    .with_energy(Rc::clone(&energy))
+    .with_glance(Rc::clone(&glance));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -170,6 +173,12 @@ fn shell(cfg: Config) -> ExitCode {
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = energy.set(handle);
+        // The system monitor and the weather run only for what is placed;
+        // the weather never without a location in `shell.json`.
+        let handle = GlanceHandle::new(sender.clone());
+        handle.apply(&settings_read);
+        // The slot is empty: `setup` runs once.
+        let _ = glance.set(handle);
         match providers::desktop::spawn(sender.clone(), &shutdown) {
             Ok(worker) => indexer = Some(worker),
             Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
@@ -237,6 +246,9 @@ fn shell(cfg: Config) -> ExitCode {
     shutdown.store(true, Ordering::Release);
     // Gamma restored, the inhibitor closed, the idle notifications destroyed.
     if let Some(handle) = energy.get() {
+        handle.stop();
+    }
+    if let Some(handle) = glance.get() {
         handle.stop();
     }
     drop(follower);

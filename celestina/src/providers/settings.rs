@@ -275,6 +275,7 @@ impl<D: FnMut(ShellRead)> Follow<D> {
             }
             Reread::Unusable => self.dirty = true,
             Reread::Value(read) => {
+                let read = *read;
                 // A read after an own write is delivered even when equal to
                 // the last one: the last one may have been ignored as older
                 // than that write, and the write may have kept an edit it
@@ -367,7 +368,8 @@ enum Reread {
     /// The file cannot be read or is not this shell's JSON: the value in
     /// force stays.
     Unusable,
-    Value(Settings),
+    /// Boxed: the whole settings would size every variant.
+    Value(Box<Settings>),
 }
 
 fn reread(file: &Path) -> Reread {
@@ -375,7 +377,7 @@ fn reread(file: &Path) -> Reread {
     match atomic_file::read_bounded(file, limit) {
         Ok(None) => Reread::Missing,
         Ok(Some(bytes)) => match Settings::from_bytes(&bytes) {
-            Some(read) => Reread::Value(read),
+            Some(read) => Reread::Value(Box::new(read)),
             None => {
                 tracing::warn!(
                     "{} is not a settings file this shell can read; the settings in force stay",
@@ -514,7 +516,7 @@ impl ShellSettings {
         }
         let written = match self.path.as_deref().map(reread) {
             Some(Reread::Value(on_disk)) => {
-                Store::new(on_disk).stage(|settings| settings.do_not_disturb = on)
+                Store::new(*on_disk).stage(|settings| settings.do_not_disturb = on)
             }
             Some(Reread::Unusable) => {
                 // Broken since the last read: kept for the person, as at start.

@@ -5,11 +5,14 @@
 //! request past the surface.
 
 pub mod activity;
+pub mod clock;
 pub mod notifications;
+pub mod sysmon;
 pub mod tabs;
 pub mod tray;
 
 use celestina_paint::{Role, Theme, Weight};
+use celestina_shell::glance::Today;
 use celestina_ui::{view, Key, View};
 
 use crate::{
@@ -18,7 +21,7 @@ use crate::{
         view::{centred, text_style},
     },
     pieces::{self, PageId},
-    providers::niri::NiriModel,
+    providers::{niri::NiriModel, sysmon::SysReading, weather::WeatherReading},
 };
 
 /// The widest an explanation line gets before it wraps, logical px.
@@ -104,6 +107,16 @@ pub struct PageCx<'a> {
     pub history: &'a [HistoryRow],
     /// The tray's items (CEL-1-G).
     pub items: &'a [TrayRow],
+    /// The system monitor's newest reading (not the bar's held-back one).
+    pub sysmon: Option<&'a SysReading>,
+    /// The weather's reading; `None` while there is no fresh one.
+    pub weather: Option<&'a WeatherReading>,
+    /// Today's local date, as of the last minute the Island read.
+    pub today: Option<Today>,
+    /// The month the Clock page shows, in months from the current one.
+    pub month_offset: i32,
+    /// The local UTC offset in seconds, for the times a page prints.
+    pub utc_offset: i64,
 }
 
 /// One of the Island's pages.
@@ -162,6 +175,27 @@ pub fn page_view(page: PageId) -> &'static dyn PageView {
 }
 
 /// What `page` asks for with `model` on a surface allowing `max_size`.
+/// The size the real font gives `text` in `style`, wrapped at `max_width`, for
+/// the tests that check a string fits where it is drawn. One `TextSystem` for
+/// the whole test binary: loading the fonts is slow.
+#[cfg(test)]
+pub(crate) fn measure_real(
+    text: &str,
+    style: &celestina_paint::TextStyle,
+    max_width: Option<f32>,
+) -> (f32, f32) {
+    use std::sync::{Mutex, OnceLock};
+
+    use celestina_paint::{default_font_dirs, TextSystem};
+
+    static SYSTEM: OnceLock<Mutex<TextSystem>> = OnceLock::new();
+    let lock = SYSTEM.get_or_init(|| {
+        Mutex::new(TextSystem::new(&default_font_dirs()).expect("Inter Variable in the checkout"))
+    });
+    let mut system = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    system.measure(text, style, max_width, 1.0)
+}
+
 #[cfg(test)]
 pub(crate) fn wants_of(
     page: &dyn PageView,
@@ -177,6 +211,11 @@ pub(crate) fn wants_of(
         do_not_disturb: false,
         history: &[],
         items: &[],
+        sysmon: None,
+        weather: None,
+        today: None,
+        month_offset: 0,
+        utc_offset: 0,
     })
 }
 
@@ -226,6 +265,11 @@ mod tests {
             do_not_disturb: false,
             history: &history,
             items: &items,
+            sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
+            utc_offset: 0,
         };
         let page = Counts;
         assert_eq!(page.title(), "counts");
@@ -412,6 +456,11 @@ mod tests {
             do_not_disturb: false,
             history: &fixture.history,
             items: &fixture.items,
+            sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
+            utc_offset: 0,
         };
         (
             pv.title().to_owned(),
@@ -605,8 +654,11 @@ mod tests {
     #[test]
     fn page_title_wants_and_view_structure_are_pinned() {
         let fixtures = fixtures();
-        assert_eq!(PINNED.len(), PageId::all().len() * fixtures.len());
-        for page in PageId::all() {
+        // The three CEL-2-A pages are pinned here; the glance pages have their
+        // own tests (CEL-2-K).
+        let pinned_pages = [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY];
+        assert_eq!(PINNED.len(), pinned_pages.len() * fixtures.len());
+        for page in pinned_pages {
             for fixture in &fixtures {
                 let pinned = PINNED
                     .iter()
@@ -627,10 +679,19 @@ mod tests {
     fn page_order_and_words_are_pinned() {
         assert_eq!(
             PageId::all(),
-            [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY]
+            [
+                PageId::ACTIVITY,
+                PageId::NOTIFICATIONS,
+                PageId::TRAY,
+                PageId::SYSMON,
+                PageId::CLOCK
+            ]
         );
         let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
-        assert_eq!(words, ["activity", "notifications", "tray"]);
+        assert_eq!(
+            words,
+            ["activity", "notifications", "tray", "sysmon", "clock"]
+        );
     }
 
     #[test]

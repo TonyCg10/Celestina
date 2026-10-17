@@ -43,16 +43,23 @@
 //! every action a piece offers must also be reachable from a page or a verb,
 //! as the three pieces' actions are (their pages and their rows).
 
+pub mod clock;
 pub mod notifications;
+pub mod sysmon;
 pub mod tray;
+pub mod weather;
 pub mod workspaces;
 
 use celestina_paint::Theme;
+use celestina_shell::glance::Today;
 use celestina_ui::{Key, View};
 
 use crate::{
     island::pages::{HistoryRow, NameOwner, PageView, TrayRow},
-    providers::{niri::NiriModel, notifications::NotificationsCommand},
+    providers::{
+        niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
+        weather::WeatherReading,
+    },
     tray::{ItemId, TrayCommand},
 };
 
@@ -82,6 +89,12 @@ impl PageId {
     pub const NOTIFICATIONS: PageId = PageId("notifications");
     /// The Tray page.
     pub const TRAY: PageId = PageId("tray");
+    /// The System page (the System monitor piece's): the meters and their
+    /// history.
+    pub const SYSMON: PageId = PageId("sysmon");
+    /// The Clock page (the Clock and Weather pieces'): the month calendar and
+    /// the weather reading.
+    pub const CLOCK: PageId = PageId("clock");
 
     /// Every page, in tab order: the table's order.
     #[must_use]
@@ -124,6 +137,13 @@ pub struct BarCx<'a> {
     /// The item `Id`s the bar's Tray piece leaves out (`bar.tray_hidden`);
     /// the Tray page still lists them.
     pub tray_hidden: &'a [String],
+    /// The system monitor's reading as the bar shows it (held back to the
+    /// bar's cadence, never the page's newest); `None` while there is none.
+    pub sysmon: Option<&'a SysReading>,
+    /// The weather's reading; `None` while there is no fresh one.
+    pub weather: Option<&'a WeatherReading>,
+    /// Today's local date, as of the last minute the Island read.
+    pub today: Option<Today>,
 }
 
 /// What the Island saw on a node of a piece's widget.
@@ -195,6 +215,9 @@ pub static PIECES: &[&dyn Piece] = &[
     &workspaces::Workspaces,
     &notifications::Notifications,
     &tray::Tray,
+    &sysmon::Sysmon,
+    &clock::Clock,
+    &weather::Weather,
 ];
 
 /// The piece the layout names `id`, if the table has it.
@@ -231,14 +254,31 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
+    use crate::providers::niri::Workspace;
 
     #[test]
     fn the_table_yields_the_pieces_and_the_tab_order() {
         let ids: Vec<&str> = PIECES.iter().map(|p| p.id().as_str()).collect();
-        assert_eq!(ids, ["workspaces", "notifications", "tray"]);
+        assert_eq!(
+            ids,
+            [
+                "workspaces",
+                "notifications",
+                "tray",
+                "sysmon",
+                "clock",
+                "weather"
+            ]
+        );
         assert_eq!(
             PageId::all(),
-            [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY]
+            [
+                PageId::ACTIVITY,
+                PageId::NOTIFICATIONS,
+                PageId::TRAY,
+                PageId::SYSMON,
+                PageId::CLOCK
+            ]
         );
         for (i, id) in PageId::all().into_iter().enumerate() {
             assert_eq!(page_index(id), Some(i), "{id:?}");
@@ -272,20 +312,26 @@ mod tests {
             let found = piece(p.id().as_str()).map(|f| f.id());
             assert_eq!(found, Some(p.id()));
         }
-        for word in ["activity", "notifications", "tray"] {
+        for word in ["activity", "notifications", "tray", "sysmon", "clock"] {
             assert_eq!(page_by_word(word).map(PageId::word), Some(word));
         }
         for foreign in ["", "Activity", "island", "workspaces", "tray ", "menu"] {
             assert_eq!(page_by_word(foreign), None, "{foreign:?}");
         }
-        for foreign in ["", "Tray", "island", "activity", "clock"] {
+        for foreign in ["", "Tray", "island", "activity", "Clock", "sysmon "] {
             assert!(piece(foreign).is_none(), "{foreign:?}");
         }
     }
 
     #[test]
     fn every_named_page_is_a_page_of_the_table() {
-        for id in [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY] {
+        for id in [
+            PageId::ACTIVITY,
+            PageId::NOTIFICATIONS,
+            PageId::TRAY,
+            PageId::SYSMON,
+            PageId::CLOCK,
+        ] {
             assert!(page_entry(id).is_some(), "{id:?}");
         }
     }
@@ -295,5 +341,111 @@ mod tests {
         for p in PIECES {
             assert!(!p.name().is_empty(), "{:?}", p.id());
         }
+    }
+
+    // ---- Characterisation (CEL-2-K T0): the three CEL-2-A pieces as they
+    // are before the table grows; they must pass unchanged.
+
+    fn keys_of(v: &View) -> Vec<Key> {
+        let mut out = Vec::new();
+        let mut stack = vec![v];
+        while let Some(n) = stack.pop() {
+            out.push(n.key);
+            stack.extend(n.children.iter().rev());
+        }
+        out
+    }
+
+    fn bar_of(
+        id: &str,
+        model: Option<&NiriModel>,
+        history: &[HistoryRow],
+        items: &[TrayRow],
+    ) -> Option<Vec<Key>> {
+        let theme = Theme::dark();
+        let owners = NameOwner::default();
+        let cx = BarCx {
+            theme: &theme,
+            output: "DP-1",
+            model,
+            owners: &owners,
+            do_not_disturb: false,
+            history,
+            items,
+            tray_hidden: &[],
+            sysmon: None,
+            weather: None,
+            today: None,
+        };
+        piece(id)
+            .expect("in the table")
+            .bar(&cx)
+            .map(|v| keys_of(&v))
+    }
+
+    #[test]
+    fn the_three_pieces_keep_their_names_pages_and_bar_keys() {
+        // The table grew in CEL-2-K: the first three entries are asserted as
+        // they were.
+        let names: Vec<&str> = PIECES.iter().take(3).map(|p| p.name()).collect();
+        assert_eq!(names, ["Espacios de trabajo", "Notificaciones", "Bandeja"]);
+        let pages: Vec<Option<&str>> = PIECES
+            .iter()
+            .take(3)
+            .map(|p| p.page().map(|e| e.id.word()))
+            .collect();
+        assert_eq!(
+            pages,
+            [Some("activity"), Some("notifications"), Some("tray")]
+        );
+
+        // Nothing to show: workspaces and the tray are absent, the bell stays.
+        assert_eq!(bar_of("workspaces", None, &[], &[]), None);
+        assert_eq!(bar_of("tray", None, &[], &[]), None);
+        assert_eq!(
+            bar_of("notifications", None, &[], &[]),
+            Some(vec![Key::named("bell"), Key::named("bell-icon")])
+        );
+
+        // Something to show.
+        let ws = |id, active| Workspace {
+            id,
+            idx: 1,
+            name: None,
+            output: Some("DP-1".to_owned()),
+            is_active: active,
+            is_focused: active,
+            columns: 1,
+        };
+        let model = NiriModel {
+            workspaces: vec![ws(5, false), ws(6, true)],
+            ..NiriModel::default()
+        };
+        let keys = bar_of("workspaces", Some(&model), &[], &[]).expect("dots");
+        assert_eq!(keys.len(), 5, "container, two dots, two marks");
+        assert_eq!(keys[0], Key::named("workspaces"));
+        assert_eq!(keys[2], Key::indexed("dot-mark", 5));
+        assert_eq!(keys[4], Key::indexed("dot-mark", 6));
+
+        let unread = HistoryRow::default();
+        assert!(!unread.read);
+        assert_eq!(
+            bar_of("notifications", None, &[unread], &[]),
+            Some(vec![
+                Key::named("bell"),
+                Key::named("bell-icon"),
+                Key::named("bell-unread")
+            ])
+        );
+
+        let item = TrayRow {
+            id: ItemId {
+                bus_name: ":1.1".to_owned(),
+                path: "/StatusNotifierItem".to_owned(),
+            },
+            ..TrayRow::default()
+        };
+        let keys = bar_of("tray", None, &[], &[item]).expect("icons");
+        assert!(keys.len() >= 2, "a container and one icon: {keys:?}");
     }
 }

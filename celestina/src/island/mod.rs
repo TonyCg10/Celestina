@@ -16,6 +16,7 @@
 //! its 1.0.0 shape.
 
 pub mod bar_tree;
+pub mod cadence;
 pub mod clock;
 pub mod menu;
 pub mod pages;
@@ -26,6 +27,7 @@ pub mod workspaces;
 use std::time::{Duration, Instant};
 
 use celestina_paint::{Painter, PixmapId, Rect, Theme};
+use celestina_shell::glance::Today;
 use celestina_shell::settings::BarLayout;
 use celestina_ui::{Interaction, Key, Tree, UiEvent, BTN_LEFT};
 use celestina_wayland::{
@@ -36,13 +38,17 @@ use crate::{
     bar::silhouette::{self, Shape},
     command::Verb,
     pieces::{BarCx, Gesture, PageId, PieceAction},
-    providers::{niri::NiriModel, notifications::NotificationsCommand},
+    providers::{
+        niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
+        weather::WeatherReading,
+    },
     tray::{scroll_steps, ItemId, Orientation, TrayCommand},
 };
 use bar_tree::BarTree;
+use cadence::{Cadence, Offer, Wake, SYSMON_BAR_PERIOD};
 use clock::{ClockTick, SecondTick};
 use pages::{
-    activity, notifications, page_view, tabs,
+    activity, clock as clock_page, notifications, page_view, sysmon as sysmon_page, tabs,
     tray::{self as tray_page, IconCache, Pixmaps, TrayList, TrayRow},
     HistoryRow, NameOwner, PageCx,
 };
@@ -78,6 +84,10 @@ pub enum IslandAction {
     /// The Notifications page's switch: the app flips the do-not-disturb
     /// setting, the one owner of the choice.
     ToggleDoNotDisturb,
+    /// A row that starts the application with this desktop id; the app
+    /// finds it in the session's applications and starts it as the launcher
+    /// does.
+    OpenApp(&'static str),
 }
 
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
@@ -100,6 +110,10 @@ pub struct Shared<'a> {
     pub history: &'a [HistoryRow],
     /// The tray's items.
     pub tray: &'a TrayList,
+    /// The system monitor's newest reading.
+    pub sysmon: Option<&'a SysReading>,
+    /// The weather's reading.
+    pub weather: Option<&'a WeatherReading>,
 }
 
 /// The painter's textures as the tray's icon cache stores pixmaps in them.
@@ -188,6 +202,18 @@ pub struct Island {
     tray_menu_on_bar: bool,
     /// The last tray menu asked for was a bar icon's.
     bar_menu_asked: bool,
+    /// The system monitor's reading as the bar shows it: refreshed at most
+    /// once per [`SYSMON_BAR_PERIOD`].
+    bar_sysmon: Cadence<SysReading>,
+    /// The system monitor's newest reading, for the open page.
+    page_sysmon: Option<SysReading>,
+    /// The weather's reading.
+    weather: Option<WeatherReading>,
+    /// Today's local date, refreshed with the minute.
+    today: Option<Today>,
+    /// The month the Clock page shows, in months from the current one;
+    /// bounded by [`clock_page::MAX_OFFSET`] and reset when the page closes.
+    month_offset: i32,
 }
 
 /// The room the page is laid out in on a surface of `size`: never wider
@@ -236,7 +262,62 @@ impl Island {
             bar: None,
             tray_menu_on_bar: false,
             bar_menu_asked: false,
+            bar_sysmon: Cadence::new(SYSMON_BAR_PERIOD),
+            page_sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
         }
+    }
+
+    /// The system monitor's reading as the bar shows it.
+    #[must_use]
+    pub fn bar_sysmon(&self) -> Option<&SysReading> {
+        self.bar_sysmon.shown()
+    }
+
+    /// The system monitor's newest reading, as the open page shows it.
+    #[must_use]
+    pub fn page_sysmon(&self) -> Option<&SysReading> {
+        self.page_sysmon.as_ref()
+    }
+
+    /// The weather's reading.
+    #[must_use]
+    pub fn weather(&self) -> Option<&WeatherReading> {
+        self.weather.as_ref()
+    }
+
+    /// Today's local date, as of the last minute the Island read.
+    #[must_use]
+    pub fn today(&self) -> Option<Today> {
+        self.today
+    }
+
+    /// What the system monitor's `newest` reading at `now` asks of this
+    /// Island's surface: a frame while a page is open (the page reads the
+    /// newest reading), a frame when the bar's held value changes, a timed
+    /// frame when it is held back, and nothing otherwise, so a closed
+    /// Island's rest stays at one frame a minute.
+    #[must_use]
+    pub fn sysmon_wake(&self, newest: Option<&SysReading>, now: Instant) -> Wake {
+        if self.sysmon_page_open() && newest != self.page_sysmon.as_ref() {
+            return Wake::Now;
+        }
+        if self.bar.is_none() {
+            return Wake::Nothing;
+        }
+        match self.bar_sysmon.peek(newest, now) {
+            Offer::Same => Wake::Nothing,
+            Offer::Changed => Wake::Now,
+            Offer::Pending(wait) => Wake::After(wait),
+        }
+    }
+
+    /// Whether the System page is the one the open Island shows: the only
+    /// page that reads the newest reading.
+    fn sysmon_page_open(&self) -> bool {
+        self.state.is_open() && self.state.shown_page() == PageId::SYSMON
     }
 
     /// Turns the bar on with `layout`, or off with `None`. Off, nothing of
@@ -279,6 +360,9 @@ impl Island {
             history: &self.history,
             items: &self.tray_rows,
             tray_hidden: &[],
+            sysmon: self.bar_sysmon.shown(),
+            weather: self.weather.as_ref(),
+            today: self.today,
         }
     }
 
@@ -361,6 +445,8 @@ impl Island {
             do_not_disturb,
             history,
             tray,
+            sysmon,
+            weather,
         } = *shared;
         let now = cx.now;
         self.set_reduced_motion(reduced);
@@ -408,9 +494,16 @@ impl Island {
             self.tray_rows = self.icons.rows(&tray.items, painter);
             seen = true;
         }
+        if weather != self.weather.as_ref() {
+            self.weather = weather.cloned();
+            seen = true;
+        }
         if seen {
             self.stale |= self.state.is_open();
             self.invalidate_bar();
+        }
+        if let Some(wait) = self.mirror_sysmon(sysmon, now) {
+            cx.ctl.redraw_after(wait);
         }
         self.tick_clock(now, &mut cx.ctl);
         if self.stale || self.state.slide(now) != self.applied_slide {
@@ -431,6 +524,24 @@ impl Island {
         self.moving = moving;
     }
 
+    /// The system monitor's `newest` reading: the open page takes it as it
+    /// is, the bar through its cadence. Returns the wait to arm for the
+    /// frame that shows a held-back value on the bar.
+    fn mirror_sysmon(&mut self, newest: Option<&SysReading>, now: Instant) -> Option<Duration> {
+        if newest != self.page_sysmon.as_ref() {
+            self.page_sysmon = newest.cloned();
+            self.stale |= self.sysmon_page_open();
+        }
+        match self.bar_sysmon.offer(newest, now) {
+            Offer::Same => None,
+            Offer::Changed => {
+                self.invalidate_bar();
+                None
+            }
+            Offer::Pending(wait) => self.bar.is_some().then_some(wait),
+        }
+    }
+
     /// Reads the wall clock: a new minute may change the text; the minute
     /// deadline is asked for again every frame and moves to the next
     /// boundary once it has passed.
@@ -448,16 +559,32 @@ impl Island {
         let minute = secs / 60;
         if self.clock_minute != Some(minute) {
             self.clock_minute = Some(minute);
-            let text = clock::format_local(secs, clock::utc_offset());
+            let offset = clock::utc_offset();
+            let text = clock::format_local(secs, offset);
             if text != self.clock {
                 self.clock = text;
                 self.stale = true;
             }
+            self.set_today(secs, offset);
         }
         // Asked again every frame: the seconds' earlier timer replaces the
         // minute's on the surface (see `ClockTick`).
         let minute_wait = self.tick.wait(now, secs, nanos);
         [Some(minute_wait), self.tick_seconds(now, secs, nanos)]
+    }
+
+    /// Today's date at wall-clock `secs` and UTC `offset`: a new day redraws
+    /// what reads it.
+    fn set_today(&mut self, secs: u64, offset: i64) {
+        let today = i64::try_from(secs)
+            .ok()
+            .zip(i32::try_from(offset).ok())
+            .and_then(|(secs, offset)| Today::from_unix(secs, offset));
+        if today != self.today {
+            self.today = today;
+            self.stale |= self.state.is_open();
+            self.invalidate_bar();
+        }
     }
 
     /// The page's seconds clock: refreshed and timed only while a page is
@@ -497,6 +624,11 @@ impl Island {
             do_not_disturb: self.do_not_disturb,
             history: &self.history,
             items: &self.tray_rows,
+            sysmon: self.page_sysmon.as_ref(),
+            weather: self.weather.as_ref(),
+            today: self.today,
+            month_offset: self.month_offset,
+            utc_offset: clock::utc_offset(),
         };
         self.state
             .request_page_size(page.wants(&cx), now, self.reduced);
@@ -636,6 +768,10 @@ impl Island {
     }
 
     fn close(&mut self, now: Instant) {
+        if self.month_offset != 0 {
+            self.month_offset = 0;
+            self.stale = true;
+        }
         if self.state.is_open() {
             self.page_input
                 .pointer(&mut self.page, &InputEvent::PointerLeave, now);
@@ -1182,6 +1318,15 @@ impl Island {
         } else if let Some(page) = tabs::page_of(key) {
             self.open(page, now);
             None
+        } else if let Some(step) = clock_page::month_step(key) {
+            let offset = step.apply(self.month_offset);
+            if offset != self.month_offset {
+                self.month_offset = offset;
+                self.stale = true;
+            }
+            None
+        } else if key == sysmon_page::open_key() {
+            Some(IslandAction::OpenApp(sysmon_page::MONITOR_DESKTOP_ID))
         } else if let Some(action) = notifications::action_for(
             &self.history,
             &self.owners,
@@ -2305,5 +2450,240 @@ mod tests {
         island.open(PageId::ACTIVITY, t0);
         assert!(island.shows_a_change(Some(&b)));
         assert!(!island.shows_a_change(Some(&a)));
+    }
+
+    // The glance slices (CEL-2-K).
+
+    fn sample(cpu: u8) -> SysReading {
+        SysReading {
+            cpu,
+            ram: 40,
+            ram_used_kib: 4,
+            ram_total_kib: 10,
+            temp_c: Some(50),
+            cpu_history: vec![cpu],
+            ram_history: vec![40],
+        }
+    }
+
+    fn bar_stale(island: &Island) -> bool {
+        island.bar.as_ref().is_some_and(BarTree::is_stale)
+    }
+
+    #[test]
+    fn a_sample_every_two_seconds_reaches_a_resting_bar_once_per_ten() {
+        let (mut island, t0) = bar_island(1920.0);
+        let s = Duration::from_secs(1);
+        // Nothing yet, nothing new: no frame.
+        assert_eq!(island.sysmon_wake(None, t0), Wake::Nothing);
+        // The first reading is shown at once.
+        let first = sample(1);
+        assert_eq!(island.sysmon_wake(Some(&first), t0), Wake::Now);
+        assert_eq!(island.mirror_sysmon(Some(&first), t0), None);
+        assert!(bar_stale(&island));
+        lay_fake(&mut island, t0);
+        assert!(!bar_stale(&island));
+        // Every two seconds a new sample: held back, with one timed frame
+        // armed for when it is due, and the bar not rebuilt.
+        let mut frames = 0;
+        for n in 1..=15u8 {
+            let now = t0 + 2 * s * u32::from(n);
+            let newest = sample(n + 1);
+            match island.sysmon_wake(Some(&newest), now) {
+                Wake::Nothing => panic!("a new sample is never nothing"),
+                Wake::After(wait) => {
+                    assert!(wait <= SYSMON_BAR_PERIOD);
+                    assert_eq!(island.mirror_sysmon(Some(&newest), now), Some(wait));
+                    assert!(!bar_stale(&island), "held back at {n}");
+                }
+                Wake::Now => {
+                    frames += 1;
+                    assert_eq!(island.mirror_sysmon(Some(&newest), now), None);
+                    assert!(bar_stale(&island));
+                    lay_fake(&mut island, now);
+                }
+            }
+            assert_eq!(island.page_sysmon(), Some(&newest));
+        }
+        // Thirty seconds: three bar changes, at 10, 20 and 30 s.
+        assert_eq!(frames, 3);
+        assert_eq!(island.bar_sysmon(), Some(&sample(16)));
+        // The same reading again wakes nothing.
+        let later = t0 + 31 * s;
+        assert_eq!(island.sysmon_wake(Some(&sample(16)), later), Wake::Nothing);
+        // A withdrawal is shown at once.
+        assert_eq!(island.sysmon_wake(None, later), Wake::Now);
+        island.mirror_sysmon(None, later);
+        assert_eq!(island.bar_sysmon(), None);
+    }
+
+    #[test]
+    fn an_open_page_takes_every_sample_and_no_bar_wakes_nothing() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        // Bar off and closed: nothing reads the system monitor.
+        assert_eq!(island.sysmon_wake(Some(&sample(1)), t0), Wake::Nothing);
+        island.open(PageId::SYSMON, t0);
+        assert_eq!(island.sysmon_wake(Some(&sample(1)), t0), Wake::Now);
+        island.stale = false;
+        island.mirror_sysmon(Some(&sample(1)), t0);
+        assert!(island.stale);
+        let soon = t0 + Duration::from_secs(2);
+        assert_eq!(island.sysmon_wake(Some(&sample(2)), soon), Wake::Now);
+        island.mirror_sysmon(Some(&sample(2)), soon);
+        assert_eq!(island.page_sysmon(), Some(&sample(2)));
+        // The bar's value is held back all the same.
+        assert_eq!(island.bar_sysmon(), Some(&sample(1)));
+        assert_eq!(island.sysmon_wake(Some(&sample(2)), soon), Wake::Nothing);
+    }
+
+    /// The default layout with the glance pieces added to the end zone.
+    fn glance_layout() -> BarLayout {
+        let mut layout = BarLayout::default();
+        layout.end.extend(
+            ["sysmon", "weather", "clock"]
+                .iter()
+                .map(|id| (*id).to_owned()),
+        );
+        layout
+    }
+
+    fn some_weather() -> WeatherReading {
+        WeatherReading {
+            celsius: 12,
+            code: 0,
+            daylight: true,
+            label: "Madrid".to_owned(),
+            taken_unix: 0,
+        }
+    }
+
+    #[test]
+    fn the_glance_pieces_read_the_bars_slices_and_a_click_opens_their_pages() {
+        let (mut island, t0) = bar_island(1920.0);
+        island.set_bar(Some(&glance_layout()));
+        // Nothing to read yet: no sysmon, no weather; the date alone shows.
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        assert!(island
+            .bar
+            .as_ref()
+            .and_then(|b| b.node_rect(Key::named("sysmon")))
+            .is_none());
+        island.set_today(1_792_281_480, 0);
+        island.mirror_sysmon(Some(&sample(23)), t0);
+        island.weather = Some(some_weather());
+        island.invalidate_bar();
+        // Pieces that just appeared fade in; a click needs them visible.
+        let t0 = t0 + Duration::from_secs(1);
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        let t0 = t0 + Duration::from_secs(1);
+        lay_fake(&mut island, t0);
+
+        // The bar reads the held-back sample, the page the newest.
+        let soon = t0 + Duration::from_secs(2);
+        island.mirror_sysmon(Some(&sample(77)), soon);
+        assert_eq!(island.bar_cx().sysmon, Some(&sample(23)));
+        assert_eq!(island.page_sysmon(), Some(&sample(77)));
+
+        for (key, page) in [
+            (Key::named("sysmon"), PageId::SYSMON),
+            (Key::named("weather"), PageId::CLOCK),
+            (Key::named("clock-date"), PageId::CLOCK),
+        ] {
+            island.close(t0);
+            let at = centre(bar_rect(&island, key));
+            assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+            assert_eq!(island.page(), Some(page), "{key:?}");
+        }
+    }
+
+    #[test]
+    fn the_calendar_buttons_move_the_month_within_bounds_and_closing_resets_it() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.set_today(1_792_281_480, 0);
+        island.open(PageId::CLOCK, t0);
+        island.stale = false;
+        assert_eq!(island.activate(clock_page::next_key(), t0), None);
+        assert_eq!(island.month_offset, 1);
+        assert!(island.stale, "a month change redraws the page");
+        assert_eq!(island.activate(clock_page::next_key(), t0), None);
+        assert_eq!(island.activate(clock_page::previous_key(), t0), None);
+        assert_eq!(island.month_offset, 1);
+        island.stale = false;
+        assert_eq!(island.activate(clock_page::today_key(), t0), None);
+        assert_eq!(island.month_offset, 0);
+        assert!(island.stale);
+        // Today again changes nothing.
+        island.stale = false;
+        island.activate(clock_page::today_key(), t0);
+        assert!(!island.stale);
+        // The bound holds however long the button is held.
+        for _ in 0..(2 * clock_page::MAX_OFFSET + 10) {
+            island.activate(clock_page::next_key(), t0);
+        }
+        assert_eq!(island.month_offset, clock_page::MAX_OFFSET);
+        // Closing the page forgets the month; reopening shows this one.
+        island.close(t0);
+        assert_eq!(island.month_offset, 0);
+        // The page is built from the offset it has.
+        island.activate(clock_page::previous_key(), t0);
+        assert_eq!(island.month_offset, -1);
+    }
+
+    #[test]
+    fn the_monitor_row_asks_the_app_to_open_the_resource_monitor() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.open(PageId::SYSMON, t0);
+        assert_eq!(
+            island.activate(sysmon_page::open_key(), t0),
+            Some(IslandAction::OpenApp("org.celestina.Hematita.desktop"))
+        );
+        assert_eq!(island.page(), Some(PageId::SYSMON));
+    }
+
+    #[test]
+    fn only_the_system_page_reads_the_newest_sample() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.open(PageId::ACTIVITY, t0);
+        assert_eq!(island.sysmon_wake(Some(&sample(1)), t0), Wake::Nothing);
+        island.stale = false;
+        island.mirror_sysmon(Some(&sample(1)), t0);
+        assert!(!island.stale, "the Activity page does not read it");
+        // Sliding to the System page makes the next change a frame.
+        island.open(PageId::SYSMON, t0);
+        assert_eq!(island.sysmon_wake(Some(&sample(2)), t0), Wake::Now);
+        island.stale = false;
+        island.mirror_sysmon(Some(&sample(2)), t0);
+        assert!(island.stale);
+        // And sliding away stops the frames again.
+        island.open(PageId::CLOCK, t0);
+        assert_eq!(island.sysmon_wake(Some(&sample(3)), t0), Wake::Nothing);
+    }
+
+    #[test]
+    fn a_new_day_rebuilds_the_bar_and_a_new_minute_does_not() {
+        let (mut island, t0) = bar_island(1920.0);
+        // 2026-10-17 23:58 UTC.
+        let late = 1_792_281_480;
+        island.set_today(late, 0);
+        assert_eq!(
+            island.today().map(|t| (t.year, t.month, t.day)),
+            Some((2026, 10, 17))
+        );
+        assert!(bar_stale(&island));
+        lay_fake(&mut island, t0);
+        island.set_today(late + 60, 0);
+        assert!(!bar_stale(&island));
+        island.set_today(late + 180, 0);
+        assert_eq!(island.today().map(|t| t.day), Some(18));
+        assert!(bar_stale(&island));
+        // The same instant two hours east is already the next day.
+        island.set_today(late, 7_200);
+        assert_eq!(island.today().map(|t| t.day), Some(18));
     }
 }

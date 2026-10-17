@@ -317,6 +317,11 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items: &[],
+            sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
+            utc_offset: 0,
         })
     }
 
@@ -469,6 +474,11 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items: &[],
+            sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
+            utc_offset: 0,
         })
     }
 
@@ -482,6 +492,11 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items: &[],
+            sysmon: None,
+            weather: None,
+            today: None,
+            month_offset: 0,
+            utc_offset: 0,
         })
     }
 

@@ -193,3 +193,330 @@ pub const TRAY_NEEDS_ATTENTION: &str = "Requiere atención";
 
 /// The Tray page's status word for a passive item ("Inactive").
 pub const TRAY_PASSIVE: &str = "Inactivo";
+
+// Glance: the system monitor, the weather and the calendar (CEL-2-K).
+
+/// The Notifications tab's short label ("Notif."): the full title does not
+/// fit one of five equal pills, and the toolkit has no ellipsis.
+pub const TAB_NOTIFICATIONS: &str = "Notific.";
+
+/// The title of the Clock page ("Clock").
+pub const PAGE_CLOCK: &str = "Reloj";
+
+/// The title of the System monitor page ("System").
+pub const PAGE_SYSMON: &str = "Sistema";
+
+/// The accessible name of the bar's weather piece ("Weather").
+pub const PIECE_WEATHER: &str = "Tiempo";
+
+/// The launcher command that opens the Clock page, as typed.
+pub const SWITCH_CLOCK: &str = "/reloj";
+
+/// The launcher command that opens the System page, as typed.
+pub const SWITCH_SYSMON: &str = "/sistema";
+
+/// What the clock command does, beside it ("Opens the Clock page").
+pub const SWITCH_CLOCK_LABEL: &str = "Abre la página Reloj";
+
+/// What the system command does, beside it ("Opens the System page").
+pub const SWITCH_SYSMON_LABEL: &str = "Abre la página Sistema";
+
+/// The calendar's button to the previous month ("Previous"). The surface has
+/// no accessible-name channel beyond the visible text, so the word stays.
+pub const CALENDAR_PREVIOUS: &str = "Anterior";
+
+/// The calendar's button back to the current month ("Today").
+pub const CALENDAR_TODAY: &str = "Hoy";
+
+/// The calendar's button to the next month ("Next").
+pub const CALENDAR_NEXT: &str = "Siguiente";
+
+/// The Clock page's only row while the shell has no date: the date comes from
+/// the bar's clock, so it says what to turn on ("No date: turn the bar on").
+pub const CLOCK_NO_DATE: &str = "Sin fecha: activa la barra para verla.";
+
+/// The System page's only row while no reading exists: the sampler runs only
+/// for a placed piece ("No data: place the sysmon piece in the bar").
+pub const SYSMON_EMPTY: &str = "Sin datos: coloca la pieza «sysmon» en la barra.";
+
+/// The label of the processor's meter ("CPU").
+pub const SYSMON_CPU: &str = "CPU";
+
+/// The label of the memory's meter ("RAM").
+pub const SYSMON_RAM: &str = "RAM";
+
+/// The label of the processor temperature row ("Temperature").
+pub const SYSMON_TEMPERATURE: &str = "Temperatura";
+
+/// The label of the System page's row that opens the resource monitor
+/// ("Open the system monitor").
+pub const SYSMON_OPEN_MONITOR: &str = "Abrir el monitor del sistema";
+
+/// The weekday names, Monday first, three letters.
+const WEEKDAYS_SHORT: [&str; 7] = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+
+/// The weekday initials the calendar's header shows, Monday first.
+const WEEKDAYS_INITIAL: [&str; 7] = ["L", "M", "X", "J", "V", "S", "D"];
+
+/// The weekday names, Monday first.
+const WEEKDAYS_FULL: [&str; 7] = [
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+    "domingo",
+];
+
+/// The month names, January first.
+const MONTHS_FULL: [&str; 12] = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+];
+
+/// The month abbreviations, January first.
+const MONTHS_SHORT: [&str; 12] = [
+    "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic",
+];
+
+/// The three-letter name of weekday `weekday` (0 = Monday); empty outside
+/// 0-6.
+#[must_use]
+pub fn weekday_short(weekday: u8) -> &'static str {
+    WEEKDAYS_SHORT
+        .get(usize::from(weekday))
+        .copied()
+        .unwrap_or("")
+}
+
+/// The initial of weekday `weekday` (0 = Monday); empty outside 0-6.
+#[must_use]
+pub fn weekday_initial(weekday: u8) -> &'static str {
+    WEEKDAYS_INITIAL
+        .get(usize::from(weekday))
+        .copied()
+        .unwrap_or("")
+}
+
+/// The full name of weekday `weekday` (0 = Monday); empty outside 0-6.
+#[must_use]
+pub fn weekday_full(weekday: u8) -> &'static str {
+    WEEKDAYS_FULL
+        .get(usize::from(weekday))
+        .copied()
+        .unwrap_or("")
+}
+
+/// The full name of month `month` (1 = January); empty outside 1-12.
+#[must_use]
+pub fn month_full(month: u8) -> &'static str {
+    usize::from(month)
+        .checked_sub(1)
+        .and_then(|i| MONTHS_FULL.get(i))
+        .copied()
+        .unwrap_or("")
+}
+
+/// The abbreviation of month `month` (1 = January); empty outside 1-12.
+#[must_use]
+pub fn month_short(month: u8) -> &'static str {
+    usize::from(month)
+        .checked_sub(1)
+        .and_then(|i| MONTHS_SHORT.get(i))
+        .copied()
+        .unwrap_or("")
+}
+
+/// The bar's short date: the weekday and the day ("fri 17").
+#[must_use]
+pub fn short_date(weekday: u8, day: u8) -> String {
+    format!("{} {day}", weekday_short(weekday))
+}
+
+/// The calendar's title for a month ("February 2024").
+#[must_use]
+pub fn month_title(year: i32, month: u8) -> String {
+    let name = month_full(month);
+    let mut chars = name.chars();
+    let head: String = chars
+        .next()
+        .into_iter()
+        .flat_map(char::to_uppercase)
+        .collect();
+    format!("{head}{} de {year}", chars.as_str())
+}
+
+/// The bar's system meter ("CPU 23% · RAM 41%").
+#[must_use]
+pub fn bar_sysmon(cpu: u8, ram: u8) -> String {
+    format!("{SYSMON_CPU} {cpu}% · {SYSMON_RAM} {ram}%")
+}
+
+/// A percentage ("23%").
+#[must_use]
+pub fn percent(value: u8) -> String {
+    format!("{value}%")
+}
+
+/// A size in KiB as GiB with one decimal and a decimal comma ("3,9 GiB").
+#[must_use]
+pub fn gib(kib: u64) -> String {
+    // Tenths of a GiB, rounded to nearest.
+    let tenths = (u128::from(kib) * 10 + 524_288) / 1_048_576;
+    format!("{},{} GiB", tenths / 10, tenths % 10)
+}
+
+/// The memory row's value: used of total ("6,2 of 15,6 GiB").
+#[must_use]
+pub fn memory_usage(used_kib: u64, total_kib: u64) -> String {
+    let total = gib(total_kib);
+    let used = gib(used_kib);
+    let used = used.strip_suffix(" GiB").unwrap_or(&used);
+    format!("{used} de {total}")
+}
+
+/// A temperature in whole degrees Celsius ("62 °C").
+#[must_use]
+pub fn celsius(degrees: i16) -> String {
+    format!("{degrees} °C")
+}
+
+/// The bar's weather: the temperature in whole degrees ("12°").
+#[must_use]
+pub fn bar_weather(degrees: i16) -> String {
+    format!("{degrees}°")
+}
+
+/// The words for an Open-Meteo weather code ("Clear"). Only the codes the
+/// service defines have words; every other number, the shell's unknown code
+/// among them, is "Undetermined".
+#[must_use]
+pub fn weather_condition(code: u8) -> &'static str {
+    match code {
+        0 => "Despejado",
+        1 => "Mayormente despejado",
+        2 => "Parcialmente nublado",
+        3 => "Nublado",
+        45 | 48 => "Niebla",
+        51 | 53 | 55 | 56 | 57 => "Llovizna",
+        61 | 63 | 65 | 66 | 67 => "Lluvia",
+        71 | 73 | 75 | 77 => "Nieve",
+        80..=82 => "Chubascos",
+        85 | 86 => "Chubascos de nieve",
+        95 | 96 | 99 => "Tormenta",
+        _ => "Sin determinar",
+    }
+}
+
+/// When the weather reading arrived ("updated 14:05").
+#[must_use]
+pub fn weather_updated(time: &str) -> String {
+    format!("actualizado {time}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_cover_their_ranges_and_nothing_outside() {
+        for weekday in 0..7 {
+            assert!(!weekday_short(weekday).is_empty());
+            assert_eq!(weekday_short(weekday).chars().count(), 3);
+            assert_eq!(weekday_initial(weekday).chars().count(), 1);
+            assert!(weekday_full(weekday).starts_with(weekday_short(weekday).trim_end_matches('é')));
+        }
+        assert_eq!(weekday_short(7), "");
+        assert_eq!(weekday_initial(200), "");
+        assert_eq!(weekday_full(7), "");
+        assert_eq!(weekday_short(0), "lun");
+        assert_eq!(weekday_full(2), "miércoles");
+        for month in 1..=12 {
+            assert!(!month_full(month).is_empty());
+            assert_eq!(month_short(month).chars().count(), 3);
+        }
+        assert_eq!(month_full(0), "");
+        assert_eq!(month_full(13), "");
+        assert_eq!(month_short(0), "");
+        assert_eq!(month_short(13), "");
+        assert_eq!(month_full(1), "enero");
+        assert_eq!(month_short(12), "dic");
+    }
+
+    #[test]
+    fn the_short_date_and_the_month_title() {
+        assert_eq!(short_date(4, 17), "vie 17");
+        assert_eq!(short_date(6, 1), "dom 1");
+        assert_eq!(month_title(2024, 2), "Febrero de 2024");
+        assert_eq!(month_title(2026, 12), "Diciembre de 2026");
+        assert_eq!(month_title(2026, 13), " de 2026");
+    }
+
+    #[test]
+    fn the_system_figures() {
+        assert_eq!(bar_sysmon(23, 41), "CPU 23% · RAM 41%");
+        assert_eq!(percent(7), "7%");
+        assert_eq!(gib(0), "0,0 GiB");
+        assert_eq!(gib(1_048_576), "1,0 GiB");
+        assert_eq!(gib(4_089_446), "3,9 GiB");
+        assert_eq!(gib(u64::MAX), "17592186044416,0 GiB");
+        assert_eq!(memory_usage(6_500_000, 16_360_000), "6,2 de 15,6 GiB");
+        assert_eq!(celsius(62), "62 °C");
+        assert_eq!(celsius(-5), "-5 °C");
+        assert_eq!(bar_weather(12), "12°");
+        assert_eq!(weather_updated("14:05"), "actualizado 14:05");
+    }
+
+    #[test]
+    fn every_open_meteo_code_has_its_words() {
+        let words = |codes: &[u8]| -> Vec<&'static str> {
+            codes.iter().map(|c| weather_condition(*c)).collect()
+        };
+        assert_eq!(weather_condition(0), "Despejado");
+        assert_eq!(
+            words(&[1, 2, 3]),
+            ["Mayormente despejado", "Parcialmente nublado", "Nublado"]
+        );
+        assert_eq!(words(&[45, 48]), ["Niebla", "Niebla"]);
+        assert!(words(&[51, 53, 55, 56, 57])
+            .iter()
+            .all(|w| *w == "Llovizna"));
+        assert!(words(&[61, 63, 65, 66, 67]).iter().all(|w| *w == "Lluvia"));
+        assert!(words(&[71, 73, 75, 77]).iter().all(|w| *w == "Nieve"));
+        assert!(words(&[80, 81, 82]).iter().all(|w| *w == "Chubascos"));
+        assert_eq!(
+            words(&[85, 86]),
+            ["Chubascos de nieve", "Chubascos de nieve"]
+        );
+        assert!(words(&[95, 96, 99]).iter().all(|w| *w == "Tormenta"));
+        // Codes the service does not define are not guessed.
+        let defined = [
+            0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82,
+            85, 86, 95, 96, 99,
+        ];
+        for code in 0..=u8::MAX {
+            let undetermined = weather_condition(code) == "Sin determinar";
+            assert_eq!(undetermined, !defined.contains(&code), "code {code}");
+        }
+        for code in [
+            52, 54, 58, 59, 60, 62, 64, 68, 69, 70, 72, 74, 76, 78, 79, 83, 84, 87, 94, 97,
+        ] {
+            assert_eq!(weather_condition(code), "Sin determinar", "code {code}");
+        }
+        assert_eq!(
+            weather_condition(celestina_shell::weather::UNKNOWN_CODE),
+            "Sin determinar"
+        );
+    }
+}

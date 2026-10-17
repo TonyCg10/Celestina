@@ -11,6 +11,7 @@ pub mod bus;
 pub mod command;
 pub mod copy;
 pub mod energy;
+pub mod glance;
 pub mod island;
 pub mod launcher;
 pub mod message;

@@ -273,3 +273,4 @@ celestina	1.0.0	release	CEL-1-H	Add the CEL-1 exit: the first stable shell, the 
 celestina	1.1.0	milestone	CEL-2-E	Add the wallpaper duty: a still image per output on a Background layer, bounded decoding, off by default
 celestina	1.2.0	milestone	CEL-2-B	Add the energy duties: idle chain, caffeine, forced night light and session verbs, each off by default
 celestina	1.3.0	milestone	CEL-2-A	Add the bar and the piece contract
+celestina	1.4.0	milestone	CEL-2-K	Add the glance pieces: system monitor, weather and the calendar page

@@ -175,7 +175,7 @@ pub(in crate::island) fn switch(key: Key, on: bool, enabled: bool) -> View {
     track.child(knob)
 }
 
-fn button(theme: &Theme, key: Key, label_key: &str, label: &str) -> View {
+pub(in crate::island) fn button(theme: &Theme, key: Key, label_key: &str, label: &str) -> View {
     centred(view::row(key))
         .height(BUTTON_H)
         .padding_xy(theme.spacing.md, 0.0)
@@ -433,6 +433,11 @@ mod tests {
         assert_eq!(page_title(PageId::NOTIFICATIONS), copy::PAGE_NOTIFICATIONS);
         assert_eq!(page_title(PageId::TRAY), copy::PAGE_TRAY);
         let titles: Vec<&str> = PageId::all().into_iter().map(page_title).collect();
-        assert_eq!(titles, ["Actividad", "Notificaciones", "Bandeja"]);
+        assert_eq!(
+            titles,
+            ["Actividad", "Notificaciones", "Bandeja", "Sistema", "Reloj"]
+        );
+        assert_eq!(page_title(PageId::SYSMON), copy::PAGE_SYSMON);
+        assert_eq!(page_title(PageId::CLOCK), copy::PAGE_CLOCK);
     }
 }

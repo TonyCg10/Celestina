@@ -36,7 +36,7 @@ usage: celestina [--exit-after SECONDS] [--metrics] [--no-blur]
        celestina VERB
 
 verbs: island toggle
-       island open activity|notifications|tray
+       island open activity|notifications|tray|sysmon|clock
        island close
        launcher toggle
        notifications toggle
@@ -590,10 +590,19 @@ mod tests {
     #[test]
     fn page_words_and_order_are_pinned() {
         let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
-        assert_eq!(words, ["activity", "notifications", "tray"]);
+        assert_eq!(
+            words,
+            ["activity", "notifications", "tray", "sysmon", "clock"]
+        );
         assert_eq!(
             PageId::all(),
-            [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY]
+            [
+                PageId::ACTIVITY,
+                PageId::NOTIFICATIONS,
+                PageId::TRAY,
+                PageId::SYSMON,
+                PageId::CLOCK
+            ]
         );
     }
 
@@ -665,7 +674,7 @@ mod tests {
 
     #[test]
     fn the_usage_text_names_every_page_word() {
-        assert!(USAGE.contains("island open activity|notifications|tray"));
+        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock"));
     }
 
     #[test]

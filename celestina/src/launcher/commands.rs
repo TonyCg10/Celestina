@@ -18,15 +18,21 @@ pub enum Switch {
     Actividad,
     /// `/bandeja`: the Island's Tray page.
     Bandeja,
+    /// `/sistema`: the Island's System page.
+    Sistema,
+    /// `/reloj`: the Island's Clock page.
+    Reloj,
 }
 
 impl Switch {
     /// Every switch, in the order the launcher lists them.
-    pub const ALL: [Switch; 4] = [
+    pub const ALL: [Switch; 6] = [
         Switch::Notificaciones,
         Switch::NoMolestar,
         Switch::Actividad,
         Switch::Bandeja,
+        Switch::Sistema,
+        Switch::Reloj,
     ];
 
     /// The command as typed, its leading `/` included.
@@ -37,6 +43,8 @@ impl Switch {
             Switch::NoMolestar => copy::SWITCH_DO_NOT_DISTURB,
             Switch::Actividad => copy::SWITCH_ACTIVITY,
             Switch::Bandeja => copy::SWITCH_TRAY,
+            Switch::Sistema => copy::SWITCH_SYSMON,
+            Switch::Reloj => copy::SWITCH_CLOCK,
         }
     }
 
@@ -48,6 +56,8 @@ impl Switch {
             Switch::NoMolestar => copy::SWITCH_DO_NOT_DISTURB_LABEL,
             Switch::Actividad => copy::SWITCH_ACTIVITY_LABEL,
             Switch::Bandeja => copy::SWITCH_TRAY_LABEL,
+            Switch::Sistema => copy::SWITCH_SYSMON_LABEL,
+            Switch::Reloj => copy::SWITCH_CLOCK_LABEL,
         }
     }
 
@@ -59,6 +69,8 @@ impl Switch {
             Switch::NoMolestar => "bell-off",
             Switch::Actividad => "layout-template",
             Switch::Bandeja => "system-tray",
+            Switch::Sistema => "cpu",
+            Switch::Reloj => "clock-arrow-up",
         }
     }
 
@@ -70,6 +82,8 @@ impl Switch {
             Switch::Notificaciones => Some(PageId::NOTIFICATIONS),
             Switch::Actividad => Some(PageId::ACTIVITY),
             Switch::Bandeja => Some(PageId::TRAY),
+            Switch::Sistema => Some(PageId::SYSMON),
+            Switch::Reloj => Some(PageId::CLOCK),
             Switch::NoMolestar => None,
         }
     }
@@ -100,6 +114,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_glance_switches_open_their_pages() {
+        assert_eq!(Switch::Sistema.page(), Some(PageId::SYSMON));
+        assert_eq!(Switch::Reloj.page(), Some(PageId::CLOCK));
+        assert_eq!(Switch::Sistema.command(), "/sistema");
+        assert_eq!(Switch::Reloj.command(), "/reloj");
+        for switch in [Switch::Sistema, Switch::Reloj] {
+            assert!(!switch.label().is_empty() && !switch.icon().is_empty());
+        }
+    }
+
+    #[test]
     fn slash_alone_lists_every_switch() {
         assert_eq!(commands_for("/"), Some(Switch::ALL.to_vec()));
         assert_eq!(commands_for("  /  "), Some(Switch::ALL.to_vec()));
@@ -113,6 +138,8 @@ mod tests {
         );
         assert_eq!(commands_for("/NO-M"), Some(vec![Switch::NoMolestar]));
         assert_eq!(commands_for("/bandeja"), Some(vec![Switch::Bandeja]));
+        assert_eq!(commands_for("/SIS"), Some(vec![Switch::Sistema]));
+        assert_eq!(commands_for("/rel"), Some(vec![Switch::Reloj]));
     }
 
     #[test]

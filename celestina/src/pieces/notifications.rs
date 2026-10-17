@@ -120,6 +120,9 @@ mod tests {
             history,
             items: &[],
             tray_hidden: &[],
+            sysmon: None,
+            weather: None,
+            today: None,
         })
     }
 

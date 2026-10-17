@@ -33,7 +33,7 @@ use celestina_wayland::Sender;
 
 use crate::message::Message;
 use crate::providers::niri::NiriRequest;
-use crate::providers::Worker;
+use crate::providers::{Reaper, Worker};
 
 use self::idle::{IdleEvent, IdleHandle};
 use self::logind::{Caffeine, LogindConfig, LogindEvent, LogindHandle, Outcome};
@@ -298,43 +298,14 @@ impl<C: ?Sized> Slot<C> {
 }
 
 impl<C: ?Sized + Send + 'static> Slot<C> {
-    /// Hands the slot to a short-lived named thread that joins it within
-    /// [`JOIN_WAIT`] and logs the outcome, so the loop that turned a duty off
-    /// never blocks on a worker. The returned [`Reaper`] must be waited for
-    /// before the same duty starts again (see [`Reaper::wait`]).
+    /// Hands the slot to a [`Reaper`], which joins it within [`JOIN_WAIT`]
+    /// off the loop, so the loop that turned a duty off never blocks on a
+    /// worker. The returned [`Reaper`] must be waited for before the same
+    /// duty starts again: a duty switched off and on while its old worker is
+    /// still stopping would otherwise hold two gamma clients, or two idle
+    /// notification sets, at once.
     fn reap(self, what: &'static str) -> Reaper {
-        let spawned = std::thread::Builder::new()
-            .name(format!("reap-{what}"))
-            .spawn(move || self.stop());
-        match spawned {
-            Ok(handle) => Reaper(Some(handle)),
-            Err(err) => {
-                // The closure, and the slot in it, was dropped: the worker's
-                // `Drop` has joined it on this thread.
-                tracing::warn!(%err, "no thread to reap the {what} worker; it was joined here");
-                Reaper(None)
-            }
-        }
-    }
-}
-
-/// The thread that is joining a worker whose duty was turned off.
-#[derive(Default)]
-struct Reaper(Option<std::thread::JoinHandle<()>>);
-
-impl Reaper {
-    /// Waits for the pending reap, if any. A duty that is switched off and on
-    /// again while its old worker is still stopping would otherwise hold two
-    /// gamma clients, or two idle notification sets, at once. The wait is
-    /// bounded: the reaper itself gives up on its worker after [`JOIN_WAIT`],
-    /// and a worker left behind that way is logged and is the one overlap this
-    /// allows (a body blocked in a read without a timeout).
-    fn wait(&mut self) {
-        if let Some(handle) = self.0.take() {
-            if handle.join().is_err() {
-                tracing::error!("a worker reaper panicked");
-            }
-        }
+        Reaper::spawn(what, move || self.stop())
     }
 }
 

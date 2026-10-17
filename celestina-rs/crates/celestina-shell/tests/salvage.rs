@@ -28,6 +28,8 @@ fn settings_round_trips_only_the_shells_own_choices() {
     // `duties` table carries both units' switches (all default-valued). The
     // `bar` table and `duties.bar` (CEL-2-A) are written only once chosen.
     assert!(value["duties"].get("bar").is_none());
+    // CEL-2-K's `weather` location is likewise written only once chosen.
+    assert!(value.get("weather").is_none());
     assert_eq!(
         keys,
         [
