@@ -18,10 +18,11 @@
   [handover note](docs/handover.md) on what Noctalia still does for the
   session, and the documents up to date
   ([evidence](docs/evidence/2026-10-16-exit.md)). The author chose 1.0.0 as the
-  first stable version, not the definitive one. The CEL-1 plan stays in
-  `docs/plans/active/` until an administrative unit archives it.
-- **Focus:** the author's live validation of the nine VAL-CEL rows, then the
-  deliveries the handover note lists before Noctalia can be stopped.
+  first stable version, not the definitive one. The CEL-1 plan was archived on 2026-10-16 by the unit that opened CEL-2.
+- **Focus:** CEL-2, the parity program
+  ([plan](docs/plans/active/2026-10-16-cel-2-parity.md)): the bar and the piece
+  contract first, with CEL-2-B and CEL-2-E under way beside it; the author's
+  live validation of the nine VAL-CEL rows stays queued.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

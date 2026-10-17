@@ -228,3 +228,21 @@ by an agent.
   hides banners and keeps history
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-CEL2-BAR-LIVE — The bar beside Noctalia
+
+- **Status:** pending
+- **Related implementation:** CEL-2-A
+- **Requires:** the deployed shell with the `bar` duty switched on in
+  `shell.json`; Noctalia running with its bar hidden by `noctalia msg bar-hide`
+- **Procedure:** look at the bar on each output; check that the blur regions
+  follow every capsule; open the tray icons' popups; click outside an open
+  page and check the focus policy with the wider surface; hover the bar's idle
+  stretches with `focus-follows-mouse`; repeat on two outputs of different
+  scale and check the edge pixels of the input regions. The queued detail is
+  completed by CEL-2-A's own unit
+- **Pass condition:** every capsule is blurred and clickable, nothing outside
+  a capsule steals a click or the focus, and windows do not move when the bar
+  is switched on
+- **Result:** not run
+- **Evidence:** none

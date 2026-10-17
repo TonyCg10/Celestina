@@ -52,8 +52,20 @@ and the `bounded` helper of that crate's `src/lib.rs` (there is no
 `celestina-qt/src/provider_adapter/{worker,notifications,launcher}.rs`
 and `celestina-qt/src/niri_adapter.rs` as reference for
 `celestina/src/providers`; `celestina-qt/scripts/dev-session.kdl` and
-`dev-session.sh` for `celestina/scripts`. Later deliveries extend this list by
-the same edit.
+`dev-session.sh` for `celestina/scripts`. The CEL-2 parity program extends the
+list unit by unit, each in the same way and each before that unit's first
+commit:
+
+- CEL-2-B: `celestina-qt/src/provider_adapter/{nightlight,session,sessionholds}.rs`
+  as reference for `celestina/src/providers`, and
+  `celestina-rs/crates/celestina-shell-core/src/{nightlight,session,pending}.rs`
+  into `celestina-rs/crates/celestina-shell`.
+- CEL-2-E: from `celestina-qt/src/provider_adapter/wallpaper.rs` only the image
+  selection, as reference for `celestina/src/providers`, and
+  `celestina-rs/crates/celestina-shell-core/src/wallpaper.rs` into
+  `celestina-rs/crates/celestina-shell`.
+
+Later deliveries extend this list by the same edit.
 
 The halt is lifted only by the author editing this section. The commit guard
 accepts a change to a halted project only in a commit that also changes this

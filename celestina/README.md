@@ -4,7 +4,7 @@ The desktop shell of the suite for the author's niri session, in pure Rust on
 Wayland: an Island on the top edge of every output that grows into pages, a
 launcher, a notification server with banners, and a system tray, painted with
 the Celestina visual language over the compositor's glass. It is built in
-[CEL-1](docs/plans/active/2026-10-14-cel-1-island.md), whose units are landed:
+[CEL-1](docs/plans/archive/2026-10-14-cel-1-island.md), whose units are landed:
 today it draws one Island capsule per output that grows into the Activity,
 Notifications and Tray pages, opens the launcher, serves notifications and the
 tray when no other program owns those names, and answers its command verbs.

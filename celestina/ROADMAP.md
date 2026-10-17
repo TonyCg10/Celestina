@@ -1,18 +1,30 @@
 # Celestina implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** CEL-1
-- **Related author validation:** VAL-CEL-GLASS, VAL-CEL-ISLAND, VAL-CEL-REST,
+- **Active implementation checkpoint:** CEL-2
+- **Related author validation:** VAL-CEL2-BAR-LIVE (it does not block); the CEL-1 rows stay queued: VAL-CEL-GLASS, VAL-CEL-ISLAND, VAL-CEL-REST,
   VAL-CEL-POPUP, VAL-CEL-KEYBOARD, VAL-CEL-IME, VAL-CEL-SCALE,
   VAL-CEL-NOCTALIA and VAL-CEL-BANNERS in [VALIDATION.md](VALIDATION.md) (they do not block)
 
-## Hypothesis and tangible outcome
+## CEL-2 — Shell parity with Noctalia
+
+**Hypothesis:** a Rust shell with the piece contract of
+[the parity design](../docs/superpowers/specs/2026-10-16-celestina-parity-program-design.md)
+can take over, duty by duty and beside a running Noctalia, everything Noctalia
+does in the author's niri session. **Plan:**
+[CEL-2](docs/plans/active/2026-10-16-cel-2-parity.md), thirteen units
+(CEL-2-A to CEL-2-M) in the plan's order; its ledger is the source of each
+unit's status and exit.
+
+**Closed program, kept below:** CEL-1.
+
+## Hypothesis and tangible outcome (CEL-1, closed)
 
 A pure Rust shell on Wayland for niri can replace the halted Qt/QML shell:
 one process draws an Island on the top edge of every output that grows into
 pages, a launcher, notification banners and a tray, painted with the
 Celestina visual language over the compositor's glass. The plan is
-[CEL-1](docs/plans/active/2026-10-14-cel-1-island.md); the design is
+[CEL-1](docs/plans/archive/2026-10-14-cel-1-island.md); the design is
 [the shell design](../docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md).
 
 ## Scope

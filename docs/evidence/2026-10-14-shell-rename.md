@@ -91,7 +91,7 @@ index; and (c) `python3 scripts/test-land-unit.py` on the branch, above.
 
 ## Follow-up
 
-CEL-1-B in [the CEL-1 plan](../../celestina/docs/plans/active/2026-10-14-cel-1-island.md).
+CEL-1-B in [the CEL-1 plan](../../celestina/docs/plans/archive/2026-10-14-cel-1-island.md).
 
 ## Correction (2026-10-15)
 

@@ -1,0 +1,35 @@
+# CEL-2-OPEN exact change inventory
+
+Base revision	7afad7db3286bc5d822f1663fb659fde823dbe7b
+Pathspec	AGENTS.md
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/plans/archive/2026-10-14-cel-1-island.md
+Pathspec	celestina/docs/plans/archive/README.md
+Pathspec	docs/evidence/2026-10-14-shell-rename.md
+Pathspec	docs/evidence/2026-10-16-cel-2-open.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-2-OPEN.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+14	2	392945aed051aa5adc12c424fcb21ff275500e9af930a3e006466472a2f97b3f	AGENTS.md
+1	1	f1f8df3a4e31fc364c683b66651409320425f01b15e9a2e0241fbe8db93c4655	celestina/README.md
+16	4	4e9e84c17a72c418bd43ec3d4769e71417258e56051a7b0281b9a172ca451e4f	celestina/ROADMAP.md
+5	4	8a8b1c9f8f7e5a235f400ed6c73ee8f5cb1bba00f57f6f13f6cb1b76596dd135	celestina/STATUS.md
+18	0	63b73ec390f1c99a03ab89221ecd339a9432cb6d581a5658497c34be1db63b7a	celestina/VALIDATION.md
+0	81	deleted	celestina/docs/plans/active/2026-10-14-cel-1-island.md
+73	0	5fae518ea97e472664ab27a8f88396596c244000aa3ba9df5db9be42d8612e8f	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+1	1	b08be0deaf50421f33739f1d59da723d7b1b69de23535b1f7cb1a4fa3a8c8938	celestina/docs/plans/active/README.md
+83	0	54089af657ad7a07860bc36ddb91dbbc61737b0446d124dcc78570d988c3e033	celestina/docs/plans/archive/2026-10-14-cel-1-island.md
+2	2	a388f5e72c727554450aaef38d6b2cd529effa48de831d51e0e1722e2d453ccc	celestina/docs/plans/archive/README.md
+1	1	41997c34dfdcf242adc8f7ca627fba7cfb5f31a7670a22c00188d61975462ea3	docs/evidence/2026-10-14-shell-rename.md
+40	0	7bdcb93c3233709bf28fc77d3d27bf71e5607cc9e7f8a8778aaf0da8e34a8fc0	docs/evidence/2026-10-16-cel-2-open.md
+35	0	self	docs/inventories/2026-10-14-rust-shell/CEL-2-OPEN.numstat.tsv
+4	2	255d56d2845b9abb8f5836555ab48824e39c0eefc643bb83c13a99bb0f016d99	docs/plans/active/2026-10-14-rust-shell.md

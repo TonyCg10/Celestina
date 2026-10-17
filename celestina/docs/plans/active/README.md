@@ -2,7 +2,7 @@
 
 | Plan | Checkpoint | Scope |
 |---|---|---|
-| [CEL-1 — the Island](2026-10-14-cel-1-island.md) | CEL-1 | The shell's first release: the Island, the launcher, notifications and the tray |
+| [CEL-2 — shell parity with Noctalia](2026-10-16-cel-2-parity.md) | CEL-2 | Thirteen units (A to M) that let the author stop Noctalia, beginning with the bar and the piece contract |
 
 A dated plan is added here only when the project roadmap names the same active
 implementation checkpoint. Unit inventories live under
