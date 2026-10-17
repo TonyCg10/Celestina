@@ -271,10 +271,12 @@ pub fn read_item(connection: &Connection, id: &ItemId, owner: &str) -> Read {
     let started = Instant::now();
     let path = id.path.as_str();
     let mut interface = None;
+    let mut sni_id = String::new();
     for candidate in ITEM_INTERFACES {
         match get_text(connection, owner, path, candidate, "Id") {
-            Ok(Some(_)) => {
+            Ok(Some(text)) => {
                 interface = Some(candidate);
+                sni_id = text;
                 break;
             }
             Ok(None) => {}
@@ -323,6 +325,7 @@ pub fn read_item(connection: &Connection, id: &ItemId, owner: &str) -> Read {
     };
     let item = TrayItem {
         id: id.clone(),
+        sni_id,
         title,
         status,
         icon_name,

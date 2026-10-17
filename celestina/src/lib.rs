@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod app;
+pub mod bar;
 pub mod bus;
 pub mod command;
 pub mod copy;
@@ -15,6 +16,7 @@ pub mod launcher;
 pub mod message;
 pub mod metrics;
 pub mod notifications;
+pub mod pieces;
 pub mod providers;
 pub mod tray;
 pub mod wallpaper;

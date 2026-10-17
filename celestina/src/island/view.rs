@@ -5,15 +5,19 @@
 //! nodes and never animates a size).
 
 use celestina_paint::{Role, TextStyle, Theme, Weight};
+use celestina_shell::settings::{BarLayout, MAX_ZONE_IDS};
 use celestina_ui::{view, Key, View};
 use taffy::{AlignItems, JustifyContent};
 
 use super::{
-    pages::tabs,
+    pages::{page_view, tabs},
     state::{CAPSULE_H, TOP_GAP},
     workspaces::Row,
 };
-use crate::{command::Page, copy};
+use crate::{
+    copy,
+    pieces::{workspaces::Workspaces, PageId, Piece},
+};
 
 /// Space between the capsule's edge and its content.
 pub const CAPSULE_PADDING: f32 = 16.0;
@@ -46,14 +50,10 @@ pub fn more_key() -> Key {
     Key::named("more")
 }
 
-/// The page's title.
+/// The page's title: its view's, from the piece table.
 #[must_use]
-pub fn page_title(page: Page) -> &'static str {
-    match page {
-        Page::Activity => copy::PAGE_ACTIVITY,
-        Page::Notifications => copy::PAGE_NOTIFICATIONS,
-        Page::Tray => copy::PAGE_TRAY,
-    }
+pub fn page_title(page: PageId) -> &'static str {
+    page_view(page).title()
 }
 
 pub(crate) fn centred(mut v: View) -> View {
@@ -76,31 +76,55 @@ pub(crate) fn text_style(size: f32, weight: Weight, tabular: bool, role: Role) -
 /// none. Centred on the top edge, [`TOP_GAP`] below it.
 #[must_use]
 pub fn capsule(theme: &Theme, clock: &str, rows: &[Row], surface_w: f32) -> View {
+    capsule_with(theme, clock, Some(rows), surface_w)
+}
+
+/// Whether the resting capsule shows the workspaces beside its clock: not
+/// while the bar is on (`bar` is the layout in force, `None` while it is
+/// off) and places the Workspaces piece in one of its zones, which then
+/// shows them; otherwise as in 1.0.0 (parity spec §6.3). One rule, no
+/// setting.
+#[must_use]
+pub fn capsule_shows_workspaces(bar: Option<&BarLayout>) -> bool {
+    let id = Workspaces.id().as_str();
+    !bar.is_some_and(|layout| {
+        [&layout.start, &layout.centre, &layout.end]
+            .into_iter()
+            .any(|zone| zone.iter().take(MAX_ZONE_IDS).any(|placed| placed == id))
+    })
+}
+
+/// [`capsule`], with `rows` `None` for the capsule that shows only the
+/// clock ([`capsule_shows_workspaces`]).
+#[must_use]
+pub fn capsule_with(theme: &Theme, clock: &str, rows: Option<&[Row]>, surface_w: f32) -> View {
     let clock_style = text_style(
         theme.type_scale.row_title,
         Weight::Semibold,
         true,
         Role::TextHi,
     );
-    let workspaces = if rows.is_empty() {
-        view::text(
-            Key::named("fallback"),
-            copy::WORKSPACES_FALLBACK,
-            text_style(theme.type_scale.body, Weight::Regular, false, Role::TextLo),
-        )
-    } else {
-        centred(view::row(Key::named("dots")).gap(DOT_GAP)).children(rows.iter().map(|r| {
-            let (w, role) = if r.active {
-                (PILL_W, Role::Accent)
-            } else {
-                (DOT, Role::TextLo)
-            };
-            view::row(Key::indexed("dot", r.id))
-                .fill(role)
-                .radius(DOT / 2.0)
-                .size(w, DOT)
-        }))
-    };
+    let workspaces = rows.map(|rows| {
+        if rows.is_empty() {
+            view::text(
+                Key::named("fallback"),
+                copy::WORKSPACES_FALLBACK,
+                text_style(theme.type_scale.body, Weight::Regular, false, Role::TextLo),
+            )
+        } else {
+            centred(view::row(Key::named("dots")).gap(DOT_GAP)).children(rows.iter().map(|r| {
+                let (w, role) = if r.active {
+                    (PILL_W, Role::Accent)
+                } else {
+                    (DOT, Role::TextLo)
+                };
+                view::row(Key::indexed("dot", r.id))
+                    .fill(role)
+                    .radius(DOT / 2.0)
+                    .size(w, DOT)
+            }))
+        }
+    });
     let body = centred(view::row(capsule_key()))
         .height(CAPSULE_H)
         .padding_xy(CAPSULE_PADDING, 0.0)
@@ -108,7 +132,7 @@ pub fn capsule(theme: &Theme, clock: &str, rows: &[Row], surface_w: f32) -> View
         .radius(theme.radius_lg)
         .interactive()
         .child(view::text(Key::named("clock"), clock, clock_style))
-        .child(workspaces);
+        .children(workspaces);
     let mut root = centred(view::row(Key::named("capsule-root")))
         .absolute(0.0, TOP_GAP)
         .size(surface_w, CAPSULE_H);
@@ -176,14 +200,17 @@ pub fn chrome_height(theme: &Theme) -> f32 {
 
 /// The page at `size`, centred where the grown Island ends: the title row
 /// (title, the overflow button, close), the page's `content` in a clipped
-/// body, and the row of page tabs under it with `open` selected. `slide`
+/// body, and the row of page tabs under it with `open` selected. The title
+/// row also shows `clock` (`HH:MM:SS`) in tabular figures, between the title
+/// and the buttons. `slide`
 /// (−1..1, in body widths) offsets the content horizontally; the title row
 /// and the tabs stay where they are.
 #[must_use]
 pub fn page(
     theme: &Theme,
-    open: Page,
+    open: PageId,
     title: &str,
+    clock: &str,
     content: View,
     surface_w: f32,
     size: (f32, f32),
@@ -200,10 +227,21 @@ pub fn page(
         ),
     )
     .grow();
+    let seconds = view::text(
+        Key::named("page-clock"),
+        clock,
+        text_style(
+            theme.type_scale.row_title,
+            Weight::Regular,
+            true,
+            Role::TextLo,
+        ),
+    );
     let title_row = centred(view::row(Key::named("title-row")))
         .height(TITLE_ROW_H)
         .gap(theme.spacing.sm)
         .child(title)
+        .child(seconds)
         .child(button(theme, more_key(), "more-label", copy::MORE))
         .child(button(theme, close_key(), "close-label", copy::CLOSE));
     let body_w = (size.0 - 2.0 * theme.spacing.lg).max(0.0);
@@ -291,6 +329,41 @@ mod tests {
         assert!(tree.node_by_key(Key::named("dots")).is_none());
     }
 
+    #[test]
+    fn the_capsule_drops_its_dots_only_while_the_bars_workspaces_show_them() {
+        let theme = Theme::dark();
+        let rows = [row(1, true), row(2, false)];
+        // Bar off: the dots, as in 1.0.0.
+        assert!(capsule_shows_workspaces(None));
+        // Bar on with the default layout: Workspaces is placed, so the
+        // capsule is the clock alone.
+        let on = BarLayout::default();
+        assert!(!capsule_shows_workspaces(Some(&on)));
+        // Bar on without the piece (in any zone): the dots come back.
+        let mut without = on.clone();
+        without.start.retain(|id| id != "workspaces");
+        assert!(capsule_shows_workspaces(Some(&without)));
+        for zone in 0..3 {
+            let mut l = without.clone();
+            [&mut l.start, &mut l.centre, &mut l.end][zone].push("workspaces".to_owned());
+            assert!(!capsule_shows_workspaces(Some(&l)), "zone {zone}");
+        }
+
+        let clock_only = laid_out(capsule_with(&theme, "12:34", None, SURFACE_W));
+        assert!(clock_only.node_by_key(Key::named("clock")).is_some());
+        for gone in ["dots", "fallback"] {
+            assert!(clock_only.node_by_key(Key::named(gone)).is_none(), "{gone}");
+        }
+        assert!(clock_only.node_by_key(Key::indexed("dot", 1)).is_none());
+        let body = rect_of(&clock_only, capsule_key());
+        assert_eq!(body.w, 5.0 * 7.0 + 2.0 * CAPSULE_PADDING);
+        // `capsule` is the capsule with its workspaces.
+        assert_eq!(
+            capsule(&theme, "12:34", &rows, SURFACE_W),
+            capsule_with(&theme, "12:34", Some(&rows), SURFACE_W)
+        );
+    }
+
     fn content() -> View {
         view::col(Key::named("content")).child(view::row(Key::named("probe")).height(40.0))
     }
@@ -298,8 +371,9 @@ mod tests {
     fn page_at(slide: f32) -> Tree {
         laid_out(page(
             &Theme::dark(),
-            Page::Activity,
+            PageId::ACTIVITY,
             copy::PAGE_ACTIVITY,
+            "12:34:56",
             content(),
             SURFACE_W,
             (420.0, 300.0),
@@ -320,9 +394,21 @@ mod tests {
         let body = rect_of(&tree, Key::named("body"));
         let probe = rect_of(&tree, Key::named("probe"));
         assert_eq!((probe.x, probe.y), (body.x, body.y), "content at rest");
-        let tab = rect_of(&tree, tabs::tab_key(Page::Activity));
+        let tab = rect_of(&tree, tabs::tab_key(PageId::ACTIVITY));
         assert_eq!(tab.y + tab.h, root.y + root.h - theme.spacing.lg);
         assert!(body.y + body.h <= tab.y, "the body ends above the tabs");
+    }
+
+    #[test]
+    fn the_title_row_shows_the_seconds_clock_between_the_title_and_the_buttons() {
+        let tree = page_at(0.0);
+        let clock = rect_of(&tree, Key::named("page-clock"));
+        let more = rect_of(&tree, more_key());
+        let title = rect_of(&tree, Key::named("title"));
+        assert!(clock.w >= 7.0 * 8.0, "HH:MM:SS fits");
+        assert!(title.x + title.w <= clock.x && clock.x + clock.w <= more.x);
+        let row = rect_of(&tree, Key::named("title-row"));
+        assert!(clock.y >= row.y && clock.y + clock.h <= row.y + row.h);
     }
 
     #[test]
@@ -334,8 +420,19 @@ mod tests {
         let x = |tree: &Tree, key| rect_of(tree, key).x;
         assert_eq!(x(&left, Key::named("probe")), body.x - body.w);
         assert_eq!(x(&right, Key::named("probe")), body.x + body.w / 2.0);
-        for key in [close_key(), tabs::tab_key(Page::Tray), Key::named("body")] {
+        for key in [close_key(), tabs::tab_key(PageId::TRAY), Key::named("body")] {
             assert_eq!(x(&rest, key), x(&left, key));
         }
+    }
+
+    #[test]
+    fn page_titles_are_the_copy_of_each_page() {
+        // Characterisation (CEL-2-A, spec 6.7): pinned before `Page` is
+        // replaced by the piece table.
+        assert_eq!(page_title(PageId::ACTIVITY), copy::PAGE_ACTIVITY);
+        assert_eq!(page_title(PageId::NOTIFICATIONS), copy::PAGE_NOTIFICATIONS);
+        assert_eq!(page_title(PageId::TRAY), copy::PAGE_TRAY);
+        let titles: Vec<&str> = PageId::all().into_iter().map(page_title).collect();
+        assert_eq!(titles, ["Actividad", "Notificaciones", "Bandeja"]);
     }
 }

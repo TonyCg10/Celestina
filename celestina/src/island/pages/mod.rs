@@ -13,11 +13,11 @@ use celestina_paint::{Role, Theme, Weight};
 use celestina_ui::{view, Key, View};
 
 use crate::{
-    command::Page,
     island::{
         state::PAGE_SIZE,
         view::{centred, text_style},
     },
+    pieces::{self, PageId},
     providers::niri::NiriModel,
 };
 
@@ -135,18 +135,30 @@ pub(super) fn note_list(theme: &Theme, key: Key, text: &str) -> View {
     view::col(key).child(row)
 }
 
-static ACTIVITY: activity::Activity = activity::Activity;
-static NOTIFICATIONS: notifications::Notifications = notifications::Notifications;
-static TRAY: tray::Tray = tray::Tray;
+/// What the Island would draw for a page the piece table does not hold:
+/// nothing, at the default size. Only the pieces make a [`PageId`], so this
+/// keeps [`page_view`] total and is never drawn.
+struct Absent;
 
-/// The view of `page`.
-#[must_use]
-pub fn page_view(page: Page) -> &'static dyn PageView {
-    match page {
-        Page::Activity => &ACTIVITY,
-        Page::Notifications => &NOTIFICATIONS,
-        Page::Tray => &TRAY,
+impl PageView for Absent {
+    fn title(&self) -> &str {
+        ""
     }
+
+    fn view(&self, _: &PageCx<'_>) -> View {
+        view::col(Key::named("absent"))
+    }
+
+    fn wants(&self, _: &PageCx<'_>) -> (f32, f32) {
+        PAGE_SIZE
+    }
+}
+
+/// The view of `page`, from the piece table.
+#[must_use]
+pub fn page_view(page: PageId) -> &'static dyn PageView {
+    let absent: &'static dyn PageView = &Absent;
+    pieces::page_entry(page).map_or(absent, |entry| entry.view)
 }
 
 /// What `page` asks for with `model` on a surface allowing `max_size`.
@@ -239,9 +251,391 @@ mod tests {
         assert!(owners.replace(NameOwner::default()));
     }
 
+    // ---- Characterisation (CEL-2-A, spec 6.7): today's pages, pinned before the
+    // `Page` enum is replaced by the piece table. They must pass unchanged.
+
+    use crate::{
+        providers::niri::{Window, Workspace},
+        tray::{ItemId, NameHolder, Status},
+    };
+
+    /// The three context fixtures a page is snapshotted against.
+    struct Fixture {
+        name: &'static str,
+        model: Option<NiriModel>,
+        owners: NameOwner,
+        history: Vec<HistoryRow>,
+        items: Vec<TrayRow>,
+    }
+
+    fn workspace(id: u64, idx: u8, name: Option<&str>, active: bool, columns: u16) -> Workspace {
+        Workspace {
+            id,
+            idx,
+            name: name.map(str::to_owned),
+            output: Some("DP-1".to_owned()),
+            is_active: active,
+            is_focused: active,
+            columns,
+        }
+    }
+
+    fn window(id: u64, title: &str, workspace: u64) -> Window {
+        Window {
+            id,
+            title: Some(title.to_owned()),
+            app_id: Some("kitty".to_owned()),
+            workspace_id: Some(workspace),
+            is_focused: false,
+            icon: Some("kitty".to_owned()),
+        }
+    }
+
+    fn history_row(id: u32, live: bool, read: bool, actions: &[(&str, &str)]) -> HistoryRow {
+        HistoryRow {
+            id,
+            app_name: "Mail".to_owned(),
+            summary: format!("Summary {id}"),
+            body: format!("Body {id}"),
+            image: None,
+            live,
+            read,
+            when: "09:41".to_owned(),
+            actions: actions
+                .iter()
+                .map(|(key, label)| RowAction {
+                    key: (*key).to_owned(),
+                    label: (*label).to_owned(),
+                })
+                .collect(),
+        }
+    }
+
+    fn tray_row(name: &str, status: tray::RowIcon, has_menu: bool) -> TrayRow {
+        TrayRow {
+            id: ItemId {
+                bus_name: format!(":1.{}", name.len()),
+                path: format!("/{name}"),
+            },
+            title: name.to_owned(),
+            status: Status::Active,
+            icon: status,
+            has_menu,
+            sni_id: String::new(),
+        }
+    }
+
+    fn fixtures() -> Vec<Fixture> {
+        let populated_model = NiriModel {
+            workspaces: vec![
+                workspace(11, 1, None, true, 2),
+                workspace(12, 2, Some("web"), false, 1),
+            ],
+            windows: vec![window(100, "main.rs", 11), window(101, "Docs", 11)],
+            outputs: vec!["DP-1".to_owned()],
+        };
+        let populated_history = vec![
+            history_row(7, true, false, &[("reply", "Reply")]),
+            history_row(6, false, true, &[]),
+        ];
+        let populated_items = vec![
+            tray_row(
+                "nm-applet",
+                tray::RowIcon::Theme("network".to_owned()),
+                true,
+            ),
+            tray_row("blueman", tray::RowIcon::default(), false),
+        ];
+        vec![
+            Fixture {
+                name: "empty",
+                model: None,
+                owners: NameOwner::default(),
+                history: Vec::new(),
+                items: Vec::new(),
+            },
+            Fixture {
+                name: "populated",
+                model: Some(populated_model.clone()),
+                owners: NameOwner::default(),
+                history: populated_history.clone(),
+                items: populated_items.clone(),
+            },
+            Fixture {
+                name: "name-held",
+                model: Some(populated_model),
+                owners: NameOwner {
+                    notifications: Some("noctalia".to_owned()),
+                    tray: Some(NameHolder {
+                        unique: ":1.42".to_owned(),
+                        comm: Some("noctalia-shell".to_owned()),
+                    }),
+                },
+                history: populated_history,
+                items: populated_items,
+            },
+        ]
+    }
+
+    /// The pre-order list of `(key, kind)` of a view tree: structure only, no
+    /// pixels and no layout.
+    fn structure(v: &View) -> Vec<String> {
+        fn kind(v: &View) -> String {
+            match &v.kind {
+                celestina_ui::ViewKind::Box { .. } => "box".to_owned(),
+                celestina_ui::ViewKind::Text { text, .. } => format!("text {text:?}"),
+                celestina_ui::ViewKind::Icon { .. } => "icon".to_owned(),
+                celestina_ui::ViewKind::Image { .. } => "image".to_owned(),
+                celestina_ui::ViewKind::Field { .. } => "field".to_owned(),
+            }
+        }
+        fn walk(v: &View, depth: usize, out: &mut Vec<String>) {
+            out.push(format!("{}{:?} {}", " ".repeat(depth), v.key, kind(v)));
+            for child in &v.children {
+                walk(child, depth + 1, out);
+            }
+        }
+        let mut out = Vec::new();
+        walk(v, 0, &mut out);
+        out
+    }
+
+    fn snapshot(page: PageId, fixture: &Fixture) -> (String, (f32, f32), Vec<String>) {
+        let theme = Theme::dark();
+        let pv = page_view(page);
+        let cx = PageCx {
+            theme: &theme,
+            max_size: (760.0, 560.0),
+            model: fixture.model.as_ref(),
+            output: "DP-1",
+            owners: &fixture.owners,
+            do_not_disturb: false,
+            history: &fixture.history,
+            items: &fixture.items,
+        };
+        (
+            pv.title().to_owned(),
+            pv.wants(&cx),
+            structure(&pv.view(&cx)),
+        )
+    }
+
+    /// One pinned snapshot: what a page said for a fixture at 1.0.0.
+    struct Pinned {
+        page: PageId,
+        fixture: &'static str,
+        title: &'static str,
+        wants: (f32, f32),
+        tree: &'static [&'static str],
+    }
+
+    const PINNED: &[Pinned] = &[
+        Pinned {
+            page: PageId::ACTIVITY,
+            fixture: "empty",
+            title: "Actividad",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(11973191988154937484) box",
+                " Key(3549857502210335328) text \"Sin datos del compositor\"",
+            ],
+        },
+        Pinned {
+            page: PageId::ACTIVITY,
+            fixture: "populated",
+            title: "Actividad",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(11973191988154937484) box",
+                " Key(18010335123842183115) box",
+                "  Key(3652693545672305645) box",
+                "  Key(5201864321132865653) text \"Espacio 1\"",
+                "  Key(8452039938623860829) text \"2 columnas\"",
+                " Key(1795906457100220908) box",
+                "  Key(15402491398479089034) box",
+                "  Key(16951662173939649042) text \"web\"",
+                "  Key(1755093717721092602) text \"1 columna\"",
+                " Key(4796775128866736326) box",
+                " Key(7460383448109864406) box",
+                "  Key(16315061430520391794) icon",
+                "  Key(6352214508856464827) text \"main.rs\"",
+                " Key(9692698855077453815) box",
+                "  Key(100632763778429587) icon",
+                "  Key(4119899101888875418) text \"Docs\"",
+            ],
+        },
+        Pinned {
+            page: PageId::ACTIVITY,
+            fixture: "name-held",
+            title: "Actividad",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(11973191988154937484) box",
+                " Key(18010335123842183115) box",
+                "  Key(3652693545672305645) box",
+                "  Key(5201864321132865653) text \"Espacio 1\"",
+                "  Key(8452039938623860829) text \"2 columnas\"",
+                " Key(1795906457100220908) box",
+                "  Key(15402491398479089034) box",
+                "  Key(16951662173939649042) text \"web\"",
+                "  Key(1755093717721092602) text \"1 columna\"",
+                " Key(4796775128866736326) box",
+                " Key(7460383448109864406) box",
+                "  Key(16315061430520391794) icon",
+                "  Key(6352214508856464827) text \"main.rs\"",
+                " Key(9692698855077453815) box",
+                "  Key(100632763778429587) icon",
+                "  Key(4119899101888875418) text \"Docs\"",
+            ],
+        },
+        Pinned {
+            page: PageId::NOTIFICATIONS,
+            fixture: "empty",
+            title: "Notificaciones",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(4062871517857070543) box",
+                " Key(10974953685449066664) box",
+                "  Key(5425448682025521546) text \"No molestar\"",
+                "  Key(14554566484198523827) box",
+                "   Key(14428596922856908928) box",
+                " Key(2551833107654166475) box",
+                "  Key(4321480622256717021) box",
+                "   Key(12128004882728413383) text \"Sin notificaciones\"",
+            ],
+        },
+        Pinned {
+            page: PageId::NOTIFICATIONS,
+            fixture: "populated",
+            title: "Notificaciones",
+            wants: (420.0, 378.0),
+            tree: &[
+                "Key(4062871517857070543) box",
+                " Key(10974953685449066664) box",
+                "  Key(5425448682025521546) text \"No molestar\"",
+                "  Key(14554566484198523827) box",
+                "   Key(14428596922856908928) box",
+                " Key(2551833107654166475) box",
+                "  Key(15487842299666878042) box",
+                "   Key(10834817680499137729) box",
+                "    Key(1830734672865307682) text \"Descartar todo\"",
+                "  Key(16452716187036512225) box",
+                "   Key(13453905839215043437) icon",
+                "   Key(888077872929100793) box",
+                "    Key(14649546737545539593) box",
+                "     Key(12290077761644798770) box",
+                "      Key(13589382029912239730) text \"Summary 7\"",
+                "     Key(8095988470496979282) text \"09:41\"",
+                "     Key(4279276437269447046) box",
+                "      Key(5905735950225300024) icon",
+                "    Key(11220128692444802078) box",
+                "     Key(14760829962931092774) text \"Body 7\"",
+                "    Key(9700973095190067993) box",
+                "     Key(17067164290754220862) box",
+                "      Key(17085524527825065143) text \"Reply\"",
+                "  Key(14220400780068922816) box",
+                "   Key(11221590432247454028) icon",
+                "   Key(17102506539671063000) box",
+                "    Key(12417231330577950184) box",
+                "     Key(14522393168612388179) box",
+                "      Key(15821697436879829139) text \"Summary 6\"",
+                "     Key(10328303877464568691) text \"09:41\"",
+                "    Key(13452444099412391487) box",
+                "     Key(16993145369898682183) text \"Body 6\"",
+            ],
+        },
+        Pinned {
+            page: PageId::NOTIFICATIONS,
+            fixture: "name-held",
+            title: "Notificaciones",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(4062871517857070543) box",
+                " Key(10974953685449066664) box",
+                "  Key(5425448682025521546) text \"No molestar\"",
+                "  Key(14554566484198523827) box",
+                "   Key(14428596922856908928) box",
+                " Key(2551833107654166475) box",
+                "  Key(4321480622256717021) box",
+                "   Key(12128004882728413383) text \"Otro programa atiende las notificaciones: noctalia\"",
+            ],
+        },
+        Pinned {
+            page: PageId::TRAY,
+            fixture: "empty",
+            title: "Bandeja",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(6564195396842955373) box",
+                " Key(12562133755713480981) box",
+                "  Key(4321480622256717021) box",
+                "   Key(12128004882728413383) text \"Sin elementos en la bandeja\"",
+            ],
+        },
+        Pinned {
+            page: PageId::TRAY,
+            fixture: "populated",
+            title: "Bandeja",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(6564195396842955373) box",
+                " Key(12562133755713480981) box",
+                "  Key(13217651681185837584) box",
+                "   Key(15872869184252048698) icon",
+                "   Key(4472443167801523467) text \"nm-applet\"",
+                "  Key(15449967088153426993) box",
+                "   Key(18105184591219638107) icon",
+                "   Key(2240127760833934058) text \"blueman\"",
+            ],
+        },
+        Pinned {
+            page: PageId::TRAY,
+            fixture: "name-held",
+            title: "Bandeja",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(6564195396842955373) box",
+                " Key(12562133755713480981) box",
+                "  Key(4321480622256717021) box",
+                "   Key(12128004882728413383) text \"Otro programa atiende la bandeja: noctalia-shell (:1.42)\"",
+            ],
+        },
+    ];
+
+    #[test]
+    fn page_title_wants_and_view_structure_are_pinned() {
+        let fixtures = fixtures();
+        assert_eq!(PINNED.len(), PageId::all().len() * fixtures.len());
+        for page in PageId::all() {
+            for fixture in &fixtures {
+                let pinned = PINNED
+                    .iter()
+                    .find(|p| p.page == page && p.fixture == fixture.name);
+                let Some(pinned) = pinned else {
+                    panic!("no snapshot for {page:?} / {}", fixture.name);
+                };
+                let (title, wants, tree) = snapshot(page, fixture);
+                let at = format!("{page:?} / {}", fixture.name);
+                assert_eq!(title, pinned.title, "{at}: title");
+                assert_eq!(wants, pinned.wants, "{at}: wants");
+                assert_eq!(tree, pinned.tree, "{at}: view structure");
+            }
+        }
+    }
+
+    #[test]
+    fn page_order_and_words_are_pinned() {
+        assert_eq!(
+            PageId::all(),
+            [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY]
+        );
+        let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
+        assert_eq!(words, ["activity", "notifications", "tray"]);
+    }
+
     #[test]
     fn every_page_has_a_view_named_like_its_tab() {
-        for page in Page::ALL {
+        for page in PageId::all() {
             let pv = page_view(page);
             assert_eq!(pv.title(), crate::island::view::page_title(page));
             assert_eq!(wants_of(pv, None, (760.0, 560.0)), PAGE_SIZE);

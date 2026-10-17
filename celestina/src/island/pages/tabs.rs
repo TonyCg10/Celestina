@@ -7,8 +7,8 @@ use celestina_ui::{view, Key, View};
 use taffy::JustifyContent;
 
 use crate::{
-    command::Page,
     island::view::{centred, page_title, text_style},
+    pieces::{self, PageId},
 };
 
 /// The tab row's height.
@@ -16,33 +16,34 @@ pub const TABS_H: f32 = 36.0;
 
 /// The tab of `page`.
 #[must_use]
-pub fn tab_key(page: Page) -> Key {
+pub fn tab_key(page: PageId) -> Key {
     Key::indexed("tab", index(page))
 }
 
 /// The page whose tab is `key`, if it is one.
 #[must_use]
-pub fn page_of(key: Key) -> Option<Page> {
-    Page::ALL.into_iter().find(|page| tab_key(*page) == key)
+pub fn page_of(key: Key) -> Option<PageId> {
+    pieces::pages()
+        .map(|entry| entry.id)
+        .find(|page| tab_key(*page) == key)
 }
 
-fn index(page: Page) -> u64 {
-    Page::ALL
-        .iter()
-        .position(|p| *p == page)
-        .map_or(0, |i| i as u64)
+fn index(page: PageId) -> u64 {
+    pieces::page_index(page).map_or(0, |i| i as u64)
 }
 
-/// The three tabs in a row `width` wide, equal in width: the open page's is
-/// an accent pill, the others lift the control fill.
+/// One tab per page of the piece table, in its order, in a row `width`
+/// wide, equal in width: the open page's is an accent pill, the others lift
+/// the control fill.
 #[must_use]
-pub fn tabs(theme: &Theme, open: Page, width: f32) -> View {
-    let count = Page::ALL.len() as f32;
+pub fn tabs(theme: &Theme, open: PageId, width: f32) -> View {
+    let pages = PageId::all();
+    let count = pages.len().max(1) as f32;
     let tab_w = ((width - theme.spacing.sm * (count - 1.0)) / count).max(0.0);
     centred(view::row(Key::named("tabs")))
         .size(width, TABS_H)
         .gap(theme.spacing.sm)
-        .children(Page::ALL.into_iter().map(|page| {
+        .children(pages.into_iter().map(|page| {
             let (fill, ink) = if page == open {
                 (Role::Accent, Role::AccentInk)
             } else {
@@ -87,13 +88,13 @@ mod tests {
     #[test]
     fn tabs_show_three_pages_with_the_open_one_selected() {
         let theme = Theme::dark();
-        for open in Page::ALL {
+        for open in PageId::all() {
             let row = tabs(&theme, open, 388.0);
             assert_eq!(row.children.len(), 3);
             let keys: Vec<Key> = row.children.iter().map(|t| t.key).collect();
-            let want: Vec<Key> = Page::ALL.into_iter().map(tab_key).collect();
+            let want: Vec<Key> = PageId::all().into_iter().map(tab_key).collect();
             assert_eq!(keys, want, "one tab per page, in order");
-            for (tab, page) in row.children.iter().zip(Page::ALL) {
+            for (tab, page) in row.children.iter().zip(PageId::all()) {
                 let want = if page == open {
                     Role::Accent
                 } else {
@@ -109,9 +110,9 @@ mod tests {
     fn tabs_are_equal_pills_across_the_row_and_name_their_pages() {
         let theme = Theme::dark();
         let mut tree = Tree::new(false, &theme);
-        tree.apply(tabs(&theme, Page::Tray, 388.0), Instant::now());
+        tree.apply(tabs(&theme, PageId::TRAY, 388.0), Instant::now());
         tree.layout_measured((600.0, 100.0), fake_measure);
-        let rects: Vec<_> = Page::ALL
+        let rects: Vec<_> = PageId::all()
             .into_iter()
             .filter_map(|p| tree.node_by_key(tab_key(p)))
             .map(|id| tree.rect(id))
@@ -122,9 +123,60 @@ mod tests {
         assert!(rects[1].x + rects[1].w <= rects[2].x);
         assert_eq!(rects[2].x + rects[2].w, 388.0);
         assert_eq!(
-            page_of(tab_key(Page::Notifications)),
-            Some(Page::Notifications)
+            page_of(tab_key(PageId::NOTIFICATIONS)),
+            Some(PageId::NOTIFICATIONS)
         );
         assert_eq!(page_of(Key::named("tab")), None);
+    }
+
+    // ---- Characterisation (CEL-2-A, spec 6.7): pinned before `Page` becomes a
+    // table identifier; they must pass unchanged.
+
+    #[test]
+    fn every_page_has_its_indexed_tab_key_and_reads_back() {
+        let want = [
+            (PageId::ACTIVITY, Key::indexed("tab", 0)),
+            (PageId::NOTIFICATIONS, Key::indexed("tab", 1)),
+            (PageId::TRAY, Key::indexed("tab", 2)),
+        ];
+        for (page, key) in want {
+            assert_eq!(tab_key(page), key, "{page:?}");
+            assert_eq!(page_of(key), Some(page), "{page:?}");
+        }
+        for foreign in [
+            Key::indexed("tab", 3),
+            Key::indexed("tab-label", 0),
+            Key::named("tab"),
+            Key::named("tabs"),
+            Key::STALE,
+        ] {
+            assert_eq!(page_of(foreign), None, "{foreign:?}");
+        }
+    }
+
+    #[test]
+    fn tab_labels_are_the_page_titles_in_tab_order() {
+        let row = tabs(&Theme::dark(), PageId::ACTIVITY, 388.0);
+        let labels: Vec<(Key, String)> = row
+            .children
+            .iter()
+            .filter_map(|tab| match &tab.children.first()?.kind {
+                ViewKind::Text { text, .. } => Some((tab.children[0].key, text.clone())),
+                _ => None,
+            })
+            .collect();
+        let want: Vec<(Key, String)> = PageId::all()
+            .into_iter()
+            .enumerate()
+            .map(|(i, page)| {
+                (
+                    Key::indexed("tab-label", i as u64),
+                    page_title(page).to_owned(),
+                )
+            })
+            .collect();
+        assert_eq!(labels, want);
+        let names: Vec<&str> = labels.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(names, ["Actividad", "Notificaciones", "Bandeja"]);
     }
 }

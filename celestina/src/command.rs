@@ -17,6 +17,7 @@ use celestina_shell::wallpaper::{is_showable, Mode as FitMode};
 use celestina_wayland::Config;
 
 use crate::energy::verbs;
+use crate::pieces::{self, PageId};
 
 /// Arguments the binary reads at most; a longer command line is a usage
 /// error before anything is parsed.
@@ -50,32 +51,6 @@ verbs: island toggle
        session suspend|reboot|power-off|log-out
        quit";
 
-/// An Island page.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Page {
-    Activity,
-    Notifications,
-    Tray,
-}
-
-impl Page {
-    pub const ALL: [Page; 3] = [Page::Activity, Page::Notifications, Page::Tray];
-
-    /// The page's word in a verb.
-    #[must_use]
-    pub fn word(self) -> &'static str {
-        match self {
-            Page::Activity => "activity",
-            Page::Notifications => "notifications",
-            Page::Tray => "tray",
-        }
-    }
-
-    fn from_word(word: &str) -> Option<Page> {
-        Page::ALL.into_iter().find(|p| p.word() == word)
-    }
-}
-
 /// What a wallpaper verb addresses.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Target {
@@ -89,7 +64,7 @@ pub enum Target {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verb {
     IslandToggle,
-    IslandOpen(Page),
+    IslandOpen(PageId),
     IslandClose,
     LauncherToggle,
     NotificationsToggle,
@@ -171,7 +146,7 @@ impl Verb {
         let words: Vec<&str> = args.iter().map(String::as_str).collect();
         let verb = match words.as_slice() {
             ["island", "toggle"] => Verb::IslandToggle,
-            ["island", "open", page] => match Page::from_word(page) {
+            ["island", "open", page] => match pieces::page_by_word(page) {
                 Some(page) => Verb::IslandOpen(page),
                 None => return Err(unknown(&words)),
             },
@@ -370,12 +345,12 @@ mod tests {
     fn every_verb_round_trips_through_words_and_parse() {
         let table = [
             (Verb::IslandToggle, "island toggle"),
-            (Verb::IslandOpen(Page::Activity), "island open activity"),
+            (Verb::IslandOpen(PageId::ACTIVITY), "island open activity"),
             (
-                Verb::IslandOpen(Page::Notifications),
+                Verb::IslandOpen(PageId::NOTIFICATIONS),
                 "island open notifications",
             ),
-            (Verb::IslandOpen(Page::Tray), "island open tray"),
+            (Verb::IslandOpen(PageId::TRAY), "island open tray"),
             (Verb::IslandClose, "island close"),
             (Verb::LauncherToggle, "launcher toggle"),
             (Verb::NotificationsToggle, "notifications toggle"),
@@ -607,5 +582,95 @@ mod tests {
         ] {
             assert!(parse(bad).is_err(), "{bad:?}");
         }
+    }
+
+    // ---- Characterisation (CEL-2-A, spec 6.7): pinned before `Page` becomes a
+    // table identifier; they must pass unchanged.
+
+    #[test]
+    fn page_words_and_order_are_pinned() {
+        let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
+        assert_eq!(words, ["activity", "notifications", "tray"]);
+        assert_eq!(
+            PageId::all(),
+            [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY]
+        );
+    }
+
+    #[test]
+    fn every_accepted_verb_string_parses_to_its_verb() {
+        let table: [(&[&str], Verb); 9] = [
+            (&["island", "toggle"], Verb::IslandToggle),
+            (
+                &["island", "open", "activity"],
+                Verb::IslandOpen(PageId::ACTIVITY),
+            ),
+            (
+                &["island", "open", "notifications"],
+                Verb::IslandOpen(PageId::NOTIFICATIONS),
+            ),
+            (&["island", "open", "tray"], Verb::IslandOpen(PageId::TRAY)),
+            (&["island", "close"], Verb::IslandClose),
+            (&["launcher", "toggle"], Verb::LauncherToggle),
+            (&["notifications", "toggle"], Verb::NotificationsToggle),
+            (
+                &["notifications", "dismiss-all"],
+                Verb::NotificationsDismissAll,
+            ),
+            (&["quit"], Verb::Quit),
+        ];
+        for (words, verb) in table {
+            assert_eq!(Verb::parse(&strings(words)), Ok(verb), "{words:?}");
+        }
+    }
+
+    #[test]
+    fn every_refused_verb_string_is_refused_with_its_message() {
+        let table: [(&[&str], &str); 14] = [
+            (&[], "unknown verb \"\""),
+            (&["island"], "unknown verb \"island\""),
+            (&["island", "open"], "unknown verb \"island open\""),
+            (
+                &["island", "open", "menu"],
+                "unknown verb \"island open menu\"",
+            ),
+            (
+                &["island", "open", "Activity"],
+                "unknown verb \"island open Activity\"",
+            ),
+            (&["island", "open", ""], "unknown verb \"island open \""),
+            (&["island", "fly"], "unknown verb \"island fly\""),
+            (&["Island", "toggle"], "unknown verb \"Island toggle\""),
+            (&["quit", "now"], "unknown verb \"quit now\""),
+            (&["launcher"], "unknown verb \"launcher\""),
+            (&["notifications"], "unknown verb \"notifications\""),
+            (
+                &["notifications", "dismiss"],
+                "unknown verb \"notifications dismiss\"",
+            ),
+            (
+                &["island", "open", "tray", "now"],
+                "unknown verb \"island open tray now\"",
+            ),
+            (
+                &["island", "open", "tray", "now", "please"],
+                "a verb has at most 4 words, not 5",
+            ),
+        ];
+        for (words, message) in table {
+            let err = Verb::parse(&strings(words)).expect_err("refused");
+            assert_eq!(err.to_string(), message, "{words:?}");
+        }
+    }
+
+    #[test]
+    fn the_usage_text_names_every_page_word() {
+        assert!(USAGE.contains("island open activity|notifications|tray"));
+    }
+
+    #[test]
+    fn the_usage_text_lists_the_piece_tables_pages() {
+        let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
+        assert!(USAGE.contains(&format!("island open {}\n", words.join("|"))));
     }
 }

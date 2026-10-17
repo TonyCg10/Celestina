@@ -9,8 +9,9 @@ pub mod history;
 use std::{cell::OnceCell, rc::Rc};
 
 use crate::{
-    command::{Page, Verb},
+    command::Verb,
     island::{clock, pages::HistoryRow},
+    pieces::PageId,
     providers::notifications::{
         NotificationsCommand, NotificationsEvent, NotificationsProvider, NotificationsSnapshot,
     },
@@ -149,11 +150,11 @@ pub fn excerpt(text: &str) -> &str {
 /// page is `open`: close it when the Notifications page is the open one,
 /// open it otherwise.
 #[must_use]
-pub fn toggle_verb(open: Option<Page>) -> Verb {
-    if open == Some(Page::Notifications) {
+pub fn toggle_verb(open: Option<PageId>) -> Verb {
+    if open == Some(PageId::NOTIFICATIONS) {
         Verb::IslandClose
     } else {
-        Verb::IslandOpen(Page::Notifications)
+        Verb::IslandOpen(PageId::NOTIFICATIONS)
     }
 }
 
@@ -265,16 +266,16 @@ mod tests {
 
     #[test]
     fn the_toggle_opens_the_page_then_closes_it() {
-        assert_eq!(toggle_verb(None), Verb::IslandOpen(Page::Notifications));
-        assert_eq!(toggle_verb(Some(Page::Notifications)), Verb::IslandClose);
+        assert_eq!(toggle_verb(None), Verb::IslandOpen(PageId::NOTIFICATIONS));
+        assert_eq!(toggle_verb(Some(PageId::NOTIFICATIONS)), Verb::IslandClose);
         // Another open page slides to this one.
         assert_eq!(
-            toggle_verb(Some(Page::Activity)),
-            Verb::IslandOpen(Page::Notifications)
+            toggle_verb(Some(PageId::ACTIVITY)),
+            Verb::IslandOpen(PageId::NOTIFICATIONS)
         );
         assert_eq!(
-            toggle_verb(Some(Page::Tray)),
-            Verb::IslandOpen(Page::Notifications)
+            toggle_verb(Some(PageId::TRAY)),
+            Verb::IslandOpen(PageId::NOTIFICATIONS)
         );
     }
 }

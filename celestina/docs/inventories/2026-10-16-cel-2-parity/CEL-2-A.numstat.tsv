@@ -1,0 +1,107 @@
+# CEL-2-A exact change inventory
+
+Base revision	7d526f6bb9eed3353b049a446b92d34b7e98983b
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell/tests/salvage.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/docs/decisions/0010-parity-program-in-thirteen-units.md
+Pathspec	celestina/docs/decisions/0011-duties-switched-on-one-by-one.md
+Pathspec	celestina/docs/decisions/0012-bar-one-surface-per-output.md
+Pathspec	celestina/docs/decisions/0013-everything-is-a-piece.md
+Pathspec	celestina/docs/decisions/0014-lock-and-polkit-carry-over.md
+Pathspec	celestina/docs/decisions/0015-clock-rests-at-minutes.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-10-16-bar-and-pieces.md
+Pathspec	celestina/docs/evidence/README.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-A.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/bar/layout.rs
+Pathspec	celestina/src/bar/mod.rs
+Pathspec	celestina/src/bar/silhouette.rs
+Pathspec	celestina/src/bar/view.rs
+Pathspec	celestina/src/bus.rs
+Pathspec	celestina/src/command.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/clock.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/tabs.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/island/state.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/launcher/commands.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/notifications/mod.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/notifications.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	celestina/src/pieces/workspaces.rs
+Pathspec	celestina/src/providers/settings.rs
+Pathspec	celestina/src/providers/tray.rs
+Pathspec	celestina/src/tray/item.rs
+Pathspec	celestina/src/tray/model.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+449	1	366d83cabdb76659f2c36fa982e1be7d3ddcb33a3d25415b32729b92f753f132	celestina-rs/crates/celestina-shell/src/settings.rs
+3	1	0211465d2512aee615087642dbefd5b686b843f0c5453126dbba7c592405b7ee	celestina-rs/crates/celestina-shell/tests/salvage.rs
+1	1	65ebbe72f812f8582fff84af36b3dd9e682ae51412efce75e1349368be8df9cb	celestina/Cargo.lock
+1	1	5b0b1ec2473fdeedc40228c92177e0aa09516592fe38674a83bd985fc3c2e04d	celestina/Cargo.toml
+3	0	a099e34a18fc99b971862fd163c8512666b26a21e6a3ffee6fbd24bbf0a4c581	celestina/README.md
+6	0	3415dbb16889c27c53e81bba2390561c6038ac6bf88cfaa5e6a3641fc3af0c8c	celestina/STATUS.md
+29	13	ab883ab8bb497560eaa7a56beb71c517a1a7a384ee8d1ef63000f34dd52f7406	celestina/VALIDATION.md
+13	1	23b175c1ad62bd3a584e063acc68af870476d03c7ebb405e49959ad75b05a3c1	celestina/crates/celestina-wayland/src/runtime.rs
+37	0	03c22ed18157f90e217879bdb680fd5140a36e7330967c5aa2886d956d7fc7de	celestina/docs/decisions/0010-parity-program-in-thirteen-units.md
+46	0	9955cdccd9cd6332a9f7634f0a8df165a66c9cf408525d8e2fb6456b0a7cd5dc	celestina/docs/decisions/0011-duties-switched-on-one-by-one.md
+45	0	a6c0462b799f13b1f9ba047d6622d2d70de0186fe0c0f5b11e69b365b500e19d	celestina/docs/decisions/0012-bar-one-surface-per-output.md
+37	0	4aa5644e01538a0057afa5309fe31a92fc6b5465bcad2deaeee1d2b6b3aed465	celestina/docs/decisions/0013-everything-is-a-piece.md
+41	0	ba931406dafe880964c9cf90b3ae36ece9c6ba680ae6f8cf7a7c6c7bb28fe9cf	celestina/docs/decisions/0014-lock-and-polkit-carry-over.md
+34	0	d718c50190b94bd6e7a5fac3e65240f2cc897285c1b6cbb13925fc204a8a438c	celestina/docs/decisions/0015-clock-rests-at-minutes.md
+9	2	ad45117efb3c8b7a6ed174e088c49f4477260f404c4f39722dd35a9124f4784a	celestina/docs/decisions/README.md
+363	0	9d58b3cc6ccec8366b20d7bda578ed7647ed1d8954d86fc712b4422bd439402a	celestina/docs/evidence/2026-10-16-bar-and-pieces.md
+2	0	a889c309e99bc1b8aae22ce1e3538397ba1217b7369f2a63946cbe6ea4b9523f	celestina/docs/evidence/README.md
+107	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-A.numstat.tsv
+1	1	82aec0ab1f66b2d47acb5b1982276965f856f547733dbd289fd6f57339077995	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+47	3	d00d42a3a1bdba0022bd6fecdf943f72ee43aa1f51e4852248e3db58fdce2570	celestina/scripts/smoke.sh
+398	28	5deae56c7ed72753280e06e509102bde19b92ee71ba887a4bd646990ed066a3b	celestina/src/app.rs
+330	0	266edcb8f8b2caea2222a3d1968936b15400427ce615459f76e82d5a2ac53b80	celestina/src/bar/layout.rs
+14	0	c170f97ef031ba49bea97083c7a4a770ed55d459dcb75a76af43631dab74fdfb	celestina/src/bar/mod.rs
+134	0	fae7cdbd1036adba80691f501d294c3b1c1008356f3aa124a01af894fecd06de	celestina/src/bar/silhouette.rs
+386	0	e2c8ba213a95ba8dcfd6e92db25c1b8c5f0978104a379b352de1ccb2a742ba9f	celestina/src/bar/view.rs
+2	2	9e6d3cd4ad874ecc2854626b304f2684fea4b70c91408e1e1aa3ee00c60ab742	celestina/src/bus.rs
+96	31	f0a9567be1ddb89d7767cacd8163b2c631afa3becd16825b5433a505c72ad24e	celestina/src/command.rs
+45	0	84119284d702d901a7097d7ab5490aa68558f1675b98fa0991bc08343f48272b	celestina/src/copy.rs
+533	0	ce8dd50691cf27124728236c1bc8f44ef2b8369703ecc6658e929e5d7456fbf3	celestina/src/island/bar_tree.rs
+124	12	5a53bd7c8a6889aaa91b7a5b16395be7a9e0f8bb17469817e1aec0d8bc27e2af	celestina/src/island/clock.rs
+1096	93	20ed4bb0ac99ae4e29036e2f2508e9be7f43341063b25bd177fc7eed2698ad02	celestina/src/island/mod.rs
+406	12	a38d7a7b0713ed0042563c43cc3a2f5f8ae9dba0514c0e5690fb693277651b6f	celestina/src/island/pages/mod.rs
+73	21	d4de339d8fd087a34f163134af6ec3c74b8a5b841f5eda27901bfd26b7e10293	celestina/src/island/pages/tabs.rs
+13	0	948fac4ee0c96cdad31312576a84ced1633e5c8bdaa598985524bdc2b9bcab44	celestina/src/island/pages/tray.rs
+80	46	7ff91999552aa55c7d33b7985cdc2c36532f6675bc5b2ec5c85e54214674fdc8	celestina/src/island/state.rs
+131	34	49cb7595212b8b52cc4e34c5c3fb70372c7436bf1a45bc02d9f2e064ed0a9c1d	celestina/src/island/view.rs
+5	5	b1a4c4e7a4f1929ad4e6e21c742248304398a4b9072b57881c7a76ec929f8077	celestina/src/launcher/commands.rs
+2	0	b619ccd6da3c3617439b49f21e72b6a551c4bdc885b86a5333ef0e840397298b	celestina/src/lib.rs
+3	3	64706bea6eec4e779d31ea11b39e5b21754635df66156dde4bb2fb657f22e74e	celestina/src/main.rs
+3	1	e2e08c510ab8564f7ed77b449859a8ad0437cb957bd9cc387730eefd8fc939c4	celestina/src/message.rs
+11	10	7eb6ac2231e395adae06429d6ccfca985a6ea6f1f336bcb44c377f673ec45241	celestina/src/notifications/mod.rs
+299	0	54004070b427a78c54deeb7042eaf9e80beef1c4a5fe7280721dee7566a46b2e	celestina/src/pieces/mod.rs
+221	0	ad51a9c0edcf544a5f29cf7e76c345a2baaedf1c45fa8e39e5e470f074159ce5	celestina/src/pieces/notifications.rs
+356	0	3087464142f8a6ccc5da828542bd1b9300331aa34bfa1d0b517bfadc2484598d	celestina/src/pieces/tray.rs
+267	0	3a37eda30767333b4ef8a5932570855623ac06439375c67d81f97e9ee66e542d	celestina/src/pieces/workspaces.rs
+372	26	44cba5f13033018e0413deb9e3af00e5e5d1ea48219611e9fddd188d1795e5b3	celestina/src/providers/settings.rs
+4	0	1724d4a2520247f40683ba4e24cf7900d74ce5f665c0a9f4b15926bad06ee2fd	celestina/src/providers/tray.rs
+4	1	e52ee6b2dfcaf151c911cda3d999c9934623231b0d1a751c3b4f1fe64720dfca	celestina/src/tray/item.rs
+13	0	45ab120043a4bd29454d445f2a36e3489e7bb6f5865e2ca042d1a56e9510611a	celestina/src/tray/model.rs
+1	0	57c3ea2e135ce0cf05b80fdfd37e886fcc6782682e70cd2d4d580f996a107247	docs/version-history.tsv

@@ -203,7 +203,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::command::Page;
+    use crate::pieces::PageId;
 
     /// A `dbus-daemon` of the test's own, removed when dropped.
     struct PrivateBus {
@@ -307,7 +307,7 @@ mod tests {
         ));
 
         // A client's verb reaches the first shell.
-        let verb = Verb::IslandOpen(Page::Tray);
+        let verb = Verb::IslandOpen(PageId::TRAY);
         send_on(bus.builder(), &verb).expect("the verb is delivered");
         assert_eq!(rx.recv_timeout(Duration::from_secs(1)), Ok(verb));
 

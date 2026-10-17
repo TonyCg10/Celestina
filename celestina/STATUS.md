@@ -40,3 +40,9 @@
   after trying the shell, without closing the rows; the recorded evidence is
   unit tests, a private bus and a smoke over a nested niri.
 - **Blockers:** none.
+- **In progress (CEL-2-A, not landed):** the bar and the piece table on
+  `unit/celestina/CEL-2-A`; evidence in
+  [`docs/evidence/2026-10-16-bar-and-pieces.md`](docs/evidence/2026-10-16-bar-and-pieces.md)
+  records the checks, the tests and the nested smoke green on the tree after
+  the review fix pass, and the gaps the unit leaves open.
+  `VAL-CEL2-BAR-LIVE` is pending.

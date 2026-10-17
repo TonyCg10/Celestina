@@ -50,6 +50,9 @@ impl Default for RowIcon {
 pub struct TrayRow {
     /// Who serves the item: what a command is addressed to.
     pub id: ItemId,
+    /// Its `Id` property: what `bar.tray_hidden` matches (empty when it
+    /// has none, and then the item is never hidden).
+    pub sni_id: String,
     /// Its title (empty when it has none).
     pub title: String,
     /// Its status.
@@ -162,6 +165,7 @@ impl IconCache {
             };
             rows.push(TrayRow {
                 id: item.id.clone(),
+                sni_id: item.sni_id.clone(),
                 title: item.title.clone(),
                 status: item.status,
                 icon,
@@ -370,6 +374,7 @@ mod tests {
             status,
             icon,
             has_menu: false,
+            sni_id: String::new(),
         }
     }
 
@@ -563,6 +568,14 @@ mod tests {
             self.lookups.set(self.lookups.get() + 1);
             self.theme.contains(&name)
         }
+    }
+
+    #[test]
+    fn rows_carry_the_items_own_id() {
+        let mut item = pixmap_item("a", 1);
+        item.sni_id = "nm-applet".to_owned();
+        let rows = IconCache::default().rows(&[item], &mut Fake::default());
+        assert_eq!(rows[0].sni_id, "nm-applet");
     }
 
     #[test]

@@ -13,22 +13,64 @@ use std::{
 /// still reads the old minute.
 pub const TICK_MARGIN: Duration = Duration::from_millis(50);
 
-/// Re-arm decision for the minute timer. The timer is monotonic, so the
-/// deadline is too: any frame at or after it re-arms from the wall clock,
-/// whatever minute that reads (an NTP step cannot freeze the clock).
+/// The minute timer's deadline. The timer is monotonic, so the deadline is
+/// too: any frame at or after it re-arms from the wall clock, whatever
+/// minute that reads (an NTP step cannot freeze the clock).
+///
+/// A surface has one redraw timer and an earlier deadline replaces the armed
+/// one (the page's [`SecondTick`] does), so every frame asks for the minute
+/// deadline again: once the earlier timer stops, the minute one is still
+/// there. Asking again for an armed deadline costs nothing.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ClockTick {
     deadline: Option<Instant>,
 }
 
 impl ClockTick {
-    #[must_use]
-    pub fn should_arm(&self, now: Instant) -> bool {
-        self.deadline.is_none_or(|d| now >= d)
+    /// The wait until the minute deadline, at `now` and wall-clock time
+    /// `secs`.`subsec_nanos`: the deadline in force, or the next boundary
+    /// plus the margin once it has passed.
+    pub fn wait(&mut self, now: Instant, secs: u64, subsec_nanos: u32) -> Duration {
+        match self.deadline {
+            Some(d) if now < d => d - now,
+            _ => {
+                let wait = until_next_minute(secs, subsec_nanos) + TICK_MARGIN;
+                self.deadline = Some(now + wait);
+                wait
+            }
+        }
+    }
+}
+
+/// Re-arm decision for the page's one-second timer. It exists only while a
+/// page is open: a closed Island forgets it, so rest keeps drawing one frame
+/// a minute. Monotonic like [`ClockTick`].
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SecondTick {
+    deadline: Option<Instant>,
+}
+
+impl SecondTick {
+    /// The wait to arm for the next second boundary, or `None` when no
+    /// timer is due: a closed page arms nothing and drops the deadline, an
+    /// open one re-arms at or after its deadline.
+    pub fn wait(&mut self, open: bool, now: Instant, subsec_nanos: u32) -> Option<Duration> {
+        if !open {
+            self.deadline = None;
+            return None;
+        }
+        if self.deadline.is_some_and(|d| now < d) {
+            return None;
+        }
+        let wait = until_next_second(subsec_nanos) + TICK_MARGIN;
+        self.deadline = Some(now + wait);
+        Some(wait)
     }
 
-    pub fn arm(&mut self, now: Instant, wait: Duration) {
-        self.deadline = Some(now + wait);
+    /// Whether a timer is armed (tests).
+    #[cfg(test)]
+    fn is_armed(&self) -> bool {
+        self.deadline.is_some()
     }
 }
 
@@ -46,6 +88,20 @@ pub fn unix_now() -> (u64, u32) {
 pub fn until_next_minute(secs: u64, subsec_nanos: u32) -> Duration {
     Duration::from_secs(60 - secs % 60)
         .saturating_sub(Duration::from_nanos(u64::from(subsec_nanos)))
+}
+
+/// Time left until the next second boundary.
+#[must_use]
+pub fn until_next_second(subsec_nanos: u32) -> Duration {
+    Duration::from_secs(1).saturating_sub(Duration::from_nanos(u64::from(subsec_nanos)))
+}
+
+/// `HH:MM:SS` of Unix time `secs` at `offset` seconds from UTC.
+#[must_use]
+pub fn format_local_seconds(secs: u64, offset: i64) -> String {
+    let secs = i64::try_from(secs).unwrap_or(i64::MAX);
+    let day = secs.saturating_add(offset).rem_euclid(86_400);
+    format!("{:02}:{:02}:{:02}", day / 3600, day / 60 % 60, day % 60)
 }
 
 /// `HH:MM` of Unix time `secs` at `offset` seconds from UTC.
@@ -110,12 +166,22 @@ mod tests {
     #[test]
     fn clock_tick_rearms_at_or_after_its_deadline_whatever_the_wall_clock_says() {
         let t0 = Instant::now();
+        let secs = Duration::from_secs;
         let mut tick = ClockTick::default();
-        assert!(tick.should_arm(t0));
-        tick.arm(t0, Duration::from_secs(30));
-        assert!(!tick.should_arm(t0 + Duration::from_secs(10)));
-        assert!(tick.should_arm(t0 + Duration::from_secs(30)));
-        assert!(tick.should_arm(t0 + Duration::from_secs(45)));
+        // Wall clock 30 s into a minute: the boundary plus the margin.
+        assert_eq!(tick.wait(t0, 90, 0), secs(30) + TICK_MARGIN);
+        // Before the deadline: what is left of it, whatever the wall clock reads.
+        assert_eq!(tick.wait(t0 + secs(10), 0, 0), secs(20) + TICK_MARGIN);
+        // At and after it: re-armed from the wall clock.
+        assert_eq!(
+            tick.wait(t0 + secs(30) + TICK_MARGIN, 120, 0),
+            secs(60) + TICK_MARGIN
+        );
+        assert_eq!(
+            tick.wait(t0 + secs(200), 150, 0),
+            secs(30) + TICK_MARGIN,
+            "an NTP step back re-arms from the clock"
+        );
     }
 
     #[test]
@@ -146,5 +212,51 @@ mod tests {
         ] {
             assert_eq!(parse_utc_offset(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn seconds_format_across_midnight_and_offsets() {
+        assert_eq!(format_local_seconds(0, 0), "00:00:00");
+        assert_eq!(format_local_seconds(13 * 3600 + 5 * 60 + 59, 0), "13:05:59");
+        assert_eq!(format_local_seconds(86_399, 0), "23:59:59");
+        assert_eq!(format_local_seconds(86_400, 0), "00:00:00");
+        assert_eq!(
+            format_local_seconds(23 * 3600 + 59 * 60 + 59, 2 * 3600),
+            "01:59:59"
+        );
+        assert_eq!(format_local_seconds(0, -1), "23:59:59");
+        assert_eq!(format_local_seconds(0, 5 * 3600 + 45 * 60 + 7), "05:45:07");
+        assert_eq!(format_local_seconds(u64::MAX, 3600).len(), 8);
+    }
+
+    #[test]
+    fn the_second_boundary_is_computed_from_the_subsecond() {
+        assert_eq!(until_next_second(0), Duration::from_secs(1));
+        assert_eq!(until_next_second(250_000_000), Duration::from_millis(750));
+        assert_eq!(until_next_second(999_999_999), Duration::from_nanos(1));
+        assert_eq!(until_next_second(u32::MAX), Duration::ZERO);
+    }
+
+    #[test]
+    fn the_second_timer_exists_only_while_a_page_is_open() {
+        let t0 = Instant::now();
+        let mut tick = SecondTick::default();
+        // Closed: nothing is armed, however often it is asked.
+        assert_eq!(tick.wait(false, t0, 0), None);
+        assert!(!tick.is_armed());
+        // Open: armed once for the next boundary plus the margin.
+        assert_eq!(
+            tick.wait(true, t0, 250_000_000),
+            Some(Duration::from_millis(750) + TICK_MARGIN)
+        );
+        // Not due again before the deadline, due at it.
+        assert_eq!(tick.wait(true, t0 + Duration::from_millis(500), 0), None);
+        assert!(tick
+            .wait(true, t0 + Duration::from_millis(800), 0)
+            .is_some());
+        // Closing drops the deadline; reopening arms afresh.
+        assert_eq!(tick.wait(false, t0 + Duration::from_secs(1), 0), None);
+        assert!(!tick.is_armed());
+        assert!(tick.wait(true, t0 + Duration::from_secs(1), 0).is_some());
     }
 }

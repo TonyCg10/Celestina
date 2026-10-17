@@ -8,7 +8,7 @@ use std::time::Instant;
 use celestina_paint::{silhouette_slices, MotionMs, Rect, Theme};
 use celestina_ui::{Animated, Motion, Reduced, EXIT, ONE_UI};
 
-use crate::command::Page;
+use crate::pieces::{self, PageId};
 
 /// Capsule height, logical px.
 pub const CAPSULE_H: f32 = 40.0;
@@ -19,6 +19,9 @@ pub const PAGE_SIZE: (f32, f32) = (420.0, 300.0);
 /// The space a page keeps from the surface's sides and bottom edge, logical
 /// px (the top keeps [`TOP_GAP`]).
 pub const PAGE_MARGIN: f32 = 8.0;
+/// The widest surface a page is laid out on, logical px: the 1.0.0 strip.
+/// On the bar's full-width surface the pages keep the sizes they had.
+pub const STRIP_W: f32 = 760.0;
 /// The tallest band of the silhouette (design §5.2: at most 2 logical px).
 pub const SILHOUETTE_STEP: f32 = 2.0;
 /// Capsule content fades out over the first 40 % of the progress, page
@@ -32,7 +35,7 @@ pub struct IslandState {
     progress: Animated,
     capsule_w: f32,
     /// The page shown while open, and the one a toggle reopens.
-    page: Page,
+    page: PageId,
     /// The horizontal offset of the page content in page widths: −1 or +1
     /// right after a switch, 0 at rest. A clock of its own: a switch is a
     /// gesture of its own, separate from the growth.
@@ -56,7 +59,7 @@ impl IslandState {
         Self {
             progress: Animated::new(0.0),
             capsule_w: even_width(capsule_w),
-            page: Page::Activity,
+            page: PageId::ACTIVITY,
             slide: Animated::new(0.0),
             request: PAGE_SIZE,
             resize: Animated::new(1.0),
@@ -140,7 +143,7 @@ impl IslandState {
     /// one in the tab order, from +1 to 0 when it is left (a single step
     /// under reduced motion). Switching to the shown page does nothing;
     /// while closed it only records the page a toggle reopens.
-    pub fn switch(&mut self, page: Page, now: Instant, reduced: bool) {
+    pub fn switch(&mut self, page: PageId, now: Instant, reduced: bool) {
         if page == self.page {
             return;
         }
@@ -179,7 +182,7 @@ impl IslandState {
     /// Grows into `page` (350 ms on the One UI curve; one step under
     /// reduced motion). While open, it only switches the page; from closed
     /// it starts with the content at rest, whatever slide was left over.
-    pub fn open(&mut self, page: Page, now: Instant, reduced: bool) {
+    pub fn open(&mut self, page: PageId, now: Instant, reduced: bool) {
         if self.is_open() {
             self.switch(page, now, reduced);
             return;
@@ -225,13 +228,13 @@ impl IslandState {
 
     /// The open page; `None` while closed or closing.
     #[must_use]
-    pub fn page(&self) -> Option<Page> {
+    pub fn page(&self) -> Option<PageId> {
         self.is_open().then_some(self.page)
     }
 
     /// The page the page view draws: the open one, or the one fading out.
     #[must_use]
-    pub fn shown_page(&self) -> Page {
+    pub fn shown_page(&self) -> PageId {
         self.page
     }
 
@@ -288,8 +291,8 @@ impl IslandState {
 }
 
 /// `page`'s place in the tab row, left to right.
-fn tab_index(page: Page) -> usize {
-    Page::ALL.iter().position(|p| *p == page).unwrap_or(0)
+fn tab_index(page: PageId) -> usize {
+    pieces::page_index(page).unwrap_or(0)
 }
 
 fn even_width(w: f32) -> f32 {
@@ -342,9 +345,9 @@ mod tests {
     fn open_settles_on_the_420_by_300_page_with_the_same_top_edge() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         assert!(s.is_open());
-        assert_eq!(s.page(), Some(Page::Activity));
+        assert_eq!(s.page(), Some(PageId::ACTIVITY));
         let end = ms(t0, 350);
         let r = s.rect(end, SURFACE_W);
         assert_eq!((r.x, r.y, r.w, r.h), (170.0, 8.0, 420.0, 300.0));
@@ -356,7 +359,7 @@ mod tests {
     fn rect_lerps_between_the_two_geometries_with_the_progress() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         let t = ms(t0, 120);
         let p = s.progress(t);
         assert!(p > 0.0 && p < 1.0);
@@ -384,7 +387,7 @@ mod tests {
     fn opacities_follow_the_live_progress() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         let t = ms(t0, 60);
         let p = s.progress(t);
         assert!(close_to(s.capsule_opacity(t), capsule_opacity_at(p)));
@@ -395,13 +398,13 @@ mod tests {
     fn wants_frame_only_while_the_progress_moves() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         assert!(s.wants_frame(t0));
         assert!(s.wants_frame(ms(t0, 349)));
         assert!(!s.wants_frame(ms(t0, 350)));
         assert!(!s.wants_frame(ms(t0, 5000)));
         // Asking again at rest changes nothing.
-        s.open(Page::Activity, ms(t0, 5000), false);
+        s.open(PageId::ACTIVITY, ms(t0, 5000), false);
         assert!(!s.wants_frame(ms(t0, 5000)));
     }
 
@@ -409,12 +412,16 @@ mod tests {
     fn close_runs_the_shorter_exit_motion() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         let t1 = ms(t0, 400);
         s.close(t1, false);
         assert!(!s.is_open());
         assert_eq!(s.page(), None);
-        assert_eq!(s.shown_page(), Page::Activity, "still drawn while it fades");
+        assert_eq!(
+            s.shown_page(),
+            PageId::ACTIVITY,
+            "still drawn while it fades"
+        );
         assert!(s.wants_frame(ms(t1, 149)));
         assert!(!s.wants_frame(ms(t1, 150)));
         let r = s.rect(ms(t1, 150), SURFACE_W);
@@ -425,7 +432,7 @@ mod tests {
     fn closing_during_an_open_retargets_from_the_current_progress() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         let t1 = ms(t0, 100);
         let before = s.rect(t1, SURFACE_W);
         let p = s.progress(t1);
@@ -454,9 +461,9 @@ mod tests {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
         s.toggle(t0, false);
-        assert_eq!(s.page(), Some(Page::Activity));
-        s.open(Page::Tray, ms(t0, 400), false);
-        assert_eq!(s.page(), Some(Page::Tray));
+        assert_eq!(s.page(), Some(PageId::ACTIVITY));
+        s.open(PageId::TRAY, ms(t0, 400), false);
+        assert_eq!(s.page(), Some(PageId::TRAY));
         assert!(
             !s.progress.is_animating(ms(t0, 400)),
             "switching does not regrow"
@@ -464,7 +471,7 @@ mod tests {
         s.toggle(ms(t0, 500), false);
         assert_eq!(s.page(), None);
         s.toggle(ms(t0, 1000), false);
-        assert_eq!(s.page(), Some(Page::Tray));
+        assert_eq!(s.page(), Some(PageId::TRAY));
     }
 
     #[test]
@@ -485,7 +492,7 @@ mod tests {
     fn silhouette_follows_the_rect_every_frame() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         let radius = Theme::dark().radius_lg;
         for t in [0, 120, 350] {
             let now = ms(t0, t);
@@ -520,11 +527,11 @@ mod tests {
         let normal = Motion::Normal.duration(&Theme::dark().motion);
         let half = t0 + normal / 2;
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, true);
+        s.open(PageId::ACTIVITY, t0, true);
         assert_eq!(s.slide(t0), 0.0, "opening does not slide");
         // Moving right: the new content comes in from the left edge's side.
-        s.switch(Page::Tray, t0, false);
-        assert_eq!(s.page(), Some(Page::Tray));
+        s.switch(PageId::TRAY, t0, false);
+        assert_eq!(s.page(), Some(PageId::TRAY));
         assert!(close_to(s.slide(t0), -1.0));
         assert!(s.wants_frame(t0));
         let mid = s.slide(half);
@@ -533,7 +540,7 @@ mod tests {
         assert!(!s.wants_frame(t0 + normal));
         // Moving left: from +1 to 0.
         let t1 = t0 + normal;
-        s.switch(Page::Notifications, t1, false);
+        s.switch(PageId::NOTIFICATIONS, t1, false);
         assert!(close_to(s.slide(t1), 1.0));
         let mid = s.slide(t1 + normal / 2);
         assert!(mid > 0.0 && mid < 1.0, "{mid}");
@@ -545,13 +552,13 @@ mod tests {
         let t0 = Instant::now();
         let normal = Motion::Normal.duration(&Theme::dark().motion);
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, true);
-        s.switch(Page::Tray, t0, false);
+        s.open(PageId::ACTIVITY, t0, true);
+        s.switch(PageId::TRAY, t0, false);
         let t1 = t0 + normal / 2;
         let before = s.slide(t1);
         assert!(before > -1.0 && before < 0.0, "{before}");
         // Back to the left mid-flight: no snap to +1.
-        s.switch(Page::Activity, t1, false);
+        s.switch(PageId::ACTIVITY, t1, false);
         assert!(close_to(s.slide(t1), before), "{}", s.slide(t1));
         assert_eq!(s.slide(t1 + normal), 0.0);
     }
@@ -561,12 +568,12 @@ mod tests {
         let t0 = Instant::now();
         let normal = Motion::Normal.duration(&Theme::dark().motion);
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, true);
-        s.switch(Page::Tray, t0, false);
+        s.open(PageId::ACTIVITY, t0, true);
+        s.switch(PageId::TRAY, t0, false);
         s.close(t0, true);
         assert!(close_to(s.slide(t0), -1.0), "left over by the close");
         let t1 = t0 + normal;
-        s.open(Page::Tray, t1, false);
+        s.open(PageId::TRAY, t1, false);
         assert_eq!(s.slide(t1), 0.0);
         assert_eq!(s.slide(t1 + normal), 0.0);
     }
@@ -575,20 +582,20 @@ mod tests {
     fn switching_to_the_same_page_is_a_no_op() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Notifications, t0, true);
-        s.switch(Page::Notifications, t0, false);
+        s.open(PageId::NOTIFICATIONS, t0, true);
+        s.switch(PageId::NOTIFICATIONS, t0, false);
         assert_eq!(s.slide(t0), 0.0);
         assert!(!s.wants_frame(t0));
-        assert_eq!(s.page(), Some(Page::Notifications));
+        assert_eq!(s.page(), Some(PageId::NOTIFICATIONS));
     }
 
     #[test]
     fn reduced_motion_switches_pages_without_a_slide() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, true);
-        s.switch(Page::Tray, t0, true);
-        assert_eq!(s.page(), Some(Page::Tray));
+        s.open(PageId::ACTIVITY, t0, true);
+        s.switch(PageId::TRAY, t0, true);
+        assert_eq!(s.page(), Some(PageId::TRAY));
         assert_eq!(s.slide(t0), 0.0);
         assert!(!s.wants_frame(t0));
     }
@@ -615,7 +622,7 @@ mod tests {
         );
         // The open rect and its silhouette follow the grown page.
         s.request_page_size((500.0, 400.0), t0, false);
-        s.open(Page::Activity, t0, true);
+        s.open(PageId::ACTIVITY, t0, true);
         let r = s.rect(t0, SURFACE_W);
         assert_eq!((r.x, r.y, r.w, r.h), (130.0, 8.0, 500.0, 400.0));
         let slices = s.silhouette(t0, SURFACE_W, Theme::dark().radius_lg);
@@ -629,7 +636,7 @@ mod tests {
         let slow = Motion::Slow.duration(&Theme::dark().motion);
         let mut s = IslandState::new(CAPSULE_W);
         s.set_surface((SURFACE_W, 560.0));
-        s.open(Page::Activity, t0, false);
+        s.open(PageId::ACTIVITY, t0, false);
         // The next frame's views ask for more than the default page.
         s.request_page_size((500.0, 400.0), ms(t0, 16), false);
         for t in [16, 100, 175, 250, 349] {
@@ -656,7 +663,7 @@ mod tests {
         let normal = Motion::Normal.duration(&Theme::dark().motion);
         let mut s = IslandState::new(CAPSULE_W);
         s.set_surface((SURFACE_W, 560.0));
-        s.open(Page::Activity, t0, true);
+        s.open(PageId::ACTIVITY, t0, true);
         let before = s.rect(t0, SURFACE_W);
         assert_eq!((before.w, before.h), PAGE_SIZE);
         s.request_page_size((500.0, 400.0), t0, false);
@@ -682,7 +689,7 @@ mod tests {
         assert_eq!(s.rect(t0, SURFACE_W).w, 300.0);
         s.close(t0, true);
         s.request_page_size((410.0, 310.0), t0, false);
-        s.open(Page::Activity, t0, true);
+        s.open(PageId::ACTIVITY, t0, true);
         assert_eq!(s.rect(t0, SURFACE_W).w, 410.0);
     }
 
@@ -690,8 +697,8 @@ mod tests {
     fn opening_while_open_switches_with_a_slide() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Activity, t0, true);
-        s.open(Page::Tray, t0, false);
+        s.open(PageId::ACTIVITY, t0, true);
+        s.open(PageId::TRAY, t0, false);
         assert!(close_to(s.slide(t0), -1.0));
     }
 
@@ -699,7 +706,7 @@ mod tests {
     fn reduced_motion_opens_in_one_step() {
         let t0 = Instant::now();
         let mut s = IslandState::new(CAPSULE_W);
-        s.open(Page::Notifications, t0, true);
+        s.open(PageId::NOTIFICATIONS, t0, true);
         assert!(!s.wants_frame(t0));
         let r = s.rect(t0, SURFACE_W);
         assert_eq!((r.x, r.y, r.w, r.h), (170.0, 8.0, 420.0, 300.0));
@@ -707,5 +714,32 @@ mod tests {
         s.close(t0, true);
         assert!(!s.wants_frame(t0));
         assert_eq!(s.rect(t0, SURFACE_W).w, 200.0);
+    }
+
+    #[test]
+    fn the_slide_direction_follows_the_tab_order_for_every_pair() {
+        // Characterisation (CEL-2-A, spec 6.7): a page right of the shown one
+        // enters from -1, one to its left from +1; pinned before `Page`
+        // becomes a table identifier.
+        let normal = Motion::Normal.duration(&Theme::dark().motion);
+        for (from_page, from_idx) in PageId::all().into_iter().zip(0_u8..) {
+            for (to_page, to_idx) in PageId::all().into_iter().zip(0_u8..) {
+                if from_page == to_page {
+                    continue;
+                }
+                let t0 = Instant::now();
+                let mut s = IslandState::new(CAPSULE_W);
+                s.open(from_page, t0, true);
+                s.switch(to_page, t0, false);
+                let want = if to_idx > from_idx { -1.0 } else { 1.0 };
+                assert!(
+                    close_to(s.slide(t0), want),
+                    "{from_page:?} -> {to_page:?}: {}",
+                    s.slide(t0)
+                );
+                assert_eq!(s.slide(t0 + normal), 0.0, "{from_page:?} -> {to_page:?}");
+                assert_eq!(tab_index(from_page), usize::from(from_idx));
+            }
+        }
     }
 }

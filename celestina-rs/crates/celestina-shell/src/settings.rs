@@ -4,7 +4,13 @@
 // `SCHEMA_VERSION = 1` for this shell's own file `celestina/shell.json`; the
 // tray, wallpaper, weather, night-light, level-step and workspace-home fields,
 // their bounds and their tests are dropped. `Store`, `Pending`, `WriteOutcome`
-// and the durable-before-published rule are unchanged.
+// and the durable-before-published rule are unchanged. CEL-2-A then added
+// what the copy did not have: `bar` (the layout of the bar's zones and the
+// tray ids kept off it) and `duties.bar` (whether the shell has taken the bar
+// over from Noctalia), both optional so a 1.0.0 file still reads, plus their
+// bounds in `clamped` and their tests. Unlike the other duties, whose `off`
+// is written once the file is, a bar value the person never set is never
+// written, so a later default still reaches them.
 
 //! What the person chose, and what it takes for that choice to be real.
 //!
@@ -73,6 +79,33 @@ fn lenient_duty<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duty, D::E
     lenient(deserializer)
 }
 
+/// A duty that stays unset until the person switches it: `"on"` or `"off"` is
+/// their choice, anything else is no choice (the default, which is off).
+fn lenient_chosen_duty<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Duty>, D::Error> {
+    Ok(serde_json::from_value(Value::deserialize(deserializer)?).ok())
+}
+
+/// A chosen id list: an array keeps its string entries (the shape checks in
+/// `clamped` come after), anything else is no choice.
+fn lenient_ids<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Vec<String>>, D::Error> {
+    Ok(match Value::deserialize(deserializer)? {
+        Value::Array(entries) => Some(
+            entries
+                .into_iter()
+                .filter_map(|entry| match entry {
+                    Value::String(id) => Some(id),
+                    _ => None,
+                })
+                .collect(),
+        ),
+        _ => None,
+    })
+}
+
 /// The schema version written into the file. A file from the future is not
 /// read: an older shell guessing at a newer schema would be inventing the
 /// person's preferences.
@@ -112,6 +145,15 @@ pub enum Duty {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Duties {
+    /// Whether this shell draws the bar; [`Duties::bar`] is the state in
+    /// force. `None` until the person switches it, and then never written, so
+    /// a later default (CEL-2-M switching the bar on) reaches every file that
+    /// did not choose.
+    #[serde(
+        deserialize_with = "lenient_chosen_duty",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub bar: Option<Duty>,
     /// Whether this shell holds the session awake while caffeine is on.
     #[serde(deserialize_with = "lenient_duty")]
     pub caffeine: Duty,
@@ -124,6 +166,180 @@ pub struct Duties {
     /// Whether this shell paints the wallpaper.
     #[serde(deserialize_with = "lenient_duty")]
     pub wallpaper: Duty,
+}
+
+impl Duties {
+    /// Whether the bar duty is on: what the person chose, or the default.
+    #[must_use]
+    pub fn bar(&self) -> Duty {
+        self.bar.unwrap_or_default()
+    }
+}
+
+/// Most piece ids one zone keeps.
+pub const MAX_ZONE_IDS: usize = 16;
+/// Most tray ids the bar keeps hidden.
+pub const MAX_HIDDEN_IDS: usize = 32;
+/// Longest piece id, in bytes.
+pub const MAX_PIECE_ID_BYTES: usize = 64;
+/// Longest hidden tray id, in bytes.
+pub const MAX_HIDDEN_ID_BYTES: usize = 128;
+
+/// The bar's three zones, as piece ids in order, and the tray items it hides:
+/// the layout in force, what the person chose with today's defaults for the
+/// rest ([`Settings::bar_layout`]).
+///
+/// This crate cannot know which piece ids exist; the product logs the ones it
+/// does not recognise. Here an id is only checked for shape and uniqueness.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BarLayout {
+    /// Left zone.
+    pub start: Vec<String>,
+    /// Zone either side of the Island.
+    pub centre: Vec<String>,
+    /// Right zone.
+    pub end: Vec<String>,
+    /// Tray item ids the bar does not show (they still appear on the Tray page).
+    pub tray_hidden: Vec<String>,
+}
+
+impl Default for BarLayout {
+    fn default() -> Self {
+        let ids = |ids: &[&str]| ids.iter().map(|id| (*id).to_owned()).collect();
+        Self {
+            start: ids(&["workspaces", "notifications"]),
+            centre: Vec::new(),
+            end: ids(&["tray"]),
+            // Blueman's item `Id` is expected to be `blueman` (the halted
+            // shell's fixtures of this session); `blueman-tray` is its
+            // process. Both until the live row confirms the `Id`.
+            tray_hidden: ids(&["nm-applet", "blueman", "blueman-tray"]),
+        }
+    }
+}
+
+/// The ids of `zone` that are well formed and not in `seen`, in order, at
+/// most `MAX_ZONE_IDS`; each kept id joins `seen`.
+fn kept_pieces(zone: Vec<String>, seen: &mut Vec<String>) -> Vec<String> {
+    let mut kept = Vec::new();
+    for id in zone {
+        if is_piece_id(&id) && !seen.contains(&id) {
+            seen.push(id.clone());
+            kept.push(id);
+            if kept.len() == MAX_ZONE_IDS {
+                break;
+            }
+        }
+    }
+    kept
+}
+
+/// The well-formed hidden ids, once each, at most `MAX_HIDDEN_IDS`.
+fn kept_hidden(ids: Vec<String>) -> Vec<String> {
+    let mut hidden: Vec<String> = Vec::new();
+    for id in ids {
+        if is_hidden_id(&id) && !hidden.contains(&id) {
+            hidden.push(id);
+            if hidden.len() == MAX_HIDDEN_IDS {
+                break;
+            }
+        }
+    }
+    hidden
+}
+
+/// What the person chose of the bar, as the file stores it: a zone or the
+/// hidden list is `None` until it is set, and an unset one is never written,
+/// so it follows the default of the shell that reads it (a later unit adds
+/// its piece to the default end zone and it reaches every such file). A list
+/// of the wrong shape is no choice; an entry that is not a string is dropped.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BarChoice {
+    /// Left zone.
+    #[serde(
+        deserialize_with = "lenient_ids",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub start: Option<Vec<String>>,
+    /// Zone either side of the Island.
+    #[serde(
+        deserialize_with = "lenient_ids",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub centre: Option<Vec<String>>,
+    /// Right zone.
+    #[serde(
+        deserialize_with = "lenient_ids",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub end: Option<Vec<String>>,
+    /// Tray item ids the bar does not show (they still appear on the Tray page).
+    #[serde(
+        deserialize_with = "lenient_ids",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tray_hidden: Option<Vec<String>>,
+}
+
+impl BarChoice {
+    /// Nothing was chosen.
+    #[must_use]
+    pub fn is_unset(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Each chosen list inside its bounds; a piece listed twice keeps its
+    /// first place among the chosen zones.
+    fn clamped(mut self) -> Self {
+        let mut seen = Vec::new();
+        for zone in [&mut self.start, &mut self.centre, &mut self.end] {
+            if let Some(ids) = zone.take() {
+                *zone = Some(kept_pieces(ids, &mut seen));
+            }
+        }
+        self.tray_hidden = self.tray_hidden.take().map(kept_hidden);
+        self
+    }
+
+    /// The layout in force: each chosen list, and the default for the rest.
+    /// A chosen zone claims its pieces first, so a default zone drops a piece
+    /// the person placed elsewhere; then a piece keeps its first place.
+    fn layout(&self) -> BarLayout {
+        let defaults = BarLayout::default();
+        let mut seen: Vec<String> = [&self.start, &self.centre, &self.end]
+            .into_iter()
+            .flatten()
+            .flatten()
+            .cloned()
+            .collect();
+        let mut zone = |chosen: &Option<Vec<String>>, default: Vec<String>| match chosen {
+            Some(ids) => ids.clone(),
+            None => kept_pieces(default, &mut seen),
+        };
+        let start = zone(&self.start, defaults.start);
+        let centre = zone(&self.centre, defaults.centre);
+        let end = zone(&self.end, defaults.end);
+        let mut placed = Vec::new();
+        BarLayout {
+            start: kept_pieces(start, &mut placed),
+            centre: kept_pieces(centre, &mut placed),
+            end: kept_pieces(end, &mut placed),
+            tray_hidden: self.tray_hidden.clone().unwrap_or(defaults.tray_hidden),
+        }
+    }
+}
+
+fn is_piece_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= MAX_PIECE_ID_BYTES
+        && id
+            .bytes()
+            .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-'))
+}
+
+fn is_hidden_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= MAX_HIDDEN_ID_BYTES && id.chars().all(|c| !c.is_control())
 }
 
 /// What the person chose for the wallpaper.
@@ -182,6 +398,14 @@ pub struct Settings {
     /// person who silenced their session did not mean "until the next reboot".
     #[serde(deserialize_with = "lenient")]
     pub do_not_disturb: bool,
+    /// What the person chose of the bar's zones and of the tray items it keeps
+    /// off; [`Settings::bar_layout`] is the layout in force. Written only for
+    /// what was chosen.
+    #[serde(
+        deserialize_with = "lenient",
+        skip_serializing_if = "BarChoice::is_unset"
+    )]
+    pub bar: BarChoice,
     /// Which optional duties this shell performs. Absent from a 1.0.0 file:
     /// all off.
     #[serde(deserialize_with = "lenient")]
@@ -199,6 +423,7 @@ impl Default for Settings {
         Self {
             schema_version: SCHEMA_VERSION,
             do_not_disturb: false,
+            bar: BarChoice::default(),
             duties: Duties::default(),
             energy: Energy::default(),
             wallpaper: WallpaperSettings::default(),
@@ -232,6 +457,7 @@ impl Settings {
     /// unusable value in front of the person.
     fn clamped(mut self) -> Self {
         self.schema_version = SCHEMA_VERSION;
+        self.bar = self.bar.clamped();
         self.wallpaper = self.wallpaper.clamped();
         // The whitepoint's own range, so the file and the light never disagree.
         self.energy.night_light_kelvin = self
@@ -239,6 +465,13 @@ impl Settings {
             .night_light_kelvin
             .clamp(Whitepoint::MINIMUM_KELVIN, Whitepoint::MAXIMUM_KELVIN);
         self
+    }
+
+    /// The bar's layout in force: what the person chose, today's defaults
+    /// for the rest.
+    #[must_use]
+    pub fn bar_layout(&self) -> BarLayout {
+        self.bar.layout()
     }
 
     /// The exact bytes to write. Pretty-printed because this file is meant to
@@ -518,6 +751,7 @@ mod tests {
     fn energy_settings_survive_a_round_trip() {
         let settings = Settings {
             duties: Duties {
+                bar: None,
                 idle: Duty::On,
                 caffeine: Duty::On,
                 nightlight: Duty::Off,
@@ -738,5 +972,219 @@ mod tests {
             Settings::from_bytes(br#"{"energy":"x"}"#),
             Some(Settings::default())
         );
+    }
+
+    fn ids(ids: &[&str]) -> Vec<String> {
+        ids.iter().map(|id| (*id).to_owned()).collect()
+    }
+
+    /// The top-level keys of a written file, and the keys of its `duties`.
+    fn written_keys(settings: &Settings) -> (Vec<String>, Vec<String>) {
+        let bytes = settings.to_bytes().expect("settings serialize");
+        let value: Value = serde_json::from_slice(&bytes).expect("JSON");
+        let keys = |value: &Value| {
+            value
+                .as_object()
+                .map(|object| object.keys().cloned().collect())
+                .unwrap_or_default()
+        };
+        (keys(&value), keys(&value["duties"]))
+    }
+
+    #[test]
+    fn the_bar_defaults_are_todays_layout() {
+        let settings = Settings::default();
+        let layout = settings.bar_layout();
+        assert_eq!(layout.start, ids(&["workspaces", "notifications"]));
+        assert!(layout.centre.is_empty());
+        assert_eq!(layout.end, ids(&["tray"]));
+        assert_eq!(
+            layout.tray_hidden,
+            ids(&["nm-applet", "blueman", "blueman-tray"])
+        );
+        assert_eq!(layout, BarLayout::default());
+        assert_eq!(settings.duties.bar(), Duty::Off);
+        assert!(settings.bar.is_unset() && settings.duties.bar.is_none());
+    }
+
+    #[test]
+    fn bar_and_duties_survive_a_round_trip() {
+        let mut settings = Settings::default();
+        settings.bar.centre = Some(ids(&["clock"]));
+        settings.bar.tray_hidden = Some(ids(&["x y"]));
+        settings.duties.bar = Some(Duty::On);
+        let bytes = settings.to_bytes().expect("settings serialize");
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+    }
+
+    #[test]
+    fn a_choice_that_equals_the_default_is_kept_as_a_choice() {
+        // "off" written by the person stays "off" when the default turns on.
+        let read = Settings::from_bytes(br#"{"duties":{"bar":"off"},"bar":{"end":["tray"]}}"#)
+            .expect("ours");
+        assert_eq!(read.duties.bar, Some(Duty::Off));
+        assert_eq!(read.bar.end, Some(ids(&["tray"])));
+        let (top, duties) = written_keys(&read);
+        assert!(top.contains(&"bar".to_owned()));
+        assert!(duties.contains(&"bar".to_owned()));
+        let again = Settings::from_bytes(&read.to_bytes().expect("serialize")).expect("ours");
+        assert_eq!(again, read);
+    }
+
+    #[test]
+    fn an_unchosen_zone_follows_the_default_and_a_chosen_one_claims_its_pieces() {
+        // Only the end zone was chosen: the start zone is the default's, less
+        // the piece the person moved to the end.
+        let read =
+            Settings::from_bytes(br#"{"bar":{"end":["notifications","tray"]}}"#).expect("ours");
+        let layout = read.bar_layout();
+        assert_eq!(layout.start, ids(&["workspaces"]));
+        assert!(layout.centre.is_empty());
+        assert_eq!(layout.end, ids(&["notifications", "tray"]));
+        assert_eq!(layout.tray_hidden, BarLayout::default().tray_hidden);
+        // An empty chosen list is a choice too.
+        let read = Settings::from_bytes(br#"{"bar":{"tray_hidden":[]}}"#).expect("ours");
+        assert!(read.bar_layout().tray_hidden.is_empty());
+        assert_eq!(read.bar_layout().start, BarLayout::default().start);
+    }
+
+    #[test]
+    fn a_1_0_0_file_reads_with_the_new_defaults_and_keeps_the_choice() {
+        let read = Settings::from_bytes(br#"{"schema_version":1,"do_not_disturb":true}"#)
+            .expect("a 1.0.0 file is ours");
+        assert!(read.do_not_disturb);
+        assert_eq!(read.bar_layout(), BarLayout::default());
+        assert_eq!(read.duties.bar(), Duty::Off);
+
+        let written = read.to_bytes().expect("settings serialize");
+        let again = Settings::from_bytes(&written).expect("written file is ours");
+        assert!(again.do_not_disturb);
+        assert_eq!(again.bar_layout(), BarLayout::default());
+        let (top, duties) = written_keys(&again);
+        assert!(!top.contains(&"bar".to_owned()));
+        assert!(!duties.contains(&"bar".to_owned()));
+    }
+
+    #[test]
+    fn unknown_bar_keys_are_ignored_and_dropped_on_write() {
+        let read = Settings::from_bytes(
+            br#"{"duties":{"bar":"on","future":"on"},"bar":{"wat":1},"extra":true}"#,
+        )
+        .expect("unknown keys do not make a file foreign");
+        assert_eq!(read.duties.bar(), Duty::On);
+        let written = String::from_utf8(read.to_bytes().expect("serialize")).expect("utf8");
+        assert!(!written.contains("future") && !written.contains("extra"));
+        assert!(
+            !written.contains("\"bar\": {"),
+            "an empty bar choice is not written"
+        );
+    }
+
+    #[test]
+    fn a_piece_listed_twice_keeps_its_first_place() {
+        let read = Settings::from_bytes(
+            br#"{"bar":{"start":["a","b","a"],"centre":["b","c"],"end":["c","d"],"tray_hidden":["x","x"]}}"#,
+        )
+        .expect("ours");
+        assert_eq!(read.bar.start, Some(ids(&["a", "b"])));
+        assert_eq!(read.bar.centre, Some(ids(&["c"])));
+        assert_eq!(read.bar.end, Some(ids(&["d"])));
+        assert_eq!(read.bar.tray_hidden, Some(ids(&["x"])));
+        let layout = read.bar_layout();
+        assert_eq!(
+            (layout.start, layout.centre, layout.end),
+            (ids(&["a", "b"]), ids(&["c"]), ids(&["d"]))
+        );
+    }
+
+    #[test]
+    fn malformed_ids_are_dropped() {
+        let long_piece = "a".repeat(MAX_PIECE_ID_BYTES + 1);
+        let long_hidden = "h".repeat(MAX_HIDDEN_ID_BYTES + 1);
+        let json = serde_json::json!({"bar": {
+            "start": ["Upper", "ok-1.x_y", "", "sp ace", long_piece],
+            "tray_hidden": ["fine app", "", "tab\there", long_hidden],
+        }});
+        let read = Settings::from_bytes(json.to_string().as_bytes()).expect("ours");
+        assert_eq!(read.bar.start, Some(ids(&["ok-1.x_y"])));
+        assert_eq!(read.bar.tray_hidden, Some(ids(&["fine app"])));
+    }
+
+    #[test]
+    fn thousands_of_ids_are_truncated() {
+        // Ten thousand ids do not fit the file bound at all (see the oversize
+        // test), so the largest list that does is split across the two bounds.
+        let many: Vec<String> = (0..5_000).map(|n| format!("p{n}")).collect();
+        let json = serde_json::json!({"bar": {"start": many, "tray_hidden": &many[..2_000]}});
+        let read = Settings::from_bytes(json.to_string().as_bytes()).expect("ours");
+        let layout = read.bar_layout();
+        assert_eq!(layout.start.len(), MAX_ZONE_IDS);
+        assert_eq!(layout.tray_hidden.len(), MAX_HIDDEN_IDS);
+        assert_eq!(layout.start[0], "p0");
+    }
+
+    #[test]
+    fn a_wrong_typed_bar_value_never_fails_the_file() {
+        // Like every other field: a typo degrades that value, not the file.
+        let read = Settings::from_bytes(
+            br#"{"do_not_disturb":true,"duties":{"bar":"maybe","idle":"on"},
+                 "bar":{"start":[1,"clock",null],"end":"tray","centre":7}}"#,
+        )
+        .expect("the file is still read");
+        assert!(read.do_not_disturb);
+        assert_eq!(read.duties.bar, None, "not a choice: the default holds");
+        assert_eq!(read.duties.idle, Duty::On, "the other duties are kept");
+        assert_eq!(read.bar.start, Some(ids(&["clock"])));
+        assert_eq!(read.bar.end, None);
+        assert_eq!(read.bar.centre, None);
+        assert_eq!(read.bar_layout().end, BarLayout::default().end);
+        // A bar table of the wrong shape is no choice at all.
+        let read = Settings::from_bytes(br#"{"bar":[1],"duties":{"bar":5}}"#).expect("read");
+        assert_eq!(read, Settings::default());
+    }
+
+    #[test]
+    fn a_hostile_oversize_bar_is_refused() {
+        let blob = "a".repeat(MAX_FILE_BYTES);
+        let json = format!(r#"{{"bar":{{"start":["{blob}"]}}}}"#);
+        assert_eq!(Settings::from_bytes(json.as_bytes()), None);
+    }
+
+    #[test]
+    fn dnd_and_bar_changes_do_not_touch_each_other() {
+        let mut store = Store::new(Settings::default());
+        let bar_before = store.current().bar.clone();
+        let pending = store.stage(|s| s.do_not_disturb = true);
+        assert!(store.apply(pending, WriteOutcome::Durable));
+        assert_eq!(store.current().bar, bar_before);
+        assert_eq!(store.current().duties.bar, None);
+
+        let pending = store.stage(|s| {
+            s.bar.centre = Some(ids(&["clock"]));
+            s.duties.bar = Some(Duty::On);
+        });
+        assert!(store.apply(pending, WriteOutcome::Durable));
+        assert!(store.current().do_not_disturb);
+        assert_eq!(store.current().bar_layout().centre, ids(&["clock"]));
+    }
+
+    #[test]
+    fn a_do_not_disturb_toggle_writes_no_bar_choice_the_person_did_not_make() {
+        let read = Settings::from_bytes(br#"{"schema_version":1,"do_not_disturb":false}"#)
+            .expect("a 1.0.0 file is ours");
+        let store = Store::new(read);
+        let pending = store.stage(|s| s.do_not_disturb = true);
+        for settings in [pending.wanted(), &Settings::default()] {
+            let (top, duties) = written_keys(settings);
+            assert!(!top.contains(&"bar".to_owned()), "{top:?}");
+            assert!(!duties.contains(&"bar".to_owned()), "{duties:?}");
+        }
+    }
+
+    #[test]
+    fn a_staged_bar_is_clamped_like_a_read_one() {
+        let store = Store::new(Settings::default());
+        let pending = store.stage(|s| s.bar.start = Some(ids(&["a", "a", "BAD"])));
+        assert_eq!(pending.wanted().bar.start, Some(ids(&["a"])));
     }
 }

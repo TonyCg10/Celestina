@@ -1,7 +1,8 @@
 # Celestina decisions
 
-Accepted shell decisions and their falsifiers live here. They are the nine
-decisions of the design's §10, one record each; open questions belong to the
+Accepted shell decisions and their falsifiers live here, one record each. ADR
+0001 to 0009 are the decisions of the CEL-1 design's §10; ADR 0010 to 0015 are
+the decisions of the parity program's §10. Open questions belong to the
 [discussion queue](../discussions/README.md).
 
 | ADR | Status | Decision |
@@ -15,5 +16,11 @@ decisions of the design's §10, one record each; open questions belong to the
 | [0007](0007-focus-policy.md) | accepted | No keyboard at rest, on demand for a page, exclusive for the launcher |
 | [0008](0008-claim-free-names-only.md) | accepted | Claim well-known names only when free |
 | [0009](0009-one-process-one-loop.md) | accepted | One process, one loop, worker threads |
+| [0010](0010-parity-program-in-thirteen-units.md) | accepted | The parity program is delivered in thirteen units, A to M |
+| [0011](0011-duties-switched-on-one-by-one.md) | accepted | Duties are switched on one by one, off while Noctalia holds them |
+| [0012](0012-bar-one-surface-per-output.md) | accepted | The bar is one surface per output with the Island in the centre zone |
+| [0013](0013-everything-is-a-piece.md) | accepted | Everything the bar holds is a piece behind one contract |
+| [0014](0014-lock-and-polkit-carry-over.md) | accepted | Lock and polkit carry ADR 0004 and 0005 over, with their own review |
+| [0015](0015-clock-rests-at-minutes.md) | accepted | The clock rests at minutes; seconds run only while the Island is open |
 
 New records use the suite [decision template](../../../docs/templates/decision.md).

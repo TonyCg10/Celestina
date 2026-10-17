@@ -1194,6 +1194,10 @@ mod tests {
         assert_eq!(items[0].id.bus_name, net_unique);
         assert_eq!(items[0].id.path, ITEM_PATH);
         assert_eq!(items[0].title, "Red");
+        assert_eq!(
+            items[0].sni_id, "fake",
+            "the item's own `Id`, for tray_hidden"
+        );
         assert_eq!(items[0].status, Status::NeedsAttention);
         assert_eq!(items[0].icon_name, "network-wired");
         assert_eq!(items[0].pixmap, None);

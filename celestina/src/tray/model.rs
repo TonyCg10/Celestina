@@ -119,6 +119,9 @@ pub struct Pixmap {
 pub struct TrayItem {
     /// Who serves it.
     pub id: ItemId,
+    /// Its `Id` property, the application's own name for it (what
+    /// `bar.tray_hidden` lists), bounded; empty when it has none.
+    pub sni_id: String,
     /// Its title, at most [`MAX_TEXT_CHARS`] characters.
     pub title: String,
     /// Its status.
@@ -362,6 +365,7 @@ pub fn bound_items(items: Vec<TrayItem>) -> Vec<TrayItem> {
         .into_iter()
         .take(MAX_ITEMS)
         .map(|item| TrayItem {
+            sni_id: bound_text(&item.sni_id, MAX_TEXT_CHARS),
             title: bound_text(&item.title, MAX_TEXT_CHARS),
             icon_name: bound_text(&item.icon_name, MAX_TEXT_CHARS),
             ..item
@@ -475,6 +479,15 @@ mod tests {
         assert_eq!(side(choose_pixmap(&all, 24)), 32);
         assert_eq!(side(choose_pixmap(&all, 100)), 64);
         assert_eq!(side(choose_pixmap(&all, 8)), 16);
+    }
+
+    #[test]
+    fn an_items_id_is_bounded_and_cleaned_like_its_title() {
+        let bounded = bound_items(vec![TrayItem {
+            sni_id: format!("{}\u{202E}", "i".repeat(500)),
+            ..TrayItem::default()
+        }]);
+        assert_eq!(bounded[0].sni_id, "i".repeat(MAX_TEXT_CHARS));
     }
 
     #[test]

@@ -25,7 +25,9 @@ fn settings_round_trips_only_the_shells_own_choices() {
         .map(String::as_str)
         .collect();
     // CEL-2-B adds the `energy` table and CEL-2-E the `wallpaper` one; the
-    // `duties` table carries both units' switches (all default-valued).
+    // `duties` table carries both units' switches (all default-valued). The
+    // `bar` table and `duties.bar` (CEL-2-A) are written only once chosen.
+    assert!(value["duties"].get("bar").is_none());
     assert_eq!(
         keys,
         [

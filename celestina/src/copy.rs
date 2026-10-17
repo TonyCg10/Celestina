@@ -15,6 +15,51 @@ pub fn workspace_number(idx: u8) -> String {
     format!("Espacio {idx}")
 }
 
+/// The accessible name of the bar's Workspaces piece ("Workspaces"). The
+/// Notifications and Tray pieces are named by their pages' titles.
+pub const PIECE_WORKSPACES: &str = "Espacios de trabajo";
+
+/// The accessible name of a workspace in the bar: its label and, when it is
+/// the one shown on the output, that it is the current one.
+#[must_use]
+pub fn bar_workspace_name(label: &str, active: bool) -> String {
+    if active {
+        format!("{label}, actual")
+    } else {
+        label.to_owned()
+    }
+}
+
+/// The accessible state of the bar's notifications bell: unread
+/// notifications and whether do-not-disturb is on.
+#[must_use]
+pub fn bar_notifications_state(unread: bool, do_not_disturb: bool) -> &'static str {
+    match (unread, do_not_disturb) {
+        (true, true) => "Notificaciones, sin leer, no molestar activado",
+        (true, false) => "Notificaciones, sin leer",
+        (false, true) => "Notificaciones, no molestar activado",
+        (false, false) => "Notificaciones",
+    }
+}
+
+/// The accessible name of a tray item in the bar: its title (or the
+/// untitled word) and, when it is not simply active, its status.
+#[must_use]
+pub fn bar_tray_item_name(title: &str, needs_attention: bool, passive: bool) -> String {
+    let title = if title.is_empty() {
+        TRAY_ITEM_UNTITLED
+    } else {
+        title
+    };
+    if needs_attention {
+        format!("{title}, {}", TRAY_NEEDS_ATTENTION.to_lowercase())
+    } else if passive {
+        format!("{title}, {}", TRAY_PASSIVE.to_lowercase())
+    } else {
+        title.to_owned()
+    }
+}
+
 /// The title of the Activity page (workspaces and windows).
 pub const PAGE_ACTIVITY: &str = "Actividad";
 

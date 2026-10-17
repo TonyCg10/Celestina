@@ -117,6 +117,10 @@ pub enum KeyboardInteractivity {
 pub enum Anchoring {
     /// Anchored to the top edge, at the spec's size.
     Top,
+    /// Anchored to the top, left and right edges: the compositor gives it
+    /// the output's width and tells it in the configure; the height is the
+    /// spec's.
+    TopWide,
     /// Centred on the output, at the spec's size.
     Centred,
     /// Anchored to all four edges: the compositor sizes it to the output
@@ -131,6 +135,7 @@ impl Anchoring {
     pub(crate) fn request(self, size: (u32, u32)) -> (Anchor, (u32, u32)) {
         match self {
             Anchoring::Top => (Anchor::TOP, size),
+            Anchoring::TopWide => (Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, (0, size.1)),
             Anchoring::Centred => (Anchor::empty(), size),
             Anchoring::Fill => (Anchor::all(), (0, 0)),
         }
@@ -145,7 +150,7 @@ pub struct LayerSpec {
     pub layer: Layer,
     pub anchor: Anchoring,
     /// Logical size; a [`Anchoring::Fill`] surface learns its size from the
-    /// configure instead.
+    /// configure instead, and a [`Anchoring::TopWide`] one its width.
     pub size: (u32, u32),
     pub exclusive_zone: i32,
     pub keyboard: KeyboardInteractivity,
@@ -1458,6 +1463,13 @@ mod tests {
             Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT
         );
         assert_eq!(size, (0, 0), "the compositor sizes it to the output");
+    }
+
+    #[test]
+    fn a_wide_surface_spans_the_top_edge_and_asks_only_for_its_height() {
+        let (anchor, size) = Anchoring::TopWide.request((760, 560));
+        assert_eq!(anchor, Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
+        assert_eq!(size, (0, 560), "the compositor gives it the output's width");
     }
 
     #[test]

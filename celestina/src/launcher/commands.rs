@@ -5,7 +5,7 @@
 
 use celestina_shell::launcher::fold;
 
-use crate::{command::Page, copy};
+use crate::{copy, pieces::PageId};
 
 /// One of the shell's switches a `/` command names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -65,11 +65,11 @@ impl Switch {
     /// The Island page the switch opens; `None` for do-not-disturb, which
     /// changes a setting instead.
     #[must_use]
-    pub fn page(self) -> Option<Page> {
+    pub fn page(self) -> Option<PageId> {
         match self {
-            Switch::Notificaciones => Some(Page::Notifications),
-            Switch::Actividad => Some(Page::Activity),
-            Switch::Bandeja => Some(Page::Tray),
+            Switch::Notificaciones => Some(PageId::NOTIFICATIONS),
+            Switch::Actividad => Some(PageId::ACTIVITY),
+            Switch::Bandeja => Some(PageId::TRAY),
             Switch::NoMolestar => None,
         }
     }

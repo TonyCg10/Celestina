@@ -56,7 +56,9 @@ pub enum Message {
     Wallpaper(crate::providers::wallpaper::WallpaperEvent),
     /// `shell.json` changed on disk (another program, or the shell's own
     /// write coming back): the value now in it, read off the loop's thread.
-    ShellSettings(crate::providers::settings::ShellRead),
+    /// Boxed: the whole settings, bar layout included, would size every
+    /// message.
+    ShellSettings(Box<crate::providers::settings::ShellRead>),
     /// News from the energy workers: idle, caffeine, night light, session.
     Energy(crate::energy::EnergyEvent),
 }

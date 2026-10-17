@@ -233,21 +233,37 @@ VAL-CEL2-SESSION. None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none
 
-## VAL-CEL2-BAR-LIVE — The bar beside Noctalia
+## VAL-CEL2-BAR-LIVE — The bar beside Noctalia, its blur, its popups, focus and two scales
 
 - **Status:** pending
-- **Related implementation:** CEL-2-A
-- **Requires:** the deployed shell with the `bar` duty switched on in
-  `shell.json`; Noctalia running with its bar hidden by `noctalia msg bar-hide`
-- **Procedure:** look at the bar on each output; check that the blur regions
-  follow every capsule; open the tray icons' popups; click outside an open
-  page and check the focus policy with the wider surface; hover the bar's idle
-  stretches with `focus-follows-mouse`; repeat on two outputs of different
-  scale and check the edge pixels of the input regions. The queued detail is
-  completed by CEL-2-A's own unit
-- **Pass condition:** every capsule is blurred and clickable, nothing outside
-  a capsule steals a click or the focus, and windows do not move when the bar
-  is switched on
+- **Related implementation:** CEL-2-A (the bar surface, the piece table and
+  the bar duty)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session with `duties.bar` set to `on` in `shell.json`, Noctalia still running
+  with its bar hidden by `noctalia msg bar-hide`, and two outputs of different
+  scale for check 5
+- **Procedure:** (1) with Noctalia's bar hidden, look at the bar beside
+  Noctalia's other surfaces: the Island in the centre zone, the Workspaces and
+  Notifications pieces at the start, the Tray piece at the end. (2) Check the
+  blur over a busy window under each capsule and over the Island while it is
+  open. (3) Click each tray icon, right click it and scroll over it, and open
+  its DBusMenu popup: it anchors to the icon. Check that nm-applet's and
+  Blueman's icons are not on the bar and are listed on the Tray page (the
+  default `tray_hidden` assumes the item `Id`s `nm-applet`, `blueman` and
+  `blueman-tray`; one that shows on the bar has another `Id`). (4) Open the
+  Island page and the overflow popup, click outside them, press keys in the
+  launcher and move the pointer across the wide surface: clicks outside must
+  close what is open and must reach the windows below, and keyboard focus
+  must follow ADR 0007. (5)
+  On the two outputs of different scale, check that the bar's text and icons
+  are sharp on each and that its zones are placed on each output
+- **Pass condition:** (1) the bar shows its three zones on the output with the
+  Island centred and nothing of Noctalia's bar visible; (2) the blur region
+  follows each capsule and the Island, with no blur outside them; (3) every
+  tray popup opens at its icon and closes on click-outside, and nm-applet and
+  Blueman are absent from the bar and present on the Tray page; (4) clicks and
+  focus behave as ADR 0007 describes on the wider surface, and clicks outside
+  reach the windows below; (5) text is sharp on both outputs
 - **Result:** not run
 - **Evidence:** none
 

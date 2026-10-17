@@ -223,9 +223,9 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!(%err, "no wallpaper worker; no wallpaper is painted"),
         }
-        // `shell.json` live: the duties (wallpaper and energy), the energy
-        // switches and do-not-disturb follow the file.
-        match providers::settings::follow_shell(follow_from, sender.clone()) {
+        // `shell.json` live: the duties (bar, wallpaper and energy), the bar's
+        // layout, the energy switches and do-not-disturb follow the file.
+        match providers::settings::follow_shell(follow_from, sender.clone(), &shutdown) {
             Ok(watch) => shell_follower = Some(watch),
             Err(err) => {
                 tracing::warn!("the shell settings are not followed: {}", error_chain(&err))

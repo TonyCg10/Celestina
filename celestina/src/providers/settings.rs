@@ -3,28 +3,37 @@
 //! - The suite's appearance file (`celestina-settings`): followed on its own
 //!   thread for as long as the returned [`Follower`] lives, each change
 //!   published as [`Message::Appearance`].
-//! - The shell's own `shell.json` (do-not-disturb, the duties, the energy
-//!   switches, the wallpaper): read at start through `celestina_shell::settings`, followed
-//!   live by [`follow_shell`] (each new value published as
-//!   [`Message::ShellSettings`]), and rewritten whole and atomically
-//!   (`celestina_core::atomic_file::replace_private`) when the person changes
-//!   it. A file that exists but cannot be read is never overwritten.
+//! - The shell's own `shell.json` (do-not-disturb, the bar's layout, the
+//!   duties, the energy switches, the wallpaper): read at start through
+//!   `celestina_shell::settings`, followed live by [`follow_shell`] (each new
+//!   value published as [`Message::ShellSettings`]), and rewritten whole and
+//!   atomically (`celestina_core::atomic_file::replace_private`) when the
+//!   person changes it. A file that exists but cannot be read is never
+//!   overwritten.
+//!
+//! [`follow_shell`] is the one watcher of `shell.json`. A value that flips
+//! the `bar` duty moves every Island to a new surface, so its deliveries are
+//! paced ([`RESHAPE_GAP`]) on a second thread of the follower that only
+//! delays; it never reads the file. No bus name is involved: the `bar` duty
+//! has no observable owner to probe, and the layer namespace it draws in is
+//! the shell's own.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
 
 use celestina_core::atomic_file::{self, Published, WriteError};
 use celestina_settings::Follower;
 use celestina_shell::settings::{
-    self, Energy, Pending, Settings, Store, WallpaperSettings, WriteOutcome, MAX_FILE_BYTES,
+    self, Duty, Energy, Pending, Settings, Store, WallpaperSettings, WriteOutcome, MAX_FILE_BYTES,
 };
 use celestina_wayland::Sender;
 use notify_debouncer_full::notify::{self, EventKind, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{new_debouncer, DebounceEventResult, Debouncer, RecommendedCache};
 
 use crate::message::Message;
+use crate::providers::Worker;
 
 /// Follows the appearance file, publishing every value (the current one
 /// first) into the loop. Dropping the [`Follower`] stops it.
@@ -39,11 +48,22 @@ pub fn follow_appearance(sender: Sender<Message>) -> Follower {
 
 /// How long the follower of `shell.json` gathers events before reading it.
 const FOLLOW_COALESCE: Duration = Duration::from_millis(300);
+/// The shortest time between two delivered flips of the `bar` duty: each one
+/// gives every output a new surface, so a file flipped back and forth (a
+/// script, a sync tool, an editor saving as the person types) moves them at
+/// most once a second, to the latest value.
+pub const RESHAPE_GAP: Duration = Duration::from_secs(1);
+/// How often the pacing thread looks at the shutdown flag: the bound on its
+/// join.
+const PACE_POLL: Duration = Duration::from_millis(100);
 
 /// A running follower of `shell.json`; dropping it stops the watch and its
-/// thread.
+/// threads (the watch first, then the pacing, which is joined).
 pub struct ShellFollower {
     _debouncer: Debouncer<RecommendedWatcher, RecommendedCache>,
+    /// The thread that paces deliveries ([`RESHAPE_GAP`]); absent for a
+    /// follower that delivers every read at once.
+    _pace: Option<Worker>,
 }
 
 impl std::fmt::Debug for ShellFollower {
@@ -72,6 +92,9 @@ pub enum FollowError {
         #[source]
         source: notify::Error,
     },
+    /// The thread that paces the deliveries could not start.
+    #[error("cannot start the thread that paces the shell settings")]
+    Pace(#[source] std::io::Error),
 }
 
 /// One clean read of `shell.json`, tagged with the shell's write count when
@@ -109,19 +132,119 @@ pub struct FollowFrom {
 /// keeps the value in force. The shell's own writes come back as values
 /// equal to what it holds, which [`ShellSettings::adopt_read`] ignores.
 ///
+/// Every read goes through [`Pace`] on a thread named `shell-settings-pace`
+/// before it reaches the loop: a flip of the `bar` duty within
+/// [`RESHAPE_GAP`] of the last one waits, at its latest value. The thread
+/// looks at `shutdown` every [`PACE_POLL`] and is joined when the follower
+/// drops.
+///
 /// # Errors
 ///
-/// [`FollowError`] when there is no file, its directory cannot be created or
-/// the watcher cannot start; the shell then keeps the value it read at start.
+/// [`FollowError`] when there is no file, its directory cannot be created,
+/// the watcher cannot start or the pacing thread cannot start; the shell then
+/// keeps the value it read at start.
 pub fn follow_shell(
     from: FollowFrom,
     sender: Sender<Message>,
+    shutdown: &Arc<AtomicBool>,
 ) -> Result<ShellFollower, FollowError> {
-    watch_shell(from, move |read| {
-        if sender.send(Message::ShellSettings(read)).is_err() {
-            tracing::debug!("the shell settings changed after the loop stopped");
-        }
+    let pace = Pace::new(&from.start);
+    let (reads, paced) = mpsc::channel();
+    let mut follower = watch_shell(from, move |read| {
+        // Gone only once the pacing stopped, which is the shell's exit; a
+        // read sent before the pacing starts waits in the queue.
+        let _ = reads.send(read);
+    })?;
+    // Started once the watch is: a worker dropped raises the shell's
+    // shutdown flag, so one is never made only to be thrown away.
+    let flag = Arc::clone(shutdown);
+    let worker = Worker::spawn("shell-settings-pace", shutdown, move || {
+        pace_reads(&paced, pace, &flag, |read| {
+            let delivered = sender.send(Message::ShellSettings(Box::new(read))).is_ok();
+            if !delivered {
+                tracing::debug!("the shell settings changed after the loop stopped");
+            }
+            delivered
+        });
     })
+    .map_err(FollowError::Pace)?;
+    follower._pace = Some(worker);
+    Ok(follower)
+}
+
+/// The pace of delivered flips ([`RESHAPE_GAP`]). A read that flips the
+/// `bar` duty within the gap of the last delivered flip is held, and so is
+/// every read after it until the gap has passed, when the latest one is
+/// delivered; the rest go at once.
+#[derive(Debug)]
+struct Pace {
+    /// The duty of the settings delivered last.
+    bar: Duty,
+    /// When the last delivered flip went.
+    flipped: Option<Instant>,
+    /// The latest read held back.
+    held: Option<ShellRead>,
+}
+
+impl Pace {
+    fn new(start: &Settings) -> Self {
+        Self {
+            bar: start.duties.bar(),
+            flipped: None,
+            held: None,
+        }
+    }
+
+    fn within_gap(&self, now: Instant) -> bool {
+        self.flipped.is_some_and(|at| now < at + RESHAPE_GAP)
+    }
+
+    /// `read` to deliver now, or `None` while it is held.
+    fn offer(&mut self, read: ShellRead, now: Instant) -> Option<ShellRead> {
+        if self.held.is_some() || (read.settings.duties.bar() != self.bar && self.within_gap(now)) {
+            self.held = Some(read);
+            return None;
+        }
+        Some(self.delivered(read, now))
+    }
+
+    /// The read held back, once the gap has passed.
+    fn due(&mut self, now: Instant) -> Option<ShellRead> {
+        if self.within_gap(now) {
+            return None;
+        }
+        let read = self.held.take()?;
+        Some(self.delivered(read, now))
+    }
+
+    fn delivered(&mut self, read: ShellRead, now: Instant) -> ShellRead {
+        if read.settings.duties.bar() != self.bar {
+            self.bar = read.settings.duties.bar();
+            self.flipped = Some(now);
+        }
+        read
+    }
+}
+
+/// The pacing thread's body: each read from the watcher goes through `pace`
+/// into `deliver`, which answers whether anyone still listens.
+fn pace_reads(
+    reads: &mpsc::Receiver<ShellRead>,
+    mut pace: Pace,
+    shutdown: &AtomicBool,
+    mut deliver: impl FnMut(ShellRead) -> bool,
+) {
+    while !shutdown.load(Ordering::Acquire) {
+        let fresh = match reads.recv_timeout(PACE_POLL) {
+            Ok(read) => pace.offer(read, Instant::now()),
+            Err(mpsc::RecvTimeoutError::Timeout) => None,
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        };
+        let held = pace.due(Instant::now());
+        if !fresh.into_iter().chain(held).all(&mut deliver) {
+            break;
+        }
+    }
 }
 
 /// The follower's state, shared by the watcher's thread and the read that
@@ -134,6 +257,8 @@ struct Follow<D> {
     /// protection.
     dirty: bool,
     writes: Arc<AtomicU64>,
+    /// The write count of the read delivered last.
+    delivered: u64,
     deliver: D,
 }
 
@@ -150,8 +275,13 @@ impl<D: FnMut(ShellRead)> Follow<D> {
             }
             Reread::Unusable => self.dirty = true,
             Reread::Value(read) => {
-                if read != self.last || self.dirty {
+                // A read after an own write is delivered even when equal to
+                // the last one: the last one may have been ignored as older
+                // than that write, and the write may have kept an edit it
+                // carried (`set_do_not_disturb` merges onto the file).
+                if read != self.last || self.dirty || generation > self.delivered {
                     self.dirty = false;
+                    self.delivered = generation;
                     self.last = read.clone();
                     (self.deliver)(ShellRead {
                         settings: read,
@@ -190,6 +320,7 @@ fn watch_shell(
         file,
         last: from.start,
         dirty: from.protected,
+        delivered: from.writes.load(Ordering::Acquire),
         writes: from.writes,
         deliver,
     }));
@@ -225,6 +356,7 @@ fn watch_shell(
     lock(&state).consider();
     Ok(ShellFollower {
         _debouncer: debouncer,
+        _pace: None,
     })
 }
 
@@ -361,13 +493,37 @@ impl ShellSettings {
     /// Turns do-not-disturb on or off, durably. Returns whether anything
     /// changed; the new value is in force only once the file is written.
     ///
+    /// The file is read again first and the switch is written on top of what
+    /// it holds, so an edit the follower has not delivered yet (the person
+    /// turning the bar on by hand a moment earlier) is kept rather than
+    /// replaced by the values in force. Only do-not-disturb changes in force
+    /// here: the follower then delivers the edit and the app applies it like
+    /// any other. A missing file is written from the values in force, as the
+    /// follower keeps them; a file that cannot be read now is protected, as
+    /// at start.
+    ///
     /// # Errors
     ///
     /// [`ShellSettingsError`] when there is no file to write, the file is
-    /// protected, or the write failed; the previous value then stays in force.
+    /// protected or cannot be read now, or the write failed; the previous
+    /// value then stays in force.
     pub fn set_do_not_disturb(&mut self, on: bool) -> Result<bool, ShellSettingsError> {
         let pending = self.store.stage(|settings| settings.do_not_disturb = on);
-        self.commit(pending)
+        if pending.wanted() == self.store.current() || self.protected {
+            return self.commit(pending);
+        }
+        let written = match self.path.as_deref().map(reread) {
+            Some(Reread::Value(on_disk)) => {
+                Store::new(on_disk).stage(|settings| settings.do_not_disturb = on)
+            }
+            Some(Reread::Unusable) => {
+                // Broken since the last read: kept for the person, as at start.
+                self.protected = true;
+                return self.commit(pending);
+            }
+            Some(Reread::Missing) | None => pending.clone(),
+        };
+        self.commit_writing(pending, &written)
     }
 
     /// Changes the energy switches, durably, the way do-not-disturb is
@@ -437,6 +593,17 @@ impl ShellSettings {
 
     /// Writes `pending` and makes it current only once it is on disk.
     fn commit(&mut self, pending: Pending) -> Result<bool, ShellSettingsError> {
+        let written = pending.clone();
+        self.commit_writing(pending, &written)
+    }
+
+    /// Writes `written` and makes `pending` current only once it is on disk:
+    /// the two differ by what the file held that is not in force yet.
+    fn commit_writing(
+        &mut self,
+        pending: Pending,
+        written: &Pending,
+    ) -> Result<bool, ShellSettingsError> {
         if pending.wanted() == self.store.current() {
             return Ok(false);
         }
@@ -449,7 +616,7 @@ impl ShellSettings {
                 path: path.to_path_buf(),
             });
         }
-        let bytes = pending.bytes().map_err(ShellSettingsError::Encode)?;
+        let bytes = written.bytes().map_err(ShellSettingsError::Encode)?;
         match atomic_file::replace_private(path, &bytes) {
             Ok(published) => {
                 if let Published::DirectoryNotSynced(error) = &published {
@@ -578,16 +745,193 @@ mod tests {
     #[test]
     fn a_failed_write_leaves_the_previous_value_in_force() {
         let scratch = Scratch::new("failed");
-        let mut shell = ShellSettings::load_from(Some(scratch.file()));
-        // After the start, the settings directory becomes a file, so the
-        // write cannot create the file inside it.
-        std::fs::write(scratch.0.join("celestina"), b"in the way").expect("the obstacle");
+        use std::os::unix::fs::PermissionsExt;
 
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        // After the start, the settings directory exists but cannot be
+        // written: the file reads as missing, and the write fails.
+        let directory = scratch.0.join("celestina");
+        std::fs::create_dir(&directory).expect("the directory");
+        let mode = |m| std::fs::Permissions::from_mode(m);
+        std::fs::set_permissions(&directory, mode(0o500)).expect("read-only");
+
+        let outcome = shell.set_do_not_disturb(true);
+        std::fs::set_permissions(&directory, mode(0o700)).expect("writable again");
+        assert!(
+            matches!(outcome, Err(ShellSettingsError::Write(_))),
+            "{outcome:?}"
+        );
+        assert!(!shell.current().do_not_disturb);
+        // The settings directory becomes a file: an energy write cannot
+        // create the file inside it, and do-not-disturb, which reads the
+        // file first, finds it unreadable and does not write.
+        std::fs::remove_dir(&directory).expect("removed");
+        std::fs::write(&directory, b"in the way").expect("the obstacle");
         assert!(matches!(
-            shell.set_do_not_disturb(true),
+            shell.set_energy(|energy| energy.caffeine = true),
             Err(ShellSettingsError::Write(_))
         ));
+        assert!(matches!(
+            shell.set_do_not_disturb(true),
+            Err(ShellSettingsError::Protected { .. })
+        ));
         assert!(!shell.current().do_not_disturb);
+    }
+
+    fn bar_on() -> Settings {
+        let mut settings = Settings::default();
+        settings.duties.bar = Some(Duty::On);
+        settings
+    }
+
+    #[test]
+    fn a_do_not_disturb_write_keeps_an_edit_the_follower_has_not_delivered() {
+        let scratch = Scratch::new("merge");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        // The person turns the bar on by hand; the follower has not read it.
+        publish(&scratch, &bar_on());
+
+        assert!(shell.set_do_not_disturb(true).expect("the write succeeds"));
+        let written = std::fs::read(scratch.file()).expect("the file");
+        let on_disk = Settings::from_bytes(&written).expect("the shell's own bytes");
+        assert!(on_disk.do_not_disturb);
+        assert_eq!(on_disk.duties.bar(), Duty::On, "the edit survives");
+        // In force: the switch, not yet the edit, which the follower brings
+        // (its read begins after the write) so the app applies it.
+        assert!(shell.current().do_not_disturb);
+        assert_eq!(shell.current().duties.bar(), Duty::Off);
+        assert!(shell.adopt_read(ShellRead {
+            settings: on_disk,
+            generation: 1,
+        }));
+        assert_eq!(shell.current().duties.bar(), Duty::On);
+
+        // A file broken since the last read is not overwritten either.
+        std::fs::write(scratch.file(), b"{ not json").expect("a broken file");
+        assert!(matches!(
+            shell.set_do_not_disturb(false),
+            Err(ShellSettingsError::Protected { .. })
+        ));
+        assert_eq!(
+            std::fs::read(scratch.file()).expect("the file"),
+            b"{ not json"
+        );
+        assert!(shell.current().do_not_disturb, "the value in force is kept");
+    }
+
+    #[test]
+    fn a_do_not_disturb_write_over_a_missing_file_keeps_the_values_in_force() {
+        let scratch = Scratch::new("merge-missing");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        assert!(shell.adopt(bar_on()));
+        // Between the delete and the create of someone else's save.
+        assert!(shell.set_do_not_disturb(true).expect("the write succeeds"));
+        let on_disk = ShellSettings::load_from(Some(scratch.file()));
+        assert_eq!(on_disk.current().duties.bar(), Duty::On);
+        assert!(on_disk.current().do_not_disturb);
+    }
+
+    #[test]
+    fn a_read_after_an_own_write_is_delivered_even_when_equal_to_the_last() {
+        let scratch = Scratch::new("own-write-echo");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        let (watch, rx) = {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let watch = watch_shell(shell.follow_from(), move |read| {
+                let _ = tx.send(read);
+            })
+            .expect("the watch starts");
+            (watch, rx)
+        };
+        // The person's edit is read (and, say, ignored by the app as older
+        // than the write that follows it)...
+        let mut edit = bar_on();
+        edit.do_not_disturb = true;
+        publish(&scratch, &edit);
+        assert_eq!(
+            rx.recv_timeout(DELIVERED).map(|read| read.settings),
+            Ok(edit.clone())
+        );
+        // ...then the shell writes the same switch onto it: the file is the
+        // edit again, and it comes back so the app can adopt it.
+        assert!(shell.set_do_not_disturb(true).expect("the write succeeds"));
+        let echo = rx.recv_timeout(DELIVERED).expect("delivered again");
+        assert_eq!(echo.settings, edit);
+        assert_eq!(echo.generation, 1);
+        assert!(shell.adopt_read(echo));
+        assert_eq!(shell.current(), &edit);
+        drop(watch);
+    }
+
+    /// `settings` as a read begun before any own write.
+    fn read_of(settings: Settings) -> ShellRead {
+        ShellRead {
+            settings,
+            generation: 0,
+        }
+    }
+
+    #[test]
+    fn duty_flips_are_delivered_a_second_apart_at_their_latest_value() {
+        let t0 = Instant::now();
+        let ms = Duration::from_millis;
+        let off = Settings::default();
+        let mut quiet_on = bar_on();
+        quiet_on.do_not_disturb = true;
+        let mut pace = Pace::new(&off);
+        // The first flip goes at once.
+        assert_eq!(pace.offer(read_of(bar_on()), t0), Some(read_of(bar_on())));
+        // Flipped back and forth within the second: held, the latest kept.
+        assert_eq!(pace.offer(read_of(off.clone()), t0 + ms(300)), None);
+        assert_eq!(pace.offer(read_of(quiet_on.clone()), t0 + ms(500)), None);
+        assert_eq!(pace.due(t0 + ms(900)), None);
+        assert_eq!(pace.due(t0 + RESHAPE_GAP), Some(read_of(quiet_on.clone())));
+        assert_eq!(pace.due(t0 + RESHAPE_GAP), None, "delivered once");
+        // That was no flip (on, then on), so the next one goes at once; a
+        // change that flips nothing never waits.
+        assert_eq!(
+            pace.offer(read_of(off.clone()), t0 + ms(1100)),
+            Some(read_of(off.clone()))
+        );
+        let mut quiet_off = off.clone();
+        quiet_off.do_not_disturb = true;
+        assert_eq!(
+            pace.offer(read_of(quiet_off.clone()), t0 + ms(1200)),
+            Some(read_of(quiet_off))
+        );
+        assert_eq!(pace.offer(read_of(bar_on()), t0 + ms(1300)), None);
+        assert_eq!(
+            pace.due(t0 + ms(1100) + RESHAPE_GAP),
+            Some(read_of(bar_on()))
+        );
+    }
+
+    #[test]
+    fn the_pacing_thread_delivers_a_held_flip_late_and_stops_on_shutdown() {
+        let (reads, paced) = std::sync::mpsc::channel();
+        let (deliver, delivered) = std::sync::mpsc::channel();
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&shutdown);
+        let worker = Worker::spawn("test-shell-settings-pace", &shutdown, move || {
+            pace_reads(&paced, Pace::new(&Settings::default()), &flag, |read| {
+                deliver.send(read).is_ok()
+            });
+        })
+        .expect("the thread starts");
+        let started = Instant::now();
+        reads.send(read_of(bar_on())).expect("sent");
+        reads.send(read_of(Settings::default())).expect("sent");
+        let first = delivered.recv_timeout(DELIVERED).expect("the first flip");
+        assert_eq!(first.settings, bar_on());
+        let second = delivered.recv_timeout(DELIVERED).expect("the held flip");
+        assert_eq!(second.settings, Settings::default());
+        assert!(started.elapsed() >= RESHAPE_GAP, "{:?}", started.elapsed());
+        let joining = Instant::now();
+        worker.join();
+        assert!(
+            joining.elapsed() < Duration::from_secs(1),
+            "joined promptly"
+        );
     }
 
     #[test]
@@ -598,9 +942,11 @@ mod tests {
         let mut shell = ShellSettings::load_from(Some(scratch.file()));
         let mut read = Settings::default();
         read.duties.wallpaper = celestina_shell::settings::Duty::On;
+        // The file now reads cleanly (do-not-disturb reads it before it
+        // writes), so the shell may write it.
+        publish(&scratch, &read);
         assert!(shell.adopt(read.clone()));
         assert!(!shell.adopt(read), "the same value again is no change");
-        // The file now reads cleanly, so the shell may write it.
         assert!(shell.set_do_not_disturb(true).expect("the write succeeds"));
         assert_eq!(
             shell.current().duties.wallpaper,

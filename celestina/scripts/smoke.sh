@@ -14,9 +14,11 @@ set -eu
 # toggle`, keeps it open for three seconds (the nest answers an idle client
 # about once a second), closes it the same way, and must still exit 0 with
 # both toggles logged and a frame drawn on the launcher's surface. A third
-# nested run turns the wallpaper duty on over a generated fixture picture (its
-# own throwaway XDG_CONFIG_HOME) and must show a `celestina-wallpaper` surface
-# in the Background layer with at most two frames at rest. A fourth nested
+# nested run turns the bar duty on (its own throwaway XDG_CONFIG_HOME) and
+# must draw on the wide top surface with no frame at rest. A fourth nested
+# run turns the wallpaper duty on over a generated fixture picture (its own
+# throwaway XDG_CONFIG_HOME) and must show a `celestina-wallpaper` surface in
+# the Background layer with at most two frames at rest. A fifth nested
 # run starts the shell with the three energy duties `on` (a throwaway
 # XDG_CONFIG_HOME holding `celestina/shell.json`) and the system bus pointed
 # at a socket that does not exist, so no real logind is ever reached; it must
@@ -214,6 +216,48 @@ if grep -q 'panicked' "$run.err"; then
     fail "the shell panicked with the launcher open"
 fi
 echo "smoke: launcher opened and closed"
+# The bar duty (CEL-2-A): a third nested run with a temporary
+# XDG_CONFIG_HOME whose `celestina/shell.json` turns `duties.bar` on, so the
+# Island's surface is the wide top one. It must exit 0, draw at least one
+# frame on every metrics line of the output, draw none at rest, and log the
+# surface it asked for with the bar on and the wide anchor. The real
+# configuration directory is never read or written.
+while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
+    sleep 1
+done
+mkdir -p "$work/xdg-bar/celestina"
+printf '{"schema_version":1,"duties":{"bar":"on"}}\n' > "$work/xdg-bar/celestina/shell.json"
+run=$work/bar
+status=0
+XDG_CONFIG_HOME=$work/xdg-bar timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
+    --binary "$bin" --once "$run" -- --exit-after 4 --metrics \
+    > "$work/niri.log" 2>&1 || status=$?
+[ "$status" -eq 0 ] || fail "the nested niri exited with $status (bar run)"
+[ -f "$run.status" ] || fail "the shell never ran inside the nest (bar run)"
+shell_status=$(cat "$run.status")
+[ "$shell_status" = 0 ] || fail "the shell exited with $shell_status (bar run)"
+lines=$(grep '^winit ' "$run.out" || true)
+[ -n "$lines" ] || fail "no metrics line for the winit output (bar run)"
+printf '%s\n' "$lines" | while IFS= read -r l; do
+    n=$(printf '%s\n' "$l" | tr ' ' '\n' | sed -n 's/^frames=//p')
+    [ "${n:-0}" -ge 1 ] || exit 1
+done || fail "a surface drew no frame with the bar on: $lines"
+rest=$(sum rest_frames)
+# The nest sometimes delivers niri's first events about two seconds after
+# start (the nest's window size varies with the host); that one model update
+# repaints the bar legitimately and counts as a rest frame. A shell that
+# keeps redrawing (a stray one-second tick, for example) draws one per
+# second, so more than one fails.
+[ "$rest" -le 1 ] || fail "frames were drawn at rest with the bar on ($rest): $lines"
+grep 'island surface requested' "$run.err" | grep -q 'bar=true' ||
+    fail "the Island did not ask for the bar's surface"
+grep 'island surface requested' "$run.err" | grep -q 'TopWide' ||
+    fail "the Island's surface was not anchored wide"
+if grep -q 'panicked' "$run.err"; then
+    fail "the shell panicked with the bar on"
+fi
+echo "smoke: bar on: $(printf '%s\n' "$lines" | head -n 1) (rest_frames=$rest)"
+grep '^rss_mib=' "$run.out" | sed 's/^/smoke: bar on: /' || true
 # The wallpaper duty (CEL-2-E): the shell runs ten seconds with a private
 # XDG_CONFIG_HOME whose `celestina/shell.json` turns `duties.wallpaper` on and
 # points `wallpaper.folder` at a fixture folder holding one generated PNG

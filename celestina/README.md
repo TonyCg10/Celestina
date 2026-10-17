@@ -46,6 +46,9 @@ What Noctalia still does for the session is in
 The design is
 [the shell design](../docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md);
 its decisions are [the decision records](docs/decisions/README.md).
+The bar that replaces the capsule-only Island on each output, and its pieces,
+are in progress under the parity program: [ADR 0012](docs/decisions/0012-bar-one-surface-per-output.md)
+and [ADR 0013](docs/decisions/0013-everything-is-a-piece.md).
 
 ## Build and use
 

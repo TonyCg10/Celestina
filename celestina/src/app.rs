@@ -8,7 +8,9 @@
 //! quit, do-not-disturb (the shell's own settings file) and reopen. It opens
 //! the launcher on its own surface on the output with the keyboard, keeps the
 //! desktop index it searches, starts what it launches, records the launch,
-//! and runs the switches chosen in it.
+//! and runs the switches chosen in it. A change to `shell.json` applies live:
+//! the bar's layout, and the `bar` duty, which moves every Island to a
+//! surface of the other shape.
 
 use std::{
     cell::{OnceCell, RefCell},
@@ -18,17 +20,20 @@ use std::{
 use celestina_core::desktop_entry::DesktopEntry;
 use celestina_paint::{Painter, Rect, TextSystem, Theme};
 use celestina_settings::Appearance;
+use celestina_shell::settings::{BarLayout, Duty, Settings};
 use celestina_wayland::{
     Anchoring, FrameCx, InputEvent, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
-    PopupId, RuntimeCtl, Sender, Shell, SurfaceCtl, SurfaceId,
+    PopupId, RuntimeCtl, RuntimeError, Sender, Shell, SurfaceCtl, SurfaceId,
 };
 
 use crate::notifications::banners::{self, BannerAction, BannerStack};
 use crate::{
-    command::{Page, Verb},
+    bar,
+    command::Verb,
     energy::{self, EnergyHandle},
     error_chain,
     island::{
+        self,
         menu::{self, ChoiceSlot, Menu, MenuChoice, MenuState, SharedPainter},
         pages::{tray::TrayList, NameOwner},
         Island, IslandAction, Shared,
@@ -36,6 +41,7 @@ use crate::{
     launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
     message::Message,
     notifications::{self, NotificationsState},
+    pieces::PageId,
     providers::{
         niri::{NiriModel, NiriProvider, NiriRequest},
         notifications::{NotificationsCommand, NotificationsProvider},
@@ -52,12 +58,112 @@ use crate::{
 pub const NAMESPACE: &str = "celestina-panel";
 /// The Island's surface, logical px: the largest page plus its margin. The
 /// surface never resizes; only its regions follow the Island (design §9).
-pub const SURFACE_SIZE: (u32, u32) = (760, 560);
+/// With the bar on it is as wide as the output and as tall.
+pub const SURFACE_SIZE: (u32, u32) = (island::state::STRIP_W as u32, 560);
+
+/// The shape of an Island's surface on an output `logical_w` px wide (0
+/// when the output has not said) under `settings`: its anchoring, its
+/// logical size, and the bar's layout while the `bar` duty is on. Off, the
+/// 1.0.0 strip; on, the whole top edge.
+fn island_shape(settings: &Settings, logical_w: u32) -> (Anchoring, (u32, u32), Option<BarLayout>) {
+    let width = match logical_w {
+        0 => SURFACE_SIZE.0,
+        w => w,
+    };
+    match settings.duties.bar() {
+        Duty::On => (
+            bar::layout::anchoring(),
+            (width, SURFACE_SIZE.1),
+            Some(settings.bar_layout()),
+        ),
+        Duty::Off => (
+            Anchoring::Top,
+            (width.min(SURFACE_SIZE.0), SURFACE_SIZE.1),
+            None,
+        ),
+    }
+}
+
+/// The Island's layer surface on `output`, of the shape [`island_shape`]
+/// gave. Its namespace is the shell's own, and no bus name is involved: the
+/// `bar` duty has no observable owner, so nothing probes for another bar.
+fn island_layer(
+    output: OutputId,
+    anchor: Anchoring,
+    size: (u32, u32),
+    exclusive_zone: i32,
+) -> LayerSpec {
+    LayerSpec {
+        output,
+        namespace: NAMESPACE,
+        layer: Layer::Top,
+        anchor,
+        size,
+        exclusive_zone,
+        keyboard: KeyboardInteractivity::None,
+    }
+}
+
+/// What a new `shell.json` asks of the Islands' surfaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BarChange {
+    Nothing,
+    /// The bar stays on with another layout: each Island lays it out again.
+    Relayout,
+    /// The `bar` duty flipped: each Island moves to a surface of the other
+    /// shape.
+    Reshape,
+}
+
+fn bar_change(before: &Settings, after: &Settings) -> BarChange {
+    if before.duties.bar() != after.duties.bar() {
+        BarChange::Reshape
+    } else if after.duties.bar() == Duty::On && before.bar_layout() != after.bar_layout() {
+        BarChange::Relayout
+    } else {
+        BarChange::Nothing
+    }
+}
+
+/// What moving the Islands to new surfaces needs of the runtime: the app's
+/// is its `RuntimeCtl`; a test records the calls.
+trait Reshaper {
+    fn create(&mut self, spec: LayerSpec) -> Result<SurfaceId, RuntimeError>;
+    /// Closes `island`'s menus and page through its `surface` before it is
+    /// destroyed; whether a menu was open.
+    fn detach(&mut self, surface: SurfaceId, island: &mut Island) -> bool;
+    fn destroy(&mut self, surface: SurfaceId);
+}
+
+impl Reshaper for RuntimeCtl<'_> {
+    fn create(&mut self, spec: LayerSpec) -> Result<SurfaceId, RuntimeError> {
+        self.create_layer_surface(spec)
+    }
+
+    fn detach(&mut self, surface: SurfaceId, island: &mut Island) -> bool {
+        self.surface(surface)
+            .is_some_and(|mut ctl| island.detach(&mut ctl))
+    }
+
+    fn destroy(&mut self, surface: SurfaceId) {
+        self.destroy_surface(surface);
+    }
+}
+
+/// What [`Islands::reshape`] did: the surfaces it destroyed, and whether a
+/// menu was open on one of them.
+#[derive(Debug, Default)]
+struct Reshaped {
+    gone: Vec<SurfaceId>,
+    menus_closed: bool,
+}
 
 /// One output's Island and its surface.
 #[derive(Debug)]
 struct Slot {
     output: OutputId,
+    /// The output's logical width, which a new surface's shape depends on.
+    logical_w: u32,
     surface: SurfaceId,
     island: Island,
 }
@@ -69,12 +175,53 @@ pub struct Islands {
 }
 
 impl Islands {
-    pub fn add(&mut self, output: OutputId, surface: SurfaceId, island: Island) {
+    pub fn add(&mut self, output: OutputId, logical_w: u32, surface: SurfaceId, island: Island) {
         self.slots.push(Slot {
             output,
+            logical_w,
             surface,
             island,
         });
+    }
+
+    /// `output` is now `logical_w` px wide.
+    pub fn set_logical_w(&mut self, output: OutputId, logical_w: u32) {
+        for slot in self.slots.iter_mut().filter(|s| s.output == output) {
+            slot.logical_w = logical_w;
+        }
+    }
+
+    /// Moves every Island to a surface of the shape `settings` asks for
+    /// ([`island_shape`]: `Anchoring::Top` with the duty off, `TopWide` on).
+    /// The new surface is made before the old one is destroyed, so an
+    /// Island whose new surface cannot be made keeps the old one. The Island
+    /// itself is kept ([`Island::detach`]): its menus and its open page
+    /// close, and the page it last showed and its motion setting go on; its
+    /// first frame on the new surface brings the configured size. It runs
+    /// at most once a second: the follower delivers a flip at most once per
+    /// [`crate::providers::settings::RESHAPE_GAP`], at its latest value.
+    fn reshape(&mut self, settings: &Settings, runtime: &mut dyn Reshaper) -> Reshaped {
+        let mut reshaped = Reshaped::default();
+        for slot in &mut self.slots {
+            let (anchor, size, bar) = island_shape(settings, slot.logical_w);
+            let spec = island_layer(slot.output, anchor, size, slot.island.exclusive_zone());
+            let new = match runtime.create(spec) {
+                Ok(new) => new,
+                Err(err) => {
+                    tracing::error!(output = %slot.island.output(), %err, "the Island keeps its surface: none of the other shape");
+                    continue;
+                }
+            };
+            let old = slot.surface;
+            reshaped.menus_closed |= runtime.detach(old, &mut slot.island);
+            slot.island.set_bar(bar.as_ref());
+            runtime.destroy(old);
+            slot.surface = new;
+            // The smoke reads this line from stderr.
+            tracing::info!(output = %slot.island.output(), bar = bar.is_some(), ?anchor, ?size, old = old.0, new = new.0, "island surface reshaped");
+            reshaped.gone.push(old);
+        }
+        reshaped
     }
 
     /// Drops the Islands of `output` (its surfaces are already gone);
@@ -256,7 +403,8 @@ pub struct App {
     /// The one painter, shared with the open menu.
     painter: Option<SharedPainter>,
     appearance: Appearance,
-    /// The shell's own settings (do-not-disturb).
+    /// The shell's own settings (do-not-disturb, the bar's layout and the
+    /// duties), kept in step with the file by its follower.
     settings: ShellSettings,
     /// Where the open menu leaves the row chosen in it.
     menu_choice: ChoiceSlot,
@@ -399,10 +547,12 @@ impl App {
         self
     }
 
-    /// `shell.json` changed on disk: its value is the one in force, and the
-    /// duties (wallpaper and energy), the energy switches and do-not-disturb
-    /// follow it live. The shell's own writes arrive as the value in force
-    /// and do nothing.
+    /// `shell.json` changed on disk ([`Message::ShellSettings`]): its value
+    /// is the one in force, and what changed is applied live, never by a
+    /// restart: the `bar` duty and the bar's layout, the duties (wallpaper
+    /// and energy), the energy switches and do-not-disturb. The shell's own
+    /// writes arrive as the value in force and do nothing. A new output reads
+    /// the settings in force when it comes.
     fn shell_settings_read(
         &mut self,
         read: crate::providers::settings::ShellRead,
@@ -412,8 +562,18 @@ impl App {
         if !self.settings.adopt_read(read) {
             return;
         }
-        tracing::info!("shell settings changed on disk");
         let after = self.settings.current().clone();
+        let bar = bar_change(&before, &after);
+        tracing::info!(
+            ?bar,
+            bar_on = after.duties.bar() == Duty::On,
+            "shell settings changed on disk"
+        );
+        match bar {
+            BarChange::Reshape => self.reshape_islands(ctl),
+            BarChange::Relayout => self.relayout_bar(ctl),
+            BarChange::Nothing => {}
+        }
         self.wallpapers
             .settings_changed(&before, &after, ctl, self.painter.as_ref());
         if before.do_not_disturb != after.do_not_disturb {
@@ -553,7 +713,7 @@ impl App {
         };
         if let (Some(island), Some(mut ctl)) = (self.islands.get_mut(surface), ctl.surface(surface))
         {
-            island.command(&Verb::IslandOpen(Page::Notifications), &mut ctl);
+            island.command(&Verb::IslandOpen(PageId::NOTIFICATIONS), &mut ctl);
         }
     }
 
@@ -566,26 +726,64 @@ impl App {
     }
 
     fn output_added(&mut self, info: &celestina_wayland::OutputInfo, ctl: &mut RuntimeCtl<'_>) {
-        let width = match info.logical_size.0 {
-            0 => SURFACE_SIZE.0,
-            w => w.min(SURFACE_SIZE.0),
-        };
-        let island = Island::new(&info.name, (width as f32, SURFACE_SIZE.1 as f32));
-        let spec = LayerSpec {
-            output: info.id,
-            namespace: NAMESPACE,
-            layer: Layer::Top,
-            anchor: Anchoring::Top,
-            size: (width, SURFACE_SIZE.1),
-            exclusive_zone: island.exclusive_zone(),
-            keyboard: KeyboardInteractivity::None,
-        };
+        let (anchor, size, bar) = island_shape(self.settings.current(), info.logical_size.0);
+        let mut island = Island::new(&info.name, (size.0 as f32, size.1 as f32));
+        island.set_bar(bar.as_ref());
+        // The shape asked for, logged at creation.
+        tracing::info!(output = %info.name, bar = bar.is_some(), ?anchor, ?size, "island surface requested");
+        let spec = island_layer(info.id, anchor, size, island.exclusive_zone());
         match ctl.create_layer_surface(spec) {
-            Ok(surface) => self.islands.add(info.id, surface, island),
+            Ok(surface) => self
+                .islands
+                .add(info.id, info.logical_size.0, surface, island),
             Err(err) => tracing::error!(output = %info.name, %err, "no Island on this output"),
         }
         // A toast that arrived before any Island existed has no banner yet.
         self.sync_banners(ctl);
+    }
+
+    /// The bar's layout changed while it is on: every Island lays it out
+    /// again on its next frame; an open page stays as it is.
+    fn relayout_bar(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let layout = self.settings.current().bar_layout();
+        for slot in &mut self.islands.slots {
+            slot.island.set_bar(Some(&layout));
+        }
+        self.redraw_all(ctl);
+    }
+
+    /// The `bar` duty flipped: every Island moves to a surface of the other
+    /// shape ([`Islands::reshape`]), and the app forgets what it kept of the
+    /// old surfaces.
+    fn reshape_islands(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let reshaped = self.islands.reshape(self.settings.current(), ctl);
+        if reshaped.menus_closed {
+            // Their popups went without a `PopupClosed`, so a row chosen in
+            // them is never made.
+            self.menu_choice.set(None);
+            *self.tray_choice.borrow_mut() = None;
+        }
+        for old in reshaped.gone {
+            self.island_surface_gone(old);
+        }
+    }
+
+    /// The app's records of an Island surface destroyed while its Island
+    /// lives on: the keyboard it held, a tray menu asked for or open there.
+    fn island_surface_gone(&mut self, old: SurfaceId) {
+        if self.keyboard == Some(old) {
+            self.keyboard = None;
+        }
+        if self.pending_menu.as_ref().is_some_and(|p| p.surface == old) {
+            self.pending_menu = None;
+        }
+        if self
+            .open_tray_menu
+            .as_ref()
+            .is_some_and(|o| o.surface == old)
+        {
+            self.tray_menu_gone();
+        }
     }
 
     fn command(&mut self, verb: Verb, ctl: &mut RuntimeCtl<'_>) {
@@ -1074,6 +1272,8 @@ impl Shell for App {
                 );
             }
             OutputEvent::Changed(info) => {
+                // The width a surface of the other shape will be made with.
+                self.islands.set_logical_w(info.id, info.logical_size.0);
                 tracing::debug!(output = %info.name, "output changed; the Island keeps its surface");
                 self.wallpapers.output_changed(
                     &info,
@@ -1353,7 +1553,7 @@ impl Shell for App {
                 self.wallpapers
                     .message(event, &mut self.settings, ctl, self.painter.as_ref());
             }
-            Message::ShellSettings(read) => self.shell_settings_read(read, ctl),
+            Message::ShellSettings(read) => self.shell_settings_read(*read, ctl),
             Message::Energy(event) => event.log(),
         }
     }
@@ -1386,15 +1586,185 @@ mod tests {
         let mut islands = Islands::default();
         islands.add(
             OutputId(1),
+            1920,
             SurfaceId(10),
             Island::new("DP-1", (760.0, 560.0)),
         );
         islands.add(
             OutputId(2),
+            2560,
             SurfaceId(20),
             Island::new("HDMI-A-1", (760.0, 560.0)),
         );
         islands
+    }
+
+    #[test]
+    fn only_a_flipped_duty_reshapes_and_only_a_bar_that_is_on_relays_out() {
+        let off = Settings::default();
+        let mut on = off.clone();
+        on.duties.bar = Some(Duty::On);
+        assert_eq!(bar_change(&off, &on), BarChange::Reshape);
+        assert_eq!(bar_change(&on, &off), BarChange::Reshape);
+        assert_eq!(bar_change(&on, &on), BarChange::Nothing);
+
+        let mut edited = on.clone();
+        edited.bar.end = Some(Vec::new());
+        assert_eq!(bar_change(&on, &edited), BarChange::Relayout);
+        // A flip that also edits the layout is one reshape, with the new one.
+        let mut off_edited = off.clone();
+        off_edited.bar.end = Some(Vec::new());
+        assert_eq!(bar_change(&off_edited, &on), BarChange::Reshape);
+        // Off, the layout has nothing to lay out.
+        assert_eq!(bar_change(&off, &off_edited), BarChange::Nothing);
+        // An off the person wrote is the default off; a zone chosen equal to
+        // the default is the same layout.
+        let mut chosen_off = off.clone();
+        chosen_off.duties.bar = Some(Duty::Off);
+        assert_eq!(bar_change(&off, &chosen_off), BarChange::Nothing);
+        let mut chosen_end = on.clone();
+        chosen_end.bar.end = Some(vec!["tray".to_owned()]);
+        assert_eq!(bar_change(&on, &chosen_end), BarChange::Nothing);
+        // Do-not-disturb is not the surfaces' business.
+        let mut quiet = on.clone();
+        quiet.do_not_disturb = true;
+        assert_eq!(bar_change(&on, &quiet), BarChange::Nothing);
+    }
+
+    /// What the runtime was asked, in order.
+    #[derive(Debug, PartialEq)]
+    enum Op {
+        Create(OutputId, Anchoring, (u32, u32)),
+        Detach(SurfaceId),
+        Destroy(SurfaceId),
+    }
+
+    /// A runtime that hands out surfaces from 100 and refuses `refuse`'s.
+    struct FakeRuntime {
+        ops: Vec<Op>,
+        next: u32,
+        refuse: Option<OutputId>,
+        menu_open_on: Option<SurfaceId>,
+    }
+
+    impl Reshaper for FakeRuntime {
+        fn create(&mut self, spec: LayerSpec) -> Result<SurfaceId, RuntimeError> {
+            assert_eq!(spec.namespace, NAMESPACE);
+            assert_eq!(spec.layer, Layer::Top);
+            assert_eq!(spec.keyboard, KeyboardInteractivity::None);
+            assert_eq!(spec.exclusive_zone, 48, "the zone does not change");
+            self.ops
+                .push(Op::Create(spec.output, spec.anchor, spec.size));
+            if self.refuse == Some(spec.output) {
+                return Err(RuntimeError::UnknownOutput(spec.output));
+            }
+            self.next += 1;
+            Ok(SurfaceId(self.next))
+        }
+
+        fn detach(&mut self, surface: SurfaceId, _island: &mut Island) -> bool {
+            self.ops.push(Op::Detach(surface));
+            self.menu_open_on == Some(surface)
+        }
+
+        fn destroy(&mut self, surface: SurfaceId) {
+            self.ops.push(Op::Destroy(surface));
+        }
+    }
+
+    #[test]
+    fn a_duty_flip_moves_each_island_to_a_surface_of_the_other_shape_and_back() {
+        let mut islands = islands();
+        let mut runtime = FakeRuntime {
+            ops: Vec::new(),
+            next: 100,
+            refuse: None,
+            menu_open_on: Some(SurfaceId(20)),
+        };
+        let mut settings = Settings::default();
+        settings.duties.bar = Some(Duty::On);
+
+        let on = islands.reshape(&settings, &mut runtime);
+        // Each new surface exists before its old one is destroyed.
+        assert_eq!(
+            runtime.ops,
+            [
+                Op::Create(OutputId(1), Anchoring::TopWide, (1920, 560)),
+                Op::Detach(SurfaceId(10)),
+                Op::Destroy(SurfaceId(10)),
+                Op::Create(OutputId(2), Anchoring::TopWide, (2560, 560)),
+                Op::Detach(SurfaceId(20)),
+                Op::Destroy(SurfaceId(20)),
+            ]
+        );
+        assert_eq!(on.gone, [SurfaceId(10), SurfaceId(20)]);
+        assert!(on.menus_closed);
+        for (old, new) in [(10, 101), (20, 102)] {
+            assert!(
+                islands.get_mut(SurfaceId(old)).is_none(),
+                "no Island on {old}"
+            );
+            assert!(islands.get_mut(SurfaceId(new)).is_some_and(|i| i.bar_on()));
+        }
+        assert_eq!(islands.len(), 2);
+        assert_eq!(islands.output_of(SurfaceId(101)), Some(OutputId(1)));
+        assert_eq!(islands.surface_on(OutputId(2)), Some(SurfaceId(102)));
+        assert_eq!(islands.target(None, Some("HDMI-A-1")), Some(SurfaceId(102)));
+        // A keyboard still naming a gone surface is ignored.
+        assert_eq!(
+            islands.target(Some(SurfaceId(20)), None),
+            Some(SurfaceId(101))
+        );
+
+        // Back off, after the first output shrank, and the second output's
+        // new surface cannot be made: it keeps the wide one, bar and all.
+        islands.set_logical_w(OutputId(1), 640);
+        runtime.ops.clear();
+        runtime.refuse = Some(OutputId(2));
+        runtime.menu_open_on = None;
+        settings.duties.bar = Some(Duty::Off);
+        let off = islands.reshape(&settings, &mut runtime);
+        assert_eq!(
+            runtime.ops,
+            [
+                Op::Create(OutputId(1), Anchoring::Top, (640, 560)),
+                Op::Detach(SurfaceId(101)),
+                Op::Destroy(SurfaceId(101)),
+                Op::Create(OutputId(2), Anchoring::Top, (760, 560)),
+            ]
+        );
+        assert_eq!(off.gone, [SurfaceId(101)]);
+        assert!(!off.menus_closed);
+        assert!(islands.get_mut(SurfaceId(103)).is_some_and(|i| !i.bar_on()));
+        assert!(islands.get_mut(SurfaceId(102)).is_some_and(|i| i.bar_on()));
+        assert_eq!(
+            islands
+                .get_mut(SurfaceId(103))
+                .map(|i| i.output().to_owned()),
+            Some("DP-1".to_owned())
+        );
+    }
+
+    #[test]
+    fn the_bar_duty_picks_the_surfaces_shape() {
+        let mut settings = Settings::default();
+        // Off (the default): the 1.0.0 strip, never wider than 760.
+        assert_eq!(
+            island_shape(&settings, 1920),
+            (Anchoring::Top, (760, 560), None)
+        );
+        assert_eq!(island_shape(&settings, 640).1, (640, 560));
+        assert_eq!(island_shape(&settings, 0).1, (760, 560));
+        // On: the whole top edge, with the layout in force.
+        settings.duties.bar = Some(Duty::On);
+        let (anchor, size, layout) = island_shape(&settings, 1920);
+        assert_eq!((anchor, size), (Anchoring::TopWide, (1920, 560)));
+        assert_eq!(layout, Some(settings.bar_layout()));
+        assert_eq!(
+            island_shape(&settings, 0).1,
+            (760, 560),
+            "until the configure says"
+        );
     }
 
     #[test]
