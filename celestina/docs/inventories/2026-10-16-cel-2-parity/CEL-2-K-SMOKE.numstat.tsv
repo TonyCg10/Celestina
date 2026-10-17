@@ -1,0 +1,15 @@
+# CEL-2-K-SMOKE exact change inventory
+
+Base revision	259821ba2afe961f74b84d084e2d1f3472ae959e
+Pathspec	celestina/docs/evidence/2026-10-17-glance-smoke.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-K-SMOKE.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/smoke.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+54	0	1ad8fa249d980007bcd092061eb555957969ce9d436f210471b8b92514866c53	celestina/docs/evidence/2026-10-17-glance-smoke.md
+15	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-K-SMOKE.numstat.tsv
+1	0	6664ea5f08e1a069afa9f42ea662a7e713ab9b2ce917e5c1d05146a9d06e75a2	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+7	1	c9caebd1be59e28f4d4658c8b67dd85cd458221a5299e7f66d4d0445bda02dcd	celestina/scripts/smoke.sh

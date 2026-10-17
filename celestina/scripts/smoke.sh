@@ -498,7 +498,13 @@ WRAPPER
     g_rest=$(printf '%s\n' "$g_lines" | tr ' ' '\n' | sed -n 's/^rest_frames=//p' |
         awk '{ n += $1 } END { print n + 0 }')
     [ "$g_frames" -ge 1 ] || fail "no frame was drawn ($g_name run): $g_lines"
-    [ "$g_rest" -le 1 ] || fail "frames were drawn at rest ($g_name run, $g_rest): $g_lines"
+    # The rest budget is what the design owes a placed system monitor: one
+    # frame when its first reading appears and at most one more when the
+    # ten-second cadence copies a changed reading to the bar. The run lasts
+    # 14 s, so that second frame lands near the exit and either side of it is
+    # a legitimate outcome; a bar that redrew on every two-second sample would
+    # draw about six.
+    [ "$g_rest" -le 2 ] || fail "frames were drawn at rest ($g_name run, $g_rest, at most 2): $g_lines"
     g_calls=0
     [ ! -f "$g_log" ] || g_calls=$(grep -c '^--call--$' "$g_log" || true)
     echo "smoke: $g_name: frames=$g_frames rest_frames=$g_rest curl_calls=$g_calls"
