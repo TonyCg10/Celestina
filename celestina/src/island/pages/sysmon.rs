@@ -232,6 +232,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
         })
     }
 

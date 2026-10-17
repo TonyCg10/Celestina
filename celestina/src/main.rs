@@ -26,6 +26,7 @@ use std::{
 use celestina::{
     app::App,
     bus::{self, BusError},
+    clipboard::ClipboardDuty,
     command::{self, Mode, Verb, USAGE},
     energy::EnergyHandle,
     error_chain,
@@ -125,7 +126,9 @@ fn shell(cfg: Config) -> ExitCode {
     let wallpaper = Rc::new(OnceCell::new());
     let energy = Rc::new(OnceCell::new());
     let glance = Rc::new(OnceCell::new());
+    let clipboard = Rc::new(OnceCell::new());
     let settings_read = settings.current().clone();
+    let settings_protected = settings.is_protected();
     let follow_from = settings.follow_from();
     let app = App::new(
         fonts,
@@ -140,7 +143,8 @@ fn shell(cfg: Config) -> ExitCode {
     .with_tray(Rc::clone(&tray))
     .with_wallpaper(Rc::clone(&wallpaper))
     .with_energy(Rc::clone(&energy))
-    .with_glance(Rc::clone(&glance));
+    .with_glance(Rc::clone(&glance))
+    .with_clipboard(Rc::clone(&clipboard));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -179,6 +183,14 @@ fn shell(cfg: Config) -> ExitCode {
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = glance.set(handle);
+        // Off by default: with the duty off the history file is deleted (by
+        // a reaper thread), with it on the worker loads the persisted
+        // history on its own thread. Protected defaults (an unreadable
+        // shell.json) delete nothing until a clean read says off.
+        let duty = ClipboardDuty::new(sender.clone());
+        duty.apply(&settings_read, settings_protected);
+        // The slot is empty: `setup` runs once.
+        let _ = clipboard.set(duty);
         match providers::desktop::spawn(sender.clone(), &shutdown) {
             Ok(worker) => indexer = Some(worker),
             Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
@@ -250,6 +262,10 @@ fn shell(cfg: Config) -> ExitCode {
     }
     if let Some(handle) = glance.get() {
         handle.stop();
+    }
+    // The history file stays: only the duty being off deletes it.
+    if let Some(duty) = clipboard.get() {
+        duty.shutdown();
     }
     drop(follower);
     drop(shell_follower);

@@ -173,6 +173,9 @@ pub struct Duties {
     /// Whether this shell holds the session awake while caffeine is on.
     #[serde(deserialize_with = "lenient_duty")]
     pub caffeine: Duty,
+    /// Whether this shell keeps a clipboard history.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub clipboard: Duty,
     /// Whether this shell turns the screens off, locks and suspends when idle.
     #[serde(deserialize_with = "lenient_duty")]
     pub idle: Duty,
@@ -225,7 +228,7 @@ impl Default for BarLayout {
         Self {
             start: ids(&["workspaces", "notifications"]),
             centre: Vec::new(),
-            end: ids(&["tray"]),
+            end: ids(&["tray", "clipboard"]),
             // Blueman's item `Id` is expected to be `blueman` (the halted
             // shell's fixtures of this session); `blueman-tray` is its
             // process. Both until the live row confirms the `Id`.
@@ -877,6 +880,7 @@ mod tests {
                 bar: None,
                 idle: Duty::On,
                 caffeine: Duty::On,
+                clipboard: Duty::Off,
                 nightlight: Duty::Off,
                 wallpaper: Duty::On,
             },
@@ -1097,6 +1101,53 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_clipboard_duty_is_off_by_default_and_in_an_old_file() {
+        assert_eq!(Settings::default().duties.clipboard, Duty::Off);
+        let read = Settings::from_bytes(br#"{"schema_version":1,"do_not_disturb":true}"#)
+            .expect("an old file is read");
+        assert_eq!(read.duties.clipboard, Duty::Off);
+        let (_, duties) = written_keys(&Settings::default());
+        assert_eq!(
+            duties,
+            ["caffeine", "clipboard", "idle", "nightlight", "wallpaper"]
+        );
+    }
+
+    #[test]
+    fn the_clipboard_duty_survives_a_round_trip() {
+        let mut settings = Settings::default();
+        settings.duties.clipboard = Duty::On;
+        let bytes = settings.to_bytes().expect("serialize");
+        assert!(String::from_utf8_lossy(&bytes).contains(r#""clipboard": "on""#));
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+    }
+
+    #[test]
+    fn a_hostile_clipboard_duty_degrades_to_off_without_losing_the_rest() {
+        for value in [
+            r#""yes""#,
+            r#""ON""#,
+            "1",
+            "true",
+            "null",
+            "[]",
+            r#"{"on":true}"#,
+        ] {
+            let json = format!(
+                r#"{{"do_not_disturb":true,"duties":{{"clipboard":{value},"idle":"on"}}}}"#
+            );
+            let read = Settings::from_bytes(json.as_bytes()).expect("the file is still read");
+            assert_eq!(read.duties.clipboard, Duty::Off, "{value}");
+            assert_eq!(read.duties.idle, Duty::On, "{value}");
+            assert!(read.do_not_disturb, "{value}");
+        }
+        let store = Store::new(Settings::default());
+        let pending = store.stage(|s| s.duties.clipboard = Duty::On);
+        assert_eq!(store.current().duties.clipboard, Duty::Off);
+        assert_eq!(pending.wanted().duties.clipboard, Duty::On);
+    }
+
     fn ids(ids: &[&str]) -> Vec<String> {
         ids.iter().map(|id| (*id).to_owned()).collect()
     }
@@ -1120,7 +1171,7 @@ mod tests {
         let layout = settings.bar_layout();
         assert_eq!(layout.start, ids(&["workspaces", "notifications"]));
         assert!(layout.centre.is_empty());
-        assert_eq!(layout.end, ids(&["tray"]));
+        assert_eq!(layout.end, ids(&["tray", "clipboard"]));
         assert_eq!(
             layout.tray_hidden,
             ids(&["nm-applet", "blueman", "blueman-tray"])

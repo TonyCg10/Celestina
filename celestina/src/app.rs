@@ -29,6 +29,7 @@ use celestina_wayland::{
 use crate::notifications::banners::{self, BannerAction, BannerStack};
 use crate::{
     bar,
+    clipboard::{ClipboardDuty, ClipboardMessage, ClipboardState},
     command::Verb,
     energy::{self, EnergyHandle},
     error_chain,
@@ -460,6 +461,11 @@ pub struct App {
     sysmon: Option<SysReading>,
     /// The weather's reading, while its worker runs.
     weather: Option<WeatherReading>,
+    /// The clipboard duty's worker, set once the loop runs.
+    clipboard: Rc<OnceCell<ClipboardDuty>>,
+    /// The latest rows the clipboard worker published: previews only, empty
+    /// while the duty is off.
+    clipboard_state: ClipboardState,
 }
 
 impl std::fmt::Debug for App {
@@ -519,6 +525,8 @@ impl App {
             glance: Rc::new(OnceCell::new()),
             sysmon: None,
             weather: None,
+            clipboard: Rc::new(OnceCell::new()),
+            clipboard_state: ClipboardState::default(),
         }
     }
 
@@ -575,6 +583,19 @@ impl App {
         }
     }
 
+    /// Takes the slot the clipboard duty is put in once the loop runs.
+    #[must_use]
+    pub fn with_clipboard(mut self, clipboard: Rc<OnceCell<ClipboardDuty>>) -> App {
+        self.clipboard = clipboard;
+        self
+    }
+
+    /// The clipboard history as the worker last published it, previews only.
+    #[must_use]
+    pub fn clipboard_state(&self) -> &ClipboardState {
+        &self.clipboard_state
+    }
+
     /// Takes the slot the energy handle is put in once the loop runs.
     #[must_use]
     pub fn with_energy(mut self, energy: Rc<OnceCell<EnergyHandle>>) -> App {
@@ -624,7 +645,16 @@ impl App {
         ctl: &mut RuntimeCtl<'_>,
     ) {
         let before = self.settings.current().clone();
-        if !self.settings.adopt_read(read) {
+        let adopted = self.settings.adopt_read(read);
+        // A clean read ends the protection even when it equals the defaults
+        // in force (and so changes nothing): a clipboard deletion deferred
+        // at start on the protected defaults' word is done now.
+        if let Some(duty) = self.clipboard.get() {
+            if duty.deletion_deferred() && !self.settings.is_protected() {
+                duty.apply(self.settings.current(), false);
+            }
+        }
+        if !adopted {
             return;
         }
         let after = self.settings.current().clone();
@@ -655,6 +685,66 @@ impl App {
         // location, and an apply that changes nothing is free; it is also
         // what starts again a weather worker found gone.
         self.apply_glance(&after, ctl);
+        if before.duties.clipboard != after.duties.clipboard {
+            if let Some(duty) = self.clipboard.get() {
+                duty.apply(&after, self.settings.is_protected());
+                if !duty.running() {
+                    self.clipboard_state.reset();
+                }
+            }
+            // The bar's clipboard piece appears or goes with the duty, even
+            // over an empty history: every Island redraws.
+            self.redraw_all(ctl);
+        }
+    }
+
+    /// Passes a clipboard verb (from the command socket or the Island's
+    /// page) to the duty; the outcome is logged and carries no content.
+    fn clipboard_verb(&self, verb: &Verb) {
+        let Some(duty) = self.clipboard.get() else {
+            tracing::warn!(?verb, "no clipboard duty: the verb does nothing");
+            return;
+        };
+        if let Some(outcome) = crate::clipboard::verbs::run(verb, duty) {
+            outcome.log();
+        }
+    }
+
+    /// One report of the clipboard worker: kept as the latest rows when it
+    /// comes from the worker that runs now, dropped when it is a stopped
+    /// worker's late event.
+    fn clipboard_event(&mut self, message: ClipboardMessage, ctl: &mut RuntimeCtl<'_>) {
+        let current = self
+            .clipboard
+            .get()
+            .is_some_and(|duty| duty.accepts(message.generation));
+        if !current {
+            return;
+        }
+        message.event.log();
+        let paused = self.clipboard_state.paused();
+        if self.clipboard_state.apply(message.event) {
+            // The bar reads only whether the duty is on and paused; the rows
+            // are the page's. Nothing else on screen changed with them.
+            if self.clipboard_state.paused() != paused {
+                self.redraw_all(ctl);
+            } else {
+                self.redraw_clipboard_pages(ctl);
+            }
+        }
+    }
+
+    /// Redraws the Islands that show the Clipboard page, and only those.
+    fn redraw_clipboard_pages(&self, ctl: &mut RuntimeCtl<'_>) {
+        for slot in self
+            .islands
+            .iter()
+            .filter(|slot| slot.island.shows_clipboard_page())
+        {
+            if let Some(mut surface) = ctl.surface(slot.surface) {
+                surface.request_redraw();
+            }
+        }
     }
 
     /// Records who holds the bus names the pages depend on; the Islands
@@ -884,6 +974,7 @@ impl App {
                     outcome.log();
                 }
             }
+            Verb::Clipboard(_) => self.clipboard_verb(&verb),
             Verb::LauncherToggle => self.toggle_launcher(ctl),
             Verb::WallpaperSet { .. }
             | Verb::WallpaperNext(_)
@@ -1099,6 +1190,7 @@ impl App {
                         ctl.request_redraw();
                     }
                 }
+                IslandAction::Clipboard(verb) => self.clipboard_verb(&Verb::Clipboard(verb)),
                 IslandAction::Tray(command) => self.tray_command(command),
                 IslandAction::OpenApp(id) => self.open_app(id),
                 IslandAction::OpenTrayMenu {
@@ -1489,6 +1581,8 @@ impl Shell for App {
             tray: &self.tray_items,
             sysmon: self.sysmon.as_ref(),
             weather: self.weather.as_ref(),
+            clipboard_on: self.settings.current().duties.clipboard == Duty::On,
+            clipboard: &self.clipboard_state,
         };
         island.frame(
             cx,
@@ -1643,6 +1737,7 @@ impl Shell for App {
             Message::Energy(event) => event.log(),
             Message::Sysmon(reading) => self.sysmon_read(reading, ctl),
             Message::Weather(reading) => self.weather_read(reading, ctl),
+            Message::Clipboard(message) => self.clipboard_event(message, ctl),
         }
     }
 }
@@ -1711,7 +1806,7 @@ mod tests {
         chosen_off.duties.bar = Some(Duty::Off);
         assert_eq!(bar_change(&off, &chosen_off), BarChange::Nothing);
         let mut chosen_end = on.clone();
-        chosen_end.bar.end = Some(vec!["tray".to_owned()]);
+        chosen_end.bar.end = Some(vec!["tray".to_owned(), "clipboard".to_owned()]);
         assert_eq!(bar_change(&on, &chosen_end), BarChange::Nothing);
         // Do-not-disturb is not the surfaces' business.
         let mut quiet = on.clone();

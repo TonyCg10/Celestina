@@ -8,6 +8,7 @@
 pub mod app;
 pub mod bar;
 pub mod bus;
+pub mod clipboard;
 pub mod command;
 pub mod copy;
 pub mod energy;

@@ -36,6 +36,7 @@ use celestina_wayland::{
 
 use crate::{
     bar::silhouette::{self, Shape},
+    clipboard::{verbs::ClipboardVerb, ClipboardState},
     command::Verb,
     pieces::{BarCx, Gesture, PageId, PieceAction},
     providers::{
@@ -48,7 +49,8 @@ use bar_tree::BarTree;
 use cadence::{Cadence, Offer, Wake, SYSMON_BAR_PERIOD};
 use clock::{ClockTick, SecondTick};
 use pages::{
-    activity, clock as clock_page, notifications, page_view, sysmon as sysmon_page, tabs,
+    activity, clipboard as clipboard_page, clock as clock_page, notifications, page_view,
+    sysmon as sysmon_page, tabs,
     tray::{self as tray_page, IconCache, Pixmaps, TrayList, TrayRow},
     HistoryRow, NameOwner, PageCx,
 };
@@ -88,6 +90,9 @@ pub enum IslandAction {
     /// finds it in the session's applications and starts it as the launcher
     /// does.
     OpenApp(&'static str),
+    /// A Clipboard page row or button: the app passes the verb to the
+    /// clipboard duty, which queues it and tells the journal how it ended.
+    Clipboard(ClipboardVerb),
 }
 
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
@@ -96,6 +101,9 @@ const BTN_MIDDLE: u32 = 0x112;
 /// The Menu key and F10 (with Shift): the keyboard's context menu.
 const XKB_KEY_MENU: u32 = 0xff67;
 const XKB_KEY_F10: u32 = 0xffc9;
+/// The Delete key and the keypad's: they remove the focused clipboard entry.
+const XKB_KEY_DELETE: u32 = 0xffff;
+const XKB_KEY_KP_DELETE: u32 = 0xff9f;
 
 /// What the Island reads of the app each frame besides the compositor's
 /// model: who holds the bus names, the settings in force, the notification
@@ -114,6 +122,22 @@ pub struct Shared<'a> {
     pub sysmon: Option<&'a SysReading>,
     /// The weather's reading.
     pub weather: Option<&'a WeatherReading>,
+    /// Whether `duties.clipboard` is on.
+    pub clipboard_on: bool,
+    /// The clipboard worker's latest rows: previews only.
+    pub clipboard: &'a ClipboardState,
+}
+
+/// Whether the bar's clipboard piece draws something else for `new` than
+/// for `old`: it reads only whether the duty is on and whether recording is
+/// paused, never the rows.
+fn bar_clipboard_changed(
+    old_on: bool,
+    old: &ClipboardState,
+    new_on: bool,
+    new: &ClipboardState,
+) -> bool {
+    old_on != new_on || old.paused() != new.paused()
 }
 
 /// The painter's textures as the tray's icon cache stores pixmaps in them.
@@ -192,6 +216,20 @@ pub struct Island {
     tray_rows: Vec<TrayRow>,
     /// The generation of the tray list `tray_rows` was made from.
     tray_generation: u64,
+    /// The clipboard rows the panel was made from, and whether the duty was
+    /// on.
+    clipboard: ClipboardState,
+    clipboard_on: bool,
+    /// What the Clipboard page and piece read, with its thumbnails uploaded.
+    clip_panel: clipboard_page::ClipboardPanel,
+    clip_textures: clipboard_page::Textures,
+    /// A clear was asked for and awaits its confirmation.
+    confirming_clear: bool,
+    /// The node to focus once the page is next built: where the keyboard
+    /// goes when the confirmation step appears or is given up.
+    pending_focus: Option<Key>,
+    /// A Delete key is down: its auto-repeat must not remove more entries.
+    delete_held: bool,
     /// The pixmaps uploaded for the items' icons.
     icons: IconCache,
     scroll: ScrollRemainder,
@@ -257,6 +295,13 @@ impl Island {
             tray_menu: None,
             tray_rows: Vec::new(),
             tray_generation: 0,
+            clipboard: ClipboardState::default(),
+            clipboard_on: false,
+            clip_panel: clipboard_page::ClipboardPanel::default(),
+            clip_textures: clipboard_page::Textures::default(),
+            confirming_clear: false,
+            pending_focus: None,
+            delete_held: false,
             icons: IconCache::default(),
             scroll: ScrollRemainder::default(),
             bar: None,
@@ -352,6 +397,7 @@ impl Island {
     /// tray ids are the bar's own layout's (`BarTree` fills them in).
     fn bar_cx(&self) -> BarCx<'_> {
         BarCx {
+            clipboard: &self.clip_panel,
             theme: &self.theme,
             output: &self.output,
             model: self.model.as_ref(),
@@ -380,6 +426,91 @@ impl Island {
         if let Some(bar) = self.bar.as_mut() {
             bar.invalidate();
         }
+    }
+
+    /// Makes the clipboard panel from the rows last shown and the duty's
+    /// state, uploading new thumbnails to `pixmaps`. A clear awaiting
+    /// confirmation is given up when nothing is left to clear.
+    fn rebuild_clipboard(&mut self, pixmaps: &mut impl Pixmaps) {
+        if self.clipboard.rows().is_empty() || !self.clipboard_on {
+            self.confirming_clear = false;
+        }
+        self.clip_panel = self.clip_textures.panel(
+            self.clipboard_on,
+            &self.clipboard,
+            self.confirming_clear,
+            pixmaps,
+        );
+    }
+
+    /// Gives up a clear that awaits its confirmation (the page closed or was
+    /// left).
+    fn forget_confirmation(&mut self) {
+        self.pending_focus = None;
+        if self.confirming_clear {
+            self.confirming_clear = false;
+            self.clip_panel.confirming_clear = false;
+            self.stale = true;
+            self.invalidate_bar();
+        }
+    }
+
+    /// Whether the Clipboard page is the one shown right now.
+    #[must_use]
+    pub fn shows_clipboard_page(&self) -> bool {
+        self.state.is_open() && self.state.shown_page() == PageId::CLIPBOARD
+    }
+
+    /// What a click or Enter on the Clipboard page's node `key` does: a verb
+    /// for the app, or only a change of the confirmation step.
+    fn clipboard_activate(&mut self, key: Key) -> Option<Option<IslandAction>> {
+        if !self.shows_clipboard_page() {
+            return None;
+        }
+        let action = clipboard_page::action_for(
+            &self.clip_panel,
+            &self.theme,
+            self.state.max_page_size(),
+            key,
+        )?;
+        Some(self.run_clipboard(action))
+    }
+
+    fn run_clipboard(&mut self, action: clipboard_page::PageAction) -> Option<IslandAction> {
+        use clipboard_page::PageAction;
+        match action {
+            PageAction::AskClear | PageAction::CancelClear => {
+                self.confirming_clear = action == PageAction::AskClear;
+                self.clip_panel.confirming_clear = self.confirming_clear;
+                // The safe button takes the keyboard when the question
+                // appears; Clear comes back with it when it is given up.
+                self.pending_focus = Some(if self.confirming_clear {
+                    clipboard_page::cancel_key()
+                } else {
+                    clipboard_page::clear_key()
+                });
+                self.stale = true;
+                None
+            }
+            PageAction::Verb(verb) => {
+                if verb == ClipboardVerb::Clear {
+                    self.forget_confirmation();
+                }
+                Some(IslandAction::Clipboard(verb))
+            }
+        }
+    }
+
+    /// Delete on the focused clipboard row removes its entry.
+    fn delete_key(&mut self) -> Option<IslandAction> {
+        let id = self.page.highlight().focused?;
+        let action = clipboard_page::remove_index(
+            &self.clip_panel,
+            &self.theme,
+            self.state.max_page_size(),
+            self.page.key_of(id),
+        )?;
+        self.run_clipboard(action)
     }
 
     /// The output's name.
@@ -447,6 +578,8 @@ impl Island {
             tray,
             sysmon,
             weather,
+            clipboard_on,
+            clipboard,
         } = *shared;
         let now = cx.now;
         self.set_reduced_motion(reduced);
@@ -497,6 +630,20 @@ impl Island {
         if weather != self.weather.as_ref() {
             self.weather = weather.cloned();
             seen = true;
+        }
+        if clipboard_on != self.clipboard_on || *clipboard != self.clipboard {
+            // The bar's piece reads only whether the duty is on and paused;
+            // the rows are the page's, drawn while it is the one shown.
+            let bar_reads =
+                bar_clipboard_changed(self.clipboard_on, &self.clipboard, clipboard_on, clipboard);
+            self.clipboard_on = clipboard_on;
+            self.clipboard = clipboard.clone();
+            self.rebuild_clipboard(painter);
+            if bar_reads {
+                seen = true;
+            } else if self.shows_clipboard_page() {
+                self.stale = true;
+            }
         }
         if seen {
             self.stale |= self.state.is_open();
@@ -616,6 +763,7 @@ impl Island {
         let shown = self.state.shown_page();
         let page = page_view(shown);
         let cx = PageCx {
+            clipboard: &self.clip_panel,
             theme: &self.theme,
             max_size: self.state.max_page_size(),
             model: self.model.as_ref(),
@@ -652,6 +800,11 @@ impl Island {
         );
         if moving {
             self.page.set_reduced_motion(self.reduced);
+        }
+        if let Some(key) = self.pending_focus.take() {
+            if self.shows_clipboard_page() {
+                self.page_input.focus_key(&mut self.page, key);
+            }
         }
         self.applied_slide = slide;
         self.stale = false;
@@ -755,6 +908,7 @@ impl Island {
     fn open(&mut self, page: PageId, now: Instant) {
         if page != self.state.shown_page() {
             self.stale = true;
+            self.forget_confirmation();
         }
         if self.state.is_open() {
             self.state.switch(page, now, self.reduced);
@@ -772,6 +926,8 @@ impl Island {
             self.month_offset = 0;
             self.stale = true;
         }
+        self.forget_confirmation();
+        self.delete_held = false;
         if self.state.is_open() {
             self.page_input
                 .pointer(&mut self.page, &InputEvent::PointerLeave, now);
@@ -918,6 +1074,30 @@ impl Island {
             {
                 actions.extend(self.menu_key());
                 Vec::new()
+            }
+            InputEvent::Key {
+                keysym,
+                pressed: true,
+                ..
+            } if open
+                && (*keysym == XKB_KEY_DELETE || *keysym == XKB_KEY_KP_DELETE)
+                && self.shows_clipboard_page() =>
+            {
+                // The keyboard repeats a held key as more presses and the
+                // toolkit does not say which is which: one press removes
+                // one entry, the next needs the key released in between.
+                if !std::mem::replace(&mut self.delete_held, true) {
+                    actions.extend(self.delete_key());
+                }
+                Vec::new()
+            }
+            InputEvent::Key {
+                keysym,
+                pressed: false,
+                ..
+            } if open && (*keysym == XKB_KEY_DELETE || *keysym == XKB_KEY_KP_DELETE) => {
+                self.delete_held = false;
+                self.page_input.key(&mut self.page, &ev)
             }
             InputEvent::Key { .. } if open => self.page_input.key(&mut self.page, &ev),
             InputEvent::PointerPress { x, y, .. }
@@ -1171,6 +1351,9 @@ impl Island {
     /// (the Island's output went away).
     pub fn release_icons(&mut self, painter: &mut Painter) {
         self.icons.release_all(painter);
+        self.clip_textures.release_all(painter);
+        self.clipboard = ClipboardState::default();
+        self.clip_panel = clipboard_page::ClipboardPanel::default();
         self.tray_rows.clear();
         self.tray_generation = 0;
         self.invalidate_bar();
@@ -1303,7 +1486,9 @@ impl Island {
 
     /// What a click or Enter on the node `key` does.
     fn activate(&mut self, key: Key, now: Instant) -> Option<IslandAction> {
-        if key == view::capsule_key() {
+        if let Some(handled) = self.clipboard_activate(key) {
+            handled
+        } else if key == view::capsule_key() {
             self.open(self.state.shown_page(), now);
             None
         } else if key == view::close_key() {
@@ -1372,6 +1557,7 @@ impl Island {
             | Verb::Caffeine(_)
             | Verb::NightLight(_)
             | Verb::Session(_)
+            | Verb::Clipboard(_)
             | Verb::Quit => return,
         }
         self.sync_ctl(ctl, now);
@@ -2685,5 +2871,263 @@ mod tests {
         // The same instant two hours east is already the next day.
         island.set_today(late, 7_200);
         assert_eq!(island.today().map(|t| t.day), Some(18));
+    }
+
+    // The Clipboard page (CEL-2-G).
+
+    /// An open Clipboard page with the text rows `texts`, laid out.
+    fn clip_island(texts: &[&str]) -> (Island, Instant) {
+        use crate::clipboard::worker::{ClipboardEvent, Preview, Row};
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.set_reduced_motion(true);
+        let rows: Vec<Row> = texts
+            .iter()
+            .enumerate()
+            .map(|(index, text)| Row {
+                index,
+                preview: Preview::Text((*text).to_owned()),
+            })
+            .collect();
+        let total = rows.len();
+        island.clipboard.apply(ClipboardEvent::Changed {
+            rows,
+            total,
+            snapshot: 1,
+        });
+        island.clipboard_on = true;
+        island.rebuild_clipboard(&mut clipboard_page::FakePixmaps::default());
+        island.open(PageId::CLIPBOARD, t0);
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        (island, t0)
+    }
+
+    fn key_event(keysym: u32) -> InputEvent {
+        InputEvent::Key {
+            keysym,
+            utf8: None,
+            modifiers: celestina_wayland::Modifiers::default(),
+            pressed: true,
+            serial: 0,
+        }
+    }
+
+    fn key_release(keysym: u32) -> InputEvent {
+        InputEvent::Key {
+            keysym,
+            utf8: None,
+            modifiers: celestina_wayland::Modifiers::default(),
+            pressed: false,
+            serial: 0,
+        }
+    }
+
+    fn focused_key(island: &Island) -> Option<Key> {
+        island
+            .page
+            .highlight()
+            .focused
+            .map(|id| island.page.key_of(id))
+    }
+
+    /// Tab until the node `want` has the focus.
+    fn focus(island: &mut Island, want: Key, now: Instant) {
+        for _ in 0..40 {
+            feed(island, key_event(0xff09), now);
+            let on = island.page.highlight().focused;
+            if on.is_some_and(|id| island.page.key_of(id) == want) {
+                return;
+            }
+        }
+        panic!("the focus never reached {want:?}");
+    }
+
+    const ENTER: u32 = 0xff0d;
+
+    #[test]
+    fn enter_on_a_clipboard_row_selects_that_entry() {
+        let (mut island, t0) = clip_island(&["first", "second"]);
+        focus(&mut island, clipboard_page::row_key(1), t0);
+        assert_eq!(
+            feed(&mut island, key_event(ENTER), t0),
+            vec![IslandAction::Clipboard(ClipboardVerb::SelectShown {
+                index: 1,
+                snapshot: 1
+            })]
+        );
+    }
+
+    #[test]
+    fn a_click_on_a_clipboard_row_selects_that_entry() {
+        let (mut island, t0) = clip_island(&["first", "second"]);
+        let row = island
+            .page
+            .node_by_key(clipboard_page::row_key(0))
+            .map(|id| island.page.rect(id))
+            .expect("a laid out row");
+        let actions = click_at(&mut island, centre(row), BTN_LEFT, t0);
+        assert_eq!(
+            actions,
+            vec![IslandAction::Clipboard(ClipboardVerb::SelectShown {
+                index: 0,
+                snapshot: 1
+            })]
+        );
+    }
+
+    #[test]
+    fn delete_removes_only_the_focused_clipboard_entry() {
+        let (mut island, t0) = clip_island(&["first", "second"]);
+        assert!(
+            feed(&mut island, key_event(XKB_KEY_DELETE), t0).is_empty(),
+            "nothing focused"
+        );
+        feed(&mut island, key_release(XKB_KEY_DELETE), t0);
+        focus(&mut island, clipboard_page::row_key(1), t0);
+        let remove_1 = vec![IslandAction::Clipboard(ClipboardVerb::RemoveShown {
+            index: 1,
+            snapshot: 1,
+        })];
+        assert_eq!(feed(&mut island, key_event(XKB_KEY_DELETE), t0), remove_1);
+        feed(&mut island, key_release(XKB_KEY_DELETE), t0);
+        assert_eq!(
+            feed(&mut island, key_event(XKB_KEY_KP_DELETE), t0),
+            remove_1
+        );
+        feed(&mut island, key_release(XKB_KEY_KP_DELETE), t0);
+        // On a button it removes nothing.
+        focus(&mut island, clipboard_page::pause_key(), t0);
+        assert!(feed(&mut island, key_event(XKB_KEY_DELETE), t0).is_empty());
+    }
+
+    #[test]
+    fn a_held_delete_removes_one_entry_not_all_of_them() {
+        let (mut island, t0) = clip_island(&["first", "second", "third"]);
+        focus(&mut island, clipboard_page::row_key(0), t0);
+        let first = feed(&mut island, key_event(XKB_KEY_DELETE), t0);
+        assert_eq!(first.len(), 1);
+        // The auto-repeat is more presses with no release between them.
+        for _ in 0..5 {
+            assert!(feed(&mut island, key_event(XKB_KEY_DELETE), t0).is_empty());
+        }
+        // The keypad's Delete is the same key held.
+        assert!(feed(&mut island, key_event(XKB_KEY_KP_DELETE), t0).is_empty());
+        feed(&mut island, key_release(XKB_KEY_DELETE), t0);
+        assert_eq!(
+            feed(&mut island, key_event(XKB_KEY_DELETE), t0).len(),
+            1,
+            "a new press after the release acts again"
+        );
+        // Closing forgets a key whose release was never seen.
+        island.close(t0);
+        island.open(PageId::CLIPBOARD, t0);
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        focus(&mut island, clipboard_page::row_key(0), t0);
+        assert_eq!(feed(&mut island, key_event(XKB_KEY_DELETE), t0).len(), 1);
+    }
+
+    #[test]
+    fn the_bar_redraws_for_the_duty_and_the_pause_but_not_for_rows() {
+        use crate::clipboard::worker::ClipboardEvent;
+        let mut a = ClipboardState::default();
+        let mut b = ClipboardState::default();
+        assert!(!bar_clipboard_changed(true, &a, true, &b));
+        assert!(bar_clipboard_changed(true, &a, false, &b), "duty toggled");
+        b.apply(ClipboardEvent::Changed {
+            rows: Vec::new(),
+            total: 3,
+            snapshot: 2,
+        });
+        assert!(!bar_clipboard_changed(true, &a, true, &b), "rows only");
+        a.apply(ClipboardEvent::Paused(true));
+        assert!(bar_clipboard_changed(true, &a, true, &b), "pause toggled");
+    }
+
+    #[test]
+    fn only_an_island_showing_the_clipboard_page_is_a_clipboard_page_redraw() {
+        let (mut island, t0) = clip_island(&["a"]);
+        assert!(island.shows_clipboard_page());
+        island.open(PageId::TRAY, t0);
+        assert!(!island.shows_clipboard_page());
+        island.close(t0);
+        assert!(!island.shows_clipboard_page());
+    }
+
+    #[test]
+    fn delete_does_nothing_off_the_clipboard_page() {
+        let (mut island, t0) = clip_island(&["first"]);
+        focus(&mut island, clipboard_page::row_key(0), t0);
+        island.open(PageId::TRAY, t0);
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        assert!(feed(&mut island, key_event(XKB_KEY_DELETE), t0).is_empty());
+    }
+
+    #[test]
+    fn clearing_needs_a_confirmation_and_closing_forgets_it() {
+        let (mut island, t0) = clip_island(&["first"]);
+        focus(&mut island, clipboard_page::clear_key(), t0);
+        // The first Enter only asks.
+        assert!(feed(&mut island, key_event(ENTER), t0).is_empty());
+        assert!(island.confirming_clear && island.clip_panel.confirming_clear);
+        assert!(island.stale, "the page is drawn again with the question");
+        // The question is drawn, and Cancel (the safe button) holds the
+        // keyboard.
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        assert_eq!(focused_key(&island), Some(clipboard_page::cancel_key()));
+        feed(&mut island, key_event(0xff09), t0);
+        assert!(island
+            .page
+            .node_by_key(clipboard_page::confirm_key())
+            .is_some());
+        // Confirming sends the verb and ends the question.
+        focus(&mut island, clipboard_page::confirm_key(), t0);
+        assert_eq!(
+            feed(&mut island, key_event(ENTER), t0),
+            vec![IslandAction::Clipboard(ClipboardVerb::Clear)]
+        );
+        assert!(!island.confirming_clear && !island.clip_panel.confirming_clear);
+    }
+
+    #[test]
+    fn cancelling_closing_or_leaving_the_page_gives_the_clear_up() {
+        let (mut island, t0) = clip_island(&["first"]);
+        let ask = |island: &mut Island| {
+            focus(island, clipboard_page::clear_key(), t0);
+            feed(island, key_event(ENTER), t0);
+            assert!(island.confirming_clear);
+        };
+        ask(&mut island);
+        focus(&mut island, clipboard_page::cancel_key(), t0);
+        assert!(feed(&mut island, key_event(ENTER), t0).is_empty());
+        assert!(!island.confirming_clear);
+        // Giving up puts the keyboard back on Clear.
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        assert_eq!(focused_key(&island), Some(clipboard_page::clear_key()));
+
+        ask(&mut island);
+        island.close(t0);
+        assert!(!island.confirming_clear && !island.clip_panel.confirming_clear);
+
+        let (mut island, t0) = clip_island(&["first"]);
+        ask(&mut island);
+        island.open(PageId::TRAY, t0);
+        assert!(!island.confirming_clear);
+        // Nothing left to clear: the question goes with the entries.
+        let (mut island, _) = clip_island(&["first"]);
+        ask(&mut island);
+        island
+            .clipboard
+            .apply(crate::clipboard::worker::ClipboardEvent::Changed {
+                rows: Vec::new(),
+                total: 0,
+                snapshot: 2,
+            });
+        island.rebuild_clipboard(&mut clipboard_page::FakePixmaps::default());
+        assert!(!island.confirming_clear && !island.clip_panel.confirming_clear);
     }
 }

@@ -58,6 +58,21 @@ What Noctalia still does for the session is in
   request, no `curl` and no piece content; the shell never works out where the
   person is, and a reading older than 15 minutes is hidden
   ([ADR 0016](docs/decisions/0016-weather-is-the-only-network-and-manual.md)).
+- The clipboard duty (`duties.clipboard`) is `off` by default. When it is on,
+  the shell keeps a history of the regular selection (never the primary one):
+  up to 200 texts of 256 KiB and 20 PNG images of 8 MiB, for seven days. A
+  selection that offers `x-kde-passwordManagerHint` is skipped unread; no
+  other heuristic exists, so a secret copied without the hint is kept. Text is
+  persisted to `$XDG_STATE_HOME/celestina/clipboard.json` (mode 0600) and the
+  file is deleted when the duty goes off; images stay in memory. A shell
+  whose clipboard duty is off (the default, also in a nest or a script that
+  does not name its own state home) therefore deletes
+  `$XDG_STATE_HOME/celestina/clipboard.json` at start: scripts that start the
+  binary export a throwaway `XDG_STATE_HOME`. The Island page `clipboard` and
+  the bar piece show previews; the verbs `clipboard select N [S]`, `remove N
+  [S]`, `clear`, `pause` and `resume` are answered `ok` by the bus as soon as
+  the worker has queued them, and how they ended (a stale snapshot `S`, a
+  missing entry) is told to the journal only; no verb returns an entry.
 - Surfaces take no keyboard at rest
   ([ADR 0007](docs/decisions/0007-focus-policy.md)); well-known bus names are
   claimed only when free, so the shell runs beside Noctalia
@@ -100,11 +115,11 @@ With a shell running, `celestina <verb>` calls `Command` on
 `org.celestina.Shell1` (`/org/celestina/Shell`, name `org.celestina.Shell`)
 and exits 0, or 1 when the shell is not running, refuses the verb or does
 not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
-`island toggle`, `island open <activity|notifications|tray|sysmon|clock>`,
+`island toggle`, `island open <activity|notifications|tray|sysmon|clock|clipboard>`,
 `island close`, `launcher toggle`, `notifications toggle`,
 `notifications dismiss-all`, `wallpaper set <output|all> <file>`,
 `wallpaper next [output]`, `wallpaper prev [output]`, `wallpaper mode <mode>`,
-`wallpaper retry` and `quit`; `launcher toggle` opens or closes the
+`wallpaper retry`, `clipboard select|remove N [S]`, `clipboard clear|pause|resume` and `quit`; `launcher toggle` opens or closes the
 launcher, and `notifications toggle` opens or closes the Notifications page and
 `notifications dismiss-all` dismisses every notification. `wallpaper set` and
 `wallpaper next`/`prev` choose the picture of one output (or of all, for `set`)

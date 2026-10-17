@@ -5,6 +5,7 @@
 //! request past the surface.
 
 pub mod activity;
+pub mod clipboard;
 pub mod clock;
 pub mod notifications;
 pub mod sysmon;
@@ -117,6 +118,9 @@ pub struct PageCx<'a> {
     pub month_offset: i32,
     /// The local UTC offset in seconds, for the times a page prints.
     pub utc_offset: i64,
+    /// The clipboard history's previews (CEL-2-G); empty while the duty is
+    /// off.
+    pub clipboard: &'a clipboard::ClipboardPanel,
 }
 
 /// One of the Island's pages.
@@ -203,6 +207,7 @@ pub(crate) fn wants_of(
     max_size: (f32, f32),
 ) -> (f32, f32) {
     page.wants(&PageCx {
+        clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
         theme: &Theme::dark(),
         max_size,
         model,
@@ -257,6 +262,7 @@ mod tests {
         let history = [HistoryRow::default()];
         let items = [TrayRow::default(), TrayRow::default()];
         let cx = PageCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &celestina_paint::Theme::dark(),
             max_size: (760.0, 560.0),
             model: None,
@@ -448,6 +454,7 @@ mod tests {
         let theme = Theme::dark();
         let pv = page_view(page);
         let cx = PageCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &theme,
             max_size: (760.0, 560.0),
             model: fixture.model.as_ref(),
@@ -651,14 +658,37 @@ mod tests {
         },
     ];
 
+    /// The pages that existed when the snapshots were taken (CEL-2-A). The
+    /// glance pages (CEL-2-K) and the Clipboard page (CEL-2-G) were appended
+    /// to the table after them and are pinned in their own modules; none of
+    /// these three may change because of them.
+    const ORIGINAL: [PageId; 3] = [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY];
+
+    /// The pages appended after the snapshots, in table order, each pinned by
+    /// its own module's tests (`pages::sysmon`, `pages::clock`,
+    /// `pages::clipboard`).
+    const LATER: [PageId; 3] = [PageId::SYSMON, PageId::CLOCK, PageId::CLIPBOARD];
+
+    #[test]
+    fn every_page_of_the_table_is_pinned_here_or_declared_pinned_elsewhere() {
+        // A page added to the table without a decision escapes both lists
+        // and fails here: either pin it above or declare where it is.
+        let mut known: Vec<PageId> = ORIGINAL.to_vec();
+        known.extend(LATER);
+        assert_eq!(PageId::all().to_vec(), known);
+        for page in ORIGINAL {
+            assert!(
+                PINNED.iter().any(|p| p.page == page),
+                "{page:?} has no pinned snapshot"
+            );
+        }
+    }
+
     #[test]
     fn page_title_wants_and_view_structure_are_pinned() {
         let fixtures = fixtures();
-        // The three CEL-2-A pages are pinned here; the glance pages have their
-        // own tests (CEL-2-K).
-        let pinned_pages = [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY];
-        assert_eq!(PINNED.len(), pinned_pages.len() * fixtures.len());
-        for page in pinned_pages {
+        assert_eq!(PINNED.len(), ORIGINAL.len() * fixtures.len());
+        for page in ORIGINAL {
             for fixture in &fixtures {
                 let pinned = PINNED
                     .iter()
@@ -677,20 +707,20 @@ mod tests {
 
     #[test]
     fn page_order_and_words_are_pinned() {
-        assert_eq!(
-            PageId::all(),
-            [
-                PageId::ACTIVITY,
-                PageId::NOTIFICATIONS,
-                PageId::TRAY,
-                PageId::SYSMON,
-                PageId::CLOCK
-            ]
-        );
+        // The original three keep their places; later pages follow them.
+        assert_eq!(PageId::all()[..3], ORIGINAL);
+        assert_eq!(PageId::all()[3..], LATER);
         let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
         assert_eq!(
             words,
-            ["activity", "notifications", "tray", "sysmon", "clock"]
+            [
+                "activity",
+                "notifications",
+                "tray",
+                "sysmon",
+                "clock",
+                "clipboard"
+            ]
         );
     }
 

@@ -189,6 +189,22 @@ impl Interaction {
         out
     }
 
+    /// Focuses the shown focusable node keyed `key`, the way a surface
+    /// restores the keyboard's place after it replaced the node that had it.
+    /// Returns whether such a node exists; the focus is left alone when not.
+    pub fn focus_key(&mut self, tree: &mut Tree, key: Key) -> bool {
+        self.sync(tree);
+        let Some(id) = focus_order(tree)
+            .into_iter()
+            .find(|&id| tree.key_of(id) == key)
+        else {
+            return false;
+        };
+        self.focused = Some(id);
+        self.publish(tree);
+        true
+    }
+
     /// Whether the focused text field edits with the key event `ev`, so the
     /// surface leaves it alone instead of treating it as a shortcut.
     pub fn field_consumes(&self, tree: &Tree, ev: &InputEvent) -> bool {
@@ -731,6 +747,15 @@ mod tests {
         // Key releases do nothing.
         ia.key(&mut tree, &key_with(XKB_KEY_TAB, false, false));
         assert_eq!(tree.highlight().focused, Some(rows[1]));
+    }
+
+    #[test]
+    fn focus_key_moves_the_focus_to_a_shown_focusable_node_only() {
+        let (mut tree, mut ia, rows) = setup();
+        assert!(ia.focus_key(&mut tree, row_key(2)));
+        assert_eq!(tree.highlight().focused, Some(rows[2]));
+        assert!(!ia.focus_key(&mut tree, Key::named("nowhere")));
+        assert_eq!(tree.highlight().focused, Some(rows[2]), "left alone");
     }
 
     #[test]

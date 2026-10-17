@@ -170,7 +170,11 @@ variant() {
     shots=$work/shots-$name
     mkdir -p "$shots"
     status=0
+    # A throwaway state home too: a shell whose clipboard duty is off (the
+    # default of this config) deletes `$XDG_STATE_HOME/celestina/clipboard.json`.
+    mkdir -p "$work/state"
     SHOT_DIR=$shots CELESTINA_NEST_CONFIG=$profile XDG_CONFIG_HOME=$work/config \
+        XDG_STATE_HOME=$work/state \
         timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$bin" \
         --probe "$work/shots.sh" --once "$work/run-$name" -- --exit-after 14 \
         > "$work/niri-$name.log" 2>&1 || status=$?

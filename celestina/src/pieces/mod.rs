@@ -43,6 +43,7 @@
 //! every action a piece offers must also be reachable from a page or a verb,
 //! as the three pieces' actions are (their pages and their rows).
 
+pub mod clipboard;
 pub mod clock;
 pub mod notifications;
 pub mod sysmon;
@@ -55,7 +56,7 @@ use celestina_shell::glance::Today;
 use celestina_ui::{Key, View};
 
 use crate::{
-    island::pages::{HistoryRow, NameOwner, PageView, TrayRow},
+    island::pages::{clipboard::ClipboardPanel, HistoryRow, NameOwner, PageView, TrayRow},
     providers::{
         niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
         weather::WeatherReading,
@@ -85,6 +86,8 @@ pub struct PageId(&'static str);
 impl PageId {
     /// The Activity page (the Workspaces piece's): workspaces and windows.
     pub const ACTIVITY: PageId = PageId("activity");
+    /// The Clipboard page.
+    pub const CLIPBOARD: PageId = PageId("clipboard");
     /// The Notifications page.
     pub const NOTIFICATIONS: PageId = PageId("notifications");
     /// The Tray page.
@@ -144,6 +147,9 @@ pub struct BarCx<'a> {
     pub weather: Option<&'a WeatherReading>,
     /// Today's local date, as of the last minute the Island read.
     pub today: Option<Today>,
+    /// The clipboard history as the bar shows it (CEL-2-G): whether the duty
+    /// is on and whether it is paused.
+    pub clipboard: &'a ClipboardPanel,
 }
 
 /// What the Island saw on a node of a piece's widget.
@@ -218,6 +224,7 @@ pub static PIECES: &[&dyn Piece] = &[
     &sysmon::Sysmon,
     &clock::Clock,
     &weather::Weather,
+    &clipboard::Clipboard,
 ];
 
 /// The piece the layout names `id`, if the table has it.
@@ -267,7 +274,8 @@ mod tests {
                 "tray",
                 "sysmon",
                 "clock",
-                "weather"
+                "weather",
+                "clipboard"
             ]
         );
         assert_eq!(
@@ -277,7 +285,8 @@ mod tests {
                 PageId::NOTIFICATIONS,
                 PageId::TRAY,
                 PageId::SYSMON,
-                PageId::CLOCK
+                PageId::CLOCK,
+                PageId::CLIPBOARD
             ]
         );
         for (i, id) in PageId::all().into_iter().enumerate() {
@@ -312,7 +321,14 @@ mod tests {
             let found = piece(p.id().as_str()).map(|f| f.id());
             assert_eq!(found, Some(p.id()));
         }
-        for word in ["activity", "notifications", "tray", "sysmon", "clock"] {
+        for word in [
+            "activity",
+            "notifications",
+            "tray",
+            "sysmon",
+            "clock",
+            "clipboard",
+        ] {
             assert_eq!(page_by_word(word).map(PageId::word), Some(word));
         }
         for foreign in ["", "Activity", "island", "workspaces", "tray ", "menu"] {
@@ -331,6 +347,7 @@ mod tests {
             PageId::TRAY,
             PageId::SYSMON,
             PageId::CLOCK,
+            PageId::CLIPBOARD,
         ] {
             assert!(page_entry(id).is_some(), "{id:?}");
         }
@@ -376,6 +393,7 @@ mod tests {
             sysmon: None,
             weather: None,
             today: None,
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
         };
         piece(id)
             .expect("in the table")

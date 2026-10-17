@@ -30,6 +30,8 @@ fn settings_round_trips_only_the_shells_own_choices() {
     assert!(value["duties"].get("bar").is_none());
     // CEL-2-K's `weather` location is likewise written only once chosen.
     assert!(value.get("weather").is_none());
+    // CEL-2-G adds `duties.clipboard`, written off like the other duties.
+    assert_eq!(value["duties"]["clipboard"], "off");
     assert_eq!(
         keys,
         [

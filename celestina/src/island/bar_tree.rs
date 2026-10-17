@@ -417,6 +417,7 @@ mod tests {
         let theme = Theme::dark();
         let owners = NameOwner::default();
         f(&BarCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &theme,
             output: "DP-1",
             model: None,

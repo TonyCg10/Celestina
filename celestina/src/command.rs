@@ -16,6 +16,7 @@ use celestina_shell::settings::MAX_NAME_BYTES;
 use celestina_shell::wallpaper::{is_showable, Mode as FitMode};
 use celestina_wayland::Config;
 
+use crate::clipboard::verbs::ClipboardVerb;
 use crate::energy::verbs;
 use crate::pieces::{self, PageId};
 
@@ -36,7 +37,7 @@ usage: celestina [--exit-after SECONDS] [--metrics] [--no-blur]
        celestina VERB
 
 verbs: island toggle
-       island open activity|notifications|tray|sysmon|clock
+       island open activity|notifications|tray|sysmon|clock|clipboard
        island close
        launcher toggle
        notifications toggle
@@ -49,6 +50,7 @@ verbs: island toggle
        caffeine on|off|toggle
        nightlight on|off|toggle
        session suspend|reboot|power-off|log-out
+       clipboard select N [S]|remove N [S]|clear|pause|resume
        quit";
 
 /// What a wallpaper verb addresses.
@@ -89,6 +91,9 @@ pub enum Verb {
     NightLight(Switch),
     /// End the session or the machine's day.
     Session(PowerAction),
+    /// A clipboard history verb: it answers success or failure only and
+    /// never returns an entry (a no-op while the duty is off).
+    Clipboard(ClipboardVerb),
     Quit,
 }
 
@@ -186,6 +191,9 @@ impl Verb {
             ["session", word] => {
                 Verb::Session(verbs::action_from_word(word).ok_or_else(|| unknown(&words))?)
             }
+            ["clipboard", rest @ ..] => {
+                Verb::Clipboard(ClipboardVerb::parse(rest).ok_or_else(|| unknown(&words))?)
+            }
             ["quit"] => Verb::Quit,
             _ => return Err(unknown(&words)),
         };
@@ -224,6 +232,7 @@ impl Verb {
             }
             Verb::WallpaperMode(mode) => own(vec!["wallpaper", "mode", mode_word(*mode)]),
             Verb::WallpaperRetry => own(vec!["wallpaper", "retry"]),
+            Verb::Clipboard(verb) => verb.words(),
             other => own(other.fixed_words()),
         }
     }
@@ -244,7 +253,8 @@ impl Verb {
             | Verb::WallpaperNext(_)
             | Verb::WallpaperPrev(_)
             | Verb::WallpaperMode(_)
-            | Verb::WallpaperRetry => Vec::new(),
+            | Verb::WallpaperRetry
+            | Verb::Clipboard(_) => Vec::new(),
         }
     }
 }
@@ -365,6 +375,17 @@ mod tests {
             (Verb::Session(PowerAction::Reboot), "session reboot"),
             (Verb::Session(PowerAction::PowerOff), "session power-off"),
             (Verb::Session(PowerAction::LogOut), "session log-out"),
+            (
+                Verb::Clipboard(ClipboardVerb::Select(3)),
+                "clipboard select 3",
+            ),
+            (
+                Verb::Clipboard(ClipboardVerb::Remove(0)),
+                "clipboard remove 0",
+            ),
+            (Verb::Clipboard(ClipboardVerb::Clear), "clipboard clear"),
+            (Verb::Clipboard(ClipboardVerb::Pause), "clipboard pause"),
+            (Verb::Clipboard(ClipboardVerb::Resume), "clipboard resume"),
             (Verb::Quit, "quit"),
             (
                 Verb::WallpaperSet {
@@ -514,6 +535,15 @@ mod tests {
             &["session"],
             &["session", "poweroff"],
             &["session", "reboot", "now"],
+            &["clipboard"],
+            &["clipboard", "select"],
+            &["clipboard", "select", "-1"],
+            &["clipboard", "select", "99999"],
+            &["clipboard", "remove", "x"],
+            &["clipboard", "clear", "all"],
+            &["clipboard", "list"],
+            &["clipboard", "show", "0"],
+            &["clipboard", "get", "0"],
         ] {
             assert!(Verb::parse(&strings(bad)).is_err(), "{bad:?}");
             assert!(parse(bad).is_err(), "{bad:?}");
@@ -592,7 +622,14 @@ mod tests {
         let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
         assert_eq!(
             words,
-            ["activity", "notifications", "tray", "sysmon", "clock"]
+            [
+                "activity",
+                "notifications",
+                "tray",
+                "sysmon",
+                "clock",
+                "clipboard"
+            ]
         );
         assert_eq!(
             PageId::all(),
@@ -601,7 +638,8 @@ mod tests {
                 PageId::NOTIFICATIONS,
                 PageId::TRAY,
                 PageId::SYSMON,
-                PageId::CLOCK
+                PageId::CLOCK,
+                PageId::CLIPBOARD
             ]
         );
     }
@@ -674,7 +712,7 @@ mod tests {
 
     #[test]
     fn the_usage_text_names_every_page_word() {
-        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock"));
+        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock|clipboard"));
     }
 
     #[test]

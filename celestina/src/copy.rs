@@ -197,7 +197,7 @@ pub const TRAY_PASSIVE: &str = "Inactivo";
 // Glance: the system monitor, the weather and the calendar (CEL-2-K).
 
 /// The Notifications tab's short label ("Notif."): the full title does not
-/// fit one of five equal pills, and the toolkit has no ellipsis.
+/// fit one of the equal pills, and the toolkit has no ellipsis.
 pub const TAB_NOTIFICATIONS: &str = "Notific.";
 
 /// The title of the Clock page ("Clock").
@@ -423,6 +423,83 @@ pub fn weather_condition(code: u8) -> &'static str {
 #[must_use]
 pub fn weather_updated(time: &str) -> String {
     format!("actualizado {time}")
+}
+
+// The Clipboard page and piece (CEL-2-G). Nothing of an entry is ever
+// translated or kept here: only the words around it.
+
+/// The title of the Clipboard page ("Clipboard").
+pub const PAGE_CLIPBOARD: &str = "Portapapeles";
+
+/// The Clipboard tab's short label ("Clipb."): the full title does not fit
+/// one of six equal pills, and the toolkit has no ellipsis.
+pub const TAB_CLIPBOARD: &str = "Portap.";
+
+/// The Clipboard page's only row while the history holds nothing
+/// ("No entries").
+pub const CLIPBOARD_EMPTY: &str = "Sin entradas";
+
+/// The Clipboard page's only row while the duty is off
+/// ("The clipboard history is off").
+pub const CLIPBOARD_OFF: &str = "El historial del portapapeles está desactivado";
+
+/// The Clipboard page's only row when the session offers no way to watch
+/// the clipboard ("The clipboard is not available in this session").
+pub const CLIPBOARD_UNAVAILABLE: &str = "El portapapeles no está disponible en esta sesión";
+
+/// The button that stops recording copies ("Pause").
+pub const CLIPBOARD_PAUSE: &str = "Pausar";
+
+/// The button that records copies again ("Resume").
+pub const CLIPBOARD_RESUME: &str = "Reanudar";
+
+/// Shown beside the buttons while recording is paused ("Paused").
+pub const CLIPBOARD_PAUSED: &str = "En pausa";
+
+/// The button that starts emptying the history ("Clear").
+pub const CLIPBOARD_CLEAR: &str = "Vaciar";
+
+/// The question the confirmation step asks ("Clear the history?").
+pub const CLIPBOARD_CLEAR_ASK: &str = "¿Vaciar el historial?";
+
+/// The button that confirms emptying the history ("Confirm").
+pub const CLIPBOARD_CLEAR_CONFIRM: &str = "Confirmar";
+
+/// The button that gives up emptying the history ("Cancel").
+pub const CLIPBOARD_CLEAR_CANCEL: &str = "Cancelar";
+
+/// The line under the rows that counts the entries the page has no room for
+/// ("12 more").
+#[must_use]
+pub fn clipboard_more(left_out: usize) -> String {
+    format!("{left_out} más")
+}
+
+/// The accessible name and label of an image entry: a fixed word and its
+/// size, never a pixel ("Image, 340 KB").
+#[must_use]
+pub fn clipboard_image_name(bytes: usize) -> String {
+    const KIB: usize = 1024;
+    const MIB: usize = 1024 * 1024;
+    if bytes >= MIB {
+        let tenths = bytes.saturating_mul(10) / MIB;
+        format!("Imagen, {},{} MB", tenths / 10, tenths % 10)
+    } else if bytes >= KIB {
+        format!("Imagen, {} KB", bytes / KIB)
+    } else {
+        format!("Imagen, {bytes} B")
+    }
+}
+
+/// The accessible state of the bar's clipboard icon: whether recording is
+/// paused.
+#[must_use]
+pub fn bar_clipboard_state(paused: bool) -> &'static str {
+    if paused {
+        "Portapapeles, en pausa"
+    } else {
+        "Portapapeles"
+    }
 }
 
 #[cfg(test)]

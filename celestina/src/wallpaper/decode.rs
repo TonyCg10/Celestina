@@ -112,6 +112,18 @@ pub const PNG_METADATA_BYTES: u64 = 16 * 1024 * 1024;
 pub const DECODER_SLACK: u64 = 16 * 1024 * 1024;
 /// The largest wallpaper file accepted, in bytes.
 pub const MAX_FILE_BYTES: u64 = 128 * 1024 * 1024;
+/// The largest source area [`decode_png_thumbnail`] accepts: 16 MP (a 4K
+/// screenshot is 8.3 MP). A clipboard image is a selection any client may
+/// offer, and its thumbnail is 64 pixels a side; it does not get the
+/// wallpaper's budget.
+pub const THUMBNAIL_MAX_SOURCE_PIXELS: u64 = 16 * 1024 * 1024;
+/// The largest decoded image [`decode_png_thumbnail`] accepts: 64 MiB, 16 MP
+/// of 8-bit RGBA (a 16-bit image gets half the area).
+pub const THUMBNAIL_MAX_DECODED_BYTES: u64 = 64 * 1024 * 1024;
+/// The most the decode of one clipboard image may need: the decoded image,
+/// the PNG's ancillary chunks and the decoder's scratch.
+pub const THUMBNAIL_MAX_DECODE_BYTES: u64 =
+    THUMBNAIL_MAX_DECODED_BYTES + PNG_METADATA_BYTES + DECODER_SLACK;
 /// The largest output buffer side, in device pixels.
 pub const MAX_TARGET_DIMENSION: u32 = 8_192;
 /// The largest output buffer area, in device pixels: an 8K output
@@ -195,18 +207,27 @@ pub enum DecodeError {
         width: u32,
         height: u32,
     },
-    /// The header declares more than [`MAX_SOURCE_PIXELS`].
-    #[error("image {width}x{height} exceeds {MAX_SOURCE_PIXELS} pixels: {}", path.display())]
+    /// The header declares more than the decode's area bound
+    /// ([`MAX_SOURCE_PIXELS`] for a wallpaper, [`THUMBNAIL_MAX_SOURCE_PIXELS`]
+    /// for a clipboard thumbnail).
+    #[error("image {width}x{height} exceeds {limit} pixels: {}", path.display())]
     TooManyPixels {
         path: PathBuf,
         width: u32,
         height: u32,
+        limit: u64,
     },
-    /// Decoding would need more than [`MAX_DECODE_BYTES`], or the decoded
-    /// image more than [`MAX_DECODED_BYTES`] (a 16-bit image of a large
-    /// area, a progressive JPEG with full-resolution chroma, ...).
-    #[error("decoding needs about {needed} bytes, over the {MAX_DECODE_BYTES}-byte budget (decoded image at most {MAX_DECODED_BYTES}): {}", path.display())]
-    OverBudget { path: PathBuf, needed: u64 },
+    /// Decoding would need more than the decode's budget
+    /// ([`MAX_DECODE_BYTES`] for a wallpaper, [`THUMBNAIL_MAX_DECODE_BYTES`]
+    /// for a clipboard thumbnail), or the decoded image more than its bound
+    /// (a 16-bit image of a large area, a progressive JPEG with
+    /// full-resolution chroma, ...).
+    #[error("decoding needs about {needed} bytes, over the {budget}-byte budget: {}", path.display())]
+    OverBudget {
+        path: PathBuf,
+        needed: u64,
+        budget: u64,
+    },
     /// The decoder produces a colour type this shell does not scale.
     #[error("unsupported colour type {color:?}: {}", path.display())]
     UnsupportedColor { path: PathBuf, color: ColorType },
@@ -263,6 +284,92 @@ pub fn decode(path: &Path, target_px: (u32, u32), mode: Mode) -> Result<Decoded,
         })
 }
 
+/// What an in-memory image is called in an error: it has no path.
+const IN_MEMORY: &str = "<in-memory image>";
+
+/// Decodes the PNG in `bytes` (the clipboard's `image/png`) into an opaque
+/// RGBA thumbnail that fits a square of `max_side` pixels, keeping the aspect
+/// ratio and never enlarging. Every bound of this module applies: the
+/// header's dimensions, the memory budget checked before a pixel is decoded,
+/// one frame only, a caught decoder panic; the area and memory bounds are the
+/// tighter [`THUMBNAIL_MAX_SOURCE_PIXELS`], [`THUMBNAIL_MAX_DECODED_BYTES`]
+/// and [`THUMBNAIL_MAX_DECODE_BYTES`]. Anything that is not a PNG is
+/// refused.
+///
+/// # Errors
+///
+/// A [`DecodeError`] naming the first bound or check the bytes failed. The
+/// error carries no byte of the image.
+pub fn decode_png_thumbnail(bytes: &[u8], max_side: u32) -> Result<Decoded, DecodeError> {
+    let path = Path::new(IN_MEMORY);
+    panic::catch_unwind(AssertUnwindSafe(|| {
+        thumbnail_unguarded(path, bytes, max_side)
+    }))
+    .unwrap_or_else(|payload| {
+        Err(DecodeError::Panicked {
+            path: path.to_owned(),
+            message: panic_message(payload.as_ref()),
+        })
+    })
+}
+
+fn thumbnail_unguarded(path: &Path, bytes: &[u8], max_side: u32) -> Result<Decoded, DecodeError> {
+    if max_side == 0 || max_side > MAX_TARGET_DIMENSION {
+        return Err(DecodeError::InvalidTarget {
+            width: max_side,
+            height: max_side,
+        });
+    }
+    let len = bytes.len() as u64;
+    if len == 0 {
+        return Err(DecodeError::Empty {
+            path: path.to_owned(),
+        });
+    }
+    if len > MAX_FILE_BYTES {
+        return Err(DecodeError::TooLarge {
+            path: path.to_owned(),
+            bytes: len,
+        });
+    }
+    let source = read_source_from(
+        path,
+        io::Cursor::new(bytes),
+        len,
+        Formats::PngOnly,
+        Budget::THUMBNAIL,
+    )?;
+    let (image_w, image_h) = source.oriented_size();
+    let (width, height) = fit_within(image_w, image_h, max_side);
+    let rgba =
+        render(&source, Mode::Stretch, (width, height)).ok_or_else(|| DecodeError::OverBudget {
+            path: path.to_owned(),
+            needed: u64::from(width) * u64::from(height) * 4,
+            budget: THUMBNAIL_MAX_DECODE_BYTES,
+        })?;
+    Ok(Decoded {
+        rgba,
+        width,
+        height,
+        source_px: (image_w, image_h),
+    })
+}
+
+/// `width` × `height` scaled down to fit a square of `max_side`, each side at
+/// least one pixel; a smaller image keeps its size.
+fn fit_within(width: u32, height: u32, max_side: u32) -> (u32, u32) {
+    let longest = width.max(height);
+    if longest <= max_side {
+        return (width, height);
+    }
+    let scaled = |side: u32| {
+        let value =
+            (u64::from(side) * u64::from(max_side) + u64::from(longest) / 2) / u64::from(longest);
+        u32::try_from(value).unwrap_or(max_side).clamp(1, max_side)
+    };
+    (scaled(width), scaled(height))
+}
+
 fn panic_message(payload: &(dyn Any + Send)) -> String {
     let text = payload
         .downcast_ref::<&str>()
@@ -311,6 +418,7 @@ fn decode_unguarded(
     let rgba = render(&source, mode, target_px).ok_or_else(|| DecodeError::OverBudget {
         path: path.to_owned(),
         needed: u64::from(target_w) * u64::from(target_h) * 4,
+        budget: MAX_DECODE_BYTES,
     })?;
     Ok(Decoded {
         rgba,
@@ -418,15 +526,62 @@ struct Source {
 }
 
 fn read_source(path: &Path, file: &File, file_bytes: u64) -> Result<Source, DecodeError> {
-    let read_error = |source: io::Error| DecodeError::Read {
-        path: path.to_owned(),
-        source,
-    };
-    let mut reader: Reader<'_> = BufReader::new(Capped {
+    let reader: Reader<'_> = BufReader::new(Capped {
         inner: file,
         position: 0,
         end: file_bytes,
     });
+    read_source_from(path, reader, file_bytes, Formats::Any, Budget::WALLPAPER)
+}
+
+/// The area and memory one decode may take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Budget {
+    /// The largest source area, in pixels.
+    pixels: u64,
+    /// The largest decoded image, in bytes.
+    decoded: u64,
+    /// The most the whole decode may need, in bytes.
+    total: u64,
+}
+
+impl Budget {
+    /// A wallpaper file.
+    const WALLPAPER: Self = Self {
+        pixels: MAX_SOURCE_PIXELS,
+        decoded: MAX_DECODED_BYTES,
+        total: MAX_DECODE_BYTES,
+    };
+    /// A clipboard image made into a thumbnail.
+    const THUMBNAIL: Self = Self {
+        pixels: THUMBNAIL_MAX_SOURCE_PIXELS,
+        decoded: THUMBNAIL_MAX_DECODED_BYTES,
+        total: THUMBNAIL_MAX_DECODE_BYTES,
+    };
+}
+
+/// Which formats [`read_source_from`] accepts.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Formats {
+    /// PNG, JPEG and WebP: a wallpaper file.
+    Any,
+    /// PNG only: the clipboard's `image/png`.
+    PngOnly,
+}
+
+/// Reads the image `reader` holds, `file_bytes` long, through every bound of
+/// the module; `path` only names it in errors.
+fn read_source_from<R: BufRead + Seek>(
+    path: &Path,
+    mut reader: R,
+    file_bytes: u64,
+    formats: Formats,
+    budget: Budget,
+) -> Result<Source, DecodeError> {
+    let read_error = |source: io::Error| DecodeError::Read {
+        path: path.to_owned(),
+        source,
+    };
     let mut head = [0u8; 32];
     let mut filled = 0;
     while filled < head.len() {
@@ -441,6 +596,12 @@ fn read_source(path: &Path, file: &File, file_bytes: u64) -> Result<Source, Deco
     let format = image::guess_format(&head[..filled]).ok();
     let decode_error = |source: ImageError| image_error(path, source);
     match format {
+        Some(format) if formats == Formats::PngOnly && format != ImageFormat::Png => {
+            Err(DecodeError::UnsupportedFormat {
+                path: path.to_owned(),
+                format: Some(format),
+            })
+        }
         Some(ImageFormat::Png) => {
             let mut limits = dimension_limits();
             limits.max_alloc = Some(PNG_METADATA_BYTES);
@@ -450,11 +611,11 @@ fn read_source(path: &Path, file: &File, file_bytes: u64) -> Result<Source, Deco
                     path: path.to_owned(),
                 });
             }
-            read_pixels(path, decoder, PNG_METADATA_BYTES)
+            read_pixels(path, decoder, PNG_METADATA_BYTES, budget)
         }
         Some(ImageFormat::Jpeg) => {
             let frame = jpeg_frame(path, &mut reader)?;
-            check_dimensions(path, frame.width, frame.height)?;
+            check_dimensions(path, frame.width, frame.height, budget)?;
             reader.rewind().map_err(read_error)?;
             let mut decoder = JpegDecoder::new(reader).map_err(decode_error)?;
             decoder
@@ -466,6 +627,7 @@ fn read_source(path: &Path, file: &File, file_bytes: u64) -> Result<Source, Deco
                 file_bytes
                     .saturating_mul(2)
                     .saturating_add(frame.coefficient_bytes),
+                budget,
             )
         }
         Some(ImageFormat::WebP) => {
@@ -481,7 +643,7 @@ fn read_source(path: &Path, file: &File, file_bytes: u64) -> Result<Source, Deco
                     feature: "lossless WebP coding",
                 });
             }
-            check_dimensions(path, header.width, header.height)?;
+            check_dimensions(path, header.width, header.height, budget)?;
             reader.rewind().map_err(read_error)?;
             let mut decoder = WebPDecoder::new(reader).map_err(decode_error)?;
             if decoder.has_animation() {
@@ -504,7 +666,7 @@ fn read_source(path: &Path, file: &File, file_bytes: u64) -> Result<Source, Deco
                 .div_ceil(2)
                 .saturating_add(file_bytes.saturating_mul(2))
                 .saturating_add(alpha);
-            read_pixels(path, decoder, extra)
+            read_pixels(path, decoder, extra, budget)
         }
         format => Err(DecodeError::UnsupportedFormat {
             path: path.to_owned(),
@@ -543,7 +705,12 @@ fn malformed(path: &Path, format: ImageFormat, what: &'static str) -> DecodeErro
     }
 }
 
-fn check_dimensions(path: &Path, width: u32, height: u32) -> Result<(), DecodeError> {
+fn check_dimensions(
+    path: &Path,
+    width: u32,
+    height: u32,
+    budget: Budget,
+) -> Result<(), DecodeError> {
     if width == 0 || height == 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
         return Err(DecodeError::Dimensions {
             path: path.to_owned(),
@@ -551,11 +718,12 @@ fn check_dimensions(path: &Path, width: u32, height: u32) -> Result<(), DecodeEr
             height,
         });
     }
-    if u64::from(width) * u64::from(height) > MAX_SOURCE_PIXELS {
+    if u64::from(width) * u64::from(height) > budget.pixels {
         return Err(DecodeError::TooManyPixels {
             path: path.to_owned(),
             width,
             height,
+            limit: budget.pixels,
         });
     }
     Ok(())
@@ -568,9 +736,10 @@ fn read_pixels<D: ImageDecoder>(
     path: &Path,
     mut decoder: D,
     extra: u64,
+    budget: Budget,
 ) -> Result<Source, DecodeError> {
     let (width, height) = decoder.dimensions();
-    check_dimensions(path, width, height)?;
+    check_dimensions(path, width, height, budget)?;
     let color = decoder.color_type();
     let (channels, wide) = match color {
         ColorType::L8 => (1, false),
@@ -593,8 +762,9 @@ fn read_pixels<D: ImageDecoder>(
     let over = || DecodeError::OverBudget {
         path: path.to_owned(),
         needed,
+        budget: budget.total,
     };
-    if total > MAX_DECODED_BYTES || needed > MAX_DECODE_BYTES {
+    if total > budget.decoded || needed > budget.total {
         return Err(over());
     }
     let len = usize::try_from(total).map_err(|_| over())?;
@@ -1267,5 +1437,148 @@ mod tests {
         assert_eq!(panic_message(payload.as_ref()), "boom");
         let payload: Box<dyn Any + Send> = Box::new(7u8);
         assert_eq!(panic_message(payload.as_ref()), "unknown panic");
+    }
+
+    // ---- In-memory PNG thumbnails (the clipboard's images).
+
+    fn png_of(w: u32, h: u32, px: [u8; 4]) -> Vec<u8> {
+        let image = image::RgbaImage::from_pixel(w, h, image::Rgba(px));
+        let mut out = io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(image)
+            .write_to(&mut out, ImageFormat::Png)
+            .expect("encode a png");
+        out.into_inner()
+    }
+
+    #[test]
+    fn a_large_png_becomes_a_thumbnail_that_keeps_its_aspect() {
+        let thumb = decode_png_thumbnail(&png_of(400, 200, [10, 20, 30, 255]), 64).expect("decode");
+        assert_eq!((thumb.width, thumb.height), (64, 32));
+        assert_eq!(thumb.source_px, (400, 200));
+        assert_eq!(thumb.rgba.len(), 64 * 32 * 4);
+        assert_eq!(at(&thumb.rgba, thumb.width, 5, 5), [10, 20, 30, 255]);
+        let tall = decode_png_thumbnail(&png_of(100, 1000, [1, 2, 3, 255]), 64).expect("decode");
+        assert_eq!((tall.width, tall.height), (6, 64));
+    }
+
+    #[test]
+    fn a_small_png_is_not_enlarged() {
+        let thumb = decode_png_thumbnail(&png_of(10, 7, [9, 9, 9, 255]), 64).expect("decode");
+        assert_eq!((thumb.width, thumb.height), (10, 7));
+    }
+
+    #[test]
+    fn fit_within_never_returns_an_empty_or_oversized_side() {
+        for (w, h) in [(1, 8_192), (8_192, 1), (8_192, 8_192), (65, 64), (64, 65)] {
+            let (fw, fh) = fit_within(w, h, 64);
+            assert!((1..=64).contains(&fw) && (1..=64).contains(&fh), "{w}x{h}");
+        }
+    }
+
+    #[test]
+    fn the_thumbnail_entry_refuses_what_is_not_a_bounded_png() {
+        let png = png_of(8, 8, [0, 0, 0, 255]);
+        assert!(matches!(
+            decode_png_thumbnail(&png, 0),
+            Err(DecodeError::InvalidTarget { .. })
+        ));
+        assert!(matches!(
+            decode_png_thumbnail(&[], 64),
+            Err(DecodeError::Empty { .. })
+        ));
+        assert!(decode_png_thumbnail(b"GIF89a not an image", 64).is_err());
+        // A PNG cut short is malformed, not a panic and not a hang.
+        assert!(decode_png_thumbnail(&png[..png.len() / 2], 64).is_err());
+        // A JPEG decodes elsewhere but is not an `image/png`.
+        let mut jpeg = io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(8, 8, image::Rgb([1, 2, 3])))
+            .write_to(&mut jpeg, ImageFormat::Jpeg)
+            .expect("encode a jpeg");
+        assert!(matches!(
+            decode_png_thumbnail(&jpeg.into_inner(), 64),
+            Err(DecodeError::UnsupportedFormat { .. })
+        ));
+    }
+
+    /// The CRC-32 of the PNG specification (ISO 3309, polynomial
+    /// 0xEDB88320), so a test can rewrite a chunk and keep it valid.
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFF_u32;
+        for &byte in bytes {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                let mask = (crc & 1).wrapping_neg();
+                crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+            }
+        }
+        !crc
+    }
+
+    /// A real PNG whose IHDR is rewritten to claim `width` x `height` at
+    /// `depth` bits per channel, with a correct CRC, so the decoder reads the
+    /// header as valid and only a bound can refuse it. The pixel data that
+    /// would follow is not there.
+    fn png_claiming(width: u32, height: u32, depth: u8) -> Vec<u8> {
+        let mut png = png_of(2, 2, [0, 0, 0, 255]);
+        // Signature (8), IHDR length (4) and type (4), then the 13 bytes of
+        // data and the CRC over type and data.
+        assert_eq!(&png[12..16], b"IHDR");
+        png[16..20].copy_from_slice(&width.to_be_bytes());
+        png[20..24].copy_from_slice(&height.to_be_bytes());
+        png[24] = depth;
+        let crc = crc32(&png[12..29]);
+        png[29..33].copy_from_slice(&crc.to_be_bytes());
+        png
+    }
+
+    #[test]
+    fn the_test_crc_is_the_png_one() {
+        // The IHDR of the unmodified image carries the encoder's CRC.
+        let png = png_of(2, 2, [0, 0, 0, 255]);
+        assert_eq!(crc32(&png[12..29]).to_be_bytes(), png[29..33]);
+        assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
+    }
+
+    #[test]
+    fn a_png_header_over_the_dimension_bound_is_refused_before_decoding() {
+        let error =
+            decode_png_thumbnail(&png_claiming(60_000, 60_000, 8), 64).expect_err("refused");
+        assert!(
+            matches!(
+                error,
+                DecodeError::Dimensions { .. } | DecodeError::Limits { .. }
+            ),
+            "a bound, not a decode failure: {error:?}"
+        );
+    }
+
+    #[test]
+    fn a_clipboard_png_gets_the_thumbnail_budget_not_the_wallpapers() {
+        // 4097 x 4097 is 16.8 MP: within a wallpaper's 40 MP, over 16 MP.
+        let error = decode_png_thumbnail(&png_claiming(4_097, 4_097, 8), 64).expect_err("refused");
+        assert!(
+            matches!(
+                error,
+                DecodeError::TooManyPixels {
+                    limit: THUMBNAIL_MAX_SOURCE_PIXELS,
+                    ..
+                }
+            ),
+            "{error:?}"
+        );
+        // 3000 x 3000 at 16 bits is 72 MB decoded: within the area, over
+        // the 64 MiB the thumbnail may decode.
+        let error = decode_png_thumbnail(&png_claiming(3_000, 3_000, 16), 64).expect_err("refused");
+        assert!(
+            matches!(
+                error,
+                DecodeError::OverBudget {
+                    budget: THUMBNAIL_MAX_DECODE_BYTES,
+                    ..
+                }
+            ),
+            "{error:?}"
+        );
+        assert_eq!(THUMBNAIL_MAX_DECODED_BYTES, 4 * THUMBNAIL_MAX_SOURCE_PIXELS);
     }
 }

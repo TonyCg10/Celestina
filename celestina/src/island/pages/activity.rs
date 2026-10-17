@@ -309,6 +309,7 @@ mod tests {
     fn view_for(model: Option<&NiriModel>, output: &str) -> View {
         let owners = NameOwner::default();
         Activity.view(&PageCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &celestina_paint::Theme::dark(),
             max_size: (760.0, 560.0),
             model,
@@ -466,6 +467,7 @@ mod tests {
 
     fn view_in(m: &NiriModel, theme: &Theme, max_size: (f32, f32)) -> View {
         Activity.view(&PageCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme,
             max_size,
             model: Some(m),
@@ -484,6 +486,7 @@ mod tests {
 
     fn wants_in(m: &NiriModel, theme: &Theme, max_size: (f32, f32)) -> (f32, f32) {
         Activity.wants(&PageCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme,
             max_size,
             model: Some(m),

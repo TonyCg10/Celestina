@@ -11,7 +11,9 @@ by the CEL-2 units, each unit adding its own (as the CEL-2 ledger states), and
 are run the same way; among them CEL-2-E queues VAL-CEL2-WALLPAPER and
 CEL-2-B queues VAL-CEL2-IDLE, VAL-CEL2-CAFFEINE, VAL-CEL2-NIGHTLIGHT and
 VAL-CEL2-SESSION; CEL-2-K queues VAL-CEL2-SYSMON, VAL-CEL2-WEATHER,
-VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS. None has been run and none is closed by an agent.
+VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS; CEL-2-G queues VAL-CEL2-CLIPBOARD-LIVE,
+VAL-CEL2-CLIPBOARD-SECRET, VAL-CEL2-CLIPBOARD-IMAGE and VAL-CEL2-CLIPBOARD-LOOK.
+None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
 
@@ -474,5 +476,71 @@ VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS. None has been run and none is closed
   the overflow popup behaves
 - **Pass condition:** every tab label is fully visible and every tab is easy to
   hit; otherwise record the failure and open a corrective unit
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-CLIPBOARD-LIVE — The clipboard history with real applications
+
+- **Status:** pending
+- **Related implementation:** CEL-2-G (`duties.clipboard`, the bar piece and
+  the Island page)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; `duties.clipboard` set to `"on"` in `~/.config/celestina/shell.json`
+- **Procedure:** copy text in a browser and in a terminal, and check the
+  piece and the page `celestina island open clipboard` list them newest first.
+  Copy something from a real password manager and check it is not listed. Pick
+  an older entry by click and by Enter, paste it in another application, and
+  check the page does not gain a duplicate. Remove one entry with Delete, use
+  pause and resume, and clear with its confirmation. Look at the piece (and its
+  paused mark) and the page at both scales
+- **Pass condition:** entries appear and paste back unchanged; the password
+  manager's copy never appears; no duplicate after a re-selection; the piece
+  and page look like the rest of the shell and work from the keyboard
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-CLIPBOARD-SECRET — The history file and the journal hold no secret
+
+- **Status:** pending
+- **Related implementation:** CEL-2-G (persistence and logging rules)
+- **Requires:** as above
+- **Procedure:** with the duty on and a few texts copied, run
+  `stat -c '%a' ~/.local/state/celestina/clipboard.json` and the same on the
+  directory. Set `duties.clipboard` to `"off"` and check the file is gone. Run
+  `journalctl --user -b | grep -F` for a distinctive string you copied
+- **Pass condition:** file mode `600`, directory `700`; the file is absent
+  with the duty off; the string appears in no journal line
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-CLIPBOARD-IMAGE — A screenshot copy round trip
+
+- **Status:** pending
+- **Related implementation:** CEL-2-G (PNG entries, thumbnails)
+- **Requires:** as above
+- **Procedure:** copy a screenshot to the clipboard with the screenshot tool,
+  check the page shows its thumbnail, copy something else, select the image
+  entry again and paste it in an image-aware application
+- **Pass condition:** the thumbnail shows; the pasted image is the original;
+  no image bytes are written under `~/.local/state/celestina/`
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-CLIPBOARD-LOOK — The page's tabs, rows line and thumbnails
+
+- **Status:** pending
+- **Related implementation:** CEL-2-G round B (tab strip, the "N more" line,
+  thumbnail alpha)
+- **Requires:** as above; try the text scales Compact, Normal, Large and Larger
+  and a light and a dark wallpaper behind the Island
+- **Procedure:** open the Island and look at the six tabs (about 58 px each,
+  at the caption size; the Notifications and Clipboard tabs show their short
+  forms "Notific." and "Portap.") at each text scale; fill the history past what the page shows and check the last line says how
+  many entries are left out; copy a screenshot with transparent corners and
+  look at its thumbnail
+- **Pass condition:** every tab label is whole at Compact and Normal and
+  clipped, never overlapping its neighbour, at Large and Larger; the "N more"
+  line is complete and counts right; a transparent thumbnail is acceptable on
+  both (it is composited over black, a known limit)
 - **Result:** not run
 - **Evidence:** none

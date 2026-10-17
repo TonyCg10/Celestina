@@ -340,6 +340,7 @@ mod tests {
 
     fn page_with(owners: &NameOwner, items: &[TrayRow]) -> View {
         Tray.view(&PageCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &celestina_paint::Theme::dark(),
             max_size: (760.0, 560.0),
             model: None,
@@ -514,6 +515,7 @@ mod tests {
         assert!(v.children[0].children.len() <= MAX_ROWS);
         assert!(!v.children[0].children.is_empty());
         let wants = Tray.wants(&PageCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &celestina_paint::Theme::dark(),
             max_size: (760.0, 560.0),
             model: None,

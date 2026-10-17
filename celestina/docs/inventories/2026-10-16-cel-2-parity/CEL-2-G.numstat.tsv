@@ -1,0 +1,111 @@
+# CEL-2-G exact change inventory
+
+Base revision	99bbbda980dc36a45b0beae19303d2e9c29b576a
+Pathspec	celestina-rs/crates/celestina-shell/src/clipboard.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell/tests/salvage.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-ui/src/input.rs
+Pathspec	celestina/docs/evidence/2026-10-17-clipboard-plan.md
+Pathspec	celestina/docs/evidence/2026-10-17-clipboard-privacy-design.md
+Pathspec	celestina/docs/evidence/2026-10-17-clipboard.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-G.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/scripts/wallpaper-backdrop-probe.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/bar/view.rs
+Pathspec	celestina/src/clipboard/mod.rs
+Pathspec	celestina/src/clipboard/store.rs
+Pathspec	celestina/src/clipboard/thumb.rs
+Pathspec	celestina/src/clipboard/verbs.rs
+Pathspec	celestina/src/clipboard/worker.rs
+Pathspec	celestina/src/command.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/energy/wire.rs
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/island/pages/clipboard.rs
+Pathspec	celestina/src/island/pages/clock.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/notifications.rs
+Pathspec	celestina/src/island/pages/sysmon.rs
+Pathspec	celestina/src/island/pages/tabs.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/pieces/clipboard.rs
+Pathspec	celestina/src/pieces/clock.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/notifications.rs
+Pathspec	celestina/src/pieces/sysmon.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	celestina/src/pieces/weather.rs
+Pathspec	celestina/src/pieces/workspaces.rs
+Pathspec	celestina/src/providers/settings.rs
+Pathspec	celestina/src/wallpaper/decode.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1183	0	3370b4cfc71353db3a2ee3044231fc4469798aa9d3b072e3e5646e73400bc8ff	celestina-rs/crates/celestina-shell/src/clipboard.rs
+3	0	768502492e569b2b4588944f8cc1554719e651769bf99d87b6f8f7944c5fc505	celestina-rs/crates/celestina-shell/src/lib.rs
+53	2	feea39bb6a092d5d347aae783e948882c90e6f88cf46ea64e83f58a008182306	celestina-rs/crates/celestina-shell/src/settings.rs
+2	0	299ff21589c9ce31fd954d778508323f2db9430b4c823a7f46d7e87364e46dbe	celestina-rs/crates/celestina-shell/tests/salvage.rs
+1	1	85a895ccb40abd04dfedd0b39a5b3711ae4afbee524c4e5206659d438236719f	celestina/Cargo.lock
+1	1	690ad542d3a75972a508f249b3dbd951d2c3d0a1b0f68f63412dacbf683e1030	celestina/Cargo.toml
+17	2	6dc70cd98c90b3d49a418d7135c65a34bfc693cd14c2553c11efcb03c22e0b08	celestina/README.md
+7	0	42e00dc512261ae6ac173430f7c1efaaae08ec575f43c349a3904f6debb0261a	celestina/STATUS.md
+69	1	0846063fc032fc88507d04beb6fc83bac49568c2b1013d292abf6f7425f3cc2f	celestina/VALIDATION.md
+25	0	32a157f37d5de2dde3e4e048a7968492b0343e52d25b51cb3a0264116fd10d86	celestina/crates/celestina-ui/src/input.rs
+112	0	81af32230b43d1ee133c8fa8d42589ff3ecbd69ca581c8300c653611f404978c	celestina/docs/evidence/2026-10-17-clipboard-plan.md
+177	0	92fbfa8d8e457622f2ebdc5a8bb045494d17d1cefdfad53b8e9a0c6b5879b20b	celestina/docs/evidence/2026-10-17-clipboard-privacy-design.md
+211	0	ed2b75f5bace1e4552627cf7cf940b5e1be9a76556b11dd0f57bb4370755ca8f	celestina/docs/evidence/2026-10-17-clipboard.md
+111	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-G.numstat.tsv
+1	1	f0c433334ed0c7cc80782339ed3c683ef7a4175b4f17a37a9b0f761a77c37ccf	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+246	4	d4026dd5d9b8f8b6cadf25752431841e9a0492a0dbdccaf8ba7f57e93a869719	celestina/scripts/smoke.sh
+4	0	51a2799ffb511103fbc5fa99e350fa55e3d15fe7fe18995700d563b94e94e326	celestina/scripts/wallpaper-backdrop-probe.sh
+97	2	414437de0c5823fd0573c6ac2b72a04e46d32ca90f48ddb732607e9cb79a53f7	celestina/src/app.rs
+1	0	ea42acb5801e0b3c0a743d56d2035e3574233ef3d4077a7610a2ca14f650637a	celestina/src/bar/view.rs
+1153	0	b64aec450dd4e404735e387927ae80b7584bc31798ce099d2b01f463e5ee53d3	celestina/src/clipboard/mod.rs
+1005	0	a1d054d7c3375a1e69b4ec90cc9a193776977ed0d358358d5125bb79cc19c731	celestina/src/clipboard/store.rs
+249	0	e67457217532734b7af6b4c0bed3ca07fd0969b3de4f60c073380fb3105d9e9d	celestina/src/clipboard/thumb.rs
+238	0	37a1b51906c0627ad338a1055f3c31f1129ec76c1cd186b65e04bdf431eb0a67	celestina/src/clipboard/verbs.rs
+2818	0	09aa0978919067c1e4ff21cc983d00004b010d7561bd1a3e039e4bf713b6e245	celestina/src/clipboard/worker.rs
+43	5	8fb8d154024cbba70efdc07f17a5b68b609ed83f48ce66ce6990a9f3103a5057	celestina/src/command.rs
+78	1	be578d2d824d10565cf658607fed6a4a1b3b66044e82ddb12fc34de573e0efdb	celestina/src/copy.rs
+22	20	a6639081ccda4a09a8b0fe459170957cc40c2379ef5ab038e9d503a5beb202d8	celestina/src/energy/wire.rs
+1	0	57782fece8d7296f8fdfa0a5e204ddf942d916f3cde9de0c2729c7ae01253673	celestina/src/island/bar_tree.rs
+446	2	eebe268e207dd81a54df0cb79d2721057c8e1e98f896e5212ff751f1c48ca798	celestina/src/island/mod.rs
+3	0	84380745d584c0fa964b95503066ee32eef47f189397f2fc399c2f7e6d0a709e	celestina/src/island/pages/activity.rs
+1146	0	54e2487d7ba85a088b24f8df05792f95069ffea36b0fd842698cb752a15263e7	celestina/src/island/pages/clipboard.rs
+2	0	8b778b8177ada6c439e4b53c31da97607c16c244a600b03484d8813dbd992daf	celestina/src/island/pages/clock.rs
+46	16	bff742395f2286580b1f99c10fb79a3199e3fef743410847e23eac8fc63e4898	celestina/src/island/pages/mod.rs
+3	0	5585caefaf55b3b77c486e4118f05b68ee5a43d21c1de448375030899faed89f	celestina/src/island/pages/notifications.rs
+1	0	73bf1431a34fecf17ee151525dae4ea8b62d44427972f4740c297a58a4f4d1eb	celestina/src/island/pages/sysmon.rs
+61	33	1e1fc59f54f59ddde7b87e3d42a874f513dba7c223e93a02dd4192efe3b31407	celestina/src/island/pages/tabs.rs
+2	0	af0f7e7d6a884173a4ecb330ddcafe7e79ccfc48059a063fd5cc6cac23ad623e	celestina/src/island/pages/tray.rs
+9	1	3e17f420ee3021ec8c3f7aa82432a8d8f2698c341efe8c3feac23b573f162c1e	celestina/src/island/view.rs
+1	0	da01c06159b1fc639d5382f4815296b1f6596ee72defa9a031abc85face6ddf4	celestina/src/lib.rs
+17	1	d5eef1ff75074710457c6ebe818aa1f01af2878b1abc0990cee84720841c646d	celestina/src/main.rs
+3	0	a73ffaef376a23f1c2446dbf5e246102a78486b4949521f9173fb98c3668daa3	celestina/src/message.rs
+232	0	e6219ea80e8052d7b32ab3ab6a626fa2fa366be01dece1580de05ad699647238	celestina/src/pieces/clipboard.rs
+1	0	455f0aad435cb6f53c126763f184a4cdd29f5c2ff04fd06c37f9d9730c99c895	celestina/src/pieces/clock.rs
+22	4	28c25304868170d38c95ba8c8d147bba03b4fd2b5f807baa2c612a74be744095	celestina/src/pieces/mod.rs
+1	0	f39d3af0ebfe5a6a0ffe21e57b130a5e4800b078b4a8af5a3b5ccdab22d465a9	celestina/src/pieces/notifications.rs
+1	0	5d6d90609c779394ae2a88c39486ca8eb63d6341ad1dc67f9f46ce519161cdad	celestina/src/pieces/sysmon.rs
+1	0	8ecf81eec92d75fe638d11be6639b0fa9a7656e335adb53eb06ff3723700d37a	celestina/src/pieces/tray.rs
+1	0	30563d3ab8499305bfc06b7da02149b0500337ed8dd7121288ea2c8076b56fdb	celestina/src/pieces/weather.rs
+1	0	5ff7cad4343efdf511272949a943a13cf91e884acc919cf5b2aa51730d82c171	celestina/src/pieces/workspaces.rs
+9	0	401ea1d805efa5adf78cff5b8657e53d6fbfe15fddf66b6422c616a8a55a0bf5	celestina/src/providers/settings.rs
+333	20	75417fd6ed65d5c108eb3e9f96f2e7e7590daee9ac2de5e791ad2e8de3456869	celestina/src/wallpaper/decode.rs
+1	0	a4da2327414e909c255be5bab20e0060d4246ea1be895a502b1e557e0998f876	docs/version-history.tsv

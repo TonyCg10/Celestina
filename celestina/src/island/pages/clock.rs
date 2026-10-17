@@ -348,6 +348,7 @@ mod tests {
             today,
             month_offset: offset,
             utc_offset: 0,
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
         })
     }
 
@@ -594,6 +595,7 @@ mod tests {
             today: Some(t),
             month_offset: 0,
             utc_offset: 7_200,
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
         });
         assert_eq!(
             text_of(&v, Key::named("clock-weather-place")),

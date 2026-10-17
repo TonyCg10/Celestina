@@ -67,4 +67,7 @@ pub enum Message {
     /// The weather worker's reading, or `None` once when it is withdrawn (no
     /// location, or the last reading stopped being fresh).
     Weather(Option<crate::providers::weather::WeatherReading>),
+    /// News from the clipboard worker: the latest rows (previews only), the
+    /// pause state, a refusal. Tagged with the worker's generation.
+    Clipboard(crate::clipboard::ClipboardMessage),
 }

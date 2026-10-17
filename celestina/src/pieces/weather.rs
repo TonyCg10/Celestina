@@ -117,6 +117,7 @@ mod tests {
             sysmon: None,
             weather,
             today: None,
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
         })
     }
 

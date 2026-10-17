@@ -35,6 +35,8 @@ pub fn page_of(key: Key) -> Option<PageId> {
 fn tab_label(page: PageId) -> &'static str {
     if page == PageId::NOTIFICATIONS {
         copy::TAB_NOTIFICATIONS
+    } else if page == PageId::CLIPBOARD {
+        copy::TAB_CLIPBOARD
     } else {
         page_title(page)
     }
@@ -42,6 +44,14 @@ fn tab_label(page: PageId) -> &'static str {
 
 fn index(page: PageId) -> u64 {
     pieces::page_index(page).map_or(0, |i| i as u64)
+}
+
+/// The label's style: the caption size, because six equal tabs on a page
+/// 420 px wide are 58 px each and "Actividad" at the body size measures 60 px
+/// with the real font. A label wider than its tab (the larger text scales) is
+/// clipped by the tab.
+fn label_style(theme: &Theme, ink: Role) -> celestina_paint::TextStyle {
+    text_style(theme.type_scale.caption, Weight::Semibold, false, ink)
 }
 
 /// One tab per page of the piece table, in its order, in a row `width`
@@ -65,12 +75,13 @@ pub fn tabs(theme: &Theme, open: PageId, width: f32) -> View {
                 .size(tab_w, TABS_H)
                 .radius(TABS_H / 2.0)
                 .fill(fill)
+                .clip()
                 .interactive()
                 .focusable()
                 .child(view::text(
                     Key::indexed("tab-label", index(page)),
                     tab_label(page),
-                    text_style(theme.type_scale.body, Weight::Semibold, false, ink),
+                    label_style(theme, ink),
                 ));
             tab.style.justify_content = JustifyContent::CENTER;
             tab
@@ -98,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    fn tabs_show_one_pill_per_page_with_the_open_one_selected() {
+    fn tabs_show_every_page_with_the_open_one_selected() {
         let theme = Theme::dark();
         for open in PageId::all() {
             let row = tabs(&theme, open, 388.0);
@@ -130,7 +141,7 @@ mod tests {
             .map(|id| tree.rect(id))
             .collect();
         assert_eq!(rects.len(), PageId::all().len());
-        // Layout rounds to whole px, so five tabs agree to within one.
+        // Layout rounds to whole px, so the tabs agree to within one.
         assert!(rects
             .iter()
             .all(|r| (r.w - rects[0].w).abs() <= 1.0 && r.h == TABS_H));
@@ -157,13 +168,14 @@ mod tests {
             (PageId::TRAY, Key::indexed("tab", 2)),
             (PageId::SYSMON, Key::indexed("tab", 3)),
             (PageId::CLOCK, Key::indexed("tab", 4)),
+            (PageId::CLIPBOARD, Key::indexed("tab", 5)),
         ];
         for (page, key) in want {
             assert_eq!(tab_key(page), key, "{page:?}");
             assert_eq!(page_of(key), Some(page), "{page:?}");
         }
         for foreign in [
-            Key::indexed("tab", 5),
+            Key::indexed("tab", 6),
             Key::indexed("tab-label", 0),
             Key::named("tab"),
             Key::named("tabs"),
@@ -173,38 +185,41 @@ mod tests {
         }
     }
 
+    /// The labels, measured with the real font (Inter Variable from the
+    /// checkout) and laid out in the row the page draws, fit their pill at the
+    /// compact and the default text scales; at the larger scales the pill
+    /// clips instead of letting a label touch its neighbour (VALIDATION: the
+    /// larger scales are judged by eye).
     #[test]
     fn no_tab_label_is_wider_than_its_pill() {
         use crate::island::{pages::measure_real, state::PAGE_SIZE};
 
-        let theme = Theme::dark();
-        // The row the page draws: the page's width less its padding.
-        let width = PAGE_SIZE.0 - 2.0 * theme.spacing.lg;
-        for open in PageId::all() {
-            let mut tree = Tree::new(false, &theme);
-            tree.apply(tabs(&theme, open, width), Instant::now());
-            tree.layout_measured((600.0, 100.0), measure_real);
-            for page in PageId::all() {
-                let pill = tree
-                    .node_by_key(tab_key(page))
-                    .map(|id| tree.rect(id))
-                    .expect("a pill");
-                let label = tree
-                    .node_by_key(Key::indexed("tab-label", index(page)))
-                    .map(|id| tree.rect(id))
-                    .expect("a label");
-                let want = measure_real(
-                    tab_label(page),
-                    &text_style(theme.type_scale.body, Weight::Semibold, false, Role::TextLo),
-                    None,
-                )
-                .0;
-                assert!(
-                    want <= pill.w,
-                    "{page:?} is {want} px in a {} px pill",
-                    pill.w
-                );
-                assert!(label.x >= pill.x - 0.5 && label.x + label.w <= pill.x + pill.w + 0.5);
+        for factor in [0.9_f64, 1.0] {
+            let theme = Theme::dark().scaled(factor);
+            // The row the page draws: the page's width less its padding.
+            let width = PAGE_SIZE.0 - 2.0 * theme.spacing.lg;
+            for open in PageId::all() {
+                let mut tree = Tree::new(false, &theme);
+                tree.apply(tabs(&theme, open, width), Instant::now());
+                tree.layout_measured((600.0, 100.0), measure_real);
+                for page in PageId::all() {
+                    let pill = tree
+                        .node_by_key(tab_key(page))
+                        .map(|id| tree.rect(id))
+                        .expect("a pill");
+                    let label = tree
+                        .node_by_key(Key::indexed("tab-label", index(page)))
+                        .map(|id| tree.rect(id))
+                        .expect("a label");
+                    let want =
+                        measure_real(tab_label(page), &label_style(&theme, Role::TextLo), None).0;
+                    assert!(
+                        want <= pill.w,
+                        "{page:?} is {want} px in a {} px pill at {factor}",
+                        pill.w
+                    );
+                    assert!(label.x >= pill.x - 0.5 && label.x + label.w <= pill.x + pill.w + 0.5);
+                }
             }
         }
     }
@@ -234,7 +249,20 @@ mod tests {
         let names: Vec<&str> = labels.iter().map(|(_, t)| t.as_str()).collect();
         assert_eq!(
             names,
-            ["Actividad", "Notific.", "Bandeja", "Sistema", "Reloj"]
+            [
+                "Actividad",
+                "Notific.",
+                "Bandeja",
+                "Sistema",
+                "Reloj",
+                "Portap."
+            ]
         );
+    }
+
+    #[test]
+    fn a_tab_clips_its_label() {
+        let row = tabs(&Theme::dark(), PageId::ACTIVITY, 388.0);
+        assert!(row.children.iter().all(|tab| tab.clip));
     }
 }

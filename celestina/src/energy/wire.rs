@@ -1,11 +1,13 @@
 // Written for the shell's energy duties (CEL-2-B) from the two copies that
 // `idle.rs` and `nightlight.rs` used to carry: one bounded Wayland pump for
 // both workers, so the flood cap, the sync deadline and the read rules have
-// one owner.
+// one owner. CEL-2-G widened its items from the energy module to the crate so
+// the clipboard worker shares this pump instead of carrying a copy.
 
-//! The shared bounded Wayland pump of the energy workers.
+//! The shared bounded Wayland pump of the energy workers and the clipboard
+//! worker.
 //!
-//! Each energy worker owns its own Wayland connection. What is the same for
+//! Each such worker owns its own Wayland connection. What is the same for
 //! all of them lives here:
 //!
 //! - [`Link`] holds the connection, its event queue and its registry, and
@@ -42,13 +44,13 @@ pub const COMMAND_QUEUE: usize = 4;
 pub const UNAVAILABLE: &str = "unavailable";
 /// How often a worker looks at its queue, its connection and the shutdown
 /// flag.
-pub(super) const POLL: Duration = Duration::from_millis(25);
+pub(crate) const POLL: Duration = Duration::from_millis(25);
 /// How long the compositor has to answer one display sync.
-pub(super) const SYNC_TIMEOUT: Duration = Duration::from_secs(1);
+pub(crate) const SYNC_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// The connection itself is gone or cannot be trusted.
 #[derive(Debug, thiserror::Error)]
-pub(super) enum Lost {
+pub(crate) enum Lost {
     #[error("cannot connect to Wayland")]
     Connect(#[source] ConnectError),
     #[error("cannot flush the Wayland connection")]
@@ -66,7 +68,7 @@ pub(super) enum Lost {
 }
 
 /// A worker's two refusals of a command, named in its own words.
-pub(super) trait QueueRefusal {
+pub(crate) trait QueueRefusal {
     /// [`COMMAND_QUEUE`] commands are already waiting.
     const BUSY: Self;
     /// The worker has stopped.
@@ -74,7 +76,7 @@ pub(super) trait QueueRefusal {
 }
 
 /// Offers `command` to a worker's bounded queue without waiting.
-pub(super) fn offer<T, R: QueueRefusal>(queue: &SyncSender<T>, command: T) -> Result<(), R> {
+pub(crate) fn offer<T, R: QueueRefusal>(queue: &SyncSender<T>, command: T) -> Result<(), R> {
     queue.try_send(command).map_err(|error| match error {
         TrySendError::Full(_) => R::BUSY,
         TrySendError::Disconnected(_) => R::GONE,
@@ -105,9 +107,9 @@ fn was_read(result: Result<usize, WaylandError>) -> Result<(), Lost> {
 }
 
 /// The dispatch state of one worker's connection.
-pub(super) struct Wire<S, E> {
+pub(crate) struct Wire<S, E> {
     /// The worker's own state.
-    pub(super) state: S,
+    pub(crate) state: S,
     events: Vec<E>,
     limit: usize,
     flooded: bool,
@@ -127,7 +129,7 @@ impl<S, E> Wire<S, E> {
 
     /// Keeps `event`, or marks the connection flooded once `limit` events
     /// are already waiting.
-    pub(super) fn push(&mut self, event: E) {
+    pub(crate) fn push(&mut self, event: E) {
         if self.events.len() < self.limit {
             self.events.push(event);
         } else {
@@ -136,12 +138,12 @@ impl<S, E> Wire<S, E> {
     }
 
     /// The events collected since the last call.
-    pub(super) fn take_events(&mut self) -> Vec<E> {
+    pub(crate) fn take_events(&mut self) -> Vec<E> {
         std::mem::take(&mut self.events)
     }
 
     /// Forgets the events collected so far.
-    pub(super) fn clear_events(&mut self) {
+    pub(crate) fn clear_events(&mut self) {
         self.events.clear();
     }
 }
@@ -162,12 +164,12 @@ impl<S: 'static, E: 'static> Dispatch<wl_callback::WlCallback, u64> for Wire<S, 
 }
 
 /// One worker's own connection, pumped with bounded waits.
-pub(super) struct Link<S: 'static, E: 'static> {
+pub(crate) struct Link<S: 'static, E: 'static> {
     connection: Connection,
     queue: EventQueue<Wire<S, E>>,
-    pub(super) qh: QueueHandle<Wire<S, E>>,
+    pub(crate) qh: QueueHandle<Wire<S, E>>,
     _registry: wl_registry::WlRegistry,
-    pub(super) wire: Wire<S, E>,
+    pub(crate) wire: Wire<S, E>,
     next_sync: u64,
 }
 
@@ -178,7 +180,7 @@ where
     /// Opens a connection to the session's compositor and asks for its
     /// registry; the globals arrive with the first [`Link::sync`]. At most
     /// `limit` events are kept per dispatch.
-    pub(super) fn connect(state: S, limit: usize) -> Result<Self, Lost> {
+    pub(crate) fn connect(state: S, limit: usize) -> Result<Self, Lost> {
         let connection = Connection::connect_to_env().map_err(Lost::Connect)?;
         Ok(Self::over(connection, state, limit))
     }
@@ -198,14 +200,14 @@ where
     }
 
     /// Sends what is queued. A full socket keeps the rest for the next pump.
-    pub(super) fn flush(&mut self) -> Result<(), Lost> {
+    pub(crate) fn flush(&mut self) -> Result<(), Lost> {
         flushed(self.queue.flush())
     }
 
     /// Dispatches what is waiting, waits at most `timeout` for more, and
     /// dispatches that. `check` is the worker's own reason to stop, looked at
     /// before the flood cap.
-    pub(super) fn pump<L: From<Lost>>(
+    pub(crate) fn pump<L: From<Lost>>(
         &mut self,
         timeout: Duration,
         check: impl Fn(&S) -> Result<(), L>,
@@ -239,7 +241,7 @@ where
 
     /// Waits until the compositor has handled everything sent so far, at
     /// most until `deadline`, stopping early when `check` does.
-    pub(super) fn sync<L: From<Lost>>(
+    pub(crate) fn sync<L: From<Lost>>(
         &mut self,
         deadline: Instant,
         check: impl Fn(&S) -> Result<(), L>,

@@ -56,3 +56,10 @@
   records the checks, the tests and the nested smoke green on the tree after
   the review fix pass, and the gaps the unit leaves open.
   `VAL-CEL2-BAR-LIVE` is pending.
+- **In progress (CEL-2-G, not landed):** the `clipboard` duty, off by default:
+  an `ext-data-control` history of text and PNG entries that skips selections
+  carrying the password-manager hint, keeps text only in a 0600 state file
+  deleted when the duty goes off, and offers a bar piece, an Island page and
+  verbs that never return content. Evidence in
+  [`docs/evidence/2026-10-17-clipboard.md`](docs/evidence/2026-10-17-clipboard.md);
+  its author rows `VAL-CEL2-CLIPBOARD-LIVE`, `-SECRET`, `-IMAGE` and `-LOOK` are pending.

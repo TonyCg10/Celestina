@@ -20,6 +20,8 @@
 //! - [`settings`] — the shell's own durable choice (do-not-disturb) and the
 //!   rule that a choice is published only once it is written.
 //! - [`calendar`] — which day falls where in a month.
+//! - [`clipboard`] — what the clipboard history may keep, for how long, and
+//!   the text-only form it is persisted in.
 //! - [`idle`] — what the shell does when the person stops using the session:
 //!   screen off, then lock and suspend, failing closed without a locker.
 //! - [`nightlight`] — the fixed night-light whitepoint, its bounded transition
@@ -36,6 +38,7 @@
 
 pub mod bounded;
 pub mod calendar;
+pub mod clipboard;
 pub mod coalesce;
 pub mod glance;
 pub mod idle;

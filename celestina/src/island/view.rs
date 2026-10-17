@@ -432,10 +432,18 @@ mod tests {
         assert_eq!(page_title(PageId::ACTIVITY), copy::PAGE_ACTIVITY);
         assert_eq!(page_title(PageId::NOTIFICATIONS), copy::PAGE_NOTIFICATIONS);
         assert_eq!(page_title(PageId::TRAY), copy::PAGE_TRAY);
+        assert_eq!(page_title(PageId::CLIPBOARD), copy::PAGE_CLIPBOARD);
         let titles: Vec<&str> = PageId::all().into_iter().map(page_title).collect();
         assert_eq!(
             titles,
-            ["Actividad", "Notificaciones", "Bandeja", "Sistema", "Reloj"]
+            [
+                "Actividad",
+                "Notificaciones",
+                "Bandeja",
+                "Sistema",
+                "Reloj",
+                "Portapapeles"
+            ]
         );
         assert_eq!(page_title(PageId::SYSMON), copy::PAGE_SYSMON);
         assert_eq!(page_title(PageId::CLOCK), copy::PAGE_CLOCK);

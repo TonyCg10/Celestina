@@ -173,6 +173,7 @@ mod tests {
         let owners = NameOwner::default();
         let hidden: Vec<String> = hidden.iter().map(|s| (*s).to_owned()).collect();
         f(&BarCx {
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &theme,
             output: "DP-1",
             model: None,

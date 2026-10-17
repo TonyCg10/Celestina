@@ -557,6 +557,15 @@ impl ShellSettings {
         self.commit(pending)
     }
 
+    /// Whether the values in force are the defaults the shell fell back to
+    /// because the file exists but could not be read: until a clean read,
+    /// they are not the person's settings, and nothing irreversible (the
+    /// clipboard duty's deletion of its history) may be done on their word.
+    #[must_use]
+    pub fn is_protected(&self) -> bool {
+        self.protected
+    }
+
     /// The file the settings live in, if there is one.
     #[must_use]
     pub fn path(&self) -> Option<&Path> {
