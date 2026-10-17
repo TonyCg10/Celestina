@@ -275,3 +275,4 @@ celestina	1.2.0	milestone	CEL-2-B	Add the energy duties: idle chain, caffeine, f
 celestina	1.3.0	milestone	CEL-2-A	Add the bar and the piece contract
 celestina	1.4.0	milestone	CEL-2-K	Add the glance pieces: system monitor, weather and the calendar page
 celestina	1.5.0	milestone	CEL-2-G	Add the clipboard history duty: ext-data-control provider, bounded text and image history, secret-aware skipping, the piece and the page
+celestina	1.5.1	bug	CEL-2-G-SYNC	Fix the clipboard worker start under load with a longer first sync and one retry

@@ -1,0 +1,21 @@
+# CEL-2-G-SYNC exact change inventory
+
+Base revision	8b09c6655fb58d4399e395913927c42d9f9df612
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-10-17-clipboard-sync.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-G-SYNC.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/clipboard/worker.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	408e70180b7f2710d97b9febe09474ecb4f7c3b6bcd2ed705d895ebe04fd2664	celestina/Cargo.lock
+1	1	6c420acb065080e79116b8bc828b072f3e490ff74e03273af567aa07787e9f29	celestina/Cargo.toml
+46	0	33727c3fa97c49e46dd17d833198490f302b2462bc1b2face07a8079a277bfeb	celestina/docs/evidence/2026-10-17-clipboard-sync.md
+21	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-G-SYNC.numstat.tsv
+1	0	6018e5188b28329d830831afc7e9f45368c23ff3052e070beb9806f69ba81f0a	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+31	5	dd3af7ff06eb3a4963875be7f65c0320bde020acd95b2dacf81e5d9d6bc2c3a0	celestina/src/clipboard/worker.rs
+1	0	344659b7b83f35039373af37041d8a4f3f42adaa1fb3157ec97554564d69a875	docs/version-history.tsv

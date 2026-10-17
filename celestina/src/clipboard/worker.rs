@@ -80,9 +80,7 @@ use wayland_protocols::ext::data_control::v1::client::{
     ext_data_control_offer_v1 as offer_proto, ext_data_control_source_v1 as source_proto,
 };
 
-use crate::energy::wire::{
-    self, Link, QueueRefusal, Wire, COMMAND_QUEUE, POLL, SYNC_TIMEOUT, UNAVAILABLE,
-};
+use crate::energy::wire::{self, Link, QueueRefusal, Wire, COMMAND_QUEUE, POLL, UNAVAILABLE};
 use crate::providers::Worker;
 
 use super::thumb::{Thumb, Thumbs};
@@ -97,6 +95,14 @@ pub const READ_DEADLINE: Duration = IMAGE_READ_DEADLINE;
 pub const WRITE_DEADLINE: Duration = Duration::from_secs(2);
 /// One read or write of a pipe moves at most this much.
 const CHUNK_BYTES: usize = 64 * 1024;
+/// How long the first sync after connecting may take. The nest of the smoke
+/// starts beside other processes on a loaded machine and answered after more
+/// than the pump's one second; this wait is on the worker's own thread and
+/// stops with the shell's flags, so a longer one costs nothing at rest.
+const STARTUP_SYNC_TIMEOUT: Duration = Duration::from_secs(5);
+/// How many times the worker connects before it reports the duty unavailable,
+/// when only the compositor's answer was late.
+const CONNECT_ATTEMPTS: usize = 2;
 /// The most MIME types kept for one offer; exclusion hints are always kept.
 const MAX_OFFER_MIMES: usize = 64;
 /// The longest MIME type kept; a longer one is not a MIME type this worker
@@ -370,7 +376,7 @@ pub fn spawn(
             identity: Identity::new(session_nonce()),
             deadlines: Deadlines::default(),
         };
-        run(WaylandTransport::connect(), parts, &queue, &flags, POLL);
+        run(connect_with_retry(&flags), parts, &queue, &flags, POLL);
     })?;
     Ok((ClipboardHandle { commands, stop }, worker))
 }
@@ -1249,6 +1255,26 @@ fn intact(state: &WaylandState) -> Result<(), Lost> {
     Ok(())
 }
 
+/// Connects, trying again when only the first sync was late (and no stop was
+/// asked meanwhile). Every other loss is final.
+fn connect_with_retry(flags: &Flags) -> Result<WaylandTransport, Lost> {
+    let mut attempt = 1;
+    loop {
+        match WaylandTransport::connect() {
+            Err(Lost::Wire(wire::Lost::Timeout))
+                if attempt < CONNECT_ATTEMPTS && !flags.raised() =>
+            {
+                tracing::debug!(
+                    attempt,
+                    "clipboard: the first sync was late; connecting again"
+                );
+                attempt += 1;
+            }
+            other => return other,
+        }
+    }
+}
+
 struct WaylandTransport {
     link: Link<WaylandState, Signal>,
 }
@@ -1269,7 +1295,7 @@ impl WaylandTransport {
             finished: false,
         };
         let mut link = Link::connect(state, MAX_EVENTS)?;
-        link.sync(Instant::now() + SYNC_TIMEOUT, intact)?;
+        link.sync(Instant::now() + STARTUP_SYNC_TIMEOUT, intact)?;
         let Link { qh, wire, .. } = &mut link;
         let state = &mut wire.state;
         let Some((_, seat)) = state.seat.as_ref() else {
