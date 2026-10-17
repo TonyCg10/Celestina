@@ -45,6 +45,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 - `RSH-1-DOCS` — the root roadmap's boxes and the root status brought up to date after CEL-1 landed.
 - `CEL-2-OPEN` — opens the CEL-2 parity program: the salvage list for CEL-2-B and CEL-2-E, the CEL-2 plan, and the move of the CEL-1 plan to the archive.
 - `CEL-2-SALV` — extends the salvage list of `AGENTS.md` "Halted projects" for the remaining CEL-2 units (C, D, F, G, H, I, J, K, L).
+- `CEL-2-K-DEPS` — the suite documents the Celestina glance unit needs ahead of it: the design of CEL-2-K, the architecture standard's list of `hematita-core` consumers and `hematita-core` among the shell's production inputs.
 
 ## Exclusions
 
@@ -54,7 +55,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 
 ## Build order
 
-1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`, then `RSH-1-DOCS` after CEL-1 landed, then `CEL-2-OPEN`, then `CEL-2-SALV`.
+1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`, then `RSH-1-DOCS` after CEL-1 landed, then `CEL-2-OPEN`, then `CEL-2-SALV`, then `CEL-2-K-DEPS` before `CEL-2-K`.
 
 ## Implementation exit
 
@@ -76,3 +77,4 @@ and the shell reads `celestina-tokens`.
 | RSH-1-DOCS | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/RSH-1-DOCS.numstat.tsv) | 5 files, +101/-12 | Mark the root roadmap's boxes for the landed units and bring the root status up to date after CEL-1 | [evidence](../../evidence/2026-10-16-rsh-1-docs.md) | None |
 | CEL-2-OPEN | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-2-OPEN.numstat.tsv) | 14 files, +293/-98 | Open the Celestina parity program: extend the salvage list for CEL-2-B and CEL-2-E, add the CEL-2 plan and move the CEL-1 plan to the archive | [evidence](../../evidence/2026-10-16-cel-2-open.md) | None |
 | CEL-2-SALV | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-2-SALV.numstat.tsv) | 4 files, +89/-3 | Add the salvage list entries for the remaining CEL-2 units | [evidence](../../evidence/2026-10-17-cel-2-salv.md) | None |
+| CEL-2-K-DEPS | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-2-K-DEPS.numstat.tsv) | 6 files, +283/-3 | Add the design of the Celestina glance unit, list the shell as a narrow consumer of `hematita-core` in the architecture standard and register `hematita-core` among the shell's production inputs | [evidence](../../evidence/2026-10-17-cel-2-k-deps.md) | None |

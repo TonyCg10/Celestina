@@ -1,0 +1,19 @@
+# CEL-2-K-DEPS exact change inventory
+
+Base revision	a3d5408e8d6d7a443571a255c7fe52404f3008bf
+Pathspec	docs/evidence/2026-10-17-cel-2-k-deps.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-2-K-DEPS.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/projects.toml
+Pathspec	docs/standards/architecture.md
+Pathspec	docs/superpowers/specs/2026-10-17-cel-2-k-glance-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+45	0	e11bb9ba3a6f9d58c9f7333f085983506ac06b3f30116cd7c41e0b91d06be473	docs/evidence/2026-10-17-cel-2-k-deps.md
+19	0	self	docs/inventories/2026-10-14-rust-shell/CEL-2-K-DEPS.numstat.tsv
+3	1	6cee14baecc7cd955f424dbfa38fc2a56799a5af2a193f3fe8ab4cda690368bd	docs/plans/active/2026-10-14-rust-shell.md
+1	1	686891f7171d5c5464fe927e6f4b116e280891b60197f7f0902a734bdf0b3bed	docs/projects.toml
+4	1	07f53c68184c01a9762b940bc46a0dbd8ef5b234b6f2d2d364093f45b5130e5f	docs/standards/architecture.md
+211	0	6c318c5b7a6962c199c46bf52a4bf03f7a4c9e27dba9865ef96813e912ba5b6a	docs/superpowers/specs/2026-10-17-cel-2-k-glance-design.md

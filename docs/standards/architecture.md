@@ -19,7 +19,10 @@ state and QML composition.
 
 Siderita is such a consumer of `grafita-core`, `fluorita-core` and
 `hematita-core::usage` (the folder scan, tree and layout only; never
-`usage::remove`, `hematita/src` or Hematita's QML).
+`usage::remove`, `hematita/src` or Hematita's QML). The Rust shell
+`celestina/` is such a consumer of `hematita-core::{cpu, memory, sensors}`
+only (the parsers of `/proc` and hwmon text behind its system monitor; never
+`usage`, `process`, `services`, `history` or Hematita's QML).
 
 [ADR 0005](../decisions/0005-bounded-qt-bridge-crates.md)
 bounds the real Qt exception: it exists only for a stable shared host seam or a
