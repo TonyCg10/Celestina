@@ -83,6 +83,9 @@ list in the same way and always before the first commit of the unit it serves:
   its file is not copied.
 - CEL-2-I: nothing is copied. ADR 0005 of the halted shell is re-decided in
   `celestina/docs/decisions/`, adapted and re-reviewed; its file is not copied.
+  `celestina-qt/src/polkit{agent,conversation,promptcontroller}.cpp` and
+  `celestina-qt/src/polkitconverse/main.cpp` are read-only reference for
+  `celestina/src/providers/polkit`.
 - CEL-2-J: `celestina-qt/src/provider_adapter/melibea.rs` as reference for
   `celestina/src/providers`, and
   `celestina-rs/crates/celestina-shell-core/src/melibea.rs` into
