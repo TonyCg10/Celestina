@@ -80,6 +80,11 @@ impl PrivateBus {
         })
     }
 
+    /// This bus's address, for a client that builds its own connection.
+    pub(crate) fn address(&self) -> &str {
+        &self.address
+    }
+
     /// A connection builder for this bus.
     pub(crate) fn builder(&self) -> Builder<'static> {
         match Builder::address(self.address.as_str()) {

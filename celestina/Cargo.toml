@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.1.0"
+version = "1.2.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -89,10 +89,19 @@ image = { version = "=0.25.6", default-features = false, features = ["png", "jpe
 # The wallpaper file is opened with `O_NONBLOCK` so a FIFO named like an
 # image cannot block the worker before `fstat` rejects it; std has no flag
 # constant and the workspace forbids the unsafe a raw libc call needs. Already
-# in the lockfile through the Wayland stack.
-rustix = { version = "1", features = ["fs"] }
+# in the lockfile through the Wayland stack. CEL-2-B: the gamma ramp travels in
+# an anonymous memory file (`memfd_create`), and the energy workers wait on
+# their own Wayland connection (`event`).
+rustix = { version = "1", features = ["fs", "event"] }
 # The shell follows its own `shell.json` live (CEL-2-E: the wallpaper duty
 # turns on and off without a restart), with the same debounced directory
 # watch `celestina-settings` uses for the appearance file; the version is the
 # one already in the lockfile through that crate.
 notify-debouncer-full = "0.5"
+# CEL-2-B: the energy workers own a Wayland connection of their own (idle
+# notification and gamma control), apart from the Island's runtime, so a
+# duty that is off costs no protocol object. `wayland-client` and the
+# protocol crates are the versions `celestina-wayland` already resolves.
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }

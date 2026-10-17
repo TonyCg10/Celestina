@@ -1,6 +1,6 @@
 # Handover: what Noctalia still does for the session
 
-- **Written:** 2026-10-16, by CEL-1-H
+- **Written:** 2026-10-16, by CEL-1-H; the night light, caffeine and idle rows updated by CEL-2-B
 - **Purpose:** CEL-1 delivers the Island, the launcher, notifications and the
   tray. It does not replace Noctalia as the session's shell. This note lists
   what Noctalia keeps doing, so the author knows what the next deliveries
@@ -41,10 +41,10 @@ both names to the shell on its next start. The launcher answers
 | Session lock | `Mod+Shift+Escape` runs `noctalia msg session lock-and-suspend` | no | a lock screen (`ext-session-lock-v1`) plus the suspend chain; `Mod+Shift+A` already uses `swaylock` and is unaffected |
 | Polkit agent | Noctalia's authentication dialogs; the earlier roadmap named it the last blocker | no | a polkit agent with a password prompt; without it, privileged prompts have no UI |
 | Wallpaper | Noctalia draws it (the niri config pins the `wallpaper` namespace to the backdrop); today a still image, though the enabled `mpvpaper` plugin and its cache show video wallpapers have been used | no | a wallpaper delivery, including video if the author still wants it |
-| Night light | niri startup runs `noctalia msg nightlight-force-toggle` | no | a night-light delivery (gamma control) and a replacement for that startup line |
-| Caffeine (idle inhibitor) | niri startup runs `noctalia msg caffeine-enable` | no | an idle-inhibit delivery and a replacement for that startup line |
+| Night light | niri startup runs `noctalia msg nightlight-force-toggle` | delivered in CEL-2-B, off by default (`duties.nightlight`, `energy.night_light`) | VAL-CEL2-NIGHTLIGHT passed; replace the startup line by setting `duties.nightlight` to `"on"` and `energy.night_light` to `true` in `shell.json`, with Noctalia's night light off |
+| Caffeine (idle inhibitor) | niri startup runs `noctalia msg caffeine-enable` | delivered in CEL-2-B, off by default (`duties.caffeine`, `energy.caffeine`) | VAL-CEL2-CAFFEINE passed; replace the startup line by setting `duties.caffeine` to `"on"` and `energy.caffeine` to `true` in `shell.json`, with Noctalia's caffeine off |
 | Bar | Noctalia's bar is visible (`noctalia msg status`) with workspaces, clock, network, Bluetooth, volume, power and the session menu | no, only the Island | the design's full-width bar delivery, or the author's decision to live on the Island alone |
-| Idle management | Noctalia sets the screen-off idle behaviour and reacts to logind lock hints; stopping it ends idle screen-off, which matters on the OLED | no | an idle delivery (`ext-idle-notify`, DPMS) before stopping Noctalia |
+| Idle management | Noctalia sets the screen-off idle behaviour and reacts to logind lock hints; stopping it ends idle screen-off, which matters on the OLED | screen-off delivered in CEL-2-B, off by default (`duties.idle`); the lock-and-suspend step is refused until a locker exists | VAL-CEL2-IDLE passed, with Noctalia's idle behaviour off; suspend after idle waits for the lock screen |
 | Magnetita plugin | `tony/magnetita` shows the phone's battery, connection and media in a bar widget and panel, fed by `org.celestina.Magnetita` | no | decide where phone state shows once the bar is gone; the plugin dies with Noctalia |
 | Bubbles | `Mod+K` runs `noctalia msg panel-toggle tony/bubbles:selector`; `tony/bubbles` also has a bar widget | no | decide whether it survives; plugins are an exclusion of the design for good |
 | Autostart | `spawn-at-startup "noctalia"` | no | start `celestina` in its place, as the last step |

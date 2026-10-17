@@ -9,11 +9,14 @@
 
 use std::time::Duration;
 
+use celestina_shell::session::{PowerAction, Switch};
 use celestina_shell::settings::plain_name;
 #[cfg(test)]
 use celestina_shell::settings::MAX_NAME_BYTES;
 use celestina_shell::wallpaper::{is_showable, Mode as FitMode};
 use celestina_wayland::Config;
+
+use crate::energy::verbs;
 
 /// Arguments the binary reads at most; a longer command line is a usage
 /// error before anything is parsed.
@@ -42,6 +45,9 @@ verbs: island toggle
        wallpaper prev [OUTPUT]
        wallpaper mode fill|fit|stretch|center
        wallpaper retry
+       caffeine on|off|toggle
+       nightlight on|off|toggle
+       session suspend|reboot|power-off|log-out
        quit";
 
 /// An Island page.
@@ -102,6 +108,12 @@ pub enum Verb {
     WallpaperMode(FitMode),
     /// `wallpaper retry`.
     WallpaperRetry,
+    /// Flip the persisted caffeine switch (a no-op while the duty is off).
+    Caffeine(Switch),
+    /// Flip the persisted forced night light (a no-op while the duty is off).
+    NightLight(Switch),
+    /// End the session or the machine's day.
+    Session(PowerAction),
     Quit,
 }
 
@@ -190,6 +202,15 @@ impl Verb {
                 None => return Err(unknown(&words)),
             },
             ["wallpaper", "retry"] => Verb::WallpaperRetry,
+            ["caffeine", word] => {
+                Verb::Caffeine(verbs::switch_from_word(word).ok_or_else(|| unknown(&words))?)
+            }
+            ["nightlight", word] => {
+                Verb::NightLight(verbs::switch_from_word(word).ok_or_else(|| unknown(&words))?)
+            }
+            ["session", word] => {
+                Verb::Session(verbs::action_from_word(word).ok_or_else(|| unknown(&words))?)
+            }
             ["quit"] => Verb::Quit,
             _ => return Err(unknown(&words)),
         };
@@ -240,6 +261,9 @@ impl Verb {
             Verb::LauncherToggle => vec!["launcher", "toggle"],
             Verb::NotificationsToggle => vec!["notifications", "toggle"],
             Verb::NotificationsDismissAll => vec!["notifications", "dismiss-all"],
+            Verb::Caffeine(switch) => vec!["caffeine", verbs::switch_word(*switch)],
+            Verb::NightLight(switch) => vec!["nightlight", verbs::switch_word(*switch)],
+            Verb::Session(action) => vec!["session", verbs::action_word(*action)],
             Verb::Quit => vec!["quit"],
             Verb::WallpaperSet { .. }
             | Verb::WallpaperNext(_)
@@ -356,6 +380,16 @@ mod tests {
             (Verb::LauncherToggle, "launcher toggle"),
             (Verb::NotificationsToggle, "notifications toggle"),
             (Verb::NotificationsDismissAll, "notifications dismiss-all"),
+            (Verb::Caffeine(Switch::On), "caffeine on"),
+            (Verb::Caffeine(Switch::Off), "caffeine off"),
+            (Verb::Caffeine(Switch::Toggle), "caffeine toggle"),
+            (Verb::NightLight(Switch::On), "nightlight on"),
+            (Verb::NightLight(Switch::Off), "nightlight off"),
+            (Verb::NightLight(Switch::Toggle), "nightlight toggle"),
+            (Verb::Session(PowerAction::Suspend), "session suspend"),
+            (Verb::Session(PowerAction::Reboot), "session reboot"),
+            (Verb::Session(PowerAction::PowerOff), "session power-off"),
+            (Verb::Session(PowerAction::LogOut), "session log-out"),
             (Verb::Quit, "quit"),
             (
                 Verb::WallpaperSet {
@@ -497,6 +531,14 @@ mod tests {
             &["island"],
             &["Island", "toggle"],
             &["quit", "now"],
+            &["caffeine"],
+            &["caffeine", "maybe"],
+            &["caffeine", "on", "now"],
+            &["nightlight", "Toggle"],
+            &["idle", "on"],
+            &["session"],
+            &["session", "poweroff"],
+            &["session", "reboot", "now"],
         ] {
             assert!(Verb::parse(&strings(bad)).is_err(), "{bad:?}");
             assert!(parse(bad).is_err(), "{bad:?}");

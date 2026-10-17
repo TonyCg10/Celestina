@@ -1,6 +1,7 @@
 //! The two contracts the salvage adds on top of the copied modules: the
-//! shell's own settings file carries only do-not-disturb, the duties and the wallpaper, and the
-//! notifications history keeps fifty while its page shows twenty.
+//! shell's own settings file carries only do-not-disturb, the duties, the
+//! energy switches and the wallpaper, and the notifications history keeps
+//! fifty while its page shows twenty.
 
 use celestina_shell::notifications::{
     CloseReason, Incoming, Notifications, MAX_HISTORY, PAGE_HISTORY,
@@ -23,9 +24,17 @@ fn settings_round_trips_only_the_shells_own_choices() {
         .keys()
         .map(String::as_str)
         .collect();
+    // CEL-2-B adds the `energy` table and CEL-2-E the `wallpaper` one; the
+    // `duties` table carries both units' switches (all default-valued).
     assert_eq!(
         keys,
-        ["do_not_disturb", "duties", "schema_version", "wallpaper"]
+        [
+            "do_not_disturb",
+            "duties",
+            "energy",
+            "schema_version",
+            "wallpaper"
+        ]
     );
     assert_eq!(SCHEMA_VERSION, 1);
     assert_eq!(Settings::from_bytes(&bytes), Some(settings));
@@ -36,7 +45,9 @@ fn settings_round_trips_only_the_shells_own_choices() {
     let read = Settings::from_bytes(older).expect("a file with extra keys is ours");
     assert!(read.do_not_disturb);
     let rewritten = String::from_utf8(read.to_bytes().expect("serialize")).expect("UTF-8");
-    assert!(!rewritten.contains("caffeine"));
+    let rewritten: serde_json::Value = serde_json::from_str(&rewritten).expect("JSON");
+    assert!(rewritten.get("caffeine").is_none());
+    assert!(rewritten.get("tray_items").is_none());
 
     // The durable-before-published rule survives the reduction.
     let mut store = Store::new(Settings::default());

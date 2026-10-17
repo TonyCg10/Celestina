@@ -881,6 +881,9 @@ impl Island {
             | Verb::WallpaperPrev(_)
             | Verb::WallpaperMode(_)
             | Verb::WallpaperRetry
+            | Verb::Caffeine(_)
+            | Verb::NightLight(_)
+            | Verb::Session(_)
             | Verb::Quit => return,
         }
         self.sync_ctl(ctl, now);

@@ -1,0 +1,71 @@
+# CEL-2-B exact change inventory
+
+Base revision	fd9edc6745fa2e590cd8b27fa3baac7c947378e8
+Pathspec	celestina-rs/crates/celestina-shell/src/idle.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/nightlight.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/session.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell/tests/salvage.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-10-16-energy-plan.md
+Pathspec	celestina/docs/evidence/2026-10-16-energy.md
+Pathspec	celestina/docs/handover.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-B.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/command.rs
+Pathspec	celestina/src/energy/idle.rs
+Pathspec	celestina/src/energy/logind.rs
+Pathspec	celestina/src/energy/mod.rs
+Pathspec	celestina/src/energy/nightlight.rs
+Pathspec	celestina/src/energy/verbs.rs
+Pathspec	celestina/src/energy/wire.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/providers/niri.rs
+Pathspec	celestina/src/providers/settings.rs
+Pathspec	celestina/src/tray/test_bus.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+554	0	e4dd745420e1931b980c10c001c15c8a4555c75b7e0523acc7e121871f0651ed	celestina-rs/crates/celestina-shell/src/idle.rs
+9	0	da20481e47c2248ae86c512715d231f794152a3bdc3c5e34e491a97475ffdcf6	celestina-rs/crates/celestina-shell/src/lib.rs
+351	0	b6053ef0ab1ab286a6cf31f3156bf0871bf1a5465aa4cf0b4d318d41f9844f77	celestina-rs/crates/celestina-shell/src/nightlight.rs
+99	0	6024421ff960b34087b9ac6ec1079ac7da3a72af8e6903d68e25c23ac35c0d74	celestina-rs/crates/celestina-shell/src/session.rs
+147	3	b080a4f9561d9ab6f0b085f46d10608bc28b2af4f057f18c0216db21458a2f94	celestina-rs/crates/celestina-shell/src/settings.rs
+15	4	bec78b12e343508f233aa80d3c31baefa2dc52d506dcf8dd7263378b5fabafde	celestina-rs/crates/celestina-shell/tests/salvage.rs
+4	1	571a8b8e1e7aa416000a722aef6510159c1c0943d9b02002475f87335d19bb81	celestina/Cargo.lock
+12	3	bee64107ba0a7ecb59a44c1ce355fb7e776710ac5089b0db493cd3edb7cee414	celestina/Cargo.toml
+6	0	47ddcb6b8acd32235f9149eb5505143fb9827e1eadb9d488a459d6a5dbbf6999	celestina/STATUS.md
+103	1	84b75da60e5fab6527b38c2182fdac8343ed1813afe7a6ff4d4fe54fa6c3f74d	celestina/VALIDATION.md
+299	0	2391bccdcb8eb6ab8de11f5c5242422dff9de328414e8a52b7a957174ec7a16a	celestina/docs/evidence/2026-10-16-energy-plan.md
+215	0	2831b8144f5c9e8fb4d3dd0f03ff7f47509a437c521eddbcdc28df248d2d5dff	celestina/docs/evidence/2026-10-16-energy.md
+4	4	0dbfe70ce6b03b0de1a531bb17f7543cba49c13b11621cd531debe6620efc12c	celestina/docs/handover.md
+71	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-B.numstat.tsv
+1	1	527541d9c9c6bf7c56dc3e27a7d6903fc895d50fc680e91807168afbfd45f79c	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+105	2	14da3324f39c640f7d2743dcd860971e8b6121b818b49dbbc3369d878a0f26df	celestina/scripts/smoke.sh
+29	1	042c755ed9a9387b71a997aa6b4caf4141eb9c2e5b25860be70aa796b7902848	celestina/src/app.rs
+42	0	5fe5b6bbc9e4136eb4cb9d5da1d15a2e0d2a7d8d0135ec244d2428b5e251abf0	celestina/src/command.rs
+1007	0	0175e0c566614d0ca63dbb82d80c3faabe35db72c49ba7f985cbb4594a1121c9	celestina/src/energy/idle.rs
+997	0	d3d6b529045d86334f6426807150ebae3514f750ecb58e1d164ae699404d2877	celestina/src/energy/logind.rs
+1325	0	819ce7c98ce84be9c78f2d57661dacd09fe5cdcdc908de863ac08c2b2ff81a44	celestina/src/energy/mod.rs
+1498	0	cbfce8d06ed851e578a22c14d1897b1003e15160986655cad4ab7da596d64307	celestina/src/energy/nightlight.rs
+346	0	b9cfafd5002dba0894bb9d6598fd4be89d783130f6b404ac132210d6c345323a	celestina/src/energy/verbs.rs
+425	0	e062589caf76f8bd2445c808b45203ad27d782f967e71e32965c4c819da24d3b	celestina/src/energy/wire.rs
+3	0	a9e73474aadaa4f3ee367f029c048a3cf59b59cf4986428f2130b33dc30a079b	celestina/src/island/mod.rs
+1	0	2e07f7e9d474f9419477a0c50f3d008f02ffe64f6efe661f88a0271b92c72ec2	celestina/src/lib.rs
+18	2	f0f723587fd0ad1f831be1bb0640cd57a414c814eaee75b760ff6ef49937a10c	celestina/src/main.rs
+2	0	12053ba0a9edf301f67a3bf628fd8d53654b1347bea42a04a66a178929cddfef	celestina/src/message.rs
+18	0	0e4e838b5817bc615ed501d566feee4aff1ae36ed5b328d138cad9956aa37f4a	celestina/src/providers/niri.rs
+28	3	2c935a20125bb735326b91cbb9aac960938afa68d31da01a157a51a46e598c11	celestina/src/providers/settings.rs
+5	0	fb5a3468c0fda04ae2472decef76244a24ce7ac8b102ab282c6bd9b66272eae9	celestina/src/tray/test_bus.rs
+1	0	4401531a7983d9c63890b8c66cc34f9132c7daae0423be4a168876e0f98295f6	docs/version-history.tsv

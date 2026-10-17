@@ -19,6 +19,12 @@
   session, and the documents up to date
   ([evidence](docs/evidence/2026-10-16-exit.md)). The author chose 1.0.0 as the
   first stable version, not the definitive one. The CEL-1 plan was archived on 2026-10-16 by the unit that opened CEL-2.
+- **Energy (CEL-2-B):** landed with this unit: the idle chain on
+  `ext-idle-notify`, caffeine as a logind inhibitor, the forced night light on
+  `wlr-gamma-control` and the `session` verbs, each duty off by default behind
+  `duties.idle`, `duties.caffeine` and `duties.nightlight` in `shell.json`
+  ([evidence](docs/evidence/2026-10-16-energy.md)). The four VAL-CEL2 rows are
+  `pending`; the version is set by the landing.
 - **Focus:** CEL-2, the parity program
   ([plan](docs/plans/active/2026-10-16-cel-2-parity.md)): the bar and the piece
   contract first, with CEL-2-B and CEL-2-E under way beside it; the author's

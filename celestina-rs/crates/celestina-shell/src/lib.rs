@@ -20,6 +20,12 @@
 //! - [`settings`] — the shell's own durable choice (do-not-disturb) and the
 //!   rule that a choice is published only once it is written.
 //! - [`calendar`] — which day falls where in a month.
+//! - [`idle`] — what the shell does when the person stops using the session:
+//!   screen off, then lock and suspend, failing closed without a locker.
+//! - [`nightlight`] — the fixed night-light whitepoint, its bounded transition
+//!   and the gamma ramps a compositor takes.
+//! - [`session`] — the two-state switch and the session requests a person
+//!   cannot take back.
 //! - [`wallpaper`] — which image an output shows, how it is laid on the
 //!   output, and the next or previous image of a folder.
 
@@ -28,8 +34,11 @@
 pub mod bounded;
 pub mod calendar;
 pub mod coalesce;
+pub mod idle;
 pub mod launcher;
+pub mod nightlight;
 pub mod notifications;
+pub mod session;
 pub mod settings;
 pub mod wallpaper;
 pub mod workspace_groups;

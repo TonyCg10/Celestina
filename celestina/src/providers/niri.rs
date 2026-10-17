@@ -191,6 +191,10 @@ impl Default for AppIcons {
 pub enum NiriRequest {
     FocusWorkspace(u64),
     FocusWindow(u64),
+    /// Turn every monitor off (DPMS); the idle chain's first step.
+    PowerOffMonitors,
+    /// Leave niri, with niri's own confirmation prompt (`session log-out`).
+    Quit,
 }
 
 impl NiriRequest {
@@ -202,6 +206,10 @@ impl NiriRequest {
                 reference: WorkspaceReferenceArg::Id(id),
             },
             Self::FocusWindow(id) => Action::FocusWindow { id },
+            Self::PowerOffMonitors => Action::PowerOffMonitors {},
+            Self::Quit => Action::Quit {
+                skip_confirmation: false,
+            },
         }
     }
 }
@@ -1098,6 +1106,16 @@ mod tests {
         assert!(matches!(
             NiriRequest::FocusWindow(9).action(),
             Action::FocusWindow { id: 9 }
+        ));
+        assert!(matches!(
+            NiriRequest::PowerOffMonitors.action(),
+            Action::PowerOffMonitors {}
+        ));
+        assert!(matches!(
+            NiriRequest::Quit.action(),
+            Action::Quit {
+                skip_confirmation: false
+            }
         ));
     }
 

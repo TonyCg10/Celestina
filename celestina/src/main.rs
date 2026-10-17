@@ -27,6 +27,7 @@ use celestina::{
     app::App,
     bus::{self, BusError},
     command::{self, Mode, Verb, USAGE},
+    energy::EnergyHandle,
     error_chain,
     island::clock,
     launcher::recent::RecentLaunches,
@@ -121,6 +122,7 @@ fn shell(cfg: Config) -> ExitCode {
     let settings = ShellSettings::load();
     let quiet = settings.current().do_not_disturb;
     let wallpaper = Rc::new(OnceCell::new());
+    let energy = Rc::new(OnceCell::new());
     let settings_read = settings.current().clone();
     let follow_from = settings.follow_from();
     let app = App::new(
@@ -134,7 +136,8 @@ fn shell(cfg: Config) -> ExitCode {
     )
     .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender))
     .with_tray(Rc::clone(&tray))
-    .with_wallpaper(Rc::clone(&wallpaper));
+    .with_wallpaper(Rc::clone(&wallpaper))
+    .with_energy(Rc::clone(&energy));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -150,8 +153,11 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!("no command surface: {}", error_chain(&err)),
         }
+        let mut compositor = None;
         match providers::niri::spawn(sender.clone(), &shutdown) {
             Ok((provider, stream, requests)) => {
+                // The energy duties' compositor actions use the same queue.
+                compositor = Some(provider.requests.clone());
                 // The slot is empty: `setup` runs once.
                 let _ = niri.set(provider);
                 workers.push(stream);
@@ -159,6 +165,11 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!(%err, "no niri provider; the capsule shows its fallback"),
         }
+        // Every duty is off by default: with the defaults no worker starts.
+        let handle = EnergyHandle::new(sender.clone(), compositor);
+        handle.apply(&settings_read);
+        // The slot is empty: `setup` runs once.
+        let _ = energy.set(handle);
         match providers::desktop::spawn(sender.clone(), &shutdown) {
             Ok(worker) => indexer = Some(worker),
             Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
@@ -212,7 +223,8 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!(%err, "no wallpaper worker; no wallpaper is painted"),
         }
-        // `shell.json` live: the duties and do-not-disturb follow the file.
+        // `shell.json` live: the duties (wallpaper and energy), the energy
+        // switches and do-not-disturb follow the file.
         match providers::settings::follow_shell(follow_from, sender.clone()) {
             Ok(watch) => shell_follower = Some(watch),
             Err(err) => {
@@ -223,6 +235,10 @@ fn shell(cfg: Config) -> ExitCode {
     });
 
     shutdown.store(true, Ordering::Release);
+    // Gamma restored, the inhibitor closed, the idle notifications destroyed.
+    if let Some(handle) = energy.get() {
+        handle.stop();
+    }
     drop(follower);
     drop(shell_follower);
     if let Some(indexer) = indexer {

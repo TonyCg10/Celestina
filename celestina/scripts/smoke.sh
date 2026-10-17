@@ -13,8 +13,18 @@ set -eu
 # ends. A second nested run then opens the launcher with `celestina launcher
 # toggle`, keeps it open for three seconds (the nest answers an idle client
 # about once a second), closes it the same way, and must still exit 0 with
-# both toggles logged and a frame drawn on the launcher's surface. Without
-# niri the nested session is skipped with a notice; without busctl and gdbus
+# both toggles logged and a frame drawn on the launcher's surface. A third
+# nested run turns the wallpaper duty on over a generated fixture picture (its
+# own throwaway XDG_CONFIG_HOME) and must show a `celestina-wallpaper` surface
+# in the Background layer with at most two frames at rest. A fourth nested
+# run starts the shell with the three energy duties `on` (a throwaway
+# XDG_CONFIG_HOME holding `celestina/shell.json`) and the system bus pointed
+# at a socket that does not exist, so no real logind is ever reached; it must
+# exit 0, report the idle worker armed or unavailable and the night light
+# applied or not applied (the nest has no DRM gamma), and answer `caffeine
+# toggle` and `session suspend` (refused: no locker yet). `session reboot` is
+# deliberately not sent: it would be a real logind call on a bus the nest does
+# not own. Without niri the nested session is skipped with a notice; without busctl and gdbus
 # the notification part is.
 usage() {
     echo "usage: scripts/smoke.sh --binary PATH" >&2
@@ -66,6 +76,31 @@ export CELESTINA_HOST_BUS
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/celestina-smoke.XXXXXX")
 trap 'rm -rf "$work"' EXIT INT TERM
+# The generated wrapper below quotes paths with single quotes, so a path that
+# holds one cannot be written safely: refuse it rather than build a script
+# that means something else.
+case "$work" in
+    *\'*)
+        echo "smoke: the temporary directory $work contains a single quote;" >&2
+        echo "  set TMPDIR to a path without one" >&2
+        exit 1
+        ;;
+esac
+# Every nested run gets a throwaway configuration home and a system bus that
+# does not exist, so a landing's smoke never acts through the author's real
+# settings or their real logind. Runs 1 and 2 start with the default
+# `shell.json` (every duty off); the wallpaper and energy runs replace the
+# home with their own, and every run keeps the dead system bus.
+xdg_default=$work/xdg-default
+mkdir -p "$xdg_default/celestina"
+cat > "$xdg_default/celestina/shell.json" <<'JSON'
+{
+  "schema_version": 1
+}
+JSON
+XDG_CONFIG_HOME=$xdg_default
+DBUS_SYSTEM_BUS_ADDRESS=unix:path=$work/no-system-bus
+export XDG_CONFIG_HOME DBUS_SYSTEM_BUS_ADDRESS
 run=$work/run
 status=0
 # shellcheck disable=SC2086 # probe_args is two words or none
@@ -269,4 +304,72 @@ if grep -q 'panicked' "$run.err"; then
 fi
 echo "smoke: wallpaper present, frames=$wp_frames rest_frames=$wp_rest over $(printf '%s\n' "$wp_lines" | wc -l) surfaces"
 echo "smoke: wallpaper held-output variant skipped: no layer-shell client in the repository (covered by unit tests)"
+
+# The energy duties: the shell starts with idle, caffeine and night light all
+# `on` from a throwaway configuration home, and its own client sends two verbs.
+# logind lives on the system bus, which a nest does not own: the wrapper points
+# DBUS_SYSTEM_BUS_ADDRESS at a socket that is not there, so the shell can only
+# report logind unavailable and nothing reaches the real one. `session reboot`
+# is never sent for the same reason; `session suspend` is refused before any
+# bus call because no locker exists yet.
+xdg=$work/xdg
+mkdir -p "$xdg/celestina"
+cat > "$xdg/celestina/shell.json" <<'JSON'
+{
+  "schema_version": 1,
+  "duties": { "idle": "on", "caffeine": "on", "nightlight": "on" },
+  "energy": { "caffeine": true, "night_light": true }
+}
+JSON
+energy=$work/energy-run
+cat > "$energy" <<WRAPPER
+#!/bin/sh
+# Runs the shell with the energy duties on, sends two verbs once it answers,
+# and exits with the shell's status.
+XDG_CONFIG_HOME='$xdg'
+DBUS_SYSTEM_BUS_ADDRESS='unix:path=$work/no-system-bus'
+export XDG_CONFIG_HOME DBUS_SYSTEM_BUS_ADDRESS
+RUST_LOG=info "$bin" "\$@" &
+shell=\$!
+send() {
+    tries=0
+    until "$bin" "\$@"; do
+        tries=\$((tries + 1))
+        [ "\$tries" -lt 20 ] || { echo "smoke-verb-failed \$*" >&2; return 1; }
+        sleep 0.2
+    done
+}
+send caffeine toggle
+send session suspend
+wait "\$shell"
+WRAPPER
+chmod +x "$energy"
+run=$work/energy
+status=0
+timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$energy" \
+    --once "$run" -- --exit-after 6 \
+    > "$work/niri.log" 2>&1 || status=$?
+[ "$status" -eq 0 ] || fail "the nested niri exited with $status (energy run)"
+[ -f "$run.status" ] || fail "the shell never ran inside the nest (energy run)"
+shell_status=$(cat "$run.status")
+[ "$shell_status" = 0 ] || fail "the shell exited with $shell_status (energy run)"
+if grep -q 'smoke-verb-failed' "$run.err"; then
+    fail "an energy verb did not reach the shell"
+fi
+if grep -q 'panicked' "$run.err"; then
+    fail "the shell panicked with the energy duties on"
+fi
+grep -Eq 'idle: (armed|unavailable)' "$run.err" ||
+    fail "the idle worker reported neither armed nor unavailable"
+grep -Eq 'night light: (applied|not applied)' "$run.err" ||
+    fail "the night light reported neither applied nor not applied"
+grep -q 'caffeine: now off' "$run.err" || fail "caffeine toggle was not answered"
+if grep -q 'caffeine: held' "$run.err"; then
+    fail "caffeine was held: a logind other than the nest's was reached"
+fi
+grep -q 'session suspend: requested' "$run.err" ||
+    fail "session suspend was not requested"
+grep -q 'session Suspend: refused: no locker yet' "$run.err" ||
+    fail "session suspend was not refused for want of a locker"
+echo "smoke: $(grep -Eo 'idle: (armed|unavailable)' "$run.err" | head -n 1), $(grep -Eo 'night light: (applied|not applied)' "$run.err" | head -n 1), suspend refused without a locker"
 echo "smoke: OK"

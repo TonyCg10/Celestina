@@ -26,6 +26,7 @@ use celestina_wayland::{
 use crate::notifications::banners::{self, BannerAction, BannerStack};
 use crate::{
     command::{Page, Verb},
+    energy::{self, EnergyHandle},
     error_chain,
     island::{
         menu::{self, ChoiceSlot, Menu, MenuChoice, MenuState, SharedPainter},
@@ -300,6 +301,8 @@ pub struct App {
     tray_refusal_logged: bool,
     /// The wallpaper duty: its surfaces, textures and requests.
     wallpapers: crate::wallpaper::surface::Wallpapers,
+    /// The energy duties' workers, set once the loop runs.
+    energy: Rc<OnceCell<EnergyHandle>>,
 }
 
 impl std::fmt::Debug for App {
@@ -355,7 +358,15 @@ impl App {
             open_tray_menu: None,
             tray_refusal_logged: false,
             wallpapers: crate::wallpaper::surface::Wallpapers::default(),
+            energy: Rc::new(OnceCell::new()),
         }
+    }
+
+    /// Takes the slot the energy handle is put in once the loop runs.
+    #[must_use]
+    pub fn with_energy(mut self, energy: Rc<OnceCell<EnergyHandle>>) -> App {
+        self.energy = energy;
+        self
     }
 
     /// The launcher's parts: the `recent` launches read at start and the
@@ -389,7 +400,9 @@ impl App {
     }
 
     /// `shell.json` changed on disk: its value is the one in force, and the
-    /// duties and do-not-disturb follow it live.
+    /// duties (wallpaper and energy), the energy switches and do-not-disturb
+    /// follow it live. The shell's own writes arrive as the value in force
+    /// and do nothing.
     fn shell_settings_read(
         &mut self,
         read: crate::providers::settings::ShellRead,
@@ -407,6 +420,11 @@ impl App {
             self.notifications
                 .send(NotificationsCommand::SetQuiet(after.do_not_disturb));
             self.redraw_all(ctl);
+        }
+        if before.duties != after.duties || before.energy != after.energy {
+            if let Some(handle) = self.energy.get() {
+                handle.apply(&after);
+            }
         }
     }
 
@@ -588,6 +606,15 @@ impl App {
                     (self.islands.get_mut(surface), ctl.surface(surface))
                 {
                     island.command(&verb, &mut ctl);
+                }
+            }
+            Verb::Caffeine(_) | Verb::NightLight(_) | Verb::Session(_) => {
+                let Some(handle) = self.energy.get() else {
+                    tracing::warn!(?verb, "no energy handle: the verb does nothing");
+                    return;
+                };
+                if let Some(outcome) = energy::verbs::run(verb, &mut self.settings, handle) {
+                    outcome.log();
                 }
             }
             Verb::LauncherToggle => self.toggle_launcher(ctl),
@@ -1327,6 +1354,7 @@ impl Shell for App {
                     .message(event, &mut self.settings, ctl, self.painter.as_ref());
             }
             Message::ShellSettings(read) => self.shell_settings_read(read, ctl),
+            Message::Energy(event) => event.log(),
         }
     }
 }

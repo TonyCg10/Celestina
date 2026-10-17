@@ -3,8 +3,8 @@
 //! - The suite's appearance file (`celestina-settings`): followed on its own
 //!   thread for as long as the returned [`Follower`] lives, each change
 //!   published as [`Message::Appearance`].
-//! - The shell's own `shell.json` (do-not-disturb, the duties, the
-//!   wallpaper): read at start through `celestina_shell::settings`, followed
+//! - The shell's own `shell.json` (do-not-disturb, the duties, the energy
+//!   switches, the wallpaper): read at start through `celestina_shell::settings`, followed
 //!   live by [`follow_shell`] (each new value published as
 //!   [`Message::ShellSettings`]), and rewritten whole and atomically
 //!   (`celestina_core::atomic_file::replace_private`) when the person changes
@@ -18,7 +18,7 @@ use std::time::Duration;
 use celestina_core::atomic_file::{self, Published, WriteError};
 use celestina_settings::Follower;
 use celestina_shell::settings::{
-    self, Pending, Settings, Store, WallpaperSettings, WriteOutcome, MAX_FILE_BYTES,
+    self, Energy, Pending, Settings, Store, WallpaperSettings, WriteOutcome, MAX_FILE_BYTES,
 };
 use celestina_wayland::Sender;
 use notify_debouncer_full::notify::{self, EventKind, RecommendedWatcher, RecursiveMode};
@@ -370,6 +370,20 @@ impl ShellSettings {
         self.commit(pending)
     }
 
+    /// Changes the energy switches, durably, the way do-not-disturb is
+    /// changed. Returns whether anything changed.
+    ///
+    /// # Errors
+    ///
+    /// As [`ShellSettings::set_do_not_disturb`].
+    pub fn set_energy(
+        &mut self,
+        change: impl FnOnce(&mut Energy),
+    ) -> Result<bool, ShellSettingsError> {
+        let pending = self.store.stage_energy(change);
+        self.commit(pending)
+    }
+
     /// Changes the wallpaper choices durably (the folder's files per output,
     /// the mode). Returns whether anything changed; the new value is in force
     /// only once the file is written.
@@ -502,6 +516,17 @@ mod tests {
         assert!(again.current().do_not_disturb);
         let text = std::fs::read_to_string(scratch.file()).expect("the file exists");
         assert!(text.contains("\"do_not_disturb\": true"));
+    }
+
+    #[test]
+    fn an_energy_change_is_written_and_read_back() {
+        let scratch = Scratch::new("energy");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        assert!(!shell.current().energy.caffeine);
+        assert!(shell.set_energy(|e| e.caffeine = true).expect("written"));
+        assert!(!shell.set_energy(|e| e.caffeine = true).expect("no change"));
+        let again = ShellSettings::load_from(Some(scratch.file()));
+        assert!(again.current().energy.caffeine);
     }
 
     #[test]

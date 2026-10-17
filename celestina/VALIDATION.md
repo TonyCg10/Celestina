@@ -8,7 +8,9 @@ each is run on
 the binary the landing of its related unit deploys. CEL-1-H checked that all
 nine `VAL-CEL-*` rows are queued and pending. The `VAL-CEL2-*` rows are queued
 by the CEL-2 units, each unit adding its own (as the CEL-2 ledger states), and
-are run the same way. None has been run and none is closed by an agent.
+are run the same way; among them CEL-2-E queues VAL-CEL2-WALLPAPER and
+CEL-2-B queues VAL-CEL2-IDLE, VAL-CEL2-CAFFEINE, VAL-CEL2-NIGHTLIGHT and
+VAL-CEL2-SESSION. None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
 
@@ -276,5 +278,105 @@ are run the same way. None has been run and none is closed by an agent.
   at scale 1.5; `next`, `mode`, hotplug and restart behave as described; after
   `celestina wallpaper retry` with Noctalia's wallpaper still on an output, the
   shell draws nothing on that output and names the holder
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-IDLE — The idle chain: screen off, and no suspend without a lock
+
+- **Status:** pending
+- **Related implementation:** CEL-2-B (the idle worker on `ext-idle-notify`
+  and the pure chain)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; `duties.idle` set to `"on"` in `~/.config/celestina/shell.json`
+  before starting it; Noctalia's idle screen-off switched off first in its
+  own idle settings, so the two never act at once; caffeine off
+- **Procedure:** start the shell and leave keyboard and pointer untouched. The
+  shell's journal line `idle: armed` appears at start. After the screen-off
+  delay (20 s) every output must power off; move the mouse and check that the
+  outputs wake at once. Leave the session idle past the suspend delay (240 s)
+  and check that nothing suspends and the journal says the step was refused
+  for want of a locker. Then set `duties.idle` back to `"off"`, wait for the
+  shell to follow the file, and check that idling no longer powers the
+  outputs off. Switch Noctalia's idle behaviour back on if you want it
+- **Pass condition:** the outputs power off after the screen-off delay and
+  wake on input; the session never suspends and the refusal is logged once
+  per idle period; with the duty off the shell does nothing on idle; Noctalia
+  and the shell were never both enabled
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-CAFFEINE — Caffeine as a logind inhibitor
+
+- **Status:** pending
+- **Related implementation:** CEL-2-B (the logind worker and the caffeine
+  verbs)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; `duties.caffeine` set to `"on"` in `~/.config/celestina/shell.json`
+  before starting it; Noctalia's caffeine switched off first with
+  `noctalia msg caffeine-disable`, so the two never hold it at once (the
+  niri startup line `caffeine-enable` is the one this replaces)
+- **Procedure:** run `celestina caffeine on` and then
+  `systemd-inhibit --list`: a `Celestina` lock for `idle:sleep` in mode
+  `block` must be listed. Run `celestina caffeine toggle` and check that it is
+  gone. Turn it on again, set `duties.idle` to `"on"` and wait past the
+  screen-off delay: the outputs must stay on while caffeine is held. Run
+  `celestina caffeine off`, stop the shell with `celestina quit` and check
+  that no `Celestina` lock remains. Verbs print nothing; the result is read
+  in `systemd-inhibit --list` and in the shell's journal
+- **Pass condition:** the lock exists exactly while caffeine is on, blocks the
+  idle chain, and is released by the verb, by switching the duty off and by
+  the shell stopping; `energy.caffeine` in `shell.json` follows the verb;
+  with the duty off the verb does nothing to the system and says so in the
+  journal
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-NIGHTLIGHT — Forced night light on the three outputs
+
+- **Status:** pending
+- **Related implementation:** CEL-2-B (the gamma worker and the night-light
+  verbs)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; `duties.nightlight` set to `"on"` and `energy.night_light` to
+  `true` in `~/.config/celestina/shell.json` before starting it; Noctalia's
+  night light switched off first with `noctalia msg nightlight-disable`
+  (and its startup `nightlight-force-toggle` not run), so the two never own
+  the gamma at once
+- **Procedure:** start the shell and look at all three outputs: each must turn
+  warm (2700 K by default) with a short transition, not a jump. Run
+  `celestina nightlight toggle` and check that every output returns to
+  neutral; toggle again and check the warm return. Unplug or disable one
+  output and plug it back, and check that it takes the colour again. Set
+  `energy.night_light_kelvin` to a value in 2000..6500 and check that the
+  colour follows the file. Stop the shell and check that the outputs return
+  to neutral
+- **Pass condition:** the warm tint appears and goes on every output, survives
+  hotplug, follows the kelvin setting, and is gone when the shell stops; if
+  an output refuses the gamma control the others still change and the journal
+  says `night light: not applied`
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-SESSION — Session verbs through logind
+
+- **Status:** pending
+- **Related implementation:** CEL-2-B (the logind worker and the session
+  verbs)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; no unsaved work, since two of the verbs below would end the
+  session if the lock existed; no duty needs to be on for these verbs
+- **Procedure:** run `celestina session suspend` and check that the machine
+  does not suspend: until the lock of a later delivery exists the shell
+  refuses and the journal says `session Suspend: refused: no locker yet`.
+  Do not run `session reboot` or `session power-off` as a check. For a harmless
+  look at the same path, run `busctl call org.freedesktop.login1
+  /org/freedesktop/login1 org.freedesktop.login1.Manager CanReboot` and
+  read the answer (`yes`, `challenge` or `na`) that the shell's probe would
+  also see. Run `celestina session log-out` only if you are ready to end the
+  session: niri asks its own confirmation before it does
+- **Pass condition:** suspend is refused with the stated reason and the
+  machine stays awake; the logind probe answers; log out goes to niri's
+  confirmation and not to logind; reboot and power off are never exercised
+  by this row
 - **Result:** not run
 - **Evidence:** none

@@ -32,6 +32,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
+use crate::nightlight::Whitepoint;
 use crate::wallpaper::{lenient_mode, Mode};
 
 /// Reads any field of a settings file without ever failing the file: a value of
@@ -105,10 +106,21 @@ pub enum Duty {
     On,
 }
 
-/// The shell's optional duties. Later units add fields; each defaults to off.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// The shell's optional duties, one line per duty in name order. Later units
+/// add fields; each defaults to off, and a value that is not `"on"` or `"off"`
+/// degrades to off instead of failing the file.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Duties {
+    /// Whether this shell holds the session awake while caffeine is on.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub caffeine: Duty,
+    /// Whether this shell turns the screens off, locks and suspends when idle.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub idle: Duty,
+    /// Whether this shell drives the night-light gamma ramps.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub nightlight: Duty,
     /// Whether this shell paints the wallpaper.
     #[serde(deserialize_with = "lenient_duty")]
     pub wallpaper: Duty,
@@ -170,9 +182,13 @@ pub struct Settings {
     /// person who silenced their session did not mean "until the next reboot".
     #[serde(deserialize_with = "lenient")]
     pub do_not_disturb: bool,
-    /// Which optional duties this shell performs.
+    /// Which optional duties this shell performs. Absent from a 1.0.0 file:
+    /// all off.
     #[serde(deserialize_with = "lenient")]
     pub duties: Duties,
+    /// The switches the person flips for the energy duties. Absent: all off.
+    #[serde(deserialize_with = "lenient")]
+    pub energy: Energy,
     /// The wallpaper choices.
     #[serde(deserialize_with = "lenient")]
     pub wallpaper: WallpaperSettings,
@@ -184,7 +200,28 @@ impl Default for Settings {
             schema_version: SCHEMA_VERSION,
             do_not_disturb: false,
             duties: Duties::default(),
+            energy: Energy::default(),
             wallpaper: WallpaperSettings::default(),
+        }
+    }
+}
+
+/// What the person switched on for energy. The duty decides whether the shell
+/// acts on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Energy {
+    pub caffeine: bool,
+    pub night_light: bool,
+    pub night_light_kelvin: u32,
+}
+
+impl Default for Energy {
+    fn default() -> Self {
+        Self {
+            caffeine: false,
+            night_light: false,
+            night_light_kelvin: Whitepoint::DEFAULT_KELVIN,
         }
     }
 }
@@ -196,6 +233,11 @@ impl Settings {
     fn clamped(mut self) -> Self {
         self.schema_version = SCHEMA_VERSION;
         self.wallpaper = self.wallpaper.clamped();
+        // The whitepoint's own range, so the file and the light never disagree.
+        self.energy.night_light_kelvin = self
+            .energy
+            .night_light_kelvin
+            .clamp(Whitepoint::MINIMUM_KELVIN, Whitepoint::MAXIMUM_KELVIN);
         self
     }
 
@@ -343,6 +385,15 @@ impl Pending {
     }
 }
 
+impl Store {
+    /// Stages a change to the energy switches, the way do-not-disturb is
+    /// staged: nothing is in force until its write is confirmed.
+    #[must_use]
+    pub fn stage_energy(&self, change: impl FnOnce(&mut Energy)) -> Pending {
+        self.stage(|settings| change(&mut settings.energy))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -450,6 +501,38 @@ mod tests {
             .insert("DP-1".into(), "a.png".into());
         let bytes = settings.to_bytes().expect("serialize");
         assert!(String::from_utf8_lossy(&bytes).contains(r#""wallpaper": "on""#));
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+    }
+
+    #[test]
+    fn the_energy_defaults_turn_nothing_on() {
+        let settings = Settings::default();
+        assert_eq!(settings.duties, Duties::default());
+        assert_eq!(settings.duties.idle, Duty::Off);
+        assert!(!settings.energy.caffeine);
+        assert!(!settings.energy.night_light);
+        assert_eq!(settings.energy.night_light_kelvin, 2700);
+    }
+
+    #[test]
+    fn energy_settings_survive_a_round_trip() {
+        let settings = Settings {
+            duties: Duties {
+                idle: Duty::On,
+                caffeine: Duty::On,
+                nightlight: Duty::Off,
+                wallpaper: Duty::On,
+            },
+            energy: Energy {
+                caffeine: true,
+                night_light: true,
+                night_light_kelvin: 3300,
+            },
+            ..Settings::default()
+        };
+        let bytes = settings.to_bytes().expect("settings serialize");
+        let text = String::from_utf8(bytes.clone()).expect("utf8");
+        assert!(text.contains("\"on\"") && text.contains("\"off\""));
         assert_eq!(Settings::from_bytes(&bytes), Some(settings));
     }
 
@@ -594,5 +677,66 @@ mod tests {
         for bad in ["", ".", "..", ".sea.png", "a\\b.png", "a/b", "a\nb", "a\0b"] {
             assert!(!plain_name(bad), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn a_1_0_0_file_keeps_its_value_and_defaults_the_rest() {
+        let read = Settings::from_bytes(br#"{"schema_version":1,"do_not_disturb":true}"#)
+            .expect("an old file is read");
+        assert!(read.do_not_disturb);
+        assert_eq!(read.duties, Duties::default());
+        assert_eq!(read.energy, Energy::default());
+    }
+
+    #[test]
+    fn an_out_of_range_kelvin_is_clamped() {
+        let low = Settings::from_bytes(br#"{"energy":{"night_light_kelvin":10}}"#).expect("read");
+        assert_eq!(low.energy.night_light_kelvin, 2000);
+        let high =
+            Settings::from_bytes(br#"{"energy":{"night_light_kelvin":99999}}"#).expect("read");
+        assert_eq!(high.energy.night_light_kelvin, 6500);
+        let store = Store::new(Settings::default());
+        let pending = store.stage_energy(|energy| energy.night_light_kelvin = 1);
+        assert_eq!(pending.wanted().energy.night_light_kelvin, 2000);
+    }
+
+    #[test]
+    fn an_unknown_duty_value_degrades_to_off_without_losing_the_rest() {
+        let read = Settings::from_bytes(
+            br#"{"do_not_disturb":true,
+                 "duties":{"idle":"on","caffeine":"maybe","nightlight":7},
+                 "energy":{"caffeine":true}}"#,
+        )
+        .expect("the file is still read");
+        assert!(read.do_not_disturb);
+        assert_eq!(read.duties.idle, Duty::On);
+        assert_eq!(read.duties.caffeine, Duty::Off);
+        assert_eq!(read.duties.nightlight, Duty::Off);
+        assert!(read.energy.caffeine);
+    }
+
+    #[test]
+    fn an_energy_change_is_durable_before_published() {
+        let mut store = Store::new(Settings::default());
+        let pending = store.stage_energy(|energy| energy.caffeine = true);
+        assert!(!store.current().energy.caffeine);
+        assert!(!store.apply(pending.clone(), WriteOutcome::Failed));
+        assert!(!store.current().energy.caffeine);
+        let bytes = pending.bytes().expect("bytes");
+        assert!(store.apply(pending, WriteOutcome::Durable));
+        assert!(store.current().energy.caffeine);
+        assert_eq!(Settings::from_bytes(&bytes).as_ref(), Some(store.current()));
+    }
+
+    #[test]
+    fn hostile_energy_input_is_still_refused() {
+        let mut huge = br#"{"energy":{"night_light_kelvin":3000}}"#.to_vec();
+        huge.resize(MAX_FILE_BYTES + 1, b' ');
+        assert_eq!(Settings::from_bytes(&huge), None);
+        // A wrong-typed table degrades to its default, like every other field.
+        assert_eq!(
+            Settings::from_bytes(br#"{"energy":"x"}"#),
+            Some(Settings::default())
+        );
     }
 }
