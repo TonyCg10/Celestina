@@ -32,6 +32,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # System libraries the shell's crates link, read from their build
+      # scripts: `wayland-sys` (features `client` and `egl`, no `dlopen`)
+      # probes `wayland-client.pc` and `wayland-egl.pc`, both shipped by
+      # libwayland-dev; `smithay-client-toolkit` probes `xkbcommon.pc` and the `xkbcommon`
+      # crate links `-lxkbcommon`, both from libxkbcommon-dev.
+      # The protocol XML is bundled by `wayland-protocols*`, EGL is loaded
+      # at run time by `khronos-egl`, and fonts are read in pure Rust.
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwayland-dev libxkbcommon-dev
+
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
 

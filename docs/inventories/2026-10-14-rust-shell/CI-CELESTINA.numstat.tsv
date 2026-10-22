@@ -1,0 +1,15 @@
+# CI-CELESTINA exact change inventory
+
+Base revision	5f2e04cc758645009e7c253ba882f0f0faaf6933
+Pathspec	.github/workflows/celestina.yml
+Pathspec	docs/evidence/2026-10-22-ci-celestina.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CI-CELESTINA.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	0	b5b9727b7f4cc9337109fd4eb87fd591fe8359802dc82586ffb027251eb51128	.github/workflows/celestina.yml
+64	0	8717cde886694d49f286eaaee87ad947308ed08cd9646de6b2ae6b585901193e	docs/evidence/2026-10-22-ci-celestina.md
+15	0	self	docs/inventories/2026-10-14-rust-shell/CI-CELESTINA.numstat.tsv
+1	0	8bc09943c9d3ae49062c0d8da75e259e100b4654fd1b12aaaf01173bb0b57858	docs/plans/active/2026-10-14-rust-shell.md
