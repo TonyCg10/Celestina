@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/celestina-core",
+    "crates/celestina-lock-proto",
     "crates/celestina-settings",
     "crates/celestina-shell",
     "crates/celestina-shell-core",

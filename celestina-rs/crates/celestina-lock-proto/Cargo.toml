@@ -1,0 +1,13 @@
+[package]
+name = "celestina-lock-proto"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The session lock's shared vocabulary: verdicts, exit codes, line and bundle codecs, backoff (CEL-2-H)"
+
+# No dependencies at all, by design (spec 2026-10-17 §4.13): the lock, the
+# verifier and the shell share this vocabulary and it pulls nothing into them.
+
+[lints]
+workspace = true

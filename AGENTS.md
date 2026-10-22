@@ -77,10 +77,14 @@ list in the same way and always before the first commit of the unit it serves:
   `celestina/src/providers`, and
   `celestina-rs/crates/celestina-shell-core/src/clipboard.rs` into
   `celestina-rs/crates/celestina-shell`.
-- CEL-2-H: `celestina-qt/src/provider_adapter/session.rs` as reference only,
-  for `celestina/src/providers`; no code is copied. ADR 0004 of the halted
-  shell is re-decided in `celestina/docs/decisions/`, adapted and re-reviewed;
-  its file is not copied.
+- CEL-2-H (CEL-2-H-a and CEL-2-H-b): as reference only, nothing copied:
+  `celestina-qt/docs/decisions/0004-first-party-session-lock.md`,
+  `celestina-qt/src/lockverify/main.cpp`, `celestina-qt/src/lockauthenticator.cpp`,
+  `celestina-qt/src/lockcontroller.cpp` and `celestina-qt/src/lock/`, for
+  `celestina/crates/celestina-lock`, `celestina/crates/celestina-lock-verify`
+  and `celestina/src/lock`. ADR 0004 of the halted shell is re-decided in
+  `celestina/docs/decisions/`, adapted and re-reviewed; its file is not
+  copied.
 - CEL-2-I: nothing is copied. ADR 0005 of the halted shell is re-decided in
   `celestina/docs/decisions/`, adapted and re-reviewed; its file is not copied.
   `celestina-qt/src/polkit{agent,conversation,promptcontroller}.cpp` and

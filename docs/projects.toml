@@ -130,8 +130,8 @@ context_documents = [
   "celestina-style/DESIGN.md",
   "celestina/docs/decisions/README.md",
 ]
-source_roots = ["celestina/src", "celestina/crates", "celestina-rs/crates/celestina-shell"]
-commit_roots = ["celestina/", "celestina-rs/crates/celestina-shell/"]
+source_roots = ["celestina/src", "celestina/crates", "celestina-rs/crates/celestina-shell", "celestina-rs/crates/celestina-lock-proto"]
+commit_roots = ["celestina/", "celestina-rs/crates/celestina-shell/", "celestina-rs/crates/celestina-lock-proto/"]
 include_workspace_manifests = true
 production_role = "activatable-shell"
 deployable = true
@@ -143,9 +143,9 @@ deploy_script = "celestina/scripts/deploy-production.sh"
 activate_script = "celestina/scripts/activate-production.sh"
 status_script = "celestina/scripts/status-production.sh"
 artifact_manifest = "celestina/target/production-artifact.toml"
-artifact_paths = ["celestina/target/release/celestina"]
+artifact_paths = ["celestina/target/release/celestina", "celestina/target/release/celestina-lock", "celestina/target/release/celestina-lock-verify"]
 cargo_manifests = ["celestina/Cargo.toml"]
-production_inputs = ["celestina/Cargo.toml", "celestina/Cargo.lock", "celestina/rust-toolchain.toml", "celestina/src", "celestina/crates", "celestina/celestina.desktop", "celestina-style/fonts", "celestina-style/icons", "celestina-rs/crates/celestina-core", "celestina-rs/crates/cuprita-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/celestina-shell", "celestina-rs/crates/hematita-core", "celestina-rs/crates/celestina-tokens", "celestina-style/tokens.toml"]
+production_inputs = ["celestina/Cargo.toml", "celestina/Cargo.lock", "celestina/rust-toolchain.toml", "celestina/src", "celestina/crates", "celestina/celestina.desktop", "celestina-style/fonts", "celestina-style/icons", "celestina-rs/crates/celestina-core", "celestina-rs/crates/cuprita-core", "celestina-rs/crates/celestina-settings", "celestina-rs/crates/celestina-shell", "celestina-rs/crates/celestina-lock-proto", "celestina-rs/crates/hematita-core", "celestina-rs/crates/celestina-tokens", "celestina-style/tokens.toml"]
 verification_inputs = ["celestina/tests", "celestina/scripts/smoke.sh", "celestina/scripts/dev-session.kdl", "celestina-rs/rust-toolchain.toml"]
 component_commit_scopes = [
   { prefix = "celestina-shell", roots = ["celestina-rs/crates/celestina-shell/"], include_workspace_manifests = true },

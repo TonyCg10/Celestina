@@ -426,6 +426,10 @@ name = "celestina-dotfiles-core"
 version = "0.1.0"
 
 [[package]]
+name = "celestina-lock-proto"
+version = "0.1.0"
+
+[[package]]
 name = "celestina-settings"
 version = "0.1.0"
 dependencies = [
