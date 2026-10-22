@@ -1,0 +1,17 @@
+# CEL-2-F-DEPS exact change inventory
+
+Base revision	7196bf704ac0f19bfb704ac7ac32b567d481484b
+Pathspec	docs/evidence/2026-10-17-cel-2-f-deps.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-2-F-DEPS.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/projects.toml
+Pathspec	docs/standards/architecture.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+43	0	3e632c003beb1636815a797a027fe0214e458edefd69560441c2f75dd43d41e3	docs/evidence/2026-10-17-cel-2-f-deps.md
+17	0	self	docs/inventories/2026-10-14-rust-shell/CEL-2-F-DEPS.numstat.tsv
+3	1	36e942f87f5f8c3de1beeff8db532391f2add7b85d69f95efeeae2612ed3cded	docs/plans/active/2026-10-14-rust-shell.md
+2	2	0a4c0aed51acf3b36583f66bd922ce0f1d68c8f3cc06e5d76f4af2fb976ec313	docs/projects.toml
+4	1	6857495dd9b8d52db5b0be82a2354f42322a7183daea23da3c3a7871aeb7ca25	docs/standards/architecture.md

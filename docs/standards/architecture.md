@@ -22,7 +22,10 @@ Siderita is such a consumer of `grafita-core`, `fluorita-core` and
 `usage::remove`, `hematita/src` or Hematita's QML). The Rust shell
 `celestina/` is such a consumer of `hematita-core::{cpu, memory, sensors}`
 only (the parsers of `/proc` and hwmon text behind its system monitor; never
-`usage`, `process`, `services`, `history` or Hematita's QML).
+`usage`, `process`, `services`, `history` or Hematita's QML). It is also a consumer of `cuprita-core`'s NetworkManager and
+BlueZ clients and their traits (`nm`, `bluez`, `network`, `bluetooth`, `model`,
+`error`; the `wpctl` audio client and Cuprita's QML never), behind its own
+narrower action type, and never edits them.
 
 [ADR 0005](../decisions/0005-bounded-qt-bridge-crates.md)
 bounds the real Qt exception: it exists only for a stable shared host seam or a
