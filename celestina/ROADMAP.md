@@ -4,7 +4,8 @@
 - **Active implementation checkpoint:** CEL-2
 - **Related author validation:** VAL-CEL2-BAR-LIVE (it does not block); the CEL-1 rows stay queued: VAL-CEL-GLASS, VAL-CEL-ISLAND, VAL-CEL-REST,
   VAL-CEL-POPUP, VAL-CEL-KEYBOARD, VAL-CEL-IME, VAL-CEL-SCALE,
-  VAL-CEL-NOCTALIA and VAL-CEL-BANNERS in [VALIDATION.md](VALIDATION.md) (they do not block)
+  VAL-CEL-NOCTALIA and VAL-CEL-BANNERS in [VALIDATION.md](VALIDATION.md) (they do not block);
+  the CEL-2-J rows VAL-CEL2-PHONE, VAL-CEL2-BUBBLES and VAL-CEL2-BUBBLES-KEYS are pending too
 
 ## CEL-2 — Shell parity with Noctalia
 
@@ -15,6 +16,10 @@ does in the author's niri session. **Plan:**
 [CEL-2](docs/plans/active/2026-10-16-cel-2-parity.md), thirteen units
 (CEL-2-A to CEL-2-M) in the plan's order; its ledger is the source of each
 unit's status and exit.
+
+**CEL-2-J (implemented in its worktree, not landed):** the phone and bubbles
+duties, both off by default; evidence in
+[docs/evidence/2026-10-17-phone-and-bubbles.md](docs/evidence/2026-10-17-phone-and-bubbles.md).
 
 **Closed program, kept below:** CEL-1.
 

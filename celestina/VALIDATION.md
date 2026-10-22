@@ -744,3 +744,115 @@ VAL-CEL2-OSD-PIECES. None has been run and none is closed by an agent.
   kind's OSD still shows while it is open
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-CEL2-PHONE — The phone piece beside Noctalia's phone widget
+
+- **Status:** pending
+- **Related implementation:** CEL-2-J (the `phone` duty, off by default, the
+  Magnetita worker on the session bus, the phone piece, the Phone page of the
+  Island and the `phone media` verbs)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; the author's phone paired with Magnetita, which runs on the session
+  bus and owns `org.celestina.Devices1`; `duties.phone` set to `"on"` in
+  `~/.config/celestina/shell.json` before starting the shell. The piece lives
+  on the bar, so the same file also sets `"duties": {"bar": "on", "phone":
+  "on"}` and puts the id `phone` in the bar's end zone, for example
+  `"bar": {"end": ["bubbles", "phone", "tray"]}` (the ids `bubbles` and
+  `phone` belong to the piece table; the zones are `start`, `centre` and
+  `end`). Noctalia's phone widget stays active: this row checks that the two show the phone
+  without interfering, and it does not switch Noctalia off
+- **Procedure:** start the shell and run `celestina island open phone`. Compare
+  the battery percentage and the charging state on the Phone page and on the
+  phone itself. Plug the phone in and out and check that the charging state
+  follows. Take the phone out of reach until Magnetita reports it disconnected,
+  and check that the phone piece leaves the bar (a phone that is not
+  connected is simply not listed, and the Phone page says there is no phone)
+  and nothing else breaks. With a
+  track playing on the phone, check that its title and state appear on the
+  Phone page, then run `celestina phone media PlayPause`, `celestina phone
+  media Next` and `celestina phone media Previous` and check that the phone's
+  player reacts to each. Stop Magnetita and check that the piece is no longer
+  drawn, with no error in the journal. Set `duties.phone` back to `"off"`,
+  wait for the shell to follow the file, and check that the piece disappears
+  without a restart. Switch the duty on again if you want it kept
+- **Pass condition:** the battery, the charging state, the connection (a
+  disconnected phone leaves no piece) and the
+  media match the phone; each `phone media` verb reaches the phone's player;
+  when Magnetita is absent or the duty is off the shell draws no phone piece
+  and reports nothing as an error; Noctalia's widget and the shell's piece do
+  not fight over the phone
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-BUBBLES — Minimised windows as bubbles, on the author's niri
+
+- **Status:** pending
+- **Related implementation:** CEL-2-J (the `bubbles` duty, off by default, the
+  Melibea worker over its socket with the v1 default and the v2 transition
+  hint, the bubbles piece and the `bubbles minimize` verb)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session, with the patched niri that accepts the anchored transition (the
+  one `~/.local/lib/celestina/niri` the nested smoke also prefers); Melibea
+  running as the author's own service; `duties.bubbles` set to `"on"` in
+  `~/.config/celestina/shell.json` before starting the shell. The bubbles
+  live on the bar, so the same file also sets `"duties": {"bar": "on",
+  "bubbles": "on"}` and puts the id `bubbles` in the bar's end zone, for
+  example `"bar": {"end": ["bubbles", "phone", "tray"]}`. The author binds
+  a key of their own to `celestina bubbles minimize` (the shell binds no key)
+  and, for the last step, uses a Melibea that speaks only v1 if one is at
+  hand; if none is, that step stays not run
+- **Procedure:** with the duty on, minimise a window with the key bound to
+  `celestina bubbles minimize` and check that a bubble appears in the bubbles
+  group with the window's icon. Minimise more windows than the group shows and
+  check that the overflow bubble reads `+N` with the number of hidden windows
+  and that clicking it opens the selector. Click a bubble and check that the
+  window comes back on its own output at the place it left, with the
+  transition anchored to the bubble. Watch the same minimise and restore
+  again with reduced motion on in the author's appearance settings and check
+  that the transition is disabled and the window still changes state. Then,
+  with a Melibea that speaks only v1, minimise and restore once: the windows
+  must still change state, the anchor is dropped, and the journal says once
+  that Melibea speaks v1 only. Stop Melibea and check that the bubbles
+  disappear and that the journal gets one line per change of state, not one
+  per reconnection attempt: the worker's `melibea: unavailable: ...` (or
+  `melibea: absent: ...` once the socket is gone) with the loop's matching
+  `bubbles: Melibea is unavailable` (or `... is absent`), and then, when
+  Melibea is back, `melibea: subscribed` with the bubbles drawn again
+- **Pass condition:** a minimised window becomes a bubble and a click restores
+  it; `+N` counts the hidden windows and opens the selector; the anchored
+  transition runs with the patched niri and the window ends where it should;
+  reduced motion disables the transition; a v1-only Melibea is served with no
+  anchor and no error; a missing Melibea shows no bubbles and no error beyond
+  those lines, written once per change of state
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-BUBBLES-KEYS — The bubbles selector on Mod+K
+
+- **Status:** pending
+- **Related implementation:** CEL-2-J (the selector: the launcher's overlay
+  with a bubbles source, `celestina bubbles select` as a toggle)
+- **Requires:** the same session as VAL-CEL2-BUBBLES, with at least three
+  minimised windows of different applications; the author binds `Mod+K` to
+  `celestina bubbles select` in their own niri configuration (the shell binds
+  no key)
+- **Procedure:** press `Mod+K` and check that the card opens with the focus in
+  its field and the first row selected. Type part of a window's title and
+  check that the rows filter by title, then by app id; clear the field and
+  check that all windows come back. Press `Down`, `Up`, `Tab` and `Shift+Tab`
+  and check that the selection moves and wraps at both ends. Press `Enter` on
+  a row and check that the window is restored and the card closes. Press
+  `Mod+K` again, select a row and press `Delete`: the window is asked to
+  close, and its row leaves only when the window really closes. Press `Mod+K`
+  and then `Escape`, then press `Mod+K` and click outside the card, then press
+  `Mod+K` and move the focus to another window: each closes without acting.
+  Press `Mod+K` while the card is open and check that it closes. Check that
+  after every close the keyboard goes back to the window that had it before
+  the card opened. With no minimised windows the card shows one note row and
+  nothing is selectable
+- **Pass condition:** every key does what is described; the card holds the
+  keyboard while open and gives it back on close; `Delete` never removes a row
+  by itself; an empty selector explains itself in one line and does nothing
+  when `Enter` is pressed
+- **Result:** not run
+- **Evidence:** none

@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.7.0"
+version = "1.8.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -98,8 +98,10 @@ image = { version = "=0.25.6", default-features = false, features = ["png", "jpe
 # constant and the workspace forbids the unsafe a raw libc call needs. Already
 # in the lockfile through the Wayland stack. CEL-2-B: the gamma ramp travels in
 # an anonymous memory file (`memfd_create`), and the energy workers wait on
-# their own Wayland connection (`event`).
-rustix = { version = "1", features = ["fs", "event"] }
+# their own Wayland connection (`event`). CEL-2-J: the Melibea socket is
+# trusted only when it belongs to this process's uid, and std has no safe
+# `getuid` (`process`).
+rustix = { version = "1", features = ["fs", "event", "process"] }
 # The shell follows its own `shell.json` live (CEL-2-E: the wallpaper duty
 # turns on and off without a restart), with the same debounced directory
 # watch `celestina-settings` uses for the appearance file; the version is the

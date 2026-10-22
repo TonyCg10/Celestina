@@ -46,12 +46,14 @@
 pub mod battery;
 pub mod bluetooth;
 pub mod brightness;
+pub mod bubbles;
 pub mod clipboard;
 pub mod clock;
 pub mod conn_glyph;
 mod level;
 pub mod network;
 pub mod notifications;
+pub mod phone;
 pub mod power_profile;
 pub mod sysmon;
 pub mod tray;
@@ -65,7 +67,10 @@ use celestina_shell::connectivity::Action;
 use celestina_shell::glance::Today;
 use celestina_ui::{Key, View};
 
+use celestina_shell::phone::PhoneState;
+
 use crate::{
+    bubbles::Bubbles,
     connectivity::state::ConnectivityState,
     island::pages::{clipboard::ClipboardPanel, HistoryRow, NameOwner, PageView, TrayRow},
     providers::{
@@ -101,6 +106,8 @@ impl PageId {
     pub const CLIPBOARD: PageId = PageId("clipboard");
     /// The Notifications page.
     pub const NOTIFICATIONS: PageId = PageId("notifications");
+    /// The Phone page (the Phone piece's).
+    pub const PHONE: PageId = PageId("phone");
     /// The Tray page.
     pub const TRAY: PageId = PageId("tray");
     /// The System page (the System monitor piece's): the meters and their
@@ -173,6 +180,12 @@ pub struct BarCx<'a> {
     /// The audio and brightness readings the Volume and Brightness pieces
     /// show; empty while the `osd` duty is off.
     pub levels: Levels,
+    /// The phone as Magnetita lists it (CEL-2-J); `Absent` while the duty
+    /// is off.
+    pub phone: &'a PhoneState,
+    /// The minimised windows Melibea keeps (CEL-2-J); empty while the duty
+    /// is off.
+    pub bubbles: &'a Bubbles,
 }
 
 /// One audio device's reading: whole percent and whether it is muted. Muted
@@ -299,6 +312,11 @@ pub enum PieceAction {
     /// A request to the connectivity workers (CEL-2-F): the Island forwards
     /// it, and the workers check it again before they act.
     Connectivity(Action),
+    /// Bring the minimised window with this id back; the Island anchors the
+    /// transition to the node the input landed on.
+    RestoreWindow(u64),
+    /// Open the selector of minimised windows.
+    OpenSelector,
 }
 
 /// One thing the bar can hold.
@@ -331,6 +349,8 @@ pub static PIECES: &[&dyn Piece] = &[
     &power_profile::PowerProfile,
     &volume::Volume,
     &brightness::Brightness,
+    &phone::Phone,
+    &bubbles::Bubbles,
 ];
 
 /// The piece the layout names `id`, if the table has it.
@@ -387,7 +407,9 @@ mod tests {
                 "battery",
                 "power-profile",
                 "volume",
-                "brightness"
+                "brightness",
+                "phone",
+                "bubbles"
             ]
         );
         assert_eq!(
@@ -402,6 +424,7 @@ mod tests {
                 PageId::NETWORK,
                 PageId::BLUETOOTH,
                 PageId::POWER,
+                PageId::PHONE,
             ]
         );
         for (i, id) in PageId::all().into_iter().enumerate() {
@@ -446,10 +469,19 @@ mod tests {
             "network",
             "bluetooth",
             "power",
+            "phone",
         ] {
             assert_eq!(page_by_word(word).map(PageId::word), Some(word));
         }
-        for foreign in ["", "Activity", "island", "workspaces", "tray ", "menu"] {
+        for foreign in [
+            "",
+            "Activity",
+            "island",
+            "workspaces",
+            "tray ",
+            "menu",
+            "bubbles",
+        ] {
             assert_eq!(page_by_word(foreign), None, "{foreign:?}");
         }
         for foreign in ["", "Tray", "island", "activity", "Clock", "sysmon "] {
@@ -469,6 +501,7 @@ mod tests {
             PageId::NETWORK,
             PageId::BLUETOOTH,
             PageId::POWER,
+            PageId::PHONE,
         ] {
             assert!(page_entry(id).is_some(), "{id:?}");
         }
@@ -528,6 +561,8 @@ mod tests {
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &ConnectivityState::default(),
             levels: crate::pieces::Levels::default(),
+            phone: &celestina_shell::phone::PhoneState::Absent,
+            bubbles: &crate::bubbles::NONE,
         };
         piece(id)
             .expect("in the table")
@@ -662,6 +697,8 @@ pub(crate) mod tests_support {
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: state,
             levels: crate::pieces::Levels::default(),
+            phone: &celestina_shell::phone::PhoneState::Absent,
+            bubbles: &crate::bubbles::NONE,
         })
     }
 }

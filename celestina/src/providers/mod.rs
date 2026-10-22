@@ -6,6 +6,9 @@
 pub mod audio;
 pub mod brightness;
 pub mod desktop;
+pub mod duty;
+pub mod magnetita;
+pub mod melibea;
 pub mod niri;
 pub mod notifications;
 pub mod settings;

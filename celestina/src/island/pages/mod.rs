@@ -10,6 +10,7 @@ pub mod clipboard;
 pub mod clock;
 pub mod network;
 pub mod notifications;
+pub mod phone;
 pub mod power;
 pub mod rows;
 pub mod sysmon;
@@ -128,6 +129,9 @@ pub struct PageCx<'a> {
     pub clipboard: &'a clipboard::ClipboardPanel,
     /// The network, Bluetooth and power state (CEL-2-F), read-only.
     pub connectivity: &'a ConnectivityState,
+    /// The phone as Magnetita lists it (CEL-2-J); `Absent` while the duty
+    /// is off.
+    pub phone: &'a celestina_shell::phone::PhoneState,
 }
 
 /// One of the Island's pages.
@@ -229,6 +233,7 @@ pub(crate) fn wants_of(
         month_offset: 0,
         utc_offset: 0,
         connectivity: &ConnectivityState::default(),
+        phone: &celestina_shell::phone::PhoneState::Absent,
     })
 }
 
@@ -285,6 +290,7 @@ mod tests {
             month_offset: 0,
             utc_offset: 0,
             connectivity: &ConnectivityState::default(),
+            phone: &celestina_shell::phone::PhoneState::Absent,
         };
         let page = Counts;
         assert_eq!(page.title(), "counts");
@@ -479,6 +485,7 @@ mod tests {
             month_offset: 0,
             utc_offset: 0,
             connectivity: &ConnectivityState::default(),
+            phone: &celestina_shell::phone::PhoneState::Absent,
         };
         (
             pv.title().to_owned(),
@@ -670,22 +677,23 @@ mod tests {
     ];
 
     /// The pages that existed when the snapshots were taken (CEL-2-A). The
-    /// glance pages (CEL-2-K), the Clipboard page (CEL-2-G) and the
-    /// connectivity pages (CEL-2-F) were appended to the table after them and are pinned in their own modules; none of
+    /// glance pages (CEL-2-K), the Clipboard page (CEL-2-G), the
+    /// connectivity pages (CEL-2-F) and the Phone page (CEL-2-J) were appended to the table after them and are pinned in their own modules; none of
     /// these three may change because of them.
     const ORIGINAL: [PageId; 3] = [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY];
 
     /// The pages appended after the snapshots, in table order, each pinned by
     /// its own module's tests (`pages::sysmon`, `pages::clock`,
     /// `pages::clipboard`, `pages::network`, `pages::bluetooth`,
-    /// `pages::power`).
-    const LATER: [PageId; 6] = [
+    /// `pages::power`, `pages::phone`).
+    const LATER: [PageId; 7] = [
         PageId::SYSMON,
         PageId::CLOCK,
         PageId::CLIPBOARD,
         PageId::NETWORK,
         PageId::BLUETOOTH,
         PageId::POWER,
+        PageId::PHONE,
     ];
 
     #[test]
@@ -741,7 +749,8 @@ mod tests {
                 "clipboard",
                 "network",
                 "bluetooth",
-                "power"
+                "power",
+                "phone"
             ]
         );
     }

@@ -109,6 +109,8 @@ mod tests {
                 audio,
                 brightness: None,
             },
+            phone: &celestina_shell::phone::PhoneState::Absent,
+            bubbles: &crate::bubbles::NONE,
         })
     }
 

@@ -8,12 +8,18 @@
 //! within one of those tiers an application launched recently comes first,
 //! the most recent first; the rest keep the ranking's name order. At most
 //! [`MAX_ROWS`] rows are shown.
+//!
+//! The `Mod+K` selector is the same state over the bubbles [`Source`]: its
+//! rows are Melibea's minimised windows ([`super::selector`]), and no query
+//! is a command there.
 
 use celestina_core::desktop_entry::DesktopEntry;
 use celestina_shell::launcher::rank;
 use celestina_ui::Field;
 
 use super::commands::{commands_for, Switch};
+use super::selector;
+use crate::bubbles::Bubbles;
 
 /// The most rows the launcher shows.
 pub const MAX_ROWS: usize = 8;
@@ -24,6 +30,24 @@ pub enum Row {
     /// An application, boxed: the entry is large beside a switch.
     App(Box<DesktopEntry>),
     Switch(Switch),
+    /// A minimised window of the selector: Melibea's id, its title and
+    /// application id (bounded, empty when it has none) and its icon name.
+    Bubble {
+        window_id: u64,
+        title: String,
+        app_id: String,
+        icon: Option<String>,
+    },
+}
+
+/// What the overlay's rows answer from.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Source {
+    /// The launcher: the desktop index and the `/` switches.
+    #[default]
+    Apps,
+    /// The selector: the minimised windows as last seen.
+    Bubbles(Bubbles),
 }
 
 /// The query, the rows it answers and the selected row.
@@ -36,6 +60,8 @@ pub struct LauncherState {
     pub rows: Vec<Row>,
     /// The desktop-file ids launched last, most recent first.
     pub recent: Vec<String>,
+    /// Where the rows come from.
+    pub source: Source,
 }
 
 impl LauncherState {
@@ -48,6 +74,41 @@ impl LauncherState {
         }
     }
 
+    /// The selector over `bubbles`, its query empty and its first row (the
+    /// most recently minimised window) selected.
+    #[must_use]
+    pub fn selector(bubbles: Bubbles) -> LauncherState {
+        let mut state = LauncherState {
+            source: Source::Bubbles(bubbles),
+            ..LauncherState::default()
+        };
+        state.update(&[]);
+        state
+    }
+
+    /// Whether this is the selector's state.
+    #[must_use]
+    pub fn is_selector(&self) -> bool {
+        matches!(self.source, Source::Bubbles(_))
+    }
+
+    /// The selector's windows changed to `bubbles`: the query is answered
+    /// again and the selection follows its window ([`selector::relocate`]).
+    /// Returns whether anything changed: the windows changed, so the rows
+    /// or the note may have (a note changes with no row, absent to empty).
+    /// The launcher's own state ignores it and returns `false`.
+    pub fn set_bubbles(&mut self, bubbles: &Bubbles) -> bool {
+        let Source::Bubbles(current) = &mut self.source else {
+            return false;
+        };
+        if current == bubbles {
+            return false;
+        }
+        current.clone_from(bubbles);
+        self.update(&[]);
+        true
+    }
+
     /// Replaces the query with `text` and answers it from `index`, the
     /// selection back on the first row. Returns whether the text changed.
     pub fn set_query(&mut self, text: &str, index: &[DesktopEntry]) -> bool {
@@ -55,25 +116,37 @@ impl LauncherState {
             return false;
         }
         self.query.set_text(text);
+        self.rows = self.answer(index);
         self.selected = 0;
-        self.update(index);
         true
     }
 
     /// Answers the current query from `index` again (a new index arrived,
     /// or the query changed); the selection stays where it was when it
-    /// still names a row.
+    /// still names a row. The selector answers from its own windows and
+    /// keeps the selected window ([`selector::relocate`]).
     pub fn update(&mut self, index: &[DesktopEntry]) {
+        let rows = self.answer(index);
+        self.selected = match self.source {
+            Source::Apps if self.selected < rows.len() => self.selected,
+            Source::Apps => 0,
+            Source::Bubbles(_) => selector::relocate(&self.rows, self.selected, &rows),
+        };
+        self.rows = rows;
+    }
+
+    /// The rows the current query names.
+    fn answer(&self, index: &[DesktopEntry]) -> Vec<Row> {
         let query = self.query.text();
-        self.rows = match commands_for(query) {
+        if let Source::Bubbles(bubbles) = &self.source {
+            return selector::rows(bubbles, query);
+        }
+        match commands_for(query) {
             Some(switches) => switches.into_iter().map(Row::Switch).collect(),
             None => ranked(index, query.trim(), &self.recent)
                 .into_iter()
                 .map(|entry| Row::App(Box::new(entry.clone())))
                 .collect(),
-        };
-        if self.selected >= self.rows.len() {
-            self.selected = 0;
         }
     }
 
@@ -138,6 +211,7 @@ mod tests {
             .map(|row| match row {
                 Row::App(e) => e.id.clone(),
                 Row::Switch(s) => s.command().to_owned(),
+                Row::Bubble { window_id, .. } => window_id.to_string(),
             })
             .collect()
     }
@@ -247,5 +321,84 @@ mod tests {
         assert_eq!(state.selected, 1);
         state.update(&index[..1]);
         assert_eq!(state.selected, 0);
+    }
+
+    fn window(id: u64, title: &str) -> celestina_shell::melibea::Window {
+        celestina_shell::melibea::Window {
+            id,
+            app_id: Some("app".to_owned()),
+            title: Some(title.to_owned()),
+            icon_name: None,
+        }
+    }
+
+    fn live(ids: &[u64]) -> Bubbles {
+        Bubbles {
+            windows: ids
+                .iter()
+                .map(|&id| window(id, &format!("w{id}")))
+                .collect(),
+            link: crate::bubbles::Link::Live,
+        }
+    }
+
+    #[test]
+    fn the_selector_starts_on_the_most_recent_window_and_wraps() {
+        let mut state = LauncherState::selector(live(&[4, 2, 9]));
+        assert!(state.is_selector());
+        assert_eq!(ids(&state), ["4", "2", "9"]);
+        assert_eq!(state.selected, 0, "Mod+K, Enter restores the newest");
+        state.move_selection(-1);
+        assert_eq!(ids(&state)[state.selected], "9");
+        state.move_selection(1);
+        assert_eq!(state.selected, 0);
+        // A slash is no command in the selector: it is a title like any.
+        let mut slashed = LauncherState::selector(Bubbles {
+            windows: vec![window(1, "/tmp"), window(2, "other")],
+            link: crate::bubbles::Link::Live,
+        });
+        slashed.set_query("/", &[]);
+        assert_eq!(ids(&slashed), ["1"]);
+        // The desktop index answers nothing in the selector.
+        let index = [entry("a", "w4")];
+        slashed.set_query("", &index);
+        assert_eq!(ids(&slashed), ["1", "2"]);
+    }
+
+    #[test]
+    fn typing_filters_the_windows_and_selects_the_first_answer() {
+        let mut state = LauncherState::selector(live(&[1, 2, 3]));
+        state.move_selection(2);
+        assert!(state.set_query("w2", &[]));
+        assert_eq!((ids(&state), state.selected), (vec!["2".to_owned()], 0));
+        assert!(state.set_query("zz", &[]));
+        assert!(state.rows.is_empty());
+        state.move_selection(1);
+        assert_eq!((state.selected, state.chosen()), (0, None));
+    }
+
+    #[test]
+    fn a_new_projection_keeps_the_selected_window_or_the_row_in_its_place() {
+        let mut state = LauncherState::selector(live(&[1, 2, 3]));
+        state.move_selection(1);
+        // A window minimised meanwhile goes first; the selection stays on 2.
+        assert!(state.set_bubbles(&live(&[7, 1, 2, 3])));
+        assert_eq!(ids(&state)[state.selected], "2");
+        assert!(!state.set_bubbles(&live(&[7, 1, 2, 3])), "the same windows");
+        // The selected window left: the one now in its place.
+        assert!(state.set_bubbles(&live(&[7, 1, 3])));
+        assert_eq!(ids(&state)[state.selected], "3");
+        // The last one left: the new last.
+        assert!(state.set_bubbles(&live(&[7, 1])));
+        assert_eq!(ids(&state)[state.selected], "1");
+        // All gone, then Melibea lost: no rows, no selection.
+        assert!(state.set_bubbles(&live(&[])));
+        assert_eq!((state.rows.len(), state.selected), (0, 0));
+        assert!(state.set_bubbles(&Bubbles::default()));
+        assert!(state.rows.is_empty());
+        // The launcher's own state takes no windows.
+        let mut apps = LauncherState::new(Vec::new());
+        assert!(!apps.set_bubbles(&live(&[1])));
+        assert!(!apps.is_selector() && apps.rows.is_empty());
     }
 }

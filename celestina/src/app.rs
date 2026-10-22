@@ -20,6 +20,7 @@ use std::{
 use celestina_core::desktop_entry::DesktopEntry;
 use celestina_paint::{Painter, Rect, TextSystem, Theme};
 use celestina_settings::Appearance;
+use celestina_shell::phone::PhoneState;
 use celestina_shell::settings::{BarLayout, Duty, Settings};
 use celestina_wayland::{
     Anchoring, FrameCx, InputEvent, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
@@ -29,6 +30,7 @@ use celestina_wayland::{
 use crate::notifications::banners::{self, BannerAction, BannerStack};
 use crate::{
     bar,
+    bubbles::{self, Bubbles, BubblesHandle, BubblesNews},
     clipboard::{ClipboardDuty, ClipboardMessage, ClipboardState},
     command::Verb,
     connectivity::{self, state::ConnectivityState, ConnectivityHandle, Forwarded},
@@ -49,8 +51,11 @@ use crate::{
         verbs::{self as level_verbs, NoWorkers},
         Suppression,
     },
+    phone::{self, PhoneHandle, PhoneNews},
     pieces::PageId,
     providers::{
+        magnetita::{MagnetitaEvent, MediaKind},
+        melibea::{BubbleAction, MelibeaEvent},
         niri::{NiriModel, NiriProvider, NiriRequest},
         notifications::{NotificationsCommand, NotificationsProvider},
         settings::ShellSettings,
@@ -483,6 +488,17 @@ pub struct App {
     /// The audio and brightness readings the bar's pieces show, and the
     /// slider popup that is open.
     controls: Controls,
+    /// The phone duty's worker, set once the loop runs (CEL-2-J).
+    phone: Rc<OnceCell<PhoneHandle>>,
+    /// The phone as the last accepted news shows it.
+    phone_state: PhoneState,
+    /// The bubbles duty's worker, set once the loop runs (CEL-2-J).
+    bubbles: Rc<OnceCell<BubblesHandle>>,
+    /// The minimised windows as the last accepted news shows them.
+    bubbles_state: Bubbles,
+    /// The close requests Melibea took and has not settled (no second Delete
+    /// for the same window meanwhile).
+    bubble_closes: bubbles::PendingCloses,
 }
 
 impl std::fmt::Debug for App {
@@ -552,6 +568,11 @@ impl App {
                 &Theme::dark(),
             ),
             controls: Controls::new(),
+            phone: Rc::new(OnceCell::new()),
+            phone_state: PhoneState::Absent,
+            bubbles: Rc::new(OnceCell::new()),
+            bubbles_state: Bubbles::default(),
+            bubble_closes: bubbles::PendingCloses::default(),
         }
     }
 
@@ -634,6 +655,19 @@ impl App {
     #[must_use]
     pub fn with_osd(mut self, runtime: Rc<OnceCell<crate::osd::OsdRuntime>>) -> App {
         self.osds = crate::osd::surface::Osds::new(runtime, self.settings.current(), &self.theme());
+        self
+    }
+
+    /// Takes the slots the phone and bubbles handles are put in once the loop
+    /// runs.
+    #[must_use]
+    pub fn with_phone_and_bubbles(
+        mut self,
+        phone: Rc<OnceCell<PhoneHandle>>,
+        bubbles: Rc<OnceCell<BubblesHandle>>,
+    ) -> App {
+        self.phone = phone;
+        self.bubbles = bubbles;
         self
     }
 
@@ -740,6 +774,32 @@ impl App {
         let theme = self.theme();
         self.osds.settings_changed(&before, &after, ctl, &theme);
         self.levels_settings_changed(&before, &after, ctl);
+        if before.duties != after.duties {
+            self.apply_phone_and_bubbles(&after, ctl);
+        }
+    }
+
+    /// Brings the phone and bubbles workers to `settings`; a duty that went
+    /// off takes its state with it, and the bars are drawn again once.
+    fn apply_phone_and_bubbles(&mut self, settings: &Settings, ctl: &mut RuntimeCtl<'_>) {
+        let mut changed = false;
+        if let Some(handle) = self.phone.get() {
+            if handle.apply(settings) && !handle.running() {
+                changed |= phone::reduce(&mut self.phone_state, MagnetitaEvent::Absent);
+            }
+        }
+        if let Some(handle) = self.bubbles.get() {
+            if handle.apply(settings) && !handle.running() {
+                self.bubble_closes.clear();
+                if bubbles::reduce(&mut self.bubbles_state, &MelibeaEvent::Absent) {
+                    changed = true;
+                    self.refresh_selector(ctl);
+                }
+            }
+        }
+        if changed {
+            self.redraw_all(ctl);
+        }
     }
 
     /// Passes a clipboard verb (from the command socket or the Island's
@@ -885,6 +945,113 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The open selector, if any, shows the minimised windows as they are
+    /// now; its selection follows its window.
+    fn refresh_selector(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let Some(open) = self.launcher.as_mut().filter(|l| l.is_selector()) else {
+            return;
+        };
+        if open.set_bubbles(&self.bubbles_state) {
+            if let Some(mut surface) = ctl.surface(open.surface()) {
+                surface.request_redraw();
+            }
+        }
+    }
+
+    /// News from the Magnetita worker: only the running worker's is taken.
+    fn phone_news(&mut self, news: PhoneNews, ctl: &mut RuntimeCtl<'_>) {
+        if !self
+            .phone
+            .get()
+            .is_some_and(|handle| handle.accepts(news.run))
+        {
+            return;
+        }
+        if phone::reduce(&mut self.phone_state, news.event) {
+            self.redraw_all(ctl);
+        }
+    }
+
+    /// News from the Melibea worker: only the running worker's is taken. How
+    /// an action ended goes to the journal and nowhere else for now.
+    fn bubbles_news(&mut self, news: BubblesNews, ctl: &mut RuntimeCtl<'_>) {
+        if !self
+            .bubbles
+            .get()
+            .is_some_and(|handle| handle.accepts(news.run))
+        {
+            return;
+        }
+        bubbles::log(&news.event);
+        self.bubble_closes.observe(&news.event);
+        if bubbles::reduce(&mut self.bubbles_state, &news.event) {
+            self.refresh_selector(ctl);
+            self.redraw_all(ctl);
+        }
+    }
+
+    /// `bubbles minimize` and `phone media` (`bubbles select` opens a
+    /// surface: [`App::select_bubbles`]).
+    fn bubbles_and_phone_verb(&self, verb: &Verb) {
+        match verb {
+            Verb::BubblesMinimize => {
+                let Some(handle) = self.bubbles.get() else {
+                    tracing::info!("bubbles minimize: no bubbles handle; nothing was done");
+                    return;
+                };
+                match handle.request(bubbles::minimize_action(self.appearance.reduced_motion)) {
+                    Ok(id) => tracing::info!(id = id.0, "bubbles minimize: asked Melibea"),
+                    Err(why) => tracing::info!("bubbles minimize: nothing was done: {why}"),
+                }
+            }
+            Verb::PhoneMedia(kind) => self.phone_media(*kind),
+            _ => {}
+        }
+    }
+
+    /// Asks Magnetita for the media action `kind` on the connected phone:
+    /// what `phone media` and the Phone page's buttons both do.
+    fn phone_media(&self, kind: MediaKind) {
+        let Some(request) = phone::media_request(&self.phone_state, kind) else {
+            tracing::info!("phone media: no phone is connected; nothing was done");
+            return;
+        };
+        let Some(handle) = self.phone.get() else {
+            tracing::info!("phone media: no phone handle; nothing was done");
+            return;
+        };
+        match handle.request(request) {
+            Ok(()) => tracing::info!("phone media {}: asked Magnetita", kind.as_str()),
+            Err(why) => tracing::info!("phone media: nothing was done: {why}"),
+        }
+    }
+
+    /// Asks Melibea to bring the minimised window `window_id` back, with
+    /// the transition `bubbles::restore_action` chooses.
+    fn restore_window(&self, window_id: u64, output: &str, bubble: Option<Rect>) {
+        let Some(handle) = self.bubbles.get() else {
+            tracing::info!("bubbles restore: no bubbles handle; nothing was done");
+            return;
+        };
+        // The bubble's rectangle is on its own output: it only travels with
+        // the restore when the window is not known to be on another one.
+        let known = self
+            .model
+            .as_ref()
+            .and_then(|model| bubbles::window_output(model, window_id));
+        let bubble = bubble.filter(|_| bubbles::anchor_allowed(known, output));
+        let action = bubbles::restore_action(
+            window_id,
+            output,
+            bubble.map(|r| (r.x, r.y, r.w, r.h)),
+            self.appearance.reduced_motion,
+        );
+        match handle.request(action) {
+            Ok(id) => tracing::info!(id = id.0, window_id, "bubbles restore: asked Melibea"),
+            Err(why) => tracing::info!("bubbles restore: nothing was done: {why}"),
         }
     }
 
@@ -1131,6 +1298,10 @@ impl App {
                     outcome.log();
                 }
             }
+            Verb::BubblesSelect => self.select_bubbles(ctl),
+            Verb::BubblesMinimize | Verb::PhoneMedia(_) => {
+                self.bubbles_and_phone_verb(&verb);
+            }
             Verb::LauncherToggle => self.toggle_launcher(ctl),
             Verb::WallpaperSet { .. }
             | Verb::WallpaperNext(_)
@@ -1161,46 +1332,23 @@ impl App {
         }
     }
 
-    /// Closes the open launcher, or opens one on the output with the
-    /// keyboard: the Island holding it, else niri's focused output, else
-    /// the first. The surface is created now and destroyed on close.
+    /// Closes the open launcher (or the open selector: one overlay at a
+    /// time), or opens one on the output with the keyboard: the Island
+    /// holding it, else niri's focused output, else the first. The surface
+    /// is created now and destroyed on close.
     fn toggle_launcher(&mut self, ctl: &mut RuntimeCtl<'_>) {
         if let Some(open) = self.launcher.take() {
             tracing::info!("launcher: closed by the command");
             close_surface(open.surface(), ctl);
             return;
         }
-        let output = self
-            .islands
-            .target(self.keyboard, focused_output(self.model.as_ref()))
-            .and_then(|surface| self.islands.output_of(surface));
-        let Some(output) = output else {
-            tracing::info!("launcher: no output to open on");
+        let Some((surface, output)) = self.overlay_surface(ctl) else {
             return;
-        };
-        let theme = self.theme();
-        // The whole output, the Island's band included: -1 ignores every
-        // exclusive zone and pushes no window; the card is centred inside.
-        let spec = LayerSpec {
-            output,
-            namespace: launcher::NAMESPACE,
-            layer: Layer::Overlay,
-            anchor: Anchoring::Fill,
-            size: (0, 0),
-            exclusive_zone: -1,
-            keyboard: KeyboardInteractivity::Exclusive,
-        };
-        let surface = match ctl.create_layer_surface(spec) {
-            Ok(surface) => surface,
-            Err(err) => {
-                tracing::error!(%err, "launcher: no surface");
-                return;
-            }
         };
         let open = Launcher::new(
             surface,
             output,
-            &theme,
+            &self.theme(),
             self.appearance.reduced_motion,
             self.recent.ids().to_vec(),
             &self.index,
@@ -1230,6 +1378,78 @@ impl App {
         }
     }
 
+    /// `bubbles select` (`Mod+K`, and the overflow bubble): closes the open
+    /// selector (a toggle), or opens one where the launcher opens. The
+    /// launcher of applications, if open, is replaced by it: one overlay at
+    /// a time. With the bubbles duty off nothing happens but a journal line.
+    fn select_bubbles(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        if let Some(open) = self.launcher.take_if(|l| l.is_selector()) {
+            tracing::info!("bubbles select: closed by the command");
+            close_surface(open.surface(), ctl);
+            return;
+        }
+        if self.settings.current().duties.bubbles != Duty::On {
+            tracing::info!("bubbles select: the bubbles duty is off; nothing was done");
+            return;
+        }
+        if let Some(open) = self.launcher.take() {
+            tracing::info!("launcher: replaced by the bubbles selector");
+            close_surface(open.surface(), ctl);
+        }
+        let Some((surface, output)) = self.overlay_surface(ctl) else {
+            return;
+        };
+        let open = Launcher::selector(
+            surface,
+            output,
+            &self.theme(),
+            self.appearance.reduced_motion,
+            &self.bubbles_state,
+        );
+        if let Some(mut s) = ctl.surface(surface) {
+            open.opened(&mut s);
+        }
+        tracing::info!(
+            output = output.0,
+            windows = self.bubbles_state.windows.len(),
+            link = ?self.bubbles_state.link,
+            "bubbles select: opened"
+        );
+        self.launcher = Some(open);
+    }
+
+    /// A new overlay surface for the launcher or the selector, on the
+    /// output with the keyboard: the Island holding it, else niri's focused
+    /// output, else the first.
+    fn overlay_surface(&self, ctl: &mut RuntimeCtl<'_>) -> Option<(SurfaceId, OutputId)> {
+        let output = self
+            .islands
+            .target(self.keyboard, focused_output(self.model.as_ref()))
+            .and_then(|surface| self.islands.output_of(surface));
+        let Some(output) = output else {
+            tracing::info!("launcher: no output to open on");
+            return None;
+        };
+        // The whole output, the Island's band included: -1 ignores every
+        // exclusive zone and pushes no window; the card is centred inside.
+        let spec = LayerSpec {
+            output,
+            namespace: launcher::NAMESPACE,
+            layer: Layer::Overlay,
+            anchor: Anchoring::Fill,
+            size: (0, 0),
+            exclusive_zone: -1,
+            keyboard: KeyboardInteractivity::Exclusive,
+        };
+        match ctl.create_layer_surface(spec) {
+            Ok(surface) => Some((surface, output)),
+            Err(err) => {
+                tracing::error!(%err, "launcher: no surface");
+                None
+            }
+        }
+    }
+
     /// The launcher asked for `action` during an input call: it is closed
     /// now (its text input off, the keyboard released) and its surface is
     /// destroyed when the posted [`Message::LauncherClosed`] arrives, which
@@ -1252,6 +1472,16 @@ impl App {
                 None
             }
             LauncherAction::Switch(switch) => Some(switch),
+            // No bubble to travel from: no anchor (D3).
+            LauncherAction::Restore(window_id) => {
+                self.restore_window(window_id, "", None);
+                None
+            }
+            LauncherAction::RequestClose(window_id) => {
+                // Not a closing action; `launcher_input` keeps it out.
+                self.close_window(window_id);
+                None
+            }
             LauncherAction::Close => None,
         };
         let closed = Message::LauncherClosed {
@@ -1347,6 +1577,20 @@ impl App {
                     }
                 }
                 IslandAction::Clipboard(verb) => self.clipboard_verb(&Verb::Clipboard(verb)),
+                IslandAction::PhoneMedia(kind) => self.phone_media(kind),
+                IslandAction::RestoreWindow {
+                    window_id,
+                    output,
+                    bubble,
+                } => self.restore_window(window_id, &output, bubble),
+                IslandAction::OpenSelector => {
+                    // Opening a surface needs the runtime: the loop hears
+                    // the verb `Mod+K` sends.
+                    let verb = Message::Command(Verb::BubblesSelect);
+                    if !self.sender.get().is_some_and(|s| s.send(verb).is_ok()) {
+                        tracing::warn!("bubbles select: the loop cannot be reached; no selector");
+                    }
+                }
                 IslandAction::Tray(command) => self.tray_command(command),
                 IslandAction::OpenApp(id) => self.open_app(id),
                 IslandAction::Connectivity(action) => {
@@ -1650,8 +1894,33 @@ impl App {
                 return;
             }
         };
-        if let Some(action) = action {
-            self.launcher_acted(action, ctl);
+        match action {
+            Some(LauncherAction::RequestClose(window_id)) => self.close_window(window_id),
+            Some(action) => self.launcher_acted(action, ctl),
+            None => {}
+        }
+    }
+
+    /// Asks Melibea to close the minimised window `window_id` (Delete in
+    /// the selector); the row leaves when the projection drops the window.
+    fn close_window(&mut self, window_id: u64) {
+        let Some(handle) = self.bubbles.get() else {
+            tracing::info!("bubbles close: no bubbles handle; nothing was done");
+            return;
+        };
+        if self.bubble_closes.pending(window_id) {
+            tracing::info!(
+                window_id,
+                "bubbles close: already asked; waiting for Melibea"
+            );
+            return;
+        }
+        match handle.request(BubbleAction::Close { window_id }) {
+            Ok(id) => {
+                self.bubble_closes.asked(window_id, id);
+                tracing::info!(id = id.0, window_id, "bubbles close: asked Melibea");
+            }
+            Err(why) => tracing::info!("bubbles close: nothing was done: {why}"),
         }
     }
 }
@@ -1840,6 +2109,9 @@ impl Shell for App {
             clipboard: &self.clipboard_state,
             audio: self.controls.readings.audio(),
             brightness: self.controls.readings.by_output(),
+            phone: &self.phone_state,
+            phone_duty: self.settings.current().duties.phone == Duty::On,
+            bubbles: &self.bubbles_state,
         };
         island.frame(
             cx,
@@ -2032,6 +2304,8 @@ impl Shell for App {
                 let theme = self.theme();
                 self.osds.tick(tick, ctl, &theme);
             }
+            Message::Melibea(news) => self.bubbles_news(*news, ctl),
+            Message::Phone(news) => self.phone_news(*news, ctl),
         }
     }
 }

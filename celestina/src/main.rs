@@ -25,6 +25,7 @@ use std::{
 
 use celestina::{
     app::App,
+    bubbles::BubblesHandle,
     bus::{self, BusError},
     clipboard::ClipboardDuty,
     command::{self, Mode, Verb, USAGE},
@@ -36,6 +37,7 @@ use celestina::{
     launcher::recent::RecentLaunches,
     message::Message,
     osd::OsdRuntime,
+    phone::PhoneHandle,
     providers::notifications::NotificationsCommand,
     providers::{self, settings::ShellSettings, wallpaper::WallpaperCommand, Worker},
 };
@@ -132,6 +134,8 @@ fn shell(cfg: Config) -> ExitCode {
     let clipboard = Rc::new(OnceCell::new());
     let connectivity = Rc::new(RefCell::new(None));
     let osd = Rc::new(OnceCell::new());
+    let phone = Rc::new(OnceCell::new());
+    let bubbles = Rc::new(OnceCell::new());
     let settings_read = settings.current().clone();
     let settings_protected = settings.is_protected();
     let follow_from = settings.follow_from();
@@ -151,7 +155,8 @@ fn shell(cfg: Config) -> ExitCode {
     .with_glance(Rc::clone(&glance))
     .with_clipboard(Rc::clone(&clipboard))
     .with_connectivity(Rc::clone(&connectivity))
-    .with_osd(Rc::clone(&osd));
+    .with_osd(Rc::clone(&osd))
+    .with_phone_and_bubbles(Rc::clone(&phone), Rc::clone(&bubbles));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -219,6 +224,13 @@ fn shell(cfg: Config) -> ExitCode {
         runtime.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = osd.set(runtime);
+        // The phone and bubbles duties are off by default as well.
+        let handle = PhoneHandle::new(sender.clone());
+        handle.apply(&settings_read);
+        let _ = phone.set(handle);
+        let handle = BubblesHandle::new(sender.clone());
+        handle.apply(&settings_read);
+        let _ = bubbles.set(handle);
         match providers::desktop::spawn(sender.clone(), &shutdown) {
             Ok(worker) => indexer = Some(worker),
             Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
@@ -310,6 +322,12 @@ fn shell(cfg: Config) -> ExitCode {
     // The audio observer's child killed and reaped, the DDC thread joined.
     if let Some(runtime) = osd.get() {
         runtime.stop();
+    }
+    if let Some(handle) = phone.get() {
+        handle.stop();
+    }
+    if let Some(handle) = bubbles.get() {
+        handle.stop();
     }
     drop(follower);
     drop(shell_follower);

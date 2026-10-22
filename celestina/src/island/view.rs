@@ -382,6 +382,25 @@ mod tests {
     }
 
     #[test]
+    fn the_phone_page_draws_the_tab_row_with_no_tab_of_its_own() {
+        let tree = laid_out(page(
+            &Theme::dark(),
+            PageId::PHONE,
+            copy::PAGE_PHONE,
+            "12:34:56",
+            content(),
+            SURFACE_W,
+            (420.0, 300.0),
+            0.0,
+        ));
+        assert!(tree.node_by_key(tabs::tab_key(PageId::PHONE)).is_none());
+        let root = rect_of(&tree, Key::named("page-root"));
+        let row = rect_of(&tree, Key::named("tabs"));
+        assert!(row.x >= root.x && row.x + row.w <= root.x + root.w);
+        assert!(tree.node_by_key(tabs::tab_key(PageId::ACTIVITY)).is_some());
+    }
+
+    #[test]
     fn the_page_fills_the_grown_island_with_buttons_at_the_right_and_tabs_below() {
         let theme = Theme::dark();
         let tree = page_at(0.0);
@@ -433,6 +452,7 @@ mod tests {
         assert_eq!(page_title(PageId::NOTIFICATIONS), copy::PAGE_NOTIFICATIONS);
         assert_eq!(page_title(PageId::TRAY), copy::PAGE_TRAY);
         assert_eq!(page_title(PageId::CLIPBOARD), copy::PAGE_CLIPBOARD);
+        assert_eq!(page_title(PageId::PHONE), copy::PAGE_PHONE);
         let titles: Vec<&str> = PageId::all().into_iter().map(page_title).collect();
         assert_eq!(
             titles,
@@ -446,6 +466,7 @@ mod tests {
                 copy::PAGE_NETWORK,
                 copy::PAGE_BLUETOOTH,
                 copy::PAGE_POWER,
+                copy::PAGE_PHONE,
             ]
         );
         assert_eq!(page_title(PageId::SYSMON), copy::PAGE_SYSMON);

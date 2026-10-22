@@ -21,6 +21,7 @@ use crate::energy::verbs;
 use crate::osd::verbs as levels;
 use crate::osd::verbs::{BrightnessVerb, MicrophoneVerb, VolumeVerb};
 use crate::pieces::{self, PageId};
+use crate::providers::magnetita::MediaKind;
 
 /// Arguments the binary reads at most; a longer command line is a usage
 /// error before anything is parsed.
@@ -39,7 +40,7 @@ usage: celestina [--exit-after SECONDS] [--metrics] [--no-blur]
        celestina VERB
 
 verbs: island toggle
-       island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power
+       island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone
        island close
        launcher toggle
        notifications toggle
@@ -59,6 +60,9 @@ verbs: island toggle
        microphone set PERCENT
        brightness up|down [OUTPUT]
        brightness set PERCENT [OUTPUT]
+       bubbles select
+       bubbles minimize
+       phone media PlayPause|Next|Previous
        quit";
 
 /// What a wallpaper verb addresses.
@@ -114,7 +118,20 @@ pub enum Verb {
         change: BrightnessVerb,
         output: Option<String>,
     },
+    /// Open the selector of minimised windows (a no-op while the duty is off).
+    BubblesSelect,
+    /// Minimise the focused window (a no-op while the duty is off).
+    BubblesMinimize,
+    /// `phone media <PlayPause|Next|Previous>`: drive the phone's player.
+    PhoneMedia(MediaKind),
     Quit,
+}
+
+/// The transport words `phone media` accepts, and no others.
+const PHONE_MEDIA: [MediaKind; 3] = [MediaKind::PlayPause, MediaKind::Next, MediaKind::Previous];
+
+fn phone_media_from_word(word: &str) -> Option<MediaKind> {
+    PHONE_MEDIA.into_iter().find(|kind| kind.as_str() == word)
 }
 
 /// The word of a fit mode in a verb.
@@ -225,6 +242,11 @@ impl Verb {
                     levels::parse_brightness(rest).ok_or_else(|| unknown(&words))?;
                 Verb::Brightness { change, output }
             }
+            ["bubbles", "select"] => Verb::BubblesSelect,
+            ["bubbles", "minimize"] => Verb::BubblesMinimize,
+            ["phone", "media", word] => {
+                Verb::PhoneMedia(phone_media_from_word(word).ok_or_else(|| unknown(&words))?)
+            }
             ["quit"] => Verb::Quit,
             _ => return Err(unknown(&words)),
         };
@@ -284,6 +306,9 @@ impl Verb {
             Verb::Caffeine(switch) => vec!["caffeine", verbs::switch_word(*switch)],
             Verb::NightLight(switch) => vec!["nightlight", verbs::switch_word(*switch)],
             Verb::Session(action) => vec!["session", verbs::action_word(*action)],
+            Verb::BubblesSelect => vec!["bubbles", "select"],
+            Verb::BubblesMinimize => vec!["bubbles", "minimize"],
+            Verb::PhoneMedia(kind) => vec!["phone", "media", kind.as_str()],
             Verb::Quit => vec!["quit"],
             Verb::WallpaperSet { .. }
             | Verb::WallpaperNext(_)
@@ -400,6 +425,7 @@ mod tests {
                 "island open notifications",
             ),
             (Verb::IslandOpen(PageId::TRAY), "island open tray"),
+            (Verb::IslandOpen(PageId::PHONE), "island open phone"),
             (Verb::IslandClose, "island close"),
             (Verb::LauncherToggle, "launcher toggle"),
             (Verb::NotificationsToggle, "notifications toggle"),
@@ -425,6 +451,17 @@ mod tests {
             (Verb::Clipboard(ClipboardVerb::Clear), "clipboard clear"),
             (Verb::Clipboard(ClipboardVerb::Pause), "clipboard pause"),
             (Verb::Clipboard(ClipboardVerb::Resume), "clipboard resume"),
+            (Verb::BubblesSelect, "bubbles select"),
+            (Verb::BubblesMinimize, "bubbles minimize"),
+            (
+                Verb::PhoneMedia(MediaKind::PlayPause),
+                "phone media PlayPause",
+            ),
+            (Verb::PhoneMedia(MediaKind::Next), "phone media Next"),
+            (
+                Verb::PhoneMedia(MediaKind::Previous),
+                "phone media Previous",
+            ),
             (Verb::Quit, "quit"),
             (
                 Verb::WallpaperSet {
@@ -532,6 +569,35 @@ mod tests {
             Verb::parse(&strings(&["brightness", "set", "5", "DP-1"])).map(|v| v.words().len()),
             Ok(MAX_VERB_WORDS)
         );
+    }
+
+    #[test]
+    fn bubbles_and_phone_verbs_accept_only_their_words() {
+        let long = "x".repeat(4096);
+        for bad in [
+            &["bubbles"][..],
+            &["bubbles", "restore"],
+            &["bubbles", "select", "now"],
+            &["bubbles", "Minimize"],
+            &["bubbles", &long],
+            &["phone"],
+            &["phone", "media"],
+            &["phone", "media", "play"],
+            &["phone", "media", "playpause"],
+            &["phone", "media", "Stop"],
+            &["phone", "media", "Pause"],
+            &["phone", "media", "Play"],
+            &["phone", "media", "Next", "extra"],
+            &["phone", "media", "Next\n"],
+            &["phone", "media", ""],
+            &["phone", "media", &long],
+            &["phone", "ring"],
+        ] {
+            assert!(Verb::parse(&strings(bad)).is_err(), "{bad:?}");
+        }
+        let err = Verb::parse(&strings(&["phone", "media", &long])).expect_err("long");
+        assert!(err.to_string().len() < 100, "{err}");
+        assert!(USAGE.contains("bubbles select") && USAGE.contains("phone media"));
     }
 
     #[test]
@@ -720,7 +786,7 @@ mod tests {
     fn page_words_and_order_are_pinned() {
         let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
         // The three pages of 1.0.0 keep their words and places; the glance,
-        // clipboard and connectivity pages follow them in table order.
+        // clipboard, connectivity and phone pages follow them in table order.
         assert_eq!(
             words,
             [
@@ -732,7 +798,8 @@ mod tests {
                 "clipboard",
                 "network",
                 "bluetooth",
-                "power"
+                "power",
+                "phone"
             ]
         );
         assert_eq!(
@@ -747,6 +814,7 @@ mod tests {
                 PageId::NETWORK,
                 PageId::BLUETOOTH,
                 PageId::POWER,
+                PageId::PHONE,
             ]
         );
     }
@@ -819,7 +887,7 @@ mod tests {
 
     #[test]
     fn the_usage_text_names_every_page_word() {
-        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power"));
+        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone"));
     }
 
     #[test]

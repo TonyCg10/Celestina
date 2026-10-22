@@ -3,8 +3,9 @@
 //! output (design §5.5, Launcher; `celestina-style/DESIGN.md`:
 //! search fields are pills, rows of the row height). An application's row
 //! shows its icon, its name and its generic name; a switch's row its
-//! semantic icon, its command and what it does. The selected row has the
-//! control fill the Island's pages give their current row.
+//! semantic icon, its command and what it does; a minimised window's row
+//! (the selector) its icon, its title and its application id. The selected
+//! row has the control fill the Island's pages give their current row.
 
 use celestina_paint::{IconKey, Rect, Role, TextStyle, Theme, Weight};
 use celestina_ui::{view, FieldId, Key, View, ViewKind};
@@ -12,7 +13,8 @@ use taffy::AlignItems;
 
 use super::{
     commands::Switch,
-    state::{LauncherState, Row, MAX_ROWS},
+    selector,
+    state::{LauncherState, Row, Source, MAX_ROWS},
 };
 use crate::{copy, island::pages::activity::truncate_title};
 
@@ -124,6 +126,10 @@ pub fn launcher(theme: &Theme, state: &LauncherState, surface: (f32, f32)) -> Vi
 #[must_use]
 pub fn card(theme: &Theme, state: &LauncherState) -> View {
     let (w, h) = card_size(theme);
+    let (placeholder, note) = match &state.source {
+        Source::Apps => (copy::LAUNCHER_PLACEHOLDER, None),
+        Source::Bubbles(bubbles) => (copy::SELECTOR_PLACEHOLDER, selector::note(bubbles)),
+    };
     let pill = centred(view::row(Key::named("launcher-pill")))
         .height(theme.top_bar)
         .radius(theme.top_bar / 2.0)
@@ -140,7 +146,7 @@ pub fn card(theme: &Theme, state: &LauncherState) -> View {
             view::field(
                 field_key(),
                 FIELD,
-                copy::LAUNCHER_PLACEHOLDER,
+                placeholder,
                 style(theme.type_scale.row_title, Role::TextHi),
             )
             .grow(),
@@ -153,7 +159,7 @@ pub fn card(theme: &Theme, state: &LauncherState) -> View {
                 .padding_xy(theme.spacing.md, 0.0)
                 .child(view::text(
                     Key::named("launcher-empty-text"),
-                    copy::LAUNCHER_EMPTY,
+                    note.unwrap_or(copy::LAUNCHER_EMPTY),
                     style(theme.type_scale.body, Role::TextLo),
                 )),
         )
@@ -193,6 +199,23 @@ fn row(theme: &Theme, index: usize, row: &Row, selected: bool) -> View {
             )
         }
         Row::Switch(switch) => switch_parts(*switch),
+        Row::Bubble {
+            title,
+            app_id,
+            icon,
+            ..
+        } => {
+            let (glyph, tint) = match icon {
+                Some(name) => (IconKey::Theme(name.clone()), None),
+                None => (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo)),
+            };
+            let name = if title.is_empty() {
+                copy::WINDOW_UNTITLED
+            } else {
+                title.as_str()
+            };
+            (glyph, tint, truncate_title(name), truncate_title(app_id))
+        }
     };
     let mut v = centred(view::row(row_key(index)))
         .height(theme.row_height)
@@ -370,5 +393,102 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].key, Key::named("launcher-empty"));
         assert!(!rows[0].interactive);
+    }
+
+    fn note_text(v: &View) -> String {
+        let rows = &v.children[1].children;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].key, Key::named("launcher-empty"));
+        assert!(!rows[0].interactive, "the note is not a row to choose");
+        match &rows[0].children[0].kind {
+            ViewKind::Text { text, .. } => text.clone(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_selector_shows_its_note_when_it_has_no_windows() {
+        use crate::bubbles::{Bubbles, Link};
+        let theme = Theme::dark();
+        let empty = LauncherState::selector(Bubbles {
+            windows: Vec::new(),
+            link: Link::Live,
+        });
+        assert_eq!(note_text(&card(&theme, &empty)), copy::SELECTOR_NO_WINDOWS);
+        for link in [Link::Absent, Link::Refused, Link::Unavailable] {
+            let gone = LauncherState::selector(Bubbles {
+                windows: Vec::new(),
+                link,
+            });
+            assert_eq!(
+                note_text(&card(&theme, &gone)),
+                copy::SELECTOR_UNAVAILABLE,
+                "{link:?}"
+            );
+        }
+        // Windows that the query does not answer: the launcher's own line.
+        let mut some = LauncherState::selector(Bubbles {
+            windows: vec![celestina_shell::melibea::Window {
+                id: 1,
+                app_id: None,
+                title: Some("Notes".to_owned()),
+                icon_name: None,
+            }],
+            link: Link::Live,
+        });
+        some.set_query("zzz", &[]);
+        assert_eq!(note_text(&card(&theme, &some)), copy::LAUNCHER_EMPTY);
+    }
+
+    #[test]
+    fn a_window_row_shows_its_icon_title_and_id_and_names_the_untitled() {
+        use crate::bubbles::{Bubbles, Link};
+        use celestina_shell::melibea::Window;
+        let theme = Theme::dark();
+        let state = LauncherState::selector(Bubbles {
+            windows: vec![
+                Window {
+                    id: 1,
+                    app_id: Some("kitty".to_owned()),
+                    title: Some("\u{1f600}".repeat(10_000)),
+                    icon_name: Some("kitty".to_owned()),
+                },
+                Window {
+                    id: 2,
+                    app_id: None,
+                    title: None,
+                    icon_name: None,
+                },
+            ],
+            link: Link::Live,
+        });
+        let v = card(&theme, &state);
+        let rows = &v.children[1].children;
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|r| r.interactive));
+        let texts = |r: &View| -> Vec<String> {
+            r.children
+                .iter()
+                .filter_map(|c| match &c.kind {
+                    ViewKind::Text { text, .. } => Some(text.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert!(matches!(
+            &rows[0].children[0].kind,
+            ViewKind::Icon { key: IconKey::Theme(n), .. } if n == "kitty"
+        ));
+        let first = texts(&rows[0]);
+        assert!(first[0].chars().count() < 100, "the hostile title is cut");
+        assert_eq!(first[1], "kitty");
+        assert!(matches!(
+            &rows[1].children[0].kind,
+            ViewKind::Icon {
+                key: IconKey::Semantic(FALLBACK_ICON),
+                ..
+            }
+        ));
+        assert_eq!(texts(&rows[1]), [copy::WINDOW_UNTITLED, ""]);
     }
 }

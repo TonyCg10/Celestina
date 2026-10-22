@@ -27,7 +27,9 @@ pub mod workspaces;
 use std::time::{Duration, Instant};
 
 use celestina_paint::{Painter, PixmapId, Rect, Theme};
-use celestina_shell::{connectivity::Action, glance::Today, settings::BarLayout};
+use celestina_shell::{
+    connectivity::Action, glance::Today, phone::PhoneState, settings::BarLayout,
+};
 use celestina_ui::{Interaction, Key, Tree, UiEvent, BTN_LEFT};
 use celestina_wayland::{
     CloseReason, FrameCx, InputEvent, KeyboardInteractivity, PopupId, PopupShell, SurfaceCtl,
@@ -35,6 +37,7 @@ use celestina_wayland::{
 
 use crate::{
     bar::silhouette::{self, Shape},
+    bubbles::Bubbles,
     clipboard::{verbs::ClipboardVerb, ClipboardState},
     command::Verb,
     connectivity::state::ConnectivityState,
@@ -43,8 +46,8 @@ use crate::{
         AudioAction, AudioLevels, BarCx, BrightnessAction, Gesture, Levels, PageId, PieceAction,
     },
     providers::{
-        niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
-        weather::WeatherReading,
+        magnetita::MediaKind, niri::NiriModel, notifications::NotificationsCommand,
+        sysmon::SysReading, weather::WeatherReading,
     },
     tray::{scroll_steps, ItemId, Orientation, TrayCommand},
 };
@@ -53,8 +56,8 @@ use cadence::{Cadence, Offer, Wake, SYSMON_BAR_PERIOD};
 use clock::{ClockTick, SecondTick};
 use pages::{
     activity, bluetooth as bluetooth_page, clipboard as clipboard_page, clock as clock_page,
-    network as network_page, notifications, page_view, power as power_page, sysmon as sysmon_page,
-    tabs,
+    network as network_page, notifications, page_view, phone as phone_page, power as power_page,
+    sysmon as sysmon_page, tabs,
     tray::{self as tray_page, IconCache, Pixmaps, TrayList, TrayRow},
     HistoryRow, NameOwner, PageCx,
 };
@@ -113,6 +116,20 @@ pub enum IslandAction {
         kind: level_popup::Kind,
         anchor: Rect,
     },
+    /// A transport button of the Phone page: the app asks Magnetita for
+    /// the same request `phone media` makes.
+    PhoneMedia(MediaKind),
+    /// A bubble of the bar: restore the minimised window `window_id`. The
+    /// transition may be anchored to the bubble, `bubble` (a rect of the
+    /// surface, which covers the output `output`), when it is known.
+    RestoreWindow {
+        window_id: u64,
+        output: String,
+        bubble: Option<Rect>,
+    },
+    /// The overflow bubble: the app opens the selector of minimised
+    /// windows.
+    OpenSelector,
 }
 
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
@@ -151,6 +168,13 @@ pub struct Shared<'a> {
     pub audio: AudioLevels,
     /// The brightness of each output's monitor, by output name.
     pub brightness: &'a std::collections::BTreeMap<String, u8>,
+    /// The phone as Magnetita lists it (CEL-2-J).
+    pub phone: &'a PhoneState,
+    /// Whether `duties.phone` is on: the Phone tab and `island open phone`
+    /// exist only then (CEL-2-J).
+    pub phone_duty: bool,
+    /// The minimised windows Melibea keeps (CEL-2-J).
+    pub bubbles: &'a Bubbles,
 }
 
 /// Whether the bar's clipboard piece draws something else for `new` than
@@ -258,6 +282,12 @@ pub struct Island {
     pending_focus: Option<Key>,
     /// A Delete key is down: its auto-repeat must not remove more entries.
     delete_held: bool,
+    /// The phone the bar's pieces read (CEL-2-J).
+    phone: PhoneState,
+    /// Whether the phone duty is on, as the last frame saw it.
+    phone_duty: bool,
+    /// The minimised windows the bar's pieces read (CEL-2-J).
+    bubbles: Bubbles,
     /// The pixmaps uploaded for the items' icons.
     icons: IconCache,
     scroll: ScrollRemainder,
@@ -336,6 +366,9 @@ impl Island {
             confirming_clear: false,
             pending_focus: None,
             delete_held: false,
+            phone: PhoneState::Absent,
+            phone_duty: false,
+            bubbles: Bubbles::default(),
             icons: IconCache::default(),
             scroll: ScrollRemainder::default(),
             bar: None,
@@ -462,6 +495,8 @@ impl Island {
             today: self.today,
             connectivity: &self.connectivity,
             levels: self.levels,
+            phone: &self.phone,
+            bubbles: &self.bubbles,
         }
     }
 
@@ -635,6 +670,9 @@ impl Island {
             clipboard,
             audio,
             brightness,
+            phone,
+            phone_duty,
+            bubbles,
         } = *shared;
         let now = cx.now;
         self.set_reduced_motion(reduced);
@@ -683,6 +721,22 @@ impl Island {
         };
         if levels != self.levels {
             self.levels = levels;
+            seen = true;
+        }
+        if phone_duty != self.phone_duty {
+            self.phone_duty = phone_duty;
+            // A page that no longer exists is not left open.
+            if !phone_duty && self.state.is_open() && self.state.shown_page() == PageId::PHONE {
+                self.state.switch(PageId::ACTIVITY, now, self.reduced);
+            }
+            seen = true;
+        }
+        if *phone != self.phone {
+            self.phone = phone.clone();
+            seen = true;
+        }
+        if *bubbles != self.bubbles {
+            self.bubbles = bubbles.clone();
             seen = true;
         }
         if tray.generation != self.tray_generation {
@@ -841,6 +895,7 @@ impl Island {
             month_offset: self.month_offset,
             utc_offset: clock::utc_offset(),
             connectivity: &self.connectivity,
+            phone: &self.phone,
         };
         self.state
             .request_page_size(page.wants(&cx), now, self.reduced);
@@ -970,6 +1025,10 @@ impl Island {
 
     /// Grows into `page`, or slides to it while already open.
     fn open(&mut self, page: PageId, now: Instant) {
+        if page == PageId::PHONE && !self.phone_duty {
+            tracing::info!("island open phone: the phone duty is off; nothing was done");
+            return;
+        }
         if page != self.state.shown_page() {
             self.stale = true;
             self.forget_confirmation();
@@ -1244,6 +1303,12 @@ impl Island {
                 PieceAction::Brightness(action) => out.push(IslandAction::Brightness(action)),
                 PieceAction::Notification(command) => out.push(IslandAction::Notification(command)),
                 PieceAction::Connectivity(action) => out.push(IslandAction::Connectivity(action)),
+                PieceAction::RestoreWindow(window_id) => out.push(IslandAction::RestoreWindow {
+                    window_id,
+                    output: self.output.clone(),
+                    bubble: self.bar.as_ref().and_then(|bar| bar.node_rect(key)),
+                }),
+                PieceAction::OpenSelector => out.push(IslandAction::OpenSelector),
             }
             if open && !scroll && !page && self.state.is_open() {
                 self.close(now);
@@ -1657,6 +1722,8 @@ impl Island {
             key,
         ) {
             Some(action)
+        } else if let Some(action) = phone_page::action_for(&self.phone, key) {
+            Some(action)
         } else {
             // No optimistic state: the compositor's event closes the loop.
             activity::action_for(
@@ -1718,6 +1785,9 @@ impl Island {
             | Verb::Volume(_)
             | Verb::Microphone(_)
             | Verb::Brightness { .. }
+            | Verb::BubblesSelect
+            | Verb::BubblesMinimize
+            | Verb::PhoneMedia(_)
             | Verb::Quit => return,
         }
         self.sync_ctl(ctl, now);
@@ -2560,6 +2630,22 @@ mod tests {
     }
 
     #[test]
+    fn the_phone_page_opens_only_while_the_phone_duty_is_on() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        assert!(!island.phone_duty, "off by default");
+        island.open(PageId::PHONE, t0);
+        assert_eq!(island.page(), None, "`island open phone` is a no-op");
+        island.open(PageId::TRAY, t0);
+        island.open(PageId::PHONE, t0);
+        assert_eq!(island.page(), Some(PageId::TRAY), "an open page stays");
+        island.close(t0);
+        island.phone_duty = true;
+        island.open(PageId::PHONE, t0);
+        assert_eq!(island.page(), Some(PageId::PHONE));
+    }
+
+    #[test]
     fn opening_another_page_while_open_slides_to_it() {
         let t0 = Instant::now();
         let mut island = Island::new("DP-1", (760.0, 560.0));
@@ -3042,6 +3128,7 @@ mod tests {
                 clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
 
                 connectivity: &island.connectivity,
+                phone: &celestina_shell::phone::PhoneState::Absent,
             };
             let texts = texts_of(&page_view(page).view(&cx));
             assert!(texts.iter().any(|t| t == why), "{page:?}: {texts:?}");

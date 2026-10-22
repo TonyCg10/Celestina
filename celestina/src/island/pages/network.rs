@@ -248,6 +248,7 @@ mod tests {
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
 
             connectivity: state,
+            phone: &celestina_shell::phone::PhoneState::Absent,
         })
     }
 
@@ -479,6 +480,7 @@ mod tests {
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
 
             connectivity: state,
+            phone: &celestina_shell::phone::PhoneState::Absent,
         })
     }
 

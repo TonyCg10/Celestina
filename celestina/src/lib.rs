@@ -7,6 +7,7 @@
 
 pub mod app;
 pub mod bar;
+pub mod bubbles;
 pub mod bus;
 pub mod clipboard;
 pub mod command;
@@ -20,6 +21,7 @@ pub mod message;
 pub mod metrics;
 pub mod notifications;
 pub mod osd;
+pub mod phone;
 pub mod pieces;
 pub mod providers;
 pub mod tray;

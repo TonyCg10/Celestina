@@ -186,6 +186,9 @@ pub struct Duties {
         skip_serializing_if = "Option::is_none"
     )]
     pub bar: Option<Duty>,
+    /// Whether this shell groups minimized windows into bubbles.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub bubbles: Duty,
     /// Whether this shell holds the session awake while caffeine is on.
     #[serde(deserialize_with = "lenient_duty")]
     pub caffeine: Duty,
@@ -202,6 +205,9 @@ pub struct Duties {
     /// microphone and brightness changes.
     #[serde(deserialize_with = "lenient_duty")]
     pub osd: Duty,
+    /// Whether this shell shows the phone's battery and media.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub phone: Duty,
     /// Whether this shell paints the wallpaper.
     #[serde(deserialize_with = "lenient_duty")]
     pub wallpaper: Duty,
@@ -989,11 +995,13 @@ mod tests {
         let settings = Settings {
             duties: Duties {
                 bar: None,
-                idle: Duty::On,
+                bubbles: Duty::On,
                 caffeine: Duty::On,
                 clipboard: Duty::Off,
+                idle: Duty::On,
                 nightlight: Duty::Off,
                 osd: Duty::Off,
+                phone: Duty::On,
                 wallpaper: Duty::On,
             },
             energy: Energy {
@@ -1189,6 +1197,39 @@ mod tests {
     }
 
     #[test]
+    fn phone_and_bubbles_default_off_and_read_off_from_older_files() {
+        let defaults = Settings::default();
+        assert_eq!(defaults.duties.phone, Duty::Off);
+        assert_eq!(defaults.duties.bubbles, Duty::Off);
+        // A 1.3.0 file knows neither duty.
+        let older = Settings::from_bytes(
+            br#"{"schema_version":1,"duties":{"idle":"on","wallpaper":"on"}}"#,
+        )
+        .expect("read");
+        assert_eq!(older.duties.phone, Duty::Off);
+        assert_eq!(older.duties.bubbles, Duty::Off);
+        assert_eq!(older.duties.idle, Duty::On);
+        // An unknown value is off and costs the other duties nothing.
+        let odd = Settings::from_bytes(br#"{"duties":{"phone":"maybe","bubbles":7,"idle":"on"}}"#)
+            .expect("read");
+        assert_eq!(odd.duties.phone, Duty::Off);
+        assert_eq!(odd.duties.bubbles, Duty::Off);
+        assert_eq!(odd.duties.idle, Duty::On);
+    }
+
+    #[test]
+    fn phone_and_bubbles_survive_a_round_trip() {
+        let mut settings = Settings::default();
+        settings.duties.phone = Duty::On;
+        let bytes = settings.to_bytes().expect("serialize");
+        let read = Settings::from_bytes(&bytes).expect("read");
+        assert_eq!(read.duties.phone, Duty::On);
+        assert_eq!(read.duties.bubbles, Duty::Off);
+        let text = String::from_utf8(bytes).expect("utf8");
+        assert!(text.contains("\"phone\"") && text.contains("\"bubbles\""));
+    }
+
+    #[test]
     fn an_energy_change_is_durable_before_published() {
         let mut store = Store::new(Settings::default());
         let pending = store.stage_energy(|energy| energy.caffeine = true);
@@ -1223,11 +1264,13 @@ mod tests {
         assert_eq!(
             duties,
             [
+                "bubbles",
                 "caffeine",
                 "clipboard",
                 "idle",
                 "nightlight",
                 "osd",
+                "phone",
                 "wallpaper"
             ]
         );

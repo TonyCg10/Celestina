@@ -23,9 +23,19 @@
 //! input method's composition and commits and the pasted text edit the field
 //! like keys do. While the launcher is open its surface asks for IME text
 //! input with the caret's rectangle.
+//!
+//! The same overlay is the `Mod+K` selector of the minimised windows
+//! (CEL-2-J, plan decision D3; [`selector`]): [`Launcher::selector`] opens
+//! it over the bubbles source. There Tab and Shift+Tab move the selection
+//! as Up and Down do, Enter or a click restores the selected window, and
+//! Delete asks the selected window to close without closing the selector
+//! (the row leaves when Melibea's next projection does; Delete edits the
+//! field only while no window row is selected). Escape, a press outside the
+//! card and focus loss close it as they close the launcher.
 
 pub mod commands;
 pub mod recent;
+pub mod selector;
 pub mod spawn;
 pub mod state;
 pub mod view;
@@ -38,28 +48,47 @@ use celestina_ui::{focus_ring, Interaction, Tree, UiEvent, FOCUS_WIDTH};
 use celestina_wayland::{FrameCx, InputEvent, Modifiers, OutputId, SurfaceCtl, SurfaceId};
 
 pub use commands::{commands_for, Switch};
-pub use state::{LauncherState, Row};
+pub use state::{LauncherState, Row, Source};
 
+use crate::bubbles::Bubbles;
 use crate::island::state::SILHOUETTE_STEP;
 
 /// The launcher's layer-shell namespace.
 pub const NAMESPACE: &str = "celestina-overlay";
 
 const XKB_KEY_TAB: u32 = 0xff09;
+const XKB_KEY_ISO_LEFT_TAB: u32 = 0xfe20;
+const XKB_KEY_DELETE: u32 = 0xffff;
 const XKB_KEY_UP: u32 = 0xff52;
 const XKB_KEY_DOWN: u32 = 0xff54;
+#[cfg(test)]
+const XKB_KEY_LEFT: u32 = 0xff51;
 const XKB_KEY_LOWER_V: u32 = 0x76;
 const XKB_KEY_UPPER_V: u32 = 0x56;
 
-/// What the launcher asks the app to do; each one closes it.
+/// What the launcher asks the app to do; each one closes it except
+/// [`LauncherAction::RequestClose`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LauncherAction {
     /// Start this application.
     Launch(Box<DesktopEntry>),
     /// Run this switch.
     Switch(Switch),
+    /// The selector: restore this minimised window.
+    Restore(u64),
+    /// The selector: ask this minimised window to close; the selector
+    /// stays open and the row stays until Melibea's projection drops it.
+    RequestClose(u64),
     /// Close without acting.
     Close,
+}
+
+impl LauncherAction {
+    /// Whether the overlay closes for this action.
+    #[must_use]
+    pub fn closes(&self) -> bool {
+        !matches!(self, LauncherAction::RequestClose(_))
+    }
 }
 
 /// One open launcher.
@@ -96,6 +125,31 @@ impl Launcher {
     ) -> Launcher {
         let mut state = LauncherState::new(recent);
         state.update(index);
+        Self::with_state(surface, output, theme, reduced, state)
+    }
+
+    /// The selector on `surface` of `output` over the minimised windows
+    /// `bubbles`, its field empty and focused, the most recent window
+    /// selected.
+    #[must_use]
+    pub fn selector(
+        surface: SurfaceId,
+        output: OutputId,
+        theme: &Theme,
+        reduced: bool,
+        bubbles: &Bubbles,
+    ) -> Launcher {
+        let state = LauncherState::selector(bubbles.clone());
+        Self::with_state(surface, output, theme, reduced, state)
+    }
+
+    fn with_state(
+        surface: SurfaceId,
+        output: OutputId,
+        theme: &Theme,
+        reduced: bool,
+        state: LauncherState,
+    ) -> Launcher {
         let mut tree = Tree::new(reduced, theme);
         tree.apply(view::launcher(theme, &state, (0.0, 0.0)), Instant::now());
         let mut input = Interaction::new();
@@ -138,6 +192,25 @@ impl Launcher {
     #[must_use]
     pub fn state(&self) -> &LauncherState {
         &self.state
+    }
+
+    /// Whether this overlay is the selector of the minimised windows.
+    #[must_use]
+    pub fn is_selector(&self) -> bool {
+        self.state.is_selector()
+    }
+
+    /// The selector's windows changed: the query is answered again and the
+    /// selection follows its window. Returns whether a frame is due; the
+    /// launcher of applications ignores it.
+    pub fn set_bubbles(&mut self, bubbles: &Bubbles) -> bool {
+        if self.state.set_bubbles(bubbles) {
+            if self.state.rows.is_empty() {
+                self.keyboard_moved = false;
+            }
+            self.stale = true;
+        }
+        self.stale
     }
 
     /// The surface just appeared: it takes IME text input and draws its
@@ -255,8 +328,9 @@ impl Launcher {
 
     /// Handles one input event on the launcher's surface; `painter`
     /// measures the view if it changed since the last frame, and `index` is
-    /// what a changed query is answered from. Returns what the app must do,
-    /// which always closes the launcher.
+    /// what a changed query is answered from (the selector answers from its
+    /// windows). Returns what the app must do, which closes the launcher
+    /// unless [`LauncherAction::closes`] says otherwise.
     pub fn input(
         &mut self,
         ev: &InputEvent,
@@ -300,6 +374,40 @@ impl Launcher {
                 self.keyboard_moved = true;
                 self.stale = true;
                 outcome.changed = true;
+                return outcome;
+            }
+            InputEvent::Key {
+                keysym: keysym @ (XKB_KEY_TAB | XKB_KEY_ISO_LEFT_TAB),
+                modifiers:
+                    Modifiers {
+                        ctrl: false,
+                        alt: false,
+                        logo: false,
+                        shift,
+                    },
+                pressed: true,
+                ..
+            } if self.state.is_selector() => {
+                let back = *shift || *keysym == XKB_KEY_ISO_LEFT_TAB;
+                self.state.move_selection(if back { -1 } else { 1 });
+                self.keyboard_moved = true;
+                self.stale = true;
+                outcome.changed = true;
+                return outcome;
+            }
+            InputEvent::Key {
+                keysym: XKB_KEY_DELETE,
+                modifiers:
+                    Modifiers {
+                        ctrl: false,
+                        alt: false,
+                        logo: false,
+                        shift: false,
+                    },
+                pressed: true,
+                ..
+            } if self.chosen_window().is_some() && self.delete_is_free() => {
+                outcome.action = self.chosen_window().map(LauncherAction::RequestClose);
                 return outcome;
             }
             InputEvent::Key {
@@ -377,11 +485,31 @@ impl Launcher {
         outcome
     }
 
+    /// Whether Delete does nothing in the search field, so the selector may
+    /// take it to ask the selected window to close: the field is empty, or its
+    /// caret sits at the end with no selection. Anywhere else Delete edits the
+    /// text and belongs to the field.
+    fn delete_is_free(&self) -> bool {
+        let Some(field) = self.tree.field(view::FIELD) else {
+            return true;
+        };
+        field.selection().is_none() && field.cursor() >= field.text().len()
+    }
+
+    /// The selector's selected window, if a window row is selected.
+    fn chosen_window(&self) -> Option<u64> {
+        match self.state.chosen()? {
+            Row::Bubble { window_id, .. } => Some(*window_id),
+            Row::App(_) | Row::Switch(_) => None,
+        }
+    }
+
     /// What choosing the selected row asks for.
     fn chosen(&self) -> Option<LauncherAction> {
         match self.state.chosen()? {
             Row::App(entry) => Some(LauncherAction::Launch(entry.clone())),
             Row::Switch(switch) => Some(LauncherAction::Switch(*switch)),
+            Row::Bubble { window_id, .. } => Some(LauncherAction::Restore(*window_id)),
         }
     }
 }
@@ -628,6 +756,228 @@ mod tests {
         assert_eq!(
             l.state().query.text().chars().count(),
             celestina_ui::MAX_CHARS
+        );
+    }
+
+    fn bubbles(ids: &[u64]) -> Bubbles {
+        Bubbles {
+            windows: ids
+                .iter()
+                .map(|&id| celestina_shell::melibea::Window {
+                    id,
+                    app_id: Some(format!("app{id}")),
+                    title: Some(format!("Window {id}")),
+                    icon_name: None,
+                })
+                .collect(),
+            link: crate::bubbles::Link::Live,
+        }
+    }
+
+    fn selector(windows: &Bubbles) -> Launcher {
+        Launcher::selector(SurfaceId(6), OutputId(1), &Theme::dark(), false, windows)
+    }
+
+    fn shift_tab() -> InputEvent {
+        InputEvent::Key {
+            keysym: XKB_KEY_ISO_LEFT_TAB,
+            utf8: None,
+            modifiers: Modifiers {
+                shift: true,
+                ..Modifiers::default()
+            },
+            pressed: true,
+            serial: 1,
+        }
+    }
+
+    #[test]
+    fn enter_in_the_selector_restores_the_most_recent_window() {
+        let mut l = selector(&bubbles(&[5, 3, 8]));
+        assert!(l.is_selector());
+        let enter = l.handle(&key(RETURN, None, false), &[], Instant::now());
+        assert_eq!(enter.action, Some(LauncherAction::Restore(5)));
+        assert!(enter.action.as_ref().is_some_and(LauncherAction::closes));
+    }
+
+    #[test]
+    fn tab_and_shift_tab_move_the_selection_with_wrap_in_the_selector() {
+        let mut l = selector(&bubbles(&[1, 2, 3]));
+        let now = Instant::now();
+        let tab = l.handle(&key(XKB_KEY_TAB, None, false), &[], now);
+        assert!(tab.changed && tab.action.is_none());
+        assert_eq!(l.state().selected, 1);
+        assert!(l.keyboard_moved, "the ring shows after Tab");
+        l.handle(&shift_tab(), &[], now);
+        l.handle(&shift_tab(), &[], now);
+        assert_eq!(
+            l.state().selected,
+            2,
+            "Shift+Tab from the first is the last"
+        );
+        // Shift with the plain Tab keysym is Shift+Tab too.
+        let mut shifted = key(XKB_KEY_TAB, None, false);
+        if let InputEvent::Key { modifiers, .. } = &mut shifted {
+            modifiers.shift = true;
+        }
+        l.handle(&shifted, &[], now);
+        assert_eq!(l.state().selected, 1);
+        l.handle(&key(XKB_KEY_DOWN, None, false), &[], now);
+        l.handle(&key(XKB_KEY_DOWN, None, false), &[], now);
+        assert_eq!(l.state().selected, 0, "Down wraps as in the launcher");
+        let enter = l.handle(&key(RETURN, None, false), &[], now);
+        assert_eq!(enter.action, Some(LauncherAction::Restore(1)));
+    }
+
+    #[test]
+    fn delete_asks_the_selected_window_to_close_and_keeps_the_selector() {
+        let mut l = selector(&bubbles(&[1, 2, 3]));
+        let now = Instant::now();
+        l.handle(&key(XKB_KEY_DOWN, None, false), &[], now);
+        let delete = l.handle(&key(XKB_KEY_DELETE, None, false), &[], now);
+        assert_eq!(delete.action, Some(LauncherAction::RequestClose(2)));
+        assert!(!LauncherAction::RequestClose(2).closes());
+        // The row stays until the projection drops it...
+        assert_eq!(l.state().rows.len(), 3);
+        assert_eq!(l.state().selected, 1);
+        // ...and then the selection takes the row in its place.
+        assert!(l.set_bubbles(&bubbles(&[1, 3])));
+        assert_eq!(
+            l.state().chosen().map(|r| match r {
+                Row::Bubble { window_id, .. } => *window_id,
+                other => panic!("{other:?}"),
+            }),
+            Some(3)
+        );
+        // With a modifier, Delete is the field's.
+        let mut ctrl_delete = key(XKB_KEY_DELETE, None, true);
+        assert_eq!(l.handle(&ctrl_delete, &[], now).action, None);
+        if let InputEvent::Key { modifiers, .. } = &mut ctrl_delete {
+            modifiers.ctrl = false;
+            modifiers.shift = true;
+        }
+        assert_eq!(l.handle(&ctrl_delete, &[], now).action, None);
+    }
+
+    #[test]
+    fn delete_edits_the_search_text_when_the_caret_is_not_at_its_end() {
+        let mut l = selector(&bubbles(&[1, 2, 3]));
+        let now = Instant::now();
+        typed(&mut l, "Window", &[]);
+        // Caret at the end: Delete does nothing in the field, so it is the
+        // selector's.
+        assert_eq!(
+            l.handle(&key(XKB_KEY_DELETE, None, false), &[], now).action,
+            Some(LauncherAction::RequestClose(1))
+        );
+        // Caret one step back: Delete removes the next character instead.
+        l.handle(&key(XKB_KEY_LEFT, None, false), &[], now);
+        let delete = l.handle(&key(XKB_KEY_DELETE, None, false), &[], now);
+        assert_eq!(delete.action, None, "no close request while editing");
+        assert!(delete.changed);
+        let text = l.tree.field(view::FIELD).map(|f| f.text().to_owned());
+        assert_eq!(text.as_deref(), Some("Windo"));
+    }
+
+    #[test]
+    fn without_windows_the_selector_chooses_nothing_and_still_closes() {
+        for windows in [bubbles(&[]), Bubbles::default()] {
+            let mut l = selector(&windows);
+            let now = Instant::now();
+            assert!(l.state().rows.is_empty());
+            for ev in [
+                key(RETURN, None, false),
+                key(XKB_KEY_DELETE, None, false),
+                key(XKB_KEY_TAB, None, false),
+            ] {
+                assert_eq!(l.handle(&ev, &[], now).action, None, "{ev:?}");
+            }
+            assert_eq!(l.state().selected, 0);
+            assert_eq!(
+                l.handle(&key(ESCAPE, None, false), &[], now).action,
+                Some(LauncherAction::Close)
+            );
+            assert_eq!(
+                l.handle(&InputEvent::FocusLost, &[], now).action,
+                Some(LauncherAction::Close)
+            );
+        }
+    }
+
+    #[test]
+    fn typing_in_the_selector_filters_by_title_and_a_long_paste_is_clamped() {
+        let mut l = selector(&bubbles(&[1, 2, 12]));
+        typed(&mut l, "window 1", &[]);
+        let ids: Vec<u64> = l
+            .state()
+            .rows
+            .iter()
+            .map(|r| match r {
+                Row::Bubble { window_id, .. } => *window_id,
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(ids, [1, 12]);
+        let enter = l.handle(&key(RETURN, None, false), &[], Instant::now());
+        assert_eq!(enter.action, Some(LauncherAction::Restore(1)));
+
+        let mut l = selector(&bubbles(&[1]));
+        let long = "x".repeat(10_000);
+        l.handle(&InputEvent::Paste(long), &[], Instant::now());
+        assert_eq!(
+            l.state().query.text().chars().count(),
+            celestina_ui::MAX_CHARS
+        );
+        assert!(l.state().rows.is_empty());
+    }
+
+    #[test]
+    fn a_press_outside_the_selectors_card_closes_without_acting() {
+        let windows = bubbles(&[1, 2]);
+        let mut l = selector(&windows);
+        sized(&mut l, (2560.0, 1440.0));
+        assert_eq!(
+            l.handle(&press(10.0, 10.0), &[], Instant::now()).action,
+            Some(LauncherAction::Close)
+        );
+        // A click on a row restores its window.
+        let mut l = selector(&windows);
+        sized(&mut l, (2560.0, 1440.0));
+        let Some(row) = l
+            .tree
+            .node_by_key(view::row_key(1))
+            .map(|id| l.tree.rect(id))
+        else {
+            panic!("the second row is laid out");
+        };
+        let (x, y) = (row.x + row.w / 2.0, row.y + row.h / 2.0);
+        let now = Instant::now();
+        assert_eq!(l.handle(&press(x, y), &[], now).action, None);
+        let release = InputEvent::PointerRelease {
+            x,
+            y,
+            button: 0x110,
+            serial: 3,
+        };
+        assert_eq!(
+            l.handle(&release, &[], now).action,
+            Some(LauncherAction::Restore(2))
+        );
+    }
+
+    #[test]
+    fn the_launcher_of_applications_keeps_tab_and_delete_for_the_field() {
+        let index = [entry("aa", "Aa"), entry("ab", "Ab")];
+        let mut l = launcher(&index);
+        assert!(!l.is_selector());
+        assert!(!l.set_bubbles(&bubbles(&[1])), "it takes no windows");
+        let now = Instant::now();
+        l.handle(&key(XKB_KEY_TAB, None, false), &index, now);
+        assert_eq!(l.state().selected, 0, "Tab does not move the rows here");
+        assert_eq!(
+            l.handle(&key(XKB_KEY_DELETE, None, false), &index, now)
+                .action,
+            None
         );
     }
 

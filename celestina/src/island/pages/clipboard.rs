@@ -734,6 +734,7 @@ mod tests {
             utc_offset: 0,
             clipboard: panel,
             connectivity: &CONNECTIVITY,
+            phone: &celestina_shell::phone::PhoneState::Absent,
         }
     }
 

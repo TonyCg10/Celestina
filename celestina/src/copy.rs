@@ -832,6 +832,96 @@ pub fn bar_brightness_state(percent: u8) -> String {
     format!("{PIECE_BRIGHTNESS}, {}", osd_percent(percent))
 }
 
+// The phone and the bubbles (CEL-2-J).
+
+/// The title of the Phone page, and the accessible name of the bar's phone
+/// piece ("Phone").
+pub const PAGE_PHONE: &str = "Teléfono";
+
+/// The accessible name of the bar's bubbles piece ("Minimised windows").
+pub const PIECE_BUBBLES: &str = "Ventanas minimizadas";
+
+/// A battery charge as the bar and the page show it ("80 %"), with a
+/// no-break space before the sign.
+#[must_use]
+pub fn charge_percent(level: u8) -> String {
+    format!("{level}\u{a0}%")
+}
+
+/// The accessible state of the bar's phone piece: the name of the page,
+/// the charge when it is known and whether it is charging.
+#[must_use]
+pub fn bar_phone_state(battery: Option<u8>, charging: bool) -> String {
+    let mut state = PAGE_PHONE.to_owned();
+    if let Some(level) = battery {
+        state.push_str(", ");
+        state.push_str(&charge_percent(level));
+    }
+    if charging {
+        state.push_str(", cargando");
+    }
+    state
+}
+
+/// The Phone page's only row while no phone is connected
+/// ("No phone is connected.").
+pub const PHONE_NONE: &str = "No hay ningún teléfono conectado.";
+
+/// The Phone page's battery row; `battery` is the charge when known
+/// ("Battery: 80 %", "Battery: unknown").
+#[must_use]
+pub fn phone_battery(battery: Option<u8>) -> String {
+    match battery {
+        Some(level) => format!("Batería: {}", charge_percent(level)),
+        None => "Batería: desconocida".to_owned(),
+    }
+}
+
+/// The word beside the battery while it charges ("Charging").
+pub const PHONE_CHARGING: &str = "Cargando";
+
+/// The heading of the media section while the phone's player plays
+/// ("Playing").
+pub const PHONE_PLAYING: &str = "Reproduciendo";
+
+/// The heading of the media section while the player is paused ("Paused").
+pub const PHONE_PAUSED: &str = "En pausa";
+
+/// The accessible name of one bubble: it restores the window titled
+/// `title`, or the untitled word ("Restore {title}").
+#[must_use]
+pub fn bubble_restore(title: &str) -> String {
+    let title = if title.is_empty() {
+        WINDOW_UNTITLED
+    } else {
+        title
+    };
+    format!("Restaurar {title}")
+}
+
+/// The accessible name of the overflow bubble, which opens the selector of
+/// the `hidden` windows that do not fit ("{n} more minimised windows").
+#[must_use]
+pub fn bubbles_more(hidden: usize) -> String {
+    if hidden == 1 {
+        "1 ventana minimizada más".to_owned()
+    } else {
+        format!("{hidden} ventanas minimizadas más")
+    }
+}
+
+/// The placeholder of the `Mod+K` selector's search field
+/// ("Search minimised windows").
+pub const SELECTOR_PLACEHOLDER: &str = "Buscar ventanas minimizadas";
+
+/// The selector's only line while Melibea keeps no window minimised
+/// ("No minimised windows.").
+pub const SELECTOR_NO_WINDOWS: &str = "No hay ventanas minimizadas.";
+
+/// The selector's only line while Melibea is absent, refused or lost
+/// ("Melibea is not available.").
+pub const SELECTOR_UNAVAILABLE: &str = "Melibea no está disponible.";
+
 #[cfg(test)]
 mod tests {
     use super::*;

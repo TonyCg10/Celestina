@@ -104,6 +104,8 @@ mod tests {
                 audio: AudioLevels::default(),
                 brightness,
             },
+            phone: &celestina_shell::phone::PhoneState::Absent,
+            bubbles: &crate::bubbles::NONE,
         })
     }
 

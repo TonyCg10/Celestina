@@ -350,6 +350,7 @@ mod tests {
             utc_offset: 0,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
+            phone: &celestina_shell::phone::PhoneState::Absent,
         })
     }
 
@@ -598,6 +599,7 @@ mod tests {
             utc_offset: 7_200,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
+            phone: &celestina_shell::phone::PhoneState::Absent,
         });
         assert_eq!(
             text_of(&v, Key::named("clock-weather-place")),

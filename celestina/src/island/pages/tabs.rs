@@ -60,12 +60,24 @@ fn label_style(theme: &Theme, ink: Role) -> celestina_paint::TextStyle {
     text_style(theme.type_scale.caption, Weight::Semibold, false, ink)
 }
 
-/// One tab per page of the piece table, in its order, in a row `width`
-/// wide: each as wide as its title plus an equal share of what is left; the
-/// open page's is an accent pill, the others lift the control fill.
+/// The pages that have a tab: every page of the piece table except the Phone
+/// page, which never has one (CEL-2-J): the row does not fit a tenth tab, and
+/// the page opens from the phone piece and from `island open phone`. With it
+/// open no tab is selected.
+#[must_use]
+pub fn shown_pages() -> Vec<PageId> {
+    PageId::all()
+        .into_iter()
+        .filter(|page| *page != PageId::PHONE)
+        .collect()
+}
+
+/// One tab per shown page ([`shown_pages`]), in the table's order, in a row
+/// `width` wide: each as wide as its title plus an equal share of what is
+/// left; the open page's is an accent pill, the others lift the control fill.
 #[must_use]
 pub fn tabs(theme: &Theme, open: PageId, width: f32) -> View {
-    let pages = PageId::all();
+    let pages = shown_pages();
     centred(view::row(Key::named("tabs")))
         .size(width, TABS_H)
         .gap(theme.spacing.xs)
@@ -122,13 +134,13 @@ mod tests {
     #[test]
     fn tabs_show_every_page_with_the_open_one_selected() {
         let theme = Theme::dark();
-        for open in PageId::all() {
+        for open in shown_pages() {
             let row = tabs(&theme, open, 388.0);
-            assert_eq!(row.children.len(), PageId::all().len());
+            assert_eq!(row.children.len(), shown_pages().len());
             let keys: Vec<Key> = row.children.iter().map(|t| t.key).collect();
-            let want: Vec<Key> = PageId::all().into_iter().map(tab_key).collect();
+            let want: Vec<Key> = shown_pages().into_iter().map(tab_key).collect();
             assert_eq!(keys, want, "one tab per page, in order");
-            for (tab, page) in row.children.iter().zip(PageId::all()) {
+            for (tab, page) in row.children.iter().zip(shown_pages()) {
                 let want = if page == open {
                     Role::Accent
                 } else {
@@ -150,7 +162,7 @@ mod tests {
         let mut tree = Tree::new(false, &theme);
         tree.apply(tabs(&theme, PageId::TRAY, width), Instant::now());
         tree.layout_measured((600.0, 100.0), measure);
-        PageId::all()
+        shown_pages()
             .into_iter()
             .filter_map(|p| {
                 let tab = tree.node_by_key(tab_key(p))?;
@@ -161,7 +173,7 @@ mod tests {
     }
 
     fn assert_in_one_row(rects: &[(celestina_paint::Rect, f32)], width: f32) {
-        assert_eq!(rects.len(), PageId::all().len());
+        assert_eq!(rects.len(), shown_pages().len());
         assert!(rects.iter().all(|(r, _)| r.h == TABS_H && r.w >= 0.0));
         for pair in rects.windows(2) {
             assert!(pair[0].0.x + pair[0].0.w <= pair[1].0.x, "{pair:?}");
@@ -211,6 +223,36 @@ mod tests {
         assert_eq!(page_of(Key::named("tab")), None);
     }
 
+    #[test]
+    fn the_phone_page_never_has_a_tab_and_opening_it_selects_none() {
+        let without_phone: Vec<PageId> = PageId::all()
+            .into_iter()
+            .filter(|page| *page != PageId::PHONE)
+            .collect();
+        assert_eq!(shown_pages(), without_phone);
+        let theme = Theme::dark();
+        let row = tabs(&theme, PageId::PHONE, 388.0);
+        let keys: Vec<Key> = row.children.iter().map(|t| t.key).collect();
+        let want: Vec<Key> = without_phone.iter().copied().map(tab_key).collect();
+        assert_eq!(keys, want);
+        assert!(!keys.contains(&tab_key(PageId::PHONE)));
+        // With the Phone page open every tab is the unselected fill.
+        assert!(row
+            .children
+            .iter()
+            .all(|tab| fill_of(tab) == Some(Role::ControlFill)));
+        // The row still lays out and is filled to its width.
+        let last_page = *without_phone.last().expect("pages");
+        let mut tree = Tree::new(false, &theme);
+        tree.apply(row, Instant::now());
+        tree.layout_measured((600.0, 100.0), fake_measure);
+        let last = tree
+            .node_by_key(tab_key(last_page))
+            .map(|id| tree.rect(id))
+            .expect("the last tab");
+        assert!((last.x + last.w - 388.0).abs() < 0.01);
+    }
+
     // ---- Characterisation (CEL-2-A, spec 6.7): pinned before `Page` becomes a
     // table identifier; they must pass unchanged.
 
@@ -226,13 +268,14 @@ mod tests {
             (PageId::NETWORK, Key::indexed("tab", 6)),
             (PageId::BLUETOOTH, Key::indexed("tab", 7)),
             (PageId::POWER, Key::indexed("tab", 8)),
+            (PageId::PHONE, Key::indexed("tab", 9)),
         ];
         for (page, key) in want {
             assert_eq!(tab_key(page), key, "{page:?}");
             assert_eq!(page_of(key), Some(page), "{page:?}");
         }
         for foreign in [
-            Key::indexed("tab", 9),
+            Key::indexed("tab", 10),
             Key::indexed("tab-label", 0),
             Key::named("tab"),
             Key::named("tabs"),
@@ -255,11 +298,11 @@ mod tests {
             let theme = Theme::dark().scaled(factor);
             // The row the page draws: the page's width less its padding.
             let width = PAGE_SIZE.0 - 2.0 * theme.spacing.lg;
-            for open in PageId::all() {
+            for open in shown_pages() {
                 let mut tree = Tree::new(false, &theme);
                 tree.apply(tabs(&theme, open, width), Instant::now());
                 tree.layout_measured((600.0, 100.0), measure_real);
-                for page in PageId::all() {
+                for page in shown_pages() {
                     let pill = tree
                         .node_by_key(tab_key(page))
                         .map(|id| tree.rect(id))
@@ -292,7 +335,7 @@ mod tests {
                 _ => None,
             })
             .collect();
-        let want: Vec<(Key, String)> = PageId::all()
+        let want: Vec<(Key, String)> = shown_pages()
             .into_iter()
             .enumerate()
             .map(|(i, page)| {

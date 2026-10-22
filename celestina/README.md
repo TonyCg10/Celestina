@@ -86,6 +86,11 @@ What Noctalia still does for the session is in
   ([ADR 0007](docs/decisions/0007-focus-policy.md)); well-known bus names are
   claimed only when free, so the shell runs beside Noctalia
   ([ADR 0008](docs/decisions/0008-claim-free-names-only.md)).
+- The phone and bubbles duties (`duties.phone` and `duties.bubbles` in
+  `~/.config/celestina/shell.json`) are `off` by default. When on, the shell
+  reads the phone from Magnetita and the minimised windows from Melibea's
+  socket; it never starts either service. Evidence:
+  [CEL-2-J](docs/evidence/2026-10-17-phone-and-bubbles.md).
 - niri only; the compositor supplies the blur.
 
 ## Architecture

@@ -87,4 +87,11 @@ pub enum Message {
     /// One of the on-screen display's timers came due (posted by its
     /// calloop timer, which has no `RuntimeCtl`).
     Osd(crate::osd::OsdTick),
+    /// Melibea's news (the minimised windows), stamped with the run of the
+    /// worker that sent it. Boxed like the settings: it would size every
+    /// message.
+    Melibea(Box<crate::bubbles::BubblesNews>),
+    /// Magnetita's news (the phone), stamped with the run of the worker that
+    /// sent it.
+    Phone(Box<crate::phone::PhoneNews>),
 }

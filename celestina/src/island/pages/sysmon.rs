@@ -234,6 +234,7 @@ mod tests {
             utc_offset: 0,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
+            phone: &celestina_shell::phone::PhoneState::Absent,
         })
     }
 

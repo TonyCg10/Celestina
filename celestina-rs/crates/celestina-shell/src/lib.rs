@@ -33,6 +33,9 @@
 //!   screen off, then lock and suspend, failing closed without a locker.
 //! - [`nightlight`] — the fixed night-light whitepoint, its bounded transition
 //!   and the gamma ramps a compositor takes.
+//! - [`melibea`] — Melibea's socket protocol and the ordered projection of
+//!   minimized windows.
+//! - [`phone`] — which device is the phone and what the bar shows of it.
 //! - [`session`] — the two-state switch and the session requests a person
 //!   cannot take back.
 //! - [`wallpaper`] — which image an output shows, how it is laid on the
@@ -53,9 +56,11 @@ pub mod connectivity;
 pub mod glance;
 pub mod idle;
 pub mod launcher;
+pub mod melibea;
 pub mod nightlight;
 pub mod notifications;
 pub mod osd;
+pub mod phone;
 pub mod session;
 pub mod settings;
 pub mod wallpaper;
