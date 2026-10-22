@@ -119,6 +119,7 @@ mod tests {
             weather: None,
             today: None,
             clipboard: panel,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         })
     }
 

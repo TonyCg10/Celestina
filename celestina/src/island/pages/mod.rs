@@ -5,9 +5,13 @@
 //! request past the surface.
 
 pub mod activity;
+pub mod bluetooth;
 pub mod clipboard;
 pub mod clock;
+pub mod network;
 pub mod notifications;
+pub mod power;
+pub mod rows;
 pub mod sysmon;
 pub mod tabs;
 pub mod tray;
@@ -17,6 +21,7 @@ use celestina_shell::glance::Today;
 use celestina_ui::{view, Key, View};
 
 use crate::{
+    connectivity::state::ConnectivityState,
     island::{
         state::PAGE_SIZE,
         view::{centred, text_style},
@@ -121,6 +126,8 @@ pub struct PageCx<'a> {
     /// The clipboard history's previews (CEL-2-G); empty while the duty is
     /// off.
     pub clipboard: &'a clipboard::ClipboardPanel,
+    /// The network, Bluetooth and power state (CEL-2-F), read-only.
+    pub connectivity: &'a ConnectivityState,
 }
 
 /// One of the Island's pages.
@@ -221,6 +228,7 @@ pub(crate) fn wants_of(
         today: None,
         month_offset: 0,
         utc_offset: 0,
+        connectivity: &ConnectivityState::default(),
     })
 }
 
@@ -276,6 +284,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            connectivity: &ConnectivityState::default(),
         };
         let page = Counts;
         assert_eq!(page.title(), "counts");
@@ -468,6 +477,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            connectivity: &ConnectivityState::default(),
         };
         (
             pv.title().to_owned(),
@@ -659,15 +669,23 @@ mod tests {
     ];
 
     /// The pages that existed when the snapshots were taken (CEL-2-A). The
-    /// glance pages (CEL-2-K) and the Clipboard page (CEL-2-G) were appended
-    /// to the table after them and are pinned in their own modules; none of
+    /// glance pages (CEL-2-K), the Clipboard page (CEL-2-G) and the
+    /// connectivity pages (CEL-2-F) were appended to the table after them and are pinned in their own modules; none of
     /// these three may change because of them.
     const ORIGINAL: [PageId; 3] = [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY];
 
     /// The pages appended after the snapshots, in table order, each pinned by
     /// its own module's tests (`pages::sysmon`, `pages::clock`,
-    /// `pages::clipboard`).
-    const LATER: [PageId; 3] = [PageId::SYSMON, PageId::CLOCK, PageId::CLIPBOARD];
+    /// `pages::clipboard`, `pages::network`, `pages::bluetooth`,
+    /// `pages::power`).
+    const LATER: [PageId; 6] = [
+        PageId::SYSMON,
+        PageId::CLOCK,
+        PageId::CLIPBOARD,
+        PageId::NETWORK,
+        PageId::BLUETOOTH,
+        PageId::POWER,
+    ];
 
     #[test]
     fn every_page_of_the_table_is_pinned_here_or_declared_pinned_elsewhere() {
@@ -719,7 +737,10 @@ mod tests {
                 "tray",
                 "sysmon",
                 "clock",
-                "clipboard"
+                "clipboard",
+                "network",
+                "bluetooth",
+                "power"
             ]
         );
     }

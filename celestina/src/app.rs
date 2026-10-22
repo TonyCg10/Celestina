@@ -31,6 +31,7 @@ use crate::{
     bar,
     clipboard::{ClipboardDuty, ClipboardMessage, ClipboardState},
     command::Verb,
+    connectivity::{self, state::ConnectivityState, ConnectivityHandle, Forwarded},
     energy::{self, EnergyHandle},
     error_chain,
     glance::{self, GlanceHandle},
@@ -466,6 +467,12 @@ pub struct App {
     /// The latest rows the clipboard worker published: previews only, empty
     /// while the duty is off.
     clipboard_state: ClipboardState,
+    /// What the connectivity workers last said, and the requests in flight;
+    /// every Island gets a copy when it changes.
+    connectivity: ConnectivityState,
+    /// The connectivity workers, put in once the loop runs and taken out by
+    /// the binary at exit to be joined.
+    connectivity_handle: Rc<RefCell<Option<ConnectivityHandle>>>,
 }
 
 impl std::fmt::Debug for App {
@@ -527,6 +534,8 @@ impl App {
             weather: None,
             clipboard: Rc::new(OnceCell::new()),
             clipboard_state: ClipboardState::default(),
+            connectivity: ConnectivityState::default(),
+            connectivity_handle: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -594,6 +603,14 @@ impl App {
     #[must_use]
     pub fn clipboard_state(&self) -> &ClipboardState {
         &self.clipboard_state
+    }
+
+    /// Takes the slot the connectivity workers' handle is put in once the
+    /// loop runs.
+    #[must_use]
+    pub fn with_connectivity(mut self, handle: Rc<RefCell<Option<ConnectivityHandle>>>) -> App {
+        self.connectivity_handle = handle;
+        self
     }
 
     /// Takes the slot the energy handle is put in once the loop runs.
@@ -1193,6 +1210,13 @@ impl App {
                 IslandAction::Clipboard(verb) => self.clipboard_verb(&Verb::Clipboard(verb)),
                 IslandAction::Tray(command) => self.tray_command(command),
                 IslandAction::OpenApp(id) => self.open_app(id),
+                IslandAction::Connectivity(action) => {
+                    if self.connectivity_request(action) {
+                        // The Island that asked shows the pending row now;
+                        // the others pick it up with the worker's news.
+                        ctl.request_redraw();
+                    }
+                }
                 IslandAction::OpenTrayMenu {
                     item,
                     row,
@@ -1225,6 +1249,55 @@ impl App {
                         island.open_menu(more, menu::menu_size(&theme), Box::new(menu), ctl);
                     }
                 }
+            }
+        }
+    }
+
+    /// A connectivity page's row or piece asked for `action`: checked by the
+    /// app's state, queued on its worker only if the state accepts it, or
+    /// the editing UI started. Every Island gets the new state; returns
+    /// whether it changed (the row shows pending, a refusal, a failure or the
+    /// editor's note).
+    fn connectivity_request(&mut self, action: celestina_shell::connectivity::Action) -> bool {
+        let forwarded = match self.connectivity_handle.try_borrow() {
+            Ok(handle) => connectivity::forward(&mut self.connectivity, handle.as_ref(), action),
+            Err(_) => connectivity::forward(&mut self.connectivity, None, action),
+        };
+        if let Forwarded::Editor(editor) = forwarded {
+            connectivity::editor::launch(&mut self.connectivity, editor);
+        }
+        self.share_connectivity().is_some()
+    }
+
+    /// Gives every Island the app's connectivity state; the surfaces whose
+    /// Island shows it, or `None` when nothing changed for any.
+    fn share_connectivity(&mut self) -> Option<Vec<SurfaceId>> {
+        let shown: Vec<SurfaceId> = self
+            .islands
+            .slots
+            .iter_mut()
+            .filter_map(|slot| {
+                slot.island
+                    .set_connectivity(&self.connectivity)
+                    .then_some(slot.surface)
+            })
+            .collect();
+        (!shown.is_empty()).then_some(shown)
+    }
+
+    /// A connectivity worker's news: applied to the state, and only a change
+    /// reaches the Islands that show it, so unchanged news costs no frame.
+    fn connectivity_event(
+        &mut self,
+        event: &connectivity::ConnectivityEvent,
+        ctl: &mut RuntimeCtl<'_>,
+    ) {
+        if !self.connectivity.apply(event) {
+            return;
+        }
+        for surface in self.share_connectivity().unwrap_or_default() {
+            if let Some(mut surface) = ctl.surface(surface) {
+                surface.request_redraw();
             }
         }
     }
@@ -1738,6 +1811,7 @@ impl Shell for App {
             Message::Sysmon(reading) => self.sysmon_read(reading, ctl),
             Message::Weather(reading) => self.weather_read(reading, ctl),
             Message::Clipboard(message) => self.clipboard_event(message, ctl),
+            Message::Connectivity(event) => self.connectivity_event(&event, ctl),
         }
     }
 }
@@ -1806,7 +1880,12 @@ mod tests {
         chosen_off.duties.bar = Some(Duty::Off);
         assert_eq!(bar_change(&off, &chosen_off), BarChange::Nothing);
         let mut chosen_end = on.clone();
-        chosen_end.bar.end = Some(vec!["tray".to_owned(), "clipboard".to_owned()]);
+        chosen_end.bar.end = Some(vec![
+            "tray".to_owned(),
+            "network".to_owned(),
+            "bluetooth".to_owned(),
+            "clipboard".to_owned(),
+        ]);
         assert_eq!(bar_change(&on, &chosen_end), BarChange::Nothing);
         // Do-not-disturb is not the surfaces' business.
         let mut quiet = on.clone();

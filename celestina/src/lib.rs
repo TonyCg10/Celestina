@@ -10,6 +10,7 @@ pub mod bar;
 pub mod bus;
 pub mod clipboard;
 pub mod command;
+pub mod connectivity;
 pub mod copy;
 pub mod energy;
 pub mod glance;

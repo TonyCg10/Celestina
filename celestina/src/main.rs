@@ -12,7 +12,7 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    cell::OnceCell,
+    cell::{OnceCell, RefCell},
     io::IsTerminal,
     process::ExitCode,
     rc::Rc,
@@ -28,11 +28,13 @@ use celestina::{
     bus::{self, BusError},
     clipboard::ClipboardDuty,
     command::{self, Mode, Verb, USAGE},
+    connectivity::ConnectivityHandle,
     energy::EnergyHandle,
     error_chain,
     glance::GlanceHandle,
     island::clock,
     launcher::recent::RecentLaunches,
+    message::Message,
     providers::notifications::NotificationsCommand,
     providers::{self, settings::ShellSettings, wallpaper::WallpaperCommand, Worker},
 };
@@ -127,6 +129,7 @@ fn shell(cfg: Config) -> ExitCode {
     let energy = Rc::new(OnceCell::new());
     let glance = Rc::new(OnceCell::new());
     let clipboard = Rc::new(OnceCell::new());
+    let connectivity = Rc::new(RefCell::new(None));
     let settings_read = settings.current().clone();
     let settings_protected = settings.is_protected();
     let follow_from = settings.follow_from();
@@ -144,7 +147,8 @@ fn shell(cfg: Config) -> ExitCode {
     .with_wallpaper(Rc::clone(&wallpaper))
     .with_energy(Rc::clone(&energy))
     .with_glance(Rc::clone(&glance))
-    .with_clipboard(Rc::clone(&clipboard));
+    .with_clipboard(Rc::clone(&clipboard))
+    .with_connectivity(Rc::clone(&connectivity));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -191,6 +195,20 @@ fn shell(cfg: Config) -> ExitCode {
         duty.apply(&settings_read, settings_protected);
         // The slot is empty: `setup` runs once.
         let _ = clipboard.set(duty);
+        // Connectivity has no duty (CEL-2-F, D9): its workers only read, and
+        // a piece shows them when the author places it.
+        let publisher = sender.clone();
+        let handle = ConnectivityHandle::start(move |event| {
+            publisher.send(Message::Connectivity(event)).is_ok()
+        });
+        // Nothing else holds the slot while `setup` runs.
+        match connectivity.try_borrow_mut() {
+            Ok(mut slot) => *slot = Some(handle),
+            Err(_) => {
+                tracing::warn!("the connectivity slot is in use; its workers stop");
+                handle.stop();
+            }
+        }
         match providers::desktop::spawn(sender.clone(), &shutdown) {
             Ok(worker) => indexer = Some(worker),
             Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
@@ -266,6 +284,18 @@ fn shell(cfg: Config) -> ExitCode {
     // The history file stays: only the duty being off deletes it.
     if let Some(duty) = clipboard.get() {
         duty.shutdown();
+    }
+    // The connectivity workers watch a flag of their own: stopped and joined
+    // here, each within its bound.
+    // The loop has returned: nothing else holds the slot.
+    let taken = connectivity
+        .try_borrow_mut()
+        .ok()
+        .and_then(|mut slot| slot.take());
+    if let Some(handle) = taken {
+        if !handle.stop() {
+            tracing::warn!("a connectivity worker did not stop in time; it is left behind");
+        }
     }
     drop(follower);
     drop(shell_follower);

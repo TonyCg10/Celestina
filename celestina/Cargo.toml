@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.5.1"
+version = "1.6.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -35,6 +35,13 @@ path = "src/lib.rs"
 [[bin]]
 name = "celestina"
 path = "src/main.rs"
+
+# Test support: fake UPower, power-profiles-daemon, NetworkManager and BlueZ
+# on a private bus, a crate of its own and named only here, so no shipped
+# build links it (a feature on this package would change the binary that
+# `cargo test` leaves in target/<profile>).
+[dev-dependencies]
+celestina-fake-system = { path = "crates/celestina-fake-system" }
 
 [dependencies]
 # The runtime: outputs, the Island's layer surfaces, regions, frame pacing
@@ -110,3 +117,8 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 # second copy of that parsing; Celestina is a narrow consumer of those
 # modules only (docs/standards/architecture.md).
 hematita-core = { path = "../celestina-rs/crates/hematita-core" }
+# CEL-2-F: the network and Bluetooth workers read NetworkManager and BlueZ
+# through Cuprita's own D-Bus clients (`NmNetwork`, `BluezBluetooth`, their
+# signal watchers and fakes) instead of a second implementation. Features
+# `nm` and `bluez` only: no `wpctl`, so no audio process code is compiled.
+cuprita-core = { path = "../celestina-rs/crates/cuprita-core", default-features = false, features = ["nm", "bluez"] }

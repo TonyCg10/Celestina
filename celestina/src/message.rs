@@ -70,4 +70,7 @@ pub enum Message {
     /// News from the clipboard worker: the latest rows (previews only), the
     /// pause state, a refusal. Tagged with the worker's generation.
     Clipboard(crate::clipboard::ClipboardMessage),
+    /// News from the connectivity workers: network, Bluetooth, power, and
+    /// what became of a request.
+    Connectivity(crate::connectivity::ConnectivityEvent),
 }

@@ -1,10 +1,16 @@
 //! The row of page tabs under the page's content (design §5.5): one pill per
 //! page, the open one selected. A click switches pages through
 //! [`crate::island::state::IslandState::switch`].
+//!
+//! Each pill is as wide as its label plus an equal share of the room left
+//! (CEL-2-F): the labels of every page in the default 388 px body do not fit
+//! equal pills, but their own widths do at the caption size. When they do
+//! not fit (the larger text scales), every pill shrinks with its label
+//! clipped inside it, so no pill ever covers another or leaves the row.
 
 use celestina_paint::{Role, Theme, Weight};
 use celestina_ui::{view, Key, View};
-use taffy::JustifyContent;
+use taffy::{JustifyContent, LengthPercentageAuto};
 
 use crate::{
     copy,
@@ -46,25 +52,23 @@ fn index(page: PageId) -> u64 {
     pieces::page_index(page).map_or(0, |i| i as u64)
 }
 
-/// The label's style: the caption size, because six equal tabs on a page
-/// 420 px wide are 58 px each and "Actividad" at the body size measures 60 px
-/// with the real font. A label wider than its tab (the larger text scales) is
+/// The label's style: the caption size, because "Actividad" at the body size
+/// measures 60 px with the real font and every page's tab shares one row of
+/// a page 420 px wide. A label wider than its tab (the larger text scales) is
 /// clipped by the tab.
 fn label_style(theme: &Theme, ink: Role) -> celestina_paint::TextStyle {
     text_style(theme.type_scale.caption, Weight::Semibold, false, ink)
 }
 
 /// One tab per page of the piece table, in its order, in a row `width`
-/// wide, equal in width: the open page's is an accent pill, the others lift
-/// the control fill.
+/// wide: each as wide as its title plus an equal share of what is left; the
+/// open page's is an accent pill, the others lift the control fill.
 #[must_use]
 pub fn tabs(theme: &Theme, open: PageId, width: f32) -> View {
     let pages = PageId::all();
-    let count = pages.len().max(1) as f32;
-    let tab_w = ((width - theme.spacing.sm * (count - 1.0)) / count).max(0.0);
     centred(view::row(Key::named("tabs")))
         .size(width, TABS_H)
-        .gap(theme.spacing.sm)
+        .gap(theme.spacing.xs)
         .children(pages.into_iter().map(|page| {
             let (fill, ink) = if page == open {
                 (Role::Accent, Role::AccentInk)
@@ -72,7 +76,8 @@ pub fn tabs(theme: &Theme, open: PageId, width: f32) -> View {
                 (Role::ControlFill, Role::TextLo)
             };
             let mut tab = centred(view::row(tab_key(page)))
-                .size(tab_w, TABS_H)
+                .height(TABS_H)
+                .grow()
                 .radius(TABS_H / 2.0)
                 .fill(fill)
                 .clip()
@@ -84,6 +89,10 @@ pub fn tabs(theme: &Theme, open: PageId, width: f32) -> View {
                     label_style(theme, ink),
                 ));
             tab.style.justify_content = JustifyContent::CENTER;
+            // The title is the pill's basis; past the row's room the pill
+            // may shrink below it (the title is clipped) instead of
+            // overflowing the row.
+            tab.style.min_size.width = LengthPercentageAuto::length(0.0);
             tab
         }))
 }
@@ -97,8 +106,10 @@ mod tests {
 
     use super::*;
 
+    /// A label at the caption size: about 5 px a character with the real
+    /// font.
     fn fake_measure(s: &str, _: &TextStyle, _: Option<f32>) -> (f32, f32) {
-        (7.0 * s.chars().count() as f32, 16.0)
+        (5.0 * s.chars().count() as f32, 14.0)
     }
 
     fn fill_of(v: &View) -> Option<Role> {
@@ -129,27 +140,70 @@ mod tests {
         }
     }
 
-    #[test]
-    fn tabs_are_equal_pills_across_the_row_and_name_their_pages() {
+    /// The tabs' rects and their labels' widths in a row `width` wide,
+    /// with `measure`.
+    fn tab_rects(
+        width: f32,
+        measure: fn(&str, &TextStyle, Option<f32>) -> (f32, f32),
+    ) -> Vec<(celestina_paint::Rect, f32)> {
         let theme = Theme::dark();
         let mut tree = Tree::new(false, &theme);
-        tree.apply(tabs(&theme, PageId::TRAY, 388.0), Instant::now());
-        tree.layout_measured((600.0, 100.0), fake_measure);
-        let rects: Vec<_> = PageId::all()
+        tree.apply(tabs(&theme, PageId::TRAY, width), Instant::now());
+        tree.layout_measured((600.0, 100.0), measure);
+        PageId::all()
             .into_iter()
-            .filter_map(|p| tree.node_by_key(tab_key(p)))
-            .map(|id| tree.rect(id))
-            .collect();
+            .filter_map(|p| {
+                let tab = tree.node_by_key(tab_key(p))?;
+                let label = tree.node_by_key(Key::indexed("tab-label", index(p)))?;
+                Some((tree.rect(tab), tree.rect(label).w))
+            })
+            .collect()
+    }
+
+    fn assert_in_one_row(rects: &[(celestina_paint::Rect, f32)], width: f32) {
         assert_eq!(rects.len(), PageId::all().len());
-        // Layout rounds to whole px, so the tabs agree to within one.
-        assert!(rects
-            .iter()
-            .all(|r| (r.w - rects[0].w).abs() <= 1.0 && r.h == TABS_H));
+        assert!(rects.iter().all(|(r, _)| r.h == TABS_H && r.w >= 0.0));
         for pair in rects.windows(2) {
-            assert!(pair[0].x + pair[0].w <= pair[1].x);
+            assert!(pair[0].0.x + pair[0].0.w <= pair[1].0.x, "{pair:?}");
         }
-        let last = rects.last().expect("tabs");
-        assert!((last.x + last.w - 388.0).abs() <= 1.0);
+        let (first, last) = (rects[0].0, rects[rects.len() - 1].0);
+        assert!(first.x >= -0.01);
+        assert!(last.x + last.w <= width + 0.01, "{last:?} leaves the row");
+    }
+
+    #[test]
+    fn every_tab_fits_the_default_body_each_wider_than_its_title() {
+        // The default page's body (420 - 2 x 16) with every page's label.
+        let rects = tab_rects(388.0, fake_measure);
+        assert_in_one_row(&rects, 388.0);
+        for (rect, label) in &rects {
+            assert!(rect.w >= *label, "{rect:?} is narrower than its title");
+        }
+        // The row is filled: the room left is shared, not left at the end.
+        let last = rects[rects.len() - 1].0;
+        assert!((last.x + last.w - 388.0).abs() < 0.01);
+        // Shared equally: every pill is its title plus the same extra (to
+        // the pixel the layout rounds to).
+        let extra: Vec<f32> = rects.iter().map(|(r, l)| r.w - l).collect();
+        assert!(
+            extra.iter().all(|e| (e - extra[0]).abs() <= 1.0),
+            "{extra:?}"
+        );
+    }
+
+    #[test]
+    fn titles_too_wide_for_the_row_shrink_the_pills_inside_it() {
+        // Nearly three times the width per character, as a much larger text
+        // would be.
+        fn wide(s: &str, _: &TextStyle, _: Option<f32>) -> (f32, f32) {
+            (14.0 * s.chars().count() as f32, 16.0)
+        }
+        let rects = tab_rects(388.0, wide);
+        assert_in_one_row(&rects, 388.0);
+    }
+
+    #[test]
+    fn tabs_name_their_pages() {
         assert_eq!(
             page_of(tab_key(PageId::NOTIFICATIONS)),
             Some(PageId::NOTIFICATIONS)
@@ -169,13 +223,16 @@ mod tests {
             (PageId::SYSMON, Key::indexed("tab", 3)),
             (PageId::CLOCK, Key::indexed("tab", 4)),
             (PageId::CLIPBOARD, Key::indexed("tab", 5)),
+            (PageId::NETWORK, Key::indexed("tab", 6)),
+            (PageId::BLUETOOTH, Key::indexed("tab", 7)),
+            (PageId::POWER, Key::indexed("tab", 8)),
         ];
         for (page, key) in want {
             assert_eq!(tab_key(page), key, "{page:?}");
             assert_eq!(page_of(key), Some(page), "{page:?}");
         }
         for foreign in [
-            Key::indexed("tab", 6),
+            Key::indexed("tab", 9),
             Key::indexed("tab-label", 0),
             Key::named("tab"),
             Key::named("tabs"),
@@ -255,7 +312,10 @@ mod tests {
                 "Bandeja",
                 "Sistema",
                 "Reloj",
-                "Portap."
+                "Portap.",
+                copy::PAGE_NETWORK,
+                copy::PAGE_BLUETOOTH,
+                copy::PAGE_POWER
             ]
         );
     }

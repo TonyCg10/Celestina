@@ -502,6 +502,290 @@ pub fn bar_clipboard_state(paused: bool) -> &'static str {
     }
 }
 
+// Connectivity and power (CEL-2-F): the network, Bluetooth, battery and
+// power-profile pieces and their pages. Service-supplied text (a network's
+// name, a device's alias) is data, shown only as a row's name, and never
+// goes into one of these sentences: a failure is described by its kind.
+
+/// The title of the Network page, and the network piece's accessible name.
+pub const PAGE_NETWORK: &str = "Red";
+
+/// The title of the Bluetooth page, and the Bluetooth piece's accessible
+/// name.
+pub const PAGE_BLUETOOTH: &str = "Bluetooth";
+
+/// The title of the Power page ("Energy"), the battery's and the profile's.
+pub const PAGE_POWER: &str = "Energía";
+
+/// The accessible name of the bar's battery piece ("Battery").
+pub const PIECE_BATTERY: &str = "Batería";
+
+/// The accessible name of the bar's power-profile piece ("Power profile").
+pub const PIECE_POWER_PROFILE: &str = "Perfil de energía";
+
+/// The label of the row that opens the editing program ("Edit...").
+pub const EDIT: &str = "Editar…";
+
+/// What the network page's edit row opens, beside it
+/// ("Network profiles and passwords").
+pub const EDIT_NETWORK_DETAIL: &str = "Perfiles de red y contraseñas";
+
+/// What the Bluetooth page's edit row opens, beside it
+/// ("Pair and forget devices").
+pub const EDIT_BLUETOOTH_DETAIL: &str = "Emparejar y olvidar dispositivos";
+
+/// Shown under the network edit row when its program is not installed
+/// ("nm-connection-editor is not installed").
+pub const EDITOR_NETWORK_MISSING: &str = "nm-connection-editor no está instalado";
+
+/// Shown under the Bluetooth edit row when its program is not installed
+/// ("blueman-manager is not installed").
+pub const EDITOR_BLUETOOTH_MISSING: &str = "blueman-manager no está instalado";
+
+/// A row's state while its request waits for the system to confirm it
+/// ("Applying...").
+pub const APPLYING: &str = "Aplicando…";
+
+/// A row's state while it needs nothing from the shell and the person
+/// configures it elsewhere ("Configured in nm-applet").
+pub const NET_CONFIGURE_ELSEWHERE: &str = "Se configura en nm-applet";
+
+/// The Wi-Fi switch's label ("Wi-Fi").
+pub const NET_WIFI: &str = "Wi-Fi";
+
+/// Under the Wi-Fi switch while the hardware blocks the radio
+/// ("Blocked by the hardware").
+pub const NET_WIFI_BLOCKED: &str = "Bloqueado por el hardware";
+
+/// The Network page's only row while NetworkManager is not on the bus
+/// ("NetworkManager is not available").
+pub const NET_UNAVAILABLE: &str = "NetworkManager no está disponible";
+
+/// The Network page's only row while the radio is off and no wired or VPN
+/// link exists ("Wi-Fi is off").
+pub const NET_WIFI_OFF: &str = "El Wi-Fi está apagado";
+
+/// The Network page's only row while no network is in range
+/// ("No networks in range").
+pub const NET_EMPTY: &str = "No hay redes al alcance";
+
+/// A network row's title when its name is empty ("Unnamed network").
+pub const NET_UNNAMED: &str = "Red sin nombre";
+
+/// A network row's state while it is active ("Connected").
+pub const NET_CONNECTED: &str = "Conectada";
+
+/// A network row's state while it activates ("Connecting...").
+pub const NET_CONNECTING: &str = "Conectando…";
+
+/// A network row's state when it has a saved profile and is not active
+/// ("Saved").
+pub const NET_SAVED: &str = "Guardada";
+
+/// A Wi-Fi row's detail while it has no security ("Open").
+pub const NET_OPEN: &str = "Abierta";
+
+/// A Wi-Fi row's detail for a passphrase network ("Protected").
+pub const NET_PASSPHRASE: &str = "Protegida";
+
+/// A Wi-Fi row's detail for an enterprise network ("Enterprise").
+pub const NET_ENTERPRISE: &str = "Empresarial";
+
+/// A Wi-Fi row's detail for a WEP network.
+pub const NET_WEP: &str = "WEP";
+
+/// A wired row's detail ("Wired").
+pub const NET_WIRED: &str = "Cableada";
+
+/// A VPN row's detail.
+pub const NET_VPN: &str = "VPN";
+
+/// A network row's detail: its kind or security, then, while active, its
+/// address ("Protected · 192.168.1.20").
+#[must_use]
+pub fn net_detail(kind: &str, address: Option<&str>) -> String {
+    match address {
+        Some(address) => format!("{kind} · {address}"),
+        None => kind.to_owned(),
+    }
+}
+
+/// The Bluetooth switch's label ("Bluetooth").
+pub const BT_SWITCH: &str = "Bluetooth";
+
+/// Under the Bluetooth switch while the adapter looks for devices
+/// ("Looking for devices...").
+pub const BT_SEARCHING: &str = "Buscando dispositivos…";
+
+/// The Bluetooth page's only row while BlueZ or its adapter is absent
+/// ("Bluetooth is not available").
+pub const BT_UNAVAILABLE: &str = "Bluetooth no está disponible";
+
+/// The Bluetooth page's only row while the adapter is off
+/// ("Bluetooth is off").
+pub const BT_OFF: &str = "Bluetooth apagado";
+
+/// The Bluetooth page's only row while no device is paired
+/// ("No paired devices").
+pub const BT_EMPTY: &str = "No hay dispositivos emparejados";
+
+/// A device row's title when its alias is empty ("Unnamed device").
+pub const BT_UNNAMED: &str = "Dispositivo sin nombre";
+
+/// A device row's state while connected ("Connected").
+pub const BT_CONNECTED: &str = "Conectado";
+
+/// A device row's state while paired and not connected ("Paired").
+pub const BT_PAIRED: &str = "Emparejado";
+
+/// A device row's state while not paired ("Paired in blueman").
+pub const BT_PAIR_ELSEWHERE: &str = "Se empareja en blueman";
+
+/// The Power page's only row while neither UPower nor the profile daemon
+/// has anything to show ("No power data").
+pub const POWER_UNAVAILABLE: &str = "No hay datos de energía";
+
+/// A battery in percent ("Battery 64 %"): the Power page's battery row title
+/// and a Bluetooth device row's detail, one recipe for both.
+#[must_use]
+pub fn battery_percent(percent: u8) -> String {
+    format!("Batería {percent} %")
+}
+
+/// The battery is charging ("Charging").
+pub const BATTERY_CHARGING: &str = "Cargando";
+
+/// The battery is discharging ("Discharging").
+pub const BATTERY_DISCHARGING: &str = "Descargando";
+
+/// The battery is full ("Fully charged").
+pub const BATTERY_FULL: &str = "Carga completa";
+
+/// The battery is empty ("Empty").
+pub const BATTERY_EMPTY: &str = "Descargada";
+
+/// The battery waits to charge ("Waiting to charge").
+pub const BATTERY_PENDING_CHARGE: &str = "Esperando para cargar";
+
+/// The battery waits to discharge ("Waiting to discharge").
+pub const BATTERY_PENDING_DISCHARGE: &str = "Esperando para descargar";
+
+/// UPower reports no state ("Unknown state").
+pub const BATTERY_UNKNOWN: &str = "Estado desconocido";
+
+/// A span of `secs` seconds, to the minute ("2 h 5 min", "35 min").
+#[must_use]
+pub fn duration(secs: u64) -> String {
+    let minutes = secs / 60;
+    match (minutes / 60, minutes % 60) {
+        (0, minutes) => format!("{} min", minutes.max(1)),
+        (hours, 0) => format!("{hours} h"),
+        (hours, minutes) => format!("{hours} h {minutes} min"),
+    }
+}
+
+/// The battery row's detail while discharging: the state and the time left
+/// ("Discharging · 2 h left").
+#[must_use]
+pub fn battery_remaining(state: &str, span: &str) -> String {
+    format!("{state} · quedan {span}")
+}
+
+/// The battery row's detail while charging: the state and the time to full
+/// ("Charging · 35 min to full").
+#[must_use]
+pub fn battery_to_full(state: &str, span: &str) -> String {
+    format!("{state} · faltan {span}")
+}
+
+/// The performance profile's label ("Performance").
+pub const PROFILE_PERFORMANCE: &str = "Rendimiento";
+
+/// The balanced profile's label ("Balanced").
+pub const PROFILE_BALANCED: &str = "Equilibrado";
+
+/// The power-saver profile's label ("Power saver").
+pub const PROFILE_POWER_SAVER: &str = "Ahorro de energía";
+
+/// A profile row's state while it is the active one ("Active").
+pub const PROFILE_ACTIVE: &str = "Activo";
+
+/// Under the profiles while the daemon reports a laptop on the lap
+/// ("Performance is limited: the computer is on a lap").
+pub const PROFILE_DEGRADED_LAP: &str = "Rendimiento limitado: el equipo está sobre las piernas";
+
+/// Under the profiles while the daemon reports heat
+/// ("Performance is limited by temperature").
+pub const PROFILE_DEGRADED_HEAT: &str = "Rendimiento limitado por la temperatura";
+
+/// Under the profiles while the daemon reports another reason
+/// ("Performance is limited").
+pub const PROFILE_DEGRADED_OTHER: &str = "Rendimiento limitado";
+
+// The sentence under a row whose request failed, by kind of failure.
+
+/// No confirmation came in time ("No answer in time").
+pub const FAIL_TIMEOUT: &str = "No hubo respuesta a tiempo";
+
+/// The saved network needs credentials the system does not hold
+/// ("Credentials are missing: configured in nm-applet").
+pub const FAIL_NEEDS_SECRET: &str = "Faltan las credenciales: se configuran en nm-applet";
+
+/// The system denied the change ("The system did not allow it").
+pub const FAIL_DENIED: &str = "El sistema no lo permitió";
+
+/// The network or device is gone ("It is no longer in range").
+pub const FAIL_NOT_FOUND: &str = "Ya no está al alcance";
+
+/// The service stopped answering ("The service stopped answering").
+pub const FAIL_UNREACHABLE: &str = "El servicio dejó de responder";
+
+/// Another request is still waiting ("Another request is in progress; try
+/// again").
+pub const FAIL_BUSY: &str = "Hay otra petición en curso; inténtalo de nuevo";
+
+/// Any other failure ("It could not be completed").
+pub const FAIL_OTHER: &str = "No se pudo completar";
+
+// The sentence under a row whose request the shell refused before sending.
+
+/// The service has not reported yet ("There is no data from the service
+/// yet").
+pub const REFUSED_NO_INVENTORY: &str = "Todavía no hay datos del servicio";
+
+/// The row is gone ("It is no longer available").
+pub const REFUSED_UNKNOWN: &str = "Ya no está disponible";
+
+/// The network has no saved profile ("It has no saved profile: configured in
+/// nm-applet").
+pub const REFUSED_NOT_KNOWN: &str = "No tiene perfil guardado: se configura en nm-applet";
+
+/// A VPN ("VPNs are managed in nm-applet").
+pub const REFUSED_KIND: &str = "Las VPN se gestionan en nm-applet";
+
+/// An enterprise or WEP network ("It needs credentials: configured in
+/// nm-applet").
+pub const REFUSED_SECRET_CLASS: &str = "Necesita credenciales: se configura en nm-applet";
+
+/// Leaving a network that is not active ("It is not connected").
+pub const REFUSED_NOT_ACTIVE: &str = "No está conectada";
+
+/// A device that is not paired ("It is not paired: paired in blueman").
+pub const REFUSED_NOT_PAIRED: &str = "No está emparejado: se empareja en blueman";
+
+/// Joining a Wi-Fi network with the radio off ("Wi-Fi is off").
+pub const REFUSED_WIFI_OFF: &str = "El Wi-Fi está apagado";
+
+/// Turning Wi-Fi on under a hardware block ("Wi-Fi is blocked by the
+/// hardware").
+pub const REFUSED_HARDWARE: &str = "El Wi-Fi está bloqueado por el hardware";
+
+/// A profile the daemon does not offer ("That profile does not exist").
+pub const REFUSED_NO_PROFILE: &str = "Ese perfil no existe";
+
+/// Cycling with nothing to cycle to ("There is no other profile").
+pub const REFUSED_NOTHING_TO_CYCLE: &str = "No hay otro perfil";
+
 #[cfg(test)]
 mod tests {
     use super::*;

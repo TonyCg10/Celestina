@@ -12,7 +12,8 @@ are run the same way; among them CEL-2-E queues VAL-CEL2-WALLPAPER and
 CEL-2-B queues VAL-CEL2-IDLE, VAL-CEL2-CAFFEINE, VAL-CEL2-NIGHTLIGHT and
 VAL-CEL2-SESSION; CEL-2-K queues VAL-CEL2-SYSMON, VAL-CEL2-WEATHER,
 VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS; CEL-2-G queues VAL-CEL2-CLIPBOARD-LIVE,
-VAL-CEL2-CLIPBOARD-SECRET, VAL-CEL2-CLIPBOARD-IMAGE and VAL-CEL2-CLIPBOARD-LOOK.
+VAL-CEL2-CLIPBOARD-SECRET, VAL-CEL2-CLIPBOARD-IMAGE and VAL-CEL2-CLIPBOARD-LOOK;
+CEL-2-F queues VAL-CEL2-NETWORK, VAL-CEL2-BLUETOOTH and VAL-CEL2-POWER.
 None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
@@ -542,5 +543,97 @@ None has been run and none is closed by an agent.
   clipped, never overlapping its neighbour, at Large and Larger; the "N more"
   line is complete and counts right; a transparent thumbnail is acceptable on
   both (it is composited over black, a known limit)
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-NETWORK — The network piece and its page beside nm-applet
+
+- **Status:** pending
+- **Related implementation:** CEL-2-F (the network worker over
+  `cuprita-core`'s NetworkManager client, the network piece and the `network`
+  page)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; `duties.bar` set to `"on"` and `network` placed in `bar.end` of
+  `~/.config/celestina/shell.json` (the piece has no duty of its own);
+  `nm-applet` running as it does today. Noctalia's network widget may stay on:
+  the shell only reads NetworkManager. Have the password of one saved network
+  and one protected network that is not saved ready, but type it only into
+  `nm-applet`, never into the shell
+- **Procedure:** start the shell and compare the piece and the `network` page
+  with `nm-applet` and `nmcli device wifi list`: the connected network, its
+  signal bars, its saved or unknown state and the Wi-Fi switch must match.
+  Join a saved network from the page and check that it becomes connected
+  within the page's pending window and that `nm-applet` shows the same
+  network. Click an unsaved or protected network and check that nothing
+  opens, no password is asked by the shell, and the row says it is configured
+  in `nm-applet`. Activate `Editar…` and check that `nm-connection-editor`
+  opens and the shell opens nothing else. Switch the Wi-Fi switch off and on
+  from the page and check that `nm-applet` follows. Check that the piece and
+  the page read correctly at the real text scale and that the icons are
+  legible
+- **Pass condition:** the state matches `nm-applet` and `nmcli` at all times
+  the page is open; a join of a saved network converges to the same state as
+  `nm-applet`; an unsaved or protected network never opens a shell dialog and
+  is answered with the `nm-applet` sentence; the shell never asks for or shows
+  a password; `Editar…` opens `nm-connection-editor` only
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-BLUETOOTH — The Bluetooth piece and its page beside blueman
+
+- **Status:** pending
+- **Related implementation:** CEL-2-F (the Bluetooth worker over
+  `cuprita-core`'s BlueZ client, the Bluetooth piece and the `bluetooth` page)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; `duties.bar` set to `"on"` and `bluetooth` placed in `bar.end` of
+  `~/.config/celestina/shell.json`; a paired device within reach that the
+  author is willing to connect and disconnect; `blueman` running as it does
+  today. Noctalia's Bluetooth widget may stay on, and a connect from either
+  side is fine as long as the two converge
+- **Procedure:** start the shell and compare the piece and the `bluetooth`
+  page with `bluetoothctl show` and `blueman-manager`: the adapter power, the
+  paired and connected devices, their aliases and the battery of a device that
+  reports one must match. Turn the adapter off and on from the page and check
+  that `blueman-manager` follows. Connect the paired device from the page and
+  check it becomes connected within the pending window; disconnect it the same
+  way. Activate `Editar…` and check that `blueman-manager` opens. Check that
+  the shell never starts a scan, never pairs or removes a device, and never
+  asks for a PIN
+- **Pass condition:** the state matches `blueman-manager` and `bluetoothctl`
+  at all times the page is open; each toggle and connect converges to the same
+  state in `blueman`; no scan, pairing, trust or removal is ever started by the
+  shell; `Editar…` opens `blueman-manager` only; the icons and the device names
+  read correctly at the real scale
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-POWER — The battery and power-profile pieces beside UPower and the profile daemon
+
+- **Status:** pending
+- **Related implementation:** CEL-2-F (the power worker over UPower and
+  power-profiles-daemon, the battery and power-profile pieces, the `power`
+  page, and the six-tab strip of the Island)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; `duties.bar` set to `"on"` and `battery` and `power-profile` placed
+  in `bar.end` of `~/.config/celestina/shell.json`; a machine with a battery
+  for the battery row (the piece is absent without one); the profile daemon
+  running; Noctalia's power profile widget, if any, may stay on since the
+  shell changes the profile only from the page or by a middle click that the
+  author makes
+- **Procedure:** start the shell and compare the battery piece and the
+  `power` page with `upower -i` on the display device: the percentage, the
+  state, and the time to empty or full must match. Compare the active profile
+  and the list of profiles with `powerprofilesctl list`. Change the profile
+  from the page and check that `powerprofilesctl get` reports it within the
+  pending window; middle-click the power-profile piece and check that the
+  profile cycles in the same order. Then open the Island and check the six
+  page tabs (Activity, Notifications, Tray, Network, Bluetooth, Power) for
+  fit, overlap and icons at the real scale, with the text scale at its default
+  and at "Larger"; note any clipped title
+- **Pass condition:** the battery and profile values match `upower` and
+  `powerprofilesctl` while the page is open; a profile change from the page or
+  the piece converges to the same profile; every tab fits the body without
+  overlap at the default scale; the icons are legible; no profile is set that
+  the daemon does not list
 - **Result:** not run
 - **Evidence:** none

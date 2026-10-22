@@ -63,3 +63,8 @@
   verbs that never return content. Evidence in
   [`docs/evidence/2026-10-17-clipboard.md`](docs/evidence/2026-10-17-clipboard.md);
   its author rows `VAL-CEL2-CLIPBOARD-LIVE`, `-SECRET`, `-IMAGE` and `-LOOK` are pending.
+- **In progress (CEL-2-F, not landed):** the network, Bluetooth, battery and
+  power-profile pieces, read-only state from NetworkManager, BlueZ, UPower and
+  power-profiles-daemon with a closed list of actions, each popup an Island page;
+  evidence in [`docs/evidence/2026-10-17-connectivity.md`](docs/evidence/2026-10-17-connectivity.md);
+  `VAL-CEL2-NETWORK`, `VAL-CEL2-BLUETOOTH` and `VAL-CEL2-POWER` are pending.

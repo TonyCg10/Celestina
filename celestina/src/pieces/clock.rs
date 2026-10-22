@@ -97,6 +97,7 @@ mod tests {
             weather: None,
             today,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         })
     }
 

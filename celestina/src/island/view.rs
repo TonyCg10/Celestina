@@ -437,15 +437,21 @@ mod tests {
         assert_eq!(
             titles,
             [
-                "Actividad",
-                "Notificaciones",
-                "Bandeja",
-                "Sistema",
-                "Reloj",
-                "Portapapeles"
+                copy::PAGE_ACTIVITY,
+                copy::PAGE_NOTIFICATIONS,
+                copy::PAGE_TRAY,
+                copy::PAGE_SYSMON,
+                copy::PAGE_CLOCK,
+                copy::PAGE_CLIPBOARD,
+                copy::PAGE_NETWORK,
+                copy::PAGE_BLUETOOTH,
+                copy::PAGE_POWER,
             ]
         );
         assert_eq!(page_title(PageId::SYSMON), copy::PAGE_SYSMON);
         assert_eq!(page_title(PageId::CLOCK), copy::PAGE_CLOCK);
+        assert_eq!(page_title(PageId::NETWORK), copy::PAGE_NETWORK);
+        assert_eq!(page_title(PageId::BLUETOOTH), copy::PAGE_BLUETOOTH);
+        assert_eq!(page_title(PageId::POWER), copy::PAGE_POWER);
     }
 }

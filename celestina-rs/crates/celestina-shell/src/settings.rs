@@ -228,7 +228,10 @@ impl Default for BarLayout {
         Self {
             start: ids(&["workspaces", "notifications"]),
             centre: Vec::new(),
-            end: ids(&["tray", "clipboard"]),
+            // Noctalia's order: tray, network, bluetooth (CEL-2-F), then the
+            // clipboard (CEL-2-G). `battery` and `power-profile` are
+            // registered pieces but not placed.
+            end: ids(&["tray", "network", "bluetooth", "clipboard"]),
             // Blueman's item `Id` is expected to be `blueman` (the halted
             // shell's fixtures of this session); `blueman-tray` is its
             // process. Both until the live row confirms the `Id`.
@@ -1171,7 +1174,10 @@ mod tests {
         let layout = settings.bar_layout();
         assert_eq!(layout.start, ids(&["workspaces", "notifications"]));
         assert!(layout.centre.is_empty());
-        assert_eq!(layout.end, ids(&["tray", "clipboard"]));
+        assert_eq!(
+            layout.end,
+            ids(&["tray", "network", "bluetooth", "clipboard"])
+        );
         assert_eq!(
             layout.tray_hidden,
             ids(&["nm-applet", "blueman", "blueman-tray"])
@@ -1203,6 +1209,25 @@ mod tests {
         assert!(duties.contains(&"bar".to_owned()));
         let again = Settings::from_bytes(&read.to_bytes().expect("serialize")).expect("ours");
         assert_eq!(again, read);
+    }
+
+    #[test]
+    fn network_and_bluetooth_reach_files_that_never_chose_an_end_zone() {
+        // An old file with a bar section but no end zone follows the default,
+        // so it gains the two connectivity pieces after the tray.
+        let old = Settings::from_bytes(br#"{"bar":{"tray_hidden":[]}}"#).expect("ours");
+        assert_eq!(
+            old.bar_layout().end,
+            ids(&["tray", "network", "bluetooth", "clipboard"])
+        );
+        // A person who chose their end zone keeps exactly that choice.
+        let chosen = Settings::from_bytes(br#"{"bar":{"end":["tray"]}}"#).expect("ours");
+        assert_eq!(chosen.bar_layout().end, ids(&["tray"]));
+        // A person who placed the piece elsewhere is not given a second copy.
+        let moved = Settings::from_bytes(br#"{"bar":{"start":["network"]}}"#).expect("ours");
+        let layout = moved.bar_layout();
+        assert_eq!(layout.start, ids(&["network"]));
+        assert_eq!(layout.end, ids(&["tray", "bluetooth", "clipboard"]));
     }
 
     #[test]

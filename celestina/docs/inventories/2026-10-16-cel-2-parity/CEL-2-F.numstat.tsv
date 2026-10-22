@@ -1,0 +1,133 @@
+# CEL-2-F exact change inventory
+
+Base revision	4f0d02ab1e57f43ba6c67a86d1daf1a7dc992d64
+Pathspec	celestina-rs/crates/celestina-shell/src/connectivity.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-fake-system/Cargo.toml
+Pathspec	celestina/crates/celestina-fake-system/src/lib.rs
+Pathspec	celestina/docs/decisions/0017-connectivity-popups-are-island-pages.md
+Pathspec	celestina/docs/decisions/0018-connectivity-reads-state-and-offers-a-closed-action-list.md
+Pathspec	celestina/docs/decisions/0019-connectivity-secrets-never-pass-through-the-shell.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-10-17-connectivity-plan.md
+Pathspec	celestina/docs/evidence/2026-10-17-connectivity.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-F.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/examples/fake_system_bus.rs
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/bar/view.rs
+Pathspec	celestina/src/command.rs
+Pathspec	celestina/src/connectivity/bluetooth.rs
+Pathspec	celestina/src/connectivity/editor.rs
+Pathspec	celestina/src/connectivity/mod.rs
+Pathspec	celestina/src/connectivity/network.rs
+Pathspec	celestina/src/connectivity/power.rs
+Pathspec	celestina/src/connectivity/state.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/island/pages/bluetooth.rs
+Pathspec	celestina/src/island/pages/clipboard.rs
+Pathspec	celestina/src/island/pages/clock.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/network.rs
+Pathspec	celestina/src/island/pages/notifications.rs
+Pathspec	celestina/src/island/pages/power.rs
+Pathspec	celestina/src/island/pages/rows.rs
+Pathspec	celestina/src/island/pages/sysmon.rs
+Pathspec	celestina/src/island/pages/tabs.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/launcher/spawn.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/pieces/battery.rs
+Pathspec	celestina/src/pieces/bluetooth.rs
+Pathspec	celestina/src/pieces/clipboard.rs
+Pathspec	celestina/src/pieces/clock.rs
+Pathspec	celestina/src/pieces/conn_glyph.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/network.rs
+Pathspec	celestina/src/pieces/notifications.rs
+Pathspec	celestina/src/pieces/power_profile.rs
+Pathspec	celestina/src/pieces/sysmon.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	celestina/src/pieces/weather.rs
+Pathspec	celestina/src/pieces/workspaces.rs
+Pathspec	celestina/tests/connectivity_bus.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2257	0	c1afc01ebfbedd0678fdaf20f8cae120c5aab44bd13d39ac16d1dd91680c0d14	celestina-rs/crates/celestina-shell/src/connectivity.rs
+4	0	bdcc0cd48802192d5bc33789f7732f326db70c673327df248b5bd54bdfa9e112	celestina-rs/crates/celestina-shell/src/lib.rs
+27	2	0b33328733e1e5be77b234b60bb981c744f18cf48ce902599e5ed1f0aa7faccf	celestina-rs/crates/celestina-shell/src/settings.rs
+17	1	a0af771c31683f10faf56c1dc7219b7248b94e91a4d699f8ce92e22744ccfda2	celestina/Cargo.lock
+13	1	14a324bcbdbd97f585a394fd720a14fbea5c0bcc971cc707c87225c84480f07f	celestina/Cargo.toml
+5	0	59d9e990b5e650e25b124fa1a3bdd4db8d21d5824e12035544c8ddd26ee6eb63	celestina/STATUS.md
+94	1	a962fc6c8273f63d3cceaf6e05ac158732607ab7567f4f7d03a3511b47e1977f	celestina/VALIDATION.md
+19	0	053d9731b101438c08af2dbab55612a52934ab876841539ec514bd3c17e45e8f	celestina/crates/celestina-fake-system/Cargo.toml
+1066	0	857544537f10fa33038a5b088f1ed6104ce1566e49bac5d8a8d9c2af44379f4c	celestina/crates/celestina-fake-system/src/lib.rs
+44	0	2c03daa41b3f22b50cf5ad5b248f72164e4c46ebfaeba6dc9c9bd4fe21fa50b4	celestina/docs/decisions/0017-connectivity-popups-are-island-pages.md
+55	0	ba3ce9a952488d1e8ab95cc1d851cb17dbaa96d4a16dc2b1ecb8b594955b7d24	celestina/docs/decisions/0018-connectivity-reads-state-and-offers-a-closed-action-list.md
+46	0	6ad1f90a8a66c603fbb82d021c2594e7b773c18389c12aff38009ce25880f164	celestina/docs/decisions/0019-connectivity-secrets-never-pass-through-the-shell.md
+6	1	7f9ee63c8067bc872204f6a5d443f99ff244497b84993eb5c4f2f9045373844e	celestina/docs/decisions/README.md
+140	0	e50afb5a312e0096e48c471942ca3a69b41a2c2b261c5a99977311679618bbb5	celestina/docs/evidence/2026-10-17-connectivity-plan.md
+382	0	bc17546e232d9cf4852f44e30eb73e2cc93603fe32c9ff524aba25bba618bdc3	celestina/docs/evidence/2026-10-17-connectivity.md
+133	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-F.numstat.tsv
+1	1	75e03e1f05547db2a580615aeba5fea29fa97e819d0ed9bb13804d429a600a23	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+85	0	7025d1edea062c90b2d8e38fdf4018731f80e5f6d136bb4711767e5c5cbf1cb7	celestina/examples/fake_system_bus.rs
+129	1	e6b4646efb7d247fb8413ad0eef65707f69b853c6270c00dc58122fbcf99d625	celestina/scripts/smoke.sh
+80	1	c45e07eec40bcdb36e3837e5bc37361184b9066370fcd4f2869910a8f4c773a1	celestina/src/app.rs
+25	0	61e875c518df258eee696e4f7b4617f5722b25502cb57a1478eb93ae4f51378e	celestina/src/bar/view.rs
+12	4	13b604e72f262649dece4dffea9452f4751c1730de2b3aa6f3e14a6bc9073181	celestina/src/command.rs
+418	0	2b37fa97e002c586761706793c6bad72cd7422cb282528f446828f2abb860cc6	celestina/src/connectivity/bluetooth.rs
+196	0	cfff049c37c666c8c9dfd645fdf901b296894d94c885212a069c62ffbd2bb7cb	celestina/src/connectivity/editor.rs
+1802	0	866a174b413054ed8c2420cf6a7f538c98476e3d081f6ee9a056380118543fa9	celestina/src/connectivity/mod.rs
+851	0	81e8e0406992156113be48766268ae8efdf3e4daaa04e30d67362e033d7504e1	celestina/src/connectivity/network.rs
+1487	0	659eb59aea5fc958756dafc49c1893bd234a17d964ef083cdf03bd58045e774e	celestina/src/connectivity/power.rs
+741	0	62216ebeefcf922ddc6ae047c2a4bc57fa46391c078917e56bf1c60c0c0612cd	celestina/src/connectivity/state.rs
+284	0	cc36cb554eac4b7a899c158d84b88147439497656332055c17560aa6d87f7b2c	celestina/src/copy.rs
+1	0	1a7beb29ec148052408052d139694edc555403eea6702c3ad43d5f47f08794d5	celestina/src/island/bar_tree.rs
+287	4	e1e3b25e5066f77f087deb279d4e4976aeb8a0ed2f5bed19f59f8691cec3f5b5	celestina/src/island/mod.rs
+3	0	0255b7475b76f4dd292627c75e2bdaaee4d2c92f8a60026ff9dae92814497105	celestina/src/island/pages/activity.rs
+432	0	7347b5a532b18d12f92965aceae0c88dd74eebee0b13b262809948f2854b089b	celestina/src/island/pages/bluetooth.rs
+3	0	fe27ddf9d838095b13d3edb3ad4aee1b9df9baa57d545dc74e01fb1b814bcd30	celestina/src/island/pages/clipboard.rs
+2	0	7a7aa2ab225a7b160d7c917cf0fdce348ddd36d0564c5922f903741e69d6749e	celestina/src/island/pages/clock.rs
+26	5	f81261d8b9b7865bdabe04cf69423fb39c4d6b17c70b1bae76e4387ab935f89b	celestina/src/island/pages/mod.rs
+505	0	29bd7e18b068ffd54bd703e5a8c7af545a28e3df9220eb855b14e0caee504f22	celestina/src/island/pages/network.rs
+3	0	0e73b904b15e978ffc4c6cdd1a556e3dff03faa5965a6ab80f006d1206d29d40	celestina/src/island/pages/notifications.rs
+448	0	8a0abcd49427c82506c5a5ceece053049aaaff3289facc5f0668deb83f47caa0	celestina/src/island/pages/power.rs
+461	0	85767436022b69ae500b374627d1961c1d59d98b2894113dbe2d309dce9ed62c	celestina/src/island/pages/rows.rs
+1	0	0528c8a45d17e9aa6f555dafa7ebdcd85a507487ba2976c6ab0b9f6f4e7a0f99	celestina/src/island/pages/sysmon.rs
+88	28	33c47c3b2411ca25fef7502fe3a81ce7f2dd174f39005fc32ae6e176857dec2e	celestina/src/island/pages/tabs.rs
+2	0	afa0d30e54524058792f29779c346a9f155dfde90d98b22ea2e0cc8208ec0f58	celestina/src/island/pages/tray.rs
+12	6	1ff76239730486e721bc8c617095564888e182c89fb6fc81996b555603fd8a2a	celestina/src/island/view.rs
+31	4	d5a42f46e537ca8688badd6523be624b6f525da5b7b23d192ba0428f38071715	celestina/src/launcher/spawn.rs
+1	0	9a566c46f875e06eaecc7bd394f574156fbd74e7d230dc26c44ec3950a1626a1	celestina/src/lib.rs
+32	2	60e392c3edc5e9e162266fbaaeec2d58ee2c82528e45a7e26bd09cc9441497a5	celestina/src/main.rs
+3	0	821a041abab0daa4af0ffb61049ae4977eb46041b4a2d62aa7c6ce2a2dd7ec2b	celestina/src/message.rs
+225	0	027ef10db1344dff4fd14d26b62c5971764de3f60c4b414f662d8dc193065495	celestina/src/pieces/battery.rs
+153	0	6e48fd11e0fea80de05fc77307abaf27f564b6d074909b0194e2842e4cee510b	celestina/src/pieces/bluetooth.rs
+1	0	559813e4cb9cadb69c80596f0a82a13edc2d4b416e43ac05bf952a6461d586f4	celestina/src/pieces/clipboard.rs
+1	0	c7bb98c5da21c6db1928ccd5538f9cb4393e631dc265ada5cdec9249dc7d7df6	celestina/src/pieces/clock.rs
+41	0	b1b618a91c3196006a4a8bf00edef8e6752b7f2adfe275408baf972c4814d6de	celestina/src/pieces/conn_glyph.rs
+102	2	aa28d538a99eafab46cc1bef127bdd657265edc9237e3e6ac8ddaddf90270d3e	celestina/src/pieces/mod.rs
+275	0	90167e886931ec417c7193678436d185bd55a33083cac1302848d58293a97e65	celestina/src/pieces/network.rs
+1	0	890e9bf5e2bc5da3c28fb4ba9ade6a2b26a810b1b402397df8863b53cd55cd42	celestina/src/pieces/notifications.rs
+191	0	368178063e28512040562629e7434c7dd1f60cd0b92362b6c3c9ac4110590991	celestina/src/pieces/power_profile.rs
+1	0	06b1c0906b5fbcddfab33a61ab94c300fb0da3719d9597f8e133f02ffc26e804	celestina/src/pieces/sysmon.rs
+1	0	94e48ccf8380ea260b22bdd8563eadbb8eaa3c7f76118c2a5ce4504d8077e357	celestina/src/pieces/tray.rs
+1	0	b28b0744e5ce9315495f53bf86b56e78343ebda1776abf492d24b68cd3c5788e	celestina/src/pieces/weather.rs
+1	0	6846ac285d6e83beb35da9782f44fb54763181977fe4e339e058640c04d36429	celestina/src/pieces/workspaces.rs
+469	0	1b1bde6d80c0d82846c7b602543a87185910bca1807fd1496a56132f8d50230f	celestina/tests/connectivity_bus.rs
+1	0	080d928a7987c10351157b6ed8a6ef218bc878d6e1b0c7550a7114f26a2774fa	docs/version-history.tsv

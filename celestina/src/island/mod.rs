@@ -27,8 +27,7 @@ pub mod workspaces;
 use std::time::{Duration, Instant};
 
 use celestina_paint::{Painter, PixmapId, Rect, Theme};
-use celestina_shell::glance::Today;
-use celestina_shell::settings::BarLayout;
+use celestina_shell::{connectivity::Action, glance::Today, settings::BarLayout};
 use celestina_ui::{Interaction, Key, Tree, UiEvent, BTN_LEFT};
 use celestina_wayland::{
     CloseReason, FrameCx, InputEvent, KeyboardInteractivity, PopupId, PopupShell, SurfaceCtl,
@@ -38,6 +37,7 @@ use crate::{
     bar::silhouette::{self, Shape},
     clipboard::{verbs::ClipboardVerb, ClipboardState},
     command::Verb,
+    connectivity::state::ConnectivityState,
     pieces::{BarCx, Gesture, PageId, PieceAction},
     providers::{
         niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
@@ -49,8 +49,9 @@ use bar_tree::BarTree;
 use cadence::{Cadence, Offer, Wake, SYSMON_BAR_PERIOD};
 use clock::{ClockTick, SecondTick};
 use pages::{
-    activity, clipboard as clipboard_page, clock as clock_page, notifications, page_view,
-    sysmon as sysmon_page, tabs,
+    activity, bluetooth as bluetooth_page, clipboard as clipboard_page, clock as clock_page,
+    network as network_page, notifications, page_view, power as power_page, sysmon as sysmon_page,
+    tabs,
     tray::{self as tray_page, IconCache, Pixmaps, TrayList, TrayRow},
     HistoryRow, NameOwner, PageCx,
 };
@@ -93,6 +94,10 @@ pub enum IslandAction {
     /// A Clipboard page row or button: the app passes the verb to the
     /// clipboard duty, which queues it and tells the journal how it ended.
     Clipboard(ClipboardVerb),
+    /// A connectivity page's row or piece asked for this: the app checks it
+    /// against its state and only then hands it to the worker (or starts the
+    /// editing UI).
+    Connectivity(Action),
 }
 
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
@@ -199,6 +204,9 @@ pub struct Island {
     do_not_disturb: bool,
     /// The notification rows the Notifications page lists.
     history: Vec<HistoryRow>,
+    /// What the connectivity pieces and pages read (CEL-2-F): a copy of
+    /// the app's, pushed by [`Island::set_connectivity`].
+    connectivity: ConnectivityState,
     /// The page slide the page view was built with.
     applied_slide: f32,
     /// The theme the views were built with.
@@ -286,6 +294,7 @@ impl Island {
             owners: NameOwner::default(),
             do_not_disturb: false,
             history: Vec::new(),
+            connectivity: ConnectivityState::default(),
             applied_slide: 0.0,
             theme,
             reduced: false,
@@ -387,6 +396,21 @@ impl Island {
         self.stale = true;
     }
 
+    /// The app's connectivity state changed: the pages and the bar's pieces
+    /// read `state` from now on. Returns whether this Island shows any of it
+    /// (a page is open or the bar is on), so the caller asks for a frame
+    /// only then and a closed Island with the bar off stays at rest.
+    pub fn set_connectivity(&mut self, state: &ConnectivityState) -> bool {
+        if *state == self.connectivity {
+            return false;
+        }
+        self.connectivity.clone_from(state);
+        let open = self.state.is_open();
+        self.stale |= open;
+        self.invalidate_bar();
+        open || self.bar.is_some()
+    }
+
     /// Whether the bar is on.
     #[must_use]
     pub fn bar_on(&self) -> bool {
@@ -409,6 +433,7 @@ impl Island {
             sysmon: self.bar_sysmon.shown(),
             weather: self.weather.as_ref(),
             today: self.today,
+            connectivity: &self.connectivity,
         }
     }
 
@@ -777,6 +802,7 @@ impl Island {
             today: self.today,
             month_offset: self.month_offset,
             utc_offset: clock::utc_offset(),
+            connectivity: &self.connectivity,
         };
         self.state
             .request_page_size(page.wants(&cx), now, self.reduced);
@@ -1167,6 +1193,7 @@ impl Island {
                     }
                 }
                 PieceAction::Notification(command) => out.push(IslandAction::Notification(command)),
+                PieceAction::Connectivity(action) => out.push(IslandAction::Connectivity(action)),
             }
             if open && !scroll && !page && self.state.is_open() {
                 self.close(now);
@@ -1512,6 +1539,8 @@ impl Island {
             None
         } else if key == sysmon_page::open_key() {
             Some(IslandAction::OpenApp(sysmon_page::MONITOR_DESKTOP_ID))
+        } else if let Some(action) = self.connectivity_action(key) {
+            Some(IslandAction::Connectivity(action))
         } else if let Some(action) = notifications::action_for(
             &self.history,
             &self.owners,
@@ -1530,6 +1559,26 @@ impl Island {
                 key,
             )
         }
+    }
+
+    /// What the row `key` of the connectivity page on screen offers: only
+    /// the page shown answers, and only for a row it drew with an action.
+    fn connectivity_action(&self, key: Key) -> Option<Action> {
+        if !self.state.is_open() {
+            return None;
+        }
+        let action_for = match self.state.shown_page() {
+            PageId::NETWORK => network_page::action_for,
+            PageId::BLUETOOTH => bluetooth_page::action_for,
+            PageId::POWER => power_page::action_for,
+            _ => return None,
+        };
+        action_for(
+            &self.connectivity,
+            &self.theme,
+            self.state.max_page_size(),
+            key,
+        )
     }
 
     /// Runs an Island verb of `org.celestina.Shell1`; other verbs are not
@@ -2614,6 +2663,240 @@ mod tests {
             );
             assert!(island.state.wants_frame(now));
         }
+    }
+
+    // Connectivity (CEL-2-F).
+
+    use crate::connectivity::state::sample;
+    use celestina_shell::connectivity::{Editor, Section};
+
+    // `key_event` and `ENTER` are the clipboard tests' (CEL-2-G), below.
+    const TAB: u32 = 0xff09;
+    const SPACE: u32 = 0x20;
+    const ESCAPE: u32 = 0xff1b;
+
+    /// An Island with every connectivity service ready, `page` open and laid
+    /// out (motion reduced, so the page is at its place at once).
+    fn connectivity_island(page: PageId) -> (Island, Instant) {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.set_reduced_motion(true);
+        island.set_connectivity(&sample::ready());
+        island.open(page, t0);
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        (island, t0)
+    }
+
+    fn page_rect(island: &Island, key: Key) -> Rect {
+        match island.page.node_by_key(key) {
+            Some(id) => island.page.rect(id),
+            None => panic!("no page node {key:?}"),
+        }
+    }
+
+    /// Tabs through the page until `want` has the focus.
+    fn tab_to(island: &mut Island, want: Key, t0: Instant) {
+        for _ in 0..40 {
+            feed(island, key_event(TAB), t0);
+            let on = island.page.highlight().focused;
+            if on.is_some_and(|id| island.page.key_of(id) == want) {
+                return;
+            }
+        }
+        panic!("the focus never reached {want:?}");
+    }
+
+    #[test]
+    fn a_click_enter_or_space_on_a_row_asks_for_its_typed_action() {
+        let (mut island, t0) = connectivity_island(PageId::NETWORK);
+        let cafe = network_page::row_key("cafe");
+        let join = IslandAction::Connectivity(Action::JoinSaved(sample::id("cafe")));
+        // The pointer.
+        let at = centre(page_rect(&island, cafe));
+        assert_eq!(click_at(&mut island, at, BTN_LEFT, t0), vec![join.clone()]);
+        // The keyboard: the row takes the focus, Enter and Space act on it.
+        tab_to(&mut island, cafe, t0);
+        assert_eq!(feed(&mut island, key_event(ENTER), t0), vec![join.clone()]);
+        assert_eq!(feed(&mut island, key_event(SPACE), t0), [join]);
+        // The connected row offers to leave it; the editor row the editor.
+        let home = network_page::row_key("home");
+        tab_to(&mut island, home, t0);
+        assert_eq!(
+            feed(&mut island, key_event(ENTER), t0),
+            [IslandAction::Connectivity(Action::Leave(sample::id(
+                "home"
+            )))]
+        );
+        tab_to(&mut island, network_page::edit_key(), t0);
+        assert_eq!(
+            feed(&mut island, key_event(ENTER), t0),
+            [IslandAction::Connectivity(Action::OpenEditor(
+                Editor::Network
+            ))]
+        );
+        // Escape closes the page, as on every page.
+        assert!(feed(&mut island, key_event(ESCAPE), t0).is_empty());
+        assert!(!island.state.is_open());
+    }
+
+    #[test]
+    fn the_bluetooth_and_power_pages_act_from_the_keyboard_too() {
+        let (mut island, t0) = connectivity_island(PageId::BLUETOOTH);
+        let headset = bluetooth_page::row_key("AA:BB:CC:DD:EE:01");
+        tab_to(&mut island, headset, t0);
+        assert_eq!(
+            feed(&mut island, key_event(ENTER), t0),
+            [IslandAction::Connectivity(Action::DisconnectDevice(
+                sample::address("AA:BB:CC:DD:EE:01")
+            ))]
+        );
+
+        let (mut island, t0) = connectivity_island(PageId::POWER);
+        let performance = power_page::profile_key("performance");
+        tab_to(&mut island, performance, t0);
+        assert_eq!(
+            feed(&mut island, key_event(SPACE), t0),
+            [IslandAction::Connectivity(Action::SetProfile(
+                sample::profile("performance")
+            ))]
+        );
+        assert!(feed(&mut island, key_event(ESCAPE), t0).is_empty());
+        assert!(!island.state.is_open());
+    }
+
+    #[test]
+    fn a_row_answers_only_while_its_page_is_on_screen() {
+        let (mut island, t0) = connectivity_island(PageId::NETWORK);
+        let cafe = network_page::row_key("cafe");
+        assert!(island.activate(cafe, t0).is_some());
+        // Another page shown: the network row's key asks for nothing.
+        island.open(PageId::TRAY, t0);
+        assert_eq!(island.activate(cafe, t0), None);
+        island.open(PageId::BLUETOOTH, t0);
+        assert_eq!(island.activate(cafe, t0), None);
+        // Closed: nothing at all.
+        island.open(PageId::NETWORK, t0);
+        island.close(t0);
+        assert_eq!(island.activate(cafe, t0), None);
+        // A row the page offers nothing for (an unsaved enterprise network)
+        // is no action either.
+        island.open(PageId::NETWORK, t0);
+        assert_eq!(island.activate(network_page::row_key("work"), t0), None);
+    }
+
+    #[test]
+    fn a_page_for_an_absent_service_explains_and_offers_nothing() {
+        let t0 = Instant::now();
+        for (page, why) in [
+            (PageId::NETWORK, crate::copy::NET_UNAVAILABLE),
+            (PageId::BLUETOOTH, crate::copy::BT_UNAVAILABLE),
+            (PageId::POWER, crate::copy::POWER_UNAVAILABLE),
+        ] {
+            let mut island = Island::new("DP-1", (760.0, 560.0));
+            island.set_reduced_motion(true);
+            island.open(page, t0);
+            island.apply_views(t0);
+            lay_fake(&mut island, t0);
+            let cx = PageCx {
+                theme: &island.theme,
+                max_size: island.state.max_page_size(),
+                model: None,
+                output: "DP-1",
+                owners: &island.owners,
+                do_not_disturb: false,
+                history: &[],
+                items: &[],
+                sysmon: None,
+                weather: None,
+                today: None,
+                month_offset: 0,
+                utc_offset: 0,
+                clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
+
+                connectivity: &island.connectivity,
+            };
+            let texts = texts_of(&page_view(page).view(&cx));
+            assert!(texts.iter().any(|t| t == why), "{page:?}: {texts:?}");
+            assert!(island.page.node_by_key(Key::named("note-text")).is_some());
+            // Tab goes round the page's own controls only (close, more, the
+            // tabs); Enter on any of them asks for no connectivity action.
+            for _ in 0..12 {
+                let acted = feed(&mut island, key_event(TAB), t0);
+                assert!(acted.is_empty());
+                let acted = island
+                    .page
+                    .highlight()
+                    .focused
+                    .map(|id| island.page.key_of(id))
+                    .and_then(|key| island.connectivity_action(key));
+                assert_eq!(acted, None, "{page:?}");
+            }
+        }
+    }
+
+    fn texts_of(view: &celestina_ui::View) -> Vec<String> {
+        let mut out = Vec::new();
+        if let celestina_ui::ViewKind::Text { text, .. } = &view.kind {
+            out.push(text.clone());
+        }
+        for child in &view.children {
+            out.extend(texts_of(child));
+        }
+        out
+    }
+
+    #[test]
+    fn the_power_profile_pieces_middle_click_takes_the_same_route() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (1920.0, 560.0));
+        island.set_connectivity(&sample::ready());
+        let layout = BarLayout {
+            end: vec!["power-profile".to_owned()],
+            ..BarLayout::default()
+        };
+        island.set_bar(Some(&layout));
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        let piece = centre(bar_rect(&island, Key::named("power-profile")));
+        assert_eq!(
+            click_at(&mut island, piece, BTN_MIDDLE, t0),
+            [IslandAction::Connectivity(Action::CycleProfile)]
+        );
+    }
+
+    #[test]
+    fn an_unchanged_state_asks_for_no_frame_and_a_closed_island_none_at_all() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.stale = false;
+        let ready = sample::ready();
+        // Closed with the bar off: the copy is taken, nothing is shown.
+        assert!(!island.set_connectivity(&ready));
+        assert_eq!(island.connectivity, ready);
+        assert!(!island.stale);
+        // The same state again: nothing at all.
+        assert!(!island.set_connectivity(&ready));
+        // Open: a change rebuilds the page and is worth a frame.
+        island.open(PageId::NETWORK, t0);
+        island.stale = false;
+        let mut pending = ready.clone();
+        assert_eq!(pending.begin(&Action::Refresh(Section::Network)), Ok(()));
+        assert!(!island.set_connectivity(&pending), "a refresh marks no row");
+        assert!(pending
+            .begin(&Action::JoinSaved(sample::id("cafe")))
+            .is_ok());
+        assert!(island.set_connectivity(&pending));
+        assert!(island.stale);
+        island.stale = false;
+        assert!(!island.set_connectivity(&pending));
+        assert!(!island.stale);
+        // Closed with the bar on: its pieces show the state.
+        island.close(t0);
+        island.state.close(t0, true);
+        island.set_bar(Some(&BarLayout::default()));
+        assert!(island.set_connectivity(&ready));
+        assert!(!island.set_connectivity(&ready));
     }
 
     #[test]

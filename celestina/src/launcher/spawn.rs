@@ -8,9 +8,14 @@
 //! `setsid -f` forks and exits at once, so the application is reparented
 //! away from the shell; the short-lived `setsid` itself is reaped on a
 //! detached thread, so no zombie is left behind and the loop never waits.
+//!
+//! [`spawn_program`] starts a fixed program the shell itself names (the
+//! connectivity pages' editing UIs) the same way, with no arguments.
 
 use std::{
+    ffi::OsString,
     io,
+    path::Path,
     process::{Command, Stdio},
     thread,
 };
@@ -66,10 +71,32 @@ pub fn spawn_argv(entry: &DesktopEntry) -> Vec<String> {
 ///
 /// [`SpawnError`] when the entry names no program or `setsid` cannot start.
 pub fn spawn(entry: &DesktopEntry) -> Result<(), SpawnError> {
-    let argv = spawn_argv(entry);
+    let argv: Vec<OsString> = spawn_argv(entry).into_iter().map(OsString::from).collect();
+    start(&argv, &entry.name, &entry.id)
+}
+
+/// Starts the program at `path` with no arguments, detached by `setsid -f`
+/// as [`spawn`] starts an entry; `name` is how errors and the journal call
+/// it.
+///
+/// # Errors
+///
+/// [`SpawnError::Start`] when `setsid` cannot start.
+pub fn spawn_program(path: &Path, name: &str) -> Result<(), SpawnError> {
+    let argv: Vec<OsString> = SETSID
+        .iter()
+        .map(OsString::from)
+        .chain(std::iter::once(path.as_os_str().to_owned()))
+        .collect();
+    start(&argv, name, name)
+}
+
+/// Runs `argv` with its streams on `/dev/null` from the home directory, and
+/// reaps the short-lived `setsid` on a thread of its own.
+fn start(argv: &[OsString], name: &str, id: &str) -> Result<(), SpawnError> {
     let Some((program, args)) = argv.split_first() else {
         return Err(SpawnError::NoProgram {
-            name: entry.name.clone(),
+            name: name.to_owned(),
         });
     };
     let mut command = Command::new(program);
@@ -82,10 +109,10 @@ pub fn spawn(entry: &DesktopEntry) -> Result<(), SpawnError> {
         command.current_dir(home);
     }
     let mut child = command.spawn().map_err(|source| SpawnError::Start {
-        name: entry.name.clone(),
+        name: name.to_owned(),
         source,
     })?;
-    let id = entry.id.clone();
+    let id = id.to_owned();
     // `setsid -f` exits right after its fork; reaping it here keeps the
     // shell free of zombies without the loop waiting on it.
     let reaper = thread::Builder::new()

@@ -43,19 +43,26 @@
 //! every action a piece offers must also be reachable from a page or a verb,
 //! as the three pieces' actions are (their pages and their rows).
 
+pub mod battery;
+pub mod bluetooth;
 pub mod clipboard;
 pub mod clock;
+pub mod conn_glyph;
+pub mod network;
 pub mod notifications;
+pub mod power_profile;
 pub mod sysmon;
 pub mod tray;
 pub mod weather;
 pub mod workspaces;
 
 use celestina_paint::Theme;
+use celestina_shell::connectivity::Action;
 use celestina_shell::glance::Today;
 use celestina_ui::{Key, View};
 
 use crate::{
+    connectivity::state::ConnectivityState,
     island::pages::{clipboard::ClipboardPanel, HistoryRow, NameOwner, PageView, TrayRow},
     providers::{
         niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
@@ -98,6 +105,13 @@ impl PageId {
     /// The Clock page (the Clock and Weather pieces'): the month calendar and
     /// the weather reading.
     pub const CLOCK: PageId = PageId("clock");
+    /// The Network page (the network piece's).
+    pub const NETWORK: PageId = PageId("network");
+    /// The Bluetooth page (the Bluetooth piece's).
+    pub const BLUETOOTH: PageId = PageId("bluetooth");
+    /// The Power page (the battery piece's, and the power-profile piece's
+    /// click opens it too).
+    pub const POWER: PageId = PageId("power");
 
     /// Every page, in tab order: the table's order.
     #[must_use]
@@ -150,6 +164,8 @@ pub struct BarCx<'a> {
     /// The clipboard history as the bar shows it (CEL-2-G): whether the duty
     /// is on and whether it is paused.
     pub clipboard: &'a ClipboardPanel,
+    /// The network, Bluetooth and power state (CEL-2-F), read-only.
+    pub connectivity: &'a ConnectivityState,
 }
 
 /// What the Island saw on a node of a piece's widget.
@@ -199,6 +215,9 @@ pub enum PieceAction {
     TrayMenu(ItemId),
     /// Something the notification server does.
     Notification(NotificationsCommand),
+    /// A request to the connectivity workers (CEL-2-F): the Island forwards
+    /// it, and the workers check it again before they act.
+    Connectivity(Action),
 }
 
 /// One thing the bar can hold.
@@ -225,6 +244,10 @@ pub static PIECES: &[&dyn Piece] = &[
     &clock::Clock,
     &weather::Weather,
     &clipboard::Clipboard,
+    &network::Network,
+    &bluetooth::Bluetooth,
+    &battery::Battery,
+    &power_profile::PowerProfile,
 ];
 
 /// The piece the layout names `id`, if the table has it.
@@ -275,7 +298,11 @@ mod tests {
                 "sysmon",
                 "clock",
                 "weather",
-                "clipboard"
+                "clipboard",
+                "network",
+                "bluetooth",
+                "battery",
+                "power-profile"
             ]
         );
         assert_eq!(
@@ -286,7 +313,10 @@ mod tests {
                 PageId::TRAY,
                 PageId::SYSMON,
                 PageId::CLOCK,
-                PageId::CLIPBOARD
+                PageId::CLIPBOARD,
+                PageId::NETWORK,
+                PageId::BLUETOOTH,
+                PageId::POWER,
             ]
         );
         for (i, id) in PageId::all().into_iter().enumerate() {
@@ -328,6 +358,9 @@ mod tests {
             "sysmon",
             "clock",
             "clipboard",
+            "network",
+            "bluetooth",
+            "power",
         ] {
             assert_eq!(page_by_word(word).map(PageId::word), Some(word));
         }
@@ -348,6 +381,9 @@ mod tests {
             PageId::SYSMON,
             PageId::CLOCK,
             PageId::CLIPBOARD,
+            PageId::NETWORK,
+            PageId::BLUETOOTH,
+            PageId::POWER,
         ] {
             assert!(page_entry(id).is_some(), "{id:?}");
         }
@@ -394,6 +430,7 @@ mod tests {
             weather: None,
             today: None,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
+            connectivity: &ConnectivityState::default(),
         };
         piece(id)
             .expect("in the table")
@@ -465,5 +502,68 @@ mod tests {
         };
         let keys = bar_of("tray", None, &[], &[item]).expect("icons");
         assert!(keys.len() >= 2, "a container and one icon: {keys:?}");
+    }
+
+    #[test]
+    fn the_battery_owns_the_power_page_and_the_profile_piece_has_none() {
+        let battery = piece("battery").expect("battery");
+        let profile = piece("power-profile").expect("power-profile");
+        assert_eq!(battery.page().map(|e| e.id), Some(PageId::POWER));
+        assert!(profile.page().is_none());
+        assert_eq!(pages().filter(|e| e.id == PageId::POWER).count(), 1);
+    }
+
+    #[test]
+    fn every_connectivity_piece_is_absent_until_its_service_answers() {
+        let state = ConnectivityState::default();
+        tests_support::with_state(&state, |cx| {
+            for id in ["network", "bluetooth", "battery", "power-profile"] {
+                let piece = piece(id).expect(id);
+                assert!(piece.bar(cx).is_none(), "{id}");
+            }
+        });
+    }
+
+    #[test]
+    fn a_ready_state_draws_every_piece_with_unique_keys_across_pieces() {
+        let state = crate::connectivity::state::sample::ready();
+        tests_support::with_state(&state, |cx| {
+            let mut keys = HashSet::new();
+            for id in ["network", "bluetooth", "battery", "power-profile"] {
+                let view = piece(id).expect(id).bar(cx).expect(id);
+                let mut stack = vec![&view];
+                while let Some(node) = stack.pop() {
+                    assert!(keys.insert(node.key), "{id}: duplicate key");
+                    stack.extend(node.children.iter());
+                }
+            }
+        });
+    }
+}
+
+/// Test support for the pieces' tests: a context over a given state.
+#[cfg(test)]
+pub(crate) mod tests_support {
+    use super::*;
+
+    /// Runs `f` with a bar context that reads `state`.
+    pub(crate) fn with_state<R>(state: &ConnectivityState, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
+        let theme = Theme::dark();
+        let owners = NameOwner::default();
+        f(&BarCx {
+            theme: &theme,
+            output: "DP-1",
+            model: None,
+            owners: &owners,
+            do_not_disturb: false,
+            history: &[],
+            items: &[],
+            tray_hidden: &[],
+            sysmon: None,
+            weather: None,
+            today: None,
+            clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
+            connectivity: state,
+        })
     }
 }

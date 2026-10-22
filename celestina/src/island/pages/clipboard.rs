@@ -716,6 +716,8 @@ mod tests {
             notifications: None,
             tray: None,
         };
+        static CONNECTIVITY: std::sync::LazyLock<crate::connectivity::state::ConnectivityState> =
+            std::sync::LazyLock::new(Default::default);
         PageCx {
             theme,
             max_size,
@@ -731,6 +733,7 @@ mod tests {
             month_offset: 0,
             utc_offset: 0,
             clipboard: panel,
+            connectivity: &CONNECTIVITY,
         }
     }
 

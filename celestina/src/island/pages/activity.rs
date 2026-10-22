@@ -323,6 +323,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         })
     }
 
@@ -481,6 +482,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         })
     }
 
@@ -500,6 +502,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         })
     }
 

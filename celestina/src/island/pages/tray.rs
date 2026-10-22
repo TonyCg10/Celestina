@@ -354,6 +354,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         })
     }
 
@@ -529,6 +530,7 @@ mod tests {
             today: None,
             month_offset: 0,
             utc_offset: 0,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         });
         assert_eq!(wants.0, PAGE_SIZE.0);
         assert!(wants.1 >= PAGE_SIZE.1);

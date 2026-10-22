@@ -124,6 +124,7 @@ mod tests {
             sysmon: None,
             weather: None,
             today: None,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         })
     }
 

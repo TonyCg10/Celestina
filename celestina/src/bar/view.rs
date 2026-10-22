@@ -227,6 +227,7 @@ mod tests {
             sysmon: None,
             weather: None,
             today: None,
+            connectivity: &crate::connectivity::state::ConnectivityState::default(),
         };
         f(&cx)
     }
@@ -386,5 +387,29 @@ mod tests {
                 assert!(!v.children.is_empty());
             }
         });
+    }
+
+    #[test]
+    fn the_default_end_zone_names_real_pieces_and_draws_only_what_answers() {
+        use crate::connectivity::state::{sample, ConnectivityState};
+        use crate::pieces::tests_support::with_state;
+
+        let end = layout(&[], &[], &["tray", "network", "bluetooth"]);
+        // Nothing answers: no capsule, and nothing is logged as unknown.
+        let mut zones = Zones::new();
+        let bare = ConnectivityState::default();
+        let views = with_state(&bare, |cx| zones.build(&end, cx));
+        assert!(views.end.is_none());
+        assert!(
+            zones.unknown_logged.is_empty(),
+            "{:?}",
+            zones.unknown_logged
+        );
+        // NetworkManager and BlueZ answer: both pieces share the capsule.
+        let ready = sample::ready();
+        let views = with_state(&ready, |cx| zones.build(&end, cx));
+        let capsule = views.end.expect("end capsule");
+        assert_eq!(capsule.children.len(), 2);
+        assert!(zones.unknown_logged.is_empty());
     }
 }

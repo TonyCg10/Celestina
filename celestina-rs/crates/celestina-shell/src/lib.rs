@@ -11,6 +11,9 @@
 //!
 //! - [`bounded`] — the one bound on text from another process.
 //! - [`coalesce`] — how often a changing provider may reach the event loop.
+//! - [`connectivity`] — what the network, Bluetooth, battery and power-profile
+//!   pieces know, the closed list of actions their pages may ask for, and how
+//!   each is checked and confirmed.
 //! - [`notifications`] — identity, replacement, expiry, actions, capabilities
 //!   and how much history is kept and shown.
 //! - [`launcher`] — which application a person means by part of a name.
@@ -40,6 +43,7 @@ pub mod bounded;
 pub mod calendar;
 pub mod clipboard;
 pub mod coalesce;
+pub mod connectivity;
 pub mod glance;
 pub mod idle;
 pub mod launcher;

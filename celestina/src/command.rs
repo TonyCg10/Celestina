@@ -37,7 +37,7 @@ usage: celestina [--exit-after SECONDS] [--metrics] [--no-blur]
        celestina VERB
 
 verbs: island toggle
-       island open activity|notifications|tray|sysmon|clock|clipboard
+       island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power
        island close
        launcher toggle
        notifications toggle
@@ -620,6 +620,8 @@ mod tests {
     #[test]
     fn page_words_and_order_are_pinned() {
         let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
+        // The three pages of 1.0.0 keep their words and places; the glance,
+        // clipboard and connectivity pages follow them in table order.
         assert_eq!(
             words,
             [
@@ -628,7 +630,10 @@ mod tests {
                 "tray",
                 "sysmon",
                 "clock",
-                "clipboard"
+                "clipboard",
+                "network",
+                "bluetooth",
+                "power"
             ]
         );
         assert_eq!(
@@ -639,7 +644,10 @@ mod tests {
                 PageId::TRAY,
                 PageId::SYSMON,
                 PageId::CLOCK,
-                PageId::CLIPBOARD
+                PageId::CLIPBOARD,
+                PageId::NETWORK,
+                PageId::BLUETOOTH,
+                PageId::POWER,
             ]
         );
     }
@@ -712,7 +720,7 @@ mod tests {
 
     #[test]
     fn the_usage_text_names_every_page_word() {
-        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock|clipboard"));
+        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power"));
     }
 
     #[test]

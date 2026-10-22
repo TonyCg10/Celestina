@@ -3,7 +3,9 @@
 Accepted shell decisions and their falsifiers live here, one record each. ADR
 0001 to 0009 are the decisions of the CEL-1 design's §10; ADR 0010 to 0015 are
 the decisions of the parity program's §10; ADR 0016 is the one of the
-CEL-2-K design's §9. Open questions belong to the
+CEL-2-K design's §9; ADR 0017 to 0019 close the connectivity unit's
+decisions D1 to D4 (CEL-2-F); a session writes them `proposed`, and the
+author sets them `accepted`. Open questions belong to the
 [discussion queue](../discussions/README.md).
 
 | ADR | Status | Decision |
@@ -24,5 +26,8 @@ CEL-2-K design's §9. Open questions belong to the
 | [0014](0014-lock-and-polkit-carry-over.md) | accepted | Lock and polkit carry ADR 0004 and 0005 over, with their own review |
 | [0015](0015-clock-rests-at-minutes.md) | accepted | The clock rests at minutes; seconds run only while the Island is open |
 | [0016](0016-weather-is-the-only-network-and-manual.md) | proposed | The weather is the only network use and its location is manual |
+| [0017](0017-connectivity-popups-are-island-pages.md) | proposed | A connectivity piece opens an Island page, not a popup surface |
+| [0018](0018-connectivity-reads-state-and-offers-a-closed-action-list.md) | proposed | Connectivity state is read, and the shell sends only a closed list of actions |
+| [0019](0019-connectivity-secrets-never-pass-through-the-shell.md) | proposed | No secret passes through the shell |
 
 New records use the suite [decision template](../../../docs/templates/decision.md).

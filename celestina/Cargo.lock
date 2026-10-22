@@ -266,14 +266,16 @@ dependencies = [
 
 [[package]]
 name = "celestina"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "celestina-core",
+ "celestina-fake-system",
  "celestina-paint",
  "celestina-settings",
  "celestina-shell",
  "celestina-ui",
  "celestina-wayland",
+ "cuprita-core",
  "hematita-core",
  "image",
  "niri-ipc",
@@ -294,6 +296,13 @@ dependencies = [
 [[package]]
 name = "celestina-core"
 version = "0.1.0"
+
+[[package]]
+name = "celestina-fake-system"
+version = "0.1.0"
+dependencies = [
+ "zbus",
+]
 
 [[package]]
 name = "celestina-paint"
@@ -427,6 +436,13 @@ name = "crossbeam-utils"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+
+[[package]]
+name = "cuprita-core"
+version = "0.1.0"
+dependencies = [
+ "zbus",
+]
 
 [[package]]
 name = "cursor-icon"
