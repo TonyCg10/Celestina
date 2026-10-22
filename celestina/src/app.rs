@@ -44,6 +44,7 @@ use crate::{
         Island, IslandAction, Shared,
     },
     launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
+    media::control::{route, MediaControl, Routed, Snapshot as MediaSnapshot},
     message::Message,
     notifications::{self, NotificationsState},
     osd::{
@@ -171,6 +172,24 @@ impl Reshaper for RuntimeCtl<'_> {
 struct Reshaped {
     gone: Vec<SurfaceId>,
     menus_closed: bool,
+}
+
+/// Gives `island` the media state in `snapshot`; whether a frame is worth
+/// drawing.
+fn media_island(island: &mut Island, painter: &mut Painter, snapshot: &MediaSnapshot) -> bool {
+    let mut draw = island.set_media(
+        painter,
+        snapshot.on,
+        &snapshot.players,
+        snapshot.active.as_deref(),
+    );
+    draw |= island.set_media_unavailable(snapshot.unavailable);
+    // An Island that already holds a cover for the same art ignores it: only
+    // a changed `art_url` (or a new Island) uploads.
+    for (bus_name, art_url, cover) in &snapshot.covers {
+        draw |= island.set_media_cover(painter, bus_name, art_url, Some(cover));
+    }
+    draw
 }
 
 /// One output's Island and its surface.
@@ -499,6 +518,11 @@ pub struct App {
     /// The close requests Melibea took and has not settled (no second Delete
     /// for the same window meanwhile).
     bubble_closes: bubbles::PendingCloses,
+    /// The media duty's worker and the state it published, set once the loop runs.
+    media: Rc<OnceCell<MediaControl>>,
+    /// The media state in force was not given to the Islands (the painter
+    /// was in use): the next event or frame gives it.
+    media_dirty: bool,
 }
 
 impl std::fmt::Debug for App {
@@ -573,6 +597,8 @@ impl App {
             bubbles: Rc::new(OnceCell::new()),
             bubbles_state: Bubbles::default(),
             bubble_closes: bubbles::PendingCloses::default(),
+            media: Rc::new(OnceCell::new()),
+            media_dirty: false,
         }
     }
 
@@ -671,6 +697,13 @@ impl App {
         self
     }
 
+    /// Takes the slot the media control is put in once the loop runs.
+    #[must_use]
+    pub fn with_media(mut self, media: Rc<OnceCell<MediaControl>>) -> App {
+        self.media = media;
+        self
+    }
+
     /// Takes the slot the energy handle is put in once the loop runs.
     #[must_use]
     pub fn with_energy(mut self, energy: Rc<OnceCell<EnergyHandle>>) -> App {
@@ -710,8 +743,11 @@ impl App {
 
     /// `shell.json` changed on disk ([`Message::ShellSettings`]): its value
     /// is the one in force, and what changed is applied live, never by a
-    /// restart: the `bar` duty and the bar's layout, the duties (wallpaper
-    /// and energy), the energy switches and do-not-disturb. The shell's own
+    /// restart: the `bar` duty and the bar's layout, the duties (wallpaper,
+    /// energy and media), the energy switches and do-not-disturb. The media
+    /// duty is applied on every adopted read, not only when its switch
+    /// changed, so a worker that failed to start is tried again by the next
+    /// write that changes the file while the duty stays on. The shell's own
     /// writes arrive as the value in force and do nothing. A new output reads
     /// the settings in force when it comes.
     fn shell_settings_read(
@@ -776,6 +812,10 @@ impl App {
         self.levels_settings_changed(&before, &after, ctl);
         if before.duties != after.duties {
             self.apply_phone_and_bubbles(&after, ctl);
+        }
+        if self.media.get().is_some_and(|media| media.apply(&after)) {
+            let draw = self.media_sync();
+            Self::redraw_surfaces(ctl, &draw);
         }
     }
 
@@ -1055,6 +1095,77 @@ impl App {
         }
     }
 
+    /// Gives every Island the media state in force; returns the surfaces
+    /// worth a frame. Without the painter nothing is given: the first frame
+    /// gives it all.
+    fn media_sync(&mut self) -> Vec<SurfaceId> {
+        let (Some(media), Some(shared)) = (self.media.get(), self.painter.as_ref()) else {
+            return Vec::new();
+        };
+        let snapshot = media.snapshot();
+        let Ok(mut painter) = shared.try_borrow_mut() else {
+            tracing::warn!("the painter is in use; the media state is given on the next frame");
+            self.media_dirty = true;
+            return Vec::new();
+        };
+        self.media_dirty = false;
+        let mut draw = Vec::new();
+        for slot in &mut self.islands.slots {
+            if media_island(&mut slot.island, &mut painter, &snapshot) {
+                draw.push(slot.surface);
+            }
+        }
+        draw
+    }
+
+    /// The media worker's news ([`Message::Media`]).
+    fn media_event(&mut self, event: crate::media::MediaEvent, ctl: &mut RuntimeCtl<'_>) {
+        let Some(media) = self.media.get() else {
+            return;
+        };
+        let draw = match route(media, event) {
+            Routed::Nothing => return,
+            Routed::Sync => self.media_sync(),
+            Routed::Cover {
+                bus_name,
+                art_url,
+                cover,
+            } => {
+                let Some(shared) = self.painter.as_ref() else {
+                    // Kept by the control; the first frame gives it.
+                    return;
+                };
+                let Ok(mut painter) = shared.try_borrow_mut() else {
+                    // The whole snapshot carries the cover: one re-sync.
+                    tracing::warn!("the painter is in use; a cover is given on the next frame");
+                    self.media_dirty = true;
+                    return;
+                };
+                let mut draw = Vec::new();
+                for slot in &mut self.islands.slots {
+                    if slot.island.set_media_cover(
+                        &mut *painter,
+                        &bus_name,
+                        &art_url,
+                        cover.as_deref(),
+                    ) {
+                        draw.push(slot.surface);
+                    }
+                }
+                draw
+            }
+        };
+        Self::redraw_surfaces(ctl, &draw);
+    }
+
+    fn redraw_surfaces(ctl: &mut RuntimeCtl<'_>, surfaces: &[SurfaceId]) {
+        for surface in surfaces {
+            if let Some(mut surface) = ctl.surface(*surface) {
+                surface.request_redraw();
+            }
+        }
+    }
+
     /// Records who holds the bus names the pages depend on; the Islands
     /// pick it up on their next frame. Detecting the owners on the bus is
     /// the job of the notification server and the tray host (CEL-1-F,
@@ -1205,6 +1316,9 @@ impl App {
                 .add(info.id, info.logical_size.0, surface, island),
             Err(err) => tracing::error!(output = %info.name, %err, "no Island on this output"),
         }
+        // The new Island draws the media state in force.
+        let draw = self.media_sync();
+        Self::redraw_surfaces(ctl, &draw);
         // A toast that arrived before any Island existed has no banner yet.
         self.sync_banners(ctl);
     }
@@ -1591,6 +1705,10 @@ impl App {
                         tracing::warn!("bubbles select: the loop cannot be reached; no selector");
                     }
                 }
+                IslandAction::Media(command) => match self.media.get() {
+                    Some(media) => media.command(command),
+                    None => tracing::debug!(?command, "no media control: the command is dropped"),
+                },
                 IslandAction::Tray(command) => self.tray_command(command),
                 IslandAction::OpenApp(id) => self.open_app(id),
                 IslandAction::Connectivity(action) => {
@@ -2023,7 +2141,11 @@ impl Shell for App {
                 return;
             };
             match Painter::new(cx.proc_address, self.theme(), fonts) {
-                Ok(painter) => self.painter = Some(Rc::new(RefCell::new(painter))),
+                Ok(painter) => {
+                    self.painter = Some(Rc::new(RefCell::new(painter)));
+                    // Media published before the painter existed.
+                    self.media_sync();
+                }
                 Err(err) => {
                     // Blank Islands holding their exclusive zones help
                     // nobody: the run ends and the binary reports why.
@@ -2034,6 +2156,11 @@ impl Shell for App {
                     return;
                 }
             }
+        }
+        if self.media_dirty {
+            // The Island drawn now is among those given; the others get it
+            // on their next frame.
+            self.media_sync();
         }
         if self.wallpapers.owns(cx.surface) {
             if let Some(shared) = self.painter.as_ref() {
@@ -2196,6 +2323,11 @@ impl Shell for App {
     }
 
     fn message(&mut self, msg: Message, ctl: &mut RuntimeCtl<'_>) {
+        if self.media_dirty {
+            // The last give was skipped (the painter was in use).
+            let draw = self.media_sync();
+            Self::redraw_surfaces(ctl, &draw);
+        }
         match msg {
             Message::Niri(model) => {
                 for slot in self.islands.iter() {
@@ -2306,6 +2438,7 @@ impl Shell for App {
             }
             Message::Melibea(news) => self.bubbles_news(*news, ctl),
             Message::Phone(news) => self.phone_news(*news, ctl),
+            Message::Media(event) => self.media_event(event, ctl),
         }
     }
 }

@@ -60,15 +60,18 @@ fn label_style(theme: &Theme, ink: Role) -> celestina_paint::TextStyle {
     text_style(theme.type_scale.caption, Weight::Semibold, false, ink)
 }
 
-/// The pages that have a tab: every page of the piece table except the Phone
-/// page, which never has one (CEL-2-J): the row does not fit a tenth tab, and
-/// the page opens from the phone piece and from `island open phone`. With it
-/// open no tab is selected.
+/// The pages that never have a tab: the row does not fit a tenth one. The
+/// Phone page (CEL-2-J) and the Media page (CEL-2-D) open from their pieces
+/// and from `island open phone` and `island open media`.
+const TABLESS: [PageId; 2] = [PageId::PHONE, PageId::MEDIA];
+
+/// The pages that have a tab: every page of the piece table except the
+/// [`TABLESS`] ones. With one of those open no tab is selected.
 #[must_use]
 pub fn shown_pages() -> Vec<PageId> {
     PageId::all()
         .into_iter()
-        .filter(|page| *page != PageId::PHONE)
+        .filter(|page| !TABLESS.contains(page))
         .collect()
 }
 
@@ -224,23 +227,28 @@ mod tests {
     }
 
     #[test]
-    fn the_phone_page_never_has_a_tab_and_opening_it_selects_none() {
+    fn the_phone_and_media_pages_never_have_a_tab_and_opening_them_selects_none() {
         let without_phone: Vec<PageId> = PageId::all()
             .into_iter()
-            .filter(|page| *page != PageId::PHONE)
+            .filter(|page| *page != PageId::PHONE && *page != PageId::MEDIA)
             .collect();
         assert_eq!(shown_pages(), without_phone);
         let theme = Theme::dark();
+        for open in [PageId::PHONE, PageId::MEDIA] {
+            let row = tabs(&theme, open, 388.0);
+            let keys: Vec<Key> = row.children.iter().map(|t| t.key).collect();
+            let want: Vec<Key> = without_phone.iter().copied().map(tab_key).collect();
+            assert_eq!(keys, want);
+            assert!(!keys.contains(&tab_key(PageId::PHONE)));
+            assert!(!keys.contains(&tab_key(PageId::MEDIA)));
+            // With the Phone or Media page open every tab is the unselected
+            // fill.
+            assert!(row
+                .children
+                .iter()
+                .all(|tab| fill_of(tab) == Some(Role::ControlFill)));
+        }
         let row = tabs(&theme, PageId::PHONE, 388.0);
-        let keys: Vec<Key> = row.children.iter().map(|t| t.key).collect();
-        let want: Vec<Key> = without_phone.iter().copied().map(tab_key).collect();
-        assert_eq!(keys, want);
-        assert!(!keys.contains(&tab_key(PageId::PHONE)));
-        // With the Phone page open every tab is the unselected fill.
-        assert!(row
-            .children
-            .iter()
-            .all(|tab| fill_of(tab) == Some(Role::ControlFill)));
         // The row still lays out and is filled to its width.
         let last_page = *without_phone.last().expect("pages");
         let mut tree = Tree::new(false, &theme);
@@ -269,13 +277,14 @@ mod tests {
             (PageId::BLUETOOTH, Key::indexed("tab", 7)),
             (PageId::POWER, Key::indexed("tab", 8)),
             (PageId::PHONE, Key::indexed("tab", 9)),
+            (PageId::MEDIA, Key::indexed("tab", 10)),
         ];
         for (page, key) in want {
             assert_eq!(tab_key(page), key, "{page:?}");
             assert_eq!(page_of(key), Some(page), "{page:?}");
         }
         for foreign in [
-            Key::indexed("tab", 10),
+            Key::indexed("tab", 11),
             Key::indexed("tab-label", 0),
             Key::named("tab"),
             Key::named("tabs"),

@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.8.0"
+version = "1.9.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -128,3 +128,10 @@ cuprita-core = { path = "../celestina-rs/crates/cuprita-core", default-features 
 # the shell's own loop (the handle `celestina_wayland::run` gives its setup);
 # the version is the one `celestina-wayland` already resolves.
 calloop = "0.14"
+
+# The smoke's media phase (`scripts/smoke.sh`) owns a player on its private
+# bus with this; it adds no dependency (zbus is the shell's own) and is not
+# part of the shipped artifact.
+[[example]]
+name = "fake-mpris-player"
+path = "examples/fake-mpris-player.rs"

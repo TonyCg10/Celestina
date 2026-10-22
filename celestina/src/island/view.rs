@@ -453,6 +453,7 @@ mod tests {
         assert_eq!(page_title(PageId::TRAY), copy::PAGE_TRAY);
         assert_eq!(page_title(PageId::CLIPBOARD), copy::PAGE_CLIPBOARD);
         assert_eq!(page_title(PageId::PHONE), copy::PAGE_PHONE);
+        assert_eq!(page_title(PageId::MEDIA), copy::PAGE_MEDIA);
         let titles: Vec<&str> = PageId::all().into_iter().map(page_title).collect();
         assert_eq!(
             titles,
@@ -467,6 +468,7 @@ mod tests {
                 copy::PAGE_BLUETOOTH,
                 copy::PAGE_POWER,
                 copy::PAGE_PHONE,
+                copy::PAGE_MEDIA,
             ]
         );
         assert_eq!(page_title(PageId::SYSMON), copy::PAGE_SYSMON);

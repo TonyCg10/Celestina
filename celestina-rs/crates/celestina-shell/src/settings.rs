@@ -198,6 +198,10 @@ pub struct Duties {
     /// Whether this shell turns the screens off, locks and suspends when idle.
     #[serde(deserialize_with = "lenient_duty")]
     pub idle: Duty,
+    /// Whether this shell listens to MPRIS players and shows the media piece
+    /// and page.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub media: Duty,
     /// Whether this shell drives the night-light gamma ramps.
     #[serde(deserialize_with = "lenient_duty")]
     pub nightlight: Duty,
@@ -999,6 +1003,7 @@ mod tests {
                 caffeine: Duty::On,
                 clipboard: Duty::Off,
                 idle: Duty::On,
+                media: Duty::On,
                 nightlight: Duty::Off,
                 osd: Duty::Off,
                 phone: Duty::On,
@@ -1230,6 +1235,20 @@ mod tests {
     }
 
     #[test]
+    fn the_media_duty_defaults_off_and_a_bad_value_degrades_without_losing_the_rest() {
+        assert_eq!(Settings::default().duties.media, Duty::Off);
+        let read = Settings::from_bytes(
+            br#"{"do_not_disturb":true,"duties":{"media":"yes","idle":"on"}}"#,
+        )
+        .expect("the file is still read");
+        assert_eq!(read.duties.media, Duty::Off);
+        assert_eq!(read.duties.idle, Duty::On);
+        assert!(read.do_not_disturb);
+        let on = Settings::from_bytes(br#"{"duties":{"media":"on"}}"#).expect("read");
+        assert_eq!(on.duties.media, Duty::On);
+    }
+
+    #[test]
     fn an_energy_change_is_durable_before_published() {
         let mut store = Store::new(Settings::default());
         let pending = store.stage_energy(|energy| energy.caffeine = true);
@@ -1268,6 +1287,7 @@ mod tests {
                 "caffeine",
                 "clipboard",
                 "idle",
+                "media",
                 "nightlight",
                 "osd",
                 "phone",

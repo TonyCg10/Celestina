@@ -106,6 +106,7 @@ mod tests {
             },
             phone: &celestina_shell::phone::PhoneState::Absent,
             bubbles: &crate::bubbles::NONE,
+            media: &crate::island::pages::media::NO_MEDIA,
         })
     }
 

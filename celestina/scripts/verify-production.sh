@@ -22,6 +22,10 @@ bash "$suite_root/scripts/check-architecture-contract.sh"
 # built above.
 (cd "$project_root" && cargo clippy --workspace --release --all-targets --locked -- -D warnings)
 (cd "$project_root" && cargo test --workspace --release --locked)
+# The media phase of the smoke drives the shell with a fake MPRIS player, an
+# example next to the release binary; it is test support, not part of the
+# artifact.
+(cd "$project_root" && cargo build --release --locked --example fake-mpris-player)
 "$project_root/scripts/smoke.sh" --binary "$binary"
 
 echo ">> Celestina verification steps completed; awaiting the runner seal"

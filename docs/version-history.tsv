@@ -279,3 +279,4 @@ celestina	1.5.1	bug	CEL-2-G-SYNC	Fix the clipboard worker start under load with 
 celestina	1.6.0	milestone	CEL-2-F	Add the connectivity pieces: network, Bluetooth, battery and power profile with read-only state and a closed action list
 celestina	1.7.0	milestone	CEL-2-C	Add the OSD duty: volume, microphone and brightness feedback, the verbs and the volume and brightness pieces, off by default
 celestina	1.8.0	milestone	CEL-2-J	Add the phone and bubbles duties: the Magnetita piece and page and the minimised-window bubbles with the Mod+K selector over Melibea's socket, off by default
+celestina	1.9.0	milestone	CEL-2-D	Add the media duty: the MPRIS client, the media piece and its Island page, off by default

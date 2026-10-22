@@ -35,6 +35,7 @@ use celestina::{
     glance::GlanceHandle,
     island::clock,
     launcher::recent::RecentLaunches,
+    media::control::MediaControl,
     message::Message,
     osd::OsdRuntime,
     phone::PhoneHandle,
@@ -136,6 +137,7 @@ fn shell(cfg: Config) -> ExitCode {
     let osd = Rc::new(OnceCell::new());
     let phone = Rc::new(OnceCell::new());
     let bubbles = Rc::new(OnceCell::new());
+    let media = Rc::new(OnceCell::new());
     let settings_read = settings.current().clone();
     let settings_protected = settings.is_protected();
     let follow_from = settings.follow_from();
@@ -156,7 +158,8 @@ fn shell(cfg: Config) -> ExitCode {
     .with_clipboard(Rc::clone(&clipboard))
     .with_connectivity(Rc::clone(&connectivity))
     .with_osd(Rc::clone(&osd))
-    .with_phone_and_bubbles(Rc::clone(&phone), Rc::clone(&bubbles));
+    .with_phone_and_bubbles(Rc::clone(&phone), Rc::clone(&bubbles))
+    .with_media(Rc::clone(&media));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -231,6 +234,10 @@ fn shell(cfg: Config) -> ExitCode {
         let handle = BubblesHandle::new(sender.clone());
         handle.apply(&settings_read);
         let _ = bubbles.set(handle);
+        // The media duty: its worker starts only with the duty on.
+        let control = MediaControl::new(sender.clone());
+        control.apply(&settings_read);
+        let _ = media.set(control);
         match providers::desktop::spawn(sender.clone(), &shutdown) {
             Ok(worker) => indexer = Some(worker),
             Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
@@ -328,6 +335,9 @@ fn shell(cfg: Config) -> ExitCode {
     }
     if let Some(handle) = bubbles.get() {
         handle.stop();
+    }
+    if let Some(control) = media.get() {
+        control.stop();
     }
     drop(follower);
     drop(shell_follower);

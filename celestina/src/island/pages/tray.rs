@@ -356,6 +356,7 @@ mod tests {
             utc_offset: 0,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         })
     }
 
@@ -533,6 +534,7 @@ mod tests {
             utc_offset: 0,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         });
         assert_eq!(wants.0, PAGE_SIZE.0);
         assert!(wants.1 >= PAGE_SIZE.1);

@@ -40,7 +40,7 @@ usage: celestina [--exit-after SECONDS] [--metrics] [--no-blur]
        celestina VERB
 
 verbs: island toggle
-       island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone
+       island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone|media
        island close
        launcher toggle
        notifications toggle
@@ -426,6 +426,7 @@ mod tests {
             ),
             (Verb::IslandOpen(PageId::TRAY), "island open tray"),
             (Verb::IslandOpen(PageId::PHONE), "island open phone"),
+            (Verb::IslandOpen(PageId::MEDIA), "island open media"),
             (Verb::IslandClose, "island close"),
             (Verb::LauncherToggle, "launcher toggle"),
             (Verb::NotificationsToggle, "notifications toggle"),
@@ -786,7 +787,8 @@ mod tests {
     fn page_words_and_order_are_pinned() {
         let words: Vec<&str> = PageId::all().into_iter().map(PageId::word).collect();
         // The three pages of 1.0.0 keep their words and places; the glance,
-        // clipboard, connectivity and phone pages follow them in table order.
+        // clipboard, connectivity, phone and media pages follow them in table
+        // order.
         assert_eq!(
             words,
             [
@@ -799,7 +801,8 @@ mod tests {
                 "network",
                 "bluetooth",
                 "power",
-                "phone"
+                "phone",
+                "media"
             ]
         );
         assert_eq!(
@@ -815,6 +818,7 @@ mod tests {
                 PageId::BLUETOOTH,
                 PageId::POWER,
                 PageId::PHONE,
+                PageId::MEDIA
             ]
         );
     }
@@ -887,7 +891,7 @@ mod tests {
 
     #[test]
     fn the_usage_text_names_every_page_word() {
-        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone"));
+        assert!(USAGE.contains("island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone|media"));
     }
 
     #[test]

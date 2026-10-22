@@ -325,6 +325,7 @@ mod tests {
             utc_offset: 0,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         })
     }
 
@@ -485,6 +486,7 @@ mod tests {
             utc_offset: 0,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         })
     }
 
@@ -506,6 +508,7 @@ mod tests {
             utc_offset: 0,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         })
     }
 

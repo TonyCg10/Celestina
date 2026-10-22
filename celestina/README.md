@@ -82,6 +82,11 @@ What Noctalia still does for the session is in
   delivered. With the duty off, the `volume`, `microphone` and `brightness`
   verbs are rejected. See
   [the evidence](docs/evidence/2026-10-17-osd.md).
+- The media duty (`duties.media` in `~/.config/celestina/shell.json`) is `off`
+  by default. When it is on, the shell follows the MPRIS players on the session
+  bus and shows the media piece and the Medios page: the shown player's cover,
+  title and artist, with previous, play/pause and next. A pin chosen on the page
+  lasts for the session only. Keys stay with `playerctl`.
 - Surfaces take no keyboard at rest
   ([ADR 0007](docs/decisions/0007-focus-policy.md)); well-known bus names are
   claimed only when free, so the shell runs beside Noctalia
@@ -129,7 +134,8 @@ With a shell running, `celestina <verb>` calls `Command` on
 `org.celestina.Shell1` (`/org/celestina/Shell`, name `org.celestina.Shell`)
 and exits 0, or 1 when the shell is not running, refuses the verb or does
 not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
-`island toggle`, `island open <activity|notifications|tray|sysmon|clock|clipboard>`,
+`island toggle`,
+`island open <activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone|media>`,
 `island close`, `launcher toggle`, `notifications toggle`,
 `notifications dismiss-all`, `wallpaper set <output|all> <file>`,
 `wallpaper next [output]`, `wallpaper prev [output]`, `wallpaper mode <mode>`,

@@ -239,6 +239,7 @@ mod tests {
 
             connectivity: state,
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         }
     }
 

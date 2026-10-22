@@ -15,7 +15,8 @@ VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS; CEL-2-G queues VAL-CEL2-CLIPBOARD-LI
 VAL-CEL2-CLIPBOARD-SECRET, VAL-CEL2-CLIPBOARD-IMAGE and VAL-CEL2-CLIPBOARD-LOOK;
 CEL-2-F queues VAL-CEL2-NETWORK, VAL-CEL2-BLUETOOTH and VAL-CEL2-POWER;
 CEL-2-C queues VAL-CEL2-OSD-AUDIO, VAL-CEL2-OSD-BRIGHTNESS and
-VAL-CEL2-OSD-PIECES. None has been run and none is closed by an agent.
+VAL-CEL2-OSD-PIECES; CEL-2-D queues VAL-CEL2-MEDIA and VAL-CEL2-MEDIA-COVER.
+None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
 
@@ -854,5 +855,52 @@ VAL-CEL2-OSD-PIECES. None has been run and none is closed by an agent.
   keyboard while open and gives it back on close; `Delete` never removes a row
   by itself; an empty selector explains itself in one line and does nothing
   when `Enter` is pressed
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-MEDIA — The media duty: the piece, the page, the buttons and the pin
+
+- **Status:** pending
+- **Related implementation:** CEL-2-D (the `media` duty, off by default, the
+  MPRIS client, the media piece and the Medios page)
+- **Requires:** the deployed shell started by hand in the author's niri session,
+  with Noctalia's media off through Noctalia's own control; a browser and mpv
+  each able to play a track; two players playing at once for the pin step
+- **Procedure:** set `duties.media` to `"on"` in `~/.config/celestina/shell.json`
+  (the shell follows the file live). Play something in a browser and something
+  in mpv. Place the `media` piece in one of the bar zones through the `bar`
+  layout of the same file. Check that the piece shows the glyph and one line of
+  the track. Click the piece and check that the page "Medios" opens with the
+  shown player's title and artist. Press previous, play/pause and next on the
+  page and check that each acts on the shown player. Middle-click the piece and
+  check that play/pause acts. With two players, pin the second one from the page
+  and check that the page and the piece follow it; press its row again and check
+  that the choice goes back to the automatic one. Check that the keys still run
+  `playerctl` (for example `playerctl --player=mpv play-pause`), with the shell
+  binding no media key of its own
+- **Pass condition:** the piece and the page show the shown player; the three
+  buttons, the middle click and the pin act on that player; the pin does not
+  survive a restart of the shell; the keys run `playerctl` as before
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-MEDIA-COVER — Cover art: a file shows, an https link shows none
+
+- **Status:** pending
+- **Related implementation:** CEL-2-D (the cover pipeline, the cover cache of
+  eight entries, the bounded decode to 128 by 128)
+- **Requires:** the deployed shell with `duties.media` `"on"` as in
+  VAL-CEL2-MEDIA; a player that publishes its cover as a file. A PNG, JPEG or
+  WebP image of at most 8 MiB, named with its extension, at an absolute path
+  that the player can point at
+- **Procedure:** make a player publish that file as its cover (for example a
+  local image path in the player's metadata). Check that the page shows the
+  cover, and that the cover of a non-square image is cropped to its centre.
+  Then make the player publish an `https://` cover for a track. Check that the
+  page shows no cover for it and that the title and the buttons still work. Do
+  not use a file over 8 MiB, which should also show none
+- **Pass condition:** the file cover shows on the page; the `https` cover shows
+  none, with the rest of the page working; nothing else is fetched from the
+  network
 - **Result:** not run
 - **Evidence:** none

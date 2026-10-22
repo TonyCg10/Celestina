@@ -31,6 +31,8 @@
 //!   the text-only form it is persisted in.
 //! - [`idle`] — what the shell does when the person stops using the session:
 //!   screen off, then lock and suspend, failing closed without a locker.
+//! - [`media`] — which MPRIS player is shown, the pin over it, and the bounds
+//!   on what a player says.
 //! - [`nightlight`] — the fixed night-light whitepoint, its bounded transition
 //!   and the gamma ramps a compositor takes.
 //! - [`melibea`] — Melibea's socket protocol and the ordered projection of
@@ -56,6 +58,7 @@ pub mod connectivity;
 pub mod glance;
 pub mod idle;
 pub mod launcher;
+pub mod media;
 pub mod melibea;
 pub mod nightlight;
 pub mod notifications;

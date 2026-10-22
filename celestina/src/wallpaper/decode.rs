@@ -438,7 +438,7 @@ fn has_accepted_extension(path: &Path) -> bool {
 /// without blocking and without taking a controlling terminal, and checks
 /// again on the descriptor (the path may have been swapped in between) that
 /// it is a non-empty regular file within [`MAX_FILE_BYTES`].
-fn open_regular(path: &Path) -> Result<(File, Fingerprint), DecodeError> {
+pub(crate) fn open_regular(path: &Path) -> Result<(File, Fingerprint), DecodeError> {
     let before = std::fs::metadata(path).map_err(|source| DecodeError::Open {
         path: path.to_owned(),
         source,
@@ -1223,8 +1223,8 @@ fn render(source: &Source, mode: Mode, target_px: (u32, u32)) -> Option<Vec<u8>>
 /// The size and modification time of a file, compared before and after the
 /// decode to detect a file replaced or rewritten under the decoder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Fingerprint {
-    bytes: u64,
+pub(crate) struct Fingerprint {
+    pub(crate) bytes: u64,
     modified_ns: Option<u128>,
 }
 

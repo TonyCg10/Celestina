@@ -94,4 +94,6 @@ pub enum Message {
     /// Magnetita's news (the phone), stamped with the run of the worker that
     /// sent it.
     Phone(Box<crate::phone::PhoneNews>),
+    /// News from the media worker: the players, a cover, the bus lost.
+    Media(crate::media::MediaEvent),
 }

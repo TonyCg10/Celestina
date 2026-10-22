@@ -735,6 +735,7 @@ mod tests {
             clipboard: panel,
             connectivity: &CONNECTIVITY,
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         }
     }
 

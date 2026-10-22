@@ -922,6 +922,50 @@ pub const SELECTOR_NO_WINDOWS: &str = "No hay ventanas minimizadas.";
 /// ("Melibea is not available.").
 pub const SELECTOR_UNAVAILABLE: &str = "Melibea no está disponible.";
 
+// Media (CEL-2-D).
+
+/// The title of the Media page and the accessible name of the Media piece.
+pub const PAGE_MEDIA: &str = "Medios";
+
+/// The Media page's only line while no player is on the bus
+/// ("Nothing is playing").
+pub const MEDIA_NOTHING_PLAYING: &str = "Nada suena";
+
+/// The Media page's only line while the media duty is off
+/// ("Media is off in shell.json").
+pub const MEDIA_DUTY_OFF: &str = "Medios está apagado en shell.json";
+
+/// The Media page's only line while the session bus cannot be followed
+/// ("Media is not available").
+pub const MEDIA_UNAVAILABLE: &str = "Medios no está disponible";
+
+/// The name of the previous-track button ("Previous").
+pub const MEDIA_PREVIOUS: &str = "Anterior";
+
+/// The name of the play button, shown while the player is paused ("Play").
+pub const MEDIA_PLAY: &str = "Reproducir";
+
+/// The name of the play button, shown while the player plays ("Pause").
+pub const MEDIA_PAUSE: &str = "Pausar";
+
+/// The name of the next-track button ("Next").
+pub const MEDIA_NEXT: &str = "Siguiente";
+
+/// The title of a track that has none ("Untitled").
+pub const MEDIA_UNTITLED: &str = "Sin título";
+
+/// The accessible name of the bar's Media piece: what plays and whether it
+/// is playing ("Medios, Artist - Title, reproduciendo").
+#[must_use]
+pub fn bar_media_name(line: &str, playing: bool) -> String {
+    let state = if playing { "reproduciendo" } else { "en pausa" };
+    if line.is_empty() {
+        format!("{PAGE_MEDIA}, {state}")
+    } else {
+        format!("{PAGE_MEDIA}, {line}, {state}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

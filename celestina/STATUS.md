@@ -60,6 +60,11 @@
   [`docs/evidence/2026-10-17-phone-and-bubbles.md`](docs/evidence/2026-10-17-phone-and-bubbles.md);
   its author rows `VAL-CEL2-PHONE`, `VAL-CEL2-BUBBLES` and
   `VAL-CEL2-BUBBLES-KEYS` are pending.
+- **CEL-2-D (in progress, not landed):** the `media` duty, off by default: an
+  MPRIS client on its own bus connection, the media piece, and the Medios page
+  with a session-only pin. Its evidence is
+  [`docs/evidence/2026-10-17-media.md`](docs/evidence/2026-10-17-media.md); its
+  author rows are `VAL-CEL2-MEDIA` and `VAL-CEL2-MEDIA-COVER`, pending.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

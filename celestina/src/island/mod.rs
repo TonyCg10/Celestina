@@ -24,7 +24,10 @@ pub mod state;
 pub mod view;
 pub mod workspaces;
 
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use celestina_paint::{Painter, PixmapId, Rect, Theme};
 use celestina_shell::{
@@ -41,9 +44,11 @@ use crate::{
     clipboard::{verbs::ClipboardVerb, ClipboardState},
     command::Verb,
     connectivity::state::ConnectivityState,
+    media::{cover::Cover, MediaCommand, PlayerView},
     osd::popup as level_popup,
     pieces::{
-        AudioAction, AudioLevels, BarCx, BrightnessAction, Gesture, Levels, PageId, PieceAction,
+        self, AudioAction, AudioLevels, BarCx, BrightnessAction, Gesture, Levels, PageId,
+        PieceAction,
     },
     providers::{
         magnetita::MediaKind, niri::NiriModel, notifications::NotificationsCommand,
@@ -56,6 +61,7 @@ use cadence::{Cadence, Offer, Wake, SYSMON_BAR_PERIOD};
 use clock::{ClockTick, SecondTick};
 use pages::{
     activity, bluetooth as bluetooth_page, clipboard as clipboard_page, clock as clock_page,
+    media::{self as media_page, MediaState},
     network as network_page, notifications, page_view, phone as phone_page, power as power_page,
     sysmon as sysmon_page, tabs,
     tray::{self as tray_page, IconCache, Pixmaps, TrayList, TrayRow},
@@ -130,6 +136,9 @@ pub enum IslandAction {
     /// The overflow bubble: the app opens the selector of minimised
     /// windows.
     OpenSelector,
+    /// A Media page button or player row, or the Media piece's middle
+    /// click: the media worker runs the command on the shown player.
+    Media(MediaCommand),
 }
 
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
@@ -208,6 +217,22 @@ impl Pixmaps for Painter {
     fn has_theme_icon(&self, name: &str, size: u32) -> bool {
         Painter::has_theme_icon(self, name, size)
     }
+}
+
+/// A decoded cover as the painter takes pixmaps: ARGB32 in network byte
+/// order. `None` when the buffer is not `width * height` RGBA texels.
+fn argb_of(cover: &Cover) -> Option<Vec<u8>> {
+    let texels = (cover.width as usize).checked_mul(cover.height as usize)?;
+    if texels.checked_mul(4)? != cover.rgba.len() {
+        return None;
+    }
+    Some(
+        cover
+            .rgba
+            .chunks_exact(4)
+            .flat_map(|t| [t[3], t[0], t[1], t[2]])
+            .collect(),
+    )
 }
 
 /// The wheel's pixels not yet worth a step, per axis, for the row they
@@ -290,6 +315,11 @@ pub struct Island {
     bubbles: Bubbles,
     /// The pixmaps uploaded for the items' icons.
     icons: IconCache,
+    /// The players the Media piece and page show (CEL-2-D).
+    media: MediaState,
+    /// The covers uploaded for the players: bus name, the art url they
+    /// were decoded from and their texture.
+    covers: HashMap<String, (String, PixmapId)>,
     scroll: ScrollRemainder,
     /// The bar's zone capsules, while the `bar` duty is on.
     bar: Option<BarTree>,
@@ -370,6 +400,8 @@ impl Island {
             phone_duty: false,
             bubbles: Bubbles::default(),
             icons: IconCache::default(),
+            media: MediaState::default(),
+            covers: HashMap::new(),
             scroll: ScrollRemainder::default(),
             bar: None,
             level_popup: None,
@@ -497,6 +529,7 @@ impl Island {
             levels: self.levels,
             phone: &self.phone,
             bubbles: &self.bubbles,
+            media: &self.media,
         }
     }
 
@@ -896,6 +929,7 @@ impl Island {
             utc_offset: clock::utc_offset(),
             connectivity: &self.connectivity,
             phone: &self.phone,
+            media: &self.media,
         };
         self.state
             .request_page_size(page.wants(&cx), now, self.reduced);
@@ -1309,6 +1343,7 @@ impl Island {
                     bubble: self.bar.as_ref().and_then(|bar| bar.node_rect(key)),
                 }),
                 PieceAction::OpenSelector => out.push(IslandAction::OpenSelector),
+                PieceAction::Media(command) => out.push(IslandAction::Media(command)),
             }
             if open && !scroll && !page && self.state.is_open() {
                 self.close(now);
@@ -1543,9 +1578,141 @@ impl Island {
         self.clip_textures.release_all(painter);
         self.clipboard = ClipboardState::default();
         self.clip_panel = clipboard_page::ClipboardPanel::default();
+        self.release_covers(painter);
         self.tray_rows.clear();
         self.tray_generation = 0;
         self.invalidate_bar();
+    }
+
+    /// Takes the media state the app keeps: whether the duty is `on`, the
+    /// `players` on the bus (sorted by bus name) and the bus name of the
+    /// shown one. Covers of players that left, or whose art changed, are
+    /// released to `pixmaps`. Returns whether a frame is worth drawing:
+    /// the bar redraws only when what it shows changed (a player appeared
+    /// or left, play or pause, the line), the page only while it is on
+    /// screen, so a position tick at rest costs nothing.
+    pub fn set_media(
+        &mut self,
+        pixmaps: &mut impl Pixmaps,
+        duty_on: bool,
+        players: &[PlayerView],
+        active: Option<&str>,
+    ) -> bool {
+        self.covers.retain(|bus, (url, id)| {
+            let current = duty_on
+                && players
+                    .iter()
+                    .any(|p| p.bus_name == *bus && !p.art_url.is_empty() && p.art_url == *url);
+            if !current {
+                pixmaps.release(*id);
+            }
+            current
+        });
+        let mut next = MediaState {
+            players: players.to_vec(),
+            active: active.map(str::to_owned),
+            cover: None,
+            duty_on,
+            unavailable: duty_on && self.media.unavailable,
+        };
+        next.cover = self.cover_of(&next);
+        self.replace_media(next)
+    }
+
+    /// Takes whether the session bus cannot be followed right now: the
+    /// views stop presenting the last players as live (a note on the page,
+    /// no piece on the bar). Returns whether a frame is worth drawing.
+    pub fn set_media_unavailable(&mut self, unavailable: bool) -> bool {
+        let unavailable = unavailable && self.media.duty_on;
+        if unavailable == self.media.unavailable {
+            return false;
+        }
+        let mut next = self.media.clone();
+        next.unavailable = unavailable;
+        self.replace_media(next)
+    }
+
+    /// Takes the decoded `cover` of the player `bus_name` whose art was
+    /// `art_url` (`None`: the art could not be decoded). A cover for a
+    /// player that is gone, or for art it no longer names, is dropped.
+    /// Uploads to `pixmaps`, releasing the previous texture. Returns
+    /// whether a frame is worth drawing, as [`Island::set_media`] does.
+    pub fn set_media_cover(
+        &mut self,
+        pixmaps: &mut impl Pixmaps,
+        bus_name: &str,
+        art_url: &str,
+        cover: Option<&Cover>,
+    ) -> bool {
+        let wanted = self.media.duty_on
+            && self
+                .media
+                .players
+                .iter()
+                .any(|p| p.bus_name == bus_name && p.art_url == art_url);
+        if !wanted {
+            return false;
+        }
+        // The loop repeats every cover of the snapshot at each players event
+        // (about once a second while anything plays): a texture already held
+        // for this art is kept, not uploaded again.
+        if cover.is_some()
+            && self
+                .covers
+                .get(bus_name)
+                .is_some_and(|(url, _)| url == art_url)
+        {
+            return false;
+        }
+        if let Some((_, old)) = self.covers.remove(bus_name) {
+            pixmaps.release(old);
+        }
+        let uploaded = cover.and_then(|c| {
+            let argb = argb_of(c)?;
+            pixmaps.upload(&argb, c.width, c.height)
+        });
+        if let Some(id) = uploaded {
+            self.covers
+                .insert(bus_name.to_owned(), (art_url.to_owned(), id));
+        }
+        let mut next = self.media.clone();
+        next.cover = self.cover_of(&next);
+        self.replace_media(next)
+    }
+
+    /// The texture of `state`'s shown player's cover.
+    fn cover_of(&self, state: &MediaState) -> Option<PixmapId> {
+        let bus = &state.shown()?.bus_name;
+        self.covers.get(bus).map(|(_, id)| *id)
+    }
+
+    /// Becomes `next`; whether a frame is worth drawing.
+    fn replace_media(&mut self, next: MediaState) -> bool {
+        if next == self.media {
+            return false;
+        }
+        let bar_changed =
+            pieces::media::bar_signature(&next) != pieces::media::bar_signature(&self.media);
+        self.media = next;
+        let page_shown = self.state.is_open() && self.state.shown_page() == PageId::MEDIA;
+        if bar_changed {
+            self.invalidate_bar();
+        }
+        if page_shown {
+            self.stale = true;
+        }
+        bar_changed || page_shown
+    }
+
+    /// Gives every cover texture back to `pixmaps`.
+    fn release_covers(&mut self, pixmaps: &mut impl Pixmaps) {
+        for (_, (_, id)) in self.covers.drain() {
+            pixmaps.release(id);
+        }
+        if self.media.cover.take().is_some() {
+            self.invalidate_bar();
+            self.stale = true;
+        }
     }
 
     /// Closes the menus from the Island's side; the runtime still reports
@@ -1714,6 +1881,10 @@ impl Island {
             Some(IslandAction::OpenApp(sysmon_page::MONITOR_DESKTOP_ID))
         } else if let Some(action) = self.connectivity_action(key) {
             Some(IslandAction::Connectivity(action))
+        } else if let Some(action) =
+            media_page::action_for(&self.media, &self.theme, self.state.max_page_size(), key)
+        {
+            Some(action)
         } else if let Some(action) = notifications::action_for(
             &self.history,
             &self.owners,
@@ -1790,6 +1961,12 @@ impl Island {
             | Verb::PhoneMedia(_)
             | Verb::Quit => return,
         }
+        tracing::debug!(
+            output = %self.output,
+            page = ?self.state.shown_page(),
+            open = self.state.is_open(),
+            "island: command applied"
+        );
         self.sync_ctl(ctl, now);
         ctl.request_redraw();
     }
@@ -3129,6 +3306,7 @@ mod tests {
 
                 connectivity: &island.connectivity,
                 phone: &celestina_shell::phone::PhoneState::Absent,
+                media: &crate::island::pages::media::NO_MEDIA,
             };
             let texts = texts_of(&page_view(page).view(&cx));
             assert!(texts.iter().any(|t| t == why), "{page:?}: {texts:?}");
@@ -3726,5 +3904,318 @@ mod tests {
             });
         island.rebuild_clipboard(&mut clipboard_page::FakePixmaps::default());
         assert!(!island.confirming_clear && !island.clip_panel.confirming_clear);
+    }
+
+    // Media (CEL-2-D).
+
+    /// Hands out ids from 1 and remembers what it was asked.
+    #[derive(Default)]
+    struct FakePixmaps {
+        next: u32,
+        uploads: Vec<(Vec<u8>, u32, u32)>,
+        released: Vec<PixmapId>,
+    }
+
+    impl Pixmaps for FakePixmaps {
+        fn upload(&mut self, argb: &[u8], w: u32, h: u32) -> Option<PixmapId> {
+            self.next += 1;
+            self.uploads.push((argb.to_vec(), w, h));
+            Some(PixmapId(self.next))
+        }
+
+        fn release(&mut self, id: PixmapId) {
+            self.released.push(id);
+        }
+
+        fn has_theme_icon(&self, _: &str, _: u32) -> bool {
+            false
+        }
+    }
+
+    fn player(n: u32, playing: bool, art: &str) -> PlayerView {
+        PlayerView {
+            bus_name: format!("org.mpris.MediaPlayer2.p{n}"),
+            identity: format!("p{n}"),
+            playing,
+            title: "Title".to_owned(),
+            artist: "Artist".to_owned(),
+            album: String::new(),
+            art_url: art.to_owned(),
+            length_ms: 100_000,
+            position_ms: 1_000,
+            pinned: false,
+        }
+    }
+
+    fn cover(rgba: [u8; 4]) -> Cover {
+        Cover {
+            width: 2,
+            height: 2,
+            rgba: rgba.repeat(4),
+        }
+    }
+
+    /// A bar island whose end zone holds the Media piece.
+    fn media_island() -> (Island, Instant) {
+        let (mut island, t0) = bar_island(1920.0);
+        let mut layout = BarLayout::default();
+        layout.end.push("media".to_owned());
+        island.set_bar(Some(&layout));
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        island.stale = false;
+        (island, t0)
+    }
+
+    fn media_key() -> Key {
+        Key::named("media")
+    }
+
+    #[test]
+    fn the_bar_shows_the_media_piece_only_while_a_player_is_shown() {
+        let (mut island, t0) = media_island();
+        let mut px = FakePixmaps::default();
+        assert!(island
+            .bar
+            .as_ref()
+            .is_some_and(|b| b.node_rect(media_key()).is_none()));
+        let players = [player(1, true, "")];
+        assert!(island.set_media(&mut px, true, &players, Some(&players[0].bus_name)));
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        assert!(island
+            .bar
+            .as_ref()
+            .is_some_and(|b| b.node_rect(media_key()).is_some()));
+        // The player leaves: the bar is asked for again (the piece draws
+        // nothing, as the piece's own tests pin).
+        assert!(island.set_media(&mut px, true, &[], None));
+        assert!(pieces::media::bar_signature(&island.media).is_none());
+    }
+
+    #[test]
+    fn a_position_tick_costs_no_frame_unless_the_media_page_is_open() {
+        let (mut island, t0) = media_island();
+        let mut px = FakePixmaps::default();
+        let mut players = vec![player(1, true, "")];
+        let bus = players[0].bus_name.clone();
+        assert!(island.set_media(&mut px, true, &players, Some(&bus)));
+        // At rest, and with another page open: progress changes nothing
+        // anyone sees.
+        for page in [None, Some(PageId::TRAY)] {
+            if let Some(page) = page {
+                island.open(page, t0);
+            }
+            island.stale = false;
+            players[0].position_ms += 1_000;
+            assert!(
+                !island.set_media(&mut px, true, &players, Some(&bus)),
+                "{page:?}"
+            );
+            assert!(!island.stale, "{page:?}");
+        }
+        // The same state again is nothing too.
+        assert!(!island.set_media(&mut px, true, &players, Some(&bus)));
+        // With the Media page open the progress bar moves.
+        island.open(PageId::MEDIA, t0);
+        island.stale = false;
+        players[0].position_ms += 1_000;
+        assert!(island.set_media(&mut px, true, &players, Some(&bus)));
+        assert!(island.stale);
+        // What the bar shows changing redraws it at rest.
+        island.close(t0);
+        island.state.close(t0, true);
+        island.stale = false;
+        players[0].playing = false;
+        assert!(island.set_media(&mut px, true, &players, Some(&bus)));
+    }
+
+    #[test]
+    fn a_page_button_and_the_pieces_middle_click_become_media_actions() {
+        let (mut island, t0) = media_island();
+        let mut px = FakePixmaps::default();
+        let players = [player(1, true, ""), player(2, false, "")];
+        island.set_media(&mut px, true, &players, Some(&players[0].bus_name));
+        // Let the piece's entrance settle.
+        let t0 = t0 + Duration::from_secs(2);
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        let t0 = t0 + Duration::from_secs(2);
+        lay_fake(&mut island, t0);
+        let centre_of = bar_rect(&island, media_key());
+        assert_eq!(
+            click_at(
+                &mut island,
+                (centre_of.x + 12.0, centre(centre_of).1),
+                BTN_MIDDLE,
+                t0
+            ),
+            [IslandAction::Media(MediaCommand::PlayPause)]
+        );
+        // The piece's click opens the page.
+        click_at(&mut island, centre(centre_of), BTN_LEFT, t0);
+        assert_eq!(island.page(), Some(PageId::MEDIA));
+        // The page's keys act like their buttons.
+        for (key, want) in [
+            (media_page::prev_key(), MediaCommand::Previous),
+            (media_page::play_key(), MediaCommand::PlayPause),
+            (media_page::next_key(), MediaCommand::Next),
+            (
+                media_page::player_key(&players[1].bus_name),
+                MediaCommand::Pin(Some(players[1].bus_name.clone())),
+            ),
+        ] {
+            assert_eq!(
+                island.on_event(UiEvent::Click(key), t0),
+                Some(IslandAction::Media(want.clone())),
+                "{want:?}"
+            );
+            assert_eq!(
+                island.on_event(UiEvent::Activate(key), t0),
+                Some(IslandAction::Media(want))
+            );
+        }
+        // A duty switched off takes the buttons away.
+        island.set_media(&mut px, false, &[], None);
+        assert_eq!(
+            island.on_event(UiEvent::Click(media_page::play_key()), t0),
+            None
+        );
+    }
+
+    #[test]
+    fn a_cover_is_uploaded_once_per_art_and_released_when_it_goes() {
+        let (mut island, _) = media_island();
+        let mut px = FakePixmaps::default();
+        let players = [
+            player(1, true, "file:///a.png"),
+            player(2, false, "file:///b.png"),
+        ];
+        let bus = players[0].bus_name.clone();
+        island.set_media(&mut px, true, &players, Some(&bus));
+        assert!(island.media.cover.is_none());
+        // RGBA in, ARGB out.
+        island.set_media_cover(&mut px, &bus, "file:///a.png", Some(&cover([1, 2, 3, 255])));
+        assert_eq!(px.uploads.len(), 1);
+        assert_eq!(px.uploads[0].0[..4], [255, 1, 2, 3]);
+        assert_eq!((px.uploads[0].1, px.uploads[0].2), (2, 2));
+        assert_eq!(island.media.cover, Some(PixmapId(1)));
+        // The same position update keeps the texture.
+        island.set_media(&mut px, true, &players, Some(&bus));
+        assert_eq!(island.media.cover, Some(PixmapId(1)));
+        assert!(px.released.is_empty());
+        // A cover for art the player no longer names, or for a stranger, is
+        // dropped before it costs a texture.
+        assert!(!island.set_media_cover(&mut px, &bus, "file:///old.png", Some(&cover([0; 4]))));
+        assert!(!island.set_media_cover(
+            &mut px,
+            "org.mpris.MediaPlayer2.x",
+            "file:///a.png",
+            Some(&cover([0; 4]))
+        ));
+        assert_eq!(px.uploads.len(), 1);
+        // Another player's cover is kept for later but not drawn.
+        let other = players[1].bus_name.clone();
+        island.set_media_cover(&mut px, &other, "file:///b.png", Some(&cover([9; 4])));
+        assert_eq!(island.media.cover, Some(PixmapId(1)));
+        // The art changes: the old texture goes at once.
+        let mut next = players.clone();
+        next[0].art_url = "file:///c.png".to_owned();
+        island.set_media(&mut px, true, &next, Some(&bus));
+        assert_eq!(px.released, [PixmapId(1)]);
+        assert!(island.media.cover.is_none());
+        // A refused decode (None) leaves no cover; a cover is held until its
+        // art changes.
+        island.set_media_cover(&mut px, &bus, "file:///c.png", None);
+        assert!(island.media.cover.is_none());
+        island.set_media_cover(&mut px, &bus, "file:///c.png", Some(&cover([5; 4])));
+        let id = island.media.cover;
+        assert!(id.is_some());
+        let uploads = px.uploads.len();
+        assert!(!island.set_media_cover(&mut px, &bus, "file:///c.png", Some(&cover([6; 4]))));
+        assert_eq!((island.media.cover, px.uploads.len()), (id, uploads));
+        // A player that leaves releases its texture; the duty off, the rest.
+        island.set_media(&mut px, true, &next[..1], Some(&bus));
+        assert!(px.released.contains(&PixmapId(2)));
+        let live = island.media.cover.expect("cover");
+        assert_eq!(Some(live), id);
+        island.set_media(&mut px, false, &[], None);
+        assert!(px.released.contains(&live));
+        assert!(island.covers.is_empty() && island.media.cover.is_none());
+    }
+
+    #[test]
+    fn a_malformed_cover_is_refused_and_a_cover_change_redraws_only_the_open_page() {
+        let (mut island, t0) = media_island();
+        let mut px = FakePixmaps::default();
+        let players = [player(1, true, "file:///a.png")];
+        let bus = players[0].bus_name.clone();
+        island.set_media(&mut px, true, &players, Some(&bus));
+        let short = Cover {
+            width: 4,
+            height: 4,
+            rgba: vec![0; 10],
+        };
+        assert!(!island.set_media_cover(&mut px, &bus, "file:///a.png", Some(&short)));
+        assert!(px.uploads.is_empty());
+        // The bar does not draw covers: at rest no frame.
+        island.stale = false;
+        assert!(!island.set_media_cover(&mut px, &bus, "file:///a.png", Some(&cover([1; 4]))));
+        assert!(!island.stale);
+        island.open(PageId::MEDIA, t0);
+        let next = [player(1, true, "file:///b.png")];
+        island.set_media(&mut px, true, &next, Some(&bus));
+        island.stale = false;
+        assert!(island.set_media_cover(&mut px, &bus, "file:///b.png", Some(&cover([2; 4]))));
+        assert!(island.stale);
+    }
+
+    #[test]
+    fn a_players_event_every_second_uploads_each_cover_once() {
+        let (mut island, _) = media_island();
+        let mut px = FakePixmaps::default();
+        let players = [
+            player(1, true, "file:///a.png"),
+            player(2, false, "file:///b.png"),
+        ];
+        let bus = players[0].bus_name.clone();
+        let covers = [
+            (players[0].bus_name.clone(), "file:///a.png", cover([1; 4])),
+            (players[1].bus_name.clone(), "file:///b.png", cover([2; 4])),
+        ];
+        // What the loop does at each players event: the players, then every
+        // cover of the snapshot again.
+        for _ in 0..5 {
+            island.set_media(&mut px, true, &players, Some(&bus));
+            for (name, url, c) in &covers {
+                island.set_media_cover(&mut px, name, url, Some(c));
+            }
+        }
+        assert_eq!(px.uploads.len(), 2, "one upload per cover");
+        assert!(px.released.is_empty());
+    }
+
+    #[test]
+    fn an_unavailable_bus_takes_the_players_off_the_views_until_it_is_back() {
+        let (mut island, _) = media_island();
+        let mut px = FakePixmaps::default();
+        let players = [player(1, true, "")];
+        let bus = players[0].bus_name.clone();
+        island.set_media(&mut px, true, &players, Some(&bus));
+        assert!(pieces::media::bar_signature(&island.media).is_some());
+        assert!(island.set_media_unavailable(true));
+        assert!(!island.set_media_unavailable(true), "said twice: no frame");
+        assert!(island.media.shown().is_none());
+        assert!(pieces::media::bar_signature(&island.media).is_none());
+        // A players event keeps the mark until the control clears it.
+        island.set_media(&mut px, true, &players, Some(&bus));
+        assert!(island.media.unavailable);
+        assert!(island.set_media_unavailable(false));
+        assert!(island.media.shown().is_some());
+        // Off clears it for good.
+        island.set_media_unavailable(true);
+        island.set_media(&mut px, false, &[], None);
+        assert!(!island.media.unavailable);
+        assert!(!island.set_media_unavailable(true), "nothing runs");
     }
 }

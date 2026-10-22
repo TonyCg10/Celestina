@@ -51,6 +51,7 @@ pub mod clipboard;
 pub mod clock;
 pub mod conn_glyph;
 mod level;
+pub mod media;
 pub mod network;
 pub mod notifications;
 pub mod phone;
@@ -72,7 +73,10 @@ use celestina_shell::phone::PhoneState;
 use crate::{
     bubbles::Bubbles,
     connectivity::state::ConnectivityState,
-    island::pages::{clipboard::ClipboardPanel, HistoryRow, NameOwner, PageView, TrayRow},
+    island::pages::{
+        clipboard::ClipboardPanel, media::MediaState, HistoryRow, NameOwner, PageView, TrayRow,
+    },
+    media::MediaCommand,
     providers::{
         niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
         weather::WeatherReading,
@@ -104,6 +108,8 @@ impl PageId {
     pub const ACTIVITY: PageId = PageId("activity");
     /// The Clipboard page.
     pub const CLIPBOARD: PageId = PageId("clipboard");
+    /// The Media page.
+    pub const MEDIA: PageId = PageId("media");
     /// The Notifications page.
     pub const NOTIFICATIONS: PageId = PageId("notifications");
     /// The Phone page (the Phone piece's).
@@ -186,6 +192,8 @@ pub struct BarCx<'a> {
     /// The minimised windows Melibea keeps (CEL-2-J); empty while the duty
     /// is off.
     pub bubbles: &'a Bubbles,
+    /// The players and the one shown (CEL-2-D).
+    pub media: &'a MediaState,
 }
 
 /// One audio device's reading: whole percent and whether it is muted. Muted
@@ -317,6 +325,8 @@ pub enum PieceAction {
     RestoreWindow(u64),
     /// Open the selector of minimised windows.
     OpenSelector,
+    /// Something the media worker does to the shown player.
+    Media(MediaCommand),
 }
 
 /// One thing the bar can hold.
@@ -351,6 +361,7 @@ pub static PIECES: &[&dyn Piece] = &[
     &brightness::Brightness,
     &phone::Phone,
     &bubbles::Bubbles,
+    &media::Media,
 ];
 
 /// The piece the layout names `id`, if the table has it.
@@ -409,7 +420,8 @@ mod tests {
                 "volume",
                 "brightness",
                 "phone",
-                "bubbles"
+                "bubbles",
+                "media"
             ]
         );
         assert_eq!(
@@ -425,6 +437,7 @@ mod tests {
                 PageId::BLUETOOTH,
                 PageId::POWER,
                 PageId::PHONE,
+                PageId::MEDIA
             ]
         );
         for (i, id) in PageId::all().into_iter().enumerate() {
@@ -470,6 +483,7 @@ mod tests {
             "bluetooth",
             "power",
             "phone",
+            "media",
         ] {
             assert_eq!(page_by_word(word).map(PageId::word), Some(word));
         }
@@ -502,6 +516,7 @@ mod tests {
             PageId::BLUETOOTH,
             PageId::POWER,
             PageId::PHONE,
+            PageId::MEDIA,
         ] {
             assert!(page_entry(id).is_some(), "{id:?}");
         }
@@ -563,6 +578,7 @@ mod tests {
             levels: crate::pieces::Levels::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
             bubbles: &crate::bubbles::NONE,
+            media: &crate::island::pages::media::NO_MEDIA,
         };
         piece(id)
             .expect("in the table")
@@ -699,6 +715,7 @@ pub(crate) mod tests_support {
             levels: crate::pieces::Levels::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
             bubbles: &crate::bubbles::NONE,
+            media: &crate::island::pages::media::NO_MEDIA,
         })
     }
 }

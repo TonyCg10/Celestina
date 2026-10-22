@@ -8,6 +8,7 @@ pub mod activity;
 pub mod bluetooth;
 pub mod clipboard;
 pub mod clock;
+pub mod media;
 pub mod network;
 pub mod notifications;
 pub mod phone;
@@ -132,6 +133,8 @@ pub struct PageCx<'a> {
     /// The phone as Magnetita lists it (CEL-2-J); `Absent` while the duty
     /// is off.
     pub phone: &'a celestina_shell::phone::PhoneState,
+    /// The players and the one shown (CEL-2-D).
+    pub media: &'a media::MediaState,
 }
 
 /// One of the Island's pages.
@@ -234,6 +237,7 @@ pub(crate) fn wants_of(
         utc_offset: 0,
         connectivity: &ConnectivityState::default(),
         phone: &celestina_shell::phone::PhoneState::Absent,
+        media: &crate::island::pages::media::NO_MEDIA,
     })
 }
 
@@ -291,6 +295,7 @@ mod tests {
             utc_offset: 0,
             connectivity: &ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         };
         let page = Counts;
         assert_eq!(page.title(), "counts");
@@ -331,6 +336,34 @@ mod tests {
         owners: NameOwner,
         history: Vec<HistoryRow>,
         items: Vec<TrayRow>,
+        media: crate::island::pages::media::MediaState,
+    }
+
+    fn media_player(n: u32, playing: bool) -> crate::media::PlayerView {
+        crate::media::PlayerView {
+            bus_name: format!("org.mpris.MediaPlayer2.p{n}"),
+            identity: format!("Player {n}"),
+            playing,
+            title: format!("Title {n}"),
+            artist: "Artist".to_owned(),
+            album: "Album".to_owned(),
+            art_url: String::new(),
+            length_ms: 200_000,
+            position_ms: 50_000,
+            pinned: false,
+        }
+    }
+
+    /// Two players, the first shown: the page with its chooser.
+    fn populated_media() -> crate::island::pages::media::MediaState {
+        let players = vec![media_player(1, true), media_player(2, false)];
+        crate::island::pages::media::MediaState {
+            active: players.first().map(|p| p.bus_name.clone()),
+            players,
+            cover: None,
+            duty_on: true,
+            unavailable: false,
+        }
     }
 
     fn workspace(id: u64, idx: u8, name: Option<&str>, active: bool, columns: u16) -> Workspace {
@@ -418,6 +451,7 @@ mod tests {
                 owners: NameOwner::default(),
                 history: Vec::new(),
                 items: Vec::new(),
+                media: crate::island::pages::media::MediaState::default(),
             },
             Fixture {
                 name: "populated",
@@ -425,6 +459,7 @@ mod tests {
                 owners: NameOwner::default(),
                 history: populated_history.clone(),
                 items: populated_items.clone(),
+                media: populated_media(),
             },
             Fixture {
                 name: "name-held",
@@ -438,6 +473,7 @@ mod tests {
                 },
                 history: populated_history,
                 items: populated_items,
+                media: crate::island::pages::media::MediaState::default(),
             },
         ]
     }
@@ -486,6 +522,7 @@ mod tests {
             utc_offset: 0,
             connectivity: &ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &fixture.media,
         };
         (
             pv.title().to_owned(),
@@ -674,19 +711,83 @@ mod tests {
                 "   Key(12128004882728413383) text \"Otro programa atiende la bandeja: noctalia-shell (:1.42)\"",
             ],
         },
+        Pinned {
+            page: PageId::MEDIA,
+            fixture: "empty",
+            title: "Medios",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(12912867724530986883) box",
+                " Key(12908918722445455807) box",
+                "  Key(4321480622256717021) box",
+                "   Key(12128004882728413383) text {MEDIA_DUTY_OFF}",
+            ],
+        },
+        Pinned {
+            page: PageId::MEDIA,
+            fixture: "populated",
+            title: "Medios",
+            wants: (420.0, 370.0),
+            tree: &[
+                "Key(12912867724530986883) box",
+                " Key(7479864549746549683) box",
+                "  Key(3808597450201731097) box",
+                "   Key(17994177349704965389) icon",
+                "  Key(10125010047677325910) box",
+                "   Key(17438774065759434300) box",
+                "    Key(6224763943379904600) text \"Title 1\"",
+                "   Key(9043335483256446157) box",
+                "    Key(11985544631978028503) text \"Artist\"",
+                "   Key(15024860372699801001) box",
+                "    Key(15779014933917365123) text \"Album\"",
+                " Key(13295523530429524629) box",
+                "  Key(11394782890341783650) text \"0:50\"",
+                "  Key(4170701675842587951) box",
+                "   Key(16654101708943011928) box",
+                "  Key(8605989064839537614) text \"3:20\"",
+                " Key(1339505620677176319) box",
+                "  Key(17705621818541804623) box",
+                "   Key(7089719975625110285) icon",
+                "  Key(1297283240111316756) box",
+                "   Key(4857404568657520876) icon",
+                "  Key(2278735135178521767) box",
+                "   Key(11554350789560289103) icon",
+                " Key(9322524121378681680) box",
+                "  Key(5295094148091143664) box",
+                "   Key(5620392692241185538) text \"Player 1\"",
+                "   Key(6582625169947144852) icon",
+                "  Key(8394441596627289079) box",
+                "   Key(15962224898935245669) text \"Player 2\"",
+                "   Key(395426872861881291) icon",
+            ],
+        },
+        Pinned {
+            page: PageId::MEDIA,
+            fixture: "name-held",
+            title: "Medios",
+            wants: (420.0, 300.0),
+            tree: &[
+                "Key(12912867724530986883) box",
+                " Key(12908918722445455807) box",
+                "  Key(4321480622256717021) box",
+                "   Key(12128004882728413383) text {MEDIA_DUTY_OFF}",
+            ],
+        },
     ];
 
     /// The pages that existed when the snapshots were taken (CEL-2-A). The
     /// glance pages (CEL-2-K), the Clipboard page (CEL-2-G), the
-    /// connectivity pages (CEL-2-F) and the Phone page (CEL-2-J) were appended to the table after them and are pinned in their own modules; none of
-    /// these three may change because of them.
+    /// connectivity pages (CEL-2-F), the Phone page (CEL-2-J) and the Media
+    /// page (CEL-2-D) were appended to the table after them; none of these
+    /// three may change because of them.
     const ORIGINAL: [PageId; 3] = [PageId::ACTIVITY, PageId::NOTIFICATIONS, PageId::TRAY];
 
-    /// The pages appended after the snapshots, in table order, each pinned by
-    /// its own module's tests (`pages::sysmon`, `pages::clock`,
+    /// The pages appended after the snapshots, in table order. Each is pinned
+    /// by its own module's tests (`pages::sysmon`, `pages::clock`,
     /// `pages::clipboard`, `pages::network`, `pages::bluetooth`,
-    /// `pages::power`, `pages::phone`).
-    const LATER: [PageId; 7] = [
+    /// `pages::power`, `pages::phone`), except Media, pinned in [`PINNED`]
+    /// against the shared fixtures.
+    const LATER: [PageId; 8] = [
         PageId::SYSMON,
         PageId::CLOCK,
         PageId::CLIPBOARD,
@@ -694,6 +795,15 @@ mod tests {
         PageId::BLUETOOTH,
         PageId::POWER,
         PageId::PHONE,
+        PageId::MEDIA,
+    ];
+
+    /// The pages [`PINNED`] snapshots against every fixture.
+    const PINNED_HERE: [PageId; 4] = [
+        PageId::ACTIVITY,
+        PageId::NOTIFICATIONS,
+        PageId::TRAY,
+        PageId::MEDIA,
     ];
 
     #[test]
@@ -703,7 +813,7 @@ mod tests {
         let mut known: Vec<PageId> = ORIGINAL.to_vec();
         known.extend(LATER);
         assert_eq!(PageId::all().to_vec(), known);
-        for page in ORIGINAL {
+        for page in PINNED_HERE {
             assert!(
                 PINNED.iter().any(|p| p.page == page),
                 "{page:?} has no pinned snapshot"
@@ -714,8 +824,8 @@ mod tests {
     #[test]
     fn page_title_wants_and_view_structure_are_pinned() {
         let fixtures = fixtures();
-        assert_eq!(PINNED.len(), ORIGINAL.len() * fixtures.len());
-        for page in ORIGINAL {
+        assert_eq!(PINNED.len(), PINNED_HERE.len() * fixtures.len());
+        for page in PINNED_HERE {
             for fixture in &fixtures {
                 let pinned = PINNED
                     .iter()
@@ -727,7 +837,17 @@ mod tests {
                 let at = format!("{page:?} / {}", fixture.name);
                 assert_eq!(title, pinned.title, "{at}: title");
                 assert_eq!(wants, pinned.wants, "{at}: wants");
-                assert_eq!(tree, pinned.tree, "{at}: view structure");
+                let want: Vec<String> = pinned
+                    .tree
+                    .iter()
+                    .map(|line| {
+                        line.replace(
+                            "{MEDIA_DUTY_OFF}",
+                            &format!("{:?}", crate::copy::MEDIA_DUTY_OFF),
+                        )
+                    })
+                    .collect();
+                assert_eq!(tree, want, "{at}: view structure");
             }
         }
     }
@@ -750,7 +870,8 @@ mod tests {
                 "network",
                 "bluetooth",
                 "power",
-                "phone"
+                "phone",
+                "media"
             ]
         );
     }

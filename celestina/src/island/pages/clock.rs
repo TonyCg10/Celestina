@@ -351,6 +351,7 @@ mod tests {
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         })
     }
 
@@ -600,6 +601,7 @@ mod tests {
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
             phone: &celestina_shell::phone::PhoneState::Absent,
+            media: &crate::island::pages::media::NO_MEDIA,
         });
         assert_eq!(
             text_of(&v, Key::named("clock-weather-place")),
