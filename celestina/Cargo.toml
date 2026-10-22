@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.6.0"
+version = "1.7.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -122,3 +122,7 @@ hematita-core = { path = "../celestina-rs/crates/hematita-core" }
 # signal watchers and fakes) instead of a second implementation. Features
 # `nm` and `bluez` only: no `wpctl`, so no audio process code is compiled.
 cuprita-core = { path = "../celestina-rs/crates/cuprita-core", default-features = false, features = ["nm", "bluez"] }
+# CEL-2-C: the on-screen display's timeout and retire are calloop timers on
+# the shell's own loop (the handle `celestina_wayland::run` gives its setup);
+# the version is the one `celestina-wayland` already resolves.
+calloop = "0.14"

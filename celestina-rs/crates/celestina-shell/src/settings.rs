@@ -13,7 +13,8 @@
 // written, so a later default still reaches them. CEL-2-K then added `weather`
 // (where the weather reading is for), copied in shape from the core's
 // `Location` and stored in whole micro-degrees so `Settings` stays `Eq`; it is
-// optional, lenient and written only once chosen.
+// optional, lenient and written only once chosen. CEL-2-C adds `duties.osd`
+// and the `osd` table (timeout, position, kinds), all defaulted per field.
 
 //! What the person chose, and what it takes for that choice to be real.
 //!
@@ -54,6 +55,21 @@ where
 {
     let raw = Value::deserialize(deserializer)?;
     Ok(serde_json::from_value(raw).unwrap_or_default())
+}
+
+/// A switch that is on unless the file says `false`: a wrong-typed value keeps
+/// the default instead of silently turning the switch off.
+fn lenient_true<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    Ok(Value::deserialize(deserializer)?.as_bool().unwrap_or(true))
+}
+
+/// A timeout in milliseconds; anything that is not a non-negative integer is
+/// the default (the bounds are applied afterwards by `clamped`).
+fn lenient_timeout<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+    Ok(Value::deserialize(deserializer)?
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
+        .unwrap_or(DEFAULT_OSD_TIMEOUT_MS))
 }
 
 fn lenient_folder<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<PathBuf>, D::Error> {
@@ -182,6 +198,10 @@ pub struct Duties {
     /// Whether this shell drives the night-light gamma ramps.
     #[serde(deserialize_with = "lenient_duty")]
     pub nightlight: Duty,
+    /// Whether this shell shows the on-screen display for volume,
+    /// microphone and brightness changes.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub osd: Duty,
     /// Whether this shell paints the wallpaper.
     #[serde(deserialize_with = "lenient_duty")]
     pub wallpaper: Duty,
@@ -228,10 +248,18 @@ impl Default for BarLayout {
         Self {
             start: ids(&["workspaces", "notifications"]),
             centre: Vec::new(),
-            // Noctalia's order: tray, network, bluetooth (CEL-2-F), then the
-            // clipboard (CEL-2-G). `battery` and `power-profile` are
-            // registered pieces but not placed.
-            end: ids(&["tray", "network", "bluetooth", "clipboard"]),
+            // Noctalia's order: tray, network, bluetooth (CEL-2-F), the
+            // volume and the brightness (CEL-2-C; both absent until a reading
+            // exists), then the clipboard (CEL-2-G). `battery` and
+            // `power-profile` are registered pieces but not placed.
+            end: ids(&[
+                "tray",
+                "network",
+                "bluetooth",
+                "volume",
+                "brightness",
+                "clipboard",
+            ]),
             // Blueman's item `Id` is expected to be `blueman` (the halted
             // shell's fixtures of this session); `blueman-tray` is its
             // process. Both until the live row confirms the `Id`.
@@ -540,6 +568,9 @@ pub struct Settings {
         skip_serializing_if = "Option::is_none"
     )]
     pub weather: Option<Location>,
+    /// How the on-screen display looks and which changes it shows.
+    #[serde(deserialize_with = "lenient")]
+    pub osd: OsdSettings,
 }
 
 impl Default for Settings {
@@ -552,7 +583,83 @@ impl Default for Settings {
             energy: Energy::default(),
             wallpaper: WallpaperSettings::default(),
             weather: None,
+            osd: OsdSettings::default(),
         }
+    }
+}
+
+/// The shortest on-screen display timeout kept, in milliseconds.
+pub const MIN_OSD_TIMEOUT_MS: u32 = 500;
+/// The longest on-screen display timeout kept, in milliseconds.
+pub const MAX_OSD_TIMEOUT_MS: u32 = 5000;
+/// How long the on-screen display stays when the person did not choose.
+pub const DEFAULT_OSD_TIMEOUT_MS: u32 = 1500;
+
+/// Where the on-screen display sits on its output.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OsdPosition {
+    /// Centred along the bottom edge.
+    #[default]
+    #[serde(rename = "bottom")]
+    Bottom,
+    /// In the bottom-right corner.
+    #[serde(rename = "bottom-right")]
+    BottomRight,
+}
+
+/// Which kinds of change the on-screen display shows. All on by default; the
+/// duty decides whether any is shown at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OsdKinds {
+    #[serde(deserialize_with = "lenient_true")]
+    pub volume: bool,
+    #[serde(deserialize_with = "lenient_true")]
+    pub microphone: bool,
+    #[serde(deserialize_with = "lenient_true")]
+    pub brightness: bool,
+}
+
+impl Default for OsdKinds {
+    fn default() -> Self {
+        Self {
+            volume: true,
+            microphone: true,
+            brightness: true,
+        }
+    }
+}
+
+/// The on-screen display's own choices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OsdSettings {
+    /// How long it stays after the last change, in milliseconds, kept between
+    /// [`MIN_OSD_TIMEOUT_MS`] and [`MAX_OSD_TIMEOUT_MS`].
+    #[serde(deserialize_with = "lenient_timeout")]
+    pub timeout_ms: u32,
+    #[serde(deserialize_with = "lenient")]
+    pub position: OsdPosition,
+    #[serde(deserialize_with = "lenient")]
+    pub kinds: OsdKinds,
+}
+
+impl Default for OsdSettings {
+    fn default() -> Self {
+        Self {
+            timeout_ms: DEFAULT_OSD_TIMEOUT_MS,
+            position: OsdPosition::default(),
+            kinds: OsdKinds::default(),
+        }
+    }
+}
+
+impl OsdSettings {
+    fn clamped(mut self) -> Self {
+        self.timeout_ms = self
+            .timeout_ms
+            .clamp(MIN_OSD_TIMEOUT_MS, MAX_OSD_TIMEOUT_MS);
+        self
     }
 }
 
@@ -588,6 +695,7 @@ impl Settings {
             label: clean_label(&place.label),
             ..place
         });
+        self.osd = self.osd.clamped();
         // The whitepoint's own range, so the file and the light never disagree.
         self.energy.night_light_kelvin = self
             .energy
@@ -885,6 +993,7 @@ mod tests {
                 caffeine: Duty::On,
                 clipboard: Duty::Off,
                 nightlight: Duty::Off,
+                osd: Duty::Off,
                 wallpaper: Duty::On,
             },
             energy: Energy {
@@ -1113,7 +1222,14 @@ mod tests {
         let (_, duties) = written_keys(&Settings::default());
         assert_eq!(
             duties,
-            ["caffeine", "clipboard", "idle", "nightlight", "wallpaper"]
+            [
+                "caffeine",
+                "clipboard",
+                "idle",
+                "nightlight",
+                "osd",
+                "wallpaper"
+            ]
         );
     }
 
@@ -1176,7 +1292,14 @@ mod tests {
         assert!(layout.centre.is_empty());
         assert_eq!(
             layout.end,
-            ids(&["tray", "network", "bluetooth", "clipboard"])
+            ids(&[
+                "tray",
+                "network",
+                "bluetooth",
+                "volume",
+                "brightness",
+                "clipboard"
+            ])
         );
         assert_eq!(
             layout.tray_hidden,
@@ -1218,7 +1341,14 @@ mod tests {
         let old = Settings::from_bytes(br#"{"bar":{"tray_hidden":[]}}"#).expect("ours");
         assert_eq!(
             old.bar_layout().end,
-            ids(&["tray", "network", "bluetooth", "clipboard"])
+            ids(&[
+                "tray",
+                "network",
+                "bluetooth",
+                "volume",
+                "brightness",
+                "clipboard"
+            ])
         );
         // A person who chose their end zone keeps exactly that choice.
         let chosen = Settings::from_bytes(br#"{"bar":{"end":["tray"]}}"#).expect("ours");
@@ -1227,7 +1357,10 @@ mod tests {
         let moved = Settings::from_bytes(br#"{"bar":{"start":["network"]}}"#).expect("ours");
         let layout = moved.bar_layout();
         assert_eq!(layout.start, ids(&["network"]));
-        assert_eq!(layout.end, ids(&["tray", "bluetooth", "clipboard"]));
+        assert_eq!(
+            layout.end,
+            ids(&["tray", "bluetooth", "volume", "brightness", "clipboard"])
+        );
     }
 
     #[test]
@@ -1503,5 +1636,99 @@ mod tests {
         let pending = store.stage(|s| s.weather = None);
         let bytes = pending.bytes().expect("bytes");
         assert!(!String::from_utf8_lossy(&bytes).contains("weather"));
+    }
+
+    #[test]
+    fn the_osd_defaults_are_off_with_every_kind_on() {
+        let settings = Settings::default();
+        assert_eq!(settings.duties.osd, Duty::Off);
+        assert_eq!(settings.osd.timeout_ms, 1500);
+        assert_eq!(settings.osd.position, OsdPosition::Bottom);
+        assert!(settings.osd.kinds.volume);
+        assert!(settings.osd.kinds.microphone);
+        assert!(settings.osd.kinds.brightness);
+        // A file that predates the unit reads as the defaults.
+        let read = Settings::from_bytes(br#"{"duties":{"idle":"on"}}"#).expect("read");
+        assert_eq!(read.duties.osd, Duty::Off);
+        assert_eq!(read.osd, OsdSettings::default());
+    }
+
+    #[test]
+    fn osd_settings_survive_a_round_trip() {
+        let settings = Settings {
+            duties: Duties {
+                osd: Duty::On,
+                ..Duties::default()
+            },
+            osd: OsdSettings {
+                timeout_ms: 2500,
+                position: OsdPosition::BottomRight,
+                kinds: OsdKinds {
+                    volume: true,
+                    microphone: false,
+                    brightness: false,
+                },
+            },
+            ..Settings::default()
+        };
+        let bytes = settings.to_bytes().expect("settings serialize");
+        let text = String::from_utf8(bytes.clone()).expect("utf8");
+        assert!(text.contains(r#""position": "bottom-right""#));
+        assert!(text.contains(r#""osd": "on""#));
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+    }
+
+    #[test]
+    fn the_osd_timeout_is_bounded() {
+        for (raw, kept) in [
+            ("0", 500),
+            ("499", 500),
+            ("500", 500),
+            ("5000", 5000),
+            ("5001", 5000),
+            ("4294967295", 5000),
+            // Not a non-negative integer that fits: the default.
+            ("-5", 1500),
+            ("99999999999", 1500),
+            ("1.5", 1500),
+            ("\"fast\"", 1500),
+            ("null", 1500),
+        ] {
+            let bytes = format!(r#"{{"osd":{{"timeout_ms":{raw}}}}}"#);
+            let read = Settings::from_bytes(bytes.as_bytes()).expect("read");
+            assert_eq!(read.osd.timeout_ms, kept, "{raw}");
+        }
+        let pending = Store::new(Settings::default()).stage(|s| s.osd.timeout_ms = 1);
+        assert_eq!(pending.wanted().osd.timeout_ms, 500);
+    }
+
+    #[test]
+    fn a_hostile_osd_table_degrades_field_by_field() {
+        let read = Settings::from_bytes(
+            br#"{"duties":{"osd":"yes"},
+                 "osd":{"position":"top","timeout_ms":900,
+                        "kinds":{"volume":false,"microphone":"no","brightness":7,"extra":1}}}"#,
+        )
+        .expect("read");
+        assert_eq!(read.duties.osd, Duty::Off);
+        assert_eq!(read.osd.position, OsdPosition::Bottom);
+        assert_eq!(read.osd.timeout_ms, 900);
+        assert!(!read.osd.kinds.volume);
+        // A wrong-typed switch keeps its default (on), not off.
+        assert!(read.osd.kinds.microphone);
+        assert!(read.osd.kinds.brightness);
+
+        for bytes in [
+            &br#"{"osd":"x"}"#[..],
+            br#"{"osd":7}"#,
+            br#"{"osd":null}"#,
+            br#"{"osd":{"kinds":5}}"#,
+        ] {
+            let read = Settings::from_bytes(bytes).expect("a bad table never fails the file");
+            assert_eq!(read.osd, OsdSettings::default());
+        }
+        let mut huge = br#"{"osd":{"timeout_ms":900}}"#.to_vec();
+        huge.resize(MAX_FILE_BYTES + 1, b' ');
+        assert_eq!(Settings::from_bytes(&huge), None);
     }
 }

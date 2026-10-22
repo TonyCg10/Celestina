@@ -18,6 +18,8 @@ use celestina_wayland::Config;
 
 use crate::clipboard::verbs::ClipboardVerb;
 use crate::energy::verbs;
+use crate::osd::verbs as levels;
+use crate::osd::verbs::{BrightnessVerb, MicrophoneVerb, VolumeVerb};
 use crate::pieces::{self, PageId};
 
 /// Arguments the binary reads at most; a longer command line is a usage
@@ -51,6 +53,12 @@ verbs: island toggle
        nightlight on|off|toggle
        session suspend|reboot|power-off|log-out
        clipboard select N [S]|remove N [S]|clear|pause|resume
+       volume up|down|mute
+       volume set PERCENT
+       microphone mute
+       microphone set PERCENT
+       brightness up|down [OUTPUT]
+       brightness set PERCENT [OUTPUT]
        quit";
 
 /// What a wallpaper verb addresses.
@@ -94,6 +102,18 @@ pub enum Verb {
     /// A clipboard history verb: it answers success or failure only and
     /// never returns an entry (a no-op while the duty is off).
     Clipboard(ClipboardVerb),
+    /// `volume up|down|set <0-100>|mute`: the default output (rejected while
+    /// the `osd` duty is off).
+    Volume(VolumeVerb),
+    /// `microphone mute|set <0-100>`: the default input (rejected while the
+    /// `osd` duty is off).
+    Microphone(MicrophoneVerb),
+    /// `brightness up|down|set <0-100> [output]`: that output's monitor, or
+    /// the focused output's (rejected while the `osd` duty is off).
+    Brightness {
+        change: BrightnessVerb,
+        output: Option<String>,
+    },
     Quit,
 }
 
@@ -194,6 +214,17 @@ impl Verb {
             ["clipboard", rest @ ..] => {
                 Verb::Clipboard(ClipboardVerb::parse(rest).ok_or_else(|| unknown(&words))?)
             }
+            ["volume", rest @ ..] => {
+                Verb::Volume(levels::parse_volume(rest).ok_or_else(|| unknown(&words))?)
+            }
+            ["microphone", rest @ ..] => {
+                Verb::Microphone(levels::parse_microphone(rest).ok_or_else(|| unknown(&words))?)
+            }
+            ["brightness", rest @ ..] => {
+                let (change, output) =
+                    levels::parse_brightness(rest).ok_or_else(|| unknown(&words))?;
+                Verb::Brightness { change, output }
+            }
             ["quit"] => Verb::Quit,
             _ => return Err(unknown(&words)),
         };
@@ -233,6 +264,11 @@ impl Verb {
             Verb::WallpaperMode(mode) => own(vec!["wallpaper", "mode", mode_word(*mode)]),
             Verb::WallpaperRetry => own(vec!["wallpaper", "retry"]),
             Verb::Clipboard(verb) => verb.words(),
+            Verb::Volume(verb) => levels::volume_words(*verb),
+            Verb::Microphone(verb) => levels::microphone_words(*verb),
+            Verb::Brightness { change, output } => {
+                levels::brightness_words(*change, output.as_deref())
+            }
             other => own(other.fixed_words()),
         }
     }
@@ -254,7 +290,10 @@ impl Verb {
             | Verb::WallpaperPrev(_)
             | Verb::WallpaperMode(_)
             | Verb::WallpaperRetry
-            | Verb::Clipboard(_) => Vec::new(),
+            | Verb::Clipboard(_)
+            | Verb::Volume(_)
+            | Verb::Microphone(_)
+            | Verb::Brightness { .. } => Vec::new(),
         }
     }
 }
@@ -422,6 +461,37 @@ mod tests {
                 "wallpaper mode center",
             ),
             (Verb::WallpaperRetry, "wallpaper retry"),
+            (Verb::Volume(VolumeVerb::Up), "volume up"),
+            (Verb::Volume(VolumeVerb::Down), "volume down"),
+            (Verb::Volume(VolumeVerb::Mute), "volume mute"),
+            (Verb::Volume(VolumeVerb::Set(0)), "volume set 0"),
+            (Verb::Volume(VolumeVerb::Set(100)), "volume set 100"),
+            (Verb::Microphone(MicrophoneVerb::Mute), "microphone mute"),
+            (
+                Verb::Microphone(MicrophoneVerb::Set(35)),
+                "microphone set 35",
+            ),
+            (
+                Verb::Brightness {
+                    change: BrightnessVerb::Up,
+                    output: None,
+                },
+                "brightness up",
+            ),
+            (
+                Verb::Brightness {
+                    change: BrightnessVerb::Down,
+                    output: Some("DP-1".to_owned()),
+                },
+                "brightness down DP-1",
+            ),
+            (
+                Verb::Brightness {
+                    change: BrightnessVerb::Set(80),
+                    output: Some("HDMI-A-1".to_owned()),
+                },
+                "brightness set 80 HDMI-A-1",
+            ),
         ];
         for (verb, spelled) in table {
             assert_eq!(verb.words().join(" "), spelled);
@@ -433,6 +503,35 @@ mod tests {
                 assert_eq!(parse(&words), Ok(Mode::Client(verb)), "{spelled}");
             }
         }
+    }
+
+    #[test]
+    fn level_verbs_reject_bad_payloads_and_stay_within_the_word_bound() {
+        for bad in [
+            &["volume"][..],
+            &["volume", "louder"],
+            &["volume", "set"],
+            &["volume", "set", "101"],
+            &["volume", "set", "-1"],
+            &["volume", "set", "5", "extra"],
+            &["volume", "up", "now"],
+            &["microphone"],
+            &["microphone", "up"],
+            &["microphone", "set", "x"],
+            &["brightness"],
+            &["brightness", "mute"],
+            &["brightness", "set", "101", "DP-1"],
+            &["brightness", "up", "a/b"],
+            &["brightness", "up", ""],
+            &["brightness", "set", "5", "DP-1", "extra"],
+        ] {
+            assert!(Verb::parse(&strings(bad)).is_err(), "{bad:?}");
+        }
+        // The longest of them is a verb of exactly the bound.
+        assert_eq!(
+            Verb::parse(&strings(&["brightness", "set", "5", "DP-1"])).map(|v| v.words().len()),
+            Ok(MAX_VERB_WORDS)
+        );
     }
 
     #[test]

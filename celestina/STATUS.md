@@ -1,6 +1,6 @@
 # Celestina status
 
-- **Updated:** 2026-10-16
+- **Updated:** 2026-10-17
 - **Version:** the one `celestina/Cargo.toml` carries, set by each landing
 - **Implementation:** the CEL-1 program is landed on `main` through CEL-1-H
   (1.0.0), the tokens as data (CEL-1-C) included: the three toolkit crates
@@ -25,6 +25,14 @@
   `duties.idle`, `duties.caffeine` and `duties.nightlight` in `shell.json`
   ([evidence](docs/evidence/2026-10-16-energy.md)). The four VAL-CEL2 rows are
   `pending`; the version is set by the landing.
+- **OSD (CEL-2-C):** in progress, not landed: the `osd` duty, off by default
+  behind `duties.osd` in `shell.json`: a `celestina-osd` overlay surface for
+  volume, microphone and brightness changes (audio through `pactl subscribe`
+  and `wpctl`, brightness through sysfs and a lazy, leased `ddcutil` thread),
+  the `volume`, `microphone` and `brightness` verbs, and the `volume` and
+  `brightness` bar pieces with a slider popup
+  ([evidence](docs/evidence/2026-10-17-osd.md)). The three VAL-CEL2-OSD rows are
+  `pending`; the lock-keys OSD is not delivered.
 - **Focus:** CEL-2, the parity program
   ([plan](docs/plans/active/2026-10-16-cel-2-parity.md)): the bar and the piece
   contract first, with CEL-2-B and CEL-2-E under way beside it; the author's

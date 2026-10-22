@@ -44,6 +44,11 @@ use crate::{
     launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
     message::Message,
     notifications::{self, NotificationsState},
+    osd::{
+        control::{self, Controls, Opening},
+        verbs::{self as level_verbs, NoWorkers},
+        Suppression,
+    },
     pieces::PageId,
     providers::{
         niri::{NiriModel, NiriProvider, NiriRequest},
@@ -473,6 +478,11 @@ pub struct App {
     /// The connectivity workers, put in once the loop runs and taken out by
     /// the binary at exit to be joined.
     connectivity_handle: Rc<RefCell<Option<ConnectivityHandle>>>,
+    /// The on-screen display duty: its surface and its readings.
+    osds: crate::osd::surface::Osds,
+    /// The audio and brightness readings the bar's pieces show, and the
+    /// slider popup that is open.
+    controls: Controls,
 }
 
 impl std::fmt::Debug for App {
@@ -536,6 +546,12 @@ impl App {
             clipboard_state: ClipboardState::default(),
             connectivity: ConnectivityState::default(),
             connectivity_handle: Rc::new(RefCell::new(None)),
+            osds: crate::osd::surface::Osds::new(
+                Rc::new(OnceCell::new()),
+                &Settings::default(),
+                &Theme::dark(),
+            ),
+            controls: Controls::new(),
         }
     }
 
@@ -610,6 +626,14 @@ impl App {
     #[must_use]
     pub fn with_connectivity(mut self, handle: Rc<RefCell<Option<ConnectivityHandle>>>) -> App {
         self.connectivity_handle = handle;
+        self
+    }
+
+    /// Takes the slot the on-screen display's workers and timer are put in
+    /// once the loop runs, under the settings read at start.
+    #[must_use]
+    pub fn with_osd(mut self, runtime: Rc<OnceCell<crate::osd::OsdRuntime>>) -> App {
+        self.osds = crate::osd::surface::Osds::new(runtime, self.settings.current(), &self.theme());
         self
     }
 
@@ -713,6 +737,9 @@ impl App {
             // over an empty history: every Island redraws.
             self.redraw_all(ctl);
         }
+        let theme = self.theme();
+        self.osds.settings_changed(&before, &after, ctl, &theme);
+        self.levels_settings_changed(&before, &after, ctl);
     }
 
     /// Passes a clipboard verb (from the command socket or the Island's
@@ -761,6 +788,103 @@ impl App {
             if let Some(mut surface) = ctl.surface(slot.surface) {
                 surface.request_redraw();
             }
+        }
+    }
+
+    /// The `osd` duty or the bar's layout changed: with the duty off the
+    /// readings are forgotten (so the pieces vanish) and an open slider popup
+    /// closes; the DDC worker is asked to detect once a layout holds the
+    /// brightness piece.
+    fn levels_settings_changed(
+        &mut self,
+        before: &Settings,
+        after: &Settings,
+        ctl: &mut RuntimeCtl<'_>,
+    ) {
+        if before.duties.osd == Duty::On && after.duties.osd == Duty::Off {
+            if let Some(surface) = self.controls.open_surface() {
+                if let (Some(island), Some(mut surface_ctl)) =
+                    (self.islands.get_mut(surface), ctl.surface(surface))
+                {
+                    island.close_level_popup(&mut surface_ctl);
+                }
+            }
+            if let Some(released) = self.controls.closed() {
+                let theme = self.theme();
+                self.osds.set_suppressed(released, ctl, &theme);
+            }
+            if self.controls.readings.clear() {
+                self.levels_changed(ctl);
+            }
+        }
+        self.request_brightness_consumer();
+    }
+
+    /// Tells the duty's runtime whether the settings in force give the DDC
+    /// worker a consumer; it asks the worker to detect only when one
+    /// appears, so calling this on every settings change and every output
+    /// added costs nothing.
+    fn request_brightness_consumer(&self) {
+        if let Some(runtime) = self.osds.runtime().get() {
+            runtime.set_brightness_consumer(control::brightness_consumer(self.settings.current()));
+        }
+    }
+
+    /// Whether the workers' readings are taken in: not after the duty went
+    /// off, so a reading still queued then cannot bring the pieces back.
+    fn levels_live(&self) -> bool {
+        let running = self
+            .osds
+            .runtime()
+            .get()
+            .is_some_and(crate::osd::OsdRuntime::running);
+        control::readings_accepted(self.settings.current(), running)
+    }
+
+    /// The readings changed: the Islands draw the pieces again and an open
+    /// popup shows the new levels.
+    fn levels_changed(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        self.redraw_all(ctl);
+        if let Some((_, popup)) = self.controls.refresh() {
+            if let Some(mut surface) = ctl.popup_surface(popup).and_then(|s| ctl.surface(s)) {
+                surface.request_redraw();
+            }
+        }
+    }
+
+    /// The slider popup is gone (seen from an input call, which controls
+    /// only its own surface): the loop is told to let the display show again.
+    fn level_popup_closed(&mut self) {
+        if let Some(released) = self.controls.closed() {
+            self.post(Message::OsdSuppressed(released));
+        }
+    }
+
+    /// Posts `message` to the loop itself.
+    fn post(&self, message: Message) {
+        match self.sender.get() {
+            Some(sender) => {
+                if sender.send(message).is_err() {
+                    tracing::debug!("the loop is gone: the message is dropped");
+                }
+            }
+            None => tracing::debug!("no loop sender: the message is dropped"),
+        }
+    }
+
+    /// A Volume or Brightness piece's action on the Island of `surface`.
+    fn level_action(&mut self, action: IslandAction, surface: SurfaceId) {
+        let Some(runtime) = self.osds.runtime().get() else {
+            return;
+        };
+        match action {
+            IslandAction::Audio(action) => self.controls.audio(action, runtime),
+            IslandAction::Brightness(action) => {
+                if let Some(island) = self.islands.get_mut(surface) {
+                    self.controls.brightness(action, island.output(), runtime);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -953,6 +1077,9 @@ impl App {
         if self.pending_menu.as_ref().is_some_and(|p| p.surface == old) {
             self.pending_menu = None;
         }
+        if self.controls.is_open_on(old) {
+            self.level_popup_closed();
+        }
         if self
             .open_tray_menu
             .as_ref()
@@ -992,6 +1119,18 @@ impl App {
                 }
             }
             Verb::Clipboard(_) => self.clipboard_verb(&verb),
+            Verb::Volume(_) | Verb::Microphone(_) | Verb::Brightness { .. } => {
+                let focused = focused_output(self.model.as_ref());
+                let outcome = match self.osds.runtime().get() {
+                    Some(runtime) => {
+                        level_verbs::run(&verb, runtime, &self.controls.readings, focused)
+                    }
+                    None => level_verbs::run(&verb, &NoWorkers, &self.controls.readings, focused),
+                };
+                if let Some(outcome) = outcome {
+                    outcome.log();
+                }
+            }
             Verb::LauncherToggle => self.toggle_launcher(ctl),
             Verb::WallpaperSet { .. }
             | Verb::WallpaperNext(_)
@@ -1229,6 +1368,25 @@ impl App {
                         keyboard,
                     });
                     self.tray_command(TrayCommand::OpenMenu(item));
+                }
+                IslandAction::Audio(_) | IslandAction::Brightness(_) => {
+                    self.level_action(action, surface);
+                }
+                IslandAction::OpenLevelPopup { kind, anchor } => {
+                    let opening = Opening {
+                        surface,
+                        painter: shared,
+                        runtime: self.osds.runtime(),
+                        reduced: self.appearance.reduced_motion,
+                    };
+                    let opened = self.islands.get_mut(surface).is_some_and(|island| {
+                        self.controls.open(kind, anchor, island, ctl, &opening)
+                    });
+                    if opened {
+                        self.post(Message::OsdSuppressed(Suppression::Open(
+                            control::kinds_of(kind),
+                        )));
+                    }
                 }
                 IslandAction::OpenMenu { more, keyboard } => {
                     let Ok(painter) = shared.try_borrow() else {
@@ -1512,6 +1670,11 @@ impl Shell for App {
     fn output(&mut self, ev: OutputEvent, ctl: &mut RuntimeCtl<'_>) {
         match ev {
             OutputEvent::Added(info) => {
+                self.osds.output_added(&info);
+                if self.controls.readings.output_added(info.id, &info.name) {
+                    self.levels_changed(ctl);
+                }
+                self.request_brightness_consumer();
                 self.output_added(&info, ctl);
                 self.wallpapers.output_added(
                     &info,
@@ -1521,9 +1684,13 @@ impl Shell for App {
                 );
             }
             OutputEvent::Changed(info) => {
+                if self.controls.readings.output_added(info.id, &info.name) {
+                    self.levels_changed(ctl);
+                }
                 // The width a surface of the other shape will be made with.
                 self.islands.set_logical_w(info.id, info.logical_size.0);
                 tracing::debug!(output = %info.name, "output changed; the Island keeps its surface");
+                self.osds.output_changed(&info);
                 self.wallpapers.output_changed(
                     &info,
                     self.settings.current(),
@@ -1532,6 +1699,10 @@ impl Shell for App {
                 );
             }
             OutputEvent::Removed(output) => {
+                self.osds.output_removed(output);
+                if self.controls.readings.output_removed(output) {
+                    self.levels_changed(ctl);
+                }
                 self.wallpapers
                     .output_removed(output, ctl, self.painter.as_ref());
                 if self.launcher.as_ref().is_some_and(|l| l.output() == output) {
@@ -1552,6 +1723,11 @@ impl Shell for App {
                 let gone = self.islands.remove_output(output);
                 if self.keyboard.is_some_and(|k| gone.contains(&k)) {
                     self.keyboard = None;
+                }
+                // The slider popup went with its Island: the display must
+                // not stay suppressed for good.
+                if let Some(released) = self.controls.surfaces_gone(&gone) {
+                    self.post(Message::OsdSuppressed(released));
                 }
                 if self
                     .open_tray_menu
@@ -1607,6 +1783,12 @@ impl Shell for App {
             }
             return;
         }
+        if self.osds.owns(cx.surface) {
+            if let Some(shared) = self.painter.as_ref() {
+                self.osds.frame(cx, shared, self.appearance.reduced_motion);
+            }
+            return;
+        }
         self.wallpapers
             .scale_seen(cx.output, cx.scale, self.settings.current());
         if let (Some(shared), Some(open)) = (self.painter.as_ref(), self.launcher.as_mut()) {
@@ -1656,6 +1838,8 @@ impl Shell for App {
             weather: self.weather.as_ref(),
             clipboard_on: self.settings.current().duties.clipboard == Duty::On,
             clipboard: &self.clipboard_state,
+            audio: self.controls.readings.audio(),
+            brightness: self.controls.readings.by_output(),
         };
         island.frame(
             cx,
@@ -1710,6 +1894,7 @@ impl Shell for App {
             }
         };
         let tray_menu_open = island.tray_menu_open();
+        let level_popup_open = island.level_popup_open();
         self.act(actions, surface, &shared, ctl);
         self.mark_read_if_viewed();
         // The menu is gone: a row chosen in it is made now. The Island has
@@ -1723,6 +1908,9 @@ impl Shell for App {
             let chosen = self.tray_choice.borrow_mut().take();
             if let Some((item, entry)) = chosen {
                 self.tray_command(TrayCommand::MenuEvent(item, entry));
+            }
+            if !level_popup_open && self.controls.is_open_on(surface) {
+                self.level_popup_closed();
             }
             if !tray_menu_open
                 && self
@@ -1812,6 +2000,38 @@ impl Shell for App {
             Message::Weather(reading) => self.weather_read(reading, ctl),
             Message::Clipboard(message) => self.clipboard_event(message, ctl),
             Message::Connectivity(event) => self.connectivity_event(&event, ctl),
+            Message::Audio(event) => {
+                if !self.levels_live() {
+                    return;
+                }
+                if self.controls.readings.audio_event(event) {
+                    self.levels_changed(ctl);
+                }
+                let theme = self.theme();
+                self.osds
+                    .audio(event, focused_output(self.model.as_ref()), ctl, &theme);
+            }
+            // A monitor's reading; the first one of each monitor is its
+            // baseline.
+            Message::Brightness(event) => {
+                if !self.levels_live() {
+                    return;
+                }
+                if self.controls.readings.brightness_event(&event) {
+                    self.levels_changed(ctl);
+                }
+                let theme = self.theme();
+                self.osds
+                    .brightness(event, focused_output(self.model.as_ref()), ctl, &theme);
+            }
+            Message::OsdSuppressed(suppression) => {
+                let theme = self.theme();
+                self.osds.set_suppressed(suppression, ctl, &theme);
+            }
+            Message::Osd(tick) => {
+                let theme = self.theme();
+                self.osds.tick(tick, ctl, &theme);
+            }
         }
     }
 }
@@ -1884,6 +2104,8 @@ mod tests {
             "tray".to_owned(),
             "network".to_owned(),
             "bluetooth".to_owned(),
+            "volume".to_owned(),
+            "brightness".to_owned(),
             "clipboard".to_owned(),
         ]);
         assert_eq!(bar_change(&on, &chosen_end), BarChange::Nothing);

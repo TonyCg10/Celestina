@@ -98,6 +98,7 @@ mod tests {
             today,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
+            levels: crate::pieces::Levels::default(),
         })
     }
 

@@ -55,6 +55,7 @@ impl Tree {
             .copied()
             .filter(|&r| self.slot(r).is_some_and(|s| !s.leaving))
             .collect();
+        let slider_height = self.slider_metrics.height();
         for root in live_roots {
             let Some(root_taffy) = self.slot(root).map(|s| s.taffy) else {
                 continue;
@@ -84,6 +85,9 @@ impl Tree {
                                     placeholder, style, ..
                                 }) => measure(placeholder, style, None),
                                 Some(ViewKind::Icon { size, .. }) => (*size, *size),
+                                // A slider is as tall as the theme says and
+                                // as wide as the view makes it.
+                                Some(ViewKind::Slider(_)) => (0.0, slider_height),
                                 _ => (0.0, 0.0),
                             };
                             Size {

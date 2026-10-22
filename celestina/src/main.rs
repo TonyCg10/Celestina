@@ -35,6 +35,7 @@ use celestina::{
     island::clock,
     launcher::recent::RecentLaunches,
     message::Message,
+    osd::OsdRuntime,
     providers::notifications::NotificationsCommand,
     providers::{self, settings::ShellSettings, wallpaper::WallpaperCommand, Worker},
 };
@@ -130,6 +131,7 @@ fn shell(cfg: Config) -> ExitCode {
     let glance = Rc::new(OnceCell::new());
     let clipboard = Rc::new(OnceCell::new());
     let connectivity = Rc::new(RefCell::new(None));
+    let osd = Rc::new(OnceCell::new());
     let settings_read = settings.current().clone();
     let settings_protected = settings.is_protected();
     let follow_from = settings.follow_from();
@@ -148,12 +150,13 @@ fn shell(cfg: Config) -> ExitCode {
     .with_energy(Rc::clone(&energy))
     .with_glance(Rc::clone(&glance))
     .with_clipboard(Rc::clone(&clipboard))
-    .with_connectivity(Rc::clone(&connectivity));
+    .with_connectivity(Rc::clone(&connectivity))
+    .with_osd(Rc::clone(&osd));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
     let mut shell_follower = None;
-    let result = celestina_wayland::run(cfg.clone(), app, |sender, _| {
+    let result = celestina_wayland::run(cfg.clone(), app, |sender, handle| {
         // The name first: a second shell leaves before it starts anything.
         // Its layer surfaces have no buffer yet, so nothing was shown.
         match bus::claim_and_serve(sender.clone(), &shutdown) {
@@ -177,6 +180,7 @@ fn shell(cfg: Config) -> ExitCode {
             Err(err) => tracing::warn!(%err, "no niri provider; the capsule shows its fallback"),
         }
         // Every duty is off by default: with the defaults no worker starts.
+        let loop_handle = handle;
         let handle = EnergyHandle::new(sender.clone(), compositor);
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
@@ -209,6 +213,12 @@ fn shell(cfg: Config) -> ExitCode {
                 handle.stop();
             }
         }
+        // The on-screen display: off by default, so no worker starts; on, its
+        // audio and brightness workers run with a flag of their own.
+        let runtime = OsdRuntime::new(sender.clone(), loop_handle.clone());
+        runtime.apply(&settings_read);
+        // The slot is empty: `setup` runs once.
+        let _ = osd.set(runtime);
         match providers::desktop::spawn(sender.clone(), &shutdown) {
             Ok(worker) => indexer = Some(worker),
             Err(err) => tracing::warn!(%err, "no desktop index; the launcher offers nothing"),
@@ -296,6 +306,10 @@ fn shell(cfg: Config) -> ExitCode {
         if !handle.stop() {
             tracing::warn!("a connectivity worker did not stop in time; it is left behind");
         }
+    }
+    // The audio observer's child killed and reaped, the DDC thread joined.
+    if let Some(runtime) = osd.get() {
+        runtime.stop();
     }
     drop(follower);
     drop(shell_follower);

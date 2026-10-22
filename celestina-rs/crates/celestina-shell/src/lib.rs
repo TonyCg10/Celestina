@@ -9,6 +9,10 @@
 //! root contract's salvage rule and adapted: no line protocol, no provider
 //! envelope, no host commands. Each file's head names its source and commit.
 //!
+//! - [`audio`], [`brightness`] — what the session's sound and a monitor's
+//!   backlight are at, read from `wpctl`, `pactl` and `ddcutil` text, and the
+//!   step arithmetic for changing them.
+//! - [`osd`] — when the on-screen display shows, what, and for how long.
 //! - [`bounded`] — the one bound on text from another process.
 //! - [`coalesce`] — how often a changing provider may reach the event loop.
 //! - [`connectivity`] — what the network, Bluetooth, battery and power-profile
@@ -39,7 +43,9 @@
 
 #![forbid(unsafe_code)]
 
+pub mod audio;
 pub mod bounded;
+pub mod brightness;
 pub mod calendar;
 pub mod clipboard;
 pub mod coalesce;
@@ -49,6 +55,7 @@ pub mod idle;
 pub mod launcher;
 pub mod nightlight;
 pub mod notifications;
+pub mod osd;
 pub mod session;
 pub mod settings;
 pub mod wallpaper;

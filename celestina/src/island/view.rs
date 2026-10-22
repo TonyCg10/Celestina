@@ -149,7 +149,7 @@ pub const SWITCH_KNOB: f32 = 16.0;
 /// `on`, at the left on the control fill when off; a switch that is not
 /// `enabled` keeps the control fill and a faint knob. The switch only
 /// shows the state: the row holding it is the control.
-pub(in crate::island) fn switch(key: Key, on: bool, enabled: bool) -> View {
+pub(crate) fn switch(key: Key, on: bool, enabled: bool) -> View {
     let knob_role = match (enabled, on) {
         (false, _) => Role::TextFaint,
         (true, true) => Role::AccentInk,

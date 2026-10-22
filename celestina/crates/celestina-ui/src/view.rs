@@ -8,7 +8,7 @@ use taffy::{
     Position,
 };
 
-use crate::{field::FieldId, key::Key};
+use crate::{field::FieldId, key::Key, slider::Slider};
 
 /// What a node draws.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,6 +45,9 @@ pub enum ViewKind {
         placeholder: String,
         style: TextStyle,
     },
+    /// A horizontal slider at the level its [`Slider`] carries
+    /// (`crate::slider`); `Tree::slider` reads the level it shows.
+    Slider(Slider),
 }
 
 /// One keyed node of a view and its children, in paint order (the last
@@ -270,6 +273,16 @@ pub fn field(key: Key, id: FieldId, placeholder: &str, style: TextStyle) -> View
     .focusable()
 }
 
+/// A slider showing `slider`: interactive and focusable unless it is
+/// disabled. Size it with `.width(w)` (or `.grow()`); its height is the
+/// theme's handle plus the focus ring's room on both sides.
+pub fn slider(key: Key, slider: Slider) -> View {
+    let mut v = View::new(key, ViewKind::Slider(slider));
+    v.interactive = slider.enabled();
+    v.focusable = slider.enabled();
+    v
+}
+
 /// A semantic (Lucide) icon from `celestina-style/icons`, `size` square.
 pub fn icon(key: Key, name: &'static str, size: f32) -> View {
     View::new(
@@ -417,6 +430,17 @@ mod tests {
         );
         // Box-only builders leave it alone.
         assert_eq!(f.clone().fill(Role::Card).kind, f.kind);
+    }
+
+    #[test]
+    fn a_slider_is_interactive_and_focusable_unless_disabled() {
+        let s = slider(Key::named("s"), Slider::new(30).with_step(5));
+        assert!(s.interactive && s.focusable);
+        assert_eq!(s.kind, ViewKind::Slider(Slider::new(30).with_step(5)));
+        let off = slider(Key::named("s"), Slider::new(30).with_enabled(false));
+        assert!(!off.interactive && !off.focusable);
+        // Box-only builders leave it alone.
+        assert_eq!(s.clone().fill(Role::Card).radius(4.0).kind, s.kind);
     }
 
     #[test]

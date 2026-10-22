@@ -2,11 +2,12 @@
 //! role plus the shape, density, type and motion scalars.
 //!
 //! The theme is built from `celestina_tokens::DARK` and the crate's scalar
-//! modules (`radius`, `spacing`, `type_scale`, `motion`, `haze`), which are
-//! generated from `celestina-style/tokens.toml`; no value lives here.
+//! modules (`radius`, `spacing`, `type_scale`, `motion`, `haze`, `control`,
+//! `opacity`), which are generated from `celestina-style/tokens.toml`; no
+//! value lives here.
 #![forbid(unsafe_code)]
 
-use celestina_tokens::{haze, motion, radius, spacing, type_scale, Rgba, Scheme};
+use celestina_tokens::{control, haze, motion, opacity, radius, spacing, type_scale, Rgba, Scheme};
 
 use crate::color::Color;
 
@@ -139,6 +140,12 @@ pub struct Theme {
     pub motion: MotionMs,
     /// The press recoil scale.
     pub press_scale: f32,
+    /// A linear track's height (slider, progress).
+    pub linear_track_height: f32,
+    /// A slider handle's diameter.
+    pub slider_handle_size: f32,
+    /// The alpha a disabled control is drawn at.
+    pub disabled_opacity: f32,
     /// The type ladder at text scale 1, so `scaled` never compounds.
     type_base: TypeScale,
 }
@@ -207,6 +214,9 @@ impl From<&Scheme> for Theme {
                 ceiling: motion::CEILING_MS,
             },
             press_scale: motion::PRESS_SCALE,
+            linear_track_height: control::LINEAR_TRACK_HEIGHT,
+            slider_handle_size: control::SLIDER_HANDLE_SIZE,
+            disabled_opacity: opacity::DISABLED,
             type_base,
         }
     }
@@ -296,6 +306,14 @@ mod tests {
         );
         assert_eq!(t.motion.ceiling, 500);
         assert_eq!(t.press_scale, 0.96);
+        assert_eq!(
+            (
+                t.linear_track_height,
+                t.slider_handle_size,
+                t.disabled_opacity
+            ),
+            (4.0, 15.0, 0.5)
+        );
     }
 
     #[test]

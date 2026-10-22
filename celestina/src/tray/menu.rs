@@ -529,7 +529,10 @@ impl LevelCore {
                         }
                     }
                 }
-                UiEvent::HoverChanged(..) | UiEvent::Scroll(..) | UiEvent::FieldChanged(_) => {}
+                UiEvent::HoverChanged(..)
+                | UiEvent::Scroll(..)
+                | UiEvent::FieldChanged(_)
+                | UiEvent::SliderChanged(..) => {}
             }
         }
         Outcome::Keep {

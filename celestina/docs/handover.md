@@ -1,6 +1,6 @@
 # Handover: what Noctalia still does for the session
 
-- **Written:** 2026-10-16, by CEL-1-H; the night light, caffeine and idle rows updated by CEL-2-B
+- **Written:** 2026-10-16, by CEL-1-H; the night light, caffeine and idle rows updated by CEL-2-B; the audio and brightness OSD rows by CEL-2-C
 - **Purpose:** CEL-1 delivers the Island, the launcher, notifications and the
   tray. It does not replace Noctalia as the session's shell. This note lists
   what Noctalia keeps doing, so the author knows what the next deliveries
@@ -34,8 +34,8 @@ both names to the shell on its next start. The launcher answers
 | Notifications | owns the name unless stopped | yes (CEL-1-F) | VAL-CEL-BANNERS and VAL-CEL-NOCTALIA passed |
 | Tray | owns the watcher unless stopped | yes (CEL-1-G) | VAL-CEL-POPUP and VAL-CEL-NOCTALIA passed |
 | Launcher | `Mod+Space` runs `noctalia msg panel-toggle launcher` | yes (CEL-1-E) | rebind the key to `Mod+Space { spawn "celestina" "launcher" "toggle"; }` (the commented `celestina msg ...` lines in the niri config belong to the halted shell and the new binary rejects them with exit 2); VAL-CEL-KEYBOARD and VAL-CEL-IME passed |
-| Audio OSD | the volume and mute keys run `wpctl` directly; Noctalia draws the feedback | no | an OSD delivery that observes PipeWire/WirePlumber, since the keys do not tell the shell anything |
-| Brightness OSD | the brightness keys run `brightnessctl`; Noctalia draws the feedback | no | an OSD delivery that observes the backlight (sysfs or logind) |
+| Audio OSD | the volume and mute keys run `wpctl` directly; Noctalia draws the feedback | delivered in CEL-2-C, off by default (`duties.osd`), observing `pactl subscribe` | VAL-CEL2-OSD-AUDIO passed, with Noctalia's OSD off; the keys keep running `wpctl` until CEL-2-M rebinds them |
+| Brightness OSD | the brightness keys run `brightnessctl`; Noctalia draws the feedback | delivered in CEL-2-C, off by default (`duties.osd`), sysfs where present and DDC otherwise; the monitor's own buttons are not observed | VAL-CEL2-OSD-BRIGHTNESS passed, with Noctalia's OSD and brightness widget off so no two `ddcutil` run at once; a lock-keys OSD is not delivered |
 | Media (MPRIS) | the play, stop, previous and next keys run `playerctl`; Noctalia shows the player | no | a media delivery with an MPRIS client and its Island page or widget |
 | Clipboard history | Noctalia's history (`clipboard-*` verbs) | no | a clipboard delivery with a bounded, hostile-input-safe history and its own privacy design |
 | Session lock | `Mod+Shift+Escape` runs `noctalia msg session lock-and-suspend` | no | a lock screen (`ext-session-lock-v1`) plus the suspend chain; `Mod+Shift+A` already uses `swaylock` and is unaffected |

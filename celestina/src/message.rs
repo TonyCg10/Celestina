@@ -73,4 +73,18 @@ pub enum Message {
     /// News from the connectivity workers: network, Bluetooth, power, and
     /// what became of a request.
     Connectivity(crate::connectivity::ConnectivityEvent),
+    /// A default audio device's level, from the audio worker; `None` is no
+    /// reading, never 0 %.
+    Audio(crate::providers::audio::AudioEvent),
+    /// A monitor's brightness, from the brightness workers; `None` is
+    /// unknown, never 0 %.
+    Brightness(crate::providers::brightness::BrightnessEvent),
+    /// The slider popup opened or closed: the display shows nothing of the
+    /// kinds it drives while it is open, nor the levels it asked for that
+    /// arrive after it closed. Posted by the loop to itself, because an
+    /// input call controls only its own surface.
+    OsdSuppressed(crate::osd::Suppression),
+    /// One of the on-screen display's timers came due (posted by its
+    /// calloop timer, which has no `RuntimeCtl`).
+    Osd(crate::osd::OsdTick),
 }

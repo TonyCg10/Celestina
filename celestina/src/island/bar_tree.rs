@@ -352,7 +352,8 @@ impl BarTree {
                 UiEvent::HoverChanged(..)
                 | UiEvent::Activate(_)
                 | UiEvent::Escape
-                | UiEvent::FieldChanged(_) => {}
+                | UiEvent::FieldChanged(_)
+                | UiEvent::SliderChanged(..) => {}
             }
         }
         let cx = self.cx(base);
@@ -430,6 +431,7 @@ mod tests {
             weather: None,
             today: None,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
+            levels: crate::pieces::Levels::default(),
         })
     }
 

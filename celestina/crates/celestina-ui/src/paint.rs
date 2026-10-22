@@ -20,6 +20,7 @@ use celestina_paint::{Painter, Rect, Role, Theme};
 
 use crate::{
     highlight::{box_fill, focus_ring, FOCUS_WIDTH},
+    slider::{self, SliderPaint},
     tree::{NodeId, Slot, Tree, Visit},
     view::ViewKind,
 };
@@ -138,6 +139,16 @@ impl Tree {
                 painter.icon(key, rect, tint.map(|r| theme.color(r)));
             }
             ViewKind::Image { id, alpha } => painter.image(*id, rect, *alpha),
+            ViewKind::Slider(s) => {
+                let h = self.highlight;
+                let p = SliderPaint {
+                    slider: *s,
+                    rect,
+                    hovered: h.hovered == Some(id),
+                    pressed: h.pressed == Some(id),
+                };
+                slider::paint(painter, theme, &self.slider_metrics, &p);
+            }
         }
         if let Some((clip, radius)) = clip_of(&slot.kind, slot.clip, rect) {
             painter.push_clip(clip, radius);
@@ -156,6 +167,8 @@ impl Tree {
             if self.highlight.focused == Some(id) && !field {
                 let radius = match slot.kind {
                     ViewKind::Box { radius, .. } => radius,
+                    // A slider's ring is a pill around the whole control.
+                    ViewKind::Slider(_) => rect.h / 2.0,
                     _ => theme.radius_sm,
                 };
                 let (ring, radius) = focus_ring(rect, radius);

@@ -13,8 +13,9 @@ CEL-2-B queues VAL-CEL2-IDLE, VAL-CEL2-CAFFEINE, VAL-CEL2-NIGHTLIGHT and
 VAL-CEL2-SESSION; CEL-2-K queues VAL-CEL2-SYSMON, VAL-CEL2-WEATHER,
 VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS; CEL-2-G queues VAL-CEL2-CLIPBOARD-LIVE,
 VAL-CEL2-CLIPBOARD-SECRET, VAL-CEL2-CLIPBOARD-IMAGE and VAL-CEL2-CLIPBOARD-LOOK;
-CEL-2-F queues VAL-CEL2-NETWORK, VAL-CEL2-BLUETOOTH and VAL-CEL2-POWER.
-None has been run and none is closed by an agent.
+CEL-2-F queues VAL-CEL2-NETWORK, VAL-CEL2-BLUETOOTH and VAL-CEL2-POWER;
+CEL-2-C queues VAL-CEL2-OSD-AUDIO, VAL-CEL2-OSD-BRIGHTNESS and
+VAL-CEL2-OSD-PIECES. None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
 
@@ -635,5 +636,111 @@ None has been run and none is closed by an agent.
   the piece converges to the same profile; every tab fits the body without
   overlap at the default scale; the icons are legible; no profile is set that
   the daemon does not list
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-OSD-AUDIO — Volume and microphone OSD beside Noctalia's
+
+- **Status:** pending
+- **Related implementation:** CEL-2-C (the `osd` duty, the audio worker on
+  `pactl subscribe` and `wpctl`, the `celestina-osd` surface)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; Noctalia's OSD switched off first with `noctalia msg osd-disable`
+  (or its own setting), so the two never draw at once; `duties.osd` set to
+  `"on"` in `~/.config/celestina/shell.json` before starting the shell
+- **Procedure:** start the shell and leave audio alone: no OSD may appear at
+  start. Press the volume keys (they still run `wpctl` directly): an OSD must
+  appear at the bottom centre of the focused output with the level and
+  `NN %`, replace itself while the keys repeat, and fade after about 1.5 s.
+  Mute with the mute key and check the muted icon with the remembered level.
+  Change the volume from another program (a media player slider, `pavucontrol`)
+  and check the OSD follows. Use the microphone mute key and check the
+  microphone OSD. Run `celestina volume up`, `celestina volume down`,
+  `celestina volume set 30`, `celestina volume mute` and `celestina
+  microphone set 20`, and check the real volume follows. Set `duties.osd` to
+  `"off"`, wait for the shell to follow the file, and check that no OSD
+  appears and that `celestina volume up` is rejected in the journal. Check
+  with `niri msg layers` that a `celestina-osd` surface exists only while an
+  OSD is on screen. Switch Noctalia's OSD back on if you want it
+- **Pass condition:** no OSD at start or at rest; the OSD follows keys and
+  other programs, shows muted state, replaces in place and is destroyed
+  after its exit; the verbs move the real volume with the duty on and are
+  rejected with it off; the two OSDs were never on at once
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-OSD-BRIGHTNESS — Brightness OSD over DDC, beside Noctalia's
+
+- **Status:** pending
+- **Related implementation:** CEL-2-C (the brightness worker: sysfs where
+  present, DDC through one `ddcutil` thread under a lease)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session; Noctalia's OSD switched off first with `noctalia msg osd-disable`;
+  Noctalia's brightness widget not open, and no other `ddcutil` running, since
+  two `ddcutil` processes on one bus lost the GPU twice in the halted shell
+  and the shell's lease cannot cover Noctalia's processes; `duties.osd` set to
+  `"on"`, the `brightness` piece placed in the bar layout; no
+  `CELESTINA_DDC=0` in the shell's environment. With the piece placed, the
+  shell has a brightness consumer from the start, so it runs **one
+  `ddcutil detect --brief` at start** (when the first output is announced),
+  plus at most one follow-up detection no sooner than 5 s after it if
+  outputs were announced while it ran; it reads and writes nothing until the
+  first use. Without the piece, DDC stays untouched until the first
+  brightness verb or popup, which detects first
+- **Procedure:** start the shell and leave the brightness alone: check in the
+  journal (`brightness: ddcutil starts`, `operation="detect"`) and with
+  `pgrep -a ddcutil` (read-only, run by you) that only the detection(s)
+  described above run, and no `getvcp` or `setvcp`. The brightness keys still
+  run `brightnessctl --class=backlight`, which has no device on this machine,
+  so they change nothing until CEL-2-M rebinds them: use the verbs. Run
+  `celestina brightness up` once and wait for the answer: the first change
+  after start must show an OSD (the level before the write is read first and
+  is the baseline). Run it again slowly, then a fast burst, which must
+  collapse to few writes. Run `celestina brightness down` and `celestina
+  brightness set 40 DP-1`, and check the monitor follows and the OSD shows
+  the read-back value. Change the brightness with the monitor's own buttons:
+  the shell is not expected to notice it (documented gap). Watch the screen
+  for black flashes or a frozen picture during every step, and stop at the
+  first one. Check the journal for `brightness: ddcutil starts` lines and that
+  none overlaps another
+- **Pass condition:** with the piece placed, only the start detection (and at
+  most one follow-up at least 5 s later) before the first use, and no read
+  or write; one `ddcutil` child at a time; the first change after start
+  shows an OSD; the OSD shows the read-back value, never 0 for an unread
+  monitor; no GPU loss, flicker or freeze; the monitor's own buttons are not
+  followed, as documented
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-OSD-PIECES — The volume and brightness pieces and their popup
+
+- **Status:** pending
+- **Related implementation:** CEL-2-C (the `volume` and `brightness` pieces,
+  the slider popup, the verbs)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session with `duties.bar` and `duties.osd` `"on"`; the pieces `volume` and
+  `brightness` in the `bar` end zone of `shell.json` (they are absent from a
+  layout until a reading exists); Noctalia's OSD and its bar off or hidden;
+  Noctalia's brightness widget closed
+- **Procedure:** check that the volume capsule shows the level and the muted
+  state, and the brightness capsule the read-back brightness. The start
+  detection reads no level, so the brightness capsule appears only after a
+  first `celestina brightness` verb has read the monitor. Scroll over each
+  capsule: the level moves by one step. Middle-click the volume capsule:
+  mute toggles. Click each capsule: a popup opens at the capsule with a
+  slider; drag it, press the arrow keys, Home and End on it (visible focus
+  ring), toggle the mute button, and for volume use the microphone row. The
+  OSD must not appear for a change the popup is driving, nor when the popup
+  closes and the last level it set is read back; with the volume popup open,
+  `celestina brightness up` must still show the brightness OSD. Close the
+  popup with Escape and by clicking outside. Check the capsules on both
+  outputs at their
+  scales, and that the Brightness piece of an output with no DDC reading
+  shows no capsule
+- **Pass condition:** capsules show the right state; scroll, click and
+  middle-click do what is described; the slider works by pointer and
+  keyboard with a visible focus; the popup opens and closes cleanly; no OSD
+  for the change the popup drives, during it or after it closes; another
+  kind's OSD still shows while it is open
 - **Result:** not run
 - **Evidence:** none

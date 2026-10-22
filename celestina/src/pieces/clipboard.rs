@@ -120,6 +120,7 @@ mod tests {
             today: None,
             clipboard: panel,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
+            levels: crate::pieces::Levels::default(),
         })
     }
 

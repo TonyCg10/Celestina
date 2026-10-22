@@ -24,7 +24,8 @@ fn settings_round_trips_only_the_shells_own_choices() {
         .keys()
         .map(String::as_str)
         .collect();
-    // CEL-2-B adds the `energy` table and CEL-2-E the `wallpaper` one; the
+    // CEL-2-B adds the `energy` table, CEL-2-C the `osd` one and CEL-2-E the
+    // `wallpaper` one; the
     // `duties` table carries both units' switches (all default-valued). The
     // `bar` table and `duties.bar` (CEL-2-A) are written only once chosen.
     assert!(value["duties"].get("bar").is_none());
@@ -38,6 +39,7 @@ fn settings_round_trips_only_the_shells_own_choices() {
             "do_not_disturb",
             "duties",
             "energy",
+            "osd",
             "schema_version",
             "wallpaper"
         ]
@@ -94,4 +96,30 @@ fn notifications_history_cap_is_fifty_and_the_page_shows_twenty() {
 
     server.clear_history();
     assert!(server.history_page().is_empty());
+}
+
+#[test]
+fn the_salvaged_readers_keep_their_exact_text_contracts() {
+    use celestina_shell::audio::{parse_wpctl_volume, AudioLevel};
+    use celestina_shell::brightness::{parse_brightness, parse_detect};
+
+    // The volume line is read as text, with no float: hundredths are percent.
+    assert_eq!(
+        parse_wpctl_volume("Volume: 0.70 [MUTED]"),
+        Some(AudioLevel {
+            percent: 70,
+            muted: true
+        })
+    );
+    assert_eq!(parse_wpctl_volume("Node 51 not found"), None);
+
+    // A monitor that does not answer DDC is not a display; the connector loses
+    // its card prefix; the reading is a percent of the monitor's own maximum.
+    let displays = parse_detect(
+        "Invalid display\n   DRM connector:    card1-HDMI-A-1\n\nDisplay 1\n   DRM connector:    card1-DP-1\n",
+    );
+    assert_eq!(displays.len(), 1);
+    assert_eq!(displays[0].connector, "DP-1");
+    assert_eq!(parse_brightness("VCP 10 C 40 80\n"), Some(50));
+    assert_eq!(parse_brightness("VCP 10 C 50 0\n"), None);
 }

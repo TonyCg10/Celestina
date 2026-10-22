@@ -19,6 +19,7 @@ pub mod launcher;
 pub mod message;
 pub mod metrics;
 pub mod notifications;
+pub mod osd;
 pub mod pieces;
 pub mod providers;
 pub mod tray;

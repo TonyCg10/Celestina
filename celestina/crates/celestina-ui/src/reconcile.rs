@@ -273,6 +273,8 @@ fn measure_changed(old: &ViewKind, new: &ViewKind) -> bool {
     match (old, new) {
         (ViewKind::Box { .. }, ViewKind::Box { .. }) => false,
         (ViewKind::Image { .. }, ViewKind::Image { .. }) => false,
+        // A slider's height is the theme's; its level moves nothing.
+        (ViewKind::Slider(_), ViewKind::Slider(_)) => false,
         (ViewKind::Icon { size: a, .. }, ViewKind::Icon { size: b, .. }) => a != b,
         (
             ViewKind::Text {

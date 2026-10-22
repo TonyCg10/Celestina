@@ -786,6 +786,52 @@ pub const REFUSED_NO_PROFILE: &str = "Ese perfil no existe";
 /// Cycling with nothing to cycle to ("There is no other profile").
 pub const REFUSED_NOTHING_TO_CYCLE: &str = "No hay otro perfil";
 
+// The on-screen display (CEL-2-C).
+
+/// The level the on-screen display shows beside its bar ("60 %"), written
+/// as the suite writes a percentage: the number, a space, the sign.
+#[must_use]
+pub fn osd_percent(percent: u8) -> String {
+    format!("{percent} %")
+}
+
+// The Volume and Brightness pieces and their popup (CEL-2-C).
+
+/// The accessible name of the bar's Volume piece and the popup's heading
+/// ("Volume").
+pub const PIECE_VOLUME: &str = "Volumen";
+
+/// The accessible name of the bar's Brightness piece and the popup's heading
+/// ("Brightness").
+pub const PIECE_BRIGHTNESS: &str = "Brillo";
+
+/// The popup's heading for the microphone's row ("Microphone").
+pub const MICROPHONE: &str = "Micrófono";
+
+/// The label of the output's mute switch in the volume popup ("Mute").
+pub const MUTE: &str = "Silenciar";
+
+/// The label of the microphone's mute switch in the volume popup
+/// ("Mute microphone").
+pub const MUTE_MICROPHONE: &str = "Silenciar micrófono";
+
+/// The accessible state of the bar's Volume piece: the level, or that the
+/// output is muted ("Volume, 60 %" / "Volume, muted").
+#[must_use]
+pub fn bar_volume_state(percent: u8, muted: bool) -> String {
+    if muted {
+        format!("{PIECE_VOLUME}, silenciado")
+    } else {
+        format!("{PIECE_VOLUME}, {}", osd_percent(percent))
+    }
+}
+
+/// The accessible state of the bar's Brightness piece ("Brightness, 60 %").
+#[must_use]
+pub fn bar_brightness_state(percent: u8) -> String {
+    format!("{PIECE_BRIGHTNESS}, {}", osd_percent(percent))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

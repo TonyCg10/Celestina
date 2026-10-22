@@ -73,6 +73,15 @@ What Noctalia still does for the session is in
   [S]`, `clear`, `pause` and `resume` are answered `ok` by the bus as soon as
   the worker has queued them, and how they ended (a stale snapshot `S`, a
   missing entry) is told to the journal only; no verb returns an entry.
+- The OSD duty (`duties.osd`, `off` by default) shows a short on-screen
+  display for volume, microphone and brightness changes on a `celestina-osd`
+  overlay surface that exists only while it shows, and gives the `volume` and
+  `brightness` bar pieces their readings. Audio is observed through
+  `pactl subscribe` and read with `wpctl`; brightness through sysfs and,
+  lazily, `ddcutil` (never with `CELESTINA_DDC=0`). The lock-keys OSD is not
+  delivered. With the duty off, the `volume`, `microphone` and `brightness`
+  verbs are rejected. See
+  [the evidence](docs/evidence/2026-10-17-osd.md).
 - Surfaces take no keyboard at rest
   ([ADR 0007](docs/decisions/0007-focus-policy.md)); well-known bus names are
   claimed only when free, so the shell runs beside Noctalia
@@ -119,7 +128,9 @@ not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
 `island close`, `launcher toggle`, `notifications toggle`,
 `notifications dismiss-all`, `wallpaper set <output|all> <file>`,
 `wallpaper next [output]`, `wallpaper prev [output]`, `wallpaper mode <mode>`,
-`wallpaper retry`, `clipboard select|remove N [S]`, `clipboard clear|pause|resume` and `quit`; `launcher toggle` opens or closes the
+`wallpaper retry`, `clipboard select|remove N [S]`, `clipboard clear|pause|resume`,
+`volume up|down|mute|set <0-100>`, `microphone mute|set <0-100>`,
+`brightness up|down|set <0-100> [output]` and `quit`; `launcher toggle` opens or closes the
 launcher, and `notifications toggle` opens or closes the Notifications page and
 `notifications dismiss-all` dismisses every notification. `wallpaper set` and
 `wallpaper next`/`prev` choose the picture of one output (or of all, for `set`)

@@ -18,6 +18,7 @@ use crate::{
     highlight::Highlight,
     key::Key,
     tree::{NodeId, Tree},
+    view::ViewKind,
 };
 
 /// Linux `BTN_LEFT`; the only button that presses and clicks.
@@ -30,10 +31,14 @@ pub(crate) const XKB_KEY_KP_ENTER: u32 = 0xff8d;
 pub(crate) const XKB_KEY_ESCAPE: u32 = 0xff1b;
 pub(crate) const XKB_KEY_ISO_LEFT_TAB: u32 = 0xfe20;
 const XKB_KEY_BACKSPACE: u32 = 0xff08;
-const XKB_KEY_HOME: u32 = 0xff50;
-const XKB_KEY_LEFT: u32 = 0xff51;
-const XKB_KEY_RIGHT: u32 = 0xff53;
-const XKB_KEY_END: u32 = 0xff57;
+pub(crate) const XKB_KEY_HOME: u32 = 0xff50;
+pub(crate) const XKB_KEY_LEFT: u32 = 0xff51;
+pub(crate) const XKB_KEY_UP: u32 = 0xff52;
+pub(crate) const XKB_KEY_RIGHT: u32 = 0xff53;
+pub(crate) const XKB_KEY_DOWN: u32 = 0xff54;
+pub(crate) const XKB_KEY_PAGE_UP: u32 = 0xff55;
+pub(crate) const XKB_KEY_PAGE_DOWN: u32 = 0xff56;
+pub(crate) const XKB_KEY_END: u32 = 0xff57;
 const XKB_KEY_DELETE: u32 = 0xffff;
 const XKB_KEY_LOWER_A: u32 = 0x61;
 const XKB_KEY_UPPER_A: u32 = 0x41;
@@ -55,6 +60,9 @@ pub enum UiEvent {
     /// composition of the field the product named so; the product reads the
     /// text through `Tree::field`.
     FieldChanged(FieldId),
+    /// A press, a drag or a key moved the slider keyed so to this level;
+    /// the tree already shows it.
+    SliderChanged(Key, u8),
 }
 
 /// The pointer and keyboard state of one surface.
@@ -76,7 +84,12 @@ impl Interaction {
     /// press, restores it (→ 1, `Slow`) on release or leave, emits `Click`
     /// on a release inside the pressed node and `Scroll` for an axis event.
     /// A left press on a text field focuses it and places its cursor (no
-    /// recoil), and motion while it is held selects (`FieldChanged`).
+    /// recoil), and motion while it is held selects (`FieldChanged`). A
+    /// left press on a slider sets the level under the pointer, motion
+    /// while it is held drags it (saturating past the track's ends, on or
+    /// off the node) and the release sets it where it lands, each emitting
+    /// `SliderChanged` when the level changes; a slider neither recoils,
+    /// takes the focus on a press, nor clicks.
     pub fn pointer(&mut self, tree: &mut Tree, ev: &InputEvent, now: Instant) -> Vec<UiEvent> {
         self.sync(tree);
         let mut out = Vec::new();
@@ -86,6 +99,9 @@ impl Interaction {
                 self.hover(tree, hit, &mut out);
                 if let Some(id) = self.pressed.filter(|&p| is_field(tree, p)) {
                     self.edit_at(tree, id, x, EditOp::PointerDrag, &mut out);
+                }
+                if let Some(id) = self.pressed.filter(|&p| is_slider(tree, p)) {
+                    slide_to(tree, id, x, &mut out);
                 }
             }
             InputEvent::PointerPress { x, y, button, .. } => {
@@ -97,6 +113,8 @@ impl Interaction {
                         if is_field(tree, id) {
                             self.focused = Some(id);
                             self.edit_at(tree, id, x, EditOp::PointerDown, &mut out);
+                        } else if is_slider(tree, id) {
+                            slide_to(tree, id, x, &mut out);
                         } else {
                             recoil(tree, id, tree.press_scale, Motion::Fast, now);
                         }
@@ -108,16 +126,20 @@ impl Interaction {
                 self.hover(tree, hit, &mut out);
                 if button == BTN_LEFT {
                     if let Some(id) = self.pressed.take() {
-                        recoil(tree, id, 1.0, Motion::Slow, now);
-                        if hit == Some(id) {
-                            out.push(UiEvent::Click(tree.key_of(id)));
+                        if is_slider(tree, id) {
+                            slide_to(tree, id, x, &mut out);
+                        } else {
+                            recoil(tree, id, 1.0, Motion::Slow, now);
+                            if hit == Some(id) {
+                                out.push(UiEvent::Click(tree.key_of(id)));
+                            }
                         }
                     }
                 }
             }
             InputEvent::PointerLeave => {
                 self.hover(tree, None, &mut out);
-                if let Some(id) = self.pressed.take() {
+                if let Some(id) = self.pressed.take().filter(|&p| !is_slider(tree, p)) {
                     recoil(tree, id, 1.0, Motion::Slow, now);
                 }
             }
@@ -152,6 +174,11 @@ impl Interaction {
     /// arrows pass through to the rules above and to the surface. The input
     /// method's `Preedit` and `CommitText` and the clipboard's `Paste` edit
     /// the focused field too; without one they are dropped.
+    ///
+    /// While an enabled slider has the focus it consumes its keys (see
+    /// [`Interaction::slider_consumes`]): the arrows, Page Up, Page Down,
+    /// Home and End move its level, emitting `SliderChanged` when it
+    /// changes.
     pub fn key(&mut self, tree: &mut Tree, ev: &InputEvent) -> Vec<UiEvent> {
         self.sync(tree);
         let mut out = Vec::new();
@@ -161,6 +188,11 @@ impl Interaction {
                     out.extend(field_id(tree, id).map(UiEvent::FieldChanged));
                 }
             }
+            self.publish(tree);
+            return out;
+        }
+        if let Some((id, value)) = slider_key(tree, self.focused, ev) {
+            set_slider(tree, id, value, &mut out);
             self.publish(tree);
             return out;
         }
@@ -209,6 +241,13 @@ impl Interaction {
     /// surface leaves it alone instead of treating it as a shortcut.
     pub fn field_consumes(&self, tree: &Tree, ev: &InputEvent) -> bool {
         field_edit(tree, tree.highlight().focused, ev).is_some()
+    }
+
+    /// Whether the focused slider moves with the key event `ev`, so the
+    /// surface leaves it alone instead of treating it as a shortcut; a
+    /// slider already at the end a key moves to still takes the key.
+    pub fn slider_consumes(&self, tree: &Tree, ev: &InputEvent) -> bool {
+        slider_key(tree, tree.highlight().focused, ev).is_some()
     }
 
     /// Edits field node `id` with `op` for a pointer at window x `x`.
@@ -288,9 +327,60 @@ fn is_field(tree: &Tree, id: NodeId) -> bool {
     tree.slot(id).is_some_and(|s| s.field.is_some())
 }
 
+fn is_slider(tree: &Tree, id: NodeId) -> bool {
+    tree.slot(id)
+        .is_some_and(|s| matches!(s.kind, ViewKind::Slider(_)))
+}
+
+/// Moves slider node `id` to the level a pointer at window x `x` names.
+fn slide_to(tree: &mut Tree, id: NodeId, x: f32, out: &mut Vec<UiEvent>) {
+    let metrics = tree.slider_metrics;
+    if let Some(rect) = tree.slot(id).map(|s| s.rect) {
+        set_slider(tree, id, metrics.value_at(rect, x), out);
+    }
+}
+
+/// Sets enabled slider node `id` to `value`, emitting `SliderChanged` when
+/// the level changes.
+fn set_slider(tree: &mut Tree, id: NodeId, value: u8, out: &mut Vec<UiEvent>) {
+    let Some(slot) = tree.slot_mut(id) else {
+        return;
+    };
+    let ViewKind::Slider(slider) = &mut slot.kind else {
+        return;
+    };
+    if !slider.enabled() || slider.value() == value {
+        return;
+    }
+    *slider = slider.with_value(value);
+    out.push(UiEvent::SliderChanged(slot.key, slider.value()));
+}
+
+/// The node and the level the focused node, when it is a shown, enabled
+/// slider, moves to with the key event `ev`.
+fn slider_key(tree: &Tree, focused: Option<NodeId>, ev: &InputEvent) -> Option<(NodeId, u8)> {
+    let id = focused.filter(|&f| tree.is_shown(f))?;
+    let ViewKind::Slider(slider) = tree.slot(id)?.kind else {
+        return None;
+    };
+    let InputEvent::Key {
+        keysym,
+        modifiers,
+        pressed: true,
+        ..
+    } = ev
+    else {
+        return None;
+    };
+    if !slider.enabled() {
+        return None;
+    }
+    Some((id, slider.key_value(*keysym, *modifiers)?))
+}
+
 fn field_id(tree: &Tree, id: NodeId) -> Option<FieldId> {
     match tree.slot(id)?.kind {
-        crate::view::ViewKind::Field { id, .. } => Some(id),
+        ViewKind::Field { id, .. } => Some(id),
         _ => None,
     }
 }
@@ -376,7 +466,7 @@ pub(crate) fn hit(tree: &Tree, x: f32, y: f32, now: Instant) -> Option<NodeId> {
         if slot.interactive && opacity > 0.0 && inside_clip && slot.rect.contains(x, y) {
             found = Some(id);
         }
-        let child_clip = if slot.clip && matches!(slot.kind, crate::view::ViewKind::Box { .. }) {
+        let child_clip = if slot.clip && matches!(slot.kind, ViewKind::Box { .. }) {
             Some(clip.map_or(slot.rect, |c| intersect(c, slot.rect)))
         } else {
             clip

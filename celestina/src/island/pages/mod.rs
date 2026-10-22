@@ -446,6 +446,7 @@ mod tests {
                 celestina_ui::ViewKind::Icon { .. } => "icon".to_owned(),
                 celestina_ui::ViewKind::Image { .. } => "image".to_owned(),
                 celestina_ui::ViewKind::Field { .. } => "field".to_owned(),
+                celestina_ui::ViewKind::Slider(_) => "slider".to_owned(),
             }
         }
         fn walk(v: &View, depth: usize, out: &mut Vec<String>) {

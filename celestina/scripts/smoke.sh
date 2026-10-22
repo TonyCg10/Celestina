@@ -45,7 +45,12 @@ set -eu
 # power-profiles-daemon, ended by closing its input), which must show the
 # network, Bluetooth, battery and profiles workers ready; one on a socket that
 # does not exist, which must show them all unavailable. Neither touches the
-# real system bus. Without niri the nested session is skipped with a notice;
+# real system bus. Two last nested runs cover the OSD duty (CEL-2-C) on fake
+# `wpctl`, `pactl`, `ddcutil` and `brightnessctl` placed first on `PATH`
+# (`CELESTINA_DDC=0`): with the duty on there is no `celestina-osd` surface at
+# rest, an audio event raises it and it is destroyed again, and `volume up`
+# reaches the fake `wpctl`; with the duty off the verbs are rejected and no
+# fake is called. Without niri the nested session is skipped with a notice;
 # without busctl and gdbus the notification part is.
 usage() {
     echo "usage: scripts/smoke.sh --binary PATH" >&2
@@ -884,4 +889,154 @@ for want in 'network: unavailable' 'bluetooth: unavailable' 'power: battery unav
     grep -q "$want" "$run.err" || fail "the journal does not say '$want' (absent bus run)"
 done
 echo "smoke: connectivity with no system bus: every service unavailable, no panic"
+
+# The OSD duty (CEL-2-C): two more nested runs, on fake tools. A directory of
+# stand-ins for `wpctl`, `pactl`, `ddcutil` and `brightnessctl` comes first on
+# the shell's `PATH`; each only appends its arguments to a calls file and
+# answers a fixed reading, so the author's real volume, backlight and monitors
+# are never touched, and `CELESTINA_DDC=0` forbids every ddcutil call besides.
+# The fake `pactl subscribe` waits for a trigger file, then moves the fake
+# volume and emits one event line. Run A has `duties.osd` on: the shell must
+# hold no `celestina-osd` surface and draw nothing for it at rest (the wrapper
+# writes a checkpoint line to stderr before the trigger, and no surface may
+# exist before it), the event must create the surface and the surface must be
+# destroyed again, and `celestina volume up` must reach the fake `wpctl` as
+# `set-volume @DEFAULT_AUDIO_SINK@ <fraction> -l 1.0`. Run B has the duty off
+# (the default): both verbs are rejected and no fake is called at all.
+osd_fakes=$work/osd-fakes
+osd_state=$work/osd-state
+mkdir -p "$osd_fakes" "$osd_state"
+cat > "$osd_fakes/wpctl" <<'FAKE'
+#!/bin/sh
+# Fake wpctl: records its arguments and keeps the volume in a file.
+echo "wpctl $*" >> "$CELESTINA_SMOKE_FAKE/calls"
+case "$1" in
+    get-volume) echo "Volume: $(cat "$CELESTINA_SMOKE_FAKE/volume")" ;;
+    set-volume) echo "$3" > "$CELESTINA_SMOKE_FAKE/volume" ;;
+esac
+FAKE
+cat > "$osd_fakes/pactl" <<'FAKE'
+#!/bin/sh
+# Fake pactl: records its arguments; `subscribe` waits for the trigger, moves
+# the volume, emits one event and then stays alive until the shell kills it.
+echo "pactl $*" >> "$CELESTINA_SMOKE_FAKE/calls"
+[ "$1" = subscribe ] || exit 0
+while [ ! -e "$CELESTINA_SMOKE_FAKE/trigger" ]; do sleep 0.1; done
+echo 0.55 > "$CELESTINA_SMOKE_FAKE/volume"
+echo "Event 'change' on sink #50"
+exec sleep 600
+FAKE
+for tool in ddcutil brightnessctl; do
+    cat > "$osd_fakes/$tool" <<'FAKE'
+#!/bin/sh
+# Fake: records its arguments and reads as nothing.
+echo "$(basename "$0") $*" >> "$CELESTINA_SMOKE_FAKE/calls"
+exit 1
+FAKE
+done
+chmod +x "$osd_fakes/wpctl" "$osd_fakes/pactl" "$osd_fakes/ddcutil" "$osd_fakes/brightnessctl"
+mkdir -p "$work/xdg-osd/celestina" "$work/xdg-osd-off/celestina"
+printf '{"schema_version":1,"duties":{"osd":"on"},"osd":{"timeout_ms":500}}\n' \
+    > "$work/xdg-osd/celestina/shell.json"
+printf '{"schema_version":1}\n' > "$work/xdg-osd-off/celestina/shell.json"
+# $1 is the configuration home, $2 whether the wrapper pulls the trigger.
+osd_wrapper() {
+    cat <<WRAPPER
+#!/bin/sh
+# Runs the shell on the fake tools, sends the OSD verbs once it answers, and
+# exits with the shell's status.
+XDG_CONFIG_HOME='$1'
+CELESTINA_SMOKE_FAKE='$osd_state'
+CELESTINA_DDC=0
+PATH='$osd_fakes':\$PATH
+export XDG_CONFIG_HOME CELESTINA_SMOKE_FAKE CELESTINA_DDC PATH
+RUST_LOG=info,celestina_wayland::runtime=debug "$bin" "\$@" &
+shell=\$!
+send() {
+    tries=0
+    until "$bin" "\$@"; do
+        tries=\$((tries + 1))
+        [ "\$tries" -lt 20 ] || { echo "smoke-verb-failed \$*" >&2; return 1; }
+        sleep 0.2
+    done
+}
+if [ '$2' = trigger ]; then
+    sleep 3
+    echo "smoke-osd-rest-checkpoint" >&2
+    : > "\$CELESTINA_SMOKE_FAKE/trigger"
+    sleep 2
+fi
+send volume up
+send brightness up
+wait "\$shell"
+WRAPPER
+}
+osd_run() {
+    # $1 name, $2 configuration home, $3 trigger|none.
+    rm -f "$osd_state/calls" "$osd_state/trigger"
+    echo 0.40 > "$osd_state/volume"
+    : > "$osd_state/calls"
+    osd_wrapper "$2" "$3" > "$work/$1-run"
+    chmod +x "$work/$1-run"
+    run=$work/$1
+    status=0
+    timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
+        --binary "$work/$1-run" --once "$run" -- --exit-after 9 \
+        > "$work/niri.log" 2>&1 || status=$?
+    [ "$status" -eq 0 ] || fail "the nested niri exited with $status ($1 run)"
+    [ -f "$run.status" ] || fail "the shell never ran inside the nest ($1 run)"
+    shell_status=$(cat "$run.status")
+    [ "$shell_status" = 0 ] || fail "the shell exited with $shell_status ($1 run)"
+    if grep -q 'panicked' "$run.err"; then
+        fail "the shell panicked ($1 run)"
+    fi
+}
+osd_run osd "$work/xdg-osd" trigger
+grep -q 'osd duty on: workers started' "$run.err" ||
+    fail "the OSD workers did not start with the duty on"
+if grep -q 'smoke-verb-failed' "$run.err"; then
+    fail "an OSD verb did not reach the shell"
+fi
+# Nothing of the OSD exists before the checkpoint: no surface and so no frame.
+if awk '/smoke-osd-rest-checkpoint/ { exit } /osd surface created/ { found = 1 } END { exit !found }' "$run.err"; then
+    fail "an OSD surface existed at rest, before any event"
+fi
+grep -q 'smoke-osd-rest-checkpoint' "$run.err" || fail "the OSD rest checkpoint was never reached"
+grep -q 'osd surface created' "$run.err" || fail "the audio event did not raise the OSD surface"
+grep -q 'osd surface destroyed' "$run.err" || fail "the OSD surface was not destroyed after its timeout"
+created=$(grep -n 'osd surface created' "$run.err" | head -n 1 | cut -d: -f1)
+destroyed=$(grep -n 'osd surface destroyed' "$run.err" | head -n 1 | cut -d: -f1)
+[ "$created" -lt "$destroyed" ] || fail "the OSD surface was destroyed before it was created"
+# Surfaces that drew a frame before the OSD existed are the shell's own; a
+# frame on any other surface after it is the OSD's, and there must be one.
+osd_frames=$(awk '
+    /osd surface created/ { made = 1; next }
+    /frame drawn/ {
+        match($0, /surface=[0-9]+/)
+        id = substr($0, RSTART, RLENGTH)
+        if (!made) { known[id] = 1 } else if (!(id in known)) { n++ }
+    }
+    END { print n + 0 }' "$run.err")
+[ "$osd_frames" -ge 1 ] || fail "no frame was drawn on the OSD surface"
+grep -q '^wpctl get-volume @DEFAULT_AUDIO_SINK@$' "$osd_state/calls" ||
+    fail "the fake wpctl was never read: $(cat "$osd_state/calls")"
+grep -q '^wpctl set-volume @DEFAULT_AUDIO_SINK@ 0\.60 -l 1\.0$' "$osd_state/calls" ||
+    fail "celestina volume up did not reach wpctl as set-volume 0.60: $(cat "$osd_state/calls")"
+grep -q '^pactl subscribe$' "$osd_state/calls" || fail "pactl subscribe was never started"
+if grep -q '^ddcutil' "$osd_state/calls"; then
+    fail "ddcutil was called with CELESTINA_DDC=0"
+fi
+grep -q 'volume up: queued' "$run.err" || fail "the volume verb was not queued"
+echo "smoke: osd on: surface created and destroyed, osd_frames=$osd_frames, volume up reached wpctl as set-volume 0.60"
+
+osd_run osd-off "$work/xdg-osd-off" none
+grep -q 'volume up: rejected: the osd duty is off' "$run.err" ||
+    fail "volume up was not rejected with the duty off"
+grep -q 'brightness up: rejected: the osd duty is off' "$run.err" ||
+    fail "brightness up was not rejected with the duty off"
+if grep -q 'osd surface created' "$run.err"; then
+    fail "an OSD surface appeared with the duty off"
+fi
+[ ! -s "$osd_state/calls" ] || fail "a fake tool was called with the duty off: $(cat "$osd_state/calls")"
+echo "smoke: osd off: both verbs rejected, no tool called"
 echo "smoke: OK"

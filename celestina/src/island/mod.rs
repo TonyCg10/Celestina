@@ -38,7 +38,10 @@ use crate::{
     clipboard::{verbs::ClipboardVerb, ClipboardState},
     command::Verb,
     connectivity::state::ConnectivityState,
-    pieces::{BarCx, Gesture, PageId, PieceAction},
+    osd::popup as level_popup,
+    pieces::{
+        AudioAction, AudioLevels, BarCx, BrightnessAction, Gesture, Levels, PageId, PieceAction,
+    },
     providers::{
         niri::NiriModel, notifications::NotificationsCommand, sysmon::SysReading,
         weather::WeatherReading,
@@ -98,6 +101,18 @@ pub enum IslandAction {
     /// against its state and only then hands it to the worker (or starts the
     /// editing UI).
     Connectivity(Action),
+    /// The Volume piece's wheel or mute: the app commands the audio worker.
+    Audio(AudioAction),
+    /// The Brightness piece's wheel: the app commands the brightness workers
+    /// for this Island's output.
+    Brightness(BrightnessAction),
+    /// The Volume or Brightness piece was clicked: the app builds the slider
+    /// popup and hands it to [`Island::open_level_popup`], anchored at
+    /// `anchor` (a rect of the surface).
+    OpenLevelPopup {
+        kind: level_popup::Kind,
+        anchor: Rect,
+    },
 }
 
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
@@ -131,6 +146,11 @@ pub struct Shared<'a> {
     pub clipboard_on: bool,
     /// The clipboard worker's latest rows: previews only.
     pub clipboard: &'a ClipboardState,
+    /// The default audio devices' readings (empty while the `osd` duty is
+    /// off).
+    pub audio: AudioLevels,
+    /// The brightness of each output's monitor, by output name.
+    pub brightness: &'a std::collections::BTreeMap<String, u8>,
 }
 
 /// Whether the bar's clipboard piece draws something else for `new` than
@@ -243,6 +263,11 @@ pub struct Island {
     scroll: ScrollRemainder,
     /// The bar's zone capsules, while the `bar` duty is on.
     bar: Option<BarTree>,
+    /// The Volume or Brightness slider popup, while it is open. It hangs from
+    /// the bar, so it outlives the page.
+    level_popup: Option<PopupId>,
+    /// What the Volume and Brightness pieces read.
+    levels: Levels,
     /// The open tray menu hangs from the bar, not from the Tray page, so it
     /// outlives the page.
     tray_menu_on_bar: bool,
@@ -314,6 +339,8 @@ impl Island {
             icons: IconCache::default(),
             scroll: ScrollRemainder::default(),
             bar: None,
+            level_popup: None,
+            levels: Levels::default(),
             tray_menu_on_bar: false,
             bar_menu_asked: false,
             bar_sysmon: Cadence::new(SYSMON_BAR_PERIOD),
@@ -434,6 +461,7 @@ impl Island {
             weather: self.weather.as_ref(),
             today: self.today,
             connectivity: &self.connectivity,
+            levels: self.levels,
         }
     }
 
@@ -605,6 +633,8 @@ impl Island {
             weather,
             clipboard_on,
             clipboard,
+            audio,
+            brightness,
         } = *shared;
         let now = cx.now;
         self.set_reduced_motion(reduced);
@@ -645,6 +675,14 @@ impl Island {
         }
         if history != self.history {
             self.history = history.to_vec();
+            seen = true;
+        }
+        let levels = Levels {
+            audio,
+            brightness: brightness.get(&self.output).copied(),
+        };
+        if levels != self.levels {
+            self.levels = levels;
             seen = true;
         }
         if tray.generation != self.tray_generation {
@@ -1004,7 +1042,11 @@ impl Island {
             }
             // The popup's grab still delivers presses on the Island (the
             // same client): like a native menu, such a press only closes it.
-            InputEvent::PointerPress { .. } if self.menu.is_some() || self.tray_menu.is_some() => {
+            InputEvent::PointerPress { .. }
+                if self.menu.is_some()
+                    || self.tray_menu.is_some()
+                    || self.level_popup.is_some() =>
+            {
                 self.close_menu(ctl);
                 true
             }
@@ -1192,6 +1234,14 @@ impl Island {
                         });
                     }
                 }
+                PieceAction::Audio(AudioAction::Popup) => {
+                    out.extend(self.popup_action(key, level_popup::Kind::Volume));
+                }
+                PieceAction::Audio(action) => out.push(IslandAction::Audio(action)),
+                PieceAction::Brightness(BrightnessAction::Popup) => {
+                    out.extend(self.popup_action(key, level_popup::Kind::Brightness));
+                }
+                PieceAction::Brightness(action) => out.push(IslandAction::Brightness(action)),
                 PieceAction::Notification(command) => out.push(IslandAction::Notification(command)),
                 PieceAction::Connectivity(action) => out.push(IslandAction::Connectivity(action)),
             }
@@ -1200,6 +1250,50 @@ impl Island {
             }
         }
         out
+    }
+
+    /// The action that opens `kind`'s slider popup below the bar node `key`.
+    fn popup_action(&self, key: Key, kind: level_popup::Kind) -> Option<IslandAction> {
+        let anchor = self.bar.as_ref()?.node_rect(key)?;
+        Some(IslandAction::OpenLevelPopup { kind, anchor })
+    }
+
+    /// Opens the slider `popup` of `size` below the piece at `anchor` (the
+    /// rect [`IslandAction::OpenLevelPopup`] carried) and returns it. `None`
+    /// while another popup of this Island is open or the bar is off.
+    pub fn open_level_popup(
+        &mut self,
+        anchor: Rect,
+        size: (f32, f32),
+        popup: Box<dyn PopupShell>,
+        ctl: &mut SurfaceCtl<'_>,
+    ) -> Option<PopupId> {
+        if self.bar.is_none()
+            || self.menu.is_some()
+            || self.tray_menu.is_some()
+            || self.level_popup.is_some()
+        {
+            return None;
+        }
+        let id = ctl.open_popup(level_popup::placement(&self.theme, anchor), size, popup);
+        tracing::debug!(output = %self.output, popup = id.0, "island: level popup opened");
+        self.level_popup = Some(id);
+        Some(id)
+    }
+
+    /// Whether a slider popup hangs from this Island right now.
+    #[must_use]
+    pub fn level_popup_open(&self) -> bool {
+        self.level_popup.is_some()
+    }
+
+    /// Closes the slider popup from the Island's side (the `osd` duty went
+    /// off); the runtime still reports `PopupClosed`.
+    pub fn close_level_popup(&mut self, ctl: &mut SurfaceCtl<'_>) {
+        if let Some(id) = self.level_popup.take() {
+            ctl.close_popup(id);
+            ctl.request_redraw();
+        }
     }
 
     /// Opens the overflow `menu` of `size` below the overflow button at
@@ -1285,7 +1379,10 @@ impl Island {
             UiEvent::Scroll(key, horizontal, vertical) => {
                 self.scroll_actions(*key, *horizontal, *vertical)
             }
-            UiEvent::HoverChanged(..) | UiEvent::Escape | UiEvent::FieldChanged(_) => Vec::new(),
+            UiEvent::HoverChanged(..)
+            | UiEvent::Escape
+            | UiEvent::FieldChanged(_)
+            | UiEvent::SliderChanged(..) => Vec::new(),
         }
     }
 
@@ -1390,9 +1487,13 @@ impl Island {
     /// `PopupClosed`, which then finds nothing to do.
     fn close_menu(&mut self, ctl: &mut SurfaceCtl<'_>) {
         self.tray_menu_on_bar = false;
-        for id in [self.menu.take(), self.tray_menu.take()]
-            .into_iter()
-            .flatten()
+        for id in [
+            self.menu.take(),
+            self.tray_menu.take(),
+            self.level_popup.take(),
+        ]
+        .into_iter()
+        .flatten()
         {
             ctl.close_popup(id);
             ctl.request_redraw();
@@ -1432,10 +1533,14 @@ impl Island {
     fn detach_at(&mut self, now: Instant) -> Vec<PopupId> {
         self.tray_menu_on_bar = false;
         self.bar_menu_asked = false;
-        let menus = [self.menu.take(), self.tray_menu.take()]
-            .into_iter()
-            .flatten()
-            .collect();
+        let menus = [
+            self.menu.take(),
+            self.tray_menu.take(),
+            self.level_popup.take(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         self.close(now);
         // A single step back to the capsule, whatever the motion setting.
         self.state.close(now, true);
@@ -1464,6 +1569,8 @@ impl Island {
         } else if self.tray_menu == Some(id) {
             self.tray_menu = None;
             self.tray_menu_on_bar = false;
+        } else if self.level_popup == Some(id) {
+            self.level_popup = None;
         } else {
             return false;
         }
@@ -1501,9 +1608,10 @@ impl Island {
                 self.close(now);
                 return None;
             }
-            UiEvent::HoverChanged(..) | UiEvent::Scroll(..) | UiEvent::FieldChanged(_) => {
-                return None
-            }
+            UiEvent::HoverChanged(..)
+            | UiEvent::Scroll(..)
+            | UiEvent::FieldChanged(_)
+            | UiEvent::SliderChanged(..) => return None,
         };
         match self.activate(key, now)? {
             IslandAction::OpenMenu { more, .. } => Some(IslandAction::OpenMenu { more, keyboard }),
@@ -1607,6 +1715,9 @@ impl Island {
             | Verb::NightLight(_)
             | Verb::Session(_)
             | Verb::Clipboard(_)
+            | Verb::Volume(_)
+            | Verb::Microphone(_)
+            | Verb::Brightness { .. }
             | Verb::Quit => return,
         }
         self.sync_ctl(ctl, now);
@@ -1618,6 +1729,7 @@ impl Island {
 mod tests {
     use super::*;
     use crate::providers::niri::{Window, Workspace};
+    use celestina_shell::audio::Direction;
     use celestina_wayland::{CloseReason, PopupId};
 
     fn model(output: &str, active: u64) -> NiriModel {
@@ -2095,6 +2207,121 @@ mod tests {
         let bell = centre(bar_rect(&island, Key::named("bell")));
         assert!(click_at(&mut island, bell, BTN_LEFT, t0).is_empty());
         assert_eq!(island.page(), Some(PageId::NOTIFICATIONS));
+    }
+
+    #[test]
+    fn the_level_pieces_appear_with_a_reading_and_ask_for_their_workers_and_popup() {
+        use crate::pieces::Level;
+        let (mut island, t0) = bar_island(1920.0);
+        let volume = Key::named("volume");
+        let brightness = Key::named("brightness");
+        // Without a reading neither piece has a node.
+        let bar = island.bar.as_ref().expect("a bar");
+        assert!(bar.node_rect(volume).is_none() && bar.node_rect(brightness).is_none());
+
+        island.levels = Levels {
+            audio: AudioLevels {
+                output: Some(Level {
+                    percent: 40,
+                    muted: false,
+                }),
+                input: None,
+            },
+            brightness: Some(70),
+        };
+        island.invalidate_bar();
+        lay_fake(&mut island, t0);
+        // The new nodes fade in: the input comes after they are shown.
+        let t0 = t0 + std::time::Duration::from_secs(1);
+
+        // The wheel steps with the Wayland sign (down lowers) and the right
+        // and middle clicks flip the mute.
+        let at = centre(bar_rect(&island, volume));
+        let wheel = |vertical| InputEvent::Axis {
+            x: at.0,
+            y: at.1,
+            horizontal: 0.0,
+            vertical,
+        };
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: at.0, y: at.1 },
+            t0,
+        );
+        assert_eq!(
+            feed(&mut island, wheel(15.0), t0),
+            [IslandAction::Audio(AudioAction::Step(Direction::Down, 1))]
+        );
+        assert_eq!(
+            feed(&mut island, wheel(-15.0), t0),
+            [IslandAction::Audio(AudioAction::Step(Direction::Up, 1))]
+        );
+        for button in [BTN_MIDDLE, BTN_RIGHT] {
+            assert_eq!(
+                click_at(&mut island, at, button, t0),
+                [IslandAction::Audio(AudioAction::ToggleMute)]
+            );
+        }
+        // A click asks for the popup, anchored at the piece's node.
+        assert_eq!(
+            click_at(&mut island, at, BTN_LEFT, t0),
+            [IslandAction::OpenLevelPopup {
+                kind: level_popup::Kind::Volume,
+                anchor: bar_rect(&island, volume),
+            }]
+        );
+
+        let at = centre(bar_rect(&island, brightness));
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: at.0, y: at.1 },
+            t0,
+        );
+        let wheel = InputEvent::Axis {
+            x: at.0,
+            y: at.1,
+            horizontal: 0.0,
+            vertical: -15.0,
+        };
+        assert_eq!(
+            feed(&mut island, wheel, t0),
+            [IslandAction::Brightness(BrightnessAction::Step(
+                Direction::Up,
+                1
+            ))]
+        );
+        // The middle and right clicks mean nothing here.
+        assert!(click_at(&mut island, at, BTN_RIGHT, t0).is_empty());
+        assert_eq!(
+            click_at(&mut island, at, BTN_LEFT, t0),
+            [IslandAction::OpenLevelPopup {
+                kind: level_popup::Kind::Brightness,
+                anchor: bar_rect(&island, brightness),
+            }]
+        );
+        assert!(!island.state.is_open(), "no piece opened a page");
+    }
+
+    #[test]
+    fn the_level_popup_is_one_of_the_islands_popups() {
+        let (mut island, t0) = bar_island(1920.0);
+        island.level_popup = Some(PopupId(7));
+        assert!(island.level_popup_open());
+        // Not its menu's, not another's.
+        assert!(!island.menu_closed(PopupId(1), CloseReason::Shell, t0));
+        assert!(island.level_popup_open());
+        assert!(island.menu_closed(PopupId(7), CloseReason::Shell, t0));
+        assert!(!island.level_popup_open());
+        // A compositor dismissal is a click outside: it closes an open page.
+        island.set_reduced_motion(true);
+        island.open(PageId::ACTIVITY, t0);
+        island.level_popup = Some(PopupId(8));
+        assert!(island.menu_closed(PopupId(8), CloseReason::Dismissed, t0));
+        assert!(!island.state.is_open());
+        // Detaching the Island closes the popup with its menus.
+        island.level_popup = Some(PopupId(9));
+        assert_eq!(island.detach_at(t0), vec![PopupId(9)]);
+        assert!(!island.level_popup_open());
     }
 
     #[test]

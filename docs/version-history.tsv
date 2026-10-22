@@ -277,3 +277,4 @@ celestina	1.4.0	milestone	CEL-2-K	Add the glance pieces: system monitor, weather
 celestina	1.5.0	milestone	CEL-2-G	Add the clipboard history duty: ext-data-control provider, bounded text and image history, secret-aware skipping, the piece and the page
 celestina	1.5.1	bug	CEL-2-G-SYNC	Fix the clipboard worker start under load with a longer first sync and one retry
 celestina	1.6.0	milestone	CEL-2-F	Add the connectivity pieces: network, Bluetooth, battery and power profile with read-only state and a closed action list
+celestina	1.7.0	milestone	CEL-2-C	Add the OSD duty: volume, microphone and brightness feedback, the verbs and the volume and brightness pieces, off by default

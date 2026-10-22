@@ -126,6 +126,10 @@ pub enum Anchoring {
     /// Anchored to all four edges: the compositor sizes it to the output
     /// and tells the size in the configure; the spec's size is not sent.
     Fill,
+    /// Anchored to the bottom edge, centred along it, at the spec's size.
+    Bottom,
+    /// Anchored to the bottom and right edges, at the spec's size.
+    BottomRight,
 }
 
 impl Anchoring {
@@ -138,6 +142,8 @@ impl Anchoring {
             Anchoring::TopWide => (Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, (0, size.1)),
             Anchoring::Centred => (Anchor::empty(), size),
             Anchoring::Fill => (Anchor::all(), (0, 0)),
+            Anchoring::Bottom => (Anchor::BOTTOM, size),
+            Anchoring::BottomRight => (Anchor::BOTTOM | Anchor::RIGHT, size),
         }
     }
 }
@@ -1463,6 +1469,18 @@ mod tests {
             Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT
         );
         assert_eq!(size, (0, 0), "the compositor sizes it to the output");
+    }
+
+    #[test]
+    fn a_bottom_surface_anchors_the_bottom_edge_and_keeps_its_size() {
+        assert_eq!(
+            Anchoring::Bottom.request((396, 88)),
+            (Anchor::BOTTOM, (396, 88))
+        );
+        assert_eq!(
+            Anchoring::BottomRight.request((396, 88)),
+            (Anchor::BOTTOM | Anchor::RIGHT, (396, 88))
+        );
     }
 
     #[test]

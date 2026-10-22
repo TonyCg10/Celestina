@@ -45,18 +45,22 @@
 
 pub mod battery;
 pub mod bluetooth;
+pub mod brightness;
 pub mod clipboard;
 pub mod clock;
 pub mod conn_glyph;
+mod level;
 pub mod network;
 pub mod notifications;
 pub mod power_profile;
 pub mod sysmon;
 pub mod tray;
+pub mod volume;
 pub mod weather;
 pub mod workspaces;
 
 use celestina_paint::Theme;
+use celestina_shell::audio::Direction;
 use celestina_shell::connectivity::Action;
 use celestina_shell::glance::Today;
 use celestina_ui::{Key, View};
@@ -166,6 +170,78 @@ pub struct BarCx<'a> {
     pub clipboard: &'a ClipboardPanel,
     /// The network, Bluetooth and power state (CEL-2-F), read-only.
     pub connectivity: &'a ConnectivityState,
+    /// The audio and brightness readings the Volume and Brightness pieces
+    /// show; empty while the `osd` duty is off.
+    pub levels: Levels,
+}
+
+/// One audio device's reading: whole percent and whether it is muted. Muted
+/// is not zero; the level is the one the device remembers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Level {
+    pub percent: u8,
+    pub muted: bool,
+}
+
+/// The default audio devices' readings. `None` is no reading (no device, or
+/// the worker has not read it), never 0 %.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AudioLevels {
+    /// The default output (speakers, headphones).
+    pub output: Option<Level>,
+    /// The default input (microphone).
+    pub input: Option<Level>,
+}
+
+/// What the Volume and Brightness pieces read: the audio devices, and the
+/// brightness of the monitor of the bar's output (`None` while unknown or
+/// when that output has no monitor this shell can read).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Levels {
+    pub audio: AudioLevels,
+    pub brightness: Option<u8>,
+}
+
+/// The wheel steps of one gesture a piece forwards at most: a flick is not a
+/// jump from one end of the range to the other.
+pub const MAX_WHEEL_STEPS: u8 = 4;
+
+/// What the Volume piece asks for. The default output is the one it drives;
+/// the microphone is in the popup.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AudioAction {
+    /// Move the level `steps` steps (at most [`MAX_WHEEL_STEPS`]).
+    Step(Direction, u8),
+    /// Flip the output's mute.
+    ToggleMute,
+    /// Open the slider popup below the piece.
+    Popup,
+}
+
+/// What the Brightness piece asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BrightnessAction {
+    /// Move the level `steps` steps (at most [`MAX_WHEEL_STEPS`]).
+    Step(Direction, u8),
+    /// Open the slider popup below the piece.
+    Popup,
+}
+
+/// The step action a wheel gesture of `steps` whole steps (the Wayland sign:
+/// positive is down) asks for, or `None` for no step. Shared by the two
+/// level pieces.
+#[must_use]
+pub fn wheel(steps: i32) -> Option<(Direction, u8)> {
+    if steps == 0 {
+        return None;
+    }
+    let direction = if steps > 0 {
+        Direction::Down
+    } else {
+        Direction::Up
+    };
+    let count = u8::try_from(steps.unsigned_abs()).unwrap_or(MAX_WHEEL_STEPS);
+    Some((direction, count.min(MAX_WHEEL_STEPS)))
 }
 
 /// What the Island saw on a node of a piece's widget.
@@ -213,6 +289,11 @@ pub enum PieceAction {
     Tray(TrayCommand),
     /// The item's menu, anchored to the node the input landed on.
     TrayMenu(ItemId),
+    /// Something the Volume piece asks of the audio worker, or its popup.
+    Audio(AudioAction),
+    /// Something the Brightness piece asks of the brightness workers, or its
+    /// popup.
+    Brightness(BrightnessAction),
     /// Something the notification server does.
     Notification(NotificationsCommand),
     /// A request to the connectivity workers (CEL-2-F): the Island forwards
@@ -248,6 +329,8 @@ pub static PIECES: &[&dyn Piece] = &[
     &bluetooth::Bluetooth,
     &battery::Battery,
     &power_profile::PowerProfile,
+    &volume::Volume,
+    &brightness::Brightness,
 ];
 
 /// The piece the layout names `id`, if the table has it.
@@ -302,7 +385,9 @@ mod tests {
                 "network",
                 "bluetooth",
                 "battery",
-                "power-profile"
+                "power-profile",
+                "volume",
+                "brightness"
             ]
         );
         assert_eq!(
@@ -390,6 +475,17 @@ mod tests {
     }
 
     #[test]
+    fn a_wheel_gesture_is_a_bounded_step_with_the_wayland_sign() {
+        assert_eq!(wheel(0), None);
+        assert_eq!(wheel(1), Some((Direction::Down, 1)));
+        assert_eq!(wheel(-1), Some((Direction::Up, 1)));
+        assert_eq!(wheel(3), Some((Direction::Down, 3)));
+        assert_eq!(wheel(-50), Some((Direction::Up, MAX_WHEEL_STEPS)));
+        assert_eq!(wheel(i32::MIN), Some((Direction::Up, MAX_WHEEL_STEPS)));
+        assert_eq!(wheel(i32::MAX), Some((Direction::Down, MAX_WHEEL_STEPS)));
+    }
+
+    #[test]
     fn every_piece_has_an_accessible_name() {
         for p in PIECES {
             assert!(!p.name().is_empty(), "{:?}", p.id());
@@ -431,6 +527,7 @@ mod tests {
             today: None,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: &ConnectivityState::default(),
+            levels: crate::pieces::Levels::default(),
         };
         piece(id)
             .expect("in the table")
@@ -564,6 +661,7 @@ pub(crate) mod tests_support {
             today: None,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             connectivity: state,
+            levels: crate::pieces::Levels::default(),
         })
     }
 }

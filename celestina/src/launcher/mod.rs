@@ -369,7 +369,8 @@ impl Launcher {
                 UiEvent::FieldChanged(_)
                 | UiEvent::Activate(_)
                 | UiEvent::HoverChanged(..)
-                | UiEvent::Scroll(..) => {}
+                | UiEvent::Scroll(..)
+                | UiEvent::SliderChanged(..) => {}
             }
         }
         outcome.changed |= self.stale;

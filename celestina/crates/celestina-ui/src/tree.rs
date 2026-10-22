@@ -19,6 +19,7 @@ use crate::{
     field::{Field, FieldId},
     highlight::Highlight,
     key::Key,
+    slider::{Slider, SliderMetrics},
     view::ViewKind,
 };
 
@@ -124,6 +125,8 @@ pub struct Tree {
     ladder: MotionMs,
     /// The theme's press recoil scale.
     pub(crate) press_scale: f32,
+    /// The theme's slider anatomy, shared by layout, hit-test and paint.
+    pub(crate) slider_metrics: SliderMetrics,
     fault: Option<TreeError>,
 }
 
@@ -157,15 +160,33 @@ impl Tree {
             reduced_motion,
             ladder: theme.motion,
             press_scale: theme.press_scale,
+            slider_metrics: SliderMetrics::of(theme),
             fault: None,
         }
     }
 
     /// Takes `theme`'s motion ladder and press scale for the animations
-    /// started from now on; running ones finish as they were.
+    /// started from now on (running ones finish as they were), and its
+    /// slider anatomy, re-measuring every slider when it changed.
     pub fn set_theme(&mut self, theme: &Theme) {
         self.ladder = theme.motion;
         self.press_scale = theme.press_scale;
+        let metrics = SliderMetrics::of(theme);
+        if metrics != self.slider_metrics {
+            self.slider_metrics = metrics;
+            let sliders: Vec<taffy::NodeId> = self
+                .slots
+                .iter()
+                .flatten()
+                .filter(|s| matches!(s.kind, ViewKind::Slider(_)))
+                .map(|s| s.taffy)
+                .collect();
+            for node in sliders {
+                let r = self.taffy.mark_dirty(node);
+                self.checked("mark a slider for layout", r);
+            }
+            self.dirty = true;
+        }
     }
 
     /// `motion` on the theme's ladder.
@@ -272,6 +293,16 @@ impl Tree {
     pub fn field_mut(&mut self, id: FieldId) -> Option<&mut Field> {
         let node = self.field_node(id)?;
         self.slot_mut(node)?.field.as_mut()
+    }
+
+    /// What the slider keyed `key` shows (its level after any press, drag
+    /// or key since the last view), or `None` when that node is not a
+    /// slider.
+    pub fn slider(&self, key: Key) -> Option<Slider> {
+        match self.slot(self.node_by_key(key)?)?.kind {
+            ViewKind::Slider(s) => Some(s),
+            _ => None,
+        }
     }
 
     fn field_node(&self, id: FieldId) -> Option<NodeId> {

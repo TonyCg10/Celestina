@@ -186,6 +186,7 @@ mod tests {
             weather: None,
             today: None,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
+            levels: crate::pieces::Levels::default(),
         })
     }
 
