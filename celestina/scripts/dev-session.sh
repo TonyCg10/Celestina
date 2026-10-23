@@ -262,6 +262,27 @@ else
     trap 'rm -f "$env_file"' EXIT INT TERM
 fi
 
+# The host withholds frame callbacks from a window it does not show (niri
+# sends one about every second instead of every refresh), and with the
+# default swap interval the nest's winit backend then blocks in eglSwapBuffers
+# on every redraw: a nest behind another window serves its clients about once
+# a second, their start-up runs late and a short-lived surface never gets its
+# configure. A `--once` nest (the smoke, the lock rehearsal, the probes) is
+# never watched, so it presents with Mesa's `vblank_mode=0` (driconf: swap
+# interval 0, exported to niri before the exec below), and only niri's own
+# presentation changes: this `environment` block gives every program the nest
+# starts, the shell under test first, the caller's value back. The
+# interactive nest is shown fullscreen, where the host never throttles it,
+# and is left alone: unthrottled, a nest redraws as fast as it can whenever a
+# client animates.
+if [ -n "$once" ]; then
+    case ${vblank_mode-} in
+        '' | *[!0-9]*) child_vblank=null ;;
+        *) child_vblank="\"$vblank_mode\"" ;;
+    esac
+    printf '\nenvironment {\n    vblank_mode %s\n}\n' "$child_vblank" >> "$generated_config"
+fi
+
 # A per-layer blur strength is the one thing a profile may carry that a
 # stock niri rejects, and a rejected profile is a nest that does not start.
 # The generated profile is offered to the very binary that will run it and,
@@ -300,6 +321,13 @@ fi
 echo ">> nested niri ($niri_binary): $config" >&2
 if [ -z "$once" ]; then
     echo ">> the shell runs inside it; Ctrl-C here stops the whole nest" >&2
+fi
+
+# The `--once` nest presents without waiting for the host (the `environment`
+# block above says why and gives the value back to what the nest starts).
+if [ -n "$once" ]; then
+    vblank_mode=0
+    export vblank_mode
 fi
 
 # The `$0` of the command niri runs is `celestina-dev-session` on purpose: it

@@ -58,12 +58,37 @@ set -eu
 # binaries, `celestina-lock` and `celestina-lock-verify`, must sit beside the
 # shell and refuse a bad request (CEL-2-H). Without niri the nested session is skipped
 # with a notice; without busctl and gdbus the notification part is.
+# A rest-frame check that fails while the host throttles the nest's window is
+# inconclusive and the whole smoke runs again, up to three times (the head of
+# the script, `rest_fail`).
 usage() {
     echo "usage: scripts/smoke.sh --binary PATH" >&2
     exit 2
 }
 [ "$#" -eq 2 ] && [ "$1" = "--binary" ] || usage
 bin=$2
+# The host compositor withholds frame callbacks from a window it does not show
+# (niri sends one about every second instead of every refresh), and a nest on
+# such a window serves its clients at that pace: start-up frames then land
+# after the first second and the rest-frame counts mean nothing. A rest-frame
+# check that fails in a run whose journal shows such a wait (`rest_fail`
+# below) is therefore inconclusive, not a verdict: the attempt exits 75 and
+# the smoke is started again, up to three attempts. A run that was not
+# throttled and fails still fails, and so does the third throttled one.
+if [ -z "${CELESTINA_SMOKE_ATTEMPT:-}" ]; then
+    attempt=1
+    while :; do
+        attempt_status=0
+        CELESTINA_SMOKE_ATTEMPT=$attempt sh "$0" "$@" || attempt_status=$?
+        [ "$attempt_status" -eq 75 ] || exit "$attempt_status"
+        if [ "$attempt" -ge 3 ]; then
+            echo "smoke: the nest was throttled by the host in 3 attempts; show its window" >&2
+            exit 1
+        fi
+        attempt=$((attempt + 1))
+        echo "smoke: the nest was throttled by the host; starting attempt $attempt of 3" >&2
+    done
+fi
 [ -x "$bin" ] || { echo "smoke: $bin is not an executable" >&2; exit 1; }
 case "$bin" in
     /*) ;;
@@ -186,21 +211,70 @@ XDG_CONFIG_HOME=$xdg_default
 XDG_STATE_HOME=$xdg_state
 DBUS_SYSTEM_BUS_ADDRESS=unix:path=$work/no-system-bus
 export XDG_CONFIG_HOME XDG_STATE_HOME DBUS_SYSTEM_BUS_ADDRESS
+# The runs that start the shell without a wrapper of their own start it through
+# this one, which turns the runtime's debug lines on (`frame drawn` carries the
+# callback flag and the time `nest_throttled` reads); the nest's own niri keeps
+# its environment.
+shell_run=$work/shell-run
+cat > "$shell_run" <<WRAPPER
+#!/bin/sh
+RUST_LOG=info,celestina_wayland::runtime=debug exec "$bin" "\$@"
+WRAPPER
+chmod +x "$shell_run"
 run=$work/run
 status=0
 # shellcheck disable=SC2086 # probe_args is two words or none
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$bin" \
+timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$shell_run" \
     $probe_args --once "$run" -- --exit-after 4 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 
-fail() {
-    echo "smoke: $1" >&2
+# tails: the end of the run's files, for a failure's reader.
+tails() {
     for f in "$run.out" "$run.err" "$run.probe" "$work/niri.log"; do
         [ -f "$f" ] || continue
-        echo "--- $(basename "$f")" >&2
+        echo "--- $(basename -- "$f")" >&2
         tail -n 40 "$f" >&2
     done
+}
+fail() {
+    echo "smoke: $1" >&2
+    tails
     exit 1
+}
+# nest_throttled JOURNAL: whether the nest withheld a frame callback from the
+# shell for 500 ms or more. A frame drawn with `next_callback=true` asked for
+# one, and the next frame on that surface is drawn when it arrives: in a nest
+# the host shows that is the next refresh (about 16 ms), in one it does not
+# show it is the host's once-a-second tick. Prints the longest wait in ms.
+nest_throttled() {
+    awk '
+    function secs(line) {
+        # 2026-10-23T17:21:05.780542Z: the time of day in seconds.
+        return substr(line, 12, 2) * 3600 + substr(line, 15, 2) * 60 + substr(line, 18, 9)
+    }
+    /frame drawn/ && /surface=[0-9]/ {
+        match($0, /surface=[0-9]+/)
+        id = substr($0, RSTART, RLENGTH)
+        now = secs($0)
+        if (id in asked && now - asked[id] > longest) longest = now - asked[id]
+        if ($0 ~ /next_callback=true/) asked[id] = now; else delete asked[id]
+    }
+    END { printf "%d\n", longest * 1000; exit !(longest >= 0.5) }' "$1"
+}
+# rest_fail JOURNAL MESSAGE: a rest-frame budget was exceeded. In a throttled
+# nest the start-up frames land late and the budget means nothing, so that is
+# inconclusive: exit 75, and the head of this script starts the run again,
+# up to three times; on the last attempt, and in a nest that was not
+# throttled, it is a failure.
+rest_fail() {
+    if wait_ms=$(nest_throttled "$1"); then
+        [ "${CELESTINA_SMOKE_ATTEMPT:-1}" -lt 3 ] ||
+            fail "$2 (inconclusive: the nest withheld a frame callback for $wait_ms ms, its window is hidden)"
+        echo "smoke: inconclusive (the nest withheld a frame callback for $wait_ms ms): $2" >&2
+        tails
+        exit 75
+    fi
+    fail "$2"
 }
 
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status"
@@ -229,7 +303,7 @@ late=$(printf '%s\n' "$line" | tr ' ' '\n' | sed -n 's/^late=//p')
 # allows exactly those two and any other frame at rest still fails.
 allowed=0
 [ -z "$probe_args" ] || allowed=2
-[ "$rest" -le "$allowed" ] || fail "frames were drawn at rest ($rest, at most $allowed): $lines"
+[ "$rest" -le "$allowed" ] || rest_fail "$run.err" "frames were drawn at rest ($rest, at most $allowed): $lines"
 
 if [ -n "$probe_args" ]; then
     [ "$(cat "$run.probe.status" 2>/dev/null)" = 0 ] ||
@@ -313,7 +387,7 @@ printf '{"schema_version":1,"duties":{"bar":"on"}}\n' > "$work/xdg-bar/celestina
 run=$work/bar
 status=0
 XDG_CONFIG_HOME=$work/xdg-bar timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
-    --binary "$bin" --once "$run" -- --exit-after 4 --metrics \
+    --binary "$shell_run" --once "$run" -- --exit-after 4 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (bar run)"
 [ -f "$run.status" ] || fail "the shell never ran inside the nest (bar run)"
@@ -331,7 +405,7 @@ rest=$(sum rest_frames)
 # repaints the bar legitimately and counts as a rest frame. A shell that
 # keeps redrawing (a stray one-second tick, for example) draws one per
 # second, so more than one fails.
-[ "$rest" -le 1 ] || fail "frames were drawn at rest with the bar on ($rest): $lines"
+[ "$rest" -le 1 ] || rest_fail "$run.err" "frames were drawn at rest with the bar on ($rest): $lines"
 grep 'island surface requested' "$run.err" | grep -q 'bar=true' ||
     fail "the Island did not ask for the bar's surface"
 grep 'island surface requested' "$run.err" | grep -q 'TopWide' ||
@@ -392,7 +466,7 @@ while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
     sleep 1
 done
 XDG_CONFIG_HOME=$config_home timeout 60 "$here/dev-session.sh" --own-bus \
-    --monitor none --binary "$bin" --probe "$here/wallpaper-layers-probe.sh" \
+    --monitor none --binary "$shell_run" --probe "$here/wallpaper-layers-probe.sh" \
     --once "$run" -- --exit-after 10 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (wallpaper run)"
@@ -422,7 +496,7 @@ wp_rest=$(printf '%s\n' "$wp_lines" | tr ' ' '\n' | sed -n 's/^rest_frames=//p' 
     awk '{ n += $1 } END { print n + 0 }')
 [ "$wp_frames" -ge 1 ] || fail "no frame was drawn (wallpaper run): $wp_lines"
 [ "$wp_rest" -le 2 ] ||
-    fail "frames were drawn at rest with the wallpaper present ($wp_rest, at most 2): $wp_lines"
+    rest_fail "$run.err" "frames were drawn at rest with the wallpaper present ($wp_rest, at most 2): $wp_lines"
 if grep -q 'wallpaper: output held by another client' "$run.err"; then
     fail "the shell found the nested output held (wallpaper run)"
 fi
@@ -533,7 +607,7 @@ XDG_CONFIG_HOME='$g_home'
 PATH='$g_bin':\$PATH
 export XDG_CONFIG_HOME PATH
 echo "smoke-curl=\$(command -v curl)" >&2
-RUST_LOG=info exec "$bin" "\$@"
+RUST_LOG=info,celestina_wayland::runtime=debug exec "$bin" "\$@"
 WRAPPER
     chmod +x "$work/$g_name-run"
     run=$work/$g_name
@@ -568,7 +642,7 @@ WRAPPER
     # 14 s, so that second frame lands near the exit and either side of it is
     # a legitimate outcome; a bar that redrew on every two-second sample would
     # draw about six.
-    [ "$g_rest" -le 2 ] || fail "frames were drawn at rest ($g_name run, $g_rest, at most 2): $g_lines"
+    [ "$g_rest" -le 2 ] || rest_fail "$run.err" "frames were drawn at rest ($g_name run, $g_rest, at most 2): $g_lines"
     g_calls=0
     [ ! -f "$g_log" ] || g_calls=$(grep -c '^--call--$' "$g_log" || true)
     echo "smoke: $g_name: frames=$g_frames rest_frames=$g_rest curl_calls=$g_calls"
@@ -816,7 +890,7 @@ clip_on=$(grep -c 'clipboard duty on' "$run.err" || true)
 clip_off=$(grep -c 'clipboard duty off' "$run.err" || true)
 clip_switches=$((clip_off + clip_on - 1))
 [ "$clip_rest" -le "$clip_switches" ] ||
-    fail "frames were drawn at rest beyond one per duty switch ($clip_rest, at most $clip_switches; $clip_events history changes): $clip_lines"
+    rest_fail "$run.err" "frames were drawn at rest beyond one per duty switch ($clip_rest, at most $clip_switches; $clip_events history changes): $clip_lines"
 echo "smoke: clipboard: history 0 -> 1 -> 2 (hinted copy skipped, image accepted, re-selection not duplicated); state file mode 600, no image, deleted when the duty went off, empty when it came back; journal free of the test strings (changes: $changes)"
 echo "smoke: clipboard: $(printf '%s\n' "$clip_lines" | head -n 1) (rest_frames=$clip_rest, duty switches=$clip_switches, history changes=$clip_events)"
 grep '^rss_mib=' "$run.out" | sed 's/^/smoke: clipboard: /' || true
@@ -875,7 +949,7 @@ until addr=\$(sed -n 's/^DBUS_SYSTEM_BUS_ADDRESS=//p' "\$out" 2>/dev/null | head
     fi
     sleep 0.2
 done
-DBUS_SYSTEM_BUS_ADDRESS=\$addr "$bin" "\$@"
+DBUS_SYSTEM_BUS_ADDRESS=\$addr RUST_LOG=info,celestina_wayland::runtime=debug "$bin" "\$@"
 status=\$?
 exec 3>&-
 wait "\$fake"
@@ -907,7 +981,7 @@ printf '%s\n' "$lines" | while IFS= read -r l; do
     [ "${n:-0}" -ge 1 ] || exit 1
 done || fail "a surface drew no frame with the connectivity pieces on: $lines"
 rest=$(sum rest_frames)
-[ "$rest" -le 1 ] || fail "frames were drawn at rest with the connectivity pieces on ($rest): $lines"
+[ "$rest" -le 1 ] || rest_fail "$run.err" "frames were drawn at rest with the connectivity pieces on ($rest): $lines"
 for want in 'network: ready' 'bluetooth: ready' 'power: battery ready' 'power: profiles ready'; do
     grep -q "$want" "$run.err" || fail "the journal does not say '$want' (connectivity run)"
 done
@@ -956,6 +1030,14 @@ echo "smoke: connectivity with no system bus: every service unavailable, no pani
 # destroyed again, and `celestina volume up` must reach the fake `wpctl` as
 # `set-volume @DEFAULT_AUDIO_SINK@ <fraction> -l 1.0`. Run B has the duty off
 # (the default): both verbs are rejected and no fake is called at all.
+# Run A holds the OSD for 4000 ms and runs for 16 s, not the 500 ms and 9 s a
+# quick desktop would do: when the host compositor throttles the nest window
+# the nest's loop runs only every 1-2 s (measured), so a new layer surface gets
+# no configure, and so no frame, before a 500 ms OSD is already destroyed. A
+# hold of 4000 ms spans at least two such ticks, and the verbs re-show the
+# live surface, which leaves it three to six. The last show is at about 5 s
+# (the verbs, 2 s after the checkpoint at 3 s), so it expires at about 9 s and
+# retires before 16 s.
 osd_fakes=$work/osd-fakes
 osd_state=$work/osd-state
 mkdir -p "$osd_fakes" "$osd_state"
@@ -989,7 +1071,7 @@ FAKE
 done
 chmod +x "$osd_fakes/wpctl" "$osd_fakes/pactl" "$osd_fakes/ddcutil" "$osd_fakes/brightnessctl"
 mkdir -p "$work/xdg-osd/celestina" "$work/xdg-osd-off/celestina"
-printf '{"schema_version":1,"duties":{"osd":"on"},"osd":{"timeout_ms":500}}\n' \
+printf '{"schema_version":1,"duties":{"osd":"on"},"osd":{"timeout_ms":4000}}\n' \
     > "$work/xdg-osd/celestina/shell.json"
 printf '{"schema_version":1}\n' > "$work/xdg-osd-off/celestina/shell.json"
 # $1 is the configuration home, $2 whether the wrapper pulls the trigger.
@@ -1003,7 +1085,7 @@ CELESTINA_SMOKE_FAKE='$osd_state'
 CELESTINA_DDC=0
 PATH='$osd_fakes':\$PATH
 export XDG_CONFIG_HOME CELESTINA_SMOKE_FAKE CELESTINA_DDC PATH
-RUST_LOG=info,celestina_wayland::runtime=debug "$bin" "\$@" &
+RUST_LOG=info,celestina_wayland::runtime=debug,celestina_wayland::handlers=debug "$bin" "\$@" &
 shell=\$!
 send() {
     tries=0
@@ -1025,7 +1107,7 @@ wait "\$shell"
 WRAPPER
 }
 osd_run() {
-    # $1 name, $2 configuration home, $3 trigger|none.
+    # $1 name, $2 configuration home, $3 trigger|none, $4 --exit-after seconds.
     rm -f "$osd_state/calls" "$osd_state/trigger"
     echo 0.40 > "$osd_state/volume"
     : > "$osd_state/calls"
@@ -1034,7 +1116,7 @@ osd_run() {
     run=$work/$1
     status=0
     timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
-        --binary "$work/$1-run" --once "$run" -- --exit-after 9 \
+        --binary "$work/$1-run" --once "$run" -- --exit-after "$4" \
         > "$work/niri.log" 2>&1 || status=$?
     [ "$status" -eq 0 ] || fail "the nested niri exited with $status ($1 run)"
     [ -f "$run.status" ] || fail "the shell never ran inside the nest ($1 run)"
@@ -1044,7 +1126,7 @@ osd_run() {
         fail "the shell panicked ($1 run)"
     fi
 }
-osd_run osd "$work/xdg-osd" trigger
+osd_run osd "$work/xdg-osd" trigger 16
 grep -q 'osd duty on: workers started' "$run.err" ||
     fail "the OSD workers did not start with the duty on"
 if grep -q 'smoke-verb-failed' "$run.err"; then
@@ -1060,16 +1142,26 @@ grep -q 'osd surface destroyed' "$run.err" || fail "the OSD surface was not dest
 created=$(grep -n 'osd surface created' "$run.err" | head -n 1 | cut -d: -f1)
 destroyed=$(grep -n 'osd surface destroyed' "$run.err" | head -n 1 | cut -d: -f1)
 [ "$created" -lt "$destroyed" ] || fail "the OSD surface was destroyed before it was created"
-# Surfaces that drew a frame before the OSD existed are the shell's own; a
-# frame on any other surface after it is the OSD's, and there must be one.
-osd_frames=$(awk '
-    /osd surface created/ { made = 1; next }
-    /frame drawn/ {
+# The OSD's own surfaces are named by the runtime's creation line, so a late
+# first frame of one of the shell's surfaces is never counted for the OSD. The
+# nest must also have configured one of them (a draw follows the first
+# configure at once); neither is a product fault when the nest's loop stalls.
+osd_counts=$(awk '
+    /layer surface created/ && /namespace="celestina-osd"/ {
+        match($0, /surface=[0-9]+/)
+        osd[substr($0, RSTART, RLENGTH)] = 1
+    }
+    /configure surface=/ || /frame drawn/ {
         match($0, /surface=[0-9]+/)
         id = substr($0, RSTART, RLENGTH)
-        if (!made) { known[id] = 1 } else if (!(id in known)) { n++ }
+        if (id in osd) { if ($0 ~ /frame drawn/) frames++; else configured++ }
     }
-    END { print n + 0 }' "$run.err")
+    END { n = 0; for (id in osd) n++; print n + 0, configured + 0, frames + 0 }' "$run.err")
+set -- $osd_counts
+[ "$1" -ge 1 ] || fail "the runtime never created a celestina-osd layer surface"
+[ "$2" -ge 1 ] ||
+    fail "the nest never configured the OSD surface within its life (its loop is stalled: host throttling?)"
+osd_frames=$3
 [ "$osd_frames" -ge 1 ] || fail "no frame was drawn on the OSD surface"
 grep -q '^wpctl get-volume @DEFAULT_AUDIO_SINK@$' "$osd_state/calls" ||
     fail "the fake wpctl was never read: $(cat "$osd_state/calls")"
@@ -1082,7 +1174,7 @@ fi
 grep -q 'volume up: queued' "$run.err" || fail "the volume verb was not queued"
 echo "smoke: osd on: surface created and destroyed, osd_frames=$osd_frames, volume up reached wpctl as set-volume 0.60"
 
-osd_run osd-off "$work/xdg-osd-off" none
+osd_run osd-off "$work/xdg-osd-off" none 9
 grep -q 'volume up: rejected: the osd duty is off' "$run.err" ||
     fail "volume up was not rejected with the duty off"
 grep -q 'brightness up: rejected: the osd duty is off' "$run.err" ||
@@ -1131,7 +1223,7 @@ XDG_CONFIG_HOME='$phone_home/config'
 XDG_RUNTIME_DIR='$phone_runtime'
 MELIBEA_SOCKET='$1'
 DBUS_SYSTEM_BUS_ADDRESS='unix:path=$work/no-system-bus'
-RUST_LOG=info,celestina::bubbles=debug
+RUST_LOG=info,celestina::bubbles=debug,celestina_wayland::runtime=debug
 export WAYLAND_DISPLAY XDG_CONFIG_HOME XDG_RUNTIME_DIR MELIBEA_SOCKET DBUS_SYSTEM_BUS_ADDRESS RUST_LOG
 PRELUDE
 }
@@ -1206,7 +1298,7 @@ frames=$(sum frames)
 rest=$(sum rest_frames)
 [ "$frames" -ge 1 ] || fail "no frame was drawn (phone metrics run): $lines"
 [ "$rest" -eq 0 ] ||
-    fail "frames were drawn at rest with the phone and bubbles duties on ($rest): $lines"
+    rest_fail "$run.err" "frames were drawn at rest with the phone and bubbles duties on ($rest): $lines"
 if ! grep -q 'melibea: subscribed' "$run.err"; then
     fail "the shell did not subscribe to the fake Melibea (phone metrics run)"
 fi
@@ -1332,6 +1424,7 @@ PNG
         media_status=0
         XDG_CONFIG_HOME=$media_home SMOKE_MEDIA_SHELL=$bin SMOKE_MEDIA_PLAYER=$player \
             SMOKE_MEDIA_MODE=$2 SMOKE_MEDIA_ART=$3 \
+            SMOKE_RUST_LOG=info,celestina::island=debug,celestina_wayland::runtime=debug \
             SMOKE_MEDIA_CONFIG=$media_home/celestina/shell.json \
             timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
             --binary "$here/smoke-media.sh" --once "$1" -- --exit-after "$4" --metrics \
@@ -1361,7 +1454,7 @@ PNG
     md_rest=$(printf '%s\n' "$md_lines" | tr ' ' '\n' | sed -n 's/^rest_frames=//p' |
         awk '{ n += $1 } END { print n + 0 }')
     [ "$md_rest" -le 2 ] ||
-        fail "frames were drawn at rest with a paused player ($md_rest, at most 2): $md_lines"
+        rest_fail "$run.err" "frames were drawn at rest with a paused player ($md_rest, at most 2): $md_lines"
     echo "smoke: media: paused player with a cover, page open, rest_frames=$md_rest"
 
     run=$work/media-variant
