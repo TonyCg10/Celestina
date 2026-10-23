@@ -1,0 +1,19 @@
+# CEL-2-M-DOCS exact change inventory
+
+Base revision	8e353cb930accee77967e9eb5783590880312825
+Pathspec	docs/evidence/2026-10-23-cel-2-m-docs.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-2-M-DOCS.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/superpowers/plans/2026-10-23-cel-2-m-cutover.md
+Pathspec	docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md
+Pathspec	docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+50	0	38be3d8fda93515bc72036f144c20ad29c7d11a60aee4cd25c9dbe283b6a2747	docs/evidence/2026-10-23-cel-2-m-docs.md
+19	0	self	docs/inventories/2026-10-14-rust-shell/CEL-2-M-DOCS.numstat.tsv
+1	0	64967a6b7048f3066f8393d90e27572c88944059edb82b897095590fecfc8184	docs/plans/active/2026-10-14-rust-shell.md
+132	0	a8845bf195e9fd31119aa720fe9a456782da1bb94de287d1a524f20dda0cc208	docs/superpowers/plans/2026-10-23-cel-2-m-cutover.md
+138	0	d566ad4ee42dc978692275b415a3370fc3d2696cce25cad6290e58a2a0e884d6	docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md
+449	0	9ccc239b0d31dab398ab2cced5c6426a380ec2ce4fd8870ec812233ed560bea3	docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md
