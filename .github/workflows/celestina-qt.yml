@@ -30,6 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # `dav1d-sys` (pulled in by `image` with `avif-native`) probes
+      # `dav1d.pc` with `dav1d >= 1.3.0`, shipped by libdav1d-dev.
+      # `wayland-sys` (via the direct `wayland-client` dependency, no
+      # `dlopen`) probes `wayland-client.pc`, shipped by libwayland-dev.
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libdav1d-dev libwayland-dev
+
       - name: Install stable Rust
         run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
 

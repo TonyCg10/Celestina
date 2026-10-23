@@ -27,6 +27,12 @@ sys.path.insert(0, str(SCRIPTS))
 import landing  # noqa: E402  (the scripts directory is not a package)
 
 
+# Upper bound for waiting on a child process; polling returns as soon as the
+# condition holds, so a generous limit costs nothing when the test passes.
+# Slow CI runners need headroom; override with CELESTINA_TEST_TIMEOUT.
+CHILD_TIMEOUT = float(os.environ.get("CELESTINA_TEST_TIMEOUT", "240"))
+
+
 def setUpModule() -> None:
     # Fixture repositories must not read the author's Git configuration:
     # signing, push negotiation or hooks there would change what they record.
@@ -2560,14 +2566,22 @@ class LandUnitFixture(unittest.TestCase):
             preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
         )
         try:
-            deadline = time.monotonic() + 60
+            deadline = time.monotonic() + CHILD_TIMEOUT
             while not (self.records / ".builds-ran").exists():
                 if process.poll() is not None or time.monotonic() > deadline:
                     self.fail("the fixture build never started")
                 time.sleep(0.05)
             # Ctrl-C reaches the whole foreground process group.
             os.killpg(process.pid, signal.SIGINT)
-            _stdout, stderr = process.communicate(timeout=60)
+            try:
+                _stdout, stderr = process.communicate(timeout=CHILD_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                _stdout, captured = process.communicate()
+                self.fail(
+                    f"land-unit.py ignored SIGINT for {CHILD_TIMEOUT:g}s; "
+                    f"stderr:\n{captured}"
+                )
         finally:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGKILL)

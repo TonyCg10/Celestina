@@ -229,7 +229,9 @@ fn argb_of(cover: &Cover) -> Option<Vec<u8>> {
     Some(
         cover
             .rgba
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .flat_map(|t| [t[3], t[0], t[1], t[2]])
             .collect(),
     )

@@ -186,7 +186,7 @@ fn pixel(decoded: &Decoded, x: u32, y: u32) -> [u8; 4] {
 fn assert_shape(decoded: &Decoded, target: (u32, u32)) {
     assert_eq!((decoded.width, decoded.height), target);
     assert_eq!(decoded.rgba.len(), (target.0 * target.1 * 4) as usize);
-    assert!(decoded.rgba.chunks_exact(4).all(|p| p[3] == 255));
+    assert!(decoded.rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
 }
 
 fn assert_halves(decoded: &Decoded) {
@@ -703,7 +703,12 @@ fn a_largest_accepted_png_decodes() {
     let path = scratch.write("max.png", &png(w, h, 8, 2, &[], &zlib_zeros(raw)));
     let decoded = decode(&path, (16, 16), Mode::Center).expect("max png");
     assert_eq!(decoded.source_px, (w, h));
-    assert!(decoded.rgba.chunks_exact(4).all(|p| p == [0, 0, 0, 255]));
+    assert!(decoded
+        .rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .all(|p| *p == [0, 0, 0, 255]));
 }
 
 #[test]

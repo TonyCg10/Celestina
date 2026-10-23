@@ -1,0 +1,47 @@
+# CI-GREEN exact change inventory
+
+Base revision	271ecfb29253496ed088c0d037318a8d51421d8a
+Pathspec	.github/workflows/celestina-qt.yml
+Pathspec	.github/workflows/celestina.yml
+Pathspec	celestina-rs/crates/selenita-core/tests/tools.rs
+Pathspec	celestina/crates/celestina-lock-verify/tests/contract.rs
+Pathspec	celestina/crates/celestina-lock/src/paint.rs
+Pathspec	celestina/crates/celestina-lock/src/view.rs
+Pathspec	celestina/crates/celestina-paint/src/haze.rs
+Pathspec	celestina/crates/celestina-paint/src/icon.rs
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/crates/celestina-paint/src/text.rs
+Pathspec	celestina/src/clipboard/thumb.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/wallpaper/decode.rs
+Pathspec	celestina/tests/lock_sleep.rs
+Pathspec	celestina/tests/media_cover.rs
+Pathspec	celestina/tests/wallpaper_decode.rs
+Pathspec	docs/evidence/2026-10-23-ci-green.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CI-GREEN.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+9	0	759573022d2611f6907679ec05e015ab7cadb8deabe5de5c323c0036cc76ce46	.github/workflows/celestina-qt.yml
+3	1	f6e507ed6ed0d0b9259f6fd9b6b233943c7a0710b78064c9bf943ef6c7edc849	.github/workflows/celestina.yml
+32	11	58d87a3f87a254e5af04fe5d728d8c9311821521a5d03e00e57d96eada3289fc	celestina-rs/crates/selenita-core/tests/tools.rs
+23	3	c15326261d32bcd6234ca0917a85d9f6e0d0610d541ea5add4fa372d2a82f2f9	celestina/crates/celestina-lock-verify/tests/contract.rs
+7	2	736389b0175937255374263d45df447d6a755750da4f548eea58041791d38db9	celestina/crates/celestina-lock/src/paint.rs
+7	3	005fd80d19444c9ee58e5e52b187b8a7b2687624446432407627b5e303e116cf	celestina/crates/celestina-lock/src/view.rs
+1	1	b954d918eb225ad4c93d07427923a6d7c5096572cda80baf81e0b34783a2c38c	celestina/crates/celestina-paint/src/haze.rs
+3	2	9f0d2bcc9f9380ff678a49969b9375feab44fc718f80d959bee53fd5ddc95f6c	celestina/crates/celestina-paint/src/icon.rs
+3	1	d1552da191cc10e861f2ead4535884467c29bc5d8413d24d3b4d58dd36963032	celestina/crates/celestina-paint/src/painter.rs
+3	2	93051321f596f67b6a6a1ce9077d790d4e1dc3718bc0fd7e99ecac554d2f119d	celestina/crates/celestina-paint/src/text.rs
+3	1	f11569aa0c1e3b0ec61fa86ed451940650b888142645f3d7e72fe84936720974	celestina/src/clipboard/thumb.rs
+3	1	26f8031867dd5f68a58a1971220a7c0d5a251085d13da66b2b5666c22c64f2e7	celestina/src/island/mod.rs
+6	4	388ccecc02233efe4c164503a90716f23824a7ebd1ab272370181d66916145a4	celestina/src/wallpaper/decode.rs
+52	12	05c97f0b4ad237ce868c12cd8eb753a456bd20b0309025518713bb717067b083	celestina/tests/lock_sleep.rs
+1	1	ae62c354b87612bbbd8aa85dafe4a53c1ba574b4eaa6a9b4fc79f19a6d1e3e77	celestina/tests/media_cover.rs
+7	2	f71e8dfb38faf8dce224e6e1006dca03acf5bb4bad71c6292ce6d19d2d618ecb	celestina/tests/wallpaper_decode.rs
+77	0	a362f9f63dbf533a0ac991129df01451951473d36fa5488bcc8d99a58cca1982	docs/evidence/2026-10-23-ci-green.md
+47	0	self	docs/inventories/2026-10-14-rust-shell/CI-GREEN.numstat.tsv
+1	0	eb9442b3410335d3d311f58be6a92ec88b9197e92e259bdb4c94bc5d7fcdf75e	docs/plans/active/2026-10-14-rust-shell.md
+16	2	933909c825f061ebfc3659ead6f601dee2b8e2ad83b473c5e3dabb2d253ad9cd	scripts/test-land-unit.py

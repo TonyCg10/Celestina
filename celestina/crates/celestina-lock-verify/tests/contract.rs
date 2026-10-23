@@ -129,13 +129,19 @@ fn the_binary_links_only_libpam_libc_and_their_dependencies() {
         return;
     };
     assert!(ldd.status.success(), "ldd failed");
-    let linked = names(&String::from_utf8_lossy(&ldd.stdout));
+    let listing = String::from_utf8_lossy(&ldd.stdout);
+    let linked = names(&listing);
     assert!(linked.contains("libpam.so.0"), "{linked:?}");
-    // What libpam itself needs, plus the C runtime Rust's std uses.
+    // What libpam itself needs, plus the C runtime Rust's std uses. libpam's
+    // path is the one the loader resolved for the binary, because the
+    // directory differs between distributions.
+    let pam_path = resolved_path(&listing, "libpam.so.0")
+        .unwrap_or_else(|| panic!("no resolved libpam.so.0 path in ldd output:\n{listing}"));
     let pam = Command::new("ldd")
-        .arg("/usr/lib/libpam.so.0")
+        .arg(pam_path)
         .output()
         .expect("ldd libpam");
+    assert!(pam.status.success(), "ldd {pam_path} failed");
     let mut allowed = names(&String::from_utf8_lossy(&pam.stdout));
     for extra in ["libpam.so.0", "libgcc_s.so.1", "libm.so.6", "libc.so.6"] {
         allowed.insert(extra.to_owned());
@@ -145,6 +151,20 @@ fn the_binary_links_only_libpam_libc_and_their_dependencies() {
         unexpected.is_empty(),
         "unexpected libraries: {unexpected:?}"
     );
+}
+
+/// The path `ldd` resolved for `library`, from a line of the form
+/// `libpam.so.0 => /path/to/libpam.so.0 (0x...)`.
+fn resolved_path<'a>(text: &'a str, library: &str) -> Option<&'a str> {
+    text.lines().find_map(|line| {
+        let (name, rest) = line.split_once("=>")?;
+        if name.trim() != library {
+            return None;
+        }
+        rest.split_whitespace()
+            .next()
+            .filter(|path| path.starts_with('/'))
+    })
 }
 
 /// The library names of `ldd` output, without paths and addresses; the
