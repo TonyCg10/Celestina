@@ -1,0 +1,21 @@
+# CEL-2-L-CLIPPY exact change inventory
+
+Base revision	4b384fc6dc3c111b155b91882cb3c95d1759e42c
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-10-23-cel-2-l-clippy.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-L-CLIPPY.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/capture/mod.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	dcfd69d660a90fb216000338411e064608f12a107cfd7c3a7f531271e149f6c9	celestina/Cargo.lock
+1	1	63e1af64d9818e00570f58e114fdafdf74c69f5314fde5c0ec531cad8d940921	celestina/Cargo.toml
+68	0	f6774cb7cf426b00acf90dfa69753b92fc41aeaa04147fd96de05665e6899608	celestina/docs/evidence/2026-10-23-cel-2-l-clippy.md
+21	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-L-CLIPPY.numstat.tsv
+1	0	ea7334c2ac7720d75a3f6343bf850e03e8f53b0b61d03acad54ae7e0fff59cf8	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+1	1	3006729c12423b0204ba7f5d7b3f737afcf2a2ad646042781f6406ca04689427	celestina/src/capture/mod.rs
+1	0	5c3d0733650e610509c2bf9e51a3c5cfca5e4b2c8861bf248bac0c37a084a71a	docs/version-history.tsv

@@ -183,7 +183,7 @@ fn columns_luma(thumb: &Thumb, from: u32, to: u32) -> u8 {
         let Some(span) = row.get(from * 4..to * 4) else {
             continue;
         };
-        for pixel in span.chunks_exact(4) {
+        for pixel in span.as_chunks::<4>().0 {
             let (r, g, b) = (
                 u64::from(pixel[0]),
                 u64::from(pixel[1]),
