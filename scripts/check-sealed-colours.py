@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keeps the compositor's generated colours tied to the sealed theme.
 
-`celestina-shell-core::niri_colours` writes Niri's focus ring and backdrop from
+`celestina-tokens::niri_colours` writes Niri's focus ring and backdrop from
 values it carries as constants. Those constants are a second place the sealed
 palette is written down, which is exactly the drift that module exists to
 prevent — so this guard reads both and refuses a mismatch.
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 THEME = ROOT / "celestina-style/CelestinaTheme.qml"
 # The values the theme binds to, generated from celestina-style/tokens.toml.
 TOKEN_DATA = ROOT / "celestina-style/CelestinaDesignTokens.qml"
-GENERATOR = ROOT / "celestina-rs/crates/celestina-shell-core/src/niri_colours.rs"
+GENERATOR = ROOT / "celestina-rs/crates/celestina-tokens/src/niri_colours.rs"
 
 SEALED_ROW = re.compile(
     r'token:\s*"(?P<token>[A-Za-z0-9_]+)"\s*,\s*value:\s*"(?P<value>#[0-9a-fA-F]+)"',

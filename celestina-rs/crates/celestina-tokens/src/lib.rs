@@ -6,6 +6,9 @@
 #![forbid(unsafe_code)]
 
 pub mod generated;
+/// The compositor's own colours, written from the same sealed values the
+/// panel paints with (copied from the halted `celestina-shell-core`).
+pub mod niri_colours;
 pub use generated::*;
 
 #[cfg(test)]

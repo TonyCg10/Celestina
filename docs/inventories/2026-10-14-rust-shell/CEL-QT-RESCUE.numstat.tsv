@@ -1,0 +1,27 @@
+# CEL-QT-RESCUE exact change inventory
+
+Base revision	06da0899dc6afefef0d67daef6b3160ca59e3997
+Pathspec	AGENTS.md
+Pathspec	celestina-rs/crates/celestina-tokens/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-tokens/src/niri_colours.rs
+Pathspec	celestina/packaging/niri/README.md
+Pathspec	celestina/packaging/niri/build-patched-niri.sh
+Pathspec	celestina/packaging/niri/per-layer-blur-strength.patch
+Pathspec	docs/evidence/2026-10-23-cel-qt-rescue.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-QT-RESCUE.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	scripts/check-sealed-colours.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	0	cb1ff55b735f086eb17b15606e1161268d9e5108d1250672deea9bfe6d3dbce1	AGENTS.md
+3	0	9b55ae1eb37827981e5bbd5c21d3f020a94b3e69a8d9ee938cebd8678aa79116	celestina-rs/crates/celestina-tokens/src/lib.rs
+184	0	f670155ff1f8ffb1d96dc36e9d345486a01273639bc07b9403d7f794a8335c6c	celestina-rs/crates/celestina-tokens/src/niri_colours.rs
+74	0	f2588d4b4ae540753abdee184658ad1c436bda6c4d9a246e5b2ac7f89179a947	celestina/packaging/niri/README.md
+127	0	379c5b72b4cec5eaf05350d73a432a472e87adca115fa9d891988c21c351c02b	celestina/packaging/niri/build-patched-niri.sh
+88	0	ef3249ce24bd0b2e2b688d0fb6d01a4860602341368dc87ae32df9cc020a35cf	celestina/packaging/niri/per-layer-blur-strength.patch
+54	0	e65979e012d4ad8c08d5a39df46b17d2477e233079a0db6865a7c2d15bb2e6a2	docs/evidence/2026-10-23-cel-qt-rescue.md
+27	0	self	docs/inventories/2026-10-14-rust-shell/CEL-QT-RESCUE.numstat.tsv
+1	0	88248f2f89cd7c38f33507a7829bd3001d8cf44afbff593af92b6aeefafc6e76	docs/plans/active/2026-10-14-rust-shell.md
+2	2	a24ea517fef21497c259681e15216054d7cf966802f8be6f17ed348875f0fbb3	scripts/check-sealed-colours.py

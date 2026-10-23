@@ -99,6 +99,12 @@ list in the same way and always before the first commit of the unit it serves:
   `celestina-rs/crates/celestina-shell-core/src/{sysmon,weather}.rs` into
   `celestina-rs/crates/celestina-shell`; `calendar.rs` is already listed.
 - CEL-2-L: nothing beyond `workspace_map.rs`, which is already listed.
+- CEL-QT-RESCUE: `celestina-qt/packaging/niri/{README.md,per-layer-blur-strength.patch}`
+  and `celestina-qt/scripts/build-patched-niri.sh` into `celestina/packaging/niri`
+  (the script beside the patch it applies), and
+  `celestina-rs/crates/celestina-shell-core/src/niri_colours.rs` into
+  `celestina-rs/crates/celestina-tokens/src`. The unit deletes nothing of the
+  halted tree.
 
 Later deliveries extend this list by the same edit.
 
