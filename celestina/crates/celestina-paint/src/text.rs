@@ -465,8 +465,9 @@ mod tests {
         );
         assert!(bitmap
             .rgba
-            .chunks_exact(4)
-            .any(|p| p == [255, 255, 255, 255]));
+            .as_chunks::<4>()
+            .0
+            .contains(&[255, 255, 255, 255]));
     }
 
     #[test]

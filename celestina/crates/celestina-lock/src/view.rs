@@ -665,7 +665,9 @@ mod tests {
 
     fn non_black(fake: &Fake, index: usize) -> usize {
         fake.buffers[index]
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|px| px[0] | px[1] | px[2] != 0)
             .count()
     }
@@ -673,7 +675,9 @@ mod tests {
     /// Pixels of the bright ink (bullets, status text) in a buffer.
     fn bright(fake: &Fake, index: usize) -> usize {
         fake.buffers[index]
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|px| px[0] > 200 && px[1] > 200 && px[2] > 200)
             .count()
     }
@@ -832,7 +836,7 @@ mod tests {
         // Nothing outside the rectangle was ever drawn.
         for index in 0..2 {
             let buffer = &fake.buffers[index];
-            for (n, px) in buffer.chunks_exact(4).enumerate() {
+            for (n, px) in buffer.as_chunks::<4>().0.iter().enumerate() {
                 if px[0] | px[1] | px[2] == 0 {
                     continue;
                 }

@@ -85,7 +85,9 @@ pub(crate) fn argb_to_rgba(argb: &[u8], width: u32, height: u32) -> Result<Vec<u
         return Err(refuse());
     }
     Ok(argb
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|p| [p[1], p[2], p[3], p[0]])
         .collect())
 }

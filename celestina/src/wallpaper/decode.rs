@@ -863,7 +863,9 @@ fn jpeg_frame<R: BufRead + Seek>(path: &Path, reader: &mut R) -> Result<JpegFram
                 return Err(bad("JPEG frame components"));
             }
             let components = rest
-                .chunks_exact(3)
+                .as_chunks::<3>()
+                .0
+                .iter()
                 .take(count)
                 .map(|component| (u64::from(component[1] >> 4), u64::from(component[1] & 0x0F)))
                 .collect::<Vec<_>>();
@@ -1303,7 +1305,7 @@ mod tests {
                 for mode in MODES {
                     let out = render(&source, mode, target).expect("render");
                     assert_eq!(out.len(), (target.0 * target.1 * 4) as usize);
-                    assert!(out.chunks_exact(4).all(|p| p[3] == 255));
+                    assert!(out.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
                 }
             }
         }
@@ -1316,7 +1318,7 @@ mod tests {
         assert_eq!(at(&fitted, 20, 10, 0), [0, 0, 0, 255]);
         assert_eq!(at(&fitted, 20, 10, 10)[0], 200);
         let filled = render(&source, Mode::Fill, (20, 20)).expect("render");
-        assert!(filled.chunks_exact(4).all(|p| p[0] > 150));
+        assert!(filled.as_chunks::<4>().0.iter().all(|p| p[0] > 150));
     }
 
     #[test]
@@ -1338,7 +1340,7 @@ mod tests {
             [x as u8 * 100, 0, 0, 255]
         });
         let out = render(&source, Mode::Center, (4, 1)).expect("render");
-        let reds: Vec<u8> = out.chunks_exact(4).map(|p| p[0]).collect();
+        let reds: Vec<u8> = out.as_chunks::<4>().0.iter().map(|p| p[0]).collect();
         assert_eq!(reds, vec![0, 0, 100, 200]);
     }
 

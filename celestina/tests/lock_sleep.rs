@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
 use celestina::command::Verb;
@@ -108,12 +108,23 @@ impl FakeLogind {
     #[zbus(property)]
     fn preparing_for_sleep(&self) -> zbus::fdo::Result<bool> {
         self.reads.fetch_add(1, Ordering::AcqRel);
-        let failing = self
-            .fail_reads
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |left| {
-                left.checked_sub(1)
-            })
-            .is_ok();
+        // `fetch_update` is deprecated and its `try_update` successor needs
+        // Rust 1.95 (MSRV is 1.89), so decrement-if-positive by hand.
+        let mut left = self.fail_reads.load(Ordering::Acquire);
+        let failing = loop {
+            let Some(next) = left.checked_sub(1) else {
+                break false;
+            };
+            match self.fail_reads.compare_exchange_weak(
+                left,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break true,
+                Err(seen) => left = seen,
+            }
+        };
         if failing {
             return Err(zbus::fdo::Error::Failed("a wedged logind".to_owned()));
         }
@@ -245,10 +256,20 @@ struct World {
     _turn: MutexGuard<'static, ()>,
 }
 
+/// The inheritable descriptors the test process was started with, as
+/// `N -> target`. A runner may pass extra pipes down without close-on-exec;
+/// they are not the code under test's leaks, so the descriptor tests ignore
+/// exactly those (same number and same target).
+static INHERITED: OnceLock<Vec<String>> = OnceLock::new();
+
 fn take_turn() -> MutexGuard<'static, ()> {
-    ONE_WORLD_AT_A_TIME
+    let turn = ONE_WORLD_AT_A_TIME
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    // The first holder gets here before any world, bus or worker exists, so
+    // this scan is what the process inherited and nothing else.
+    INHERITED.get_or_init(raw_inheritable_descriptors);
+    turn
 }
 
 fn serve_logind(address: &str, fake: FakeLogind) -> Connection {
@@ -1011,9 +1032,18 @@ fn open_descriptors(pid: &str) -> Vec<u32> {
 }
 
 /// The descriptors of this process that a child would inherit: open, 3 or
-/// above and without close-on-exec. The directory listing's own descriptor is
-/// not one (it is closed when the listing ends).
+/// above and without close-on-exec, except those the process started with
+/// (`INHERITED`).
 fn inheritable_descriptors() -> Vec<String> {
+    let inherited = INHERITED.get().map(Vec::as_slice).unwrap_or_default();
+    let mut found = raw_inheritable_descriptors();
+    found.retain(|entry| !inherited.contains(entry));
+    found
+}
+
+/// Every inheritable descriptor of this process, unfiltered. The directory
+/// listing's own descriptor is not one (it is closed when the listing ends).
+fn raw_inheritable_descriptors() -> Vec<String> {
     let mut found = Vec::new();
     for number in open_descriptors("self") {
         let Ok(info) = fs::read_to_string(format!("/proc/self/fdinfo/{number}")) else {
@@ -1081,8 +1111,18 @@ fn a_lock_started_with_the_inhibitor_held_inherits_only_the_standard_streams() {
     });
     let pids = fs::read_to_string(world.file("pids")).expect("the script wrote its pid");
     let pid = pids.lines().next().expect("a pid").trim().to_owned();
+    let inherited = INHERITED.get().map(Vec::as_slice).unwrap_or_default();
+    let held: Vec<u32> = open_descriptors(&pid)
+        .into_iter()
+        .filter(|number| {
+            let target = fs::read_link(format!("/proc/{pid}/fd/{number}"))
+                .map(|path| path.display().to_string())
+                .unwrap_or_default();
+            !inherited.contains(&format!("{number} -> {target}"))
+        })
+        .collect();
     assert_eq!(
-        open_descriptors(&pid),
+        held,
         Vec::<u32>::new(),
         "the child holds descriptors beyond 0, 1 and 2"
     );
