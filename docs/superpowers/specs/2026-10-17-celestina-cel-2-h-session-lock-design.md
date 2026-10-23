@@ -3,10 +3,16 @@
 - **Date:** 2026-10-17
 - **Status:** drafted from the author's decisions of 2026-10-17 (restated in
   §2, not reopened) and revised after two reviews; OD-1 and OD-2 decided by
-  the author on 2026-10-17 (§0). **Approval of the complete specification is
-  pending.** Nothing here is implemented, and no implementation starts before
-  the author approves this document, the prerequisite commit of §13 and the
-  model table of §11.
+  the author on 2026-10-17 (§0). **Amended 2026-10-22 after implementation and
+  review of CEL-2-H-a (rounds 1–6)** (see Revised): CEL-2-H-a is implemented
+  in its session worktree and has passed review rounds 1 to 6 (§16);
+  CEL-2-H-b is not started. The amendments change the cover (§3.1, §4.6), the
+  signal policy (§4.4, §4.13, F27), the sleep worker's wake-ups and retries
+  (§4.10), the `Ending` watchdog and the exit of a stray child in `Spawning`
+  (§4.4), the lock's environment and first steps (§4.2), the connection guard
+  that refuses to lock outside the shell or a verified nest (§4.2.1, §4.3, §5,
+  §6, §7), the input-method residual (§5) and the questions of §12; each is
+  marked **Amended 2026-10-22** where it stands.
 - **Product:** the shell's own session lock: an `ext-session-lock-v1` client
   that covers every output, asks for the password, and is the only thing that
   can end the lock, after PAM says yes; plus the lock-and-suspend chain that
@@ -34,6 +40,18 @@
   adversarial pass (Opus 5.5, findings `X-*`). Each finding was checked
   against the code before it was applied; the disposition of every finding
   is in §16.
+- **Amended:** 2026-10-22, after implementation and review of CEL-2-H-a. The
+  author accepted in writing the eleven spike answers of
+  `celestina/docs/evidence/2026-10-22-cel-2-h-spikes.md` (§12), the
+  zeroed-`wl_shm` cover, the input-method residual, the local constants of
+  the lock, the deviations of the implementation listed above and the
+  connect guard (§4.2.1). These are
+  the author's decisions of 2026-10-22 and are not reopened here; the
+  evidence of the unit
+  (`celestina/docs/evidence/2026-10-22-cel-2-h-a.md`) records the tests that
+  pin each of them, and ADR 0022 records the decisions. Text that was
+  replaced is not kept; the review dispositions of the implementation are in
+  §16.
 
 ## 0. Decisions taken by the author
 
@@ -115,7 +133,7 @@ signal, keyboard-layout display, assistive technology on the lock screen
 | The runtime logs `?ev` (the whole `InputEvent`, a key's `utf8` included) at debug when input reaches a surface that is gone | `runtime.rs`, `Runtime::deliver` |
 | `Modifiers` carries ctrl, alt, shift and logo; no Caps Lock | `celestina-wayland/src/input.rs` |
 | sctk 0.21.1 has `session_lock` (`SessionLockState::lock`, `create_lock_surface`, `SessionLock::unlock`); dropping a locked `SessionLock` sends `destroy`, a protocol error that fails secure | registry `smithay-client-toolkit-0.21.1/src/session_lock/mod.rs` |
-| `wp_single_pixel_buffer_v1` and `wp_viewporter` are in `wayland-protocols` (staging) and served by niri | registry; niri `src/niri.rs` (`SinglePixelBufferState`, `ViewporterState`) |
+| `wp_viewporter` is in `wayland-protocols` (staging) and served by niri. **Amended 2026-10-22:** `wp_single_pixel_buffer_manager_v1` is **not** served: niri creates it only under `#[cfg(test)]` (commit `d38bfc4a`), and the nest's registry lists 42 globals without it. The cover is therefore always a zeroed `wl_shm` XRGB8888 buffer | registry; niri `src/niri.rs` (`ViewporterState`; `SinglePixelBufferState::new` in test builds only); spike Q4 |
 | niri refuses a second lock while one is locking, or locked with a live client; a refused locker is answered `finished` (smithay's `SessionLocker` drop) | niri `Niri::lock`; smithay `ff5fa7d` `session_lock/mod.rs` |
 | niri **replaces a dead lock**: a new client's lock is accepted at once when the locked client is gone ("replacing existing dead lock") | niri `Niri::lock` |
 | niri waits at most 1 s for every output's lock surface to be mapped, then redraws and confirms; an output without a lock surface is drawn in `CLEAR_COLOR_LOCKED` (dark red) | niri `Niri::lock`, `continue_to_locking`, `CLEAR_COLOR_LOCKED` |
@@ -224,14 +242,55 @@ the installation section of `celestina/README.md`, so the author learns it
 before the first lock rather than at it.
 
 **Environment.** The lock is spawned with `env_clear()` and an allowlist of
-exactly `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR` and `MESA_SHADER_CACHE_DISABLE=true`
-(the last only matters if the EGL alternative of H-15 is ever chosen). No
+exactly four entries (**amended 2026-10-22**: it was three): `WAYLAND_DISPLAY`,
+`XDG_RUNTIME_DIR`, `MESA_SHADER_CACHE_DISABLE=true` (this one only matters if
+the EGL alternative of H-15 is ever chosen) and
+`CELESTINA_LOCK_LAUNCHER=shell`. The fourth is the marker the connect guard
+reads (§4.2.1); its value is fixed by the supervisor, never copied from the
+caller's environment, so a hostile value there is replaced (T-E1). The shell
+never hands the lock a `WAYLAND_SOCKET`. No
 `HOME`, no `XDG_*` beyond the runtime directory, no `LANG`/`LC_*` (the copy is
 compiled Spanish and the clock is formatted in process), no `LD_*`, no
 `RUST_LOG`, no `__EGL_*`/`MESA_*` loader variables. Without `HOME` and
 `XDG_CONFIG_HOME` nothing in the process can find the user's `fonts.conf`,
 icon themes or caches. The verifier is spawned with `env_clear()` and
 `PATH=/usr/local/sbin:/usr/local/bin:/usr/bin` only.
+
+**Descriptors, closed first (amended 2026-10-22, round 4 finding I-α).** The
+very first thing the lock and the verifier do is close every inherited
+descriptor from 3 up except the one `WAYLAND_SOCKET` names (the lock; the
+verifier keeps none; fd 0, the bundle, is below 3). The reason: zbus 5.19
+receives the logind delay inhibitor with `recvmsg` without `MSG_CMSG_CLOEXEC`,
+so for as long as the reply message lives the shell holds an inheritable copy,
+and any child it starts in that time inherits it. For the lock that would mean
+the delay inhibitor lasting as long as the lock, and every suspend of a locked
+session waiting `InhibitDelayMaxSec`, which breaks T-S1 ("released on
+`locked`"). `celestina-lock-proto/src/descriptors.rs` is the single owner of
+*which* numbers are accidents (`inherited_descriptors`, `wayland_fd`; pure, no
+dependency); each binary's `hardening.rs` lists `/proc/self/fd` (the one
+directory listing the source guards allow) and closes with
+`nix::unistd::close` on a raw number: `rustix` 1.1.5 has no `close_range` and
+its `close` is `unsafe`, and `nix` was already in the closure, so there is no
+`unsafe` and `tests/closure.allow` is unchanged. A per-fd close rather than
+`CLOEXEC`, because the lock itself must stop holding the inhibitor. **Order,
+decided (finding m-4, evidence round 5):** before `PR_SET_DUMPABLE`, not after
+it: no secret exists yet, a tracer attached before the first instruction is
+caught afterwards by the `TracerPid` read whichever order is used, moving it
+would split `apply` (whose tests run in the test process and must not close
+its descriptors) to gain a window of the same size, and the inhibitor is
+released sooner. A listing that fails is exit 15 for the lock and
+`Unavailable` for the verifier: not knowing what is open is not a pass. A
+guard test pins that the call is one, and the first statement of `start` and
+of the verifier's `main`. On the shell's side, `sleep::inhibit` marks the
+received descriptor close-on-exec in the message at once (`own_cloexec`:
+`FD_CLOEXEC` on the descriptor the message holds, then a close-on-exec clone
+for the policy). **Residual X3, narrowed and declared (round 6, I-B):** the
+descriptor is inheritable between zbus's `recvmsg` and that `fcntl`; the lock
+and the verifier cure themselves, but another child of the shell started in
+that span (a launched application) may inherit a copy and keep the delay
+inhibitor as long as it lives, which only delays a suspend, never prevents it.
+`energy/logind.rs` (the caffeine inhibitor, CEL-2-B) has the same pattern and
+is a unit of its own.
 
 **Not traced at start.** Right after `PR_SET_DUMPABLE 0` (§4.11, H-13), the
 lock and the verifier read `TracerPid` from `/proc/self/status`; a non-zero
@@ -257,6 +316,70 @@ than the nest's names a live pid (§9.2).
 one reader, needs no authentication, and its EOF is the lock's death. A
 socket or a bus name would let any process of the session talk to the
 process that can unlock.
+
+#### 4.2.1 The connect guard (amended 2026-10-22, round 5; ADR 0022 A4)
+
+**The incident.** On 2026-10-22 an agent ran `celestina-lock --rehearsal`
+without `env -i` while `WAYLAND_DISPLAY=wayland-1` was inherited from the
+author's desktop session. The lock connected to the real niri and locked the
+real session; it ignores `SIGTERM` by design and a rehearsal never unlocks, so
+the author restarted the machine. Nothing in this design stopped a client of
+the lock profile from connecting to whatever compositor the environment named
+(the rehearsal rule of §9.2 lived in a script, not in the binary).
+
+**The guard.** Every client of the lock profile (`celestina-lock`,
+`unlock_probe`, the examples `lock_cover` and `paint_probe`) opens its
+connection through one place, `celestina_wayland::lock::connect`, which
+`run_lock` calls **before** `registry_queue_init`, so before the first Wayland
+request and before `get_registry`. The caller states how it was launched with
+a `ConnectPolicy` (no `Default`; `run_lock` takes one); each policy has a
+precondition the guard checks itself, so a caller cannot claim more than the
+environment shows:
+
+| Policy | Precondition | Notes |
+|---|---|---|
+| `ShellLaunched` | the environment carries `CELESTINA_LOCK_LAUNCHER=shell`, which the shell's supervisor adds to its allowlist | the marker is a declaration of intent against accidents; the guard checks nothing else of the peer. Never granted to `--rehearsal`, the probes or the examples |
+| `VerifiedNest` | the peer of the Wayland socket (`$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY`, or an absolute display path; a relative runtime directory names no compositor) is a process of the same user, read with `SO_PEERCRED` on the very stream that will be used (`rustix`, safe), whose `/proc/<pid>/cmdline` has an argument whose last path component is `celestina-dev-session` or `celestina-dev-session.kdl` (what `dev-session.sh` gives the niri it starts; the `$0` of the command niri runs is now `celestina-dev-session`, so `--once` nests carry it too) | the argument must be the whole component, not a substring |
+| `HandedInSocket` | `WAYLAND_SOCKET` is a decimal descriptor number of 3 or more, parsed as `wayland-client` parses it (no trimming); the guard reads the `SO_PEERCRED` of that very socket and accepts it only if the peer is of the same user and either the lock's own parent (the harness that made the socketpair and started it) or a verified nest | the environment names no compositor. Added in round 6 (finding I-A): round 5 took the socket on trust and accepted any connected one, the real compositor's included. The production lock is held to the same rule (the shell never hands it a socket) |
+
+`ConnectPolicy::detect(nest_only)` chooses from the environment:
+`WAYLAND_SOCKET` set gives `HandedInSocket`; otherwise the marker gives
+`ShellLaunched` unless `nest_only`; otherwise `VerifiedNest`. `celestina-lock`
+passes `detect(rehearsal)`; `unlock_probe`, `lock_cover` and `paint_probe` pass
+`detect(true)`. So **a rehearsal or a probe never gets the shell marker**: it
+needs a verified nest or a handed-in socket whose peer is its own parent or a
+verified nest. **Fail closed:** an unreadable `/proc`, an unknown peer, a pid
+of 0, another user's process or a missing marker is a refusal. The stream
+that was checked becomes the `Connection` (`Connection::from_socket`; for a
+handed-in socket the toolkit adopts the descriptor, which sends nothing, and
+the check reads that same socket), so there is no gap between the check and
+the use, and on refusal it is dropped with nothing written.
+
+**What a refusal does.** It is `LockError::Refused`, exit 15 (§4.3 (b)),
+logged by the lock with the refusal and how to rehearse
+(`celestina/scripts/lock-rehearsal.sh`, or a shell attached to a nest); a bad
+`WAYLAND_SOCKET` number is a refusal too, exit 15, not 12. A socket that
+cannot even be opened is a connection failure, exit 12. The shell reads exit 15
+as setup failed, unavailable (§4.3, §7 F41).
+
+**What it is not.** A barrier against accidents, not against an adversary:
+the marker and a command line can be forged by any process that can run
+programs as the user, and that user can lock the session through any other
+client anyway (the same-user limit X2, §5). The guard cannot tell a nest the
+author started from one an attacker started, and is not meant to. The `pid <=
+0` branch of the nest check (a peer in another pid namespace) cannot be
+reached on the real path, because `rustix` types the pid as non-zero and
+decoding 0 needs `unsafe`; it stays as defence in depth, and the deployments
+have one pid namespace (residual, Info).
+
+**Verified.** The binary under `env_clear()` against a test compositor of its
+own (a Python listener counting bytes) is refused with 0 bytes received in a
+bare run, in a rehearsal with or without the marker, and for a handed-in
+socket to a non-nest peer; it speaks only with the marker (production), a
+verified nest, or a harness parent. In a real nest started by
+`dev-session.sh --own-bus --monitor none --once` the guard accepted and the
+lock covered the nest; against a listener that is not a nest it exited 15 with
+0 bytes (tests T-CG1…T-CG5, §9.1).
 
 ### 4.3 Protocols, versioned and bounded
 
@@ -318,9 +441,9 @@ The final exit status completes the line set:
 | 2 | usage (bad argv) | not locked; bug |
 | 10 | `finished` before `locked`: **either** another live client holds or is taking the lock, **or** the compositor gave up locking (niri unlocks when it cannot render a locked frame) | ambiguous: never suspend; retry within the bound of §4.4, then report |
 | 11 | no `ext_session_lock_manager_v1` | unavailable |
-| 12 | no Wayland connection | unavailable |
+| 12 | no Wayland connection: no compositor named, the socket cannot be opened, or the toolkit's connect or registry failed (**amended 2026-10-22**: a refused launch is 15, not 12) | unavailable |
 | 13 | `finished` after `locked` (compositor policy ended the lock) | logged as an error; not relaunched |
-| 15 | the lock's own setup failed before `requested` (hardening, a tracer attached, the verifier pin) | unavailable |
+| 15 | the lock's own setup failed before `requested` (hardening, a tracer attached, the descriptors it could not list, the verifier pin, the status writer), **or the connect guard refused** (§4.2.1: not launched by the shell and not talking to a verified nest, a bad `WAYLAND_SOCKET`, a handed-in socket whose peer is neither the parent nor a nest); in the guard's case **0 bytes** were sent to any compositor (**amended 2026-10-22**) | unavailable; no relaunch (§7 F41) |
 | 16 | the Wayland connection was lost after `requested` (the compositor quit or crashed: logout, `Quit`, a crash) | the session it protected is gone; not relaunched; logged |
 | a signal, or any other status after `requested` | the lock died | relaunch (H-12) |
 
@@ -356,6 +479,12 @@ existing paths, `service_check(service, &[existing]) -> Result<(), Verdict>`,
 whose caller passes what `stat` found in the compiled directory list; the
 tests feed it lists directly, so "the rehearsal file exists → 6" is tested
 without root (M5).
+
+The verifier's setup failures map differently, and both deny the attempt
+(amended 2026-10-22, evidence m-5): a refusal to list `/proc/self/fd` (§4.2) is
+`Unavailable` (2), while a refusal to read `/proc/self/status`, or a tracer, is
+`BadRequest` (6). The lock reads either as the failure of that attempt, never as
+a pass.
 
 The door to other factors is the version: a protocol-2 verifier could
 forward prompts as framed messages on stdout and read answers on stdin. A
@@ -414,7 +543,8 @@ intent is pending.
 | death after `requested` without `unlocked` | `Requested`, `Locked` | `Spawning` | `Spawn(prior_failures)` while fewer than 3 relaunches in 60 s, else `Idle` with an error log and a `Notice` |
 | `Tick`: `Spawning` older than 5 s without `requested` | `Spawning` | `Idle` | kill the child through its pidfd (it never asked to lock, so killing it uncovers nothing); log; as a spawn failure |
 | `Tick`: `Requested` older than 10 s without `locked` | `Requested` | same | do **not** kill (it may be about to lock); drop the intent (`Notice` if `Verb`); `ReleaseInhibitor` if `Preparing`; log an error once |
-| `Tick`: `Ending` older than 5 s without an exit | `Ending` | `Idle` | log (the unlock already happened by protocol); `HoldInhibitor` if `Awake` |
+| `Tick`: `Ending` older than 5 s without an exit | `Ending` | `Spawning` if a request or an intent is pending, else `Idle` | log (the unlock already happened by protocol); `KillChild` through the pidfd (killing it uncovers nothing); bump the generation; the pending request or intent is served now (`Spawn`, queued behind the reaping), as the exit would have served it; the inhibitor is held if `Awake` (the invariant). **Amended 2026-10-22** (review findings I2, I-B, M-c): the worker marks the killed child, publishes nothing of it (no line and no exit) and starts the queued spawn only after the pidfd shows it reaped |
+| exit 0 | `Spawning` | same | log `StrayExit` and nothing else. **Amended 2026-10-22** (finding m-1): a child that has not said `requested` cannot exit 0, so the exit is the straggling exit of the old child of `Ending`, published by the worker before it read `KillChild`; taking it for the new child's would drop a lock about to run and, during a sleep, release the inhibitor. The 5 s watchdog of `Spawning` still bounds the new child. A status other than 0 in `Spawning` is still the new child's (a straggler is always 0, because that child had unlocked). **Residual X2:** a straggling status other than 0 (a signal sent to the old child by a same-user process just then) is read as the new child's and leads to `give_up` (the policy `Idle` while the new child may be running); nothing is uncovered, because the compositor keeps the session locked, and a later request is answered by the compositor (exit 10) |
 | `Tick`: intent deadline passed | any | same | drop the intent, log "not suspended: the lock was not confirmed", `Notice` if `Verb` |
 | `IdleResumed` | any | same | drop an intent whose origin is `Idle` (someone is back) |
 | `PrepareForSleep(true)` | `Locked` | same, `Preparing` | nothing (released by the invariant) |
@@ -427,8 +557,9 @@ intent is pending.
 Invariant: the delay inhibitor is held **iff** the duty is on, the lock is
 available, the state is not `Locked`, and `sleep` is `Awake`. During
 `Preparing` the policy never takes a new inhibitor (one taken after logind
-announced the sleep would not delay it, **[verify]** Q17), it only releases
-the one it holds; the re-take happens on `PrepareForSleep(false)`.
+announced the sleep is refused by logind with `OperationInProgress`, spike
+Q17, amended 2026-10-22), it only releases the one it holds; the re-take
+happens on `PrepareForSleep(false)`.
 
 `LockedProof` is a type with a private constructor in `celestina-shell::lock`,
 minted only in `Locked`. It is carried by the lock worker, which checks the
@@ -455,7 +586,7 @@ inhibitor, which unlocking re-takes.
 | Enter, empty field | nothing (no attempt, no PAM call) |
 | Enter while `wait_until` is in the future | nothing; the countdown stays |
 | paste, IME, selection | do not exist (§4.7) |
-| no key or pointer motion for `lock.idle_fade_after` (a theme token, proposed 30 s) | `faded = true`: every output, the prompt included, is drawn black (backdrop and text gone; OLED and onlookers); the field's content is kept |
+| no key or pointer motion for `FADE_AFTER` (30 s; a constant local to the lock, **amended 2026-10-22**: it becomes the token `lock.idle_fade_after` when the style program decides tokens) | `faded = true`: every output, the prompt included, is drawn black (backdrop and text gone; OLED and onlookers); the field's content is kept |
 | any key or pointer motion while `faded` | `faded = false`, redrawn; a key is also handled as above |
 
 | Verdict | Next |
@@ -474,17 +605,24 @@ and takes that token. A test asserts the call site is unique (§9.1).
 ### 4.6 Covering before anything else; outputs that come and go
 
 - On the first `configure` of every lock surface the **toolkit** acks it and
-  commits a cover: a `wp_single_pixel_buffer_v1` black pixel scaled by
-  `wp_viewporter` to the configured size, or, without that global, a zeroed
-  `wl_shm` XRGB8888 buffer of the configured size (a fresh memfd is zero, so
-  nothing is written). No GPU, no font, no decode is on that path. Covering is
-  a toolkit invariant of the lock role, not product code (H-2).
+  commits a cover: **always** a zeroed `wl_shm` XRGB8888 buffer of the
+  configured size (a fresh memfd is zero, so nothing is written). **Amended
+  2026-10-22 (the author's decision at the spike gate, P2):** niri does not
+  serve `wp_single_pixel_buffer_manager_v1`, so there is no one-pixel cover
+  and no viewport on the cover path; the single-pixel code was deleted from
+  the toolkit. A buffer of the configured logical size at buffer scale 1 maps
+  and locks without a protocol error at scale 1.5 (spike Q4). No GPU, no font,
+  no decode is on that path. Covering is a toolkit invariant of the lock role,
+  not product code (H-2). A `configure` that arrives after `locked` (niri
+  sends `locked` before the new client's `configure` when it replaces a dead
+  lock, spike Q1) is covered the same way, and a `configure` that arrives
+  after `finished` (a refused client) is tolerated, not an error.
 - Nothing but covers is committed before `locked`: niri continues as soon as
   every surface is mapped, so time to `locked` is the cover's time (target
   < 1.5 s, measured in the nest, Q12; logind gives 5 s).
 - After `locked`: the CPU painter and the one embedded font start (§4.6.1);
   the backdrop worker reads the bundle; each output draws its backdrop (or
-  stays black), the scrim token over it, and on the focused output the clock
+  stays black), the scrim (`SCRIM`, a local constant, black at 60 %) over it, and on the focused output the clock
   and the field.
 - **An output that appears** gets a lock surface at once, locked or not
   (the protocol asks for it; a duplicate is a protocol error, so one per
@@ -543,15 +681,26 @@ dimmed backdrop. When the seat has no keyboard capability, the status says so.
 
 **Input.** The lock profile binds no data device, no primary selection, no
 `zwp_text_input_v3`: no paste and no text-input activation. **The user's
-input method** (review X-N6) is a separate client of
-`zwp_input_method_v2`; niri serves that protocol (smithay's
-`InputMethodHandler`), and an input method holding a keyboard grab receives
-keys before the focused surface. Since the lock never activates text input,
-smithay should deactivate the input method when focus moves to the lock
-surface, but the exact moment the grab is released and whether a grab can
-outlive the focus change is **[verify]** Q16. No input method runs in the
-author's session today (measured); the risk is recorded in §5 (TM-28) and the
-live row checks it if one is ever installed. Keys come from xkb with compose
+input method and niri's accessibility keyboard monitor** (review X-N6, answered
+by spike Q16, **amended 2026-10-22**) are the lock's X2 residual, not a
+mitigation. In smithay `ff5fa7d`, `zwp_input_method_v2.grab_keyboard` installs
+a seat keyboard grab at once, whatever the activation or the focus; the grab
+forwards every key to the input method and none to the focused surface, ends
+only when the client destroys it, survives the lock taking focus and can be
+taken while the session is locked; niri forwards keys through it while locked.
+Any unrestricted client of the user can bind the global. In a session
+instance niri also serves `org.freedesktop.a11y.KeyboardMonitor` on the
+session bus and emits every key's keysym and character to any client that
+called `WatchKeyboard`, with no lock check. Neither path can be closed by the
+lock; closing them needs a change in niri. The author accepted both on
+2026-10-22 as a residual of X2, as `swaylock` has the same one (§5, TM-15,
+TM-28). The lock states nothing it cannot keep: it never activates text
+input, and its README names the residual. No input method runs in the
+author's session today (measured); fcitx5 is not installed, so the spike used a
+throwaway `zwp_input_method_v2` client, and physical keys were never sent in the
+nest (virtual-keyboard input bypasses grabs): the physical half rests on
+the source, and the author can confirm it with a throwaway client and any
+non-password text, never in the live session. Keys come from xkb with compose
 (**[verify]** Q8: dead keys and accents yield the same bytes as a VT login).
 Caps Lock is shown from the xkb modifier state (the toolkit gains
 `Modifiers::caps_lock`). The field shows one bullet per character.
@@ -582,6 +731,7 @@ The shell's notices (§4.9) are product copy of the shell, in
 ```text
 NOTICE_LOCK_TITLE           "Bloqueo de sesión"
 NOTICE_LOCK_UNAVAILABLE     "No se puede bloquear: {motivo}"
+NOTICE_LOCK_NOT_LOCKED      "No se ha podido bloquear la sesión."
 NOTICE_LOCK_REFUSED         "El compositor no ha concedido el bloqueo; no se ha suspendido."
 NOTICE_LOCK_NOT_CONFIRMED   "El bloqueo no se ha confirmado a tiempo; no se ha suspendido."
 NOTICE_LOCK_RELAUNCH_LIMIT  "El bloqueo se ha cerrado varias veces seguidas; usa otra consola para recuperarlo."
@@ -655,7 +805,8 @@ Changes to CEL-2-B, each removing the old path in the same unit:
 **A suspend that races an unlock** (M11). The proof was minted, then the
 person unlocked before the logind worker called `Suspend`. Re-taking the
 delay inhibitor at unlock does not cover this: a delay inhibitor taken after
-logind sent `PrepareForSleep(true)` does not delay that sleep (Q17), and the
+logind sent `PrepareForSleep(true)` does not delay that sleep (logind refuses
+it, Q17), and the
 call may land after the unlock but before the new inhibitor exists. So each
 `LockedProof` carries the lock **generation** (a counter the policy bumps on
 every `unlocked`, on every child exit and on duty off), published through a
@@ -690,7 +841,7 @@ limit beyond "one intent at a time", and logs each request's origin
 |---|---|---|---|
 | loop | shell | the pure policy, routing | no IO |
 | `lock` | shell | pinning, spawn, stdout reader, `pidfd` wait, the liveness check before a suspend proof, the memfd bundle, the offset read, the PAM-file check, the notices | one blocking `poll` on stdout, the pidfd and an `eventfd` that the command sender and shutdown signal (M12: no periodic wake-up; the bounded `sync_channel` of 4 is drained when the eventfd fires), join `JOIN_WAIT` |
-| `lock-sleep` | shell | its own system-bus connection, the delay inhibitor fd, the `PrepareForSleep` subscription; woken by the bus or an `eventfd`, never by a periodic poll | `energy::logind`'s connect helper, `CALL_TIMEOUT`, `CONNECT_TIMEOUT` (reused, made `pub(crate)`, not copied) **[verify]** Q10 for unblocking the signal iterator on shutdown |
+| `lock-sleep` | shell | its own system-bus connection, the delay inhibitor fd, the `PrepareForSleep` subscription; woken by the bus or by its order channel. **Amended 2026-10-22:** by itself it wakes only every 5 s (`RECONNECT`) while it has no bus, and every 2 s (`PREPARING_RECHECK`) to read the `PreparingForSleep` property while the last value it published is `true` or a read is still owed after a failure. This replaces "never by a periodic poll": a lost `false` cannot be detected any other way, it would leave the policy `Preparing` for good and re-lock after every unlock (finding I-C), and a `true` whose owner lookup and property read both failed would leave the inhibitor held until logind's own cap and the machine sleeping uncovered (finding m-3). The timer exists only in those states, so an idle awake session has no periodic wake-up. **Amended 2026-10-22 (round 4, m-3 residual):** a persistent failure of the property read with the bus alive is retried with a backoff of 2 s, then 4 s, then 8 s (`RETRY_CAP`, the cap), counted from the failure **whatever wakes the worker meanwhile** (the reply to a failed call arrives on the worker's own stream and wakes it; measured against the fake logind, without the rule the worker read 6936 times in 1.5 s). The first failure of a streak is logged at `warn`, the rest at `debug`, and the end of the streak at `info`; a new reason to look (an order, a pass with candidates, a new connection) ends the wait. This replaces "fixed 2 s; not backed off" | `energy::logind`'s connect helper, `CALL_TIMEOUT`, `CONNECT_TIMEOUT` (reused, made `pub(crate)`, not copied). **Amended 2026-10-22 (spike Q10):** dropping connection clones never ends zbus 5's blocking signal iterator; it ends only on `Connection::close()` or when the `MessageStream` is polled by hand with a `Waker` that writes to the same bounded channel the stop path writes to, which is what the implementation does (in under 1 ms, also with a hung bus). No `eventfd` is needed: the channel is the wake-up. A sender is believed only if it is the current owner of `org.freedesktop.login1` (finding C2); a delay inhibitor requested during a pending sleep is refused by logind with `OperationInProgress` (spike Q17), which the worker treats as the expected answer, `InhibitorFailure::SleepInProgress`, not as a bus failure |
 | `logind` (CEL-2-B) | shell | the `Suspend` call with a proof | unchanged |
 | `wallpaper` (CEL-2-E) | shell | one thumbnail per decoded picture | unchanged bounds |
 | loop | lock | Wayland, the realtime timerfd, the delay and fade timers, the channel, painting the damaged rectangle | no IO beyond the Wayland socket; the one full-output upscale per output and backdrop is done on the `backdrop` worker into the cached base |
@@ -816,14 +967,17 @@ celestina-rs/crates/celestina-lock-proto/           NEW crate, no dependencies a
   src/lib.rs         Verdict and the verifier's exit codes, the lock's exit codes, the status-line
                      codec, the bundle codec, Backoff, the PAM service name and its paths, the
                      protocol versions: the one owner both binaries and the shell share
+  src/descriptors.rs NEW (amended 2026-10-22): which inherited descriptors are accidents
+                     (`inherited_descriptors`, `wayland_fd`), pure; the one owner for both binaries
 celestina-rs/crates/celestina-shell/src/
   lock.rs            NEW pure: LockPolicy (§4.4) and LockedProof, over celestina-lock-proto
   idle.rs            CHANGED: IdleAction::Resumed
   settings.rs        CHANGED: duties.lock (lenient, default off)
   lib.rs             CHANGED: module list
 celestina/crates/celestina-wayland/src/              (toolkit, knows nothing about PAM)
-  lock.rs            NEW: the lock profile: binds the session-lock manager, single-pixel buffer, shm,
-                     viewporter, fractional scale, seat; never layer shell, xdg_wm_base, data device,
+  lock.rs            NEW: the lock profile: binds the session-lock manager, shm, seat and, optionally,
+                     viewporter and fractional scale (for frames at a fractional scale; the cover
+                     uses neither; no single-pixel buffer, amended 2026-10-22); never layer shell, xdg_wm_base, data device,
                      primary selection, text input, background effect; Role::Lock; the cover on first
                      configure; Locked/Finished events; the unlock, reachable only through
                      `UnlockCapability` (M7): the toolkit's lock runtime hands exactly one
@@ -831,11 +985,14 @@ celestina/crates/celestina-wayland/src/              (toolkit, knows nothing abo
                      `UnlockCapability::unlock(self)` consumes it; there is no public
                      `unlock_session()` any other consumer of the toolkit could call
   runtime.rs, handlers.rs, surface.rs   CHANGED: profile-dependent globals and signal policy
-                     (the lock profile does not stop on SIGINT/SIGTERM/SIGHUP; it logs them)
+                     (the lock profile blocks and ignores eight signals and logs them, F27;
+                     amended 2026-10-22: it was three)
   Cargo.toml, lib.rs CHANGED: a `gl` feature (default on) gating egl, blur, popup and their crates
+  lock/connect.rs    NEW (amended 2026-10-22): the connect guard (§4.2.1): `ConnectPolicy`,
+                     `Refusal`, the one place that opens a lock-profile connection
   input.rs           CHANGED: Modifiers::caps_lock; Debug of Key redacts keysym and text
 celestina/crates/celestina-lock/                     NEW package, bin celestina-lock
-  src/main.rs        argv (--rehearsal), hardening, tracer check, pin the verifier, pid file, run
+  src/main.rs        argv (--rehearsal), close inherited descriptors (first), hardening, tracer check, pin the verifier, pid file, run
   src/machine.rs     the lock-side state machine (§4.5), tested without Wayland
   src/verify.rs      one attempt: spawn, pidfd deadline, kill, Authenticated
   src/unlock.rs      the single unlock call
@@ -887,8 +1044,13 @@ app's wallpaper state (≤ 1.6 MiB per output), and copied into the bundle at
 spawn time. With the wallpaper duty off there is no thumbnail and the lock is
 black. That is the normal case during coexistence (M15): while Noctalia paints
 the wallpaper, `duties.wallpaper` is off, so the lock shows a black backdrop
-until the author moves the wallpaper duty to the shell; the live row says so. The scrim (dimming) is the lock's, from a theme token, so the field's
-contrast does not depend on the picture.
+until the author moves the wallpaper duty to the shell; the live row says so. The scrim (dimming) is the lock's, so the field's contrast does not depend
+on the picture. **Amended 2026-10-22 (the author's decision):** `FADE_AFTER`
+(30 s), `SCRIM` (black at 60 %) and `VEIL` (black at 35 %) are constants local
+to the lock (`machine.rs`, `view.rs`) until the style program decides tokens
+for them; `celestina-style/tokens.toml` and its generator are untouched. The
+existing `scrim` token (black at 45 %) reaches only 3.2:1 over pure white, below
+the 4.5:1 that T-T1 demands, so it cannot serve.
 
 ### 4.14 Dependencies
 
@@ -899,6 +1061,7 @@ contrast does not depend on the picture.
 | | `tiny-skia` 0.12, `cosmic-text` 0.19 (no default features), `fontdb` 0.23 | the CPU painter and text (H-15); all in the lockfile |
 | | `rustix` (`fs`, `process`, `time`, `event`) | dumpable, rlimit, pidfd, process-group kill, timerfd, flock, seals; safe API, in the lockfile |
 | | `zeroize` 1.x | zeroing secret buffers without an own `unsafe`; small and widely used; **new to the lockfile** |
+| | `nix` 0.31 (no default features; **amended 2026-10-22**) | `nix::unistd::close` on a raw descriptor number, the safe call for §4.2's first step (`rustix` has no `close_range` and its `close` is `unsafe`); already in the closure through the verifier and calloop, so the allowlist of T-D1 is unchanged |
 | | `tracing`, `tracing-subscriber`, `thiserror` | as the shell; the subscriber's filter is fixed at `info` (no environment filter) |
 | | **not** `celestina-shell`, `celestina-paint`, `celestina-ui`, `zbus`, `image`, `serde_json`, `niri-ipc`, `khronos-egl`, `femtovg`, `freedesktop-icons`, `resvg` | no bus, no decoder, no compositor IPC, no GPU, no system fonts or icon themes |
 | `celestina-lock-verify` | `celestina-lock-proto` | the exit-code vocabulary |
@@ -917,9 +1080,11 @@ and `celestina-lock` together would switch `celestina-wayland`'s `gl` and
 `cosmic-text`'s `fontconfig` on for the lock too. `build-production.sh`
 therefore builds the two lock binaries in an invocation of their own
 (`cargo build --release --locked -p celestina-lock -p celestina-lock-verify`),
-and T-D1 checks the closure of that exact command; **[verify]** that the
-shared `target/` keeps both feature sets of the toolkit without thrashing the
-cache (Q18).
+and T-D1 checks the closure of that exact command. Spike Q18 (amended
+2026-10-22): cargo keys each unit by its resolved features, so both feature
+sets of the toolkit stay in the shared `target/` and alternating builds rebuild
+nothing (shown for the debug profile; the release profile is the production
+entry's own build).
 
 ## 5. Threat model
 
@@ -933,7 +1098,7 @@ session.
 | Id | Adversary | In scope for |
 |---|---|---|
 | X1 | a person at the keyboard and the outputs, without code execution | everything |
-| X2 | a process running as the same user | A2 through our channels; no new unlock interface; **not** A3 (below) |
+| X2 | a process running as the same user | A2 through our channels (not through the compositor's input paths, a residual: TM-15); no new unlock interface; **not** A3 (below) |
 | X3 | the compositor misbehaving or the lock client dying (faults) | A1, A3, A4 |
 | X4 | a hostile wallpaper file | A1, A3, A5 |
 | X5 | a manipulated environment (launcher, `systemd --user` environment) | A2, A3 |
@@ -949,7 +1114,11 @@ same-user process can `SIGKILL` our lock (same uid; non-dumpable does not
 prevent a kill) and run its own client. A same-user attacker with code
 execution can therefore end any lock on this compositor, ours or `swaylock`.
 This unit adds no interface that makes it easier, and keeps the password from
-that process; it cannot make niri's replacement policy stricter. Recorded so
+that process through its own channels; it cannot make niri's replacement
+policy stricter, and (amended 2026-10-22) it cannot keep the keys from a
+process that takes an input-method keyboard grab or watches niri's
+accessibility keyboard monitor (§4.6.1, TM-15): both obtain the password
+through the compositor. Recorded so
 no review assumes otherwise (decision H-12 "Revisit when").
 
 **Nothing outside the compositor is trusted about coverage** (review X-H1).
@@ -966,7 +1135,7 @@ the file carries a pid for the author and nothing else (§4.2, §4.4).
 | TM-2 | X1 races a stale verdict (old attempt) into an unlock | verdicts carry the attempt number; one attempt at a time | T-M3 |
 | TM-3 | X1 sees content while the lock comes up or an output is plugged | covers on first configure, nothing else before `locked`; late outputs get a surface at once; niri blanks the rest | T-W1, R-1, VAL-CEL2-LOCK-HOTPLUG |
 | TM-4 | X3 the lock crashes after `locked` | the compositor keeps the session locked; the shell relaunches (≤ 3/60 s), niri accepts the replacement | R-3, T-P5 |
-| TM-5 | X3 the lock crashes before `locked` | niri finishes locking after its 1 s deadline **[verify]** Q1; the shell relaunches after `requested` | R-4, T-P5 |
+| TM-5 | X3 the lock crashes before `locked` | niri finishes locking after its 1 s deadline (spike Q1, confirmed 2026-10-22); the shell relaunches after `requested` | R-4, T-P5 |
 | TM-6 | X3 the shell crashes or restarts | the lock does not depend on the shell: own process group, ignores `EPIPE`; the new shell trusts no file about it and asks the compositor when it next needs a lock | T-S2, R-5 |
 | TM-6b | a file or another compositor's lock taken as "covered" (X-H1, S-C2) | no state file is read for any decision; the pid file is per display | T-P8 (no event from a file exists in the policy), R-5 |
 | TM-7 | X4 a hostile image crashes or subverts the lock | the lock never decodes; the shell decodes under CEL-2-E's bounds; the bundle is validated (sizes, seals, UTF-8, total) | T-B1…T-B4 (seeded random fuzz of the parser), dependency pin T-D1 |
@@ -978,7 +1147,7 @@ the file carries a pid for the author and nothing else (§4.2, §4.4).
 | TM-12 | the password in a core dump or through `ptrace` / `/proc/<pid>/mem` | `PR_SET_DUMPABLE 0` and `RLIMIT_CORE 0` first thing in lock and verifier; then `TracerPid` must be 0, else exit before `requested` (lock) or 6 (verifier). Non-dumpable refuses a later attach whatever Yama says, but cannot detach a tracer attached in the instant before the call: closing that window relies on `kernel.yama.ptrace_scope` ≥ 1 (measured 1: only an ancestor may attach) **and** the tracer check (X-N3). No secret exists in that window | T-H1, T-H2 (a traced start exits), R-6 |
 | TM-13 | the password in swap | swap is zram only (measured); zeroized buffers with reserved capacity; residual: transient per-key strings from xkb and the toolkit are freed, not zeroed | evidence note; residual accepted by the author |
 | TM-14 | the password through the clipboard or an input method | the lock profile binds no data device, primary selection or text input | T-W2 (the lock profile's bound globals) |
-| TM-15 | keylogging by other clients | the compositor routes keys only to the lock surface; `allow-when-locked` binds see chords, not text (the author's are media keys) | VAL-CEL2-LOCK-LIVE note |
+| TM-15 | keylogging by other clients | **Amended 2026-10-22: not mitigated; residual of X2, accepted by the author.** The compositor does not route keys only to the lock surface: an input-method keyboard grab and niri's `org.freedesktop.a11y.KeyboardMonitor` receive keys while locked (spike Q16, §4.6.1). `allow-when-locked` binds see chords, not text (the author's are media keys). The same limit applies to `swaylock` | Q16 evidence, README, VAL-CEL2-LOCK-LIVE note |
 | TM-16 | a PAM module echoes the secret in a message | messages are counted, never copied or printed; stderr is `/dev/null` | T-V3 |
 | TM-17 | the secret sent to a prompt it does not belong to (OTP, username) | only the first echo-off prompt is answered | T-V2 |
 | TM-18 | X6 brute force by a person at the keyboard | `pam_faillock` (3 per 15 min, then 10 min) plus the lock's own 2/4/8/16/30 s, carried across a relaunch. Against X2 neither holds (the tally is user-writable, §4.11), which the X2 limit above already concedes | T-M4, T-P6 |
@@ -991,9 +1160,11 @@ the file carries a pid for the author and nothing else (§4.2, §4.4).
 | TM-25 | an unlock via logind (`loginctl unlock-session`) or a shell verb | neither exists | T-C1 (`Verb::parse` refuses `unlock`), T-G1 (no `Unlock` subscription) |
 | TM-26 | X2 asks `Shell1` for `lock` or `lock suspend` (X-N2) | locking is harmless; suspending is a mild denial of service that logind already grants the active user without a password, so nothing new; one intent at a time, origin logged; no further rate limit (§4.9) | T-P1 (one intent), review |
 | TM-27 | stack injection through the rehearsal service | the rehearsal service name is compiled, may only be passed by `celestina-lock --rehearsal`, the lock never unlocks in rehearsal, and the verifier refuses if the rehearsal file exists | T-V8, T-M5 |
-| TM-28 | the user's input method sees the password (X-N6) | the lock never activates text input; no input method runs today (measured); whether a grab can outlive the focus change is Q16 | Q16, VAL-CEL2-LOCK-LIVE |
-| TM-29 | an onlooker reads the clock, the backdrop or the bullet count on an idle lock; OLED burn-in (S-I9) | fade to black after `lock.idle_fade_after` without input; niri's screen-off still applies | T-M6, R-1 |
+| TM-28 | the user's input method sees the password (X-N6) | the lock never activates text input and no input method runs today (measured). **Amended 2026-10-22:** a grab does outlive the focus change and can be taken while locked (Q16), so an input method of the user receives the keys; accepted by the author as a residual of X2, with TM-15 | Q16 evidence, VAL-CEL2-LOCK-LIVE |
+| TM-29 | an onlooker reads the clock, the backdrop or the bullet count on an idle lock; OLED burn-in (S-I9) | fade to black after `FADE_AFTER` (30 s, local constant) without input; niri's screen-off still applies | T-M6, R-1 |
 | TM-30 | X3 niri gives up locking after `lock()` (render failure: it unlocks and sends `finished`) (X-H3) | exit 10 is ambiguous: bounded retry, never a suspend, reported as a refusal; the sleep case is F33 | T-P9, Q19 |
+| TM-31 | X7 **(amended 2026-10-22)** an accidental lock of a real session by a bare run: `celestina-lock`, a probe or an example started by hand, or by an agent, with the desktop's `WAYLAND_DISPLAY` inherited, locks the real compositor, and the lock ignores `SIGTERM` (the incident of 2026-10-22, which cost a restart) | the connect guard of §4.2.1, before the first Wayland request: the shell's marker (production only), a verified nest, or a handed-in socket whose peer is the parent or a nest; every doubt refuses with exit 15 and 0 bytes sent; a rehearsal or probe never gets the marker. **A barrier against accidents, not against X2**, who can lock the session through any other client | T-CG1…T-CG5 (`connect_guard.rs`: 0 bytes at the listener), T-E1, R-1 in a nest |
+| TM-32 | X7 **(amended 2026-10-22)** the logind delay inhibitor leaks into the lock or the verifier through an inherited descriptor, so every suspend of a locked session waits `InhibitDelayMaxSec` (T-S1 broken) | the first step of both binaries closes every inherited descriptor from 3 up except the one `WAYLAND_SOCKET` names; the shell marks the received descriptor close-on-exec at once; residual X3 (another child of the shell in the span between `recvmsg` and the `fcntl`) declared in §4.2 | T-DS1 |
 
 ## 6. What the unit never does
 
@@ -1045,6 +1216,9 @@ the file carries a pid for the author and nothing else (§4.2, §4.4).
     covered.
 25. Never loads a font, an icon or a shader from the system or the user's
     home in the lock, and never initialises a GPU there.
+26. Never connects a lock-profile client to a compositor that is neither the
+    shell's session nor a verified nest, and never sends it a byte before the
+    guard of §4.2.1 has decided (**amended 2026-10-22**).
 
 ## 7. Failure modes: always locked or denied
 
@@ -1055,7 +1229,7 @@ the file carries a pid for the author and nothing else (§4.2, §4.4).
 | F3 | (merged into F2) | — | — |
 | F4 | no Wayland connection or no session-lock global | **denied**; our suspends do not happen | log; `Notice` for a verb |
 | F5 | exit 10: another client holds the lock, or niri gave up | after 2 retries: locked by that client, or unlocked by niri (F33); ours never suspends | the other locker, or the notice `NOTICE_LOCK_REFUSED` |
-| F6 | the lock dies before `locked` | **locked** by niri after ≤ 1 s with a dead client [verify Q1]; relaunched | dark red, then the prompt |
+| F6 | the lock dies before `locked` | **locked** by niri after ≤ 1 s with a dead client (Q1, confirmed); relaunched | dark red, then the prompt |
 | F7 | the lock dies after `locked` | **locked** (dead client); relaunched, accepted as replacement | dark red, then the prompt |
 | F8 | relaunch limit reached | **locked** (dead client) | dark red; `NOTICE_LOCK_RELAUNCH_LIMIT` after the unlock; recovery §8 |
 | F9 | verifier hangs past 15 s | **locked**; child and group killed | `LOCK_UNAVAILABLE`, retry after 2 s |
@@ -1076,20 +1250,22 @@ the file carries a pid for the author and nothing else (§4.2, §4.4).
 | F24 | an external sleep and the lock not confirmed within logind's 5 s | logind sleeps; the lock covers on resume; logged as an error | possibly a glimpse on resume (VAL measures time-to-locked) |
 | F25 | our suspend intent not confirmed within 10 s | **not suspended**; the lock continues | the prompt |
 | F26 | input returns before `locked` (idle origin) | locked, **not suspended** | the prompt |
-| F27 | `SIGTERM`, `SIGINT`, `SIGHUP` to the lock | ignored and logged; still **locked** (at logout the compositor's exit ends it first, F38) | nothing |
+| F27 | `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGQUIT`, `SIGABRT`, `SIGALRM`, `SIGUSR1`, `SIGUSR2` to the lock (exactly these eight; **amended 2026-10-22**, it was three) | ignored and logged; still **locked** (at logout the compositor's exit ends it first, F38). The lock blocks the eight in every thread before any other thread exists (the profile's `setup` runs before the status writer thread starts, finding C1), so none reaches a thread with a default action. **Residual X2, declared and not covered:** `SIGKILL` and `SIGSTOP` (not catchable); `SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGILL` (terminate it with a core dump when sent with `kill`); `SIGTSTP`, `SIGTTIN`, `SIGTTOU` (stop it); `SIGVTALRM`, `SIGPROF`, `SIGIO`, `SIGPWR`, `SIGSYS`, `SIGXCPU`, `SIGXFSZ`, `SIGSTKFLT`, `SIGTRAP` and the real-time signals (not ignored). None of them unlocks: they can only kill the lock (F7/F28: niri keeps the session locked and the shell relaunches it) or stop it (§8). `SIGPIPE`, `SIGCHLD`, `SIGCONT`, `SIGURG` and `SIGWINCH` have no effect on it. An `abort()` raised by the process itself still terminates it | nothing |
 | F28 | `SIGKILL` to the lock | as F7 | dark red, then the prompt |
 | F29 | the lock dies between `unlock_and_destroy` and the sync | either unlocked by PAM's verdict, or killed by a protocol error first and still **locked**, then relaunched | either the desktop or the prompt again |
 | F30 | the compositor sends `finished` after `locked` (exit 13) | the compositor ended the lock by its own policy; never on niri (verified source); not relaunched | the desktop; logged as an error |
 | F31 | the pid file cannot be created | **locked**; only the author's pid lookup is lost (no decision depends on it) | log; §8 falls back to reading the pid from `ps -eo pid,args` (listing, never killing, by name) |
 | F32 | sctk drops a locked `SessionLock` without `unlock` (bug) | protocol error, client killed, **locked** (dead) | as F7 |
 | F33 | niri fails to render a locked frame while `Locking` and unlocks (verified source), during a `PrepareForSleep` | ours exits 10 and is retried; if every retry fails, the inhibitor is released and logind sleeps **uncovered**; logged as an error | the desktop on resume; `NOTICE_LOCK_REFUSED` |
-| F34 | no input for `lock.idle_fade_after` | **locked**, faded to black | black; a key brings the prompt back |
-| F35 | a tracer is attached when the lock starts | **denied**: exit 15 before `requested`; the shell logs and notices | `NOTICE_LOCK_UNAVAILABLE` |
+| F34 | no input for `FADE_AFTER` (30 s) | **locked**, faded to black | black; a key brings the prompt back |
+| F35 | a tracer is attached when the lock starts | **denied**: exit 15 before `requested`; the shell logs and notices (**amended 2026-10-22**: the notice is `NOTICE_LOCK_NOT_LOCKED`, the one every exit before `requested` gets, for a verb) | `NOTICE_LOCK_NOT_LOCKED` |
 | F36 | the child stays in `Requested` past 10 s | not killed; the intent dropped; the inhibitor released if a sleep is pending; whatever niri does then (locks or not) | log; `NOTICE_LOCK_NOT_CONFIRMED` for a verb |
 | F37 | the child hangs before `requested` past 5 s | killed through its pidfd (it never asked to lock): **denied** | log; notice for a verb |
 | F38 | the compositor quits or crashes while locked (logout, `Quit`, a crash) | the lock's Wayland connection breaks and it exits 16 at once (M8), so a logout is never held up waiting for systemd's `SIGKILL` of a lock that ignores `SIGTERM`; the session is gone, nothing is exposed | the greeter |
 | F39 | no output at all when locking (all off or unplugged) | niri locks at once (verified: "no outputs, lock the session right away"); the lock has no surface and no keyboard focus, prints `locked`; the first output that appears gets a surface, its cover and the prompt (M9) | nothing until an output appears, then the prompt |
 | F40 | more than 8 outputs | the 9th and later get covers and the scrim but no backdrop (§4.3) | black backdrop there |
+| F41 | the connect guard refuses (**amended 2026-10-22**, §4.2.1): the process was not launched by the shell and does not talk to a verified nest, or a handed-in socket is bad or its peer is neither the parent nor a nest | the lock exits 15 before `requested` with **0 bytes** sent; the shell's policy goes to `Idle`, drops the intent, does **not** relaunch (it never requested a lock) and mints no proof, so no suspend of ours follows; a verb gets `NOTICE_LOCK_NOT_LOCKED`. Nothing is locked by this process. In production it cannot arise from the shell itself, whose supervisor always adds the marker | the log line with the refusal and how to rehearse; the notice for a verb |
+| F42 | the lock or the verifier cannot list `/proc/self/fd` at its first step (**amended 2026-10-22**, §4.2) | the lock exits 15 before `requested` (as F35: denied, nothing locked, no relaunch); the verifier answers `Unavailable` (2), so an attempt is denied and the lock stays locked, never unlocked on a doubt (a failure to read `/proc/self/status`, or a tracer, is `BadRequest`, 6; both deny) | `NOTICE_LOCK_NOT_LOCKED` for a verb; for the verifier, `LOCK_UNAVAILABLE` and a retry after 2 s |
 
 F24, F30 and F33 are the only rows where the session can end uncovered, and
 none is caused by this unit's code: F24 is logind's cap on delay inhibitors,
@@ -1118,8 +1294,10 @@ agent proposes its removal; CEL-2-M does not include it.
    `WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/<uid> swaylock -c 000000`
    (the display name is the session's; check `ls /run/user/<uid>/wayland-*`):
    niri accepts it as the replacement of the dead lock and `swaylock`'s own
-   PAM service unlocks. Both steps are rehearsed in the nest (§9.2, R-3)
-   **[verify]** Q2.
+   PAM service unlocks. Both steps are rehearsed in the nest (§9.2, R-3); spike
+   Q2 showed `swaylock` accepted as the replacement and covering, but its
+   password unlock was not run (no agent types the password), and stays in
+   `VAL-CEL2-LOCK-RECOVERY`.
 
 **When the user's own password path is closed** (reviews S-I10, X-N1). The
 VT login (`login` → `system-local-login` → `system-login`), `swaylock`
@@ -1164,7 +1342,7 @@ exists; `swaylock` is the author's to retire.
 | T-O1…T-O3 | `celestina-lock::machine` with a fake runtime | outputs added before and after `locked` each get exactly one surface (a second for the same `wl_output` would be `duplicate_output`); a removed output's surface is destroyed and the prompt moves; zero outputs at `locked`, then one appears (F39) (M14) |
 | T-O4 | `celestina-lock` | the Wayland connection breaking after `requested` exits 16 (F38) |
 | T-X1 | `celestina-shell::lock` | the first draft's scenarios (S-C1, S-C2): a pid file of another display, a stale file, and a shell restarted under a running lock all leave the policy `Idle` with no proof (M14) |
-| T-T1 | `celestina-lock::view` | the field and clock text tokens against the scrim token composited over pure white reach 4.5:1 (large clock 3:1) (M13) |
+| T-T1 | `celestina-lock::view` | the field and clock text tokens against the lock's scrim (`SCRIM`) composited over pure white reach 4.5:1 (large clock 3:1) (M13); H-a carries the field and status half, H-b the clock's |
 | T-N1 | `celestina-lock-proto` | `service_check` over given path lists: production missing → 5, rehearsal present → 6, both rules without touching `/etc` (M5) |
 | T-G2 | `celestina` | a proof whose generation is older than the current one is dropped by the logind worker before `Suspend` (M11) |
 | T-Z1 | `celestina::lock::bundle` | the memfd's offset is 0 at spawn and the child's first read returns the magic (M4); a bundle with 8 maximal outputs fits 16 MiB (M3); a missing offset sets `offset_known = 0` and the lock hides the clock (M1) |
@@ -1172,10 +1350,12 @@ exists; `swaylock` is the author's to retire.
 | T-D1 | `celestina-lock`, `celestina-lock-verify` | the transitive normal-dependency closure of the production build command (`cargo tree -e normal`) equals the checked-in allowlist of §4.14; `unlock_probe` is absent without `fake-verifier` |
 | T-V1…T-V8 | `celestina-lock-verify` | conversation policy (first echo-off only, echo-on refused, messages never copied, `num_msg` bounds, allocation failure frees); argv/stdin/exit table; secret bounds; uid 0 refused; constants against `_pam_types.h`; the real binary with `--service celestina-lock-rehearsal` and no such file answers 1 (via `other`, outside `faillock`); with the file present answers 6 |
 | T-V6 | `celestina-lock::verify` | a fake verifier that sleeps: killed at the (shortened) deadline, group included, verdict `Unavailable`; a fake that exits 0 yields `Authenticated` only for its own attempt |
-| T-E1…T-E3 | `celestina-lock`, `celestina::lock` | lock and verifier get only the allowlisted environment; no override variable is read; a pinned binary replaced on disk still runs the pinned bytes, a script is refused |
+| T-CG1…T-CG5 | `celestina-lock/tests/connect_guard.rs` (the real binary under `env_clear()`, against a Python test compositor in a scratch runtime directory that counts the bytes it receives), `celestina-wayland` units and source guards (**amended 2026-10-22**, TM-31) | CG1 a bare run against a compositor that is not a nest: exit 15, the message names `lock-rehearsal.sh`, **0 bytes**; CG2 `--rehearsal` with and without the shell marker: exit 15, 0 bytes; CG3 the marker lets the production lock connect and speak; a verified nest (a listener whose own command line carries `celestina-dev-session.kdl`) is accepted for a rehearsal and for a run without the marker; CG4 `WAYLAND_SOCKET`: a socket to a non-nest peer is refused for rehearsal and production alike, a value that is not a descriptor number of 3 or more (`0 1 2 x "" " 5" -1 "5 6"`) is refused with exit 15 and the display also named is never consulted (0, 0), a socket to a verified nest is accepted, the harness parent case is `signals.rs` and `descriptors.rs`; CG5 units in `connect.rs` (every doubt is a refusal, `/proc` is not read for an unknown peer, a pid of 0 or a foreign uid; the policy follows the environment and a rehearsal never trusts the marker; a command line names a nest by an argument, not a substring; the socket path follows the Wayland convention; a policy whose condition does not hold is refused before any socket is opened) and the source guards of `tests/lock_profile.rs` (inside `run_lock` the guard precedes `registry_queue_init`, which precedes `request_lock`; one call site of `request_lock`; no code of the profile but `connect.rs` names `connect_to_env`, `from_socket`, `UnixStream` or `from_fd`; every `run_lock` call passes a policy and the probes pass `detect(true)`; `ConnectPolicy` has no `Default`; `ShellLaunched` is named only in `connect.rs`). The two refusal tests failed against the unguarded lock (it connected and never exited) |
+| T-DS1 | `celestina-lock/tests/descriptors.rs`, `celestina-lock-verify/tests/descriptors.rs`, `celestina-lock-proto` units, the guards of both binaries (**amended 2026-10-22**, TM-32) | the real binary closes a pipe's write end made inheritable while it is alive and keeps the Wayland socket it was handed (seen from the peer); the pure decision (the standard streams and the kept descriptor stay; what is not a plain number is ignored; `" 5\n"` is not a descriptor number); the close is one call and the first statement of `start` and of the verifier's `main`; in the shell, `the_inhibitor_reply_leaves_no_inheritable_descriptor_in_the_stream` (a private peer-to-peer zbus connection stands in for logind) fails without `own_cloexec`, and a lock started with the inhibitor held inherits only the standard streams |
+| T-E1…T-E3 | `celestina-lock`, `celestina::lock` | lock and verifier get only the allowlisted environment (the lock's is exactly four names, the marker's value fixed, a hostile marker replaced); no override variable is read; a pinned binary replaced on disk still runs the pinned bytes, a script is refused |
 | T-H1 | both binaries | `prctl(PR_GET_DUMPABLE)` (`rustix::process::dumpable_behavior`) reports not dumpable after hardening, and the core limit is 0 |
 | T-H2 | both binaries | a start with a non-zero `TracerPid` (parsed from a fixture of `/proc/self/status`) exits 15 (lock, before `requested`) or 6 (verifier) |
-| T-W1…T-W3 | `celestina-wayland::lock` | first commit of a lock surface is the cover; the lock profile binds exactly its list; `Key`'s Debug shows no keysym or text |
+| T-W1…T-W3 | `celestina-wayland::lock` | first commit of a lock surface is the cover, a zeroed `wl_shm` XRGB8888 buffer, and no single-pixel path exists (amended 2026-10-22); the lock profile binds exactly its list; `Key`'s Debug shows no keysym or text; the eight ignored signals do not stop the profile |
 | T-S1 | `celestina::lock::sleep` with B's private-bus logind fixture | `Inhibit("sleep", …, "delay")`; released on `locked`; re-held after unlock; `Suspend false` recorded only after `locked` |
 | T-S2 | `celestina::lock::supervisor` with a fake lock binary (prints lines, exits) | line parsing bounds, exit table, relaunch, `EPIPE` tolerance, notices rate-limited to one per 10 s |
 | T-G1 | `celestina` | no subscription to logind `Lock`/`Unlock` (source scan) |
@@ -1189,7 +1369,10 @@ on a private bus, so no real inhibitor is taken), refuses to start if
 `$XDG_RUNTIME_DIR/celestina/lock-*.state` other than the nest's own display
 names a live pid (a lock of the live session; the nest shares the runtime
 directory), and tears the nest down by the pid its own `.kdl` run recorded.
-It never runs in the author's session.
+It never runs in the author's session. **Amended 2026-10-22:** the binary
+itself now refuses to lock outside a verified nest (§4.2.1); the script's
+rule is no longer the only barrier, and its clients still run under `env -i`
+with the nest's display.
 
 | Step | Expectation |
 |---|---|
@@ -1216,7 +1399,9 @@ captures and the time to `locked`; `cargo tree -e normal` of the two new
 packages; `ldd` of `celestina-lock-verify` (only `libpam`, `libc` and their
 dependencies) and of `celestina-lock` (no `libEGL`, no `libfontconfig`); the
 count and location of `unsafe` blocks (all in `pam.rs` and `egl.rs`); the
-residuals the author accepted (TM-13, F24, F33, the X2 limit).
+residuals the author accepted (TM-13, F24, F33, the X2 limit, which includes
+the input-method keyboard grab and niri's accessibility keyboard monitor,
+TM-15 and TM-28, amended 2026-10-22).
 
 ### 9.4 Author validation (queued, non-blocking)
 
@@ -1286,27 +1471,29 @@ and one landing.
 
 ## 12. Questions to settle in the nest before implementing
 
-| Q | Question | How |
-|---|---|---|
-| Q1 | Does niri end in `Locked` with a dead client when the lock dies between `lock()` and `locked`? (`continue_to_locking` does not check liveness) | a throwaway sctk client in the nest, killed after `lock()`; niri log and capture |
-| Q2 | Does niri accept a new client after our lock was killed, and does `swaylock` take over and unlock? | R-3 |
-| Q3 | Is an output without a lock surface drawn in `CLEAR_COLOR_LOCKED` until our cover maps? | nest capture for the dead-client case; hotplug only live |
-| Q4 | Is a single-pixel buffer with a viewport destination accepted as a lock surface's first buffer (no `dimensions_mismatch`)? Otherwise the shm cover is the only path | throwaway client in the nest |
-| Q5 | (moot with H-15: covers and frames are both `wl_shm` or single-pixel buffers; reopened only if EGL is chosen) | — |
-| Q6 | Does `wl_keyboard.enter` reach the lock surface under the pointer and move with it? | nest (one output), multi-output live |
-| Q7 | Does a virtual keyboard (`wtype` against the nest's socket, its path checked against the nest's environment file) reach the nest's lock surface? | nest; if not, R-7 is dropped and T-V covers the path |
-| Q8 | Do xkb compose and dead keys give the bytes `passwd` stored (precomposed UTF-8)? | live only, the author typing (VAL-CEL2-LOCK-LIVE) |
-| Q9 | Does `std::process::Command` execute `/proc/self/fd/N` (CLOEXEC descriptor) through its posix_spawn path, and refuse a script? | unit test T-E3 |
-| Q10 | How does a blocking `zbus` 5 signal iterator end within `JOIN_WAIT` on shutdown? | prototype against B's private bus |
-| Q11 | Does `ext-idle-notify` report `resumed` for input while locked? | nest with short delays |
-| Q12 | Time from spawn to `locked` | R-1, target < 1.5 s |
-| Q13 | (moot with H-15: no mesa in the lock) Does `PR_SET_DUMPABLE 0` disturb anything the lock uses? | R-1 with hardening on |
-| Q14 | `InhibitDelayMaxUSec` stays 5 s, and `faillock.conf` stays at defaults; does the author want either tuned? | the author |
-| Q15 | Can `faillock` be read and reset without privilege? **Answered:** yes, the tally is the user's own file (0660, measured); recorded in §4.11, §5 and §8. Still open: does the author keep a root VT or `ssh` login for a lockout? | the author |
-| Q16 | With an input method running (fcitx5), can its keyboard grab receive keys typed on the lock surface (at the focus change, or later)? | nest with fcitx5 started inside it only; never in the live session |
-| Q17 | Does logind wait for a delay inhibitor taken after `PrepareForSleep(true)` was sent? (the policy assumes not, and never takes one then) | B's private-bus fixture cannot answer it; logind's documentation and source, then VAL-CEL2-LOCK-SUSPEND |
-| Q18 | Do the two feature sets of `celestina-wayland` (with and without `gl`) coexist in `target/` without rebuilding each other on every production run? | two consecutive production-shaped builds in the worktree, timing the second |
-| Q19 | How often, if ever, does niri unlock on a failed locked frame (the render-failure branch), and what does it log? | nest log during R-1…R-10; live journal during VAL |
+Amended 2026-10-22: the spikes of task TS answered Q1, Q2, Q4, Q6, Q7, Q10, Q11, Q16, Q17, Q18 and Q19 in the nest and from the sources (`celestina/docs/evidence/2026-10-22-cel-2-h-spikes.md`); the last column records each answer. Q3 was answered by the Q1 spike, and Q9, Q12 and Q13 by the unit's tests and rehearsal. Q8, Q14 and Q15 stay with the author and the live rows.
+
+| Q | Question | How | Answer (2026-10-22) |
+|---|---|---|---|
+| Q1 | Does niri end in `Locked` with a dead client when the lock dies between `lock()` and `locked`? (`continue_to_locking` does not check liveness) | a throwaway sctk client in the nest, killed after `lock()`; niri log and capture | Yes. After its 1 s deadline niri stays `Locked` with the dead client and draws its lock colour (dark red); the next client replaces the dead lock, and on a replacement `locked` arrives **before** the new client's `configure`, so the toolkit covers on a post-`locked` configure. Confirms TM-5, R-4 |
+| Q2 | Does niri accept a new client after our lock was killed, and does `swaylock` take over and unlock? | R-3 | Yes for the takeover: a second client's `lock()` is accepted at once over a dead lock and its unlock works; `swaylock` is accepted as the replacement and covers. `swaylock`'s password unlock was not run (no agent types the password): it stays in `VAL-CEL2-LOCK-RECOVERY` |
+| Q3 | Is an output without a lock surface drawn in `CLEAR_COLOR_LOCKED` until our cover maps? | nest capture for the dead-client case; hotplug only live | Yes for the dead-client case (95.7 % of the pixels in niri's lock colour); a hotplugged output stays live only |
+| Q4 | Is a single-pixel buffer with a viewport destination accepted as a lock surface's first buffer (no `dimensions_mismatch`)? Otherwise the shm cover is the only path | throwaway client in the nest | **Cannot arise:** niri serves no `wp_single_pixel_buffer_manager_v1` (test-only). The zeroed `wl_shm` XRGB8888 cover is the only path and works at scale 1.5. Changes §3.1, §4.6, §4.13, T-W1 |
+| Q5 | (moot with H-15: covers and frames are both `wl_shm` buffers; reopened only if EGL is chosen) | — | — |
+| Q6 | Does `wl_keyboard.enter` reach the lock surface under the pointer and move with it? | nest (one output), multi-output live | Yes on one output: `wl_keyboard.enter` reaches the lock surface already in `Locking`; niri recomputes the focus from the output under the cursor, else the active one, else the first. Following the pointer between outputs is live only |
+| Q7 | Does a virtual keyboard (`wtype` against the nest's socket, its path checked against the nest's environment file) reach the nest's lock surface? | nest; if not, R-7 is dropped and T-V covers the path | Yes: `zwp_virtual_keyboard_v1` keys reach the lock surface, bypassing niri's binds and any keyboard grab; R-7 runs. The same path lets a same-user client type guesses (X2) |
+| Q8 | Do xkb compose and dead keys give the bytes `passwd` stored (precomposed UTF-8)? | live only, the author typing (VAL-CEL2-LOCK-LIVE) | Open: live only |
+| Q9 | Does `std::process::Command` execute `/proc/self/fd/N` (CLOEXEC descriptor) through its posix_spawn path, and refuse a script? | unit test T-E3 | Yes: `Command` executes `/proc/self/fd/N` of a close-on-exec descriptor and a script is refused (T-E3) |
+| Q10 | How does a blocking `zbus` 5 signal iterator end within `JOIN_WAIT` on shutdown? | prototype against B's private bus | Dropping clones never ends the blocking iterator. `Connection::close()` or a hand-polled `MessageStream` with a `Waker` writing to the stop channel ends it in under 1 ms, also with a hung bus; the implementation uses the second, with no `eventfd` |
+| Q11 | Does `ext-idle-notify` report `resumed` for input while locked? | nest with short delays | Yes: counted input (the virtual pointer shown; physical keys by source) reports `resumed` to every idle notification; virtual-keyboard input does not; unlock itself reports `resumed`. R-9 drives pointer input |
+| Q12 | Time from spawn to `locked` | R-1, target < 1.5 s | 20 to 78 ms in the nest with the window shown (about 1.0 s once while frames were throttled), against the 1.5 s target |
+| Q13 | (moot with H-15: no mesa in the lock) Does `PR_SET_DUMPABLE 0` disturb anything the lock uses? | R-1 with hardening on | Moot with H-15; R-1 ran with hardening on |
+| Q14 | `InhibitDelayMaxUSec` stays 5 s, and `faillock.conf` stays at defaults; does the author want either tuned? | the author | Open: the author |
+| Q15 | Can `faillock` be read and reset without privilege? **Answered:** yes, the tally is the user's own file (0660, measured); recorded in §4.11, §5 and §8. Still open: does the author keep a root VT or `ssh` login for a lockout? | the author | Answered as stated; the root VT or `ssh` login is still the author's |
+| Q16 | With an input method running (fcitx5), can its keyboard grab receive keys typed on the lock surface (at the focus change, or later)? | nest with fcitx5 started inside it only; never in the live session | **Yes, and it cannot be closed from the lock.** A `zwp_input_method_v2` keyboard grab survives the lock's focus change, can be taken while locked, and receives physical keys instead of the lock surface; niri's `org.freedesktop.a11y.KeyboardMonitor` also emits keys while locked. fcitx5 is not installed, so a throwaway client stood in; physical keys were never sent. **Accepted by the author as a residual of X2** (as for `swaylock`). Changes §4.6.1, §5 TM-15, TM-28 |
+| Q17 | Does logind wait for a delay inhibitor taken after `PrepareForSleep(true)` was sent? (the policy assumes not, and never takes one then) | B's private-bus fixture cannot answer it; logind's documentation and source, then VAL-CEL2-LOCK-SUSPEND | No: logind refuses a delay inhibitor requested during a pending sleep with `OperationInProgress` and, with none held at the signal, sleeps at once. The §4.4 invariant stands; the sleep worker treats the refusal as the answer of a race (`InhibitorFailure::SleepInProgress`) |
+| Q18 | Do the two feature sets of `celestina-wayland` (with and without `gl`) coexist in `target/` without rebuilding each other on every production run? | two consecutive production-shaped builds in the worktree, timing the second | Yes: both feature sets coexist in `target/` and alternating builds rebuild nothing (debug profile shown) |
+| Q19 | How often, if ever, does niri unlock on a failed locked frame (the render-failure branch), and what does it log? | nest log during R-1…R-10; live journal during VAL | None in 34 lock requests; niri logs the render-failure unlock with the same "unlocking session" line as a client's unlock, so only whether the shell's own child printed `unlocked` tells them apart. The live journal check stays in VAL |
 
 ## 13. The salvage edit of the root `AGENTS.md`
 
@@ -1347,8 +1534,9 @@ whatever CEL-2-I has taken by then.
   The lock outlives the shell; status travels on a pipe; only the
   compositor's `locked`, relayed by the shell's own child, counts as covered,
   and a per-display pid file serves the author only (§4.1, §4.2, §4.4).
-- **H-2. Cover first, never decode in the lock.** The toolkit commits a black
-  cover on each lock surface's first configure; the lock receives
+- **H-2. Cover first, never decode in the lock.** The toolkit commits a
+  zeroed `wl_shm` cover (always; niri serves no single-pixel buffer, amended
+  2026-10-22) on each lock surface's first configure; the lock receives
   pre-scaled, pre-blurred pixels in a sealed memfd and opens no user file
   (§4.3, §4.6).
 - **H-3. The verifier is Rust with one FFI module,** the project's second
@@ -1452,3 +1640,82 @@ first; the check is named.
 | M13 contrast test of text over the scrim | **accepted** | T-T1 against pure white under the scrim |
 | M14 missing tests; the lock's stderr | **accepted** | T-O1…T-O4, T-X1; stderr inherited from the shell, i.e. the journal under `systemd-cat` (§4.1) |
 | M15 a black backdrop while Noctalia owns the wallpaper | **accepted** | noted in §4.13 and for the live row |
+
+### Amended 2026-10-22: the review rounds of the implementation of CEL-2-H-a
+
+The evidence records six rounds of review and fixes: Review A (Opus 5.5,
+high) over the unit's diff in six passes (the first over the diff, the later
+ones over the fixes of the round before), and Review B (Opus 5.5, adversarial)
+in passes over `f9ef5db6` and `bb519283` (§10). Rounds 4 to 6 were added to
+this table on 2026-10-22. Identifiers are those of
+`celestina/docs/evidence/2026-10-22-cel-2-h-a.md`, whose record of Task 11 holds
+the change and the test of every row; each fix has a test that failed against
+the previous code or a mutant that the test kills. Rows marked **spec** changed
+this document (the author accepted them on 2026-10-22).
+
+| Round and reviewer | Finding | Disposition |
+|---|---|---|
+| 1, Review A | C1 `SIGTERM`, `SIGINT` and `SIGHUP` killed the binary: the status writer thread was created before the signals were blocked | **fixed**: the writer starts in the profile's `setup`, after the mask; a test runs the real binary and checks every thread's `SigBlk`. **spec** (F27, §4.13: eight signals, the residual listed) |
+| 1, Review A | C2 `Preparing` could stick or be forged by a signal from another sender | **fixed**: the sender must be the current owner of `org.freedesktop.login1`; the property is read after subscribing, after a reconnect and after every order. **spec** (§4.10) |
+| 1, Review A | I1 a policy test did not bite; I2 the `Ending` and `Spawning` watchdogs left the worker holding the child and refusing the next spawn; I3 orders shared a queue of eight with the bus's wake-ups; I4 a failed inhibitor was not retried when the bus returned; I5 evidence rows corrected | **fixed**. **spec** (§4.4: `Ending` watchdog and `KillChild`, the worker's silence about a killed child) |
+| 1, Review A | M1 to M5, M7 (a relaunch that does not start gave no notice; Caps Lock latched at entry; non-UTF-8 argument; hardening not first; a dead arm in `perform_idle`; `UnlockFailed` exit) | **fixed**; M7 was superseded by I-A |
+| 1, Review A | M6, M8, M9, M10 and the Info items | **deferred by the author's instruction**; recorded in Review A's report, not regressions of the unit |
+| 1, Review B, pass 1 | no finding that must be fixed; Info H1 (the sleep worker did not revalidate the signal's sender) | **closed** by C2 |
+| 2, re-review of A and Review B, pass 2 | I-A (= H-B1) an unconfirmed unlock exited 16, so a protocol error left the session locked by a dead client that nobody relaunched | **fixed** (exit 1 unless the connection itself broke; F29, F32), then found **incomplete** by round 3 (I-1). The spec's §4.3 (b) and F29 already said "any other status after `requested` died" |
+| 2 | I-B the worker published the exit of a killed child, which the policy read as the new child's | **fixed** (the exit and lines of a killed child are never published). **spec** (§4.4) |
+| 2 | I-C a lost `false` left the policy `Preparing` and re-locked after every unlock | **fixed**: the property is re-read every 2 s while the last value is `true`. **spec** (§4.10, replaces "never by a periodic poll") |
+| 2 | I-D a test helper script looped for ever and held the stderr pipe; a flaky `shutdown_joins_within_the_bound` | **fixed** in the tests (the helper ends with its directory; the test waits on the descriptor); the flake was reproduced once and not explained further. If it reappears it is a defect to investigate, not to retry |
+| 2 | M-a the cap on forged signals was applied before the sender was known; M-b (= H-B2) a status writer that failed to start left the lock without lines; M-c the `Ending` watchdog dropped a pending request | **fixed** (M-b: exit 15 before the lock is requested). **spec** for M-c (§4.4 `Ending` watchdog) |
+| 2, Review B, pass 2 | H-B3 (= Info-2) the ignored set was three signals | **fixed** (eight). **spec** (F27) |
+| 2 | Info-1 a shared `target/` gave a spurious failure to another reviewer | **not a code change**: the landing's `cargo test` evidence comes from a clean tree and its own target |
+| 3, third pass | I-1 a protocol error reached `event_loop.run` wrapped by calloop and was not recognised: exit 16, no relaunch | **fixed** (the error is unwrapped recursively), with a test over a real `EventLoop` |
+| 3 | m-1 the straggling exit 0 of the old child of `Ending` was read as the new child's | **fixed**. **spec** (§4.4, `StrayExit` in `Spawning`; the residual for a status other than 0) |
+| 3 | m-3 a failed owner lookup and a failed property read lost a `true` | **fixed** (the read stays owed and the worker wakes every 2 s). **spec** (§4.10) |
+| 3 | m-4, m-5, m-6 (a misleading comment on the per-sender cap; incomplete signal lists; stale texts) | **fixed**: comments, lists and manifests |
+| 3 | m-2 the periodic re-read contradicts "never by a periodic poll" | **accepted** and written into §4.10 |
+| 4, Review A (fourth pass) | I-α the logind delay inhibitor leaks into children started in parallel: zbus receives the descriptor without `MSG_CMSG_CLOEXEC`, so a lock started while the reply message lives could keep the inhibitor for its whole life (captured live: fd 57 in a `celestina-lock -c` child), and every suspend of a locked session would wait `InhibitDelayMaxSec` | **fixed**: the lock and the verifier close every inherited descriptor from 3 up except the one `WAYLAND_SOCKET` names, first thing they do (`nix::unistd::close`, no `unsafe`; the decision of which numbers are accidents lives once in `celestina-lock-proto/src/descriptors.rs`); source guards amended; tests run the real binaries and failed first. **spec** (§4.2, TM-32, T-DS1, F42, §4.14) |
+| 4 | I-α, shell side: the shell's worker | the first text said the reply is dropped within milliseconds; **corrected in round 5 (I-2) and round 6 (I-B)**, see below. A process-wide gate making `spawn` wait for the `Inhibit` round trip was **rejected** (a hung logind would delay the lock by the bus timeout). Residual **X3** declared |
+| 4 | I-α, flake: `no_inhibitor_is_taken_while_preparing` timed out in 2 of 99 debug runs | the cause is the same leak across tests (the fake logind and the shell's workers share a process); this **corrects the round 2 row I-D**, which blamed the test alone. The worlds of `lock_sleep.rs` now take turns; the file ran 30 times in a row, 30 passed (bounds the flake loosely, a rate of 2 % would have shown 55 % of the time: no regression, not proof of absence) |
+| 4 | m-β the round 3 text "a stale exit of the old child is always 0" was false (a child in `Ending` that hangs for 5 s may die of a signal or fail) | text corrected; **residual X2** declared and accepted for the author's written acceptance: a status other than 0 in `Spawning` is read as the new child's, so the policy can give up while the new child runs unfollowed (and, with a sleep being prepared, release the inhibitor early). Numbering the spawns in `Event::Line` and `Event::Exit` was **decided against** (it changes the crate's `Event`, the worker and the policy's state for a case that needs the old child to hang the full 5 s and die in the instant a new spawn waits; the `Spawning` watchdog and niri keeping the session covered bound the damage) |
+| 4 | m-γ `RECONNECT` missing from the §4.10 deviations; m-4 "nine or more connections" (it is eight, 8 x 8 = 64); m-5 the signal lists | **fixed**: text (§4.10 already named `RECONNECT`; F27 now names `SIGPIPE`, `SIGCHLD`, `SIGCONT`, `SIGURG` and `SIGWINCH` as signals with no effect) |
+| 4 | m-3 residual: a persistent failure of the property read with the bus alive was read again at once and again (6936 reads in 1.5 s), because the failed call's reply wakes the worker | **fixed**: a streak counter (first failure `warn`, the rest `debug`, the end `info`) and a retry after 2 s, then 4 s, then 8 s (cap `RETRY_CAP`) whatever wakes the worker meanwhile; a new reason to look ends the wait. **spec** (§4.10: replaces "fixed 2 s; not backed off") |
+| 4, Review B (pass over `f9ef5db6`) | B-1 in a degenerate coexistence (another client of the same user competing for the lock) the lock is spawned again every 2 s; B-2 the signals test no longer exercised the multi-threaded case of C1; B-3 "empty directories", recorded exactly as handed over. Checks that passed: 1200 random inputs to the verifier (none exits 0), the eight signals with `setsid` (the lock survived), a real cut of the compositor connection (exit 16, no `unlocked`), R-3, R-4, R-2, R-8, R-9c, a fuzz of the backdrop decoder (3 million inputs, no panic). Verdict: it may land; the evidence holds a summary, not the reviewer's report | **B-2 fixed in round 5**; **B-1 and B-3 open for the author**, none a regression |
+| 5, Review A (fifth pass) | **G-1** every client of the lock profile connected to the compositor the environment named: the incident of 2026-10-22, in which a bare `celestina-lock --rehearsal` locked the author's real session (ADR 0022 A4) | **fixed**: the connect guard of §4.2.1, before the first Wayland request; `ConnectPolicy`, fail closed, exit 15 with 0 bytes; the supervisor's allowlist gains the marker; `dev-session.sh` names the command niri runs `celestina-dev-session`. Verified against a real nest (accepted) and a listener that is not a nest (exit 15, `bytes=0`). **spec** (§4.2, §4.2.1, §4.3, §5 TM-31, §6 item 26, §7 F41, T-CG1…T-CG5) |
+| 5 | I-2 the round 4 text of X3 and the comment at the spawn said the reply is dropped within milliseconds: false (the reply is broadcast to the worker's own stream and lives until the next `drain`) | **fixed**: `sleep::inhibit` sets `FD_CLOEXEC` on the descriptor in the message at once (`own_cloexec`) and hands the policy a close-on-exec clone; a test with a private peer-to-peer zbus connection reproduces it and failed first. The test needs zbus's `p2p` feature as a dev-dependency of `celestina` |
+| 5 | m-1 nothing pinned that the closing is the first thing both binaries do; m-2 several `read_dir(` calls would pass the guard; m-3 `wayland_fd` trimmed its input; m-4 where the closing sits relative to `PR_SET_DUMPABLE`; m-5 the verifier's two failures map differently | **fixed**: guards for the first statement and the count; `" 5\n"` is no longer a descriptor number; **decision: the closing stays before `PR_SET_DUMPABLE`** (reasons in §4.2); the verifier maps a refusal to list `/proc/self/fd` to `Unavailable` and a refusal to read `/proc/self/status`, or a tracer, to `BadRequest`, both denying (§4.3 (c)). **spec** (§4.2, §4.3, F42) |
+| 5 | B-2 (the review B finding above) | **fixed**: the signals test serves the other end of the socketpair with a minimal hand-written Wayland server, so startup completes and the status writer thread exists; it asserts at least two threads, each with all eight bits blocked; it failed first against an unanswered peer |
+| 6, Review A (sixth pass) | **I-A** `HandedInSocket` skipped the nest requirement: with `WAYLAND_SOCKET` set, any already-connected socket, the real compositor's included, was accepted, even for `--rehearsal` | **fixed**: the number must be a decimal descriptor of 3 or more as the toolkit parses it (else `Refusal::BadSocket`, exit 15, not 12); the guard reads `SO_PEERCRED` of that very socket and accepts only the same user's parent or a verified nest, for production as for a rehearsal; the connection is dropped before any request exists. Tests failed first. **spec** (§4.2.1, T-CG4) |
+| 6 | I-B residual X3 was recorded as "withdrawn" | **corrected**: only narrowed, to the span between zbus's `recvmsg` and the `fcntl`; the lock and the verifier cure themselves, another child of the shell started in that span may inherit a copy; `energy/logind.rs` (CEL-2-B) has the same pattern and is a unit of its own. **spec** (§4.2) |
+| 6 | m-a `Refusal::BadSocket` unused; m-c a relative `XDG_RUNTIME_DIR` was joined; m-d the source scanners cut a file at its first `#[cfg(test)]` and `count()` counted lines; m-e the test compositor's guard killed `timeout`, not python; m-f the wording about when `/proc` is read | **fixed**: `BadSocket` comes from the number check; `socket_path` returns `None` for a relative runtime directory, as the toolkit does; one scanner helper (`without_test_blocks`) removes each test-gated item and keeps the production code after it, included by four crates by `#[path]`, with a test that failed against the old logic; the compositor is started directly and ends itself with `SIGALRM` after 60 s; text corrected |
+| 6 | m-b (Info) the `pid <= 0` branch of the nest check is unreachable on the real path: `rustix` 1.1.5 types `UCred::pid` as a non-zero `Pid`, so a kernel pid of 0 (a peer in another pid namespace) cannot be decoded without `unsafe` | **left, recorded as residual**: the branch stays as defence in depth, the deployments have one pid namespace |
+| 6, Review B (pass over `bb519283`) | the pass over the revision that added the connect guard. Verdict: it may land (the repository holds no separate record of this pass; its Info is the `UCred` pid 0 item above) | no change |
+
+The spikes of §12 are not review findings; their answers are in that table.
+The deviations of the implementation from the first version of this document
+are now the text of §4.2, §4.2.1, §4.3, §4.4, §4.10 and F27, F41, F42: the
+eight signals, the `Ending` watchdog that serves what is pending, the periodic
+property read with its 2, 4, 8 s backoff, the ignored `Unlocked` exit in
+`Spawning`, the lock's four-entry environment, the first-step closing of
+inherited descriptors, and the connect guard. The cover and the input-method
+residual were the author's decisions at the spike gate.
+
+**Open, for the author's decision** (recorded, not decided here, and none a
+regression of the unit):
+
+- **m-α**: an `EPROTO` masked by an `EPIPE` stays as round 3 left it. The
+  author's instruction was to leave it untouched.
+- **B-1** (review B): in a degenerate coexistence, another client of the same
+  user competing for the lock, the lock is spawned again every 2 s.
+- **B-3** (review B): recorded exactly as handed over ("empty directories"),
+  without interpretation; the reviewer's report holds the detail.
+- The Info of round 6 (m-b): the `pid <= 0` branch of the nest check is
+  unreachable with `rustix` 1.1.5's non-zero `UCred` pid.
+
+Residuals the author must still accept in writing (plan stop point P5): TM-13,
+F24, F33, the X2 limit with Q16, the replacement of a dead lock by any client of
+the user, the window before `locked`, the closing of `swaylock` and the VT by
+`pam_faillock` and `pam_nologin`, and, from the later rounds (the evidence's labels for residuals, not §5's adversaries), **residual X2** of round 4
+(a status other than 0 in `Spawning` read as the new child's), **residual X3** (the
+inhibitor descriptor between `recvmsg` and the `fcntl`, §4.2) and the nature of
+the connect guard: a barrier against accidents, not against the same user
+(§4.2.1).
