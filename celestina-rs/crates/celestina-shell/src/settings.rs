@@ -15,6 +15,7 @@
 // `Location` and stored in whole micro-degrees so `Settings` stays `Eq`; it is
 // optional, lenient and written only once chosen. CEL-2-C adds `duties.osd`
 // and the `osd` table (timeout, position, kinds), all defaulted per field.
+// CEL-2-H adds `duties.lock`, off like the other switches.
 
 //! What the person chose, and what it takes for that choice to be real.
 //!
@@ -198,6 +199,11 @@ pub struct Duties {
     /// Whether this shell turns the screens off, locks and suspends when idle.
     #[serde(deserialize_with = "lenient_duty")]
     pub idle: Duty,
+    /// Whether this shell's own session lock runs: the `lock` verbs, the idle
+    /// chain's second step and the sleep inhibitor. Off while another locker
+    /// owns the session (CEL-2-H).
+    #[serde(deserialize_with = "lenient_duty")]
+    pub lock: Duty,
     /// Whether this shell listens to MPRIS players and shows the media piece
     /// and page.
     #[serde(deserialize_with = "lenient_duty")]
@@ -1003,6 +1009,7 @@ mod tests {
                 caffeine: Duty::On,
                 clipboard: Duty::Off,
                 idle: Duty::On,
+                lock: Duty::On,
                 media: Duty::On,
                 nightlight: Duty::Off,
                 osd: Duty::Off,
@@ -1287,6 +1294,7 @@ mod tests {
                 "caffeine",
                 "clipboard",
                 "idle",
+                "lock",
                 "media",
                 "nightlight",
                 "osd",
@@ -1328,6 +1336,54 @@ mod tests {
         let pending = store.stage(|s| s.duties.clipboard = Duty::On);
         assert_eq!(store.current().duties.clipboard, Duty::Off);
         assert_eq!(pending.wanted().duties.clipboard, Duty::On);
+    }
+
+    #[test]
+    fn duty_lock_defaults_off_and_reads_leniently() {
+        assert_eq!(Settings::default().duties.lock, Duty::Off);
+        // A file from before the lock has no key: off, the rest untouched.
+        let older = Settings::from_bytes(br#"{"schema_version":1,"duties":{"idle":"on"}}"#)
+            .expect("an old file is read");
+        assert_eq!(older.duties.lock, Duty::Off);
+        assert_eq!(older.duties.idle, Duty::On);
+        // The duty is written, off, like the other switches.
+        let (_, duties) = written_keys(&Settings::default());
+        assert!(duties.contains(&"lock".to_owned()));
+        let on = Settings::from_bytes(br#"{"duties":{"lock":"on"}}"#).expect("read");
+        assert_eq!(on.duties.lock, Duty::On);
+    }
+
+    #[test]
+    fn duty_lock_round_trips_and_ignores_garbage() {
+        let mut settings = Settings::default();
+        settings.duties.lock = Duty::On;
+        let bytes = settings.to_bytes().expect("serialize");
+        assert!(String::from_utf8_lossy(&bytes).contains(r#""lock": "on""#));
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+
+        for value in [
+            r#""yes""#,
+            r#""ON""#,
+            r#""On ""#,
+            "1",
+            "true",
+            "null",
+            "[]",
+            r#"{"on":true}"#,
+        ] {
+            let json =
+                format!(r#"{{"do_not_disturb":true,"duties":{{"lock":{value},"idle":"on"}}}}"#);
+            let read = Settings::from_bytes(json.as_bytes()).expect("the file is still read");
+            assert_eq!(read.duties.lock, Duty::Off, "{value}");
+            assert_eq!(read.duties.idle, Duty::On, "{value}");
+            assert!(read.do_not_disturb, "{value}");
+        }
+
+        // A change is durable before it is published, like every duty.
+        let store = Store::new(Settings::default());
+        let pending = store.stage(|s| s.duties.lock = Duty::On);
+        assert_eq!(store.current().duties.lock, Duty::Off);
+        assert_eq!(pending.wanted().duties.lock, Duty::On);
     }
 
     fn ids(ids: &[&str]) -> Vec<String> {

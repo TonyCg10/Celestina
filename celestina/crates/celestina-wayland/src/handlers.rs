@@ -29,7 +29,7 @@ use wayland_client::{
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3;
 
 use crate::{
-    input::{InputEvent, Modifiers},
+    input::{key_input, pointer_input, InputEvent, Modifiers},
     runtime::{OutputEvent, Runtime, Shell, SurfaceId, Target},
     surface::PreferredScaleSink,
     text_input::TextInputSink,
@@ -356,12 +356,7 @@ impl<S: Shell> KeyboardHandler for Runtime<S> {
         _: RawModifiers,
         _: u32,
     ) {
-        self.core.modifiers = Modifiers {
-            ctrl: modifiers.ctrl,
-            alt: modifiers.alt,
-            shift: modifiers.shift,
-            logo: modifiers.logo,
-        };
+        self.core.modifiers = Modifiers::from(&modifiers);
     }
 }
 
@@ -372,13 +367,7 @@ impl<S: Shell> Runtime<S> {
         let Some(id) = self.core.keyboard_focus else {
             return;
         };
-        let ev = InputEvent::Key {
-            keysym: event.keysym.raw(),
-            utf8: event.utf8,
-            modifiers: self.core.modifiers,
-            pressed,
-            serial,
-        };
+        let ev = key_input(event, self.core.modifiers, pressed, serial);
         match self.core.popup_for_focus(id) {
             Some(idx) => self.dispatch_popup_input(idx, ev),
             None => self.dispatch_input(id, ev),
@@ -401,43 +390,11 @@ impl<S: Shell> PointerHandler for Runtime<S> {
             let Some(target) = self.core.target_by_wl(&event.surface) else {
                 continue;
             };
-            let (x, y) = (event.position.0 as f32, event.position.1 as f32);
-            let ev = match event.kind {
-                PointerEventKind::Enter { .. } => {
-                    self.core.pointer_entered();
-                    InputEvent::PointerMotion { x, y }
-                }
-                PointerEventKind::Motion { .. } => InputEvent::PointerMotion { x, y },
-                PointerEventKind::Press { button, serial, .. } => InputEvent::PointerPress {
-                    x,
-                    y,
-                    button,
-                    serial,
-                },
-                PointerEventKind::Release { button, serial, .. } => InputEvent::PointerRelease {
-                    x,
-                    y,
-                    button,
-                    serial,
-                },
-                PointerEventKind::Leave { .. } => InputEvent::PointerLeave,
-                PointerEventKind::Axis {
-                    horizontal,
-                    vertical,
-                    ..
-                } => {
-                    if horizontal.absolute == 0.0 && vertical.absolute == 0.0 {
-                        // Source, stop and discrete-only events carry no
-                        // movement of their own.
-                        continue;
-                    }
-                    InputEvent::Axis {
-                        x,
-                        y,
-                        horizontal: horizontal.absolute as f32,
-                        vertical: vertical.absolute as f32,
-                    }
-                }
+            if matches!(event.kind, PointerEventKind::Enter { .. }) {
+                self.core.pointer_entered();
+            }
+            let Some(ev) = pointer_input(&event.kind, event.position) else {
+                continue;
             };
             match target {
                 Target::Layer(idx) => {

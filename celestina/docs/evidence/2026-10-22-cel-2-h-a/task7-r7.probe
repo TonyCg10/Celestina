@@ -1,0 +1,2 @@
+/home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/scripts/lock-rehearsal.sh: línea 70: 2043572 Terminado (killed)         nest_bg "$bin_dir/celestina-lock" --rehearsal < /dev/null > "$prefix.lines" 2> "$prefix.lock.err"
+RESULT R-7 PASS wrong passwords refused through the rehearsal service (no such file: PAM 'other' denies); Enter inside the 2 s delay started no attempt; 3683 ms between the two attempt lines; never unlocked

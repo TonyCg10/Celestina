@@ -1,0 +1,6 @@
+1792709471069 probe for R-6 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2043283.sock
+1792709471138 verb 'lock' sent
+1792709471191 locked 1792709471159 (verb at 1792709471121, 38 ms)
+1792709471193 R-6 pid 2043418: environ owner 0:0 (uid is 1000), read environ: denied, read mem: denied
+1792709471193 RESULT R-6 PASS /proc/2043418/environ owned by 0:0; the user cannot read environ or mem
+1792709471362 shell exited status 0

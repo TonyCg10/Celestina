@@ -1,0 +1,1 @@
+RESULT R-9b PASS pointer input at armed+230074 ms ended the idle period: at armed+262 s no lock was requested and no Suspend reached the fake logind (the unaided chain locks at armed+240 s, R-9a)

@@ -1,0 +1,1 @@
+RESULT R-3 PASS relaunch after SIGKILL (pid 2041938 -> 2041962, 1792709455843) and swaylock takeover of a dead lock; its unlock was SIGUSR1, not a password (the PAM unlock of swaylock was not tried)

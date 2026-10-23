@@ -52,7 +52,9 @@ verbs: island toggle
        wallpaper retry
        caffeine on|off|toggle
        nightlight on|off|toggle
-       session suspend|reboot|power-off|log-out
+       session reboot|power-off|log-out
+       lock
+       lock suspend
        clipboard select N [S]|remove N [S]|clear|pause|resume
        volume up|down|mute
        volume set PERCENT
@@ -103,6 +105,11 @@ pub enum Verb {
     NightLight(Switch),
     /// End the session or the machine's day.
     Session(PowerAction),
+    /// `lock`: cover the session with the shell's own lock (refused with a
+    /// notice while its duty is off). There is no verb that unlocks.
+    Lock,
+    /// `lock suspend`: lock, and suspend once the lock is confirmed.
+    LockAndSuspend,
     /// A clipboard history verb: it answers success or failure only and
     /// never returns an entry (a no-op while the duty is off).
     Clipboard(ClipboardVerb),
@@ -225,6 +232,8 @@ impl Verb {
             ["nightlight", word] => {
                 Verb::NightLight(verbs::switch_from_word(word).ok_or_else(|| unknown(&words))?)
             }
+            ["lock"] => Verb::Lock,
+            ["lock", "suspend"] => Verb::LockAndSuspend,
             ["session", word] => {
                 Verb::Session(verbs::action_from_word(word).ok_or_else(|| unknown(&words))?)
             }
@@ -306,6 +315,8 @@ impl Verb {
             Verb::Caffeine(switch) => vec!["caffeine", verbs::switch_word(*switch)],
             Verb::NightLight(switch) => vec!["nightlight", verbs::switch_word(*switch)],
             Verb::Session(action) => vec!["session", verbs::action_word(*action)],
+            Verb::Lock => vec!["lock"],
+            Verb::LockAndSuspend => vec!["lock", "suspend"],
             Verb::BubblesSelect => vec!["bubbles", "select"],
             Verb::BubblesMinimize => vec!["bubbles", "minimize"],
             Verb::PhoneMedia(kind) => vec!["phone", "media", kind.as_str()],
@@ -441,6 +452,8 @@ mod tests {
             (Verb::Session(PowerAction::Reboot), "session reboot"),
             (Verb::Session(PowerAction::PowerOff), "session power-off"),
             (Verb::Session(PowerAction::LogOut), "session log-out"),
+            (Verb::Lock, "lock"),
+            (Verb::LockAndSuspend, "lock suspend"),
             (
                 Verb::Clipboard(ClipboardVerb::Select(3)),
                 "clipboard select 3",
@@ -541,6 +554,40 @@ mod tests {
                 assert_eq!(parse(&words), Ok(Mode::Client(verb)), "{spelled}");
             }
         }
+    }
+
+    #[test]
+    fn t_c1_lock_and_lock_suspend_parse_and_unlock_and_every_other_word_are_refused() {
+        assert_eq!(Verb::parse(&strings(&["lock"])), Ok(Verb::Lock));
+        assert_eq!(
+            Verb::parse(&strings(&["lock", "suspend"])),
+            Ok(Verb::LockAndSuspend)
+        );
+        for bad in [
+            &["unlock"][..],
+            &["lock", "unlock"],
+            &["lock", "off"],
+            &["lock", "now"],
+            &["lock", "suspend", "now"],
+            &["lock", "Suspend"],
+            &["lock", ""],
+            &["unlock", "suspend"],
+            &["session", "unlock"],
+            &["session", "lock"],
+            &["lock-session"],
+            &["Lock"],
+        ] {
+            assert!(Verb::parse(&strings(bad)).is_err(), "{bad:?}");
+        }
+        // `session suspend` still parses: the shell refuses it by its own
+        // rule, with the lock duty on or off (see `energy::verbs`).
+        assert_eq!(
+            Verb::parse(&strings(&["session", "suspend"])),
+            Ok(Verb::Session(PowerAction::Suspend))
+        );
+        assert!(USAGE.contains("lock suspend"));
+        // No verb word that undoes a lock exists anywhere in the grammar.
+        assert!(!USAGE.contains("unlock"));
     }
 
     #[test]

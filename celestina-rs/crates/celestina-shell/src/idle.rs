@@ -24,6 +24,13 @@
 //! so while no locker is available the second step is reported as
 //! [`Refusal::NoLocker`] and nothing is suspended (decision D1 of
 //! `celestina/docs/evidence/2026-10-16-energy-plan.md`).
+//!
+//! **Someone coming back cancels what idle started.** When input ends a period
+//! in which the chain handed out [`IdleAction::LockAndSuspend`], the first
+//! [`IdleChain::resumed`] of that period answers [`IdleAction::Resumed`], so
+//! the session lock can drop a suspend that idle asked for and nobody
+//! confirmed (CEL-2-H, design §4.9). A refusal started nothing, so it is not
+//! followed by one.
 
 use std::error::Error;
 use std::fmt;
@@ -181,6 +188,9 @@ pub enum IdleAction {
     LockAndSuspend,
     /// A step came due and was deliberately not carried out.
     Refused(Refusal),
+    /// Input ended a period in which [`IdleAction::LockAndSuspend`] was
+    /// handed out: whoever is back must not be suspended by that request.
+    Resumed,
 }
 
 /// The idle chain: which steps are idle, whether anything may act, and what
@@ -190,6 +200,9 @@ pub struct IdleChain {
     config: IdleConfig,
     idle: [bool; 2],
     handled: [bool; 2],
+    /// Whether this period handed out [`IdleAction::LockAndSuspend`] (not a
+    /// refusal of it).
+    lock_and_suspend_started: bool,
     caffeine: bool,
     enabled: bool,
     locker_available: bool,
@@ -204,6 +217,7 @@ impl IdleChain {
             config,
             idle: [false; 2],
             handled: [false; 2],
+            lock_and_suspend_started: false,
             caffeine: false,
             enabled: false,
             locker_available: false,
@@ -263,12 +277,19 @@ impl IdleChain {
     }
 
     /// The compositor reports input after `step` was idle. Input ends the idle
-    /// period for every step, whichever notification reported it, and owes no
-    /// action: turning the monitors back on is the compositor's job.
+    /// period for every step, whichever notification reported it. Turning the
+    /// monitors back on is the compositor's job; the only thing owed is to say
+    /// [`IdleAction::Resumed`] once if the period had started a lock and
+    /// suspend.
     pub fn resumed(&mut self, _step: Step) -> Vec<IdleAction> {
+        let started = std::mem::take(&mut self.lock_and_suspend_started);
         self.idle = [false; 2];
         self.handled = [false; 2];
-        Vec::new()
+        if started {
+            vec![IdleAction::Resumed]
+        } else {
+            Vec::new()
+        }
     }
 
     /// Caffeine on keeps every step from acting; turning it off acts on the
@@ -307,7 +328,10 @@ impl IdleChain {
             self.handled[index] = true;
             actions.push(match step {
                 Step::ScreenOff => IdleAction::PowerOffMonitors,
-                Step::LockAndSuspend if self.locker_available => IdleAction::LockAndSuspend,
+                Step::LockAndSuspend if self.locker_available => {
+                    self.lock_and_suspend_started = true;
+                    IdleAction::LockAndSuspend
+                }
                 Step::LockAndSuspend => IdleAction::Refused(Refusal::NoLocker),
             });
         }
@@ -487,7 +511,9 @@ mod tests {
         let mut chain = chain();
         chain.set_locker_available(true);
         chain.idled(Step::LockAndSuspend);
-        assert!(chain.resumed(Step::ScreenOff).is_empty());
+        // The period had handled lock-and-suspend, so the resume also says so
+        // (CEL-2-H, design §4.9); the clearing it tests is unchanged.
+        assert_eq!(chain.resumed(Step::ScreenOff), [IdleAction::Resumed]);
         assert!(!chain.is_idle(Step::LockAndSuspend));
         assert_eq!(chain.idled(Step::ScreenOff), [IdleAction::PowerOffMonitors]);
         assert_eq!(
@@ -550,5 +576,67 @@ mod tests {
         assert!(chain.set_enabled(false).is_empty());
         assert!(chain.idled(Step::LockAndSuspend).is_empty());
         assert_eq!(chain.set_enabled(true), [IdleAction::LockAndSuspend]);
+    }
+
+    #[test]
+    fn t_i1_resumed_only_after_a_handled_lock_and_suspend_and_b_tests_unchanged() {
+        // After a handled lock-and-suspend, the first resume of the period
+        // says so, whichever notification reported it, and only once.
+        for reporter in [Step::ScreenOff, Step::LockAndSuspend] {
+            let mut chain = chain();
+            chain.set_locker_available(true);
+            assert_eq!(
+                chain.idled(Step::LockAndSuspend),
+                [IdleAction::PowerOffMonitors, IdleAction::LockAndSuspend]
+            );
+            assert_eq!(
+                chain.resumed(reporter),
+                [IdleAction::Resumed],
+                "{reporter:?}"
+            );
+            assert!(chain.resumed(Step::ScreenOff).is_empty());
+            assert!(chain.resumed(Step::LockAndSuspend).is_empty());
+        }
+
+        // Never after the screen-off step alone.
+        let mut chain = chain();
+        chain.set_locker_available(true);
+        chain.idled(Step::ScreenOff);
+        assert!(chain.resumed(Step::ScreenOff).is_empty());
+
+        // Never after a refusal: nothing was started that input could cancel.
+        let mut chain = self::chain();
+        assert_eq!(
+            chain.idled(Step::LockAndSuspend),
+            [IdleAction::PowerOffMonitors, REFUSED]
+        );
+        assert!(chain.resumed(Step::LockAndSuspend).is_empty());
+
+        // Never when the duty or caffeine kept the step from acting.
+        let mut chain = IdleChain::new(IdleConfig::default());
+        chain.set_locker_available(true);
+        chain.idled(Step::LockAndSuspend);
+        assert!(chain.resumed(Step::LockAndSuspend).is_empty());
+        let mut chain = self::chain();
+        chain.set_locker_available(true);
+        chain.set_caffeine(true);
+        chain.idled(Step::LockAndSuspend);
+        assert!(chain.resumed(Step::LockAndSuspend).is_empty());
+
+        // A step that was due while held back and fired later counts when it
+        // fired, not when it came due.
+        let mut chain = self::chain();
+        chain.set_locker_available(true);
+        chain.set_caffeine(true);
+        chain.idled(Step::LockAndSuspend);
+        assert_eq!(
+            chain.set_caffeine(false),
+            [IdleAction::PowerOffMonitors, IdleAction::LockAndSuspend]
+        );
+        assert_eq!(chain.resumed(Step::ScreenOff), [IdleAction::Resumed]);
+
+        // The next period starts clean.
+        chain.idled(Step::ScreenOff);
+        assert!(chain.resumed(Step::ScreenOff).is_empty());
     }
 }

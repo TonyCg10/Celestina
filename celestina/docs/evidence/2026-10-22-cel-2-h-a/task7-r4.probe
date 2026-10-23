@@ -1,0 +1,1 @@
+RESULT R-4 PASS killed between requested and locked (attempt 1); niri kept the session locked, the shell relaunched (2042310 -> 2042327) and niri replaced the dead lock

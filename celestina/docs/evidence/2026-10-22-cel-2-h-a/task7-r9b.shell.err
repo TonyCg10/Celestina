@@ -1,0 +1,24 @@
+2026-10-22T22:55:22.307895Z  INFO celestina_wayland::blur: ext_background_effect_v1 bound
+2026-10-22T22:55:22.321278Z  INFO celestina_wayland::egl: EGL initialised, GLES 3.0 context created egl="1.5" vendor=Some("Mesa Project")
+2026-10-22T22:55:22.321381Z  INFO celestina_wayland::handlers: output added output=winit id=43 size=(628, 673) scale=2.0 refresh_mhz=60000
+2026-10-22T22:55:22.321397Z  INFO celestina::app: island surface requested output=winit bar=false anchor=Top size=(628, 560)
+2026-10-22T22:55:22.321419Z  INFO celestina_wayland::runtime: layer surface created surface=1 output=winit namespace="celestina-panel" layer=Top size=(628, 560)
+2026-10-22T22:55:22.342680Z  INFO celestina::energy: idle duty on
+2026-10-22T22:55:22.342721Z  INFO celestina::lock: lock: the duty is on; turn off the other locker's idle lock (Noctalia) and bind `celestina lock suspend` yourself
+2026-10-22T22:55:22.342756Z  INFO celestina::clipboard: clipboard: the history file was deleted
+2026-10-22T22:55:22.342786Z  INFO celestina::providers::niri: niri: skipping the MinimizedWindowsChanged event, unknown to niri-ipc 26.4.0
+2026-10-22T22:55:22.342796Z  INFO celestina::providers::niri: niri: skipping the BindingModeChanged event, unknown to niri-ipc 26.4.0
+2026-10-22T22:55:22.343038Z  WARN celestina::lock: lock: the PAM service celestina-lock is not installed: the lock will cover the screen but cannot be unlocked (see celestina/README.md)
+2026-10-22T22:55:22.343075Z  INFO celestina::energy: idle: armed
+2026-10-22T22:55:22.343186Z  INFO celestina::connectivity: network: unavailable failure=Unreachable retry_ms=5000
+2026-10-22T22:55:22.343241Z  INFO celestina::connectivity: bluetooth: unavailable failure=Unreachable retry_ms=5000
+2026-10-22T22:55:22.343290Z  INFO celestina::lock::sleep: lock: the sleep inhibitor is held
+2026-10-22T22:55:22.344219Z  INFO celestina::app: desktop index received entries=64
+2026-10-22T22:55:22.543329Z  INFO celestina::connectivity: power: battery unavailable
+2026-10-22T22:55:22.543334Z  INFO celestina::connectivity: power: profiles unavailable
+2026-10-22T22:55:22.593359Z  INFO celestina_wayland::runtime: layer surface created surface=2 output=winit namespace="celestina-toasts" layer=Overlay size=(420, 408)
+2026-10-22T22:55:22.593367Z  INFO celestina::app: banners surface requested created=true toasts=1
+2026-10-22T22:55:32.345476Z  INFO celestina::app: banners surface released: no toast left
+2026-10-22T22:59:44.400749Z  INFO celestina::app: quit requested over the bus
+2026-10-22T22:59:44.403200Z  INFO celestina_wayland::runtime: clean exit frames=22
+2026-10-22T22:59:44.649978Z  INFO celestina: the shell stopped frames=22

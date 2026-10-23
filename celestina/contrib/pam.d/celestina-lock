@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Celestina session lock: the password, through the system stack.
+auth      include   system-auth
+account   include   system-auth

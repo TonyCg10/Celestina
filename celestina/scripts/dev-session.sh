@@ -302,8 +302,13 @@ if [ -z "$once" ]; then
     echo ">> the shell runs inside it; Ctrl-C here stops the whole nest" >&2
 fi
 
+# The `$0` of the command niri runs is `celestina-dev-session` on purpose: it
+# lands in the nest niri's own command line, which the session-lock client's
+# connection guard reads (`/proc/<pid>/cmdline`, ADR 0022 A4) to accept a
+# rehearsal only against a nest started here. Do not rename it without
+# changing `celestina_wayland::lock::NEST_MARKER`.
 if [ "$own_bus" = yes ]; then
     exec dbus-run-session -- \
-        "$niri_binary" -c "$generated_config" -- /bin/sh -c "$inside" dev-session "$@"
+        "$niri_binary" -c "$generated_config" -- /bin/sh -c "$inside" celestina-dev-session "$@"
 fi
-exec "$niri_binary" -c "$generated_config" -- /bin/sh -c "$inside" dev-session "$@"
+exec "$niri_binary" -c "$generated_config" -- /bin/sh -c "$inside" celestina-dev-session "$@"

@@ -1,0 +1,6 @@
+1792709478844 probe for R-9a on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2043899.sock
+1792709478897 R-9a idle armed at 1792709478885; waiting for the chain (about 250 s)
+1792709721927 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a-locked.png
+1792709721928 R-9a locked at 1792709718888; first Suspend on the fake logind: 1792709718888 Suspend false
+1792709721928 RESULT R-9a PASS idle armed 1792709478885, locked 1792709718888, Suspend recorded 1792709718888 (0 ms after locked)
+1792709722015 shell exited status 0

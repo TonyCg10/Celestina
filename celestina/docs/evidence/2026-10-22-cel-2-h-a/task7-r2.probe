@@ -1,0 +1,1 @@
+RESULT R-2 PASS second celestina-lock exit 10; first (pid 2041695) alive, same pid file, no unlock

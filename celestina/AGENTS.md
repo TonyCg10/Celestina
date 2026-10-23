@@ -20,13 +20,21 @@ the shell's constraints; it cannot relax the root or grant authority.
   nothing about the Island or notifications; `src/` is the product; the pure
   domain is `celestina-rs/crates/celestina-shell`, which knows nothing about
   Wayland, GL or D-Bus. Dependencies point from the product down, never back.
-- `unsafe` lives only in `crates/celestina-wayland/src/egl.rs`, with the
-  invariants documented at each call; every other module forbids it.
+- `unsafe` lives only in `crates/celestina-wayland/src/egl.rs` and, since the
+  session lock (CEL-2-H, design §4.11, H-3), in
+  `crates/celestina-lock-verify/src/pam.rs`: the hand-written `libpam`
+  declarations, the conversation callback and the `malloc`'d responses PAM
+  frees. Each documents its invariants at every block, and every other module
+  forbids `unsafe` (the verifier's crate root cannot say `forbid` over a module
+  that allows, so `crates/celestina-lock-verify/tests/source_guards.rs` keeps
+  it so).
 - Never edit `celestina-qt/` or `celestina-rs/crates/celestina-shell-core`.
   Copy from them only what the root contract's "Halted projects" section
   names, recording the source path and commit in the copy's head comment.
 - Product copy is Spanish and lives in `src/copy.rs`, whose head says
-  `language-contract: product-copy`; everything else is English.
+  `language-contract: product-copy`; the session lock's own screen keeps its
+  copy in `crates/celestina-lock/src/copy.rs` under the same head; everything
+  else is English.
 
 ## Local verification
 
@@ -37,6 +45,9 @@ the shell's constraints; it cannot relax the root or grant authority.
   exits
 - `celestina/scripts/deploy-production.sh`
 - `celestina/scripts/smoke.sh --binary PATH`
+- `celestina/scripts/lock-rehearsal.sh` (the session lock's steps R-1 to R-9;
+  nested niri, a fake logind and no PAM service only, never the live session;
+  it stops processes by recorded pid, never by name)
 
 Verification exercises the canonical release artifact without touching the
 installed binary; completion updates it without starting or replacing the live

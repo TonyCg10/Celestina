@@ -712,9 +712,12 @@ mod tests {
             duty.signal(Signal::Idled(Step::LockAndSuspend)),
             [IdleAction::LockAndSuspend]
         );
-        assert!(duty
-            .signal(Signal::Resumed(Step::LockAndSuspend))
-            .is_empty());
+        // The period had handed out lock-and-suspend, so the resume says so
+        // (CEL-2-H, design §4.9); the wiring that cancels the intent is task 6.
+        assert_eq!(
+            duty.signal(Signal::Resumed(Step::LockAndSuspend)),
+            [IdleAction::Resumed]
+        );
         assert_eq!(
             duty.signal(Signal::Idled(Step::ScreenOff)),
             [IdleAction::PowerOffMonitors],

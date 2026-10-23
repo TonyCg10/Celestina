@@ -1,0 +1,8 @@
+1792709471651 probe for R-7 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2043511.sock
+1792709472805 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-prompt.png
+1792709472805 R-7 typing a wrong password into the nest's lock surface
+1792709473487 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-refused.png
+1792709477171 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-refused-again.png
+1792709477173 kill -KILL 2043572 (celestina-lock)
+1792709477174 R-7 attempts: first 1792709472946 (1792709472806 typed), inside the delay 1 line(s), second 1792709476629
+1792709477175 RESULT R-7 PASS wrong passwords refused through the rehearsal service (no such file: PAM 'other' denies); Enter inside the 2 s delay started no attempt; 3683 ms between the two attempt lines; never unlocked

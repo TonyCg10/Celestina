@@ -15,6 +15,10 @@ celestina-core.workspace = true
 # reader and writer of those files, as in the module they were copied from.
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+# The session lock's policy (`lock`) speaks the lock's vocabulary: the status
+# lines it reads, the exit codes it classifies. The crate has no dependency of
+# its own and is the one owner of those numbers (CEL-2-H, design §4.13).
+celestina-lock-proto = { path = "../celestina-lock-proto" }
 
 [lints]
 workspace = true

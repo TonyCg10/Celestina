@@ -1,0 +1,5 @@
+2026-10-22T22:51:11.662957Z  INFO celestina_lock::launch: no backdrop bundle on stdin
+2026-10-22T22:51:11.663187Z  INFO celestina_wayland::lock::handlers: output added output=winit id=43
+2026-10-22T22:51:11.665690Z  INFO celestina_wayland::lock::handlers: the compositor confirmed the lock
+2026-10-22T22:51:12.929471Z  WARN celestina_lock::view: a frame was not shown output=43 err=both buffers are still in use by the compositor
+2026-10-22T22:51:16.612967Z  WARN celestina_lock::view: a frame was not shown output=43 err=both buffers are still in use by the compositor

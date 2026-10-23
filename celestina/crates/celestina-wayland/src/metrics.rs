@@ -23,7 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::runtime::SurfaceId;
+use crate::ids::SurfaceId;
 
 /// Frame-time samples kept per surface (percentiles cover the last ones).
 pub const RING: usize = 4096;

@@ -96,4 +96,7 @@ pub enum Message {
     Phone(Box<crate::phone::PhoneNews>),
     /// News from the media worker: the players, a cover, the bus lost.
     Media(crate::media::MediaEvent),
+    /// News for the session lock's policy: from the idle chain, or from the
+    /// lock's workers stamped with their run.
+    Lock(crate::lock::LockMessage),
 }

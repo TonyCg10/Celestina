@@ -45,6 +45,9 @@
 //! - [`weather`] — the one request the shell makes, how its answer is read, and
 //!   when a reading stops counting.
 //! - [`glance`] — load levels and today's date for the bar's readings.
+//! - [`lock`] — when the shell's own session lock is started, what its
+//!   confirmations mean, and the only way to mint a proof that the session is
+//!   covered before it suspends.
 
 #![forbid(unsafe_code)]
 
@@ -58,6 +61,7 @@ pub mod connectivity;
 pub mod glance;
 pub mod idle;
 pub mod launcher;
+pub mod lock;
 pub mod media;
 pub mod melibea;
 pub mod nightlight;

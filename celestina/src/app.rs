@@ -44,6 +44,7 @@ use crate::{
         Island, IslandAction, Shared,
     },
     launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
+    lock::LockHandle,
     media::control::{route, MediaControl, Routed, Snapshot as MediaSnapshot},
     message::Message,
     notifications::{self, NotificationsState},
@@ -485,6 +486,8 @@ pub struct App {
     wallpapers: crate::wallpaper::surface::Wallpapers,
     /// The energy duties' workers, set once the loop runs.
     energy: Rc<OnceCell<EnergyHandle>>,
+    /// The session lock's side of the shell, set once the loop runs.
+    lock: Rc<OnceCell<LockHandle>>,
     /// The glance workers (system monitor, weather), set once the loop runs.
     glance: Rc<OnceCell<GlanceHandle>>,
     /// The system monitor's newest reading, while its worker runs.
@@ -579,6 +582,7 @@ impl App {
             tray_refusal_logged: false,
             wallpapers: crate::wallpaper::surface::Wallpapers::default(),
             energy: Rc::new(OnceCell::new()),
+            lock: Rc::new(OnceCell::new()),
             glance: Rc::new(OnceCell::new()),
             sysmon: None,
             weather: None,
@@ -711,6 +715,13 @@ impl App {
         self
     }
 
+    /// Takes the slot the session lock's handle is put in once the loop runs.
+    #[must_use]
+    pub fn with_lock(mut self, lock: Rc<OnceCell<LockHandle>>) -> App {
+        self.lock = lock;
+        self
+    }
+
     /// The launcher's parts: the `recent` launches read at start and the
     /// slot the loop's own sender is put in once the loop runs.
     #[must_use]
@@ -789,6 +800,11 @@ impl App {
         }
         if before.duties != after.duties || before.energy != after.energy {
             if let Some(handle) = self.energy.get() {
+                handle.apply(&after);
+            }
+        }
+        if before.duties.lock != after.duties.lock {
+            if let Some(handle) = self.lock.get() {
                 handle.apply(&after);
             }
         }
@@ -1399,6 +1415,12 @@ impl App {
                     outcome.log();
                 }
             }
+            Verb::Lock | Verb::LockAndSuspend => match self.lock.get() {
+                Some(handle) => {
+                    handle.verb(&verb);
+                }
+                None => tracing::warn!(?verb, "no lock handle: the verb does nothing"),
+            },
             Verb::Clipboard(_) => self.clipboard_verb(&verb),
             Verb::Volume(_) | Verb::Microphone(_) | Verb::Brightness { .. } => {
                 let focused = focused_output(self.model.as_ref());
@@ -2400,6 +2422,10 @@ impl Shell for App {
             }
             Message::ShellSettings(read) => self.shell_settings_read(*read, ctl),
             Message::Energy(event) => event.log(),
+            Message::Lock(message) => match self.lock.get() {
+                Some(handle) => handle.message(message),
+                None => tracing::warn!("no lock handle: a lock message was dropped"),
+            },
             Message::Sysmon(reading) => self.sysmon_read(reading, ctl),
             Message::Weather(reading) => self.weather_read(reading, ctl),
             Message::Clipboard(message) => self.clipboard_event(message, ctl),

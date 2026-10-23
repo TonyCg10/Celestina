@@ -266,11 +266,12 @@ dependencies = [
 
 [[package]]
 name = "celestina"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "calloop",
  "celestina-core",
  "celestina-fake-system",
+ "celestina-lock-proto",
  "celestina-paint",
  "celestina-settings",
  "celestina-shell",
@@ -306,6 +307,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "celestina-lock"
+version = "0.1.0"
+dependencies = [
+ "calloop",
+ "celestina-lock-proto",
+ "celestina-tokens",
+ "celestina-wayland",
+ "cosmic-text",
+ "fontdb",
+ "nix",
+ "rustix",
+ "thiserror 2.0.21",
+ "tiny-skia",
+ "tracing",
+ "tracing-subscriber",
+ "zeroize",
+]
+
+[[package]]
+name = "celestina-lock-proto"
+version = "0.1.0"
+
+[[package]]
+name = "celestina-lock-verify"
+version = "0.1.0"
+dependencies = [
+ "celestina-lock-proto",
+ "libc",
+ "nix",
+ "rustix",
+ "zeroize",
+]
+
+[[package]]
 name = "celestina-paint"
 version = "0.1.0"
 dependencies = [
@@ -332,6 +367,7 @@ name = "celestina-shell"
 version = "0.1.0"
 dependencies = [
  "celestina-core",
+ "celestina-lock-proto",
  "serde",
  "serde_json",
 ]
@@ -357,6 +393,7 @@ version = "0.1.0"
 dependencies = [
  "calloop",
  "calloop-wayland-source",
+ "celestina-lock-proto",
  "femtovg",
  "glow",
  "khronos-egl",
@@ -1955,6 +1992,7 @@ version = "1.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
 dependencies = [
+ "getrandom 0.4.3",
  "js-sys",
  "serde_core",
  "wasm-bindgen",
@@ -2454,6 +2492,12 @@ name = "zeno"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6df3dc4292935e51816d896edcd52aa30bc297907c26167fec31e2b0c6a32524"
+
+[[package]]
+name = "zeroize"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 
 [[package]]
 name = "zlib-rs"

@@ -1,0 +1,7 @@
+1792709452776 probe for R-1 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2041259.sock
+1792709452845 verb 'lock' sent
+1792709452897 locked 1792709452876 (verb at 1792709452828, 48 ms)
+1792709452938 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1-locked.png
+1792709454473 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1-prompt.png
+1792709454476 RESULT R-1 PASS hello/requested/locked at lines 19/20/22, 48 ms from the verb to locked
+1792709454711 shell exited status 0

@@ -27,10 +27,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use celestina_shell::idle::{IdleAction, IdleConfig};
+use celestina_shell::lock::{Event as LockEvent, Origin};
 use celestina_shell::session::PowerAction;
 use celestina_shell::settings::{Duty, Settings};
 use celestina_wayland::Sender;
 
+use crate::lock::LockMessage;
 use crate::message::Message;
 use crate::providers::niri::NiriRequest;
 use crate::providers::{Reaper, Worker};
@@ -203,22 +205,31 @@ fn queue_request(queue: &CompositorQueue, request: NiriRequest) -> Result<(), St
     }
 }
 
-/// What the idle worker does for each action of the chain.
-fn perform_idle(queue: &CompositorQueue, action: IdleAction) {
+/// What the idle worker does for each action of the chain: the one router.
+/// The lock policy lives on the loop and this runs on the idle worker's
+/// thread, so its two actions are posted to the loop and never waited for;
+/// nothing here may suspend a session.
+fn perform_idle(queue: &CompositorQueue, tell_lock: &dyn Fn(LockEvent), action: IdleAction) {
     match action {
         IdleAction::PowerOffMonitors => {
             if let Err(why) = queue_request(queue, NiriRequest::PowerOffMonitors) {
                 tracing::warn!("idle: the outputs were not powered off: {why}");
             }
         }
-        IdleAction::LockAndSuspend => {
-            // The chain refuses this step while no locker is available, and
-            // none is until CEL-2-H, so it never arrives; if it did, nothing
-            // here may suspend an unlocked session.
-            tracing::warn!("idle: lock and suspend has no locker; nothing was done");
-        }
+        IdleAction::LockAndSuspend => tell_lock(LockEvent::LockAndSuspend(Origin::Idle)),
+        IdleAction::Resumed => tell_lock(LockEvent::IdleResumed),
         // The worker publishes the refusal as `IdleEvent::Refused`.
         IdleAction::Refused(_) => {}
+    }
+}
+
+/// Tells the loop's lock policy what the idle chain did.
+fn notify_lock(sender: &Sender<Message>, event: LockEvent) {
+    if sender
+        .send(Message::Lock(LockMessage::Idle(event)))
+        .is_err()
+    {
+        tracing::warn!("idle: the loop is gone; the lock was not told");
     }
 }
 
@@ -231,6 +242,7 @@ struct Live {
 impl Spawner for Live {
     fn idle(&self, shutdown: &Arc<AtomicBool>) -> io::Result<(Box<dyn IdleControl>, Worker)> {
         let sender = self.sender.clone();
+        let lock = self.sender.clone();
         let queue = self.compositor.clone();
         let (handle, worker) = idle::spawn(
             move |event| {
@@ -238,7 +250,7 @@ impl Spawner for Live {
                     .send(Message::Energy(EnergyEvent::Idle(event)))
                     .is_ok()
             },
-            move |action| perform_idle(&queue, action),
+            move |action| perform_idle(&queue, &|event| notify_lock(&lock, event), action),
             shutdown,
         )?;
         Ok((Box::new(handle), worker))
@@ -263,6 +275,8 @@ impl Spawner for Live {
     fn logind(&self, shutdown: &Arc<AtomicBool>) -> io::Result<(Box<dyn LogindControl>, Worker)> {
         let sender = self.sender.clone();
         let (handle, worker) = logind::spawn(
+            // No generation counter: this worker never suspends. Only the
+            // worker the lock owns is tied to the policy.
             LogindConfig::default(),
             move |event| {
                 sender
@@ -317,7 +331,8 @@ impl<C: ?Sized + Send + 'static> Slot<C> {
 #[derive(Default)]
 struct IdleSent {
     config: bool,
-    locker: bool,
+    /// The availability of the lock the worker last took.
+    locker: Option<bool>,
     caffeine: Option<bool>,
     enabled: bool,
 }
@@ -332,7 +347,7 @@ impl IdleSlot {
     /// chain clean (configuration, locker, caffeine, then enabled), and stops
     /// at the first refusal: the rest waits for the next call, so a queue that
     /// holds fewer commands than there are to send loses none.
-    fn sync(&mut self, caffeine: bool) {
+    fn sync(&mut self, caffeine: bool, locker: bool) {
         let control = &*self.slot.control;
         let sent = &mut self.sent;
         if !sent.config {
@@ -341,11 +356,11 @@ impl IdleSlot {
             }
             sent.config = true;
         }
-        if !sent.locker {
-            if !note("idle", control.set_locker_available(false)) {
+        if sent.locker != Some(locker) {
+            if !note("idle", control.set_locker_available(locker)) {
                 return;
             }
-            sent.locker = true;
+            sent.locker = Some(locker);
         }
         if sent.caffeine != Some(caffeine) {
             if !note("idle", control.set_caffeine(caffeine)) {
@@ -384,6 +399,12 @@ pub struct Running {
 
 struct Inner {
     spawner: Box<dyn Spawner>,
+    /// Whether the shell's lock can lock before suspending: the lock
+    /// policy's availability, `false` until it says otherwise.
+    locker_available: bool,
+    /// Whether caffeine was last wanted, for a locker change that arrives
+    /// between two `apply` calls.
+    caffeine_wanted: bool,
     idle: Option<IdleSlot>,
     night: Option<NightSlot>,
     logind: Option<LogindSlot>,
@@ -420,6 +441,8 @@ impl EnergyHandle {
         Self {
             inner: RefCell::new(Inner {
                 spawner,
+                locker_available: false,
+                caffeine_wanted: false,
                 idle: None,
                 night: None,
                 logind: None,
@@ -452,6 +475,7 @@ impl EnergyHandle {
         let mut inner = self.inner.borrow_mut();
         let caffeine_on = settings.duties.caffeine == Duty::On;
         let caffeine_wanted = caffeine_on && settings.energy.caffeine;
+        inner.caffeine_wanted = caffeine_wanted;
         inner.apply_idle(settings.duties.idle == Duty::On, caffeine_wanted);
         inner.apply_night_light(
             settings.duties.nightlight == Duty::On,
@@ -463,8 +487,22 @@ impl EnergyHandle {
         inner.apply_caffeine(caffeine_on, caffeine_wanted);
     }
 
+    /// Tells the idle chain whether the shell's lock is available, so its
+    /// second step is accepted exactly then (CEL-2-H §4.9). The state is kept
+    /// for an idle worker that starts later; a command the worker refused is
+    /// sent again by the next call or [`EnergyHandle::apply`].
+    pub fn set_locker_available(&self, available: bool) {
+        let mut inner = self.inner.borrow_mut();
+        inner.locker_available = available;
+        let (caffeine, locker) = (inner.caffeine_wanted, inner.locker_available);
+        if let Some(idle) = inner.idle.as_mut() {
+            idle.sync(caffeine, locker);
+        }
+    }
+
     /// Asks for a session action. Log out goes to the compositor; the rest to
     /// logind, whose worker is started for it when no duty has done so.
+    /// Suspend is refused by that worker: it goes through the lock.
     ///
     /// # Errors
     ///
@@ -539,7 +577,7 @@ impl Inner {
                             slot: Slot { control, worker },
                             sent: IdleSent::default(),
                         };
-                        idle.sync(caffeine);
+                        idle.sync(caffeine, self.locker_available);
                         self.idle = Some(idle);
                         tracing::info!("idle duty on");
                     }
@@ -548,7 +586,7 @@ impl Inner {
             }
             (true, true) => {
                 if let Some(idle) = self.idle.as_mut() {
-                    idle.sync(caffeine);
+                    idle.sync(caffeine, self.locker_available);
                 }
             }
             (false, true) => {
@@ -904,6 +942,36 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn the_idle_chain_follows_the_locks_availability_and_a_new_worker_starts_with_it() {
+        let (handle, log) = Fake::handle();
+        let duties = Duties {
+            idle: ON,
+            ..Duties::default()
+        };
+        let lockers = |log: &Log| lines_of(log, "idle locker");
+        // No lock yet: the chain starts without a locker, as before.
+        handle.apply(&settings(duties, Energy::default()));
+        assert_eq!(lockers(&log), ["idle locker false"]);
+        // The lock becomes available: the running worker hears it once.
+        handle.set_locker_available(true);
+        handle.set_locker_available(true);
+        assert_eq!(lockers(&log), ["idle locker false", "idle locker true"]);
+        // And it is withdrawn.
+        handle.set_locker_available(false);
+        assert_eq!(
+            lockers(&log),
+            ["idle locker false", "idle locker true", "idle locker false"]
+        );
+        // An availability that arrives before the idle worker exists is kept
+        // for it.
+        let (handle, log) = Fake::handle();
+        handle.set_locker_available(true);
+        assert!(lockers(&log).is_empty(), "no worker, nothing to tell");
+        handle.apply(&settings(duties, Energy::default()));
+        assert_eq!(lockers(&log), ["idle locker true"]);
+    }
+
+    #[test]
     fn the_idle_chain_follows_caffeine_and_starts_clean() {
         let (handle, log) = Fake::handle();
         let duties = Duties {
@@ -1110,16 +1178,29 @@ pub(crate) mod tests {
     fn idle_actions_become_compositor_requests_and_refusals_nothing() {
         let (queue, taken) = sync_channel(4);
         let queue = Some(queue);
-        perform_idle(&queue, IdleAction::PowerOffMonitors);
+        let told = std::cell::RefCell::new(Vec::new());
+        let lock = |event: LockEvent| told.borrow_mut().push(event);
+        perform_idle(&queue, &lock, IdleAction::PowerOffMonitors);
         assert_eq!(taken.try_recv(), Ok(NiriRequest::PowerOffMonitors));
+        assert!(told.borrow().is_empty());
         perform_idle(
             &queue,
+            &lock,
             IdleAction::Refused(celestina_shell::idle::Refusal::NoLocker),
         );
-        perform_idle(&queue, IdleAction::LockAndSuspend);
+        // The lock actions reach the loop's policy and never the compositor.
+        perform_idle(&queue, &lock, IdleAction::LockAndSuspend);
+        perform_idle(&queue, &lock, IdleAction::Resumed);
         assert!(taken.try_recv().is_err());
+        assert_eq!(
+            *told.borrow(),
+            [
+                LockEvent::LockAndSuspend(Origin::Idle),
+                LockEvent::IdleResumed
+            ]
+        );
         // No compositor: logged, never a panic.
-        perform_idle(&None, IdleAction::PowerOffMonitors);
+        perform_idle(&None, &lock, IdleAction::PowerOffMonitors);
     }
 
     fn lines_of(log: &Log, prefix: &str) -> Vec<String> {

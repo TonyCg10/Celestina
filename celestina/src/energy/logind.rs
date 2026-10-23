@@ -15,10 +15,13 @@
 //!   `interactive = false` (a shell cannot answer a polkit prompt, so a
 //!   session that is not allowed must fail visibly rather than hang), each
 //!   after its `CanXxx` probe: `yes` and `challenge` go ahead, `na` is
-//!   "unavailable" and nothing is called. Suspend is refused while no locker
-//!   exists (D2: a session that suspends unlocked wakes unlocked). Log out is
-//!   not logind's: the compositor ends the session (D5), so it is refused
-//!   here and the wiring routes it to niri.
+//!   "unavailable" and nothing is called. Suspend is not a power request: a
+//!   session that suspends unlocked wakes unlocked (D2), so the only way to
+//!   suspend is [`LogindHandle::suspend`], which takes the lock policy's
+//!   proof that the session is covered and compares the proof's generation
+//!   with the policy's current one immediately before the call (CEL-2-H
+//!   §4.9). Log out is not logind's: the compositor ends the session (D5),
+//!   so it is refused here and the wiring routes it to niri.
 //!
 //! Every bus call carries [`CALL_TIMEOUT`] and connecting is bounded by
 //! [`CONNECT_TIMEOUT`]; the loop waits on its queue in [`POLL`] slices and
@@ -35,6 +38,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use celestina_shell::lock::{GenerationReader, LockedProof};
 use celestina_shell::session::PowerAction;
 use zbus::blocking::{connection::Builder, Connection};
 
@@ -72,8 +76,13 @@ pub const POLL: Duration = Duration::from_millis(100);
 /// The most bytes of a reason (often a bus error's text) that is published.
 pub const MAX_REASON: usize = 240;
 
-/// The reason suspend is refused while no locker exists (D2).
-pub const NO_LOCKER: &str = "no locker yet";
+/// The reason a suspend request that carries no proof is refused (D2, CEL-2-H
+/// §4.9): the one way to suspend is through the lock.
+pub const SUSPEND_VIA_LOCK: &str = "suspend goes through the lock (celestina lock suspend)";
+/// The reason a proof from before the lock changed is dropped.
+pub const STALE_PROOF: &str = "the lock changed since the proof was made";
+/// The reason a proof is dropped when this worker has no policy to ask.
+pub const NO_POLICY: &str = "this worker is not tied to the lock policy";
 /// The reason log out is refused here (D5).
 pub const LOG_OUT_ELSEWHERE: &str = "log out goes through the compositor";
 /// The reason given for a request cut short by the shell stopping.
@@ -90,7 +99,7 @@ pub enum LogindBus {
 }
 
 impl LogindBus {
-    fn builder(&self) -> zbus::Result<Builder<'static>> {
+    pub(crate) fn builder(&self) -> zbus::Result<Builder<'static>> {
         match self {
             Self::System => Builder::system(),
             Self::Address(address) => Builder::address(address.as_str()),
@@ -99,13 +108,14 @@ impl LogindBus {
 }
 
 /// How the worker is built.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default)]
 pub struct LogindConfig {
     /// Where logind is looked for.
     pub bus: LogindBus,
-    /// Whether a session locker exists. While it is `false` (the default,
-    /// until CEL-2-H) suspend is refused with [`NO_LOCKER`].
-    pub locker_available: bool,
+    /// The lock policy's generation counter, read immediately before a
+    /// suspend. Without it every proof is dropped: only the worker the lock
+    /// owns suspends.
+    pub generation: Option<GenerationReader>,
 }
 
 /// What caffeine is left in after a request.
@@ -125,8 +135,8 @@ pub enum Caffeine {
 pub enum Outcome {
     /// logind accepted the call.
     Done,
-    /// This shell does not perform it (no locker, log out, or logind says
-    /// this session may not).
+    /// This shell does not perform it (no proof, a stale proof, log out, or
+    /// logind says this session may not).
     Refused(String),
     /// logind is not there, or says this machine cannot do it.
     Unavailable(String),
@@ -250,6 +260,7 @@ fn bounded(text: &str) -> String {
 enum Request {
     Caffeine(bool),
     Power(PowerAction),
+    Suspend(LockedProof),
 }
 
 /// The way into the worker: queues a request, never waits for it.
@@ -280,6 +291,18 @@ impl LogindHandle {
     /// [`RequestError`] when the queue is full or the worker has stopped.
     pub fn power(&self, action: PowerAction) -> Result<(), RequestError> {
         self.send(Request::Power(action))
+    }
+
+    /// Asks to suspend the machine. The proof says this shell's lock covers
+    /// the session; a proof the worker finds stale is dropped and the request
+    /// ends `Refused`. Reported as a [`PowerAction::Suspend`] outcome.
+    ///
+    /// # Errors
+    ///
+    /// [`RequestError`] when the queue is full or the worker has stopped; the
+    /// proof is dropped with the request.
+    pub fn suspend(&self, proof: LockedProof) -> Result<(), RequestError> {
+        self.send(Request::Suspend(proof))
     }
 
     fn send(&self, request: Request) -> Result<(), RequestError> {
@@ -327,6 +350,9 @@ fn run(
             Ok(Request::Caffeine(held)) => LogindEvent::Caffeine(logind.caffeine(held, shutdown)),
             Ok(Request::Power(action)) => {
                 LogindEvent::Power(action, logind.power(action, shutdown))
+            }
+            Ok(Request::Suspend(proof)) => {
+                LogindEvent::Power(PowerAction::Suspend, logind.suspend(&proof, shutdown))
             }
             Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) => break,
@@ -404,13 +430,42 @@ impl Logind {
     fn power(&mut self, action: PowerAction, shutdown: &AtomicBool) -> Outcome {
         let (probe, method, verb) = match action {
             PowerAction::LogOut => return Outcome::Refused(LOG_OUT_ELSEWHERE.to_owned()),
-            PowerAction::Suspend if !self.config.locker_available => {
-                return Outcome::Refused(NO_LOCKER.to_owned());
-            }
-            PowerAction::Suspend => ("CanSuspend", "Suspend", "suspend"),
+            // Suspending needs the lock's proof: see [`Logind::suspend`].
+            PowerAction::Suspend => return Outcome::Refused(SUSPEND_VIA_LOCK.to_owned()),
             PowerAction::Reboot => ("CanReboot", "Reboot", "reboot"),
             PowerAction::PowerOff => ("CanPowerOff", "PowerOff", "power off"),
         };
+        self.perform(probe, method, verb, shutdown, || true)
+    }
+
+    /// Suspends the machine on the lock's word: the proof is current when it
+    /// arrives and once more immediately before the call, after logind
+    /// answered the probe. What remains between that last look and logind
+    /// acting is the window any locker has.
+    fn suspend(&mut self, proof: &LockedProof, shutdown: &AtomicBool) -> Outcome {
+        let Some(reader) = self.config.generation.clone() else {
+            tracing::warn!("logind: a suspend proof reached a worker with no lock policy");
+            return Outcome::Refused(NO_POLICY.to_owned());
+        };
+        if !reader.is_current(proof) {
+            tracing::warn!("logind: not suspending, the proof is stale");
+            return Outcome::Refused(STALE_PROOF.to_owned());
+        }
+        self.perform("CanSuspend", "Suspend", "suspend", shutdown, || {
+            reader.is_current(proof)
+        })
+    }
+
+    /// Probes `probe`, then, if `still_wanted`, calls `method` without
+    /// interaction.
+    fn perform(
+        &mut self,
+        probe: &'static str,
+        method: &'static str,
+        verb: &str,
+        shutdown: &AtomicBool,
+        still_wanted: impl FnOnce() -> bool,
+    ) -> Outcome {
         if shutdown.load(Ordering::Acquire) {
             return Outcome::Failed(STOPPING.to_owned());
         }
@@ -432,6 +487,10 @@ impl Logind {
         }
         if shutdown.load(Ordering::Acquire) {
             return Outcome::Failed(STOPPING.to_owned());
+        }
+        if !still_wanted() {
+            tracing::warn!("logind: not calling {method}, the proof went stale");
+            return Outcome::Refused(STALE_PROOF.to_owned());
         }
         // `false`: never ask to authenticate interactively (see the module).
         match self.call(method, &(false,)) {
@@ -505,10 +564,16 @@ fn failure(err: &LogindError) -> Outcome {
 /// [`CONNECT_TIMEOUT`]: the handshake has no timeout of its own, and a hung
 /// bus must not hold the worker past its join. A helper still connecting
 /// after that is left behind and ends with its connection attempt.
-fn connect(bus: &LogindBus) -> Result<Connection, LogindError> {
+pub(crate) fn connect(bus: &LogindBus) -> Result<Connection, LogindError> {
     let builder = bus
         .builder()
         .map_err(|err| LogindError::Connect(Box::new(err)))?;
+    connect_with(builder)
+}
+
+/// [`connect`] over a builder of the caller's, for a bus that is not
+/// logind's (the lock's notices go to the session bus).
+pub(crate) fn connect_with(builder: Builder<'static>) -> Result<Connection, LogindError> {
     let (done, result) = mpsc::sync_channel(1);
     thread::Builder::new()
         .name("logind-connect".to_owned())
@@ -526,9 +591,12 @@ fn connect(bus: &LogindBus) -> Result<Connection, LogindError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
     use std::io::{PipeReader, Read};
     use std::sync::Mutex;
     use std::time::Instant;
+
+    use celestina_shell::lock::{Event, LockPolicy};
 
     use zbus::zvariant;
 
@@ -640,11 +708,16 @@ mod tests {
         readers: Readers,
         _server: Option<Connection>,
         _bus: PrivateBus,
+        /// The lock policy the worker is tied to, and the proof it minted.
+        policy: RefCell<Option<LockPolicy>>,
+        proof: RefCell<Option<LockedProof>>,
     }
 
     impl Fixture {
         /// `None` (with the bus's notice) where `dbus-daemon` is absent.
-        fn start(name: &str, fake: Option<Fake>, locker_available: bool) -> Option<Fixture> {
+        /// `with_policy`: the worker is tied to a lock policy's generation
+        /// counter, as the one the lock owns is.
+        fn start(name: &str, fake: Option<Fake>, with_policy: bool) -> Option<Fixture> {
             let bus = PrivateBus::start(&format!("logind-{name}"))?;
             let calls = Calls::default();
             let readers = Readers::default();
@@ -663,9 +736,14 @@ mod tests {
                     .build()
                     .expect("the fake logind starts")
             });
+            let tied = with_policy.then(crate::lock::test_support::locked);
             let config = LogindConfig {
                 bus: LogindBus::Address(bus.address().to_owned()),
-                locker_available,
+                generation: tied.as_ref().map(|(policy, _)| policy.generation_reader()),
+            };
+            let (policy, proof) = match tied {
+                Some((policy, proof)) => (Some(policy), Some(proof)),
+                None => (None, None),
             };
             let (sent, events) = mpsc::channel();
             // A flag of the test's own: this worker's join stops nothing else.
@@ -680,7 +758,24 @@ mod tests {
                 readers,
                 _server: server,
                 _bus: bus,
+                policy: RefCell::new(policy),
+                proof: RefCell::new(proof),
             })
+        }
+
+        /// The proof the policy minted for this fixture.
+        fn proof(&self) -> LockedProof {
+            self.proof.borrow_mut().take().expect("the proof is unused")
+        }
+
+        /// The child said `unlocked`: the policy's generation moves on.
+        fn unlock(&self) {
+            let mut policy = self.policy.borrow_mut();
+            let policy = policy.as_mut().expect("a policy");
+            policy.handle(
+                Instant::now(),
+                Event::Line(celestina_lock_proto::StatusLine::Unlocked),
+            );
         }
 
         fn handle(&self) -> &LogindHandle {
@@ -874,32 +969,69 @@ mod tests {
     }
 
     #[test]
-    fn suspend_is_refused_without_a_locker_and_sent_with_one() {
-        let Some(fixture) = Fixture::start("nolocker", YES, false) else {
-            return;
-        };
-        fixture
-            .handle()
-            .power(PowerAction::Suspend)
-            .expect("queued");
-        assert_eq!(
-            fixture.next(),
-            LogindEvent::Power(PowerAction::Suspend, Outcome::Refused(NO_LOCKER.to_owned()))
-        );
-        assert!(fixture.calls().is_empty(), "nothing reached logind");
+    fn suspend_is_refused_without_a_proof_and_sent_with_one() {
+        // A power request for suspend is refused whatever the worker is tied
+        // to: the one way to suspend carries the lock's proof.
+        for tied in [false, true] {
+            let Some(fixture) = Fixture::start(&format!("noproof-{tied}"), YES, tied) else {
+                return;
+            };
+            fixture
+                .handle()
+                .power(PowerAction::Suspend)
+                .expect("queued");
+            assert_eq!(
+                fixture.next(),
+                LogindEvent::Power(
+                    PowerAction::Suspend,
+                    Outcome::Refused(SUSPEND_VIA_LOCK.to_owned())
+                )
+            );
+            assert!(fixture.calls().is_empty(), "nothing reached logind");
+        }
 
-        let Some(fixture) = Fixture::start("locker", YES, true) else {
+        let Some(fixture) = Fixture::start("proof", YES, true) else {
             return;
         };
-        fixture
-            .handle()
-            .power(PowerAction::Suspend)
-            .expect("queued");
+        fixture.handle().suspend(fixture.proof()).expect("queued");
         assert_eq!(
             fixture.next(),
             LogindEvent::Power(PowerAction::Suspend, Outcome::Done)
         );
         assert_eq!(fixture.calls(), ["CanSuspend", "Suspend false"]);
+    }
+
+    #[test]
+    fn t_g2_a_proof_whose_generation_is_older_than_the_current_one_is_dropped_before_suspend() {
+        let Some(fixture) = Fixture::start("stale", YES, true) else {
+            return;
+        };
+        let proof = fixture.proof();
+        // The lock unlocked after the proof was made.
+        fixture.unlock();
+        fixture.handle().suspend(proof).expect("queued");
+        assert_eq!(
+            fixture.next(),
+            LogindEvent::Power(
+                PowerAction::Suspend,
+                Outcome::Refused(STALE_PROOF.to_owned())
+            )
+        );
+        assert!(fixture.calls().is_empty(), "{:?}", fixture.calls());
+    }
+
+    #[test]
+    fn a_proof_sent_to_a_worker_with_no_policy_is_refused() {
+        let Some(fixture) = Fixture::start("nopolicy", YES, false) else {
+            return;
+        };
+        let (_policy, proof) = crate::lock::test_support::locked();
+        fixture.handle().suspend(proof).expect("queued");
+        assert_eq!(
+            fixture.next(),
+            LogindEvent::Power(PowerAction::Suspend, Outcome::Refused(NO_POLICY.to_owned()))
+        );
+        assert!(fixture.calls().is_empty());
     }
 
     #[test]
@@ -929,11 +1061,7 @@ mod tests {
             matches!(&event, LogindEvent::Caffeine(Caffeine::Unavailable(_))),
             "{event:?}"
         );
-        for action in [
-            PowerAction::Reboot,
-            PowerAction::PowerOff,
-            PowerAction::Suspend,
-        ] {
+        for action in [PowerAction::Reboot, PowerAction::PowerOff] {
             fixture.handle().power(action).expect("queued");
             let event = fixture.next();
             assert!(
@@ -941,6 +1069,16 @@ mod tests {
                 "{event:?}"
             );
         }
+        // Suspend, with the lock's proof, finds no logind either.
+        fixture.handle().suspend(fixture.proof()).expect("queued");
+        let event = fixture.next();
+        assert!(
+            matches!(
+                &event,
+                LogindEvent::Power(PowerAction::Suspend, Outcome::Unavailable(_))
+            ),
+            "{event:?}"
+        );
     }
 
     #[test]
@@ -949,7 +1087,7 @@ mod tests {
             std::env::temp_dir().join(format!("celestina-logind-nobus-{}/bus", std::process::id()));
         let config = LogindConfig {
             bus: LogindBus::Address(format!("unix:path={}", absent.display())),
-            locker_available: false,
+            generation: None,
         };
         let (sent, events) = mpsc::channel();
         let shutdown = Arc::new(AtomicBool::new(false));

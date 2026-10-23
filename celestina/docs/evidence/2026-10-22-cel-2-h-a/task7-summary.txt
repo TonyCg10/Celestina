@@ -1,0 +1,11 @@
+RESULT R-1 PASS hello/requested/locked at lines 19/20/22, 48 ms from the verb to locked
+RESULT R-2 PASS second celestina-lock exit 10; first (pid 2041695) alive, same pid file, no unlock
+RESULT R-3 PASS relaunch after SIGKILL (pid 2041938 -> 2041962, 1792709455843) and swaylock takeover of a dead lock; its unlock was SIGUSR1, not a password (the PAM unlock of swaylock was not tried)
+RESULT R-4 PASS killed between requested and locked (attempt 1); niri kept the session locked, the shell relaunched (2042310 -> 2042327) and niri replaced the dead lock
+RESULT R-5 PASS lock pid 2042581 survived the shell's quit and restart, still the only lock; 'lock suspend' did not suspend (Suspend calls on the fake logind: 0)
+RESULT R-6 PASS /proc/2043418/environ owned by 0:0; the user cannot read environ or mem
+RESULT R-7 PASS wrong passwords refused through the rehearsal service (no such file: PAM 'other' denies); Enter inside the 2 s delay started no attempt; 3683 ms between the two attempt lines; never unlocked
+RESULT R-8 PASS unlock_probe: lines [hello 1,requested,locked,unlocked,] exit 0; niri logged 'unlocking session'
+RESULT R-9a PASS idle armed 1792709478885, locked 1792709718888, Suspend recorded 1792709718888 (0 ms after locked)
+RESULT R-9b PASS pointer input at armed+230074 ms ended the idle period: at armed+262 s no lock was requested and no Suspend reached the fake logind (the unaided chain locks at armed+240 s, R-9a)
+RESULT R-9c PASS PrepareForSleep(true) -> locked (20 ms) -> inhibitor released 1792709985013 (0 ms after locked); no Suspend call

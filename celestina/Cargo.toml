@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.9.0"
+version = "1.10.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -42,6 +42,11 @@ path = "src/main.rs"
 # `cargo test` leaves in target/<profile>).
 [dev-dependencies]
 celestina-fake-system = { path = "crates/celestina-fake-system" }
+# `p2p`: a private peer-to-peer connection over a socketpair, which the sleep
+# worker's test (`lock::sleep`, finding I-2 of round 5) uses as a stand-in for
+# logind to see the descriptor a reply carries. Tests only; no daemon, no new
+# crate beyond `uuid`'s `v4`, and not part of the shipped artifact.
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api", "p2p"] }
 
 [dependencies]
 # The runtime: outputs, the Island's layer surfaces, regions, frame pacing
@@ -75,6 +80,11 @@ serde_json = "1"
 celestina-core = { path = "../celestina-rs/crates/celestina-core" }
 celestina-settings = { path = "../celestina-rs/crates/celestina-settings" }
 celestina-shell = { path = "../celestina-rs/crates/celestina-shell" }
+# CEL-2-H: the vocabulary the shell shares with `celestina-lock` and
+# `celestina-lock-verify` (status lines, exit codes, the backdrop bundle and
+# the PAM service files). The supervisor reads the lock's lines and writes the
+# bundle with it; the crate has no dependency of its own.
+celestina-lock-proto = { path = "../celestina-rs/crates/celestina-lock-proto" }
 # Diagnostics to stderr (journald under the session); the toolkit crates log
 # through the same facade.
 tracing = "0.1"
@@ -100,7 +110,10 @@ image = { version = "=0.25.6", default-features = false, features = ["png", "jpe
 # an anonymous memory file (`memfd_create`), and the energy workers wait on
 # their own Wayland connection (`event`). CEL-2-J: the Melibea socket is
 # trusted only when it belongs to this process's uid, and std has no safe
-# `getuid` (`process`).
+# `getuid` (`process`). CEL-2-H: the lock supervisor holds the lock's pidfd and
+# waits on it, its stdout and an eventfd with one `poll` (`process`, `event`),
+# writes the sealed bundle memory file (`fs`) and checks the lock binary's
+# descriptor (`fs`, `process` for the uid); the same features, no new ones.
 rustix = { version = "1", features = ["fs", "event", "process"] }
 # The shell follows its own `shell.json` live (CEL-2-E: the wallpaper duty
 # turns on and off without a restart), with the same debounced directory

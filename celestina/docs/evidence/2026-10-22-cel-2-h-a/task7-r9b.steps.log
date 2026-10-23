@@ -1,0 +1,6 @@
+1792709722302 probe for R-9b on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2061504.sock
+1792709722367 R-9b idle armed at 1792709722343; pointer input scheduled for armed+230 s
+1792709952418 R-9b pointer input released at 1792709952417 (armed+230074 ms); lock requests so far: 0
+1792709984398 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b-after-240s.png
+1792709984399 RESULT R-9b PASS pointer input at armed+230074 ms ended the idle period: at armed+262 s no lock was requested and no Suspend reached the fake logind (the unaided chain locks at armed+240 s, R-9a)
+1792709984652 shell exited status 0

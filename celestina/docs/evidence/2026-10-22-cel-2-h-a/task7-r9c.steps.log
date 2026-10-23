@@ -1,0 +1,4 @@
+1792709984940 probe for R-9c on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2068099.sock
+1792709984992 R-9c PrepareForSleep(true) with no lock held; inhibitors taken so far: 1
+1792709986548 RESULT R-9c PASS PrepareForSleep(true) -> locked (20 ms) -> inhibitor released 1792709985013 (0 ms after locked); no Suspend call
+1792709986732 shell exited status 0

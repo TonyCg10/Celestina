@@ -1,0 +1,473 @@
+# CEL-2-H-a exact change inventory
+
+Base revision	1071233a0d130165e17a7de40973d1413088405d
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/backoff.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/bundle.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/descriptors.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/exit.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/lines.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/proc_status.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/service.rs
+Pathspec	celestina-rs/crates/celestina-lock-proto/src/verdict.rs
+Pathspec	celestina-rs/crates/celestina-shell/Cargo.toml
+Pathspec	celestina-rs/crates/celestina-shell/src/idle.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lock.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina/AGENTS.md
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/contrib/pam.d/celestina-lock
+Pathspec	celestina/crates/celestina-lock-verify/Cargo.toml
+Pathspec	celestina/crates/celestina-lock-verify/src/args.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/consts.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/conversation.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/hardening.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/main.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/outcome.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/pam.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/run.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/secret.rs
+Pathspec	celestina/crates/celestina-lock-verify/src/session.rs
+Pathspec	celestina/crates/celestina-lock-verify/tests/closure.allow
+Pathspec	celestina/crates/celestina-lock-verify/tests/closure.rs
+Pathspec	celestina/crates/celestina-lock-verify/tests/contract.rs
+Pathspec	celestina/crates/celestina-lock-verify/tests/descriptors.rs
+Pathspec	celestina/crates/celestina-lock-verify/tests/source_guards.rs
+Pathspec	celestina/crates/celestina-lock/Cargo.toml
+Pathspec	celestina/crates/celestina-lock/examples/paint_probe.rs
+Pathspec	celestina/crates/celestina-lock/src/app.rs
+Pathspec	celestina/crates/celestina-lock/src/backdrop.rs
+Pathspec	celestina/crates/celestina-lock/src/bin/unlock_probe.rs
+Pathspec	celestina/crates/celestina-lock/src/copy.rs
+Pathspec	celestina/crates/celestina-lock/src/driver.rs
+Pathspec	celestina/crates/celestina-lock/src/field.rs
+Pathspec	celestina/crates/celestina-lock/src/hardening.rs
+Pathspec	celestina/crates/celestina-lock/src/launch.rs
+Pathspec	celestina/crates/celestina-lock/src/lib.rs
+Pathspec	celestina/crates/celestina-lock/src/machine.rs
+Pathspec	celestina/crates/celestina-lock/src/main.rs
+Pathspec	celestina/crates/celestina-lock/src/paint.rs
+Pathspec	celestina/crates/celestina-lock/src/present.rs
+Pathspec	celestina/crates/celestina-lock/src/report.rs
+Pathspec	celestina/crates/celestina-lock/src/state_file.rs
+Pathspec	celestina/crates/celestina-lock/src/unlock.rs
+Pathspec	celestina/crates/celestina-lock/src/verify.rs
+Pathspec	celestina/crates/celestina-lock/src/view.rs
+Pathspec	celestina/crates/celestina-lock/src/wake.rs
+Pathspec	celestina/crates/celestina-lock/tests/argv.rs
+Pathspec	celestina/crates/celestina-lock/tests/closure.allow
+Pathspec	celestina/crates/celestina-lock/tests/closure.rs
+Pathspec	celestina/crates/celestina-lock/tests/connect_guard.rs
+Pathspec	celestina/crates/celestina-lock/tests/descriptors.rs
+Pathspec	celestina/crates/celestina-lock/tests/guards.rs
+Pathspec	celestina/crates/celestina-lock/tests/signals.rs
+Pathspec	celestina/crates/celestina-wayland/Cargo.toml
+Pathspec	celestina/crates/celestina-wayland/examples/lock_cover.rs
+Pathspec	celestina/crates/celestina-wayland/src/handlers.rs
+Pathspec	celestina/crates/celestina-wayland/src/ids.rs
+Pathspec	celestina/crates/celestina-wayland/src/input.rs
+Pathspec	celestina/crates/celestina-wayland/src/lib.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock/canvas.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock/capability.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock/connect.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock/cover.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock/flow.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock/handlers.rs
+Pathspec	celestina/crates/celestina-wayland/src/metrics.rs
+Pathspec	celestina/crates/celestina-wayland/src/output.rs
+Pathspec	celestina/crates/celestina-wayland/src/popup.rs
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/crates/celestina-wayland/src/sender.rs
+Pathspec	celestina/crates/celestina-wayland/tests/lock_profile.rs
+Pathspec	celestina/crates/celestina-wayland/tests/lock_signals.rs
+Pathspec	celestina/crates/celestina-wayland/tests/support/test_gates.rs
+Pathspec	celestina/docs/decisions/0022-session-lock.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a-review-b.md
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a.md
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/empty.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/faded.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/status.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1-locked.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1-prompt.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2-after.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.second.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.second.lines
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-dead-lock.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-relaunched.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-swaylock.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.swaylock.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4-after-kill.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4-relaunched.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-after-lock-suspend.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-locked.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-shell-gone.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.lock-suspend.excerpt
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-prompt.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-refused-again.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-refused.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.lines
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.lock.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.lines
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.probe.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a-locked.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b-after-240s.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.pointer.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.logind.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.nest.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.probe
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.shell.err
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.shell.out
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.shell.status
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.steps.log
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-summary.txt
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-a/typed.png
+Pathspec	celestina/docs/evidence/2026-10-22-cel-2-h-spikes.md
+Pathspec	celestina/docs/handover.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-H-a.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/examples/fake_logind.rs
+Pathspec	celestina/scripts/build-production.sh
+Pathspec	celestina/scripts/deploy-production.sh
+Pathspec	celestina/scripts/dev-session.sh
+Pathspec	celestina/scripts/lock-rehearsal.sh
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/scripts/status-production.sh
+Pathspec	celestina/scripts/verify-production.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/command.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/energy/idle.rs
+Pathspec	celestina/src/energy/logind.rs
+Pathspec	celestina/src/energy/mod.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/lock/bundle.rs
+Pathspec	celestina/src/lock/mod.rs
+Pathspec	celestina/src/lock/notify.rs
+Pathspec	celestina/src/lock/sleep.rs
+Pathspec	celestina/src/lock/supervisor.rs
+Pathspec	celestina/src/lock/tick.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/tests/lock_guards.rs
+Pathspec	celestina/tests/lock_scripts.rs
+Pathspec	celestina/tests/lock_sleep.rs
+Pathspec	celestina/tests/lock_supervisor.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	8d0f238ab77c5996a2cfd772101950b6f572d16d26d5f03728400e2805fa28f3	celestina-rs/Cargo.lock
+174	0	0e5a54025a0e6650d7e8d014be92448431fb8b1b241145d46b237c95847625e0	celestina-rs/crates/celestina-lock-proto/src/backoff.rs
+896	0	ea47ebb0d5e8c871dacb7f3390d7159ac82b762087f048ed7a296329b46f06b3	celestina-rs/crates/celestina-lock-proto/src/bundle.rs
+106	0	95b5d6f27f6e3859fc984fa119ee03f0bb8009557ef1fc46f8af76cf273c6322	celestina-rs/crates/celestina-lock-proto/src/descriptors.rs
+90	0	a40478fcbc71bcad62eedfad044e07c3722f41cd4226bb72f2a1bd03844980da	celestina-rs/crates/celestina-lock-proto/src/exit.rs
+66	1	4adec36032652b42a5500ddfcb785eea8de6f6c86e451bc1ed82eba2ce6f1c6f	celestina-rs/crates/celestina-lock-proto/src/lib.rs
+445	0	afce85bef818e6e0f242ed1680a5581d77b4d0cbfc62118cf4f9ee519ee8d986	celestina-rs/crates/celestina-lock-proto/src/lines.rs
+57	0	6da35a7e5bbd6ebeecab47603368104fff2c4300b0862b9c903f4666c274bbff	celestina-rs/crates/celestina-lock-proto/src/proc_status.rs
+191	0	63382aecd7a3fdb16ceb439967b6ee28b717c53d1d3fe031d7d801ed11b76842	celestina-rs/crates/celestina-lock-proto/src/service.rs
+157	0	1aa85df17bb9bb892652679a4649a62100449e6023beab9d69c600085793d775	celestina-rs/crates/celestina-lock-proto/src/verdict.rs
+4	0	efb55d41fbca573c87ac5ee16452a6fef627b9ea6772488a0a7289a4aafcca1f	celestina-rs/crates/celestina-shell/Cargo.toml
+93	5	7b63c4dcb811c8db656b82b57fd9fa6849fe293e00cbd9535bbf6507df179069	celestina-rs/crates/celestina-shell/src/idle.rs
+4	0	1a61461f6c2e270abe3301f63f7d64ecbd4350a3c18e867ce566df9f04e3b5cb	celestina-rs/crates/celestina-shell/src/lib.rs
+2621	0	f6e234c830eddd1b5d1dbb053e8fff7228436a511e091db20e4e3e9c7c58183c	celestina-rs/crates/celestina-shell/src/lock.rs
+56	0	1d92df406ae6ca3a50e82514ae3e26892f5e670cd630cd8a5f0a17487e8455c0	celestina-rs/crates/celestina-shell/src/settings.rs
+14	3	eed58833a4cdd9f05a073814b862d425434b6fbb2e59d7fbf78db18cc7a42d24	celestina/AGENTS.md
+45	1	45e11b8f371b7c9a685ec84c461306a2d257a8d9e63a0c74dec8b8df6a2366c9	celestina/Cargo.lock
+15	2	e0927e6b5de77915040eb3cb7656c323657a1ab08f0b7b0e7566a88cdaf20779	celestina/Cargo.toml
+134	1	6850b6a228a0544f9fd95d864c45f4ca44d507dad116edb74c80083ded23a43c	celestina/README.md
+12	1	90fbcd0f5699c42768eb4211ad78abcffc4a67f9ffbc179159b9deaab4653b9e	celestina/ROADMAP.md
+19	1	0f57b71aaa8a3f21a09b64dccc0153758c78383a5c526c484bd9553f719cc6f9	celestina/STATUS.md
+161	1	a52b374f8283bc0ad6822b44c545a84ebe0bbb123f653169cfeca968620c5e26	celestina/VALIDATION.md
+4	0	ca3d687334fec80bc84c4fa40ea2403ae0d05e0c20ac2fca425884afc9c98600	celestina/contrib/pam.d/celestina-lock
+34	0	fe454e14fee7ecf1a7b65a58bd31d3c1531faaedc97010b08eec796cb98f64a4	celestina/crates/celestina-lock-verify/Cargo.toml
+132	0	dd5cc98c767f39477940b745b2fa3889d440d1b79ed5d86518be7015992cd2e9	celestina/crates/celestina-lock-verify/src/args.rs
+103	0	af27f55425f697bc7d219f461fd776b7b4dc240883bd68be50d5f9b7fd892c9f	celestina/crates/celestina-lock-verify/src/consts.rs
+321	0	c81a23a497e1fe6ee6101336c688521967608fe18ade374dab01e299ff104433	celestina/crates/celestina-lock-verify/src/conversation.rs
+179	0	ffe96bef7c6befdc6fbfd5088f2168f18c4fd2f84cda6fd3b9d0357456edcbbc	celestina/crates/celestina-lock-verify/src/hardening.rs
+91	0	2170d7cc4a4239a251d75f9e8fa95847ada6887dfef8a2cd40a06ef7e58f5fc4	celestina/crates/celestina-lock-verify/src/main.rs
+189	0	2f81b4c1e92df652d4d0a41c84ff80d1107cc47b9df1b39f0aad48aacd21fefd	celestina/crates/celestina-lock-verify/src/outcome.rs
+691	0	095b4f0f1274a9095a12c76c4d6ca67ab78f2f40938b2fa76855e1d91f44815f	celestina/crates/celestina-lock-verify/src/pam.rs
+287	0	3e79a5c3689e44e25f06c846bfb20af0ef419da6f06748ed855c83a9594ac3ed	celestina/crates/celestina-lock-verify/src/run.rs
+165	0	6aebadef44701144325b439a0d086bae044656c4f4b50e7f551572093dc19618	celestina/crates/celestina-lock-verify/src/secret.rs
+294	0	462c5b393bec0d5af249765a30af099d0b07cbdcf62b2a35d18c46b385f24029	celestina/crates/celestina-lock-verify/src/session.rs
+15	0	389fb6b3afea401182445d1e20304d1cfe9585986d31531d73e1dba546b99d5d	celestina/crates/celestina-lock-verify/tests/closure.allow
+46	0	8ab7f81f06e8ce936d82da456790f067ce254fbc51caae1edcf4cc3f171731bf	celestina/crates/celestina-lock-verify/tests/closure.rs
+158	0	840faf52376cc1c6fcdf3e5840e304ab48ec02dc550d400c2c06970f21db3c41	celestina/crates/celestina-lock-verify/tests/contract.rs
+57	0	040194380985355bf16835ef5d89f4166c41f14df2ce7c9ee4598742c4b3dcf1	celestina/crates/celestina-lock-verify/tests/descriptors.rs
+200	0	a58e8efc17bf8eaf3df56db46f12353d55048a549632c84abff5fe43b07acbc0	celestina/crates/celestina-lock-verify/tests/source_guards.rs
+87	0	875ed21ec121e6f263fe25c1f75ebb05ab076e79969b2702a2c6d512b2a6fa37	celestina/crates/celestina-lock/Cargo.toml
+289	0	742072085babc0a20c9a9a032c29b638a72156ded68b85e15d406948500d6787	celestina/crates/celestina-lock/examples/paint_probe.rs
+439	0	588b378c65fa1e938315266928694945f5b3515c7faf5e3bd9bc5005808c03d0	celestina/crates/celestina-lock/src/app.rs
+256	0	8a0968f570774cf87acfcbe38176378a31fdfc461c47c886197232f8ed4073da	celestina/crates/celestina-lock/src/backdrop.rs
+31	0	a805ee03b45522ce7c9f94d99fcd3cda543d1a35eb2ee76fd3821a68355542e9	celestina/crates/celestina-lock/src/bin/unlock_probe.rs
+53	0	699e173a6b1a0d97faafca004d0a434c1189dea0ee4d393f20b452c5adf908e4	celestina/crates/celestina-lock/src/copy.rs
+409	0	ad31f5665426a4c4a194b4a71d453b1c04d2ac36bf5ce617cd96f1e3b53b1ed5	celestina/crates/celestina-lock/src/driver.rs
+221	0	5abd24b684462f54cfe17426efd72b53dc4b3d9497fc83ad30c90989c09d2dde	celestina/crates/celestina-lock/src/field.rs
+189	0	7ac8ca881536127d27f41c323d58a27c4702b0d44505712a9b837788d9f638a6	celestina/crates/celestina-lock/src/hardening.rs
+332	0	dc085aa84eda7060823c83d359fc607a8d51f4e30c17170052749b73f2f65bed	celestina/crates/celestina-lock/src/launch.rs
+45	0	1548dca275034d64349768a41f78a1d7d01b67b30ae264aab6f89fc8d3a82150	celestina/crates/celestina-lock/src/lib.rs
+1484	0	75feef0d4297eff3abc7e1cd73b06dcc67813c63da6a98135352ab546dca1e9f	celestina/crates/celestina-lock/src/machine.rs
+71	0	840be29b254d365722dde83fa0e32654f48fcca0dd3b8d176f4091555a3d42fb	celestina/crates/celestina-lock/src/main.rs
+389	0	31495438a1fc5c1632ac6128b4247d9b0ab768744197f3f8ce96446575eaed83	celestina/crates/celestina-lock/src/paint.rs
+28	0	649883b98a53f8a69e066e126b59b3e6f84c9154f2fdf3ea588aef64d83117b7	celestina/crates/celestina-lock/src/present.rs
+259	0	475a22c32564d1bb4aafe2f3379b400c0ada0aae263e85f08b155e1860ac8d24	celestina/crates/celestina-lock/src/report.rs
+184	0	939d56abbdd8b051f4d2cbb609960b8cc01e3404a338eef966685a1857e32078	celestina/crates/celestina-lock/src/state_file.rs
+26	0	afda6ad02fdb578b1a279fbb2c56fc4f8c0056dc892626cbc9e06c0a23aa3a42	celestina/crates/celestina-lock/src/unlock.rs
+876	0	9ca4c2628ea5c9dcad8da81d033843b5b5843a9d9a2ce8a86d0c66a1e2de5003	celestina/crates/celestina-lock/src/verify.rs
+1119	0	b4de2ec03892be6b336b96fcb218a02b4c0b94a23efe42ef9b87d64f38adbcd5	celestina/crates/celestina-lock/src/view.rs
+142	0	398bd311054bcd08d690dab3af6300064cb184d44acf0a380609160b7171bfc6	celestina/crates/celestina-lock/src/wake.rs
+18	0	b65acbb02e3045f607ab53d977bf9985306932d164440a10e0b258a7f26d67ca	celestina/crates/celestina-lock/tests/argv.rs
+103	0	c9291cc891e36576c9d32346de36a4e72b9cd88ce9b1bf6ce0c2ffcce04fd4c0	celestina/crates/celestina-lock/tests/closure.allow
+134	0	78b5175153bdc26064fbbc5cf47035f6e98113c60dd8835f29f8faf0a5085366	celestina/crates/celestina-lock/tests/closure.rs
+366	0	75f6ecaf619bed8c1c3036b48b4d9e4f5832a3b176c12769c5871939e9a1183f	celestina/crates/celestina-lock/tests/connect_guard.rs
+114	0	1704287e90a345364769d4bfe89e314824108a6807e2f286e7d2800c345c28fb	celestina/crates/celestina-lock/tests/descriptors.rs
+557	0	5f006fe9a4956a21edaa1b0aedecf089d35fd87f67e7a5ec87c69c94ee9890bd	celestina/crates/celestina-lock/tests/guards.rs
+233	0	1df8f7a65cc989d0f40cb1686367cffe9ffbb42d6e1553e97920b5c12cca36df	celestina/crates/celestina-lock/tests/signals.rs
+62	18	d74d191eb7654b86cb15974ef43f631f2e5a565f502cd65059fec8c55585ee4e	celestina/crates/celestina-wayland/Cargo.toml
+132	0	1d9f3aa41191968379a7687dc33fa59e4ccec5118b74270a58bd399fdfde28a1	celestina/crates/celestina-wayland/examples/lock_cover.rs
+8	51	c9f7a54b79a76b6f9adb9c1b9f165bd0d8a8895367a475906dd6517080ab58ac	celestina/crates/celestina-wayland/src/handlers.rs
+34	0	d426540dbbb80ed091c048d3de3dcda8f3dce2035e790ba27b2c7860b770a068	celestina/crates/celestina-wayland/src/ids.rs
+290	5	4db2a4c1b53750e0d6f3dfd3d6d6298b8ea496073db4893448fe18d91516bee1	celestina/crates/celestina-wayland/src/input.rs
+31	7	3c3c43eeed0807f091de8e5bac3b2b48207e2004fe0409f2928428b6134cdaa5	celestina/crates/celestina-wayland/src/lib.rs
+522	0	cea6ae3dcf6ad6d6ff42273d3fbcac57fbe426b25904202505e8783fa84d53b0	celestina/crates/celestina-wayland/src/lock.rs
+610	0	c6f73c9b61affa9eec75c00a76284fc59f713b415366389af7210e7fe4d56a12	celestina/crates/celestina-wayland/src/lock/canvas.rs
+90	0	7d905d2886261ca6cebf5bc360c1fa864c050cbd104c9240cac992eebbe6f77b	celestina/crates/celestina-wayland/src/lock/capability.rs
+599	0	3ca1c319970d9be9b6444e3049e117c643e9ab6a8fc7e819272250d59c0e2489	celestina/crates/celestina-wayland/src/lock/connect.rs
+118	0	d6bd058cdee33a7a2f02370dc68615d563257bc0ebc88da2ac2d722246643c1a	celestina/crates/celestina-wayland/src/lock/cover.rs
+591	0	dfd811384d738dcf5c0818e1774bf526ab32abed92ea73a39e3cec5910f98b46	celestina/crates/celestina-wayland/src/lock/flow.rs
+612	0	66f1359443b831604edbd0c7ed074026b164da1ebd896b51ede9731d03d43fe9	celestina/crates/celestina-wayland/src/lock/handlers.rs
+1	1	232b9a9c92d9b1451b40e6b9cd1550a4cb7824a94432c58c601630513d72d40c	celestina/crates/celestina-wayland/src/metrics.rs
+53	0	09d8c68f5785fc9b1a9cb2fda08d4b74aeb5a37e8d24f259abb08f25e75ca03a	celestina/crates/celestina-wayland/src/output.rs
+1	25	d7453372088d483ee49676467032625ebeea48223816913f231cf4bf386f0b24	celestina/crates/celestina-wayland/src/popup.rs
+7	71	d30b0f27991c67538726a78bddb988adfdbbca66159567faac89d13113b9c351	celestina/crates/celestina-wayland/src/runtime.rs
+39	0	de72a56e0cc9ce6d3934de2514109b9aa515cfda01956b84d970e142081a3920	celestina/crates/celestina-wayland/src/sender.rs
+483	0	92551ec2f488781abf2753beb9f0be06c063e9a52ccd84389364ff7db4138954	celestina/crates/celestina-wayland/tests/lock_profile.rs
+73	0	73f8856598bb1abb2247aaf0cdc628451832c00c21d3aaa33f8baf779e412a9c	celestina/crates/celestina-wayland/tests/lock_signals.rs
+199	0	b2d8e4f38d013d3388e46e0cd6ce9700cc981161b208978f4d8eff44bed73e91	celestina/crates/celestina-wayland/tests/support/test_gates.rs
+249	0	f6f6263aa7d307d09a4d0e729d6359335b6843b87816c0e205bab24437e1b723	celestina/docs/decisions/0022-session-lock.md
+4	1	b3d3658ce012a3934c09110dfe0d571d75cf586b6dacd3ae97e23c24fb586824	celestina/docs/decisions/README.md
+101	0	2033e9d771e72724b866799e989a5dc5147f9d0481b6c1cfcbcc8b8898344614	celestina/docs/evidence/2026-10-22-cel-2-h-a-review-b.md
+1072	0	05a1ba12e8d1ee19006d6c5411d029a9f2c5887dc83a84a56ab070f253ee1ec8	celestina/docs/evidence/2026-10-22-cel-2-h-a.md
+-	-	bad3db521911ee0899c637a762c92a9761f011416ccc818a4be3066a847266ce	celestina/docs/evidence/2026-10-22-cel-2-h-a/empty.png
+-	-	d14285afcd7bba56a7b1ee71501e170e36e7f5cac4226a1af5edd9fa7e4ffcb7	celestina/docs/evidence/2026-10-22-cel-2-h-a/faded.png
+-	-	ad849a546901f49ccf79306fe499db80d4fe0f8cc745da1559773497b6eebc7d	celestina/docs/evidence/2026-10-22-cel-2-h-a/status.png
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1-locked.png
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1-prompt.png
+4	0	a13446d08b36ddb2d9a9cc9c7cad52553214f8a3f23eac03c684ec88132e22ea	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.logind.log
+30	0	f43dc6402bbb188f6e8fd59f3a64ea86a10a8e6386acd9bb795269822165b2dd	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.nest.log
+1	0	a9e65a055c0cdd9631a7d41179d43de43e3db6b2b0355774d89a0e582d8e080b	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.probe
+30	0	be82888fee2256776f57fc6b0d63f10a1ce231323abc9f8bc8b5bac44e39d554	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.shell.status
+7	0	c960c3fd8fc12babfa0e73b9860caffad1608448b0284d2675b59cbc6aff9446	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r1.steps.log
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2-after.png
+4	0	f7023394bb0fdb8b91bccc1f815e868b34702a031f5f49118beae5d60f242664	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.logind.log
+30	0	96a9fae0fc4a6fca4135133f1e8f878a3ac56243b0b6b5abd76e05a68ed49ffd	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.nest.log
+1	0	3a9eeda3b127d0d900d23f569a3b64a0966639ad75f4009b47f726e654babe50	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.probe
+5	0	dcaebdfc9f2258c803a37d6236734b9b4829e4d182173404bab7ac8074740838	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.second.err
+2	0	dc5149b358b91ff03b513de90b5e9c74086e21b72816ebeae45664a1d626c097	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.second.lines
+29	0	bd43597d3a1d5de8ebff3b777b167c7b24a8523a30b20d6e576be1882661fe55	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.shell.status
+7	0	cdfc59f6a9a71b453bbbdf0c22f2ccb346c74bd911a4781e5ba50ec426b3e4a9	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2.steps.log
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-dead-lock.png
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-relaunched.png
+-	-	8f8d6b23ca820d9be1e8d1c133fcf44a0446b59e1b969c4b3aae029f275e19e6	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-swaylock.png
+6	0	3cfc25c3ac4ea2acc4b245948b998eef63bb7a3e36964089b96b4099ff97cbd7	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.logind.log
+35	0	018dbfe732e63a9cc70cd5bd16f461403c6fcc5cce599c403c8d82915fc8c7b9	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.nest.log
+1	0	1daa0922fae51b8958c06461833ba647aaf08abcf0ee62f9eac1d2ba03081d8c	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.probe
+39	0	9890d316401dd5a52d0a36bd6f30a78642b336a64589892f946ee51635727893	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.shell.status
+16	0	3e08738bbb242416e6f3928f3c9b9402bccf1e6ecbeaaf8e2b1bc8bf2a0b4f04	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.steps.log
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3.swaylock.out
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4-after-kill.png
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4-relaunched.png
+4	0	a285bc2a031a157515b0e56c8fb13c755de903124fce29516e4192c75635a010	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.logind.log
+33	0	21546458665521c4a93e3df480f29294ba7016525156eef35c5e54db44f8e644	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.nest.log
+1	0	ba01b4bd69f302b559224ef8614c22a2e5cce5293330440f3060041f3319aada	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.probe
+37	0	f226db8faf3d503af4c743b7a1aafe42cbe0f3e820341e1e2bc395c58c360846	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.shell.status
+6	0	341f965e2827b48da92f8153840e158dde55451f7214d56924c5c2febb99ed7e	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4.steps.log
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-after-lock-suspend.png
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-locked.png
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-shell-gone.png
+25	0	431b4d7e6f61a18579feed2510ff36f0b0c69fc661508c64d7a0f62ea991a703	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.lock-suspend.excerpt
+6	0	356ce5e66c0f47b8ed2461da2defb62868c1ebb49c360bf0873a273dbdfc90cc	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.logind.log
+39	0	167e4aef5338fef017dddc57595a33eddff7abf0e5c418be025f28f120d752ad	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.nest.log
+1	0	af95d9f76fdc9e7a086735f03ad5aecbde48d8abd31fca8bc2109da7cae599d4	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.probe
+74	0	92ec86355d3101dfb66240edc2aa881dc301e85856e93f511145ecbf9be2ccc4	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.shell.status
+13	0	4bd1827b7e1c46285b846c4c4eb39f6f77c53451f6b3e6d2abbc200404cb11ef	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5.steps.log
+4	0	9b1cbbf208472abf1af956ccb811219614279a794b0f23209f28af0794634538	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.logind.log
+29	0	843e2b3a12aa09ccfc1ba0083a4d52723a8675f4877072a61aef573fb22ae8a4	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.nest.log
+1	0	3e8387bc8477bb66dd56e29ec2ad71647260d697d90a1ef6ca861a0150bda339	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.probe
+28	0	af8f970efc2e1af03b4bf19ebea2717b5ec62a9c85bcf846919a8cb91ff36716	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.shell.status
+6	0	7e580520eb335d556f5e1dc3468b10af4dadf0b7f31a106016c0dc7dedb10ac5	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r6.steps.log
+-	-	129b20ab3d31b98eb48e86cf49c099fc4c7e8e689fb6ba1a5162c3206d6dda69	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-prompt.png
+-	-	43479b80972236ad9b8702ba3545853368e288cb2d42938c1f5b543f2241881d	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-refused-again.png
+-	-	725a4412b197dc263e29c0759155162f1c51a30b9a07cbb3a14135509baab1d7	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7-refused.png
+5	0	b54c980bcda8015742ed5a4fc5a6cad444305c152e87a5a3725395dd071dd107	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.lines
+5	0	b929045ea5bfc4afee6e62057fbb3fef8344db3d7d52027c87e7d450ec157c45	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.lock.err
+2	0	01ba1f52b81da1ece6270676d0b71c8c94470bf47227c97d353350a825fc97f0	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.logind.log
+30	0	f02a5f135581ff3a9d3fbb0791469168510bf1b04a112298d99d0459190f64b5	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.nest.log
+2	0	a8058d2e3b21c9ee30d55b0dd5447c39c1b16179a31d2cc32f045feeee9b86fc	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.probe
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.shell.status
+8	0	e2b4d5327641d4c48aedaf10a0642c1ad363400d1924fd0c60a98487ebbb2f0c	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r7.steps.log
+4	0	bd6df05bffced310b32fc66718bd97c876fec896739a590e188cb962ea3e4d14	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.lines
+2	0	039138d3e28879d76127f6a397f9d591c7a124fd1f3ed1ab79d297744e811344	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.logind.log
+27	0	fa24fea0035d884f546cad479e7f14abaf939fc39e871c182297eb319c0d2bbe	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.nest.log
+1	0	0c5e5c079833410293adbb4f79ec1fef355604683ffedaa36d80d05691ced8d8	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.probe
+5	0	ae720e10987f6f5ed9e5636fc27cae656520354a1e075ddd6a65ee54ed96f348	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.probe.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.shell.status
+2	0	bc5ca4b1b3f372aa0d4fae140af9450e1a46b6cf92d2c81642dd52cf09bf377d	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r8.steps.log
+-	-	6ea5e21c4532ceab763bbece391646e1a5724b5c23640cee5bf22bc7adff30ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a-locked.png
+8	0	6c5eb7d7559d4c0375203e637c64516c4df0a9dbee639f46d397c564e6869fbc	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.logind.log
+272	0	460808981322400b0319999da0f96041082097d6313c38c2afcab51c3a270353	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.nest.log
+1	0	75a5709d9d7880224529b926c49dfb89f4747f2443e3fa53aba1e061c4e6f8bb	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.probe
+35	0	0f45811e093e3e8eb8e3f503bba35e2ea1537971e83e62999232d6de3246ba19	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.shell.status
+6	0	1910a2f14e2299cb838a48c0eda41807cfdd99f70c51083281f67b035eead2d8	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9a.steps.log
+-	-	f495b866111c38f361c4ac389628845287fd39f1caed91a574e242aeedc93bf1	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b-after-240s.png
+4	0	659b93c6a12ece6240529dd261ee3b27c218296c9324b13424af53549b58030e	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.logind.log
+290	0	df70fc42b6f12c6d3d246e811fc3e25e1230c3824a6de97a7e7d823a1a2a7efe	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.nest.log
+7	0	a50efdc42f866446e314d3b6cd0ba4a4244189ab56e9b162c4c27f2e8dc29b56	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.pointer.out
+1	0	356b7730411cd39cce7b2555c1f7719a7fbf9d728600924fdd882e460b282615	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.probe
+24	0	231135252f65c9b77557f86d918aad03dc1d52aff8b2921bc3e4e765920eaa78	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.shell.status
+6	0	7518175894915136cea5a2f2a7dc4a1d2b49ae05bf190cb9eee89b72ded6c8ff	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9b.steps.log
+6	0	58fdc4bdf5487e7a36127cc890f98f629d63cfeb107b1063b3ff430651340b06	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.logind.log
+30	0	931084adc7fdaee21478a8614542afaed8ce09f4e4693be107b4072d56c529bf	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.nest.log
+1	0	871cbc1912b91c1441febeb2010da0a61651bb6aaffffaf3cb1a0ae6c4d4def8	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.probe
+30	0	1c57e2ec5402f1c7d52708a5201e7f69cb255004daac9d2deb421c472545dd07	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.shell.err
+0	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.shell.out
+1	0	9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.shell.status
+4	0	4d025ca42fd96207df9d60f04c8f986988c4cb62bdfb3551d6ed7ca640d8a763	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r9c.steps.log
+11	0	864c6d090e981913f45a21e89f9f765e37f2fcbdcf1fe6a2e29a045ba939fa4b	celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-summary.txt
+-	-	cc74d62bb3ea9c622a606a243e5c52790c74478d93a908c3d7e14b9c71703293	celestina/docs/evidence/2026-10-22-cel-2-h-a/typed.png
+433	0	73fe3764d581139830b5c3ab58b95cebf9e66a7041c23c59ed6b372038179d8d	celestina/docs/evidence/2026-10-22-cel-2-h-spikes.md
+45	3	42674bfac0e938da6b9733c06b5d952ca227507830f5ceadddaef250c4028316	celestina/docs/handover.md
+473	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-H-a.numstat.tsv
+1	1	976afdebbb79c167c000b72a206e282d275dc9036510a5a068551eab68996b89	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+238	0	bd533545aa5dbb3457b1a02325c1fe25e7dd207c38dc08bfb0c635b6add285d5	celestina/examples/fake_logind.rs
+6	0	07cf4d84130a5416159704cb1d5e7e6215e0a2e42cc39a8de859453c2f9ccb7f	celestina/scripts/build-production.sh
+10	3	1b34ef322495a9a26553d0295a7bb0850bca615630d8131f50ced01ba0f23775	celestina/scripts/deploy-production.sh
+7	2	64573f90c720262746ef776c92b6d9fa6b02162642db56cc7f109bfbc5720ece	celestina/scripts/dev-session.sh
+973	0	0048ebfe743259c874c2ee0ba638526fcc2dba35e7b0d4ca02e03bd5cf7dbd8a	celestina/scripts/lock-rehearsal.sh
+37	6	2a4e390ef6c7e16602ebbe677b30389340e92727659c084b860231fb8f5af352	celestina/scripts/smoke.sh
+3	1	7979caabd640fb0d6443823bf7339046b1354b1776ab7fd54ccd2c119a60e70f	celestina/scripts/status-production.sh
+65	0	d699ba5e80a4c21114a332ea1047a6f30d8145917ec187ad143b1d57d92178d0	celestina/scripts/verify-production.sh
+26	0	b3f1518125d95af17ac1793cdf135669e5f9d9d572c769e2b88e65a282a80751	celestina/src/app.rs
+48	1	f314f9a2410381a13d085a00369c0170d405d044df000cbceee5c9e0ef8e30f3	celestina/src/command.rs
+67	0	a9ef387e969b87485b745df1b6c0df5b8de50712d54c44cd70075c69d59ea8cb	celestina/src/copy.rs
+6	3	47139cf9396940e5339de9d283b253d7047204215404ff77c4ef4e323862d629	celestina/src/energy/idle.rs
+179	41	9d1c5a0106cad98215a53df8fc74d2671f8291d656c2895cc91ea87edbb4d27b	celestina/src/energy/logind.rs
+100	19	8f498c8f8e71ac4ec7a259430b4add97a4a1c4e3317fdc5843c69fa69fad8e15	celestina/src/energy/mod.rs
+2	0	33e7c28eeeaf603929617de1ccf1ef5a196305f0249cf70f36faadd92d5cdad2	celestina/src/island/mod.rs
+4	0	7d7843c0272b9d542c8cb0e1afd93e478e2ae69bf8d5a8f90887a327964289f7	celestina/src/launcher/mod.rs
+1	0	afedd6eb168bdd4f889534d24aa80c7153336bc4eb2ca53209bfcbad93749767	celestina/src/lib.rs
+193	0	2d61fcb5d6887c923ce140c26e25cc43302c5afa5d3e9ceb49ddf31021a502e0	celestina/src/lock/bundle.rs
+940	0	f239b49920d8fabd087234b98d6b847d0b16961ff09d21d6b7951abdec33daa9	celestina/src/lock/mod.rs
+237	0	4433dd0a1eefb41ec981f860e405920c117d671e6af178432b4950f4a44b1dc4	celestina/src/lock/notify.rs
+1044	0	7e86c0ad13954f6a892943adccf047ccafe885f719bc34bbde14b8185fd28460	celestina/src/lock/sleep.rs
+1283	0	d7ebd48177de7360c2990c233f82e738d2bcc47d27d28e8121c27e8c844bf27c	celestina/src/lock/supervisor.rs
+127	0	33c6b9fb15aebd19e0bb9f08e49d1ee2ca042ce7cd2ca7f495112cab2280581e	celestina/src/lock/tick.rs
+23	0	bbfa6fda9c770b33b38763aea617b08bbf89e59d635147ed848234f265a834d6	celestina/src/main.rs
+3	0	87d9d3e10bd11a4a5848bf432c51f9df2056f1d33d6ecdf1adfe81f1a267b16f	celestina/src/message.rs
+298	0	1503bc8b476840648f2a75e9ebc19d46f95474f8594a4389c8965fad3724916c	celestina/tests/lock_guards.rs
+220	0	f073309442f4f10651bd7891ff1428a69951ebf448ec29c44b681642390a9b04	celestina/tests/lock_scripts.rs
+1158	0	121011548bbb55fea2743388a2bb671a717c1a8271265d451b79be83b5b3bd6b	celestina/tests/lock_sleep.rs
+620	0	2d2de3cb2d9990dc8484832f1ed4ba89d84190fd99fd96bdb216b2150473f063	celestina/tests/lock_supervisor.rs
+1	0	b77b7792e3aa0f7ec5a1a24d165cefc715a6c6d77ead4eec16d12a6438f0303f	docs/version-history.tsv

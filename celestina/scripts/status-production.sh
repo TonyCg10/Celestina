@@ -8,5 +8,7 @@ prefix=${HOME}/.local
 if [ "${1:-}" = "--prefix" ]; then shift; prefix=${1:?--prefix requires a directory}; shift; fi
 [ "$#" -eq 0 ] || { echo "usage: scripts/status-production.sh [--prefix DIR]" >&2; exit 2; }
 production_status "$suite_root" celestina \
-    --installed "celestina/target/release/celestina=$prefix/bin/celestina"
+    --installed "celestina/target/release/celestina=$prefix/bin/celestina" \
+    --installed "celestina/target/release/celestina-lock=$prefix/bin/celestina-lock" \
+    --installed "celestina/target/release/celestina-lock-verify=$prefix/bin/celestina-lock-verify"
 

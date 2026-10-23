@@ -1,0 +1,6 @@
+1792709984769 ready
+1792709984980 Inhibit 1 sleep|Celestina|delay
+1792709984992 emit PrepareForSleep true
+1792709985013 InhibitorReleased 1
+1792709986046 emit PrepareForSleep false
+1792709986742 stopped

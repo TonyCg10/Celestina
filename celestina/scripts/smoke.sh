@@ -24,7 +24,7 @@ set -eu
 # at a socket that does not exist, so no real logind is ever reached; it must
 # exit 0, report the idle worker armed or unavailable and the night light
 # applied or not applied (the nest has no DRM gamma), and answer `caffeine
-# toggle` and `session suspend` (refused: no locker yet). `session reboot` is
+# toggle` and `session suspend` (refused: suspend goes through the lock). `session reboot` is
 # deliberately not sent: it would be a real logind call on a bus the nest does
 # not own. A sixth and a seventh nested run (CEL-2-K) put `sysmon`, `clock`
 # and `tray` (and, in the seventh, `weather` with a Dublin location) in the
@@ -54,7 +54,9 @@ set -eu
 # duties on against `fake-melibea.py` in a private runtime directory
 # (CEL-2-J): one must draw no frame at rest, one opens and closes the bubbles
 # selector and answers the phone verbs, and one must log the missing Melibea
-# socket as absent exactly once. Without niri the nested session is skipped
+# socket as absent exactly once. Before any of them the artifact's other two
+# binaries, `celestina-lock` and `celestina-lock-verify`, must sit beside the
+# shell and refuse a bad request (CEL-2-H). Without niri the nested session is skipped
 # with a notice; without busctl and gdbus the notification part is.
 usage() {
     echo "usage: scripts/smoke.sh --binary PATH" >&2
@@ -68,6 +70,35 @@ case "$bin" in
     *) bin=$(pwd)/$bin ;;
 esac
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# The artifact is three binaries (CEL-2-H): the shell finds the lock and its
+# verifier beside itself, so a smoke of a lone shell proves nothing about the
+# lock it would spawn. Assertions only: neither is started against a
+# compositor here. A bad argument answers 2 from the lock and 6 from the
+# verifier before either touches Wayland, PAM or stdin, which shows the right
+# programs are there and speak their contracts.
+bin_dir=$(dirname -- "$bin")
+for lock_binary in celestina-lock celestina-lock-verify; do
+    [ -x "$bin_dir/$lock_binary" ] || {
+        echo "smoke: $bin_dir/$lock_binary is missing or not an executable" >&2
+        exit 1
+    }
+done
+set +e
+"$bin_dir/celestina-lock" --not-an-option >/dev/null 2>&1
+lock_status=$?
+"$bin_dir/celestina-lock-verify" --protocol 0 --service production </dev/null >/dev/null 2>&1
+verify_status=$?
+set -e
+[ "$lock_status" -eq 2 ] || {
+    echo "smoke: celestina-lock answered $lock_status to a bad option, not 2" >&2
+    exit 1
+}
+[ "$verify_status" -eq 6 ] || {
+    echo "smoke: celestina-lock-verify answered $verify_status to a bad protocol, not 6" >&2
+    exit 1
+}
+echo "smoke: celestina-lock and celestina-lock-verify are beside the shell and refuse a bad request"
 
 if ! "$bin" --check; then
     echo "smoke: $bin --check failed" >&2
@@ -407,7 +438,7 @@ echo "smoke: wallpaper held-output variant skipped: no layer-shell client in the
 # DBUS_SYSTEM_BUS_ADDRESS at a socket that is not there, so the shell can only
 # report logind unavailable and nothing reaches the real one. `session reboot`
 # is never sent for the same reason; `session suspend` is refused before any
-# bus call because no locker exists yet.
+# bus call because suspend goes through the lock (`lock suspend`).
 xdg=$work/xdg
 mkdir -p "$xdg/celestina"
 cat > "$xdg/celestina/shell.json" <<'JSON'
@@ -465,9 +496,9 @@ if grep -q 'caffeine: held' "$run.err"; then
 fi
 grep -q 'session suspend: requested' "$run.err" ||
     fail "session suspend was not requested"
-grep -q 'session Suspend: refused: no locker yet' "$run.err" ||
-    fail "session suspend was not refused for want of a locker"
-echo "smoke: $(grep -Eo 'idle: (armed|unavailable)' "$run.err" | head -n 1), $(grep -Eo 'night light: (applied|not applied)' "$run.err" | head -n 1), suspend refused without a locker"
+grep -q 'session Suspend: refused: suspend goes through the lock' "$run.err" ||
+    fail "session suspend was not refused (suspend goes through the lock)"
+echo "smoke: $(grep -Eo 'idle: (armed|unavailable)' "$run.err" | head -n 1), $(grep -Eo 'night light: (applied|not applied)' "$run.err" | head -n 1), suspend refused (it goes through the lock)"
 
 # The glance workers (CEL-2-K): the system monitor and the weather. Each run
 # starts the shell through a wrapper that puts a fake `curl` first on PATH (a

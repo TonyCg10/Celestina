@@ -1,0 +1,37 @@
+2026-10-22T22:50:59.555419Z  INFO celestina_wayland::blur: ext_background_effect_v1 bound
+2026-10-22T22:50:59.568468Z  INFO celestina_wayland::egl: EGL initialised, GLES 3.0 context created egl="1.5" vendor=Some("Mesa Project")
+2026-10-22T22:50:59.568569Z  INFO celestina_wayland::handlers: output added output=winit id=43 size=(628, 673) scale=2.0 refresh_mhz=60000
+2026-10-22T22:50:59.568592Z  INFO celestina::app: island surface requested output=winit bar=false anchor=Top size=(628, 560)
+2026-10-22T22:50:59.568617Z  INFO celestina_wayland::runtime: layer surface created surface=1 output=winit namespace="celestina-panel" layer=Top size=(628, 560)
+2026-10-22T22:50:59.589370Z  INFO celestina::lock: lock: the duty is on; turn off the other locker's idle lock (Noctalia) and bind `celestina lock suspend` yourself
+2026-10-22T22:50:59.589506Z  INFO celestina::clipboard: clipboard: the history file was deleted
+2026-10-22T22:50:59.589623Z  WARN celestina::lock: lock: the PAM service celestina-lock is not installed: the lock will cover the screen but cannot be unlocked (see celestina/README.md)
+2026-10-22T22:50:59.589848Z  INFO celestina::connectivity: network: unavailable failure=Unreachable retry_ms=5000
+2026-10-22T22:50:59.589957Z  INFO celestina::connectivity: bluetooth: unavailable failure=Unreachable retry_ms=5000
+2026-10-22T22:50:59.590032Z  INFO celestina::lock::sleep: lock: the sleep inhibitor is held
+2026-10-22T22:50:59.590854Z  INFO celestina::app: desktop index received entries=64
+2026-10-22T22:50:59.593313Z  INFO celestina::providers::niri: niri: skipping the MinimizedWindowsChanged event, unknown to niri-ipc 26.4.0
+2026-10-22T22:50:59.593321Z  INFO celestina::providers::niri: niri: skipping the BindingModeChanged event, unknown to niri-ipc 26.4.0
+2026-10-22T22:50:59.621999Z  INFO celestina_lock::launch: backdrop bundle read
+2026-10-22T22:50:59.622008Z  WARN celestina_lock::launch: the PAM service file is missing: every attempt will be denied
+2026-10-22T22:50:59.626713Z  INFO celestina_wayland::lock::handlers: output added output=winit id=43
+2026-10-22T22:50:59.628179Z DEBUG celestina::lock::supervisor: lock: status line line=hello 1
+2026-10-22T22:50:59.628184Z DEBUG celestina::lock::supervisor: lock: status line line=requested
+2026-10-22T22:50:59.629306Z  INFO celestina::lock: lock: the lock died; starting it again
+2026-10-22T22:50:59.639273Z  INFO celestina_lock::launch: backdrop bundle read
+2026-10-22T22:50:59.639279Z  WARN celestina_lock::launch: the PAM service file is missing: every attempt will be denied
+2026-10-22T22:50:59.676618Z  INFO celestina_wayland::lock::handlers: output added output=winit id=43
+2026-10-22T22:50:59.678053Z DEBUG celestina::lock::supervisor: lock: status line line=hello 1
+2026-10-22T22:50:59.678057Z DEBUG celestina::lock::supervisor: lock: status line line=requested
+2026-10-22T22:50:59.693148Z  INFO celestina_wayland::lock::handlers: the compositor confirmed the lock
+2026-10-22T22:50:59.693164Z DEBUG celestina::lock::supervisor: lock: status line line=locked
+2026-10-22T22:50:59.693182Z  INFO celestina::lock::sleep: lock: the sleep inhibitor was released
+2026-10-22T22:50:59.789899Z  INFO celestina::connectivity: power: battery unavailable
+2026-10-22T22:50:59.789905Z  INFO celestina::connectivity: power: profiles unavailable
+2026-10-22T22:50:59.840075Z  INFO celestina_wayland::runtime: layer surface created surface=2 output=winit namespace="celestina-toasts" layer=Overlay size=(420, 408)
+2026-10-22T22:50:59.840083Z  INFO celestina::app: banners surface requested created=true toasts=1
+2026-10-22T22:51:02.508130Z  INFO celestina::app: quit requested over the bus
+2026-10-22T22:51:02.510616Z  INFO celestina_wayland::runtime: clean exit frames=6
+2026-10-22T22:51:02.510924Z  INFO celestina::lock::supervisor: the lock worker stops; the lock keeps running
+2026-10-22T22:51:02.592639Z  INFO celestina: the shell stopped frames=6
+Io error: Broken pipe (os error 32)

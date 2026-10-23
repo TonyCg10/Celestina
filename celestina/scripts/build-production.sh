@@ -15,5 +15,11 @@ if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
 fi
 
 (cd "$project_root" && cargo build --release --locked --bin celestina)
+# The session lock's two binaries are built in an invocation of their own
+# (CEL-2-H, design §4.14): with the shell in the same command, feature
+# unification would switch the toolkit's `gl` feature on for the one process
+# that can end the lock. `cargo test --workspace` unifies the same way, which
+# is why verify-production.sh rebuilds this pair after it.
+(cd "$project_root" && cargo build --release --locked -p celestina-lock -p celestina-lock-verify)
 
 echo ">> Celestina release build steps completed (not installed)"

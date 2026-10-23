@@ -1,0 +1,15 @@
+# The transitive normal-dependency closure of celestina-lock-verify (design
+# §4.14): the output of
+#   cargo tree -e normal --prefix none -p celestina-lock-verify
+# reduced to crate names. A crate that arrives through a feature or a
+# transitive edge fails tests/closure.rs. Task 4 adds the same list for the
+# lock process in celestina-lock/tests/closure.allow (T-D1).
+bitflags
+celestina-lock-proto
+celestina-lock-verify
+cfg-if
+libc
+linux-raw-sys
+nix
+rustix
+zeroize

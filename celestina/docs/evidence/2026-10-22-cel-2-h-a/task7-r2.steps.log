@@ -1,0 +1,7 @@
+1792709454999 probe for R-2 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2041561.sock
+1792709455068 verb 'lock' sent
+1792709455121 locked 1792709455093 (verb at 1792709455051, 42 ms)
+1792709455122 first lock pid 2041695
+1792709455256 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r2-after.png
+1792709455257 RESULT R-2 PASS second celestina-lock exit 10; first (pid 2041695) alive, same pid file, no unlock
+1792709455398 shell exited status 0

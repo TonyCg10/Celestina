@@ -1,0 +1,1 @@
+RESULT R-6 PASS /proc/2043418/environ owned by 0:0; the user cannot read environ or mem

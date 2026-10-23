@@ -1,0 +1,13 @@
+1792709462883 probe for R-5 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2042444.sock
+1792709462951 verb 'lock' sent
+1792709463004 locked 1792709462976 (verb at 1792709462935, 41 ms)
+1792709463038 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-locked.png
+1792709463053 verb 'quit' sent
+1792709463288 shell exited status 0
+1792709464387 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-shell-gone.png
+1792709464491 shell started again
+1792709464590 R-5 second shell ready (duty lines: 2 -> 2)
+1792709464607 verb 'lock suspend' sent
+1792709470642 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r5-after-lock-suspend.png
+1792709470643 RESULT R-5 PASS lock pid 2042581 survived the shell's quit and restart, still the only lock; 'lock suspend' did not suspend (Suspend calls on the fake logind: 0)
+1792709470782 shell exited status 0

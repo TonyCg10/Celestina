@@ -1,0 +1,5 @@
+2026-10-22T22:51:17.566919Z  INFO celestina_lock::launch: no backdrop bundle on stdin
+2026-10-22T22:51:17.566948Z  WARN celestina_lock::launch: the PAM service file is missing: every attempt will be denied
+2026-10-22T22:51:17.567381Z  INFO celestina_wayland::lock::handlers: output added output=winit id=43
+2026-10-22T22:51:17.570193Z  INFO celestina_wayland::lock::handlers: the compositor confirmed the lock
+2026-10-22T22:51:17.898958Z  WARN celestina_lock::view: a frame was not shown output=43 err=both buffers are still in use by the compositor

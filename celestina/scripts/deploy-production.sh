@@ -2,9 +2,10 @@
 set -eu
 
 # Installs the verified shell (docs/contracts/production-artifacts.md): the
-# binary at $prefix/bin/celestina, its desktop entry, and the style's font and
-# icons under $prefix/share/celestina/, where the painter looks for them
-# beside an installed binary. The argument handling and the verified-artifact
+# binary at $prefix/bin/celestina, the session lock's two binaries beside it,
+# its desktop entry, and the style's font and icons under
+# $prefix/share/celestina/, where the painter looks for them beside an
+# installed binary. The argument handling and the verified-artifact
 # gate follow hematita/scripts/deploy-production.sh at
 # 9ecc72eeef9cb5a5418a8213c3fb8cdaa5edff72. It never starts or replaces the
 # live shell.
@@ -19,6 +20,12 @@ production_require_verified "$suite_root" celestina
 # Not production_install_xdg_application: it installs an application icon,
 # and the shell has none.
 production_install_file "$project_root/target/release/celestina" "$prefix/bin/celestina" 0755
+# The session lock and its verifier go beside the shell: the shell finds them
+# there (design §4.2), never through PATH. The PAM service text is not
+# installed: /etc/pam.d/celestina-lock is the author's own command (README,
+# "Installing the lock's PAM service").
+production_install_file "$project_root/target/release/celestina-lock" "$prefix/bin/celestina-lock" 0755
+production_install_file "$project_root/target/release/celestina-lock-verify" "$prefix/bin/celestina-lock-verify" 0755
 applications=$prefix/share/applications
 production_install_file "$project_root/celestina.desktop" "$applications/celestina.desktop" 0644
 style=$suite_root/celestina-style

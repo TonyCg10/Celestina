@@ -1,0 +1,6 @@
+1792709459550 probe for R-4 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2042174.sock
+1792709459630 R-4 attempt 1: kill -KILL 2042310 (celestina-lock) at 1792709459629, locked lines at that moment: 0
+1792709461471 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4-after-kill.png
+1792709462505 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r4-relaunched.png
+1792709462506 RESULT R-4 PASS killed between requested and locked (attempt 1); niri kept the session locked, the shell relaunched (2042310 -> 2042327) and niri replaced the dead lock
+1792709462594 shell exited status 0

@@ -1,0 +1,2 @@
+1792709477554 probe for R-8 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2043743.sock
+1792709478470 RESULT R-8 PASS unlock_probe: lines [hello 1,requested,locked,unlocked,] exit 0; niri logged 'unlocking session'

@@ -1,0 +1,103 @@
+# The transitive normal-dependency closure of the production build command of
+# the two lock binaries (design §4.14, T-D1), the output of
+#   cargo tree -e normal --prefix none -p celestina-lock -p celestina-lock-verify
+# reduced to crate names. A crate that arrives through a feature or a
+# transitive edge fails tests/closure.rs and stops the executor. Task 5 (the
+# CPU painter) and the tokens add their crates to this list in the same edit
+# that adds the dependency.
+#
+# The two packages and the vocabulary they share.
+celestina-lock
+celestina-lock-verify
+celestina-lock-proto
+# The Wayland toolkit without the `gl` feature, and what the session-lock
+# protocol needs (smithay-client-toolkit, wayland-client and its protocol
+# crates, calloop as the loop, xkbcommon for the keymap).
+celestina-wayland
+smithay-client-toolkit
+calloop
+calloop-wayland-source
+polling
+wayland-client
+wayland-backend
+wayland-sys
+wayland-scanner
+wayland-protocols
+wayland-protocols-experimental
+wayland-protocols-misc
+wayland-protocols-wlr
+wayland-csd-frame
+wayland-cursor
+xkbcommon
+xkeysym
+cursor-icon
+xcursor
+memmap2
+bytemuck
+bytemuck_derive
+downcast-rs
+quick-xml
+lazy_static
+log
+# System interface: rustix is the safe syscall API of both binaries; libc and
+# nix (user lookup) are the verifier's.
+rustix
+linux-raw-sys
+bitflags
+cfg-if
+libc
+nix
+memchr
+once_cell
+pin-project-lite
+# Logging facade and the fixed-level subscriber (no env-filter, so no regex).
+tracing
+tracing-attributes
+tracing-core
+tracing-subscriber
+sharded-slab
+thread_local
+smallvec
+# Typed errors, zeroing of secret buffers, proc-macro support.
+thiserror
+thiserror-impl
+zeroize
+proc-macro2
+quote
+syn
+unicode-ident
+# The CPU painter (design §4.6.1, H-15): tiny-skia for shapes; cosmic-text for
+# shaping (harfrust, skrifa, read-fonts, font-types, unicode-*) and glyph
+# rasterisation (swash, zeno, yazi); fontdb (empty database, no fontconfig,
+# no PNG decoder) and its parser ttf-parser; the style tokens. Added with the
+# painter, in the same edit as the dependencies.
+celestina-tokens
+tiny-skia
+tiny-skia-path
+arrayref
+arrayvec
+strict-num
+cosmic-text
+fontdb
+ttf-parser
+tinyvec
+slotmap
+harfrust
+skrifa
+read-fonts
+font-types
+core_maths
+libm
+linebender_resource_handle
+rangemap
+rustc-hash
+self_cell
+smol_str
+swash
+zeno
+yazi
+sys-locale
+unicode-bidi
+unicode-linebreak
+unicode-script
+unicode-segmentation

@@ -1,0 +1,5 @@
+2026-10-22T22:50:55.122737Z  WARN celestina_lock::launch: cannot write the pid file err=Resource temporarily unavailable (os error 11)
+2026-10-22T22:50:55.122752Z  INFO celestina_lock::launch: no backdrop bundle on stdin
+2026-10-22T22:50:55.122760Z  WARN celestina_lock::launch: the PAM service file is missing: every attempt will be denied
+2026-10-22T22:50:55.126633Z  INFO celestina_wayland::lock::handlers: output added output=winit id=43
+2026-10-22T22:50:55.128127Z  WARN celestina_wayland::lock::handlers: the compositor ended the lock request

@@ -15,7 +15,11 @@ VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS; CEL-2-G queues VAL-CEL2-CLIPBOARD-LI
 VAL-CEL2-CLIPBOARD-SECRET, VAL-CEL2-CLIPBOARD-IMAGE and VAL-CEL2-CLIPBOARD-LOOK;
 CEL-2-F queues VAL-CEL2-NETWORK, VAL-CEL2-BLUETOOTH and VAL-CEL2-POWER;
 CEL-2-C queues VAL-CEL2-OSD-AUDIO, VAL-CEL2-OSD-BRIGHTNESS and
-VAL-CEL2-OSD-PIECES; CEL-2-D queues VAL-CEL2-MEDIA and VAL-CEL2-MEDIA-COVER.
+VAL-CEL2-OSD-PIECES; CEL-2-D queues VAL-CEL2-MEDIA and VAL-CEL2-MEDIA-COVER; CEL-2-H-a queues
+VAL-CEL2-LOCK-PAM, VAL-CEL2-LOCK-LIVE, VAL-CEL2-LOCK-SUSPEND,
+VAL-CEL2-LOCK-HOTPLUG, VAL-CEL2-LOCK-RECOVERY, VAL-CEL2-LOCK-NOTICES and
+VAL-CEL2-LOCK-COEXIST (CEL-2-H-b will queue VAL-CEL2-LOCK-BACKDROP and
+VAL-CEL2-LOCK-CLOCK).
 None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
@@ -902,5 +906,161 @@ None has been run and none is closed by an agent.
 - **Pass condition:** the file cover shows on the page; the `https` cover shows
   none, with the rest of the page working; nothing else is fetched from the
   network
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-LOCK-PAM — The PAM service, installed by hand
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-a (`celestina/contrib/pam.d/celestina-lock`,
+  `celestina-lock-verify`)
+- **Requires:** root on the author's machine; the repository checkout. No agent
+  installs, edits or checks anything in `/etc`
+- **Procedure:** read `celestina/contrib/pam.d/celestina-lock` (four lines: the
+  header, a comment and `auth` and `account` including `system-auth`, with no
+  `pam_nologin`), then install it with
+  `sudo install -m 0644 -o root -g root celestina/contrib/pam.d/celestina-lock /etc/pam.d/celestina-lock`.
+  If `pamtester` is installed, run `pamtester celestina-lock <user> authenticate`
+  and type the right password. Do not type a wrong password more than once: the
+  service shares `pam_faillock`, so three wrong passwords in 15 minutes lock the
+  account for 10 minutes everywhere (`faillock --user <user>` shows the tally)
+- **Pass condition:** the right password is accepted; a wrong one is refused;
+  with the file removed again the shell, with `duties.lock` on, warns once that
+  the service is missing, and the lock refuses everything with the
+  missing-service message
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-LOCK-LIVE — The lock on the real session
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-a (the lock, the covers, the CPU painter,
+  the field, the status words, Caps Lock and the fade)
+- **Requires:** the deployed shell started by hand in the author's niri session
+  with the PAM service installed (VAL-CEL2-LOCK-PAM passed), `duties.lock` set
+  to `"on"` in `~/.config/celestina/shell.json`, Noctalia's idle lock switched
+  off first so the two never lock at once, `swaylock` left on `Mod+Shift+A`, and
+  a root login (a console or an `ssh` key) at hand for a lockout. The lock is
+  started by the shell (`celestina lock`), never by hand: a hand-run
+  `celestina-lock` outside a nest is refused with exit 15 (ADR 0022 A4)
+- **Procedure:** run `celestina lock`. Check the three outputs: each is covered
+  in black at once and the password field appears on the output with the
+  keyboard focus, then follows the pointer to another output. Type the right
+  password and check that it unlocks. Lock again, type a wrong password and
+  check the refusal message and the delay (2 s, then 4 s on the second wrong
+  password; do not make a third: `faillock` counts them). Press Caps Lock and
+  check the message. Type a password with accents and dead keys and check that
+  it is accepted (precomposed characters as `passwd` stored them). Check the
+  contrast of the field and the words over black, on the scale 1.5 output and on
+  the scale 1.0 output. Leave the lock untouched for the fade delay (30 s) and
+  check that every output goes black, prompt included, and that a key or the
+  pointer brings the prompt back with the typed bullets still there. There is no
+  screen-reader support on the lock (a known gap, not tested)
+- **Pass condition:** covered at once on every output; the right password
+  unlocks and nothing else does; the delay and the messages are as written; the
+  accented password works; the field is readable; the fade and its recovery work
+- **Result:** not run
+- **Evidence:** none
+- **Rollback:** switch `duties.lock` off and leave `swaylock` on `Mod+Shift+A`.
+  A running lock is not touched by switching the duty off; unlock it with the
+  password
+
+## VAL-CEL2-LOCK-SUSPEND — Suspend only after the lock covers
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-a (the idle chain's second step, the
+  `lock suspend` verb, the logind delay inhibitor)
+- **Requires:** as VAL-CEL2-LOCK-LIVE, plus `duties.idle` set to `"on"`; the
+  session otherwise idle
+- **Procedure:** leave keyboard and pointer untouched for the idle suspend
+  delay (240 s) and check that the session locks and then suspends, and that on
+  resume the lock is up and asks for the password. Then, from an unlocked
+  session, close the lid, press the power button and run `systemctl suspend`
+  one at a time; on resume check each time that the lock was up before the
+  machine slept and that no part of the session was visible on wake (time how
+  long the screen shows before the prompt). With the lock up, let the outputs
+  power off and wake them with the pointer
+- **Pass condition:** every suspend is preceded by a confirmed lock; on every
+  resume the first thing shown is the lock; the screen-off while locked wakes on
+  input. A glimpse of the session on resume is a finding (it is logind's cap on
+  delay inhibitors, F24 of the design) and is recorded with its duration
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-LOCK-HOTPLUG — An output plugged and unplugged while locked
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-a (one cover per output, the prompt
+  moving with the focus)
+- **Requires:** as VAL-CEL2-LOCK-LIVE; a second or third output that can be
+  plugged and unplugged
+- **Procedure:** lock the session. Plug an output and check that it shows black
+  at once and then a cover; unplug the output that holds the prompt and check
+  that the prompt appears on another output; plug it back. Repeat with the
+  lock covering all outputs and then with only one output left
+- **Pass condition:** at no moment does any part of the session show on any
+  output; the prompt is always on an output that exists
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-LOCK-RECOVERY — Getting back in when the lock does not let you
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-a (the pid file, the relaunch, the
+  recovery path of the README and the design's §8)
+- **Requires:** as VAL-CEL2-LOCK-LIVE; a console login that works on
+  `Ctrl+Alt+F3`
+- **Procedure:** lock the session. Press `Ctrl+Alt+F3` and log in on that
+  console. Read the pid with
+  `cat "$XDG_RUNTIME_DIR/celestina/lock-wayland-1.state"` (the display name is the
+  session's; `ls /run/user/<uid>/wayland-*`), then `kill -KILL <pid>` by that
+  pid only, never by name. Return to the session's console: the screen shows
+  the dark lock colour and the shell starts the lock again within a second.
+  Then stop the shell, kill the lock again by its pid, and from the console run
+  `WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/<uid> swaylock -c 000000`
+  and unlock it with your password. Finally read the `faillock` lockout
+  message once (three wrong passwords on the production service lock the
+  account: do this only if you accept 10 minutes of lockout, or skip it) and
+  write down which root path you keep for a lockout: a console login as root or
+  an `ssh` key to root
+- **Pass condition:** the lock is killed by pid and the session stays locked;
+  the relaunch and the `swaylock` takeover both work; you know your root path
+  to `faillock --user <name> --reset`
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-LOCK-NOTICES — The lock's notices and the fade
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-a (the notices of explicit refusals, the
+  missing-PAM-file notice at duty-on, the fade)
+- **Requires:** as VAL-CEL2-LOCK-LIVE, with a notification owner running
+  (Noctalia during coexistence)
+- **Procedure:** with another client's lock holding the session (start
+  `swaylock` with `Mod+Shift+A`), run `celestina lock suspend` and check that a
+  notification says the lock was refused and that nothing suspends. Move the PAM
+  service away (as root, `mv /etc/pam.d/celestina-lock /etc/pam.d/celestina-lock.off`)
+  and switch `duties.lock` off and on: check that a notification says the service
+  is missing; put the file back. Leave a lock untouched and check the fade to
+  black after its delay
+- **Pass condition:** a refused `lock suspend` and a missing PAM file at duty-on
+  each reach the notification owner once; an idle refusal produces no
+  notification; the fade follows the delay
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-LOCK-COEXIST — Beside Noctalia's lock
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-a (the protocol's single lock, exit 10
+  and its bounded retry)
+- **Requires:** Noctalia running with its lock enabled, `duties.lock` `"on"`
+- **Procedure:** lock with Noctalia's own lock control (its session menu), then run
+  `celestina lock` and check that it is refused and the Noctalia lock is
+  unaffected; unlock it with your password. Then lock with `celestina lock`,
+  run Noctalia's lock and check that Noctalia is refused and ours is
+  unaffected
+- **Pass condition:** the second locker is refused in both orders and neither
+  lock is displaced; a refused `celestina lock suspend` never suspends
 - **Result:** not run
 - **Evidence:** none

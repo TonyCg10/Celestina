@@ -1,6 +1,6 @@
 # Celestina status
 
-- **Updated:** 2026-10-17
+- **Updated:** 2026-10-22
 - **Version:** the one `celestina/Cargo.toml` carries, set by each landing
 - **Implementation:** the CEL-1 program is landed on `main` through CEL-1-H
   (1.0.0), the tokens as data (CEL-1-C) included: the three toolkit crates
@@ -65,6 +65,24 @@
   with a session-only pin. Its evidence is
   [`docs/evidence/2026-10-17-media.md`](docs/evidence/2026-10-17-media.md); its
   author rows are `VAL-CEL2-MEDIA` and `VAL-CEL2-MEDIA-COVER`, pending.
+- **CEL-2-H-a (implemented in its worktree, not landed, reviews pending):** the
+  session lock's security core on `unit/celestina/CEL-2-H-a`: `celestina-lock`
+  (an `ext-session-lock-v1` client with black covers, a CPU-painted password
+  field and the only unlock), `celestina-lock-verify` (the PAM child),
+  `celestina-lock-proto`, the shell's supervisor, sleep worker, `lock` and `lock
+  suspend` verbs and the idle chain's second step, behind `duties.lock`, **off by
+  default**. The PAM service `celestina-lock` is **not installed** (the author
+  installs it by hand; the README says how and how to get back in) and **nothing
+  has been validated live**: no run on the real session, with real PAM, real
+  logind or real hotplug; the nest rehearsal R-1 to R-9 passed against a fake
+  logind. The dimmed wallpaper and the clock are CEL-2-H-b, not started. Its
+  evidence is
+  [`docs/evidence/2026-10-22-cel-2-h-a.md`](docs/evidence/2026-10-22-cel-2-h-a.md)
+  (spikes: [`2026-10-22-cel-2-h-spikes.md`](docs/evidence/2026-10-22-cel-2-h-spikes.md));
+  the decisions are
+  [ADR 0022](docs/decisions/0022-session-lock.md) (proposed); its author rows
+  `VAL-CEL2-LOCK-PAM`, `-LIVE`, `-SUSPEND`, `-HOTPLUG`, `-RECOVERY`, `-NOTICES`
+  and `-COEXIST` are pending. Review A and Review B have not run.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

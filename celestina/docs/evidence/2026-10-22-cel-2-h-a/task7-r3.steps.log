@@ -1,0 +1,16 @@
+1792709455689 probe for R-3 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.2041803.sock
+1792709455758 verb 'lock' sent
+1792709455811 locked 1792709455776 (verb at 1792709455741, 35 ms)
+1792709455811 R-3 part 1: SIGKILL the lock by the pid in its pid file (2041938)
+1792709455813 kill -KILL 2041938 (celestina-lock)
+1792709456155 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-dead-lock.png
+1792709456690 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-relaunched.png
+1792709456690 R-3 part 1 PASS: relaunched as pid 2041962, niri replacements 0 -> 1
+1792709456691 R-3 part 2: stop the shell, kill the lock again, start swaylock against the nest
+1792709456706 verb 'quit' sent
+1792709456855 shell exited status 0
+1792709456908 kill -KILL 2041962 (celestina-lock)
+1792709459070 capture /home/toni/CODIGO/CELESTINA.worktrees/celestina-CEL-2-H-a/celestina/docs/evidence/2026-10-22-cel-2-h-a/task7-r3-swaylock.png
+1792709459071 R-3 part 2 PASS: swaylock pid 2042070 alive: yes
+1792709459073 kill -USR1 2042070 (swaylock)
+1792709459175 RESULT R-3 PASS relaunch after SIGKILL (pid 2041938 -> 2041962, 1792709455843) and swaylock takeover of a dead lock; its unlock was SIGUSR1, not a password (the PAM unlock of swaylock was not tried)

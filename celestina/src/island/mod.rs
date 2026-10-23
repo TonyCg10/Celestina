@@ -1952,6 +1952,8 @@ impl Island {
             | Verb::Caffeine(_)
             | Verb::NightLight(_)
             | Verb::Session(_)
+            | Verb::Lock
+            | Verb::LockAndSuspend
             | Verb::Clipboard(_)
             | Verb::Volume(_)
             | Verb::Microphone(_)

@@ -5,7 +5,8 @@
 - **Related author validation:** VAL-CEL2-BAR-LIVE (it does not block); the CEL-1 rows stay queued: VAL-CEL-GLASS, VAL-CEL-ISLAND, VAL-CEL-REST,
   VAL-CEL-POPUP, VAL-CEL-KEYBOARD, VAL-CEL-IME, VAL-CEL-SCALE,
   VAL-CEL-NOCTALIA and VAL-CEL-BANNERS in [VALIDATION.md](VALIDATION.md) (they do not block);
-  the CEL-2-J rows VAL-CEL2-PHONE, VAL-CEL2-BUBBLES and VAL-CEL2-BUBBLES-KEYS are pending too
+  the CEL-2-J rows VAL-CEL2-PHONE, VAL-CEL2-BUBBLES and VAL-CEL2-BUBBLES-KEYS are pending too;
+  the CEL-2-H-a rows VAL-CEL2-LOCK-PAM, -LIVE, -SUSPEND, -HOTPLUG, -RECOVERY, -NOTICES and -COEXIST are pending
 
 ## CEL-2 — Shell parity with Noctalia
 
@@ -20,6 +21,16 @@ unit's status and exit.
 **CEL-2-J (implemented in its worktree, not landed):** the phone and bubbles
 duties, both off by default; evidence in
 [docs/evidence/2026-10-17-phone-and-bubbles.md](docs/evidence/2026-10-17-phone-and-bubbles.md).
+
+**CEL-2-H-a (implemented in its worktree, not landed):** the session lock's
+security core, behind `duties.lock`, off by default; the ledger row is `active`.
+Agent evidence is [docs/evidence/2026-10-22-cel-2-h-a.md](docs/evidence/2026-10-22-cel-2-h-a.md):
+the table of every automated test id of the design with its result and command,
+the nest rehearsal R-1 to R-9, the dependency closure, the `ldd` of both
+binaries, the `unsafe` count, the spike answers, the residuals the author must
+accept and what did not run. Reviews A and B are open. The decisions are
+[ADR 0022](docs/decisions/0022-session-lock.md). CEL-2-H-b (the dimmed
+wallpaper and the clock) starts after H-a has landed.
 
 **Closed program, kept below:** CEL-1.
 

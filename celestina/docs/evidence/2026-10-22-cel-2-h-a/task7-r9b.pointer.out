@@ -1,0 +1,7 @@
+t=1792709722367 +0 pid 2061640
+t=1792709722395 +27 output-new
+t=1792709722395 +27 seat-capabilities Capability(Pointer | Keyboard | Touch)
+t=1792709722395 +27 hello globals: single-pixel=false viewporter=true outputs=1 seat=true
+t=1792709722411 +44 vptr-ready
+t=1792709952416 +230049 vptr-first-motion-flushed
+t=1792709953417 +231049 vptr-sent motions=10

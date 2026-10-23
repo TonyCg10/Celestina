@@ -1,0 +1,87 @@
+[package]
+name = "celestina-lock"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The session lock: an ext-session-lock-v1 client that covers every output and ends the lock only after PAM says yes (CEL-2-H)"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Rehearsal only (design §4.13, S-I8): the `unlock_probe` binary drives the
+# same core with a verifier that always answers yes and types its own
+# password, so the nest can check that `locked`, `unlocked` and niri's
+# "unlocking session" line agree. The production entries never pass this
+# feature, `verify-production.sh` checks the shipped `celestina-lock` holds
+# no probe symbol, and `tests/closure.rs` pins the binary's absence without it.
+fake-verifier = []
+
+# The lock is a library (the core, exercised by its tests) plus two thin
+# binaries over it: the shipped `celestina-lock` and the rehearsal probe.
+[lib]
+name = "celestina_lock"
+path = "src/lib.rs"
+
+[[bin]]
+name = "celestina-lock"
+path = "src/main.rs"
+
+[[bin]]
+name = "unlock_probe"
+path = "src/bin/unlock_probe.rs"
+required-features = ["fake-verifier"]
+
+[dependencies]
+# The Wayland runtime without the GPU: `default-features = false` drops the
+# `gl` feature, so no EGL, GL, popup or clipboard code is linked into the
+# process that can end the lock (design §4.6.1, §4.14). Its lock profile covers
+# every output, delivers the input and hands out the one unlock capability.
+celestina-wayland = { path = "../celestina-wayland", default-features = false }
+# The shared vocabulary: verdicts, exit codes, status lines, the bundle codec,
+# the backoff and the PAM service enum. No dependency of its own.
+celestina-lock-proto = { path = "../../../celestina-rs/crates/celestina-lock-proto" }
+# The type of the loop handle `celestina_wayland::lock::run_lock` gives its
+# setup, and the `Generic` source the deadline timer is registered with. Not
+# in the design's §4.14 table by name (the table lists what is new to the
+# closure); already in the closure through `celestina-wayland`, so
+# `tests/closure.allow` is unchanged by it. The version the toolkit resolves.
+calloop = "0.14"
+# Non-dumpable and the core limit (hardening), pidfd, the process-group kill,
+# the deadline timerfd, `flock` on the pid file, seals and `pread` on the
+# bundle, `poll` on the pidfd. The safe API: the lock has no `unsafe`.
+# Already in the lockfile.
+rustix = { version = "1", default-features = false, features = ["std", "fs", "process", "time", "event"] }
+# `unistd::close` on a raw descriptor number, the one safe way to close the
+# descriptors the process inherited by accident (round 4, finding I-α): rustix's
+# `close` is `unsafe` and `unsafe` is forbidden here. No feature of its own
+# (the module is always built); already in the closure through the verifier and
+# calloop, so `tests/closure.allow` is unchanged.
+nix = { version = "0.31", default-features = false }
+# The CPU painter (design §4.6.1, H-15): `tiny-skia` for the scrim, the capsules
+# and the bullets; no PNG decoder (`png-format` off), no GPU. Already in the
+# lockfile through the shell's painter.
+tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
+# Shaping and glyph rasterisation of the three lines of text, over the one
+# embedded face. `fontconfig` off: the lock never reads `fonts.conf` nor the
+# system's fonts; `swash` is the glyph rasteriser. Already in the lockfile.
+cosmic-text = { version = "0.19", default-features = false, features = ["std", "swash"] }
+# The empty font database the embedded face is loaded into
+# (`FontSystem::new_with_locale_and_db`); no `fs`, `memmap` nor `fontconfig`
+# feature of its own, `load_system_fonts` is never called. Same version as the
+# one `cosmic-text` resolves; already in the lockfile.
+fontdb = { version = "0.23", default-features = false, features = ["std"] }
+# Sizes, radii and the colours of the dark scheme; the generated constants of
+# the style program, no dependency of their own.
+celestina-tokens = { path = "../../../celestina-rs/crates/celestina-tokens" }
+# Zeroing every buffer that ever held the secret, without an `unsafe` of our
+# own. Already in the lockfile through the verifier.
+zeroize = "1"
+# Diagnostics to stderr, which the shell inherits from the journal; the
+# subscriber's filter is fixed at `info` (no environment filter, so no regex).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std"] }
+# Typed errors with their sources, as in the toolkit crates.
+thiserror = "2"

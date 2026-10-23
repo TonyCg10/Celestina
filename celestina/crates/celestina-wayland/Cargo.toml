@@ -4,42 +4,86 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "The shell's Wayland runtime: outputs, layer surfaces, popups, scale, regions and EGL"
+description = "The suite's Wayland toolkit: the shell runtime (outputs, layer surfaces, popups, scale, regions, EGL) behind the `gl` feature, and the session-lock profile"
 
 [lints]
 workspace = true
 
+[features]
+default = ["gl"]
+# The shell profile: the layer-shell runtime and everything that needs a GPU
+# or a surface role the session lock must not have (EGL windows, the blur
+# regions, xdg popups, the clipboard, text input). The lock profile
+# (`lock`) is what remains with this feature off; `celestina-lock` depends
+# on this crate with `default-features = false`, so no EGL, GL or femtovg
+# code is linked into the process that can end the lock (design §4.6.1).
+gl = [
+    "dep:wayland-egl",
+    "dep:khronos-egl",
+    "dep:glow",
+    "dep:femtovg",
+    "wayland-protocols/unstable",
+]
+
 [dependencies]
 # The Wayland client toolkit: registry, outputs, seat (keyboard through
-# xkbcommon, pointer, cursor shape), layer shell, xdg popups and the
-# background-effect state; `calloop` wires its sources into the loop.
+# xkbcommon, pointer, cursor shape), layer shell, xdg popups, the
+# background-effect state and `session_lock` (always compiled); `calloop`
+# wires its sources into the loop, `RawPool` backs the lock's cover buffer.
 smithay-client-toolkit = { version = "0.21", features = ["calloop", "xkbcommon"] }
 # The Wayland connection, queue and core protocol objects sctk builds on.
 wayland-client = "0.31"
-# `wp_viewporter`, `wp_fractional_scale_v1`, `wp_cursor_shape_v1`,
-# `ext_background_effect_v1` and `xdg_shell` (`client` + `staging`), and
-# `zwp_text_input_v3` for IME input (`unstable`).
-wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
-# One `wl_egl_window` per surface, resized to the buffer size.
-wayland-egl = "0.32"
+# `ext_session_lock_v1` (`staging`, through sctk's `session_lock`), and for
+# the shell profile `wp_viewporter`, `wp_fractional_scale_v1`,
+# `wp_cursor_shape_v1`, `ext_background_effect_v1` and `xdg_shell`
+# (`client` + `staging`), and `zwp_text_input_v3` for IME input
+# (`unstable`, switched on by the `gl` feature).
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+# One `wl_egl_window` per surface, resized to the buffer size. Shell profile.
+wayland-egl = { version = "0.32", optional = true }
 # libEGL loaded at run time: display, config with a stencil, the shared
-# GLES 3 context, swap interval 0 and `eglGetProcAddress`.
-khronos-egl = { version = "6", features = ["dynamic"] }
+# GLES 3 context, swap interval 0 and `eglGetProcAddress`. Shell profile.
+khronos-egl = { version = "6", features = ["dynamic"], optional = true }
 # The GL table bound to the shared context, used for the viewport only.
-glow = "0.18"
+# Shell profile.
+glow = { version = "0.18", optional = true }
 # `egl::femtovg_renderer`: the one `unsafe` constructor of the painter's
-# renderer, kept here so the painter crate forbids `unsafe` outright.
-femtovg = { version = "0.27", default-features = false }
+# renderer, kept here so the painter crate forbids `unsafe` outright. Shell
+# profile.
+femtovg = { version = "0.27", default-features = false, optional = true }
 # The event loop: the Wayland source, timers, the message channel and
-# SIGTERM/SIGINT through `signals`.
+# SIGTERM/SIGINT (shell: stop; lock: log and ignore, plus SIGHUP) through
+# `signals`.
 calloop = { version = "0.14", features = ["signals"] }
 # Adapts the Wayland queue to a calloop source.
 calloop-wayland-source = "0.4"
 # `poll` with a timeout on the clipboard pipe, so the paste worker honours
-# its deadline and stop flag and its join stays bounded; already in the
-# tree through sctk and calloop.
-rustix = { version = "1", features = ["event"] }
+# its deadline and stop flag and its join stays bounded (`event`, shell
+# profile); `SO_PEERCRED` and the process's own uid for the connection guard
+# of the lock profile (`net`, `process`, round 5): safe calls, no `unsafe`.
+# Already in the tree through sctk and calloop.
+rustix = { version = "1", features = ["event", "net", "process"] }
 # Diagnostics; the binary installs the subscriber.
 tracing = "0.1"
 # Typed errors with their sources.
 thiserror = "2"
+# The one owner of the `WAYLAND_SOCKET` descriptor rule (`wayland_fd`, round 7),
+# shared with the lock's launcher so the connection guard and the close sweep
+# agree. Adapter to pure crate (the allowed direction); no dependencies of its
+# own, and already in the closure of `celestina-lock` and its verifier.
+celestina-lock-proto = { path = "../../../celestina-rs/crates/celestina-lock-proto" }
+
+[dev-dependencies]
+# The signal-policy test (`tests/lock_signals.rs`) sends its own process the
+# ignored signals with `kill_process`; a dev-dependency feature, so
+# no shipped build gains it.
+rustix = { version = "1", features = ["process"] }
+
+# The signal test must run on a process with a single thread: a signal the
+# loop blocks only on the thread that created its signal source would
+# terminate the process through any other thread (libtest's harness has
+# several), so the test is a plain `main`.
+[[test]]
+name = "lock_signals"
+path = "tests/lock_signals.rs"
+harness = false

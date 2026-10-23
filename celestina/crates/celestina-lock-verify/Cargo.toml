@@ -1,0 +1,34 @@
+[package]
+name = "celestina-lock-verify"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The session lock's PAM verifier: one attempt per process, the verdict is the exit status (CEL-2-H)"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "celestina-lock-verify"
+path = "src/main.rs"
+
+[dependencies]
+# The exit-code vocabulary, the closed list of PAM services and where their
+# files are, and the secret's bound: the one owner the lock, the verifier and
+# the shell share (design §4.13). No dependency of its own.
+celestina-lock-proto = { path = "../../../celestina-rs/crates/celestina-lock-proto" }
+# C types and the allocator PAM frees its responses with (`malloc`, `calloc`,
+# `free`); the declarations of `libpam` itself are hand-written in `pam.rs`
+# (design §4.11). Already in the lockfile.
+libc = "0.2"
+# `User::from_uid`: the user name of the real uid without an `unsafe` of our
+# own. Feature `user` only; already in the lockfile through calloop.
+nix = { version = "0.31", default-features = false, features = ["user"] }
+# Zeroing every buffer that ever held the secret, without an `unsafe` of our
+# own. Default features only (`alloc`, for `Zeroizing<Vec<u8>>`); new to the
+# lockfile (design §4.14).
+zeroize = "1"
+# Non-dumpable, the core limit and the real uid through a safe API. Already in
+# the lockfile.
+rustix = { version = "1", default-features = false, features = ["std", "process"] }

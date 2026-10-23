@@ -35,6 +35,7 @@ use celestina::{
     glance::GlanceHandle,
     island::clock,
     launcher::recent::RecentLaunches,
+    lock::LockHandle,
     media::control::MediaControl,
     message::Message,
     osd::OsdRuntime,
@@ -131,6 +132,7 @@ fn shell(cfg: Config) -> ExitCode {
     let quiet = settings.current().do_not_disturb;
     let wallpaper = Rc::new(OnceCell::new());
     let energy = Rc::new(OnceCell::new());
+    let lock = Rc::new(OnceCell::new());
     let glance = Rc::new(OnceCell::new());
     let clipboard = Rc::new(OnceCell::new());
     let connectivity = Rc::new(RefCell::new(None));
@@ -154,6 +156,7 @@ fn shell(cfg: Config) -> ExitCode {
     .with_tray(Rc::clone(&tray))
     .with_wallpaper(Rc::clone(&wallpaper))
     .with_energy(Rc::clone(&energy))
+    .with_lock(Rc::clone(&lock))
     .with_glance(Rc::clone(&glance))
     .with_clipboard(Rc::clone(&clipboard))
     .with_connectivity(Rc::clone(&connectivity))
@@ -193,6 +196,21 @@ fn shell(cfg: Config) -> ExitCode {
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = energy.set(handle);
+        // The session lock: off by default, so with the defaults no worker
+        // starts. Its availability is what the idle chain's second step
+        // follows; the energy handle is in its slot already.
+        let availability = {
+            let energy = Rc::clone(&energy);
+            Box::new(move |available: bool| {
+                if let Some(handle) = energy.get() {
+                    handle.set_locker_available(available);
+                }
+            })
+        };
+        let handle = LockHandle::new(sender.clone(), availability);
+        handle.apply(&settings_read);
+        // The slot is empty: `setup` runs once.
+        let _ = lock.set(handle);
         // The system monitor and the weather run only for what is placed;
         // the weather never without a location in `shell.json`.
         let handle = GlanceHandle::new(sender.clone());
@@ -338,6 +356,11 @@ fn shell(cfg: Config) -> ExitCode {
     }
     if let Some(control) = media.get() {
         control.stop();
+    }
+    // The lock's workers stop; a lock that is running is not touched, it
+    // outlives the shell.
+    if let Some(handle) = lock.get() {
+        handle.stop();
     }
     drop(follower);
     drop(shell_follower);

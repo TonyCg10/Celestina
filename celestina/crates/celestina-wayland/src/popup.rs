@@ -25,6 +25,7 @@ use wayland_protocols::xdg::shell::client::{
     xdg_wm_base::XdgWmBase,
 };
 
+pub use crate::ids::{CloseReason, PopupId};
 use crate::{
     geometry::{PixelRect, Rect},
     input::InputEvent,
@@ -32,36 +33,11 @@ use crate::{
     surface::{Role, Surface},
 };
 
-/// A popup, by the id `SurfaceCtl::open_popup` returned.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct PopupId(pub u32);
-
 /// What a popup shell answers to an input event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PopupAction {
     Keep,
     Close,
-}
-
-/// Why a popup is gone.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CloseReason {
-    /// The popup's shell returned `PopupAction::Close`.
-    Shell,
-    /// The parent shell called `close_popup`, or the parent popup closed
-    /// (a nested popup closes before its parent, for whatever reason the
-    /// parent closes).
-    Parent,
-    /// The compositor sent `popup_done`.
-    Dismissed,
-    /// The parent opened another popup.
-    Replaced,
-    /// The parent surface went away.
-    ParentGone,
-    /// The popup could not be created or mapped.
-    Failed,
-    /// The runtime is shutting down.
-    Exit,
 }
 
 /// The bound `xdg_wm_base`. sctk answers its pings (`Dispatch2` on

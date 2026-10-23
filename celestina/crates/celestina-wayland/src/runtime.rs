@@ -52,6 +52,11 @@ use crate::{
     surface::{NoEvents, OutputRef, Protocols, Role, Surface},
     text_input::TextInput,
 };
+pub use crate::{
+    ids::SurfaceId,
+    output::{OutputId, OutputInfo},
+    sender::{RuntimeGone, Sender},
+};
 
 /// What a run of the shell is told from the command line.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -63,27 +68,6 @@ pub struct Config {
     pub no_blur: bool,
     /// Count frame times, late frames and RSS, and return the summary.
     pub metrics: bool,
-}
-
-/// An output, by the global name of its `wl_output`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct OutputId(pub u32);
-
-/// What the product needs to know about an output.
-#[derive(Clone, Debug, PartialEq)]
-pub struct OutputInfo {
-    pub id: OutputId,
-    /// The connector name (`DP-1`), or `wl_output-<id>` when the compositor
-    /// gives none.
-    pub name: String,
-    /// Logical size: `xdg_output`'s when offered, else the current mode
-    /// divided by the integer scale.
-    pub logical_size: (u32, u32),
-    /// The output's integer scale; the real (fractional) scale of a surface
-    /// arrives per surface through `wp_fractional_scale_v1`.
-    pub scale: f64,
-    /// Refresh rate of the current mode in mHz, 0 when unknown.
-    pub refresh_mhz: i32,
 }
 
 /// Hotplug, mode and scale changes, delivered to `Shell::output`.
@@ -190,10 +174,6 @@ pub trait PopupShell: 'static {
     /// destroyed right after this returns.
     fn dismissed(&mut self);
 }
-
-/// A layer surface or a popup surface.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct SurfaceId(pub u32);
 
 /// One frame of one surface.
 pub struct FrameCx<'a> {
@@ -410,33 +390,6 @@ trait RuntimeOps {
     fn stop(&mut self);
 }
 
-/// Publishes messages into the loop from any thread; workers clone it.
-pub struct Sender<M>(channel::Sender<M>);
-
-impl<M> Clone for Sender<M> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<M> std::fmt::Debug for Sender<M> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Sender")
-    }
-}
-
-impl<M> Sender<M> {
-    /// Queues `msg` for `Shell::message`; fails once the loop is gone.
-    pub fn send(&self, msg: M) -> Result<(), RuntimeGone> {
-        self.0.send(msg).map_err(|_| RuntimeGone)
-    }
-}
-
-/// The loop stopped receiving messages: the sender's worker should exit.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("the runtime stopped receiving messages")]
-pub struct RuntimeGone;
-
 /// What `run` reports at exit.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RunReport {
@@ -623,7 +576,7 @@ pub fn run<S: Shell>(
             .map_err(insert_error("insert the RSS timer"))?;
     }
 
-    setup(Sender(sender), &handle);
+    setup(Sender::new(sender), &handle);
 
     event_loop
         .run(None, &mut rt, |_| {})
@@ -772,24 +725,7 @@ impl<S: Shell> Core<S> {
 
     /// The product's view of an output, from sctk's info.
     pub(crate) fn output_info(&self, output: &wl_output::WlOutput) -> Option<OutputInfo> {
-        let info = self.output_state.info(output)?;
-        let id = OutputId(info.id);
-        let current = info.modes.iter().find(|m| m.current);
-        let scale = f64::from(info.scale_factor.max(1));
-        let logical_size = match info.logical_size {
-            Some((w, h)) => (w.max(0) as u32, h.max(0) as u32),
-            None => current.map_or((0, 0), |m| {
-                let side = |px: i32| (f64::from(px.max(0)) / scale).round() as u32;
-                (side(m.dimensions.0), side(m.dimensions.1))
-            }),
-        };
-        Some(OutputInfo {
-            id,
-            name: info.name.unwrap_or_else(|| format!("wl_output-{}", id.0)),
-            logical_size,
-            scale,
-            refresh_mhz: current.map_or(0, |m| m.refresh_rate),
-        })
+        OutputInfo::read(&self.output_state, output)
     }
 
     fn wl_output(&self, id: OutputId) -> Option<wl_output::WlOutput> {

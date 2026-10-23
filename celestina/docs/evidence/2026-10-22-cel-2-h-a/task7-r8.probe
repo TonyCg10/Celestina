@@ -1,0 +1,1 @@
+RESULT R-8 PASS unlock_probe: lines [hello 1,requested,locked,unlocked,] exit 0; niri logged 'unlocking session'

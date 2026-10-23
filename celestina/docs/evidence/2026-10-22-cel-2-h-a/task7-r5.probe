@@ -1,0 +1,1 @@
+RESULT R-5 PASS lock pid 2042581 survived the shell's quit and restart, still the only lock; 'lock suspend' did not suspend (Suspend calls on the fake logind: 0)

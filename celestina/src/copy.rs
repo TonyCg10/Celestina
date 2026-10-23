@@ -966,6 +966,50 @@ pub fn bar_media_name(line: &str, playing: bool) -> String {
     }
 }
 
+/// The title of every notice of the session lock.
+pub const NOTICE_LOCK_TITLE: &str = "Bloqueo de sesión";
+/// An explicit request met a lock that is not available; `{motivo}` is
+/// [`NOTICE_LOCK_WHY_DUTY_OFF`] or [`NOTICE_LOCK_WHY_NOT_PINNED`].
+pub const NOTICE_LOCK_UNAVAILABLE: &str = "No se puede bloquear: {motivo}";
+/// The reason when the lock's duty is off.
+pub const NOTICE_LOCK_WHY_DUTY_OFF: &str = "el bloqueo está desactivado en los ajustes";
+/// The reason when the lock's programs are missing or fail their checks.
+pub const NOTICE_LOCK_WHY_NOT_PINNED: &str = "faltan los programas del bloqueo";
+/// The lock ended without covering the session, and a person had asked.
+pub const NOTICE_LOCK_NOT_LOCKED: &str = "No se ha podido bloquear la sesión.";
+/// The compositor refused the lock and the retries ran out.
+pub const NOTICE_LOCK_REFUSED: &str =
+    "El compositor no ha concedido el bloqueo; no se ha suspendido.";
+/// A suspend was dropped because the lock was not confirmed in time.
+pub const NOTICE_LOCK_NOT_CONFIRMED: &str =
+    "El bloqueo no se ha confirmado a tiempo; no se ha suspendido.";
+/// The lock died more often than it is started again.
+pub const NOTICE_LOCK_RELAUNCH_LIMIT: &str =
+    "El bloqueo se ha cerrado varias veces seguidas; usa otra consola para recuperarlo.";
+/// The PAM service file is not installed.
+pub const NOTICE_PAM_MISSING: &str = "Falta el servicio PAM celestina-lock: el bloqueo cubrirá la pantalla pero no podrá desbloquearse. Instálalo como explica celestina/README.md.";
+
+/// The title and body of a lock notice, chosen by its reason.
+#[must_use]
+pub fn lock_notice(notice: celestina_shell::lock::Notice) -> (&'static str, String) {
+    use celestina_shell::lock::{Notice, Why};
+    let body = match notice {
+        Notice::Unavailable(why) => NOTICE_LOCK_UNAVAILABLE.replace(
+            "{motivo}",
+            match why {
+                Why::DutyOff => NOTICE_LOCK_WHY_DUTY_OFF,
+                Why::NotPinned => NOTICE_LOCK_WHY_NOT_PINNED,
+            },
+        ),
+        Notice::NotLocked => NOTICE_LOCK_NOT_LOCKED.to_owned(),
+        Notice::CompositorRefused => NOTICE_LOCK_REFUSED.to_owned(),
+        Notice::NotConfirmed => NOTICE_LOCK_NOT_CONFIRMED.to_owned(),
+        Notice::RelaunchLimit => NOTICE_LOCK_RELAUNCH_LIMIT.to_owned(),
+        Notice::PamMissing => NOTICE_PAM_MISSING.to_owned(),
+    };
+    (NOTICE_LOCK_TITLE, body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1059,5 +1103,28 @@ mod tests {
             weather_condition(celestina_shell::weather::UNKNOWN_CODE),
             "Sin determinar"
         );
+    }
+    #[test]
+    fn every_lock_notice_has_words_and_the_reason_fills_its_place() {
+        use celestina_shell::lock::{Notice, Why};
+        for notice in [
+            Notice::Unavailable(Why::DutyOff),
+            Notice::Unavailable(Why::NotPinned),
+            Notice::NotLocked,
+            Notice::CompositorRefused,
+            Notice::NotConfirmed,
+            Notice::RelaunchLimit,
+            Notice::PamMissing,
+        ] {
+            let (title, body) = lock_notice(notice);
+            assert_eq!(title, NOTICE_LOCK_TITLE);
+            assert!(
+                !body.is_empty() && !body.contains('{'),
+                "{notice:?}: {body}"
+            );
+        }
+        assert!(lock_notice(Notice::Unavailable(Why::DutyOff))
+            .1
+            .contains(NOTICE_LOCK_WHY_DUTY_OFF));
     }
 }

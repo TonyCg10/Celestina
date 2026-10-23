@@ -384,6 +384,8 @@ impl Launcher {
                         alt: false,
                         logo: false,
                         shift,
+                        // Caps Lock does not change what Tab means.
+                        ..
                     },
                 pressed: true,
                 ..
@@ -403,6 +405,8 @@ impl Launcher {
                         alt: false,
                         logo: false,
                         shift: false,
+                        // Caps Lock does not change what Delete means.
+                        ..
                     },
                 pressed: true,
                 ..
