@@ -262,7 +262,12 @@ pub fn copy_to_xrgb(src: &Pixmap, dst: &mut [u8], stride: usize, size: (u32, u32
         let Some(dst_row) = dst.get_mut(start..start + cols * 4) else {
             return;
         };
-        for (d, s) in dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(4)) {
+        for (d, s) in dst_row
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(src_row.as_chunks::<4>().0.iter())
+        {
             d[0] = s[2];
             d[1] = s[1];
             d[2] = s[0];
@@ -323,7 +328,7 @@ mod tests {
         let extent = fonts.draw(&mut pixmap, text, style, (4.0, 4.0), 312.0);
         assert!(extent.width > 40.0 && extent.lines >= 1, "{extent:?}");
         assert!(
-            pixmap.data().chunks_exact(4).any(|px| px[3] > 0),
+            pixmap.data().as_chunks::<4>().0.iter().any(|px| px[3] > 0),
             "something was drawn"
         );
         // The same text shaped from an empty database would come out with no

@@ -108,12 +108,23 @@ impl FakeLogind {
     #[zbus(property)]
     fn preparing_for_sleep(&self) -> zbus::fdo::Result<bool> {
         self.reads.fetch_add(1, Ordering::AcqRel);
-        let failing = self
-            .fail_reads
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |left| {
-                left.checked_sub(1)
-            })
-            .is_ok();
+        // `fetch_update` is deprecated and its `try_update` successor needs
+        // Rust 1.95 (MSRV is 1.89), so decrement-if-positive by hand.
+        let mut left = self.fail_reads.load(Ordering::Acquire);
+        let failing = loop {
+            let Some(next) = left.checked_sub(1) else {
+                break false;
+            };
+            match self.fail_reads.compare_exchange_weak(
+                left,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break true,
+                Err(seen) => left = seen,
+            }
+        };
         if failing {
             return Err(zbus::fdo::Error::Failed("a wedged logind".to_owned()));
         }

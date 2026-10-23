@@ -182,20 +182,41 @@ fn a_quiet_child_leaves_no_pipe_to_a_forked_server() {
 fn a_running_child_stops_on_sigint_and_is_killed_at_the_deadline() {
     use selenita_core::runner::{start, Exit};
     use std::time::{Duration, Instant};
-    // `sh` ends on SIGINT with status 130 while it sleeps.
-    let argv: Vec<OsString> = ["sh", "-c", "echo starting >&2; sleep 30"]
-        .into_iter()
-        .map(OsString::from)
-        .collect();
+    // `sh` ends on SIGINT with status 130 while it sleeps. A CI runner may start
+    // the test process with SIGINT ignored; children inherit that and a POSIX
+    // shell cannot re-enable a signal ignored on entry. `env --default-signal`
+    // restores the default disposition before `sh` starts (it execs, so the
+    // runner still signals the very same process).
+    let argv: Vec<OsString> = [
+        "env",
+        "--default-signal=INT",
+        "sh",
+        "-c",
+        "echo starting >&2; sleep 30",
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect();
     let mut running = start(&argv, None).expect("started");
-    assert_eq!(running.name(), "sh");
+    assert_eq!(running.name(), "env");
     assert!(running.poll().is_none());
-    running.interrupt().expect("interrupted");
+    // Until `env` has exec'd `sh`, SIGINT is still ignored and a signal sent
+    // now is lost: send it again until the child ends, within the bound.
     let began = Instant::now();
-    let (exited, exit) = running.wait_until(Duration::from_secs(5));
-    assert!(exited);
-    assert!(began.elapsed() < Duration::from_secs(5));
-    assert_ne!(exit.code, Some(0));
+    let exit = loop {
+        // An error means the child is already gone: the wait below reaps it.
+        let _ = running.interrupt();
+        let (exited, exit) = running.wait_until(Duration::from_millis(50));
+        if exited {
+            break exit;
+        }
+        assert!(
+            began.elapsed() < Duration::from_secs(5),
+            "SIGINT never stopped it"
+        );
+    };
+    // 130 from `sh`, or a signal death; never `env`'s own usage error (125).
+    assert!(matches!(exit.code, Some(130) | None), "{exit:?}");
 
     let argv: Vec<OsString> = ["sh", "-c", "trap '' INT; sleep 30"]
         .into_iter()

@@ -272,7 +272,7 @@ mod tests {
         assert_eq!((a.width, a.height), (GRAIN_SIZE, GRAIN_SIZE));
         assert_eq!(a.rgba.len(), (GRAIN_SIZE * GRAIN_SIZE * 4) as usize);
         let distinct: std::collections::HashSet<u8> =
-            a.rgba.chunks_exact(4).map(|p| p[3]).collect();
+            a.rgba.as_chunks::<4>().0.iter().map(|p| p[3]).collect();
         assert!(distinct.len() > 150, "{} alpha levels", distinct.len());
     }
 

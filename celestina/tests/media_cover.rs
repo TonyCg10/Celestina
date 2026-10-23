@@ -120,7 +120,7 @@ fn assert_square(cover: &Cover) {
         (COVER_SIZE * COVER_SIZE * 4) as usize,
         "RGBA8, row-major"
     );
-    assert!(cover.rgba.chunks_exact(4).all(|p| p[3] == 255));
+    assert!(cover.rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
 }
 
 /// Every pixel away from the crop's edges is red: the green and blue
