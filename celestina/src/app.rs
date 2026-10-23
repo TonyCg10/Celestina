@@ -24,7 +24,7 @@ use celestina_shell::phone::PhoneState;
 use celestina_shell::settings::{BarLayout, Duty, Settings};
 use celestina_wayland::{
     Anchoring, FrameCx, InputEvent, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
-    PopupId, RuntimeCtl, RuntimeError, Sender, Shell, SurfaceCtl, SurfaceId,
+    OutputInfo, PopupId, RuntimeCtl, RuntimeError, Sender, Shell, SurfaceCtl, SurfaceId,
 };
 
 use crate::notifications::banners::{self, BannerAction, BannerStack};
@@ -32,7 +32,7 @@ use crate::{
     bar,
     bubbles::{self, Bubbles, BubblesHandle, BubblesNews},
     clipboard::{ClipboardDuty, ClipboardMessage, ClipboardState},
-    command::Verb,
+    command::{Presence, Verb},
     connectivity::{self, state::ConnectivityState, ConnectivityHandle, Forwarded},
     energy::{self, EnergyHandle},
     error_chain,
@@ -52,6 +52,12 @@ use crate::{
         control::{self, Controls, Opening},
         verbs::{self as level_verbs, NoWorkers},
         Suppression,
+    },
+    overview::{
+        self,
+        flow::{capture_request, Step},
+        slot::{NotAsked, Slot as OverviewSlot},
+        Mode as OverviewMode, Overview, OverviewAction,
     },
     phone::{self, PhoneHandle, PhoneNews},
     pieces::PageId,
@@ -526,6 +532,11 @@ pub struct App {
     /// The media state in force was not given to the Islands (the painter
     /// was in use): the next event or frame gives it.
     media_dirty: bool,
+    /// The overview: its state machine, panel and short-lived workers.
+    overview: OverviewSlot,
+    /// The outputs as the compositor last described them, for the capture
+    /// request and the overview's output name.
+    outputs: Vec<OutputInfo>,
 }
 
 impl std::fmt::Debug for App {
@@ -603,6 +614,8 @@ impl App {
             bubble_closes: bubbles::PendingCloses::default(),
             media: Rc::new(OnceCell::new()),
             media_dirty: false,
+            overview: OverviewSlot::default(),
+            outputs: Vec::new(),
         }
     }
 
@@ -1438,7 +1451,12 @@ impl App {
             Verb::BubblesMinimize | Verb::PhoneMedia(_) => {
                 self.bubbles_and_phone_verb(&verb);
             }
-            Verb::LauncherToggle => self.toggle_launcher(ctl),
+            Verb::LauncherToggle => {
+                self.close_overview(ctl);
+                self.toggle_launcher(ctl);
+            }
+            Verb::Overview(presence) => self.overview_verb(OverviewMode::Desktop, presence, ctl),
+            Verb::Shortcuts(presence) => self.overview_verb(OverviewMode::Shortcuts, presence, ctl),
             Verb::WallpaperSet { .. }
             | Verb::WallpaperNext(_)
             | Verb::WallpaperPrev(_)
@@ -1528,6 +1546,9 @@ impl App {
             tracing::info!("bubbles select: the bubbles duty is off; nothing was done");
             return;
         }
+        // One overlay at a time: an open overview goes, as it does for the
+        // launcher's toggle.
+        self.close_overview(ctl);
         if let Some(open) = self.launcher.take() {
             tracing::info!("launcher: replaced by the bubbles selector");
             close_surface(open.surface(), ctl);
@@ -2065,6 +2086,392 @@ impl App {
     }
 }
 
+impl App {
+    /// A verb of the overview (`wanted` Desktop) or of the shortcuts
+    /// (`wanted` Shortcuts).
+    fn overview_verb(
+        &mut self,
+        wanted: OverviewMode,
+        presence: Presence,
+        ctl: &mut RuntimeCtl<'_>,
+    ) {
+        let steps = self.overview.flow.verb(wanted, presence);
+        self.overview_steps(steps, ctl);
+    }
+
+    /// Runs what the overview's state machine asked for.
+    fn overview_steps(&mut self, steps: Vec<Step>, ctl: &mut RuntimeCtl<'_>) {
+        let mut queue = std::collections::VecDeque::from(steps);
+        while let Some(step) = queue.pop_front() {
+            match step {
+                Step::RequestCapture => {
+                    // Nothing of the shell's own overlays may be in the
+                    // picture: the launcher goes before the capture.
+                    if let Some(launcher) = self.launcher.take() {
+                        close_surface(launcher.surface(), ctl);
+                    }
+                    let Some((output, info)) = self.overview_target() else {
+                        tracing::info!("overview: no output to open on");
+                        self.overview.flow.closed();
+                        self.overview.clear_pending();
+                        queue.clear();
+                        continue;
+                    };
+                    self.overview.target = Some(output);
+                    if let Err(why) = self.overview_request_capture(&info) {
+                        tracing::info!(?why, "overview: opening with geometry only");
+                        queue.extend(self.overview.flow.capture_failed());
+                    }
+                }
+                Step::CancelCapture => {
+                    tracing::info!("overview: the capture is given up");
+                    self.overview.cancel_capture();
+                }
+                Step::OpenSurface(mode) => {
+                    self.overview.stop_timer();
+                    self.open_overview_surface(mode, ctl);
+                    if !self.overview.flow.is_active() {
+                        // No surface could be made and the flow closed:
+                        // nothing after it (bindings, previews) may run.
+                        queue.clear();
+                    }
+                }
+                Step::SetMode(mode) => {
+                    if let Some(open) = self.overview.panel.as_mut() {
+                        if open.set_mode(mode) {
+                            if let Some(mut surface) = ctl.surface(open.surface()) {
+                                surface.request_redraw();
+                            }
+                        }
+                    }
+                }
+                Step::LoadKeybinds => {
+                    if let Some(unavailable) = self.overview_load_keybinds() {
+                        self.overview.keybinds = Some(unavailable);
+                        queue.push_back(Step::ApplyKeybinds);
+                    }
+                }
+                Step::ApplyPreviews => {
+                    let previews = std::mem::take(&mut self.overview.previews);
+                    if let Some(open) = self.overview.panel.as_mut() {
+                        let mut due = false;
+                        for (id, preview) in previews {
+                            due |= open.set_preview(id, preview);
+                        }
+                        if due {
+                            if let Some(mut surface) = ctl.surface(open.surface()) {
+                                surface.request_redraw();
+                            }
+                        }
+                    }
+                }
+                Step::ApplyKeybinds => {
+                    if let (Some(open), Some(keybinds)) =
+                        (self.overview.panel.as_mut(), self.overview.keybinds.take())
+                    {
+                        if open.set_keybinds(keybinds) {
+                            if let Some(mut surface) = ctl.surface(open.surface()) {
+                                surface.request_redraw();
+                            }
+                        }
+                    }
+                }
+                Step::Close => self.destroy_overview(ctl),
+            }
+        }
+    }
+
+    /// The output the overview opens on (the one with the keyboard, as the
+    /// launcher picks it) and its description.
+    fn overview_target(&self) -> Option<(OutputId, OutputInfo)> {
+        let output = self
+            .islands
+            .target(self.keyboard, focused_output(self.model.as_ref()))
+            .and_then(|surface| self.islands.output_of(surface))?;
+        let info = self.outputs.iter().find(|o| o.id == output)?.clone();
+        Some((output, info))
+    }
+
+    /// Asks the capture worker for one frame of `output`, the one the panel
+    /// opens on, and starts the timer that bounds the wait.
+    fn overview_request_capture(&mut self, output: &OutputInfo) -> Result<(), NotAsked> {
+        let (Some(model), Some(sender)) = (self.model.as_ref(), self.sender.get()) else {
+            return Err(NotAsked::NothingToCapture);
+        };
+        let generation = self.overview.flow.generation();
+        let request = capture_request(model, output, generation);
+        let spawner = crate::capture::Live::new(sender.clone());
+        self.overview.request_capture(&spawner, request)?;
+        let timer_sender = sender.clone();
+        self.overview.start_timer(move || {
+            let _ = timer_sender.send(Message::OverviewCaptureTimeout(generation));
+        });
+        Ok(())
+    }
+
+    /// Reads the niri config's bindings off the loop's thread, for an open
+    /// panel only. When the reader thread cannot start, the question is not
+    /// counted as asked and the answer to hand the panel is "unreadable".
+    fn overview_load_keybinds(&mut self) -> Option<crate::providers::keybinds::Keybinds> {
+        if !self.overview.flow.is_active() || self.overview.panel.is_none() {
+            return None;
+        }
+        let sender = self.sender.get()?;
+        let generation = self.overview.flow.generation();
+        match crate::providers::keybinds::spawn_load(sender.clone(), generation) {
+            Ok(worker) => {
+                self.overview.hold_reader(generation, worker);
+                None
+            }
+            Err(err) => {
+                tracing::warn!(%err, "overview: the bindings could not be read");
+                self.overview.flow.reader_failed();
+                Some(crate::providers::keybinds::Keybinds::Unavailable(
+                    crate::providers::keybinds::KeybindsUnavailable::Unreadable,
+                ))
+            }
+        }
+    }
+
+    /// Creates the overview's surface in `mode` on the output chosen before
+    /// the capture (or, for an opening without one, the output with the
+    /// keyboard). The flow is closed again when it cannot, also when the
+    /// chosen output is gone: the panel never moves to another one.
+    fn open_overview_surface(&mut self, mode: OverviewMode, ctl: &mut RuntimeCtl<'_>) {
+        let chosen = match self.overview.target {
+            Some(id) => self
+                .outputs
+                .iter()
+                .find(|o| o.id == id)
+                .map(|o| (id, o.clone())),
+            None => self.overview_target(),
+        };
+        let Some((output, info)) = chosen else {
+            tracing::info!("overview: no output to open on");
+            self.overview.flow.closed();
+            self.overview.clear_pending();
+            return;
+        };
+        if let Some(launcher) = self.launcher.take() {
+            close_surface(launcher.surface(), ctl);
+        }
+        let theme = self.theme();
+        let spec = LayerSpec {
+            output,
+            namespace: overview::NAMESPACE,
+            layer: Layer::Overlay,
+            anchor: Anchoring::Fill,
+            size: (0, 0),
+            exclusive_zone: -1,
+            keyboard: KeyboardInteractivity::Exclusive,
+        };
+        let surface = match ctl.create_layer_surface(spec) {
+            Ok(surface) => surface,
+            Err(err) => {
+                tracing::error!(%err, "overview: no surface");
+                self.overview.flow.closed();
+                self.overview.clear_pending();
+                return;
+            }
+        };
+        let empty = NiriModel::default();
+        let mut open = Overview::new(
+            surface,
+            output,
+            &info.name,
+            &theme,
+            self.appearance.reduced_motion,
+            self.model.as_ref().unwrap_or(&empty),
+        );
+        open.set_mode(mode);
+        if let Some(mut s) = ctl.surface(surface) {
+            open.opened(&mut s);
+        }
+        tracing::info!(
+            output = output.0,
+            shortcuts = mode == OverviewMode::Shortcuts,
+            "overview: opened"
+        );
+        self.overview.panel = Some(open);
+    }
+
+    /// Frees the textures of a panel that is going away. If the painter is
+    /// busy (it should not be outside a frame or an input call), the panel is
+    /// kept in the slot's `dying` list and freed at the next frame or close.
+    fn release_overview(&mut self, mut open: Overview) {
+        match self.painter.as_ref().map(|p| p.try_borrow_mut()) {
+            Some(Ok(mut painter)) => open.release(&mut painter),
+            Some(Err(_)) => {
+                tracing::warn!(
+                    "overview: the painter is in use; the panel's textures are freed at the next frame"
+                );
+                self.overview.dying.push(open);
+            }
+            None => {}
+        }
+    }
+
+    /// Frees the textures of panels whose release had to wait.
+    fn release_dying_overviews(&mut self) {
+        if self.overview.dying.is_empty() {
+            return;
+        }
+        if let Some(Ok(mut painter)) = self.painter.as_ref().map(|p| p.try_borrow_mut()) {
+            for mut open in self.overview.dying.drain(..) {
+                open.release(&mut painter);
+            }
+        }
+    }
+
+    /// Closes whatever there is of the overview from the loop: gives up a
+    /// wait, or releases and destroys the panel.
+    fn close_overview(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        if self.overview.flow.is_active() {
+            let steps = self
+                .overview
+                .flow
+                .verb(OverviewMode::Desktop, Presence::Close);
+            self.overview_steps(steps, ctl);
+        }
+    }
+
+    fn destroy_overview(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        self.overview.clear_pending();
+        self.release_dying_overviews();
+        if let Some(open) = self.overview.panel.take() {
+            tracing::info!("overview: closed");
+            let surface = open.surface();
+            self.release_overview(open);
+            if let Some(mut s) = ctl.surface(surface) {
+                Overview::closing(&mut s);
+            }
+            ctl.destroy_surface(surface);
+        }
+    }
+
+    /// Input on the overview's surface.
+    fn overview_input(&mut self, ev: &InputEvent, ctl: &mut SurfaceCtl<'_>) {
+        let (Some(shared), Some(open)) = (self.painter.clone(), self.overview.panel.as_mut())
+        else {
+            return;
+        };
+        let action = match shared.try_borrow_mut() {
+            Ok(mut painter) => open.input(ev, ctl, &mut painter),
+            Err(_) => {
+                tracing::warn!("the painter is in use; the overview's input is dropped");
+                return;
+            }
+        };
+        let Some(action) = action else {
+            return;
+        };
+        if action == OverviewAction::SwitchMode {
+            let mode = open.state().mode;
+            for step in self.overview.flow.mode_switched(mode) {
+                if step != Step::LoadKeybinds {
+                    continue;
+                }
+                if let Some(unavailable) = self.overview_load_keybinds() {
+                    if let Some(open) = self.overview.panel.as_mut() {
+                        if open.set_keybinds(unavailable) {
+                            ctl.request_redraw();
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        self.overview_acted(action, ctl);
+    }
+
+    /// The overview asked to close during an input call: it is closed now and
+    /// its surface is destroyed when the posted [`Message::OverviewClosed`]
+    /// arrives; a chosen window or workspace is focused first.
+    fn overview_acted(&mut self, action: OverviewAction, ctl: &mut SurfaceCtl<'_>) {
+        let Some(open) = self.overview.panel.take() else {
+            return;
+        };
+        let surface = open.surface();
+        self.overview.flow.closed();
+        self.overview.clear_pending();
+        self.release_overview(open);
+        Overview::closing(ctl);
+        ctl.set_keyboard_interactivity(KeyboardInteractivity::None);
+        match action {
+            OverviewAction::Focus(id) => self.request(NiriRequest::FocusWindow(id)),
+            OverviewAction::FocusWorkspace(id) => self.request(NiriRequest::FocusWorkspace(id)),
+            OverviewAction::SwitchMode | OverviewAction::Close => {}
+        }
+        tracing::info!(?action, "overview: closed by the person");
+        let closed = Message::OverviewClosed { surface };
+        if !self
+            .sender
+            .get()
+            .is_some_and(|sender| sender.send(closed).is_ok())
+        {
+            tracing::warn!("overview: the loop cannot be reached; its surface stays until exit");
+        }
+    }
+
+    /// The capture's reply. Only the wait of its own opening uses it: the
+    /// pictures wait for the panel, which opens now. A reply of another
+    /// opening, or one that comes after the timeout or a close, is dropped
+    /// with its pixels.
+    fn overview_captured(&mut self, reply: crate::capture::CaptureReply, ctl: &mut RuntimeCtl<'_>) {
+        self.overview.capture_replied(reply.generation);
+        let steps = self.overview.flow.captured(reply.generation);
+        if steps.is_empty() {
+            tracing::debug!(
+                generation = reply.generation,
+                "overview: a capture reply nobody waits for is dropped"
+            );
+            return;
+        }
+        self.overview.stop_timer();
+        match reply.result {
+            crate::capture::CaptureResult::Done { previews } => self.overview.previews = previews,
+            crate::capture::CaptureResult::Unavailable(reason) => {
+                tracing::info!(%reason, "overview: no previews");
+            }
+        }
+        self.overview_steps(steps, ctl);
+        // A reply nobody can use is dropped with its pixels.
+        if self.overview.panel.is_none() {
+            self.overview.previews.clear();
+        }
+    }
+
+    /// The bindings of opening `generation`: shown if that opening's panel is
+    /// still up, dropped otherwise.
+    fn overview_keybinds_loaded(
+        &mut self,
+        generation: u64,
+        keybinds: crate::providers::keybinds::Keybinds,
+        ctl: &mut RuntimeCtl<'_>,
+    ) {
+        self.overview.reader_replied(generation);
+        let steps = self.overview.flow.keybinds_loaded(generation);
+        if steps.is_empty() {
+            tracing::debug!(
+                generation,
+                "overview: bindings nobody waits for are dropped"
+            );
+            return;
+        }
+        match &keybinds {
+            crate::providers::keybinds::Keybinds::Groups(groups) => {
+                tracing::info!("overview: shortcuts loaded: {} group(s)", groups.len());
+            }
+            crate::providers::keybinds::Keybinds::Unavailable(why) => {
+                tracing::info!(?why, "overview: shortcuts unavailable");
+            }
+        }
+        self.overview.keybinds = Some(keybinds);
+        self.overview_steps(steps, ctl);
+        self.overview.keybinds = None;
+    }
+}
+
 /// Destroys the launcher's `surface`, its text input off first.
 fn close_surface(surface: SurfaceId, ctl: &mut RuntimeCtl<'_>) {
     if let Some(mut s) = ctl.surface(surface) {
@@ -2079,6 +2486,8 @@ impl Shell for App {
     fn output(&mut self, ev: OutputEvent, ctl: &mut RuntimeCtl<'_>) {
         match ev {
             OutputEvent::Added(info) => {
+                self.outputs.retain(|o| o.id != info.id);
+                self.outputs.push(info.clone());
                 self.osds.output_added(&info);
                 if self.controls.readings.output_added(info.id, &info.name) {
                     self.levels_changed(ctl);
@@ -2093,6 +2502,9 @@ impl Shell for App {
                 );
             }
             OutputEvent::Changed(info) => {
+                if let Some(known) = self.outputs.iter_mut().find(|o| o.id == info.id) {
+                    *known = info.clone();
+                }
                 if self.controls.readings.output_added(info.id, &info.name) {
                     self.levels_changed(ctl);
                 }
@@ -2111,6 +2523,24 @@ impl Shell for App {
                 self.osds.output_removed(output);
                 if self.controls.readings.output_removed(output) {
                     self.levels_changed(ctl);
+                }
+                self.outputs.retain(|o| o.id != output);
+                if self.overview.output_removed(output) {
+                    tracing::info!("overview: the opening is given up with its output");
+                }
+                if self
+                    .overview
+                    .panel
+                    .as_ref()
+                    .is_some_and(|o| o.output() == output)
+                {
+                    // Its surface went with the output.
+                    if let Some(open) = self.overview.panel.take() {
+                        self.release_overview(open);
+                    }
+                    self.overview.flow.closed();
+                    self.overview.clear_pending();
+                    tracing::info!("overview: closed with its output");
                 }
                 self.wallpapers
                     .output_removed(output, ctl, self.painter.as_ref());
@@ -2184,6 +2614,8 @@ impl Shell for App {
             // on their next frame.
             self.media_sync();
         }
+        // A closed overview whose textures had to wait is freed now.
+        self.release_dying_overviews();
         if self.wallpapers.owns(cx.surface) {
             if let Some(shared) = self.painter.as_ref() {
                 if let Some(failed) = self.wallpapers.frame(cx, shared, self.settings.current()) {
@@ -2215,6 +2647,18 @@ impl Shell for App {
                     Ok(mut painter) => open.frame(cx, &mut painter, self.appearance.reduced_motion),
                     Err(_) => {
                         tracing::warn!("the painter is in use; the launcher's frame is skipped");
+                        cx.ctl.request_redraw();
+                    }
+                }
+                return;
+            }
+        }
+        if let (Some(shared), Some(open)) = (self.painter.as_ref(), self.overview.panel.as_mut()) {
+            if open.surface() == cx.surface {
+                match shared.try_borrow_mut() {
+                    Ok(mut painter) => open.frame(cx, &mut painter, self.appearance.reduced_motion),
+                    Err(_) => {
+                        tracing::warn!("the painter is in use; the overview's frame is skipped");
                         cx.ctl.request_redraw();
                     }
                 }
@@ -2302,6 +2746,15 @@ impl Shell for App {
             self.launcher_input(&ev, ctl);
             return;
         }
+        if self
+            .overview
+            .panel
+            .as_ref()
+            .is_some_and(|o| o.surface() == surface)
+        {
+            self.overview_input(&ev, ctl);
+            return;
+        }
         let closed = matches!(ev, InputEvent::PopupClosed { .. });
         let (Some(shared), Some(island)) = (self.painter.clone(), self.islands.get_mut(surface))
         else {
@@ -2355,6 +2808,13 @@ impl Shell for App {
                 for slot in self.islands.iter() {
                     if slot.island.shows_a_change(Some(&model)) {
                         if let Some(mut surface) = ctl.surface(slot.surface) {
+                            surface.request_redraw();
+                        }
+                    }
+                }
+                if let Some(open) = self.overview.panel.as_mut() {
+                    if open.set_model(&model) {
+                        if let Some(mut surface) = ctl.surface(open.surface()) {
                             surface.request_redraw();
                         }
                     }
@@ -2465,6 +2925,19 @@ impl Shell for App {
             Message::Melibea(news) => self.bubbles_news(*news, ctl),
             Message::Phone(news) => self.phone_news(*news, ctl),
             Message::Media(event) => self.media_event(event, ctl),
+            Message::Captured(reply) => self.overview_captured(reply, ctl),
+            Message::KeybindsLoaded {
+                generation,
+                keybinds,
+            } => self.overview_keybinds_loaded(generation, keybinds, ctl),
+            Message::OverviewClosed { surface } => ctl.destroy_surface(surface),
+            Message::OverviewCaptureTimeout(generation) => {
+                let steps = self.overview.flow.timeout(generation);
+                if !steps.is_empty() {
+                    tracing::info!("overview: the capture did not reply in time");
+                }
+                self.overview_steps(steps, ctl);
+            }
         }
     }
 }

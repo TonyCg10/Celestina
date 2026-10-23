@@ -88,7 +88,7 @@ pub struct Workspace {
 }
 
 /// One window, as the Island shows it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Window {
     pub id: u64,
     pub title: Option<String>,
@@ -99,6 +99,23 @@ pub struct Window {
     /// `None` out of [`reduce`], which is pure, and for an application
     /// without an entry or icon.
     pub icon: Option<String>,
+    /// The tile's size including decorations, in whole logical pixels. Only
+    /// the layout numbers the overview draws are kept, so a change that only
+    /// scrolls the view (niri's on-screen tile position) publishes nothing.
+    pub tile_size: (i32, i32),
+    /// The 1-based column of a tiled window in the scrolling layout, as niri
+    /// numbers it; `None` for a floating window.
+    pub column: Option<u16>,
+    /// The 1-based tile index within its column; `None` for a floating window.
+    pub row: Option<u16>,
+}
+
+/// Rounds a compositor pixel value to whole pixels, saturating at the `i32`
+/// range, so the model keeps its `Eq` derive.
+fn whole_px(value: f64) -> i32 {
+    value
+        .round()
+        .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
 }
 
 /// The compositor's state, reduced to what the shell draws.
@@ -379,6 +396,18 @@ pub fn reduce(state: &EventStreamState) -> NiriModel {
             workspace_id: window.workspace_id,
             is_focused: window.is_focused,
             icon: None,
+            tile_size: (
+                whole_px(window.layout.tile_size.0),
+                whole_px(window.layout.tile_size.1),
+            ),
+            column: window
+                .layout
+                .pos_in_scrolling_layout
+                .and_then(|(column, _)| u16::try_from(column).ok()),
+            row: window
+                .layout
+                .pos_in_scrolling_layout
+                .and_then(|(_, row)| u16::try_from(row).ok()),
         })
         .collect();
     windows.sort_by(|a, b| a.workspace_id.cmp(&b.workspace_id).then(a.id.cmp(&b.id)));
@@ -1490,6 +1519,7 @@ mod tests {
                     workspace_id: Some(1),
                     is_focused: false,
                     icon: None,
+                    ..Window::default()
                 })
                 .collect(),
             ..NiriModel::default()
@@ -1501,5 +1531,108 @@ mod tests {
             icons.icon_name(&format!("app{n}"));
         }
         assert!(icons.cache.len() <= MAX_ICON_CACHE);
+    }
+
+    fn with_layout(
+        mut window: niri_ipc::Window,
+        pos: Option<(usize, usize)>,
+        tile_pos: Option<(f64, f64)>,
+        tile_size: (f64, f64),
+    ) -> niri_ipc::Window {
+        window.layout.pos_in_scrolling_layout = pos;
+        window.layout.tile_pos_in_workspace_view = tile_pos;
+        window.layout.tile_size = tile_size;
+        window.layout.window_size = (790, 590);
+        window
+    }
+
+    #[test]
+    fn reduce_keeps_the_layout_numbers() {
+        let mut s = state();
+        s.apply(Event::WindowsChanged {
+            windows: vec![with_layout(
+                window(7, "editor", Some(11), true, Some(3)),
+                Some((3, 2)),
+                Some((12.4, 30.6)),
+                (800.4, 599.5),
+            )],
+        });
+        let m = reduce(&s);
+        let w = &m.windows[0];
+        assert_eq!(w.column, Some(3));
+        assert_eq!(w.row, Some(2));
+        assert_eq!(w.tile_size, (800, 600));
+    }
+
+    #[test]
+    fn a_layout_change_that_only_moves_the_view_publishes_nothing_new() {
+        let mut s = state();
+        s.apply(Event::WindowsChanged {
+            windows: vec![with_layout(
+                window(7, "editor", Some(11), true, Some(1)),
+                Some((1, 1)),
+                Some((0.0, 0.0)),
+                (800.0, 600.0),
+            )],
+        });
+        let before = reduce(&s);
+        let scrolled = with_layout(
+            window(7, "editor", Some(11), true, Some(1)),
+            Some((1, 1)),
+            Some((-640.0, 0.0)),
+            (800.0, 600.0),
+        );
+        s.apply(Event::WindowLayoutsChanged {
+            changes: vec![(7, scrolled.layout)],
+        });
+        assert_eq!(reduce(&s), before);
+    }
+
+    #[test]
+    fn a_layout_change_updates_only_that_window() {
+        let mut s = state();
+        s.apply(Event::WindowsChanged {
+            windows: vec![
+                window(7, "editor", Some(11), true, Some(1)),
+                window(8, "browser", Some(11), false, Some(2)),
+            ],
+        });
+        let before = reduce(&s);
+        let other_before = before.windows.iter().find(|w| w.id == 8).cloned();
+
+        let moved = with_layout(
+            window(7, "editor", Some(11), true, Some(4)),
+            Some((4, 1)),
+            Some((1600.0, 0.0)),
+            (800.0, 600.0),
+        );
+        s.apply(Event::WindowLayoutsChanged {
+            changes: vec![(7, moved.layout)],
+        });
+        let after = reduce(&s);
+
+        let changed = after.windows.iter().find(|w| w.id == 7);
+        assert_eq!(changed.and_then(|w| w.column), Some(4));
+        let other_after = after.windows.iter().find(|w| w.id == 8).cloned();
+        assert_eq!(other_after, other_before);
+        assert_eq!(other_after.and_then(|w| w.column), Some(2));
+    }
+
+    #[test]
+    fn a_floating_window_has_no_column_or_row() {
+        let mut s = state();
+        s.apply(Event::WindowsChanged {
+            windows: vec![with_layout(
+                window(9, "player", Some(31), false, None),
+                None,
+                None,
+                (640.0, 360.0),
+            )],
+        });
+        let m = reduce(&s);
+        let w = &m.windows[0];
+        assert_eq!(w.column, None);
+        assert_eq!(w.row, None);
+        assert_eq!(w.tile_size, (640, 360));
     }
 }

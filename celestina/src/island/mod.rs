@@ -1944,6 +1944,8 @@ impl Island {
             Verb::IslandOpen(page) => self.open(page, now),
             Verb::IslandClose => self.close(now),
             Verb::LauncherToggle
+            | Verb::Overview(_)
+            | Verb::Shortcuts(_)
             | Verb::NotificationsToggle
             | Verb::NotificationsDismissAll
             | Verb::WallpaperSet { .. }
@@ -2857,6 +2859,7 @@ mod tests {
             workspace_id: Some(1),
             is_focused: false,
             icon: None,
+            ..Default::default()
         });
         island.model = Some(m);
         island.open(PageId::ACTIVITY, t0);
@@ -3410,6 +3413,7 @@ mod tests {
             workspace_id: Some(1),
             is_focused: false,
             icon: None,
+            ..Default::default()
         });
         assert!(!island.shows_a_change(Some(&b)));
         island.open(PageId::ACTIVITY, t0);

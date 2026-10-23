@@ -25,6 +25,9 @@
 //! What differs per worker stays with the worker: its globals, its own
 //! reasons to stop (passed to [`Link::pump`] and [`Link::sync`] as a check
 //! over its state), and what a confirmed sync releases.
+//!
+//! The capture worker (`crate::capture`, CEL-2-L) opens its connection
+//! through this same pump, so its flood cap and bounded waits are these.
 
 use std::io::ErrorKind;
 use std::sync::mpsc::{SyncSender, TrySendError};

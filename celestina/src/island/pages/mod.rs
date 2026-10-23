@@ -386,6 +386,7 @@ mod tests {
             workspace_id: Some(workspace),
             is_focused: false,
             icon: Some("kitty".to_owned()),
+            ..Default::default()
         }
     }
 

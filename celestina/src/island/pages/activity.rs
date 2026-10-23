@@ -161,14 +161,20 @@ fn active_windows<'a>(model: &'a NiriModel, rows: &[Row]) -> Vec<&'a Window> {
 /// ellipsis, so the result never has more than the maximum.
 #[must_use]
 pub fn truncate_title(title: &str) -> String {
-    let kept: Vec<&str> = title
-        .graphemes(true)
-        .take(MAX_TITLE_GRAPHEMES + 1)
-        .collect();
-    if kept.len() <= MAX_TITLE_GRAPHEMES {
-        return title.to_owned();
+    truncate_graphemes(title, MAX_TITLE_GRAPHEMES)
+}
+
+/// `text` when it has at most `max` extended grapheme clusters, else its
+/// first `max - 1` and an ellipsis, so the result never has more than `max`
+/// (at least one).
+#[must_use]
+pub fn truncate_graphemes(text: &str, max: usize) -> String {
+    let max = max.max(1);
+    let kept: Vec<&str> = text.graphemes(true).take(max + 1).collect();
+    if kept.len() <= max {
+        return text.to_owned();
     }
-    let mut cut = kept[..MAX_TITLE_GRAPHEMES - 1].concat();
+    let mut cut = kept[..max - 1].concat();
     cut.push('\u{2026}');
     cut
 }
@@ -284,6 +290,7 @@ mod tests {
             workspace_id: Some(workspace),
             is_focused: false,
             icon: icon.map(str::to_owned),
+            ..Default::default()
         }
     }
 

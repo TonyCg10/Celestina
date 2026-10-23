@@ -99,4 +99,20 @@ pub enum Message {
     /// News for the session lock's policy: from the idle chain, or from the
     /// lock's workers stamped with their run.
     Lock(crate::lock::LockMessage),
+    /// The capture worker's reply to one request, tagged with the overview's
+    /// opening: the preview of the output the panel opens on (the whole
+    /// output, shrunk), or why there is none (CEL-2-L).
+    Captured(crate::capture::CaptureReply),
+    /// The niri config's key bindings, read once as the Shortcuts mode opened,
+    /// tagged with the overview's opening (CEL-2-L).
+    KeybindsLoaded {
+        generation: u64,
+        keybinds: crate::providers::keybinds::Keybinds,
+    },
+    /// The overview on `surface` closed during an input call, which cannot
+    /// destroy a surface; the app posts this to itself and destroys it here.
+    OverviewClosed { surface: SurfaceId },
+    /// The timer of the numbered wait for the capture's reply fired: the
+    /// panel opens with geometry only if it still waits.
+    OverviewCaptureTimeout(u64),
 }

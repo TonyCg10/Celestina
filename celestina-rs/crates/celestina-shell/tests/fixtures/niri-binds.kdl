@@ -1,0 +1,25 @@
+// Trimmed to the node shapes of a niri config: binding modes, a binds block,
+// repeat=false, hotkey-overlay-title, comments and a multi-string spawn.
+
+// `exit-on-action=true`: one choice and the mode ends.
+binding-mode "monitor" exit-on-action=true {
+    Left  { focus-monitor-left; }
+    Shift+Right { move-column-to-monitor-right; }
+}
+
+// Without `exit-on-action`: the default keeps the mode open.
+binding-mode "size" {
+    R { switch-preset-column-width; }
+    KP_Subtract { set-column-width "-10%"; }
+}
+
+binds {
+    // Direct launchers.
+    Mod+Q { spawn "kitty"; }
+    Mod+T hotkey-overlay-title="Open a terminal" { spawn "kitty" "--single-instance" "--title" "term"; }
+    Mod+1 repeat=false { spawn "/opt/tools/blackout-toggle" "OUT-1"; }
+    Mod+R repeat=false { enter-binding-mode "size"; }
+    XF86AudioMute allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
+    Mod+Alt+WheelScrollUp cooldown-ms=150 { spawn "wtype" "-k" "Page_Up"; }
+    // Mod+Space { spawn "commented-out"; }
+}

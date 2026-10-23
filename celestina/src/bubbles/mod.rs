@@ -540,6 +540,7 @@ mod tests {
                     workspace_id: Some(10),
                     is_focused: false,
                     icon: None,
+                    ..Default::default()
                 },
                 NiriWindow {
                     id: 4,
@@ -548,6 +549,7 @@ mod tests {
                     workspace_id: None,
                     is_focused: false,
                     icon: None,
+                    ..Default::default()
                 },
             ],
             outputs: vec!["HDMI-A-1".to_owned()],

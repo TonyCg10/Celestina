@@ -1010,6 +1010,99 @@ pub fn lock_notice(notice: celestina_shell::lock::Notice) -> (&'static str, Stri
     (NOTICE_LOCK_TITLE, body)
 }
 
+// The overview panel (CEL-2-L).
+
+/// The Desktop tab of the overview ("Desktop").
+pub const OVERVIEW_TAB_DESKTOP: &str = "Escritorio";
+
+/// The Shortcuts tab of the overview ("Shortcuts").
+pub const OVERVIEW_TAB_SHORTCUTS: &str = "Atajos";
+
+/// Shown when the compositor reports no workspace for this output
+/// ("There are no workspaces to show").
+pub const OVERVIEW_EMPTY: &str = "No hay espacios de trabajo que mostrar";
+
+/// Shown inside a workspace that holds no window ("Empty").
+pub const OVERVIEW_WORKSPACE_EMPTY: &str = "Vacío";
+
+/// The title of a window that has none ("Untitled").
+pub const OVERVIEW_WINDOW_UNTITLED: &str = "Sin título";
+
+/// What a workspace strip says when windows did not fit the map ("and 3
+/// more").
+#[must_use]
+pub fn overview_hidden(count: usize) -> String {
+    format!("y {count} más")
+}
+
+/// The accessible name of a window tile: its title and, when it has the
+/// focus, that it is the current one.
+#[must_use]
+pub fn overview_window_name(title: &str, focused: bool) -> String {
+    if focused {
+        format!("{title}, actual")
+    } else {
+        title.to_owned()
+    }
+}
+
+/// The accessible name of a workspace's header in the overview: its label
+/// and how many windows it holds ("Espacio 2, 3 ventanas").
+#[must_use]
+pub fn overview_workspace_name(label: &str, windows: usize) -> String {
+    match windows {
+        0 => format!("{label}, vacío"),
+        1 => format!("{label}, 1 ventana"),
+        n => format!("{label}, {n} ventanas"),
+    }
+}
+
+// The overview's Shortcuts mode (CEL-2-L, T7).
+
+/// The title of the group of normal key bindings ("Keyboard shortcuts").
+pub const SHORTCUTS_NORMAL_TITLE: &str = "Atajos de teclado";
+
+/// Shown when no niri configuration file exists ("niri's configuration was
+/// not found").
+pub const SHORTCUTS_MISSING: &str = "No se encontró la configuración de niri";
+
+/// Shown when the configuration exists but cannot be read ("niri's
+/// configuration cannot be read").
+pub const SHORTCUTS_UNREADABLE: &str = "No se puede leer la configuración de niri";
+
+/// Shown when the configuration is too big to be read ("niri's configuration
+/// is too large to show").
+pub const SHORTCUTS_TOO_LARGE: &str = "La configuración de niri es demasiado grande para mostrarla";
+
+/// Shown when the configuration is not valid ("niri's configuration cannot
+/// be interpreted").
+pub const SHORTCUTS_INVALID: &str = "La configuración de niri no se puede interpretar";
+
+/// Shown when the configuration defines no shortcut ("The configuration
+/// defines no shortcuts").
+pub const SHORTCUTS_EMPTY: &str = "La configuración no define ningún atajo";
+
+/// What a shortcut that runs a shell command does, when its owner gave it no
+/// title ("Run a command").
+pub const SHORTCUTS_RUN_COMMAND: &str = "Ejecutar un comando";
+
+/// What a shortcut that starts `program` does, when its owner gave it no
+/// title ("Open kitty").
+#[must_use]
+pub fn shortcuts_open_program(program: &str) -> String {
+    format!("Abrir {program}")
+}
+
+/// The heading of a binding mode: its name and, when a shortcut enters it,
+/// that shortcut ("Mode «resize», entered with Mod+R").
+#[must_use]
+pub fn shortcuts_mode_heading(name: &str, enter: Option<&str>) -> String {
+    match enter {
+        Some(chord) => format!("Modo «{name}», se activa con {chord}"),
+        None => format!("Modo «{name}»"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

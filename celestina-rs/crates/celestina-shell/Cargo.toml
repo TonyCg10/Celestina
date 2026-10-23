@@ -19,6 +19,18 @@ serde_json.workspace = true
 # lines it reads, the exit codes it classifies. The crate has no dependency of
 # its own and is the one owner of those numbers (CEL-2-H, design §4.13).
 celestina-lock-proto = { path = "../celestina-lock-proto" }
+# Reads niri's `config.kdl` for the shortcuts page; the shell never writes that
+# file. niri's config is KDL, so a real parser beats a hand-rolled one.
+# niri still writes KDL v1 (`true`/`false` bare), so the `v1-fallback` feature is
+# required: plain v2 parsing rejects the real config. That feature is the price
+# of reading niri's v1 syntax: it brings a second major of the same crate (kdl
+# 4.7.1, the v1 parser), miette 5 beside miette 7, nom 7 and thiserror 1 into
+# the tree. Both parsers recurse: `keybinds::check_nesting` bounds brace and
+# comment nesting before either runs, but crafted text of a few KiB still
+# overflows their stack through other recursive paths and aborts the process,
+# so the shell runs this parser only in a child process of its own
+# (`celestina --keybinds-probe`, decided by the author on 2026-10-17).
+kdl = { version = "6", features = ["v1-fallback"] }
 
 [lints]
 workspace = true

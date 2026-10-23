@@ -83,6 +83,14 @@
   [ADR 0022](docs/decisions/0022-session-lock.md) (proposed); its author rows
   `VAL-CEL2-LOCK-PAM`, `-LIVE`, `-SUSPEND`, `-HOTPLUG`, `-RECOVERY`, `-NOTICES`
   and `-COEXIST` are pending. Review A and Review B have not run.
+- **CEL-2-L (in progress, not landed):** the overview and the shortcut sheet,
+  on `unit/celestina/CEL-2-L`: one centred overlay panel with the workspaces of
+  the focused output, one on-demand `wlr-screencopy` preview of the output the
+  panel opens on (for its active workspace, once per opening), and the keybinds
+  of niri's `config.kdl` grouped by mode; verbs `overview` and `shortcuts`, no
+  duty switch. Its evidence is
+  [`docs/evidence/2026-10-17-see-the-desktop.md`](docs/evidence/2026-10-17-see-the-desktop.md);
+  its author rows are `VAL-CEL2-OVERVIEW` and `VAL-CEL2-SHORTCUTS`, pending.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

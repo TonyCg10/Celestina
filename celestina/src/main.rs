@@ -7,6 +7,9 @@
 //!   or 1 when it could not.
 //! - `celestina --check` loads the theme, the fonts and the appearance file
 //!   and exits, without a compositor.
+//! - `celestina --keybinds-probe PATH` is internal, not in the usage text:
+//!   the shell re-executes itself this way to parse niri's config in a child
+//!   process (`providers::keybinds`), so a parser crash cannot take it down.
 //!
 //! Diagnostics go to stderr, filtered by `RUST_LOG` (default `info`).
 #![forbid(unsafe_code)]
@@ -52,6 +55,13 @@ use tracing_subscriber::EnvFilter;
 const JOIN_WAIT: Duration = Duration::from_secs(2);
 
 fn main() -> ExitCode {
+    // The internal probe comes first: no logging, no other argument.
+    let raw: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    if let [flag, path] = raw.as_slice() {
+        if flag.as_os_str() == providers::keybinds::PROBE_FLAG {
+            return providers::keybinds::probe_main(std::path::Path::new(path));
+        }
+    }
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -59,9 +69,7 @@ fn main() -> ExitCode {
         .with_writer(std::io::stderr)
         .with_ansi(std::io::stderr().is_terminal())
         .init();
-    let args = std::env::args_os()
-        .skip(1)
-        .map(|a| a.to_string_lossy().into_owned());
+    let args = raw.iter().map(|a| a.to_string_lossy().into_owned());
     match command::parse_args(args) {
         Ok(Mode::Usage) => {
             println!("{USAGE}");
@@ -89,6 +97,21 @@ fn check() -> ExitCode {
         reduced_motion = appearance.reduced_motion,
         text_scale = appearance.text_scale.as_str(),
         "check passed: theme, fonts and appearance load"
+    );
+    // The overview's bindings: the path and what reading it gives (bounded,
+    // no session needed, parsed in a probe child as the shell does). Whether
+    // the compositor offers wlr_screencopy needs a Wayland connection, which
+    // this check never opens.
+    let keybinds = providers::keybinds::resolve_path(&providers::keybinds::Env::from_process());
+    let state = match providers::keybinds::load_default(&std::sync::atomic::AtomicBool::new(false))
+    {
+        providers::keybinds::Keybinds::Groups(groups) => format!("{} group(s) read", groups.len()),
+        providers::keybinds::Keybinds::Unavailable(why) => format!("unavailable: {why:?}"),
+    };
+    tracing::info!(
+        path = ?keybinds,
+        state = %state,
+        "check: niri config for the shortcuts overview"
     );
     ExitCode::SUCCESS
 }

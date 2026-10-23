@@ -1064,3 +1064,65 @@ None has been run and none is closed by an agent.
   lock is displaced; a refused `celestina lock suspend` never suspends
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-CEL2-OVERVIEW — The workspace overview and its preview
+
+- **Status:** pending
+- **Related implementation:** CEL-2-L (the overview panel, the workspace
+  geometry and the one on-demand `wlr-screencopy` preview per opening)
+- **Requires:** the author's niri session with the deployed shell, or a
+  nested niri started with `scripts/dev-session.sh --own-bus` (the nest's
+  own session bus, so the live session is not touched). **Test with a nested
+  niri first.** A nested niri is the first run of this row, and the live
+  session only after it passes there. Windows the author's config blocks with
+  `block-out-from "screen-capture"` must be open on the output, so the check
+  can see that they come out black
+- **Procedure:** bind `celestina overview toggle` to a key in niri with
+  `spawn "celestina" "overview" "toggle"`, or run it from a shell in the nest.
+  Open the overview with several workspaces and windows, and check that the
+  panel shows the workspaces of the focused output in their arrangement:
+  columns left to right, rows down a column, windows at their true relative
+  sizes. On the workspace active on the output the panel opens on, check that
+  one preview of that output is drawn behind its tiles, dimmed and rounded.
+  Check that the preview is taken once: change the view while the panel is
+  open and check the preview does not refresh. Check that the blocked windows
+  are black in the preview and the other windows are not. Close the panel with
+  `celestina overview close`, with Escape, with a click outside it, and by
+  moving focus to another window, and check each one closes it and the preview
+  is gone (not kept in the next opening). Check that `celestina overview open`
+  opens it and that a second `overview toggle` closes it. Check the panel on a
+  rotated output, if the author has one, and on a fractional-scale output at
+  1.5: the rotated output must show geometry only, and the fractional-scale
+  preview must not be blurred or misaligned
+- **Pass condition:** the panel opens and closes by each action in the
+  procedure; the preview appears only on the workspace active on the output
+  the panel opens on and is taken once per opening; blocked windows are black;
+  no preview survives a close; a rotated output shows geometry only; the
+  panel's own surface never appears in its preview
+- **Result:** not run
+- **Evidence:** none
+
+## VAL-CEL2-SHORTCUTS — The shortcut sheet beside the author's config
+
+- **Status:** pending
+- **Related implementation:** CEL-2-L (the shortcut sheet, read from niri's
+  `config.kdl` once per opening of the Shortcuts mode)
+- **Requires:** the same niri session or nest as VAL-CEL2-OVERVIEW; the
+  author's `config.kdl` in place (`$NIRI_CONFIG`, else
+  `$XDG_CONFIG_HOME/niri/config.kdl`). **Test with a nested niri first.**
+- **Procedure:** bind `celestina shortcuts toggle` to a key in niri with
+  `spawn "celestina" "shortcuts" "toggle"`, or run it from a shell in the nest.
+  Check that the sheet opens and lists the binds of `config.kdl` grouped by
+  binding mode, with the normal binds under their own group. Compare the list
+  with the file: every bind in the file appears once, with its own title and
+  its own action, and no bind appears that the file does not declare. Add a
+  bind to the config (in the nest's config only) and run `shortcuts toggle`
+  again: the new bind appears, because the file is read once per opening. Close
+  the sheet with Escape, a click outside it, and by moving focus, and check the
+  same way as the overview. Check that `celestina shortcuts open` opens it and
+  `celestina shortcuts close` closes it
+- **Pass condition:** the sheet matches `config.kdl` bind for bind and group
+  for group; a change to the file shows on the next opening and not before;
+  each close action works; nothing is read from any other file
+- **Result:** not run
+- **Evidence:** none

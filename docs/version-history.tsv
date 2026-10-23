@@ -281,3 +281,4 @@ celestina	1.7.0	milestone	CEL-2-C	Add the OSD duty: volume, microphone and brigh
 celestina	1.8.0	milestone	CEL-2-J	Add the phone and bubbles duties: the Magnetita piece and page and the minimised-window bubbles with the Mod+K selector over Melibea's socket, off by default
 celestina	1.9.0	milestone	CEL-2-D	Add the media duty: the MPRIS client, the media piece and its Island page, off by default
 celestina	1.10.0	milestone	CEL-2-H-a	Add the session lock core: the lock client, the PAM verifier, the shell supervisor and the suspend chain, off by default
+celestina	1.11.0	milestone	CEL-2-L	Add the desktop overview with a per-workspace preview and the keybind sheet read from niri's config, behind the overview and shortcuts verbs

@@ -1,0 +1,89 @@
+# CEL-2-L exact change inventory
+
+Base revision	df534373e2764bd11e1fb7b91a573a5ff88fe812
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/celestina-shell/Cargo.toml
+Pathspec	celestina-rs/crates/celestina-shell/src/keybinds.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/thumbnail.rs
+Pathspec	celestina-rs/crates/celestina-shell/tests/fixtures/niri-binds.kdl
+Pathspec	celestina-rs/crates/celestina-shell/tests/kdl_parses_niri_config.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/docs/evidence/2026-10-17-see-the-desktop.md
+Pathspec	celestina/docs/evidence/README.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-L.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/bubbles/mod.rs
+Pathspec	celestina/src/capture/mod.rs
+Pathspec	celestina/src/capture/worker.rs
+Pathspec	celestina/src/command.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/energy/wire.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/overview/flow.rs
+Pathspec	celestina/src/overview/mod.rs
+Pathspec	celestina/src/overview/slot.rs
+Pathspec	celestina/src/overview/state.rs
+Pathspec	celestina/src/overview/view.rs
+Pathspec	celestina/src/providers/keybinds.rs
+Pathspec	celestina/src/providers/mod.rs
+Pathspec	celestina/src/providers/niri.rs
+Pathspec	celestina/tests/keybinds_probe.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+90	6	34a7e18cab3af77e7582c04c3f06c0399ad1b3077edee634fa26d6e751d9e51e	celestina-rs/Cargo.lock
+12	0	a848cb9344e34143cfdae2cfe510bc3df6874add6acdbb360dcf212eddff99e5	celestina-rs/crates/celestina-shell/Cargo.toml
+698	0	ab029b370bfb53654d6510f41f584e2cfd504a10a3e78e5c3adb0eeff759a620	celestina-rs/crates/celestina-shell/src/keybinds.rs
+2	0	e7327dbd428d6c9c7269c6f5eb918d71449c857e7ef7454d90221a04c8da99cc	celestina-rs/crates/celestina-shell/src/lib.rs
+684	0	e233de7fde5ed6f0b8c91a0f76938c71002998b88983854646d078f8ce7fd0f6	celestina-rs/crates/celestina-shell/src/thumbnail.rs
+25	0	436f602296c75a3e837db0c1a901054e9ea6eab0f66028c452272e79119e67e7	celestina-rs/crates/celestina-shell/tests/fixtures/niri-binds.kdl
+54	0	1aab6c52521edaa85d0b6577652762ef599de8590fcbe93da569189b2a3757f1	celestina-rs/crates/celestina-shell/tests/kdl_parses_niri_config.rs
+96	7	4cf240bfe1dfe4c03e95ef8f5a44c5c058110f0febc9598f8624f022b717e8d4	celestina/Cargo.lock
+4	1	dc32c011b092421ba2e5e71a1574d911096e91426394dd4dedc988b8b81e07fe	celestina/Cargo.toml
+5	1	2516d715b9fb5d98dbbe6b45fb8216948338afbb1acc35996456e7a4f3c15ba6	celestina/README.md
+8	0	a12cc702fc0b547635690184cd536b9b6c70c8a67a9f2f633b010b483785ba65	celestina/STATUS.md
+62	0	13e3799429d5513c7a14c8610dc0c5304c59b6d452a2d6564f6e18f42831b1f8	celestina/VALIDATION.md
+48	0	e0bc2a976d5b412e63d40e39f174fa7338a0f0bb89677ca8b3f5af7728d68f26	celestina/crates/celestina-paint/src/painter.rs
+399	0	ec876f725b49cf7ebcf89fe390d0169aaad10bb4b052d0270cf6ce37d34178a1	celestina/docs/evidence/2026-10-17-see-the-desktop.md
+1	0	04aa27d82db27b73e4773d976a1b6a0011c6514c7d6c63a4f15754e5c5e95e74	celestina/docs/evidence/README.md
+89	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-L.numstat.tsv
+1	1	c281ee7d18a35e8bf92432dc918ffea0833282a5ccbfdc4ff9dd86dc63bf1dbe	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+207	0	b4da4c38a9bf26d703c2b4944eee0644f898f42e57e194a6252eb3d77c2701c8	celestina/scripts/smoke.sh
+476	3	eb04a73f09f269427690fdccb1ebda249490edc715175f6775d9660a446cf91e	celestina/src/app.rs
+2	0	343cc8460a2479f9161f811795ffc053db23fa900e7b80edf51f2ccf3eb49ab9	celestina/src/bubbles/mod.rs
+921	0	b77033c3406dcbb76dc985de9dc962221bbea3cb227502afafb693e2584d2ed7	celestina/src/capture/mod.rs
+979	0	307b5fa0e4247dcc685da67665e0fe2a22ccf3659c7fc18aa4737d5cb68fdaf7	celestina/src/capture/worker.rs
+52	2	eef753d4ce06f64ffc9916409e7fb24a00401aa3f52792dd9296ea634d66e9bf	celestina/src/command.rs
+93	0	b5b0e7cb638a24bc42a08a736e6fa071bd3ca9030d71be8ae61e2e7dc31abe8d	celestina/src/copy.rs
+3	0	c6186aa296464d0b82125009982671f9618ecc90099f50d93f9ac78f10e44bca	celestina/src/energy/wire.rs
+4	0	b22b6df20d7deb3ad3887c1129d7536c84980ccbcbd68ae460faf1f77caf2944	celestina/src/island/mod.rs
+14	7	1fc93ff3cf6583c6ac42d6e4274a6a3b89fefd0f91409e150250e1663dd30fb9	celestina/src/island/pages/activity.rs
+1	0	ae065fb06bfb5ca6ab8ce3e078057f93e0934b0c4925f84102cc390ce38bf39b	celestina/src/island/pages/mod.rs
+2	0	2629b4b6bf9ec9a12a08b6033e634706b35821378b964f7b4bf58ffc94bd2ff0	celestina/src/lib.rs
+26	3	96791a2e7b883cfbe03f647e64cb1baa2d49c9f97457f7eccc7511e258912d43	celestina/src/main.rs
+16	0	bf8ebbb72dc7fa8def5d6ddd65c8218b9b20e286709ffea6ad3bf5a220cea18d	celestina/src/message.rs
+595	0	57ef7eb503ba0b8a1ce1df0d75208698d5b4579d735c378f41ff654f7b6882b2	celestina/src/overview/flow.rs
+805	0	53a4dac35e2991054017aea62cdeac366a489551d09616a0de02a5f7136dc14e	celestina/src/overview/mod.rs
+666	0	31e4bfb76298cb592237ea446eacaa2d818165e6c6587f4b8dabd00f73139214	celestina/src/overview/slot.rs
+885	0	935bb2e8c1ed0199a614ac2af69900183240fdff8afeb7d426885bb6d5497c80	celestina/src/overview/state.rs
+973	0	905f902f6a8ef29b8698564053bcb2905f54b97b40506b23a489e0c31e0962f3	celestina/src/overview/view.rs
+1348	0	206c3304580886379434d8cb1232a2e3af7d67cf21f897891663b6d9d4aa21e7	celestina/src/providers/keybinds.rs
+1	0	8970bbbd55408ddbf7eb2c02c4f98aced1327d8aa4b8e216dc1c1570e35a331b	celestina/src/providers/mod.rs
+134	1	8658f5ccbf6077d2203be4b1dba1041a7a348b62a346248439a00b183a1699ce	celestina/src/providers/niri.rs
+159	0	fce7d3a7a27682dd252218861178bc0abf3a3ae7cc10cdb188c0aec45211ce9c	celestina/tests/keybinds_probe.rs
+1	0	de0c26c455eba46ba9c994b7b56c1227c897fba13b3f0c7cdc83a9103306d863	docs/version-history.tsv

@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.10.0"
+version = "1.11.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -114,6 +114,9 @@ image = { version = "=0.25.6", default-features = false, features = ["png", "jpe
 # waits on it, its stdout and an eventfd with one `poll` (`process`, `event`),
 # writes the sealed bundle memory file (`fs`) and checks the lock binary's
 # descriptor (`fs`, `process` for the uid); the same features, no new ones.
+# CEL-2-L: the bindings probe child lowers its own core-dump, address-space
+# and CPU limits before it parses a hostile file (the safe `setrlimit`, under
+# the same `process` feature).
 rustix = { version = "1", features = ["fs", "event", "process"] }
 # The shell follows its own `shell.json` live (CEL-2-E: the wallpaper duty
 # turns on and off without a restart), with the same debounced directory

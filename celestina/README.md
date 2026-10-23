@@ -160,10 +160,14 @@ not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
 `notifications dismiss-all`, `wallpaper set <output|all> <file>`,
 `wallpaper next [output]`, `wallpaper prev [output]`, `wallpaper mode <mode>`,
 `wallpaper retry`, `clipboard select|remove N [S]`, `clipboard clear|pause|resume`,
+`overview toggle|open|close`, `shortcuts toggle|open|close`,
 `volume up|down|mute|set <0-100>`, `microphone mute|set <0-100>`,
 `brightness up|down|set <0-100> [output]`, `lock`, `lock suspend` and `quit`; `launcher toggle` opens or closes the
 launcher, and `notifications toggle` opens or closes the Notifications page and
-`notifications dismiss-all` dismisses every notification. `wallpaper set` and
+`notifications dismiss-all` dismisses every notification. `overview` opens a
+panel of the focused output's workspaces, with one preview of the output it
+opens on, taken once per opening and discarded on close; `shortcuts` opens the
+keybinds of niri's `config.kdl`, read once per opening. `wallpaper set` and
 `wallpaper next`/`prev` choose the picture of one output (or of all, for `set`)
 from the folder's sorted image files; `wallpaper retry` checks the outputs
 again, for example after another client has released one. A choice is written

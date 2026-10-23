@@ -92,6 +92,19 @@ pub(crate) fn argb_to_rgba(argb: &[u8], width: u32, height: u32) -> Result<Vec<u
         .collect())
 }
 
+/// Checks straight RGBA texels bound for a pixmap: both sides in
+/// `1..=MAX_PIXMAP_SIDE` and exactly `width`×`height` texels.
+pub(crate) fn check_rgba(len: usize, width: u32, height: u32) -> Result<(), PaintError> {
+    let sides = 1..=MAX_PIXMAP_SIDE;
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|n| n.checked_mul(4));
+    if !sides.contains(&width) || !sides.contains(&height) || expected != Some(len) {
+        return Err(PaintError::Pixmap { width, height, len });
+    }
+    Ok(())
+}
+
 /// Checks a wallpaper's straight RGBA texels before they reach the GPU:
 /// both sides in `1..=max_side` (the GL limit) and exactly `width`×`height`
 /// texels.
@@ -561,6 +574,23 @@ impl Painter {
         Ok(self.register_pixmap(image))
     }
 
+    /// Uploads a straight (not premultiplied) RGBA8 image, such as the
+    /// overview's opaque workspace preview, sides up to 2048 px. Freed with
+    /// `release_pixmap`; draw it with `image` or an `Image` view.
+    pub fn upload_rgba(
+        &mut self,
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<PixmapId, PaintError> {
+        check_rgba(rgba.len(), width, height)?;
+        let image = self
+            .backend
+            .create_image(width, height, rgba, ImageKind::Straight)
+            .map_err(gpu("upload an RGBA image"))?;
+        Ok(self.register_pixmap(image))
+    }
+
     /// Uploads a wallpaper: opaque straight RGBA texels at the output's
     /// device size, each side up to the GL context's maximum texture side
     /// (not the 2048 px of `upload_pixmap`). Freed with `release_pixmap`.
@@ -697,6 +727,24 @@ mod tests {
             argb_to_rgba(&[], huge, 1),
             Err(PaintError::Pixmap { .. })
         ));
+    }
+
+    #[test]
+    fn rgba_images_need_whole_texels_within_the_pixmap_limit() {
+        assert!(check_rgba(8, 2, 1).is_ok());
+        assert!(check_rgba(4 * MAX_PIXMAP_SIDE as usize, MAX_PIXMAP_SIDE, 1).is_ok());
+        for (len, w, h) in [
+            (7, 2, 1),
+            (0, 0, 1),
+            (0, 1, 0),
+            (0, MAX_PIXMAP_SIDE + 1, 1),
+            (usize::MAX, u32::MAX, u32::MAX),
+        ] {
+            assert!(matches!(
+                check_rgba(len, w, h),
+                Err(PaintError::Pixmap { .. })
+            ));
+        }
     }
 
     #[test]

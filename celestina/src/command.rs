@@ -43,6 +43,8 @@ verbs: island toggle
        island open activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone|media
        island close
        launcher toggle
+       overview toggle|open|close
+       shortcuts toggle|open|close
        notifications toggle
        notifications dismiss-all
        wallpaper set OUTPUT|all FILE
@@ -76,6 +78,32 @@ pub enum Target {
     Output(String),
 }
 
+/// What a panel verb asks of a panel: flip it, open it or close it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Presence {
+    Toggle,
+    Open,
+    Close,
+}
+
+impl Presence {
+    /// The verb's last word.
+    #[must_use]
+    pub fn word(self) -> &'static str {
+        match self {
+            Presence::Toggle => "toggle",
+            Presence::Open => "open",
+            Presence::Close => "close",
+        }
+    }
+
+    fn from_word(word: &str) -> Option<Presence> {
+        [Presence::Toggle, Presence::Open, Presence::Close]
+            .into_iter()
+            .find(|p| p.word() == word)
+    }
+}
+
 /// One command of `org.celestina.Shell1`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verb {
@@ -83,6 +111,10 @@ pub enum Verb {
     IslandOpen(PageId),
     IslandClose,
     LauncherToggle,
+    /// `overview toggle|open|close`: the overview in Desktop mode.
+    Overview(Presence),
+    /// `shortcuts toggle|open|close`: the overview in Shortcuts mode.
+    Shortcuts(Presence),
     NotificationsToggle,
     NotificationsDismissAll,
     /// `wallpaper set <output|all> <file>`: `file` is a bare name in the
@@ -201,6 +233,12 @@ impl Verb {
             },
             ["island", "close"] => Verb::IslandClose,
             ["launcher", "toggle"] => Verb::LauncherToggle,
+            ["overview", word] => {
+                Verb::Overview(Presence::from_word(word).ok_or_else(|| unknown(&words))?)
+            }
+            ["shortcuts", word] => {
+                Verb::Shortcuts(Presence::from_word(word).ok_or_else(|| unknown(&words))?)
+            }
             ["notifications", "toggle"] => Verb::NotificationsToggle,
             ["notifications", "dismiss-all"] => Verb::NotificationsDismissAll,
             ["wallpaper", "set", target, file] if output_name(target) && file_name(file) => {
@@ -310,6 +348,8 @@ impl Verb {
             Verb::IslandOpen(page) => vec!["island", "open", page.word()],
             Verb::IslandClose => vec!["island", "close"],
             Verb::LauncherToggle => vec!["launcher", "toggle"],
+            Verb::Overview(presence) => vec!["overview", presence.word()],
+            Verb::Shortcuts(presence) => vec!["shortcuts", presence.word()],
             Verb::NotificationsToggle => vec!["notifications", "toggle"],
             Verb::NotificationsDismissAll => vec!["notifications", "dismiss-all"],
             Verb::Caffeine(switch) => vec!["caffeine", verbs::switch_word(*switch)],
@@ -440,6 +480,12 @@ mod tests {
             (Verb::IslandOpen(PageId::MEDIA), "island open media"),
             (Verb::IslandClose, "island close"),
             (Verb::LauncherToggle, "launcher toggle"),
+            (Verb::Overview(Presence::Toggle), "overview toggle"),
+            (Verb::Overview(Presence::Open), "overview open"),
+            (Verb::Overview(Presence::Close), "overview close"),
+            (Verb::Shortcuts(Presence::Toggle), "shortcuts toggle"),
+            (Verb::Shortcuts(Presence::Open), "shortcuts open"),
+            (Verb::Shortcuts(Presence::Close), "shortcuts close"),
             (Verb::NotificationsToggle, "notifications toggle"),
             (Verb::NotificationsDismissAll, "notifications dismiss-all"),
             (Verb::Caffeine(Switch::On), "caffeine on"),
@@ -872,7 +918,7 @@ mod tests {
 
     #[test]
     fn every_accepted_verb_string_parses_to_its_verb() {
-        let table: [(&[&str], Verb); 9] = [
+        let table: [(&[&str], Verb); 11] = [
             (&["island", "toggle"], Verb::IslandToggle),
             (
                 &["island", "open", "activity"],
@@ -885,6 +931,8 @@ mod tests {
             (&["island", "open", "tray"], Verb::IslandOpen(PageId::TRAY)),
             (&["island", "close"], Verb::IslandClose),
             (&["launcher", "toggle"], Verb::LauncherToggle),
+            (&["overview", "toggle"], Verb::Overview(Presence::Toggle)),
+            (&["shortcuts", "close"], Verb::Shortcuts(Presence::Close)),
             (&["notifications", "toggle"], Verb::NotificationsToggle),
             (
                 &["notifications", "dismiss-all"],
@@ -899,7 +947,7 @@ mod tests {
 
     #[test]
     fn every_refused_verb_string_is_refused_with_its_message() {
-        let table: [(&[&str], &str); 14] = [
+        let table: [(&[&str], &str); 16] = [
             (&[], "unknown verb \"\""),
             (&["island"], "unknown verb \"island\""),
             (&["island", "open"], "unknown verb \"island open\""),
@@ -916,6 +964,8 @@ mod tests {
             (&["Island", "toggle"], "unknown verb \"Island toggle\""),
             (&["quit", "now"], "unknown verb \"quit now\""),
             (&["launcher"], "unknown verb \"launcher\""),
+            (&["overview"], "unknown verb \"overview\""),
+            (&["shortcuts", "fly"], "unknown verb \"shortcuts fly\""),
             (&["notifications"], "unknown verb \"notifications\""),
             (
                 &["notifications", "dismiss"],
