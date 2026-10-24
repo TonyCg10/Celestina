@@ -42,6 +42,10 @@
 //!   cannot take back.
 //! - [`wallpaper`] — which image an output shows, how it is laid on the
 //!   output, and the next or previous image of a folder.
+//! - [`display_text`] — text a stranger wrote, made safe to paint and bounded.
+//! - [`polkit`] — the polkit authentication agent's pure domain: requests,
+//!   the queue and its limits, the helper's line protocol, how a request
+//!   ends and what polkitd is told (the agent never grants).
 //! - [`weather`] — the one request the shell makes, how its answer is read, and
 //!   when a reading stops counting.
 //! - [`glance`] — load levels and today's date for the bar's readings.
@@ -58,6 +62,7 @@ pub mod calendar;
 pub mod clipboard;
 pub mod coalesce;
 pub mod connectivity;
+pub mod display_text;
 pub mod glance;
 pub mod idle;
 pub mod keybinds;
@@ -69,6 +74,7 @@ pub mod nightlight;
 pub mod notifications;
 pub mod osd;
 pub mod phone;
+pub mod polkit;
 pub mod session;
 pub mod settings;
 pub mod thumbnail;

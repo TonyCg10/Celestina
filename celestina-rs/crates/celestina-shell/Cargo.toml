@@ -15,6 +15,15 @@ celestina-core.workspace = true
 # reader and writer of those files, as in the module they were copied from.
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+# `polkit::Cookie` holds the authentication cookie polkitd hands the agent, a
+# bearer secret for one request: `Zeroizing` wipes its bytes when it is
+# dropped, on every path including unwinding (CEL-2-I design, section 6.5).
+zeroize = "1"
+# `display_text` cuts text a stranger wrote at a grapheme boundary, so a
+# combining sequence or an emoji is never split in half (CEL-2-I design,
+# section 6.2 D). The same crate and major version the product already uses
+# for grapheme counting.
+unicode-segmentation = "1"
 # The session lock's policy (`lock`) speaks the lock's vocabulary: the status
 # lines it reads, the exit codes it classifies. The crate has no dependency of
 # its own and is the one owner of those numbers (CEL-2-H, design §4.13).

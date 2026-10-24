@@ -1,0 +1,143 @@
+# CEL-2-I exact change inventory
+
+Base revision	ee4cd19d791892287a38027bdfe999785761b0b2
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/crates/celestina-shell/Cargo.toml
+Pathspec	celestina-rs/crates/celestina-shell/src/display_text.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/notifications.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/polkit.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-lock/src/machine.rs
+Pathspec	celestina/crates/celestina-paint/src/theme.rs
+Pathspec	celestina/crates/celestina-ui/Cargo.toml
+Pathspec	celestina/crates/celestina-ui/src/lib.rs
+Pathspec	celestina/crates/celestina-ui/src/secret.rs
+Pathspec	celestina/crates/celestina-ui/tests/secret.rs
+Pathspec	celestina/crates/celestina-wayland/examples/lock_cover.rs
+Pathspec	celestina/crates/celestina-wayland/src/handlers.rs
+Pathspec	celestina/crates/celestina-wayland/src/input.rs
+Pathspec	celestina/crates/celestina-wayland/src/lock/handlers.rs
+Pathspec	celestina/crates/celestina-wayland/src/popup.rs
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/docs/decisions/0021-polkit-agent.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-10-17-cel-2-i-spike.md
+Pathspec	celestina/docs/evidence/2026-10-17-cel-2-i.md
+Pathspec	celestina/docs/handover.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-I.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/bus_signal.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/menu.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/media/control.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	celestina/src/polkit/dumpable.rs
+Pathspec	celestina/src/polkit/duty.rs
+Pathspec	celestina/src/polkit/duty/tests.rs
+Pathspec	celestina/src/polkit/mod.rs
+Pathspec	celestina/src/polkit/state.rs
+Pathspec	celestina/src/polkit/state/tests.rs
+Pathspec	celestina/src/polkit/view.rs
+Pathspec	celestina/src/providers/mod.rs
+Pathspec	celestina/src/providers/notifications.rs
+Pathspec	celestina/src/providers/polkit/agent.rs
+Pathspec	celestina/src/providers/polkit/helper.rs
+Pathspec	celestina/src/providers/polkit/helper/tests.rs
+Pathspec	celestina/src/providers/polkit/mod.rs
+Pathspec	celestina/src/providers/polkit/session.rs
+Pathspec	celestina/src/providers/polkit/testing.rs
+Pathspec	celestina/src/providers/polkit/tests.rs
+Pathspec	celestina/src/providers/worker.rs
+Pathspec	celestina/src/tray/item.rs
+Pathspec	celestina/src/tray/menu.rs
+Pathspec	celestina/src/tray/test_bus.rs
+Pathspec	celestina/tests/polkit_duty.rs
+Pathspec	celestina/tests/polkit_guards.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	0	25de09e1cca44e3b1e0c7d43966fd9ccec5f7203663f5a3a08ca637556a7471b	celestina-rs/Cargo.lock
+9	0	935585ab862021a069fdddd719f0086569cefd12c9faedbaf2a25406c323e988	celestina-rs/crates/celestina-shell/Cargo.toml
+341	0	cc89a4c069eb7febf38a8459319f0a30e17e68b2574b14b7f061ed67edab3055	celestina-rs/crates/celestina-shell/src/display_text.rs
+6	0	718355fcd3a786a04475478debc4b4c787923623295d99699ec11e70492f3d1e	celestina-rs/crates/celestina-shell/src/lib.rs
+1	1	4d08f707eee7767dfcd3171d13f78374de518a73c6cc6bc202c63b18972ece45	celestina-rs/crates/celestina-shell/src/notifications.rs
+2845	0	71f1d829fab13101cc809e74ae0effcd067e24784a9d0ac30148ed19292d605f	celestina-rs/crates/celestina-shell/src/polkit.rs
+39	0	ef4b363e1371fc2f5370a2091f85939d66d9912f5ffe5cb82c560af5f8fedd70	celestina-rs/crates/celestina-shell/src/settings.rs
+4	1	d3043d3bebeb541d4ae1140698d2dc84ffe60383ea9fa293f69085afc2461f70	celestina/Cargo.lock
+17	11	62f1a78b2556de3feef7215f57da8b9de54ed67137183adfc96b7d0152105af8	celestina/Cargo.toml
+12	0	e94b7acf4c156e7033570d417b13ce00c829785f6e60c5d4e11ddfbf2e419934	celestina/README.md
+1	1	577adee2e2cf1ad5da9d36b29d85ccbc09d6d53b0aa97f62472180f346325fcf	celestina/ROADMAP.md
+9	0	c1db7e6cda1dc8a0e9e81f0315112798599c5ab4d722c45725eb297738ccf73d	celestina/STATUS.md
+92	3	b887dec3c44682efa7bc61d7aa83d59e7bfe143d5d3f095ef56a9e547822dbc0	celestina/VALIDATION.md
+13	4	33e552cac1ba74bf15b5225ac13ecce1bf1e439f0c2de8467cc995140546328f	celestina/crates/celestina-lock/src/machine.rs
+10	2	4f9dfab1574347660ff966ce12cf02e876342a2d1ddb65b6184bad4855ca8cdb	celestina/crates/celestina-paint/src/theme.rs
+7	0	950d853dfb956f2e895e680c1457124183cbd48c910256b2803d635acba34f22	celestina/crates/celestina-ui/Cargo.toml
+7	1	25e20808c1e46820dba257ff25f3ec7bbb681595f28ebcafd7cb6bd6ca840f9c	celestina/crates/celestina-ui/src/lib.rs
+360	0	b7a4cc1bb140741aa7086a9393660bf982dbc25a1187b6b7ef633c3dc9b3ef4e	celestina/crates/celestina-ui/src/secret.rs
+345	0	5a6eddc979f359e60c00f05a0e031ed0049568f3f50814790de0e05d282da12a	celestina/crates/celestina-ui/tests/secret.rs
+3	1	9651b3a22e06566def28032868405f8548b24928d6ec8beecd7d92d5087bb4c9	celestina/crates/celestina-wayland/examples/lock_cover.rs
+34	23	9d36103e2e6d3f31fcb00e3fe2c2f4638102f3f858147b23c02bfe3a7df7a419	celestina/crates/celestina-wayland/src/handlers.rs
+291	34	aa6b96d7088eb1854b791b82c3a98b80b68e94f2ba26e9c27d143c5715bee4f4	celestina/crates/celestina-wayland/src/input.rs
+5	2	d13a8fcaae49972e23e00e5ae730d2120f28aaf03319ecc0ed54e4acf17a7696	celestina/crates/celestina-wayland/src/lock/handlers.rs
+1	3	d6711b82eca32d4c48302a7004d7ee5459edb3da76e4ade7b25431bba8fd214f	celestina/crates/celestina-wayland/src/popup.rs
+4	6	17f78858369ab98984bcdc9203ca161f31f2745f5bdf6a230e959e65a95968d2	celestina/crates/celestina-wayland/src/runtime.rs
+89	0	79dcbd473aac0fb0ae566bc94117bc0724a806058f6bf1ba11798aa1c166f4e1	celestina/docs/decisions/0021-polkit-agent.md
+4	3	9e5330f55ed293336100cd0ea897b96733ee14164adc03c749837a54f31aa8f9	celestina/docs/decisions/README.md
+313	0	44237b123c30e1eae75163d739ae55cdd60205e96137e32ae610bd9f675b2c59	celestina/docs/evidence/2026-10-17-cel-2-i-spike.md
+688	0	2bf612e6181eafc755e0c9ea49016a59eeca3440d041e17b83b181cd445dc4f3	celestina/docs/evidence/2026-10-17-cel-2-i.md
+2	2	4deec8ebddc6d3f575625d5fd01b9be5af7bd00b4e195f9a09b16429d37930aa	celestina/docs/handover.md
+143	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-I.numstat.tsv
+1	1	e3d7a9fab07380a6d554e6b4b1c12186aa55a74d879b311551f9f37e75b203ba	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+50	4	9dddf70f1a2c70aaeebc84bfe06316b1fc1860ce80d05489e86c16ad19965c00	celestina/scripts/smoke.sh
+358	12	d99be429b7cb13cd1f27c0b974aedeadb8d6cd2c40bcba8fbaf80ca2ebc04c19	celestina/src/app.rs
+86	0	d066b97968d91fc65b122d35abad8a8f35d574e736adc857a5a5bcea0f3e6fb6	celestina/src/bus_signal.rs
+80	0	b064b05f54dd15e1c8f82f196638cee6e5c3872532553b99a48a0fa0ae25caf3	celestina/src/copy.rs
+1	1	4c4d82e998ccaa596c3f3da8a76eabc2818cbf47a3abe40c530e30822a6d582c	celestina/src/island/menu.rs
+4	2	ab5b9185021b5f383fb97af0153cb2fd74f7381fe1cbe0a7f01e39e5f8b16de8	celestina/src/island/mod.rs
+23	2	eba398542ccea1aef9c429f0d1f38898bf2f6f3fb36f465051ad2a685318df56	celestina/src/island/view.rs
+1	1	42f652ce74ec8fd6d6be4a989ae1b1948183f699740bcfaac14566755abbec11	celestina/src/launcher/mod.rs
+2	0	282a813bed989a4484c20ab5dac061daec6110edb85c089fc4b56f0804f93539	celestina/src/lib.rs
+18	1	aa34b548102d411762abbf67b86495b2810f1e67702955a982b079d2dcaad258	celestina/src/main.rs
+1	1	8a6954818b458b6ccf76b3358d79b7c137c7397e5382729eb5b4fde180ae8d44	celestina/src/media/control.rs
+20	0	3bec8a4dc6df96b1f523b80a00689e07dbd3bba77727f0c07891813b86170ee1	celestina/src/message.rs
+1	1	010f75239ab25d063c1712e37f2beacebd405dc6dbfe8369e8552c9dabac2356	celestina/src/osd/popup.rs
+268	0	2c1ccddc5fb6c1d67257f46cd34e61ed1419c8a8b5c30a4111bc67de67d5ab56	celestina/src/polkit/dumpable.rs
+385	0	6721a086638f74addabe666ab06ac0bac5eba4f1cacbe2aa895d811b7b851345	celestina/src/polkit/duty.rs
+510	0	600631ca83fcbbdfe14fcc5b539a1381b84c3137abb8be2476ba24f3dd7db2c1	celestina/src/polkit/duty/tests.rs
+300	0	f5c2fa22f0c4ffdb6d27a7d6d74cc903502e6253e52d1794fa1576496974c0fd	celestina/src/polkit/mod.rs
+1057	0	0efb34d335a58ef6cfba24b76cfdb248e25f0e3a75d8e0cc961aa8c917f72a13	celestina/src/polkit/state.rs
+1480	0	5b92e295c413d56b9efd407366ef5b4859f92715e03c63d3ca030289afe5b1f0	celestina/src/polkit/state/tests.rs
+546	0	c83552e1aec806fd842e63fac04fa95e7fbade2bb1bf1871ddedbf52bdc450de	celestina/src/polkit/view.rs
+1	0	8d84f570740bd89d71b3a10ecae1f7bb96c910b931422acdc2c725b41330e366	celestina/src/providers/mod.rs
+28	0	8ac94acb2a0e2347937e79b3df30a1a624f1628db94208f8ffb79d84caba0ff5	celestina/src/providers/notifications.rs
+741	0	bd3a512313fcd702475d6a1e0f62f8a762196903d12bc35208e18f21d1f3497b	celestina/src/providers/polkit/agent.rs
+706	0	b3bfa51d41f7687d08ec8a05dc27a5d11ea273fd1542d636fd0fe180cb146917	celestina/src/providers/polkit/helper.rs
+1243	0	670cf9147b4d8098f7d342047281c35342bf3b526224bc9810e5409f3e227608	celestina/src/providers/polkit/helper/tests.rs
+657	0	f71c3834775388474a9159a17aea08e2f17ce46704f7cde36f24bca27f7089a9	celestina/src/providers/polkit/mod.rs
+388	0	58c5bc14ef0bcd7c157b6d17d6f5fd80230abb2482b744c096bb1b0f61d3bf31	celestina/src/providers/polkit/session.rs
+616	0	460fab73143cbb1fda2f6faeaebd9e75fd8d3e7766c23a7fe69ad57fe31b1c92	celestina/src/providers/polkit/testing.rs
+1310	0	a7e0be572fe5d2aaf6754e67eabff1f50047966d77c3e9905c14f6f8f266fa91	celestina/src/providers/polkit/tests.rs
+91	12	9b9980b57f6854c7aa1b8c734692f5b51112d037b690ec4890aeb3a4b5defb56	celestina/src/providers/worker.rs
+5	13	9185bfe8ca83a2efaeb923eb1fed5b9d11e80e0baea52382e72a7ed984d19e56	celestina/src/tray/item.rs
+1	1	d5871b40812cbb63f7494806af678aba0a2d99dc5fd1d98e64e3932abc3ae779	celestina/src/tray/menu.rs
+7	0	bd50fb0e073b7259900769d6c113ecf6c986e4b2e7387341cdb3df07b24c58d2	celestina/src/tray/test_bus.rs
+33	0	24cd3a7cd8d998047207dbcb76623908aafb121325af6550e8606dd36ccc4df2	celestina/tests/polkit_duty.rs
+1445	0	6ca11d40b253e1da42cbb531341be70a451c275fafbcb2083ea75706b357d9a8	celestina/tests/polkit_guards.rs
+1	0	49f38198de415a0e59ff4f0de1ce7b7a16736692780acf0a1aabb55bb94bc80c	docs/version-history.tsv

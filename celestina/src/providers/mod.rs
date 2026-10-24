@@ -12,6 +12,7 @@ pub mod magnetita;
 pub mod melibea;
 pub mod niri;
 pub mod notifications;
+pub mod polkit;
 pub mod settings;
 pub mod sysmon;
 pub mod tray;

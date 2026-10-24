@@ -50,14 +50,14 @@ set -eu
 # (`CELESTINA_DDC=0`): with the duty on there is no `celestina-osd` surface at
 # rest, an audio event raises it and it is destroyed again, and `volume up`
 # reaches the fake `wpctl`; with the duty off the verbs are rejected and no
-# fake is called. The last three nested runs turn the phone and bubbles
+# fake is called. Three more nested runs turn the phone and bubbles
 # duties on against `fake-melibea.py` in a private runtime directory
 # (CEL-2-J): one must draw no frame at rest, one opens and closes the bubbles
 # selector and answers the phone verbs, and one must log the missing Melibea
 # socket as absent exactly once. Before any of them the artifact's other two
 # binaries, `celestina-lock` and `celestina-lock-verify`, must sit beside the
-# shell and refuse a bad request (CEL-2-H). Without niri the nested session is skipped
-# with a notice; without busctl and gdbus the notification part is.
+# shell and refuse a bad request (CEL-2-H). Two more nested runs (CEL-2-D) turn
+# the media duty on against a fake MPRIS player (see the media block below).
 # An overview run (CEL-2-L) starts two coloured `kitty` windows, one
 # under a `block-out-from "screen-capture"` rule of a throwaway niri profile,
 # opens the overview and then the shortcuts, and checks the capture's one
@@ -66,7 +66,11 @@ set -eu
 # read from that profile, and no frame at rest after the panel closes.
 # A rest-frame check that fails while the host throttles the nest's window is
 # inconclusive and the whole smoke runs again, up to three times (the head of
-# the script, `rest_fail`).
+# the script, `rest_fail`). A last nested run (CEL-2-I) turns the polkit duty
+# on over the same dead system bus: it must exit 0, report the agent
+# unavailable, never register with a polkitd and not panic (the duty is never
+# activated against the real bus here). Without niri the nested session is
+# skipped with a notice; without busctl and gdbus the notification part is.
 usage() {
     echo "usage: scripts/smoke.sh --binary PATH" >&2
     exit 2
@@ -1675,4 +1679,46 @@ rest_frames=$(awk '/smoke-rest-begin/ { on = 1; next } /smoke-rest-end/ { on = 0
 echo "smoke: no frame at rest after the overview closed"
 }
 overview_run
+
+
+# The polkit duty (CEL-2-I): the shell starts with `duties.polkit` on from a
+# throwaway configuration home and the system bus pointed at a socket that is
+# not there, so the agent can never reach a real polkitd or logind. It must
+# start the duty, report itself unavailable once, register nothing and not
+# panic. The wrapper sets the dead bus itself, as the energy run does, and the
+# run is refused if that socket exists.
+xdg_polkit=$work/xdg-polkit
+mkdir -p "$xdg_polkit/celestina"
+printf '{"schema_version":1,"duties":{"polkit":"on"}}\n' > "$xdg_polkit/celestina/shell.json"
+[ ! -e "$work/no-system-bus" ] || fail "the dead system bus socket exists (polkit run)"
+polkit=$work/polkit-run
+cat > "$polkit" <<WRAPPER
+#!/bin/sh
+# Runs the shell with the polkit duty on over a system bus that is not there.
+XDG_CONFIG_HOME='$xdg_polkit'
+DBUS_SYSTEM_BUS_ADDRESS='unix:path=$work/no-system-bus'
+export XDG_CONFIG_HOME DBUS_SYSTEM_BUS_ADDRESS
+exec env RUST_LOG=info "$bin" "\$@"
+WRAPPER
+chmod +x "$polkit"
+run=$work/polkit
+status=0
+timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$polkit" \
+    --once "$run" -- --exit-after 5 \
+    > "$work/niri.log" 2>&1 || status=$?
+[ "$status" -eq 0 ] || fail "the nested niri exited with $status (polkit run)"
+[ -f "$run.status" ] || fail "the shell never ran inside the nest (polkit run)"
+shell_status=$(cat "$run.status")
+[ "$shell_status" = 0 ] || fail "the shell exited with $shell_status (polkit run)"
+if grep -q 'panicked' "$run.err"; then
+    fail "the shell panicked with the polkit duty on"
+fi
+grep -q 'polkit: the duty is on' "$run.err" ||
+    fail "the polkit duty did not start"
+grep -q 'polkit: the agent is unavailable' "$run.err" ||
+    fail "the polkit agent did not report itself unavailable over the dead system bus"
+if grep -Eq 'polkit: registration (Registered|Refused)' "$run.err"; then
+    fail "the polkit agent registered or was answered: a system bus other than the dead one was reached"
+fi
+echo "smoke: polkit on over the dead system bus: the agent is unavailable and the shell did not panic"
 echo "smoke: OK"

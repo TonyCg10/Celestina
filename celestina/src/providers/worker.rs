@@ -25,7 +25,7 @@
 
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Condvar, Mutex, MutexGuard};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -132,19 +132,59 @@ impl Drop for Worker {
 /// The stop is expected to be bounded ([`Worker::join_within`]). Whoever may
 /// start the same worker again calls [`Reaper::wait`] first, so an old and a
 /// new instance never overlap; the exit path waits for every reaper too.
+///
+/// A reaper is a handle on **one stop finishing**, so it can be cloned and
+/// waited for by several parties: a chain of replacements, each one's
+/// teardown waiting for the teardown it replaced, stays transitive (CEL-2-I,
+/// I-1). Waiting does not join the thread; it waits for the stop to return
+/// (or to panic), after which the thread has nothing left to do.
+#[derive(Clone, Debug, Default)]
+pub struct Reaper(Option<Arc<Finished>>);
+
+/// Whether a reaper's stop has returned, and the way to wait for it.
 #[derive(Debug, Default)]
-pub struct Reaper(Option<JoinHandle<()>>);
+struct Finished {
+    done: Mutex<bool>,
+    ended: Condvar,
+}
+
+impl Finished {
+    fn lock(&self) -> MutexGuard<'_, bool> {
+        // The flag is a plain bool: a poisoned lock holds no broken invariant.
+        match self.done.lock() {
+            Ok(done) => done,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+}
+
+/// Marks a reaper's stop as over when the thread leaves it, by any path.
+struct Signal(Arc<Finished>);
+
+impl Drop for Signal {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            tracing::error!("a worker reaper panicked");
+        }
+        *self.0.lock() = true;
+        self.0.ended.notify_all();
+    }
+}
 
 impl Reaper {
     /// Runs `stop` on a thread named `reap-{what}`. Without a thread, `stop`
     /// is dropped unrun, which drops what it owns: a [`Worker`] in it is then
     /// joined by its `Drop`, on this thread.
     pub fn spawn(what: &'static str, stop: impl FnOnce() + Send + 'static) -> Reaper {
+        let finished = Arc::new(Finished::default());
+        let signal = Signal(Arc::clone(&finished));
         match thread::Builder::new()
             .name(format!("reap-{what}"))
-            .spawn(stop)
-        {
-            Ok(handle) => Reaper(Some(handle)),
+            .spawn(move || {
+                let _signal = signal;
+                stop();
+            }) {
+            Ok(_) => Reaper(Some(finished)),
             Err(err) => {
                 tracing::warn!(%err, "no thread to reap the {what} worker; it was joined here");
                 Reaper(None)
@@ -152,12 +192,18 @@ impl Reaper {
         }
     }
 
-    /// Waits for the pending stop, if any.
-    pub fn wait(&mut self) {
-        if let Some(handle) = self.0.take() {
-            if handle.join().is_err() {
-                tracing::error!("a worker reaper panicked");
-            }
+    /// Waits for the stop to return, if there is one. Idempotent: waiting
+    /// again, or on a clone, returns at once once it is over.
+    pub fn wait(&self) {
+        let Some(finished) = &self.0 else {
+            return;
+        };
+        let mut done = finished.lock();
+        while !*done {
+            done = match finished.ended.wait(done) {
+                Ok(done) => done,
+                Err(poisoned) => poisoned.into_inner(),
+            };
         }
     }
 }
@@ -171,7 +217,7 @@ mod tests {
     fn a_reaper_runs_the_stop_off_the_caller_and_wait_waits_for_it() {
         let done = Arc::new(AtomicBool::new(false));
         let release = Arc::new(AtomicBool::new(false));
-        let mut reaper = {
+        let reaper = {
             let done = Arc::clone(&done);
             let release = Arc::clone(&release);
             Reaper::spawn("test", move || {
@@ -189,6 +235,39 @@ mod tests {
         // Waiting again, or on a default reaper, is nothing.
         reaper.wait();
         Reaper::default().wait();
+    }
+
+    #[test]
+    fn a_cloned_reaper_is_waited_for_by_every_holder_and_a_panicking_stop_still_ends() {
+        let release = Arc::new(AtomicBool::new(false));
+        let reaper = {
+            let release = Arc::clone(&release);
+            Reaper::spawn("test-clone", move || {
+                while !release.load(Ordering::Acquire) {
+                    thread::sleep(Duration::from_millis(2));
+                }
+            })
+        };
+        let waiters: Vec<_> = (0..3)
+            .map(|_| {
+                let reaper = reaper.clone();
+                thread::spawn(move || reaper.wait())
+            })
+            .collect();
+        thread::sleep(Duration::from_millis(30));
+        assert!(
+            waiters.iter().all(|waiter| !waiter.is_finished()),
+            "nobody is released while the stop runs"
+        );
+        release.store(true, Ordering::Release);
+        for waiter in waiters {
+            assert!(waiter.join().is_ok());
+        }
+        // A holder that comes late finds it over.
+        reaper.wait();
+
+        let panicked = Reaper::spawn("test-panic", || panic!("on purpose"));
+        panicked.wait();
     }
 
     fn until_shutdown(shutdown: &Arc<AtomicBool>) -> impl FnOnce() + Send + 'static {

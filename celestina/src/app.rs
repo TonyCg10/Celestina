@@ -61,6 +61,12 @@ use crate::{
     },
     phone::{self, PhoneHandle, PhoneNews},
     pieces::PageId,
+    polkit::{
+        self,
+        duty::{Change, LauncherSlot, PolkitDuty},
+        state::Ctx,
+        Notice, PolkitState, PromptHost,
+    },
     providers::{
         magnetita::{MagnetitaEvent, MediaKind},
         melibea::{BubbleAction, MelibeaEvent},
@@ -492,6 +498,9 @@ pub struct App {
     wallpapers: crate::wallpaper::surface::Wallpapers,
     /// The energy duties' workers, set once the loop runs.
     energy: Rc<OnceCell<EnergyHandle>>,
+    /// The `polkit` duty (CEL-2-I): nothing while off, the agent and the
+    /// prompt state while on.
+    polkit: PolkitDuty,
     /// The session lock's side of the shell, set once the loop runs.
     lock: Rc<OnceCell<LockHandle>>,
     /// The glance workers (system monitor, weather), set once the loop runs.
@@ -593,6 +602,7 @@ impl App {
             tray_refusal_logged: false,
             wallpapers: crate::wallpaper::surface::Wallpapers::default(),
             energy: Rc::new(OnceCell::new()),
+            polkit: PolkitDuty::new(Rc::new(OnceCell::new())),
             lock: Rc::new(OnceCell::new()),
             glance: Rc::new(OnceCell::new()),
             sysmon: None,
@@ -617,6 +627,15 @@ impl App {
             overview: OverviewSlot::default(),
             outputs: Vec::new(),
         }
+    }
+
+    /// Takes the slot the polkit launcher is put in once the loop runs. The
+    /// `polkit` duty starts the agent through it, at start when the duty is on
+    /// and live whenever `shell.json` flips it.
+    #[must_use]
+    pub fn with_polkit(mut self, launcher: LauncherSlot) -> App {
+        self.polkit = PolkitDuty::new(launcher);
+        self
     }
 
     /// Takes the slot the glance handle is put in once the loop runs.
@@ -817,6 +836,9 @@ impl App {
             if let Some(handle) = self.energy.get() {
                 handle.apply(&after);
             }
+        }
+        if before.duties.polkit != after.duties.polkit {
+            self.polkit_apply(ctl);
         }
         if before.duties.lock != after.duties.lock {
             if let Some(handle) = self.lock.get() {
@@ -1316,6 +1338,12 @@ impl App {
 
     /// Opens the Notifications page on `output`'s Island.
     fn open_notifications_page(&mut self, output: OutputId, ctl: &mut RuntimeCtl<'_>) {
+        if self.polkit_claims_keyboard() {
+            tracing::info!(
+                "notifications: page not opened while a polkit prompt holds the keyboard"
+            );
+            return;
+        }
         let Some(surface) = self.islands.surface_of(output) else {
             tracing::debug!(output = output.0, "the output is gone: no page to open");
             return;
@@ -1407,6 +1435,12 @@ impl App {
                 tracing::info!("quit requested over the bus");
                 ctl.stop();
             }
+            Verb::IslandToggle | Verb::IslandOpen(_) if self.polkit_claims_keyboard() => {
+                tracing::info!(
+                    ?verb,
+                    "island: not opened while a polkit prompt holds the keyboard"
+                );
+            }
             Verb::IslandToggle | Verb::IslandOpen(_) | Verb::IslandClose => {
                 let target = self
                     .islands
@@ -1470,6 +1504,11 @@ impl App {
             Verb::NotificationsDismissAll => {
                 self.notifications.send(NotificationsCommand::DismissAll);
             }
+            Verb::NotificationsToggle if self.polkit_claims_keyboard() => {
+                tracing::info!(
+                    "notifications: not toggled while a polkit prompt holds the keyboard"
+                );
+            }
             Verb::NotificationsToggle => {
                 let target = self
                     .islands
@@ -1496,6 +1535,10 @@ impl App {
         if let Some(open) = self.launcher.take() {
             tracing::info!("launcher: closed by the command");
             close_surface(open.surface(), ctl);
+            return;
+        }
+        if self.polkit_claims_keyboard() {
+            tracing::info!("launcher: not opened while a polkit prompt holds the keyboard");
             return;
         }
         let Some((surface, output)) = self.overlay_surface(ctl) else {
@@ -1546,6 +1589,10 @@ impl App {
         }
         if self.settings.current().duties.bubbles != Duty::On {
             tracing::info!("bubbles select: the bubbles duty is off; nothing was done");
+            return;
+        }
+        if self.polkit_claims_keyboard() {
+            tracing::info!("bubbles select: not opened while a polkit prompt holds the keyboard");
             return;
         }
         // One overlay at a time: an open overview goes, as it does for the
@@ -1672,6 +1719,10 @@ impl App {
             }
             return;
         };
+        if self.polkit_claims_keyboard() {
+            tracing::info!("launcher: switch dropped while a polkit prompt holds the keyboard");
+            return;
+        }
         let Some(surface) = self.islands.surface_on(output).or_else(|| {
             self.islands
                 .target(None, focused_output(self.model.as_ref()))
@@ -2097,6 +2148,10 @@ impl App {
         presence: Presence,
         ctl: &mut RuntimeCtl<'_>,
     ) {
+        if !matches!(presence, Presence::Close) && self.polkit_claims_keyboard() {
+            tracing::info!("overview: not opened while a polkit prompt holds the keyboard");
+            return;
+        }
         let steps = self.overview.flow.verb(wanted, presence);
         self.overview_steps(steps, ctl);
     }
@@ -2240,6 +2295,14 @@ impl App {
     /// keyboard). The flow is closed again when it cannot, also when the
     /// chosen output is gone: the panel never moves to another one.
     fn open_overview_surface(&mut self, mode: OverviewMode, ctl: &mut RuntimeCtl<'_>) {
+        // A prompt may have appeared while the capture was awaited: the
+        // panel's exclusive keyboard would starve its proof.
+        if self.polkit_claims_keyboard() {
+            tracing::info!("overview: not opened while a polkit prompt holds the keyboard");
+            self.overview.flow.closed();
+            self.overview.clear_pending();
+            return;
+        }
         let chosen = match self.overview.target {
             Some(id) => self
                 .outputs
@@ -2300,17 +2363,8 @@ impl App {
     /// Frees the textures of a panel that is going away. If the painter is
     /// busy (it should not be outside a frame or an input call), the panel is
     /// kept in the slot's `dying` list and freed at the next frame or close.
-    fn release_overview(&mut self, mut open: Overview) {
-        match self.painter.as_ref().map(|p| p.try_borrow_mut()) {
-            Some(Ok(mut painter)) => open.release(&mut painter),
-            Some(Err(_)) => {
-                tracing::warn!(
-                    "overview: the painter is in use; the panel's textures are freed at the next frame"
-                );
-                self.overview.dying.push(open);
-            }
-            None => {}
-        }
+    fn release_overview(&mut self, open: Overview) {
+        release_overview_panel(&mut self.overview, self.painter.as_ref(), open);
     }
 
     /// Frees the textures of panels whose release had to wait.
@@ -2482,12 +2536,240 @@ fn close_surface(surface: SurfaceId, ctl: &mut RuntimeCtl<'_>) {
     ctl.destroy_surface(surface);
 }
 
+/// What the polkit prompt may do through the app: make and destroy its
+/// surfaces, close the surfaces that hold the keyboard, and raise its notices
+/// through the shell's own notification server (CEL-2-I).
+/// Frees the textures of a closed overview panel. If the painter is busy the
+/// panel waits in the slot's `dying` list for the next frame or close.
+fn release_overview_panel(
+    slot: &mut OverviewSlot,
+    painter: Option<&SharedPainter>,
+    mut open: Overview,
+) {
+    match painter.map(|p| p.try_borrow_mut()) {
+        Some(Ok(mut painter)) => open.release(&mut painter),
+        Some(Err(_)) => {
+            tracing::warn!(
+                "overview: the painter is in use; the panel's textures are freed at the next frame"
+            );
+            slot.dying.push(open);
+        }
+        None => {}
+    }
+}
+
+struct PolkitHost<'a, 'b> {
+    ctl: &'a mut RuntimeCtl<'b>,
+    launcher: &'a mut Option<Launcher>,
+    islands: &'a mut Islands,
+    notifications: &'a mut NotificationsState,
+    overview: &'a mut OverviewSlot,
+    painter: Option<&'a SharedPainter>,
+}
+
+impl PromptHost for PolkitHost<'_, '_> {
+    fn create_surface(&mut self, spec: LayerSpec) -> Result<SurfaceId, RuntimeError> {
+        self.ctl.create_layer_surface(spec)
+    }
+
+    fn destroy_surface(&mut self, id: SurfaceId) {
+        self.ctl.destroy_surface(id);
+    }
+
+    fn request_redraw(&mut self, id: SurfaceId) {
+        if let Some(mut surface) = self.ctl.surface(id) {
+            surface.request_redraw();
+        }
+    }
+
+    /// The launcher, every open Island page and every menu of the bar go: two
+    /// exclusive overlays (or a popup grab) would leave the choice to the
+    /// compositor and starve the proof.
+    fn close_keyboard_surfaces(&mut self) {
+        if let Some(open) = self.launcher.take() {
+            tracing::info!("launcher: closed by a polkit prompt");
+            close_surface(open.surface(), self.ctl);
+        }
+        for slot in &mut self.islands.slots {
+            let Some(mut surface) = self.ctl.surface(slot.surface) else {
+                continue;
+            };
+            if slot.island.page().is_some() {
+                slot.island.command(&Verb::IslandClose, &mut surface);
+            }
+            // A menu hanging from the bar (a tray icon's) survives the page
+            // closing and may hold a popup grab: it goes too (N-25).
+            slot.island.close_menu(&mut surface);
+        }
+        // The overview's panel holds the keyboard exclusively too: the wait
+        // for its capture is given up and an open panel is destroyed.
+        if self.overview.flow.is_active() || self.overview.panel.is_some() {
+            self.overview.flow.closed();
+            self.overview.clear_pending();
+            if let Some(open) = self.overview.panel.take() {
+                tracing::info!("overview: closed by a polkit prompt");
+                let surface = open.surface();
+                release_overview_panel(self.overview, self.painter, open);
+                if let Some(mut s) = self.ctl.surface(surface) {
+                    Overview::closing(&mut s);
+                }
+                self.ctl.destroy_surface(surface);
+            }
+        }
+    }
+
+    fn notice(&mut self, notice: Notice) {
+        let incoming = polkit::notice_incoming(notice);
+        if self
+            .notifications
+            .send(NotificationsCommand::Post(Box::new(incoming)))
+        {
+            return;
+        }
+        // Another program holds the notification name (or the worker is gone):
+        // the banner cannot be shown, so the journal carries the notice. A
+        // proof failure means a request was cancelled unshown, which a client
+        // that suppressed the real prompt must not be able to hide.
+        match notice {
+            Notice::PromptCouldNotBeShown => tracing::error!(
+                ?notice,
+                "polkit: a request was cancelled because its prompt could not be shown, and the notice could not be raised (the notification name is held elsewhere)"
+            ),
+            Notice::CooldownStarted => tracing::warn!(
+                ?notice,
+                "polkit: requests are cancelled unshown for a while, and the notice could not be raised (the notification name is held elsewhere)"
+            ),
+            Notice::HelperUnavailable => tracing::warn!(
+                ?notice,
+                "polkit: a request failed because polkit's helper could not be used, and the notice could not be raised (the notification name is held elsewhere)"
+            ),
+        }
+    }
+}
+
+impl App {
+    /// Whether a polkit prompt holds the keyboard (or has surfaces left to
+    /// destroy that do): nothing else that takes it opens meanwhile.
+    fn polkit_claims_keyboard(&self) -> bool {
+        self.polkit
+            .state()
+            .is_some_and(PolkitState::keyboard_claimed)
+    }
+
+    /// Runs `f` on the polkit state with a host over the rest of the app;
+    /// `None` when the duty has started no agent.
+    fn polkit_run<R>(
+        &mut self,
+        ctl: &mut RuntimeCtl<'_>,
+        f: impl FnOnce(&mut PolkitState, &Ctx<'_>, &mut dyn PromptHost) -> R,
+    ) -> Option<R> {
+        let focused = focused_output(self.model.as_ref()).map(str::to_owned);
+        let polkit = self.polkit.state_mut()?;
+        let mut host = PolkitHost {
+            ctl,
+            launcher: &mut self.launcher,
+            islands: &mut self.islands,
+            notifications: &mut self.notifications,
+            overview: &mut self.overview,
+            painter: self.painter.as_ref(),
+        };
+        let ctx = Ctx {
+            now: std::time::Instant::now(),
+            focused_output: focused.as_deref(),
+        };
+        Some(f(polkit, &ctx, &mut host))
+    }
+
+    /// Brings the `polkit` duty to what `shell.json` says: starts the agent
+    /// and the prompt state, or tears them down (every request cancelled, the
+    /// helper conversation closed, the text wiped, the surfaces destroyed,
+    /// the agent unregistered). A duty that is on and whose registration was
+    /// refused is left as it is: off and on again is the retry.
+    fn polkit_apply(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let want = self.settings.current().duties.polkit;
+        let theme = self.theme();
+        let reduced = self.appearance.reduced_motion;
+        let mut host = PolkitHost {
+            ctl,
+            launcher: &mut self.launcher,
+            islands: &mut self.islands,
+            notifications: &mut self.notifications,
+            overview: &mut self.overview,
+            painter: self.painter.as_ref(),
+        };
+        let change = self
+            .polkit
+            .apply(want, &theme, reduced, std::time::Instant::now(), &mut host);
+        if change != Change::Unchanged {
+            tracing::info!(?change, "polkit: the duty was applied");
+            self.arm_polkit_timer(ctl);
+        }
+    }
+
+    /// Wakes the loop at the prompt's next deadline through the first Island's
+    /// surface, which always exists while a prompt can: a card the compositor
+    /// never configures has no frames of its own to be woken by.
+    fn arm_polkit_timer(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let Some(wait) = self
+            .polkit
+            .state()
+            .and_then(|p| p.next_wake(std::time::Instant::now()))
+        else {
+            return;
+        };
+        let carrier = self.islands.iter().next().map(|slot| slot.surface);
+        if let Some(mut surface) = carrier.and_then(|id| ctl.surface(id)) {
+            surface.redraw_after(wait);
+        }
+    }
+
+    /// Posts [`Message::PolkitSettle`] to the loop: a prompt ended during an
+    /// input or frame call, which cannot destroy a surface or map the next.
+    fn post_polkit_settle(&self) {
+        match self
+            .sender
+            .get()
+            .map(|sender| sender.send(Message::PolkitSettle))
+        {
+            Some(Ok(())) => {}
+            _ => tracing::warn!("polkit: the loop cannot be reached; the prompt's surfaces stay"),
+        }
+    }
+
+    /// Input on one of the prompt's surfaces.
+    fn polkit_input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) {
+        let now = std::time::Instant::now();
+        let surface = ctl.id();
+        let Some(polkit) = self.polkit.state_mut() else {
+            return;
+        };
+        let outcome = polkit.input(surface, ev, now);
+        if outcome.redraw {
+            ctl.request_redraw();
+        }
+        if outcome.settle {
+            // The keyboard and the pointer are released now; the surface
+            // goes when the posted message arrives.
+            ctl.set_keyboard_interactivity(KeyboardInteractivity::None);
+            ctl.set_input_region(&[]);
+        }
+        if let Some(wait) = polkit.next_wake(now) {
+            ctl.redraw_after(wait);
+        }
+        if outcome.settle {
+            self.post_polkit_settle();
+        }
+    }
+}
+
 impl Shell for App {
     type Message = Message;
 
     fn output(&mut self, ev: OutputEvent, ctl: &mut RuntimeCtl<'_>) {
         match ev {
             OutputEvent::Added(info) => {
+                self.polkit.note_output(&info);
+                self.polkit_run(ctl, |polkit, _, host| polkit.output_added(&info, host));
                 self.outputs.retain(|o| o.id != info.id);
                 self.outputs.push(info.clone());
                 self.osds.output_added(&info);
@@ -2504,6 +2786,7 @@ impl Shell for App {
                 );
             }
             OutputEvent::Changed(info) => {
+                self.polkit.note_output(&info);
                 if let Some(known) = self.outputs.iter_mut().find(|o| o.id == info.id) {
                     *known = info.clone();
                 }
@@ -2522,6 +2805,14 @@ impl Shell for App {
                 );
             }
             OutputEvent::Removed(output) => {
+                self.polkit.forget_output(output);
+                self.polkit_run(ctl, |polkit, cx, host| {
+                    polkit.output_removed(output, cx.now);
+                    if polkit.needs_settle(cx.now) {
+                        polkit.settle(cx, host);
+                    }
+                });
+                self.arm_polkit_timer(ctl);
                 self.osds.output_removed(output);
                 if self.controls.readings.output_removed(output) {
                     self.levels_changed(ctl);
@@ -2610,6 +2901,34 @@ impl Shell for App {
                     return;
                 }
             }
+        }
+        let (mut prompt_surface, mut settle) = (false, false);
+        if let Some(polkit) = self.polkit.state_mut() {
+            polkit.tick(cx.now);
+            prompt_surface = polkit.owns(cx.surface);
+            if prompt_surface {
+                match self.painter.as_ref().map(|p| p.try_borrow_mut()) {
+                    Some(Ok(mut painter)) => {
+                        polkit.frame(cx, &mut painter);
+                    }
+                    _ => {
+                        tracing::warn!("the painter is in use; the prompt's frame is skipped");
+                        cx.ctl.request_redraw();
+                    }
+                }
+            } else if polkit.keyboard_claimed() {
+                // Every frame keeps the prompt's timer armed.
+                if let Some(wait) = polkit.next_wake(cx.now) {
+                    cx.ctl.redraw_after(wait);
+                }
+            }
+            settle = polkit.needs_settle(cx.now);
+        }
+        if settle {
+            self.post_polkit_settle();
+        }
+        if prompt_surface {
+            return;
         }
         if self.media_dirty {
             // The Island drawn now is among those given; the others get it
@@ -2719,6 +3038,10 @@ impl Shell for App {
 
     fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) {
         let surface = ctl.id();
+        if self.polkit.state().is_some_and(|p| p.owns(surface)) {
+            self.polkit_input(ev, ctl);
+            return;
+        }
         if let Some(banners) = self.banners.as_mut().filter(|b| b.surface == surface) {
             let Some(Ok(mut painter)) = self.painter.as_ref().map(|p| p.try_borrow_mut()) else {
                 tracing::warn!("no painter at hand; the banners' input is dropped");
@@ -2736,7 +3059,7 @@ impl Shell for App {
             return;
         }
         match ev {
-            InputEvent::FocusEnter => self.keyboard = Some(surface),
+            InputEvent::FocusEnter { .. } => self.keyboard = Some(surface),
             InputEvent::FocusLost if self.keyboard == Some(surface) => self.keyboard = None,
             _ => {}
         }
@@ -2829,6 +3152,10 @@ impl Shell for App {
                 }
                 self.appearance = appearance;
                 let theme = self.theme();
+                let reduced = self.appearance.reduced_motion;
+                if let Some(polkit) = self.polkit.state_mut() {
+                    polkit.set_appearance(theme.clone(), reduced);
+                }
                 match self.painter.as_ref().map(|p| p.try_borrow_mut()) {
                     Some(Ok(mut painter)) => painter.set_theme(theme),
                     Some(Err(_)) => tracing::warn!("the painter is in use; the theme waits"),
@@ -2884,6 +3211,25 @@ impl Shell for App {
             }
             Message::ShellSettings(read) => self.shell_settings_read(*read, ctl),
             Message::Energy(event) => event.log(),
+            Message::PolkitApply => self.polkit_apply(ctl),
+            Message::Polkit(event) => {
+                event.log();
+                if let crate::providers::polkit::PolkitEvent::Registration(state) = &event {
+                    self.polkit.registration_reported(state.clone());
+                }
+                self.polkit_run(ctl, |polkit, cx, host| polkit.on_event(event, cx, host));
+                self.arm_polkit_timer(ctl);
+            }
+            Message::PolkitHelper { id, event } => {
+                self.polkit_run(ctl, |polkit, cx, host| {
+                    polkit.on_helper(id, event, cx, host)
+                });
+                self.arm_polkit_timer(ctl);
+            }
+            Message::PolkitSettle => {
+                self.polkit_run(ctl, |polkit, cx, host| polkit.settle(cx, host));
+                self.arm_polkit_timer(ctl);
+            }
             Message::Lock(message) => match self.lock.get() {
                 Some(handle) => handle.message(message),
                 None => tracing::warn!("no lock handle: a lock message was dropped"),

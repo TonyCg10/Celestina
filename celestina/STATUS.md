@@ -107,6 +107,15 @@
   nothing ran on the real session. Evidence:
   [`docs/evidence/2026-10-23-cel-2-h-b.md`](docs/evidence/2026-10-23-cel-2-h-b.md);
   author rows `VAL-CEL2-LOCK-BACKDROP` and `VAL-CEL2-LOCK-CLOCK`, pending.
+- **CEL-2-I (in progress, not landed):** the `polkit` duty, off by default, on
+  `unit/celestina/CEL-2-I`: the shell as the session's polkit authentication
+  agent, with a keyboard-grabbing card, the helper conversation spoken over
+  polkit's socket, and the source guards of
+  [`tests/polkit_guards.rs`](tests/polkit_guards.rs). Its evidence is
+  [`docs/evidence/2026-10-17-cel-2-i.md`](docs/evidence/2026-10-17-cel-2-i.md)
+  (the review and the adversarial pass are still to run); its author row is
+  `VAL-CEL2-POLKIT-LIVE`, pending. The recovery is the duty switched off, or
+  Noctalia's agent re-enabled. The ADR is a draft, number provisional.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

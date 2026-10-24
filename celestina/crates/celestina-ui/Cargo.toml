@@ -26,3 +26,10 @@ thiserror = "2"
 # with a combining accent, a flag) and jumps by Unicode word boundary;
 # `str::chars` cannot do either. Already in the lockfile through cosmic-text.
 unicode-segmentation = "1"
+# `Secret` (the polkit prompt's password buffer, and the lock screen's after
+# it) wipes its bytes with `Zeroize` when a character is removed, when it is
+# cleared and when it is dropped, and the field wipes the key text of the
+# events it consumes; `Zeroizing` ties the wipe to ownership so every path,
+# including an unwind, ends in a zero buffer. The release profile unwinds.
+# `std::ptr::write_volatile` would need `unsafe`; this crate forbids it.
+zeroize = "1"

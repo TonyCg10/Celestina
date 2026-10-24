@@ -3,6 +3,8 @@
 //! translate protocol events into runtime calls and end each with a flush.
 #![forbid(unsafe_code)]
 
+use std::time::Instant;
+
 use smithay_client_toolkit::{
     background_effect::{BackgroundEffectHandler, BackgroundEffectState},
     compositor::CompositorHandler,
@@ -29,7 +31,7 @@ use wayland_client::{
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3;
 
 use crate::{
-    input::{key_input, pointer_input, InputEvent, Modifiers},
+    input::{key_input, pointer_input, FocusTarget, Modifiers},
     runtime::{OutputEvent, Runtime, Shell, SurfaceId, Target},
     surface::PreferredScaleSink,
     text_input::TextInputSink,
@@ -272,16 +274,18 @@ impl<S: Shell> KeyboardHandler for Runtime<S> {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         surface: &wl_surface::WlSurface,
-        _: u32,
+        serial: u32,
         _: &[u32],
         _: &[Keysym],
     ) {
-        let target = self.core.target_by_wl(surface);
-        self.core.keyboard_focus = target.map(|target| self.core.surface_at(target).id);
-        tracing::debug!(focus = ?self.core.keyboard_focus, "keyboard entered");
-        if let Some(Target::Layer(idx)) = target {
-            let id = self.core.surfaces[idx].id;
-            self.dispatch_input(id, InputEvent::FocusEnter);
+        let target = self.focus_target(surface);
+        let event = self
+            .core
+            .keyboard_focus
+            .enter(target, serial, Instant::now());
+        tracing::debug!(focus = ?self.core.keyboard_focus.surface(), "keyboard entered");
+        if let (Some(FocusTarget::Layer(id)), Some(event)) = (target, event) {
+            self.dispatch_input(id, event);
         }
     }
 
@@ -293,20 +297,19 @@ impl<S: Shell> KeyboardHandler for Runtime<S> {
         surface: &wl_surface::WlSurface,
         _: u32,
     ) {
-        match self.core.target_by_wl(surface) {
-            Some(Target::Layer(idx)) => {
-                let id = self.core.surfaces[idx].id;
-                self.core.keyboard_focus = None;
-                if self.core.has_popup(id) {
-                    // The popup grab moved the keyboard into our own popup:
-                    // not a focus loss for the page.
-                    tracing::debug!(surface = id.0, "keyboard moved into the popup");
-                } else {
-                    self.dispatch_input(id, InputEvent::FocusLost);
-                }
-            }
-            Some(Target::Popup(_)) => self.core.keyboard_focus = None,
-            None => {}
+        let Some(target) = self.focus_target(surface) else {
+            return;
+        };
+        let popup_grab = matches!(target, FocusTarget::Layer(id) if self.core.has_popup(id));
+        if popup_grab {
+            // The popup grab moves the keyboard into our own popup: not a
+            // focus loss for the page.
+            tracing::debug!("keyboard moved into the popup");
+        }
+        if let (FocusTarget::Layer(id), Some(event)) =
+            (target, self.core.keyboard_focus.leave(target, popup_grab))
+        {
+            self.dispatch_input(id, event);
         }
     }
 
@@ -361,10 +364,18 @@ impl<S: Shell> KeyboardHandler for Runtime<S> {
 }
 
 impl<S: Shell> Runtime<S> {
+    /// The surface a keyboard enter or leave names, if it is one of ours.
+    fn focus_target(&self, surface: &wl_surface::WlSurface) -> Option<FocusTarget> {
+        match self.core.target_by_wl(surface)? {
+            Target::Layer(idx) => Some(FocusTarget::Layer(self.core.surfaces[idx].id)),
+            Target::Popup(idx) => Some(FocusTarget::Popup(self.core.popups[idx].surface.id)),
+        }
+    }
+
     /// Keys go to the open popup first (whether the keyboard is on the
     /// popup or still on its parent), else to the focused surface.
     fn key_event(&mut self, event: KeyEvent, pressed: bool, serial: u32) {
-        let Some(id) = self.core.keyboard_focus else {
+        let Some(id) = self.core.keyboard_focus.surface() else {
             return;
         };
         let ev = key_input(event, self.core.modifiers, pressed, serial);

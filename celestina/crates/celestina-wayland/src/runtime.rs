@@ -44,7 +44,7 @@ use crate::{
     data_device::Clipboard,
     egl::{Egl, EglError},
     geometry::Rect,
-    input::{CursorShape, InputEvent, Modifiers, SeatRequest, SeatRequests},
+    input::{CursorShape, InputEvent, KeyboardFocus, Modifiers, SeatRequest, SeatRequests},
     metrics::{self, Metrics},
     popup::{
         CloseReason, GrabSerial, Placement, PopupAction, PopupEntry, PopupId, PopupQueue, WmBase,
@@ -490,7 +490,7 @@ pub(crate) struct Core<S: Shell> {
     /// the newer of the two.
     pub(crate) grab_serial: GrabSerial,
     /// Layer surface or popup surface.
-    pub(crate) keyboard_focus: Option<SurfaceId>,
+    pub(crate) keyboard_focus: KeyboardFocus,
     pub(crate) next_surface_id: u32,
     frames_drawn: u64,
     pub(crate) metrics: Option<Metrics>,
@@ -661,7 +661,7 @@ impl<S: Shell> Core<S> {
             pointer: None,
             modifiers: Modifiers::default(),
             grab_serial: GrabSerial::default(),
-            keyboard_focus: None,
+            keyboard_focus: KeyboardFocus::default(),
             next_surface_id: 1,
             frames_drawn: 0,
             metrics,
@@ -758,9 +758,7 @@ impl<S: Shell> Core<S> {
         let Some(idx) = self.surface_index(id) else {
             return;
         };
-        if self.keyboard_focus == Some(id) {
-            self.keyboard_focus = None;
-        }
+        self.keyboard_focus.forget(id);
         let surface = self.surfaces.remove(idx);
         self.destroy_surface_object(surface);
     }

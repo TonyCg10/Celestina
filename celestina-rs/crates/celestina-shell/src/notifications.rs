@@ -148,7 +148,7 @@ pub struct Action {
 }
 
 /// A `Notify` call, before any of it is believed.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Incoming {
     pub app_name: String,
     /// The id to replace, or 0 for a new notification.

@@ -363,7 +363,7 @@ impl Launcher {
                 outcome.action = Some(LauncherAction::Close);
                 return outcome;
             }
-            InputEvent::FocusEnter | InputEvent::PopupClosed { .. } => return outcome,
+            InputEvent::FocusEnter { .. } | InputEvent::PopupClosed { .. } => return outcome,
             InputEvent::Key {
                 keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
                 pressed: true,

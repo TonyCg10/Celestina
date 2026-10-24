@@ -218,6 +218,11 @@ pub struct Duties {
     /// Whether this shell shows the phone's battery and media.
     #[serde(deserialize_with = "lenient_duty")]
     pub phone: Duty,
+    /// Whether this shell is the session's polkit authentication agent
+    /// (CEL-2-I). Off until the person switches it: switching it on while
+    /// another agent holds the session is refused, never forced.
+    #[serde(deserialize_with = "lenient_duty")]
+    pub polkit: Duty,
     /// Whether this shell paints the wallpaper.
     #[serde(deserialize_with = "lenient_duty")]
     pub wallpaper: Duty,
@@ -1014,6 +1019,7 @@ mod tests {
                 nightlight: Duty::Off,
                 osd: Duty::Off,
                 phone: Duty::On,
+                polkit: Duty::Off,
                 wallpaper: Duty::On,
             },
             energy: Energy {
@@ -1209,6 +1215,38 @@ mod tests {
     }
 
     #[test]
+    fn duty_polkit_defaults_off_and_reads_leniently() {
+        // Default: off, for a fresh file and for a file that predates the key.
+        assert_eq!(Settings::default().duties.polkit, Duty::Off);
+        let without = Settings::from_bytes(br#"{"duties":{"idle":"on"}}"#).expect("read");
+        assert_eq!(without.duties.polkit, Duty::Off);
+        assert_eq!(without.duties.idle, Duty::On);
+        // The person's choice is kept.
+        let on = Settings::from_bytes(br#"{"duties":{"polkit":"on"}}"#).expect("read");
+        assert_eq!(on.duties.polkit, Duty::On);
+        // Garbage of any shape degrades to off and costs the rest of the file
+        // nothing.
+        for garbage in [r#""yes""#, "7", "null", "[1]", r#"{"a":1}"#, "true"] {
+            let bytes =
+                format!(r#"{{"do_not_disturb":true,"duties":{{"polkit":{garbage},"idle":"on"}}}}"#);
+            let read = Settings::from_bytes(bytes.as_bytes()).expect("the file is still read");
+            assert_eq!(read.duties.polkit, Duty::Off, "{garbage}");
+            assert_eq!(read.duties.idle, Duty::On, "{garbage}");
+            assert!(read.do_not_disturb, "{garbage}");
+        }
+        // It survives a round trip, in name order between nightlight and
+        // wallpaper.
+        let mut settings = Settings::default();
+        settings.duties.polkit = Duty::On;
+        let bytes = settings.to_bytes().expect("settings serialize");
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+        let text = String::from_utf8(bytes).expect("utf8");
+        let at = |key: &str| text.find(key).expect(key);
+        assert!(at("\"nightlight\"") < at("\"polkit\""));
+        assert!(at("\"polkit\"") < at("\"wallpaper\""));
+    }
+
+    #[test]
     fn phone_and_bubbles_default_off_and_read_off_from_older_files() {
         let defaults = Settings::default();
         assert_eq!(defaults.duties.phone, Duty::Off);
@@ -1299,6 +1337,7 @@ mod tests {
                 "nightlight",
                 "osd",
                 "phone",
+                "polkit",
                 "wallpaper"
             ]
         );

@@ -1718,8 +1718,10 @@ impl Island {
     }
 
     /// Closes the menus from the Island's side; the runtime still reports
-    /// `PopupClosed`, which then finds nothing to do.
-    fn close_menu(&mut self, ctl: &mut SurfaceCtl<'_>) {
+    /// `PopupClosed`, which then finds nothing to do. The polkit prompt calls
+    /// it on every Island, a bar icon's menu included: a popup with a grab
+    /// could otherwise keep the keyboard from the card (N-25).
+    pub(crate) fn close_menu(&mut self, ctl: &mut SurfaceCtl<'_>) {
         self.tray_menu_on_bar = false;
         for id in [
             self.menu.take(),

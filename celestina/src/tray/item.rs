@@ -20,6 +20,7 @@ use zbus::{
     zvariant::{ObjectPath, Str},
 };
 
+use crate::bus_signal::{name_owner_change, NameOwnerChange, BUS_DRIVER};
 use crate::tray::model::{choose_pixmap, Orientation, Status, TrayEvent, TrayItem};
 use crate::tray::ItemId;
 
@@ -48,8 +49,6 @@ pub const ITEM_READ_BUDGET: Duration = Duration::from_millis(900);
 /// The wire signature of `IconPixmap`.
 const PIXMAPS_SIGNATURE: &[u8] = b"a(iiay)";
 const PROPERTIES: &str = "org.freedesktop.DBus.Properties";
-/// The bus driver, the only sender of `NameOwnerChanged` that is trusted.
-const BUS_DRIVER: &str = "org.freedesktop.DBus";
 
 /// Where an item is served, once the watcher's registration was resolved.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -433,10 +432,9 @@ pub enum BusSignal {
 }
 
 /// Recognises `message` as one of the signals the tray acts on. A
-/// `NameOwnerChanged` counts only from the bus driver itself and only as a
-/// broadcast: the connection's stream also carries signals a peer addresses
-/// to the shell, and a forged one would drop other items or redirect their
-/// commands to the forger.
+/// `NameOwnerChanged` counts only as [`name_owner_change`] accepts it: a
+/// forged one would drop other items or redirect their commands to the
+/// forger.
 #[must_use]
 pub fn recognise(message: &Message) -> Option<BusSignal> {
     let header = message.header();
@@ -446,13 +444,7 @@ pub fn recognise(message: &Message) -> Option<BusSignal> {
     let interface = header.interface()?.as_str();
     let member = header.member()?.as_str();
     if interface == BUS_DRIVER && member == "NameOwnerChanged" {
-        let from_driver = header.sender().is_some_and(|s| s.as_str() == BUS_DRIVER);
-        if !from_driver || header.destination().is_some() {
-            tracing::debug!("tray: a NameOwnerChanged not broadcast by the bus is ignored");
-            return None;
-        }
-        let (name, _old, new_owner): (String, String, String) =
-            message.body().deserialize().ok()?;
+        let NameOwnerChange { name, new_owner } = name_owner_change(message)?;
         return Some(BusSignal::NameOwnerChanged { name, new_owner });
     }
     if interface == "com.canonical.dbusmenu"

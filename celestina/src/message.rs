@@ -61,6 +61,26 @@ pub enum Message {
     ShellSettings(Box<crate::providers::settings::ShellRead>),
     /// News from the energy workers: idle, caffeine, night light, session.
     Energy(crate::energy::EnergyEvent),
+    /// The polkit agent's news (CEL-2-I): a request admitted or ended, the
+    /// registration's state. Request ids and endings only: a cookie or a
+    /// secret never travels in a `Message` (design N-2).
+    Polkit(crate::providers::polkit::PolkitEvent),
+    /// What request `id`'s helper conversation said: PAM's prompt or words,
+    /// a wrong answer, or the end (CEL-2-I). PAM's text only: the answer
+    /// travels the other way, moved into the helper's thread, never in a
+    /// message.
+    PolkitHelper {
+        id: celestina_shell::polkit::RequestId,
+        event: crate::providers::polkit::helper::HelperEvent,
+    },
+    /// Bring the `polkit` duty to what the settings in force say: the loop
+    /// posts it to itself once the shell has started, when the duty is on at
+    /// start (the launcher exists only inside the loop's setup).
+    PolkitApply,
+    /// A prompt ended during an input or frame call, which can neither
+    /// destroy a surface nor map the next prompt; the app posts this to
+    /// itself and finishes the work here (as for [`Message::LauncherClosed`]).
+    PolkitSettle,
     /// The system monitor's reading, or `None` once when its counters can no
     /// longer be read.
     Sysmon(Option<crate::providers::sysmon::SysReading>),

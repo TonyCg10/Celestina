@@ -29,11 +29,13 @@ pub enum Role {
     GlassTint,
     GlassFallback,
     Danger,
+    /// The dim under a modal layer (the scheme's `scrim`).
+    Scrim,
 }
 
 impl Role {
     /// Every role, in declaration order.
-    pub const ALL: [Role; 15] = [
+    pub const ALL: [Role; 16] = [
         Role::Canvas,
         Role::Card,
         Role::TextHi,
@@ -49,6 +51,7 @@ impl Role {
         Role::GlassTint,
         Role::GlassFallback,
         Role::Danger,
+        Role::Scrim,
     ];
 }
 
@@ -126,6 +129,8 @@ pub struct Theme {
     pub glass_tint: Color,
     pub glass_fallback: Color,
     pub danger: Color,
+    /// The dim a modal layer lays over the output.
+    pub scrim: Color,
     /// Haze's grain alpha, drawn under the tint.
     pub grain_alpha: f32,
     pub radius_lg: f32,
@@ -189,6 +194,7 @@ impl From<&Scheme> for Theme {
             // role of the scheme, so it follows the canvas here too.
             glass_fallback: color_of(scheme.canvas),
             danger: color_of(scheme.danger),
+            scrim: color_of(scheme.scrim),
             grain_alpha: haze::GRAIN,
             radius_lg: radius::LG,
             radius_md: radius::MD,
@@ -247,6 +253,7 @@ impl Theme {
             Role::GlassTint => self.glass_tint,
             Role::GlassFallback => self.glass_fallback,
             Role::Danger => self.danger,
+            Role::Scrim => self.scrim,
         }
     }
 
@@ -323,7 +330,7 @@ mod tests {
             let c = t.color(role);
             assert!((0.0..=1.0).contains(&c.3), "{role:?} alpha {}", c.3);
         }
-        assert_eq!(Role::ALL.len(), 15);
+        assert_eq!(Role::ALL.len(), 16);
     }
 
     #[test]
@@ -363,6 +370,7 @@ mod tests {
                 // `CelestinaTheme.glassFallback: canvas`, a relation.
                 Role::GlassFallback => DARK.canvas,
                 Role::Danger => DARK.danger,
+                Role::Scrim => DARK.scrim,
             };
             assert_eq!(
                 t.color(role),

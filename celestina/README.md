@@ -87,6 +87,18 @@ What Noctalia still does for the session is in
   bus and shows the media piece and the Medios page: the shown player's cover,
   title and artist, with previous, play/pause and next. A pin chosen on the page
   lasts for the session only. Keys stay with `playerctl`.
+- The polkit duty (`duties.polkit` in `~/.config/celestina/shell.json`) is
+  `off` by default. When it is on, the shell is the session's polkit
+  authentication agent: a card over a dimmed overlay takes the keyboard
+  exclusively, asks for the password (two attempts per prompt) and hands it
+  only to polkit's own helper, which verifies it; the shell never decides a
+  success, and every failure is a refusal. Switch it on with Noctalia's agent
+  off: if another agent holds the session the shell refuses to register, logs
+  it and does not retry or evict. Recovery is to set the duty to `"off"` (the
+  shell cancels every request and unregisters) or stop the shell, then
+  re-enable Noctalia's agent; without any agent, polkit refuses what needs
+  interaction. The live check is `VAL-CEL2-POLKIT-LIVE` in
+  [VALIDATION.md](VALIDATION.md).
 - Surfaces take no keyboard at rest
   ([ADR 0007](docs/decisions/0007-focus-policy.md)); well-known bus names are
   claimed only when free, so the shell runs beside Noctalia

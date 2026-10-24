@@ -176,17 +176,38 @@ pub(crate) fn switch(key: Key, on: bool, enabled: bool) -> View {
 }
 
 pub(in crate::island) fn button(theme: &Theme, key: Key, label_key: &str, label: &str) -> View {
+    button_filled(
+        theme,
+        key,
+        label_key,
+        label,
+        Role::ControlFill,
+        Role::TextHi,
+    )
+}
+
+/// A text button of the page's height, `fill` behind `ink`: the control fill
+/// for an ordinary button, the accent for the one that acts (the polkit
+/// prompt's authenticate control).
+pub(crate) fn button_filled(
+    theme: &Theme,
+    key: Key,
+    label_key: &str,
+    label: &str,
+    fill: Role,
+    ink: Role,
+) -> View {
     centred(view::row(key))
         .height(BUTTON_H)
         .padding_xy(theme.spacing.md, 0.0)
         .radius(theme.radius_button)
-        .fill(Role::ControlFill)
+        .fill(fill)
         .interactive()
         .focusable()
         .child(view::text(
             Key::named(label_key),
             label,
-            text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi),
+            text_style(theme.type_scale.body, Weight::Regular, false, ink),
         ))
 }
 

@@ -195,7 +195,7 @@ impl MediaControl {
     /// Stops the worker at the shell's exit, here and bounded, after any
     /// reap still pending.
     pub fn stop(&self) {
-        let (running, mut reaper) = {
+        let (running, reaper) = {
             let mut inner = self.inner.borrow_mut();
             (inner.running.take(), std::mem::take(&mut inner.reaper))
         };

@@ -43,6 +43,7 @@ use celestina::{
     message::Message,
     osd::OsdRuntime,
     phone::PhoneHandle,
+    polkit::duty::{AgentLauncher, SystemLauncher},
     providers::notifications::NotificationsCommand,
     providers::{self, settings::ShellSettings, wallpaper::WallpaperCommand, Worker},
 };
@@ -157,6 +158,7 @@ fn shell(cfg: Config) -> ExitCode {
     // The wallpaper state's thumbnails, which the session lock's bundle copies.
     let thumbnails = celestina::wallpaper::thumbnail::ThumbnailStore::default();
     let energy = Rc::new(OnceCell::new());
+    let polkit = Rc::new(OnceCell::new());
     let lock = Rc::new(OnceCell::new());
     let glance = Rc::new(OnceCell::new());
     let clipboard = Rc::new(OnceCell::new());
@@ -187,7 +189,8 @@ fn shell(cfg: Config) -> ExitCode {
     .with_connectivity(Rc::clone(&connectivity))
     .with_osd(Rc::clone(&osd))
     .with_phone_and_bubbles(Rc::clone(&phone), Rc::clone(&bubbles))
-    .with_media(Rc::clone(&media));
+    .with_media(Rc::clone(&media))
+    .with_polkit(Rc::clone(&polkit));
     let mut workers: Vec<Worker> = Vec::new();
     let mut indexer = None;
     let mut follower = None;
@@ -221,6 +224,20 @@ fn shell(cfg: Config) -> ExitCode {
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = energy.set(handle);
+        // The polkit duty: with it off nothing starts, no bus connection is
+        // made and nothing is registered. On, the loop starts the agent through
+        // this launcher (now, and live whenever `shell.json` flips the duty).
+        // The slot is empty: `setup` runs once.
+        let launcher: Box<dyn AgentLauncher> =
+            Box::new(SystemLauncher::new(sender.clone(), Arc::clone(&shutdown)));
+        let _ = polkit.set(launcher);
+        if settings_read.duties.polkit == Duty::On
+            && sender
+                .send(celestina::message::Message::PolkitApply)
+                .is_err()
+        {
+            tracing::warn!("the loop did not take the polkit duty's start");
+        }
         // The session lock: off by default, so with the defaults no worker
         // starts. Its availability is what the idle chain's second step
         // follows; the energy handle is in its slot already.

@@ -281,7 +281,7 @@ impl MenuCore {
                 self.input.key(&mut self.tree, &tab)
             }
             InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
-            InputEvent::PopupClosed { .. } | InputEvent::FocusEnter => Vec::new(),
+            InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
             _ => self.input.pointer(&mut self.tree, ev, now),
         };
         for event in &events {

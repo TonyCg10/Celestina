@@ -432,7 +432,7 @@ impl Machine {
 
     fn input(&mut self, output: OutputId, event: &InputEvent, now: Instant, out: &mut Vec<Action>) {
         match event {
-            InputEvent::FocusEnter => self.keyboard_focus = Some(output),
+            InputEvent::FocusEnter { .. } => self.keyboard_focus = Some(output),
             InputEvent::FocusLost => {
                 if self.keyboard_focus == Some(output) {
                     self.keyboard_focus = None;
@@ -1098,7 +1098,10 @@ mod tests {
             rig.feed(Input::OutputAdded(info(2, "HDMI-A-1")));
             rig.feed(Input::Input {
                 output: OutputId(1),
-                event: InputEvent::FocusEnter,
+                event: InputEvent::FocusEnter {
+                    serial: 1,
+                    at: std::time::Instant::now(),
+                },
             });
             assert_eq!(rig.scene().prompt, Some(OutputId(1)));
             rig.type_text("pw");
@@ -1291,7 +1294,10 @@ mod tests {
         // The keyboard focus wins over the pointer.
         rig.feed(Input::Input {
             output: OutputId(3),
-            event: InputEvent::FocusEnter,
+            event: InputEvent::FocusEnter {
+                serial: 1,
+                at: std::time::Instant::now(),
+            },
         });
         assert_eq!(rig.scene().prompt, Some(OutputId(3)));
         // Losing the keyboard falls back to the pointer, then to the first.
@@ -1308,7 +1314,10 @@ mod tests {
         // A focused output that goes away is forgotten.
         rig.feed(Input::Input {
             output: OutputId(3),
-            event: InputEvent::FocusEnter,
+            event: InputEvent::FocusEnter {
+                serial: 1,
+                at: std::time::Instant::now(),
+            },
         });
         rig.feed(Input::OutputRemoved(OutputId(3)));
         assert_eq!(rig.scene().prompt, Some(OutputId(1)));

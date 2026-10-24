@@ -194,6 +194,86 @@ pub const TRAY_NEEDS_ATTENTION: &str = "Requiere atención";
 /// The Tray page's status word for a passive item ("Inactive").
 pub const TRAY_PASSIVE: &str = "Inactivo";
 
+// The polkit prompt (CEL-2-I). The message and the action id on the card are
+// polkit's own words, shown as polkitd sent them; everything below is the
+// shell's labels around them.
+
+/// The card's title ("Authorization needed").
+pub const POLKIT_TITLE: &str = "Se necesita autorización";
+
+/// The label of the line that shows the action id ("Action").
+pub const POLKIT_ACTION_LABEL: &str = "Acción";
+
+/// The label of the line that shows the account being asked for ("Account").
+pub const POLKIT_ACCOUNT_LABEL: &str = "Cuenta";
+
+/// The button that sends the answer ("Authenticate").
+pub const POLKIT_AUTHENTICATE: &str = "Autenticar";
+
+/// The button that gives the request up ("Cancel").
+pub const POLKIT_CANCEL: &str = "Cancelar";
+
+/// The accessible name of the answer field ("Password").
+pub const POLKIT_FIELD_NAME: &str = "Contraseña";
+
+/// The accessible state of the answer field while nothing is typed ("empty").
+pub const POLKIT_FIELD_EMPTY: &str = "vacío";
+
+/// The accessible state of the answer field once something is typed; the
+/// field says nothing else about it, so neither the characters nor their
+/// count can be read ("has content").
+pub const POLKIT_FIELD_HAS_CONTENT: &str = "con contenido";
+
+/// The line under the card's text before PAM has asked for anything
+/// ("Preparing the authentication...").
+pub const POLKIT_PREPARING: &str = "Preparando la autenticación…";
+
+/// The line shown while the answer is with the system's helper
+/// ("Checking...").
+pub const POLKIT_CHECKING: &str = "Comprobando…";
+
+/// The line shown when the answer was wrong and attempts remain; one left is
+/// singular ("Wrong answer. 1 attempt left").
+#[must_use]
+pub fn polkit_attempts_left(left: u32) -> String {
+    if left == 1 {
+        "Respuesta incorrecta. Queda 1 intento".to_owned()
+    } else {
+        format!("Respuesta incorrecta. Quedan {left} intentos")
+    }
+}
+
+/// The name the shell's notices are raised under ("Celestina").
+pub const POLKIT_NOTICE_APP: &str = "Celestina";
+
+/// The notice's summary when a request for authorization could not be shown
+/// ("An authorization request could not be shown").
+pub const POLKIT_UNSHOWN_SUMMARY: &str = "No se pudo mostrar una solicitud de autorización";
+
+/// The notice's body when a request for authorization could not be shown
+/// ("A program asked for authorization and the password prompt could not
+/// take the keyboard. The request was cancelled.").
+pub const POLKIT_UNSHOWN_BODY: &str =
+    "Un programa pidió autorización y la ventana de contraseña no pudo tomar el teclado. La solicitud se canceló.";
+
+/// The notice's summary when requests are being cancelled unshown
+/// ("Authorization requests paused").
+pub const POLKIT_COOLDOWN_SUMMARY: &str = "Solicitudes de autorización en pausa";
+
+/// The notice's body when requests are being cancelled unshown ("Several
+/// requests in a row were closed without an answer. For one minute they are
+/// cancelled without being shown.").
+pub const POLKIT_COOLDOWN_BODY: &str =
+    "Varias solicitudes seguidas se cerraron sin respuesta. Durante un minuto se cancelan sin mostrarse.";
+/// The notice's summary when polkit's helper could not be used ("An
+/// authorization could not be completed").
+pub const POLKIT_HELPER_SUMMARY: &str = "No se pudo completar una autorización";
+
+/// The notice's body when polkit's helper could not be used ("Polkit's
+/// password helper is not available. The request was cancelled.").
+pub const POLKIT_HELPER_BODY: &str =
+    "El ayudante de contraseñas de polkit no está disponible. La solicitud se canceló.";
+
 // Glance: the system monitor, the weather and the calendar (CEL-2-K).
 
 /// The Notifications tab's short label ("Notif."): the full title does not

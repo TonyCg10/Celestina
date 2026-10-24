@@ -85,6 +85,13 @@ impl PrivateBus {
         &self.address
     }
 
+    /// Kills the daemon, as a crashed bus would end: every connection to it
+    /// sees its socket close.
+    pub(crate) fn kill(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+
     /// A connection builder for this bus.
     pub(crate) fn builder(&self) -> Builder<'static> {
         match Builder::address(self.address.as_str()) {

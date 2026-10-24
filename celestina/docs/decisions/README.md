@@ -5,9 +5,9 @@ Accepted shell decisions and their falsifiers live here, one record each. ADR
 the decisions of the parity program's §10; ADR 0016 is the one of the
 CEL-2-K design's §9; ADR 0017 to 0019 close the connectivity unit's
 decisions D1 to D4 (CEL-2-F); ADR 0020 records the decisions of CEL-2-J's
-plan; ADR 0022 records the session lock's decisions H-1 to H-18 (CEL-2-H; the
-number is provisional until landing); a session writes them `proposed`, and
-the author sets them `accepted`.
+plan; ADR 0021 is the polkit agent's (CEL-2-I) and ADR 0022 records the session
+lock's decisions H-1 to H-18 (CEL-2-H); both numbers are provisional until
+landing; a session writes them `proposed`, and the author sets them `accepted`.
 Open questions belong to the
 [discussion queue](../discussions/README.md).
 
@@ -33,6 +33,7 @@ Open questions belong to the
 | [0018](0018-connectivity-reads-state-and-offers-a-closed-action-list.md) | proposed | Connectivity state is read, and the shell sends only a closed list of actions |
 | [0019](0019-connectivity-secrets-never-pass-through-the-shell.md) | proposed | No secret passes through the shell |
 | [0020](0020-phone-and-bubbles.md) | accepted | Phone and bubbles: Melibea v1 by default with a per-action v2 hint, an absent socket is a state, one selector for the bubbles |
+| [0021](0021-polkit-agent.md) | proposed | The shell is the session's polkit agent behind the `polkit` duty, off by default (number provisional) |
 | [0022](0022-session-lock.md) | proposed | The session lock is three processes, locked on every failure, with the PAM verdict as its only way out (number provisional) |
 | [0023](0023-qt-shell-retired.md) | accepted | The Qt shell is retired and removed from the tree; supersedes 0002 (number provisional) |
 

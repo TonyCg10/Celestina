@@ -125,6 +125,10 @@ pub enum NotificationsCommand {
     Hover(bool),
     /// The person looked at the page.
     MarkRead,
+    /// The shell's own notice (the polkit prompt could not be shown, or is
+    /// cooling down): posted like a `Notify` call, so it is a banner that
+    /// takes no keyboard. Boxed: it would size every command.
+    Post(Box<Incoming>),
 }
 
 /// The handle the loop sends commands through.
@@ -291,6 +295,10 @@ impl Core {
             NotificationsCommand::MarkRead => {
                 self.dirty |= self.machine.live().iter().any(|entry| !entry.read);
                 self.machine.mark_read();
+                Vec::new()
+            }
+            NotificationsCommand::Post(notice) => {
+                self.post(&notice, real_ms);
                 Vec::new()
             }
         }
@@ -789,6 +797,26 @@ mod tests {
         assert!(core.take_snapshot().is_some());
         core.command(NotificationsCommand::SetQuiet(false), 30);
         assert!(core.take_snapshot().is_none(), "already not quiet");
+    }
+
+    #[test]
+    fn a_notice_the_shell_posts_itself_is_shown_like_any_other() {
+        let mut core = Core::new();
+        let _ = core.take_snapshot();
+        let notice = Incoming {
+            app_name: "Shell".to_owned(),
+            summary: "Own notice".to_owned(),
+            urgency: Urgency::Critical,
+            expire_timeout: 0,
+            ..Incoming::default()
+        };
+        assert!(core
+            .command(NotificationsCommand::Post(Box::new(notice)), 5)
+            .is_empty());
+        let snapshot = core.take_snapshot();
+        assert!(
+            snapshot.is_some_and(|s| s.toasts.len() == 1 && s.toasts[0].summary == "Own notice")
+        );
     }
 
     #[test]

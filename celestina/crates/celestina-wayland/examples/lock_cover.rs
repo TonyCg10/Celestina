@@ -71,7 +71,9 @@ impl LockShell for Probe {
                 self.keys += 1;
                 self.say(&format!("key press #{} on output {}", self.keys, output.0));
             }
-            InputEvent::FocusEnter => self.say(&format!("keyboard enter output {}", output.0)),
+            InputEvent::FocusEnter { .. } => {
+                self.say(&format!("keyboard enter output {}", output.0))
+            }
             InputEvent::FocusLost => self.say(&format!("keyboard leave output {}", output.0)),
             InputEvent::PointerMotion { .. } => {}
             _ => {}

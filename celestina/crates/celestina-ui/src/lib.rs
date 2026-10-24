@@ -10,7 +10,9 @@
 //! running animations; inserted nodes fade in, removed ones fade out, moved
 //! ones slide from where they were. [`Interaction`] turns pointer and key
 //! events into [`UiEvent`]s naming keys. The text field (`Field`) comes with
-//! CEL-1-E, the slider ([`Slider`]) with CEL-2-C.
+//! CEL-1-E, the slider ([`Slider`]) with CEL-2-C; [`Secret`] and [`SecretField`]
+//! are the password buffer and the field that fills it, for the polkit prompt and
+//! the lock screen (CEL-2-I).
 #![forbid(unsafe_code)]
 
 mod anim;
@@ -22,6 +24,7 @@ mod key;
 mod layout;
 mod paint;
 mod reconcile;
+mod secret;
 pub mod slider;
 #[cfg(test)]
 mod testing;
@@ -34,6 +37,9 @@ pub use field::{EditOp, Field, FieldId, MAX_CHARS};
 pub use highlight::{focus_ring, Highlight, FOCUS_WIDTH};
 pub use input::{Interaction, UiEvent, BTN_LEFT};
 pub use key::Key;
+pub use secret::{
+    Secret, SecretField, SecretFieldState, SecretKey, SecretRefused, MAX_SECRET_BYTES,
+};
 pub use slider::Slider;
 pub use tree::{NodeId, Tree, TreeError};
 pub use view::{View, ViewKind};

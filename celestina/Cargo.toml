@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.12.0"
+version = "1.13.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -108,16 +108,22 @@ image = { version = "=0.25.6", default-features = false, features = ["png", "jpe
 # constant and the workspace forbids the unsafe a raw libc call needs. Already
 # in the lockfile through the Wayland stack. CEL-2-B: the gamma ramp travels in
 # an anonymous memory file (`memfd_create`), and the energy workers wait on
-# their own Wayland connection (`event`). CEL-2-J: the Melibea socket is
-# trusted only when it belongs to this process's uid, and std has no safe
-# `getuid` (`process`). CEL-2-H: the lock supervisor holds the lock's pidfd and
-# waits on it, its stdout and an eventfd with one `poll` (`process`, `event`),
-# writes the sealed bundle memory file (`fs`) and checks the lock binary's
-# descriptor (`fs`, `process` for the uid); the same features, no new ones.
-# CEL-2-L: the bindings probe child lowers its own core-dump, address-space
-# and CPU limits before it parses a hostile file (the safe `setrlimit`, under
-# the same `process` feature).
-rustix = { version = "1", features = ["fs", "event", "process"] }
+# their own Wayland connection (`event`). CEL-2-I: `net` is `SO_PEERCRED`
+# (`socket_peercred`), through which the polkit helper conversation checks that
+# the listener behind the helper's socket is root before sending a byte; the
+# std library has no safe way to read it and the workspace forbids the unsafe a
+# raw `getsockopt` needs. `process` is the uid of the running shell (the tests
+# of those checks and CEL-2-J: the Melibea socket is trusted only when it
+# belongs to this process's uid, and std has no safe `getuid`) and
+# `set_dumpable_behavior`, the non-dumpable window of an open polkit request
+# (design S-9). CEL-2-H: the lock supervisor holds the lock's pidfd and waits
+# on it, its stdout and an eventfd with one `poll` (`process`, `event`), writes
+# the sealed bundle memory file (`fs`) and checks the lock binary's descriptor
+# (`fs`, `process` for the uid): the same features, no new ones. CEL-2-L: the
+# bindings probe child lowers its own core-dump, address-space and CPU limits
+# before it parses a hostile file (the safe `setrlimit`, under the same
+# `process` feature).
+rustix = { version = "1", features = ["fs", "event", "net", "process"] }
 # The shell follows its own `shell.json` live (CEL-2-E: the wallpaper duty
 # turns on and off without a restart), with the same debounced directory
 # watch `celestina-settings` uses for the appearance file; the version is the

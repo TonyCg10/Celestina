@@ -734,9 +734,7 @@ impl<S: Shell> Core<S> {
                 continue;
             };
             let entry = self.popups.remove(idx);
-            if self.keyboard_focus == Some(entry.surface.id) {
-                self.keyboard_focus = None;
-            }
+            self.keyboard_focus.forget(entry.surface.id);
             tracing::info!(
                 popup = entry.id.0,
                 ?reason,

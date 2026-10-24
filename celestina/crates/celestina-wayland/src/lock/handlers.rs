@@ -394,7 +394,7 @@ impl<S: LockShell> KeyboardHandler for LockRuntime<S> {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         surface: &wl_surface::WlSurface,
-        _: u32,
+        serial: u32,
         _: &[u32],
         _: &[Keysym],
     ) {
@@ -403,7 +403,10 @@ impl<S: LockShell> KeyboardHandler for LockRuntime<S> {
         };
         self.env.keyboard_focus = Some(output);
         tracing::debug!(output = output.0, "keyboard entered");
-        self.input(output, InputEvent::FocusEnter);
+        // The enter's serial and moment travel with it (the shell profile's
+        // keyboard proof uses them; the lock does not).
+        let at = std::time::Instant::now();
+        self.input(output, InputEvent::FocusEnter { serial, at });
     }
 
     fn leave(

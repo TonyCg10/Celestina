@@ -1,6 +1,6 @@
 # Handover: what Noctalia still does for the session
 
-- **Written:** 2026-10-16, by CEL-1-H; the night light, caffeine and idle rows updated by CEL-2-B; the audio and brightness OSD rows by CEL-2-C; the session lock rows and the lock section by CEL-2-H-a
+- **Written:** 2026-10-16, by CEL-1-H; the night light, caffeine and idle rows updated by CEL-2-B; the audio and brightness OSD rows by CEL-2-C; the polkit row by CEL-2-I; the session lock rows and the lock section by CEL-2-H-a
 - **Purpose:** CEL-1 delivers the Island, the launcher, notifications and the
   tray. It does not replace Noctalia as the session's shell. This note lists
   what Noctalia keeps doing, so the author knows what the next deliveries
@@ -39,7 +39,7 @@ both names to the shell on its next start. The launcher answers
 | Media (MPRIS) | the play, stop, previous and next keys run `playerctl`; Noctalia shows the player | no | a media delivery with an MPRIS client and its Island page or widget |
 | Clipboard history | Noctalia's history (`clipboard-*` verbs) | no | a clipboard delivery with a bounded, hostile-input-safe history and its own privacy design |
 | Session lock | `Mod+Shift+Escape` runs `noctalia msg session lock-and-suspend` | security core delivered in CEL-2-H-a, off by default (`duties.lock`); the PAM service is not installed; the dimmed wallpaper and the clock wait for CEL-2-H-b | VAL-CEL2-LOCK-PAM, -LIVE, -SUSPEND, -HOTPLUG, -RECOVERY, -NOTICES and -COEXIST passed, with Noctalia's idle lock off; `Mod+Shift+A` keeps using `swaylock` (the recovery path) until the author retires it; rebinding `Mod+Shift+Escape` to `celestina lock suspend` is CEL-2-M |
-| Polkit agent | Noctalia's authentication dialogs; the earlier roadmap named it the last blocker | no | a polkit agent with a password prompt; without it, privileged prompts have no UI |
+| Polkit agent | Noctalia's authentication dialogs; the earlier roadmap named it the last blocker | delivered in CEL-2-I, off by default (`duties.polkit`) | VAL-CEL2-POLKIT-LIVE passed; set `duties.polkit` to `"on"` in `shell.json` with Noctalia's agent off (the shell refuses while another agent holds the session); recovery is the duty `"off"` or stopping the shell, then Noctalia's agent again; without any agent, privileged prompts have no UI |
 | Wallpaper | Noctalia draws it (the niri config pins the `wallpaper` namespace to the backdrop); today a still image, though the enabled `mpvpaper` plugin and its cache show video wallpapers have been used | no | a wallpaper delivery, including video if the author still wants it |
 | Night light | niri startup runs `noctalia msg nightlight-force-toggle` | delivered in CEL-2-B, off by default (`duties.nightlight`, `energy.night_light`) | VAL-CEL2-NIGHTLIGHT passed; replace the startup line by setting `duties.nightlight` to `"on"` and `energy.night_light` to `true` in `shell.json`, with Noctalia's night light off |
 | Caffeine (idle inhibitor) | niri startup runs `noctalia msg caffeine-enable` | delivered in CEL-2-B, off by default (`duties.caffeine`, `energy.caffeine`) | VAL-CEL2-CAFFEINE passed; replace the startup line by setting `duties.caffeine` to `"on"` and `energy.caffeine` to `true` in `shell.json`, with Noctalia's caffeine off |

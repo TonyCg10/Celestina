@@ -15,11 +15,12 @@ VAL-CEL2-CALENDAR and VAL-CEL2-GLANCE-TABS; CEL-2-G queues VAL-CEL2-CLIPBOARD-LI
 VAL-CEL2-CLIPBOARD-SECRET, VAL-CEL2-CLIPBOARD-IMAGE and VAL-CEL2-CLIPBOARD-LOOK;
 CEL-2-F queues VAL-CEL2-NETWORK, VAL-CEL2-BLUETOOTH and VAL-CEL2-POWER;
 CEL-2-C queues VAL-CEL2-OSD-AUDIO, VAL-CEL2-OSD-BRIGHTNESS and
-VAL-CEL2-OSD-PIECES; CEL-2-D queues VAL-CEL2-MEDIA and VAL-CEL2-MEDIA-COVER; CEL-2-H-a queues
-VAL-CEL2-LOCK-PAM, VAL-CEL2-LOCK-LIVE, VAL-CEL2-LOCK-SUSPEND,
+VAL-CEL2-OSD-PIECES; CEL-2-J queues VAL-CEL2-PHONE, VAL-CEL2-BUBBLES and
+VAL-CEL2-BUBBLES-KEYS; CEL-2-D queues VAL-CEL2-MEDIA and VAL-CEL2-MEDIA-COVER;
+CEL-2-H-a queues VAL-CEL2-LOCK-PAM, VAL-CEL2-LOCK-LIVE, VAL-CEL2-LOCK-SUSPEND,
 VAL-CEL2-LOCK-HOTPLUG, VAL-CEL2-LOCK-RECOVERY, VAL-CEL2-LOCK-NOTICES and
 VAL-CEL2-LOCK-COEXIST; CEL-2-H-b queues VAL-CEL2-LOCK-BACKDROP and
-VAL-CEL2-LOCK-CLOCK.
+VAL-CEL2-LOCK-CLOCK; CEL-2-I queues VAL-CEL2-POLKIT-LIVE.
 None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
@@ -1174,3 +1175,91 @@ None has been run and none is closed by an agent.
   one lock keeps the offset read at its spawn
 - **Result:** partial, 2026-10-23, in a nest with one output (R-10 of the rehearsal, [evidence](docs/evidence/2026-10-23-cel-2-h-b.md)): the dimmed and blurred picture showed under the field with the clock and the date, and the clock redrew at the minute. Not run: the live session, three outputs, hotplug, the brightest real picture, resume from suspend, the unreadable-offset case
 - **Evidence:** [2026-10-23-cel-2-h-b.md](docs/evidence/2026-10-23-cel-2-h-b.md), section R-10
+
+## VAL-CEL2-POLKIT-LIVE — The polkit agent in the author's session
+
+- **Status:** pending
+- **Related implementation:** CEL-2-I (the `polkit` duty: the agent, the
+  prompt card and the helper conversation)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session, with Noctalia's polkit agent switched off first and Noctalia's
+  notifications understood (see the notes below); `duties.polkit` set to
+  `"on"` in `~/.config/celestina/shell.json` (the shell follows the file live);
+  a terminal; the shell's log in view (its stderr, or `journalctl --user -b`
+  if a unit started it). Do not run this with a work session you cannot
+  afford to lose focus in: a prompt takes the keyboard exclusively
+- **Procedure:** (1) With the duty on and Noctalia's agent off, run
+  `pkexec /usr/bin/true`: the card appears on the focused output with the
+  other outputs dimmed, showing polkit's message, the action id and your
+  account, and the keyboard is the card's. Type the right password and press
+  Enter: the card closes and `pkexec` exits 0. (2) Run it again, type a wrong
+  password once and press Enter: the card says the answer was not accepted
+  and asks again; type the right one and check it succeeds. Do not fail twice
+  in a row more than once in a session (see the faillock note). (3) Run it
+  again and press Escape: the card closes and `pkexec` reports that the
+  request was dismissed. (4) Run it, and while the card is up start a second
+  overlay client that takes the keyboard (any layer-shell program that asks for
+  exclusive keyboard, started from another terminal you opened before): the
+  card loses the keyboard, the typed text is wiped, and the request is
+  cancelled within about two seconds, with a notice that an authorization
+  prompt could not be shown. (5) Run it and, with the card up, run
+  `systemctl restart polkit` from a terminal opened before: the request is torn
+  down, the card closes, and a new `pkexec` prompts again with no restart of
+  the shell. (6) Run it and stop the shell with `celestina quit`, or kill it by
+  its own pid (never by name); `pkexec` must fail, never succeed, and a new
+  shell must register again. (7) With the duty on, ask Hematita for a service
+  action that polkit guards (start or stop a unit), and check that the card
+  names Hematita's action and that cancelling it makes Hematita report a
+  refusal, not a success. (8) After all of this, read the shell's log and
+  `journalctl --user -b`: they must contain no password, no part of one and no
+  cookie (search for the password you typed and for the cookie shape
+  `3-` followed by hex in the polkit lines). (9) Rollback: set `duties.polkit`
+  to `"off"`, check that a pending request, if any, is cancelled and that a new
+  `pkexec` gets no card from the shell, then re-enable Noctalia's agent and
+  check that `pkexec /usr/bin/true` prompts there. Stopping the shell has the
+  same effect, since polkit removes an agent whose connection vanished
+- **Pass condition:** every step does what is described: the card on the
+  focused output with the exclusive keyboard; success only after the right
+  password; a wrong answer asks again and a second one in the same prompt
+  ends it; Escape and focus theft cancel (never grant); a polkit restart or a
+  killed shell ends the request and never grants; Hematita's action shows its
+  own id and obeys the answer; the log holds no secret and no cookie; and the
+  rollback returns the session to Noctalia's agent
+- **Notes for the author, not checks:**
+  - **faillock.** This host's `pam_faillock` is `deny = 3`, `unlock_time = 600`.
+    A prompt allows two attempts (`MAX_ATTEMPTS = 2`), so one prompt cannot lock
+    the account, but two prompts that each fail twice can, for login and `sudo`
+    too. Keep the failure count at one per prompt in this row.
+  - **niri.** The prompt cannot be defended from a compositor that is hostile,
+    and has no trusted path on Wayland. Recommended in the niri configuration
+    (outside this repository, the author decides): a `layer-rule` for the
+    namespace `celestina-polkit-prompt` with a `block-out-from` setting
+    (whether niri applies the rule to layer surfaces is unverified, and a
+    fixed-length echo is not shown in any case), and withholding the
+    virtual-keyboard and input-method protocols from untrusted clients, since a
+    virtual keyboard injects into the focused surface, which is the card, with no
+    leave event (spec Q7).
+  - **Noctalia holds the notifications name.** The notices (the prompt could not
+    be shown; the helper could not be used; the prompt cool-down) are posted through the shell's own
+    notification server, which does not run while Noctalia owns
+    `org.freedesktop.Notifications`: the request is still cancelled, but the
+    notice is lost and the shell only writes a log line. Step 4 therefore shows
+    its notice only if Noctalia's notifications are off and the shell serves them.
+  - **Deadlines and the screen.** The prompt's deadlines (the keyboard proof,
+    the focus grace, the idle cap) are evaluated when the compositor sends a
+    frame callback for the Island's or the card's surface. With the output
+    switched off by the idle chain, or the surface hidden, no callback arrives
+    and a prompt ends only when polkitd cancels it or the person acts; nothing
+    is granted either way. Check step 4 and the idle cap with the screen on.
+  - **The session type.** The agent registers only for a local `wayland` session
+    of your user. Before the row, `loginctl show-session
+    $(loginctl show-user $USER -p Display --value) -p Id -p Type -p Class -p
+    Remote` should say `Type=wayland`, `Class=user`, `Remote=no`; a session
+    started from a TTY says `Type=tty` and the duty reports `unavailable`.
+  - **The glyph.** The card shows the suite's `key` icon where the design says
+    lock: `celestina-style/icons` has no `lock.svg` yet.
+  - **Accessibility.** The toolkit has no AT-SPI; the answer field has no
+    accessible tree, and nothing is claimed.
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [2026-10-17-cel-2-i.md](docs/evidence/2026-10-17-cel-2-i.md)

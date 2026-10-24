@@ -2,7 +2,7 @@
 //! surface that received them.
 #![forbid(unsafe_code)]
 
-use std::fmt;
+use std::{fmt, time::Instant};
 
 use smithay_client_toolkit::seat::{
     keyboard::{KeyEvent, Modifiers as SctkModifiers},
@@ -49,9 +49,12 @@ pub enum CursorShape {
 
 /// One input event on one surface.
 ///
-/// `Debug` is written by hand: a key event is what a person types, and in the
-/// session lock that is a password, so the keysym and the text never reach a
-/// log line however the event is formatted (`?ev`, `{ev:?}`, `{ev:#?}`).
+/// `Debug` is written by hand: a key press, the input method's text and the
+/// clipboard's text can be a password (in the session lock a key event is
+/// always what a person types), and the runtime logs an event it cannot
+/// deliver, so the variants that can carry typed text print `<redacted>` in
+/// their place, however the event is formatted (`?ev`, `{ev:?}`, `{ev:#?}`).
+/// See the `Debug` impl below.
 #[derive(Clone, PartialEq)]
 pub enum InputEvent {
     PointerMotion {
@@ -91,8 +94,14 @@ pub enum InputEvent {
     /// lock key latches). Delivered to the surface holding the keyboard focus
     /// by the lock profile only.
     Modifiers(Modifiers),
-    /// The keyboard entered this surface.
-    FocusEnter,
+    /// The keyboard entered this surface, with the serial of the
+    /// `wl_keyboard.enter` and the moment the runtime handled it (a
+    /// monotonic clock). A key whose press carries an older serial began
+    /// before the enter.
+    FocusEnter {
+        serial: u32,
+        at: Instant,
+    },
     /// The keyboard left this surface (not for a move into its own popup).
     FocusLost,
     /// Popup `id` of this surface is gone; `reason` says why (a
@@ -115,7 +124,7 @@ pub enum InputEvent {
     Paste(String),
 }
 
-/// Stands for a value `InputEvent`'s `Debug` must not show.
+/// A stand-in that prints as `<redacted>` wherever typed text would be.
 struct Redacted;
 
 impl fmt::Debug for Redacted {
@@ -124,15 +133,27 @@ impl fmt::Debug for Redacted {
     }
 }
 
+/// Whether a key press can name a typed character: its text has one that is
+/// not a control character, or its keysym is outside the function, cursor,
+/// modifier and function-key ranges (keypad digits and operators included in
+/// "can name"). The keysym of a letter is the letter, so it is redacted with
+/// the text; Return, Escape, Backspace, the arrows and the like stay
+/// readable in a log.
+fn names_a_character(keysym: u32, utf8: Option<&str>) -> bool {
+    let text = utf8.is_some_and(|s| s.chars().any(|c| !c.is_control()));
+    let function_key = (0xff00..=0xffff).contains(&keysym) && !(0xffaa..=0xffbd).contains(&keysym);
+    text || !function_key
+}
+
 impl fmt::Debug for InputEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::PointerMotion { x, y } => f
+            InputEvent::PointerMotion { x, y } => f
                 .debug_struct("PointerMotion")
                 .field("x", x)
                 .field("y", y)
                 .finish(),
-            Self::PointerPress {
+            InputEvent::PointerPress {
                 x,
                 y,
                 button,
@@ -144,7 +165,7 @@ impl fmt::Debug for InputEvent {
                 .field("button", button)
                 .field("serial", serial)
                 .finish(),
-            Self::PointerRelease {
+            InputEvent::PointerRelease {
                 x,
                 y,
                 button,
@@ -156,8 +177,8 @@ impl fmt::Debug for InputEvent {
                 .field("button", button)
                 .field("serial", serial)
                 .finish(),
-            Self::PointerLeave => f.write_str("PointerLeave"),
-            Self::Axis {
+            InputEvent::PointerLeave => f.write_str("PointerLeave"),
+            InputEvent::Axis {
                 x,
                 y,
                 horizontal,
@@ -169,36 +190,49 @@ impl fmt::Debug for InputEvent {
                 .field("horizontal", horizontal)
                 .field("vertical", vertical)
                 .finish(),
-            // The keysym and the text are what was typed: never shown, not
-            // even whether the key produced text.
-            Self::Key {
+            InputEvent::Key {
+                keysym,
+                utf8,
                 modifiers,
                 pressed,
                 serial,
-                ..
-            } => f
-                .debug_struct("Key")
-                .field("keysym", &Redacted)
-                .field("utf8", &Redacted)
-                .field("modifiers", modifiers)
-                .field("pressed", pressed)
+            } => {
+                let mut key = f.debug_struct("Key");
+                if names_a_character(*keysym, utf8.as_deref()) {
+                    key.field("keysym", &Redacted);
+                } else {
+                    key.field("keysym", keysym);
+                }
+                // Not even whether the key produced text.
+                let _ = utf8;
+                key.field("utf8", &Redacted);
+                key.field("modifiers", modifiers)
+                    .field("pressed", pressed)
+                    .field("serial", serial)
+                    .finish()
+            }
+            InputEvent::Modifiers(modifiers) => {
+                f.debug_tuple("Modifiers").field(modifiers).finish()
+            }
+            InputEvent::FocusEnter { serial, at } => f
+                .debug_struct("FocusEnter")
                 .field("serial", serial)
+                .field("at", at)
                 .finish(),
-            Self::Modifiers(modifiers) => f.debug_tuple("Modifiers").field(modifiers).finish(),
-            Self::FocusEnter => f.write_str("FocusEnter"),
-            Self::FocusLost => f.write_str("FocusLost"),
-            Self::PopupClosed { id, reason } => f
+            InputEvent::FocusLost => f.write_str("FocusLost"),
+            InputEvent::PopupClosed { id, reason } => f
                 .debug_struct("PopupClosed")
                 .field("id", id)
                 .field("reason", reason)
                 .finish(),
-            Self::Preedit { text, cursor } => f
+            // The cursor is a byte offset into the text: its length.
+            InputEvent::Preedit { .. } => f
                 .debug_struct("Preedit")
-                .field("text", text)
-                .field("cursor", cursor)
+                .field("text", &Redacted)
+                .field("cursor", &Redacted)
                 .finish(),
-            Self::CommitText(text) => f.debug_tuple("CommitText").field(text).finish(),
-            Self::Paste(text) => f.debug_tuple("Paste").field(text).finish(),
+            InputEvent::CommitText(_) => f.debug_tuple("CommitText").field(&Redacted).finish(),
+            InputEvent::Paste(_) => f.debug_tuple("Paste").field(&Redacted).finish(),
         }
     }
 }
@@ -259,6 +293,79 @@ pub(crate) fn pointer_input(kind: &PointerEventKind, position: (f64, f64)) -> Op
     })
 }
 
+#[cfg(feature = "gl")]
+/// The surface a keyboard enter or leave names, as the runtime resolved it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FocusTarget {
+    /// A layer surface: its shell is told.
+    Layer(SurfaceId),
+    /// An `xdg_popup`: the focus moves, the shell is not told.
+    Popup(SurfaceId),
+}
+
+#[cfg(feature = "gl")]
+impl FocusTarget {
+    fn surface(self) -> SurfaceId {
+        match self {
+            FocusTarget::Layer(id) | FocusTarget::Popup(id) => id,
+        }
+    }
+}
+
+#[cfg(feature = "gl")]
+/// Which surface holds the keyboard, and the events its enters and leaves
+/// deliver. Pure: the handlers resolve the `wl_surface`, this decides.
+#[derive(Debug, Default)]
+pub(crate) struct KeyboardFocus {
+    surface: Option<SurfaceId>,
+}
+
+#[cfg(feature = "gl")]
+impl KeyboardFocus {
+    /// The surface that holds the keyboard now.
+    pub(crate) fn surface(&self) -> Option<SurfaceId> {
+        self.surface
+    }
+
+    /// `wl_keyboard.enter`: the focus moves to `target` (to nothing for a
+    /// surface that is not ours). A layer surface is told, with the enter's
+    /// serial and the moment.
+    pub(crate) fn enter(
+        &mut self,
+        target: Option<FocusTarget>,
+        serial: u32,
+        at: Instant,
+    ) -> Option<InputEvent> {
+        self.surface = target.map(FocusTarget::surface);
+        match target {
+            Some(FocusTarget::Layer(_)) => Some(InputEvent::FocusEnter { serial, at }),
+            Some(FocusTarget::Popup(_)) | None => None,
+        }
+    }
+
+    /// `wl_keyboard.leave`: a surface that did not hold the keyboard
+    /// changes nothing and tells nobody. `popup_grab` says a popup of this
+    /// layer surface is open, so the keyboard moved into it: the focus is
+    /// gone but the page was not left.
+    pub(crate) fn leave(&mut self, target: FocusTarget, popup_grab: bool) -> Option<InputEvent> {
+        if self.surface != Some(target.surface()) {
+            return None;
+        }
+        self.surface = None;
+        match target {
+            FocusTarget::Layer(_) if !popup_grab => Some(InputEvent::FocusLost),
+            FocusTarget::Layer(_) | FocusTarget::Popup(_) => None,
+        }
+    }
+
+    /// A surface was destroyed: it no longer holds the keyboard.
+    pub(crate) fn forget(&mut self, surface: SurfaceId) {
+        if self.surface == Some(surface) {
+            self.surface = None;
+        }
+    }
+}
+
 /// What a shell asked of the seat through a `SurfaceCtl`, applied by the
 /// runtime right after the shell call returns.
 #[cfg(feature = "gl")]
@@ -278,6 +385,155 @@ pub(crate) type SeatRequests = Vec<(SurfaceId, SeatRequest)>;
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "gl")]
+    use std::time::Duration;
+
+    use super::*;
+
+    /// What the runtime's log site (`tracing::debug!(?ev, ..)`) formats.
+    fn logged(ev: &InputEvent) -> String {
+        format!("{:?}", tracing::field::debug(ev))
+    }
+
+    fn key(keysym: u32, utf8: Option<&str>) -> InputEvent {
+        InputEvent::Key {
+            keysym,
+            utf8: utf8.map(str::to_owned),
+            modifiers: Modifiers::default(),
+            pressed: true,
+            serial: 4242,
+        }
+    }
+
+    #[test]
+    fn input_event_debug_redacts_typed_text() {
+        // Every variant that can carry typed text, with text that must not
+        // appear and the keysym of a typed letter ('h' = 0x68 = 104).
+        let secret = "hunter2\u{e9}";
+        let typed = [
+            key(0x68, Some("h")),
+            key(0x68, Some(secret)),
+            // A key with no text still names a letter by its keysym.
+            key(0x68, None),
+            // Keypad digits are typed text too (KP_5).
+            key(0xffb5, Some("5")),
+            InputEvent::Preedit {
+                text: secret.to_owned(),
+                cursor: 7,
+            },
+            InputEvent::CommitText(secret.to_owned()),
+            InputEvent::Paste(secret.to_owned()),
+        ];
+        for ev in &typed {
+            for text in [format!("{ev:?}"), format!("{ev:#?}"), logged(ev)] {
+                assert!(text.contains("<redacted>"), "{text}");
+                for leaked in ["hunter2", "\u{e9}", "\"h\"", "104", "0x68", "68", "1000"] {
+                    assert!(!text.contains(leaked), "{leaked:?} leaked in {text}");
+                }
+            }
+        }
+        // The preedit's cursor is the text's length: redacted too.
+        let preedit = InputEvent::Preedit {
+            text: "abcdef".to_owned(),
+            cursor: 6,
+        };
+        assert!(!format!("{preedit:?}").contains('6'));
+        // The key's other fields stay readable for debugging.
+        let text = format!("{:?}", key(0x68, Some("h")));
+        assert!(
+            text.contains("4242") && text.contains("pressed: true"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn input_event_debug_keeps_the_events_that_carry_no_text_readable() {
+        // Return, Escape and the arrows say what the person did, not what
+        // they typed, and they are what a log reader needs.
+        let text = format!("{:?}", key(0xff0d, Some("\r")));
+        assert!(text.contains(&0xff0d.to_string()), "{text}");
+        let text = format!("{:?}", key(0xff1b, None));
+        assert!(text.contains(&0xff1b.to_string()), "{text}");
+        assert_eq!(format!("{:?}", InputEvent::FocusLost), "FocusLost");
+        assert_eq!(format!("{:?}", InputEvent::PointerLeave), "PointerLeave");
+        let motion = format!("{:?}", InputEvent::PointerMotion { x: 1.5, y: 2.5 });
+        assert!(motion.contains("1.5") && motion.contains("2.5"), "{motion}");
+    }
+
+    #[cfg(feature = "gl")]
+    fn layer(n: u32) -> FocusTarget {
+        FocusTarget::Layer(SurfaceId(n))
+    }
+
+    #[cfg(feature = "gl")]
+    #[test]
+    fn enter_then_leave_is_delivered_in_order() {
+        let mut focus = KeyboardFocus::default();
+        let t0 = Instant::now();
+        let t1 = t0 + Duration::from_millis(30);
+        assert_eq!(focus.surface(), None);
+
+        // The enter carries its serial and moment.
+        assert_eq!(
+            focus.enter(Some(layer(1)), 77, t0),
+            Some(InputEvent::FocusEnter { serial: 77, at: t0 })
+        );
+        assert_eq!(focus.surface(), Some(SurfaceId(1)));
+        assert_eq!(focus.leave(layer(1), false), Some(InputEvent::FocusLost));
+        assert_eq!(focus.surface(), None);
+
+        // The keyboard moves from surface 1 to surface 2: leave, then enter.
+        assert!(focus.enter(Some(layer(1)), 78, t0).is_some());
+        assert_eq!(focus.leave(layer(1), false), Some(InputEvent::FocusLost));
+        assert_eq!(
+            focus.enter(Some(layer(2)), 79, t1),
+            Some(InputEvent::FocusEnter { serial: 79, at: t1 })
+        );
+        assert_eq!(focus.surface(), Some(SurfaceId(2)));
+
+        // Into a popup of surface 2 and out again: the page is not left.
+        assert_eq!(focus.leave(layer(2), true), None);
+        assert_eq!(focus.surface(), None);
+        assert_eq!(
+            focus.enter(Some(FocusTarget::Popup(SurfaceId(9))), 80, t1),
+            None
+        );
+        assert_eq!(focus.surface(), Some(SurfaceId(9)));
+        assert_eq!(focus.leave(FocusTarget::Popup(SurfaceId(9)), false), None);
+        assert_eq!(
+            focus.enter(Some(layer(2)), 81, t1),
+            Some(InputEvent::FocusEnter { serial: 81, at: t1 })
+        );
+    }
+
+    #[cfg(feature = "gl")]
+    #[test]
+    fn leave_of_an_unfocused_surface_is_ignored() {
+        let mut focus = KeyboardFocus::default();
+        let now = Instant::now();
+        // Nothing focused: a stray leave tells nobody.
+        assert_eq!(focus.leave(layer(1), false), None);
+        // Surface 2 holds the keyboard; surface 1's late leave changes nothing.
+        assert!(focus.enter(Some(layer(2)), 5, now).is_some());
+        assert_eq!(focus.leave(layer(1), false), None);
+        assert_eq!(focus.surface(), Some(SurfaceId(2)));
+        // A surface that is not ours takes the keyboard: nobody is told.
+        assert_eq!(focus.enter(None, 6, now), None);
+        assert_eq!(focus.surface(), None);
+        assert_eq!(focus.leave(layer(2), false), None);
+        // A destroyed surface no longer holds it either, and a different
+        // destroyed surface changes nothing.
+        assert!(focus.enter(Some(layer(3)), 7, now).is_some());
+        focus.forget(SurfaceId(4));
+        assert_eq!(focus.surface(), Some(SurfaceId(3)));
+        focus.forget(SurfaceId(3));
+        assert_eq!(focus.surface(), None);
+        assert_eq!(focus.leave(layer(3), false), None);
+    }
+}
+
+#[cfg(test)]
+mod lock_profile_tests {
     use super::*;
 
     fn key(keysym: u32, utf8: Option<&str>) -> InputEvent {
@@ -330,16 +586,17 @@ mod tests {
     }
 
     #[test]
-    fn the_other_events_keep_the_derived_debug_format() {
+    fn the_other_events_keep_a_readable_debug_format() {
         assert_eq!(
             format!("{:?}", InputEvent::PointerMotion { x: 1.0, y: 2.5 }),
             "PointerMotion { x: 1.0, y: 2.5 }"
         );
-        assert_eq!(format!("{:?}", InputEvent::FocusEnter), "FocusEnter");
         assert_eq!(format!("{:?}", InputEvent::PointerLeave), "PointerLeave");
+        // Typed text is redacted in the input method's and the clipboard's
+        // events too (it can be a password).
         assert_eq!(
             format!("{:?}", InputEvent::Paste("x".to_owned())),
-            "Paste(\"x\")"
+            "Paste(<redacted>)"
         );
         assert_eq!(
             format!(
