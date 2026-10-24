@@ -11,7 +11,7 @@
 >
 > Per-project roadmaps: [celestina-rs](../../celestina-rs/ROADMAP.md) ·
 > [celestina-style](../../celestina-style/ROADMAP.md) ·
-> [celestina](../../celestina-qt/ROADMAP.md) ·
+> celestina (`celestina-qt/ROADMAP.md`, removed by CEL-QT-REMOVE) ·
 > [siderita](../../siderita/ROADMAP.md) ·
 > [magnetita](../../magnetita/ROADMAP.md) ·
 > [fluorita](../../fluorita/ROADMAP.md) ·
@@ -46,7 +46,7 @@ real output-local workspaces plus the active window beside its clock and phone
 state. It remains read-only until focus requests can expose pending, failed and
 provider-confirmed outcomes; Noctalia stays the reversible fallback. Since
 2026-07-29 the shell's destination is explicit: replace Noctalia entirely in
-staged phases (R0–R9 in the [shell roadmap](../../celestina-qt/ROADMAP.md)), each phase
+staged phases (R0–R9 in the shell roadmap (`celestina-qt/ROADMAP.md`, removed by CEL-QT-REMOVE)), each phase
 retiring one responsibility behind a real-session gate.
 
 ## The pieces
@@ -55,7 +55,7 @@ retiring one responsibility behind a real-session gate.
 |---|---|---|---|---|
 | [celestina-rs](../../celestina-rs/) | Shared domain cores | Rust | — | siderita, magnetita, future apps |
 | [celestina-style](../../celestina-style/) | Shared visual language | QML | — | celestina, siderita, magnetita, future apps |
-| [celestina](../../celestina-qt/) | Niri shell / session | C++ · QML (+ Rust bridge) | celestina-style | the session |
+| celestina (`celestina-qt/`, removed by CEL-QT-REMOVE) | Niri shell / session | C++ · QML (+ Rust bridge) | celestina-style | the session |
 | [siderita](../../siderita/) | File manager (first app) | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user |
 | [magnetita](../../magnetita/) | Phone link (KDE Connect) | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user, siderita (via `org.celestina.Devices1`) |
 | [grafita](../../grafita/) | Text editor | Rust · QML (CXX-Qt) | celestina-rs, celestina-style | the user, siderita (embedded editing surface) |
@@ -234,16 +234,16 @@ installed style release is not a prerequisite before STYLE-D's external gate.
       once the shell has a real Niri adapter; `Settings` moves to `celestina` as
       the first portal the shell serves. Everything else stays with **gtk** until
       one of them proves a daily need. Detail and the interface table live in the
-      [shell's roadmap](../../celestina-qt/ROADMAP.md). *Removing the GTK library is not a
+      shell's roadmap (`celestina-qt/ROADMAP.md`, removed by CEL-QT-REMOVE). *Removing the GTK library is not a
       goal — Firefox and Electron link it regardless; removing GTK's and GNOME's
       say over this session's dialogs is*
 - [ ] **Retire Noctalia (celestina R0–R9)** — the shell replaces Noctalia one
       responsibility at a time (bar → launcher → session verbs/OSD →
       notifications → control center → lock → wallpaper/Settings portal →
       Polkit/dock), each phase gated on real-session evidence with a named
-      fallback; the phases live in the [shell's roadmap](../../celestina-qt/ROADMAP.md)
+      fallback; the phases live in the shell's roadmap (`celestina-qt/ROADMAP.md`, removed by CEL-QT-REMOVE)
       and the per-phase work orders in
-      [NOCTALIA-REPLACEMENT.md](../../celestina-qt/NOCTALIA-REPLACEMENT.md)
+      NOCTALIA-REPLACEMENT.md (`celestina-qt/NOCTALIA-REPLACEMENT.md`, removed by CEL-QT-REMOVE)
 - [ ] Suite conventions: single-instance behavior, a small IPC/activation convention, `open-with`/handler wiring, drag-and-drop between first-party apps — all over freedesktop standards
 - [ ] One settings + theming source shared by the shell and every app
 - [ ] Additional first-party apps — **Grafita** has landed G0–G4 and G6 (both

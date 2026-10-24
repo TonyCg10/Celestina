@@ -2,7 +2,6 @@
 # same commit that earns the reduction. Registered in docs/projects.toml as
 # a shared ratchet file so every project prefix may lower its own row.
 # findings<TAB>project
-9	celestina-qt
 0	celestina-style
 0	cuprita
 0	fluorita

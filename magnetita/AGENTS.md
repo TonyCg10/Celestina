@@ -44,10 +44,10 @@ or grant authority.
 Build and verify never stop `magnetitad`. `scripts/complete-production.sh` is
 mandatory when closing a bug or milestone; it may stop an already-active service
 once, copy the verified daemon, and restart it. It never enables an inactive
-service. The shell that consumed `magnetita-core`'s phone projection is halted
-(`celestina-qt/`); its `celestina-qt/scripts/complete-production.sh` is not run
-when `magnetita-core` changes, as AGENTS.md "Halted projects" rules. Do
-not delete trust/configuration or force re-pairing for verification.
+service. The Qt shell that consumed `magnetita-core`'s phone projection was
+removed from the tree (AGENTS.md "Halted projects"), so a `magnetita-core`
+change rebuilds no shell for it. Do not delete trust/configuration or force
+re-pairing for verification.
 
 ## Local verification
 

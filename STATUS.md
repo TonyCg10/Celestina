@@ -126,7 +126,7 @@ pre-migration detail is explicitly historical and is not current instruction.
 |---|---|---|
 | Governance foundation | complete | archived GOV-1 plan |
 | Project document migration | complete | root/project canonical documents and histories |
-| Reusable production artifacts | entries complete for every project registered in [docs/projects.toml](docs/projects.toml); the Celestina shell's are halted since 2026-09-27 and no landing runs them | production evidence |
+| Reusable production artifacts | entries complete for every project registered in [docs/projects.toml](docs/projects.toml); the Qt shell's left with its tree when CEL-QT-REMOVE retired it | production evidence |
 | Registry-backed guards and commit policy | complete | production/documentation/architecture/hook fixtures |
 | Product version convention | complete | registered sources, typed commits and append-only history |
 | Repository language | canonical rules and current guard success output are English; legacy diagnostics and code/UI debt remain ratcheted | language standard and guard |

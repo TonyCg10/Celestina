@@ -60,56 +60,6 @@ release_increment = "major"
 maintenance_increment = "none"
 
 [[projects]]
-id = "celestina-qt"
-name = "Celestina shell (Qt, halted)"
-path = "celestina-qt"
-kind = "qt-shell"
-commit_prefix = "celestina-qt"
-# Registered as `celestina` until 2026-10-14; the history rows that carry that
-# name up to the Rust shell's baseline are this project's
-# (docs/contracts/versioning.md, "Renaming a project").
-history_owner = "celestina"
-# The author halted the shell on this date; AGENTS.md "Halted projects" is the
-# rule. agent-context.py announces it, commit_scope.py refuses its prefixes and
-# paths, and the landing never builds, verifies or deploys it. Only the author
-# lifts it, by editing that section and removing this key.
-halted = "2026-09-27"
-version_source = { kind = "cmake-project", path = "celestina-qt/CMakeLists.txt", project = "celestina" }
-version_mirrors = [
-  { kind = "cargo-package", path = "celestina-qt/Cargo.toml", package = "celestina-shell" },
-  { kind = "cargo-lock", path = "celestina-qt/Cargo.lock", package = "celestina-shell" },
-]
-agents = "celestina-qt/AGENTS.md"
-readme = "celestina-qt/README.md"
-status = "celestina-qt/STATUS.md"
-roadmap = "celestina-qt/ROADMAP.md"
-validation = "celestina-qt/VALIDATION.md"
-active_plans = "celestina-qt/docs/plans/active"
-context_documents = [
-  "celestina-qt/docs/discussions/README.md",
-  "celestina-qt/docs/decisions/README.md",
-]
-source_roots = ["celestina-qt/src", "celestina-qt/qml", "celestina-rs/crates/celestina-shell-core"]
-commit_roots = ["celestina-qt/", "celestina-rs/crates/celestina-shell-core/"]
-include_workspace_manifests = true
-production_role = "activatable-shell"
-deployable = true
-build_script = "celestina-qt/scripts/build-production.sh"
-complete_script = "celestina-qt/scripts/complete-production.sh"
-verify_script = "celestina-qt/scripts/verify-production.sh"
-deploy_script = "celestina-qt/scripts/deploy-production.sh"
-activate_script = "celestina-qt/scripts/activate-production.sh"
-status_script = "celestina-qt/scripts/status-production.sh"
-artifact_manifest = "celestina-qt/build/production-artifact.toml"
-artifact_paths = ["celestina-qt/build/celestina", "celestina-qt/build/celestina-lock", "celestina-qt/build/celestina-lock-verify", "celestina-qt/build/libcelestina-lock-session.so", "celestina-qt/build/celestina-polkit-converse", "celestina-qt/build/rust-target/release/celestina-niri-adapter", "celestina-qt/build/rust-target/release/celestina-provider-adapter", "celestina-style/build/libcelestina-style.so", "celestina-style/build/CelestinaStyle", "celestina-qt/scripts/celestina-launcher.sh", "celestina-qt/celestina.desktop"]
-cargo_manifests = ["celestina-qt/Cargo.toml"]
-production_inputs = ["celestina-qt/celestina.desktop", "celestina-qt/CMakeLists.txt", "celestina-qt/Cargo.toml", "celestina-qt/Cargo.lock", "celestina-qt/src", "celestina-qt/qml", "celestina-style/CMakeLists.txt", "celestina-style/*.qml", "celestina-style/qmldir", "celestina-style/fonts", "celestina-style/icons", "celestina-style/scripts/build-production.sh", "celestina-rs/crates/celestina-shell-core", "celestina-rs/crates/celestina-core", "celestina-rs/crates/magnetita-core"]
-verification_inputs = ["celestina-qt/tests", "celestina-qt/scripts/qmllint-production.sh", "celestina-qt/scripts/smoke-production.sh", "celestina-style/tests", "celestina-style/gallery", "celestina-style/scripts/verify-production.sh", "celestina-style/scripts/smoke-production.sh", "celestina-rs/rust-toolchain.toml"]
-component_commit_scopes = [
-  { prefix = "celestina-shell-core", roots = ["celestina-rs/crates/celestina-shell-core/"], include_workspace_manifests = true },
-]
-
-[[projects]]
 id = "celestina"
 name = "Celestina shell"
 path = "celestina"
@@ -559,3 +509,19 @@ verification_inputs = ["selenita/scripts/smoke.sh", "celestina-rs/rust-toolchain
 component_commit_scopes = [
   { prefix = "selenita-core", roots = ["celestina-rs/crates/selenita-core/"], include_workspace_manifests = true },
 ]
+
+# Projects removed from the tree. Their history rows and old commits still
+# name them, so the version contract and the history replay read them here;
+# no other tool sees them (docs/contracts/versioning.md, "Retiring a
+# project"). An entry is permanent, and its id and prefixes stay reserved.
+
+[[retired_projects]]
+# The Qt/QML shell: halted on 2026-09-27 and removed by CEL-QT-REMOVE
+# (AGENTS.md "Halted projects"). Registered as `celestina` until 2026-10-14;
+# the history rows that carry that name up to the Rust shell's baseline are
+# its rows.
+id = "celestina-qt"
+retired = "2026-10-23"
+history_owner = "celestina"
+commit_prefixes = ["celestina-qt", "celestina-shell-core"]
+commit_roots = ["celestina-qt/", "celestina-rs/crates/celestina-shell-core/"]

@@ -449,15 +449,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "celestina-shell-core"
-version = "0.1.0"
-dependencies = [
- "celestina-core",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "celestina-tokens"
 version = "0.1.0"
 

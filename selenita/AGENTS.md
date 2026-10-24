@@ -37,8 +37,9 @@ Selenita's constraints; it cannot relax the root or grant authority.
 - `SELENITA_FAKE=1` routes every external tool (niri, `grim`, `slurp`,
   `wl-copy`, the portal, GStreamer) to fakes; tests and the smoke run with it.
   A real capture or recording on the session is never run by an agent.
-- The Celestina shell is halted by the author's order: never read, reuse or
-  reference `celestina-qt/` or `celestina-shell-core`.
+- The Qt shell (`celestina-qt/`, `celestina-shell-core`) was removed from the
+  tree (AGENTS.md "Halted projects"); do not recover or reuse its code from
+  the Git history.
 
 ## Local verification
 

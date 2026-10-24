@@ -6,7 +6,7 @@
 ## Context
 
 The halted shell decided against a running-application dock in its
-[ADR 0003](../../../celestina-qt/docs/decisions/0003-no-running-app-dock.md).
+ADR 0003 (`celestina-qt/docs/decisions/0003-no-running-app-dock.md`, removed by CEL-QT-REMOVE).
 The author confirmed the same choice for this shell in brainstorming. See
 [the design](../../../docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md), §2.
 

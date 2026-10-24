@@ -24,12 +24,9 @@ another language. See
 
 ## Halted projects
 
-The Qt/QML Celestina shell is halted by the author's decision of 2026-09-27.
-The halt covers the `celestina-qt/` project (moved from `celestina/` on
-2026-10-14; id and prefix `celestina-qt`), the crate registered only for it
-(`celestina-rs/crates/celestina-shell-core`), their commit prefixes
-`celestina-qt:` and `celestina-shell-core:`, the shell's scripts, and its
-registered production entries.
+No project is halted now. The author halts a project by marking it `halted`
+in `docs/projects.toml` and describing the halt in this section. While a
+project is halted:
 
 - No agent plans, audits, implements, refactors, adopts shared owners into,
   builds, verifies, deploys, or activates it, and no agent proposes work on it.
@@ -37,23 +34,41 @@ registered production entries.
   shared change never extends to it and never rebuilds it.
 - A request that touches it is answered by pointing at this section, and the
   work stops there.
-- Its bytes stay in the repository as history and rollback; nothing is
-  deleted.
-- `docs/projects.toml` marks it `halted`. `scripts/agent-context.py` announces
-  the halt, `scripts/commit_scope.py` refuses its prefixes and paths, and the
-  landing drops it from every production run.
+- `scripts/agent-context.py` announces the halt, `scripts/commit_scope.py`
+  refuses its prefixes and paths, and the landing drops it from every
+  production run.
 
-**Salvage by copy.** The Rust shell at `celestina/` may copy, never edit,
-these files of the halted tree and adapt them in its own crates, recording in
-each copy's head comment the source path and the commit it came from:
+Only the author lifts, amends or ends a halt, by editing this section. The
+commit guard accepts a change to a halted project only in a commit that also
+changes this section. A halted project removed from the tree stays in the
+registry under `[[retired_projects]]`, so its history rows and old commits
+still resolve (see
+[docs/contracts/versioning.md](docs/contracts/versioning.md), "Retiring a
+project").
+
+**History: the Qt/QML shell.** The author halted the Qt/QML Celestina shell
+on 2026-09-27: the `celestina-qt/` project (moved from `celestina/` on
+2026-10-14; id and prefix `celestina-qt`) and the crate registered only for it,
+`celestina-rs/crates/celestina-shell-core` (prefix `celestina-shell-core`).
+The unit CEL-QT-REMOVE removed both from the tree by the author's decision
+of 2026-10-23: no tag, branch or copy keeps them, their bytes remain only in
+the Git history before that commit, and `docs/projects.toml` lists the shell
+as a retired project.
+
+**Salvage record.** Before the removal, the Rust shell at `celestina/` copied
+or read these files of the halted tree, never editing them; each copy records
+in its head comment the source path and the commit it came from. The paths no
+longer exist in the tree; the list stays as the provenance those head comments
+cite:
 `celestina-rs/crates/celestina-shell-core/src/{notifications,launcher,coalesce,workspace_groups,workspace_map,settings,calendar}.rs`
 and the `bounded` helper of that crate's `src/lib.rs` (there is no
 `bounded.rs`) into `celestina-rs/crates/celestina-shell`;
 `celestina-qt/src/provider_adapter/{worker,notifications,launcher}.rs`
 and `celestina-qt/src/niri_adapter.rs` as reference for
 `celestina/src/providers`; `celestina-qt/scripts/dev-session.kdl` and
-`dev-session.sh` for `celestina/scripts`. The CEL-2 parity program extends the
-list in the same way and always before the first commit of the unit it serves:
+`dev-session.sh` for `celestina/scripts`. The CEL-2 parity program extended
+the list in the same way, each time before the first commit of the unit it
+served:
 
 - CEL-2-B: `celestina-qt/src/provider_adapter/{nightlight,session,sessionholds}.rs`
   as reference for `celestina/src/providers`, and
@@ -103,14 +118,8 @@ list in the same way and always before the first commit of the unit it serves:
   and `celestina-qt/scripts/build-patched-niri.sh` into `celestina/packaging/niri`
   (the script beside the patch it applies), and
   `celestina-rs/crates/celestina-shell-core/src/niri_colours.rs` into
-  `celestina-rs/crates/celestina-tokens/src`. The unit deletes nothing of the
-  halted tree.
-
-Later deliveries extend this list by the same edit.
-
-The halt is lifted only by the author editing this section. The commit guard
-accepts a change to a halted project only in a commit that also changes this
-section.
+  `celestina-rs/crates/celestina-tokens/src`, the last salvage before the
+  removal.
 
 ## Mandatory preflight
 

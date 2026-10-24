@@ -1,8 +1,5 @@
 # Legacy non-English line ratchet. English is mandatory for new content.
 # suspicious_lines<TAB>path
-11	celestina-rs/crates/celestina-shell-core/src/launcher.rs
-1	celestina-rs/crates/celestina-shell-core/src/lib.rs
-2	celestina-rs/crates/celestina-shell-core/src/network.rs
 1	celestina-rs/crates/fluorita-core/src/artwork.rs
 17	celestina-rs/crates/fluorita-core/src/catalogue.rs
 5	celestina-rs/crates/fluorita-core/src/gallery.rs

@@ -1,0 +1,1115 @@
+# CEL-QT-REMOVE exact change inventory
+
+Base revision	39bd1a89be09df8222e58f1bdb3801e99237a7b6
+Pathspec	.github/workflows/README.md
+Pathspec	.github/workflows/celestina-qt.yml
+Pathspec	.github/workflows/celestina.yml
+Pathspec	AGENTS.md
+Pathspec	Celestina.code-workspace
+Pathspec	HOST-HYGIENE.md
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	calcita/AGENTS.md
+Pathspec	celestina-qt/.gitignore
+Pathspec	celestina-qt/AGENTS.md
+Pathspec	celestina-qt/CMakeLists.txt
+Pathspec	celestina-qt/Cargo.lock
+Pathspec	celestina-qt/Cargo.toml
+Pathspec	celestina-qt/DRAWING.md
+Pathspec	celestina-qt/NOCTALIA-REPLACEMENT.md
+Pathspec	celestina-qt/README.md
+Pathspec	celestina-qt/ROADMAP.md
+Pathspec	celestina-qt/STATUS.md
+Pathspec	celestina-qt/Testing/Temporary/CTestCostData.txt
+Pathspec	celestina-qt/Testing/Temporary/LastTest.log
+Pathspec	celestina-qt/VALIDATION.md
+Pathspec	celestina-qt/celestina.desktop
+Pathspec	celestina-qt/docs/decisions/0001-shell-execution-defaults.md
+Pathspec	celestina-qt/docs/decisions/0002-borderless-glass-panel.md
+Pathspec	celestina-qt/docs/decisions/0003-no-running-app-dock.md
+Pathspec	celestina-qt/docs/decisions/0004-first-party-session-lock.md
+Pathspec	celestina-qt/docs/decisions/0005-first-party-polkit-agent.md
+Pathspec	celestina-qt/docs/decisions/0006-own-night-light-gamma-transition.md
+Pathspec	celestina-qt/docs/decisions/README.md
+Pathspec	celestina-qt/docs/diagnostics.md
+Pathspec	celestina-qt/docs/discussions/2026-08-08-shell-visual-design.md
+Pathspec	celestina-qt/docs/discussions/README.md
+Pathspec	celestina-qt/docs/evidence/2026-08-04-live-validation-failures.md
+Pathspec	celestina-qt/docs/evidence/2026-08-04-r3-completion.md
+Pathspec	celestina-qt/docs/evidence/2026-08-04-r3-session-verbs.md
+Pathspec	celestina-qt/docs/evidence/2026-08-04-r4-notifications.md
+Pathspec	celestina-qt/docs/evidence/2026-08-04-r5-control-centre.md
+Pathspec	celestina-qt/docs/evidence/2026-08-04-r7-session-look.md
+Pathspec	celestina-qt/docs/evidence/2026-08-04-r8-noctalia-departure.md
+Pathspec	celestina-qt/docs/evidence/2026-08-05-ddc-process-lifecycle.md
+Pathspec	celestina-qt/docs/evidence/2026-08-05-gpu-loss-system-audit.md
+Pathspec	celestina-qt/docs/evidence/2026-08-05-late-provider-insertion.md
+Pathspec	celestina-qt/docs/evidence/2026-08-05-live-validation-follow-up.md
+Pathspec	celestina-qt/docs/evidence/2026-08-05-live-validation-remediation.md
+Pathspec	celestina-qt/docs/evidence/2026-08-05-static-shell-audit.md
+Pathspec	celestina-qt/docs/evidence/2026-08-06-helper-restart-ownership.md
+Pathspec	celestina-qt/docs/evidence/2026-08-06-helper-sources-gathered.md
+Pathspec	celestina-qt/docs/evidence/2026-08-06-oversized-frame-is-skipped.md
+Pathspec	celestina-qt/docs/evidence/2026-08-07-confirmed-connectivity-actions.md
+Pathspec	celestina-qt/docs/evidence/2026-08-07-connectivity-inventory-contract.md
+Pathspec	celestina-qt/docs/evidence/2026-08-07-lvr3-archive.md
+Pathspec	celestina-qt/docs/evidence/2026-08-07-lvr3-validation-closure.md
+Pathspec	celestina-qt/docs/evidence/2026-08-07-one-poll-is-not-the-truth.md
+Pathspec	celestina-qt/docs/evidence/2026-08-07-two-menus-that-do-not-lie.md
+Pathspec	celestina-qt/docs/evidence/2026-08-07-what-a-probe-did-not-see.md
+Pathspec	celestina-qt/docs/evidence/2026-08-08-diagnostic-journal.md
+Pathspec	celestina-qt/docs/evidence/2026-08-08-menu-anchor-correction.md
+Pathspec	celestina-qt/docs/evidence/2026-08-08-panel-checkpoint-transition.md
+Pathspec	celestina-qt/docs/evidence/2026-08-08-panel-glass-baseline.md
+Pathspec	celestina-qt/docs/evidence/2026-08-08-ux-1-delivery.md
+Pathspec	celestina-qt/docs/evidence/2026-08-08-workspace-monitor-groups.md
+Pathspec	celestina-qt/docs/evidence/2026-08-08-workspace-window-map.md
+Pathspec	celestina-qt/docs/evidence/2026-08-10-contextual-menu-hierarchy-nested.md
+Pathspec	celestina-qt/docs/evidence/2026-08-10-panel-adaptive-ink-nested.md
+Pathspec	celestina-qt/docs/evidence/2026-08-11-contextual-menu-shared-glass.md
+Pathspec	celestina-qt/docs/evidence/2026-08-11-edge-attached-shell-prototype.md
+Pathspec	celestina-qt/docs/evidence/2026-08-11-fixed-white-shell-ink.md
+Pathspec	celestina-qt/docs/evidence/2026-08-11-one-ui-content-glass.md
+Pathspec	celestina-qt/docs/evidence/2026-08-12-droplet-tension-fall.md
+Pathspec	celestina-qt/docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md
+Pathspec	celestina-qt/docs/evidence/2026-08-12-shell-performance-audit.md
+Pathspec	celestina-qt/docs/evidence/2026-08-13-quiet-surface-glass-and-placement.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-handover-knows-about-the-lock.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-lock-before-sleep.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-lock-plan-closure.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-lock-surface-presentation.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-lock-verification-boundary.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-panel-glass-closure.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-polkit-agent-registration.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-polkit-helper-conversation.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-polkit-prompt-surface.md
+Pathspec	celestina-qt/docs/evidence/2026-08-14-session-lock-protocol.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-first-live-prompt.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-first-live-session-findings.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-one-block-forming-and-leaving.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-one-panel-menu-lifecycle.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-production-contract-breaches.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-prompt-reproduced-with-grim.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-resting-companions-saturated-the-session.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-the-fall-behind-the-bar.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-the-seam-law-and-the-twin-ghost.md
+Pathspec	celestina-qt/docs/evidence/2026-08-15-wallpaper-switch-black-frame.md
+Pathspec	celestina-qt/docs/evidence/2026-08-16-panel-seam-carriers.md
+Pathspec	celestina-qt/docs/evidence/2026-08-16-pinned-tray-menu-attachment.md
+Pathspec	celestina-qt/docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-control-centre-reading-transition.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-live-session-hardening.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-live-session-investigation.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-lock-and-polkit-live-declarations.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-lock-backdrop-handoff.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-lock-depth-transition.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-lock-plan-closure.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-lock-uncover-guarantee.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-night-light-gamma-transition.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-provider-truthfulness.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-r8-final-corrections.md
+Pathspec	celestina-qt/docs/evidence/2026-08-17-three-monitors.md
+Pathspec	celestina-qt/docs/evidence/2026-08-18-melibea-bubbles.md
+Pathspec	celestina-qt/docs/evidence/2026-08-19-live-session-repairs-archival.md
+Pathspec	celestina-qt/docs/evidence/2026-08-20-persistent-carriers-nest-exercise.md
+Pathspec	celestina-qt/docs/evidence/2026-08-22-screen-recorder-and-hardening.md
+Pathspec	celestina-qt/docs/evidence/2026-08-22-surf-1-d-fast-toggle-races.md
+Pathspec	celestina-qt/docs/evidence/2026-09-19-screencast-first-frame-freeze.md
+Pathspec	celestina-qt/docs/evidence/README.md
+Pathspec	celestina-qt/docs/history/README.md
+Pathspec	celestina-qt/docs/history/noctalia-replacement-through-2026-08-03.md
+Pathspec	celestina-qt/docs/history/roadmap-through-2026-08-03.md
+Pathspec	celestina-qt/docs/inventories/2026-08-03-r3-session-verbs/R3-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-03-r3-session-verbs/R3-Z.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-04-live-validation-remediation/LVR-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-04-r4-notifications/R4-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-04-r5-control-centre/R5-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-04-r7-session-look/R7-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-04-r8-noctalia-departure/R8-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-C.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-D.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-E.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-F.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-G.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-H.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-05-live-validation-follow-up/LVR-2-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-C.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-D.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-E.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-08-diagnostic-journal/DIAG-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-Z.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-08-workspace-monitor-groups/WSG-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-C.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-D.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-E.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-F.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-Z.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-D.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-E.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-F.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-G.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-H.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-I.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-J.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-K.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-L.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-M.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-N.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-O.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-P.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-Q.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Y.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Z.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-B.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-C.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-17-melibea-bubbles/BUBBLE-1-A.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-20-persistent-carriers/SURF-1-D.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-08-22-screen-recorder-and-hardening/REC-1.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/2026-09-19-screencast-first-frame-freeze/CAST-1.numstat.tsv
+Pathspec	celestina-qt/docs/inventories/README.md
+Pathspec	celestina-qt/docs/plans/README.md
+Pathspec	celestina-qt/docs/plans/active/2026-08-20-persistent-carriers.md
+Pathspec	celestina-qt/docs/plans/active/README.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-03-r3-session-verbs.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-04-live-validation-remediation.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-04-r4-notifications.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-04-r5-control-centre.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-04-r7-session-look.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-04-r8-noctalia-departure.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-05-late-provider-insertion.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-05-live-validation-follow-up.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-08-diagnostic-journal.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-08-panel-glass-redesign.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-08-workspace-monitor-groups.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-08-workspace-window-map.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-14-first-party-session-lock.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-14-polkit-authentication-agent.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-17-live-session-repairs.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-17-lock-depth-transition.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-17-melibea-bubbles.md
+Pathspec	celestina-qt/docs/plans/archive/2026-08-22-screen-recorder-and-hardening.md
+Pathspec	celestina-qt/docs/plans/archive/2026-09-19-screencast-first-frame-freeze.md
+Pathspec	celestina-qt/docs/plans/archive/README.md
+Pathspec	celestina-qt/docs/plans/pending/README.md
+Pathspec	celestina-qt/packaging/niri/README.md
+Pathspec	celestina-qt/packaging/niri/per-layer-blur-strength.patch
+Pathspec	celestina-qt/packaging/xdg-desktop-portal-wlr/README.md
+Pathspec	celestina-qt/packaging/xdg-desktop-portal-wlr/trigger-process-after-screencopy.patch
+Pathspec	celestina-qt/qml/AnchoredCard.qml
+Pathspec	celestina-qt/qml/AnchoredMenu.qml
+Pathspec	celestina-qt/qml/AudioLevel.qml
+Pathspec	celestina-qt/qml/AudioMenu.qml
+Pathspec	celestina-qt/qml/BackdropButton.qml
+Pathspec	celestina-qt/qml/BackdropIconButton.qml
+Pathspec	celestina-qt/qml/BackdropInk.qml
+Pathspec	celestina-qt/qml/BackdropTextField.qml
+Pathspec	celestina-qt/qml/BluetoothMenu.qml
+Pathspec	celestina-qt/qml/BrightnessLevel.qml
+Pathspec	celestina-qt/qml/BrightnessMenu.qml
+Pathspec	celestina-qt/qml/BubbleAnchorSlot.qml
+Pathspec	celestina-qt/qml/BubbleGroup.qml
+Pathspec	celestina-qt/qml/BubbleSelector.qml
+Pathspec	celestina-qt/qml/CalendarMenu.qml
+Pathspec	celestina-qt/qml/CaptureButton.qml
+Pathspec	celestina-qt/qml/CaptureMenu.qml
+Pathspec	celestina-qt/qml/ClipboardEntryRow.qml
+Pathspec	celestina-qt/qml/ClipboardOverlay.qml
+Pathspec	celestina-qt/qml/Clock.qml
+Pathspec	celestina-qt/qml/CompositorGlassRegion.qml
+Pathspec	celestina-qt/qml/ControlCentre.qml
+Pathspec	celestina-qt/qml/DevicePicker.qml
+Pathspec	celestina-qt/qml/EdgeAttachedGeometry.js
+Pathspec	celestina-qt/qml/LauncherOverlay.qml
+Pathspec	celestina-qt/qml/LevelRow.qml
+Pathspec	celestina-qt/qml/MediaMini.qml
+Pathspec	celestina-qt/qml/MenuHeader.qml
+Pathspec	celestina-qt/qml/MenuSection.qml
+Pathspec	celestina-qt/qml/MonthCalendar.qml
+Pathspec	celestina-qt/qml/NetworkMenu.qml
+Pathspec	celestina-qt/qml/NotificationCenter.qml
+Pathspec	celestina-qt/qml/NotificationIndicator.qml
+Pathspec	celestina-qt/qml/OutputChooser.qml
+Pathspec	celestina-qt/qml/Panel.qml
+Pathspec	celestina-qt/qml/PanelActionButton.qml
+Pathspec	celestina-qt/qml/PanelCluster.qml
+Pathspec	celestina-qt/qml/PanelFlank.qml
+Pathspec	celestina-qt/qml/PanelMenuButton.qml
+Pathspec	celestina-qt/qml/PanelPill.qml
+Pathspec	celestina-qt/qml/PanelPopupPlacement.qml
+Pathspec	celestina-qt/qml/PerformanceMenu.qml
+Pathspec	celestina-qt/qml/PhoneMenu.qml
+Pathspec	celestina-qt/qml/PhoneStatus.qml
+Pathspec	celestina-qt/qml/PolkitPrompt.qml
+Pathspec	celestina-qt/qml/ProviderReading.js
+Pathspec	celestina-qt/qml/SessionMenu.qml
+Pathspec	celestina-qt/qml/SessionOsd.qml
+Pathspec	celestina-qt/qml/SessionStatus.qml
+Pathspec	celestina-qt/qml/ShellPanel.qml
+Pathspec	celestina-qt/qml/SoftCard.qml
+Pathspec	celestina-qt/qml/SoftMenu.qml
+Pathspec	celestina-qt/qml/SoftMenuField.qml
+Pathspec	celestina-qt/qml/SoftMenuRow.qml
+Pathspec	celestina-qt/qml/SoftOverlayCard.qml
+Pathspec	celestina-qt/qml/SysMon.qml
+Pathspec	celestina-qt/qml/ToastStack.qml
+Pathspec	celestina-qt/qml/TrayDrawer.qml
+Pathspec	celestina-qt/qml/TrayItemsMenu.qml
+Pathspec	celestina-qt/qml/TrayMenu.qml
+Pathspec	celestina-qt/qml/Wallpaper.qml
+Pathspec	celestina-qt/qml/WallpaperMenu.qml
+Pathspec	celestina-qt/qml/WorkspaceGroupCapsule.qml
+Pathspec	celestina-qt/qml/WorkspaceMap.qml
+Pathspec	celestina-qt/qml/WorkspaceMapBoard.qml
+Pathspec	celestina-qt/qml/WorkspaceMapTile.qml
+Pathspec	celestina-qt/qml/WorkspacePill.qml
+Pathspec	celestina-qt/qml/WorkspaceStrip.qml
+Pathspec	celestina-qt/scripts/activate-production.sh
+Pathspec	celestina-qt/scripts/build-patched-niri.sh
+Pathspec	celestina-qt/scripts/build-patched-xdpw.sh
+Pathspec	celestina-qt/scripts/build-production.sh
+Pathspec	celestina-qt/scripts/celestina-launcher.sh
+Pathspec	celestina-qt/scripts/complete-production.sh
+Pathspec	celestina-qt/scripts/deploy-production.sh
+Pathspec	celestina-qt/scripts/dev-quiet-demo.sh
+Pathspec	celestina-qt/scripts/dev-restart.sh
+Pathspec	celestina-qt/scripts/dev-session.kdl
+Pathspec	celestina-qt/scripts/dev-session.sh
+Pathspec	celestina-qt/scripts/diagnostic-report.sh
+Pathspec	celestina-qt/scripts/handover-remove.sh
+Pathspec	celestina-qt/scripts/handover-status.sh
+Pathspec	celestina-qt/scripts/qmllint-production.sh
+Pathspec	celestina-qt/scripts/run.sh
+Pathspec	celestina-qt/scripts/session-interlock.sh
+Pathspec	celestina-qt/scripts/smoke-production.sh
+Pathspec	celestina-qt/scripts/status-production.sh
+Pathspec	celestina-qt/scripts/verify-production.sh
+Pathspec	celestina-qt/src/appiconprovider.cpp
+Pathspec	celestina-qt/src/appiconprovider.h
+Pathspec	celestina-qt/src/blurreach.h
+Pathspec	celestina-qt/src/bubbleanchorsource.h
+Pathspec	celestina-qt/src/commitnudge.h
+Pathspec	celestina-qt/src/denseglass.cpp
+Pathspec	celestina-qt/src/denseglass.h
+Pathspec	celestina-qt/src/devicesclient.cpp
+Pathspec	celestina-qt/src/devicesclient.h
+Pathspec	celestina-qt/src/diagnosticjournal.cpp
+Pathspec	celestina-qt/src/diagnosticjournal.h
+Pathspec	celestina-qt/src/lock/LockScreen.qml
+Pathspec	celestina-qt/src/lock/celestina-lock.json
+Pathspec	celestina-qt/src/lock/lockbackdrop.cpp
+Pathspec	celestina-qt/src/lock/lockbackdrop.h
+Pathspec	celestina-qt/src/lock/locksession.cpp
+Pathspec	celestina-qt/src/lock/locksession.h
+Pathspec	celestina-qt/src/lock/locksurface.cpp
+Pathspec	celestina-qt/src/lock/locksurface.h
+Pathspec	celestina-qt/src/lock/lockuncover.cpp
+Pathspec	celestina-qt/src/lock/lockuncover.h
+Pathspec	celestina-qt/src/lock/main.cpp
+Pathspec	celestina-qt/src/lock/plugin.cpp
+Pathspec	celestina-qt/src/lockauthenticator.cpp
+Pathspec	celestina-qt/src/lockauthenticator.h
+Pathspec	celestina-qt/src/lockcontroller.cpp
+Pathspec	celestina-qt/src/lockcontroller.h
+Pathspec	celestina-qt/src/lockverify/main.cpp
+Pathspec	celestina-qt/src/main.cpp
+Pathspec	celestina-qt/src/niri_adapter.rs
+Pathspec	celestina-qt/src/niriclient.cpp
+Pathspec	celestina-qt/src/niriclient.h
+Pathspec	celestina-qt/src/osdcontroller.cpp
+Pathspec	celestina-qt/src/osdcontroller.h
+Pathspec	celestina-qt/src/osdreadings.cpp
+Pathspec	celestina-qt/src/osdreadings.h
+Pathspec	celestina-qt/src/outputsnapshot.cpp
+Pathspec	celestina-qt/src/outputsnapshot.h
+Pathspec	celestina-qt/src/overlaycontroller.cpp
+Pathspec	celestina-qt/src/overlaycontroller.h
+Pathspec	celestina-qt/src/overlaysurface.cpp
+Pathspec	celestina-qt/src/overlaysurface.h
+Pathspec	celestina-qt/src/panelattachmentlease.cpp
+Pathspec	celestina-qt/src/panelattachmentlease.h
+Pathspec	celestina-qt/src/panelblurcontroller.cpp
+Pathspec	celestina-qt/src/panelblurcontroller.h
+Pathspec	celestina-qt/src/panelmanager.cpp
+Pathspec	celestina-qt/src/panelmanager.h
+Pathspec	celestina-qt/src/panelmenucontroller.cpp
+Pathspec	celestina-qt/src/panelmenucontroller.h
+Pathspec	celestina-qt/src/panelmenusurface.cpp
+Pathspec	celestina-qt/src/panelmenusurface.h
+Pathspec	celestina-qt/src/panelpopupplacement.h
+Pathspec	celestina-qt/src/polkitagent.cpp
+Pathspec	celestina-qt/src/polkitagent.h
+Pathspec	celestina-qt/src/polkitconversation.cpp
+Pathspec	celestina-qt/src/polkitconversation.h
+Pathspec	celestina-qt/src/polkitconverse/main.cpp
+Pathspec	celestina-qt/src/polkitpromptcontroller.cpp
+Pathspec	celestina-qt/src/polkitpromptcontroller.h
+Pathspec	celestina-qt/src/protocoldecoder.cpp
+Pathspec	celestina-qt/src/protocoldecoder.h
+Pathspec	celestina-qt/src/provider_adapter/audio.rs
+Pathspec	celestina-qt/src/provider_adapter/brightness.rs
+Pathspec	celestina-qt/src/provider_adapter/clipboard.rs
+Pathspec	celestina-qt/src/provider_adapter/generated.rs
+Pathspec	celestina-qt/src/provider_adapter/held.rs
+Pathspec	celestina-qt/src/provider_adapter/launcher.rs
+Pathspec	celestina-qt/src/provider_adapter/main.rs
+Pathspec	celestina-qt/src/provider_adapter/media.rs
+Pathspec	celestina-qt/src/provider_adapter/melibea.rs
+Pathspec	celestina-qt/src/provider_adapter/nightlight.rs
+Pathspec	celestina-qt/src/provider_adapter/notifications.rs
+Pathspec	celestina-qt/src/provider_adapter/portal_settings.rs
+Pathspec	celestina-qt/src/provider_adapter/recorder.rs
+Pathspec	celestina-qt/src/provider_adapter/session.rs
+Pathspec	celestina-qt/src/provider_adapter/sessionholds.rs
+Pathspec	celestina-qt/src/provider_adapter/settings.rs
+Pathspec	celestina-qt/src/provider_adapter/sysmon.rs
+Pathspec	celestina-qt/src/provider_adapter/tools.rs
+Pathspec	celestina-qt/src/provider_adapter/wallpaper.rs
+Pathspec	celestina-qt/src/provider_adapter/weather.rs
+Pathspec	celestina-qt/src/provider_adapter/worker.rs
+Pathspec	celestina-qt/src/providerstates.cpp
+Pathspec	celestina-qt/src/providerstates.h
+Pathspec	celestina-qt/src/quietplacement.cpp
+Pathspec	celestina-qt/src/quietplacement.h
+Pathspec	celestina-qt/src/requestledger.cpp
+Pathspec	celestina-qt/src/requestledger.h
+Pathspec	celestina-qt/src/sessionactions.cpp
+Pathspec	celestina-qt/src/sessionactions.h
+Pathspec	celestina-qt/src/sessionrequests.cpp
+Pathspec	celestina-qt/src/sessionrequests.h
+Pathspec	celestina-qt/src/shellclient.cpp
+Pathspec	celestina-qt/src/shellclient.h
+Pathspec	celestina-qt/src/shellcommandline.cpp
+Pathspec	celestina-qt/src/shellcommandline.h
+Pathspec	celestina-qt/src/shellprovidersclient.cpp
+Pathspec	celestina-qt/src/shellprovidersclient.h
+Pathspec	celestina-qt/src/shellscale.cpp
+Pathspec	celestina-qt/src/shellscale.h
+Pathspec	celestina-qt/src/shellservice.cpp
+Pathspec	celestina-qt/src/shellservice.h
+Pathspec	celestina-qt/src/softclose.h
+Pathspec	celestina-qt/src/surfacemanager.cpp
+Pathspec	celestina-qt/src/surfacemanager.h
+Pathspec	celestina-qt/src/toastcontroller.cpp
+Pathspec	celestina-qt/src/toastcontroller.h
+Pathspec	celestina-qt/src/trayiconprovider.cpp
+Pathspec	celestina-qt/src/trayiconprovider.h
+Pathspec	celestina-qt/src/trayicons.cpp
+Pathspec	celestina-qt/src/trayicons.h
+Pathspec	celestina-qt/src/trayitems.cpp
+Pathspec	celestina-qt/src/trayitems.h
+Pathspec	celestina-qt/src/traymenu.cpp
+Pathspec	celestina-qt/src/traymenu.h
+Pathspec	celestina-qt/src/traywatcher.cpp
+Pathspec	celestina-qt/src/traywatcher.h
+Pathspec	celestina-qt/src/traywatcherservice.cpp
+Pathspec	celestina-qt/src/traywatcherservice.h
+Pathspec	celestina-qt/src/wallpaperidentity.cpp
+Pathspec	celestina-qt/src/wallpaperidentity.h
+Pathspec	celestina-qt/src/wallpapermanager.cpp
+Pathspec	celestina-qt/src/wallpapermanager.h
+Pathspec	celestina-qt/src/workspacefocusrequests.cpp
+Pathspec	celestina-qt/src/workspacefocusrequests.h
+Pathspec	celestina-qt/tests/appiconprovider_test.cpp
+Pathspec	celestina-qt/tests/held_shutdown.rs
+Pathspec	celestina-qt/tests/indicatormenu_test.cpp
+Pathspec	celestina-qt/tests/lockauthenticator_test.cpp
+Pathspec	celestina-qt/tests/lockcontroller_test.cpp
+Pathspec	celestina-qt/tests/lockuncover_test.cpp
+Pathspec	celestina-qt/tests/media_signals.rs
+Pathspec	celestina-qt/tests/notification_server.rs
+Pathspec	celestina-qt/tests/osdreadings_test.cpp
+Pathspec	celestina-qt/tests/overlaycontract_test.cpp
+Pathspec	celestina-qt/tests/polkitagent_test.cpp
+Pathspec	celestina-qt/tests/polkitconversation_test.cpp
+Pathspec	celestina-qt/tests/polkitprompt_test.cpp
+Pathspec	celestina-qt/tests/protocoldecoder_test.cpp
+Pathspec	celestina-qt/tests/providerstates_test.cpp
+Pathspec	celestina-qt/tests/quicktest_main.cpp
+Pathspec	celestina-qt/tests/requestledger_test.cpp
+Pathspec	celestina-qt/tests/sessionrequests_test.cpp
+Pathspec	celestina-qt/tests/shellcommandline_test.cpp
+Pathspec	celestina-qt/tests/shellscale_test.cpp
+Pathspec	celestina-qt/tests/shellservice_test.cpp
+Pathspec	celestina-qt/tests/surfacemanager_test.cpp
+Pathspec	celestina-qt/tests/trayicons_test.cpp
+Pathspec	celestina-qt/tests/trayitems_test.cpp
+Pathspec	celestina-qt/tests/traymenu_test.cpp
+Pathspec	celestina-qt/tests/traywatcher_test.cpp
+Pathspec	celestina-qt/tests/traywatcherservice_test.cpp
+Pathspec	celestina-qt/tests/tst_attachmentfall.qml
+Pathspec	celestina-qt/tests/tst_audiolevel.qml
+Pathspec	celestina-qt/tests/tst_audiomenu.qml
+Pathspec	celestina-qt/tests/tst_backdropink.qml
+Pathspec	celestina-qt/tests/tst_bluetoothmenu.qml
+Pathspec	celestina-qt/tests/tst_brightnesslevel.qml
+Pathspec	celestina-qt/tests/tst_bubbleanchorslot.qml
+Pathspec	celestina-qt/tests/tst_bubblegroup.qml
+Pathspec	celestina-qt/tests/tst_bubbleselector.qml
+Pathspec	celestina-qt/tests/tst_capturebutton.qml
+Pathspec	celestina-qt/tests/tst_capturemenu.qml
+Pathspec	celestina-qt/tests/tst_clipboardentryrow.qml
+Pathspec	celestina-qt/tests/tst_clipboardoverlay.qml
+Pathspec	celestina-qt/tests/tst_controlcentre.qml
+Pathspec	celestina-qt/tests/tst_edgeattachedgeometry.qml
+Pathspec	celestina-qt/tests/tst_levelrow.qml
+Pathspec	celestina-qt/tests/tst_networkmenu.qml
+Pathspec	celestina-qt/tests/tst_notificationjoin.qml
+Pathspec	celestina-qt/tests/tst_notifications.qml
+Pathspec	celestina-qt/tests/tst_openerrects.qml
+Pathspec	celestina-qt/tests/tst_outputchooser.qml
+Pathspec	celestina-qt/tests/tst_panelactionbutton.qml
+Pathspec	celestina-qt/tests/tst_panelcluster.qml
+Pathspec	celestina-qt/tests/tst_panelflank.qml
+Pathspec	celestina-qt/tests/tst_panelmenubutton.qml
+Pathspec	celestina-qt/tests/tst_performancemenu.qml
+Pathspec	celestina-qt/tests/tst_performancemenucard.qml
+Pathspec	celestina-qt/tests/tst_polkitprompt.qml
+Pathspec	celestina-qt/tests/tst_sessionindicators.qml
+Pathspec	celestina-qt/tests/tst_sessionmenu.qml
+Pathspec	celestina-qt/tests/tst_sessionosd.qml
+Pathspec	celestina-qt/tests/tst_sessionstatus.qml
+Pathspec	celestina-qt/tests/tst_softcard.qml
+Pathspec	celestina-qt/tests/tst_sysmon.qml
+Pathspec	celestina-qt/tests/tst_traydrawer.qml
+Pathspec	celestina-qt/tests/tst_trayitemsmenu.qml
+Pathspec	celestina-qt/tests/tst_wallpapermenu.qml
+Pathspec	celestina-qt/tests/tst_workspacemenufeedback.qml
+Pathspec	celestina-qt/tests/tst_workspacestrip.qml
+Pathspec	celestina-qt/tests/workspacefocusrequests_test.cpp
+Pathspec	celestina-rs/AGENTS.md
+Pathspec	celestina-rs/Cargo.lock
+Pathspec	celestina-rs/Cargo.toml
+Pathspec	celestina-rs/README.md
+Pathspec	celestina-rs/crates/celestina-shell-core/Cargo.toml
+Pathspec	celestina-rs/crates/celestina-shell-core/src/appearance.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/audio.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/bluetooth.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/brightness.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/calendar.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/clipboard.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/coalesce.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/command.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/connectivity.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/diagnostics.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/handover.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/inventory.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/journal.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/launcher.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lib.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/lines.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/media.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/melibea.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/network.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/nightlight.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/niri_colours.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/notifications.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/pending.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/power.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/runtime.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/session.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/snapshot.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/sysmon.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/wallpaper.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/weather.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/workspace_groups.rs
+Pathspec	celestina-rs/crates/celestina-shell-core/src/workspace_map.rs
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina/AGENTS.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/decisions/0002-halted-qt-shell-is-history.md
+Pathspec	celestina/docs/decisions/0003-no-dock.md
+Pathspec	celestina/docs/decisions/0023-qt-shell-retired.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	cuprita/AGENTS.md
+Pathspec	docs/evidence/2026-08-05-static-suite-audit.md
+Pathspec	docs/evidence/2026-09-28-halt-shell.md
+Pathspec	docs/evidence/2026-10-23-cel-qt-remove.md
+Pathspec	docs/history/suite-roadmap-through-2026-08-03.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-QT-REMOVE.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/plans/archive/2026-08-05-desktop-entry-registration.md
+Pathspec	docs/projects.toml
+Pathspec	hematita/AGENTS.md
+Pathspec	magnetita/AGENTS.md
+Pathspec	magnetita/ROADMAP.md
+Pathspec	scripts/language-baseline.tsv
+Pathspec	scripts/radius-baseline.tsv
+Pathspec	selenita/AGENTS.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	4	1506400dde31828f41f3fbd7a3b235fc1e49ea4841d8b71f80d0b0475d41a254	.github/workflows/README.md
+0	61	deleted	.github/workflows/celestina-qt.yml
+1	1	0e4967ea079ba292fb4e2e17628648ed851b94bd24cf7b4ede32a2eaa47ef9bf	.github/workflows/celestina.yml
+34	25	7b114e2581f36da679d11cf0200b764ff54c6811892074d112d9314edc6434bf	AGENTS.md
+0	3	b68303702f094bc317315e61e2d79cfa1ccf0c5ef935414d772c393809ecb8bc	Celestina.code-workspace
+3	3	aa5e9f017b18f2d72a7f526f887cd2044e55fee528877755ac536dd3e4cb4cbb	HOST-HYGIENE.md
+0	1	a568d7976f9dd239a9d70233ffa4abd8a4bc7cd34b137380511b038b745542e4	README.md
+0	1	2fc9924e5f5844eb396c71253d2185d2029dbd07e8bc79f571fef8923df874d8	ROADMAP.md
+1	1	8f1236d694934424e404009d16be7b99c0fbf25cb94a52750a57621deb8dcfc2	STATUS.md
+3	2	faefdb9245e9d73b078431a5a049293de8335976650c0d23bd5626e72c989af9	calcita/AGENTS.md
+0	13	deleted	celestina-qt/.gitignore
+0	94	deleted	celestina-qt/AGENTS.md
+0	883	deleted	celestina-qt/CMakeLists.txt
+0	1435	deleted	celestina-qt/Cargo.lock
+0	85	deleted	celestina-qt/Cargo.toml
+0	76	deleted	celestina-qt/DRAWING.md
+0	11	deleted	celestina-qt/NOCTALIA-REPLACEMENT.md
+0	305	deleted	celestina-qt/README.md
+0	840	deleted	celestina-qt/ROADMAP.md
+0	961	deleted	celestina-qt/STATUS.md
+0	1	deleted	celestina-qt/Testing/Temporary/CTestCostData.txt
+0	3	deleted	celestina-qt/Testing/Temporary/LastTest.log
+0	1270	deleted	celestina-qt/VALIDATION.md
+0	20	deleted	celestina-qt/celestina.desktop
+0	41	deleted	celestina-qt/docs/decisions/0001-shell-execution-defaults.md
+0	48	deleted	celestina-qt/docs/decisions/0002-borderless-glass-panel.md
+0	31	deleted	celestina-qt/docs/decisions/0003-no-running-app-dock.md
+0	74	deleted	celestina-qt/docs/decisions/0004-first-party-session-lock.md
+0	68	deleted	celestina-qt/docs/decisions/0005-first-party-polkit-agent.md
+0	63	deleted	celestina-qt/docs/decisions/0006-own-night-light-gamma-transition.md
+0	16	deleted	celestina-qt/docs/decisions/README.md
+0	300	deleted	celestina-qt/docs/diagnostics.md
+0	228	deleted	celestina-qt/docs/discussions/2026-08-08-shell-visual-design.md
+0	28	deleted	celestina-qt/docs/discussions/README.md
+0	170	deleted	celestina-qt/docs/evidence/2026-08-04-live-validation-failures.md
+0	57	deleted	celestina-qt/docs/evidence/2026-08-04-r3-completion.md
+0	92	deleted	celestina-qt/docs/evidence/2026-08-04-r3-session-verbs.md
+0	78	deleted	celestina-qt/docs/evidence/2026-08-04-r4-notifications.md
+0	83	deleted	celestina-qt/docs/evidence/2026-08-04-r5-control-centre.md
+0	83	deleted	celestina-qt/docs/evidence/2026-08-04-r7-session-look.md
+0	69	deleted	celestina-qt/docs/evidence/2026-08-04-r8-noctalia-departure.md
+0	98	deleted	celestina-qt/docs/evidence/2026-08-05-ddc-process-lifecycle.md
+0	215	deleted	celestina-qt/docs/evidence/2026-08-05-gpu-loss-system-audit.md
+0	39	deleted	celestina-qt/docs/evidence/2026-08-05-late-provider-insertion.md
+0	229	deleted	celestina-qt/docs/evidence/2026-08-05-live-validation-follow-up.md
+0	134	deleted	celestina-qt/docs/evidence/2026-08-05-live-validation-remediation.md
+0	205	deleted	celestina-qt/docs/evidence/2026-08-05-static-shell-audit.md
+0	83	deleted	celestina-qt/docs/evidence/2026-08-06-helper-restart-ownership.md
+0	59	deleted	celestina-qt/docs/evidence/2026-08-06-helper-sources-gathered.md
+0	72	deleted	celestina-qt/docs/evidence/2026-08-06-oversized-frame-is-skipped.md
+0	56	deleted	celestina-qt/docs/evidence/2026-08-07-confirmed-connectivity-actions.md
+0	62	deleted	celestina-qt/docs/evidence/2026-08-07-connectivity-inventory-contract.md
+0	48	deleted	celestina-qt/docs/evidence/2026-08-07-lvr3-archive.md
+0	48	deleted	celestina-qt/docs/evidence/2026-08-07-lvr3-validation-closure.md
+0	233	deleted	celestina-qt/docs/evidence/2026-08-07-one-poll-is-not-the-truth.md
+0	185	deleted	celestina-qt/docs/evidence/2026-08-07-two-menus-that-do-not-lie.md
+0	252	deleted	celestina-qt/docs/evidence/2026-08-07-what-a-probe-did-not-see.md
+0	193	deleted	celestina-qt/docs/evidence/2026-08-08-diagnostic-journal.md
+0	55	deleted	celestina-qt/docs/evidence/2026-08-08-menu-anchor-correction.md
+0	47	deleted	celestina-qt/docs/evidence/2026-08-08-panel-checkpoint-transition.md
+0	86	deleted	celestina-qt/docs/evidence/2026-08-08-panel-glass-baseline.md
+0	53	deleted	celestina-qt/docs/evidence/2026-08-08-ux-1-delivery.md
+0	167	deleted	celestina-qt/docs/evidence/2026-08-08-workspace-monitor-groups.md
+0	155	deleted	celestina-qt/docs/evidence/2026-08-08-workspace-window-map.md
+0	445	deleted	celestina-qt/docs/evidence/2026-08-10-contextual-menu-hierarchy-nested.md
+0	112	deleted	celestina-qt/docs/evidence/2026-08-10-panel-adaptive-ink-nested.md
+0	78	deleted	celestina-qt/docs/evidence/2026-08-11-contextual-menu-shared-glass.md
+0	292	deleted	celestina-qt/docs/evidence/2026-08-11-edge-attached-shell-prototype.md
+0	84	deleted	celestina-qt/docs/evidence/2026-08-11-fixed-white-shell-ink.md
+0	86	deleted	celestina-qt/docs/evidence/2026-08-11-one-ui-content-glass.md
+0	177	deleted	celestina-qt/docs/evidence/2026-08-12-droplet-tension-fall.md
+0	181	deleted	celestina-qt/docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md
+0	123	deleted	celestina-qt/docs/evidence/2026-08-12-shell-performance-audit.md
+0	101	deleted	celestina-qt/docs/evidence/2026-08-13-quiet-surface-glass-and-placement.md
+0	42	deleted	celestina-qt/docs/evidence/2026-08-14-handover-knows-about-the-lock.md
+0	74	deleted	celestina-qt/docs/evidence/2026-08-14-lock-before-sleep.md
+0	70	deleted	celestina-qt/docs/evidence/2026-08-14-lock-plan-closure.md
+0	59	deleted	celestina-qt/docs/evidence/2026-08-14-lock-surface-presentation.md
+0	68	deleted	celestina-qt/docs/evidence/2026-08-14-lock-verification-boundary.md
+0	62	deleted	celestina-qt/docs/evidence/2026-08-14-panel-glass-closure.md
+0	82	deleted	celestina-qt/docs/evidence/2026-08-14-polkit-agent-registration.md
+0	91	deleted	celestina-qt/docs/evidence/2026-08-14-polkit-helper-conversation.md
+0	108	deleted	celestina-qt/docs/evidence/2026-08-14-polkit-prompt-surface.md
+0	85	deleted	celestina-qt/docs/evidence/2026-08-14-session-lock-protocol.md
+0	62	deleted	celestina-qt/docs/evidence/2026-08-15-bundle-carries-the-lock-and-the-agent.md
+0	49	deleted	celestina-qt/docs/evidence/2026-08-15-first-live-prompt.md
+0	72	deleted	celestina-qt/docs/evidence/2026-08-15-first-live-session-findings.md
+0	73	deleted	celestina-qt/docs/evidence/2026-08-15-one-block-forming-and-leaving.md
+0	128	deleted	celestina-qt/docs/evidence/2026-08-15-one-panel-menu-lifecycle.md
+0	46	deleted	celestina-qt/docs/evidence/2026-08-15-production-contract-breaches.md
+0	57	deleted	celestina-qt/docs/evidence/2026-08-15-prompt-reproduced-with-grim.md
+0	62	deleted	celestina-qt/docs/evidence/2026-08-15-resting-companions-saturated-the-session.md
+0	47	deleted	celestina-qt/docs/evidence/2026-08-15-the-fall-behind-the-bar.md
+0	55	deleted	celestina-qt/docs/evidence/2026-08-15-the-seam-law-and-the-twin-ghost.md
+0	41	deleted	celestina-qt/docs/evidence/2026-08-15-wallpaper-switch-black-frame.md
+0	144	deleted	celestina-qt/docs/evidence/2026-08-16-panel-seam-carriers.md
+0	152	deleted	celestina-qt/docs/evidence/2026-08-16-pinned-tray-menu-attachment.md
+0	78	deleted	celestina-qt/docs/evidence/2026-08-16-quiet-surface-temporal-lifecycle.md
+0	55	deleted	celestina-qt/docs/evidence/2026-08-17-control-centre-reading-transition.md
+0	113	deleted	celestina-qt/docs/evidence/2026-08-17-live-session-hardening.md
+0	126	deleted	celestina-qt/docs/evidence/2026-08-17-live-session-investigation.md
+0	47	deleted	celestina-qt/docs/evidence/2026-08-17-lock-and-polkit-live-declarations.md
+0	46	deleted	celestina-qt/docs/evidence/2026-08-17-lock-backdrop-handoff.md
+0	70	deleted	celestina-qt/docs/evidence/2026-08-17-lock-depth-transition.md
+0	46	deleted	celestina-qt/docs/evidence/2026-08-17-lock-plan-closure.md
+0	64	deleted	celestina-qt/docs/evidence/2026-08-17-lock-uncover-guarantee.md
+0	89	deleted	celestina-qt/docs/evidence/2026-08-17-night-light-gamma-transition.md
+0	75	deleted	celestina-qt/docs/evidence/2026-08-17-provider-truthfulness.md
+0	53	deleted	celestina-qt/docs/evidence/2026-08-17-r8-final-corrections.md
+0	134	deleted	celestina-qt/docs/evidence/2026-08-17-three-monitors.md
+0	87	deleted	celestina-qt/docs/evidence/2026-08-18-melibea-bubbles.md
+0	27	deleted	celestina-qt/docs/evidence/2026-08-19-live-session-repairs-archival.md
+0	79	deleted	celestina-qt/docs/evidence/2026-08-20-persistent-carriers-nest-exercise.md
+0	112	deleted	celestina-qt/docs/evidence/2026-08-22-screen-recorder-and-hardening.md
+0	104	deleted	celestina-qt/docs/evidence/2026-08-22-surf-1-d-fast-toggle-races.md
+0	109	deleted	celestina-qt/docs/evidence/2026-09-19-screencast-first-frame-freeze.md
+0	8	deleted	celestina-qt/docs/evidence/README.md
+0	10	deleted	celestina-qt/docs/history/README.md
+0	694	deleted	celestina-qt/docs/history/noctalia-replacement-through-2026-08-03.md
+0	1312	deleted	celestina-qt/docs/history/roadmap-through-2026-08-03.md
+0	51	deleted	celestina-qt/docs/inventories/2026-08-03-r3-session-verbs/R3-A.numstat.tsv
+0	18	deleted	celestina-qt/docs/inventories/2026-08-03-r3-session-verbs/R3-Z.numstat.tsv
+0	54	deleted	celestina-qt/docs/inventories/2026-08-04-live-validation-remediation/LVR-1-A.numstat.tsv
+0	44	deleted	celestina-qt/docs/inventories/2026-08-04-r4-notifications/R4-A.numstat.tsv
+0	51	deleted	celestina-qt/docs/inventories/2026-08-04-r5-control-centre/R5-A.numstat.tsv
+0	37	deleted	celestina-qt/docs/inventories/2026-08-04-r7-session-look/R7-A.numstat.tsv
+0	29	deleted	celestina-qt/docs/inventories/2026-08-04-r8-noctalia-departure/R8-A.numstat.tsv
+0	15	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-A.numstat.tsv
+0	62	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-B.numstat.tsv
+0	20	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-C.numstat.tsv
+0	19	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-D.numstat.tsv
+0	18	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-E.numstat.tsv
+0	79	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-F.numstat.tsv
+0	35	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-G.numstat.tsv
+0	35	deleted	celestina-qt/docs/inventories/2026-08-05-late-provider-insertion/LVR-3-H.numstat.tsv
+0	28	deleted	celestina-qt/docs/inventories/2026-08-05-live-validation-follow-up/LVR-2-A.numstat.tsv
+0	25	deleted	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-A.numstat.tsv
+0	27	deleted	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-B.numstat.tsv
+0	51	deleted	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-C.numstat.tsv
+0	33	deleted	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-D.numstat.tsv
+0	29	deleted	celestina-qt/docs/inventories/2026-08-07-network-bluetooth-indicator-menus/UX-1-E.numstat.tsv
+0	57	deleted	celestina-qt/docs/inventories/2026-08-08-diagnostic-journal/DIAG-1-A.numstat.tsv
+0	92	deleted	celestina-qt/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-A.numstat.tsv
+0	140	deleted	celestina-qt/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-B.numstat.tsv
+0	42	deleted	celestina-qt/docs/inventories/2026-08-08-panel-glass-redesign/PANEL-1-Z.numstat.tsv
+0	27	deleted	celestina-qt/docs/inventories/2026-08-08-workspace-monitor-groups/WSG-1-A.numstat.tsv
+0	46	deleted	celestina-qt/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-A.numstat.tsv
+0	36	deleted	celestina-qt/docs/inventories/2026-08-08-workspace-window-map/WMAP-1-B.numstat.tsv
+0	30	deleted	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-A.numstat.tsv
+0	36	deleted	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-B.numstat.tsv
+0	24	deleted	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-C.numstat.tsv
+0	36	deleted	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-D.numstat.tsv
+0	26	deleted	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-E.numstat.tsv
+0	24	deleted	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-F.numstat.tsv
+0	38	deleted	celestina-qt/docs/inventories/2026-08-14-first-party-session-lock/R6-Z.numstat.tsv
+0	29	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-A.numstat.tsv
+0	27	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-B.numstat.tsv
+0	35	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-C.numstat.tsv
+0	29	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-D.numstat.tsv
+0	30	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-E.numstat.tsv
+0	26	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-F.numstat.tsv
+0	30	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-G.numstat.tsv
+0	33	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-H.numstat.tsv
+0	24	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-I.numstat.tsv
+0	24	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-J.numstat.tsv
+0	37	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-K.numstat.tsv
+0	26	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-L.numstat.tsv
+0	32	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-M.numstat.tsv
+0	22	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-N.numstat.tsv
+0	46	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-O.numstat.tsv
+0	62	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-P.numstat.tsv
+0	130	deleted	celestina-qt/docs/inventories/2026-08-14-polkit-authentication-agent/R8-P-Q.numstat.tsv
+0	29	deleted	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-A.numstat.tsv
+0	17	deleted	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-B.numstat.tsv
+0	13	deleted	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Y.numstat.tsv
+0	35	deleted	celestina-qt/docs/inventories/2026-08-17-live-session-repairs/LIVE-1-Z.numstat.tsv
+0	23	deleted	celestina-qt/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-A.numstat.tsv
+0	13	deleted	celestina-qt/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-B.numstat.tsv
+0	35	deleted	celestina-qt/docs/inventories/2026-08-17-lock-depth-transition/LOCK-1-C.numstat.tsv
+0	107	deleted	celestina-qt/docs/inventories/2026-08-17-melibea-bubbles/BUBBLE-1-A.numstat.tsv
+0	27	deleted	celestina-qt/docs/inventories/2026-08-20-persistent-carriers/SURF-1-D.numstat.tsv
+0	77	deleted	celestina-qt/docs/inventories/2026-08-22-screen-recorder-and-hardening/REC-1.numstat.tsv
+0	29	deleted	celestina-qt/docs/inventories/2026-09-19-screencast-first-frame-freeze/CAST-1.numstat.tsv
+0	15	deleted	celestina-qt/docs/inventories/README.md
+0	21	deleted	celestina-qt/docs/plans/README.md
+0	156	deleted	celestina-qt/docs/plans/active/2026-08-20-persistent-carriers.md
+0	18	deleted	celestina-qt/docs/plans/active/README.md
+0	106	deleted	celestina-qt/docs/plans/archive/2026-08-03-r3-session-verbs.md
+0	124	deleted	celestina-qt/docs/plans/archive/2026-08-04-live-validation-remediation.md
+0	117	deleted	celestina-qt/docs/plans/archive/2026-08-04-r4-notifications.md
+0	150	deleted	celestina-qt/docs/plans/archive/2026-08-04-r5-control-centre.md
+0	114	deleted	celestina-qt/docs/plans/archive/2026-08-04-r7-session-look.md
+0	100	deleted	celestina-qt/docs/plans/archive/2026-08-04-r8-noctalia-departure.md
+0	201	deleted	celestina-qt/docs/plans/archive/2026-08-05-late-provider-insertion.md
+0	83	deleted	celestina-qt/docs/plans/archive/2026-08-05-live-validation-follow-up.md
+0	345	deleted	celestina-qt/docs/plans/archive/2026-08-07-network-bluetooth-indicator-menus.md
+0	153	deleted	celestina-qt/docs/plans/archive/2026-08-08-diagnostic-journal.md
+0	1462	deleted	celestina-qt/docs/plans/archive/2026-08-08-panel-glass-redesign.md
+0	163	deleted	celestina-qt/docs/plans/archive/2026-08-08-workspace-monitor-groups.md
+0	406	deleted	celestina-qt/docs/plans/archive/2026-08-08-workspace-window-map.md
+0	108	deleted	celestina-qt/docs/plans/archive/2026-08-14-first-party-session-lock.md
+0	140	deleted	celestina-qt/docs/plans/archive/2026-08-14-polkit-authentication-agent.md
+0	98	deleted	celestina-qt/docs/plans/archive/2026-08-17-live-session-repairs.md
+0	188	deleted	celestina-qt/docs/plans/archive/2026-08-17-lock-depth-transition.md
+0	94	deleted	celestina-qt/docs/plans/archive/2026-08-17-melibea-bubbles.md
+0	160	deleted	celestina-qt/docs/plans/archive/2026-08-22-screen-recorder-and-hardening.md
+0	87	deleted	celestina-qt/docs/plans/archive/2026-09-19-screencast-first-frame-freeze.md
+0	19	deleted	celestina-qt/docs/plans/archive/README.md
+0	13	deleted	celestina-qt/docs/plans/pending/README.md
+0	67	deleted	celestina-qt/packaging/niri/README.md
+0	88	deleted	celestina-qt/packaging/niri/per-layer-blur-strength.patch
+0	48	deleted	celestina-qt/packaging/xdg-desktop-portal-wlr/README.md
+0	48	deleted	celestina-qt/packaging/xdg-desktop-portal-wlr/trigger-process-after-screencopy.patch
+0	178	deleted	celestina-qt/qml/AnchoredCard.qml
+0	146	deleted	celestina-qt/qml/AnchoredMenu.qml
+0	112	deleted	celestina-qt/qml/AudioLevel.qml
+0	291	deleted	celestina-qt/qml/AudioMenu.qml
+0	98	deleted	celestina-qt/qml/BackdropButton.qml
+0	45	deleted	celestina-qt/qml/BackdropIconButton.qml
+0	41	deleted	celestina-qt/qml/BackdropInk.qml
+0	41	deleted	celestina-qt/qml/BackdropTextField.qml
+0	396	deleted	celestina-qt/qml/BluetoothMenu.qml
+0	74	deleted	celestina-qt/qml/BrightnessLevel.qml
+0	114	deleted	celestina-qt/qml/BrightnessMenu.qml
+0	66	deleted	celestina-qt/qml/BubbleAnchorSlot.qml
+0	131	deleted	celestina-qt/qml/BubbleGroup.qml
+0	471	deleted	celestina-qt/qml/BubbleSelector.qml
+0	34	deleted	celestina-qt/qml/CalendarMenu.qml
+0	39	deleted	celestina-qt/qml/CaptureButton.qml
+0	170	deleted	celestina-qt/qml/CaptureMenu.qml
+0	125	deleted	celestina-qt/qml/ClipboardEntryRow.qml
+0	282	deleted	celestina-qt/qml/ClipboardOverlay.qml
+0	66	deleted	celestina-qt/qml/Clock.qml
+0	71	deleted	celestina-qt/qml/CompositorGlassRegion.qml
+0	1020	deleted	celestina-qt/qml/ControlCentre.qml
+0	171	deleted	celestina-qt/qml/DevicePicker.qml
+0	655	deleted	celestina-qt/qml/EdgeAttachedGeometry.js
+0	441	deleted	celestina-qt/qml/LauncherOverlay.qml
+0	278	deleted	celestina-qt/qml/LevelRow.qml
+0	128	deleted	celestina-qt/qml/MediaMini.qml
+0	121	deleted	celestina-qt/qml/MenuHeader.qml
+0	49	deleted	celestina-qt/qml/MenuSection.qml
+0	148	deleted	celestina-qt/qml/MonthCalendar.qml
+0	318	deleted	celestina-qt/qml/NetworkMenu.qml
+0	421	deleted	celestina-qt/qml/NotificationCenter.qml
+0	86	deleted	celestina-qt/qml/NotificationIndicator.qml
+0	349	deleted	celestina-qt/qml/OutputChooser.qml
+0	760	deleted	celestina-qt/qml/Panel.qml
+0	57	deleted	celestina-qt/qml/PanelActionButton.qml
+0	47	deleted	celestina-qt/qml/PanelCluster.qml
+0	55	deleted	celestina-qt/qml/PanelFlank.qml
+0	168	deleted	celestina-qt/qml/PanelMenuButton.qml
+0	61	deleted	celestina-qt/qml/PanelPill.qml
+0	98	deleted	celestina-qt/qml/PanelPopupPlacement.qml
+0	118	deleted	celestina-qt/qml/PerformanceMenu.qml
+0	182	deleted	celestina-qt/qml/PhoneMenu.qml
+0	83	deleted	celestina-qt/qml/PhoneStatus.qml
+0	257	deleted	celestina-qt/qml/PolkitPrompt.qml
+0	11	deleted	celestina-qt/qml/ProviderReading.js
+0	331	deleted	celestina-qt/qml/SessionMenu.qml
+0	597	deleted	celestina-qt/qml/SessionOsd.qml
+0	200	deleted	celestina-qt/qml/SessionStatus.qml
+0	57	deleted	celestina-qt/qml/ShellPanel.qml
+0	147	deleted	celestina-qt/qml/SoftCard.qml
+0	292	deleted	celestina-qt/qml/SoftMenu.qml
+0	339	deleted	celestina-qt/qml/SoftMenuField.qml
+0	359	deleted	celestina-qt/qml/SoftMenuRow.qml
+0	24	deleted	celestina-qt/qml/SoftOverlayCard.qml
+0	32	deleted	celestina-qt/qml/SysMon.qml
+0	688	deleted	celestina-qt/qml/ToastStack.qml
+0	444	deleted	celestina-qt/qml/TrayDrawer.qml
+0	767	deleted	celestina-qt/qml/TrayItemsMenu.qml
+0	171	deleted	celestina-qt/qml/TrayMenu.qml
+0	178	deleted	celestina-qt/qml/Wallpaper.qml
+0	458	deleted	celestina-qt/qml/WallpaperMenu.qml
+0	114	deleted	celestina-qt/qml/WorkspaceGroupCapsule.qml
+0	232	deleted	celestina-qt/qml/WorkspaceMap.qml
+0	196	deleted	celestina-qt/qml/WorkspaceMapBoard.qml
+0	179	deleted	celestina-qt/qml/WorkspaceMapTile.qml
+0	170	deleted	celestina-qt/qml/WorkspacePill.qml
+0	231	deleted	celestina-qt/qml/WorkspaceStrip.qml
+0	60	deleted	celestina-qt/scripts/activate-production.sh
+0	121	deleted	celestina-qt/scripts/build-patched-niri.sh
+0	147	deleted	celestina-qt/scripts/build-patched-xdpw.sh
+0	27	deleted	celestina-qt/scripts/build-production.sh
+0	20	deleted	celestina-qt/scripts/celestina-launcher.sh
+0	4	deleted	celestina-qt/scripts/complete-production.sh
+0	75	deleted	celestina-qt/scripts/deploy-production.sh
+0	92	deleted	celestina-qt/scripts/dev-quiet-demo.sh
+0	76	deleted	celestina-qt/scripts/dev-restart.sh
+0	246	deleted	celestina-qt/scripts/dev-session.kdl
+0	315	deleted	celestina-qt/scripts/dev-session.sh
+0	190	deleted	celestina-qt/scripts/diagnostic-report.sh
+0	74	deleted	celestina-qt/scripts/handover-remove.sh
+0	72	deleted	celestina-qt/scripts/handover-status.sh
+0	32	deleted	celestina-qt/scripts/qmllint-production.sh
+0	26	deleted	celestina-qt/scripts/run.sh
+0	75	deleted	celestina-qt/scripts/session-interlock.sh
+0	61	deleted	celestina-qt/scripts/smoke-production.sh
+0	26	deleted	celestina-qt/scripts/status-production.sh
+0	57	deleted	celestina-qt/scripts/verify-production.sh
+0	99	deleted	celestina-qt/src/appiconprovider.cpp
+0	51	deleted	celestina-qt/src/appiconprovider.h
+0	79	deleted	celestina-qt/src/blurreach.h
+0	23	deleted	celestina-qt/src/bubbleanchorsource.h
+0	70	deleted	celestina-qt/src/commitnudge.h
+0	601	deleted	celestina-qt/src/denseglass.cpp
+0	156	deleted	celestina-qt/src/denseglass.h
+0	180	deleted	celestina-qt/src/devicesclient.cpp
+0	72	deleted	celestina-qt/src/devicesclient.h
+0	515	deleted	celestina-qt/src/diagnosticjournal.cpp
+0	159	deleted	celestina-qt/src/diagnosticjournal.h
+0	598	deleted	celestina-qt/src/lock/LockScreen.qml
+0	1	deleted	celestina-qt/src/lock/celestina-lock.json
+0	138	deleted	celestina-qt/src/lock/lockbackdrop.cpp
+0	52	deleted	celestina-qt/src/lock/lockbackdrop.h
+0	40	deleted	celestina-qt/src/lock/locksession.cpp
+0	55	deleted	celestina-qt/src/lock/locksession.h
+0	166	deleted	celestina-qt/src/lock/locksurface.cpp
+0	94	deleted	celestina-qt/src/lock/locksurface.h
+0	24	deleted	celestina-qt/src/lock/lockuncover.cpp
+0	52	deleted	celestina-qt/src/lock/lockuncover.h
+0	278	deleted	celestina-qt/src/lock/main.cpp
+0	32	deleted	celestina-qt/src/lock/plugin.cpp
+0	148	deleted	celestina-qt/src/lockauthenticator.cpp
+0	83	deleted	celestina-qt/src/lockauthenticator.h
+0	349	deleted	celestina-qt/src/lockcontroller.cpp
+0	94	deleted	celestina-qt/src/lockcontroller.h
+0	207	deleted	celestina-qt/src/lockverify/main.cpp
+0	687	deleted	celestina-qt/src/main.cpp
+0	1923	deleted	celestina-qt/src/niri_adapter.rs
+0	937	deleted	celestina-qt/src/niriclient.cpp
+0	149	deleted	celestina-qt/src/niriclient.h
+0	784	deleted	celestina-qt/src/osdcontroller.cpp
+0	164	deleted	celestina-qt/src/osdcontroller.h
+0	147	deleted	celestina-qt/src/osdreadings.cpp
+0	86	deleted	celestina-qt/src/osdreadings.h
+0	21	deleted	celestina-qt/src/outputsnapshot.cpp
+0	18	deleted	celestina-qt/src/outputsnapshot.h
+0	650	deleted	celestina-qt/src/overlaycontroller.cpp
+0	191	deleted	celestina-qt/src/overlaycontroller.h
+0	361	deleted	celestina-qt/src/overlaysurface.cpp
+0	101	deleted	celestina-qt/src/overlaysurface.h
+0	748	deleted	celestina-qt/src/panelattachmentlease.cpp
+0	116	deleted	celestina-qt/src/panelattachmentlease.h
+0	637	deleted	celestina-qt/src/panelblurcontroller.cpp
+0	105	deleted	celestina-qt/src/panelblurcontroller.h
+0	737	deleted	celestina-qt/src/panelmanager.cpp
+0	206	deleted	celestina-qt/src/panelmanager.h
+0	1633	deleted	celestina-qt/src/panelmenucontroller.cpp
+0	275	deleted	celestina-qt/src/panelmenucontroller.h
+0	218	deleted	celestina-qt/src/panelmenusurface.cpp
+0	80	deleted	celestina-qt/src/panelmenusurface.h
+0	88	deleted	celestina-qt/src/panelpopupplacement.h
+0	355	deleted	celestina-qt/src/polkitagent.cpp
+0	136	deleted	celestina-qt/src/polkitagent.h
+0	199	deleted	celestina-qt/src/polkitconversation.cpp
+0	79	deleted	celestina-qt/src/polkitconversation.h
+0	298	deleted	celestina-qt/src/polkitconverse/main.cpp
+0	271	deleted	celestina-qt/src/polkitpromptcontroller.cpp
+0	102	deleted	celestina-qt/src/polkitpromptcontroller.h
+0	49	deleted	celestina-qt/src/protocoldecoder.cpp
+0	25	deleted	celestina-qt/src/protocoldecoder.h
+0	743	deleted	celestina-qt/src/provider_adapter/audio.rs
+0	666	deleted	celestina-qt/src/provider_adapter/brightness.rs
+0	634	deleted	celestina-qt/src/provider_adapter/clipboard.rs
+0	50	deleted	celestina-qt/src/provider_adapter/generated.rs
+0	204	deleted	celestina-qt/src/provider_adapter/held.rs
+0	345	deleted	celestina-qt/src/provider_adapter/launcher.rs
+0	453	deleted	celestina-qt/src/provider_adapter/main.rs
+0	801	deleted	celestina-qt/src/provider_adapter/media.rs
+0	935	deleted	celestina-qt/src/provider_adapter/melibea.rs
+0	1296	deleted	celestina-qt/src/provider_adapter/nightlight.rs
+0	510	deleted	celestina-qt/src/provider_adapter/notifications.rs
+0	263	deleted	celestina-qt/src/provider_adapter/portal_settings.rs
+0	457	deleted	celestina-qt/src/provider_adapter/recorder.rs
+0	729	deleted	celestina-qt/src/provider_adapter/session.rs
+0	170	deleted	celestina-qt/src/provider_adapter/sessionholds.rs
+0	422	deleted	celestina-qt/src/provider_adapter/settings.rs
+0	95	deleted	celestina-qt/src/provider_adapter/sysmon.rs
+0	670	deleted	celestina-qt/src/provider_adapter/tools.rs
+0	2031	deleted	celestina-qt/src/provider_adapter/wallpaper.rs
+0	129	deleted	celestina-qt/src/provider_adapter/weather.rs
+0	70	deleted	celestina-qt/src/provider_adapter/worker.rs
+0	252	deleted	celestina-qt/src/providerstates.cpp
+0	82	deleted	celestina-qt/src/providerstates.h
+0	207	deleted	celestina-qt/src/quietplacement.cpp
+0	117	deleted	celestina-qt/src/quietplacement.h
+0	196	deleted	celestina-qt/src/requestledger.cpp
+0	140	deleted	celestina-qt/src/requestledger.h
+0	58	deleted	celestina-qt/src/sessionactions.cpp
+0	35	deleted	celestina-qt/src/sessionactions.h
+0	191	deleted	celestina-qt/src/sessionrequests.cpp
+0	106	deleted	celestina-qt/src/sessionrequests.h
+0	256	deleted	celestina-qt/src/shellclient.cpp
+0	11	deleted	celestina-qt/src/shellclient.h
+0	111	deleted	celestina-qt/src/shellcommandline.cpp
+0	22	deleted	celestina-qt/src/shellcommandline.h
+0	413	deleted	celestina-qt/src/shellprovidersclient.cpp
+0	120	deleted	celestina-qt/src/shellprovidersclient.h
+0	125	deleted	celestina-qt/src/shellscale.cpp
+0	42	deleted	celestina-qt/src/shellscale.h
+0	952	deleted	celestina-qt/src/shellservice.cpp
+0	244	deleted	celestina-qt/src/shellservice.h
+0	282	deleted	celestina-qt/src/softclose.h
+0	117	deleted	celestina-qt/src/surfacemanager.cpp
+0	85	deleted	celestina-qt/src/surfacemanager.h
+0	636	deleted	celestina-qt/src/toastcontroller.cpp
+0	125	deleted	celestina-qt/src/toastcontroller.h
+0	34	deleted	celestina-qt/src/trayiconprovider.cpp
+0	23	deleted	celestina-qt/src/trayiconprovider.h
+0	236	deleted	celestina-qt/src/trayicons.cpp
+0	85	deleted	celestina-qt/src/trayicons.h
+0	286	deleted	celestina-qt/src/trayitems.cpp
+0	129	deleted	celestina-qt/src/trayitems.h
+0	92	deleted	celestina-qt/src/traymenu.cpp
+0	37	deleted	celestina-qt/src/traymenu.h
+0	860	deleted	celestina-qt/src/traywatcher.cpp
+0	152	deleted	celestina-qt/src/traywatcher.h
+0	139	deleted	celestina-qt/src/traywatcherservice.cpp
+0	79	deleted	celestina-qt/src/traywatcherservice.h
+0	136	deleted	celestina-qt/src/wallpaperidentity.cpp
+0	26	deleted	celestina-qt/src/wallpaperidentity.h
+0	279	deleted	celestina-qt/src/wallpapermanager.cpp
+0	71	deleted	celestina-qt/src/wallpapermanager.h
+0	198	deleted	celestina-qt/src/workspacefocusrequests.cpp
+0	101	deleted	celestina-qt/src/workspacefocusrequests.h
+0	86	deleted	celestina-qt/tests/appiconprovider_test.cpp
+0	115	deleted	celestina-qt/tests/held_shutdown.rs
+0	1606	deleted	celestina-qt/tests/indicatormenu_test.cpp
+0	223	deleted	celestina-qt/tests/lockauthenticator_test.cpp
+0	222	deleted	celestina-qt/tests/lockcontroller_test.cpp
+0	130	deleted	celestina-qt/tests/lockuncover_test.cpp
+0	299	deleted	celestina-qt/tests/media_signals.rs
+0	431	deleted	celestina-qt/tests/notification_server.rs
+0	162	deleted	celestina-qt/tests/osdreadings_test.cpp
+0	1140	deleted	celestina-qt/tests/overlaycontract_test.cpp
+0	353	deleted	celestina-qt/tests/polkitagent_test.cpp
+0	294	deleted	celestina-qt/tests/polkitconversation_test.cpp
+0	144	deleted	celestina-qt/tests/polkitprompt_test.cpp
+0	46	deleted	celestina-qt/tests/protocoldecoder_test.cpp
+0	375	deleted	celestina-qt/tests/providerstates_test.cpp
+0	3	deleted	celestina-qt/tests/quicktest_main.cpp
+0	447	deleted	celestina-qt/tests/requestledger_test.cpp
+0	249	deleted	celestina-qt/tests/sessionrequests_test.cpp
+0	87	deleted	celestina-qt/tests/shellcommandline_test.cpp
+0	152	deleted	celestina-qt/tests/shellscale_test.cpp
+0	369	deleted	celestina-qt/tests/shellservice_test.cpp
+0	2993	deleted	celestina-qt/tests/surfacemanager_test.cpp
+0	150	deleted	celestina-qt/tests/trayicons_test.cpp
+0	436	deleted	celestina-qt/tests/trayitems_test.cpp
+0	134	deleted	celestina-qt/tests/traymenu_test.cpp
+0	484	deleted	celestina-qt/tests/traywatcher_test.cpp
+0	181	deleted	celestina-qt/tests/traywatcherservice_test.cpp
+0	195	deleted	celestina-qt/tests/tst_attachmentfall.qml
+0	67	deleted	celestina-qt/tests/tst_audiolevel.qml
+0	102	deleted	celestina-qt/tests/tst_audiomenu.qml
+0	38	deleted	celestina-qt/tests/tst_backdropink.qml
+0	213	deleted	celestina-qt/tests/tst_bluetoothmenu.qml
+0	76	deleted	celestina-qt/tests/tst_brightnesslevel.qml
+0	115	deleted	celestina-qt/tests/tst_bubbleanchorslot.qml
+0	91	deleted	celestina-qt/tests/tst_bubblegroup.qml
+0	320	deleted	celestina-qt/tests/tst_bubbleselector.qml
+0	85	deleted	celestina-qt/tests/tst_capturebutton.qml
+0	211	deleted	celestina-qt/tests/tst_capturemenu.qml
+0	106	deleted	celestina-qt/tests/tst_clipboardentryrow.qml
+0	86	deleted	celestina-qt/tests/tst_clipboardoverlay.qml
+0	368	deleted	celestina-qt/tests/tst_controlcentre.qml
+0	359	deleted	celestina-qt/tests/tst_edgeattachedgeometry.qml
+0	190	deleted	celestina-qt/tests/tst_levelrow.qml
+0	242	deleted	celestina-qt/tests/tst_networkmenu.qml
+0	439	deleted	celestina-qt/tests/tst_notificationjoin.qml
+0	207	deleted	celestina-qt/tests/tst_notifications.qml
+0	138	deleted	celestina-qt/tests/tst_openerrects.qml
+0	117	deleted	celestina-qt/tests/tst_outputchooser.qml
+0	135	deleted	celestina-qt/tests/tst_panelactionbutton.qml
+0	211	deleted	celestina-qt/tests/tst_panelcluster.qml
+0	157	deleted	celestina-qt/tests/tst_panelflank.qml
+0	123	deleted	celestina-qt/tests/tst_panelmenubutton.qml
+0	193	deleted	celestina-qt/tests/tst_performancemenu.qml
+0	129	deleted	celestina-qt/tests/tst_performancemenucard.qml
+0	157	deleted	celestina-qt/tests/tst_polkitprompt.qml
+0	264	deleted	celestina-qt/tests/tst_sessionindicators.qml
+0	75	deleted	celestina-qt/tests/tst_sessionmenu.qml
+0	468	deleted	celestina-qt/tests/tst_sessionosd.qml
+0	97	deleted	celestina-qt/tests/tst_sessionstatus.qml
+0	45	deleted	celestina-qt/tests/tst_softcard.qml
+0	75	deleted	celestina-qt/tests/tst_sysmon.qml
+0	637	deleted	celestina-qt/tests/tst_traydrawer.qml
+0	576	deleted	celestina-qt/tests/tst_trayitemsmenu.qml
+0	295	deleted	celestina-qt/tests/tst_wallpapermenu.qml
+0	95	deleted	celestina-qt/tests/tst_workspacemenufeedback.qml
+0	204	deleted	celestina-qt/tests/tst_workspacestrip.qml
+0	142	deleted	celestina-qt/tests/workspacefocusrequests_test.cpp
+0	2	9285d69efd446f4b41a9e67cc76230a983c28fc28c77b7f2175631e5564bc11e	celestina-rs/AGENTS.md
+0	9	93538f2df54207746c064e0461c0971691a015d6ec960e3d387e15255f6df0e5	celestina-rs/Cargo.lock
+0	1	615d5377c9f6746a9cd9538858718c296723a004eb44ce330e9d1171aba68bc0	celestina-rs/Cargo.toml
+0	1	e22f359ffbf708f51ca4ee924db7c47c345797d01ae077ab74ff650b8cde7237	celestina-rs/README.md
+0	19	deleted	celestina-rs/crates/celestina-shell-core/Cargo.toml
+0	111	deleted	celestina-rs/crates/celestina-shell-core/src/appearance.rs
+0	120	deleted	celestina-rs/crates/celestina-shell-core/src/audio.rs
+0	545	deleted	celestina-rs/crates/celestina-shell-core/src/bluetooth.rs
+0	215	deleted	celestina-rs/crates/celestina-shell-core/src/brightness.rs
+0	171	deleted	celestina-rs/crates/celestina-shell-core/src/calendar.rs
+0	228	deleted	celestina-rs/crates/celestina-shell-core/src/clipboard.rs
+0	108	deleted	celestina-rs/crates/celestina-shell-core/src/coalesce.rs
+0	323	deleted	celestina-rs/crates/celestina-shell-core/src/command.rs
+0	633	deleted	celestina-rs/crates/celestina-shell-core/src/connectivity.rs
+0	876	deleted	celestina-rs/crates/celestina-shell-core/src/diagnostics.rs
+0	258	deleted	celestina-rs/crates/celestina-shell-core/src/handover.rs
+0	280	deleted	celestina-rs/crates/celestina-shell-core/src/inventory.rs
+0	883	deleted	celestina-rs/crates/celestina-shell-core/src/journal.rs
+0	264	deleted	celestina-rs/crates/celestina-shell-core/src/launcher.rs
+0	148	deleted	celestina-rs/crates/celestina-shell-core/src/lib.rs
+0	234	deleted	celestina-rs/crates/celestina-shell-core/src/lines.rs
+0	253	deleted	celestina-rs/crates/celestina-shell-core/src/media.rs
+0	905	deleted	celestina-rs/crates/celestina-shell-core/src/melibea.rs
+0	1342	deleted	celestina-rs/crates/celestina-shell-core/src/network.rs
+0	323	deleted	celestina-rs/crates/celestina-shell-core/src/nightlight.rs
+0	179	deleted	celestina-rs/crates/celestina-shell-core/src/niri_colours.rs
+0	811	deleted	celestina-rs/crates/celestina-shell-core/src/notifications.rs
+0	539	deleted	celestina-rs/crates/celestina-shell-core/src/pending.rs
+0	93	deleted	celestina-rs/crates/celestina-shell-core/src/power.rs
+0	317	deleted	celestina-rs/crates/celestina-shell-core/src/runtime.rs
+0	630	deleted	celestina-rs/crates/celestina-shell-core/src/session.rs
+0	687	deleted	celestina-rs/crates/celestina-shell-core/src/settings.rs
+0	438	deleted	celestina-rs/crates/celestina-shell-core/src/snapshot.rs
+0	343	deleted	celestina-rs/crates/celestina-shell-core/src/sysmon.rs
+0	256	deleted	celestina-rs/crates/celestina-shell-core/src/wallpaper.rs
+0	256	deleted	celestina-rs/crates/celestina-shell-core/src/weather.rs
+0	794	deleted	celestina-rs/crates/celestina-shell-core/src/workspace_groups.rs
+0	514	deleted	celestina-rs/crates/celestina-shell-core/src/workspace_map.rs
+1	1	2ca6185dc9b99a5928f01ee0772f39f9cb913f81c371ea2a7d1505579e77b21a	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+4	3	778030b9562e096bfee4c2087d3f3909d3845bcfdf0b4478ad73b815ad17bf7e	celestina/AGENTS.md
+1	1	dc9d37d98113c92eb41c9c0ff7a61e63c8f662bc81e43efd7b4a3584afc432f9	celestina/STATUS.md
+6	1	562300c5b307d55d6a944b21607ef302e9758b9aec8ef6a0a45ba5b60c7ea5dc	celestina/docs/decisions/0002-halted-qt-shell-is-history.md
+1	1	2c8dc5d1ccc3eb66daf45a18a5c3ba3652bc11905a20a6e51f6b5ef42e6f57e6	celestina/docs/decisions/0003-no-dock.md
+40	0	7b3c394ed2e1e710173e6f9ec91da358ddb7d4afab4c6d01d3d101baa42d9e04	celestina/docs/decisions/0023-qt-shell-retired.md
+2	1	c7901ff31f36df5752040f06656ac00013f4b771bf880f7b87459c23a71a7e38	celestina/docs/decisions/README.md
+3	3	ec2083c6ca4587ff2645d14380757121e5b42bbf19dad0e9aedf7cea02318116	cuprita/AGENTS.md
+1	1	6cc7c7c64259acaa5dbd1edaa696921c32b3e7eee69294ad19b258303afc54df	docs/evidence/2026-08-05-static-suite-audit.md
+1	1	dd2aff22d70331b965255f8b4adc7cc7de8d2c58ae9a46768bbd9b456bae2eb1	docs/evidence/2026-09-28-halt-shell.md
+64	0	55a33c640b1debd48a502f4467d78dcb965db591741af30a2a7b0a36adfda019	docs/evidence/2026-10-23-cel-qt-remove.md
+6	6	08c4773e9f7b740781456817d145bfaf7e40b2a873a58335df66c83b16c63629	docs/history/suite-roadmap-through-2026-08-03.md
+1115	0	self	docs/inventories/2026-10-14-rust-shell/CEL-QT-REMOVE.numstat.tsv
+1	0	a2fa3204770c5a470412de4a3628ffeb3b0b4a2f04dfcd5e41a3ec534236dd11	docs/plans/active/2026-10-14-rust-shell.md
+1	1	346aaa52c1f66ab1719ead5dd42b64b9a8cc2c29865a17e387f84e18695942ea	docs/plans/archive/2026-08-05-desktop-entry-registration.md
+16	50	402d48864832a628cbc3fbbde812e4b3591b1c373fc5c05f8e74a887185c6957	docs/projects.toml
+3	2	43fc244e2411a621f949bd88504df2f14d5470e34ab57687bc461f4dbd3ca365	hematita/AGENTS.md
+4	4	f763e427085c8568e7527aa61ac541d3c4f07c7c4c203c54bf04c1ed9f9d51dc	magnetita/AGENTS.md
+2	2	b00d2139d22999a85bba6ed9a8b96a7fcfabc83e5dded393d69306e75006fa9d	magnetita/ROADMAP.md
+0	3	7de5e593e408da0eef70e5b7196c2fc0724abb69fe4029bc5508b2b6fe244250	scripts/language-baseline.tsv
+0	1	5c4f8ebe84cba0732c776c53d5456a924c73f5a7cf54b5318186870932e2c590	scripts/radius-baseline.tsv
+3	2	6324fa592e309886aa48701e7321c4f82aaafe5e753e7c731737b2c43d154963	selenita/AGENTS.md

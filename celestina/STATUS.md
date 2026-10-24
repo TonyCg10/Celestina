@@ -12,7 +12,7 @@
   `org.freedesktop.Notifications` and `org.kde.StatusNotifierWatcher` only
   when the name is free. Evidence per unit is in
   [`docs/evidence/`](docs/evidence/README.md). The halted Qt/QML shell this
-  project replaces lives at [`celestina-qt/`](../celestina-qt/README.md).
+  project replaces lived at `celestina-qt/` until CEL-QT-REMOVE removed it.
 - **Exit (CEL-1-H):** landed on `main` as celestina 1.0.0 (`00c6d0bb`), kind
   `release`: the live rows queued in [VALIDATION.md](VALIDATION.md), the
   [handover note](docs/handover.md) on what Noctalia still does for the

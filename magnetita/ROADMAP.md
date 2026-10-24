@@ -85,8 +85,8 @@ workspace check, QML lint and the architecture contract, **and** the author has
 requested the canonical `scripts/complete-production.sh` exit. The corrections
 were authorized without a production build or deployment, so the units stay
 `active` and the installed daemon still carries the uncorrected bytes until
-that request arrives. `magnetita-core` changed; the shell that consumed it is
-halted, so closing does not run `celestina-qt/scripts/complete-production.sh`.
+that request arrives. `magnetita-core` changed; the Qt shell that consumed it was
+halted and later removed from the tree, so closing runs no shell completion.
 
 ## MAG-M1 — Deterministic app read/watch lifecycle
 

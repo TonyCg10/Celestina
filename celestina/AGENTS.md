@@ -28,9 +28,10 @@ the shell's constraints; it cannot relax the root or grant authority.
   forbids `unsafe` (the verifier's crate root cannot say `forbid` over a module
   that allows, so `crates/celestina-lock-verify/tests/source_guards.rs` keeps
   it so).
-- Never edit `celestina-qt/` or `celestina-rs/crates/celestina-shell-core`.
-  Copy from them only what the root contract's "Halted projects" section
-  names, recording the source path and commit in the copy's head comment.
+- The halted Qt shell (`celestina-qt/`, `celestina-rs/crates/celestina-shell-core`)
+  was removed from the tree. Code it salvaged keeps the source path and commit
+  in its head comment, as the root contract's "Halted projects" section
+  records; nothing more is recovered from its Git history.
 - Product copy is Spanish and lives in `src/copy.rs`, whose head says
   `language-contract: product-copy`; the session lock's own screen keeps its
   copy in `crates/celestina-lock/src/copy.rs` under the same head; everything

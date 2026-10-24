@@ -4,7 +4,6 @@ members = [
     "crates/celestina-lock-proto",
     "crates/celestina-settings",
     "crates/celestina-shell",
-    "crates/celestina-shell-core",
     "crates/celestina-tokens",
     "crates/siderita-core",
     "crates/siderita-archive",

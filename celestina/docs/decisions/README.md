@@ -14,7 +14,7 @@ Open questions belong to the
 | ADR | Status | Decision |
 |---|---|---|
 | [0001](0001-pure-rust-shell-on-wayland.md) | accepted | A pure Rust shell on Wayland, for niri only |
-| [0002](0002-halted-qt-shell-is-history.md) | accepted | The halted Qt shell is history at `celestina-qt/`; salvage is by copy |
+| [0002](0002-halted-qt-shell-is-history.md) | superseded | The halted Qt shell is history at `celestina-qt/`; salvage is by copy (superseded by 0023) |
 | [0003](0003-no-dock.md) | accepted | No dock |
 | [0004](0004-femtovg-behind-a-painter.md) | accepted | femtovg behind a Painter contract |
 | [0005](0005-cosmic-text-only-text-stack.md) | accepted | cosmic-text is the only text stack |
@@ -34,5 +34,6 @@ Open questions belong to the
 | [0019](0019-connectivity-secrets-never-pass-through-the-shell.md) | proposed | No secret passes through the shell |
 | [0020](0020-phone-and-bubbles.md) | accepted | Phone and bubbles: Melibea v1 by default with a per-action v2 hint, an absent socket is a state, one selector for the bubbles |
 | [0022](0022-session-lock.md) | proposed | The session lock is three processes, locked on every failure, with the PAM verdict as its only way out (number provisional) |
+| [0023](0023-qt-shell-retired.md) | accepted | The Qt shell is retired and removed from the tree; supersedes 0002 (number provisional) |
 
 New records use the suite [decision template](../../../docs/templates/decision.md).

@@ -29,8 +29,9 @@ Hematita constraints; it cannot relax the root or grant authority.
 - `src/` owns the sampling thread, the snapshot it publishes, the load
   thresholds and every Qt object; `qml/` presents. QML never reads a file,
   spawns a process or decides what "high" means.
-- The Celestina shell is in standby by the author's order: never read, reuse
-  or reference `celestina-qt/` or `celestina-shell-core`, however similar.
+- The Qt shell (`celestina-qt/`, `celestina-shell-core`) was removed from the
+  tree (AGENTS.md "Halted projects"); do not recover or reuse its code from
+  the Git history, however similar.
 - Absence is a state: a source that cannot be read leaves its section of the
   snapshot unavailable with a reason while the others keep publishing. Every
   row carries its own state and its own typed reason, and the page composes

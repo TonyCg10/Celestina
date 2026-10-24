@@ -28,9 +28,9 @@ Cuprita constraints; it cannot relax the root or grant authority.
   password is passed inside the activation call to NetworkManager and dropped;
   a Bluetooth code goes straight to BlueZ through the pairing agent; polkit
   prompts in its own window.
-- The Celestina shell is halted by the author's order: never read, reuse or
-  reference `celestina-qt/` or `celestina-shell-core`, however similar. Cuprita has
-  no tray, indicator or daemon.
+- The Qt shell (`celestina-qt/`, `celestina-shell-core`) was removed from the
+  tree (AGENTS.md "Halted projects"); do not recover or reuse its code from
+  the Git history, however similar. Cuprita has no tray, indicator or daemon.
 
 ## Local verification
 

@@ -2,7 +2,7 @@
 #
 # The shell's own workspace (`celestina/Cargo.toml`, members `crates/*` and the
 # binary) plus the two `celestina-rs` crates registered for it, whose changes
-# the shell will consume. The halted Qt shell runs in `celestina-qt.yml`.
+# the shell will consume. The Qt shell was removed from the tree (CEL-QT-REMOVE).
 name: celestina
 
 on:

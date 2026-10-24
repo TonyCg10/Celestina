@@ -18,7 +18,6 @@ the deliberately contained Magnetita transport/daemon and Fluorita render seam.
 | Area | Responsibility |
 |---|---|
 | `crates/celestina-core` | Generations and cancellation; small-file IO (state replacement, private state, media landing, bounded reads); XDG base, runtime and private directories; percent encoding, path keys and `file://` URIs; `.desktop` parsing and scanning; cover-art plausibility |
-| `crates/celestina-shell-core` | The shell helpers' domain: line framing, provider envelope, typed host commands and the provider rules (connectivity, audio, brightness, notifications, launcher, settings, workspaces and more); its `journal` module is the one part that writes files |
 | `crates/siderita-*` | Read models, loss-free file operations, archives, the pictures files carry inside themselves, and the opaque Qt-facing view contract |
 | `crates/grafita-core` | Text classification, document/edit history, safe save, workers and host-neutral session state |
 | `crates/hematita-core` | `/proc` and `/sys` readings as typed values, and the storage analyzer's walk, check and removal |

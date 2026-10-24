@@ -47,8 +47,9 @@ Calcita's constraints; it cannot relax the root or grant authority.
   incremental update (the original's bytes a prefix), landed as a copy
   beside it or replacing it with the original sent to the Trash, never in
   place. It needs no privilege.
-- The Celestina shell is halted by the author's order: never read, reuse or
-  reference `celestina-qt/` or `celestina-shell-core`.
+- The Qt shell (`celestina-qt/`, `celestina-shell-core`) was removed from the
+  tree (AGENTS.md "Halted projects"); do not recover or reuse its code from
+  the Git history.
 
 ## Local verification
 

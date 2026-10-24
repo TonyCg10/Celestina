@@ -307,7 +307,6 @@ The build order, exclusions and ledger are in
 | Project | Canonical implementation queue |
 |---|---|
 | Celestina shell | [celestina/ROADMAP.md](celestina/ROADMAP.md) |
-| Celestina Qt shell (halted since 2026-09-27; see [Halted projects](AGENTS.md#halted-projects)) | [celestina-qt/ROADMAP.md](celestina-qt/ROADMAP.md) |
 | Shared Rust crates | [celestina-rs/ROADMAP.md](celestina-rs/ROADMAP.md) |
 | Shared visual language | [celestina-style/ROADMAP.md](celestina-style/ROADMAP.md) |
 | Siderita | [siderita/ROADMAP.md](siderita/ROADMAP.md) |

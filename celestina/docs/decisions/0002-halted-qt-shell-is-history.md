@@ -1,7 +1,12 @@
 # ADR 0002: The halted Qt shell is history at `celestina-qt/`
 
 - **Date:** 2026-10-14
-- **Status:** accepted
+- **Status:** superseded
+- **Superseded by:** [ADR 0023](0023-qt-shell-retired.md), written by the
+  unit CEL-QT-REMOVE, which removed `celestina-qt/` and
+  `celestina-rs/crates/celestina-shell-core` from the tree and registered the
+  shell as a retired project; the salvage list stays as a record in
+  [AGENTS.md "Halted projects"](../../../AGENTS.md#halted-projects).
 
 ## Context
 
