@@ -152,6 +152,25 @@ project's plan with only `planned` rows), and so is a plan that differs from
 both are set aside while another changed plan remains and count as settled
 plans afterwards.
 
+A retired halted owner (registered `halted` on `origin/main`, absent from the
+branch's `[[projects]]` and listed in its `[[retired_projects]]`; see
+[Retiring a project](versioning.md#retiring-a-project)) takes its plans and
+inventories with its tree. A changed path under its `commit_roots` that the
+branch deletes is not a plan the branch changes when it is a plan file of one
+of its `<docs root>/plans/` directories (active or archived), and not an edit
+of a tracked inventory when it is a `.numstat.tsv` under its
+`<docs root>/inventories/`: `preflight` leaves both out of the deletion stop
+and of the immutable-inventory stop (`retired_owner_deletions`,
+`retired_owner_roots`), and the unit's own inventory claims every deleted
+path with a `deleted` row. While the branch retires such an owner, and only
+then, another owner's active plan that differs from `origin/main`'s only
+where it stops linking the retired tree is set aside like one that follows a
+rename (`only_drops_retired_links`). The rule is strict: the two texts have
+the same lines, each line that differs holds an inline link resolving under
+the retired `commit_roots` on `origin/main` and none on the branch, and in a
+table row only the cells that held such a link may differ, so no status,
+unit or other cell of that plan changes with it.
+
 The row of the unit a branch `unit/<project>/<unit>` is named after is never
 set aside: when `origin/main` closed it, in any changed plan, it is the unit,
 and `preflight` then refuses it as landed. The unit found must be the one

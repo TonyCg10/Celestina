@@ -13,6 +13,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 import functools
+import json
 import re
 import tomllib
 
@@ -122,11 +123,40 @@ class VersionPolicy:
 
 
 @dataclass(frozen=True)
+class RetiredOwner:
+    """A `[[retired_projects]]` entry: its history chain stays, its sources are gone.
+
+    `table` is the whole entry as canonical JSON, so two entries are equal
+    only when every key is: the entry is permanent.
+    """
+
+    owner: str
+    history_owner: str
+    commit_prefixes: frozenset[str] = frozenset()
+    commit_roots: frozenset[str] = frozenset()
+    table: str = ""
+
+
+@dataclass(frozen=True)
+class OwnerScope:
+    """The prefixes (its own and its components') and `commit_roots` an owner commits under."""
+
+    owner: str
+    commit_prefixes: frozenset[str]
+    commit_roots: frozenset[str]
+
+
+@dataclass(frozen=True)
 class RegistryModel:
     policy: VersionPolicy | None
     suite_prefix: str
     owners: tuple[OwnerConfig, ...]
     component_prefixes: frozenset[str]
+    # Owners the registry marks `halted`: only these may be retired.
+    halted: frozenset[str] = frozenset()
+    retired: tuple[RetiredOwner, ...] = ()
+    # What each owner commits under, which a retired entry must repeat.
+    scopes: tuple[OwnerScope, ...] = ()
 
     def owner_map(self) -> dict[str, OwnerConfig]:
         return {owner.owner: owner for owner in self.owners}
@@ -235,6 +265,7 @@ def parse_registry(registry: Mapping[str, object], label: str = "registry") -> R
     if not isinstance(raw_projects, Sequence) or isinstance(raw_projects, (str, bytes)):
         raise VersionRegistryError(f"{label}.projects must be an array of tables")
     owners: list[OwnerConfig] = []
+    scopes: list[OwnerScope] = []
     component_prefixes: set[str] = set()
     seen_ids: set[str] = set()
     seen_aliases: set[str] = set()
@@ -308,6 +339,7 @@ def parse_registry(registry: Mapping[str, object], label: str = "registry") -> R
             raise VersionRegistryError(
                 f"{project_label}.component_commit_scopes must be a list"
             )
+        owner_prefixes = {prefix}
         for component_index, component in enumerate(raw_components):
             component_label = f"{project_label}.component_commit_scopes[{component_index}]"
             if not isinstance(component, Mapping):
@@ -321,8 +353,65 @@ def parse_registry(registry: Mapping[str, object], label: str = "registry") -> R
                 )
             component_prefixes.add(component_prefix)
             seen_prefixes.add(component_prefix)
+            owner_prefixes.add(component_prefix)
+        scopes.append(
+            OwnerScope(
+                owner,
+                frozenset(owner_prefixes),
+                _string_set(raw_project.get("commit_roots", []), f"{project_label}.commit_roots"),
+            )
+        )
 
-    return RegistryModel(policy, suite_prefix, tuple(owners), frozenset(component_prefixes))
+    halted = frozenset(
+        str(raw_project["id"])
+        for raw_project in raw_projects
+        if isinstance(raw_project, Mapping) and "halted" in raw_project
+    )
+    raw_retired = registry.get("retired_projects", [])
+    if not isinstance(raw_retired, Sequence) or isinstance(raw_retired, (str, bytes)):
+        raise VersionRegistryError(f"{label}.retired_projects must be an array of tables")
+    retired: list[RetiredOwner] = []
+    for index, raw_entry in enumerate(raw_retired):
+        entry_label = f"{label}.retired_projects[{index}]"
+        if not isinstance(raw_entry, Mapping):
+            raise VersionRegistryError(f"{entry_label} must be a table")
+        owner = _required_string(raw_entry.get("id"), f"{entry_label}.id")
+        if owner in seen_ids:
+            raise VersionRegistryError(f'{label} repeats project id "{owner}"')
+        seen_ids.add(owner)
+        history_owner = _required_string(
+            raw_entry.get("history_owner", owner), f"{entry_label}.history_owner"
+        )
+        if history_owner in seen_aliases:
+            raise VersionRegistryError(f'{label} repeats history_owner "{history_owner}"')
+        seen_aliases.add(history_owner)
+        retired.append(
+            RetiredOwner(
+                owner,
+                history_owner,
+                _string_set(raw_entry.get("commit_prefixes", []), f"{entry_label}.commit_prefixes"),
+                _string_set(raw_entry.get("commit_roots", []), f"{entry_label}.commit_roots"),
+                json.dumps(dict(raw_entry), sort_keys=True, default=str),
+            )
+        )
+
+    return RegistryModel(
+        policy,
+        suite_prefix,
+        tuple(owners),
+        frozenset(component_prefixes),
+        halted,
+        tuple(retired),
+        tuple(scopes),
+    )
+
+
+def _string_set(value: object, label: str) -> frozenset[str]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        raise VersionRegistryError(f"{label} must be a list of strings")
+    if not all(isinstance(item, str) for item in value):
+        raise VersionRegistryError(f"{label} must be a list of strings")
+    return frozenset(value)
 
 
 def _decode(raw: bytes | str, label: str) -> str:
@@ -465,6 +554,12 @@ def _validate_history(
 ) -> None:
     owners = model.owner_map()
     alias = {c.history_owner: c.owner for c in model.owners if c.history_owner != c.owner}
+    # A retired project's chain is read like a renamed one's, under the name
+    # its rows carry, and it is closed: no source to end at.
+    retired = {entry.owner: entry for entry in model.retired}
+    alias.update(
+        {entry.history_owner: entry.owner for entry in model.retired}
+    )
     grouped: dict[str, list[HistoryRow]] = defaultdict(list)
     carried: set[str] = set()
     for row in rows:
@@ -479,6 +574,9 @@ def _validate_history(
             else:
                 owner_id = target
                 carried.add(row.owner)
+        if owner_id in retired:
+            grouped[owner_id].append(row)
+            continue
         config = owners.get(owner_id)
         if config is None:
             raise VersionHistoryError(f'{label}: history names unknown owner "{row.owner}"')
@@ -491,10 +589,17 @@ def _validate_history(
                 f'{label}: "{config.owner}" declares history_owner "{config.history_owner}" '
                 "but no history row carries that name"
             )
+    for entry in model.retired:
+        if entry.history_owner != entry.owner and entry.history_owner not in carried:
+            raise VersionHistoryError(
+                f'{label}: retired "{entry.owner}" declares history_owner '
+                f'"{entry.history_owner}" but no history row carries that name'
+            )
 
-    for owner in model.owners:
-        if not owner.versioned:
-            continue
+    chains: list[tuple[str, bool]] = [(owner.owner, True) for owner in model.owners if owner.versioned]
+    chains += [(entry.owner, False) for entry in model.retired if grouped.get(entry.owner)]
+    for owner_id, live in chains:
+        owner = owners.get(owner_id) or retired[owner_id]
         owner_rows = grouped.get(owner.owner, [])
         if not owner_rows:
             raise VersionHistoryError(f'{label}: versioned owner "{owner.owner}" has no baseline')
@@ -513,6 +618,8 @@ def _validate_history(
                     f'{label}: {owner.owner} {current.kind} must move '
                     f"{previous.version} -> {expected}, found {current.version}"
                 )
+        if not live:
+            continue
         current_version = versions.get(owner.owner)
         if current_version is None:
             raise VersionSourceError(f'{label}: no source version for "{owner.owner}"')
@@ -613,6 +720,7 @@ def _assert_normal_config(head: RegistryModel, index: RegistryModel) -> None:
         head.policy != index.policy
         or head.suite_prefix != index.suite_prefix
         or head.owners != index.owners
+        or head.retired != index.retired
     ):
         raise VersionRegistryError(
             "normal delivery commits cannot change version policy or owner configuration; "
@@ -671,10 +779,42 @@ def _validate_policy_addition(
         if config.history_owner != config.owner and config.history_owner in head_owners
         and config.owner not in head_owners
     }
+    # A halted project leaves the registry by becoming a retired one: same
+    # history name, no new rows, nobody else's version moves. A retired entry
+    # is permanent, because its rows are.
+    head_retired = {entry.owner: entry for entry in head.retired}
+    index_retired = {entry.owner: entry for entry in index.retired}
+    for owner, entry in head_retired.items():
+        if index_retired.get(owner) != entry:
+            raise VersionRegistryError(
+                f'suite-maintenance cannot change or remove retired project "{owner}"'
+            )
+    retiring: set[str] = set()
     adopted: list[OwnerConfig] = []
     renamed: dict[str, OwnerConfig] = {}
     for owner, config in head_owners.items():
         after_config = index_owners.get(owner)
+        if after_config is None and owner in index_retired and owner not in head_retired:
+            if owner not in head.halted:
+                raise VersionRegistryError(
+                    f'suite-maintenance can retire only a halted project, not "{owner}"'
+                )
+            if index_retired[owner].history_owner != config.history_owner:
+                raise VersionRegistryError(
+                    f'retired "{owner}" must keep its history name "{config.history_owner}"'
+                )
+            scope = next((item for item in head.scopes if item.owner == owner), None)
+            if scope is not None and (
+                index_retired[owner].commit_prefixes != scope.commit_prefixes
+                or index_retired[owner].commit_roots != scope.commit_roots
+            ):
+                raise VersionRegistryError(
+                    f'retired "{owner}" must keep the commit_prefixes '
+                    f"{sorted(scope.commit_prefixes)} and commit_roots "
+                    f"{sorted(scope.commit_roots)} it had"
+                )
+            retiring.add(owner)
+            continue
         successor = successors.get(owner)
         if successor is not None:
             same_shape = (
@@ -712,12 +852,27 @@ def _validate_policy_addition(
         owner for owner in index.owners
         if owner.owner not in head_owners and owner not in renamed.values()
     ] + adopted
-    if not added and not renamed:
+    unexplained = sorted(set(index_retired) - set(head_retired) - retiring)
+    if unexplained:
+        raise VersionRegistryError(
+            "a retired project must be a registered owner the same commit removes: "
+            + ", ".join(unexplained)
+        )
+    if not added and not renamed and not retiring:
         _validate_no_delta(head, index, before, after)
         return
 
     history_path = head.policy.history_file if head.policy is not None else ""
     new_rows = appended_history_rows(before, after, history_path)
+    if retiring and not added and not renamed:
+        if new_rows:
+            raise VersionHistoryError("retiring a project appends no history row")
+        for owner, version in before.versions.items():
+            if owner not in retiring and after.versions.get(owner) != version:
+                raise VersionTransitionError(
+                    "retiring a project cannot bump another owner's version"
+                )
+        return
     expected = {owner.owner for owner in added if owner.versioned}
     if len(new_rows) != len(expected) or {row.owner for row in new_rows} != expected:
         raise VersionHistoryError(
@@ -729,6 +884,8 @@ def _validate_policy_addition(
                 f'new owner "{row.owner}" requires a baseline at {after.versions[row.owner]}'
             )
     for owner, version in before.versions.items():
+        if owner in retiring:
+            continue
         current = renamed[owner].owner if owner in renamed else owner
         if after.versions.get(current) != version:
             raise VersionTransitionError(
@@ -781,7 +938,9 @@ def validate_staged_transition(
         return
 
     if kind == "maintenance":
-        if base_prefix == head.suite_prefix and head.owners != index.owners:
+        if base_prefix == head.suite_prefix and (
+            head.owners != index.owners or head.retired != index.retired
+        ):
             _validate_policy_addition(head, index, before, after, staged)
         else:
             _validate_no_delta(head, index, before, after)

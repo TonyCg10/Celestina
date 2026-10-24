@@ -335,6 +335,39 @@ def renamed_owner_moves(root: Path, staged_paths: set[str]) -> dict[str, str]:
     return moves
 
 
+def retired_inventory_roots(root: Path) -> tuple[str, ...]:
+    """The delivery roots (inventories, active and archived plans) of the
+    halted owners this batch retires.
+
+    An owner HEAD registers as `halted` that INDEX no longer registers but
+    lists under `[[retired_projects]]` leaves the tree in this commit, and its
+    inventories and plans go with it. A session commit may delete them
+    without an inventory of its own; the landing's inventory claims each
+    deletion. Nothing else may delete an inventory or a plan, and no
+    inventory may be edited.
+    """
+    head = registry_tables(root, "HEAD").get("projects")
+    index = registry_tables(root, "INDEX")
+    live = {
+        owner.get("id")
+        for owner in index.get("projects", [])
+        if isinstance(owner, dict)
+    }
+    retired = {
+        entry.get("id")
+        for entry in index.get("retired_projects", [])
+        if isinstance(entry, dict)
+    }
+    roots: list[str] = []
+    for owner in head if isinstance(head, list) else []:
+        if not isinstance(owner, dict) or "halted" not in owner:
+            continue
+        owner_id, active = owner.get("id"), owner.get("active_plans")
+        if owner_id in retired and owner_id not in live and isinstance(active, str):
+            roots.extend(owner_delivery_roots(active).values())
+    return tuple(roots)
+
+
 def report_moves(moves: dict[str, str], quiet: bool) -> None:
     if not moves or quiet:
         return
@@ -678,8 +711,15 @@ def validate_batch(
         and index_bytes(root, path) is None
         and path_exists_at_head(root, path)
     )
+    retired_roots = retired_inventory_roots(root)
     immutable = sorted(
-        path for path in all_staged_inventories if path_exists_at_head(root, path)
+        path
+        for path in all_staged_inventories
+        if path_exists_at_head(root, path)
+        and not (
+            index_bytes(root, path) is None
+            and any(path.startswith(f"{retired}/") for retired in retired_roots)
+        )
     )
     if immutable:
         raise StagedUnitError(
@@ -719,15 +759,24 @@ def validate_batch(
             "separately"
         )
     if not selected:
-        if deleted_plans:
+        # A retired owner's plans and inventories leave with its tree; the
+        # landing's inventory claims them, so the session commit needs none.
+        retired_path = lambda path: any(  # noqa: E731
+            path.startswith(f"{retired}/") for retired in retired_roots
+        )
+        unretired_plans = [path for path in deleted_plans if not retired_path(path)]
+        if unretired_plans:
             raise StagedUnitError(
                 "deleting or archiving a plan requires an administrative unit "
-                "with a new inventory: " + ", ".join(deleted_plans)
+                "with a new inventory: " + ", ".join(unretired_plans)
             )
-        if deleted_inventories:
+        unretired_inventories = sorted(
+            path for path in deleted_inventories if not retired_path(path)
+        )
+        if unretired_inventories:
             raise StagedUnitError(
                 "deleted inventories require a destination inventory that claims "
-                "their path as deleted: " + ", ".join(sorted(deleted_inventories))
+                "their path as deleted: " + ", ".join(unretired_inventories)
             )
         report_moves(moves, quiet)
         if not quiet:

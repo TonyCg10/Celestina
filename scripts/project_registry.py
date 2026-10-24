@@ -135,6 +135,111 @@ def halted_owner(path: str, halted: tuple[HaltedProject, ...]) -> HaltedProject 
     return None
 
 
+@dataclass(frozen=True)
+class RetiredProject:
+    """A project removed from the tree; `[[retired_projects]]` keeps its name.
+
+    Its history rows still name it (`history_owner`, or its id), and its old
+    commits still carry its prefixes, so the version contract and the history
+    replay read it here. No other tool sees it: it is not a project.
+    """
+
+    id: str
+    since: str
+    history_owner: str
+    commit_prefixes: tuple[str, ...]
+    commit_roots: tuple[str, ...]
+
+
+def retired_projects(registry: dict[str, Any]) -> tuple[RetiredProject, ...]:
+    """Return every `[[retired_projects]]` table, validated.
+
+    A retired project was halted and then removed in one `suite-maintenance`
+    commit (docs/contracts/versioning.md, "Retiring a project"). Its id and
+    prefixes stay reserved: no live project may take them, so an old commit
+    replays against exactly one scope.
+    """
+    tables = registry.get("retired_projects", ())
+    if not isinstance(tables, (list, tuple)):
+        raise ValueError("retired_projects must be a list of tables")
+    projects = registry.get("projects", ())
+    live_ids = {p.get("id") for p in projects if isinstance(p, dict)}
+    live_prefixes = {p.get("commit_prefix") for p in projects if isinstance(p, dict)} | {
+        component.get("prefix")
+        for p in projects
+        if isinstance(p, dict)
+        for component in p.get("component_commit_scopes", ())
+        if isinstance(component, dict)
+    }
+    retired: list[RetiredProject] = []
+    seen: set[str] = set()
+    for index, table in enumerate(tables):
+        label = f"retired_projects[{index}]"
+        if not isinstance(table, dict):
+            raise ValueError(f"{label} is not a table")
+        project_id = table.get("id")
+        if not isinstance(project_id, str) or not project_id:
+            raise ValueError(f"{label}.id is required")
+        if project_id in live_ids:
+            raise ValueError(f"{label}.id is also a registered project: {project_id}")
+        since = table.get("retired")
+        if not isinstance(since, str) or HALTED_DATE.fullmatch(since) is None:
+            raise ValueError(f'{label}.retired must be a date string "YYYY-MM-DD"')
+        try:
+            date.fromisoformat(since)
+        except ValueError as error:
+            raise ValueError(f"{label}.retired is not a calendar date: {since}") from error
+        history_owner = table.get("history_owner", project_id)
+        if not isinstance(history_owner, str) or not history_owner:
+            raise ValueError(f"{label}.history_owner must be a non-empty string")
+        prefixes = table.get("commit_prefixes")
+        if (
+            not isinstance(prefixes, list)
+            or not prefixes
+            or not all(isinstance(prefix, str) and prefix for prefix in prefixes)
+        ):
+            raise ValueError(f"{label}.commit_prefixes must list the project's prefixes")
+        for name in unique([project_id, *prefixes]):
+            if name in seen:
+                raise ValueError(f"{label} repeats a retired id or prefix: {name}")
+            seen.add(name)
+        reused = sorted(set(prefixes) & live_prefixes)
+        if reused:
+            raise ValueError(f"{label} names a registered prefix: {', '.join(reused)}")
+        retired.append(
+            RetiredProject(
+                id=project_id,
+                since=since,
+                history_owner=history_owner,
+                commit_prefixes=unique(prefixes),
+                commit_roots=normalized_roots(table.get("commit_roots", ()), f"{label}.commit_roots"),
+            )
+        )
+    return tuple(retired)
+
+
+def retired_commit_scopes(registry: dict[str, Any]) -> dict[str, CommitScope]:
+    """The scopes a retired project's old commits replay against, by old prefix.
+
+    Each prefix the project committed under, and its `history_owner` (the
+    prefix it had before a rename), covers its roots, the workspace manifests,
+    the shared ratchets and the version history. Only the history replay uses
+    them; no new commit is judged by a retired scope.
+    """
+    policy = registry.get("commit_policy", {})
+    files = list(normalized_files(policy.get("workspace_manifests", ()), "commit_policy.workspace_manifests"))
+    files += normalized_files(policy.get("shared_ratchet_files", ()), "commit_policy.shared_ratchet_files")
+    version_policy = registry.get("version_policy")
+    if isinstance(version_policy, dict) and isinstance(version_policy.get("history_file"), str):
+        files += normalized_files([version_policy["history_file"]], "version_policy.history_file")
+    scopes: dict[str, CommitScope] = {}
+    for project in retired_projects(registry):
+        scope = CommitScope(project.commit_roots, unique(files))
+        for prefix in unique([*project.commit_prefixes, project.history_owner]):
+            scopes[prefix] = scope
+    return scopes
+
+
 def optional_bool(table: dict[str, Any], key: str, label: str) -> bool:
     value = table.get(key, False)
     if not isinstance(value, bool):

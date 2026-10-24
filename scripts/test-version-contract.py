@@ -248,6 +248,10 @@ class StaticAndSourceTests(unittest.TestCase):
             project.get("history_owner", project["id"])
             for project in registry["projects"]
             if project["id"] in expected
+        } | {
+            # A retired project's rows stay in the history under their name.
+            entry.get("history_owner", entry["id"])
+            for entry in registry.get("retired_projects", [])
         }
         self.assertEqual({row.owner for row in snapshot.history}, carried_names)
 
@@ -873,6 +877,214 @@ class RenameTests(unittest.TestCase):
             fixture.index_registry["projects"][0]["history_owner"] = "alpha"
             with self.assertRaises(contract.VersionRegistryError):
                 contract.parse_registry(fixture.index_registry, "fixture")
+
+
+class RetireTests(unittest.TestCase):
+    """A halted project leaves the registry as a retired one; its rows stay its own."""
+
+    def halted_rename(self) -> TransitionFixture:
+        """HEAD: beta renamed beta-old and halted, a new beta after its own baseline."""
+        renames = RenameTests()
+        fixture = renames.renamed_fixture()
+        renames.new_beta(fixture)
+        fixture.append_history("beta", contract.SemVer(0, 1, 0), "baseline", "R-1", "Adopt the new beta")
+        fixture.validate("suite-maintenance", "maintenance", "Rename beta")
+        beta_old = next(p for p in fixture.index_registry["projects"] if p["id"] == "beta-old")
+        beta_old["halted"] = "2026-09-27"
+        fixture.head_registry = deepcopy(fixture.index_registry)
+        fixture.blobs["HEAD"] = dict(fixture.blobs["INDEX"])
+        fixture.changed_paths = set()
+        return fixture
+
+    def retire(
+        self, fixture: TransitionFixture, owner: str, history_owner: str | None = None
+    ) -> None:
+        projects = fixture.index_registry["projects"]
+        table = next(p for p in projects if p["id"] == owner)
+        projects.remove(table)
+        # The entry repeats what the project committed under at HEAD.
+        head_table = next(p for p in fixture.head_registry["projects"] if p["id"] == owner)
+        head_table.setdefault("commit_roots", [f"{owner}/"])
+        for source in contract.parse_registry(fixture.head_registry, "head").owner_map()[owner].sources:
+            fixture.blobs["INDEX"].pop(source.path, None)
+            fixture.changed_paths.add(source.path)
+        entry: dict[str, object] = {
+            "id": owner,
+            "retired": "2026-10-23",
+            "commit_prefixes": [
+                head_table["commit_prefix"],
+                *(c["prefix"] for c in head_table.get("component_commit_scopes", [])),
+            ],
+            "commit_roots": list(head_table["commit_roots"]),
+        }
+        if history_owner is not None:
+            entry["history_owner"] = history_owner
+        fixture.index_registry.setdefault("retired_projects", []).append(entry)
+        fixture.changed_paths.add("docs/projects.toml")
+
+    def test_a_halted_renamed_project_retires_and_keeps_its_rows(self) -> None:
+        fixture = self.halted_rename()
+        self.retire(fixture, "beta-old", "beta")
+        fixture.validate("suite-maintenance", "maintenance", "Remove beta-old")
+        snapshot = contract.validate_snapshot(
+            contract.parse_registry(fixture.index_registry, "fixture"), "INDEX", fixture.read_blob
+        )
+        self.assertNotIn("beta-old", snapshot.versions)
+        self.assertEqual(snapshot.versions["beta"], contract.SemVer(0, 1, 0))
+        # The next delivery of the new beta still chains from its own baseline.
+        fixture.head_registry = deepcopy(fixture.index_registry)
+        fixture.blobs["HEAD"] = dict(fixture.blobs["INDEX"])
+        fixture.changed_paths = set()
+        fixture.deliver("beta", "milestone", "Add the first checkpoint", unit="B-1")
+        fixture.validate("beta-milestone", "milestone", "Add the first checkpoint")
+
+    def test_a_halted_project_under_its_own_name_retires(self) -> None:
+        fixture = TransitionFixture()
+        fixture.head_registry["projects"][0]["halted"] = "2026-09-27"
+        fixture.index_registry = deepcopy(fixture.head_registry)
+        self.retire(fixture, "alpha")
+        self.assertEqual(
+            fixture.index_registry["retired_projects"][0]["commit_prefixes"], ["alpha", "alpha-core"]
+        )
+        fixture.validate("suite-maintenance", "maintenance", "Remove alpha")
+
+    def test_retirement_rejections(self) -> None:
+        with self.subTest(case="removed without a retired entry"):
+            fixture = self.halted_rename()
+            self.retire(fixture, "beta-old", "beta")
+            del fixture.index_registry["retired_projects"]
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("suite-maintenance", "maintenance", "Remove beta-old")
+        with self.subTest(case="a project that is not halted"):
+            fixture = TransitionFixture()
+            self.retire(fixture, "alpha")
+            with self.assertRaises(contract.VersionRegistryError):
+                fixture.validate("suite-maintenance", "maintenance", "Remove alpha")
+        with self.subTest(case="a different history name"):
+            fixture = self.halted_rename()
+            self.retire(fixture, "beta-old")
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("suite-maintenance", "maintenance", "Remove beta-old")
+        with self.subTest(case="under a product prefix"):
+            fixture = self.halted_rename()
+            self.retire(fixture, "beta-old", "beta")
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("beta-maintenance", "maintenance", "Remove beta-old")
+        with self.subTest(case="a retirement that appends a row"):
+            fixture = self.halted_rename()
+            self.retire(fixture, "beta-old", "beta")
+            fixture.deliver("beta", "bug", "Fix beta", unit="R-2")
+            with self.assertRaisesRegex(contract.VersionContractError, "appends no history row"):
+                fixture.validate("suite-maintenance", "maintenance", "Remove beta-old")
+        with self.subTest(case="a retired entry for nothing removed"):
+            fixture = TransitionFixture()
+            fixture.index_registry["retired_projects"] = [
+                {"id": "ghost", "retired": "2026-10-23", "commit_prefixes": ["ghost"],
+                 "commit_roots": ["ghost/"]}
+            ]
+            fixture.changed_paths.add("docs/projects.toml")
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("suite-maintenance", "maintenance", "Retire a ghost")
+        with self.subTest(case="a later commit that drops the retired entry"):
+            fixture = self.halted_rename()
+            self.retire(fixture, "beta-old", "beta")
+            fixture.head_registry = deepcopy(fixture.index_registry)
+            fixture.blobs["HEAD"] = dict(fixture.blobs["INDEX"])
+            fixture.changed_paths = {"docs/projects.toml"}
+            del fixture.index_registry["retired_projects"]
+            with self.assertRaises(contract.VersionContractError):
+                fixture.validate("suite-maintenance", "maintenance", "Forget beta-old")
+        later_edits = {
+            "commit_roots": ["beta-old/", "elsewhere/"],
+            "commit_prefixes": ["beta-old", "beta-extra"],
+            "retired": "2026-10-24",
+        }
+        for key, value in later_edits.items():
+            with self.subTest(case=f"a later commit that edits the entry's {key}"):
+                fixture = self.halted_rename()
+                self.retire(fixture, "beta-old", "beta")
+                fixture.head_registry = deepcopy(fixture.index_registry)
+                fixture.blobs["HEAD"] = dict(fixture.blobs["INDEX"])
+                fixture.changed_paths = {"docs/projects.toml"}
+                fixture.index_registry["retired_projects"][0][key] = value
+                with self.assertRaisesRegex(
+                    contract.VersionRegistryError, "cannot change or remove retired project"
+                ):
+                    fixture.validate("suite-maintenance", "maintenance", "Edit beta-old")
+                # A product commit cannot change it either.
+                with self.assertRaises(contract.VersionContractError):
+                    fixture.validate("beta-maintenance", "maintenance", "Edit beta-old")
+        retiring_mismatches = {
+            "commit_roots": ["beta-old/", "elsewhere/"],
+            "commit_prefixes": ["beta-old", "beta-extra"],
+        }
+        for key, value in retiring_mismatches.items():
+            with self.subTest(case=f"a retirement whose {key} differ from HEAD's"):
+                fixture = self.halted_rename()
+                self.retire(fixture, "beta-old", "beta")
+                fixture.index_registry["retired_projects"][0][key] = value
+                with self.assertRaisesRegex(contract.VersionRegistryError, "must keep the commit_prefixes"):
+                    fixture.validate("suite-maintenance", "maintenance", "Remove beta-old")
+        with self.subTest(case="a retirement that drops a component prefix"):
+            fixture = TransitionFixture()
+            fixture.head_registry["projects"][0]["halted"] = "2026-09-27"
+            fixture.index_registry = deepcopy(fixture.head_registry)
+            self.retire(fixture, "alpha")
+            fixture.index_registry["retired_projects"][0]["commit_prefixes"] = ["alpha"]
+            with self.assertRaisesRegex(contract.VersionRegistryError, "must keep the commit_prefixes"):
+                fixture.validate("suite-maintenance", "maintenance", "Remove alpha")
+
+
+class RetiredRegistryTests(unittest.TestCase):
+    """`[[retired_projects]]` reserves its names and replays its old commits."""
+
+    def registry(self) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "suite": {"commit_prefix": "suite", "allow_all_commit_paths": True},
+            "commit_policy": {"workspace_manifests": ["rs/Cargo.toml"]},
+            "projects": [
+                {"id": "app", "commit_prefix": "app", "commit_roots": ["app/"]},
+            ],
+            "retired_projects": [
+                {
+                    "id": "old-shell",
+                    "retired": "2026-10-23",
+                    "history_owner": "app",
+                    "commit_prefixes": ["old-shell", "old-core"],
+                    "commit_roots": ["old-shell/", "rs/old-core/"],
+                }
+            ],
+        }
+
+    def test_old_commits_replay_against_the_retired_scope(self) -> None:
+        registry = self.registry()
+        scopes = project_registry.build_commit_scopes(registry)
+        namespace = vars(project_registry)
+        replay = commit_scope.history_scopes(scopes, registry, namespace)
+        self.assertNotIn("old-core", scopes)
+        self.assertTrue(project_registry.path_allowed("rs/old-core/src/lib.rs", replay["old-core"]))
+        self.assertTrue(project_registry.path_allowed("rs/Cargo.toml", replay["old-core"]))
+        # The history name widens the live project of that name, in replay only.
+        self.assertTrue(project_registry.path_allowed("old-shell/main.cpp", replay["app"]))
+        self.assertTrue(project_registry.path_allowed("app/main.rs", replay["app"]))
+        self.assertFalse(project_registry.path_allowed("old-shell/main.cpp", scopes["app"]))
+        self.assertFalse(project_registry.path_allowed("other/main.rs", replay["old-core"]))
+
+    def test_invalid_entries_are_refused(self) -> None:
+        cases = {
+            "a live id": {"id": "app"},
+            "a live prefix": {"commit_prefixes": ["app"]},
+            "no prefixes": {"commit_prefixes": []},
+            "no date": {"retired": "someday"},
+            "an unnormalized root": {"commit_roots": ["old-shell"]},
+        }
+        for case, change in cases.items():
+            with self.subTest(case=case):
+                registry = self.registry()
+                registry["retired_projects"][0].update(change)
+                with self.assertRaises(ValueError):
+                    project_registry.retired_projects(registry)
 
 
 if __name__ == "__main__":

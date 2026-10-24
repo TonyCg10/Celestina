@@ -844,4 +844,63 @@ elif ! grep -q 'historical inventories are immutable.*app/docs/inventories/2026-
     fail "the refused post-rename move produced no immutability diagnostic naming the inventory"
 fi
 
+# A halted owner that leaves the registry as a retired one
+# (`[[retired_projects]]`) takes its inventories and plans with it: their
+# deletion is no edit, and the session commit needs no inventory of its own
+# (the landing's inventory claims each deletion). Without the retired entry,
+# or for an owner HEAD does not halt, a deleted inventory is still an edit of
+# history.
+retire_root=$temporary/retired-owner
+mkdir -p "$retire_root/docs/plans/active" \
+    "$retire_root/app/docs/inventories/2026-08-03-unit" \
+    "$retire_root/app/docs/plans/archive" "$retire_root/scripts"
+printf '# Plan\n' > "$retire_root/app/docs/plans/archive/2026-08-03-unit.md"
+cp "$case_root/scripts/"*.py "$retire_root/scripts/"
+cp "$case_root/docs/projects.toml" "$retire_root/docs/projects.toml"
+printf 'Base revision\t%s\nPathspec\tapp/\n' "$base" \
+    > "$retire_root/app/docs/inventories/2026-08-03-unit/UNIT-A.numstat.tsv"
+git -C "$retire_root" init -q
+git -C "$retire_root" config user.name "Staged Fixture"
+git -C "$retire_root" config user.email "fixture@example.invalid"
+sed -i 's|^commit_prefix = "app"$|commit_prefix = "app"\nhalted = "2026-09-27"|; s|^\[\[projects\]\]$|[[projects]]\nid = "lib"\ncommit_prefix = "lib"\nactive_plans = "lib/docs/plans/active"\ncommit_roots = ["lib/"]\n\n[[projects]]|' \
+    "$retire_root/docs/projects.toml"
+git -C "$retire_root" add .
+git -C "$retire_root" commit -qm "fixture: a halted owner with history"
+retire_app() {
+    git -C "$retire_root" rm -rq app
+    python3 - "$retire_root/docs/projects.toml" "$1" <<'PYTHON'
+import sys
+from pathlib import Path
+path, retired = Path(sys.argv[1]), sys.argv[2] == "retired"
+head, marker, _app = path.read_text(encoding="utf-8").partition('[[projects]]\nid = "app"\n')
+assert marker, "the fixture registers no app"
+if retired:
+    head += ('[[retired_projects]]\nid = "app"\nretired = "2026-10-23"\n'
+             'commit_prefixes = ["app"]\ncommit_roots = ["app/"]\n')
+path.write_text(head, encoding="utf-8")
+PYTHON
+    git -C "$retire_root" add -A
+}
+retire_app retired
+if ! python3 "$checker" --root "$retire_root" --quiet 2>"$temporary/retired.err"; then
+    cat "$temporary/retired.err" >&2
+    fail "a retired owner's inventories and plans could not leave with its tree"
+fi
+git -C "$retire_root" reset -q --hard
+retire_app removed
+if python3 "$checker" --root "$retire_root" --quiet 2>"$temporary/unretired.err"; then
+    fail "an owner removed without a retired entry deleted its inventories"
+elif ! grep -q 'historical inventories are immutable' "$temporary/unretired.err"; then
+    fail "an owner removed without a retired entry gave no immutability diagnostic"
+fi
+git -C "$retire_root" reset -q --hard
+sed -i '/^halted = /d' "$retire_root/docs/projects.toml"
+git -C "$retire_root" commit -qam "fixture: lift the halt"
+retire_app retired
+if python3 "$checker" --root "$retire_root" --quiet 2>"$temporary/live-retired.err"; then
+    fail "an owner HEAD does not halt deleted its inventories"
+elif ! grep -q 'historical inventories are immutable' "$temporary/live-retired.err"; then
+    fail "an owner HEAD does not halt gave no immutability diagnostic"
+fi
+
 printf 'Staged inventories: OK\n'

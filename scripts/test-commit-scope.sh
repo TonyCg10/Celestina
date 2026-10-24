@@ -44,41 +44,6 @@ if git -C "$root" show HEAD:docs/projects.toml 2>/dev/null | \
     typed_subjects=true
 fi
 
-# The halt is interpreted like every other rule: by the registry reader
-# committed in HEAD. Before that reader and the shell's `halted` marker have
-# landed, the shell's prefixes still pass the real-history fixtures below.
-shell_halted=false
-if git -C "$root" show HEAD:scripts/project_registry.py 2>/dev/null | \
-    grep -q '^def halted_projects' &&
-    git -C "$root" show HEAD:docs/projects.toml 2>/dev/null | \
-    grep -q '^halted = '; then
-    shell_halted=true
-fi
-if [ "$shell_halted" = true ]; then
-    halted_shell_expectation=fail
-else
-    halted_shell_expectation=pass
-fi
-# The halted shell's tree and commit prefix, read from a registry on stdin as
-# `path prefix`: the one `qt-shell` project. Its move to `celestina-qt` renames
-# both, so the fixtures read them instead of naming them.
-qt_shell_identity() {
-    python3 -c '
-import sys
-import tomllib
-for project in tomllib.loads(sys.stdin.read())["projects"]:
-    if project.get("kind") == "qt-shell":
-        print(project["path"], project["commit_prefix"])
-        break
-'
-}
-# The scope fixtures below are judged by HEAD's registry, so they name the
-# shell as HEAD registers it.
-halted_shell_identity=$(git -C "$root" show HEAD:docs/projects.toml | qt_shell_identity)
-halted_shell_root=${halted_shell_identity% *}
-halted_shell_prefix=${halted_shell_identity#* }
-[ -n "$halted_shell_identity" ] || fail "HEAD registers no qt-shell project"
-
 fixture_subject() {
     raw=$1
     if [ "$typed_subjects" != true ]; then
@@ -148,14 +113,14 @@ fi
 # 2. Fixtures
 
 # The guard exists to catch a subject whose prefix lies about its paths.
-expect_scope fail 'siderita: update two applications' 'siderita/src/main.rs' "$halted_shell_root/src/main.cpp"
+expect_scope fail 'siderita: update two applications' 'siderita/src/main.rs' 'hematita/src/main.rs'
 expect_scope fail 'grafita: update two applications' 'grafita/src/main.rs' 'fluorita/src/main.rs'
 expect_scope fail 'celestina-style: update a foreign surface' 'celestina-style/qmldir' 'siderita/qml/Main.qml'
 # One core cannot enter through another core's prefix.
 expect_scope fail 'grafita-core: update a foreign core' 'celestina-rs/crates/fluorita-core/src/lib.rs'
 # Original failure case: the entire tree under an arbitrary prefix.
 expect_scope fail 'siderita: collect unrelated changes' \
-    'siderita/src/main.rs' "$halted_shell_root/src/main.cpp" 'grafita/src/main.rs' \
+    'siderita/src/main.rs' 'hematita/src/main.rs' 'grafita/src/main.rs' \
     'celestina-style/qmldir' 'README.md'
 
 # Legitimate changes must remain unobstructed.
@@ -187,12 +152,12 @@ expect_scope fail 'grafita: reject a lookalike crate' \
     'celestina-rs/crates/grafita-evil/src/lib.rs'
 # --no-renames gives the guard both source and destination of a move.
 expect_scope fail 'siderita: move a foreign file into scope' \
-    "$halted_shell_root/src/foreign.cpp" 'siderita/src/foreign.cpp'
-# The shell and its core share a prefix, and the halt closes both.
-expect_scope "$halted_shell_expectation" "$halted_shell_prefix: update the shell core" \
-    "$halted_shell_root/src/main.cpp" 'celestina-rs/crates/celestina-shell-core/src/lib.rs'
-expect_scope "$halted_shell_expectation" 'suite: align the shell with a project' \
-    'siderita/src/main.rs' "$halted_shell_root/src/main.cpp"
+    'hematita/src/foreign.rs' 'siderita/src/foreign.rs'
+# The Qt shell's prefixes are closed, halted or retired: no new commit uses
+# them. The halt and the retirement themselves are exercised on a fixture
+# project below.
+expect_scope fail 'celestina-qt: update the shell core' \
+    'celestina-qt/src/main.cpp' 'celestina-rs/crates/celestina-shell-core/src/lib.rs'
 # Ratchet ownership is exercised below in a repository whose HEAD already
 # contains the new policy. The current checkout's HEAD may predate this worktree
 # migration, and scope replay intentionally uses only committed rules.
@@ -218,6 +183,27 @@ if [ -n "$ratchet_tmp" ]; then
     # product manifests in the temporary repository.
     sed -i '/^\[version_policy\]$/,/^$/d' \
         "$ratchet_tmp/docs/projects.toml"
+    # The halt and retirement fixtures use a project of their own, so they
+    # never depend on what the real registry halts or retires. It starts
+    # halted, and it stays the registry's last project.
+    fixture_shell=fixture-shell
+    fixture_shell_prefix=fixture-shell
+    fixture_core=celestina-rs/crates/fixture-shell-core
+    cat >> "$ratchet_tmp/docs/projects.toml" <<'TOML'
+
+[[projects]]
+id = "fixture-shell"
+name = "Fixture shell"
+path = "fixture-shell"
+commit_prefix = "fixture-shell"
+halted = "2026-09-27"
+active_plans = "fixture-shell/docs/plans/active"
+commit_roots = ["fixture-shell/", "celestina-rs/crates/fixture-shell-core/"]
+include_workspace_manifests = true
+component_commit_scopes = [
+  { prefix = "fixture-shell-core", roots = ["celestina-rs/crates/fixture-shell-core/"], include_workspace_manifests = true },
+]
+TOML
     cp "$root/scripts/commit_scope.py" \
         "$root/scripts/project_registry.py" \
         "$root/scripts/repo_git.py" \
@@ -453,7 +439,7 @@ if [ -n "$ratchet_tmp" ]; then
 
     # A halted tree is history for the language ratchet, and the staged
     # registry names the tree: a rename of the halted project moves its legacy
-    # prose with it and owes no baseline row (the shell's move to celestina-qt).
+    # prose with it and owes no baseline row (the Qt shell's move to celestina-qt).
     # The same prose outside a halted tree is still new debt.
     reset_ratchet_fixture
     mkdir -p "$ratchet_tmp/relocated/qml"
@@ -608,22 +594,15 @@ PYTHON
 
     # A halted project is closed to every commit that does not also change the
     # root contract's "Halted projects" section. The fixture first removes any
-    # halt the copied registry carries, so both directions are exercised. The
-    # registry is the worktree's, so the shell is named as the worktree
-    # registers it.
+    # halt the copied registry carries, so both directions are exercised.
     reset_ratchet_fixture
-    fixture_shell_identity=$(qt_shell_identity < "$ratchet_tmp/docs/projects.toml")
-    fixture_shell=${fixture_shell_identity% *}
-    fixture_shell_prefix=${fixture_shell_identity#* }
-    [ -n "$fixture_shell_identity" ] || fail "the fixture registers no qt-shell project"
     sed -i '/^halted = /d' "$ratchet_tmp/docs/projects.toml"
     printf '%s\n' '# Fixture contract' '' '## Repository language' '' 'English.' \
         '' '## Mandatory preflight' '' 'Read first.' > "$ratchet_tmp/AGENTS.md"
     mkdir -p "$ratchet_tmp/$fixture_shell/src" "$ratchet_tmp/siderita/src" \
-        "$ratchet_tmp/celestina-rs/crates/celestina-shell-core/src"
+        "$ratchet_tmp/$fixture_core/src"
     printf '%s\n' '// shell' > "$ratchet_tmp/$fixture_shell/src/main.cpp"
-    printf '%s\n' '// shell core' \
-        > "$ratchet_tmp/celestina-rs/crates/celestina-shell-core/src/lib.rs"
+    printf '%s\n' '// shell core' > "$ratchet_tmp/$fixture_core/src/lib.rs"
     printf '%s\n' '// siderita' > "$ratchet_tmp/siderita/src/main.rs"
     git -C "$ratchet_tmp" add .
     git -C "$ratchet_tmp" commit -qm 'fixture: an unhalted shell'
@@ -676,8 +655,8 @@ PYTHON
     fi
 
     reset_ratchet_fixture
-    check_halted_path '// change' celestina-rs/crates/celestina-shell-core/src/lib.rs
-    if check_index 'celestina-shell-core: extend the halted core'; then
+    check_halted_path '// change' "$fixture_core/src/lib.rs"
+    if check_index 'fixture-shell-core: extend the halted core'; then
         fail "a halted project's component prefix was accepted"
     fi
 
@@ -727,9 +706,49 @@ PYTHON
         fail "history replay applied the halt to commits made before it"
     fi
 
+    # A halted project leaves the registry as a retired one
+    # ([[retired_projects]]): no new commit may use its prefixes, and its old
+    # commits still replay against its old prefixes and roots.
+    reset_ratchet_fixture
+    python3 - "$ratchet_tmp/docs/projects.toml" <<'PYTHON'
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+head, marker, _shell = path.read_text(encoding="utf-8").rpartition(
+    '\n[[projects]]\nid = "fixture-shell"\n'
+)
+assert marker, "the fixture shell is not the registry's last project"
+path.write_text(
+    head
+    + '\n[[retired_projects]]\nid = "fixture-shell"\nretired = "2026-10-23"\n'
+    + 'commit_prefixes = ["fixture-shell", "fixture-shell-core"]\n'
+    + 'commit_roots = ["fixture-shell/", "celestina-rs/crates/fixture-shell-core/"]\n',
+    encoding="utf-8",
+)
+PYTHON
+    git -C "$ratchet_tmp" commit -qam 'fixture: retire the shell'
+    replay_retired() {
+        printf '%s\n' "$2" | \
+            python3 "$ratchet_tmp/scripts/commit_scope.py" --root "$ratchet_tmp" \
+                --history-scope-only "$1: record an old change" >/dev/null 2>&1
+    }
+    replay_retired fixture-shell "$fixture_shell/src/main.cpp" || \
+        fail "history replay refused a retired project's old change"
+    replay_retired fixture-shell-core "$fixture_core/Cargo.toml" || \
+        fail "history replay refused a retired component's old change"
+    if replay_retired fixture-shell siderita/src/main.rs; then
+        fail "history replay let a retired prefix reach another project"
+    fi
+    if printf '%s\n' "$fixture_shell/src/main.cpp" | \
+        python3 "$ratchet_tmp/scripts/commit_scope.py" --root "$ratchet_tmp" \
+            --check "$fixture_shell_prefix: update the retired shell" >/dev/null 2>&1; then
+        fail "--check accepted a retired project's prefix"
+    fi
+    git -C "$ratchet_tmp" reset -q --hard HEAD~1
+
     # History is replayed against HEAD's registry. A renamed project's old
     # commits carry its old prefix, the name `history_owner` records, and HEAD
-    # may register that name again for a new project (the shell's move to
+    # may register that name again for a new project (the Qt shell's move to
     # celestina-qt): in replay the old prefix also covers the renamed scope.
     reset_ratchet_fixture
     python3 - "$ratchet_tmp/docs/projects.toml" "$fixture_shell_prefix" <<'PYTHON'
@@ -756,7 +775,7 @@ PYTHON
                 --history-scope-only "$fixture_shell_prefix: record an old change" \
                 >/dev/null 2>&1
     }
-    replay_old_change 'celestina-rs/crates/celestina-shell-core/src/lib.rs' || \
+    replay_old_change "$fixture_core/src/lib.rs" || \
         fail "history replay refused a renamed project's old change under its old prefix"
     replay_old_change "$fixture_shell_prefix-next/src/main.rs" || \
         fail "history replay lost the scope of the project registered under the old name"
@@ -765,7 +784,7 @@ PYTHON
     fi
     sed -i '/^history_owner = /d' "$ratchet_tmp/docs/projects.toml"
     git -C "$ratchet_tmp" commit -qam 'fixture: forget the old name'
-    if replay_old_change 'celestina-rs/crates/celestina-shell-core/src/lib.rs'; then
+    if replay_old_change "$fixture_core/src/lib.rs"; then
         fail "history replay widened a prefix that no renamed project declares"
     fi
 fi
@@ -801,9 +820,9 @@ if [ "$typed_subjects" = true ]; then
 fi
 expect_scope pass 'Revert "siderita: update one surface"' 'siderita/src/main.rs'
 expect_scope fail 'Revert "siderita: update one surface"' \
-    'siderita/src/main.rs' "$halted_shell_root/src/main.cpp"
+    'siderita/src/main.rs' 'hematita/src/main.rs'
 expect_scope pass 'fixup! siderita: update one surface' 'siderita/src/main.rs'
-expect_scope fail 'fixup! siderita: update one surface' "$halted_shell_root/src/main.cpp"
+expect_scope fail 'fixup! siderita: update one surface' 'hematita/src/main.rs'
 expect_scope fail "fixup! $fixture_non_english_subject" 'siderita/src/main.rs'
 if ! printf '%s\n' 'siderita/src/main.rs' | sh "$hook" \
     --history-scope-only 'siderita: documentation snapshot' >/dev/null 2>&1; then
@@ -866,7 +885,7 @@ expect_scope pass 'fluorita-qt: keep the render seam narrow' \
     'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
 expect_scope fail 'fluorita-qt: cross a project boundary' \
     'celestina-rs/crates/fluorita-qt/src/renderitem.cpp' 'fluorita/qml/Main.qml'
-expect_scope "$halted_shell_expectation" 'celestina-shell-core: extend the command vocabulary' \
+expect_scope fail 'celestina-shell-core: extend the command vocabulary' \
     'celestina-rs/crates/celestina-shell-core/src/lib.rs' \
     'celestina-rs/Cargo.toml' 'celestina-rs/Cargo.lock'
 

@@ -9,6 +9,7 @@ import importlib.util
 import os
 from pathlib import Path
 import posixpath
+import re
 import shutil
 import signal
 import subprocess
@@ -803,6 +804,205 @@ class LandingFunctions(unittest.TestCase):
                         REGISTRY, changed, edited.get, main.get, "FX-B", renamed_roots=roots
                     )
                 self.assertIn("exactly one active plan; found 2", str(raised.exception))
+
+    def test_retired_owner_deletions_are_the_plans_and_inventories_of_a_retired_halted_owner(
+        self,
+    ) -> None:
+        halted = {
+            "id": "app-qt",
+            "halted": "2026-09-27",
+            "active_plans": "app-qt/docs/plans/active",
+            "commit_roots": ["app-qt/", "core/app-qt-core/"],
+        }
+        app = {"id": "app", "active_plans": "app/docs/plans/active", "commit_roots": ["app/"]}
+        main_registry = {"projects": [halted, app]}
+        retired = {
+            "id": "app-qt",
+            "retired": "2026-10-23",
+            "commit_prefixes": ["app-qt"],
+            "commit_roots": ["app-qt/", "core/app-qt-core/"],
+        }
+        branch_registry = {"projects": [app], "retired_projects": [retired]}
+        active = "app-qt/docs/plans/active/2026-08-20-carriers.md"
+        archived = "app-qt/docs/plans/archive/2026-07-01-older.md"
+        inventory = "app-qt/docs/inventories/2026-08-20-carriers/QT-A.numstat.tsv"
+        main = {
+            active: "carriers\n",
+            archived: "older\n",
+            inventory: b"1\t0\tapp-qt/src/main.rs\n",
+            "app-qt/docs/plans/active/README.md": "readme\n",
+            # Inventory-shaped, but not under the inventory root.
+            "app-qt/docs/evidence/QT-B.numstat.tsv": b"2\t0\tapp-qt/src/lib.rs\n",
+            "app-qt/src/main.rs": "fn main() {}\n",
+            "core/app-qt-core/src/lib.rs": "\n",
+            # Another owner's deleted plan and inventory are no retirement's.
+            "app/docs/plans/active/2026-08-01-app.md": "app\n",
+            "app/docs/inventories/2026-08-01-app/APP-A.numstat.tsv": b"3\t0\tapp/src/a.rs\n",
+        }
+        kept = "app-qt/docs/plans/active/2026-08-21-kept.md"
+        branch = {kept: "kept\n"}
+        changed = set(main) | {kept}
+        self.assertEqual(
+            landing.retired_owner_roots(main_registry, branch_registry),
+            ("app-qt/", "core/app-qt-core/"),
+        )
+        self.assertEqual(
+            landing.retired_owner_deletions(main_registry, branch_registry, changed, branch.get),
+            ({active, archived}, {inventory}),
+        )
+        # The pairing holds only in the commit that retires a halted owner.
+        cases = {
+            "not halted on main": (
+                {"projects": [{k: v for k, v in halted.items() if k != "halted"}, app]},
+                branch_registry,
+            ),
+            "still registered on the branch": (
+                main_registry,
+                {"projects": [halted, app], "retired_projects": [retired]},
+            ),
+            "no retired entry": (main_registry, {"projects": [app]}),
+            "a retired entry for another id": (
+                main_registry,
+                {"projects": [app], "retired_projects": [dict(retired, id="other")]},
+            ),
+            "retired before": (
+                {"projects": [app], "retired_projects": [retired]},
+                branch_registry,
+            ),
+        }
+        for case, (main_side, branch_side) in cases.items():
+            with self.subTest(case=case):
+                self.assertEqual(landing.retired_owner_roots(main_side, branch_side), ())
+                self.assertEqual(
+                    landing.retired_owner_deletions(main_side, branch_side, changed, branch.get),
+                    (set(), set()),
+                )
+
+    def test_discover_unit_leaves_out_the_plans_a_retired_owner_deletes(self) -> None:
+        registry = tomllib.loads(
+            REGISTRY_TOML
+            + '\n[[projects]]\nid = "old"\ncommit_prefix = "old"\nversioned = false\n'
+            'halted = "2026-09-27"\nactive_plans = "old/docs/plans/active"\n'
+            'commit_roots = ["old/"]\n'
+        )
+        branch_registry = dict(REGISTRY)
+        branch_registry["retired_projects"] = [
+            {"id": "old", "retired": "2026-10-23", "commit_prefixes": ["old"], "commit_roots": ["old/"]}
+        ]
+        deleted = "old/docs/plans/active/2026-08-20-old.md"
+        own = ledger_row("FX-B", "active", evidence="[evidence](../../evidence/2026-09-25-fx-b.md)")
+        branch = {PLAN: plan_text(own)}
+        main = {PLAN: plan_text(ledger_row("FX-B", "planned")), deleted: plan_text()}
+        changed = {PLAN, deleted, "old/src/main.rs"}
+
+        with self.assertRaises(landing.LandingStop) as raised:
+            landing.discover_unit(registry, changed, branch.get, main.get, "FX-B")
+        self.assertEqual(str(raised.exception), f"the branch deletes its plan {deleted}")
+        plans, _inventories = landing.retired_owner_deletions(
+            registry, branch_registry, changed, branch.get
+        )
+        self.assertEqual(plans, {deleted})
+        unit = landing.discover_unit(
+            registry, changed, branch.get, main.get, "FX-B", moved_plans=plans
+        )
+        self.assertEqual((unit.unit, unit.plan_path, unit.settled_plans), ("FX-B", PLAN, ()))
+
+    def test_discover_unit_sets_aside_a_plan_that_only_drops_links_to_a_retired_owner(
+        self,
+    ) -> None:
+        library_plan = "lib/docs/plans/active/2026-09-25-lib.md"
+        roots = ("app-qt/",)
+        own = ledger_row("FX-B", "active", evidence="[evidence](../../evidence/2026-09-25-fx-b.md)")
+        linked = ledger_row(
+            "LIB-K", "active", prefix="`lib:`", evidence="[k](../../../../app-qt/docs/evidence/k.md)"
+        )
+        unlinked = ledger_row(
+            "LIB-K",
+            "active",
+            prefix="`lib:`",
+            evidence="k (`app-qt/docs/evidence/k.md`, removed by the retirement)",
+        )
+        prose_link = "See [the old shell](../../../../app-qt/README.md#history) for history."
+        prose_plain = "See the old shell (`app-qt/README.md`, removed) for history."
+        main = {
+            PLAN: plan_text(ledger_row("FX-B", "planned")),
+            library_plan: plan_text(linked, prose=prose_link),
+        }
+        branch = {PLAN: plan_text(own), library_plan: plan_text(unlinked, prose=prose_plain)}
+        changed = {PLAN, library_plan, "app-qt/README.md"}
+
+        self.assertTrue(
+            landing.only_drops_retired_links(
+                main[library_plan], branch[library_plan], library_plan, roots
+            )
+        )
+        unit = landing.discover_unit(
+            REGISTRY, changed, branch.get, main.get, "FX-B", retired_roots=roots
+        )
+        self.assertEqual(
+            (unit.unit, unit.plan_path, unit.settled_plans), ("FX-B", PLAN, (library_plan,))
+        )
+        # Without a retired owner the edited row of LIB-K is the branch's.
+        with self.assertRaises(landing.LandingStop) as raised:
+            landing.discover_unit(REGISTRY, changed, branch.get, main.get, "FX-B")
+        self.assertIn("exactly one active plan; found 2", str(raised.exception))
+        # Only the lines that stop linking the retired tree may change, and in
+        # a row only the cells that held such a link.
+        closed = ledger_row(
+            "LIB-K",
+            "done",
+            prefix="`lib:`",
+            diffstat="—",
+            evidence="k (`app-qt/docs/evidence/k.md`, removed by the retirement)",
+        )
+        renamed_unit = unlinked.replace("Change LIB-K", "Change LIB-K again")
+        relinked = ledger_row(
+            "LIB-K", "active", prefix="`lib:`", evidence="[k](../../../../app-qt/docs/evidence/j.md)"
+        )
+        elsewhere = ledger_row(
+            "LIB-K", "active", prefix="`lib:`", evidence="[k](../../evidence/k.md)"
+        )
+        cases = {
+            "prose edit elsewhere": plan_text(unlinked, prose=prose_plain).replace(
+                "Trailing prose.", "Edited by the branch."
+            ),
+            "status change with the dropped link": plan_text(closed, prose=prose_plain),
+            "another cell of the row": plan_text(renamed_unit, prose=prose_plain),
+            "still links the retired tree": plan_text(relinked, prose=prose_plain),
+            "a line added": plan_text(unlinked, prose=prose_plain + "\n\nMore."),
+        }
+        for case, text in cases.items():
+            with self.subTest(case=case):
+                self.assertFalse(
+                    landing.only_drops_retired_links(main[library_plan], text, library_plan, roots)
+                )
+                edited = dict(branch, **{library_plan: text})
+                with self.assertRaises(landing.LandingStop) as raised:
+                    landing.discover_unit(
+                        REGISTRY, changed, edited.get, main.get, "FX-B", retired_roots=roots
+                    )
+                self.assertIn("exactly one active plan; found 2", str(raised.exception))
+        # A link retargeted to a live owner is not a dropped link: the cell
+        # held a retired link, so it may change, as long as the new target is
+        # outside the retired roots.
+        self.assertTrue(
+            landing.only_drops_retired_links(
+                main[library_plan], plan_text(elsewhere, prose=prose_plain), library_plan, roots
+            )
+        )
+        for case, (before, after) in {
+            "no retired owner": (main[library_plan], branch[library_plan]),
+            "unchanged": (main[library_plan], main[library_plan]),
+        }.items():
+            with self.subTest(case=case):
+                self.assertFalse(
+                    landing.only_drops_retired_links(
+                        before, after, library_plan, () if case == "no retired owner" else roots
+                    )
+                )
+        self.assertFalse(
+            landing.only_drops_retired_links(None, branch[library_plan], library_plan, roots)
+        )
 
     def test_merge_settled_plan_takes_main_or_stops(self) -> None:
         path = "lib/docs/plans/active/2026-09-25-lib.md"
@@ -3453,6 +3653,62 @@ class LandUnitFixture(unittest.TestCase):
             r"- \*\*Deploy:\*\* after the push: app: deploy-production\.sh, "
             r"status-production\.sh\n$",
         )
+
+    def test_suite_unit_retiring_a_halted_project_lands(self) -> None:
+        """A retirement deletes the halted owner's plans and inventories and unlinks its tree."""
+        old_owner = (
+            '\n[[projects]]\nid = "old"\ncommit_prefix = "old"\nversioned = false\n'
+            'halted = "2026-09-27"\nactive_plans = "old/docs/plans/active"\n'
+            'commit_roots = ["old/"]\n'
+        )
+        retired_entry = (
+            '\n[[retired_projects]]\nid = "old"\nretired = "2026-10-23"\n'
+            'commit_prefixes = ["old"]\ncommit_roots = ["old/"]\n'
+        )
+        old_plan = "old/docs/plans/active/2026-08-01-old.md"
+        old_archive = "old/docs/plans/archive/2026-07-01-older.md"
+        old_inventory = "old/docs/inventories/2026-08-01-old/OLD-A.numstat.tsv"
+        library_plan = "lib/docs/plans/active/2026-09-25-lib.md"
+        linked = ledger_row(
+            "LIB-K",
+            "active",
+            prefix="`lib:`",
+            evidence="[k](../../../../old/docs/evidence/2026-08-01-old-a.md)",
+        )
+        unlinked = ledger_row(
+            "LIB-K",
+            "active",
+            prefix="`lib:`",
+            evidence="k (`old/docs/evidence/2026-08-01-old-a.md`, removed by SU-X)",
+        )
+
+        def halt_old(clone: Path) -> None:
+            self.write(clone, "docs/projects.toml", REGISTRY_TOML + old_owner)
+            self.write(clone, "old/src/main.rs", "fn main() {}\n")
+            self.write(clone, old_plan, plan_text(ledger_row("OLD-A", "done", prefix="`old:`")))
+            self.write(clone, old_archive, plan_text(ledger_row("OLD-0", "done", prefix="`old:`")))
+            self.write(clone, old_inventory, "# OLD-A exact change inventory\n")
+            self.write(clone, "old/docs/evidence/2026-08-01-old-a.md", "# Evidence: OLD-A\n")
+            self.write(clone, library_plan, plan_text(linked))
+
+        self.advance_main(halt_old, "suite-maintenance: Halt the old project")
+
+        def retire_old(worktree: Path) -> None:
+            shutil.rmtree(worktree / "old")
+            self.write(worktree, "docs/projects.toml", REGISTRY_TOML + retired_entry)
+            self.write(worktree, library_plan, plan_text(unlinked))
+
+        evidence = self.open_suite_unit("SU-X", retire_old)
+        before = self.origin_main()
+
+        result = self.land("unit/suite/SU-X", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        inventory = self.show_main("docs/inventories/2026-09-25-suite/SU-X.numstat.tsv")
+        for path in (old_plan, old_archive, old_inventory, "old/src/main.rs"):
+            self.assertRegex(inventory, rf"\n0\t\d+\tdeleted\t{re.escape(path)}\n")
+        self.assertEqual(self.show_main(library_plan), plan_text(unlinked))
+        self.assertIn("- **Build:** ", self.show_main(evidence))
 
     def test_a_landing_prunes_the_debug_builds(self) -> None:
         worktree = self.open_branch("FX-A")

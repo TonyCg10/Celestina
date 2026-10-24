@@ -233,23 +233,25 @@ def load_scopes(
     return scopes, namespace, data
 
 
-def history_scopes(scopes: dict[str, Any], registry: dict[str, Any]) -> dict[str, Any]:
+def history_scopes(
+    scopes: dict[str, Any],
+    registry: dict[str, Any],
+    registry_namespace: dict[str, object] | None = None,
+) -> dict[str, Any]:
     """The scopes old commits are replayed against.
 
     A renamed project's old commits carry its old prefix: the name its history
     rows carry (`history_owner`; the suite keeps every id equal to its
     prefix). HEAD may register that name again for a new project, so in a
     replay the old prefix covers the renamed project's scope as well as its
-    own. Only the replay widens; a new commit is judged by HEAD's scopes.
+    own. A retired project (`[[retired_projects]]`) is gone from the tree, but
+    its old commits replay against its old prefixes and roots, read by HEAD's
+    `retired_commit_scopes`; a HEAD rule from before retirement has none.
+    Only the replay widens; a new commit is judged by HEAD's scopes.
     """
     replay = dict(scopes)
-    for project in registry.get("projects", ()):
-        if not isinstance(project, dict):
-            continue
-        alias = project.get("history_owner")
-        renamed = scopes.get(project.get("commit_prefix"))
-        if not isinstance(alias, str) or not alias or renamed is None:
-            continue
+
+    def widen(alias: str, renamed: Any) -> None:
         current = replay.get(alias)
         if current is None:
             replay[alias] = renamed
@@ -259,6 +261,27 @@ def history_scopes(scopes: dict[str, Any], registry: dict[str, Any]) -> dict[str
                 roots=tuple(dict.fromkeys((*current.roots, *renamed.roots))),
                 files=tuple(dict.fromkeys((*current.files, *renamed.files))),
             )
+
+    for project in registry.get("projects", ()):
+        if not isinstance(project, dict):
+            continue
+        alias = project.get("history_owner")
+        renamed = scopes.get(project.get("commit_prefix"))
+        if not isinstance(alias, str) or not alias or renamed is None:
+            continue
+        widen(alias, renamed)
+    rule = (registry_namespace or {}).get("retired_commit_scopes")
+    if callable(rule):
+        try:
+            retired = call_dynamic_rule(
+                f"HEAD:{PROJECT_REGISTRY} retired_commit_scopes over HEAD:{REGISTRY}",
+                rule,
+                registry,
+            )
+        except (TypeError, ValueError) as error:
+            fail(f"HEAD:{REGISTRY}: {error}")
+        for prefix, scope in retired.items():
+            widen(prefix, scope)
     return replay
 
 
@@ -1322,7 +1345,7 @@ def main() -> None:
         validate(
             args.history_scope_only,
             stdin_paths(),
-            history_scopes(scopes, registry),
+            history_scopes(scopes, registry, registry_namespace),
             registry_namespace,
             require_imperative=False,
             require_kind=False,

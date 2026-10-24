@@ -64,6 +64,8 @@ from landing import (
     owner_tables,
     render_inventory,
     renamed_owner_roots,
+    retired_owner_deletions,
+    retired_owner_roots,
     scope_violations,
     sealed_diffstat,
     subject,
@@ -328,11 +330,14 @@ def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
     """The branch's unit; plans and rows that `main` (origin/main or the base) settles are set aside.
 
     The registry is `main`'s (`ctx.registry`); the branch's registry only says
-    which halted owner the branch renames, so that the plans the rename moved
-    unchanged are not read as deletions and the links that follow it are not
-    read as changes (`moved_plan_paths`, `renamed_owner_roots`). The moved
-    files stay in `changed`: they are the unit's change, in its inventory and
-    its scope check, which the suite prefix allows.
+    which halted owner the branch renames or retires, so that the plans the
+    rename moved unchanged or the retirement deletes are not read as
+    deletions and the links that follow the rename or stop pointing into the
+    retired tree are not read as changes (`moved_plan_paths`,
+    `renamed_owner_roots`, `retired_owner_deletions`, `retired_owner_roots`).
+    The moved and deleted files stay in `changed`: they are the unit's
+    change, in its inventory and its scope check, which the suite prefix
+    allows.
     """
     branch = ctx.state.branch
     fork = run(ctx, "merge-base", main, branch).stdout.strip()
@@ -359,8 +364,10 @@ def resolve_unit(ctx: LandContext, changed: set[str], main: str) -> UnitRef:
         stacked_on=lambda unit: stacked_on(ctx, unit),
         moved_plans=moved_plan_paths(
             ctx.registry, branch_registry, changed, reader(branch), reader(main)
-        ),
+        )
+        | retired_owner_deletions(ctx.registry, branch_registry, changed, reader(branch))[0],
         renamed_roots=renamed_owner_roots(ctx.registry, branch_registry),
+        retired_roots=retired_owner_roots(ctx.registry, branch_registry),
     )
 
 
@@ -527,14 +534,18 @@ def preflight(ctx: LandContext) -> None:
             violations[0],
         )
     # A halted owner's inventories moved byte-identically with its renamed
-    # tree are the unit's change, not edits of tracked inventories.
+    # tree, or deleted with its retired tree, are the unit's change, not
+    # edits of tracked inventories; the unit's inventory claims each path.
+    branch_registry = registry_at(ctx, state.branch)
     moved_inventories = moved_inventory_paths(
         ctx.registry,
-        registry_at(ctx, state.branch),
+        branch_registry,
         changed,
         lambda path: blob(ctx, f"{state.branch}:{path}"),
         lambda path: blob(ctx, f"origin/main:{path}"),
-    )
+    ) | retired_owner_deletions(
+        ctx.registry, branch_registry, changed, lambda path: blob(ctx, f"{state.branch}:{path}")
+    )[1]
     tracked_inventories = sorted(
         path
         for path in changed - moved_inventories

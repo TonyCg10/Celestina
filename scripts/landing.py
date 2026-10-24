@@ -420,6 +420,150 @@ def only_follows_renamed_links(
     )
 
 
+def retired_owners(
+    main_registry: Mapping[str, object], branch_registry: Mapping[str, object]
+) -> list[Mapping[str, object]]:
+    """origin/main's table of each halted owner the branch retires.
+
+    The pairing holds only in the commit that removes the owner
+    (docs/contracts/versioning.md, "Retiring a project"): main registers the
+    owner `halted`, and the branch no longer lists it in `[[projects]]` but
+    lists its id in `[[retired_projects]]`. Empty for a branch that retires
+    nothing.
+    """
+    branch_ids = {str(owner.get("id")) for owner in owner_tables(branch_registry)}
+    raw_retired = branch_registry.get("retired_projects", [])
+    retired_ids = {
+        str(entry.get("id"))
+        for entry in (raw_retired if isinstance(raw_retired, list) else [])
+        if isinstance(entry, Mapping) and isinstance(entry.get("id"), str)
+    }
+    return [
+        owner
+        for owner in owner_tables(main_registry)
+        if "halted" in owner
+        and isinstance(owner.get("id"), str)
+        and owner.get("id") in retired_ids
+        and owner.get("id") not in branch_ids
+    ]
+
+
+def retired_owner_roots(
+    main_registry: Mapping[str, object], branch_registry: Mapping[str, object]
+) -> tuple[str, ...]:
+    """The `commit_roots` (each ending in `/`) of every halted owner the branch retires.
+
+    They are origin/main's roots of the owner, which the version contract
+    requires the `[[retired_projects]]` entry to repeat. Empty for a branch
+    that retires nothing.
+    """
+    roots: list[str] = []
+    for owner in retired_owners(main_registry, branch_registry):
+        raw = owner.get("commit_roots", [])
+        for root in raw if isinstance(raw, list) else []:
+            if isinstance(root, str) and root.endswith("/") and root not in roots:
+                roots.append(root)
+    return tuple(sorted(roots))
+
+
+def under_roots(path: str, roots: Collection[str]) -> bool:
+    return any(path.startswith(root) for root in roots)
+
+
+def retired_owner_deletions(
+    main_registry: Mapping[str, object],
+    branch_registry: Mapping[str, object],
+    changed_paths: Collection[str],
+    read_branch: Callable[[str], bytes | str | None],
+) -> tuple[set[str], set[str]]:
+    """(plans, inventories) a retired halted owner takes with its tree: deletions it delivers.
+
+    For each owner of `retired_owners`, a changed path under its `commit_roots`
+    that the branch lacks is the owner's when it is a plan file (active or
+    archived: a Markdown file directly in a directory of `<docs root>/plans/`)
+    or a `.numstat.tsv` under `<docs root>/inventories/` (`owner_docs_root`).
+    Such a plan is not a plan the branch changes, and such an inventory is not
+    an edit of a tracked inventory: the landing's own inventory claims each
+    deletion. A path the branch still holds pairs with nothing.
+    """
+    plans: set[str] = set()
+    inventories: set[str] = set()
+    for owner in retired_owners(main_registry, branch_registry):
+        roots = [root for root in owner.get("commit_roots", []) or [] if isinstance(root, str)]
+        try:
+            docs = owner_docs_root(owner)
+        except LandingError:
+            continue
+        plans_root = posixpath.join(docs, "plans") + "/"
+        inventories_root = posixpath.join(docs, "inventories") + "/"
+        for path in sorted(changed_paths):
+            if not under_roots(path, roots) or read_branch(path) is not None:
+                continue
+            parent = posixpath.dirname(path)
+            if posixpath.dirname(parent) + "/" == plans_root and is_plan_file(path, parent):
+                plans.add(path)
+            elif path.startswith(inventories_root) and path.endswith(".numstat.tsv"):
+                inventories.add(path)
+    return plans, inventories
+
+
+def retired_links(text: str, plan_path: str, roots: Collection[str]) -> dict[int, list[str]]:
+    """{line number: link targets} of each inline link in `text` that resolves under `roots`."""
+    directory = posixpath.dirname(plan_path)
+    found: dict[int, list[str]] = {}
+    for line_number, target in extract_inline_links(text):
+        path = target.split("#", 1)[0]
+        if not path or "://" in path or path.startswith("mailto:"):
+            continue
+        resolved = posixpath.normpath(posixpath.join(directory, path))
+        if under_roots(resolved + "/", roots):
+            found.setdefault(line_number, []).append(target)
+    return found
+
+
+def only_drops_retired_links(
+    main_text: str | None, branch_text: str, plan_path: str, retired_roots: Collection[str]
+) -> bool:
+    """Whether the branch's plan differs from main's only where it stops linking a retired owner.
+
+    Such a plan (another owner's, linking a record the retirement deletes)
+    changes no row of its own, and is set aside while another changed plan
+    remains. The rule is strict: both texts have the same lines; every line
+    that differs holds, on main, an inline link resolving under
+    `retired_roots` (`retired_owner_roots`) and, on the branch, none; and in a
+    table row only the cells holding such a link on main may differ, so a
+    row's status, unit or any other cell stays main's. False without a
+    retired owner, for a plan main lacks, and for an unchanged plan.
+    """
+    if not retired_roots or main_text is None or main_text == branch_text:
+        return False
+    main_lines = main_text.splitlines(keepends=True)
+    branch_lines = branch_text.splitlines(keepends=True)
+    if len(main_lines) != len(branch_lines):
+        return False
+    main_links = retired_links(main_text, plan_path, retired_roots)
+    branch_links = retired_links(branch_text, plan_path, retired_roots)
+    for index, (before, after) in enumerate(zip(main_lines, branch_lines)):
+        if before == after:
+            continue
+        line_number = index + 1
+        if line_number not in main_links or line_number in branch_links:
+            return False
+        if before.lstrip().startswith("|") or after.lstrip().startswith("|"):
+            if not (before.lstrip().startswith("|") and after.lstrip().startswith("|")):
+                return False
+            if before.endswith("\n") != after.endswith("\n"):
+                return False
+            before_cells = split_table_row(before)
+            after_cells = split_table_row(after)
+            if len(before_cells) != len(after_cells):
+                return False
+            for old_cell, new_cell in zip(before_cells, after_cells):
+                if old_cell != new_cell and not retired_links(old_cell, plan_path, retired_roots):
+                    return False
+    return True
+
+
 def has_open_row(text: str, label: str) -> bool:
     """Whether the plan has an open row on the branch; a plan without a ledger counts as open."""
     try:
@@ -439,15 +583,17 @@ def discover_unit(
     stacked_on: Callable[[str], bool] | None = None,
     moved_plans: Collection[str] = (),
     renamed_roots: Mapping[str, str] | None = None,
+    retired_roots: Collection[str] = (),
 ) -> UnitRef:
     """Find the one open ledger row of the one active plan a branch changes.
 
     Plan texts come from `read_plan` (the branch), `read_main_plan`
     (origin/main) and `read_base_plan` (the fork point), so the caller decides
     which revisions are read. `moved_plans` are the old-path plans a renamed
-    halted owner moved unchanged (`moved_plan_paths`): the branch deletes them
-    only as paths, so they are not its plans and are left out before the
-    deletion stop. A changed plan that `plan_settled` finds holds
+    halted owner moved unchanged (`moved_plan_paths`), and the plans a retired
+    halted owner takes with its tree (`retired_owner_deletions`): the branch
+    deletes them only as paths or with their owner, so they are not its plans
+    and are left out before the deletion stop. A changed plan that `plan_settled` finds holds
     nothing main lacks belongs to units that already landed, such as the
     dependencies of a stacked branch, and is set aside while another plan
     remains; so are, only while `renamed_roots` (from `renamed_owner_roots`)
@@ -455,7 +601,10 @@ def discover_unit(
     whose branch text has no open row, which the rename delivers as
     documentation (the new project's plan with only `planned` rows), and a
     plan that differs from main's only in links that follow the renamed
-    owner's tree (`only_follows_renamed_links`). In the unit's plan, a row
+    owner's tree (`only_follows_renamed_links`); and, only while
+    `retired_roots` (from `retired_owner_roots`) names a retired halted
+    owner, a plan that differs from main's only where it stops linking that
+    owner's tree (`only_drops_retired_links`). In the unit's plan, a row
     whose line equals main's is not the branch's (main's own open rows, such as the author's in-flight work), and
     a row open on the branch that main closed is set aside the same way, except the row of `branch_unit`, the unit the
     branch is named after: when main closed it, in any plan, it is the unit,
@@ -468,6 +617,7 @@ def discover_unit(
     read_base = read_base_plan or (lambda _path: None)
     moved = set(moved_plans)
     renamed = dict(renamed_roots or {})
+    retired = tuple(retired_roots)
     plans: list[tuple[str, Mapping[str, object]]] = []
     for owner in owner_tables(registry):
         directory = owner.get("active_plans")
@@ -499,7 +649,8 @@ def discover_unit(
     ]
     # Set aside while another plan remains: the plans of landed units and,
     # only while a halted owner is renamed, a new plan with no open row and a
-    # plan that only follows the renamed owner.
+    # plan that only follows the renamed owner; only while one is retired, a
+    # plan that only stops linking the retired owner.
     documentation = {
         path
         for path, _owner in plans
@@ -512,6 +663,7 @@ def discover_unit(
         path
         for path, _owner in plans
         if only_follows_renamed_links(read_main(path), texts[path], path, renamed)
+        or only_drops_retired_links(read_main(path), texts[path], path, retired)
     }
     unsettled = [
         (path, owner)

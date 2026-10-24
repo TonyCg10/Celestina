@@ -124,6 +124,27 @@ name stops meaning the renamed project. `scripts/version_contract.py` refuses
 a rename that bumps, a `history_owner` with no rows behind it, two projects
 naming one history owner, and a rename under a product prefix.
 
+## Retiring a project
+
+Only a halted project leaves the tree (AGENTS.md "Halted projects"). The
+`suite-maintenance` commit that deletes it, and changes that section, moves
+its registry table to a `[[retired_projects]]` entry: its `id`, the
+`retired` date, its `history_owner` when it has one, the `commit_prefixes` it
+committed under (its `commit_prefix` and every `component_commit_scopes`
+prefix) and its `commit_roots`, both exactly as the registry had them before
+the commit. Its history rows stay its own and are checked as a closed chain,
+with no source to end at; its old commits replay against its old prefixes
+and roots; its inventories and plans go with its tree, each deletion claimed
+by the landing's inventory (a session commit needs none of its own; the
+[landing contract](landing.md) says how `preflight` reads them). Nothing
+else reads the entry: no new commit uses its prefixes, and no live project
+may take its id or prefixes. `scripts/version_contract.py` refuses a
+retirement of a project that is not halted, one that changes the history
+name, bumps a version or appends a row, an entry whose `commit_prefixes` or
+`commit_roots` differ from what the project had, a retired entry for an
+owner the commit does not remove, and a later change to any key of an
+entry, which is permanent.
+
 ## Git edge cases
 
 - `fixup!`, `squash!` and `amend!` commits are temporary and must not add

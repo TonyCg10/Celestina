@@ -25,6 +25,7 @@ from project_registry import (
     build_commit_scopes,
     halted_projects,
     parse_subject_prefix,
+    retired_projects,
     path_allowed,
     pathspec_allowed,
 )
@@ -501,6 +502,10 @@ class DocumentationContract:
             halted_projects(self.registry)
         except ValueError as error:
             self.error("docs/projects.toml", f"invalid halt: {error}")
+        try:
+            retired_projects(self.registry)
+        except ValueError as error:
+            self.error("docs/projects.toml", f"invalid retired project: {error}")
 
         version_policy = self.registry.get("version_policy")
         if version_policy is not None:

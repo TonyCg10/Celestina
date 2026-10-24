@@ -790,7 +790,9 @@ def registry_qml_projects(
                 )
         rows.append((role, identifier, path, qml_root))
 
-    for required in ("application", "shell", "style"):
+    # A shell is optional: the Rust shell owns no QML, and the Qt shell that
+    # did was retired (CEL-QT-REMOVE).
+    for required in ("application", "style"):
         if not any(row[0] == required for row in rows):
             raise ScannerError(f"the registry declares no {required} QML project")
     return rows

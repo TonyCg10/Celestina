@@ -1,0 +1,43 @@
+# CEL-QT-RETIRE exact change inventory
+
+Base revision	36f3a7ebb3d6bae4e19981c67a823e26281b25e5
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/contracts/versioning.md
+Pathspec	docs/evidence/2026-10-23-cel-qt-retire.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-QT-RETIRE.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	scripts/architecture_scanners.py
+Pathspec	scripts/check-architecture-contract.sh
+Pathspec	scripts/check-staged-units.py
+Pathspec	scripts/commit_scope.py
+Pathspec	scripts/documentation_contract.py
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/project_registry.py
+Pathspec	scripts/test-commit-scope.sh
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-staged-units.sh
+Pathspec	scripts/test-version-contract.py
+Pathspec	scripts/version_contract.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+19	0	e2657cfc5f29729f62c57d923965751bab20934466b976b5cf1c445997f8fdc7	docs/contracts/landing.md
+21	0	7da8b5dc67fd26b231a5d642f49d3d923e7c7e1ae696c274f849384ad413c51d	docs/contracts/versioning.md
+87	0	135d8f9dab54fdf1c367280e92cdf2f529c0ced4765f19c73b0a15fa89970f71	docs/evidence/2026-10-23-cel-qt-retire.md
+43	0	self	docs/inventories/2026-10-14-rust-shell/CEL-QT-RETIRE.numstat.tsv
+1	0	ecd5133665ab226fcc44d451724b4246ab6977148bb791fee0d611fb80baaa4b	docs/plans/active/2026-10-14-rust-shell.md
+3	1	70b9613ff0f457ba99ba9263aedd4547a6daa4587f36acd12355dbc8e5371f6d	scripts/architecture_scanners.py
+0	5	9643d640885902362fccd0f53e6c2b62607084c7e7edf61edf782da89f0ff76d	scripts/check-architecture-contract.sh
+54	5	319fbb45bf7ecf62f1c3e792c6ef80a93ccf60ce8e23dc7b537222419b3c3119	scripts/check-staged-units.py
+33	10	a64c55d46490272229b7236e74383248851137dd8aea53c21ebdfa8d65b7a76d	scripts/commit_scope.py
+5	0	cdb3a6f335e3d3dfbe5dae16899c5ab58a0e1198bccd9b48fa709172433cd3a7	scripts/documentation_contract.py
+20	9	0a5071278de3f2c4f3e752194b6880ee72ade99109249c2193161f2790ff5581	scripts/land-unit.py
+157	5	45226fd8bad6c2370d17aec9db406737cbb7438a2bcb617c45cd5393ab396b91	scripts/landing.py
+105	0	1003a3675d4cd70efbaf205c17d679a7a2807c742671e6ea69996437d89abef8	scripts/project_registry.py
+82	63	e444fba89e693d22d94376795ec4357175a6764318d77c933d9e055d907be12f	scripts/test-commit-scope.sh
+256	0	4e6c91dae118656d19b2ce92fc93a68f5a8050db997ee9d4a00b18a78e44b850	scripts/test-land-unit.py
+59	0	51b60f7c085a30523e1cd0fa1a8178c1cf23ea508d42f4119eccae24c2a0273e	scripts/test-staged-units.sh
+212	0	ba189b202e4dc62a90f620db56f939aa0f4b5d1944df4b3cdfafe2041cb5bd90	scripts/test-version-contract.py
+165	6	d91495aedf5f71075410f8db50df3271637cfd3ba3f0bde7c99fc2ee150d9a7c	scripts/version_contract.py
