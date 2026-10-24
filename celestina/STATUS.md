@@ -1,6 +1,6 @@
 # Celestina status
 
-- **Updated:** 2026-10-22
+- **Updated:** 2026-10-23
 - **Version:** the one `celestina/Cargo.toml` carries, set by each landing
 - **Implementation:** the CEL-1 program is landed on `main` through CEL-1-H
   (1.0.0), the tokens as data (CEL-1-C) included: the three toolkit crates
@@ -65,7 +65,7 @@
   with a session-only pin. Its evidence is
   [`docs/evidence/2026-10-17-media.md`](docs/evidence/2026-10-17-media.md); its
   author rows are `VAL-CEL2-MEDIA` and `VAL-CEL2-MEDIA-COVER`, pending.
-- **CEL-2-H-a (implemented in its worktree, not landed, reviews pending):** the
+- **CEL-2-H-a (landed as 1.10.0 on 2026-10-23, `a5427f7a`; live validation pending):** the
   session lock's security core on `unit/celestina/CEL-2-H-a`: `celestina-lock`
   (an `ext-session-lock-v1` client with black covers, a CPU-painted password
   field and the only unlock), `celestina-lock-verify` (the PAM child),
@@ -75,7 +75,7 @@
   installs it by hand; the README says how and how to get back in) and **nothing
   has been validated live**: no run on the real session, with real PAM, real
   logind or real hotplug; the nest rehearsal R-1 to R-9 passed against a fake
-  logind. The dimmed wallpaper and the clock are CEL-2-H-b, not started. Its
+  logind. The dimmed wallpaper and the clock are CEL-2-H-b (next entry). Its
   evidence is
   [`docs/evidence/2026-10-22-cel-2-h-a.md`](docs/evidence/2026-10-22-cel-2-h-a.md)
   (spikes: [`2026-10-22-cel-2-h-spikes.md`](docs/evidence/2026-10-22-cel-2-h-spikes.md));
@@ -91,6 +91,22 @@
   duty switch. Its evidence is
   [`docs/evidence/2026-10-17-see-the-desktop.md`](docs/evidence/2026-10-17-see-the-desktop.md);
   its author rows are `VAL-CEL2-OVERVIEW` and `VAL-CEL2-SHORTCUTS`, pending.
+- **CEL-2-H-b (implemented on its branch, not landed, reviews pending):** the
+  lock's presentation on `unit/celestina/CEL-2-H-b`, over H-a's frozen bundle
+  format (the proto crate, the machine, the policy and the closure allowlist
+  have no diff). With `duties.wallpaper` **on**, each output of the lock shows
+  its own wallpaper dimmed and blurred (a thumbnail derived on the wallpaper
+  worker, sent in the bundle, upscaled on the lock's `backdrop` worker, with the
+  scrim over it), and the prompt gains a large clock and the date (a realtime
+  timer; the clock is hidden when the UTC offset could not be read, the date
+  then reads in UTC). With the wallpaper duty **off** (Noctalia owning the
+  wallpaper) the backdrop is black. The lock duty is **off by default**; the
+  author installed the PAM service on 2026-10-23, and H-a's live rows are still
+  pending. **Validation is partial and in a nest only:** the automated tests
+  pass; the rehearsal step R-10 is written but **has not been run**, and
+  nothing ran on the real session. Evidence:
+  [`docs/evidence/2026-10-23-cel-2-h-b.md`](docs/evidence/2026-10-23-cel-2-h-b.md);
+  author rows `VAL-CEL2-LOCK-BACKDROP` and `VAL-CEL2-LOCK-CLOCK`, pending.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

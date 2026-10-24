@@ -975,6 +975,11 @@ mod tests {
         found
     }
 
+    /// The hard deadline of the descriptor test below: every wait in it is
+    /// either bounded by this or unblocked by the socket shutdown that
+    /// follows it.
+    const INHIBITOR_TEST_DEADLINE: Duration = Duration::from_secs(20);
+
     #[test]
     fn the_inhibitor_reply_leaves_no_inheritable_descriptor_in_the_stream() {
         // Finding I-2 (round 5): `inhibit` used to deserialize the reply as an
@@ -984,12 +989,47 @@ mod tests {
         //
         // A private peer-to-peer connection stands in for logind: the same
         // message path, no daemon.
-        use std::os::fd::AsRawFd as _;
+        //
+        // Round 10: the body runs in its own thread under a hard deadline. A
+        // blocking call with no reply used to hang the whole suite; on the
+        // deadline both socket ends are shut down, which unblocks every
+        // thread still waiting, and the test fails with a clear message.
         use std::os::unix::net::UnixStream;
-        use zbus::blocking::connection::Builder;
 
         let (to_server, to_client) = UnixStream::pair().expect("socketpair");
+        let kill_server = to_server.try_clone().expect("clone server end");
+        let kill_client = to_client.try_clone().expect("clone client end");
+        let (done_tx, done_rx) = mpsc::channel();
+        let body = std::thread::spawn(move || {
+            inhibitor_reply_check(to_server, to_client);
+            let _ = done_tx.send(());
+        });
+        let outcome = done_rx.recv_timeout(INHIBITOR_TEST_DEADLINE);
+        if outcome.is_err() {
+            let _ = kill_server.shutdown(std::net::Shutdown::Both);
+            let _ = kill_client.shutdown(std::net::Shutdown::Both);
+        }
+        // A panic in the body disconnects the channel: join reports it.
+        let joined = body.join();
+        match (outcome, joined) {
+            (Ok(()), Ok(())) => {}
+            (Err(RecvTimeoutError::Timeout), _) => {
+                panic!("the inhibitor-reply test did not finish within {INHIBITOR_TEST_DEADLINE:?}")
+            }
+            (_, Err(panic)) => std::panic::resume_unwind(panic),
+            (Err(error), Ok(())) => panic!("the test body ended without a result: {error:?}"),
+        }
+    }
+
+    fn inhibitor_reply_check(
+        to_server: std::os::unix::net::UnixStream,
+        to_client: std::os::unix::net::UnixStream,
+    ) {
+        use std::os::fd::AsRawFd as _;
+        use zbus::blocking::connection::Builder;
+
         let guid = zbus::Guid::generate();
+        // The two handshakes block on each other, so they run concurrently.
         let server = std::thread::spawn(move || {
             Builder::async_io_unix_stream(to_server)
                 .server(guid)
@@ -1015,8 +1055,13 @@ mod tests {
 
         // The worker's stream exists before the call, as in `subscribe`.
         let stream = MessageIterator::from(&client).into_inner();
+        // The server's receiver also exists before the call: a connection
+        // broadcasts only to the receivers that exist when a message
+        // arrives, so creating it inside the answering thread lost the call
+        // whenever that thread started late, and both ends then waited
+        // forever (round 10).
+        let mut calls = MessageIterator::from(&server);
         let answering = std::thread::spawn(move || {
-            let mut calls = MessageIterator::from(&server);
             while let Some(Ok(call)) = calls.next() {
                 if call.header().member().map(|m| m.as_str()) == Some("Inhibit") {
                     server

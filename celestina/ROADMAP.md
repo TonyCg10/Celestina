@@ -6,7 +6,8 @@
   VAL-CEL-POPUP, VAL-CEL-KEYBOARD, VAL-CEL-IME, VAL-CEL-SCALE,
   VAL-CEL-NOCTALIA and VAL-CEL-BANNERS in [VALIDATION.md](VALIDATION.md) (they do not block);
   the CEL-2-J rows VAL-CEL2-PHONE, VAL-CEL2-BUBBLES and VAL-CEL2-BUBBLES-KEYS are pending too;
-  the CEL-2-H-a rows VAL-CEL2-LOCK-PAM, -LIVE, -SUSPEND, -HOTPLUG, -RECOVERY, -NOTICES and -COEXIST are pending
+  the CEL-2-H-a rows VAL-CEL2-LOCK-PAM, -LIVE, -SUSPEND, -HOTPLUG, -RECOVERY, -NOTICES and -COEXIST are pending;
+  the CEL-2-H-b rows VAL-CEL2-LOCK-BACKDROP and VAL-CEL2-LOCK-CLOCK are pending too
 
 ## CEL-2 — Shell parity with Noctalia
 
@@ -31,6 +32,14 @@ binaries, the `unsafe` count, the spike answers, the residuals the author must
 accept and what did not run. Reviews A and B are open. The decisions are
 [ADR 0022](docs/decisions/0022-session-lock.md). CEL-2-H-b (the dimmed
 wallpaper and the clock) starts after H-a has landed.
+
+**CEL-2-H-b (implemented on its branch, not landed):** the lock's presentation
+over H-a's frozen bundle format: the dimmed, blurred wallpaper per output and
+the clock and date; the ledger row is `active`. Agent evidence is
+[docs/evidence/2026-10-23-cel-2-h-b.md](docs/evidence/2026-10-23-cel-2-h-b.md):
+the new tests by name, T-F1, T-T1, T-Z1 and T-D1 (allowlist unchanged), the
+empty diffs of the proto crate and of the machine, the implementation decisions
+and what did not run (the nest step R-10 and the live rows).
 
 **Closed program, kept below:** CEL-1.
 

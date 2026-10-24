@@ -18,8 +18,8 @@ CEL-2-C queues VAL-CEL2-OSD-AUDIO, VAL-CEL2-OSD-BRIGHTNESS and
 VAL-CEL2-OSD-PIECES; CEL-2-D queues VAL-CEL2-MEDIA and VAL-CEL2-MEDIA-COVER; CEL-2-H-a queues
 VAL-CEL2-LOCK-PAM, VAL-CEL2-LOCK-LIVE, VAL-CEL2-LOCK-SUSPEND,
 VAL-CEL2-LOCK-HOTPLUG, VAL-CEL2-LOCK-RECOVERY, VAL-CEL2-LOCK-NOTICES and
-VAL-CEL2-LOCK-COEXIST (CEL-2-H-b will queue VAL-CEL2-LOCK-BACKDROP and
-VAL-CEL2-LOCK-CLOCK).
+VAL-CEL2-LOCK-COEXIST; CEL-2-H-b queues VAL-CEL2-LOCK-BACKDROP and
+VAL-CEL2-LOCK-CLOCK.
 None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
@@ -928,8 +928,8 @@ None has been run and none is closed by an agent.
   with the file removed again the shell, with `duties.lock` on, warns once that
   the service is missing, and the lock refuses everything with the
   missing-service message
-- **Result:** not run
-- **Evidence:** none
+- **Result:** partial, 2026-10-23: the author installed the service by hand and ran the shell in a nest (own bus, throwaway `XDG_CONFIG_HOME` with `duties.lock` on, the deployed 1.10.0 binaries): a wrong password was refused and the right one accepted through `celestina-lock`, both logged by `pam_unix(celestina-lock:auth)`, with the `faillock` tally empty afterwards. Not run: `pamtester`, and the file removed again (the missing-service notice on the live shell)
+- **Evidence:** [the nest check of 2026-10-23](docs/evidence/2026-10-23-cel-2-h-b.md#the-nest-check-of-2026-10-23-pam-and-live)
 
 ## VAL-CEL2-LOCK-LIVE — The lock on the real session
 
@@ -959,8 +959,8 @@ None has been run and none is closed by an agent.
 - **Pass condition:** covered at once on every output; the right password
   unlocks and nothing else does; the delay and the messages are as written; the
   accented password works; the field is readable; the fade and its recovery work
-- **Result:** not run
-- **Evidence:** none
+- **Result:** partial, 2026-10-23, in a nest with one output and not on the live session: `celestina lock` covered the output and showed the field, a wrong password was refused and the right one unlocked, the lock ended by itself and left no process. Not run: the three real outputs, the field following the pointer, Caps Lock, accented passwords, contrast at scale 1.0 and 1.5, the fade (30 s) and its recovery
+- **Evidence:** [the nest check of 2026-10-23](docs/evidence/2026-10-23-cel-2-h-b.md#the-nest-check-of-2026-10-23-pam-and-live)
 - **Rollback:** switch `duties.lock` off and leave `swaylock` on `Mod+Shift+A`.
   A running lock is not touched by switching the duty off; unlock it with the
   password
@@ -1126,3 +1126,51 @@ None has been run and none is closed by an agent.
   each close action works; nothing is read from any other file
 - **Result:** not run
 - **Evidence:** none
+
+## VAL-CEL2-LOCK-BACKDROP — The dimmed wallpaper under the lock
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-b (the wallpaper thumbnail per output,
+  the bundle's pixel blocks, the lock's backdrop worker and the scrim)
+- **Requires:** as VAL-CEL2-LOCK-LIVE, plus `duties.wallpaper` set to `"on"`
+  with `wallpaper.folder` naming a folder of pictures, and one picture with a
+  bright area among them. With Noctalia holding the wallpaper (coexistence)
+  the shell paints none, so the second half of the procedure is the one that
+  applies then
+- **Procedure:** with the wallpaper duty on, run `celestina lock` and check
+  that each output shows its own picture, dimmed and blurred, with the field
+  and the status words on top. Give an output the brightest picture you have
+  and check that the field, the bullets and the words stay readable over it.
+  Plug or unplug an output while locked and check that the new output is black
+  or shows its picture, and never the session. Then switch `duties.wallpaper`
+  off, unlock, lock again and check that the backdrop is black; do the same
+  with Noctalia owning the wallpaper
+- **Pass condition:** each output shows its own dimmed and blurred picture;
+  the field is readable over the brightest wallpaper; with the wallpaper duty
+  off (coexistence with Noctalia) the backdrop is black, which is the intended
+  result there and not a failure, and the prompt is complete in both cases
+- **Result:** partial, 2026-10-23, in a nest with one output (R-10 of the rehearsal, [evidence](docs/evidence/2026-10-23-cel-2-h-b.md)): the dimmed and blurred picture showed under the field with the clock and the date, and the clock redrew at the minute. Not run: the live session, three outputs, hotplug, the brightest real picture, resume from suspend, the unreadable-offset case
+- **Evidence:** [2026-10-23-cel-2-h-b.md](docs/evidence/2026-10-23-cel-2-h-b.md), section R-10
+
+## VAL-CEL2-LOCK-CLOCK — The lock's clock and date
+
+- **Status:** pending
+- **Related implementation:** CEL-2-H-b (the realtime minute timer, the
+  uncached UTC offset read at each spawn)
+- **Requires:** as VAL-CEL2-LOCK-LIVE; for the offset case, a way to make
+  `date +%z` fail for the shell, such as starting the shell by hand with an
+  unusable `PATH` in a nest, never on the live session
+- **Procedure:** run `celestina lock` and compare the clock and the date with
+  the system's. Leave the lock up across a minute change and check that the
+  clock follows it. Suspend with `celestina lock suspend` (after
+  VAL-CEL2-LOCK-SUSPEND passed), resume and check that the clock is right at
+  once and not up to a minute late. Start a shell whose `date +%z` cannot be
+  read (in a nest) and lock: the date and the field show and the clock does
+  not. Lock shortly before a daylight-saving change, if one is near, and
+  check that the offset the lock shows is the one read when it started
+- **Pass condition:** the clock and the date are right at lock time and on
+  resume from suspend; the clock is hidden, with the date and the field in
+  place, when the offset could not be read; a daylight-saving change during
+  one lock keeps the offset read at its spawn
+- **Result:** partial, 2026-10-23, in a nest with one output (R-10 of the rehearsal, [evidence](docs/evidence/2026-10-23-cel-2-h-b.md)): the dimmed and blurred picture showed under the field with the clock and the date, and the clock redrew at the minute. Not run: the live session, three outputs, hotplug, the brightest real picture, resume from suspend, the unreadable-offset case
+- **Evidence:** [2026-10-23-cel-2-h-b.md](docs/evidence/2026-10-23-cel-2-h-b.md), section R-10

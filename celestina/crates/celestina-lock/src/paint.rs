@@ -289,6 +289,63 @@ pub fn clear_xrgb(dst: &mut [u8], stride: usize, size: (u32, u32), rect: (u32, u
     }
 }
 
+/// Copies a rectangle `(x, y, w, h)` of an `XRGB8888` image (`src`, rows of
+/// `src_stride` bytes) onto the same place of `dst` (rows of `dst_stride`
+/// bytes); both are `size` pixels. What lies outside either is left out.
+pub fn copy_rect_xrgb(
+    src: (&[u8], usize),
+    dst: (&mut [u8], usize),
+    size: (u32, u32),
+    rect: (u32, u32, u32, u32),
+) {
+    let ((from, src_stride), (to, dst_stride)) = (src, dst);
+    let (x, y, w, h) = rect;
+    let cols = (w.min(size.0.saturating_sub(x))) as usize;
+    let rows = (h.min(size.1.saturating_sub(y))) as usize;
+    for row in 0..rows {
+        let at = y as usize + row;
+        let from_start = at * src_stride + x as usize * 4;
+        let to_start = at * dst_stride + x as usize * 4;
+        if let (Some(source), Some(target)) = (
+            from.get(from_start..from_start + cols * 4),
+            to.get_mut(to_start..to_start + cols * 4),
+        ) {
+            target.copy_from_slice(source);
+        }
+    }
+}
+
+/// Fills `pixmap` with the rectangle of an `XRGB8888` image (`src`, rows of
+/// `stride` bytes, `size` pixels) whose top-left is `at`: the backdrop under
+/// the prompt. Rows or pixels outside the image are left as they are.
+pub fn read_xrgb(pixmap: &mut Pixmap, src: &[u8], stride: usize, size: (u32, u32), at: (u32, u32)) {
+    let (width, height) = (pixmap.width() as usize, pixmap.height() as usize);
+    let (x0, y0) = (at.0 as usize, at.1 as usize);
+    let rows = height.min((size.1 as usize).saturating_sub(y0));
+    let cols = width.min((size.0 as usize).saturating_sub(x0));
+    let to = pixmap.data_mut();
+    for row in 0..rows {
+        let start = (y0 + row) * stride + x0 * 4;
+        let Some(source) = src.get(start..start + cols * 4) else {
+            return;
+        };
+        let Some(target) = to.get_mut(row * width * 4..row * width * 4 + cols * 4) else {
+            return;
+        };
+        for (t, s) in target
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(source.as_chunks::<4>().0.iter())
+        {
+            t[0] = s[2];
+            t[1] = s[1];
+            t[2] = s[0];
+            t[3] = 0xff;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

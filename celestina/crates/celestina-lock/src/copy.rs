@@ -51,3 +51,47 @@ pub const LOCK_REHEARSAL: &str = "Ensayo: este bloqueo no se desbloquea";
 pub fn lock_wait(seconds: u32) -> String {
     format!("Espera {seconds} s para volver a intentarlo")
 }
+
+/// The weekdays of the date line, Sunday first ("Sunday" to "Saturday").
+pub const LOCK_WEEKDAYS: [&str; 7] = [
+    "domingo",
+    "lunes",
+    "martes",
+    "miércoles",
+    "jueves",
+    "viernes",
+    "sábado",
+];
+
+/// The months of the date line, January first ("January" to "December").
+pub const LOCK_MONTHS: [&str; 12] = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+];
+
+/// The date line ("Friday 23 October"): `weekday` counts from Sunday = 0,
+/// `month` from January = 1. An index out of range leaves its word out
+/// rather than panic; the clock never produces one.
+#[must_use]
+pub fn lock_date(weekday: u8, day: u8, month: u8) -> String {
+    let weekday = LOCK_WEEKDAYS.get(usize::from(weekday)).copied();
+    let month = usize::from(month)
+        .checked_sub(1)
+        .and_then(|index| LOCK_MONTHS.get(index))
+        .copied();
+    match (weekday, month) {
+        (Some(weekday), Some(month)) => format!("{weekday} {day} de {month}"),
+        (None, Some(month)) => format!("{day} de {month}"),
+        _ => day.to_string(),
+    }
+}

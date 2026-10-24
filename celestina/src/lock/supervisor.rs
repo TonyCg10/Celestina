@@ -46,9 +46,7 @@ use std::sync::mpsc::{self, Receiver, SyncSender, TryRecvError, TrySendError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use celestina_lock_proto::{
-    render, service_check, Bundle, LineReader, Service, StatusLine, Verdict,
-};
+use celestina_lock_proto::{render, service_check, LineReader, Service, StatusLine, Verdict};
 use celestina_shell::lock::{ChildExit, Event, GenerationReader, LockedProof};
 use celestina_wayland::lock::{LAUNCHER_SHELL, LAUNCHER_VARIABLE};
 use rustix::event::{eventfd, poll, EventfdFlags, PollFd, PollFlags};
@@ -58,6 +56,7 @@ use rustix::time::Timespec;
 
 use super::bundle;
 use crate::providers::Worker;
+use crate::wallpaper::thumbnail::ThumbnailStore;
 
 /// The lock's file name beside the shell's executable.
 pub const LOCK_FILE: &str = "celestina-lock";
@@ -182,6 +181,13 @@ pub struct Config {
     /// Which of the PAM service's candidate files exist (`stat`, never
     /// opened).
     pub pam_existing: Arc<dyn Fn() -> Vec<PathBuf> + Send + Sync>,
+    /// The wallpaper state's thumbnails; every spawn copies them into the
+    /// bundle (CEL-2-H-b). Empty with the wallpaper duty off.
+    pub thumbnails: ThumbnailStore,
+    /// Reads the local UTC offset in seconds for one spawn; `None` when it
+    /// cannot be read (CEL-2-H-b, design §4.8, M1). It may block on a child
+    /// process, and is called only on the worker, never on the loop.
+    pub utc_offset: Arc<dyn Fn() -> Option<i32> + Send + Sync>,
 }
 
 impl std::fmt::Debug for Config {
@@ -203,7 +209,7 @@ impl Config {
     /// # Errors
     ///
     /// When this executable's own path cannot be read.
-    pub fn production() -> io::Result<Self> {
+    pub fn production(thumbnails: ThumbnailStore) -> io::Result<Self> {
         let exe = std::env::current_exe()?;
         let dir = exe.parent().map(Path::to_path_buf).unwrap_or_default();
         Ok(Self {
@@ -213,8 +219,16 @@ impl Config {
             args: Vec::new(),
             env: allowlisted_environment(|name| std::env::var_os(name)),
             pam_existing: Arc::new(production_pam_files),
+            thumbnails,
+            utc_offset: Arc::new(production_utc_offset),
         })
     }
+}
+
+/// The Island's `date +%z` parse, without its cell: afresh on every call, so a
+/// lock started after a daylight-saving change shows the new offset.
+fn production_utc_offset() -> Option<i32> {
+    crate::island::clock::read_utc_offset().and_then(|seconds| i32::try_from(seconds).ok())
 }
 
 /// The environment the lock is started with, and nothing else (design §4.2):
@@ -667,8 +681,22 @@ impl Run {
 
     fn launch(&mut self, prior_failures: u8) -> Result<Held, LaunchError> {
         let lock = self.lock.as_ref().ok_or(LaunchError::NotPinned)?;
-        let bundle =
-            bundle::sealed(&Bundle::header_only(prior_failures)).map_err(LaunchError::Bundle)?;
+        // Read afresh for every spawn, so a lock restarted after a wallpaper
+        // change shows the new picture. The copy is the supervisor worker's,
+        // never the loop's.
+        // The UTC offset is read afresh too, once per spawn and here, on the
+        // worker (it runs `date`): a failed read sends `offset_known = 0` and
+        // the lock hides its clock rather than show a wrong hour.
+        let offset = (self.config.utc_offset)();
+        if offset.is_none() {
+            tracing::warn!("the UTC offset could not be read: the lock will show no clock");
+        }
+        let bundle = bundle::sealed(&bundle::with_thumbnails(
+            prior_failures,
+            offset,
+            &self.config.thumbnails,
+        ))
+        .map_err(LaunchError::Bundle)?;
         let mut command = Command::new(lock.exec_path());
         command
             .arg0(self.config.lock_file)
@@ -1077,6 +1105,8 @@ mod tests {
                 args: Vec::new(),
                 env: Vec::new(),
                 pam_existing: Arc::new(Vec::new),
+                thumbnails: ThumbnailStore::default(),
+                utc_offset: Arc::new(|| None),
             },
             publish: Box::new(move |event| {
                 events.lock().expect("events").push(event);

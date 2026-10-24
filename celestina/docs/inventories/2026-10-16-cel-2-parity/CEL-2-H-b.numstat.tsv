@@ -1,0 +1,101 @@
+# CEL-2-H-b exact change inventory
+
+Base revision	93a1702980b6a67348dfefe9784b0fe1ff584d0c
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-lock/Cargo.toml
+Pathspec	celestina/crates/celestina-lock/src/app.rs
+Pathspec	celestina/crates/celestina-lock/src/backdrop.rs
+Pathspec	celestina/crates/celestina-lock/src/clock.rs
+Pathspec	celestina/crates/celestina-lock/src/copy.rs
+Pathspec	celestina/crates/celestina-lock/src/hardening.rs
+Pathspec	celestina/crates/celestina-lock/src/launch.rs
+Pathspec	celestina/crates/celestina-lock/src/lib.rs
+Pathspec	celestina/crates/celestina-lock/src/paint.rs
+Pathspec	celestina/crates/celestina-lock/src/present.rs
+Pathspec	celestina/crates/celestina-lock/src/view.rs
+Pathspec	celestina/crates/celestina-lock/tests/closure.rs
+Pathspec	celestina/crates/celestina-lock/tests/guards.rs
+Pathspec	celestina/crates/celestina-lock/tests/signals.rs
+Pathspec	celestina/docs/decisions/0022-session-lock.md
+Pathspec	celestina/docs/evidence/2026-10-23-cel-2-h-b.md
+Pathspec	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-after-minute.png
+Pathspec	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-backdrop.png
+Pathspec	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-lock-lines.txt
+Pathspec	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-shell-excerpt.log
+Pathspec	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-steps.log
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-H-b.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/lock-rehearsal.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/energy/wire.rs
+Pathspec	celestina/src/island/clock.rs
+Pathspec	celestina/src/lock/bundle.rs
+Pathspec	celestina/src/lock/mod.rs
+Pathspec	celestina/src/lock/sleep.rs
+Pathspec	celestina/src/lock/supervisor.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/providers/wallpaper.rs
+Pathspec	celestina/src/wallpaper/mod.rs
+Pathspec	celestina/src/wallpaper/surface.rs
+Pathspec	celestina/src/wallpaper/thumbnail.rs
+Pathspec	celestina/tests/lock_scripts.rs
+Pathspec	celestina/tests/lock_sleep.rs
+Pathspec	celestina/tests/lock_supervisor.rs
+Pathspec	celestina/tests/wallpaper_thumbnail.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	b03516dede4b7c32b8a97ab0c66542854a306c29df3273d50fbc952674bad39c	celestina/Cargo.lock
+1	1	dbb1e05571f6c2ef872bc1b964cd41afa94885d5304a2b816942336ca5704133	celestina/Cargo.toml
+6	4	45178b16217c5e6ab4c6fe25d5c054c10d565f2cc6d33e94db57aacfbde46f25	celestina/README.md
+10	1	2027b832d921bfa9e3367fea21d6eb94d8afae9f65e3ab12f1f585b0faf47bd5	celestina/ROADMAP.md
+19	3	adfabd5014b823f9f7fbdf65ac3d1a647e9a86feb0efab39517ba06d8e7c3ed7	celestina/STATUS.md
+54	6	2a805100b180085bc9a404e0078861e799e8237bd42ab1482178d3349a65d2b2	celestina/VALIDATION.md
+11	4	834459df6353a1b7f36eb685b84d34b99a9cd8d64a592ea29098a8a05d5a95f5	celestina/crates/celestina-lock/Cargo.toml
+38	0	332ce3fa10aca8cf6e1a8c7350964085b5f4387a122d9ef2166fb438371cfdee	celestina/crates/celestina-lock/src/app.rs
+806	27	cc7d9ad5000459fef74c49d439d36bdc796aa03e14c20524dd251c6b00891193	celestina/crates/celestina-lock/src/backdrop.rs
+501	0	d4fa9405aaaa2b053c8765338529d98fec2e4270b5c69280ab18fd967bfb60a4	celestina/crates/celestina-lock/src/clock.rs
+44	0	5891bdec88d66a04d0eef3ac2d1d2adb740f621ca1940481a79264b4c1ea0b64	celestina/crates/celestina-lock/src/copy.rs
+66	0	0e4d8a349bfb3c80f2092705078cc7464f63852c2e719422e48dae3937fd64e3	celestina/crates/celestina-lock/src/hardening.rs
+15	8	3b171722d32560c2c2b232f7c5c931f9b3fccdebb4b9b5906fef7d530e69355e	celestina/crates/celestina-lock/src/launch.rs
+3	0	f57c69a020b989d272695261f46ff9e28d18761e28b9b6a362deb11b4902a6ea	celestina/crates/celestina-lock/src/lib.rs
+57	0	4329fb9fff1923dbb54a806cddb3b7e99d6eccf89f1e0b585b92e16181ab1052	celestina/crates/celestina-lock/src/paint.rs
+7	0	54be4abc0f45c23e303665827626aec7312d79a6df3fa8a02d4cc2e8f6a12ed5	celestina/crates/celestina-lock/src/present.rs
+1102	71	875a88ab5b055a796d7bc2e4e8905c33a8d8441e249e327dcfccc8b985146570	celestina/crates/celestina-lock/src/view.rs
+44	0	7cd1801413bcf93e9d2998085aa816bc4fce66d9e3972744a85e7dccd98ff747	celestina/crates/celestina-lock/tests/closure.rs
+93	13	6869e4545b774aba5a4cfebdd8c8e304514ef171ef8ec781820f8c46a93806ef	celestina/crates/celestina-lock/tests/guards.rs
+173	10	6732c0370bbaaf834b592e101671450a7265edf9d1f03cc7c53a3c4a6f397526	celestina/crates/celestina-lock/tests/signals.rs
+10	0	02d6e1ed8a979133990a473d410d7a6389e882ea3c66405f35a69c56582935c0	celestina/docs/decisions/0022-session-lock.md
+528	0	758120deb3a3a5b4f97d8190b4237d2b28d2522e4a566d09d82b339268054ad7	celestina/docs/evidence/2026-10-23-cel-2-h-b.md
+-	-	1e222f178a7d1e004c1d88213d98e4b5ee8734103757d61a36bb657962c8e31e	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-after-minute.png
+-	-	de77c0e5e1a63105623e651980f4f8cbe1122d8cd488372d6bb08ee2d923822d	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-backdrop.png
+1	0	597125a96e4c6d861d07f76b9117640abaefdcafece91476ff8083e07b87cb69	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-lock-lines.txt
+9	0	492e1757391adb211fef628ac039f6afa830735f91f1f0d5ca9f5d652c257c9d	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-shell-excerpt.log
+13	0	5013f24b12cfbb1c40d96ffb708f95b077b8c88522df7677704173ef3a2bf615	celestina/docs/evidence/2026-10-23-cel-2-h-b/r10-steps.log
+101	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-H-b.numstat.tsv
+1	1	3c21a2a826e4a8ffe2bcb5d549f0c9f528bdca59d078dc793af811fe0bf9ed2b	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+298	9	07c511b751bbd203b2d4449db6da035d94d3c98bab7534572a5367c880df8eec	celestina/scripts/lock-rehearsal.sh
+4	2	120ad6a8fcaf50c793ee11f361a82f80dc2705b9ab2b4bafe867114c77664cf5	celestina/src/app.rs
+5	0	c8f0466289ad338f20c2a376e2c889bf7146687869971d8badaca21c872b2152	celestina/src/energy/wire.rs
+247	12	fad8300aab101d6b6a4002f96217d77c15385fb908864cdb447188d7dbf58af3	celestina/src/island/clock.rs
+151	4	e96d9311b9c3645f9ad676f40510b3512df597a0e5a848ff94975c9e2b786068	celestina/src/lock/bundle.rs
+20	6	7d4fabfe91891f9d6440aeed2497de6458d2486af1c3a83a0f2e1f49fe41bbdb	celestina/src/lock/mod.rs
+48	3	2238825eec47f139132805c525765948accbd4d512183535203db1243f863625	celestina/src/lock/sleep.rs
+36	6	8ce9e7c9fde74fd8feb4a824b5be601fef6031fee2ecdfb07ec25884a5124393	celestina/src/lock/supervisor.rs
+4	2	fe675ca7f2ca069ee707f6f941b337f162fccf0662ccad495a623121e0ed97ea	celestina/src/main.rs
+48	5	6ec05807a0472566fe79b9092d9a1453508bc0cd76d38ffb565a783a496c92f2	celestina/src/providers/wallpaper.rs
+3	0	b6e01ae587f6dbdf9f3c83b2fc48895b0eec9a34f9ab216c038f965822c10200	celestina/src/wallpaper/mod.rs
+157	3	769e04e49a2d570b937b20d6c66febc9a4353718a005be511c361c1434425438	celestina/src/wallpaper/surface.rs
+328	0	17a0be9dc7c53144cd81030b59b657cd531d282f37851db9e6d3465ed5fcafff	celestina/src/wallpaper/thumbnail.rs
+84	0	54e93b94b22afaebf765c2d9c00a18a12026ce3ee92f490c9668e8b7f69a207a	celestina/tests/lock_scripts.rs
+3	0	be264bb94ef6c2624e01cd32b99df988663fcb90f26c16bca95dd02f353faa30	celestina/tests/lock_sleep.rs
+137	1	3474a7efb5070a5e5044c57a86a1cd4cdfe88b164c6024b8f3234ce78c5e945f	celestina/tests/lock_supervisor.rs
+153	0	fffb5b1ea03e722dc5c725727a18d75be18c7429c0a36ea58701d8f3d41fce44	celestina/tests/wallpaper_thumbnail.rs
+1	0	45f4c52c9380be65f721cd9c1f5439c8b9a3429b750825debbfd398a6c652989	docs/version-history.tsv

@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use celestina::lock::supervisor::{spawn, Config, Supervisor, Suspender};
+use celestina::wallpaper::thumbnail::ThumbnailStore;
 use celestina_lock_proto::{decode, AttemptKind, FileMeta, LockExit, Status, StatusLine};
 use celestina_shell::lock::{Action, ChildExit, Event, LockPolicy, LockedProof};
 
@@ -79,6 +80,9 @@ impl Rig {
             ],
             // The production service file is "installed".
             pam_existing: Arc::new(|| vec![PathBuf::from("/etc/pam.d/celestina-lock")]),
+            thumbnails: ThumbnailStore::default(),
+            // No `date` in the tests: the offset is whatever the test says.
+            utc_offset: Arc::new(|| None),
         }
     }
 }
@@ -457,8 +461,140 @@ fn t_z1_the_memfd_offset_is_0_at_spawn_and_the_childs_first_read_returns_the_mag
     );
     assert_eq!(decoded.status, Status::Complete);
     assert_eq!(decoded.bundle.prior_failures, 3, "the failures are carried");
-    assert!(decoded.bundle.outputs.is_empty(), "header only in H-a");
+    assert!(
+        decoded.bundle.outputs.is_empty(),
+        "no thumbnails in this rig"
+    );
     assert!(!decoded.bundle.offset_known);
+}
+
+#[test]
+fn every_spawn_reads_the_utc_offset_afresh_on_the_worker_and_a_failed_read_is_unknown() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Mutex;
+
+    let rig = Rig::new("bundle-offset");
+    let dump = rig.file("stdin");
+    let mut config = rig.config(&format!("cat > {}; exit 0", dump.display()));
+    // The answers in order: a zone, a changed zone (daylight saving), a
+    // failure. The reader records which thread asked.
+    let answers = Arc::new(Mutex::new(vec![None, Some(-12_600), Some(7_200)]));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let threads = Arc::new(Mutex::new(Vec::new()));
+    {
+        let (answers, calls, threads) = (
+            Arc::clone(&answers),
+            Arc::clone(&calls),
+            Arc::clone(&threads),
+        );
+        config.utc_offset = Arc::new(move || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            threads
+                .lock()
+                .expect("threads")
+                .push(std::thread::current().name().map(str::to_owned));
+            answers.lock().expect("answers").pop().flatten()
+        });
+    }
+    let run = start(config);
+    assert_eq!(run.next(), Event::Pinned(true));
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        0,
+        "nothing is read before a spawn is asked for"
+    );
+    let read = |dump: &Path| {
+        let bytes = fs::read(dump).expect("the child read its stdin");
+        let size = u64::try_from(bytes.len()).expect("len");
+        decode(
+            &bytes,
+            FileMeta {
+                size,
+                seals_ok: true,
+            },
+        )
+        .bundle
+    };
+    for (expected_known, expected_seconds, expected_calls) in
+        [(true, 7_200, 1), (true, -12_600, 2), (false, 0, 3)]
+    {
+        run.handle().spawn_child(0, Duration::ZERO).expect("queued");
+        run.until_exit();
+        let bundle = read(&dump);
+        assert_eq!(bundle.offset_known, expected_known);
+        assert_eq!(bundle.utc_offset_s, expected_seconds);
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            expected_calls,
+            "once per spawn"
+        );
+    }
+    let threads = threads.lock().expect("threads");
+    assert!(
+        threads.iter().all(|name| name.as_deref() == Some("lock")),
+        "the offset is read on the lock worker, never the loop: {threads:?}"
+    );
+}
+
+#[test]
+fn every_spawn_reads_the_thumbnails_afresh_into_the_bundle() {
+    use celestina::wallpaper::decode::Decoded;
+    use celestina::wallpaper::thumbnail::derive;
+
+    let rig = Rig::new("bundle-pixels");
+    let dump = rig.file("stdin");
+    let mut config = rig.config(&format!("cat > {}; exit 0", dump.display()));
+    let store = ThumbnailStore::default();
+    config.thumbnails = store.clone();
+    let run = start(config);
+    assert_eq!(run.next(), Event::Pinned(true));
+    let shade = |value: u8| {
+        derive(&Decoded {
+            rgba: vec![value; 32 * 32 * 4],
+            width: 32,
+            height: 32,
+            source_px: (32, 32),
+        })
+        .expect("a thumbnail")
+    };
+    let read = |dump: &Path| {
+        let bytes = fs::read(dump).expect("the child read its stdin");
+        let size = u64::try_from(bytes.len()).expect("len");
+        decode(
+            &bytes,
+            FileMeta {
+                size,
+                seals_ok: true,
+            },
+        )
+    };
+
+    store.set("DP-1", shade(10));
+    run.handle().spawn_child(0, Duration::ZERO).expect("queued");
+    run.until_exit();
+    let first = read(&dump);
+    assert_eq!(first.status, Status::Complete);
+    assert_eq!(first.bundle.outputs.len(), 1);
+    assert_eq!(first.bundle.outputs[0].name(), "DP-1");
+    assert_eq!(&first.bundle.outputs[0].pixels()[..4], &[10, 10, 10, 255]);
+    assert!(!first.bundle.offset_known, "this rig reads no offset");
+
+    // The picture changed and an output went: the next spawn sees it.
+    store.set("DP-1", shade(200));
+    store.set("DP-2", shade(7));
+    run.handle().spawn_child(1, Duration::ZERO).expect("queued");
+    run.until_exit();
+    let second = read(&dump);
+    assert_eq!(second.bundle.prior_failures, 1);
+    assert_eq!(second.bundle.outputs.len(), 2);
+    assert_eq!(
+        &second.bundle.outputs[0].pixels()[..4],
+        &[200, 200, 200, 255]
+    );
+    store.clear();
+    run.handle().spawn_child(0, Duration::ZERO).expect("queued");
+    run.until_exit();
+    assert!(read(&dump).bundle.outputs.is_empty(), "black without them");
 }
 
 #[test]

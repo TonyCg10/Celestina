@@ -283,3 +283,4 @@ celestina	1.9.0	milestone	CEL-2-D	Add the media duty: the MPRIS client, the medi
 celestina	1.10.0	milestone	CEL-2-H-a	Add the session lock core: the lock client, the PAM verifier, the shell supervisor and the suspend chain, off by default
 celestina	1.11.0	milestone	CEL-2-L	Add the desktop overview with a per-workspace preview and the keybind sheet read from niri's config, behind the overview and shortcuts verbs
 celestina	1.11.1	bug	CEL-2-L-CLIPPY	Fix the capture thumbnail's chunking for Clippy 1.99
+celestina	1.12.0	milestone	CEL-2-H-b	Add the lock backdrop, clock and date: the dimmed wallpaper thumbnail under the prompt

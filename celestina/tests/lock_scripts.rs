@@ -218,3 +218,87 @@ fn the_nest_niri_carries_the_marker_the_connection_guard_reads() {
         .iter()
         .any(|l| l.contains("niri -c") || l.contains("niri --config")));
 }
+
+/// The lines of the rehearsal's `step_r10` function, comments excluded.
+fn r10_body() -> Vec<String> {
+    let lines = code("scripts/lock-rehearsal.sh");
+    let start = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with("step_r10() {"))
+        .expect("the rehearsal has step_r10");
+    let end = lines[start..]
+        .iter()
+        .position(|l| l == "    }")
+        .expect("step_r10 ends");
+    lines[start..start + end].to_vec()
+}
+
+/// R-10 (H-b, spec §9.2) is a step of the rehearsal like the others: it is
+/// named in the list of steps, the usage and the default plan, its nest is
+/// 4K at scale 1.5, and it dispatches through the same verified probe.
+#[test]
+fn r10_is_registered_with_its_options_and_a_scale_1_5_nest() {
+    let script = read("scripts/lock-rehearsal.sh");
+    assert!(script.contains("R-[1-9]|R-9[abc]|R-10)"), "the step list");
+    assert!(script.contains("[--check] [R-1 ... R-10 | R-9a R-9b R-9c]"));
+    assert!(
+        script.contains("R-9 R-10\""),
+        "the default plan ends with R-10"
+    );
+    assert!(script.contains("        R-10) step_r10 ;;"), "the dispatch");
+    assert!(script.contains("--wallpaper-folder"));
+    let launch = code("scripts/lock-rehearsal.sh")
+        .into_iter()
+        .find(|l| l.contains("nest_args=\"--scale 1.5 --monitor $r10_monitor\""))
+        .expect("R-10 asks for scale 1.5 on the 4K output");
+    assert!(launch.contains("--monitor"), "{launch}");
+    // The other steps keep leaving the window where the host puts it.
+    assert!(script.contains("nest_args=\"--monitor none\""));
+    // The wallpaper duty is switched on in the nest's throwaway configuration,
+    // never in the author's.
+    assert!(script.contains("\"duties\":{\"lock\":\"on\",\"wallpaper\":\"on\"}"));
+}
+
+/// R-10 acts only on the verified nest: the display guard runs first, every
+/// capture and every key goes through `nestenv`/`shot`, the lock is started
+/// only by the shell's own verb, and no frame time is invented.
+#[test]
+fn r10_touches_only_the_verified_nest_and_invents_no_frame_time() {
+    let body = r10_body();
+    assert!(
+        body.get(1).is_some_and(|l| l.trim() == "guard || return"),
+        "the nest's display is verified before anything else"
+    );
+    for line in &body {
+        // A word that runs `grim` or `wtype` follows `nestenv`; the same names
+        // inside the text of a `msg=` assignment are not commands.
+        if !line.trim_start().starts_with("msg=") {
+            let words: Vec<&str> = line.split_whitespace().collect();
+            for (at, word) in words.iter().enumerate() {
+                if *word == "grim" || *word == "wtype" {
+                    assert!(
+                        at > 0 && words[at - 1] == "nestenv",
+                        "R-10 runs {word} outside the nest's clean environment: {line}"
+                    );
+                }
+            }
+        }
+        // Nothing is stopped, started or read outside the nest.
+        let text = ["msg=", "result ", "say "]
+            .iter()
+            .any(|lead| line.trim_start().starts_with(lead));
+        for word in ["celestina-lock", "swaylock", "kill", "WAYLAND_DEBUG"] {
+            assert!(text || !line.contains(word), "R-10 names {word}: {line}");
+        }
+    }
+    let joined = body.join("\n");
+    assert!(
+        joined.contains("lock_through_shell"),
+        "locks through the shell"
+    );
+    // Never Enter: no password, not even a made-up one.
+    assert!(!joined.contains("Return"), "R-10 presses Enter");
+    // Without a frame time from the lock, the limit is recorded as a NOTE.
+    assert!(joined.contains("result R-10 NOTE"));
+    assert!(joined.contains("NOT the painter's frame time"));
+}

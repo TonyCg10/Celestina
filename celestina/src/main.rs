@@ -154,6 +154,8 @@ fn shell(cfg: Config) -> ExitCode {
     let settings = ShellSettings::load();
     let quiet = settings.current().do_not_disturb;
     let wallpaper = Rc::new(OnceCell::new());
+    // The wallpaper state's thumbnails, which the session lock's bundle copies.
+    let thumbnails = celestina::wallpaper::thumbnail::ThumbnailStore::default();
     let energy = Rc::new(OnceCell::new());
     let lock = Rc::new(OnceCell::new());
     let glance = Rc::new(OnceCell::new());
@@ -177,7 +179,7 @@ fn shell(cfg: Config) -> ExitCode {
     )
     .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender))
     .with_tray(Rc::clone(&tray))
-    .with_wallpaper(Rc::clone(&wallpaper))
+    .with_wallpaper(Rc::clone(&wallpaper), thumbnails.clone())
     .with_energy(Rc::clone(&energy))
     .with_lock(Rc::clone(&lock))
     .with_glance(Rc::clone(&glance))
@@ -230,7 +232,7 @@ fn shell(cfg: Config) -> ExitCode {
                 }
             })
         };
-        let handle = LockHandle::new(sender.clone(), availability);
+        let handle = LockHandle::new(sender.clone(), availability, thumbnails.clone());
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = lock.set(handle);

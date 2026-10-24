@@ -55,6 +55,7 @@ use crate::energy::logind::{self, LogindBus, LogindConfig, LogindHandle};
 use crate::energy::EnergyEvent;
 use crate::message::Message;
 use crate::providers::{Reaper, Worker};
+use crate::wallpaper::thumbnail::ThumbnailStore;
 
 use self::notify::{NoticeBus, Notifier};
 use self::sleep::Sleep;
@@ -131,12 +132,24 @@ impl std::fmt::Debug for LockHandle {
 impl LockHandle {
     /// A handle over the real system. `availability` is told, on the loop,
     /// whenever the lock becomes available or stops being so (the idle
-    /// chain's second step follows it). Nothing runs until
-    /// [`LockHandle::apply`] finds the duty on.
+    /// chain's second step follows it). `thumbnails` is where the wallpaper
+    /// state keeps the pictures every lock child is given (CEL-2-H-b).
+    /// Nothing runs until [`LockHandle::apply`] finds the duty on.
     #[must_use]
-    pub fn new(sender: Sender<Message>, availability: Box<dyn Fn(bool)>) -> Self {
+    pub fn new(
+        sender: Sender<Message>,
+        availability: Box<dyn Fn(bool)>,
+        thumbnails: ThumbnailStore,
+    ) -> Self {
         Self::with_effects(
-            |generation| Box::new(Live::production(sender, availability, generation)),
+            |generation| {
+                Box::new(Live::production(
+                    sender,
+                    availability,
+                    generation,
+                    thumbnails,
+                ))
+            },
             Box::new(Instant::now),
         )
     }
@@ -419,13 +432,14 @@ impl Live {
         sender: Sender<Message>,
         availability: Box<dyn Fn(bool)>,
         generation: GenerationReader,
+        thumbnails: ThumbnailStore,
     ) -> Self {
         let send: Arc<dyn Fn(Message) -> bool + Send + Sync> =
             Arc::new(move |message| sender.send(message).is_ok());
         // Beside this executable, or nowhere: a lock found through the
         // working directory would be found through the environment.
-        let config =
-            Config::production().map_err(|err| format!("this executable's path is unknown: {err}"));
+        let config = Config::production(thumbnails)
+            .map_err(|err| format!("this executable's path is unknown: {err}"));
         Self::new(Wiring {
             send,
             availability,

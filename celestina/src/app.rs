@@ -755,13 +755,15 @@ impl App {
         self
     }
 
-    /// Takes the slot the wallpaper worker's queue is put in once it runs.
+    /// Takes the slot the wallpaper worker's queue is put in once it runs, and
+    /// the store the session lock reads the wallpaper thumbnails from.
     #[must_use]
     pub fn with_wallpaper(
         mut self,
         provider: Rc<OnceCell<crate::providers::wallpaper::WallpaperProvider>>,
+        thumbnails: crate::wallpaper::thumbnail::ThumbnailStore,
     ) -> App {
-        self.wallpapers = crate::wallpaper::surface::Wallpapers::new(provider);
+        self.wallpapers = crate::wallpaper::surface::Wallpapers::new(provider, thumbnails);
         self
     }
 

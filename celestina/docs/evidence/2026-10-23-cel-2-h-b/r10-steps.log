@@ -1,0 +1,13 @@
+1792794831130 probe for R-10 on wayland-2 (host is wayland-1), nest niri from /run/user/1000/niri.wayland-2.3250797.sock
+1792794833946 verb 'lock' sent
+1792794833999 locked 1792794833958 (verb at 1792794833933, 25 ms)
+1792794836097 capture /tmp/claude-1000/-home-toni-CODIGO-CELESTINA/b7a5e925-da18-4549-b5d8-4af94fefbc11/scratchpad/rh3/out10/task7-r10-backdrop.png
+1792794836137 R-10 backdrop luminance spread (sampled std dev, 0-255): 20
+1792794836137 R-10 capture 3840 2160 (width height), 77611 bytes
+1792794857701 R-10 key press to visible change: n=20 p50=49ms p99=50ms
+1792794900049 R-10 minute boundary 1792794900000: first differing capture started 29 ms and ended 47 ms after it (screen quiet before: yes)
+1792794900133 capture /tmp/claude-1000/-home-toni-CODIGO-CELESTINA/b7a5e925-da18-4549-b5d8-4af94fefbc11/scratchpad/rh3/out10/task7-r10-after-minute.png
+1792794900133 RESULT R-10 PASS the lock read a complete bundle over the wallpaper duty's picture; capture 3840 2160 px, luminance spread 20 (a picture, not a flat colour); the clock redrew at the minute (first differing capture ended 47 ms after the boundary, started 29 ms after it; screen quiet before: yes)
+1792794900134 RESULT R-10 NOTE key press (wtype x / BackSpace against the nest) to the first differing grim capture: n=20 p50=49 ms p99=50 ms. This is an upper bound that includes wtype, the nest's compositor and a capture; it is NOT the painter's frame time, which celestina-lock does not expose, so none is reported and it cannot be compared with the 16 ms budget; p99 is above 16 ms: recorded for the author (H-15 revisit); the painter is unchanged
+1792794900134 RESULT R-10 NOTE the minute figure above has the resolution of one capture (hundreds of ms at 4K); the in-process frame times of the key press and of the minute redraw are not measured (no --metrics or log in celestina-lock): the painter-only figures come from examples/paint_probe, which draws neither the backdrop nor the clock
+1792794900237 shell exited status 0

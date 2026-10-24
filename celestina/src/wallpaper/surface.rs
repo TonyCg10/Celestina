@@ -59,6 +59,7 @@ use crate::island::menu::SharedPainter;
 use crate::providers::settings::{ShellSettings, ShellSettingsError};
 use crate::providers::wallpaper::{WallpaperCommand, WallpaperEvent, WallpaperProvider};
 use crate::wallpaper::decode::Decoded;
+use crate::wallpaper::thumbnail::{Thumbnail, ThumbnailStore};
 use crate::wallpaper::NAMESPACE;
 
 /// What the duty's decisions do to the world: the compositor, the worker and
@@ -170,6 +171,11 @@ pub struct Wallpapers {
     /// The worker's queue, set once it runs.
     provider: Rc<OnceCell<WallpaperProvider>>,
     refusal_logged: bool,
+    /// The blurred thumbnail of each output's current picture, for the
+    /// session lock's bundle (CEL-2-H-b). An entry exists only while the duty
+    /// is on and the output's last decode succeeded: it is dropped with the
+    /// picture (fallback, failure, holder, duty off) and with the output.
+    thumbnails: ThumbnailStore,
 }
 
 /// A `wallpaper next`/`prev` waiting for the folder's listing.
@@ -197,11 +203,13 @@ fn current_choice(output: &str, wallpaper: &WallpaperSettings, names: &[String])
 }
 
 impl Wallpapers {
-    /// Takes the slot the worker's queue is put in once it runs.
+    /// Takes the slot the worker's queue is put in once it runs, and the
+    /// store the session lock reads its thumbnails from.
     #[must_use]
-    pub fn new(provider: Rc<OnceCell<WallpaperProvider>>) -> Self {
+    pub fn new(provider: Rc<OnceCell<WallpaperProvider>>, thumbnails: ThumbnailStore) -> Self {
         Self {
             provider,
+            thumbnails,
             ..Self::default()
         }
     }
@@ -421,6 +429,10 @@ impl Wallpapers {
         let Some(index) = self.outputs.iter().position(|o| o.id == info.id) else {
             return;
         };
+        if self.outputs[index].name != info.name {
+            // Thumbnails are keyed by connector name.
+            self.thumbnails.remove(&self.outputs[index].name);
+        }
         self.outputs[index].name.clone_from(&info.name);
         if let Some(surface) = self.live_surface(index, host) {
             // The surface's next frame says its own size and scale; a
@@ -437,6 +449,15 @@ impl Wallpapers {
         }
         // Only a different device size (or a first request) asks.
         self.ask_if_resized(index, settings, &mut |command| host.request(command));
+    }
+
+    /// Stores the picture the lock will dim, or forgets it when the decode
+    /// made none.
+    fn keep_thumbnail(&mut self, output: &str, thumbnail: Option<Thumbnail>) {
+        match thumbnail {
+            Some(thumbnail) => self.thumbnails.set(output, thumbnail),
+            None => self.thumbnails.remove(output),
+        }
     }
 
     fn removed(&mut self, output: OutputId, host: &mut impl Host) {
@@ -456,6 +477,7 @@ impl Wallpapers {
                 output,
                 generation,
                 image,
+                thumbnail,
             } => {
                 let Some(index) = self.current(&output, generation, settings) else {
                     tracing::debug!(%output, generation, "a stale wallpaper is dropped");
@@ -463,6 +485,7 @@ impl Wallpapers {
                 };
                 self.outputs[index].incoming = Some(image);
                 if let Some(surface) = self.live_surface(index, host) {
+                    self.keep_thumbnail(&output, thumbnail);
                     host.redraw(surface);
                     return;
                 }
@@ -471,8 +494,14 @@ impl Wallpapers {
                     Some(surface) => {
                         out.surface = Some(surface);
                         tracing::info!(output = %out.name, "wallpaper surface created");
+                        self.keep_thumbnail(&output, thumbnail);
                     }
-                    None => out.incoming = None,
+                    None => {
+                        // Nothing is shown on this output, so the lock must
+                        // not show a picture the desktop does not (M9b).
+                        out.incoming = None;
+                        self.thumbnails.remove(&output);
+                    }
                 }
             }
             WallpaperEvent::Fallback { output, generation } => {
@@ -920,6 +949,7 @@ impl Wallpapers {
             return;
         };
         out.incoming = None;
+        self.thumbnails.remove(&out.name);
         let surface = out.surface.take();
         let texture = out.texture.take();
         if let Some(surface) = surface {
@@ -931,6 +961,7 @@ impl Wallpapers {
     }
 
     fn forget(&mut self, gone: Output, host: &mut impl Host) {
+        self.thumbnails.remove(&gone.name);
         if let Some(surface) = gone.surface {
             host.destroy(surface);
         }
@@ -1100,6 +1131,8 @@ mod tests {
         requests: Vec<WallpaperCommand>,
         released: Vec<PixmapId>,
         refuse: bool,
+        /// `create` finds no surface to make.
+        no_surface: bool,
         busy_painter: bool,
         /// Surfaces the compositor closed.
         closed: Vec<SurfaceId>,
@@ -1110,6 +1143,9 @@ mod tests {
 
     impl Host for Fake {
         fn create(&mut self, output: OutputId) -> Option<SurfaceId> {
+            if self.no_surface {
+                return None;
+            }
             self.next_surface += 1;
             let surface = SurfaceId(100 + self.next_surface);
             self.created.push((output, surface));
@@ -1202,6 +1238,7 @@ mod tests {
             output: output.to_owned(),
             generation,
             image: image(px),
+            thumbnail: crate::wallpaper::thumbnail::derive(&image(px)),
         }
     }
 
@@ -1224,6 +1261,123 @@ mod tests {
             .iter()
             .find(|o| o.name == name)
             .expect("the output")
+    }
+
+    fn with_store() -> (Wallpapers, ThumbnailStore, Fake) {
+        let store = ThumbnailStore::default();
+        let wallpapers = Wallpapers::new(Rc::new(OnceCell::new()), store.clone());
+        (wallpapers, store, Fake::default())
+    }
+
+    fn names(store: &ThumbnailStore) -> Vec<String> {
+        store.blocks().iter().map(|b| b.name().to_owned()).collect()
+    }
+
+    #[test]
+    fn a_decode_keeps_a_thumbnail_and_the_output_leaving_drops_it() {
+        let (mut w, store, mut host) = with_store();
+        let settings = on();
+        w.added(&info(1, "DP-1"), &settings, &mut host);
+        w.added(&info(2, "HDMI-A-1"), &settings, &mut host);
+        w.event(decoded("DP-1", 1, (2000, 1200)), &settings, &mut host);
+        w.event(decoded("HDMI-A-1", 2, (2000, 1200)), &settings, &mut host);
+        assert_eq!(names(&store), ["DP-1", "HDMI-A-1"]);
+        // A stale generation changes nothing.
+        w.event(decoded("DP-1", 99, (10, 10)), &settings, &mut host);
+        assert_eq!(store.len(), 2);
+        w.removed(OutputId(1), &mut host);
+        assert_eq!(names(&store), ["HDMI-A-1"]);
+    }
+
+    #[test]
+    fn a_surface_that_cannot_be_created_leaves_no_thumbnail() {
+        let (mut w, store, mut host) = with_store();
+        let settings = on();
+        w.added(&info(1, "DP-1"), &settings, &mut host);
+        host.no_surface = true;
+        w.event(decoded("DP-1", 1, (2000, 1200)), &settings, &mut host);
+        assert!(host.created.is_empty());
+        assert!(store.is_empty(), "no surface, no picture for the lock");
+    }
+
+    #[test]
+    fn no_thumbnail_exists_with_the_wallpaper_duty_off() {
+        let (mut w, store, mut host) = with_store();
+        let settings = on();
+        w.added(&info(1, "DP-1"), &settings, &mut host);
+        w.event(decoded("DP-1", 1, (2000, 1200)), &settings, &mut host);
+        assert_eq!(store.len(), 1);
+        let mut off = settings.clone();
+        off.duties.wallpaper = Duty::Off;
+        w.apply(&settings, &off, &mut host);
+        assert!(store.is_empty(), "turning the duty off drops them");
+        // A result asked before the duty went off is dropped, not kept.
+        w.event(decoded("DP-1", 1, (2000, 1200)), &off, &mut host);
+        assert!(store.is_empty());
+        // An output that appears with the duty off never gets one.
+        w.added(&info(2, "HDMI-A-1"), &off, &mut host);
+        assert!(store.is_empty());
+        assert!(crate::lock::bundle::with_thumbnails(0, None, &store)
+            .outputs
+            .is_empty());
+    }
+
+    #[test]
+    fn a_failed_decode_yields_no_thumbnail_and_a_black_backdrop() {
+        let (mut w, store, mut host) = with_store();
+        let settings = on();
+        w.added(&info(1, "DP-1"), &settings, &mut host);
+        w.event(decoded("DP-1", 1, (2000, 1200)), &settings, &mut host);
+        assert_eq!(store.len(), 1);
+        // The picture is asked again and the new decode fails.
+        w.resolve(0, &settings, &mut host);
+        let generation = w.generation;
+        w.event(
+            WallpaperEvent::Failed {
+                output: "DP-1".into(),
+                generation,
+                why: "unreadable".into(),
+            },
+            &settings,
+            &mut host,
+        );
+        assert!(store.is_empty(), "the old thumbnail goes with the picture");
+        let bundle = crate::lock::bundle::with_thumbnails(0, None, &store);
+        assert!(
+            bundle.outputs.is_empty(),
+            "no block: the lock is black there"
+        );
+        // A decode that yielded no thumbnail also leaves none.
+        w.resolve(0, &settings, &mut host);
+        let generation = w.generation;
+        w.event(
+            WallpaperEvent::Decoded {
+                output: "DP-1".into(),
+                generation,
+                image: image((2000, 1200)),
+                thumbnail: None,
+            },
+            &settings,
+            &mut host,
+        );
+        assert!(store.is_empty());
+    }
+
+    #[test]
+    fn another_client_holding_the_layer_leaves_no_thumbnail() {
+        let (mut w, store, mut host) = with_store();
+        let settings = on();
+        w.added(&info(1, "DP-1"), &settings, &mut host);
+        w.event(decoded("DP-1", 1, (2000, 1200)), &settings, &mut host);
+        w.event(
+            WallpaperEvent::Held {
+                output: "DP-1".into(),
+                by: "swaybg".into(),
+            },
+            &settings,
+            &mut host,
+        );
+        assert!(store.is_empty());
     }
 
     #[test]

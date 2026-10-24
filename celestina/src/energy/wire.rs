@@ -293,6 +293,11 @@ mod tests {
     /// compositor.
     fn pair() -> (Link<Bare, ()>, UnixStream) {
         let (client, peer) = UnixStream::pair().expect("a socket pair");
+        // The stand-in compositor threads read with `read_exact`: a bounded
+        // read turns a request that never comes into a failure instead of a
+        // test that never ends (round 10).
+        peer.set_read_timeout(Some(Duration::from_secs(20)))
+            .expect("a read deadline");
         let connection = Connection::from_socket(client).expect("a connection over it");
         (Link::over(connection, Bare, 8), peer)
     }

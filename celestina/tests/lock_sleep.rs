@@ -29,6 +29,7 @@ use celestina::lock::sleep::PREPARING_RECHECK;
 use celestina::lock::supervisor::Config;
 use celestina::lock::{Live, LockHandle, LockMessage, Wiring};
 use celestina::message::Message;
+use celestina::wallpaper::thumbnail::ThumbnailStore;
 use celestina_fake_system::{FakeSystem, Services};
 use celestina_shell::session::PowerAction;
 use celestina_shell::settings::{Duty, Settings};
@@ -438,6 +439,8 @@ impl World {
                     Vec::new()
                 }
             }),
+            thumbnails: ThumbnailStore::default(),
+            utc_offset: Arc::new(|| None),
         }
     }
 }

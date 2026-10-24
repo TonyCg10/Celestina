@@ -20,13 +20,13 @@ use celestina_lock_proto::{service_check, LockExit, Service, Status, Verdict};
 use celestina_wayland::lock::ConnectPolicy;
 
 use crate::app::{run, Run};
-use crate::backdrop::{self, Loaded};
+use crate::backdrop::{self, Backdrop, Loaded};
 use crate::hardening;
 use crate::machine::Config;
 use crate::report::Reporter;
 use crate::state_file::StateFile;
 use crate::verify::{Attempts, PinnedBinary, Timings, Verifier};
-use crate::view::CpuPresenter;
+use crate::view::{CpuPresenter, SCRIM};
 
 #[cfg(feature = "fake-verifier")]
 use std::ffi::OsString;
@@ -114,10 +114,13 @@ fn handed_in_descriptor() -> Option<i32> {
 pub fn start(launch: Launch) -> ExitCode {
     // Hardening is the first thing the process does (design §4.2, M4): before
     // the subscriber, before argv-derived paths, before any file is looked at.
-    // Even before it, whatever the shell handed over by accident is closed
-    // (round 4, I-α): a copy of the logind delay inhibitor must not live as
-    // long as the lock does.
-    let hardened = hardening::close_inherited_descriptors(handed_in_descriptor())
+    // Before even that the ignored signals are blocked (round B7c, B-2): from
+    // the first instruction a `SIGTERM` waits in the signalfd instead of
+    // killing a process that has not yet said `requested`. Then whatever the
+    // shell handed over by accident is closed (round 4, I-α): a copy of the
+    // logind delay inhibitor must not live as long as the lock does.
+    let hardened = hardening::block_ignored_signals()
+        .and_then(|()| hardening::close_inherited_descriptors(handed_in_descriptor()))
         .and_then(|()| hardening::apply());
     init_logging();
     let exit = match prepare_and_run_with(launch, hardened) {
@@ -218,9 +221,12 @@ fn prepare_and_run_with(
     // until the process is done.
     let _state = state_file();
 
-    let loaded = backdrop::read_header(std::io::stdin().as_fd(), backdrop::READ_DEADLINE);
+    let loaded = backdrop::read_bundle(std::io::stdin().as_fd(), backdrop::READ_DEADLINE);
     log_bundle(&loaded);
     let header = loaded.header();
+    // The pictures go to the `backdrop` worker; no picture, or a bundle that
+    // was ignored, means no worker and a black backdrop.
+    let backdrop = Backdrop::spawn(loaded.into_blocks(), SCRIM);
 
     let service_missing =
         service_check(service, &existing(service)) == Err(Verdict::ServiceMissing);
@@ -234,7 +240,8 @@ fn prepare_and_run_with(
     Ok(run(Run {
         config: Config::new(launch.rehearsal, service_missing, header.prior_failures),
         attempts: Attempts::new(verifier, Timings::default()),
-        presenter: CpuPresenter::new(),
+        presenter: CpuPresenter::with_backdrop(backdrop)
+            .with_utc_offset(header.offset_known.then_some(header.utc_offset_s)),
         reporter,
         connect: launch.connect,
         #[cfg(feature = "fake-verifier")]

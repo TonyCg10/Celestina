@@ -202,6 +202,16 @@ expected result of a race, never as a bus failure; and a blocking `zbus` signal
 iterator ends only through `close()` or a hand-polled stream with a shared
 channel waker, never by dropping connection clones (Q10).
 
+- **A5. The presentation's deviations, accepted on 2026-10-23 (CEL-2-H-b).**
+  The date is shown in UTC when the offset is unknown, the clock hidden; the
+  backdrop goes to the first eight outputs by connector name that have a
+  thumbnail; the bundle is read at startup, bounded, and only the upscale runs
+  on the `backdrop` worker; the blur radius (6), the area-average downscale,
+  `MAX_BASE_PIXELS` (40 000 000) and `CLOCK_BLOCK` (120 px) are the
+  implementation's values; and a few microseconds before `exec` remain in which
+  a signal kills the lock before its mask, to be closed by the supervisor in a
+  later unit. Evidence: `docs/evidence/2026-10-23-cel-2-h-b.md`.
+
 ## Consequences
 
 - A lock with no wallpaper and no clock is a complete lock: black covers, the

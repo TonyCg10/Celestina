@@ -98,7 +98,7 @@ What Noctalia still does for the session is in
   [CEL-2-J](docs/evidence/2026-10-17-phone-and-bubbles.md).
 - The lock duty (`duties.lock` in `~/.config/celestina/shell.json`) is `off` by
   default. When it is on, `celestina lock` starts `celestina-lock`, which holds
-  the `ext-session-lock-v1` lock, covers every output in black at once and asks
+  the `ext-session-lock-v1` lock, covers every output at once and asks
   for the password on the output with the keyboard focus; `celestina lock
   suspend` locks and suspends only once the compositor confirms the lock. The
   idle chain's second step (lock, then suspend) works only with the duty on, and
@@ -106,9 +106,11 @@ What Noctalia still does for the session is in
   password is checked by PAM through a service the author installs, and nothing
   but the right password unlocks: every failure leaves the session locked. There
   is no `unlock` verb, and `session suspend` is always refused and points to
-  `lock suspend`. The lock paints black with the field, the status words,
-  Caps Lock and a fade to black after 30 s without input; the dimmed wallpaper
-  and the clock are CEL-2-H-b. Install the PAM service and read the recovery
+  `lock suspend`. The lock paints the field, the status words, Caps Lock and a
+  fade to black after 30 s without input over each output's own wallpaper,
+  dimmed and blurred, with the clock and the date; with `duties.wallpaper` off, such as
+  while Noctalia owns the wallpaper, the backdrop is black and the clock and
+  the date still show. Install the PAM service and read the recovery
   path first: [Installing the lock's PAM service](#installing-the-locks-pam-service).
   Decisions: [ADR 0022](docs/decisions/0022-session-lock.md); evidence:
   [CEL-2-H-a](docs/evidence/2026-10-22-cel-2-h-a.md).

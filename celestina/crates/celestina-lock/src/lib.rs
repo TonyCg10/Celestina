@@ -14,6 +14,8 @@
 //!   [`driver::Host`].
 //! * [`app`] — the adapter over the toolkit's lock profile (Wayland, timers,
 //!   the status pipe) and the process's startup ([`launch`]).
+//! * [`clock`] — the realtime minute timer and the local time from the
+//!   bundle's offset (design §4.8).
 //! * [`view`], [`paint`], [`copy`] — the CPU painter (design §4.6.1): the
 //!   prompt over `tiny-skia` and `cosmic-text`, one embedded font, and the
 //!   Spanish copy.
@@ -29,6 +31,7 @@
 
 pub mod app;
 pub mod backdrop;
+pub mod clock;
 pub mod copy;
 pub mod driver;
 pub mod field;

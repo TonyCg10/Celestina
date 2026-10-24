@@ -1,10 +1,20 @@
 //! The capsule's clock: `HH:MM` formatted in process from the wall clock and
 //! the local UTC offset, read once per process through `date +%z` (no
 //! timezone dependency, and no `unsafe` for `localtime_r`), and a monotonic
-//! minute tick. Ported from the spike's `src/island/mod.rs`.
+//! minute tick. Ported from the spike's `src/island/mod.rs`. The session lock
+//! reads the offset afresh per spawn through [`read_utc_offset`] instead
+//! (CEL-2-H-b).
 
+use rustix::{
+    event::{poll, PollFd, PollFlags, Timespec},
+    io::Errno,
+    process::{kill_process_group, Pid, Signal},
+};
 use std::{
-    process::Command,
+    ffi::OsStr,
+    io::Read,
+    os::unix::process::CommandExt,
+    process::{Child, Command, ExitStatus, Stdio},
     sync::OnceLock,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -129,20 +139,132 @@ pub fn parse_utc_offset(s: &str) -> Option<i64> {
     (hours < 24 && minutes < 60).then_some(sign * (hours * 3600 + minutes * 60))
 }
 
+/// How long `date +%z` may take: it prints four characters, so a run past
+/// this is hung and the offset is unknown.
+const DATE_DEADLINE: Duration = Duration::from_millis(500);
+
+/// How often a running `date` is looked at while it is waited for.
+const DATE_POLL: Duration = Duration::from_millis(5);
+
+/// The most a `date +%z` run may print; more reads as unknown.
+const DATE_MAX_OUTPUT: u64 = 64;
+
+/// Where `date` lives: an absolute path, never a search through `PATH`
+/// (design §4.2).
+const DATE_PROGRAM: &str = "/usr/bin/date";
+
+/// What `program args` printed when it succeeded within `limit`, with `env`
+/// added to its environment. The whole run, the read of its output included,
+/// is inside `limit`: the output is read only when `poll` says it is
+/// readable, with the time that is left, so a descendant that inherits the
+/// pipe and outlives `program` cannot hold the caller. The child leads its
+/// own process group; a run that overstays has the group killed through the
+/// child's pid (never by name) and the child reaped, and the answer is
+/// `None`.
+fn bounded_output(
+    program: &OsStr,
+    args: &[&str],
+    env: &[(&str, &str)],
+    limit: Duration,
+) -> Option<Vec<u8>> {
+    let mut child = Command::new(program)
+        .args(args)
+        .envs(env.iter().copied())
+        .process_group(0)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let end = Instant::now() + limit;
+    let out = read_until(&mut child, end);
+    let status = out.as_ref().and_then(|_| wait_until(&mut child, end));
+    if status.is_none() {
+        // Not reaped yet, so its pid (the group id) cannot have been reused.
+        if let Some(pid) = i32::try_from(child.id()).ok().and_then(Pid::from_raw) {
+            let _ = kill_process_group(pid, Signal::KILL);
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    if !status?.success() {
+        return None;
+    }
+    out
+}
+
+/// The output of `child` up to end of file (at most [`DATE_MAX_OUTPUT`]
+/// bytes), or `None` when `end` comes first.
+fn read_until(child: &mut Child, end: Instant) -> Option<Vec<u8>> {
+    let stdout = child.stdout.as_mut()?;
+    let mut out = Vec::new();
+    let mut chunk = [0_u8; 64];
+    loop {
+        let left = end.checked_duration_since(Instant::now())?;
+        let timeout = Timespec::try_from(left).ok()?;
+        let mut fds = [PollFd::new(&*stdout, PollFlags::IN)];
+        match poll(&mut fds, Some(&timeout)) {
+            Ok(0) => return None,
+            Ok(_) => {}
+            Err(Errno::INTR) => continue,
+            Err(_) => return None,
+        }
+        // Readable (or hung up): this read returns at once.
+        match stdout.read(&mut chunk) {
+            Ok(0) => return Some(out),
+            Ok(n) => {
+                out.extend_from_slice(&chunk[..n]);
+                if out.len() as u64 > DATE_MAX_OUTPUT {
+                    return None;
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(_) => return None,
+        }
+    }
+}
+
+/// The exit status of `child` once it exits before `end`.
+fn wait_until(child: &mut Child, end: Instant) -> Option<ExitStatus> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Some(status),
+            Ok(None) if Instant::now() < end => std::thread::sleep(DATE_POLL),
+            Ok(None) | Err(_) => return None,
+        }
+    }
+}
+
+/// What `date +%z` printed, when it ran and succeeded in time.
+fn date_z_output() -> Option<Vec<u8>> {
+    bounded_output(OsStr::new(DATE_PROGRAM), &["+%z"], &[], DATE_DEADLINE)
+}
+
+/// The offset in the bytes a `date +%z` run printed.
+fn offset_of(output: Option<Vec<u8>>) -> Option<i64> {
+    String::from_utf8(output?)
+        .ok()
+        .and_then(|s| parse_utc_offset(&s))
+}
+
+/// The local UTC offset, read afresh through `date +%z` on every call: no
+/// cell, so a daylight-saving change is seen by the next call. `None` when
+/// `date` fails or prints something else; the caller decides what that means
+/// (the session lock hides its clock rather than guess, design §4.8, M1). It
+/// waits for a child process for at most [`DATE_DEADLINE`] (a hung `date`
+/// reads as unknown), so it never runs on a loop thread.
+#[must_use]
+pub fn read_utc_offset() -> Option<i64> {
+    offset_of(date_z_output())
+}
+
 /// The local UTC offset, read once per process through `date +%z`. A DST
-/// change while running is ignored until restart. Falls back to UTC, with
-/// one warning, when `date` fails.
+/// change while running is ignored until restart (a separate bug unit, not
+/// this one). Falls back to UTC, with one warning, when `date` fails.
 pub fn utc_offset() -> i64 {
     static OFFSET: OnceLock<i64> = OnceLock::new();
     *OFFSET.get_or_init(|| {
-        let offset = Command::new("date")
-            .arg("+%z")
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .and_then(|o| String::from_utf8(o.stdout).ok())
-            .and_then(|s| parse_utc_offset(&s));
-        offset.unwrap_or_else(|| {
+        read_utc_offset().unwrap_or_else(|| {
             tracing::warn!("`date +%z` unavailable, the clock shows UTC");
             0
         })
@@ -258,5 +380,118 @@ mod tests {
         assert_eq!(tick.wait(false, t0 + Duration::from_secs(1), 0), None);
         assert!(!tick.is_armed());
         assert!(tick.wait(true, t0 + Duration::from_secs(1), 0).is_some());
+    }
+
+    /// `date +%z` run with `TZ` in its own environment only: a POSIX string
+    /// such as `XXX-5` (five hours east) needs no time-zone database, and the
+    /// process environment, shared by every parallel test, is never changed.
+    fn offset_in(tz: &str) -> Option<i64> {
+        offset_of(bounded_output(
+            OsStr::new(DATE_PROGRAM),
+            &["+%z"],
+            &[("TZ", tz)],
+            Duration::from_secs(10),
+        ))
+    }
+
+    #[test]
+    fn read_utc_offset_is_uncached_and_fails_to_none() {
+        // Every run asks `date` again: three zones, three answers.
+        assert_eq!(offset_in("XXX-5"), Some(5 * 3600));
+        assert_eq!(offset_in("YYY3"), Some(-3 * 3600));
+        assert_eq!(offset_in("ZZZ-5:30"), Some(5 * 3600 + 1800));
+        // A failed run or output that is not an offset is `None`, not UTC.
+        assert_eq!(offset_of(None), None);
+        assert_eq!(offset_of(Some(b"".to_vec())), None);
+        assert_eq!(offset_of(Some(b"UTC\n".to_vec())), None);
+        assert_eq!(offset_of(Some(vec![0xff, 0xfe])), None);
+        assert_eq!(offset_of(Some(b"+0100\n".to_vec())), Some(3600));
+    }
+
+    #[test]
+    fn a_date_that_hangs_is_killed_at_the_deadline_and_reads_as_unknown() {
+        // `sleep 30` stands for a `date` that never answers.
+        let started = Instant::now();
+        let out = bounded_output(
+            OsStr::new("sleep"),
+            &["30"],
+            &[],
+            Duration::from_millis(150),
+        );
+        let took = started.elapsed();
+        assert_eq!(out, None);
+        assert!(took >= Duration::from_millis(150), "{took:?}");
+        assert!(took < Duration::from_secs(5), "{took:?}");
+    }
+
+    /// Whether `pid` is gone (or only a zombie waiting for its reaper).
+    fn is_dead(pid: &str) -> bool {
+        match std::fs::read_to_string(format!("/proc/{pid}/stat")) {
+            Err(_) => true,
+            Ok(stat) => stat.rsplit(") ").next().is_some_and(|r| r.starts_with('Z')),
+        }
+    }
+
+    #[test]
+    fn a_descendant_holding_the_pipe_cannot_hold_the_caller() {
+        let dir = std::env::temp_dir().join(format!("clock-b1-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        let pidfile = dir.join("sleeper");
+        // `sh` prints the offset and exits at once; its `sleep` keeps stdout.
+        let script = format!("sleep 3 & echo $! > {}; echo +0100", pidfile.display());
+        let started = Instant::now();
+        let out = bounded_output(
+            OsStr::new("sh"),
+            &["-c", &script],
+            &[],
+            Duration::from_millis(150),
+        );
+        let took = started.elapsed();
+        assert_eq!(out, None);
+        assert!(took < Duration::from_millis(500), "{took:?}");
+        let pid = std::fs::read_to_string(&pidfile).expect("pid file");
+        let pid = pid.trim();
+        let gone = (0..100).any(|_| {
+            std::thread::sleep(Duration::from_millis(20));
+            is_dead(pid)
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(gone, "the sleep of the group is still alive");
+    }
+
+    #[test]
+    fn an_exec_that_never_answers_is_killed_with_its_group() {
+        let started = Instant::now();
+        let out = bounded_output(
+            OsStr::new("sh"),
+            &["-c", "exec sleep 30"],
+            &[],
+            Duration::from_millis(150),
+        );
+        assert_eq!(out, None);
+        assert!(started.elapsed() < Duration::from_millis(500));
+    }
+
+    #[test]
+    fn a_date_that_fails_or_cannot_start_reads_as_unknown() {
+        let limit = Duration::from_secs(10);
+        assert_eq!(bounded_output(OsStr::new("false"), &[], &[], limit), None);
+        assert_eq!(
+            bounded_output(OsStr::new("/nonexistent/date"), &[], &[], limit),
+            None
+        );
+        assert_eq!(
+            bounded_output(OsStr::new("echo"), &["+0200"], &[], limit),
+            Some(b"+0200\n".to_vec())
+        );
+    }
+
+    #[test]
+    fn the_island_keeps_its_cached_offset() {
+        // The Island's call is filled once per process: every call answers
+        // what the first did (its staleness across a zone change is noted for
+        // a separate bug unit, not changed here).
+        let first = utc_offset();
+        assert_eq!(utc_offset(), first);
     }
 }

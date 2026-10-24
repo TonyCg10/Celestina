@@ -40,6 +40,47 @@ pub enum HardeningError {
     TracerUnknown,
     #[error("cannot list the descriptors the process inherited")]
     Descriptors,
+    #[error("cannot block the signals the lock ignores")]
+    SignalMask,
+}
+
+/// The signals the lock ignores (design §4.2, §7 F27): the same eight as
+/// `celestina_wayland::lock::IGNORED_SIGNALS`, whose signalfd reads them once
+/// the loop exists. `SIGKILL` and `SIGSTOP` cannot be blocked (residual X2).
+const IGNORED: [nix::sys::signal::Signal; 8] = {
+    use nix::sys::signal::Signal;
+    [
+        Signal::SIGINT,
+        Signal::SIGTERM,
+        Signal::SIGHUP,
+        Signal::SIGQUIT,
+        Signal::SIGABRT,
+        Signal::SIGALRM,
+        Signal::SIGUSR1,
+        Signal::SIGUSR2,
+    ]
+};
+
+/// Blocks the ignored signals in the calling thread (round B7c, finding B-2).
+/// It is the first instruction of `launch::start`: until it runs, the
+/// process has the default disposition and a `SIGTERM` kills it before it
+/// announces `requested`, which the shell reads as `ExitBeforeRequest` and
+/// does not retry. Every thread created later inherits the mask. The loop
+/// blocks the same set again when it creates its signalfd, with no effect, and
+/// that signalfd then collects what arrived in the meantime (a blocked signal
+/// stays pending).
+///
+/// # Errors
+///
+/// [`HardeningError::SignalMask`] when the mask cannot be set: the process
+/// could be killed before it locks, so it does not lock.
+pub fn block_ignored_signals() -> Result<(), HardeningError> {
+    use nix::sys::signal::{pthread_sigmask, SigSet, SigmaskHow};
+    let mut set = SigSet::empty();
+    for signal in IGNORED {
+        set.add(signal);
+    }
+    pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&set), None).map_err(|_| HardeningError::SignalMask)
 }
 
 /// Closes every descriptor the lock was not handed on purpose (round 4,
@@ -132,6 +173,31 @@ mod tests {
 
     /// Hardening is process-wide: the tests that apply it take turns.
     static PROCESS_STATE: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn the_ignored_signals_are_blocked_in_the_calling_thread_and_in_its_children() {
+        use nix::sys::signal::{pthread_sigmask, SigSet, SigmaskHow};
+        // A thread of its own: the mask is per thread and the test process
+        // must keep its dispositions.
+        let seen = std::thread::spawn(|| {
+            block_ignored_signals().expect("mask");
+            let mut now = SigSet::empty();
+            pthread_sigmask(SigmaskHow::SIG_BLOCK, None, Some(&mut now)).expect("read");
+            let own = IGNORED.iter().all(|s| now.contains(*s));
+            // Inherited by a thread created afterwards.
+            let child = std::thread::spawn(|| {
+                let mut now = SigSet::empty();
+                pthread_sigmask(SigmaskHow::SIG_BLOCK, None, Some(&mut now)).expect("read");
+                IGNORED.iter().all(|s| now.contains(*s))
+            })
+            .join()
+            .expect("child");
+            (own, child)
+        })
+        .join()
+        .expect("thread");
+        assert_eq!(seen, (true, true));
+    }
 
     const UNTRACED: &str =
         "Name:\tcelestina-lock\nPid:\t4242\nTracerPid:\t0\nUid:\t1000\t1000\t1000\t1000\n";

@@ -37,6 +37,7 @@ use super::niri::{read_line_bounded, LineRead, SessionError};
 use super::Worker;
 use crate::message::Message;
 use crate::wallpaper::decode::{decode, DecodeError, Decoded, EXTENSIONS};
+use crate::wallpaper::thumbnail::{derive, Thumbnail};
 use crate::wallpaper::NAMESPACE;
 
 /// Commands that may wait for the worker; the loop gets a refusal beyond it.
@@ -77,6 +78,10 @@ pub enum WallpaperEvent {
         output: String,
         generation: u64,
         image: Decoded,
+        /// The blurred thumbnail the session lock may show (CEL-2-H-b),
+        /// derived here on the worker from this decode; `None` when the
+        /// picture could not be made small.
+        thumbnail: Option<Thumbnail>,
     },
     /// Nothing to show on `output`: no folder, or no showable file for it.
     Fallback { output: String, generation: u64 },
@@ -501,11 +506,17 @@ fn resolve(
         Choice::Image(name) => {
             let path = folder.join(&name);
             match environment.decode(&path, device_px, settings.mode) {
-                Ok(image) => WallpaperEvent::Decoded {
-                    output,
-                    generation,
-                    image,
-                },
+                Ok(image) => {
+                    // Bounded (one pass over the picture, then a fixed blur
+                    // over at most 640 x 640 pixels) and on this thread.
+                    let thumbnail = derive(&image);
+                    WallpaperEvent::Decoded {
+                        output,
+                        generation,
+                        image,
+                        thumbnail,
+                    }
+                }
                 Err(error) => WallpaperEvent::Failed {
                     output,
                     generation,
@@ -674,6 +685,7 @@ mod tests {
             output,
             generation,
             image,
+            ..
         } = next(&rig)
         else {
             panic!("expected a decoded picture");
@@ -684,6 +696,37 @@ mod tests {
             seen,
             vec![(PathBuf::from("/pics/DP-1.png"), (4, 2), Mode::Fit)]
         );
+        rig.worker.join();
+    }
+
+    #[test]
+    fn a_decode_carries_its_thumbnail_and_a_failed_one_none() {
+        let rig = rig(Fake {
+            folder: files(&["DP-1.png", "HDMI-A-1.png"]),
+            broken: vec!["HDMI-A-1.png".to_owned()],
+            ..Fake::default()
+        });
+        let s = settings(Some("/pics"));
+        assert!(rig
+            .provider
+            .request(resolve_cmd("DP-1", 1, s.clone()))
+            .is_ok());
+        let WallpaperEvent::Decoded {
+            image, thumbnail, ..
+        } = next(&rig)
+        else {
+            panic!("expected a decoded picture");
+        };
+        let thumbnail = thumbnail.expect("a thumbnail from the decode");
+        assert_eq!(
+            (thumbnail.width(), thumbnail.height()),
+            (
+                u16::try_from(image.width).expect("small"),
+                u16::try_from(image.height).expect("small")
+            )
+        );
+        assert!(rig.provider.request(resolve_cmd("HDMI-A-1", 2, s)).is_ok());
+        assert!(matches!(next(&rig), WallpaperEvent::Failed { .. }));
         rig.worker.join();
     }
 

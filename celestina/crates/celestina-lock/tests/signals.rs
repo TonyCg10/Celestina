@@ -35,6 +35,8 @@ const ABRT: u64 = 1 << 5;
 const USR1: u64 = 1 << 9;
 const USR2: u64 = 1 << 11;
 const ALRM: u64 = 1 << 13;
+/// `SIGPIPE` (13): the Rust runtime ignores it as it starts.
+const PIPE: u64 = 1 << 12;
 const ALL: u64 = HUP | INT | TERM | QUIT | ABRT | USR1 | USR2 | ALRM;
 
 struct Scratch(PathBuf);
@@ -59,6 +61,13 @@ fn sig_blk(path: &std::path::Path) -> Option<u64> {
     let text = fs::read_to_string(path).ok()?;
     let line = text.lines().find(|l| l.starts_with("SigBlk:"))?;
     u64::from_str_radix(line.trim_start_matches("SigBlk:").trim(), 16).ok()
+}
+
+/// A hexadecimal mask line of `/proc/<pid>/status`, such as `SigIgn:`.
+fn sig_field(pid: u32, field: &str) -> Option<u64> {
+    let text = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let line = text.lines().find(|l| l.starts_with(field))?;
+    u64::from_str_radix(line.trim_start_matches(field).trim(), 16).ok()
 }
 
 fn masks(pid: u32) -> Vec<(String, u64)> {
@@ -162,11 +171,102 @@ fn all_block(masks: &[(String, u64)]) -> bool {
     !masks.is_empty() && masks.iter().all(|(_, m)| m & ALL == ALL)
 }
 
-#[test]
-fn the_ignored_signals_are_blocked_in_every_thread_and_the_process_survives() {
-    let dir = Scratch(
-        std::env::temp_dir().join(format!("celestina-lock-signals-{}", std::process::id())),
-    );
+/// A sealed memory file holding a bundle with one 4x4 block, built with the
+/// shared codec: the stdin the shell hands the lock when it has a picture.
+fn one_block_bundle() -> std::os::fd::OwnedFd {
+    use celestina_lock_proto::{encode, Bundle, OutputBlock};
+    use rustix::fs::{fcntl_add_seals, ftruncate, memfd_create, MemfdFlags, SealFlags};
+    let pixels = std::iter::repeat_n([250u8, 250, 250, 255], 16)
+        .flatten()
+        .collect();
+    let block = OutputBlock::new("DP-1", 4, 4, pixels).expect("block");
+    let bytes = encode(&Bundle {
+        prior_failures: 0,
+        offset_known: false,
+        utc_offset_s: 0,
+        outputs: vec![block],
+    });
+    let fd = memfd_create("bundle", MemfdFlags::ALLOW_SEALING).expect("memfd");
+    ftruncate(&fd, u64::try_from(bytes.len()).expect("len")).expect("truncate");
+    let mut written = 0;
+    while written < bytes.len() {
+        written += rustix::io::pwrite(
+            &fd,
+            &bytes[written..],
+            u64::try_from(written).expect("offset"),
+        )
+        .expect("pwrite");
+    }
+    fcntl_add_seals(
+        &fd,
+        SealFlags::SHRINK | SealFlags::GROW | SealFlags::WRITE | SealFlags::SEAL,
+    )
+    .expect("seal");
+    fd
+}
+
+/// The `State:` letter of the process (`Z` is a zombie: `/proc/<pid>` still
+/// exists then, which is why a bare `metadata` check missed finding C1 of
+/// review A).
+fn state(pid: u32) -> Option<char> {
+    let text = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let line = text.lines().find(|l| l.starts_with("State:"))?;
+    line.trim_start_matches("State:").trim().chars().next()
+}
+
+/// A sealed bundle of the eight largest-allowed blocks: a large read that
+/// keeps the process busy before the event loop exists (round B7c, B-2). Each
+/// block is about 1.6 MiB, the whole file stays under the 16 MiB cap.
+fn eight_block_bundle() -> std::os::fd::OwnedFd {
+    use celestina_lock_proto::{encode, Bundle, OutputBlock};
+    use rustix::fs::{fcntl_add_seals, ftruncate, memfd_create, MemfdFlags, SealFlags};
+    let outputs = (0..8)
+        .map(|n| {
+            let pixels = std::iter::repeat_n([250u8, 250, 250, 255], 640 * 640)
+                .flatten()
+                .collect();
+            OutputBlock::new(format!("DP-{n}"), 640, 640, pixels).expect("block")
+        })
+        .collect();
+    let bytes = encode(&Bundle {
+        prior_failures: 0,
+        offset_known: false,
+        utc_offset_s: 0,
+        outputs,
+    });
+    let fd = memfd_create("bundle", MemfdFlags::ALLOW_SEALING).expect("memfd");
+    ftruncate(&fd, u64::try_from(bytes.len()).expect("len")).expect("truncate");
+    let mut written = 0;
+    while written < bytes.len() {
+        written += rustix::io::pwrite(
+            &fd,
+            &bytes[written..],
+            u64::try_from(written).expect("offset"),
+        )
+        .expect("pwrite");
+    }
+    fcntl_add_seals(
+        &fd,
+        SealFlags::SHRINK | SealFlags::GROW | SealFlags::WRITE | SealFlags::SEAL,
+    )
+    .expect("seal");
+    fd
+}
+
+/// Runs the real binary with `stdin` and `min_threads` expected, checks the
+/// mask of every thread, sends the eight signals and checks the process is
+/// alive and not a zombie.
+fn the_signals_do_not_touch_it(
+    stdin: Option<std::os::fd::OwnedFd>,
+    min_threads: usize,
+    early_term: bool,
+) {
+    static CASE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let dir = Scratch(std::env::temp_dir().join(format!(
+        "celestina-lock-signals-{}-{}",
+        std::process::id(),
+        CASE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    )));
     fs::create_dir_all(&dir.0).expect("scratch dir");
     let lock = dir.0.join("celestina-lock");
     fs::copy(env!("CARGO_BIN_EXE_celestina-lock"), &lock).expect("copy the lock");
@@ -186,7 +286,7 @@ fn the_ignored_signals_are_blocked_in_every_thread_and_the_process_survives() {
         .arg("--rehearsal")
         .env_clear()
         .env("WAYLAND_SOCKET", number.to_string())
-        .stdin(Stdio::null())
+        .stdin(stdin.map_or_else(Stdio::null, Stdio::from))
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
@@ -195,18 +295,47 @@ fn the_ignored_signals_are_blocked_in_every_thread_and_the_process_survives() {
     let child = Guard(child);
     drop(theirs);
     drop(inherited);
+    if early_term {
+        // Round B7c, B-2: a `SIGTERM` by pid as soon as the Rust runtime of
+        // the lock is up (it ignores `SIGPIPE`: the bit shows in `SigIgn`;
+        // before that the image is still being loaded and nothing the lock
+        // wrote has run), over and over until the mask is there: the window
+        // in which the default disposition applied while the bundle was read.
+        let start = Instant::now();
+        let mut sent = 0;
+        while start.elapsed() < Duration::from_secs(10) {
+            if !matches!(state(pid), Some(letter) if letter != 'Z' && letter != 'X') {
+                break;
+            }
+            if sig_field(pid, "SigIgn:").is_some_and(|m| m & PIPE != 0) {
+                let status = Command::new("kill")
+                    .args(["-TERM", &pid.to_string()])
+                    .status()
+                    .expect("kill(1)");
+                if !status.success() {
+                    break;
+                }
+                sent += 1;
+                if masks(pid).iter().any(|(_, m)| m & TERM != 0) && sent > 1 {
+                    break;
+                }
+            }
+        }
+        assert!(sent > 0, "the process was never seen running");
+    }
 
     // Wait until startup is done: the writer thread exists (two threads at
     // least) and every thread has the mask. The process then waits for an
     // answer to its lock request that never comes.
     let deadline = Instant::now() + Duration::from_secs(10);
-    while Instant::now() < deadline && !(masks(pid).len() >= 2 && all_block(&masks(pid))) {
+    while Instant::now() < deadline && !(masks(pid).len() >= min_threads && all_block(&masks(pid)))
+    {
         std::thread::sleep(Duration::from_millis(20));
     }
     let before = masks(pid);
     assert!(
-        before.len() >= 2,
-        "startup completed and the status writer thread exists, so the multi-thread case is exercised: {before:x?}"
+        before.len() >= min_threads,
+        "startup completed and every worker exists, so the multi-thread case is exercised: {before:x?}"
     );
     assert!(
         all_block(&before),
@@ -225,9 +354,43 @@ fn the_ignored_signals_are_blocked_in_every_thread_and_the_process_survives() {
         fs::metadata(format!("/proc/{pid}")).is_ok(),
         "the lock survived eight signals"
     );
+    assert!(
+        matches!(state(pid), Some(letter) if letter != 'Z' && letter != 'X'),
+        "the lock is running, not a zombie: {:?}",
+        state(pid)
+    );
     let after = masks(pid);
-    assert!(after.len() >= 2 && all_block(&after), "{after:x?}");
+    assert!(
+        after.len() >= min_threads && all_block(&after),
+        "{after:x?}"
+    );
     drop(child);
     drop(ours);
     server.join().expect("the test server ended");
+}
+
+#[test]
+fn the_ignored_signals_are_blocked_in_every_thread_and_the_process_survives() {
+    the_signals_do_not_touch_it(None, 2, false);
+}
+
+/// Finding C1 of review A: with a picture on stdin the `backdrop` worker
+/// exists too, and it must be created after the mask like the others.
+#[test]
+fn the_ignored_signals_are_blocked_in_the_backdrop_worker_too() {
+    the_signals_do_not_touch_it(Some(one_block_bundle()), 3, false);
+}
+
+/// Round B7c, finding B-2: the process read its bundle with the default
+/// disposition (0.5 to 3.8 ms measured), and a `SIGTERM` in that window killed
+/// it before `requested`, which the shell reads as `ExitBeforeRequest` and
+/// never retries. The mask is now the first instruction of `launch::start`.
+/// The test sends `SIGTERM` from the moment `/proc/<pid>` exists, with the
+/// largest bundle the codec accepts, and the lock must go on to the end of its
+/// startup (the two round trips are served, the writer thread exists).
+#[test]
+fn a_sigterm_right_after_the_spawn_does_not_kill_the_lock() {
+    for _ in 0..5 {
+        the_signals_do_not_touch_it(Some(eight_block_bundle()), 3, true);
+    }
 }

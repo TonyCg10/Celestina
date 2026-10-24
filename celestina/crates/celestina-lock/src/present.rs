@@ -10,6 +10,8 @@
 
 use celestina_wayland::lock::LockCtl;
 
+pub use crate::backdrop::WakeLoop;
+
 use crate::machine::Scene;
 
 /// Draws a scene. Called only after `locked`, and only when the scene changed.
@@ -17,6 +19,11 @@ pub trait Presenter {
     /// Shows `scene`. A presenter that cannot draw keeps the covers (the
     /// field still works blind) and logs; it never fails the lock.
     fn render(&mut self, scene: &Scene, ctl: &mut LockCtl<'_>);
+
+    /// Gives the presenter what to call, from any thread, when something it
+    /// draws arrived (the `backdrop` worker's base): the loop then asks for a
+    /// redraw. A presenter with no worker ignores it.
+    fn set_wake(&mut self, _wake: WakeLoop) {}
 }
 
 /// Draws nothing: the covers stay as the toolkit committed them.

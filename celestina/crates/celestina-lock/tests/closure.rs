@@ -93,6 +93,50 @@ fn the_lock_tree_holds_no_shell_gpu_decoder_bus_or_icon_crate() {
     }
 }
 
+/// CEL-2-H-b, T-D1: the dimmed backdrop brought no decoder. The pictures
+/// arrive in the sealed bundle already decoded by the shell, so the closure and
+/// its allowlist are exactly H-a's and neither names an image codec.
+#[test]
+fn no_decoder_is_linked() {
+    let decoders = [
+        "image",
+        "image-webp",
+        "png",
+        "jpeg-decoder",
+        "zune-jpeg",
+        "zune-core",
+        "zune-inflate",
+        "gif",
+        "tiff",
+        "weezl",
+        "exr",
+        "lodepng",
+        "qoi",
+        "ravif",
+        "libwebp-sys",
+        "fdeflate",
+        "flate2",
+        "miniz_oxide",
+        "resvg",
+        "usvg",
+    ];
+    let found = closure(&["celestina-lock", "celestina-lock-verify"]);
+    let allowed = allowed();
+    for name in decoders {
+        assert!(!found.contains(name), "{name} is linked into the lock");
+        assert!(!allowed.contains(name), "{name} is in the allowlist");
+    }
+    // The painter's rasteriser is built without its PNG reader, and no
+    // dependency was added for the backdrop: the manifest names the same
+    // packages as in H-a.
+    let manifest = include_str!("../Cargo.toml");
+    let tiny_skia = manifest
+        .lines()
+        .find(|line| line.starts_with("tiny-skia"))
+        .expect("tiny-skia line");
+    assert!(!tiny_skia.contains("png-format"), "{tiny_skia}");
+}
+
 #[test]
 fn the_verifiers_own_allowlist_is_inside_the_locks() {
     let verify_only: BTreeSet<String> =

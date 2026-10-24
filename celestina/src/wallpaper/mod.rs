@@ -7,9 +7,12 @@
 //! it runs on the wallpaper worker, never on the loop's thread.
 //! [`surface::Wallpapers`] is the app's side: the surface per output, the
 //! requests to the worker, the texture upload and the 1:1 draw.
+//! [`thumbnail`] is the small blurred copy of each picture the session lock
+//! shows behind its prompt (CEL-2-H-b), derived on the same worker.
 
 pub mod decode;
 pub mod surface;
+pub mod thumbnail;
 
 /// The layer-shell namespace of the wallpaper surface; the owner check
 /// recognises its own surface by it.

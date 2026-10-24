@@ -50,16 +50,23 @@ celestina-lock-proto = { path = "../../../celestina-rs/crates/celestina-lock-pro
 # `tests/closure.allow` is unchanged by it. The version the toolkit resolves.
 calloop = "0.14"
 # Non-dumpable and the core limit (hardening), pidfd, the process-group kill,
-# the deadline timerfd, `flock` on the pid file, seals and `pread` on the
+# the deadline timerfd and the clock's realtime timerfd (`time`: absolute,
+# `TFD_TIMER_CANCEL_ON_SET`, no new feature), `flock` on the pid file, seals and `pread` on the
 # bundle, `poll` on the pidfd. The safe API: the lock has no `unsafe`.
 # Already in the lockfile.
 rustix = { version = "1", default-features = false, features = ["std", "fs", "process", "time", "event"] }
 # `unistd::close` on a raw descriptor number, the one safe way to close the
 # descriptors the process inherited by accident (round 4, finding I-α): rustix's
-# `close` is `unsafe` and `unsafe` is forbidden here. No feature of its own
-# (the module is always built); already in the closure through the verifier and
+# `close` is `unsafe` and `unsafe` is forbidden here. `close` needs no feature
+# (the module is always built); nix is already in the closure through the verifier and
 # calloop, so `tests/closure.allow` is unchanged.
-nix = { version = "0.31", default-features = false }
+# Feature `signal` (round B7c, finding B-2): `pthread_sigmask` blocks the eight
+# ignored signals as the very first instruction of `launch::start`, before the
+# bundle is read and before the loop that would otherwise block them: until then
+# the default disposition lets a `SIGTERM` kill the lock before `requested`.
+# rustix has no `sigprocmask`. The feature adds no crate (libc, bitflags,
+# cfg-if are already here).
+nix = { version = "0.31", default-features = false, features = ["signal"] }
 # The CPU painter (design §4.6.1, H-15): `tiny-skia` for the scrim, the capsules
 # and the bullets; no PNG decoder (`png-format` off), no GPU. Already in the
 # lockfile through the shell's painter.

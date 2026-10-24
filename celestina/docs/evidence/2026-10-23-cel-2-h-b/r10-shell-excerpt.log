@@ -1,0 +1,9 @@
+2026-10-23T22:33:51.215488Z  INFO celestina::lock::sleep: lock: the sleep inhibitor is held
+2026-10-23T22:33:52.911898Z  INFO celestina_wayland::runtime: layer surface created surface=2 output=winit namespace="celestina-wallpaper" layer=Background size=(0, 0)
+2026-10-23T22:33:52.911938Z  INFO celestina::wallpaper::surface: wallpaper surface created output=winit
+2026-10-23T22:33:52.919288Z  INFO celestina::wallpaper::surface: wallpaper uploaded output=winit width=3840 height=2160
+2026-10-23T22:33:53.952120Z  INFO celestina_lock::launch: backdrop bundle read
+2026-10-23T22:33:53.954239Z DEBUG celestina::lock::supervisor: lock: status line line=hello 1
+2026-10-23T22:33:53.954258Z DEBUG celestina::lock::supervisor: lock: status line line=requested
+2026-10-23T22:33:53.958967Z DEBUG celestina::lock::supervisor: lock: status line line=locked
+2026-10-23T22:33:53.959016Z  INFO celestina::lock::sleep: lock: the sleep inhibitor was released

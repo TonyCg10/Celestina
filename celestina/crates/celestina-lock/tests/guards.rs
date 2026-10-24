@@ -207,6 +207,65 @@ fn the_lock_opens_no_file_of_the_users() {
     assert_eq!(files_with("symlink_metadata"), ["launch.rs"]);
 }
 
+/// CEL-2-H-b, TM-7, TM-7b, §6 items 12 and 25: the dimmed backdrop opens no file
+/// of the user. Its pixels come from the sealed bundle on the one descriptor the
+/// shell handed over (stdin), already decoded; `backdrop.rs` has no path, no
+/// file API, no environment and no decoder, and nothing but the launch reads a
+/// bundle.
+#[test]
+fn the_lock_opens_no_user_file_for_the_backdrop() {
+    let all = production();
+    let (_, lines) = all
+        .iter()
+        .find(|(name, _)| name == "backdrop.rs")
+        .expect("backdrop.rs");
+    for needle in [
+        "std::fs",
+        "File::",
+        "OpenOptions",
+        "read_dir",
+        "read_to_end",
+        "read_to_string",
+        "Path",
+        "PathBuf",
+        "env::var",
+        "std::env",
+        "include_bytes",
+        "include_str",
+        "image::",
+        "Decoder",
+        "Command",
+        "from_raw_fd",
+        "openat",
+        "open(",
+    ] {
+        assert!(
+            lines.iter().all(|line| !line.contains(needle)),
+            "backdrop.rs holds `{needle}`"
+        );
+    }
+    // No string literal in it names a path.
+    assert!(
+        lines
+            .iter()
+            .all(|line| !line.contains("\"/") && !line.contains("\"~")),
+        "a path literal in backdrop.rs"
+    );
+    // The one read is a positioned read on the descriptor it was given, and
+    // the one place that hands it stdin is the launch.
+    assert_eq!(count("pread("), 1, "one positioned read");
+    assert_eq!(count("fn read_bundle("), 1);
+    assert_eq!(files_with("read_bundle("), ["backdrop.rs", "launch.rs"]);
+    assert_eq!(count("stdin()"), 1, "the bundle's descriptor is stdin");
+    assert_eq!(files_with("stdin()"), ["launch.rs"]);
+    // The worker owns no Wayland object and no file: it takes blocks and
+    // sizes in, bases out.
+    assert!(
+        lines.iter().any(|line| line.contains("name(\"backdrop\"")),
+        "the worker is the thread named `backdrop`"
+    );
+}
+
 /// TM-7b, T-F1: the painter resolves no icon and reads no theme; every glyph is
 /// in the one embedded face.
 #[test]
@@ -340,14 +399,7 @@ fn no_socket_no_bus_no_network() {
 /// go to the verifier this process spawned (its pidfd or its group).
 #[test]
 fn nothing_is_killed_by_name_and_only_the_own_child_is_signalled() {
-    for needle in [
-        "pkill",
-        "killall",
-        "kill -",
-        "Pid::from_raw",
-        "libc::kill",
-        "nix::sys::signal",
-    ] {
+    for needle in ["pkill", "killall", "kill -", "Pid::from_raw", "libc::kill"] {
         assert!(
             files_with(needle).is_empty(),
             "{needle}: {:?}",
@@ -357,6 +409,23 @@ fn nothing_is_killed_by_name_and_only_the_own_child_is_signalled() {
     assert_eq!(files_with("pidfd_send_signal("), ["verify.rs"]);
     assert_eq!(files_with("kill_process_group("), ["verify.rs"]);
     assert_eq!(count("Pid::from_child(&child)"), 1);
+    // Round B7c, B-2: `nix::sys::signal` is used for the one mask call and
+    // nothing else: it sends no signal and never unblocks one.
+    assert_eq!(files_with("nix::sys::signal"), ["hardening.rs"]);
+    assert_eq!(count("pthread_sigmask("), 1);
+    for needle in [
+        "SIG_UNBLOCK",
+        "SIG_SETMASK",
+        "nix::sys::signal::kill",
+        "sigaction",
+        "signal::raise",
+    ] {
+        assert!(
+            files_with(needle).is_empty(),
+            "{needle}: {:?}",
+            files_with(needle)
+        );
+    }
 }
 
 /// The first statement of a function (the lines of its body up to the first
@@ -377,9 +446,11 @@ fn first_statement(lines: &[String], signature: &str) -> String {
     statement
 }
 
-/// Round 5, m-1: the descriptors the lock was not handed are closed by one
-/// call, which is the first statement of `launch::start`, and the only
-/// `nix` item the lock uses is the `close` inside that function's callee.
+/// Round 5, m-1 (amended in round B7c, B-2): the descriptors the lock was not
+/// handed are closed by one call, which is the second step of the first
+/// statement of `launch::start` (the first is the signal mask), and the only
+/// `nix` items the lock uses are the `close` inside that function's callee
+/// and the mask call.
 #[test]
 fn m1_the_inherited_descriptors_are_closed_first_by_exactly_one_call() {
     assert_eq!(count("hardening::close_inherited_descriptors("), 1);
@@ -390,10 +461,19 @@ fn m1_the_inherited_descriptors_are_closed_first_by_exactly_one_call() {
         .expect("launch.rs")
         .1;
     let first = first_statement(&launch, "pub fn start(");
+    let mask = first.find("hardening::block_ignored_signals(");
+    let close = first.find("hardening::close_inherited_descriptors(");
     assert!(
-        first.contains("hardening::close_inherited_descriptors("),
-        "the first statement of start: {first}"
+        matches!((mask, close), (Some(m), Some(c)) if m < c),
+        "the mask first, the closing of descriptors second, in the first statement of start: {first}"
     );
+    assert!(
+        first
+            .trim_start()
+            .starts_with("let hardened = hardening::block_ignored_signals("),
+        "nothing runs before the mask: {first}"
+    );
+    assert_eq!(count("hardening::block_ignored_signals("), 1);
     // `nix::` as a path, not the tail of `unix::`.
     let nix_users: Vec<String> = production()
         .into_iter()

@@ -22,6 +22,7 @@ use celestina_wayland::lock::{
 };
 use celestina_wayland::{InputEvent, OutputId, Sender};
 
+use crate::clock::RealtimeTimer;
 use crate::driver::{AttemptRefused, Driver, Host};
 use crate::field::Secret;
 use crate::machine::{Config, Input, Scene, UnlockFailure};
@@ -43,6 +44,11 @@ pub enum Message {
     Verdict { attempt: u64, outcome: Outcome },
     /// The deadline timer fired.
     Tick,
+    /// The clock's realtime timer fired (a minute boundary, a resume from
+    /// suspend or a clock step): the machine only redraws (design §4.8).
+    ClockTick,
+    /// The `backdrop` worker has a base: draw again.
+    BackdropReady,
     /// Rehearsal probe only: type a made-up password and press Enter.
     #[cfg(feature = "fake-verifier")]
     AutoType,
@@ -160,12 +166,21 @@ impl<P: Presenter + 'static> LockShell for LockApp<P> {
     fn message(&mut self, msg: Message, ctl: &mut LockCtl<'_>) {
         match msg {
             Message::Connected => {
+                if let Some(sender) = self.parts.sender.get().cloned() {
+                    // The worker may now wake the loop; the machine is not
+                    // involved until the redraw.
+                    self.parts.presenter.set_wake(Box::new(move || {
+                        let _ = sender.send(Message::BackdropReady);
+                    }));
+                }
                 self.feed(Input::Connected, ctl);
             }
             Message::Verdict { attempt, outcome } => {
                 self.feed(Input::Verdict { attempt, outcome }, ctl);
             }
             Message::Tick => self.feed(Input::Tick, ctl),
+            Message::ClockTick => self.feed(Input::Redraw, ctl),
+            Message::BackdropReady => self.feed(Input::Redraw, ctl),
             #[cfg(feature = "fake-verifier")]
             Message::AutoType => {
                 for (keysym, text) in [(0x78, Some("x")), (0xff0d, None)] {
@@ -268,6 +283,7 @@ pub fn run<P: Presenter + 'static>(run: Run<P>) -> LockExit {
             // not run; the prompt and the lock itself still do.
             tracing::error!(%err, "cannot register the deadline timer");
         }
+        install_clock(&sender, handle);
         #[cfg(feature = "fake-verifier")]
         if let Some(after) = auto_type_after {
             let typist = sender.clone();
@@ -287,6 +303,28 @@ pub fn run<P: Presenter + 'static>(run: Run<P>) -> LockExit {
         tracing::error!(error = %err, "the lock ended with an error");
     }
     exit_after(result, exit.get(), requested.get())
+}
+
+/// The clock's realtime timer, armed for the next minute and registered on
+/// the loop. Without it the clock may go stale, but the prompt and the lock
+/// itself work, so a failure is logged and never stops the lock.
+fn install_clock<D: 'static>(sender: &Sender<Message>, handle: &calloop::LoopHandle<'static, D>) {
+    let timer = match RealtimeTimer::new() {
+        Ok(timer) => timer,
+        Err(err) => {
+            tracing::error!(%err, "cannot create the clock timer: the clock may go stale");
+            return;
+        }
+    };
+    if let Err(err) = timer.arm_next_minute() {
+        tracing::error!(%err, "cannot arm the clock timer: the clock may go stale");
+    }
+    let tick = sender.clone();
+    if let Err(err) = timer.install(handle, move || {
+        let _ = tick.send(Message::ClockTick);
+    }) {
+        tracing::error!(%err, "cannot register the clock timer: the clock may go stale");
+    }
 }
 
 /// Starts the status writer with `start`; a failure stops the lock before it

@@ -1,10 +1,11 @@
 #!/bin/sh
-# lock-rehearsal.sh: steps R-1 to R-9 of the session lock's rehearsal
+# lock-rehearsal.sh: steps R-1 to R-10 of the session lock's rehearsal
 # (CEL-2-H design §9.2), in a nested niri and nowhere else.
 #
 #   lock-rehearsal.sh --bin-dir DIR --fake-logind PATH --out DIR
 #                     [--unlock-probe PATH] [--pointer-tool PATH]
-#                     [--check] [R-1 ... R-9 | R-9a R-9b R-9c]
+#                     [--wallpaper-folder DIR] [--monitor NAME|none]
+#                     [--check] [R-1 ... R-10 | R-9a R-9b R-9c]
 #
 #   --bin-dir        directory holding the release `celestina`,
 #                    `celestina-lock` and `celestina-lock-verify` (the shell
@@ -18,6 +19,15 @@
 #                    motions and exits (R-9b: input that ends the idle period
 #                    must stop the chain; a virtual keyboard does not count as
 #                    activity for the compositor, a pointer does)
+#   --wallpaper-folder  R-10 only: a directory holding the pictures the nest's
+#                    wallpaper duty paints (and so the lock's thumbnail). Without
+#                    it R-10 generates a bright 960x540 PNG with python3
+#   --monitor        R-10 only: the host output the nest's window is placed
+#                    fullscreen on, as `dev-session.sh --monitor` does (default
+#                    DP-1, the 4K output; `none` leaves the window where the
+#                    host puts it and R-10 then records the size it measured).
+#                    R-10 always runs the nest at scale 1.5. Every other step
+#                    keeps `--monitor none` and never touches the host's IPC
 #   --out            where the evidence goes (captures, logs, summary)
 #   --check          run the refusals and the preparation, print the plan and
 #                    stop: nothing is started
@@ -29,6 +39,15 @@
 # reach is `celestina-lock-rehearsal`, which must NOT exist: PAM then falls to
 # `other` and denies, outside `faillock`. The author's password is never typed
 # and the production service is never reached with a wrong one.
+#
+# R-10 (the backdrop and the clock, H-b) locks a nest whose shell runs the
+# wallpaper duty over a real picture, so the bundle carries a thumbnail; it
+# captures the dimmed backdrop with the clock and checks that the clock
+# redraws at the minute. The lock exposes no frame time (no `--metrics`, no
+# log line), so R-10 does NOT report painter p50/p99: it records, as a NOTE,
+# the wall-clock time from a key press (`wtype` against the nest) to the first
+# `grim` capture that differs, an upper bound that includes `wtype`, the
+# nest's compositor and the capture itself. See `step_r10`.
 #
 # Refused at the start, with nothing started:
 #   - /etc/pam.d/celestina-lock-rehearsal exists (read-only test);
@@ -662,6 +681,191 @@ if [ "${LOCK_REHEARSAL_INSIDE:-}" = 1 ]; then
         fi
     }
 
+    # The p-th quantile (0..1) of the numbers in FILE, the way `paint_probe`
+    # picks one: the sorted value at round((n-1)*p).
+    quantile() { # quantile P FILE
+        sort -n "$2" | awk -v p="$1" '{ v[NR] = $1 } END { if (NR == 0) { print "n/a"; exit } print v[int((NR - 1) * p + 0.5) + 1] }'
+    }
+
+    # R-10 (H-b): the lock with the dimmed backdrop and the clock, at scale
+    # 1.5 on the 4K window, over a real wallpaper thumbnail (the shell runs the
+    # wallpaper duty over a real picture and locks with its own `lock` verb, so
+    # the bundle carries the thumbnail). Three things come out of it:
+    #   1. the captures of the backdrop and the clock, and that the lock read a
+    #      complete bundle;
+    #   2. whether the clock redraws at the minute boundary, and an upper bound
+    #      of how late (a capture is polled from just before the boundary);
+    #   3. the wall-clock time from a key press to the first capture that
+    #      differs, 20 samples, as p50 and p99.
+    # LIMIT: `celestina-lock` exposes no frame time (no `--metrics`, no log
+    # line, and `WAYLAND_DEBUG` would print key events, so it is not used), so
+    # the painter's own p50/p99 are NOT measured here and none is invented. The
+    # figures in 3 contain `wtype`, the nest's compositor and one `grim`
+    # capture (hundreds of milliseconds at 4K): an upper bound that cannot be
+    # compared with the 16 ms budget of H-15. Painter-only times without the
+    # backdrop or the clock come from `examples/paint_probe`. The keys are an
+    # `x` and a BackSpace, never Enter and never a password, and the nest's
+    # lock is the only surface that gets them.
+    step_r10() {
+        guard || return
+        wait_count "$err" 'wallpaper surface created' 1 40 || { result R-10 FAIL "the wallpaper duty never painted a surface in the nest (nothing to thumbnail)"; return; }
+        # The thumbnail is derived beside the decode; give the store a moment.
+        sleep 1
+        lock_through_shell || { result R-10 FAIL "no locked line"; return; }
+        wait_count "$err" 'backdrop bundle read' 1 15 || {
+            result R-10 FAIL "the lock never read a complete backdrop bundle ($(count "$err" 'backdrop bundle not fully usable') 'not fully usable' lines)"
+            return
+        }
+        sleep 2
+        shot backdrop
+        size=
+        [ ! -f "$prefix-backdrop.png" ] || size=$(python3 -I -c 'import struct, sys; print(*struct.unpack(">II", open(sys.argv[1], "rb").read(24)[16:24]))' "$prefix-backdrop.png" 2>/dev/null)
+        bytes=0
+        [ ! -f "$prefix-backdrop.png" ] || bytes=$(stat -c %s "$prefix-backdrop.png")
+        # Whether the backdrop is a flat colour is judged on the pixels, not on
+        # the PNG's size: a dimmed and blurred picture compresses to a few tens
+        # of kilobytes at 4K (the first R-10 of 2026-10-23 measured 78 KB over a
+        # real backdrop and called it flat). An uncompressed PPM of the same
+        # frame is sampled on a grid and the spread of its luminance decides.
+        nestenv grim -t ppm "$work/backdrop.ppm" 2>> "$steps_log" || say "R-10 backdrop ppm capture failed"
+        spread=$(python3 -I - "$work/backdrop.ppm" << 'PY'
+import sys
+try:
+    data = open(sys.argv[1], "rb").read()
+except OSError:
+    print("n/a"); sys.exit(0)
+fields, i = [], 0
+while len(fields) < 4 and i < len(data):
+    while i < len(data) and data[i:i+1].isspace(): i += 1
+    if data[i:i+1] == b"#":
+        while i < len(data) and data[i:i+1] not in (b"\n", b""): i += 1
+        continue
+    start = i
+    while i < len(data) and not data[i:i+1].isspace(): i += 1
+    fields.append(data[start:i])
+i += 1
+if len(fields) < 4 or fields[0] != b"P6":
+    print("n/a"); sys.exit(0)
+w, h = int(fields[1]), int(fields[2])
+px = data[i:]
+step = max(1, (w * h) // 20000)
+lum = []
+for n in range(0, w * h, step):
+    o = n * 3
+    if o + 2 >= len(px): break
+    lum.append((299 * px[o] + 587 * px[o+1] + 114 * px[o+2]) // 1000)
+if len(lum) < 100:
+    print("n/a"); sys.exit(0)
+mean = sum(lum) / len(lum)
+var = sum((l - mean) ** 2 for l in lum) / len(lum)
+print(int(var ** 0.5))
+PY
+)
+        say "R-10 backdrop luminance spread (sampled std dev, 0-255): ${spread:-n/a}"
+        say "R-10 capture ${size:-?} (width height), $bytes bytes"
+
+        # 3. The key presses. The reference capture is taken before each one.
+        # Each press also keeps the 30 s fade away.
+        keys=$work/r10-key-ms
+        : > "$keys"
+        n=0
+        while [ "$n" -lt 20 ]; do
+            guard || return
+            nestenv grim -t ppm "$work/poll-a.ppm" 2>> "$steps_log" || { say "R-10 reference capture failed"; break; }
+            t0=$(now_ms)
+            if [ $((n % 2)) -eq 0 ]; then
+                nestenv wtype x 2>> "$steps_log"
+            else
+                nestenv wtype -k BackSpace 2>> "$steps_log"
+            fi
+            seen=
+            k=0
+            while [ "$k" -lt 20 ]; do
+                nestenv grim -t ppm "$work/poll-b.ppm" 2>> "$steps_log" || break
+                if ! cmp -s "$work/poll-a.ppm" "$work/poll-b.ppm"; then
+                    seen=$(now_ms)
+                    break
+                fi
+                k=$((k + 1))
+            done
+            [ -z "$seen" ] || printf '%s\n' $((seen - t0)) >> "$keys"
+            n=$((n + 1))
+            sleep 1
+        done
+        samples=$(wc -l < "$keys" | tr -d ' ')
+        key_p50=$(quantile 0.50 "$keys")
+        key_p99=$(quantile 0.99 "$keys")
+        say "R-10 key press to visible change: n=$samples p50=${key_p50}ms p99=${key_p99}ms"
+
+        # 2. The minute. Keep the fade away until the last seconds of a minute
+        # (the typed `x` and the BackSpace leave the field empty), take two
+        # reference captures to see that the screen is quiet, then poll.
+        while [ "$(date +%-S)" -ge 52 ]; do sleep 1; done
+        until [ "$(date +%-S)" -ge 52 ]; do
+            guard || return
+            nestenv wtype x -k BackSpace 2>> "$steps_log"
+            sleep 5
+        done
+        sleep 1
+        guard || return
+        nestenv grim -t ppm "$work/poll-a.ppm" 2>> "$steps_log" || { result R-10 FAIL "reference capture failed"; return; }
+        nestenv grim -t ppm "$work/poll-b.ppm" 2>> "$steps_log" || { result R-10 FAIL "reference capture failed"; return; }
+        quiet=yes
+        cmp -s "$work/poll-a.ppm" "$work/poll-b.ppm" || quiet=no
+        boundary=$((($(date +%s) / 60 + 1) * 60 * 1000))
+        minute_late=
+        minute_early=
+        if [ "$(now_ms)" -lt $((boundary - 800)) ]; then
+            nestenv grim -t ppm "$work/poll-a.ppm" 2>> "$steps_log" || say "R-10 reference capture failed"
+            while [ "$(now_ms)" -lt $((boundary + 8000)) ]; do
+                s=$(now_ms)
+                nestenv grim -t ppm "$work/poll-b.ppm" 2>> "$steps_log" || break
+                e=$(now_ms)
+                if ! cmp -s "$work/poll-a.ppm" "$work/poll-b.ppm"; then
+                    minute_early=$((s - boundary))
+                    minute_late=$((e - boundary))
+                    break
+                fi
+            done
+            say "R-10 minute boundary ${boundary}: first differing capture started ${minute_early:-never} ms and ended ${minute_late:-never} ms after it (screen quiet before: $quiet)"
+        else
+            say "R-10 the minute boundary was too close to start polling"
+        fi
+        shot after-minute
+
+        # The verdicts. A flat colour has a luminance spread near 0; the dimmed
+        # picture of the generated wallpaper measures well above 10. The
+        # threshold is deliberately low: it tells black from a picture, nothing
+        # finer.
+        flat=yes
+        case "$spread" in
+            ''|n/a) ;;
+            *) [ "$spread" -lt 10 ] || flat=no ;;
+        esac
+        why=
+        [ "$flat" = no ] || why="$why backdrop is a flat colour (luminance spread ${spread:-n/a});"
+        [ -n "$minute_late" ] || why="$why no redraw seen within 8 s of the minute boundary;"
+        [ -z "$minute_late" ] || [ "$minute_early" -ge -200 ] || why="$why the screen changed more than 200 ms before the boundary;"
+        if [ -z "$why" ]; then
+            result R-10 PASS "the lock read a complete bundle over the wallpaper duty's picture; capture ${size:-?} px, luminance spread ${spread} (a picture, not a flat colour); the clock redrew at the minute (first differing capture ended ${minute_late} ms after the boundary, started ${minute_early} ms after it; screen quiet before: $quiet)"
+        else
+            result R-10 FAIL "${why# } capture ${size:-?} px, $bytes bytes, luminance spread ${spread:-n/a}; minute redraw: ${minute_late:-not seen within 8 s} ms (started ${minute_early:-n/a})"
+        fi
+        case "$size" in
+            "3840 2160") ;;
+            *) result R-10 NOTE "the capture is ${size:-unknown} px, not the 4K window (3840 2160): the figures are for that size, not for the author's monitor" ;;
+        esac
+        if [ "${samples:-0}" -ge 10 ]; then
+            msg="key press (wtype x / BackSpace against the nest) to the first differing grim capture: n=$samples p50=${key_p50} ms p99=${key_p99} ms. This is an upper bound that includes wtype, the nest's compositor and a capture; it is NOT the painter's frame time, which celestina-lock does not expose, so none is reported and it cannot be compared with the 16 ms budget"
+            [ "${key_p99:-0}" -le 16 ] || msg="$msg; p99 is above 16 ms: recorded for the author (H-15 revisit); the painter is unchanged"
+            result R-10 NOTE "$msg"
+        else
+            result R-10 NOTE "only $samples of 20 key presses changed the screen: no p50/p99 recorded; the lock exposes no frame time, so there is no other source"
+        fi
+        result R-10 NOTE "the minute figure above has the resolution of one capture (hundreds of ms at 4K); the in-process frame times of the key press and of the minute redraw are not measured (no --metrics or log in celestina-lock): the painter-only figures come from examples/paint_probe, which draws neither the backdrop nor the clock"
+        grep -E 'backdrop|clock' "$err" | tail -n 20 > "$prefix.lock-lines.excerpt" 2>/dev/null || true
+    }
+
     # ── the probe ────────────────────────────────────────────────────────────
 
     trap finish EXIT
@@ -682,6 +886,7 @@ if [ "${LOCK_REHEARSAL_INSIDE:-}" = 1 ]; then
         R-9a) step_r9a ;;
         R-9b) step_r9b ;;
         R-9c) step_r9c ;;
+        R-10) step_r10 ;;
         *) say "unknown step $LOCK_REHEARSAL_STEP"; exit 2 ;;
     esac
     exit 0
@@ -694,7 +899,8 @@ set -eu
 usage() {
     echo "usage: lock-rehearsal.sh --bin-dir DIR --fake-logind PATH --out DIR" >&2
     echo "                         [--unlock-probe PATH] [--pointer-tool PATH]" >&2
-    echo "                         [--check] [R-1 ... R-9 | R-9a R-9b R-9c]" >&2
+    echo "                         [--wallpaper-folder DIR] [--monitor NAME|none]" >&2
+    echo "                         [--check] [R-1 ... R-10 | R-9a R-9b R-9c]" >&2
 }
 
 bin_dir=
@@ -702,6 +908,8 @@ fake_logind=
 out=
 unlock_probe=
 pointer_tool=
+wallpaper_folder=
+r10_monitor=DP-1
 check=no
 steps=
 while [ "$#" -gt 0 ]; do
@@ -711,14 +919,16 @@ while [ "$#" -gt 0 ]; do
         --out) [ "$#" -ge 2 ] || { usage; exit 2; }; out=$2; shift 2 ;;
         --unlock-probe) [ "$#" -ge 2 ] || { usage; exit 2; }; unlock_probe=$2; shift 2 ;;
         --pointer-tool) [ "$#" -ge 2 ] || { usage; exit 2; }; pointer_tool=$2; shift 2 ;;
+        --wallpaper-folder) [ "$#" -ge 2 ] || { usage; exit 2; }; wallpaper_folder=$2; shift 2 ;;
+        --monitor) [ "$#" -ge 2 ] || { usage; exit 2; }; r10_monitor=$2; shift 2 ;;
         --check) check=yes; shift ;;
-        R-[1-9]|R-9[abc]) steps="$steps $1"; shift ;;
+        R-[1-9]|R-9[abc]|R-10) steps="$steps $1"; shift ;;
         --help|-h) usage; exit 0 ;;
         *) usage; exit 2 ;;
     esac
 done
 [ -n "$bin_dir" ] && [ -n "$fake_logind" ] && [ -n "$out" ] || { usage; exit 2; }
-[ -n "$steps" ] || steps=" R-1 R-2 R-3 R-4 R-5 R-6 R-7 R-8 R-9"
+[ -n "$steps" ] || steps=" R-1 R-2 R-3 R-4 R-5 R-6 R-7 R-8 R-9 R-10"
 
 refuse() {
     echo "lock-rehearsal: $*" >&2
@@ -737,6 +947,7 @@ fake_logind=$(abs "$fake_logind")
 out=$(abs "$out")
 [ -z "$unlock_probe" ] || unlock_probe=$(abs "$unlock_probe")
 [ -z "$pointer_tool" ] || pointer_tool=$(abs "$pointer_tool")
+[ -z "$wallpaper_folder" ] || wallpaper_folder=$(abs "$wallpaper_folder")
 
 # The refusals.
 [ -n "${XDG_RUNTIME_DIR:-}" ] || refuse "XDG_RUNTIME_DIR is empty"
@@ -769,10 +980,31 @@ esac
 case " $steps " in
     *" R-8 "*) [ -n "$unlock_probe" ] && [ -x "$unlock_probe" ] || refuse "R-8 needs --unlock-probe (built with --features fake-verifier)" ;;
 esac
-# The paths are quoted into the nest's command line with single quotes.
-for path in "$self" "$bin_dir" "$out"; do
+case " $steps " in
+    *" R-10 "*)
+        command -v wtype > /dev/null 2>&1 || refuse "wtype is not installed (R-10)"
+        command -v cmp > /dev/null 2>&1 || refuse "cmp is not installed (R-10)"
+        command -v python3 > /dev/null 2>&1 || refuse "python3 is not installed (R-10 reads the capture's size and may generate its picture)"
+        case "$r10_monitor" in
+            none) ;;
+            ''|*[!A-Za-z0-9_-]*) refuse "--monitor wants an output name or none (R-10)" ;;
+        esac
+        if [ -n "$wallpaper_folder" ]; then
+            [ -d "$wallpaper_folder" ] || refuse "--wallpaper-folder $wallpaper_folder is not a directory (R-10)"
+            [ -n "$(ls -A -- "$wallpaper_folder" 2> /dev/null)" ] || refuse "--wallpaper-folder $wallpaper_folder is empty (R-10)"
+        fi
+        ;;
+esac
+[ -z "$wallpaper_folder" ] || case " $steps " in
+    *" R-10 "*) ;;
+    *) refuse "--wallpaper-folder is only for R-10" ;;
+esac
+# The paths are quoted into the nest's command line with single quotes, and
+# the wallpaper folder into a JSON string.
+for path in "$self" "$bin_dir" "$out" "$wallpaper_folder"; do
     case "$path" in
         *"'"*) refuse "a path holds a single quote: $path" ;;
+        *'"'*|*'\'*) refuse "a path holds a double quote or a backslash: $path" ;;
     esac
 done
 
@@ -789,6 +1021,11 @@ echo "lock-rehearsal: host display $host_display, runtime $XDG_RUNTIME_DIR"
 echo "lock-rehearsal: bin dir $bin_dir, fake logind $fake_logind"
 echo "lock-rehearsal: evidence in $out"
 echo "lock-rehearsal: plan:$plan"
+case " $plan " in
+    *" R-10 "*)
+        echo "lock-rehearsal: R-10: nest at scale 1.5, window on $r10_monitor, wallpaper ${wallpaper_folder:-generated by python3 in the run's scratch directory}"
+        ;;
+esac
 if [ "$check" = yes ]; then
     echo "lock-rehearsal: --check: refusals passed, nothing started"
     exit 0
@@ -848,6 +1085,43 @@ on_signal() {
 }
 trap on_signal INT TERM
 
+# A bright 960x540 picture (a near-white band, a gradient and a colour field),
+# so the lock's scrim has the brightest part of a wallpaper to dim. Standard
+# library only; the author's own pictures are never read.
+make_wallpaper() { # make_wallpaper DIR
+    mkdir -p "$1"
+    # `default.png`: the wallpaper duty picks `<output>.<ext>`, then
+    # `default.<ext>`, and never "the first file", so a picture under any other
+    # name is a fallback (black) and R-10 has nothing to thumbnail (seen on
+    # 2026-10-23: the first R-10 ran with `rehearsal.png` and failed that way).
+    python3 -I - "$1/default.png" << 'PNG'
+import struct, sys, zlib
+
+width, height = 960, 540
+rows = bytearray()
+for y in range(height):
+    rows.append(0)
+    for x in range(width):
+        if x < width // 3:
+            rows += bytes((245, 245, 235))
+        elif x < 2 * width // 3:
+            rows += bytes((60 + (x - width // 3) * 150 // (width // 3), 90 + y * 120 // height, 200))
+        else:
+            rows += bytes((200, 40 + y * 150 // height, 60 + (x - 2 * width // 3) * 120 // (width // 3)))
+
+def chunk(kind, data):
+    body = kind + data
+    return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+open(sys.argv[1], "wb").write(
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    + chunk(b"IDAT", zlib.compress(bytes(rows)))
+    + chunk(b"IEND", b"")
+)
+PNG
+}
+
 run_step() {
     step=$1
     attempt=${2:-1}
@@ -866,8 +1140,22 @@ run_step() {
         R-1|R-2|R-3|R-4|R-5|R-6|R-9c) shell=1 ;;
         R-9a|R-9b) shell=1; idle=yes; limit=420; emulate=--emulate-sleep ;;
         R-7|R-8) shell=0 ;;
+        R-10) shell=1; limit=360 ;;
     esac
-    if [ "$idle" = yes ]; then
+    # The nest's window: R-10 asks for the 4K output at scale 1.5 (the author's
+    # monitor); the others leave the window where the host puts it and never
+    # touch the host compositor's IPC.
+    nest_args="--monitor none"
+    if [ "$step" = R-10 ]; then
+        nest_args="--scale 1.5 --monitor $r10_monitor"
+        folder=$wallpaper_folder
+        if [ -z "$folder" ]; then
+            folder=$work/wallpapers
+            make_wallpaper "$folder"
+        fi
+        printf '{"schema_version":1,"duties":{"lock":"on","wallpaper":"on"},"wallpaper":{"folder":"%s"}}\n' "$folder" > "$work/xdg/celestina/shell.json"
+        echo "R-10 setup: nest scale 1.5, window on $r10_monitor, wallpaper folder $folder" | tee -a "$summary"
+    elif [ "$idle" = yes ]; then
         printf '%s\n' '{"schema_version":1,"duties":{"lock":"on","idle":"on"}}' > "$work/xdg/celestina/shell.json"
     else
         printf '%s\n' '{"schema_version":1,"duties":{"lock":"on"}}' > "$work/xdg/celestina/shell.json"
@@ -910,7 +1198,8 @@ run_step() {
             LOCK_REHEARSAL_ATTEMPT XDG_CONFIG_HOME XDG_STATE_HOME DBUS_SYSTEM_BUS_ADDRESS RUST_LOG
         # `--monitor none`: the nest's window is left where the host puts it
         # and nothing here touches the host compositor's IPC.
-        exec timeout "$limit" "$here/dev-session.sh" --own-bus --monitor none \
+        # shellcheck disable=SC2086 # nest_args is a few plain words
+        exec timeout "$limit" "$here/dev-session.sh" --own-bus $nest_args \
             --binary "$self" --probe "$self" --once "$work/run" -- --nest-shell \
             8>&- > "$work/nest.log" 2>&1
     ) &
