@@ -14,10 +14,12 @@
 //!   current, asks the worker for a fresh reading (one per monitor for the
 //!   DDC worker, never concurrent) and remembers which popup it is, so the
 //!   display can be suppressed while it is open and released when it closes.
-//! - **DDC is gated** on a consumer: the worker is asked to detect once,
-//!   when the duty is on and a layout comes to hold the `brightness` piece
-//!   (see `OsdRuntime::set_brightness_consumer`); a step or a slider is a
-//!   change, which the worker detects for lazily, never a detection request.
+//! - **DDC is gated** on a consumer: while the duty is on and a layout holds
+//!   the `brightness` piece the worker is told to show it (`OsdRuntime::apply`
+//!   reads [`brightness_consumer`] at start and on every settings change). It
+//!   then detects once and reads once each monitor whose level is unknown,
+//!   so the piece has something to draw; a step or a slider is a change,
+//!   which the worker detects for lazily, never a detection request.
 //! - **Closing a popup** releases the display's kinds with the last level the
 //!   popup asked of each, so their read-backs are not announced.
 
@@ -341,28 +343,33 @@ impl Controls {
     }
 }
 
+/// Settings with the `osd` and `bar` duties as given and `end` as the bar's
+/// end zone, for the tests of whoever reads [`brightness_consumer`].
+/// The `bar` argument goes when CEL-2-M removes the `bar` duty.
+#[cfg(test)]
+pub(crate) fn test_settings(osd: Duty, bar: Duty, end: &[&str]) -> Settings {
+    use celestina_shell::settings::{BarChoice, Duties};
+    Settings {
+        duties: Duties {
+            osd,
+            bar: Some(bar),
+            ..Duties::default()
+        },
+        bar: BarChoice {
+            end: Some(end.iter().map(|s| (*s).to_owned()).collect()),
+            ..BarChoice::default()
+        },
+        ..Settings::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use celestina_shell::audio::Direction;
-    use celestina_shell::settings::{BarChoice, Duties};
 
+    use super::test_settings as settings;
     use super::*;
     use crate::providers::brightness::BrightnessSource;
-
-    fn settings(osd: Duty, bar: Duty, end: &[&str]) -> Settings {
-        Settings {
-            duties: Duties {
-                osd,
-                bar: Some(bar),
-                ..Duties::default()
-            },
-            bar: BarChoice {
-                end: Some(end.iter().map(|s| (*s).to_owned()).collect()),
-                ..BarChoice::default()
-            },
-            ..Settings::default()
-        }
-    }
 
     #[test]
     fn ddc_has_a_consumer_only_with_the_duty_the_bar_and_the_piece() {

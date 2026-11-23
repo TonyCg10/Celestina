@@ -171,7 +171,7 @@ impl Osds {
     }
 
     /// The settings in force changed from `before`: the workers follow the
-    /// duty, and the display its switches.
+    /// duty and the bar's layout, and the display its switches.
     pub fn settings_changed(
         &mut self,
         before: &Settings,
@@ -179,16 +179,25 @@ impl Osds {
         ctl: &mut RuntimeCtl<'_>,
         theme: &Theme,
     ) {
-        if before.duties.osd == after.duties.osd && before.osd == after.osd {
+        if !self.workers_follow(before, after) {
             return;
-        }
-        if let Some(runtime) = self.runtime.get() {
-            runtime.apply(after);
         }
         let runtime = Rc::clone(&self.runtime);
         let mut host = AppHost::new(ctl, runtime.get(), theme);
         let now = self.now();
         self.apply(after, now, &mut host);
+    }
+
+    /// Brings the duty's workers to `after` and says whether the display
+    /// itself has anything to follow. The workers hear every change, not
+    /// only the duty's: whether a layout holds the brightness piece is the
+    /// runtime's to read ([`OsdRuntime::apply`]), and an apply that changes
+    /// nothing is free.
+    fn workers_follow(&self, before: &Settings, after: &Settings) -> bool {
+        if let Some(runtime) = self.runtime.get() {
+            runtime.apply(after);
+        }
+        before.duties.osd != after.duties.osd || before.osd != after.osd
     }
 
     /// The audio worker's reading.
@@ -661,6 +670,37 @@ mod tests {
     fn fire(osds: &mut Osds, host: &mut Fake) {
         let tick = host.last_tick();
         osds.ticked(tick, host);
+    }
+
+    #[test]
+    fn a_layout_change_alone_reaches_the_workers_and_leaves_the_display_alone() {
+        use crate::osd::control::test_settings;
+        use crate::osd::tests::{runtime_with_brightness_queue, told};
+        use crate::providers::brightness::BrightnessCommand;
+
+        let before = test_settings(Duty::On, Duty::On, &["tray", "volume"]);
+        let after = test_settings(Duty::On, Duty::On, &["tray", "brightness"]);
+        let (runtime, commands) = runtime_with_brightness_queue();
+        // The shell's start: the duty is on, the piece is not placed.
+        runtime.apply(&before);
+        assert_eq!(told(&commands), []);
+        let slot = Rc::new(OnceCell::new());
+        assert!(slot.set(runtime).is_ok());
+        let osds = Osds::new(Rc::clone(&slot), &before, &Theme::dark());
+
+        // The piece is placed live: neither the duty nor the `osd` section
+        // changed, so the display has nothing to follow, and still the
+        // workers are told (behind the display's early return they would
+        // not be, and a piece placed live would never appear).
+        assert!(!osds.workers_follow(&before, &after));
+        assert_eq!(told(&commands), [BrightnessCommand::Show]);
+        // Removed live: taken back.
+        assert!(!osds.workers_follow(&after, &before));
+        assert_eq!(told(&commands), [BrightnessCommand::Hide]);
+        // The duty's own change is the display's too.
+        let off = test_settings(Duty::Off, Duty::On, &["tray", "volume"]);
+        assert!(osds.workers_follow(&before, &off));
+        assert!(slot.get().is_some_and(|runtime| !runtime.running()));
     }
 
     #[test]

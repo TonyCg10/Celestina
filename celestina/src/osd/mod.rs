@@ -296,7 +296,7 @@ struct Inner {
     wanted: bool,
     /// The settings in force give the DDC worker a consumer.
     consumer: bool,
-    /// The running brightness workers were told so (one `Detect` each).
+    /// The running brightness workers were told so (one `Show` each).
     consumer_told: bool,
 }
 
@@ -329,8 +329,28 @@ impl Inner {
         let Some(handle) = self.running.as_ref().and_then(|r| r.brightness.as_ref()) else {
             return;
         };
-        // A refusal is logged by the handle; the next call asks again.
-        self.consumer_told = handle.request(BrightnessCommand::Detect).is_ok();
+        // A refusal (a full queue, a worker gone) is logged by the handle;
+        // the next settings change asks again.
+        self.consumer_told = handle.request(BrightnessCommand::Show).is_ok();
+    }
+
+    /// Takes whether the settings in force give the DDC worker a consumer:
+    /// one that appears is told to the running workers, one that left is
+    /// taken back from them.
+    fn set_consumer(&mut self, consumer: bool) {
+        self.consumer = consumer;
+        if consumer {
+            self.tell_consumer();
+            return;
+        }
+        if std::mem::take(&mut self.consumer_told) {
+            if let Some(handle) = self.running.as_ref().and_then(|r| r.brightness.as_ref()) {
+                // A refusal is logged by the handle. The worker then keeps
+                // reading new monitors for a piece that left, until its
+                // workers stop: a read too many, never a write.
+                let _ = handle.request(BrightnessCommand::Hide);
+            }
+        }
     }
 }
 
@@ -382,12 +402,20 @@ impl OsdRuntime {
     /// Brings the workers to what `settings` ask for: the duty on has them,
     /// off has none (stopped by a reaper thread, never on the loop's). A
     /// duty turned on while the last workers still stop starts when the
-    /// reaper is done ([`OsdRuntime::resume`]). Idempotent, so it is called
-    /// at start and after every settings change.
+    /// reaper is done ([`OsdRuntime::resume`]). The brightness workers are
+    /// also told whether a layout holds the brightness piece
+    /// ([`control::brightness_consumer`]): `Show` once when it does, `Hide`
+    /// once when it no longer does. Idempotent, so it is called at start and
+    /// after every settings change.
     pub fn apply(&self, settings: &Settings) {
         let on = settings.duties.osd == Duty::On;
         let mut inner = self.inner.borrow_mut();
         inner.wanted = on;
+        // Before the workers start, so a start tells them; and here rather
+        // than on an output's arrival, because at the shell's start the
+        // outputs are announced before this runtime exists (a placed piece
+        // then never asked for its detection).
+        inner.set_consumer(control::brightness_consumer(settings));
         match (on, inner.running.is_some()) {
             (true, false) => {
                 if inner.reaper.busy() {
@@ -415,21 +443,6 @@ impl OsdRuntime {
         let mut inner = self.inner.borrow_mut();
         if inner.wanted && inner.running.is_none() && !inner.reaper.busy() {
             inner.start();
-        }
-    }
-
-    /// Whether the settings in force give the DDC worker a consumer (the
-    /// duty on and the `brightness` piece in a layout). The worker is asked
-    /// to detect only when this becomes true, or when new workers start
-    /// while it is; every other call is a no-op, so the caller may say it on
-    /// every settings change and every output added.
-    pub fn set_brightness_consumer(&self, consumer: bool) {
-        let mut inner = self.inner.borrow_mut();
-        inner.consumer = consumer;
-        if consumer {
-            inner.tell_consumer();
-        } else {
-            inner.consumer_told = false;
         }
     }
 
@@ -581,38 +594,146 @@ mod tests {
         assert_eq!(counting.started.load(Ordering::SeqCst), 2);
     }
 
-    #[test]
-    fn the_ddc_worker_is_asked_to_detect_only_when_a_consumer_appears() {
+    /// A runtime whose brightness workers are only the returned queue, so a
+    /// test reads what they were told. Every set of workers it starts shares
+    /// that one queue.
+    pub(in crate::osd) fn runtime_with_brightness_queue(
+    ) -> (OsdRuntime, std::sync::mpsc::Receiver<BrightnessCommand>) {
         let (handle, commands) = crate::providers::brightness::test_handle();
         let counting = Counting {
             brightness: Some(handle),
             ..Counting::default()
         };
-        let runtime = OsdRuntime::with(Box::new(counting), Box::new(NoTimer));
-        let detects = || {
-            std::iter::from_fn(|| commands.try_recv().ok())
-                .filter(|c| *c == BrightnessCommand::Detect)
-                .count()
-        };
-        // Wanted before the workers exist: told when they start.
-        runtime.set_brightness_consumer(true);
-        assert_eq!(detects(), 0);
-        runtime.apply(&settings(Duty::On));
-        assert_eq!(detects(), 1);
-        // Every settings write and every output added asks again: no-ops.
+        (
+            OsdRuntime::with(Box::new(counting), Box::new(NoTimer)),
+            commands,
+        )
+    }
+
+    /// What the brightness workers were told since the last look, in order.
+    pub(in crate::osd) fn told(
+        commands: &std::sync::mpsc::Receiver<BrightnessCommand>,
+    ) -> Vec<BrightnessCommand> {
+        std::iter::from_fn(|| commands.try_recv().ok()).collect()
+    }
+
+    /// The duty on, the bar on and the `brightness` piece in its end zone.
+    fn piece_placed() -> Settings {
+        control::test_settings(Duty::On, Duty::On, &["tray", "brightness"])
+    }
+
+    /// The duty on and the bar on, without the `brightness` piece.
+    fn piece_absent() -> Settings {
+        control::test_settings(Duty::On, Duty::On, &["tray", "volume"])
+    }
+
+    #[test]
+    fn a_start_with_the_piece_placed_and_the_duty_on_asks_the_ddc_worker_to_show_it() {
+        // The shell's cold start (the defect of 1.13.0): the outputs were
+        // announced before this runtime existed, so no output event reaches
+        // it, and `main` calls `apply` once. That one call must be enough.
+        let (runtime, commands) = runtime_with_brightness_queue();
+        runtime.apply(&piece_placed());
+        assert!(runtime.running());
+        assert_eq!(told(&commands), [BrightnessCommand::Show]);
+    }
+
+    #[test]
+    fn the_ddc_worker_hears_the_piece_once_when_it_is_placed_and_once_when_it_leaves() {
+        let (runtime, commands) = runtime_with_brightness_queue();
+        runtime.apply(&piece_placed());
+        assert_eq!(told(&commands), [BrightnessCommand::Show]);
+        // Every later settings write with the piece still placed: nothing.
         for _ in 0..10 {
-            runtime.set_brightness_consumer(true);
+            runtime.apply(&piece_placed());
         }
-        assert_eq!(detects(), 0);
-        // The piece removed and placed again is a new consumer.
-        runtime.set_brightness_consumer(false);
-        runtime.set_brightness_consumer(true);
-        assert_eq!(detects(), 1);
-        // New workers (the duty off and on) hear it once more.
-        runtime.apply(&settings(Duty::Off));
+        assert_eq!(told(&commands), []);
+        // An output is its own news, never a second `Show`.
+        runtime.outputs_changed();
+        assert_eq!(told(&commands), [BrightnessCommand::OutputsChanged]);
+        // The piece leaves the layout: taken back once.
+        runtime.apply(&piece_absent());
+        runtime.apply(&piece_absent());
+        assert_eq!(told(&commands), [BrightnessCommand::Hide]);
+        // Placed again: a new consumer.
+        runtime.apply(&piece_placed());
+        assert_eq!(told(&commands), [BrightnessCommand::Show]);
+        // The bar going off takes its pieces with it.
+        runtime.apply(&control::test_settings(
+            Duty::On,
+            Duty::Off,
+            &["tray", "brightness"],
+        ));
+        assert_eq!(told(&commands), [BrightnessCommand::Hide]);
+        runtime.apply(&piece_placed());
+        assert_eq!(told(&commands), [BrightnessCommand::Show]);
+        // The duty off: the workers that are about to stop hear the piece
+        // leave (they share the test's queue with their successors).
+        runtime.apply(&control::test_settings(
+            Duty::Off,
+            Duty::On,
+            &["tray", "brightness"],
+        ));
+        assert!(!runtime.running());
+        assert_eq!(told(&commands), [BrightnessCommand::Hide]);
+        // New workers hear it once more, and once only.
         runtime.stop();
-        runtime.apply(&settings(Duty::On));
-        assert_eq!(detects(), 1);
+        runtime.apply(&piece_placed());
+        runtime.apply(&piece_placed());
+        assert!(runtime.running());
+        assert_eq!(told(&commands), [BrightnessCommand::Show]);
+    }
+
+    #[test]
+    fn a_piece_placed_while_the_old_workers_stop_is_told_to_the_new_ones() {
+        let (handle, commands) = crate::providers::brightness::test_handle();
+        let counting = Counting {
+            stop_delay: Duration::from_millis(400),
+            brightness: Some(handle),
+            ..Counting::default()
+        };
+        let runtime = OsdRuntime::with(Box::new(counting.clone()), Box::new(NoTimer));
+        // Named layouts, never the default one: whether that places the
+        // piece is not this test's to assume.
+        runtime.apply(&piece_absent());
+        runtime.apply(&control::test_settings(
+            Duty::Off,
+            Duty::On,
+            &["tray", "volume"],
+        ));
+        assert_eq!(told(&commands), []);
+        // Deferred behind the reaper: there is no worker to tell yet.
+        runtime.apply(&piece_placed());
+        assert!(!runtime.running());
+        assert_eq!(told(&commands), []);
+        until("the reaper", || counting.reaped.load(Ordering::SeqCst) == 1);
+        runtime.resume();
+        assert!(runtime.running());
+        assert_eq!(told(&commands), [BrightnessCommand::Show]);
+    }
+
+    #[test]
+    fn the_duty_on_without_the_piece_tells_the_ddc_worker_nothing() {
+        let (runtime, commands) = runtime_with_brightness_queue();
+        runtime.apply(&piece_absent());
+        runtime.apply(&piece_absent());
+        assert!(runtime.running());
+        // Neither `Show` nor, for a piece that was never told, `Hide`.
+        assert_eq!(told(&commands), []);
+        // The piece in a layout nobody draws (the bar off) is not placed.
+        runtime.apply(&control::test_settings(
+            Duty::On,
+            Duty::Off,
+            &["tray", "brightness"],
+        ));
+        assert_eq!(told(&commands), []);
+        // And with the duty off there is no worker to tell.
+        runtime.apply(&control::test_settings(
+            Duty::Off,
+            Duty::On,
+            &["tray", "brightness"],
+        ));
+        assert_eq!(told(&commands), []);
     }
 
     struct NoTimer;

@@ -1,0 +1,33 @@
+# CEL-2-C-DDC exact change inventory
+
+Base revision	3ffac082db9b7454c329625ac755f4077efd9ab4
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-23-ddc-piece.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-C-DDC.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/osd/control.rs
+Pathspec	celestina/src/osd/mod.rs
+Pathspec	celestina/src/osd/surface.rs
+Pathspec	celestina/src/providers/brightness.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	1f4bc88c8193aa3769b6edfaad8fe621e82e0a991e6208d6f01b11fc03f0ad32	celestina/Cargo.lock
+1	1	3707b753cc5218d1b3a0e4a14c87c978d6fd71c1a0c4e2d8da1a6b3d3504e03a	celestina/Cargo.toml
+7	1	7678c732f6c55becc91d8cc3d963b8d1a239943d73f796e0e1b526cd8575e2f1	celestina/README.md
+41	18	ef8bb1b69eeed31591e493a6ed8c3b69192824d3fea85a02c8fef5827a01937f	celestina/VALIDATION.md
+295	0	878ed96b786c3775c998f259362fb5d44b19ad455249b4de2e554ea8cae0070f	celestina/docs/evidence/2026-11-23-ddc-piece.md
+33	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-C-DDC.numstat.tsv
+1	0	30724d9779495cc4ed6ea1a093ce86aa24eb213621ec394225f7fc8deb171cdd	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+2	14	fddeaa7f0f23de3e7deecf40ad0a18d4ef41260527af8967d7b00ceb3b7787ec	celestina/src/app.rs
+27	20	b6d00b2f6b492bf429a59e94a5fff46f4efe1a61abf9a67b9ae17c2dca10598f	celestina/src/osd/control.rs
+165	44	e99c0e1b5cc432cc33bd61e0abdd4a5eaaf4199368ac6ba87603a93994d36460	celestina/src/osd/mod.rs
+45	5	29a0ae8d1cf05e48141bc1641ce8d6f6b83100c7e37b7f962d35a1efbce8c90d	celestina/src/osd/surface.rs
+601	70	93eaecb5d4774a9728aaf35f0ca4750becfd2c8a0273987fb6177f43078c2360	celestina/src/providers/brightness.rs
+1	0	163a1984af4c84b7cab48855df7acd850289a0ef923de0a92ee34d2188ec5ceb	docs/version-history.tsv

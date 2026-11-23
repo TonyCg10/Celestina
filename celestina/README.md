@@ -78,7 +78,13 @@ What Noctalia still does for the session is in
   overlay surface that exists only while it shows, and gives the `volume` and
   `brightness` bar pieces their readings. Audio is observed through
   `pactl subscribe` and read with `wpctl`; brightness through sysfs and,
-  lazily, `ddcutil` (never with `CELESTINA_DDC=0`). The lock-keys OSD is not
+  lazily, `ddcutil` (never with `CELESTINA_DDC=0`): nothing runs before the
+  first use, unless the `brightness` piece is placed, which asks for one
+  detection and one read per monitor when the duty's workers start, so the
+  piece has a level to show. Once something was detected, outputs that
+  appear or go are followed by one more detection after they have settled
+  for 5 s, and while the piece is placed by one read of each monitor whose
+  level is then unknown. The lock-keys OSD is not
   delivered. With the duty off, the `volume`, `microphone` and `brightness`
   verbs are rejected. See
   [the evidence](docs/evidence/2026-10-17-osd.md).

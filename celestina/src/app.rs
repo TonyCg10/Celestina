@@ -946,8 +946,8 @@ impl App {
 
     /// The `osd` duty or the bar's layout changed: with the duty off the
     /// readings are forgotten (so the pieces vanish) and an open slider popup
-    /// closes; the DDC worker is asked to detect once a layout holds the
-    /// brightness piece.
+    /// closes. Whether a layout holds the brightness piece is the runtime's
+    /// to read, in `OsdRuntime::apply`.
     fn levels_settings_changed(
         &mut self,
         before: &Settings,
@@ -969,17 +969,6 @@ impl App {
             if self.controls.readings.clear() {
                 self.levels_changed(ctl);
             }
-        }
-        self.request_brightness_consumer();
-    }
-
-    /// Tells the duty's runtime whether the settings in force give the DDC
-    /// worker a consumer; it asks the worker to detect only when one
-    /// appears, so calling this on every settings change and every output
-    /// added costs nothing.
-    fn request_brightness_consumer(&self) {
-        if let Some(runtime) = self.osds.runtime().get() {
-            runtime.set_brightness_consumer(control::brightness_consumer(self.settings.current()));
         }
     }
 
@@ -2776,7 +2765,6 @@ impl Shell for App {
                 if self.controls.readings.output_added(info.id, &info.name) {
                     self.levels_changed(ctl);
                 }
-                self.request_brightness_consumer();
                 self.output_added(&info, ctl);
                 self.wallpapers.output_added(
                     &info,

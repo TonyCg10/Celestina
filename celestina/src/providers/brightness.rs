@@ -16,18 +16,26 @@
 //!   timer that reads anything: the poll wakes every [`BACKLIGHT_WAKE`] only
 //!   to look at the shutdown flag and the command queue.
 //! - **DDC/CI** (`ddcutil`): one thread owns every `ddcutil` child. It is
-//!   lazy: nothing runs until a consumer asks ([`BrightnessCommand::Detect`],
+//!   lazy: nothing runs until a consumer asks ([`BrightnessCommand::Show`],
 //!   [`BrightnessCommand::Read`] or a DDC [`BrightnessCommand::Change`]); the
 //!   worker existing at all is the duty being on. Detection is then cached;
 //!   [`BrightnessCommand::OutputsChanged`] sets one flag, and only once a
 //!   detection happened, so a burst of outputs is one re-detection, and it
-//!   waits [`OUTPUTS_REDETECT_FLOOR`] after the last detection. A consumer
+//!   waits until [`OUTPUTS_REDETECT_FLOOR`] has passed since both the last
+//!   detection and the last output change: connectors that drop and come
+//!   back (a resume from suspend, a dock) settle before any child touches
+//!   their buses. A monitor a detection no longer finds is published as
+//!   unknown. A consumer
 //!   asking again after a detection that found nothing waits `REDETECT`
 //!   (30 s), so key presses never become a `detect` each. There is no
 //!   periodic read: the monitor's own buttons are not observed. A read
 //!   follows each of our writes, one precedes the first write to a monitor
-//!   whose level is unknown (published, so the display has a baseline), and
-//!   one read per monitor is asked for when the slider popup opens.
+//!   whose level is unknown (published, so the display has a baseline), one
+//!   read per monitor is asked for when the slider popup opens, and while the
+//!   brightness piece is placed each detection is followed by one read of
+//!   every monitor whose level is unknown (the piece draws nothing without a
+//!   reading, so it could not appear otherwise); the piece leaving drops
+//!   those of its reads that have not started.
 //!
 //! Two GPU losses were recorded with concurrent `ddcutil` children on one
 //! bus, so every DDC operation:
@@ -91,11 +99,14 @@ pub const MAX_BACKLIGHTS: usize = 8;
 pub const BACKLIGHT_WAKE: Duration = Duration::from_millis(100);
 /// The most bytes of a child's output kept; the rest is read and dropped.
 pub const MAX_CHILD_OUTPUT: usize = 64 * 1024;
-/// The least time between the end of a detection and a re-detection asked
-/// for by outputs appearing or going: a burst of outputs (the shell starting
-/// on three monitors, a dock) is one follow-up, never back-to-back children
-/// on the bus. A consumer asking again after a detection that found nothing
-/// waits the longer [`REDETECT`](celestina_shell::brightness::REDETECT).
+/// The least time before a re-detection asked for by outputs appearing or
+/// going, counted from the end of the last detection and from the last
+/// output change, whichever is later: a burst of outputs (the shell starting
+/// on three monitors, a dock, the connectors dropping and coming back at a
+/// resume) is one follow-up once it has settled, never back-to-back children
+/// on the bus and never a child while the connectors still change. A
+/// consumer asking again after a detection that found nothing waits the
+/// longer [`REDETECT`](celestina_shell::brightness::REDETECT).
 pub const OUTPUTS_REDETECT_FLOOR: Duration = Duration::from_secs(5);
 
 /// How often an idle DDC worker looks at the shutdown flag.
@@ -154,10 +165,17 @@ pub enum Change {
 /// What the loop asks of the brightness workers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BrightnessCommand {
-    /// A DDC consumer exists (the piece is placed): detect once, then cache.
-    /// After a detection that found nothing, it asks again, no sooner than
-    /// `REDETECT` after it.
-    Detect,
+    /// The brightness piece is placed: detect once, then cache, and read
+    /// once every monitor whose level is unknown, now and after each later
+    /// detection, until [`BrightnessCommand::Hide`]. A piece draws nothing
+    /// without a reading, so without this read it could never appear before
+    /// a verb or the popup had read the monitor for it. After a detection
+    /// that found nothing, it asks again, no sooner than `REDETECT` after it.
+    Show,
+    /// The brightness piece left every layout: no read is owed to it any
+    /// more, and those of its reads that have not started are dropped. What
+    /// is detected and read stays cached.
+    Hide,
     /// The slider popup opened: read every detected DDC monitor once.
     Read,
     /// Change one monitor. A DDC change is also a consumer.
@@ -167,8 +185,9 @@ pub enum BrightnessCommand {
         change: Change,
     },
     /// An output appeared or went: re-detect, once, if a detection already
-    /// happened, no sooner than [`OUTPUTS_REDETECT_FLOOR`] after it;
-    /// otherwise nothing.
+    /// happened, no sooner than [`OUTPUTS_REDETECT_FLOOR`] after it and after
+    /// the last of these commands (each one starts that wait again, so a
+    /// storm of them is one detection after it settles); otherwise nothing.
     OutputsChanged,
 }
 
@@ -565,10 +584,20 @@ struct Plan {
     /// it.
     retry: bool,
     /// Outputs appeared or went after a detection: one re-detection is owed
-    /// once [`OUTPUTS_REDETECT_FLOOR`] has passed since it.
+    /// once [`OUTPUTS_REDETECT_FLOOR`] has passed since it and since the
+    /// last of those changes.
     outputs_changed: bool,
+    /// An output change was absorbed and has no instant yet: the plan has no
+    /// clock, so the worker stamps it at its next step.
+    outputs_unstamped: bool,
     /// The popup asked for one read of every monitor.
     read_all: bool,
+    /// The piece is placed ([`BrightnessCommand::Show`]): each detection owes
+    /// one read of every monitor whose level is unknown.
+    shows: bool,
+    /// One read of every monitor whose level is unknown is owed: the piece
+    /// was placed, or a detection ended while it is.
+    read_unknown: bool,
     /// The newest target per connector.
     pending: BTreeMap<String, Target>,
     /// Commands seen while DDC is forbidden (logged once).
@@ -578,9 +607,15 @@ struct Plan {
 impl Plan {
     fn absorb(&mut self, command: BrightnessCommand) {
         match command {
-            BrightnessCommand::Detect => {
+            BrightnessCommand::Show => {
                 self.consumer = true;
+                self.shows = true;
+                self.read_unknown = true;
                 self.retry_if_found_none();
+            }
+            BrightnessCommand::Hide => {
+                self.shows = false;
+                self.read_unknown = false;
             }
             BrightnessCommand::Read => {
                 self.consumer = true;
@@ -611,6 +646,7 @@ impl Plan {
             BrightnessCommand::OutputsChanged => {
                 if self.detected {
                     self.outputs_changed = true;
+                    self.outputs_unstamped = true;
                 }
             }
         }
@@ -643,8 +679,13 @@ struct Ddc<E: DdcEnvironment> {
     levels: BTreeMap<String, Option<u8>>,
     /// Monitors the popup's read still owes.
     to_read: BTreeSet<String>,
+    /// Monitors the placed piece is still owed a read of; kept apart from
+    /// the popup's so the piece leaving drops them.
+    piece_reads: BTreeSet<String>,
     /// When the last detection ended, on the environment's clock.
     last_detect: Option<Instant>,
+    /// When the worker took in the last output change, on the same clock.
+    last_outputs_change: Option<Instant>,
     /// The lease kept while an abandoned child may be alive.
     held: Option<E::Lease>,
 }
@@ -669,15 +710,7 @@ fn run_ddc<E: DdcEnvironment>(
     shutdown: &AtomicBool,
     mut publish: impl FnMut(BrightnessEvent) -> bool,
 ) {
-    let mut ddc = Ddc {
-        env,
-        plan: Plan::default(),
-        displays: Vec::new(),
-        levels: BTreeMap::new(),
-        to_read: BTreeSet::new(),
-        last_detect: None,
-        held: None,
-    };
+    let mut ddc = Ddc::new(env);
     let mut busy = false;
     loop {
         if shutdown.load(Ordering::Acquire) {
@@ -735,9 +768,29 @@ enum Step {
 }
 
 impl<E: DdcEnvironment> Ddc<E> {
+    fn new(env: E) -> Self {
+        Self {
+            env,
+            plan: Plan::default(),
+            displays: Vec::new(),
+            levels: BTreeMap::new(),
+            to_read: BTreeSet::new(),
+            piece_reads: BTreeSet::new(),
+            last_detect: None,
+            last_outputs_change: None,
+            held: None,
+        }
+    }
+
     /// Runs at most one unit of work: a detection, one monitor's write and
-    /// read-back, or one popup read.
+    /// read-back, or one read owed to the popup or to the placed piece.
     fn step(&mut self, queue: &Receiver<BrightnessCommand>, shutdown: &AtomicBool) -> Step {
+        if std::mem::take(&mut self.plan.outputs_unstamped) {
+            // Taken in between two operations at the latest, so a change
+            // that arrived during one is stamped at its end: later than it
+            // came, never earlier.
+            self.last_outputs_change = Some(self.env.now());
+        }
         if !self.plan.wants_ddc() {
             return Step::Idle;
         }
@@ -755,7 +808,26 @@ impl<E: DdcEnvironment> Ddc<E> {
                 .map(|display| display.connector.clone())
                 .collect();
         }
-        if let Some(monitor) = self.to_read.pop_first() {
+        if self.plan.read_unknown {
+            // Once per request: a monitor that does not answer stays unknown
+            // until the next detection or the next time the piece is placed.
+            self.plan.read_unknown = false;
+            self.piece_reads.extend(
+                self.levels
+                    .iter()
+                    .filter(|(_, level)| level.is_none())
+                    .map(|(monitor, _)| monitor.clone()),
+            );
+        }
+        if !self.plan.shows {
+            // The piece left: its reads that have not started are not owed.
+            self.piece_reads.clear();
+        }
+        let owed = self
+            .to_read
+            .pop_first()
+            .or_else(|| self.piece_reads.pop_first());
+        if let Some(monitor) = owed {
             return match self.read(&monitor, queue, shutdown) {
                 Err(OpError::Cancelled) => Step::Stop,
                 Ok(_) | Err(_) => Step::Worked(vec![self.event(&monitor)]),
@@ -765,7 +837,8 @@ impl<E: DdcEnvironment> Ddc<E> {
     }
 
     /// Whether a re-detection owed is due: outputs changing wait
-    /// [`OUTPUTS_REDETECT_FLOOR`] after the last detection, a consumer
+    /// [`OUTPUTS_REDETECT_FLOOR`] after the last detection and after the
+    /// last of those changes (so a storm of them settles first), a consumer
     /// asking again after finding nothing waits [`REDETECT`](celestina_shell::brightness::REDETECT)
     /// (`detection_is_due`'s interval for a worker that knows no monitor). A
     /// request not yet due stays owed and the idle loop looks again.
@@ -773,11 +846,12 @@ impl<E: DdcEnvironment> Ddc<E> {
         if !self.plan.retry && !self.plan.outputs_changed {
             return false;
         }
-        let since = match self.last_detect {
-            Some(at) => self.env.now().saturating_duration_since(at),
-            None => Duration::MAX,
-        };
-        let outputs = self.plan.outputs_changed && since >= OUTPUTS_REDETECT_FLOOR;
+        let now = self.env.now();
+        let elapsed =
+            |at: Option<Instant>| at.map_or(Duration::MAX, |at| now.saturating_duration_since(at));
+        let since = elapsed(self.last_detect);
+        let settled = elapsed(self.last_outputs_change) >= OUTPUTS_REDETECT_FLOOR;
+        let outputs = self.plan.outputs_changed && since >= OUTPUTS_REDETECT_FLOOR && settled;
         let retry = self.plan.retry && detection_is_due(!self.plan.found_none, false, since);
         outputs || retry
     }
@@ -826,14 +900,32 @@ impl<E: DdcEnvironment> Ddc<E> {
             let known = self.levels.get(&display.connector).copied().flatten();
             levels.insert(display.connector.clone(), known);
         }
+        // A monitor this detection no longer finds is published as unknown,
+        // or its last level would stay on screen for a monitor nobody can
+        // read or change.
+        let gone: Vec<String> = self
+            .levels
+            .keys()
+            .filter(|monitor| !levels.contains_key(*monitor))
+            .cloned()
+            .collect();
         self.levels = levels;
         self.displays = displays;
         self.to_read
             .retain(|monitor| self.levels.contains_key(monitor));
+        self.piece_reads
+            .retain(|monitor| self.levels.contains_key(monitor));
+        // The piece shows every monitor: one this detection brought is read.
+        self.plan.read_unknown = self.plan.shows;
         Step::Worked(
-            self.displays
-                .iter()
-                .map(|display| self.event(&display.connector))
+            gone.iter()
+                .map(String::as_str)
+                .chain(
+                    self.displays
+                        .iter()
+                        .map(|display| display.connector.as_str()),
+                )
+                .map(|monitor| self.event(monitor))
                 .collect(),
         )
     }
@@ -934,6 +1026,8 @@ impl<E: DdcEnvironment> Ddc<E> {
         queue: &Receiver<BrightnessCommand>,
         shutdown: &AtomicBool,
     ) -> Result<u8, OpError> {
+        // Any read of the monitor is the one the piece was owed.
+        self.piece_reads.remove(monitor);
         let number = self.number(monitor).ok_or(OpError::Unreadable)?;
         let args = vec![
             "--display".to_owned(),
@@ -1553,8 +1647,13 @@ mod tests {
         gated: AtomicUsize,
         /// Answer every operation with a timeout.
         time_out: AtomicBool,
+        /// Displays whose reads (`getvcp`) time out while everything else
+        /// answers.
+        deaf: Mutex<BTreeSet<u8>>,
         /// Simulated time.
         clock: Mutex<Duration>,
+        /// How often the clock was read.
+        clock_reads: AtomicUsize,
     }
 
     impl Bus {
@@ -1574,6 +1673,18 @@ mod tests {
                 .iter()
                 .filter(|args| args.iter().any(|arg| arg == verb))
                 .count()
+        }
+
+        /// The display numbers read (`getvcp`), in order.
+        fn reads(&self) -> Vec<String> {
+            self.calls()
+                .iter()
+                .filter(|args| args.iter().any(|arg| arg == "getvcp"))
+                .filter_map(|args| {
+                    let at = args.iter().position(|arg| arg == "--display")?;
+                    args.get(at + 1).cloned()
+                })
+                .collect()
         }
 
         fn writes(&self) -> Vec<Vec<String>> {
@@ -1642,6 +1753,7 @@ mod tests {
 
         fn now(&mut self) -> Instant {
             static BASE: OnceLock<Instant> = OnceLock::new();
+            self.0.clock_reads.fetch_add(1, Ordering::AcqRel);
             *BASE.get_or_init(Instant::now) + *self.0.clock.lock().expect("lock")
         }
 
@@ -1694,6 +1806,11 @@ mod tests {
             return Ok(bus.detect.lock().expect("lock").clone());
         }
         let display = display.ok_or(RunError::Timeout)?;
+        if args.iter().any(|arg| arg == "getvcp")
+            && bus.deaf.lock().expect("lock").contains(&display)
+        {
+            return Err(RunError::Timeout);
+        }
         if args.iter().any(|arg| arg == "setvcp") {
             let value = args.last().and_then(|v| v.parse().ok()).unwrap_or(0);
             bus.values.lock().expect("lock").insert(display, value);
@@ -1766,6 +1883,85 @@ mod tests {
         }
     }
 
+    /// Places the piece on a bus whose two monitors answer: the detection
+    /// publishes both as unknown, then each is read once.
+    fn show_and_read(rig: &Rig) {
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        assert_eq!(next(rig), ddc("DP-1", None));
+        assert_eq!(next(rig), ddc("DP-2", None));
+        assert_eq!(next(rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(rig), ddc("DP-2", Some(30)));
+    }
+
+    /// Nothing more is published for a while.
+    fn quiet(rig: &Rig) {
+        let event = rig.events.recv_timeout(Duration::from_millis(150));
+        assert!(event.is_err(), "{event:?}");
+    }
+
+    /// One output change taken in by an idle worker that has detected, and
+    /// then the floor passing since it: the redetection is due.
+    fn outputs_change_settled(bus: &Bus, rig: &Rig) {
+        // An idle worker that owes nothing never reads the clock; it reads
+        // it to stamp the change, and only from that stamp the floor counts.
+        let seen = bus.clock_reads.load(Ordering::Acquire);
+        assert!(rig
+            .handle
+            .request(BrightnessCommand::OutputsChanged)
+            .is_ok());
+        until("the worker to take the change in", || {
+            bus.clock_reads.load(Ordering::Acquire) > seen
+        });
+        bus.advance(OUTPUTS_REDETECT_FLOOR);
+    }
+
+    /// A DDC worker's state over a fake bus, stepped by hand: no thread and
+    /// no waiting, so the fake clock alone decides what is due.
+    struct ByHand {
+        ddc: Ddc<FakeDdc>,
+        queue: Receiver<BrightnessCommand>,
+        _commands: SyncSender<BrightnessCommand>,
+        shutdown: AtomicBool,
+    }
+
+    impl ByHand {
+        fn new(bus: &Arc<Bus>) -> Self {
+            let (commands, queue) = mpsc::sync_channel(COMMAND_QUEUE);
+            Self {
+                ddc: Ddc::new(FakeDdc(Arc::clone(bus))),
+                queue,
+                _commands: commands,
+                shutdown: AtomicBool::new(false),
+            }
+        }
+
+        /// Folds `command` into the plan, as the worker's loop does.
+        fn tell(&mut self, command: BrightnessCommand) {
+            self.ddc.plan.absorb(command);
+        }
+
+        /// One unit of work: what it published, or `None` when nothing is
+        /// due.
+        fn once(&mut self) -> Option<Vec<BrightnessEvent>> {
+            match self.ddc.step(&self.queue, &self.shutdown) {
+                Step::Idle => None,
+                Step::Worked(events) => Some(events),
+                Step::Stop => panic!("nothing asked the worker to stop"),
+            }
+        }
+
+        /// Every unit of work that is due now: what they published.
+        fn run(&mut self) -> Vec<BrightnessEvent> {
+            let mut events = Vec::new();
+            while let Some(more) = self.once() {
+                events.extend(more);
+            }
+            events
+        }
+    }
+
+    const ONE_DISPLAY: &str = "Display 1\n   DRM connector:    card1-DP-1\n";
+
     fn change(monitor: &str, change: Change) -> BrightnessCommand {
         BrightnessCommand::Change {
             source: BrightnessSource::Ddc,
@@ -1800,7 +1996,7 @@ mod tests {
     }
 
     #[test]
-    fn nothing_runs_before_a_consumer_and_an_early_output_change_is_not_one() {
+    fn nothing_runs_before_a_consumer_and_the_placed_piece_reads_each_monitor_once() {
         let bus = Bus::new();
         let rig = rig(&bus);
         assert!(rig
@@ -1811,17 +2007,24 @@ mod tests {
         assert!(bus.calls().is_empty());
         assert_eq!(bus.lease_attempts.load(Ordering::Acquire), 0);
 
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
         // Known but unread: unknown, never zero.
         assert_eq!(next(&rig), ddc("DP-1", None));
         assert_eq!(next(&rig), ddc("DP-2", None));
+        // The placed piece is the reason to read: it draws nothing without
+        // a level. One read per monitor, in order, after the one detection.
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
         assert_eq!(bus.count("detect"), 1);
-        assert_eq!(bus.count("getvcp"), 0, "no read without a reason");
+        assert_eq!(bus.reads(), ["1", "2"]);
+        assert!(bus.writes().is_empty(), "showing never writes");
 
-        // A second consumer uses the cache.
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
-        thread::sleep(Duration::from_millis(150));
+        // A second `Show` uses the cache and reads nothing more: every
+        // level is known. Nor is there a periodic read.
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        quiet(&rig);
         assert_eq!(bus.count("detect"), 1);
+        assert_eq!(bus.count("getvcp"), 2);
         rig.workers.join();
     }
 
@@ -1829,11 +2032,15 @@ mod tests {
     fn nothing_runs_with_ddc_switched_off() {
         let bus = Bus::new();
         let rig = rig_with(&bus, false, NoBacklight);
+        // The placed piece is refused like every other consumer: neither
+        // its detection nor its reads run.
         for command in [
-            BrightnessCommand::Detect,
+            BrightnessCommand::Show,
             BrightnessCommand::Read,
             change("DP-1", Change::Set(10)),
             BrightnessCommand::OutputsChanged,
+            BrightnessCommand::Hide,
+            BrightnessCommand::Show,
         ] {
             assert!(rig.handle.request(command).is_ok());
         }
@@ -1874,9 +2081,7 @@ mod tests {
         let bus = Bus::new();
         bus.tick_while_gated.store(true, Ordering::Release);
         let rig = rig(&bus);
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
-        assert_eq!(next(&rig), ddc("DP-1", None));
-        assert_eq!(next(&rig), ddc("DP-2", None));
+        show_and_read(&rig);
 
         // The first write blocks on the bus; ten steps arrive meanwhile.
         bus.close_gate();
@@ -1897,13 +2102,16 @@ mod tests {
         thread::sleep(Duration::from_millis(30));
         bus.open_gate();
 
-        // The level before the first write (read while the burst arrived).
-        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        // The level before the first write is the one the placed piece
+        // read, so nothing is read again before it: each write is followed
+        // by its read-back and nothing else.
         assert_eq!(next(&rig), ddc("DP-1", Some(40)));
         assert_eq!(next(&rig), ddc("DP-1", Some(75)));
         let writes = bus.writes();
         assert_eq!(writes.len(), 2, "{writes:?}");
+        assert_eq!(writes[0].last().map(String::as_str), Some("40"));
         assert_eq!(writes[1].last().map(String::as_str), Some("75"));
+        assert_eq!(bus.reads(), ["1", "2", "1", "1"]);
         rig.workers.join();
     }
 
@@ -1935,7 +2143,7 @@ mod tests {
         let bus = Bus::new();
         let rig = rig(&bus);
         bus.close_gate();
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
         until("the detection to block", || {
             bus.gated.load(Ordering::Acquire) == 1
         });
@@ -1989,7 +2197,7 @@ mod tests {
         let bus = Bus::new();
         *bus.leased.lock().expect("lock") = true;
         let rig = rig(&bus);
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
         // The fake clock runs out the patience: the detection is refused.
         until("the refusal", || {
             *bus.clock.lock().expect("lock") >= LEASE_PATIENCE
@@ -2000,9 +2208,13 @@ mod tests {
         // answered, now on a free bus.
         *bus.leased.lock().expect("lock") = false;
         bus.advance(REDETECT);
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
         assert_eq!(next(&rig), ddc("DP-1", None));
+        assert_eq!(next(&rig), ddc("DP-2", None));
         assert_eq!(bus.count("detect"), 1);
+        // And the reads the piece is owed follow that detection.
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
         rig.workers.join();
     }
 
@@ -2011,16 +2223,10 @@ mod tests {
         let bus = Bus::new();
         bus.tick_while_gated.store(true, Ordering::Release);
         let rig = rig(&bus);
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
-        assert_eq!(next(&rig), ddc("DP-1", None));
-        assert_eq!(next(&rig), ddc("DP-2", None));
+        show_and_read(&rig);
 
         bus.close_gate();
-        bus.advance(OUTPUTS_REDETECT_FLOOR);
-        assert!(rig
-            .handle
-            .request(BrightnessCommand::OutputsChanged)
-            .is_ok());
+        outputs_change_settled(&bus, &rig);
         until("the redetection to block", || {
             bus.gated.load(Ordering::Acquire) == 1
         });
@@ -2033,8 +2239,9 @@ mod tests {
         }
         thread::sleep(Duration::from_millis(30));
         bus.open_gate();
-        assert_eq!(next(&rig), ddc("DP-1", None));
-        assert_eq!(next(&rig), ddc("DP-2", None));
+        // A redetection keeps the levels of the monitors it finds again.
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
         // The follow-up keeps the floor after the redetection too.
         thread::sleep(Duration::from_millis(150));
         assert_eq!(bus.count("detect"), 2);
@@ -2042,6 +2249,8 @@ mod tests {
         until("the follow-up", || bus.count("detect") >= 3);
         thread::sleep(Duration::from_millis(200));
         assert_eq!(bus.count("detect"), 3);
+        // Known monitors found again are not read again for the piece.
+        assert_eq!(bus.count("getvcp"), 2);
         rig.workers.join();
     }
 
@@ -2050,12 +2259,12 @@ mod tests {
         let bus = Bus::new();
         bus.detect.lock().expect("lock").clear();
         let rig = rig(&bus);
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
         until("the first detection", || bus.count("detect") == 1);
         // Twenty consumers (key presses, settings writes, outputs) ask again
         // at once: none of them is a reason for another child on the bus.
         for _ in 0..20 {
-            let _ = rig.handle.request(BrightnessCommand::Detect);
+            let _ = rig.handle.request(BrightnessCommand::Show);
             let _ = rig
                 .handle
                 .request(change("DP-1", Change::Step(Direction::Up)));
@@ -2069,6 +2278,7 @@ mod tests {
         thread::sleep(Duration::from_millis(200));
         assert_eq!(bus.count("detect"), 2);
         assert!(bus.writes().is_empty(), "no monitor, no write");
+        assert_eq!(bus.count("getvcp"), 0, "no monitor, no read");
         rig.workers.join();
     }
 
@@ -2076,22 +2286,26 @@ mod tests {
     fn outputs_arriving_right_after_a_detection_wait_for_the_short_floor() {
         let bus = Bus::new();
         let rig = rig(&bus);
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
         assert_eq!(next(&rig), ddc("DP-1", None));
         assert_eq!(next(&rig), ddc("DP-2", None));
-        // Three outputs announced at start, after the first detection began.
+        // Three outputs announced at start, after the first detection began
+        // and while the piece's reads run.
         for _ in 0..3 {
             assert!(rig
                 .handle
                 .request(BrightnessCommand::OutputsChanged)
                 .is_ok());
         }
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
         thread::sleep(Duration::from_millis(200));
         assert_eq!(bus.count("detect"), 1, "not back to back on the bus");
         bus.advance(OUTPUTS_REDETECT_FLOOR);
         until("the follow-up", || bus.count("detect") == 2);
         thread::sleep(Duration::from_millis(200));
         assert_eq!(bus.count("detect"), 2, "one follow-up, not three");
+        assert_eq!(bus.count("getvcp"), 2, "and no read of a known level");
         rig.workers.join();
     }
 
@@ -2141,9 +2355,7 @@ mod tests {
     fn a_timed_out_operation_leaves_the_monitor_unknown_and_the_worker_going() {
         let bus = Bus::new();
         let rig = rig(&bus);
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
-        assert_eq!(next(&rig), ddc("DP-1", None));
-        assert_eq!(next(&rig), ddc("DP-2", None));
+        show_and_read(&rig);
         bus.time_out.store(true, Ordering::Release);
         assert!(rig.handle.request(BrightnessCommand::Read).is_ok());
         assert_eq!(next(&rig), ddc("DP-1", None));
@@ -2157,12 +2369,331 @@ mod tests {
     }
 
     #[test]
+    fn a_monitor_that_does_not_answer_is_left_unknown_until_the_piece_is_placed_again() {
+        let bus = Bus::new();
+        // Display 1 times out on every read; display 2 answers nothing.
+        bus.deaf.lock().expect("lock").insert(1);
+        bus.values.lock().expect("lock").remove(&2);
+        let rig = rig(&bus);
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        assert_eq!(next(&rig), ddc("DP-1", None));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        // Each failed read is published as unknown, never as zero: the
+        // piece draws nothing for that monitor.
+        assert_eq!(next(&rig), ddc("DP-1", None));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        // One attempt each and no retry: a silent monitor is not a loop of
+        // children on the bus.
+        quiet(&rig);
+        assert_eq!(bus.reads(), ["1", "2"]);
+
+        // The monitors would answer now; nothing asks them by itself.
+        bus.deaf.lock().expect("lock").clear();
+        bus.values.lock().expect("lock").insert(2, 30);
+        quiet(&rig);
+        assert_eq!(bus.count("getvcp"), 2);
+
+        // The piece placed again is a new request: both are read, once.
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
+        quiet(&rig);
+        assert_eq!(bus.reads(), ["1", "2", "1", "2"]);
+        assert_eq!(bus.count("detect"), 1, "the detection stays cached");
+        assert!(bus.writes().is_empty());
+        rig.workers.join();
+    }
+
+    #[test]
+    fn a_monitor_that_did_not_answer_is_read_again_after_the_next_detection() {
+        let bus = Bus::new();
+        bus.deaf.lock().expect("lock").insert(2);
+        let rig = rig(&bus);
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        assert_eq!(next(&rig), ddc("DP-1", None));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        quiet(&rig);
+        assert_eq!(bus.reads(), ["1", "2"]);
+
+        // An output change past the floor redetects; the piece is still
+        // placed, so the monitor still unknown is asked once more, and the
+        // one already known is not.
+        bus.deaf.lock().expect("lock").clear();
+        outputs_change_settled(&bus, &rig);
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
+        quiet(&rig);
+        assert_eq!(bus.reads(), ["1", "2", "2"]);
+        assert_eq!(bus.count("detect"), 2);
+        rig.workers.join();
+    }
+
+    #[test]
+    fn a_redetection_that_brings_a_new_monitor_reads_only_the_new_one() {
+        let bus = Bus::new();
+        ONE_DISPLAY.clone_into(&mut bus.detect.lock().expect("lock"));
+        let rig = rig(&bus);
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        assert_eq!(next(&rig), ddc("DP-1", None));
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        quiet(&rig);
+
+        // A second monitor is plugged in: nothing before the floor.
+        DETECT.clone_into(&mut bus.detect.lock().expect("lock"));
+        assert!(rig
+            .handle
+            .request(BrightnessCommand::OutputsChanged)
+            .is_ok());
+        quiet(&rig);
+        assert_eq!(bus.count("detect"), 1);
+        bus.advance(OUTPUTS_REDETECT_FLOOR);
+        // The redetection keeps the level it knew and publishes the new
+        // monitor as unknown; then the piece's read, of the new one only.
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
+        quiet(&rig);
+        assert_eq!(bus.reads(), ["1", "2"]);
+        assert_eq!(bus.count("detect"), 2);
+        assert!(bus.writes().is_empty());
+        rig.workers.join();
+    }
+
+    #[test]
+    fn after_the_piece_leaves_a_redetection_reads_nothing() {
+        let bus = Bus::new();
+        ONE_DISPLAY.clone_into(&mut bus.detect.lock().expect("lock"));
+        let rig = rig(&bus);
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        assert_eq!(next(&rig), ddc("DP-1", None));
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+
+        assert!(rig.handle.request(BrightnessCommand::Hide).is_ok());
+        DETECT.clone_into(&mut bus.detect.lock().expect("lock"));
+        outputs_change_settled(&bus, &rig);
+        // The redetection still runs (what is detected stays current) and
+        // the new monitor is known, unread: no piece is owed its level.
+        assert_eq!(next(&rig), ddc("DP-1", Some(50)));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        quiet(&rig);
+        assert_eq!(bus.reads(), ["1"]);
+        assert_eq!(bus.count("detect"), 2);
+
+        // Placed again: the unknown one is read, over the cached detection.
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        assert_eq!(next(&rig), ddc("DP-2", Some(30)));
+        quiet(&rig);
+        assert_eq!(bus.reads(), ["1", "2"]);
+        assert_eq!(bus.count("detect"), 2);
+        rig.workers.join();
+    }
+
+    #[test]
+    fn a_piece_that_leaves_before_its_detection_ends_is_owed_no_read() {
+        let bus = Bus::new();
+        bus.tick_while_gated.store(true, Ordering::Release);
+        let rig = rig(&bus);
+        bus.close_gate();
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
+        until("the detection to block", || {
+            bus.gated.load(Ordering::Acquire) == 1
+        });
+        // Folded into the plan while the detection runs.
+        assert!(rig.handle.request(BrightnessCommand::Hide).is_ok());
+        thread::sleep(Duration::from_millis(30));
+        bus.open_gate();
+        assert_eq!(next(&rig), ddc("DP-1", None));
+        assert_eq!(next(&rig), ddc("DP-2", None));
+        quiet(&rig);
+        assert_eq!(bus.count("getvcp"), 0);
+        rig.workers.join();
+    }
+
+    #[test]
+    fn the_detection_and_the_reads_of_a_placed_piece_run_one_child_at_a_time() {
+        let bus = Bus::new();
+        // Two owners of one bus, as two processes would be, both showing
+        // the piece at once: the lease serialises every child.
+        let first = rig(&bus);
+        let second = rig(&bus);
+        assert!(first.handle.request(BrightnessCommand::Show).is_ok());
+        assert!(second.handle.request(BrightnessCommand::Show).is_ok());
+        for rig in [&first, &second] {
+            assert_eq!(next(rig), ddc("DP-1", None));
+            assert_eq!(next(rig), ddc("DP-2", None));
+            assert_eq!(next(rig), ddc("DP-1", Some(50)));
+            assert_eq!(next(rig), ddc("DP-2", Some(30)));
+        }
+        quiet(&first);
+        quiet(&second);
+        assert_eq!(bus.max_active.load(Ordering::Acquire), 1);
+        assert_eq!(bus.count("detect"), 2);
+        assert_eq!(bus.count("getvcp"), 4);
+        assert!(bus.writes().is_empty());
+        // One worker's own sequence: the detection, then each read.
+        let alone = Bus::new();
+        let rig = rig(&alone);
+        show_and_read(&rig);
+        let verbs: Vec<String> = alone
+            .calls()
+            .iter()
+            .filter_map(|args| {
+                args.iter()
+                    .find(|arg| matches!(arg.as_str(), "detect" | "getvcp" | "setvcp"))
+                    .cloned()
+            })
+            .collect();
+        assert_eq!(verbs, ["detect", "getvcp", "getvcp"]);
+        assert_eq!(alone.max_active.load(Ordering::Acquire), 1);
+        first.workers.join();
+        second.workers.join();
+        rig.workers.join();
+    }
+
+    #[test]
+    fn connectors_dropping_and_coming_back_are_one_detection_after_they_settle() {
+        const MS: Duration = Duration::from_millis(1);
+        const S: Duration = Duration::from_secs(1);
+        let bus = Bus::new();
+        let mut worker = ByHand::new(&bus);
+        worker.tell(BrightnessCommand::Show);
+        assert_eq!(worker.run().len(), 4);
+        // A resume from suspend, long after the last detection: one output
+        // goes, and a second later it is back.
+        bus.advance(60 * S);
+        worker.tell(BrightnessCommand::OutputsChanged);
+        assert!(worker.once().is_none(), "no child while they still change");
+        bus.advance(S);
+        worker.tell(BrightnessCommand::OutputsChanged);
+        assert!(worker.once().is_none());
+        // The floor since the removal has passed; since the addition, not.
+        bus.advance(OUTPUTS_REDETECT_FLOOR - S);
+        assert!(worker.once().is_none());
+        bus.advance(S - MS);
+        assert!(worker.once().is_none());
+        assert_eq!(bus.count("detect"), 1);
+        // The floor after the last change, to the millisecond: one
+        // detection, which finds what it knew and reads nothing.
+        bus.advance(MS);
+        assert_eq!(worker.run(), [ddc("DP-1", Some(50)), ddc("DP-2", Some(30))]);
+        assert_eq!(bus.count("detect"), 2);
+        bus.advance(60 * S);
+        assert!(worker.once().is_none(), "one detection for both changes");
+        assert_eq!(bus.count("detect"), 2);
+        assert_eq!(bus.count("getvcp"), 2);
+    }
+
+    #[test]
+    fn a_storm_of_output_changes_holds_the_detection_until_it_settles() {
+        const MS: Duration = Duration::from_millis(1);
+        const S: Duration = Duration::from_secs(1);
+        let bus = Bus::new();
+        let mut worker = ByHand::new(&bus);
+        worker.tell(BrightnessCommand::Show);
+        assert_eq!(worker.run().len(), 4);
+        bus.advance(60 * S);
+        // A change every two seconds for twenty: each starts the wait again.
+        for _ in 0..10 {
+            worker.tell(BrightnessCommand::OutputsChanged);
+            assert!(worker.once().is_none());
+            bus.advance(2 * S);
+            assert!(worker.once().is_none());
+        }
+        assert_eq!(bus.count("detect"), 1);
+        // Two seconds have passed since the last one.
+        bus.advance(OUTPUTS_REDETECT_FLOOR - 2 * S - MS);
+        assert!(worker.once().is_none());
+        bus.advance(MS);
+        assert_eq!(worker.run().len(), 2);
+        assert_eq!(bus.count("detect"), 2, "one detection for the storm");
+        bus.advance(60 * S);
+        assert!(worker.once().is_none());
+        assert_eq!(bus.count("detect"), 2);
+    }
+
+    #[test]
+    fn a_detection_that_no_longer_finds_a_monitor_publishes_it_as_unknown() {
+        let bus = Bus::new();
+        let mut worker = ByHand::new(&bus);
+        worker.tell(BrightnessCommand::Show);
+        assert_eq!(worker.run().len(), 4);
+
+        // DP-2 is unplugged: its level is taken back, so its capsule goes
+        // instead of keeping a level nobody can read or change any more.
+        ONE_DISPLAY.clone_into(&mut bus.detect.lock().expect("lock"));
+        worker.tell(BrightnessCommand::OutputsChanged);
+        assert!(worker.once().is_none());
+        bus.advance(OUTPUTS_REDETECT_FLOOR);
+        assert_eq!(worker.run(), [ddc("DP-2", None), ddc("DP-1", Some(50))]);
+        assert_eq!(bus.count("getvcp"), 2);
+
+        // Back again: found as unknown, and read for the piece.
+        DETECT.clone_into(&mut bus.detect.lock().expect("lock"));
+        worker.tell(BrightnessCommand::OutputsChanged);
+        assert!(worker.once().is_none());
+        bus.advance(OUTPUTS_REDETECT_FLOOR);
+        assert_eq!(
+            worker.run(),
+            [
+                ddc("DP-1", Some(50)),
+                ddc("DP-2", None),
+                ddc("DP-2", Some(30))
+            ]
+        );
+        assert_eq!(bus.reads(), ["1", "2", "2"]);
+
+        // A detection that fails knows no monitor: every level is unknown,
+        // as it is for the worker itself.
+        bus.time_out.store(true, Ordering::Release);
+        worker.tell(BrightnessCommand::OutputsChanged);
+        assert!(worker.once().is_none());
+        bus.advance(OUTPUTS_REDETECT_FLOOR);
+        assert_eq!(worker.run(), [ddc("DP-1", None), ddc("DP-2", None)]);
+        assert_eq!(bus.count("getvcp"), 3, "nothing to read");
+    }
+
+    #[test]
+    fn the_piece_leaving_drops_its_reads_that_have_not_started() {
+        let bus = Bus::new();
+        let mut worker = ByHand::new(&bus);
+        // After the detection and before any read: none runs.
+        worker.tell(BrightnessCommand::Show);
+        assert_eq!(
+            worker.once(),
+            Some(vec![ddc("DP-1", None), ddc("DP-2", None)])
+        );
+        worker.tell(BrightnessCommand::Hide);
+        assert_eq!(worker.run(), []);
+        assert_eq!(bus.count("getvcp"), 0);
+
+        // In the middle of its reads: the rest do not run.
+        worker.tell(BrightnessCommand::Show);
+        assert_eq!(worker.once(), Some(vec![ddc("DP-1", Some(50))]));
+        worker.tell(BrightnessCommand::Hide);
+        assert_eq!(worker.run(), []);
+        assert_eq!(bus.reads(), ["1"]);
+
+        // The popup's reads are its own: the piece leaving keeps them.
+        worker.tell(BrightnessCommand::Show);
+        worker.tell(BrightnessCommand::Read);
+        assert_eq!(worker.once(), Some(vec![ddc("DP-1", Some(50))]));
+        worker.tell(BrightnessCommand::Hide);
+        assert_eq!(worker.run(), [ddc("DP-2", Some(30))]);
+        assert_eq!(bus.reads(), ["1", "1", "2"]);
+        assert_eq!(bus.count("detect"), 1);
+        assert!(bus.writes().is_empty());
+    }
+
+    #[test]
     fn a_join_stops_a_worker_in_the_middle_of_an_operation() {
         let bus = Bus::new();
         bus.tick_while_gated.store(true, Ordering::Release);
         let rig = rig(&bus);
         bus.close_gate();
-        assert!(rig.handle.request(BrightnessCommand::Detect).is_ok());
+        assert!(rig.handle.request(BrightnessCommand::Show).is_ok());
         until("the operation to start", || {
             bus.gated.load(Ordering::Acquire) == 1
         });

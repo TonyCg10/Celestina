@@ -687,31 +687,50 @@ None has been run and none is closed by an agent.
   and the shell's lease cannot cover Noctalia's processes; `duties.osd` set to
   `"on"`, the `brightness` piece placed in the bar layout; no
   `CELESTINA_DDC=0` in the shell's environment. With the piece placed, the
-  shell has a brightness consumer from the start, so it runs **one
-  `ddcutil detect --brief` at start** (when the first output is announced),
-  plus at most one follow-up detection no sooner than 5 s after it if
-  outputs were announced while it ran; it reads and writes nothing until the
-  first use. Without the piece, DDC stays untouched until the first
-  brightness verb or popup, which detects first
+  shell has a brightness consumer from the start, so when the duty's workers
+  start it runs **one `ddcutil detect --brief`** and then **one `getvcp` per
+  monitor whose level is unknown**, one child at a time (a cold read takes
+  about ten seconds per monitor on this hardware), plus at most one
+  follow-up detection if outputs were announced meanwhile, no sooner than
+  5 s after the first and after the last output change, which reads only a
+  monitor still unknown; it writes nothing until the first use, and a
+  monitor that does not answer is not asked again by itself, except after
+  each later detection. Outputs that appear or go later (a resume from
+  suspend, the idle duty powering them off and on, a cable) cost one
+  detection once they have been still for 5 s, and a monitor it no longer
+  finds loses its capsule. A wheel step over the brightness capsule writes
+  to the monitor, by design: an accidental scroll over the bar is a
+  `setvcp`. Without the piece, DDC stays untouched until the
+  first brightness verb or popup, which detects first
 - **Procedure:** start the shell and leave the brightness alone: check in the
-  journal (`brightness: ddcutil starts`, `operation="detect"`) and with
-  `pgrep -a ddcutil` (read-only, run by you) that only the detection(s)
-  described above run, and no `getvcp` or `setvcp`. The brightness keys still
+  journal (`brightness: ddcutil starts`, `operation="detect"`, then
+  `operation="read"` once per monitor) and with `pgrep -a ddcutil`
+  (read-only, run by you) that only the detection(s) and the reads described
+  above run, one after another, and no `setvcp`; no OSD shows for these
+  first readings. The brightness keys still
   run `brightnessctl --class=backlight`, which has no device on this machine,
   so they change nothing until CEL-2-M rebinds them: use the verbs. Run
   `celestina brightness up` once and wait for the answer: the first change
-  after start must show an OSD (the level before the write is read first and
-  is the baseline). Run it again slowly, then a fast burst, which must
+  after start must show an OSD (the level read at start is the baseline;
+  for a monitor still unread, the level before the write is read first).
+  Run it again slowly, then a fast burst, which must
   collapse to few writes. Run `celestina brightness down` and `celestina
   brightness set 40 DP-1`, and check the monitor follows and the OSD shows
   the read-back value. Change the brightness with the monitor's own buttons:
-  the shell is not expected to notice it (documented gap). Watch the screen
+  the shell is not expected to notice it (documented gap). Suspend and
+  resume, and let the idle duty power the outputs off and wake them: in the
+  journal at most one detection, no sooner than 5 s after the outputs
+  settle, then one read per monitor whose level became unknown; none
+  overlapping; watch for a black flash. Watch the screen
   for black flashes or a frozen picture during every step, and stop at the
   first one. Check the journal for `brightness: ddcutil starts` lines and that
   none overlaps another
-- **Pass condition:** with the piece placed, only the start detection (and at
-  most one follow-up at least 5 s later) before the first use, and no read
-  or write; one `ddcutil` child at a time; the first change after start
+- **Pass condition:** with the piece placed, before the first use only the
+  start detection (and at most one follow-up at least 5 s later) and one
+  read per monitor whose level is unknown, and no write; after a resume or a
+  wake, at most one detection, no sooner than 5 s after the outputs settle,
+  and reads only of monitors whose level became unknown; one `ddcutil` child
+  at a time; the first change after start
   shows an OSD; the OSD shows the read-back value, never 0 for an unread
   monitor; no GPU loss, flicker or freeze; the monitor's own buttons are not
   followed, as documented
@@ -729,9 +748,13 @@ None has been run and none is closed by an agent.
   layout until a reading exists); Noctalia's OSD and its bar off or hidden;
   Noctalia's brightness widget closed
 - **Procedure:** check that the volume capsule shows the level and the muted
-  state, and the brightness capsule the read-back brightness. The start
-  detection reads no level, so the brightness capsule appears only after a
-  first `celestina brightness` verb has read the monitor. Scroll over each
+  state, and the brightness capsule the read-back brightness. With the
+  piece placed and the duty on, the shell reads each monitor once after the
+  start detection, so the brightness capsule appears by itself, with no verb,
+  once its monitor has answered (a cold read takes about ten seconds per
+  monitor, one after another); a monitor that does not answer shows no
+  capsule. Take `brightness` out of the layout and put it back while the
+  shell runs: the capsule goes and comes back without a restart. Scroll over each
   capsule: the level moves by one step. Middle-click the volume capsule:
   mute toggles. Click each capsule: a popup opens at the capsule with a
   slider; drag it, press the arrow keys, Home and End on it (visible focus
