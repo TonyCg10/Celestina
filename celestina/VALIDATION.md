@@ -362,7 +362,8 @@ None has been run and none is closed by an agent.
 
 - **Status:** pending
 - **Related implementation:** CEL-2-B (the gamma worker and the night-light
-  verbs)
+  verbs); CEL-2-B-GAMMA (the sweep paced by the compositor and the
+  connection opened again after a loss)
 - **Requires:** the deployed shell started by hand in the author's niri
   session; `duties.nightlight` set to `"on"` and `energy.night_light` to
   `true` in `~/.config/celestina/shell.json` before starting it; Noctalia's
@@ -376,11 +377,25 @@ None has been run and none is closed by an agent.
   output and plug it back, and check that it takes the colour again. Set
   `energy.night_light_kelvin` to a value in 2000..6500 and check that the
   colour follows the file. Stop the shell and check that the outputs return
-  to neutral
+  to neutral. Run the shell for this row with
+  `RUST_LOG=info,celestina::energy::nightlight=debug` and, each time the
+  light goes on or off, read the worker's line
+  `night light: sweep played N of 18 frames, slowest confirm M ms` in the
+  journal; write N and M down in the result
 - **Pass condition:** the warm tint appears and goes on every output, survives
   hotplug, follows the kelvin setting, and is gone when the shell stops; if
   an output refuses the gamma control the others still change and the journal
-  says `night light: not applied`
+  says `night light: not applied`. A transition the compositor paces slower
+  than its 300 ms still ends on the target on every output: the tint stays,
+  it does not show for an instant and go, every sweep line reports at least
+  one frame played with its slowest confirm well under 1000 ms, and the
+  journal does not say `the compositor did not answer a sync`. The return of
+  the light after a lost connection is covered by the automated tests only:
+  no step here causes a loss (a VT switch does not, niri defers the table).
+  If the journal does show one while the light is wanted
+  (`night light: not applied: ...`), then `night light: applied` must follow
+  by itself within the backoff (1 s, doubling to 30 s), with no verb and no
+  restart
 - **Result:** not run
 - **Evidence:** none
 

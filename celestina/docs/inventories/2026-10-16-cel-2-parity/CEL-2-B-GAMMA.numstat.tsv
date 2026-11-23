@@ -1,0 +1,23 @@
+# CEL-2-B-GAMMA exact change inventory
+
+Base revision	3b36e8f84d362b76f06fc1a439061e9936284e49
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-23-night-light-pacing.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-B-GAMMA.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/energy/nightlight.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	1e0fd4e6ef4af7571c578e07ae1ce544985ac9c26d502bbc3437d3d3a091b65b	celestina/Cargo.lock
+1	1	89e3e9ba3ddc38a822ae76d6cc5544fc5ec043621c7bba3d7eec64ff59383b20	celestina/Cargo.toml
+18	3	fdc82fc986452089fb93aea628e7ebc90b34534fe5e2fce3f192331560308bfe	celestina/VALIDATION.md
+276	0	877b34807d40dd31cb53afdd4b1c55c9e8a91959ddac1d126bec120201106a14	celestina/docs/evidence/2026-11-23-night-light-pacing.md
+23	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-B-GAMMA.numstat.tsv
+1	0	066ad6c8aae7cce1aeb382b612fa1250b304c438a1da185093bc523784bd2fb4	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+1609	146	519a228c88c303ea6ae269a1980297054f17194e54f03e30731c7dfb2f1571ce	celestina/src/energy/nightlight.rs
+1	0	dbf95d4e2943999d953d0d7d54b570587c2cddbd1308a35438ca8b94558cfc1d	docs/version-history.tsv
