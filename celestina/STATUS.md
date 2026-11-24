@@ -49,9 +49,10 @@
   start that chooses nothing has the OSD duty on and the `brightness` piece
   placed, so it runs one `ddcutil` detection and one read per monitor;
   `scripts/dev-session.sh` therefore starts every nest with
-  `CELESTINA_DDC=0` unless the caller set the variable. The night-light duty
-  is on by default and holds no gamma until `energy.night_light` is switched
-  on.
+  `CELESTINA_DDC=0` and `CELESTINA_BACKLIGHT=0` (the second keeps the nested
+  shell off the host's backlight) unless the caller set that variable. The
+  night-light duty is on by default and holds no gamma until
+  `energy.night_light` is switched on.
   [The handover note](docs/handover.md) holds the switch-over and the way
   back.
 - **CEL-2-M-LOCK-POLKIT (implemented on its branch, not landed):** `lock` and

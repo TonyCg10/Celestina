@@ -318,26 +318,40 @@ STRIP
     echo "   keeps the global one" >&2
 fi
 
-# A nest never drives the host's monitors. The nested shell has the host's
-# I2C buses in reach whatever compositor it draws on, and since the cutover
-# (CEL-2-M) the OSD duty is on and the default layout places the `brightness`
-# piece, so a nest whose `shell.json` does not say `"osd": "off"` (the
-# interactive nest reads the author's real one, or none) would run a real
-# `ddcutil detect` and one `getvcp` per monitor at start, and a `setvcp` at
-# the first wheel step over the piece: on the monitors of the session the
-# nest is watched from, beside whatever `ddcutil` that session runs (two at
-# once on one bus lost the GPU twice in the halted shell). So every nest,
-# interactive or `--once`, starts the shell with `CELESTINA_DDC=0`, which
-# forbids every `ddcutil` call, unless the caller chose a value itself: a
-# caller that wants DDC inside a nest says `CELESTINA_DDC=1` and owns it.
-# niri hands its environment to what it starts, so the export reaches the
-# shell through either launch below.
+# A nest never drives the host's hardware. The nested shell has the host's
+# I2C buses and its backlight in reach whatever compositor it draws on, and
+# since the cutover (CEL-2-M) the OSD duty is on and the default layout
+# places the `brightness` piece, so a nest whose `shell.json` does not say
+# `"osd": "off"` (the interactive nest reads the author's real one, or none)
+# would run a real `ddcutil detect` and one `getvcp` per monitor at start, and
+# a `setvcp` at the first wheel step over the piece: on the monitors of the
+# session the nest is watched from, beside whatever `ddcutil` that session
+# runs (two at once on one bus lost the GPU twice in the halted shell). The
+# backlight worker would likewise open and poll the host's
+# `/sys/class/backlight` and run `brightnessctl` on its panel. So every nest,
+# interactive or `--once`, starts the shell with `CELESTINA_DDC=0` and
+# `CELESTINA_BACKLIGHT=0`, which forbid every `ddcutil` call and every
+# backlight read and write, unless the caller chose a value itself: a caller
+# that wants either inside a nest says `=1` and owns it. niri hands its
+# environment to what it starts, so the export reaches the shell through
+# either launch below.
 ddc_pinned=no
-if [ -z "${CELESTINA_DDC:-}" ]; then
-    CELESTINA_DDC=0
-    ddc_pinned=yes
-fi
-export CELESTINA_DDC
+backlight_pinned=no
+[ -n "${CELESTINA_DDC:-}" ] || ddc_pinned=yes
+[ -n "${CELESTINA_BACKLIGHT:-}" ] || backlight_pinned=yes
+: "${CELESTINA_DDC:=0}" "${CELESTINA_BACKLIGHT:=0}"
+export CELESTINA_DDC CELESTINA_BACKLIGHT
+
+# One notice for a switch of the nest: `$1` its name, `$2` its value, `$3`
+# whether the script pinned it, `$4` what the nest never does when it is
+# pinned and `$5` what it may do when the caller's value is kept.
+say_nest_switch() {
+    if [ "$3" = yes ]; then
+        echo ">> $1=0 in the nest: it never $4 (start it with $1=1 to allow it)" >&2
+    else
+        echo ">> $1=$2 kept from the caller: unless it is 0 or false the nest may $5" >&2
+    fi
+}
 
 echo ">> nested niri ($niri_binary): $config" >&2
 if [ -z "$once" ]; then
@@ -348,16 +362,17 @@ if [ -z "$once" ]; then
     # real state home) and, since CEL-2-M-LOCK-POLKIT, the lock and the
     # polkit agent included (the nest reaches the host's system bus unless
     # the caller points DBUS_SYSTEM_BUS_ADDRESS elsewhere), so say so once;
-    # nothing is written. DDC is the exception, pinned off above, and the
-    # notice says which it is.
+    # nothing is written. DDC and the backlight are the exceptions, pinned
+    # off above, and the notices say which they are.
     if [ ! -f "${XDG_CONFIG_HOME:-$HOME/.config}/celestina/shell.json" ]; then
         echo ">> no celestina/shell.json in ${XDG_CONFIG_HOME:-$HOME/.config}: every shipped duty will be on in the nest, the lock and the polkit agent included (write a shell.json naming what you want off)" >&2
     fi
-    if [ "$ddc_pinned" = yes ]; then
-        echo ">> CELESTINA_DDC=0 in the nest: it never runs ddcutil on this session's monitors (start it with CELESTINA_DDC=1 to allow it)" >&2
-    else
-        echo ">> CELESTINA_DDC=$CELESTINA_DDC kept from the caller: unless it is 0 or false the nest may run ddcutil on this session's monitors" >&2
-    fi
+    say_nest_switch CELESTINA_DDC "$CELESTINA_DDC" "$ddc_pinned" \
+        "runs ddcutil on this session's monitors" \
+        "run ddcutil on this session's monitors"
+    say_nest_switch CELESTINA_BACKLIGHT "$CELESTINA_BACKLIGHT" "$backlight_pinned" \
+        "reads or writes this session's backlight" \
+        "read and write this session's backlight"
 fi
 
 # The `--once` nest presents without waiting for the host (the `environment`

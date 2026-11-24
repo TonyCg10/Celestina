@@ -1,0 +1,31 @@
+# NEST-BACKLIGHT exact change inventory
+
+Base revision	e79a52e88afaba4ea3dbcc09e7872fa996db0272
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/evidence/2026-11-24-nest-backlight.md
+Pathspec	celestina/docs/handover.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/NEST-BACKLIGHT.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/dev-session.sh
+Pathspec	celestina/src/providers/brightness.rs
+Pathspec	celestina/tests/lock_scripts.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	f222a2b3ddc79d78d1bc4f8fe35a1fc29253917d488396ae12d23b7ad63cb28f	celestina/Cargo.lock
+1	1	6f5c53301a1c81167d4ba75810f27d7b5480fc76bfa1f59f4715f5437e57fb0a	celestina/Cargo.toml
+7	4	fedde8c7afdafed414acf206d9ed0cf758188655ff3ce75d68a12c402bd3bc74	celestina/README.md
+4	3	5a86082f05520ca2d174d1302d7720ca5f8191a3c1b69cfc849756fc89990f12	celestina/STATUS.md
+150	0	9e3c60546d5203b37d556fab11b3fbc5a2b88dc6c2994cb0b07a33c1f3e8e9b3	celestina/docs/evidence/2026-11-24-nest-backlight.md
+5	2	77ae2b682460fc2368527eae7b69616b9642da53e7b3a8902bb570ad97122211	celestina/docs/handover.md
+31	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/NEST-BACKLIGHT.numstat.tsv
+1	0	7113e0013af4e8b3255fb7b5407b11a6481377edc8f9ab6698bda1e3ccf34f93	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+41	26	0d503676f48283af8fe1c613050def2a08b582d3371d8217215092a55ff0e183	celestina/scripts/dev-session.sh
+157	18	5a57baf94d2917351adbe9d90404ad38079b9d5e8043ca6a2175d091bea61b96	celestina/src/providers/brightness.rs
+80	46	bf3163f569dabd131e67362d3a9258c9f1e61524a86a30f372dcac1d709d848f	celestina/tests/lock_scripts.rs
+1	0	09bbb7b842ab4acecec8d7aef137f0869e260aeaa83d34c4b719381e4c1ed5f3	docs/version-history.tsv

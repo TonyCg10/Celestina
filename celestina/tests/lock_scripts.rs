@@ -3,7 +3,8 @@
 //! this unit's commit roots, so these scan the project's own `scripts/` and
 //! `contrib/` from a test. Each cites the rule it enforces. The last one is
 //! the cutover's (CEL-2-M) and runs `dev-session.sh` against a fake niri:
-//! every nest starts with `CELESTINA_DDC=0` unless the caller chose a value.
+//! every nest starts with `CELESTINA_DDC=0` and `CELESTINA_BACKLIGHT=0` unless
+//! the caller chose a value.
 
 use std::fs;
 use std::path::PathBuf;
@@ -330,17 +331,27 @@ fn r10_touches_only_the_verified_nest_and_invents_no_frame_time() {
     assert!(joined.contains("NOT the painter's frame time"));
 }
 
-/// What `dev-session.sh` hands the niri it starts as `CELESTINA_DDC`, and
-/// what it printed. The niri is a fake that records the variable and exits,
+/// The two variables a nest is pinned on: the name the script exports and
+/// the phrases of its notices (pinned, kept from the caller).
+const NEST_SWITCHES: [(&str, &str); 2] = [
+    ("CELESTINA_DDC", "never runs ddcutil"),
+    ("CELESTINA_BACKLIGHT", "never reads or writes"),
+];
+
+/// What `dev-session.sh` hands the niri it starts as `CELESTINA_DDC` and
+/// `CELESTINA_BACKLIGHT` (one value per line, in [`NEST_SWITCHES`] order), and
+/// what it printed. The niri is a fake that records the variables and exits,
 /// the host's display is a name nobody listens on and `--monitor none` keeps
-/// the script off the host compositor's IPC, so no nest, no shell and no
-/// `ddcutil` ever starts. `caller` is the caller's own value, if any;
-/// `once` chooses the `--once` mode over the interactive one.
-fn ddc_a_nest_starts_with(
+/// the script off the host compositor's IPC, so no nest, no shell, no
+/// `ddcutil` and no `brightnessctl` ever starts. `caller` is the caller's own
+/// value of `name`, if any, the other variable being left unset; `once`
+/// chooses the `--once` mode over the interactive one.
+fn switches_a_nest_starts_with(
     scratch: &std::path::Path,
+    name: &str,
     caller: Option<&str>,
     once: bool,
-) -> (String, String) {
+) -> (Vec<String>, String) {
     use std::process::Command;
 
     let fake = scratch.join("fake-niri");
@@ -362,27 +373,30 @@ fn ddc_a_nest_starts_with(
         .env("CELESTINA_NEST_NIRI", &fake)
         .env("FAKE_NIRI_SEEN", &seen)
         .env_remove("CELESTINA_NEST_CONFIG")
-        .env_remove("NIRI_SOCKET")
-        .env_remove("CELESTINA_DDC");
+        .env_remove("NIRI_SOCKET");
+    for (variable, _) in NEST_SWITCHES {
+        command.env_remove(variable);
+    }
     if let Some(value) = caller {
-        command.env("CELESTINA_DDC", value);
+        command.env(name, value);
     }
     let output = command.output().expect("sh runs dev-session.sh");
     let notes = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "dev-session.sh failed: {notes}");
     let seen = fs::read_to_string(&seen).unwrap_or_else(|err| panic!("the fake niri: {err}"));
-    (seen.trim().to_owned(), notes)
+    (seen.lines().map(str::to_owned).collect(), notes)
 }
 
-/// CEL-2-M: a nest never drives the host's monitors. Since the cutover the
+/// CEL-2-M: a nest never drives the host's hardware. Since the cutover the
 /// OSD duty is on and the default layout places the `brightness` piece, so
 /// a nested shell without `"osd": "off"` would run a real `ddcutil` at
-/// start; `dev-session.sh` therefore starts every nest, interactive or
-/// `--once`, with `CELESTINA_DDC=0` unless the caller chose a value. One
+/// start and open the host's backlight; `dev-session.sh` therefore starts
+/// every nest, interactive or `--once`, with `CELESTINA_DDC=0` and
+/// `CELESTINA_BACKLIGHT=0` unless the caller chose a value for one. One
 /// test on purpose: nothing else in this file starts a process, so nothing
 /// forks while the fake below is being written (`ETXTBSY`).
 #[test]
-fn every_nest_starts_with_ddc_forbidden_unless_the_caller_chose() {
+fn every_nest_starts_with_ddc_and_backlight_forbidden_unless_the_caller_chose() {
     use std::os::unix::fs::PermissionsExt;
 
     let scratch = std::env::temp_dir().join(format!("celestina-nest-ddc-{}", std::process::id()));
@@ -393,50 +407,70 @@ fn every_nest_starts_with_ddc_forbidden_unless_the_caller_chose() {
         &fake,
         "#!/bin/sh\n\
          [ \"${1:-}\" = validate ] && exit 0\n\
-         printf '%s\\n' \"${CELESTINA_DDC-unset}\" > \"$FAKE_NIRI_SEEN\"\n",
+         printf '%s\\n' \"${CELESTINA_DDC-unset}\" \"${CELESTINA_BACKLIGHT-unset}\" > \"$FAKE_NIRI_SEEN\"\n",
     )
     .expect("the fake niri");
     fs::set_permissions(&fake, fs::Permissions::from_mode(0o755)).expect("its mode");
 
     for once in [false, true] {
-        // Nothing chosen, or chosen empty (which the shell reads as allowed
-        // and nobody means as a choice): forbidden.
-        for caller in [None, Some("")] {
-            let (seen, notes) = ddc_a_nest_starts_with(&scratch, caller, once);
-            assert_eq!(seen, "0", "once={once} caller={caller:?}: {notes}");
-            assert_eq!(
-                notes.contains(">> CELESTINA_DDC=0 in the nest"),
-                !once,
-                "the interactive nest says so, a `--once` run is silent: {notes}"
-            );
-        }
-        // The caller's own value is kept, whichever it is.
-        for value in ["1", "0", "false"] {
-            let (seen, notes) = ddc_a_nest_starts_with(&scratch, Some(value), once);
-            assert_eq!(seen, value, "once={once}: {notes}");
-            assert_eq!(
-                notes.contains(&format!(">> CELESTINA_DDC={value} kept from the caller")),
-                !once,
-                "{notes}"
-            );
+        for (index, (name, pinned)) in NEST_SWITCHES.into_iter().enumerate() {
+            // Nothing chosen, or chosen empty (which the shell reads as
+            // allowed and nobody means as a choice): both forbidden.
+            for caller in [None, Some("")] {
+                let (seen, notes) = switches_a_nest_starts_with(&scratch, name, caller, once);
+                assert_eq!(seen, ["0", "0"], "once={once} {name}={caller:?}: {notes}");
+                assert_eq!(
+                    notes.contains(&format!(">> {name}=0 in the nest: it {pinned}")),
+                    !once,
+                    "the interactive nest says so, a `--once` run is silent: {notes}"
+                );
+            }
+            // The caller's own value is kept, whichever it is, and the other
+            // variable stays pinned.
+            for value in ["1", "0", "false"] {
+                let (seen, notes) = switches_a_nest_starts_with(&scratch, name, Some(value), once);
+                let mut expected = ["0", "0"].map(str::to_owned);
+                expected[index] = value.to_owned();
+                assert_eq!(seen, expected, "once={once} {name}={value}: {notes}");
+                assert_eq!(
+                    notes.contains(&format!(">> {name}={value} kept from the caller")),
+                    !once,
+                    "{notes}"
+                );
+                let (other, _) = NEST_SWITCHES[1 - index];
+                assert_eq!(
+                    notes.contains(&format!(">> {other}=0 in the nest")),
+                    !once,
+                    "the other variable's notice is unchanged: {notes}"
+                );
+            }
         }
     }
     let _ = fs::remove_dir_all(&scratch);
 
     // The value the shell reads as "forbidden" is the one the script sets,
-    // and it is exported before either launch of the nest's niri.
+    // under the name the shell reads, and both are exported before either
+    // launch of the nest's niri.
     assert_eq!(
         celestina::providers::brightness::DDC_ENABLED_VAR,
-        "CELESTINA_DDC"
+        NEST_SWITCHES[0].0
+    );
+    assert_eq!(
+        celestina::providers::brightness::BACKLIGHT_ENABLED_VAR,
+        NEST_SWITCHES[1].0
     );
     let lines = code("scripts/dev-session.sh");
-    let at = |needle: &str| {
-        lines
-            .iter()
-            .position(|l| l.contains(needle))
-            .unwrap_or_else(|| panic!("dev-session.sh has no `{needle}`"))
-    };
-    let exported = at("export CELESTINA_DDC");
+    let exported = lines
+        .iter()
+        .position(|l| l.starts_with("export ") && l.contains("CELESTINA_DDC"))
+        .expect("dev-session.sh exports the switches");
+    for (name, _) in NEST_SWITCHES {
+        assert!(
+            lines[exported].contains(name),
+            "`{name}` is exported with the others: {}",
+            lines[exported]
+        );
+    }
     let launches: Vec<usize> = lines
         .iter()
         .enumerate()

@@ -4,6 +4,8 @@
 // and its patience, the 20 s operation bound, the newest-target-per-monitor
 // shape and the one-flag redetection come from there; the provider envelope,
 // the module singletons, the periodic refresh and the journal are dropped.
+// The `CELESTINA_BACKLIGHT` switch is not from the reference: it was added
+// later for nested shells (NEST-BACKLIGHT) and reads by the same rule.
 
 //! The brightness workers (CEL-2-C, plan decisions 5 and 6): every blocking
 //! step of reading and setting a monitor's brightness, off the loop.
@@ -51,7 +53,11 @@
 //! it and never blocks the loop. While an operation runs the worker keeps
 //! folding the queue into its plan, so a burst of steps for one monitor is
 //! one write of the newest target. `CELESTINA_DDC=0|false`, read once,
-//! forbids every `ddcutil` call.
+//! forbids every `ddcutil` call; `CELESTINA_BACKLIGHT=0|false`, read once by
+//! the same rule, keeps the backlight worker from opening, polling or
+//! writing any device (a nested shell must never act on the host's panel):
+//! its thread ends at once and a backlight change is refused as on a machine
+//! with no backlight.
 //!
 //! Every effect (children, sysfs, clock, lease) sits behind
 //! [`DdcEnvironment`] and [`BacklightEnvironment`] so tests use fakes and no
@@ -92,6 +98,9 @@ pub const LEASE_PATIENCE: Duration = Duration::from_secs(25);
 pub const BACKLIGHT_TIMEOUT: Duration = Duration::from_secs(5);
 /// The variable that switches DDC off for this process (`0` or `false`).
 pub const DDC_ENABLED_VAR: &str = "CELESTINA_DDC";
+/// The variable that switches the backlight worker off for this process
+/// (`0` or `false`).
+pub const BACKLIGHT_ENABLED_VAR: &str = "CELESTINA_BACKLIGHT";
 /// The most backlight devices observed.
 pub const MAX_BACKLIGHTS: usize = 8;
 /// How often the backlight thread wakes, reading nothing, to look at the
@@ -305,26 +314,44 @@ pub trait BacklightEnvironment: Send + 'static {
     fn sleep(&mut self, duration: Duration);
 }
 
-/// Whether a value of [`DDC_ENABLED_VAR`] allows DDC: absent, empty or
+/// Whether a value of a switch variable ([`DDC_ENABLED_VAR`],
+/// [`BACKLIGHT_ENABLED_VAR`]) allows what it guards: absent, empty or
 /// unreadable allows it (a typo must not remove a working control); only `0`
 /// or `false`, in any case and with surrounding blanks, forbids it.
-fn ddc_requested(value: Option<&str>) -> bool {
+fn switch_allows(value: Option<&str>) -> bool {
     match value.map(|value| value.trim().to_ascii_lowercase()) {
         None => true,
         Some(value) => !matches!(value.as_str(), "0" | "false"),
     }
 }
 
-/// [`ddc_requested`] of this process's environment, read once.
+/// [`switch_allows`] of the variable `name` in this process's environment,
+/// with `forbidden` as the one warning line when it forbids.
+fn read_switch(name: &str, forbidden: &str) -> bool {
+    let allowed = switch_allows(std::env::var(name).ok().as_deref());
+    if !allowed {
+        tracing::warn!("brightness: {name} forbids {forbidden}");
+    }
+    allowed
+}
+
+/// Whether DDC is allowed in this process, read once.
 #[must_use]
 pub fn ddc_allowed() -> bool {
     static ALLOWED: OnceLock<bool> = OnceLock::new();
+    *ALLOWED.get_or_init(|| read_switch(DDC_ENABLED_VAR, "every ddcutil call"))
+}
+
+/// Whether the backlight worker is allowed in this process, read once: a
+/// nested shell must never read or write the host's panel.
+#[must_use]
+pub fn backlight_allowed() -> bool {
+    static ALLOWED: OnceLock<bool> = OnceLock::new();
     *ALLOWED.get_or_init(|| {
-        let allowed = ddc_requested(std::env::var(DDC_ENABLED_VAR).ok().as_deref());
-        if !allowed {
-            tracing::warn!("brightness: {DDC_ENABLED_VAR} forbids every ddcutil call");
-        }
-        allowed
+        read_switch(
+            BACKLIGHT_ENABLED_VAR,
+            "every read, wait and write of a backlight",
+        )
     })
 }
 
@@ -458,13 +485,15 @@ pub fn spawn(
         SystemDdc::default(),
         SysfsBacklight::new(PathBuf::from("/sys/class/backlight")),
         ddc_allowed(),
+        backlight_allowed(),
         shutdown,
         move |event| sender.send(Message::Brightness(event)).is_ok(),
     )
 }
 
-/// [`spawn`] with its effects, the DDC switch and its sink given; `publish`
-/// returns whether the event was accepted (false ends that worker).
+/// [`spawn`] with its effects, the DDC and backlight switches and its sink
+/// given; `publish` returns whether the event was accepted (false ends that
+/// worker).
 ///
 /// # Errors
 ///
@@ -473,6 +502,7 @@ pub fn spawn_with<P>(
     ddc: impl DdcEnvironment,
     backlight: impl BacklightEnvironment,
     ddc_allowed: bool,
+    backlight_allowed: bool,
     shutdown: &Arc<AtomicBool>,
     publish: P,
 ) -> io::Result<(BrightnessHandle, BrightnessWorkers)>
@@ -488,7 +518,13 @@ where
     })?;
     let flag = Arc::clone(shutdown);
     let backlight_worker = Worker::spawn("brightness-backlight", shutdown, move || {
-        run_backlight(backlight, &backlight_queue, &flag, publish);
+        run_backlight(
+            backlight,
+            backlight_allowed,
+            &backlight_queue,
+            &flag,
+            publish,
+        );
     })?;
     Ok((
         BrightnessHandle {
@@ -1156,10 +1192,17 @@ fn acquire_lease<E: DdcEnvironment>(
 
 fn run_backlight(
     mut env: impl BacklightEnvironment,
+    allowed: bool,
     queue: &Receiver<(String, Change)>,
     shutdown: &AtomicBool,
     mut publish: impl FnMut(BrightnessEvent) -> bool,
 ) {
+    if !allowed {
+        // Forbidden: no device is listed, read or watched and nothing is
+        // published; the thread ends, so a backlight change is refused by
+        // the queue as a stopped worker.
+        return;
+    }
     let mut levels: BTreeMap<String, Option<u8>> = BTreeMap::new();
     for device in env.devices() {
         let level = env.read(&device).unwrap_or_else(|error| {
@@ -1847,13 +1890,19 @@ mod tests {
         events: Receiver<BrightnessEvent>,
     }
 
-    fn rig_with(bus: &Arc<Bus>, allowed: bool, backlight: impl BacklightEnvironment) -> Rig {
+    fn rig_with(
+        bus: &Arc<Bus>,
+        allowed: bool,
+        backlight_allowed: bool,
+        backlight: impl BacklightEnvironment,
+    ) -> Rig {
         let shutdown = Arc::new(AtomicBool::new(false));
         let (tx, events) = mpsc::channel();
         let (handle, workers) = spawn_with(
             FakeDdc(Arc::clone(bus)),
             backlight,
             allowed,
+            backlight_allowed,
             &shutdown,
             move |event| tx.send(event).is_ok(),
         )
@@ -1866,7 +1915,7 @@ mod tests {
     }
 
     fn rig(bus: &Arc<Bus>) -> Rig {
-        rig_with(bus, true, NoBacklight)
+        rig_with(bus, true, true, NoBacklight)
     }
 
     fn next(rig: &Rig) -> BrightnessEvent {
@@ -1979,7 +2028,7 @@ mod tests {
     }
 
     #[test]
-    fn only_a_readable_refusal_turns_ddc_off() {
+    fn only_a_readable_refusal_turns_a_switch_off() {
         for allowed in [
             None,
             Some(""),
@@ -1988,11 +2037,14 @@ mod tests {
             Some("true"),
             Some("00"),
         ] {
-            assert!(ddc_requested(allowed), "{allowed:?}");
+            assert!(switch_allows(allowed), "{allowed:?}");
         }
         for refused in ["0", "false", "FALSE", " 0 "] {
-            assert!(!ddc_requested(Some(refused)), "{refused}");
+            assert!(!switch_allows(Some(refused)), "{refused}");
         }
+        // One rule for both variables; each has its own name.
+        assert_eq!(DDC_ENABLED_VAR, "CELESTINA_DDC");
+        assert_eq!(BACKLIGHT_ENABLED_VAR, "CELESTINA_BACKLIGHT");
     }
 
     #[test]
@@ -2031,7 +2083,7 @@ mod tests {
     #[test]
     fn nothing_runs_with_ddc_switched_off() {
         let bus = Bus::new();
-        let rig = rig_with(&bus, false, NoBacklight);
+        let rig = rig_with(&bus, false, true, NoBacklight);
         // The placed piece is refused like every other consumer: neither
         // its detection nor its reads run.
         for command in [
@@ -2831,6 +2883,7 @@ mod tests {
         let rig = rig_with(
             &bus,
             true,
+            true,
             FakeBacklight {
                 level: Arc::clone(&level),
                 notify,
@@ -2859,6 +2912,92 @@ mod tests {
         assert_eq!(*sets.lock().expect("lock"), [55]);
         assert!(bus.calls().is_empty(), "a backlight never touches DDC");
         rig.workers.join();
+    }
+
+    /// A backlight that records every call and would answer a panel.
+    struct RecordingBacklight {
+        calls: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    impl RecordingBacklight {
+        fn note(&self, call: &'static str) {
+            self.calls.lock().expect("lock").push(call);
+        }
+    }
+
+    impl BacklightEnvironment for RecordingBacklight {
+        fn devices(&mut self) -> Vec<String> {
+            self.note("devices");
+            vec!["panel".to_owned()]
+        }
+        fn read(&mut self, _: &str) -> io::Result<Option<u8>> {
+            self.note("read");
+            Ok(Some(40))
+        }
+        fn wait(&mut self, timeout: Duration) -> io::Result<Vec<String>> {
+            self.note("wait");
+            thread::sleep(timeout);
+            Ok(Vec::new())
+        }
+        fn forget(&mut self, _: &str) {
+            self.note("forget");
+        }
+        fn set(&mut self, _: &str, _: u8, _: &mut dyn FnMut() -> bool) -> Result<(), RunError> {
+            self.note("set");
+            Ok(())
+        }
+        fn sleep(&mut self, _: Duration) {
+            self.note("sleep");
+        }
+    }
+
+    #[test]
+    fn a_forbidden_backlight_touches_nothing_publishes_nothing_and_refuses_a_change() {
+        let bus = Bus::new();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let rig = rig_with(
+            &bus,
+            true,
+            false,
+            RecordingBacklight {
+                calls: Arc::clone(&calls),
+            },
+        );
+        quiet(&rig);
+        // The thread has ended, so its queue is closed: the change is
+        // refused as on a machine with no backlight device.
+        until("the backlight thread to end", || {
+            let command = BrightnessCommand::Change {
+                source: BrightnessSource::Backlight,
+                monitor: "panel".to_owned(),
+                change: Change::Step(Direction::Down),
+            };
+            rig.handle.request(command).is_err()
+        });
+        quiet(&rig);
+        assert!(bus.calls().is_empty(), "a backlight never touches DDC");
+        rig.workers.join();
+        assert_eq!(*calls.lock().expect("lock"), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn an_allowed_backlight_is_opened_and_read() {
+        let bus = Bus::new();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let rig = rig_with(
+            &bus,
+            true,
+            true,
+            RecordingBacklight {
+                calls: Arc::clone(&calls),
+            },
+        );
+        let event = next(&rig);
+        assert_eq!(event.source, BrightnessSource::Backlight);
+        assert_eq!(event.percent, Some(40));
+        rig.workers.join();
+        let calls = calls.lock().expect("lock");
+        assert_eq!(calls[..2], ["devices", "read"]);
     }
 
     #[test]

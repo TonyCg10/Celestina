@@ -77,8 +77,11 @@ Two consequences of these defaults. The default layout places the
 that does not say `"osd": "off"`, take `brightness` out of the layout or set
 `CELESTINA_DDC=0` runs one `ddcutil` detection and one read per monitor when
 the duty's workers start: Noctalia's brightness widget stays closed then, as
-VAL-CEL2-OSD-BRIGHTNESS requires. And `nightlight` on only starts its
-worker: no output's gamma is held until `energy.night_light` is switched on.
+VAL-CEL2-OSD-BRIGHTNESS requires. A backlight is read, watched and written
+by the same duty unless `CELESTINA_BACKLIGHT=0` (or `false`) forbids it;
+`dev-session.sh` pins both variables to `0` in every nest. And `nightlight`
+on only starts its worker: no output's gamma is held until
+`energy.night_light` is switched on.
 
 ## Switching over (the author, by hand)
 

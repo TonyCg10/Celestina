@@ -87,7 +87,8 @@ in [the handover note](docs/handover.md).
   overlay surface that exists only while it shows, and gives the `volume` and
   `brightness` bar pieces their readings. Audio is observed through
   `pactl subscribe` and read with `wpctl`; brightness through sysfs and,
-  lazily, `ddcutil` (never with `CELESTINA_DDC=0`): nothing runs before the
+  lazily, `ddcutil` (never with `CELESTINA_DDC=0`; a backlight is neither
+  opened nor written with `CELESTINA_BACKLIGHT=0`): nothing runs before the
   first use, unless the `brightness` piece is placed, which asks for one
   detection and one read per monitor when the duty's workers start, so the
   piece has a level to show. The default layout places the piece and the
@@ -274,9 +275,11 @@ claims its names there), `--binary PATH` names the binary (default the
 release build), `--scale` and `--monitor` set the nested output's factor and
 where the window goes, and `dev-session.sh --shell` opens a shell attached
 to the running nest. A nest never drives the monitors of the session it is
-watched from: the script starts every nest with `CELESTINA_DDC=0` unless the
-caller set the variable, because the nested shell reaches the same I2C buses
-and, with the defaults above, would run `ddcutil` at start. The interactive
+watched from: the script starts every nest with `CELESTINA_DDC=0` and
+`CELESTINA_BACKLIGHT=0` unless the caller set that variable, because the
+nested shell reaches the same I2C buses and the same backlight and, with the
+defaults above, would run `ddcutil` at start and read, and on a wheel step
+write, the host's panel. The interactive
 nest otherwise reads the real `shell.json` and state home, and no nest
 started by hand gets a system bus of its own: with the lock and the polkit
 duties on (the defaults, when the configuration home has no `shell.json`)
