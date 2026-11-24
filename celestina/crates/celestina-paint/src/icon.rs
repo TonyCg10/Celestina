@@ -7,9 +7,9 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use celestina_core::atomic_file::ReadError;
 use resvg::{tiny_skia, usvg};
 
 use crate::RgbaImage;
@@ -71,6 +71,8 @@ pub(crate) enum IconError {
     },
     #[error("{path:?} is larger than {MAX_ICON_FILE} bytes")]
     TooLarge { path: PathBuf },
+    #[error("{path:?} is not a regular file")]
+    NotRegular { path: PathBuf },
     #[error("{path:?} is neither SVG nor PNG")]
     Unsupported { path: PathBuf },
     #[error("cannot parse {path:?}")]
@@ -287,27 +289,34 @@ pub(crate) fn device_size(rect: Rect, dpr: f32) -> u32 {
 /// Rasterises an SVG or PNG file to fit a `size`×`size` square, keeping its
 /// aspect ratio, as premultiplied RGBA.
 pub(crate) fn rasterise_file(path: &Path, size: u32) -> Result<RgbaImage, IconError> {
-    let read = |source| IconError::Read {
-        path: path.to_owned(),
-        source,
+    // `read_bounded` owns the recipe: type check before the open, a
+    // non-blocking open (a FIFO never waits for a writer), a regular-file
+    // check on the handle and a read of at most one byte past the limit.
+    let bytes = match celestina_core::atomic_file::read_bounded(path, MAX_ICON_FILE) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            return Err(IconError::Read {
+                path: path.to_owned(),
+                source: std::io::Error::from(std::io::ErrorKind::NotFound),
+            })
+        }
+        Err(ReadError::NotRegular { .. }) => {
+            return Err(IconError::NotRegular {
+                path: path.to_owned(),
+            })
+        }
+        Err(ReadError::TooLarge { .. }) => {
+            return Err(IconError::TooLarge {
+                path: path.to_owned(),
+            })
+        }
+        Err(ReadError::Io { source, .. }) => {
+            return Err(IconError::Read {
+                path: path.to_owned(),
+                source,
+            })
+        }
     };
-    // One handle: the type check and the read see the same file, and the
-    // read is bounded whatever the metadata says (`/proc` files claim 0).
-    let file = std::fs::File::open(path).map_err(read)?;
-    if !file.metadata().map_err(read)?.is_file() {
-        return Err(IconError::Unsupported {
-            path: path.to_owned(),
-        });
-    }
-    let mut bytes = Vec::new();
-    file.take(MAX_ICON_FILE + 1)
-        .read_to_end(&mut bytes)
-        .map_err(read)?;
-    if bytes.len() as u64 > MAX_ICON_FILE {
-        return Err(IconError::TooLarge {
-            path: path.to_owned(),
-        });
-    }
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
@@ -317,12 +326,21 @@ pub(crate) fn rasterise_file(path: &Path, size: u32) -> Result<RgbaImage, IconEr
     };
     match extension.as_deref() {
         Some("svg") => {
+            // Icon SVGs are drawn from themes and `.desktop` files: a file or
+            // URL one names is not followed (the default string resolver
+            // would read it with an unbounded `fs::read`, and block on a
+            // FIFO). Embedded `data:` images still resolve.
+            let options = usvg::Options {
+                image_href_resolver: usvg::ImageHrefResolver {
+                    resolve_data: usvg::ImageHrefResolver::default_data_resolver(),
+                    resolve_string: Box::new(|_, _| None),
+                },
+                ..usvg::Options::default()
+            };
             let tree =
-                usvg::Tree::from_data(&bytes, &usvg::Options::default()).map_err(|source| {
-                    IconError::Svg {
-                        path: path.to_owned(),
-                        source,
-                    }
+                usvg::Tree::from_data(&bytes, &options).map_err(|source| IconError::Svg {
+                    path: path.to_owned(),
+                    source,
                 })?;
             let (w, h) = (tree.size().width(), tree.size().height());
             fit(w, h, size, |pixmap, transform| {
@@ -579,7 +597,7 @@ mod tests {
         std::fs::create_dir_all(&folder).unwrap();
         assert!(matches!(
             rasterise_file(&folder, 16),
-            Err(IconError::Unsupported { .. })
+            Err(IconError::NotRegular { .. })
         ));
         let big = dir.0.join("big.png");
         std::fs::write(&big, vec![0u8; MAX_ICON_FILE as usize + 1]).unwrap();
@@ -587,6 +605,137 @@ mod tests {
             rasterise_file(&big, 16),
             Err(IconError::TooLarge { .. })
         ));
+    }
+
+    /// Runs `rasterise_file` on a thread and fails if it does not return in
+    /// 5 s, so a regression that blocks cannot hang the suite. The blocked
+    /// thread is leaked, which the process exit reaps.
+    fn rasterise_within_timeout(path: &Path) -> Result<RgbaImage, IconError> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let path = path.to_owned();
+        std::thread::spawn(move || {
+            let _ = tx.send(rasterise_file(&path, 16));
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .expect("rasterise_file blocked for 5 s")
+    }
+
+    /// A FIFO at `dir/name`. `mkfifo` is a coreutils build requirement, so
+    /// a missing one is a failure, not a skip.
+    #[cfg(target_os = "linux")]
+    fn make_fifo(dir: &Scratch, name: &str) -> PathBuf {
+        let path = dir.0.join(name);
+        let status = std::process::Command::new("mkfifo")
+            .arg(&path)
+            .status()
+            .expect("mkfifo (coreutils) must be installed to run this test");
+        assert!(status.success(), "mkfifo failed");
+        path
+    }
+
+    #[test]
+    fn rasterise_refuses_a_fifo_without_blocking() {
+        let dir = Scratch::new("raster-fifo");
+        let fifo = make_fifo(&dir, "pipe.png");
+        assert!(matches!(
+            rasterise_within_timeout(&fifo),
+            Err(IconError::NotRegular { .. })
+        ));
+    }
+
+    #[test]
+    fn rasterise_reports_a_missing_file_as_not_found() {
+        let dir = Scratch::new("raster-missing");
+        match rasterise_file(&dir.0.join("gone.png"), 16) {
+            Err(IconError::Read { source, .. }) => {
+                assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected a NotFound read error, got {other:?}"),
+        }
+    }
+
+    /// A 4x4 opaque red square: drawn by resvg without any raster decoder,
+    /// which this build leaves out (`raster-images` is off, so PNG `<image>`
+    /// elements parse but draw nothing).
+    const RED_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><rect width="4" height="4" fill="#f00"/></svg>"##;
+
+    fn base64(bytes: &[u8]) -> String {
+        const ALPHABET: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for chunk in bytes.chunks(3) {
+            let n = chunk
+                .iter()
+                .enumerate()
+                .fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
+            for i in 0..=chunk.len() {
+                out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
+            }
+            for _ in chunk.len()..3 {
+                out.push('=');
+            }
+        }
+        out
+    }
+
+    fn image_svg(href: &str) -> String {
+        format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><image href="{href}" width="8" height="8"/></svg>"#
+        )
+    }
+
+    fn alpha(image: &RgbaImage) -> impl Iterator<Item = u8> + '_ {
+        image.rgba.iter().skip(3).step_by(4).copied()
+    }
+
+    #[test]
+    fn an_svg_image_href_to_a_file_is_not_followed() {
+        let dir = Scratch::new("svg-href");
+        // The default resolver would read this file and draw it.
+        let red = dir.0.join("red.svg");
+        std::fs::write(&red, RED_SVG).unwrap();
+        let plain = dir.0.join("plain.svg");
+        std::fs::write(&plain, image_svg(red.to_str().unwrap())).unwrap();
+        let image = rasterise_within_timeout(&plain).expect("renders");
+        assert!(
+            alpha(&image).all(|a| a == 0),
+            "the href is not followed, so nothing is drawn"
+        );
+        // The default resolver would also open a FIFO and wait for a writer.
+        let fifo = make_fifo(&dir, "image.svg");
+        let piped = dir.0.join("piped.svg");
+        std::fs::write(&piped, image_svg(fifo.to_str().unwrap())).unwrap();
+        assert!(rasterise_within_timeout(&piped).is_ok());
+    }
+
+    #[test]
+    fn an_svg_with_data_images_still_resolves() {
+        let dir = Scratch::new("svg-data");
+        // A data: SVG is drawn, so the data resolver still works.
+        let path = dir.0.join("data.svg");
+        std::fs::write(
+            &path,
+            image_svg(&format!(
+                "data:image/svg+xml;base64,{}",
+                base64(RED_SVG.as_bytes())
+            )),
+        )
+        .unwrap();
+        let image = rasterise_within_timeout(&path).expect("renders");
+        assert!(alpha(&image).any(|a| a > 0), "the data: image is drawn");
+        // A data: PNG still parses (this build does not draw raster images).
+        let png = dir.0.join("data-png.svg");
+        std::fs::write(
+            &png,
+            image_svg(&format!(
+                "data:image/png;base64,{}",
+                base64(include_bytes!(
+                    "../../../../celestina-style/icons/haze-noise.png"
+                ))
+            )),
+        )
+        .unwrap();
+        assert!(rasterise_within_timeout(&png).is_ok());
     }
 
     #[test]

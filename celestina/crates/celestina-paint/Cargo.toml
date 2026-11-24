@@ -17,6 +17,9 @@ celestina-wayland = { path = "../celestina-wayland" }
 # motion, Haze), generated from `celestina-style/tokens.toml`; `Theme` is built
 # from them so the shell and the QML style read one data file.
 celestina-tokens = { path = "../../../celestina-rs/crates/celestina-tokens" }
+# `atomic_file::read_bounded`, the one recipe for reading a small file that may
+# be a FIFO (type check, non-blocking open, bounded read); no features.
+celestina-core = { path = "../../../celestina-rs/crates/celestina-core" }
 # The painter backend: paths, scissors, images and the glyph quads of the
 # atlas. Text layout and image decoding come from cosmic-text and resvg, so
 # femtovg's own `textlayout` and `image-loading` stay off; `ImageSource::Rgba`

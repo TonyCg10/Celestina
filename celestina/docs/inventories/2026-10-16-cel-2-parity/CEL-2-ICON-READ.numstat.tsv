@@ -1,0 +1,23 @@
+# CEL-2-ICON-READ exact change inventory
+
+Base revision	2d45e2b60166e96d129b668ae99742d883439716
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/crates/celestina-paint/Cargo.toml
+Pathspec	celestina/crates/celestina-paint/src/icon.rs
+Pathspec	celestina/docs/evidence/2026-11-24-icon-read.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-ICON-READ.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+2	1	194e6be3157ea60977c18f5b46792bc3ba1ea3094e79d6612bf3e221d46e37d9	celestina/Cargo.lock
+1	1	5e924bed5670a6bc46251d4fc6e25a1e863096ea9c1eb8515f89a58579debb64	celestina/Cargo.toml
+3	0	2dba6e0beb64fa5260bda99e073b01813eed8b626b964d9a508a5b94fd0b8267	celestina/crates/celestina-paint/Cargo.toml
+176	27	5c6c14d6e098c8bd4034c8e6e8262ad4ecdc48f0ee33ca140a653fc7bd232b18	celestina/crates/celestina-paint/src/icon.rs
+124	0	3fbf119ba917ef199408bdcb62fdfcb5b3f7a83737ec0248383de8bc0ac4f277	celestina/docs/evidence/2026-11-24-icon-read.md
+23	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-ICON-READ.numstat.tsv
+1	0	fc0021985ee4d865876c42c95c061b75102b4f4f7c286dbe0b1253156084bc96	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+1	0	48123a3b47914569a9999e06316030b72f372765d518c19fc0f970694174ef7b	docs/version-history.tsv
