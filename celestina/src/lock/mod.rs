@@ -319,7 +319,9 @@ fn describe(reason: LogReason) -> String {
         LogReason::IntentSet(origin) => format!("lock and suspend requested by {origin:?}"),
         LogReason::IntentExpired => "not suspended: the lock was not confirmed in time".to_owned(),
         LogReason::IntentCancelledByInput => {
-            "input came back: the idle chain's lock and suspend was cancelled".to_owned()
+            "the idle chain withdrew its lock and suspend: input came back or caffeine was \
+             switched on"
+                .to_owned()
         }
         LogReason::UnknownProtocol => "the lock speaks a protocol this shell does not".to_owned(),
         LogReason::UnexpectedLine => "a status line that does not fit the state".to_owned(),

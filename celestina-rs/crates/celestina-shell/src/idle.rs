@@ -31,6 +31,15 @@
 //! the session lock can drop a suspend that idle asked for and nobody
 //! confirmed (CEL-2-H, design §4.9). A refusal started nothing, so it is not
 //! followed by one.
+//!
+//! **Caffeine switched on withdraws what idle started.** Caffeine promises
+//! that inactivity suspends nothing while it is on, and it can be switched on
+//! with no input at all (the verb over ssh or from a script, an edit of
+//! `shell.json`). If the period already handed out
+//! [`IdleAction::LockAndSuspend`], [`IdleChain::set_caffeine`] answers the
+//! same [`IdleAction::Resumed`], once, so the suspend nobody confirmed yet is
+//! dropped (ADR 0025 of `celestina/docs/decisions/`). The period goes on: the
+//! step stays spent, so nothing is handed out again before the next input.
 
 use std::error::Error;
 use std::fmt;
@@ -188,8 +197,11 @@ pub enum IdleAction {
     LockAndSuspend,
     /// A step came due and was deliberately not carried out.
     Refused(Refusal),
-    /// Input ended a period in which [`IdleAction::LockAndSuspend`] was
-    /// handed out: whoever is back must not be suspended by that request.
+    /// The [`IdleAction::LockAndSuspend`] this period handed out is
+    /// withdrawn: input ended the period, so whoever is back must not be
+    /// suspended by that request, or caffeine was switched on, so inactivity
+    /// must not suspend at all. It asks for nothing else: the monitors are
+    /// the compositor's to power on, and the lock itself is not undone.
     Resumed,
 }
 
@@ -294,8 +306,18 @@ impl IdleChain {
 
     /// Caffeine on keeps every step from acting; turning it off acts on the
     /// steps already due.
+    ///
+    /// Switching it on after this period handed out
+    /// [`IdleAction::LockAndSuspend`] answers [`IdleAction::Resumed`] once:
+    /// the suspend that inactivity asked for is withdrawn, because nothing
+    /// here says the lock was confirmed and the machine suspended yet. The
+    /// step stays handled, so the period never hands it out again, with
+    /// caffeine on or after it is switched off; only input starts a new one.
     pub fn set_caffeine(&mut self, caffeine: bool) -> Vec<IdleAction> {
         self.caffeine = caffeine;
+        if caffeine && std::mem::take(&mut self.lock_and_suspend_started) {
+            return vec![IdleAction::Resumed];
+        }
         self.due()
     }
 
@@ -638,5 +660,61 @@ mod tests {
         // The next period starts clean.
         chain.idled(Step::ScreenOff);
         assert!(chain.resumed(Step::ScreenOff).is_empty());
+    }
+
+    /// ADR 0025: caffeine switched on with no input (a verb over ssh, a
+    /// script) must not leave an idle suspend in flight.
+    #[test]
+    fn caffeine_switched_on_withdraws_a_lock_and_suspend_already_handed_out() {
+        let mut chain = chain();
+        chain.set_locker_available(true);
+        assert_eq!(
+            chain.idled(Step::LockAndSuspend),
+            [IdleAction::PowerOffMonitors, IdleAction::LockAndSuspend]
+        );
+        assert_eq!(chain.set_caffeine(true), [IdleAction::Resumed]);
+        // Once: saying it again withdraws nothing more.
+        assert!(chain.set_caffeine(true).is_empty());
+
+        // While caffeine is on nothing is handed out again, whatever moves.
+        assert!(chain.idled(Step::ScreenOff).is_empty());
+        assert!(chain.idled(Step::LockAndSuspend).is_empty());
+        assert!(chain.set_locker_available(true).is_empty());
+        assert!(chain.set_enabled(true).is_empty());
+        // The period goes on and the step stays spent: switching caffeine
+        // off does not ask for the suspend a second time.
+        assert!(chain.is_idle(Step::LockAndSuspend));
+        assert!(chain.set_caffeine(false).is_empty());
+        // The withdrawal was already said, so the input that ends the period
+        // has nothing left to cancel, and the next period starts clean.
+        assert!(chain.resumed(Step::ScreenOff).is_empty());
+        assert_eq!(
+            chain.idled(Step::LockAndSuspend),
+            [IdleAction::PowerOffMonitors, IdleAction::LockAndSuspend]
+        );
+
+        // Caffeine on before the step, as before: nothing to withdraw, and
+        // the step is held back.
+        let mut chain = self::chain();
+        chain.set_locker_available(true);
+        assert_eq!(chain.idled(Step::ScreenOff), [IdleAction::PowerOffMonitors]);
+        assert!(chain.set_caffeine(true).is_empty());
+        assert!(chain.idled(Step::LockAndSuspend).is_empty());
+        assert!(chain.resumed(Step::LockAndSuspend).is_empty());
+
+        // A refusal started nothing, so caffeine withdraws nothing.
+        let mut chain = self::chain();
+        assert_eq!(
+            chain.idled(Step::LockAndSuspend),
+            [IdleAction::PowerOffMonitors, REFUSED]
+        );
+        assert!(chain.set_caffeine(true).is_empty());
+
+        // Switching caffeine off never withdraws.
+        let mut chain = self::chain();
+        chain.set_locker_available(true);
+        chain.idled(Step::LockAndSuspend);
+        assert!(chain.set_caffeine(false).is_empty());
+        assert_eq!(chain.resumed(Step::ScreenOff), [IdleAction::Resumed]);
     }
 }

@@ -4,8 +4,12 @@
 //! One worker owns a blocking `zbus` connection to the system bus and serves
 //! two kinds of request from a bounded queue ([`QUEUE`]):
 //!
-//! - **Caffeine.** `Inhibit("idle:sleep", "Celestina", WHY, "block")` on
-//!   `org.freedesktop.login1.Manager`. logind keeps the lock exactly as long
+//! - **Caffeine.** `Inhibit("idle", "Celestina", WHY, "block")` on
+//!   `org.freedesktop.login1.Manager`: caffeine stops what inactivity would
+//!   do by itself (logind's idle action, and the shell's own idle chain
+//!   through `IdleChain::set_caffeine`), and nothing a person asks for, so a
+//!   suspend by hand goes through while it is on (ADR 0025). logind keeps the
+//!   lock exactly as long
 //!   as the returned file descriptor is open, so the descriptor *is* the
 //!   state: the worker holds it, and closing it is the release. It lives in
 //!   the worker's own stack frame, so it is closed on release, when the
@@ -51,14 +55,15 @@ pub const LOGIND_PATH: &str = "/org/freedesktop/login1";
 /// The manager interface.
 pub const MANAGER_INTERFACE: &str = "org.freedesktop.login1.Manager";
 
-/// What the caffeine inhibitor blocks: idling and sleeping.
-pub const INHIBIT_WHAT: &str = "idle:sleep";
+/// What the caffeine inhibitor blocks: idling, and only idling. Not `sleep`:
+/// that would also refuse a suspend the person asks for by hand (ADR 0025).
+pub const INHIBIT_WHAT: &str = "idle";
 /// Who the inhibitor is reported as.
 pub const INHIBIT_WHO: &str = "Celestina";
 /// Why, as `systemd-inhibit --list` shows it.
 pub const INHIBIT_WHY: &str = "The session was asked to stay awake";
-/// `block`, not `delay`: a delay only postpones sleep, and what caffeine
-/// promises is that the session does not idle or suspend while it is on.
+/// `block`, not `delay`: `idle` takes no delay lock, and what caffeine
+/// promises is that the session is not treated as idle while it is on.
 pub const INHIBIT_MODE: &str = "block";
 
 /// The requests that may wait for the worker. Caffeine and the power verbs
@@ -814,6 +819,14 @@ mod tests {
         format!("Inhibit {INHIBIT_WHAT}|{INHIBIT_WHO}|{INHIBIT_WHY}|{INHIBIT_MODE}")
     }
 
+    /// The author's decision of 2026-11-23 (ADR 0025): caffeine never
+    /// stands in the way of a suspend asked for by hand.
+    #[test]
+    fn caffeine_inhibits_idling_and_never_sleep() {
+        assert_eq!(INHIBIT_WHAT, "idle");
+        assert_eq!(INHIBIT_MODE, "block");
+    }
+
     #[test]
     fn the_inhibitor_is_taken_as_documented_and_closed_on_release() {
         let Some(fixture) = Fixture::start("release", YES, false) else {
@@ -821,7 +834,12 @@ mod tests {
         };
         fixture.handle().caffeine(true).expect("queued");
         assert_eq!(fixture.next(), LogindEvent::Caffeine(Caffeine::Held));
-        assert_eq!(fixture.calls(), vec![inhibit_call()]);
+        // The call as logind receives it, spelled out and not built from the
+        // constants: a `what` that names `sleep` again fails here (ADR 0025).
+        assert_eq!(
+            fixture.calls(),
+            ["Inhibit idle|Celestina|The session was asked to stay awake|block"]
+        );
 
         let closed = fixture.closed();
         assert!(

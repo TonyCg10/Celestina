@@ -190,7 +190,7 @@ pub struct Duties {
     /// Whether this shell groups minimized windows into bubbles.
     #[serde(deserialize_with = "lenient_duty")]
     pub bubbles: Duty,
-    /// Whether this shell holds the session awake while caffeine is on.
+    /// Whether this shell keeps the session from idling while caffeine is on.
     #[serde(deserialize_with = "lenient_duty")]
     pub caffeine: Duty,
     /// Whether this shell keeps a clipboard history.

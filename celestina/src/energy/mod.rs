@@ -1203,6 +1203,109 @@ pub(crate) mod tests {
         perform_idle(&None, &lock, IdleAction::PowerOffMonitors);
     }
 
+    /// The chain, the router and the lock policy together, as the idle
+    /// worker and the loop join them: what each chain call decides goes
+    /// through [`perform_idle`] and the policy answers.
+    struct IdleToLock {
+        chain: celestina_shell::idle::IdleChain,
+        policy: celestina_shell::lock::LockPolicy,
+        now: std::time::Instant,
+    }
+
+    impl IdleToLock {
+        /// The idle duty on with a locker, and the lock available and idle.
+        fn ready() -> Self {
+            let mut joined = Self {
+                chain: celestina_shell::idle::IdleChain::new(IdleConfig::default()),
+                policy: celestina_shell::lock::LockPolicy::new(),
+                now: std::time::Instant::now(),
+            };
+            joined.lock(LockEvent::Duty(true));
+            joined.lock(LockEvent::Pinned(true));
+            assert!(joined.policy.available());
+            assert!(joined.chain.set_locker_available(true).is_empty());
+            assert!(joined.chain.set_enabled(true).is_empty());
+            joined
+        }
+
+        /// How many suspends the policy asked for in answer to `event`.
+        fn lock(&mut self, event: LockEvent) -> usize {
+            self.policy
+                .handle(self.now, event)
+                .iter()
+                .filter(|action| matches!(action, celestina_shell::lock::Action::Suspend(_)))
+                .count()
+        }
+
+        /// Routes what the chain decided and returns the suspends asked for.
+        fn route(&mut self, actions: Vec<IdleAction>) -> usize {
+            let (queue, _taken) = sync_channel(4);
+            let told = RefCell::new(Vec::new());
+            for action in actions {
+                perform_idle(
+                    &Some(queue.clone()),
+                    &|event| told.borrow_mut().push(event),
+                    action,
+                );
+            }
+            let mut suspends = 0;
+            for event in told.into_inner() {
+                suspends += self.lock(event);
+            }
+            suspends
+        }
+
+        /// The lock child confirms the lock; returns the suspends asked for.
+        fn confirm(&mut self) -> usize {
+            use celestina_lock_proto::StatusLine;
+            self.lock(LockEvent::Line(StatusLine::Requested))
+                + self.lock(LockEvent::Line(StatusLine::Locked))
+        }
+    }
+
+    /// ADR 0025: caffeine switched on with no input withdraws the suspend
+    /// the idle chain has in flight, and only that one.
+    #[test]
+    fn caffeine_switched_on_withdraws_the_idle_suspend_and_never_a_persons_own() {
+        use celestina_shell::idle::Step;
+        use celestina_shell::lock::State;
+
+        // The chain's second step set the intent; caffeine goes on before
+        // the lock confirms: the session is locked and nothing suspends.
+        let mut joined = IdleToLock::ready();
+        let step = joined.chain.idled(Step::LockAndSuspend);
+        assert_eq!(joined.route(step), 0);
+        assert_eq!(
+            joined.policy.intent().map(|intent| intent.origin),
+            Some(Origin::Idle)
+        );
+        let withdrawn = joined.chain.set_caffeine(true);
+        assert_eq!(withdrawn, [IdleAction::Resumed]);
+        assert_eq!(joined.route(withdrawn), 0);
+        assert!(joined.policy.intent().is_none());
+        assert_eq!(joined.confirm(), 0, "an idle suspend under caffeine");
+        assert_eq!(joined.policy.state(), State::Locked);
+
+        // Without caffeine the same confirmation suspends: the rig can tell.
+        let mut joined = IdleToLock::ready();
+        let step = joined.chain.idled(Step::LockAndSuspend);
+        assert_eq!(joined.route(step), 0);
+        assert_eq!(joined.confirm(), 1);
+
+        // A person's own `lock suspend` in the same window survives it.
+        let mut joined = IdleToLock::ready();
+        let step = joined.chain.idled(Step::LockAndSuspend);
+        assert_eq!(joined.route(step), 0);
+        assert_eq!(joined.lock(LockEvent::LockAndSuspend(Origin::Verb)), 0);
+        let withdrawn = joined.chain.set_caffeine(true);
+        assert_eq!(joined.route(withdrawn), 0);
+        assert_eq!(
+            joined.policy.intent().map(|intent| intent.origin),
+            Some(Origin::Verb)
+        );
+        assert_eq!(joined.confirm(), 1, "the person's own request");
+    }
+
     fn lines_of(log: &Log, prefix: &str) -> Vec<String> {
         said(log)
             .into_iter()

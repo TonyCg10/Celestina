@@ -343,15 +343,25 @@ None has been run and none is closed by an agent.
   `noctalia msg caffeine-disable`, so the two never hold it at once (the
   niri startup line `caffeine-enable` is the one this replaces)
 - **Procedure:** run `celestina caffeine on` and then
-  `systemd-inhibit --list`: a `Celestina` lock for `idle:sleep` in mode
-  `block` must be listed. Run `celestina caffeine toggle` and check that it is
+  `systemd-inhibit --list`: a `Celestina` lock for `idle` in mode
+  `block` must be listed, and no `Celestina` lock for `sleep` in mode
+  `block` (with the lock duty on, its own `sleep` lock in mode `delay` is
+  listed and is right). Run `celestina caffeine toggle` and check that the
+  `idle` lock is
   gone. Turn it on again, set `duties.idle` to `"on"` and wait past the
-  screen-off delay: the outputs must stay on while caffeine is held. Run
+  screen-off delay: the outputs must stay on while caffeine is held. With
+  caffeine still on and the lock duty on, run `systemctl suspend` (or
+  `celestina lock suspend`, or the power key) with no unsaved work: the
+  machine must suspend,
+  locked, because caffeine only stops what inactivity does by itself. Run
   `celestina caffeine off`, stop the shell with `celestina quit` and check
   that no `Celestina` lock remains. Verbs print nothing; the result is read
   in `systemd-inhibit --list` and in the shell's journal
-- **Pass condition:** the lock exists exactly while caffeine is on, blocks the
-  idle chain, and is released by the verb, by switching the duty off and by
+- **Pass condition:** the `idle` lock exists exactly while caffeine is on;
+  while it is on the idle chain is held off by the shell's own switch and
+  logind's idle action by the lock, and a suspend asked for by hand goes
+  through, locked first; the lock is released by the verb,
+  by switching the duty off and by
   the shell stopping; `energy.caffeine` in `shell.json` follows the verb;
   with the duty off the verb does nothing to the system and says so in the
   journal

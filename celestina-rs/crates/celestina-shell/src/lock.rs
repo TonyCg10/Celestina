@@ -73,7 +73,8 @@ pub const MAX_RELAUNCHES: usize = 3;
 /// Who asked to suspend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Origin {
-    /// The idle chain's second step. Input cancels it.
+    /// The idle chain's second step. Input cancels it, and so does caffeine
+    /// being switched on.
     Idle,
     /// A person's `lock suspend`. Pressing the binding is input too, so
     /// input never cancels it.
@@ -180,7 +181,8 @@ pub enum Event {
     SpawnFailed,
     /// The one-second timer; it runs only while [`LockPolicy::wants_tick`].
     Tick,
-    /// Input came back after the idle chain asked to lock and suspend.
+    /// The idle chain withdrew its request to lock and suspend: input came
+    /// back, or caffeine was switched on (`IdleAction::Resumed`).
     IdleResumed,
     /// logind's `PrepareForSleep`.
     PrepareForSleep(bool),
@@ -231,7 +233,8 @@ pub enum LogReason {
     IntentSet(Origin),
     /// A request to suspend was not served in time.
     IntentExpired,
-    /// Input came back and cancelled the request idle made.
+    /// The idle chain withdrew the request idle made: input came back, or
+    /// caffeine was switched on.
     IntentCancelledByInput,
     /// The child said a protocol this shell does not speak.
     UnknownProtocol,

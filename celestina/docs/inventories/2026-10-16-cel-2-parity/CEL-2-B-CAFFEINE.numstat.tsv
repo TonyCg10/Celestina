@@ -1,0 +1,37 @@
+# CEL-2-B-CAFFEINE exact change inventory
+
+Base revision	3c4e63f4cc5edfb96edbb2e0f4d6c4c38fd7c433
+Pathspec	celestina-rs/crates/celestina-shell/src/idle.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lock.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/decisions/0025-caffeine-inhibits-idle-only.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-11-23-caffeine-idle-only.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-B-CAFFEINE.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/energy/logind.rs
+Pathspec	celestina/src/energy/mod.rs
+Pathspec	celestina/src/lock/mod.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+80	2	57bc839e06581f05c25d060c26338ffeedb5409a4c2be16fe2cce1b378e30b56	celestina-rs/crates/celestina-shell/src/idle.rs
+6	3	b7340bffbdb3c2fecfc4d48f67167dbfa2db07a88131c7d573a1e7c6c78b306e	celestina-rs/crates/celestina-shell/src/lock.rs
+1	1	bc02b0368470fc71840e24dd4779104bee9c2f7347c66cbf96fe16895686e599	celestina-rs/crates/celestina-shell/src/settings.rs
+1	1	9ef3ac67da979127b93f47684a5cfe6c59243ba4ad1350285fa622dfe29a40d5	celestina/Cargo.lock
+1	1	9031eaaa687d6cc723e9fee34b96225d72e8edb24cf11e10ce9eb683d28ca261	celestina/Cargo.toml
+15	5	1b454ecb0dcaad3d618987374ca68b9039e509ca50c106956f0c90ed02a38cb2	celestina/VALIDATION.md
+84	0	d60fd2f48cb1203122245d4ce75c48a470bfc6cc5e7ff9859dc2e6ebc37a3521	celestina/docs/decisions/0025-caffeine-inhibits-idle-only.md
+1	0	e0ed9b46e056f14e8b8e664d09576b52771e0070be79d3069104c4c9d1c93d3b	celestina/docs/decisions/README.md
+174	0	0192f5eaf3f92e6f7acf579dbe927763d497b6c5ad87e3bad9e15405ed12ae94	celestina/docs/evidence/2026-11-23-caffeine-idle-only.md
+37	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-B-CAFFEINE.numstat.tsv
+1	0	48801a5258a484b0571445ccdc38b8191423f47f54f4887c93babd938bacb27d	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+25	7	fc7d03e6ae2941a045478eeaae8d414d31bb38f6922339f2eac702012f4ea56e	celestina/src/energy/logind.rs
+103	0	d4ca83e3c50153c563b49f7345a455925b7d231bff0c95edea7c6473235c02eb	celestina/src/energy/mod.rs
+3	1	93cca75de504896bd34fff389b9ad6de11e33152d8e5fcf39e34b6afbef4e5b0	celestina/src/lock/mod.rs
+1	0	85c9db4215f59ea3367b10e2bf47657b21aaee9931eb8828e31ab13a19cb4cd4	docs/version-history.tsv
