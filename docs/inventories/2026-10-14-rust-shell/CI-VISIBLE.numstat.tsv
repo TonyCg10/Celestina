@@ -1,0 +1,25 @@
+# CI-VISIBLE exact change inventory
+
+Base revision	840562fc528b1c05fa3e99f7aa145e37f65e4c92
+Pathspec	.github/workflows/celestina.yml
+Pathspec	celestina/AGENTS.md
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/evidence/2026-11-24-ci-visible.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CI-VISIBLE.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+7	5	84d6782340931d0526e1a45b5965ee25735490345d3bf1e399f2385578dd0d2c	.github/workflows/celestina.yml
+13	0	8871b59c22a8e74e7feb11fa541cbc099f4b69486304d28027819dda45651384	celestina/AGENTS.md
+35	12	35b6c8b88af3301b2f521acca2b67e71998cd080c32419b8c9a981d26267e3f7	docs/contracts/landing.md
+132	0	669ece8be821e34c9479690a70356c872c9540ae0fca03415b6a6c66ca0a686c	docs/evidence/2026-11-24-ci-visible.md
+25	0	self	docs/inventories/2026-10-14-rust-shell/CI-VISIBLE.numstat.tsv
+1	0	fad0de41a65fb08bdd926fa0880f69a7c51de85b49974069745bca6b73db515f	docs/plans/active/2026-10-14-rust-shell.md
+109	41	aadbf1a973f1583abe620800bd51e4484f51fbed51fde9b5bd95c62fb2cbd3d9	scripts/land-unit.py
+2	2	78e5c4cf3f5508433ecc2ac54238e75657eb003c3c890e6d30179f7862a0b907	scripts/landing.py
+279	24	41f2441d1f2ac6d2687b4766ea5f92c41f247935003d32f053a4b8d99ae96a4a	scripts/test-land-unit.py

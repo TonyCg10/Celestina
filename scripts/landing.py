@@ -131,7 +131,7 @@ class LandState:
     # "yes" once origin/main holds the sealed commit: from then on nothing
     # moves main back, and --abort only reports what is not deployed.
     pushed: str = ""
-    # The failed `contracts` run the author landed over with --accept-red-ci.
+    # The failed workflow runs (`file url`, joined by `; `) the author landed over with --accept-red-ci.
     red_ci: str = ""
 
     def dump(self) -> str:
@@ -1575,7 +1575,7 @@ def landing_section(
         lines.append(f"- **Deploy:** after the push: {deploy}\n")
     if red_ci is not None:
         lines.append(
-            f"- **CI:** GitHub `contracts` had failed on main ({red_ci}); "
+            f"- **CI:** GitHub workflows had failed on main ({red_ci}); "
             "landed with `--accept-red-ci`\n"
         )
     return "".join(lines)

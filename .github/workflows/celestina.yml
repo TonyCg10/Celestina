@@ -27,8 +27,6 @@ jobs:
     defaults:
       run:
         working-directory: celestina
-    env:
-      RUSTUP_TOOLCHAIN: stable
     steps:
       - uses: actions/checkout@v4
 
@@ -46,8 +44,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libwayland-dev libxkbcommon-dev libpam0g-dev
 
-      - name: Install stable Rust
-        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      # The job runs the toolchain `celestina/rust-toolchain.toml` pins, the
+      # one every local check uses; rustup reads it from the working
+      # directory. A moving `stable` turned `main` red with no commit to blame
+      # (2026-11-09), so the workflow never names `stable`.
+      - name: Install pinned toolchain
+        run: rustup toolchain install
 
       - name: Cargo cache
         uses: actions/cache@v4
@@ -56,7 +58,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             celestina/target
-          key: cargo-celestina-${{ runner.os }}-${{ hashFiles('celestina/Cargo.lock', 'celestina/Cargo.toml') }}
+          key: cargo-celestina-${{ runner.os }}-${{ hashFiles('celestina/Cargo.lock', 'celestina/Cargo.toml', 'celestina/rust-toolchain.toml') }}
 
       - name: Format
         run: cargo fmt --all --check

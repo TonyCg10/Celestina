@@ -212,7 +212,7 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    canonical checkout is not a clean `main` (the message lists the
    `git status --porcelain` lines), when local `main` has commits that are not
    on `origin/main` after `git fetch origin main`, when the latest GitHub
-   `contracts` run on `main` failed (see [A red main](#a-red-main)) and
+   run on `main` of any workflow of the repository failed (see [A red main](#a-red-main)) and
    `--accept-red-ci` was not given, when the branch does not
    exist or has no changes, when the branch does not satisfy the plan and row
    rules of the previous section, when the unit's inventory already exists on
@@ -337,7 +337,7 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    - **Check:** <per project: the check command, its exit and its first output line>
    - **Build:** <per project that ran: `<project> build:` or `<project> verify:`, each entry with exit 0, then the manifest's source_fingerprint and verification_fingerprint>
    - **Deploy:** after the push: <per deployable affected project: `<project>:` and the deploy and status entries>
-   - **CI:** GitHub `contracts` had failed on main (<run>); landed with `--accept-red-ci`
+   - **CI:** GitHub workflows had failed on main (<workflow file> <run>[; <workflow file> <run>]); landed with `--accept-red-ci`
    ```
 
    The `Deploy` line appears when a deployable project is affected, and the
@@ -612,19 +612,42 @@ branch is never changed, so a new landing starts from the same session work.
 
 `LAND_UNIT_GIT`, `LAND_UNIT_CARGO` and `LAND_UNIT_PYTHON` replace the programs
 the tool runs; the tests use them. `LAND_UNIT_CI_STATUS` replaces the GitHub API
-URL of the `contracts` status, or skips its read with `off`.
+URL read for each workflow (the text `{workflow}` in it is replaced by the workflow's file name, percent-quoted as in the default URL, which a `file://` URL decodes again; a value without it is read as it stands once per workflow), or skips the read with `off`.
 
 ## A red main
 
-A `contracts` run that is red on `main` enforces nothing, and the steps after
-the failing one never ran. `preflight` therefore reads the latest run of
-`.github/workflows/contracts.yml` on `main` through GitHub's public REST API,
-which needs no credentials for a public repository, with a 20 s timeout.
-When that run completed with `failure`, `timed_out` or `startup_failure`, the
-landing stops; the unit that makes `main` green again lands with
-`--accept-red-ci`, and the tool says it did. A remote that is not on GitHub is
-not read, and a status that cannot be read (offline, rate-limited, private)
-is a warning, not a stop.
+A workflow run that is red on `main` enforces nothing, and the steps after
+the failing one never ran. `preflight` therefore lists the workflow files
+tracked on `origin/main` (`.github/workflows/*.yml`) and reads, for each one,
+its newest push run on `main` through GitHub's public REST API
+(`actions/workflows/<file>/runs?branch=main&event=push&per_page=1`), which
+needs no credentials for a public repository. The file names are read
+NUL-separated from the tree and percent-quoted in the URL. The whole read
+shares one deadline of 20 s, each request getting what is left, and each
+request has a byte bound; once the deadline is spent, the workflows not yet
+read are reported in one warning that names them. Each workflow is read by
+itself, so a workflow that runs
+rarely (the `celestina` workflow runs only for pushes touching its paths) is
+judged by its own newest run however many runs other workflows have had since.
+That run is red only when it completed with `failure`, `timed_out` or
+`startup_failure`; one still in progress is not red. A workflow whose file is
+not on `origin/main` is never asked, so the last run of a retired workflow,
+red forever, stops nothing. A workflow with no run at all has no status: the
+tool prints one notice line and continues. When any workflow is red, the
+landing stops and names each red workflow and its run; the unit that makes
+`main` green again lands with `--accept-red-ci`, and the tool says it did and
+writes the `CI` line of the evidence naming the same runs. A remote that is
+not on GitHub is not read. A status that cannot be read (offline,
+rate-limited, private, cut short, malformed) and a workflow list that cannot be
+read are each a warning naming what failed, never a stop, and the other
+workflows are still read.
+
+Each Rust workflow runs the toolchain its workspace's `rust-toolchain.toml`
+pins, the same one a session's local checks use, so a check that passes
+locally passes on the runner; a workflow never names `stable`, which moves
+(it turned `main` red with no commit to blame on 2026-11-09). Moving a pin is
+a unit of its own whose evidence shows Clippy, the format check and the tests
+on the new toolchain.
 
 The landing is not the only way to reach `main`, so the author's own gate is
 GitHub branch protection on `main` requiring the `suite-contracts` check of

@@ -18,7 +18,7 @@ Exit 0 when the unit landed, 1 when the landing stopped or failed, 2 on usage
 errors. LAND_UNIT_GIT, LAND_UNIT_CARGO and LAND_UNIT_PYTHON override the
 programs it runs; LAND_UNIT_NETWORK_TIMEOUT bounds a fetch or push (300 s) and
 LAND_UNIT_CI_STATUS replaces, or with `off` skips, the read of the latest
-GitHub `contracts` run on main.
+GitHub run on main of each workflow (`{workflow}` in it stands for the file name).
 """
 
 from __future__ import annotations
@@ -33,7 +33,9 @@ from pathlib import Path
 import posixpath
 import subprocess
 import sys
+import time
 import tomllib
+import urllib.parse
 import urllib.request
 
 from landing import (
@@ -96,7 +98,7 @@ class LandContext:
     registry: dict
     state: LandState
     unit: UnitRef | None
-    # --accept-red-ci: land although GitHub `contracts` is red on main, which
+    # --accept-red-ci: land although a GitHub workflow is red on main, which
     # only the unit that makes it green should need.
     accept_red_ci: bool = False
 
@@ -410,10 +412,14 @@ def rebase_in_progress(ctx: LandContext) -> bool:
     return False
 
 
-# GitHub `contracts` on main (TOOL-1).
+# GitHub workflows on main (TOOL-1).
 
-CI_WORKFLOW = "contracts.yml"
+# One deadline for the whole read, shared by every request.
 CI_TIMEOUT_SECONDS = 20
+# One run of the REST answer is 12-25 kB (the embedded repository objects
+# dominate); the read asks for one run per workflow.
+CI_MAX_BYTES = 1_000_000
+WORKFLOW_DIRECTORY = ".github/workflows/"
 RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
 
 
@@ -427,59 +433,120 @@ def github_repository(url: str) -> str | None:
     return None
 
 
-def contracts_status_source(ctx: LandContext) -> str | None:
-    """Where the latest `contracts` run on main is read from, or None to skip.
+def now() -> float:
+    """The monotonic clock of the CI read's deadline (the tests replace it)."""
+    return time.monotonic()
 
-    `LAND_UNIT_CI_STATUS=off` skips the read, and any other value replaces
-    the GitHub API URL (the tests point it at a file). The public API needs no
-    credentials for a public repository; a remote that is not on GitHub has
-    no status to read.
+
+def workflow_status_source(ctx: LandContext, workflow: str) -> str | None:
+    """Where the latest run of one workflow on main is read from, or None to skip.
+
+    `LAND_UNIT_CI_STATUS=off` skips every read. Any other value is the URL to
+    read, in which `{workflow}` is replaced by the workflow's file name,
+    percent-quoted like the default URL's (a `file://` URL decodes it again;
+    the tests give each workflow its own file); a value without `{workflow}`
+    is read as it stands once per workflow. The public API needs no credentials
+    for a public repository; a remote that is not on GitHub has no status to
+    read.
     """
     configured = os.environ.get("LAND_UNIT_CI_STATUS", "")
     if configured == "off":
         return None
+    quoted = urllib.parse.quote(workflow, safe="")
     if configured:
-        return configured
+        return configured.replace("{workflow}", quoted)
     remote = run(ctx, "remote", "get-url", "origin", check=False).stdout.strip()
     repository = github_repository(remote)
     if repository is None:
         return None
     return (
-        f"https://api.github.com/repos/{repository}/actions/workflows/{CI_WORKFLOW}"
+        f"https://api.github.com/repos/{repository}/actions/workflows/{quoted}"
         "/runs?branch=main&event=push&per_page=1"
     )
 
 
-def red_contracts_run(ctx: LandContext) -> str | None:
-    """The URL of the latest `contracts` run on main when it failed, else None.
+def workflow_files_on_main(ctx: LandContext) -> list[str] | None:
+    """The workflow file names tracked on origin/main, or None when not listable.
 
-    A status that cannot be read is a warning, not a stop: the landing must
-    work offline, and branch protection on GitHub is the author's gate for
-    what reaches main in other ways.
+    The tree is read NUL-separated, so Git quotes and drops no name.
     """
-    source = contracts_status_source(ctx)
-    if source is None:
-        return None
-    request = urllib.request.Request(
-        source,
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "celestina-land-unit"},
+    listing = run(
+        ctx, "ls-tree", "-z", "--name-only", "origin/main", "--", WORKFLOW_DIRECTORY,
+        check=False,
     )
-    try:
-        with urllib.request.urlopen(request, timeout=CI_TIMEOUT_SECONDS) as response:
-            payload = json.loads(response.read(1_000_000).decode("utf-8"))
-        runs = payload.get("workflow_runs", [])
-        latest = runs[0] if isinstance(runs, list) and runs else None
-    except (OSError, ValueError, AttributeError, http.client.HTTPException) as error:
-        say(
-            f"warning: cannot read the latest GitHub {CI_WORKFLOW} run on main ({error}); "
-            "continuing without it"
-        )
+    if listing.returncode != 0:
         return None
+    names = (entry.removeprefix(WORKFLOW_DIRECTORY) for entry in listing.stdout.split("\0") if entry)
+    return sorted(name for name in names if name.endswith((".yml", ".yaml")))
+
+
+def latest_run_is_red(latest: object) -> str | None:
+    """The run's URL when it completed red, else None; ValueError when malformed."""
     if not isinstance(latest, dict):
-        return None
-    if latest.get("status") != "completed" or latest.get("conclusion") not in RED_CONCLUSIONS:
+        raise ValueError("the run is not an object")
+    status, conclusion = latest.get("status"), latest.get("conclusion")
+    if not isinstance(status, str) or not (conclusion is None or isinstance(conclusion, str)):
+        raise ValueError("the run has a status or conclusion that is not a string")
+    if status != "completed" or conclusion not in RED_CONCLUSIONS:
         return None
     return str(latest.get("html_url") or latest.get("head_sha") or "the latest run")
+
+
+def red_workflow_runs(ctx: LandContext) -> list[tuple[str, str]]:
+    """(workflow file, run URL) of each workflow whose latest run on main failed.
+
+    Each workflow file tracked on origin/main is asked for its own newest push
+    run on main, so no window of other workflows' runs can push a red run out
+    of sight (a retired workflow has no file and is never asked). The run is
+    red only when completed with a conclusion in RED_CONCLUSIONS; one still in
+    progress is not red, and a workflow with no run has no status. A status
+    that cannot be read is a warning naming the workflow, not a stop, and the
+    other workflows are still read: the landing must work offline, and branch
+    protection on GitHub is the author's gate for what reaches main in other
+    ways.
+    """
+    if workflow_status_source(ctx, "") is None:
+        return []
+    workflows = workflow_files_on_main(ctx)
+    if workflows is None:
+        say("warning: cannot list the workflows on origin/main; continuing without their status")
+        return []
+    red: list[tuple[str, str]] = []
+    deadline = now() + CI_TIMEOUT_SECONDS
+    for position, workflow in enumerate(workflows):
+        remaining = deadline - now()
+        if remaining <= 0:
+            skipped = ", ".join(workflows[position:])
+            say(
+                f"warning: the {CI_TIMEOUT_SECONDS} s allowed for the GitHub status ran out; "
+                f"cannot read the latest run of {skipped} on main; continuing without it"
+            )
+            break
+        source = workflow_status_source(ctx, workflow)
+        if source is None:
+            continue
+        request = urllib.request.Request(
+            source,
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "celestina-land-unit"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=remaining) as response:
+                payload = json.loads(response.read(CI_MAX_BYTES).decode("utf-8"))
+            runs = payload.get("workflow_runs", [])
+            if not isinstance(runs, list):
+                raise ValueError("workflow_runs is not a list")
+            url = latest_run_is_red(runs[0]) if runs else None
+        except (OSError, ValueError, AttributeError, http.client.HTTPException) as error:
+            say(
+                f"warning: cannot read the latest GitHub run of {workflow} on main ({error}); "
+                "continuing without it"
+            )
+            continue
+        if not runs:
+            say(f"notice: no run of {workflow} on main; its status is not checked")
+        elif url is not None:
+            red.append((workflow, url))
+    return red
 
 
 # Steps.
@@ -505,16 +572,17 @@ def preflight(ctx: LandContext) -> None:
     run(ctx, "fetch", "--quiet", "origin", "main")
     if not succeeds(ctx, "merge-base", "--is-ancestor", "main", "origin/main"):
         raise LandingStop("preflight", "local main has commits that are not on origin/main")
-    red = red_contracts_run(ctx)
-    if red is not None:
+    red = red_workflow_runs(ctx)
+    if red:
+        named = ", ".join(f"{workflow} ({url})" for workflow, url in red)
         if not ctx.accept_red_ci:
             raise LandingStop(
                 "preflight",
-                f"GitHub {CI_WORKFLOW} failed on main ({red}); a red main enforces nothing, "
+                f"GitHub workflows failed on main: {named}; a red main enforces nothing, "
                 "so land the unit that makes it green first, with --accept-red-ci",
             )
-        say(f"warning: GitHub {CI_WORKFLOW} failed on main ({red}); landing with --accept-red-ci")
-        state.red_ci = red
+        say(f"warning: GitHub workflows failed on main: {named}; landing with --accept-red-ci")
+        state.red_ci = "; ".join(f"{workflow} {url}" for workflow, url in red)
     if not succeeds(ctx, "rev-parse", "--verify", "--quiet", f"refs/heads/{state.branch}"):
         raise LandingStop("preflight", f"no such branch: {state.branch}")
     ctx.registry = registry_at(ctx, "origin/main")
@@ -1409,7 +1477,7 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--accept-red-ci",
         action="store_true",
-        help="land although GitHub contracts failed on main (for the unit that fixes it)",
+        help="land although a GitHub workflow failed on main (for the unit that fixes it)",
     )
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--continue", dest="resume", action="store_true")

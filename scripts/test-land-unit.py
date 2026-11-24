@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import importlib.util
+import json
 import os
 from pathlib import Path
 import posixpath
@@ -1515,11 +1516,11 @@ class LandingFunctions(unittest.TestCase):
         self.assertNotIn("CI", current)
         extended = landing.landing_section(
             base, "artifact: app current", None, deploy="app: deploy-production.sh",
-            red_ci="https://example.invalid/runs/1",
+            red_ci="celestina.yml https://example.invalid/runs/1",
         )
         self.assertIn("- **Deploy:** after the push: app: deploy-production.sh\n", extended)
         self.assertIn(
-            "- **CI:** GitHub `contracts` had failed on main (https://example.invalid/runs/1); "
+            "- **CI:** GitHub workflows had failed on main (celestina.yml https://example.invalid/runs/1); "
             "landed with `--accept-red-ci`\n",
             extended,
         )
@@ -3006,43 +3007,142 @@ class LandUnitFixture(unittest.TestCase):
         self.assertNotIn("deploy", self.records_of(".app-entries-ran"))
         self.assertEqual(self.land("--abort").returncode, 0)
 
-    def test_red_contracts_on_main_stops_the_preflight(self) -> None:
-        runs = self.top / "runs.json"
-        runs.write_text(
-            '{"workflow_runs": [{"status": "completed", "conclusion": "failure", '
-            '"html_url": "https://example.invalid/runs/1"}]}',
-            encoding="utf-8",
+    def publish_workflows(self, *names: str) -> None:
+        """Put workflow files on origin/main, as the repository's own are."""
+        directory = self.repo / ".github/workflows"
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in names:
+            (directory / f"{name}.yml").write_text(f"name: {name}\n", encoding="utf-8")
+        self.git(self.repo, "add", "--all")
+        self.git(self.repo, "commit", "--quiet", "--no-verify", "-m", "Add the fixture workflows")
+        self.git(self.repo, "push", "--quiet", "origin", "main")
+
+    def write_runs(self, *runs: tuple[str, str, str | None]) -> str:
+        """One answer file per workflow, newest run first: (workflow, status,
+        conclusion) each. Returns the LAND_UNIT_CI_STATUS value."""
+        directory = self.top / "ci"
+        directory.mkdir(exist_ok=True)
+        by_workflow: dict[str, list[dict]] = {}
+        for index, (workflow, status, conclusion) in enumerate(runs):
+            by_workflow.setdefault(workflow, []).append(
+                {
+                    "path": f".github/workflows/{workflow}.yml",
+                    "name": workflow,
+                    "status": status,
+                    "conclusion": conclusion,
+                    "html_url": f"https://example.invalid/{workflow}/{index}",
+                    "head_sha": "a" * 40,
+                }
+            )
+        for workflow, entries in by_workflow.items():
+            self.write_answer(workflow, entries)
+        return (directory / "{workflow}.json").as_uri().replace("%7Bworkflow%7D", "{workflow}")
+
+    def write_answer(self, workflow: str, entries: object) -> None:
+        directory = self.top / "ci"
+        directory.mkdir(exist_ok=True)
+        (directory / f"{workflow}.yml.json").write_text(
+            json.dumps({"total_count": 1, "workflow_runs": entries}), encoding="utf-8"
         )
+
+    def land_over(self, status: str, *arguments: str) -> tuple[str, subprocess.CompletedProcess[str]]:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+        result = self.land("unit/app/FX-A", "--kind", "bug", *arguments, LAND_UNIT_CI_STATUS=status)
+        return before, result
+
+    def test_red_workflow_on_main_stops_the_preflight(self) -> None:
+        self.publish_workflows("contracts")
+        runs = self.write_runs(("contracts", "completed", "failure"))
         worktree = self.open_branch("FX-A")
         self.write_unit(worktree, "FX-A")
         before = self.origin_main()
 
-        refused = self.land("unit/app/FX-A", "--kind", "bug", LAND_UNIT_CI_STATUS=runs.as_uri())
+        refused = self.land("unit/app/FX-A", "--kind", "bug", LAND_UNIT_CI_STATUS=runs)
 
         self.assert_not_landed(refused, before)
         self.assertIn(
-            "stopped at preflight: GitHub contracts.yml failed on main "
-            "(https://example.invalid/runs/1)",
+            "stopped at preflight: GitHub workflows failed on main: contracts.yml "
+            "(https://example.invalid/contracts/0)",
             refused.stderr,
         )
         self.assertFalse(self.landing_dir.exists())
         accepted = self.land(
-            "unit/app/FX-A", "--kind", "bug", "--accept-red-ci", LAND_UNIT_CI_STATUS=runs.as_uri()
+            "unit/app/FX-A", "--kind", "bug", "--accept-red-ci", LAND_UNIT_CI_STATUS=runs
         )
         head = self.assert_landed(accepted, before)
         self.assertIn("landing with --accept-red-ci", accepted.stderr)
         self.assertIn(
-            "- **CI:** GitHub `contracts` had failed on main (https://example.invalid/runs/1); "
-            "landed with `--accept-red-ci`\n",
+            "- **CI:** GitHub workflows had failed on main (contracts.yml "
+            "https://example.invalid/contracts/0); landed with `--accept-red-ci`\n",
             self.git(self.origin, "show", f"{head}:{EVIDENCE}"),
         )
 
-    def test_truncated_contracts_status_only_warns(self) -> None:
+    def test_red_celestina_with_green_contracts_stops_the_preflight(self) -> None:
+        self.publish_workflows("contracts", "celestina")
+        runs = self.write_runs(
+            ("contracts", "completed", "success"), ("celestina", "completed", "failure")
+        )
+
+        before, refused = self.land_over(runs)
+
+        self.assert_not_landed(refused, before)
+        self.assertIn("celestina.yml (https://example.invalid/celestina/1)", refused.stderr)
+        self.assertNotIn("contracts.yml", refused.stderr)
+
+    def test_two_red_workflows_are_both_named(self) -> None:
+        self.publish_workflows("contracts", "celestina")
+        runs = self.write_runs(
+            ("contracts", "completed", "timed_out"), ("celestina", "completed", "failure")
+        )
+
+        before, refused = self.land_over(runs)
+
+        self.assert_not_landed(refused, before)
+        self.assertIn("contracts.yml (https://example.invalid/contracts/0)", refused.stderr)
+        self.assertIn("celestina.yml (https://example.invalid/celestina/1)", refused.stderr)
+        accepted = self.land("unit/app/FX-A", "--kind", "bug", "--accept-red-ci", LAND_UNIT_CI_STATUS=runs)
+        head = self.assert_landed(accepted, before)
+        evidence = self.git(self.origin, "show", f"{head}:{EVIDENCE}")
+        self.assertIn("contracts.yml https://example.invalid/contracts/0", evidence)
+        self.assertIn("celestina.yml https://example.invalid/celestina/1", evidence)
+
+    def test_older_red_run_under_a_newer_green_run_does_not_stop(self) -> None:
+        self.publish_workflows("celestina")
+        runs = self.write_runs(
+            ("celestina", "completed", "success"), ("celestina", "completed", "failure")
+        )
+
+        before, result = self.land_over(runs)
+
+        self.assert_landed(result, before)
+
+    def test_red_run_of_a_workflow_not_on_origin_main_does_not_stop(self) -> None:
+        self.publish_workflows("contracts")
+        runs = self.write_runs(
+            ("contracts", "completed", "success"), ("celestina-qt", "completed", "failure")
+        )
+
+        before, result = self.land_over(runs)
+
+        self.assert_landed(result, before)
+
+    def test_newest_run_in_progress_does_not_stop(self) -> None:
+        self.publish_workflows("celestina")
+        runs = self.write_runs(
+            ("celestina", "in_progress", None), ("celestina", "completed", "failure")
+        )
+
+        before, result = self.land_over(runs)
+
+        self.assert_landed(result, before)
+
+    def test_truncated_workflow_status_only_warns(self) -> None:
         # An HTTP response cut short raises http.client.IncompleteRead, which
         # is not an OSError; it must warn like any unreadable status.
-        runs = self.top / "runs.json"
-        runs.write_text("{}", encoding="utf-8")
-        red_contracts_run = LAND_UNIT.red_contracts_run
+        self.publish_workflows("contracts")
+        runs = self.write_runs(("contracts", "completed", "success"))
         ctx = LAND_UNIT.LandContext(
             self.repo, self.landing_dir, {}, landing.LandState("preflight", "", "", "", "", "", 0), None
         )
@@ -3057,22 +3157,177 @@ class LandUnitFixture(unittest.TestCase):
             def read(self, _limit):
                 raise http.client.IncompleteRead(b"{", 10)
 
-        with mock.patch.dict(os.environ, {"LAND_UNIT_CI_STATUS": runs.as_uri()}), mock.patch.object(
+        with mock.patch.dict(os.environ, {"LAND_UNIT_CI_STATUS": runs}), mock.patch.object(
             LAND_UNIT.urllib.request, "urlopen", return_value=Truncated()
         ), mock.patch.object(LAND_UNIT, "say") as said:
-            self.assertIsNone(red_contracts_run(ctx))
-        self.assertIn("cannot read the latest GitHub contracts.yml run", said.call_args.args[0])
+            self.assertEqual(LAND_UNIT.red_workflow_runs(ctx), [])
+        self.assertIn("cannot read the latest GitHub run of contracts.yml", said.call_args.args[0])
 
-    def test_unreadable_contracts_status_only_warns(self) -> None:
+    def test_unreadable_workflow_status_only_warns(self) -> None:
+        self.publish_workflows("contracts")
         worktree = self.open_branch("FX-A")
         self.write_unit(worktree, "FX-A")
         before = self.origin_main()
-        missing = (self.top / "no-such-runs.json").as_uri()
+        missing = (self.top / "no-such-ci" / "{workflow}.json").as_uri().replace("%7Bworkflow%7D", "{workflow}")
 
         result = self.land("unit/app/FX-A", "--kind", "bug", LAND_UNIT_CI_STATUS=missing)
 
         self.assert_landed(result, before)
-        self.assertIn("warning: cannot read the latest GitHub contracts.yml run", result.stderr)
+        self.assertIn("warning: cannot read the latest GitHub run of contracts.yml", result.stderr)
+
+    def test_each_workflow_is_read_by_itself(self) -> None:
+        # A workflow whose newest run is red is found however many newer runs
+        # other workflows have: nothing is read from a shared window.
+        self.publish_workflows("contracts", "celestina")
+        status = self.write_runs(("celestina", "completed", "failure"))
+        self.write_answer(
+            "contracts",
+            [
+                {
+                    "path": ".github/workflows/contracts.yml",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "html_url": f"https://example.invalid/contracts/{index}",
+                    "head_sha": "a" * 40,
+                }
+                for index in range(150)
+            ],
+        )
+
+        before, refused = self.land_over(status)
+
+        self.assert_not_landed(refused, before)
+        self.assertIn("celestina.yml (https://example.invalid/celestina/0)", refused.stderr)
+
+    def test_unreadable_workflow_warns_and_the_others_are_still_read(self) -> None:
+        # The unreadable workflow is read first (celestina.yml sorts before
+        # contracts.yml), so stopping at it would hide the red one after it.
+        self.publish_workflows("contracts", "celestina")
+        status = self.write_runs(("contracts", "completed", "failure"))
+
+        before, refused = self.land_over(status)
+
+        self.assert_not_landed(refused, before)
+        self.assertIn("warning: cannot read the latest GitHub run of celestina.yml", refused.stderr)
+        self.assertIn("contracts.yml (https://example.invalid/contracts/0)", refused.stderr)
+
+    def test_only_workflow_files_are_asked_for_a_status(self) -> None:
+        (self.repo / ".github/workflows").mkdir(parents=True)
+        (self.repo / ".github/workflows/README.md").write_text("Notes\n", encoding="utf-8")
+        self.publish_workflows("contracts")
+        status = self.write_runs(("contracts", "completed", "success"))
+
+        before, result = self.land_over(status)
+
+        self.assert_landed(result, before)
+        self.assertNotIn("README.md", result.stderr)
+
+    def test_workflow_names_with_a_space_or_non_ascii_are_read(self) -> None:
+        self.publish_workflows("a b", "\u00e9t\u00e9")
+        status = self.write_runs(
+            ("a b", "completed", "success"), ("\u00e9t\u00e9", "completed", "failure")
+        )
+
+        before, refused = self.land_over(status)
+
+        self.assert_not_landed(refused, before)
+        self.assertIn("\u00e9t\u00e9.yml (https://example.invalid/\u00e9t\u00e9/1)", refused.stderr)
+        self.assertNotIn("cannot read", refused.stderr)
+
+    def test_the_whole_status_read_shares_one_deadline(self) -> None:
+        self.publish_workflows("contracts", "celestina", "celestina-rs")
+        status = self.write_runs(("contracts", "completed", "success"))
+        ctx = LAND_UNIT.LandContext(
+            self.repo, self.landing_dir, {}, landing.LandState("preflight", "", "", "", "", "", 0), None
+        )
+        clock = [100.0]
+        timeouts: list[float] = []
+
+        def urlopen(_request, timeout):
+            timeouts.append(timeout)
+            clock[0] += LAND_UNIT.CI_TIMEOUT_SECONDS  # the request used all it was given
+            raise TimeoutError("timed out")
+
+        with mock.patch.dict(os.environ, {"LAND_UNIT_CI_STATUS": status}), mock.patch.object(
+            LAND_UNIT, "now", lambda: clock[0]
+        ), mock.patch.object(LAND_UNIT.urllib.request, "urlopen", urlopen), mock.patch.object(
+            LAND_UNIT, "say"
+        ) as said:
+            self.assertEqual(LAND_UNIT.red_workflow_runs(ctx), [])
+
+        self.assertEqual(timeouts, [LAND_UNIT.CI_TIMEOUT_SECONDS])
+        messages = [call.args[0] for call in said.call_args_list]
+        self.assertEqual(len(messages), 2, msg=messages)
+        self.assertIn("cannot read the latest GitHub run of celestina-rs.yml", messages[0])
+        self.assertIn("celestina.yml", messages[1])
+        self.assertIn("contracts.yml", messages[1])
+        self.assertIn("ran out", messages[1])
+
+    def test_workflow_without_runs_is_a_notice_not_a_stop(self) -> None:
+        self.publish_workflows("contracts", "celestina")
+        status = self.write_runs(("contracts", "completed", "success"))
+        self.write_answer("celestina", [])
+
+        before, result = self.land_over(status)
+
+        self.assert_landed(result, before)
+        self.assertIn("notice: no run of celestina.yml on main; its status is not checked", result.stderr)
+
+    def test_malformed_status_or_conclusion_is_a_warning_for_that_workflow(self) -> None:
+        self.publish_workflows("contracts", "celestina")
+        status = self.write_runs(("celestina", "completed", "failure"))
+        self.write_answer(
+            "contracts",
+            [{"path": ".github/workflows/contracts.yml", "status": "completed", "conclusion": ["failure"]}],
+        )
+
+        before, refused = self.land_over(status)
+
+        self.assert_not_landed(refused, before)
+        self.assertIn("warning: cannot read the latest GitHub run of contracts.yml", refused.stderr)
+        self.assertNotIn("Traceback", refused.stderr)
+        self.assertIn("celestina.yml (https://example.invalid/celestina/0)", refused.stderr)
+
+    def test_status_without_placeholder_is_read_once_per_workflow(self) -> None:
+        self.publish_workflows("contracts")
+        single = self.top / "single.json"
+        single.write_text(
+            json.dumps(
+                {
+                    "workflow_runs": [
+                        {
+                            "status": "completed",
+                            "conclusion": "failure",
+                            "html_url": "https://example.invalid/single/0",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        before, refused = self.land_over(single.as_uri())
+
+        self.assert_not_landed(refused, before)
+        self.assertIn("contracts.yml (https://example.invalid/single/0)", refused.stderr)
+
+    def test_failing_workflow_listing_warns(self) -> None:
+        self.publish_workflows("contracts")
+        status = self.write_runs(("contracts", "completed", "failure"))
+        ctx = LAND_UNIT.LandContext(
+            self.repo, self.landing_dir, {}, landing.LandState("preflight", "", "", "", "", "", 0), None
+        )
+        failed = subprocess.CompletedProcess([], 128, stdout="", stderr="fatal")
+        real_run = LAND_UNIT.run
+
+        def run(ctx, *args, **options):
+            return failed if "ls-tree" in args else real_run(ctx, *args, **options)
+
+        with mock.patch.dict(os.environ, {"LAND_UNIT_CI_STATUS": status}), mock.patch.object(
+            LAND_UNIT, "run", run
+        ), mock.patch.object(LAND_UNIT, "say") as said:
+            self.assertEqual(LAND_UNIT.red_workflow_runs(ctx), [])
+        self.assertIn("cannot list the workflows on origin/main", said.call_args.args[0])
 
     def test_guard_failure_stops_before_commit(self) -> None:
         worktree = self.open_branch("FX-A")

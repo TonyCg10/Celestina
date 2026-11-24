@@ -50,6 +50,19 @@ the shell's constraints; it cannot relax the root or grant authority.
   nested niri, a fake logind and no PAM service only, never the live session;
   it stops processes by recorded pid, never by name)
 
+The fast checks a session runs from `celestina/`, on the toolchain
+`celestina/rust-toolchain.toml` pins:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`
+- `cargo test --workspace --locked`
+
+Keep `--workspace`: a plain `cargo clippy --all-targets` in `celestina/` skips
+the member crates entirely (only the root `celestina` package is checked).
+The `celestina` workflow runs the same three checks on the same pinned
+toolchain, and the landing stops while that workflow's
+latest run on `main` is red (see `docs/contracts/landing.md`, "A red main").
+
 Verification exercises the canonical release artifact without touching the
 installed binary; completion updates it without starting or replacing the live
 shell. `activate-production.sh` runs only on the author's explicit request.
