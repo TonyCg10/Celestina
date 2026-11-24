@@ -14,6 +14,8 @@
 //! compositor, a session or a bus. The child is killed by its pid at the end
 //! (never by name).
 
+mod support;
+
 use std::fs;
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
@@ -282,15 +284,16 @@ fn the_signals_do_not_touch_it(
         let stream = ours.try_clone().expect("clone the server end");
         move || serve(stream)
     });
-    let child = Command::new(&lock)
-        .arg("--rehearsal")
-        .env_clear()
-        .env("WAYLAND_SOCKET", number.to_string())
-        .stdin(stdin.map_or_else(Stdio::null, Stdio::from))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn the lock");
+    let child = support::spawn_fresh(
+        Command::new(&lock)
+            .arg("--rehearsal")
+            .env_clear()
+            .env("WAYLAND_SOCKET", number.to_string())
+            .stdin(stdin.map_or_else(Stdio::null, Stdio::from))
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
+    .expect("spawn the lock");
     let pid = child.id();
     let child = Guard(child);
     drop(theirs);

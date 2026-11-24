@@ -10,6 +10,8 @@
 //! socket it was given on purpose must survive. Nothing here touches a
 //! compositor, a session or a bus; the child is killed by its pid at the end.
 
+mod support;
+
 use std::fs;
 use std::io::{PipeReader, Read};
 use std::os::fd::AsRawFd;
@@ -69,15 +71,16 @@ fn the_lock_closes_what_it_inherited_by_accident_and_keeps_the_wayland_socket() 
     let leaked_number = writer.as_raw_fd();
     assert_ne!(socket_number, leaked_number);
 
-    let child = Command::new(&lock)
-        .arg("--rehearsal")
-        .env_clear()
-        .env("WAYLAND_SOCKET", socket_number.to_string())
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn the lock");
+    let child = support::spawn_fresh(
+        Command::new(&lock)
+            .arg("--rehearsal")
+            .env_clear()
+            .env("WAYLAND_SOCKET", socket_number.to_string())
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
+    .expect("spawn the lock");
     let mut child = Guard(child);
     drop(theirs);
     drop(socket);

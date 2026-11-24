@@ -1,0 +1,25 @@
+# CEL-2-CLIPPY-1100 exact change inventory
+
+Base revision	b99a22b45ce69761b7ab0d2be1c91db3634dfa21
+Pathspec	celestina/crates/celestina-lock/src/view.rs
+Pathspec	celestina/crates/celestina-lock/tests/connect_guard.rs
+Pathspec	celestina/crates/celestina-lock/tests/descriptors.rs
+Pathspec	celestina/crates/celestina-lock/tests/signals.rs
+Pathspec	celestina/crates/celestina-lock/tests/support/mod.rs
+Pathspec	celestina/docs/evidence/2026-11-24-clippy-1-100.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-CLIPPY-1100.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/providers/keybinds.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	2	6d15cb81968e933282dd59f752449d2795acdc6e61633224374b21e54743aa78	celestina/crates/celestina-lock/src/view.rs
+16	12	fb723dd43ca68a72e5d65c1faaaa15f269769bd15285b55f03ecba104101dd35	celestina/crates/celestina-lock/tests/connect_guard.rs
+12	9	3eb706df1b707ba898efcd900292437f700c37f19e7e6f31f87b4702f2cd5cce	celestina/crates/celestina-lock/tests/descriptors.rs
+12	9	8fdf46e90435390815417e78d3a1cddb11ae9548a0e97a3259e8d741bdbed65a	celestina/crates/celestina-lock/tests/signals.rs
+31	0	1e53a3777c22533ce52c13430b3e0533ebc7819226261a5c0a41c45dc8ead9a6	celestina/crates/celestina-lock/tests/support/mod.rs
+101	0	9ab406f950642f80ce61712f7d9cf9b213b82b8b90e8f83d955a93e877f52dcf	celestina/docs/evidence/2026-11-24-clippy-1-100.md
+25	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-CLIPPY-1100.numstat.tsv
+1	0	dee8438be048a78a750884e21473c282c0af90d45122a16cdcabda67c6967e48	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+1	2	f1cd4711666b87e6bd7a3ee85f323c931fe62dc63e1eec0eeb8c2ce8462d574f	celestina/src/providers/keybinds.rs

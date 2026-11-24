@@ -14,6 +14,8 @@
 //! from nothing (`env_clear`), so nothing of the desktop session reaches it.
 //! No child is ever matched by name; each is killed by its pid.
 
+mod support;
+
 use std::fs;
 use std::os::fd::AsRawFd as _;
 use std::os::unix::net::UnixStream;
@@ -170,12 +172,13 @@ impl Rig {
                 .env("XDG_RUNTIME_DIR", &self.dir.0);
         }
         Guard(
-            command
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .spawn()
-                .expect("spawn the lock"),
+            support::spawn_fresh(
+                command
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::piped()),
+            )
+            .expect("spawn the lock"),
         )
     }
 
@@ -193,12 +196,13 @@ impl Rig {
             command.env("CELESTINA_LOCK_LAUNCHER", "shell");
         }
         Guard(
-            command
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .spawn()
-                .expect("spawn the lock"),
+            support::spawn_fresh(
+                command
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::piped()),
+            )
+            .expect("spawn the lock"),
         )
     }
 }

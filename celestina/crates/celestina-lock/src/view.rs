@@ -1064,8 +1064,7 @@ mod tests {
             "the rectangle is a small part of a 4K output"
         );
         // Nothing outside the rectangle was ever drawn.
-        for index in 0..2 {
-            let buffer = &fake.buffers[index];
+        for buffer in &fake.buffers {
             for (n, px) in buffer.as_chunks::<4>().0.iter().enumerate() {
                 if px[0] | px[1] | px[2] == 0 {
                     continue;

@@ -235,8 +235,7 @@ pub fn load_with(exe: &Path, path: &Path, cancel: &AtomicBool) -> Keybinds {
 
 /// The probe's side: the body of `celestina --keybinds-probe PATH`. Reads
 /// `path` in this process, prints the answer on stdout and exits 0; exits 1
-/// when the answer cannot be written.
-#[must_use]
+/// when the answer cannot be written. `ExitCode` is `#[must_use]` itself.
 pub fn probe_main(path: &Path) -> ExitCode {
     confine();
     let answer = encode(&load_here(path));
