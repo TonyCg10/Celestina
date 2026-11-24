@@ -95,10 +95,19 @@ impl FramePacing {
 
 /// The one redraw timer of a surface: `redraw_after` calls coalesce into
 /// the earliest deadline, and the runtime keeps a single calloop timer for
-/// it, re-armed only when the deadline moves earlier.
+/// it, re-armed whenever the deadline moves.
+///
+/// A deadline asked for with [`RedrawTimer::arm_withdrawable`] is kept
+/// apart, so that its owner can take it back when the reason for it goes
+/// away. A surface has exactly one withdrawable deadline: a second user
+/// would replace or withdraw the first's; the timer then falls to the earliest deadline of the others, or to
+/// none.
 #[derive(Debug, Default)]
 pub struct RedrawTimer {
-    deadline: Option<Instant>,
+    /// The earliest deadline of the plain asks.
+    plain: Option<Instant>,
+    /// The earliest deadline of the withdrawable asks.
+    withdrawable: Option<Instant>,
     /// The deadline the loop timer must be (re)registered for, until the
     /// runtime takes it.
     rearm: Option<Instant>,
@@ -109,15 +118,42 @@ impl RedrawTimer {
     /// Arms the timer for `deadline`, or keeps the earlier deadline already
     /// armed.
     pub fn arm(&mut self, deadline: Instant) {
-        if self.deadline.is_some_and(|armed| armed <= deadline) {
-            return;
-        }
-        self.deadline = Some(deadline);
-        self.rearm = Some(deadline);
+        let before = self.deadline();
+        self.plain = earliest(self.plain, deadline);
+        self.moved_from(before);
     }
 
+    /// [`RedrawTimer::arm`] for a deadline its owner may take back with
+    /// [`RedrawTimer::withdraw`].
+    pub fn arm_withdrawable(&mut self, deadline: Instant) {
+        let before = self.deadline();
+        self.withdrawable = earliest(self.withdrawable, deadline);
+        self.moved_from(before);
+    }
+
+    /// Takes back the withdrawable deadline; the plain ones stay. When it
+    /// was the one armed, the loop timer moves to the next deadline or, with
+    /// none left, is removed ([`RedrawTimer::take_stale_token`]).
+    pub fn withdraw(&mut self) {
+        let before = self.deadline();
+        self.withdrawable = None;
+        self.moved_from(before);
+    }
+
+    /// Records that the earliest deadline moved, for the runtime to follow.
+    fn moved_from(&mut self, before: Option<Instant>) {
+        let now = self.deadline();
+        if now != before {
+            self.rearm = now;
+        }
+    }
+
+    /// The earliest deadline asked for and not withdrawn.
     pub fn deadline(&self) -> Option<Instant> {
-        self.deadline
+        match (self.plain, self.withdrawable) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     /// The deadline the runtime must register a loop timer for, once per
@@ -128,9 +164,21 @@ impl RedrawTimer {
 
     /// The loop timer fired: nothing is armed any more.
     pub fn fired(&mut self) {
-        self.deadline = None;
+        self.plain = None;
+        self.withdrawable = None;
         self.rearm = None;
         self.token = None;
+    }
+
+    /// The registered loop timer, once nothing is armed any more: the
+    /// runtime removes it so it does not fire for a deadline taken back.
+    pub fn take_stale_token(&mut self) -> Option<RegistrationToken> {
+        if self.deadline().is_none() {
+            self.rearm = None;
+            self.token.take()
+        } else {
+            None
+        }
     }
 
     /// Stores the token of the registered loop timer, returning the stale
@@ -143,6 +191,10 @@ impl RedrawTimer {
     pub fn take_token(&mut self) -> Option<RegistrationToken> {
         self.token.take()
     }
+}
+
+fn earliest(armed: Option<Instant>, deadline: Instant) -> Option<Instant> {
+    Some(armed.map_or(deadline, |armed| armed.min(deadline)))
 }
 
 /// Regions a shell set since the last frame; they reach the compositor
@@ -688,6 +740,57 @@ mod tests {
         assert_eq!(timer.take_rearm(), None);
         timer.arm(now + Duration::from_millis(900));
         assert_eq!(timer.take_rearm(), Some(now + Duration::from_millis(900)));
+    }
+
+    #[test]
+    fn a_withdrawable_deadline_goes_without_touching_the_others() {
+        let now = Instant::now();
+        let ms = Duration::from_millis;
+        let mut timer = RedrawTimer::default();
+
+        // Alone, a withdrawn deadline leaves nothing armed and the loop
+        // timer registered for it to be removed.
+        timer.arm_withdrawable(now + ms(100));
+        assert_eq!(timer.deadline(), Some(now + ms(100)));
+        assert_eq!(timer.take_rearm(), Some(now + ms(100)));
+        assert!(timer.take_stale_token().is_none(), "still armed");
+        timer.withdraw();
+        assert_eq!(timer.deadline(), None);
+        assert_eq!(timer.take_rearm(), None);
+        // No loop timer was registered here, so no token is stale.
+        assert!(timer.take_stale_token().is_none());
+
+        // With a plain deadline later than the withdrawable one, the plain
+        // one is what remains, and the loop timer moves to it.
+        timer.arm(now + ms(500));
+        timer.arm_withdrawable(now + ms(100));
+        assert_eq!(timer.deadline(), Some(now + ms(100)));
+        assert_eq!(timer.take_rearm(), Some(now + ms(100)));
+        timer.withdraw();
+        assert_eq!(timer.deadline(), Some(now + ms(500)));
+        assert_eq!(timer.take_rearm(), Some(now + ms(500)));
+
+        // A plain deadline earlier than the withdrawable one never moves.
+        timer.fired();
+        timer.arm(now + ms(40));
+        timer.arm_withdrawable(now + ms(100));
+        assert_eq!(timer.take_rearm(), Some(now + ms(40)));
+        timer.withdraw();
+        assert_eq!(timer.deadline(), Some(now + ms(40)));
+        assert_eq!(timer.take_rearm(), None, "the loop timer is right");
+
+        // Withdrawing what was never asked for changes nothing.
+        timer.withdraw();
+        assert_eq!(timer.deadline(), Some(now + ms(40)));
+
+        // Asked again after a withdrawal, it arms afresh; firing clears both.
+        timer.arm_withdrawable(now + ms(20));
+        assert_eq!(timer.take_rearm(), Some(now + ms(20)));
+        timer.fired();
+        assert_eq!(timer.deadline(), None);
+        timer.withdraw();
+        assert_eq!(timer.deadline(), None);
+        assert_eq!(timer.take_rearm(), None);
     }
 
     #[test]

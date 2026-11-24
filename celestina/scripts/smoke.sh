@@ -1868,21 +1868,20 @@ echo "smoke: polkit on over the dead system bus: the agent is unavailable and th
 # on this side when the picture, and so the switch, is three seconds late.
 # The system monitor's first reading and the pieces arriving animate, so
 # they are not rest frames.
-# Every other surface after the switch, every duty off (one in each of the
-# fourteen): one for the system monitor's held-back copy, due ten seconds
-# after its first reading (twelve seconds into the run), whose timer the
-# switch does not cancel, so the panel draws once with no reading left to
-# show; and one for the switch itself, a single rewrite of the file, should
-# no piece animate as it goes (the clipboard run's rule: one per duty switch;
-# here the pieces going animate and it has not been seen). A resize after
-# the wallpaper is gone costs no rest frame (measured over three): the panel
-# animates to its new width.
+# Every other surface after the switch, every duty off: one for the switch
+# itself, a single rewrite of the file, should no piece animate as it goes
+# (the clipboard run's rule: one per duty switch; here the pieces going
+# animate and it has not been seen). The system monitor's held-back copy,
+# due ten seconds after its first reading (twelve seconds into the run), is
+# taken back when the switch withdraws the reading, so no frame is drawn for
+# it. A resize after the wallpaper is gone costs no rest frame (measured over
+# three): the panel animates to its new width.
 # Only when the lock warned that the PAM service is missing, its desktop
 # notice, which the shell's own server shows and expires after ten seconds,
 # adds one frame on each side: its posting when that falls after the panel's
 # first second, and its expiry, a second after the switch or, when the switch
 # is late, before it. A panel that redrew every two seconds would still draw
-# four on either side against those three.
+# four on either side, more than either side is allowed.
 cutover_run() {
     cutover_home=$work/xdg-cutover
     cutover_state=$work/cutover-state
@@ -2125,13 +2124,13 @@ LAYERS
     cutover_changes=$(output_changes "$run.err" 'wallpaper surface created' 'wallpaper duty off')
     cutover_paper_allowed=$((2 + 2 * cutover_changes))
     cutover_before_allowed=$((1 + 1 + cutover_notice))
-    cutover_after_allowed=$((1 + 1 + cutover_notice))
+    cutover_after_allowed=$((1 + cutover_notice))
     [ "$cutover_paper" -le "$cutover_paper_allowed" ] ||
         rest_fail "$run.err" "the wallpaper drew frames at rest with every duty on ($cutover_paper, at most $cutover_paper_allowed: 2 for the real scale, 2 for each of $cutover_changes output changes): $lines"
     [ "$cutover_before" -le "$cutover_before_allowed" ] ||
         rest_fail "$run.err" "frames were drawn at rest with every duty on, before the switch ($cutover_before, at most $cutover_before_allowed: bar 1, a late switch 1, notice $cutover_notice): $lines"
     [ "$cutover_after" -le "$cutover_after_allowed" ] ||
-        rest_fail "$run.err" "frames were drawn at rest after every duty went off ($cutover_after, at most $cutover_after_allowed: the system monitor's held-back copy 1, the switch 1, notice $cutover_notice): $lines"
+        rest_fail "$run.err" "frames were drawn at rest after every duty went off ($cutover_after, at most $cutover_after_allowed: the switch 1, notice $cutover_notice): $lines"
     echo "smoke: cutover: every duty on then off: $(printf '%s\n' "$lines" | head -n 1) (rest_frames=$cutover_rest: the wallpaper $cutover_paper, at most $cutover_paper_allowed with $cutover_changes output changes; the rest $cutover_before before the switch, at most $cutover_before_allowed, and $cutover_after after it, at most $cutover_after_allowed; over $(printf '%s\n' "$lines" | wc -l) surfaces)"
     echo "smoke: cutover: $(grep -Eo 'idle: (armed|unavailable)' "$run.err" | head -n 1), $(grep -Eo 'night light: (applied|not applied)' "$run.err" | head -n 1), caffeine not held, lock on with the inhibitor refused by the dead bus ($cutover_pam_note), polkit on with the agent unavailable over the dead bus and nothing registered, Melibea absent once, Magnetita absent, $cutover_switches duty switches reported off and the history file deleted"
     grep '^rss_mib=' "$run.out" | sed 's/^/smoke: cutover: /' || true

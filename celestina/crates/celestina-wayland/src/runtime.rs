@@ -238,6 +238,25 @@ impl SurfaceCtl<'_> {
         self.surface.redraw_timer_mut().arm(Instant::now() + d);
     }
 
+    /// [`SurfaceCtl::redraw_after`] for a reason that may go away before its
+    /// deadline: [`SurfaceCtl::withdraw_redraw`] takes the deadline back, and
+    /// the surface's other deadlines are not touched. Asked again, it keeps
+    /// the earliest. A surface has exactly one withdrawable deadline: a
+    /// second user would replace or withdraw the first's, so only one reason
+    /// may use it.
+    pub fn redraw_after_withdrawable(&mut self, d: Duration) {
+        self.surface
+            .redraw_timer_mut()
+            .arm_withdrawable(Instant::now() + d);
+    }
+
+    /// Takes back the deadline of [`SurfaceCtl::redraw_after_withdrawable`],
+    /// so no frame is drawn for it; deadlines asked for with
+    /// [`SurfaceCtl::redraw_after`] stay.
+    pub fn withdraw_redraw(&mut self) {
+        self.surface.redraw_timer_mut().withdraw();
+    }
+
     /// Blur region in logical px; empty = no blur. Sent with the next
     /// frame's commit.
     pub fn set_blur_region(&mut self, rects: &[Rect]) {
@@ -787,6 +806,9 @@ impl<S: Shell> Core<S> {
         for surface in all {
             let id = surface.id;
             let timer = surface.redraw_timer_mut();
+            if let Some(stale) = timer.take_stale_token() {
+                handle.remove(stale);
+            }
             let Some(deadline) = timer.take_rearm() else {
                 continue;
             };

@@ -57,7 +57,7 @@ use crate::{
     tray::{scroll_steps, ItemId, Orientation, TrayCommand},
 };
 use bar_tree::BarTree;
-use cadence::{Cadence, Offer, Wake, SYSMON_BAR_PERIOD};
+use cadence::{Cadence, Offer, Redraws, Wake, SYSMON_BAR_PERIOD};
 use clock::{ClockTick, SecondTick};
 use pages::{
     activity, bluetooth as bluetooth_page, clipboard as clipboard_page, clock as clock_page,
@@ -798,9 +798,7 @@ impl Island {
             self.stale |= self.state.is_open();
             self.invalidate_bar();
         }
-        if let Some(wait) = self.mirror_sysmon(sysmon, now) {
-            cx.ctl.redraw_after(wait);
-        }
+        self.hold_sysmon(sysmon, now, &mut cx.ctl);
         self.tick_clock(now, &mut cx.ctl);
         if self.stale || self.state.slide(now) != self.applied_slide {
             self.apply_views(now);
@@ -818,6 +816,13 @@ impl Island {
             tracing::debug!(output = %self.output, open = self.state.is_open(), "island: growth settled");
         }
         self.moving = moving;
+    }
+
+    /// The frame's part for the system monitor: mirrors `newest`
+    /// ([`Island::mirror_sysmon`]) and asks `to` for the deadline of the copy
+    /// still held back, or takes the earlier one back when none is.
+    fn hold_sysmon(&mut self, newest: Option<&SysReading>, now: Instant, to: &mut impl Redraws) {
+        Wake::held(self.mirror_sysmon(newest, now)).apply(to);
     }
 
     /// The system monitor's `newest` reading: the open page takes it as it
@@ -1931,6 +1936,20 @@ impl Island {
         );
         self.sync_ctl(ctl, now);
         ctl.request_redraw();
+    }
+}
+
+impl Redraws for SurfaceCtl<'_> {
+    fn request_redraw(&mut self) {
+        SurfaceCtl::request_redraw(self);
+    }
+
+    fn redraw_after_withdrawable(&mut self, wait: Duration) {
+        SurfaceCtl::redraw_after_withdrawable(self, wait);
+    }
+
+    fn withdraw_redraw(&mut self) {
+        SurfaceCtl::withdraw_redraw(self);
     }
 }
 
@@ -3383,6 +3402,249 @@ mod tests {
         assert_eq!(island.sysmon_wake(None, later), Wake::Now);
         island.mirror_sysmon(None, later);
         assert_eq!(island.bar_sysmon(), None);
+    }
+
+    /// A surface as the runtime keeps it: the one redraw timer
+    /// (`celestina_wayland`'s `RedrawTimer`, the real one), and the frames
+    /// asked for at once.
+    struct FakeSurface {
+        now: Instant,
+        timer: celestina_wayland::surface::RedrawTimer,
+        requested: u32,
+    }
+
+    impl FakeSurface {
+        fn new(now: Instant) -> Self {
+            Self {
+                now,
+                timer: celestina_wayland::surface::RedrawTimer::default(),
+                requested: 0,
+            }
+        }
+
+        /// The deadline armed, as a time after `t0`.
+        fn due(&self, t0: Instant) -> Option<Duration> {
+            self.timer.deadline().map(|d| d.duration_since(t0))
+        }
+    }
+
+    impl Redraws for FakeSurface {
+        fn request_redraw(&mut self) {
+            self.requested += 1;
+        }
+
+        fn redraw_after_withdrawable(&mut self, wait: Duration) {
+            self.timer.arm_withdrawable(self.now + wait);
+        }
+
+        fn withdraw_redraw(&mut self) {
+            self.timer.withdraw();
+        }
+    }
+
+    /// The system monitor's reading at `t0 + t`, as the app carries it out
+    /// (`App::sysmon_read`): the wake on the surface.
+    fn read_at(
+        island: &Island,
+        surface: &mut FakeSurface,
+        t0: Instant,
+        t: Duration,
+        newest: Option<&SysReading>,
+    ) -> Wake {
+        surface.now = t0 + t;
+        let wake = island.sysmon_wake(newest, surface.now);
+        wake.apply(surface);
+        wake
+    }
+
+    /// The frame the surface draws at `t0 + t` (`Island::frame`'s part for the
+    /// system monitor): the timer has fired when `fired`.
+    fn frame_at(
+        island: &mut Island,
+        surface: &mut FakeSurface,
+        t0: Instant,
+        t: Duration,
+        newest: Option<&SysReading>,
+        fired: bool,
+    ) {
+        surface.now = t0 + t;
+        if fired {
+            surface.timer.fired();
+        }
+        island.hold_sysmon(newest, surface.now, surface);
+    }
+
+    #[test]
+    fn a_reading_withdrawn_while_a_copy_is_held_back_leaves_no_deadline() {
+        let (mut island, t0) = bar_island(1920.0);
+        let s = Duration::from_secs(1);
+        let mut surface = FakeSurface::new(t0);
+        let first = sample(1);
+        read_at(&island, &mut surface, t0, Duration::ZERO, Some(&first));
+        frame_at(
+            &mut island,
+            &mut surface,
+            t0,
+            Duration::ZERO,
+            Some(&first),
+            false,
+        );
+        // The second reading is held back until ten seconds.
+        let second = sample(2);
+        let wake = read_at(&island, &mut surface, t0, 4 * s, Some(&second));
+        assert_eq!(wake, Wake::After(6 * s));
+        assert_eq!(surface.due(t0), Some(10 * s));
+        // The monitor stops: the withdrawal is shown at once, and the frame
+        // that shows it takes the held-back copy's deadline back.
+        let wake = read_at(&island, &mut surface, t0, 9 * s, None);
+        assert_eq!(wake, Wake::Now);
+        frame_at(&mut island, &mut surface, t0, 9 * s, None, false);
+        assert_eq!(island.bar_sysmon(), None);
+        assert_eq!(surface.due(t0), None, "no frame at ten seconds");
+    }
+
+    #[test]
+    fn a_reading_that_comes_back_to_what_the_bar_shows_withdraws_the_copy() {
+        let (mut island, t0) = bar_island(1920.0);
+        let s = Duration::from_secs(1);
+        let mut surface = FakeSurface::new(t0);
+        let first = sample(1);
+        read_at(&island, &mut surface, t0, Duration::ZERO, Some(&first));
+        frame_at(
+            &mut island,
+            &mut surface,
+            t0,
+            Duration::ZERO,
+            Some(&first),
+            false,
+        );
+        read_at(&island, &mut surface, t0, 2 * s, Some(&sample(2)));
+        assert_eq!(surface.due(t0), Some(10 * s));
+        // The next reading equals what the bar shows: nothing is due.
+        let wake = read_at(&island, &mut surface, t0, 4 * s, Some(&first));
+        assert_eq!(wake, Wake::Nothing);
+        assert_eq!(surface.due(t0), None);
+        assert_eq!(surface.requested, 1, "only the first reading drew");
+    }
+
+    #[test]
+    fn a_held_back_copy_still_arrives_once_when_its_period_ends() {
+        let (mut island, t0) = bar_island(1920.0);
+        let s = Duration::from_secs(1);
+        let mut surface = FakeSurface::new(t0);
+        let first = sample(1);
+        read_at(&island, &mut surface, t0, Duration::ZERO, Some(&first));
+        frame_at(
+            &mut island,
+            &mut surface,
+            t0,
+            Duration::ZERO,
+            Some(&first),
+            false,
+        );
+        // Two more readings, the newest the one the bar will show.
+        read_at(&island, &mut surface, t0, 2 * s, Some(&sample(2)));
+        let newest = sample(3);
+        read_at(&island, &mut surface, t0, 4 * s, Some(&newest));
+        // The deadline is the period's end, not before, not moved by a
+        // second reading.
+        assert_eq!(surface.due(t0), Some(10 * s));
+        assert_eq!(island.bar_sysmon(), Some(&first));
+        // The timer fires: the frame shows the newest reading, once.
+        frame_at(&mut island, &mut surface, t0, 10 * s, Some(&newest), true);
+        assert_eq!(island.bar_sysmon(), Some(&newest));
+        assert_eq!(surface.due(t0), None);
+        assert_eq!(surface.requested, 1, "no frame is asked for at once");
+    }
+
+    #[test]
+    fn the_clocks_minute_survives_a_withdrawn_copy() {
+        let (mut island, t0) = bar_island(1920.0);
+        let s = Duration::from_secs(1);
+        let mut surface = FakeSurface::new(t0);
+        let first = sample(1);
+        read_at(&island, &mut surface, t0, Duration::ZERO, Some(&first));
+        frame_at(
+            &mut island,
+            &mut surface,
+            t0,
+            Duration::ZERO,
+            Some(&first),
+            false,
+        );
+        // The frame asks for the minute, later than the copy's deadline.
+        surface.timer.arm(t0 + 60 * s);
+        read_at(&island, &mut surface, t0, 4 * s, Some(&sample(2)));
+        assert_eq!(surface.due(t0), Some(10 * s));
+        frame_at(&mut island, &mut surface, t0, 9 * s, None, false);
+        assert_eq!(surface.due(t0), Some(60 * s), "the minute's tick is kept");
+        // A wait earlier than the copy's is kept as well.
+        let (mut island, t0) = bar_island(1920.0);
+        let mut surface = FakeSurface::new(t0);
+        read_at(&island, &mut surface, t0, Duration::ZERO, Some(&first));
+        frame_at(
+            &mut island,
+            &mut surface,
+            t0,
+            Duration::ZERO,
+            Some(&first),
+            false,
+        );
+        read_at(&island, &mut surface, t0, 4 * s, Some(&sample(2)));
+        surface.timer.arm(t0 + 5 * s);
+        assert_eq!(surface.due(t0), Some(5 * s));
+        // At five seconds the earlier wait fires and the frame still holds
+        // the copy back; the withdrawal then leaves only the later wait.
+        frame_at(&mut island, &mut surface, t0, 5 * s, Some(&sample(2)), true);
+        assert_eq!(surface.due(t0), Some(10 * s));
+        surface.timer.arm(t0 + 12 * s);
+        frame_at(&mut island, &mut surface, t0, 6 * s, None, false);
+        assert_eq!(surface.due(t0), Some(12 * s), "the copy's 10 s went");
+    }
+
+    #[test]
+    fn a_copy_held_back_stays_due_while_the_system_page_opens_and_closes() {
+        let (mut island, t0) = bar_island(1920.0);
+        let s = Duration::from_secs(1);
+        let mut surface = FakeSurface::new(t0);
+        let first = sample(1);
+        read_at(&island, &mut surface, t0, Duration::ZERO, Some(&first));
+        frame_at(
+            &mut island,
+            &mut surface,
+            t0,
+            Duration::ZERO,
+            Some(&first),
+            false,
+        );
+        let second = sample(2);
+        read_at(&island, &mut surface, t0, 2 * s, Some(&second));
+        // The page opens and already shows the newest reading: a reading
+        // equal to it still leaves the bar's copy due.
+        island.open(PageId::SYSMON, t0 + 3 * s);
+        frame_at(&mut island, &mut surface, t0, 3 * s, Some(&second), false);
+        assert_eq!(island.page_sysmon(), Some(&second));
+        assert_eq!(
+            read_at(&island, &mut surface, t0, 4 * s, Some(&second)),
+            Wake::After(6 * s)
+        );
+        assert_eq!(surface.due(t0), Some(10 * s));
+        // A new reading while the page is open is a frame now, which keeps
+        // the copy's deadline asked for.
+        let third = sample(3);
+        assert_eq!(
+            read_at(&island, &mut surface, t0, 6 * s, Some(&third)),
+            Wake::Now
+        );
+        frame_at(&mut island, &mut surface, t0, 6 * s, Some(&third), false);
+        assert_eq!(surface.due(t0), Some(10 * s));
+        // The page closes: the copy is still due, and arrives.
+        island.close(t0 + 7 * s);
+        frame_at(&mut island, &mut surface, t0, 7 * s, Some(&third), false);
+        assert_eq!(surface.due(t0), Some(10 * s));
+        frame_at(&mut island, &mut surface, t0, 10 * s, Some(&third), true);
+        assert_eq!(island.bar_sysmon(), Some(&third));
+        assert_eq!(surface.due(t0), None);
     }
 
     #[test]

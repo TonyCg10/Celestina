@@ -582,11 +582,7 @@ impl App {
         for slot in self.islands.iter() {
             let wake = slot.island.sysmon_wake(self.sysmon.as_ref(), now);
             if let Some(mut surface) = ctl.surface(slot.surface) {
-                match wake {
-                    island::cadence::Wake::Nothing => {}
-                    island::cadence::Wake::Now => surface.request_redraw(),
-                    island::cadence::Wake::After(wait) => surface.redraw_after(wait),
-                }
+                wake.apply(&mut surface);
             }
         }
     }

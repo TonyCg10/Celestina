@@ -26,12 +26,44 @@ pub enum Offer {
 /// What a new reading asks of one Island's surface.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Wake {
-    /// No frame: nothing it shows changes.
+    /// No frame: nothing it shows changes, and no held-back copy is waiting,
+    /// so the deadline of an earlier one is taken back.
     Nothing,
     /// A frame now.
     Now,
     /// A frame after this wait, when the held-back reading is due.
     After(Duration),
+}
+
+/// What a surface lets the system monitor's reading ask of it: the part of a
+/// surface's control that [`Wake::apply`] uses.
+pub trait Redraws {
+    /// A frame now.
+    fn request_redraw(&mut self);
+    /// A frame after `wait`, a deadline [`Redraws::withdraw_redraw`] takes
+    /// back.
+    fn redraw_after_withdrawable(&mut self, wait: Duration);
+    /// Takes back the deadline of [`Redraws::redraw_after_withdrawable`].
+    fn withdraw_redraw(&mut self);
+}
+
+impl Wake {
+    /// The wake for the wait the Island still holds a copy back for: `None`
+    /// when no copy is held back.
+    #[must_use]
+    pub fn held(wait: Option<Duration>) -> Self {
+        wait.map_or(Wake::Nothing, Wake::After)
+    }
+
+    /// Carries the wake out on a surface. [`Wake::Nothing`] withdraws the
+    /// held-back deadline: no copy waits, so no frame is due for it.
+    pub fn apply(self, to: &mut impl Redraws) {
+        match self {
+            Wake::Nothing => to.withdraw_redraw(),
+            Wake::Now => to.request_redraw(),
+            Wake::After(wait) => to.redraw_after_withdrawable(wait),
+        }
+    }
 }
 
 /// The value one bar shows, refreshed at most once per period.
