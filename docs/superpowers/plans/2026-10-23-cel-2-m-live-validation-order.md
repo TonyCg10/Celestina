@@ -1,5 +1,26 @@
 # CEL-2-M — The live validations, in the order the author runs them
 
+> **Status (2026-11-24):** the swap of row 47 is done. The author switched the
+> session over on 2026-11-24: niri's line 71 starts `celestina` through
+> `systemd-cat -t celestina`, Noctalia is no longer started, and CEL-2-M
+> landed as celestina 1.14.0 (`b99a22b4`). The rows themselves are still
+> `pending` in `celestina/VALIDATION.md`, whose procedure stays the authority;
+> this list is kept as the record of the order planned before the swap. Its
+> steps that switch something off in Noctalia, and its Noctalia undo column,
+> no longer apply while Noctalia is not started. Three steps were corrected on
+> 2026-11-24 because they had stopped matching the code: row 8 (there is no
+> `bar` duty since
+> [ADR 0024](../../../celestina/docs/decisions/0024-cutover-defaults.md)),
+> row 22 (caffeine holds an `idle` lock only since
+> [ADR 0025](../../../celestina/docs/decisions/0025-caffeine-inhibits-idle-only.md))
+> and row 24 (the refusal text of `session suspend`). With the 1.14.0 defaults
+> every duty but `lock` and `polkit` was on when `shell.json` did not name it;
+> since 1.15.0 (CEL-2-M-LOCK-POLKIT,
+> [ADR 0026](../../../celestina/docs/decisions/0026-lock-and-polkit-on-by-default.md))
+> every duty is, on the author's report of 2026-11-24 that the rows
+> `VAL-CEL2-LOCK-PAM`, `-LIVE`, `-RECOVERY`, `-SUSPEND` and
+> `VAL-CEL2-POLKIT-LIVE` passed.
+
 - **Date:** 2026-10-23
 - **Design:** [the cutover design](../specs/2026-10-23-celestina-cel-2-m-cutover-design.md), §4 (the order) and §6 (recovery)
 - **Source of every row:** `celestina/VALIDATION.md` on `main` at `a5427f7a`,
@@ -36,7 +57,7 @@ follows the file, no restart. **kdl** = restore the one line in `config.kdl`
 
 | # | Row | Blocks M | Exact step | Risk | Undo |
 |---|---|---|---|---|---|
-| 8 | VAL-CEL2-BAR-LIVE | **yes** | `noctalia msg bar-hide`; `"duties": {"bar": "on"}` in `shell.json`; checks (1)–(5) of the row on two scales | two bars stacked if `bar-hide` is forgotten; clicks swallowed by a wrong input region (the row's check 4) | `noctalia msg bar-show`; `"bar": "off"` (file) |
+| 8 | VAL-CEL2-BAR-LIVE | **yes** | `noctalia msg bar-hide`; the bar is always drawn (no `bar` duty since ADR 0024, amended 2026-11-24); checks (1)–(5) of the row on two scales | two bars stacked if `bar-hide` is forgotten; clicks swallowed by a wrong input region (the row's check 4) | `noctalia msg bar-show`; empty the `bar` zones in `shell.json` (file) |
 | 9 | VAL-CEL2-GLANCE-TABS | no | open the Island, read the five (now more) tabs at both scales | cosmetic | — |
 | 10 | VAL-CEL2-NETWORK | no | place `network` in `bar.end`; compare with `nm-applet` and `nmcli`; join a saved network from the page; `Editar…` opens `nm-connection-editor` | a join the author did not want; no secret passes (ADR 0019) | remove the piece from the file |
 | 11 | VAL-CEL2-BLUETOOTH | no | place `bluetooth`; compare with `bluetoothctl show`; connect and disconnect one paired device from the page | a device connected or disconnected; never a scan, pairing or removal | remove the piece |
@@ -60,9 +81,9 @@ follows the file, no restart. **kdl** = restore the one line in `config.kdl`
 | # | Row | Blocks M | Exact step | Risk | Undo |
 |---|---|---|---|---|---|
 | 21 | VAL-CEL2-WALLPAPER | **yes** | Noctalia's wallpaper off (its settings); `"wallpaper": "on"` and `"wallpaper": {"folder": …}`; `celestina wallpaper next DP-1`, `mode fit|stretch|center`, hotplug, restart; then Noctalia's wallpaper on again and `celestina wallpaper retry` shows the refusal | a black or doubled background for a moment; nothing destructive | Noctalia's wallpaper on; `"wallpaper": "off"` (file) |
-| 22 | VAL-CEL2-CAFFEINE | **yes** (replaces startup line 73) | `noctalia msg caffeine-disable`; `"caffeine": "on"`, `"energy": {"caffeine": true}`; `celestina caffeine on`, `systemd-inhibit --list` shows a `Celestina` `idle:sleep` block; toggle; `celestina quit` leaves no lock. **Backup `config.kdl` first**, then delete line 73 | the session may idle-suspend (through Noctalia's idle, still on) while caffeine is off between the two: run with Noctalia's idle disabled or keep the mouse moving | `noctalia msg caffeine-enable`; `"caffeine": "off"`; restore line 73 (kdl) |
+| 22 | VAL-CEL2-CAFFEINE | **yes** (replaces startup line 73) | `noctalia msg caffeine-disable`; `"caffeine": "on"`, `"energy": {"caffeine": true}`; `celestina caffeine on`, `systemd-inhibit --list` shows a `Celestina` `idle` block and no `Celestina` `sleep` block (ADR 0025, amended 2026-11-24); toggle; `celestina quit` leaves no lock. **Backup `config.kdl` first**, then delete line 73 | the session may idle-suspend (through Noctalia's idle, still on) while caffeine is off between the two: run with Noctalia's idle disabled or keep the mouse moving | `noctalia msg caffeine-enable`; `"caffeine": "off"`; restore line 73 (kdl) |
 | 23 | VAL-CEL2-NIGHTLIGHT | **yes** (same line) | `noctalia msg nightlight-disable` and `nightlight-force-toggle` (undo the forced mode); `"nightlight": "on"`, `"energy": {"night_light": true}`; three outputs turn warm; `celestina nightlight toggle`; hotplug; `night_light_kelvin`; `celestina quit` returns neutral | a neutral or doubly warm screen for a moment; `wlr-gamma-control` is per client, the compositor arbitrates | `noctalia msg nightlight-force-toggle`; `"nightlight": "off"` |
-| 24 | VAL-CEL2-SESSION | no | `celestina session suspend` is refused with `no locker yet` (while `lock` is off); `busctl … CanReboot`; **never** run `reboot` or `power-off` as a check | `log-out` ends the session (niri confirms first): skip it unless ready | — |
+| 24 | VAL-CEL2-SESSION | no | `celestina session suspend` is always refused with `suspend goes through the lock (celestina lock suspend)` (amended 2026-11-24); `busctl … CanReboot`; **never** run `reboot` or `power-off` as a check | `log-out` ends the session (niri confirms first): skip it unless ready | — |
 | 25 | VAL-CEL2-IDLE | **yes** (OLED) | Noctalia's `screen-off` **and** `lock-and-suspend` disabled in its idle settings; caffeine off; `"idle": "on"`; hands off: outputs off at 20 s, wake on input; past 240 s nothing suspends and the journal says `refused` once; `"idle": "off"` stops it | a suspend if Noctalia's idle is still on (both chains armed); the OLED stays lit if neither is on and the author walks away | Noctalia's idle on; `"idle": "off"` (file) |
 
 ## Phase 4 — clipboard, phone, bubbles (steps 7–8)

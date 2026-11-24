@@ -1,0 +1,29 @@
+# CEL-2-DOCS-SYNC exact change inventory
+
+Base revision	c83807be01db39a41b767d8e67303f1c9b766230
+Pathspec	HOST-HYGIENE.md
+Pathspec	README.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-11-24-cel-2-docs-sync.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/CEL-2-DOCS-SYNC.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md
+Pathspec	docs/superpowers/specs/2026-10-17-celestina-cel-2-h-session-lock-design.md
+Pathspec	docs/superpowers/specs/2026-10-17-celestina-polkit-agent-design.md
+Pathspec	docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+7	2	69738296a6f9fb4846f29826d066a3e798930787c5db2371f5d62cdfde6d3f87	HOST-HYGIENE.md
+1	1	915a98e698c181398eb8157cd1563e6c26e47f7e40c0127df142d8ac8e6ab6ec	README.md
+9	0	8f6bda66a90ad32bd9b1a9c2c5c6c244537f74d7dce708b88b84e2610d24be8f	ROADMAP.md
+24	11	fbecd12ee5acd8d642bdaeb6209a9b79bbe374068873b7885e2fb1713e0ce19b	STATUS.md
+125	0	69f644a8da14c9788ff807a82a9f8fc2915ff63c1b74ace1959614356fdd433a	docs/evidence/2026-11-24-cel-2-docs-sync.md
+29	0	self	docs/inventories/2026-10-14-rust-shell/CEL-2-DOCS-SYNC.numstat.tsv
+1	0	0d6ce0311152cfab91e0e6f2b2de9a96c14455dbe53fd73baf929ffedceb83d5	docs/plans/active/2026-10-14-rust-shell.md
+24	3	2daba621df3131fae5f3f2e6e95868e5aaac54d1a0fc06b29b8e51ed74902d23	docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md
+17	4	eec2527f3c28573d65efc23064de0fe4b127c90a7f618b405a4ba763c97d190a	docs/superpowers/specs/2026-10-17-celestina-cel-2-h-session-lock-design.md
+22	3	130d56b944062f34d6a0c9499a1f57cbbd4538bddcc008b1b5c3c00ad1c7ec7b	docs/superpowers/specs/2026-10-17-celestina-polkit-agent-design.md
+25	0	7b8479835241d465099e0252571bfb9bcee577cbc90c1791e2d55ac355a753c4	docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md

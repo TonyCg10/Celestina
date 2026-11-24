@@ -12,7 +12,13 @@
   (§4.4), the lock's environment and first steps (§4.2), the connection guard
   that refuses to lock outside the shell or a verified nest (§4.2.1, §4.3, §5,
   §6, §7), the input-method residual (§5) and the questions of §12; each is
-  marked **Amended 2026-10-22** where it stands.
+  marked **Amended 2026-10-22** where it stands. **Amended 2026-11-24** for
+  CEL-2-B-CAFFEINE (celestina 1.13.4,
+  [ADR 0025](../../../celestina/docs/decisions/0025-caffeine-inhibits-idle-only.md)):
+  `IdleResumed` is sent on input and also when caffeine is switched on while
+  the idle chain's lock-and-suspend is in flight (§4.4, §4.9). Since
+  CEL-2-M-LOCK-POLKIT (celestina 1.15.0, [ADR 0026](../../../celestina/docs/decisions/0026-lock-and-polkit-on-by-default.md))
+  `duties.lock` defaults to on and fails closed (H-11).
 - **Product:** the shell's own session lock: an `ext-session-lock-v1` client
   that covers every output, asks for the password, and is the only thing that
   can end the lock, after PAM says yes; plus the lock-and-suspend chain that
@@ -546,7 +552,7 @@ intent is pending.
 | `Tick`: `Ending` older than 5 s without an exit | `Ending` | `Spawning` if a request or an intent is pending, else `Idle` | log (the unlock already happened by protocol); `KillChild` through the pidfd (killing it uncovers nothing); bump the generation; the pending request or intent is served now (`Spawn`, queued behind the reaping), as the exit would have served it; the inhibitor is held if `Awake` (the invariant). **Amended 2026-10-22** (review findings I2, I-B, M-c): the worker marks the killed child, publishes nothing of it (no line and no exit) and starts the queued spawn only after the pidfd shows it reaped |
 | exit 0 | `Spawning` | same | log `StrayExit` and nothing else. **Amended 2026-10-22** (finding m-1): a child that has not said `requested` cannot exit 0, so the exit is the straggling exit of the old child of `Ending`, published by the worker before it read `KillChild`; taking it for the new child's would drop a lock about to run and, during a sleep, release the inhibitor. The 5 s watchdog of `Spawning` still bounds the new child. A status other than 0 in `Spawning` is still the new child's (a straggler is always 0, because that child had unlocked). **Residual X2:** a straggling status other than 0 (a signal sent to the old child by a same-user process just then) is read as the new child's and leads to `give_up` (the policy `Idle` while the new child may be running); nothing is uncovered, because the compositor keeps the session locked, and a later request is answered by the compositor (exit 10) |
 | `Tick`: intent deadline passed | any | same | drop the intent, log "not suspended: the lock was not confirmed", `Notice` if `Verb` |
-| `IdleResumed` | any | same | drop an intent whose origin is `Idle` (someone is back) |
+| `IdleResumed` | any | same | drop an intent whose origin is `Idle` (someone is back, or, **amended 2026-11-24** (ADR 0025), caffeine was switched on) |
 | `PrepareForSleep(true)` | `Locked` | same, `Preparing` | nothing (released by the invariant) |
 | `PrepareForSleep(true)` | `Idle` | `Spawning`, `Preparing` | `Spawn` (the compositor decides; a running foreign lock answers with exit 10, then `ReleaseInhibitor`) |
 | `PrepareForSleep(true)` | `Spawning`, `Requested`, `Ending` | same, `Preparing` | keep the inhibitor until `locked` or a failure; in `Ending`, the exit spawns again |
@@ -785,7 +791,7 @@ countdown.
 |---|---|---|
 | `celestina lock` (CLI and `Shell1`) | `Verb::Lock` → policy `Lock` | no |
 | `celestina lock suspend` | `Verb::LockAndSuspend` → policy `LockAndSuspend(Verb)`; refused with a notice while the lock duty is off | after `locked`, through `LockedProof` |
-| idle step 2 (`duties.idle` on) | `perform_idle(LockAndSuspend)` sends `Message::Lock(LockAndSuspend(Idle))` to the loop; never waits | after `locked`, unless input came back first |
+| idle step 2 (`duties.idle` on) | `perform_idle(LockAndSuspend)` sends `Message::Lock(LockAndSuspend(Idle))` to the loop; never waits | after `locked`, unless input came back first or (**amended 2026-11-24**, ADR 0025) caffeine was switched on first |
 | lid, power button, `systemctl suspend`, anything | logind `PrepareForSleep(true)` while our `sleep`/`delay` inhibitor is held | logind proceeds when we release (locked or failed) or after its 5 s |
 | `celestina session suspend` | **always** refused, reason "suspend goes through `lock suspend`" (one behaviour whatever the duty, M6; it was refused already under CEL-2-B D2) | no |
 | logind `Lock` (`loginctl lock-session`) | **not served** (§6, 5) | — |
@@ -800,6 +806,11 @@ Changes to CEL-2-B, each removing the old path in the same unit:
 - `IdleChain::resumed` returns `IdleAction::Resumed` when the period had
   handled `LockAndSuspend`, so the wiring can drop an idle-origin intent.
   Explicit verbs are not cancelled by input (pressing the binding is input).
+  **Amended 2026-11-24** (CEL-2-B-CAFFEINE, ADR 0025): `IdleChain::set_caffeine(true)`
+  returns the same `IdleAction::Resumed` when the period had started
+  `LockAndSuspend`, so switching caffeine on withdraws an idle suspend in
+  flight; the session still locks, and an explicit verb's intent is never
+  withdrawn by caffeine either.
 - The smoke's fifth run expects the new refusal text.
 
 **A suspend that races an unlock** (M11). The proof was minted, then the
@@ -1561,7 +1572,9 @@ whatever CEL-2-I has taken by then.
 - **H-10. The lock's clock runs on an absolute realtime timer** that fires on
   resume and on clock steps (§4.8).
 - **H-11. `duties.lock`, off by default; coexistence rests on the protocol's
-  single lock;** a refused lock never suspends (§4.12).
+  single lock;** a refused lock never suspends (§4.12). **Amended
+  2026-11-24** ([ADR 0026](../../../celestina/docs/decisions/0026-lock-and-polkit-on-by-default.md)): on by default since 1.15.0; a value that is
+  neither `on` nor `off` reads as off.
 - **H-12. Recovery:** `swaylock` stays until the author retires it after the
   live rows pass; the shell relaunches a dead lock (≤ 3 a minute); the
   author kills a stuck lock by its pid from another VT; when `faillock` or

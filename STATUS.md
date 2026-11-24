@@ -1,9 +1,13 @@
 # Suite status
 
-- **Updated:** 2026-10-16
-- **Current focus:** RSH-1 is implemented: every suite row has landed and the
-  Rust shell is at 1.0.0 (the first stable version, not the definitive one);
-  the plan awaits its archive. All project work follows each local roadmap
+- **Updated:** 2026-11-24
+- **Current focus:** the Celestina shell is the shell of the author's niri
+  session since 2026-11-24, when the author switched the session over and
+  Noctalia stopped being started; the shell's parity program, CEL-2, is
+  complete: CEL-2-M landed as celestina 1.14.0, and CEL-2-M-LOCK-POLKIT
+  turned the lock and the polkit agent on by default in 1.15.0. Every RSH-1 suite row has
+  landed; the plan awaits its archive. All project work follows each local
+  roadmap
 - **Implementation checkpoint:** RSH-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
@@ -39,9 +43,17 @@ ledger rules currently written in five documents.
 RSH-1 moved the halted Qt shell to `celestina-qt/`, registered a Rust shell at
 `celestina/` and made the shared style tokens data that QML and Rust both read;
 every suite row has landed, and the shell's own program, CEL-1, landed its last
-unit, CEL-1-H, as release 1.0.0 (`00c6d0bb`); its plan and roadmap are still
-active. The plan stays active until an administrative
-unit archives it. The ledger is
+unit, CEL-1-H, as release 1.0.0 (`00c6d0bb`). The same ledger then carried the
+suite units of the shell's parity program, CEL-2 (its opening, the salvage
+list, the documents the `celestina:` scope cannot carry, the CI fixes and the
+retirement of the Qt shell). CEL-2 is complete: every unit of its plan is
+`done`: CEL-2-M (`b99a22b4`, celestina 1.14.0) after the author's cutover of
+2026-11-24, then CEL-2-M-LOCK-POLKIT (`c83807be`, 1.15.0), which put the lock
+and the polkit agent among the duties on by default; the shell's own plan
+awaits its archive. The
+halted Qt/QML shell left the tree on 2026-10-24 (CEL-QT-REMOVE) and is a
+retired project. The RSH-1 plan stays active until an administrative unit
+archives it. The ledger is
 [the active plan](docs/plans/active/2026-10-14-rust-shell.md). Other new
 cross-project work starts only when an accepted decision promotes it, as the
 root roadmap's later suite-level section requires.
@@ -147,10 +159,11 @@ python3 scripts/check-language-contract.py
 
 ## Blockers
 
-No governance blocker is recorded. The Celestina shell is halted by the
-author's decision of 2026-09-27; that is a decision, not a blocker, and it is
-recorded in [Halted projects](AGENTS.md#halted-projects). Product-specific blockers live only in
-their project status documents.
+No governance blocker is recorded and no project is halted. The Qt/QML
+shell the author halted on 2026-09-27 was removed from the tree on
+2026-10-24 and is registered as retired; its history is in
+[Halted projects](AGENTS.md#halted-projects). Product-specific blockers live
+only in their project status documents.
 
 ## Evidence
 

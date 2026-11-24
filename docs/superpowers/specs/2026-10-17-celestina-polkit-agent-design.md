@@ -2,7 +2,17 @@
 
 - **Date:** 2026-10-17
 - **Status:** drafted from the author's answers in brainstorming and revised
-  after two reviews (§10.2); awaiting the author's review
+  after two reviews (§10.2); awaiting the author's review. **Amended
+  2026-11-24:** CEL-2-I landed as celestina 1.13.0, and CEL-2-I-CANCEL
+  (1.13.5) made the helper conversation lazy, recorded as the 2026-11-23
+  amendment of the shell's
+  [ADR 0021](../../../celestina/docs/decisions/0021-polkit-agent.md)
+  (decision 25): no socket is opened until the person submits a non-empty
+  secret, so a cancelled prompt never reaches PAM and never counts in
+  `pam_faillock`. Where this design says the conversation starts once the
+  card has the keyboard (§4.3, §5.3, N-24), that amendment governs. Since
+  CEL-2-M-LOCK-POLKIT (celestina 1.15.0, [ADR 0026](../../../celestina/docs/decisions/0026-lock-and-polkit-on-by-default.md))
+  the duty `polkit` defaults to on and fails closed.
 - **Product:** the unit that gives the Rust shell its own polkit
   authentication agent, so that actions needing authorization (`pkexec`,
   `systemctl` on system units, Hematita's service and process actions) can be
@@ -246,6 +256,13 @@ helper thread: connect, write "<user>\n<cookie>\n"
 polkitd ──CancelAuthentication(cookie)──▶ bus thread ──▶ loop: that request ends, whatever its state
 ```
 
+**Amended 2026-11-24** (ADR 0021, decision 25): the helper thread starts when
+the card is ready but connects only at the first submit of a non-empty
+secret, answers PAM's first `PAM_PROMPT_ECHO_OFF` with that secret, and goes
+back to idle with no connection after a wrong answer below the cap; the next
+submit opens the next conversation with the same cookie. A cancel before a
+submit therefore closes no PAM conversation.
+
 ### 4.4 Why the agent speaks the helper's protocol itself
 
 The halted shell linked `libpolkit-agent-1` in a separate C++ child because
@@ -273,7 +290,8 @@ shows up as "denied", never as a grant. Revisit in §11.
 
 ### 4.5 Registration and its lifecycle
 
-- The duty `polkit` is `off` by default. Switched on, the shell opens its
+- The duty `polkit` is `off` by default (**amended 2026-11-24:** on by
+  default since 1.15.0, ADR 0026). Switched on, the shell opens its
   dedicated system connection and resolves the **session id** from logind:
   `GetUser(uid)` → `Display`, then checks the session (`Uid` is the shell's,
   `Class=user`, `Type=wayland`, `Remote=false`); `XDG_SESSION_ID` is only a
@@ -662,7 +680,8 @@ unit can always return to, so it installs no second recovery tool.
 - **What stays installed and untouched:** `polkit` with `polkitd`, the
   socket-activated helper and its socket, and Noctalia with its agent. The
   unit installs no polkit action file, no service and no setuid file.
-- **The duty is `off` by default**; the author switches it on; landing never
+- **The duty is `off` by default** (**amended 2026-11-24:** on by default
+  since 1.15.0, ADR 0026; an explicit `off` still switches it off); landing never
   replaces the live shell (program §4.1).
 - **A terminal path with no graphical agent:** `sudo` talks to PAM directly
   and needs no polkit agent, so it stays the author's fallback for privileged

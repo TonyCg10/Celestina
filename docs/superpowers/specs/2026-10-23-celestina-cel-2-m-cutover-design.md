@@ -1,5 +1,26 @@
 # CEL-2-M — Cutover from Noctalia to Celestina — design
 
+> **Status (2026-11-24):** done. The author switched the session over on
+> 2026-11-24 (niri's line 71 starts `celestina` through `systemd-cat -t
+> celestina`; Noctalia is no longer started; the backup
+> `config.kdl.pre-celestina-cutover` is kept), and CEL-2-M landed as
+> celestina 1.14.0 (`b99a22b4`), closing every unit of the parity program.
+> This design is kept as the record of what was planned; it is not current
+> instruction, except the way back of §6, which still holds. Where the landed
+> code differs from it: there is no `bar` duty and the bar is always drawn
+> ([ADR 0024](../../../celestina/docs/decisions/0024-cutover-defaults.md),
+> which replaces M-3's `bar` default and §7 step 1's `Option<Duty>`); every
+> duty but `lock` and `polkit` defaulted to on at 1.14.0, and those two
+> followed in one unit, CEL-2-M-LOCK-POLKIT (1.15.0,
+> [ADR 0026](../../../celestina/docs/decisions/0026-lock-and-polkit-on-by-default.md)),
+> both failing closed; caffeine holds a logind `idle`
+> lock only, not `idle:sleep`
+> ([ADR 0025](../../../celestina/docs/decisions/0025-caffeine-inhibits-idle-only.md),
+> CEL-2-B-CAFFEINE, 1.13.4); and the polkit agent opens no helper connection
+> before the first submit (the amendment of
+> [ADR 0021](../../../celestina/docs/decisions/0021-polkit-agent.md),
+> CEL-2-I-CANCEL, 1.13.5). The facts of §2 and §9 are those of 2026-10-23.
+
 - **Date:** 2026-10-23
 - **Status:** drafted for the author's review; nothing in it has run against
   the live session, and this document grants no authority to do so
@@ -224,6 +245,10 @@ location in the file, ADR 0016):
   }
 }
 ```
+
+**Amended 2026-11-24:** the `"bar": "on"` entry of `duties` above is read
+past as an unknown key since ADR 0024 and never written back; the `bar`
+object (the layout) is what places the pieces.
 
 The zones mirror Noctalia's bar (program §3, `settings.toml`: start =
 workspaces, magnetita, notifications; centre = weather, clock; end = bubbles,

@@ -298,6 +298,15 @@ a stub binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 - [x] Move the halted shell and register the Rust shell (`CEL-1-A`, the author).
 - [x] Generate the style's tokens from one data file (`CEL-1-C`).
 
+The same ledger carried the suite units of the shell's parity program, CEL-2,
+and of the Qt shell's retirement: `CEL-2-OPEN`, `CEL-2-SALV`, `CEL-2-K-DEPS`,
+`CEL-2-F-DEPS`, `CEL-2-L-DOCS`, `CEL-2-M-DOCS`, `CI-CELESTINA`, `CI-GREEN`,
+`CEL-QT-RESCUE`, `CEL-QT-RETIRE` and `CEL-QT-REMOVE`, all landed. CEL-2 itself
+is the shell's own program ([celestina/ROADMAP.md](celestina/ROADMAP.md)); it
+closed with CEL-2-M (celestina 1.14.0) after the author's cutover of
+2026-11-24 and CEL-2-M-LOCK-POLKIT (1.15.0), since when the Rust shell is the session's shell and Noctalia is
+not started.
+
 The build order, exclusions and ledger are in
 [the active plan](docs/plans/active/2026-10-14-rust-shell.md), and the design in
 [the spec](docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md).

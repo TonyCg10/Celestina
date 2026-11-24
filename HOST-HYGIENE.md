@@ -487,8 +487,13 @@ Rollback: Current packages and Niri startup lines are already the rollback.
 Missing evidence: The corresponding Celestina live validation and explicit
 handover decisions.
 
-Decision: pending for Noctalia (the shell is halted by the author's decision of
-2026-09-27, so no handover is scheduled). Superseded on 2026-10-08 for Blueman
+Decision: superseded on 2026-11-24 for Noctalia's role: the author switched
+the niri session over to the Celestina shell (CEL-2-M, celestina 1.14.0),
+which now owns `org.freedesktop.Notifications`, the tray watcher and the
+session duties, and niri no longer starts Noctalia. The Noctalia package and
+the pre-cutover `config.kdl` copy stay as the rollback of the cutover design's
+§6 (`docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md`);
+removing the package remains pending and is the author's action. Superseded on 2026-10-08 for Blueman
 and `nm-applet`, and for Pavucontrol: Cuprita 1.0 (`cuprita/`, registered in
 AUD-1-P and closed in CUP-1-F) holds the network, Bluetooth and audio control
 surfaces — Wi-Fi join with password, forget, airplane and saved VPNs over
