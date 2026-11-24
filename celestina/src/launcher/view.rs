@@ -186,10 +186,9 @@ fn row(theme: &Theme, index: usize, row: &Row, selected: bool) -> View {
     let i = index as u64;
     let (glyph, tint, name, detail) = match row {
         Row::App(entry) => {
-            let (glyph, tint) = if entry.icon.is_empty() {
-                (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo))
-            } else {
-                (IconKey::Theme(entry.icon.clone()), None)
+            let (glyph, tint) = match IconKey::desktop_icon(&entry.icon) {
+                Some(key) => (key, None),
+                None => (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo)),
             };
             (
                 glyph,

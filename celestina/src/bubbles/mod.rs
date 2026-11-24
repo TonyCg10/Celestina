@@ -115,8 +115,10 @@ pub fn reduce(state: &mut Bubbles, event: &MelibeaEvent) -> bool {
 
 /// Gives every window of a projection that names no icon (none, or an empty
 /// name) the one `lookup` finds for its `app_id`; a window without an
-/// application id, or one `lookup` knows no icon for, keeps none. Any other
-/// event is left alone.
+/// application id, or one `lookup` knows no icon for, keeps none. A file path
+/// `lookup` finds (an absolute `Icon=`) is dropped too: a bubble's icon is
+/// drawn as a theme name, because Melibea may send any string there. Any
+/// other event is left alone.
 pub fn fill_icons(event: &mut MelibeaEvent, mut lookup: impl FnMut(&str) -> Option<String>) {
     let MelibeaEvent::Windows(windows) = event else {
         return;
@@ -133,7 +135,8 @@ pub fn fill_icons(event: &mut MelibeaEvent, mut lookup: impl FnMut(&str) -> Opti
             .app_id
             .as_deref()
             .filter(|app_id| !app_id.is_empty())
-            .and_then(&mut lookup);
+            .and_then(&mut lookup)
+            .filter(|name| !name.starts_with('/'));
     }
 }
 
@@ -652,11 +655,16 @@ mod tests {
             with_icon(5, Some(""), None),
             with_icon(6, Some("unknown"), None),
             with_icon(7, Some(&"x".repeat(10_000)), None),
+            with_icon(8, Some("waydroid"), None),
         ]);
         let mut asked = Vec::new();
         fill_icons(&mut event, |app_id| {
             asked.push(app_id.chars().count());
-            (app_id == "firefox").then(|| "firefox-icon".to_owned())
+            match app_id {
+                "firefox" => Some("firefox-icon".to_owned()),
+                "waydroid" => Some("/home/u/waydroid.png".to_owned()),
+                _ => None,
+            }
         });
         let MelibeaEvent::Windows(windows) = &event else {
             panic!("{event:?}");
@@ -671,11 +679,12 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
                 None
             ]
         );
         // Only the windows that lacked an icon and had an id were looked up.
-        assert_eq!(asked, [7, 7, 7, 10_000]);
+        assert_eq!(asked, [7, 7, 7, 10_000, 8]);
         // Other events are left alone and ask nothing.
         let mut absent = MelibeaEvent::Absent;
         fill_icons(&mut absent, |_| panic!("no lookup"));

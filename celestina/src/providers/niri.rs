@@ -164,8 +164,8 @@ impl AppIcons {
         }
     }
 
-    /// The icon name for `app_id`, or `None` when no entry names one. An
-    /// absolute path is not a theme name and counts as none.
+    /// The `Icon=` value for `app_id`, a theme name or an absolute path, or
+    /// `None` when no entry names one.
     pub fn icon_name(&mut self, app_id: &str) -> Option<String> {
         if let Some(known) = self.cache.get(app_id) {
             return known.clone();
@@ -183,7 +183,7 @@ impl AppIcons {
         let lower = format!("{}.desktop", app_id.to_lowercase());
         let entry = desktop_entry::find(&self.dirs, &exact)
             .or_else(|| desktop_entry::find(&self.dirs, &lower))?;
-        (!entry.icon.is_empty() && !entry.icon.starts_with('/')).then_some(entry.icon)
+        (!entry.icon.is_empty()).then_some(entry.icon)
     }
 
     /// Sets the icon of every window of `model` that has an `app_id`.
@@ -1497,7 +1497,11 @@ mod tests {
         // Case differs from the file name: the lowercase id is tried too.
         assert_eq!(icons.icon_name("Firefox").as_deref(), Some("firefox-icon"));
         assert_eq!(icons.icon_name("org.Example.Term").as_deref(), Some("term"));
-        assert_eq!(icons.icon_name("pathy"), None, "a path is not a theme name");
+        assert_eq!(
+            icons.icon_name("pathy").as_deref(),
+            Some("/opt/pathy.png"),
+            "an absolute Icon= comes through"
+        );
         assert_eq!(icons.icon_name("bare"), None);
         assert_eq!(icons.icon_name("ghost"), None);
         // A remembered answer survives the file going away.

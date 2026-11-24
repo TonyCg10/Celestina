@@ -1,0 +1,33 @@
+# CEL-2-ICONS exact change inventory
+
+Base revision	4144a54e7588c7113eb62dd250aa84328fd79955
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/crates/celestina-paint/src/icon.rs
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/docs/evidence/2026-11-24-desktop-icons.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-ICONS.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/bubbles/mod.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/launcher/view.rs
+Pathspec	celestina/src/overview/view.rs
+Pathspec	celestina/src/providers/niri.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	1ffb6f6bb49d1b9235ce275cc0e360130f63824161ece7ecca0fa1f77d764b62	celestina/Cargo.lock
+1	1	0cd369cc449d3709e476a1d7de5a9c910a8d821553dba49af221d1e6f6a83558	celestina/Cargo.toml
+345	3	321371e43068945673dd44fe85e679c158e27caa4dbb03f391d3ae109dab5ee1	celestina/crates/celestina-paint/src/icon.rs
+4	3	6066d2cc3a858f9012f411ddf5e46f14ea54e4ab0943de28f634851c3a0c8496	celestina/crates/celestina-paint/src/painter.rs
+150	0	f7fe11fa9b552e09f6809e9c1a1083ddb5500e1fe8f77993b2afa62755c7bd69	celestina/docs/evidence/2026-11-24-desktop-icons.md
+33	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-ICONS.numstat.tsv
+1	0	aaff5738ba9fe025c8c1832895f500d3e8688845c9f45213fd0bd9d5d170b6bc	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+14	5	c285d97adc7f41ec7860b3bc070a33d4aa3635f82a39665075730052342256de	celestina/src/bubbles/mod.rs
+4	1	0a1381efc8deed8554c9c7718739aea5908f1310d405e51937d2d3424f986141	celestina/src/island/pages/activity.rs
+3	4	83f3c7ad0e75f089a9f95970cce9c9e8073659e7349f370720335613ec12c22c	celestina/src/launcher/view.rs
+3	3	004131ad0bb109415dffac8c286977a82ce377df3da7f44c97b75fe4bc23c501	celestina/src/overview/view.rs
+8	4	c32b0fa58ed1d5bf14ded5769d4dd72f2407de0a09421a1d5ac104d051a3fc1a	celestina/src/providers/niri.rs
+1	0	0932e6972931e690afd1e0451dc0a730f30efe3a9f896a1711272401ad557b02	docs/version-history.tsv

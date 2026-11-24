@@ -16,8 +16,8 @@ use crate::backend::{Backend, BackendInit, GlyphQuad, GpuError, ImageHandle, Ima
 use crate::color::{unit, Color};
 use crate::haze::{grain_texels, GrainError, HazePlan, GRAIN_SIZE};
 use crate::icon::{
-    default_icon_dirs, device_size, rasterise_file, semantic_path, theme_path, IconCache, IconKey,
-    PixmapId,
+    default_icon_dirs, device_size, file_path, rasterise_file, semantic_path, theme_path,
+    IconCache, IconKey, PixmapId,
 };
 use crate::text::{TextRun, TextSystem};
 use crate::theme::Theme;
@@ -267,7 +267,7 @@ impl Painter {
             atlas_full_warned: false,
             icons: IconCache::new(),
             icon_dirs: default_icon_dirs(),
-            icon_theme: freedesktop_icons::default_theme_gtk(),
+            icon_theme: crate::icon::default_theme(),
             pixmaps: HashMap::new(),
             next_pixmap: 0,
             max_texture_side,
@@ -510,6 +510,7 @@ impl Painter {
         let path = match key {
             IconKey::Semantic(name) => semantic_path(&self.icon_dirs, name),
             IconKey::Theme(name) => theme_path(self.icon_theme.as_deref(), name, size),
+            IconKey::File(path) => file_path(path),
             IconKey::Pixmap(_) => None,
         };
         let Some(path) = path else {

@@ -493,9 +493,9 @@ fn tile(theme: &Theme, ws: &WorkspaceView, at: &TileRect, selected: bool) -> Vie
     } else {
         truncate_graphemes(raw, title_room(at.rect.w, theme, pad, focused))
     };
-    let (glyph, tint) = match info.and_then(|i| i.icon.clone()) {
-        Some(name) if !name.is_empty() => (IconKey::Theme(name), None),
-        _ => (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo)),
+    let (glyph, tint) = match info.and_then(|i| IconKey::desktop_icon(i.icon.as_deref()?)) {
+        Some(key) => (key, None),
+        None => (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo)),
     };
     let header = centred(view::row(Key::indexed("overview-win-head", at.id)))
         .height(ICON_SIZE)

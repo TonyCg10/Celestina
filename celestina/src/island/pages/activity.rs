@@ -224,7 +224,10 @@ fn window_row(theme: &Theme, window: &Window) -> View {
         .or(window.app_id.as_deref())
         .map_or_else(|| copy::WINDOW_UNTITLED.to_owned(), truncate_title);
     let (key, tint) = match &window.icon {
-        Some(name) => (IconKey::Theme(name.clone()), None),
+        Some(name) => match IconKey::desktop_icon(name) {
+            Some(key) => (key, None),
+            None => (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo)),
+        },
         None => (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo)),
     };
     let icon = View::new(

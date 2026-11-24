@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use resvg::{tiny_skia, usvg};
@@ -36,8 +37,27 @@ pub enum IconKey {
     Semantic(&'static str),
     /// A freedesktop icon theme name (`.desktop` entries, tray items).
     Theme(String),
+    /// An absolute icon file named by a `.desktop` entry; never built from a
+    /// string a remote peer sent.
+    File(PathBuf),
     /// A pixmap already uploaded.
     Pixmap(PixmapId),
+}
+
+impl IconKey {
+    /// The key of a `.desktop` entry's `Icon=` value: an absolute path is a
+    /// [`IconKey::File`], any other value a theme name; empty is none. Only
+    /// for strings read from a `.desktop` file.
+    #[must_use]
+    pub fn desktop_icon(value: &str) -> Option<IconKey> {
+        if value.is_empty() {
+            None
+        } else if Path::new(value).is_absolute() {
+            Some(IconKey::File(PathBuf::from(value)))
+        } else {
+            Some(IconKey::Theme(value.to_owned()))
+        }
+    }
 }
 
 /// Why an icon file could not be rasterised.
@@ -100,6 +120,146 @@ pub(crate) fn semantic_path(dirs: &[PathBuf], name: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
+/// Where an icon theme was chosen from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ThemeSource {
+    Gsettings,
+    Gtk3Settings,
+    Gtk4Settings,
+    Adwaita,
+}
+
+/// The value of `gtk-icon-theme-name` in a GTK `settings.ini` text.
+pub(crate) fn settings_icon_theme(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let line = line.trim();
+        if line.starts_with(['#', ';']) {
+            return None;
+        }
+        let (key, value) = line.split_once('=')?;
+        if key.trim() != "gtk-icon-theme-name" {
+            return None;
+        }
+        let value = value.trim().trim_matches(['"', '\'']).trim();
+        (!value.is_empty()).then(|| value.to_owned())
+    })
+}
+
+/// Whether some base directory holds `<name>/index.theme`.
+pub(crate) fn theme_installed(bases: &[PathBuf], name: &str) -> bool {
+    valid_name(name)
+        && bases
+            .iter()
+            .any(|base| base.join(name).join("index.theme").is_file())
+}
+
+/// The icon theme to look names up in: the GNOME setting, the GTK 3 then
+/// GTK 4 settings file, then Adwaita, each only if installed.
+///
+/// `gsettings` answers the schema default (`Adwaita`) when the user never set
+/// a theme, so it then outranks `settings.ini`, as GTK itself does on Wayland.
+pub(crate) fn choose_theme(
+    gsettings: Option<&str>,
+    gtk3_ini: Option<&str>,
+    gtk4_ini: Option<&str>,
+    bases: &[PathBuf],
+) -> Option<(String, ThemeSource)> {
+    let named = [
+        (gsettings.map(str::to_owned), ThemeSource::Gsettings),
+        (
+            gtk3_ini.and_then(settings_icon_theme),
+            ThemeSource::Gtk3Settings,
+        ),
+        (
+            gtk4_ini.and_then(settings_icon_theme),
+            ThemeSource::Gtk4Settings,
+        ),
+        (Some("Adwaita".to_owned()), ThemeSource::Adwaita),
+    ];
+    named.into_iter().find_map(|(name, source)| {
+        let name = name?;
+        theme_installed(bases, &name).then_some((name, source))
+    })
+}
+
+/// The icon base directories of the freedesktop spec, from the environment.
+fn icon_base_dirs() -> Vec<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let var = |key: &str| std::env::var_os(key).filter(|v| !v.is_empty());
+    let mut dirs = Vec::new();
+    if let Some(home) = &home {
+        dirs.push(home.join(".icons"));
+    }
+    match (var("XDG_DATA_HOME"), &home) {
+        (Some(data), _) => dirs.push(PathBuf::from(data).join("icons")),
+        (None, Some(home)) => dirs.push(home.join(".local/share/icons")),
+        (None, None) => {}
+    }
+    let data_dirs = var("XDG_DATA_DIRS").unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+    dirs.extend(
+        std::env::split_paths(&data_dirs)
+            .filter(|dir| !dir.as_os_str().is_empty())
+            .map(|dir| dir.join("icons")),
+    );
+    dirs
+}
+
+/// `gtk-3.0` or `gtk-4.0` `settings.ini` under the user's config directory.
+fn read_gtk_settings(version: &str) -> Option<String> {
+    let config = match std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+        Some(config) => PathBuf::from(config),
+        None => PathBuf::from(std::env::var_os("HOME")?).join(".config"),
+    };
+    std::fs::read_to_string(config.join(version).join("settings.ini")).ok()
+}
+
+/// `gsettings get org.gnome.desktop.interface icon-theme`, if it answers.
+fn gsettings_icon_theme() -> Option<String> {
+    let output = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "icon-theme"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(output.stdout).ok()?;
+    let name = text.trim().trim_matches('\'');
+    (!name.is_empty()).then(|| name.to_owned())
+}
+
+/// The user's icon theme directory name, or `None` for hicolor alone. Runs
+/// `gsettings`, so call it once.
+pub(crate) fn default_theme() -> Option<String> {
+    let gtk3 = read_gtk_settings("gtk-3.0");
+    let gtk4 = read_gtk_settings("gtk-4.0");
+    let chosen = choose_theme(
+        gsettings_icon_theme().as_deref(),
+        gtk3.as_deref(),
+        gtk4.as_deref(),
+        &icon_base_dirs(),
+    );
+    match chosen {
+        Some((name, source)) => {
+            tracing::info!(theme = %name, ?source, "icon theme");
+            Some(name)
+        }
+        None => {
+            tracing::info!("icon theme: none installed, hicolor only");
+            None
+        }
+    }
+}
+
+/// `path` itself when it is absolute, a PNG or SVG by extension (any case)
+/// and a regular file.
+pub(crate) fn file_path(path: &Path) -> Option<PathBuf> {
+    let icon_file = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("png") || e.eq_ignore_ascii_case("svg"));
+    (path.is_absolute() && icon_file && path.is_file()).then(|| path.to_owned())
+}
+
 /// The theme's file for `name` at `size` device px.
 pub(crate) fn theme_path(theme: Option<&str>, name: &str, size: u32) -> Option<PathBuf> {
     if !valid_name(name) {
@@ -131,13 +291,23 @@ pub(crate) fn rasterise_file(path: &Path, size: u32) -> Result<RgbaImage, IconEr
         path: path.to_owned(),
         source,
     };
-    let len = std::fs::metadata(path).map_err(read)?.len();
-    if len > MAX_ICON_FILE {
+    // One handle: the type check and the read see the same file, and the
+    // read is bounded whatever the metadata says (`/proc` files claim 0).
+    let file = std::fs::File::open(path).map_err(read)?;
+    if !file.metadata().map_err(read)?.is_file() {
+        return Err(IconError::Unsupported {
+            path: path.to_owned(),
+        });
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_ICON_FILE + 1)
+        .read_to_end(&mut bytes)
+        .map_err(read)?;
+    if bytes.len() as u64 > MAX_ICON_FILE {
         return Err(IconError::TooLarge {
             path: path.to_owned(),
         });
     }
-    let bytes = std::fs::read(path).map_err(read)?;
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
@@ -329,6 +499,178 @@ mod tests {
         }
         assert!(valid_name("org.celestina.Calcita"));
         assert!(valid_name("app-window"));
+    }
+
+    /// A unique scratch directory, removed on drop.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(tag: &str) -> Scratch {
+            let dir = std::env::temp_dir().join(format!(
+                "celestina-paint-{tag}-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("scratch dir");
+            Scratch(dir)
+        }
+
+        fn file(&self, rel: &str) -> PathBuf {
+            let path = self.0.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, b"x").unwrap();
+            path
+        }
+
+        fn theme(&self, name: &str) {
+            self.file(&format!("{name}/index.theme"));
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_theme_name_with_an_absolute_path_resolves_to_nothing() {
+        let dir = Scratch::new("abs-theme");
+        let path = dir.file("a/totk.png");
+        assert!(theme_path(None, path.to_str().unwrap(), 32).is_none());
+        assert!(theme_path(None, "a/b.png", 32).is_none());
+    }
+
+    #[test]
+    fn desktop_icon_values_become_names_or_files() {
+        assert_eq!(IconKey::desktop_icon(""), None);
+        assert_eq!(
+            IconKey::desktop_icon("phone"),
+            Some(IconKey::Theme("phone".to_owned()))
+        );
+        assert_eq!(
+            IconKey::desktop_icon("/opt/a.png"),
+            Some(IconKey::File(PathBuf::from("/opt/a.png")))
+        );
+    }
+
+    #[test]
+    fn the_file_helper_takes_only_absolute_png_or_svg_regular_files() {
+        let dir = Scratch::new("file-helper");
+        for rel in ["a/totk.png", "a/up.PNG", "a/vec.svg"] {
+            let path = dir.file(rel);
+            assert_eq!(file_path(&path), Some(path.clone()), "{rel}");
+        }
+        assert!(file_path(&dir.0.join("missing.png")).is_none());
+        for rel in ["a/x.xpm", "a/x.txt", "a/noext"] {
+            assert!(file_path(&dir.file(rel)).is_none(), "{rel}");
+        }
+        let folder = dir.0.join("d.png");
+        std::fs::create_dir_all(&folder).unwrap();
+        assert!(file_path(&folder).is_none());
+        assert!(file_path(Path::new("a/b.png")).is_none());
+    }
+
+    #[test]
+    fn rasterise_refuses_directories_and_oversized_files() {
+        let dir = Scratch::new("raster-bounds");
+        let folder = dir.0.join("d.png");
+        std::fs::create_dir_all(&folder).unwrap();
+        assert!(matches!(
+            rasterise_file(&folder, 16),
+            Err(IconError::Unsupported { .. })
+        ));
+        let big = dir.0.join("big.png");
+        std::fs::write(&big, vec![0u8; MAX_ICON_FILE as usize + 1]).unwrap();
+        assert!(matches!(
+            rasterise_file(&big, 16),
+            Err(IconError::TooLarge { .. })
+        ));
+    }
+
+    #[test]
+    fn settings_ini_parsing_trims_quotes_and_skips_comments() {
+        let parse = settings_icon_theme;
+        assert_eq!(
+            parse("[Settings]\ngtk-icon-theme-name=Adwaita\n").as_deref(),
+            Some("Adwaita")
+        );
+        assert_eq!(
+            parse("gtk-icon-theme-name = Papirus Dark \n").as_deref(),
+            Some("Papirus Dark")
+        );
+        assert_eq!(
+            parse("gtk-icon-theme-name = \"Adwaita\"\n").as_deref(),
+            Some("Adwaita")
+        );
+        assert_eq!(
+            parse("gtk-icon-theme-name='Adwaita'").as_deref(),
+            Some("Adwaita")
+        );
+        assert_eq!(
+            parse("# gtk-icon-theme-name=Old\n; gtk-icon-theme-name=Older\n"),
+            None
+        );
+        assert_eq!(
+            parse("# gtk-icon-theme-name=Old\ngtk-icon-theme-name=New").as_deref(),
+            Some("New")
+        );
+        assert_eq!(parse("gtk-theme-name=Adwaita\n"), None);
+        assert_eq!(parse("gtk-icon-theme-name=\n"), None);
+    }
+
+    #[test]
+    fn the_gsettings_theme_wins_when_it_is_installed() {
+        let dir = Scratch::new("theme-gs");
+        dir.theme("Papirus");
+        dir.theme("Adwaita");
+        let bases = [dir.0.clone()];
+        let ini = "gtk-icon-theme-name=Adwaita";
+        assert_eq!(
+            choose_theme(Some("Papirus"), Some(ini), None, &bases),
+            Some(("Papirus".to_owned(), ThemeSource::Gsettings))
+        );
+    }
+
+    #[test]
+    fn a_missing_gsettings_theme_falls_back_to_the_settings_files() {
+        let dir = Scratch::new("theme-ini");
+        dir.theme("Adwaita");
+        dir.theme("Other");
+        let bases = [dir.0.clone()];
+        assert_eq!(
+            choose_theme(
+                Some("WhiteSur-dark"),
+                Some("gtk-icon-theme-name = Adwaita"),
+                Some("gtk-icon-theme-name = Other"),
+                &bases
+            ),
+            Some(("Adwaita".to_owned(), ThemeSource::Gtk3Settings))
+        );
+        assert_eq!(
+            choose_theme(
+                None,
+                Some("gtk-icon-theme-name = Gone"),
+                Some("gtk-icon-theme-name = Other"),
+                &bases
+            ),
+            Some(("Other".to_owned(), ThemeSource::Gtk4Settings))
+        );
+    }
+
+    #[test]
+    fn adwaita_is_the_last_resort_and_nothing_installed_means_hicolor() {
+        let dir = Scratch::new("theme-last");
+        let bases = [dir.0.clone()];
+        assert_eq!(choose_theme(Some("Gone"), None, None, &bases), None);
+        dir.theme("Adwaita");
+        assert_eq!(
+            choose_theme(Some("Gone"), None, None, &bases),
+            Some(("Adwaita".to_owned(), ThemeSource::Adwaita))
+        );
+        assert!(!theme_installed(&bases, "../x"));
+        assert!(!theme_installed(&bases, ""));
     }
 
     #[test]
