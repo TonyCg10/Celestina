@@ -7,7 +7,10 @@
 //! `rest_frames` counts frames drawn while nothing animated, from
 //! [`REST_AFTER`] after the surface's first frame: a surface at rest draws
 //! none (design §5.2), so anything there is a frame nobody needed — or the
-//! clock's minute.
+//! clock's minute. Each one is also written to the journal when it is
+//! counted (`metrics: rest frame`, with its surface), so a reader can say
+//! when a rest frame was drawn and what preceded it; the smoke splits its
+//! budgets by that line.
 //!
 //! Two clocks per frame callback: the local arrival `Instant` and the
 //! compositor's `wl_callback.done` timestamp (ms, wrapping `u32`). An
@@ -120,11 +123,14 @@ impl SurfaceStats {
     /// counts in `frames`; only animated frames are timed, and only those
     /// chained to an animated predecessor are classified. A frame that
     /// neither animates nor ends an animation is a rest frame once
-    /// [`REST_AFTER`] has passed since the first frame.
-    pub fn on_frame(&mut self, started: Instant, elapsed: Duration, animated: bool) {
+    /// [`REST_AFTER`] has passed since the first frame; returns whether this
+    /// one was.
+    pub fn on_frame(&mut self, started: Instant, elapsed: Duration, animated: bool) -> bool {
         self.frames += 1;
         let first = *self.first_frame.get_or_insert(started);
-        if !animated && !self.chain && started.saturating_duration_since(first) >= REST_AFTER {
+        let rest =
+            !animated && !self.chain && started.saturating_duration_since(first) >= REST_AFTER;
+        if rest {
             self.rest_frames += 1;
         }
         let interval = self.pending_interval.take();
@@ -161,6 +167,7 @@ impl SurfaceStats {
             }
         }
         self.chain = animated;
+        rest
     }
 
     /// `n` is the number of CPU samples behind the percentiles (below 100,
@@ -213,7 +220,17 @@ impl Metrics {
 
     pub fn on_frame(&mut self, id: SurfaceId, started: Instant, elapsed: Duration, animated: bool) {
         if let Some(s) = self.stats(id) {
-            s.on_frame(started, elapsed, animated);
+            if s.on_frame(started, elapsed, animated) {
+                // One line per rest frame, which a surface at rest never
+                // draws: the journal then says which surface drew it and
+                // when, beside whatever asked for it.
+                tracing::info!(
+                    surface = id.0,
+                    output = %s.label,
+                    rest_frames = s.rest_frames,
+                    "metrics: rest frame"
+                );
+            }
         }
     }
 
@@ -332,15 +349,16 @@ mod tests {
         let mut s = SurfaceStats::new("winit".into(), period_from_mhz(60_000));
         let t0 = Instant::now();
         // Start-up: configure, scale, the first model.
-        s.on_frame(t0, ms(1.0), false);
-        s.on_frame(t0 + ms(400.0), ms(1.0), false);
+        assert!(!s.on_frame(t0, ms(1.0), false));
+        assert!(!s.on_frame(t0 + ms(400.0), ms(1.0), false));
         // An animation and the frame that ends it, after the first second:
         // not rest.
-        s.on_frame(t0 + ms(1500.0), ms(1.0), true);
-        s.on_frame(t0 + ms(1517.0), ms(1.0), false);
+        assert!(!s.on_frame(t0 + ms(1500.0), ms(1.0), true));
+        assert!(!s.on_frame(t0 + ms(1517.0), ms(1.0), false));
         assert_eq!(s.rest_frames, 0);
-        // A frame nothing animated asked for: rest.
-        s.on_frame(t0 + ms(2500.0), ms(1.0), false);
+        // A frame nothing animated asked for: rest, and the caller is told so
+        // (the journal's `metrics: rest frame` line is written from it).
+        assert!(s.on_frame(t0 + ms(2500.0), ms(1.0), false));
         assert_eq!((s.frames, s.rest_frames), (5, 1));
     }
 

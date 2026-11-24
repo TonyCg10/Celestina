@@ -20,7 +20,9 @@ set -eu
 # must draw on the wide top surface with no frame at rest. A fourth nested
 # run turns the wallpaper duty on over a generated fixture picture (its own
 # throwaway XDG_CONFIG_HOME) and must show a `celestina-wallpaper` surface in
-# the Background layer with at most two frames at rest. A fifth nested
+# the Background layer with at most two frames at rest, and two more for each
+# time the host resized the nest's window once that surface exists. A fifth
+# nested
 # run starts the shell with the three energy duties `on` (a throwaway
 # XDG_CONFIG_HOME holding `celestina/shell.json`) and the system bus pointed
 # at a socket that does not exist, so no real logind is ever reached; it must
@@ -92,9 +94,9 @@ set -eu
 # over the dead bus and nothing registered (as the polkit run checks), the
 # OSD workers started with no `celestina-osd`
 # surface, Melibea absent once, Magnetita absent, the clipboard loaded, and
-# frames at rest within the budget documented at the run (the bar's, the
-# wallpaper's and the system monitor's allowances plus one per duty the switch
-# below reports off). Then, with the shell still running, the file is rewritten
+# frames at rest within the budgets documented at the run: the wallpaper's
+# surface by itself, and every other surface before the switch below and
+# after it. Then, with the shell still running, the file is rewritten
 # with every duty off: the journal must report each duty off, the
 # `celestina-wallpaper` surface must be gone while the panel's surface is the
 # same one, and the clipboard's history file must be deleted. Since the
@@ -334,12 +336,35 @@ nest_throttled() {
     }
     END { printf "%d\n", longest * 1000; exit !(longest >= 0.5) }' "$1"
 }
+# rest_context JOURNAL: the journal's lines before each rest frame, without
+# the frames themselves. The runtime writes `metrics: rest frame` when it
+# counts one, so what asked for the frame (an output change, a duty switch, a
+# worker's news) is the line just above it; the journal is deleted with the
+# run, and its last forty lines are mostly frames.
+rest_context() {
+    echo "--- what preceded each rest frame ($(basename -- "$1"))" >&2
+    grep -v 'frame drawn frame=' "$1" | grep -B 4 'metrics: rest frame' | tail -n 60 >&2 || true
+}
+# output_changes JOURNAL [AFTER [UNTIL]]: how many times the nest's output
+# changed in the journal, after the first line holding AFTER and before the
+# first one holding UNTIL, when given. The nest's output is its window on the
+# host, so each is the host resizing that window under the run: nothing this
+# script or the shell did. With the wallpaper's surface up, each costs that
+# surface two frames at rest (the wallpaper run's comment says which).
+output_changes() {
+    awk -v after="${2:-}" -v until="${3:-}" '
+    after != "" && !seen { if (index($0, after)) seen = 1; next }
+    until != "" && index($0, until) { exit }
+    /output changed output=/ { n++ }
+    END { print n + 0 }' "$1"
+}
 # rest_fail JOURNAL MESSAGE: a rest-frame budget was exceeded. In a throttled
 # nest the start-up frames land late and the budget means nothing, so that is
 # inconclusive: exit 75, and the head of this script starts the run again,
 # up to three times; on the last attempt, and in a nest that was not
 # throttled, it is a failure.
 rest_fail() {
+    rest_context "$1"
     if wait_ms=$(nest_throttled "$1"); then
         [ "${CELESTINA_SMOKE_ATTEMPT:-1}" -lt 3 ] ||
             fail "$2 (inconclusive: the nest withheld a frame callback for $wait_ms ms, its window is hidden)"
@@ -492,11 +517,23 @@ grep '^rss_mib=' "$run.out" | sed 's/^/smoke: bar on: /' || true
 # (the author's own configuration and pictures are never read). A probe inside
 # the nest lists the compositor's layers: (a) a `celestina-wallpaper` surface
 # must sit in `Background` on the nested output, (b) the metrics show no frame
-# at rest beyond an allowance of two, the same kind as the notification's: the
-# picture arriving (decoded off the loop, so after the first second) and its
-# redecode when the surface scale changes after the first configure are each a
-# frame somebody needed, though nothing animates in it; any other frame at
-# rest fails, and (c) is not run: no layer-shell client that could hold the Background
+# at rest beyond an allowance of the same kind as the notification's, frames
+# somebody needed though nothing animates in them. Two for the surface
+# learning its real scale after its first frame: the frame at that scale and
+# the picture decoded again for it. The surface is created when the first
+# picture arrives, so that picture is its first frame and never a rest frame,
+# and the Island's frames say the real scale before then; the two are owed
+# only when the first decode beats the Island's first frame and the answer
+# then takes over a second (never seen in the runs of the evidence record
+# 2026-11-24-smoke-rest.md, which measured none at rest). And two for each
+# change of the nest's output after the wallpaper's surface exists, which is
+# the host resizing the nest's window under the run: the surface at its new
+# size with the old picture stretched, and the picture decoded for that size
+# (measured: exactly two per resize, and none from a loaded machine alone).
+# The landing of 2026-11-23 that failed here with four had them all on the
+# wallpaper's surface. Any other frame at rest fails: a shell that redrew by
+# itself every two seconds would draw four in the ten-second run. (c) is not
+# run: no layer-shell client that could hold the Background
 # layer exists in the repository, and none is invented here; the owner
 # detection that makes the shell refuse such an output is covered by the unit
 # tests of `src/wallpaper` and `src/providers/wallpaper.rs`.
@@ -566,15 +603,17 @@ wp_frames=$(printf '%s\n' "$wp_lines" | tr ' ' '\n' | sed -n 's/^frames=//p' |
 wp_rest=$(printf '%s\n' "$wp_lines" | tr ' ' '\n' | sed -n 's/^rest_frames=//p' |
     awk '{ n += $1 } END { print n + 0 }')
 [ "$wp_frames" -ge 1 ] || fail "no frame was drawn (wallpaper run): $wp_lines"
-[ "$wp_rest" -le 2 ] ||
-    rest_fail "$run.err" "frames were drawn at rest with the wallpaper present ($wp_rest, at most 2): $wp_lines"
+wp_changes=$(output_changes "$run.err" 'wallpaper surface created')
+wp_allowed=$((2 + 2 * wp_changes))
+[ "$wp_rest" -le "$wp_allowed" ] ||
+    rest_fail "$run.err" "frames were drawn at rest with the wallpaper present ($wp_rest, at most $wp_allowed: 2 for the real scale, 2 for each of $wp_changes output changes): $wp_lines"
 if grep -q 'wallpaper: output held by another client' "$run.err"; then
     fail "the shell found the nested output held (wallpaper run)"
 fi
 if grep -q 'panicked' "$run.err"; then
     fail "the shell panicked with the wallpaper on"
 fi
-echo "smoke: wallpaper present, frames=$wp_frames rest_frames=$wp_rest over $(printf '%s\n' "$wp_lines" | wc -l) surfaces"
+echo "smoke: wallpaper present, frames=$wp_frames rest_frames=$wp_rest (at most $wp_allowed, $wp_changes output changes) over $(printf '%s\n' "$wp_lines" | wc -l) surfaces"
 echo "smoke: wallpaper held-output variant skipped: no layer-shell client in the repository (covered by unit tests)"
 
 # The energy duties: the shell starts with idle, caffeine and night light all
@@ -1803,20 +1842,47 @@ echo "smoke: polkit on over the dead system bus: the agent is unavailable and th
 # throwaway state home and the dead system bus, all set in the wrapper
 # itself. The wallpaper run's probe lists the nest's layers once the wallpaper
 # surface is up: that is the shell at rest. The wrapper waits for the picture,
-# rests five seconds, rewrites the file with every duty off (`bar` kept on: the
+# rests nine seconds, rewrites the file with every duty off (`bar` kept on: the
 # panel's one wide surface is not what the switch tests), waits for the
 # wallpaper duty to report off and lists the layers again itself.
-# The rest budget, each part a rule of an earlier run: one frame for the
-# nest's late first events repainting the bar (the bar run), two for the
-# wallpaper's picture arriving and its redecode after the first configure (the
-# wallpaper run), two for the system monitor's first reading and its
-# ten-second copy (the glance runs), one per duty the switch reports off (the
-# clipboard run: switching a duty in `shell.json` redraws every surface once,
-# a piece appears or goes), and two more only when the lock warned that the
-# PAM service is missing, because that warning posts a desktop notice through
-# the nest's own bus which the shell's own server shows and expires (the first
-# run's rule for a notification). A shell that kept redrawing would draw one
-# frame a second over the eighteen seconds and still fail.
+# Frames at rest: the runtime writes `metrics: rest frame` with the surface
+# for each one it counts, so the journal says which surface drew it and on
+# which side of the wrapper's `smoke-cutover-rewrite` line; the three counts
+# below must add up to the metrics' own total. One budget over the whole run
+# (thirteen, the sum of every earlier run's allowance) let a shell that
+# redrew every two seconds pass. Now each surface is held to what it can owe,
+# over a time long enough (eight seconds or more) for such a shell to draw
+# four.
+# The wallpaper's surface, whenever it draws (none in fourteen runs without a
+# resize): the wallpaper run's two rules. Two frames for learning its real
+# scale after its first frame, and two for each change of the nest's output
+# between `wallpaper surface created` and `wallpaper duty off`, which is the
+# host resizing the nest's window (measured here too: two per resize). They
+# are counted by surface and not by side because the surface outlives the
+# wrapper's line by the 300 ms the shell waits before it follows a rewritten
+# file, and a resize there would land its frames after the line.
+# Every other surface before the switch, every duty on (none in each of the
+# fourteen runs, nine resting five seconds and five resting nine): one frame
+# for the nest's late first events repainting the bar (the bar run's rule),
+# and one for the system monitor's held-back copy described next, which falls
+# on this side when the picture, and so the switch, is three seconds late.
+# The system monitor's first reading and the pieces arriving animate, so
+# they are not rest frames.
+# Every other surface after the switch, every duty off (one in each of the
+# fourteen): one for the system monitor's held-back copy, due ten seconds
+# after its first reading (twelve seconds into the run), whose timer the
+# switch does not cancel, so the panel draws once with no reading left to
+# show; and one for the switch itself, a single rewrite of the file, should
+# no piece animate as it goes (the clipboard run's rule: one per duty switch;
+# here the pieces going animate and it has not been seen). A resize after
+# the wallpaper is gone costs no rest frame (measured over three): the panel
+# animates to its new width.
+# Only when the lock warned that the PAM service is missing, its desktop
+# notice, which the shell's own server shows and expires after ten seconds,
+# adds one frame on each side: its posting when that falls after the panel's
+# first second, and its expiry, a second after the switch or, when the switch
+# is late, before it. A panel that redrew every two seconds would still draw
+# four on either side against those three.
 cutover_run() {
     cutover_home=$work/xdg-cutover
     cutover_state=$work/cutover-state
@@ -1877,13 +1943,14 @@ wait_for() {
     done
 }
 wait_for 'wallpaper uploaded' || exit 1
-sleep 5
+sleep 9
 echo "smoke-cutover-rewrite" >&2
 printf '%s\n' '$cutover_off' > "\$XDG_CONFIG_HOME/celestina/shell.json.tmp"
 mv "\$XDG_CONFIG_HOME/celestina/shell.json.tmp" "\$XDG_CONFIG_HOME/celestina/shell.json"
 wait_for 'wallpaper duty off' || exit 1
 wait_for 'clipboard: the history file was deleted' || exit 1
 sleep 2
+kill -0 "\$shell" 2>/dev/null || echo "smoke-cutover-failed the shell exited before the layers after the switch were listed" >&2
 '$niri_binary' msg --json layers > '$run.layers' 2>/dev/null || echo "smoke-cutover-failed layers" >&2
 if [ -e '$cutover_state/celestina/clipboard.json' ]; then
     echo "smoke-cutover-failed history-present" >&2
@@ -2000,7 +2067,7 @@ LAYERS
     case "$cutover_pam" in
         0) cutover_pam_note="the PAM service is installed on this host and the lock did not warn" ;;
         1)
-            cutover_notice=2
+            cutover_notice=1
             cutover_pam_note="the lock warned once that the PAM service is missing"
             ;;
         *) fail "the lock warned $cutover_pam times that the PAM service is missing, not once (cutover run)" ;;
@@ -2026,7 +2093,7 @@ LAYERS
     cutover_switches=$((cutover_switches + 1))
     grep -q 'system monitor off' "$run.err" || fail "the system monitor did not stop with the bar's pieces gone (cutover run)"
     grep -q 'shell settings changed on disk' "$run.err" || fail "the shell did not follow the rewritten file (cutover run)"
-    # Frames: every surface drew, and the rest within the budget above.
+    # Frames: every surface drew, and the rest within the two budgets above.
     lines=$(grep '^winit ' "$run.out" || true)
     [ -n "$lines" ] || fail "no metrics line for the winit output (cutover run)"
     printf '%s\n' "$lines" | while IFS= read -r l; do
@@ -2034,10 +2101,38 @@ LAYERS
         [ "${n:-0}" -ge 1 ] || exit 1
     done || fail "a surface drew no frame with every duty on: $lines"
     cutover_rest=$(sum rest_frames)
-    cutover_allowed=$((1 + 2 + 2 + cutover_switches + cutover_notice))
-    [ "$cutover_rest" -le "$cutover_allowed" ] ||
-        rest_fail "$run.err" "frames were drawn at rest with every duty on ($cutover_rest, at most $cutover_allowed: bar 1, wallpaper 2, system monitor 2, $cutover_switches duty switches, notice $cutover_notice): $lines"
-    echo "smoke: cutover: every duty on then off: $(printf '%s\n' "$lines" | head -n 1) (rest_frames=$cutover_rest, at most $cutover_allowed over $(printf '%s\n' "$lines" | wc -l) surfaces)"
+    # "PAPER BEFORE AFTER": the wallpaper surfaces' rest frames, and every
+    # other surface's on each side of the wrapper's line.
+    cutover_counts=$(awk '
+        /layer surface created/ && /namespace="celestina-wallpaper"/ {
+            match($0, /surface=[0-9]+/)
+            paper[substr($0, RSTART, RLENGTH)] = 1
+        }
+        /smoke-cutover-rewrite/ { after = 1 }
+        /metrics: rest frame/ {
+            match($0, /surface=[0-9]+/)
+            if (substr($0, RSTART, RLENGTH) in paper) p++
+            else if (after) a++
+            else b++
+        }
+        END { print p + 0, b + 0, a + 0 }' "$run.err")
+    cutover_paper=${cutover_counts%% *}
+    cutover_after=${cutover_counts##* }
+    cutover_before=${cutover_counts#* }
+    cutover_before=${cutover_before% *}
+    [ $((cutover_paper + cutover_before + cutover_after)) -eq "$cutover_rest" ] ||
+        fail "the journal names $cutover_counts rest frames (wallpaper, before, after) and the metrics count $cutover_rest (cutover run): $lines"
+    cutover_changes=$(output_changes "$run.err" 'wallpaper surface created' 'wallpaper duty off')
+    cutover_paper_allowed=$((2 + 2 * cutover_changes))
+    cutover_before_allowed=$((1 + 1 + cutover_notice))
+    cutover_after_allowed=$((1 + 1 + cutover_notice))
+    [ "$cutover_paper" -le "$cutover_paper_allowed" ] ||
+        rest_fail "$run.err" "the wallpaper drew frames at rest with every duty on ($cutover_paper, at most $cutover_paper_allowed: 2 for the real scale, 2 for each of $cutover_changes output changes): $lines"
+    [ "$cutover_before" -le "$cutover_before_allowed" ] ||
+        rest_fail "$run.err" "frames were drawn at rest with every duty on, before the switch ($cutover_before, at most $cutover_before_allowed: bar 1, a late switch 1, notice $cutover_notice): $lines"
+    [ "$cutover_after" -le "$cutover_after_allowed" ] ||
+        rest_fail "$run.err" "frames were drawn at rest after every duty went off ($cutover_after, at most $cutover_after_allowed: the system monitor's held-back copy 1, the switch 1, notice $cutover_notice): $lines"
+    echo "smoke: cutover: every duty on then off: $(printf '%s\n' "$lines" | head -n 1) (rest_frames=$cutover_rest: the wallpaper $cutover_paper, at most $cutover_paper_allowed with $cutover_changes output changes; the rest $cutover_before before the switch, at most $cutover_before_allowed, and $cutover_after after it, at most $cutover_after_allowed; over $(printf '%s\n' "$lines" | wc -l) surfaces)"
     echo "smoke: cutover: $(grep -Eo 'idle: (armed|unavailable)' "$run.err" | head -n 1), $(grep -Eo 'night light: (applied|not applied)' "$run.err" | head -n 1), caffeine not held, lock on with the inhibitor refused by the dead bus ($cutover_pam_note), polkit on with the agent unavailable over the dead bus and nothing registered, Melibea absent once, Magnetita absent, $cutover_switches duty switches reported off and the history file deleted"
     grep '^rss_mib=' "$run.out" | sed 's/^/smoke: cutover: /' || true
 }
