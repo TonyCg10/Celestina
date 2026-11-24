@@ -247,10 +247,10 @@ None has been run and none is closed by an agent.
 ## VAL-CEL2-BAR-LIVE — The bar beside Noctalia, its blur, its popups, focus and two scales
 
 - **Status:** pending
-- **Related implementation:** CEL-2-A (the bar surface, the piece table and
-  the bar duty)
+- **Related implementation:** CEL-2-A (the bar surface and the piece table;
+  the bar duty it shipped with is gone since CEL-2-M)
 - **Requires:** the deployed shell started by hand in the author's niri
-  session with `duties.bar` set to `on` in `shell.json`, Noctalia still running
+  session (since the cutover the bar is always drawn; `duties.bar` no longer exists), Noctalia still running
   with its bar hidden by `noctalia msg bar-hide`, and two outputs of different
   scale for check 5
 - **Procedure:** (1) with Noctalia's bar hidden, look at the bar beside
@@ -316,7 +316,11 @@ None has been run and none is closed by an agent.
 - **Requires:** the deployed shell started by hand in the author's niri
   session; `duties.idle` set to `"on"` in `~/.config/celestina/shell.json`
   before starting it; Noctalia's idle screen-off switched off first in its
-  own idle settings, so the two never act at once; caffeine off
+  own idle settings, so the two never act at once; caffeine off; **no idle
+  inhibitor held by another program**: the shell's idle notifications honour
+  inhibitors, as the design asks, so while one is held `idle: armed` never
+  fires (observed on 2026-11-23 with Claude Desktop's "Keep computer awake
+  while Claude works" switched on, which holds one while a session works)
 - **Procedure:** start the shell and leave keyboard and pointer untouched. The
   shell's journal line `idle: armed` appears at start. After the screen-off
   delay (20 s) every output must power off; move the mouse and check that the
@@ -585,7 +589,7 @@ None has been run and none is closed by an agent.
   `cuprita-core`'s NetworkManager client, the network piece and the `network`
   page)
 - **Requires:** the deployed shell started by hand in the author's niri
-  session; `duties.bar` set to `"on"` and `network` placed in `bar.end` of
+  session; `network` placed in `bar.end` of
   `~/.config/celestina/shell.json` (the piece has no duty of its own);
   `nm-applet` running as it does today. Noctalia's network widget may stay on:
   the shell only reads NetworkManager. Have the password of one saved network
@@ -617,7 +621,7 @@ None has been run and none is closed by an agent.
 - **Related implementation:** CEL-2-F (the Bluetooth worker over
   `cuprita-core`'s BlueZ client, the Bluetooth piece and the `bluetooth` page)
 - **Requires:** the deployed shell started by hand in the author's niri
-  session; `duties.bar` set to `"on"` and `bluetooth` placed in `bar.end` of
+  session; `bluetooth` placed in `bar.end` of
   `~/.config/celestina/shell.json`; a paired device within reach that the
   author is willing to connect and disconnect; `blueman` running as it does
   today. Noctalia's Bluetooth widget may stay on, and a connect from either
@@ -646,7 +650,7 @@ None has been run and none is closed by an agent.
   power-profiles-daemon, the battery and power-profile pieces, the `power`
   page, and the six-tab strip of the Island)
 - **Requires:** the deployed shell started by hand in the author's niri
-  session; `duties.bar` set to `"on"` and `battery` and `power-profile` placed
+  session; `battery` and `power-profile` placed
   in `bar.end` of `~/.config/celestina/shell.json`; a machine with a battery
   for the battery row (the piece is absent without one); the profile daemon
   running; Noctalia's power profile widget, if any, may stay on since the
@@ -768,7 +772,7 @@ None has been run and none is closed by an agent.
 - **Related implementation:** CEL-2-C (the `volume` and `brightness` pieces,
   the slider popup, the verbs)
 - **Requires:** the deployed shell started by hand in the author's niri
-  session with `duties.bar` and `duties.osd` `"on"`; the pieces `volume` and
+  session with `duties.osd` `"on"` (the bar is always drawn); the pieces `volume` and
   `brightness` in the `bar` end zone of `shell.json` (they are absent from a
   layout until a reading exists); Noctalia's OSD and its bar off or hidden;
   Noctalia's brightness widget closed
@@ -809,7 +813,7 @@ None has been run and none is closed by an agent.
   session; the author's phone paired with Magnetita, which runs on the session
   bus and owns `org.celestina.Devices1`; `duties.phone` set to `"on"` in
   `~/.config/celestina/shell.json` before starting the shell. The piece lives
-  on the bar, so the same file also sets `"duties": {"bar": "on", "phone":
+  on the bar, so the same file also sets `"duties": {"phone":
   "on"}` and puts the id `phone` in the bar's end zone, for example
   `"bar": {"end": ["bubbles", "phone", "tray"]}` (the ids `bubbles` and
   `phone` belong to the piece table; the zones are `start`, `centre` and
@@ -849,7 +853,7 @@ None has been run and none is closed by an agent.
   one `~/.local/lib/celestina/niri` the nested smoke also prefers); Melibea
   running as the author's own service; `duties.bubbles` set to `"on"` in
   `~/.config/celestina/shell.json` before starting the shell. The bubbles
-  live on the bar, so the same file also sets `"duties": {"bar": "on",
+  live on the bar, so the same file also sets `"duties": {
   "bubbles": "on"}` and puts the id `bubbles` in the bar's end zone, for
   example `"bar": {"end": ["bubbles", "phone", "tray"]}`. The author binds
   a key of their own to `celestina bubbles minimize` (the shell binds no key)

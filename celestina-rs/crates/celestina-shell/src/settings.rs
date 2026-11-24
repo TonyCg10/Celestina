@@ -6,16 +6,23 @@
 // their bounds and their tests are dropped. `Store`, `Pending`, `WriteOutcome`
 // and the durable-before-published rule are unchanged. CEL-2-A then added
 // what the copy did not have: `bar` (the layout of the bar's zones and the
-// tray ids kept off it) and `duties.bar` (whether the shell has taken the bar
-// over from Noctalia), both optional so a 1.0.0 file still reads, plus their
-// bounds in `clamped` and their tests. Unlike the other duties, whose `off`
-// is written once the file is, a bar value the person never set is never
-// written, so a later default still reaches them. CEL-2-K then added `weather`
+// tray ids kept off it), optional so a 1.0.0 file still reads, plus its
+// bounds in `clamped` and its tests; the `duties.bar` switch it also added
+// (whether the shell had taken the bar over from Noctalia) is gone since the
+// cutover (CEL-2-M): the bar is always on, and a `"bar"` key left in `duties`
+// by an older file is an unknown key, read past and dropped on the next
+// write. CEL-2-K then added `weather`
 // (where the weather reading is for), copied in shape from the core's
 // `Location` and stored in whole micro-degrees so `Settings` stays `Eq`; it is
 // optional, lenient and written only once chosen. CEL-2-C adds `duties.osd`
 // and the `osd` table (timeout, position, kinds), all defaulted per field.
-// CEL-2-H adds `duties.lock`, off like the other switches.
+// CEL-2-H adds `duties.lock`, off like the other switches. CEL-2-M, the
+// cutover, flips the default of every shipped duty to on (`lenient_duty_on`,
+// `impl Default for Duties`) and removes the `bar` duty; the lock keeps off
+// until its live rows pass, and the clipboard, a privacy duty, fails closed:
+// a value that is not `"on"` or `"off"` reads as off (`lenient_duty`), while
+// an absent key still reads as on. `Duties::all_off` is the quiet set a
+// protected start (an unreadable file) runs on until a clean read.
 
 //! What the person chose, and what it takes for that choice to be real.
 //!
@@ -95,16 +102,35 @@ fn lenient_outputs<'de, D: Deserializer<'de>>(
     })
 }
 
+/// A duty that is off unless the file says `"on"`: a wrong-typed value is
+/// read as off. For the lock, which must not switch itself on; for the
+/// clipboard, which fails closed (see [`Duties::clipboard`]).
 fn lenient_duty<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duty, D::Error> {
     lenient(deserializer)
 }
 
-/// A duty that stays unset until the person switches it: `"on"` or `"off"` is
-/// their choice, anything else is no choice (the default, which is off).
-fn lenient_chosen_duty<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<Duty>, D::Error> {
-    Ok(serde_json::from_value(Value::deserialize(deserializer)?).ok())
+/// A duty that is on unless the file says `"off"`. Since the cutover
+/// (CEL-2-M) the shipped duties default to on, so a wrong-typed value keeps
+/// that default instead of silently turning the duty off, the way
+/// [`lenient_true`] keeps a switch on.
+fn lenient_duty_on<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duty, D::Error> {
+    Ok(serde_json::from_value(Value::deserialize(deserializer)?).unwrap_or(Duty::On))
+}
+
+/// The `duties` table. An object is read field by field with each duty's
+/// own leniency ([`lenient_duty`], [`lenient_duty_on`]). Anything else
+/// (`"off"`, `false`, `null`, a number, an array, a string) is a file that
+/// does not clearly say what it wants: the defaults, with the clipboard
+/// **off**. The clipboard fails closed whenever the file does not clearly
+/// say "on" ([`Duties::clipboard`]), and an array is never read
+/// positionally into the fields, which serde would otherwise do.
+fn lenient_duties<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duties, D::Error> {
+    Ok(match Value::deserialize(deserializer)? {
+        object @ Value::Object(_) => {
+            serde_json::from_value(object).unwrap_or_else(|_| Duties::unclear())
+        }
+        _ => Duties::unclear(),
+    })
 }
 
 /// A chosen id list: an array keeps its string entries (the shape checks in
@@ -172,51 +198,57 @@ pub enum Duty {
     On,
 }
 
-/// The shell's optional duties, one line per duty in name order. Later units
-/// add fields; each defaults to off, and a value that is not `"on"` or `"off"`
-/// degrades to off instead of failing the file.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// The shell's optional duties, one line per duty in name order. While
+/// Noctalia held them every duty shipped off (ADR 0011); since the cutover
+/// (CEL-2-M) the duties the author validated live default to **on**, and a
+/// value that is not `"on"` or `"off"` degrades to the field's default
+/// instead of failing the file, with one exception: the clipboard fails
+/// closed, so such a value reads as off ([`Duties::clipboard`]). The session
+/// lock keeps `off` until its live rows pass (the lock design's §8): a
+/// privileged duty nobody validated must not switch itself on for a file
+/// that chose nothing. The bar is not a duty any more: the shell always
+/// draws it (its layout is [`Settings::bar`]), and a `"bar"` key an older
+/// file left here is an unknown key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Duties {
-    /// Whether this shell draws the bar; [`Duties::bar`] is the state in
-    /// force. `None` until the person switches it, and then never written, so
-    /// a later default (CEL-2-M switching the bar on) reaches every file that
-    /// did not choose.
-    #[serde(
-        deserialize_with = "lenient_chosen_duty",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub bar: Option<Duty>,
     /// Whether this shell groups minimized windows into bubbles.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub bubbles: Duty,
     /// Whether this shell keeps the session from idling while caffeine is on.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub caffeine: Duty,
-    /// Whether this shell keeps a clipboard history.
+    /// Whether this shell keeps a clipboard history. On when the key is
+    /// absent, like the other shipped duties, but it fails closed: a value
+    /// that is not `"on"` or `"off"` (`false`, `"OFF"`, `"disabled"`, a
+    /// number) reads as **off**, because a person who tried to write "off"
+    /// and got it wrong must not have every selection recorded to disk
+    /// (privacy, CEL-2-G); the other duties cost nothing when a typo leaves
+    /// them on.
     #[serde(deserialize_with = "lenient_duty")]
     pub clipboard: Duty,
     /// Whether this shell turns the screens off, locks and suspends when idle.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub idle: Duty,
     /// Whether this shell's own session lock runs: the `lock` verbs, the idle
     /// chain's second step and the sleep inhibitor. Off while another locker
-    /// owns the session (CEL-2-H).
+    /// owns the session (CEL-2-H), and off by default until the author's live
+    /// rows pass.
     #[serde(deserialize_with = "lenient_duty")]
     pub lock: Duty,
     /// Whether this shell listens to MPRIS players and shows the media piece
     /// and page.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub media: Duty,
     /// Whether this shell drives the night-light gamma ramps.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub nightlight: Duty,
     /// Whether this shell shows the on-screen display for volume,
     /// microphone and brightness changes.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub osd: Duty,
     /// Whether this shell shows the phone's battery and media.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub phone: Duty,
     /// Whether this shell is the session's polkit authentication agent
     /// (CEL-2-I). Off until the person switches it: switching it on while
@@ -224,15 +256,72 @@ pub struct Duties {
     #[serde(deserialize_with = "lenient_duty")]
     pub polkit: Duty,
     /// Whether this shell paints the wallpaper.
-    #[serde(deserialize_with = "lenient_duty")]
+    #[serde(deserialize_with = "lenient_duty_on")]
     pub wallpaper: Duty,
 }
 
+impl Default for Duties {
+    /// The cutover's defaults: every shipped duty on, the lock and the
+    /// polkit agent off.
+    fn default() -> Self {
+        Self::defaults()
+    }
+}
+
 impl Duties {
-    /// Whether the bar duty is on: what the person chose, or the default.
+    /// What a `duties` value that is not an object reads as (`"off"`,
+    /// `false`, `null`, `5`, `[]`): the defaults with the clipboard off. A
+    /// person who wrote `"duties": "off"` meant something this shell cannot
+    /// read as a table, and the one duty that records to disk must not run
+    /// on a guess; the lock and the polkit agent are off in the defaults
+    /// already.
     #[must_use]
-    pub fn bar(&self) -> Duty {
-        self.bar.unwrap_or_default()
+    pub const fn unclear() -> Self {
+        Self {
+            clipboard: Duty::Off,
+            ..Self::defaults()
+        }
+    }
+
+    /// [`Duties::default`] as a `const fn`, so [`Duties::unclear`] can build
+    /// on it.
+    const fn defaults() -> Self {
+        Self {
+            bubbles: Duty::On,
+            caffeine: Duty::On,
+            clipboard: Duty::On,
+            idle: Duty::On,
+            lock: Duty::Off,
+            media: Duty::On,
+            nightlight: Duty::On,
+            osd: Duty::On,
+            phone: Duty::On,
+            polkit: Duty::Off,
+            wallpaper: Duty::On,
+        }
+    }
+
+    /// Every duty off: what the shell runs on while its settings file exists
+    /// but cannot be read (a protected start), so a typo in a hand-edited
+    /// file never starts a worker the file may say `"off"` to; the first
+    /// clean read then applies the real values. Also the set a test builds
+    /// when it wants to start exactly the duties it names. Adding a duty
+    /// adds a line here, so the quiet set can never miss one.
+    #[must_use]
+    pub const fn all_off() -> Self {
+        Self {
+            bubbles: Duty::Off,
+            caffeine: Duty::Off,
+            clipboard: Duty::Off,
+            idle: Duty::Off,
+            lock: Duty::Off,
+            media: Duty::Off,
+            nightlight: Duty::Off,
+            osd: Duty::Off,
+            phone: Duty::Off,
+            polkit: Duty::Off,
+            wallpaper: Duty::Off,
+        }
     }
 }
 
@@ -573,8 +662,10 @@ pub struct Settings {
     )]
     pub bar: BarChoice,
     /// Which optional duties this shell performs. Absent from a 1.0.0 file:
-    /// all off.
-    #[serde(deserialize_with = "lenient")]
+    /// the cutover's defaults, every shipped duty on and the lock off
+    /// ([`Duties::default`]). Present but not an object: the same with the
+    /// clipboard off ([`Duties::unclear`], read by `lenient_duties`).
+    #[serde(deserialize_with = "lenient_duties")]
     pub duties: Duties,
     /// The switches the person flips for the energy duties. Absent: all off.
     #[serde(deserialize_with = "lenient")]
@@ -976,7 +1067,7 @@ mod tests {
         let old = br#"{"schema_version":1,"do_not_disturb":true}"#;
         let read = Settings::from_bytes(old).expect("old file");
         assert!(read.do_not_disturb);
-        assert_eq!(read.duties.wallpaper, Duty::Off);
+        assert_eq!(read.duties.wallpaper, Duty::On);
         assert_eq!(read.wallpaper, WallpaperSettings::default());
     }
 
@@ -996,10 +1087,11 @@ mod tests {
     }
 
     #[test]
-    fn the_energy_defaults_turn_nothing_on() {
+    fn the_defaults_turn_the_shipped_duties_on_and_the_energy_switches_off() {
         let settings = Settings::default();
         assert_eq!(settings.duties, Duties::default());
-        assert_eq!(settings.duties.idle, Duty::Off);
+        assert_eq!(settings.duties.idle, Duty::On);
+        assert_eq!(settings.duties.lock, Duty::Off);
         assert!(!settings.energy.caffeine);
         assert!(!settings.energy.night_light);
         assert_eq!(settings.energy.night_light_kelvin, 2700);
@@ -1009,7 +1101,6 @@ mod tests {
     fn energy_settings_survive_a_round_trip() {
         let settings = Settings {
             duties: Duties {
-                bar: None,
                 bubbles: Duty::On,
                 caffeine: Duty::On,
                 clipboard: Duty::Off,
@@ -1115,7 +1206,7 @@ mod tests {
             "wallpaper":{"mode":"tile","folder":42,"outputs":{"DP-1":5,"HDMI-A-1":"b.png"}}}"#;
         let read = Settings::from_bytes(bytes).expect("read");
         assert!(read.do_not_disturb);
-        assert_eq!(read.duties.wallpaper, Duty::Off);
+        assert_eq!(read.duties.wallpaper, Duty::On);
         assert_eq!(read.wallpaper.mode, Mode::Fill);
         assert_eq!(read.wallpaper.folder, None);
         assert_eq!(read.wallpaper.outputs.len(), 1);
@@ -1123,7 +1214,6 @@ mod tests {
 
         for bytes in [
             &br#"{"do_not_disturb":"yes"}"#[..],
-            br#"{"duties":5,"wallpaper":"x"}"#,
             br#"{"wallpaper":{"outputs":[1],"mode":7,"folder":null}}"#,
             br#"{"duties":{"wallpaper":null}}"#,
         ] {
@@ -1134,6 +1224,16 @@ mod tests {
                 String::from_utf8_lossy(bytes)
             );
         }
+        // A `duties` that is not an object is the one wrong-typed value that
+        // does not read as the plain defaults: the clipboard fails closed
+        // (`Duties::unclear`), the rest of the file is still read.
+        assert_eq!(
+            Settings::from_bytes(br#"{"duties":5,"wallpaper":"x"}"#),
+            Some(Settings {
+                duties: Duties::unclear(),
+                ..Settings::default()
+            })
+        );
     }
 
     #[test]
@@ -1188,6 +1288,69 @@ mod tests {
     }
 
     #[test]
+    fn the_cutover_defaults_reach_a_file_that_chose_nothing_and_keep_every_off() {
+        // A file from before the cutover with no `duties` key: every shipped
+        // duty is on, the lock stays off (CEL-2-M).
+        let read = Settings::from_bytes(br#"{"schema_version":1,"do_not_disturb":false}"#)
+            .expect("an older file is read");
+        for (name, duty) in [
+            ("bubbles", read.duties.bubbles),
+            ("caffeine", read.duties.caffeine),
+            ("clipboard", read.duties.clipboard),
+            ("idle", read.duties.idle),
+            ("media", read.duties.media),
+            ("nightlight", read.duties.nightlight),
+            ("osd", read.duties.osd),
+            ("phone", read.duties.phone),
+            ("wallpaper", read.duties.wallpaper),
+        ] {
+            assert_eq!(duty, Duty::On, "{name}");
+        }
+        assert_eq!(read.duties.lock, Duty::Off);
+        // An explicit "off" written while Noctalia held a duty is honoured.
+        let chosen = Settings::from_bytes(
+            br#"{"duties":{"idle":"off","osd":"off","lock":"on","wallpaper":"off"}}"#,
+        )
+        .expect("read");
+        assert_eq!(chosen.duties.idle, Duty::Off);
+        assert_eq!(chosen.duties.osd, Duty::Off);
+        assert_eq!(chosen.duties.wallpaper, Duty::Off);
+        assert_eq!(chosen.duties.lock, Duty::On);
+        assert_eq!(chosen.duties.media, Duty::On);
+        // The clipboard is on only for an absent key or an explicit "on": a
+        // value that is neither reads as off, where the other shipped duties
+        // keep their default of on.
+        let typo =
+            Settings::from_bytes(br#"{"duties":{"clipboard":"Off","idle":"Off"}}"#).expect("read");
+        assert_eq!(typo.duties.clipboard, Duty::Off);
+        assert_eq!(typo.duties.idle, Duty::On);
+        assert_eq!(chosen.duties.clipboard, Duty::On, "absent: on");
+    }
+
+    #[test]
+    fn all_off_names_every_duty_and_differs_from_the_defaults_in_the_duties_alone() {
+        let quiet = Duties::all_off();
+        let (_, written) = written_keys(&Settings {
+            duties: quiet,
+            ..Settings::default()
+        });
+        let (_, defaults) = written_keys(&Settings::default());
+        assert_eq!(written, defaults, "the same keys, so no duty is missed");
+        let value = serde_json::to_value(quiet).expect("duties serialize");
+        for (name, duty) in value.as_object().expect("an object") {
+            assert_eq!(duty, "off", "{name}");
+        }
+        assert_ne!(quiet, Duties::default());
+        // The round trip keeps every off.
+        let settings = Settings {
+            duties: quiet,
+            ..Settings::default()
+        };
+        let bytes = settings.to_bytes().expect("serialize");
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
+    }
+
+    #[test]
     fn an_out_of_range_kelvin_is_clamped() {
         let low = Settings::from_bytes(br#"{"energy":{"night_light_kelvin":10}}"#).expect("read");
         assert_eq!(low.energy.night_light_kelvin, 2000);
@@ -1200,7 +1363,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_duty_value_degrades_to_off_without_losing_the_rest() {
+    fn an_unknown_duty_value_degrades_to_its_default_without_losing_the_rest() {
         let read = Settings::from_bytes(
             br#"{"do_not_disturb":true,
                  "duties":{"idle":"on","caffeine":"maybe","nightlight":7},
@@ -1209,8 +1372,8 @@ mod tests {
         .expect("the file is still read");
         assert!(read.do_not_disturb);
         assert_eq!(read.duties.idle, Duty::On);
-        assert_eq!(read.duties.caffeine, Duty::Off);
-        assert_eq!(read.duties.nightlight, Duty::Off);
+        assert_eq!(read.duties.caffeine, Duty::On);
+        assert_eq!(read.duties.nightlight, Duty::On);
         assert!(read.energy.caffeine);
     }
 
@@ -1247,23 +1410,23 @@ mod tests {
     }
 
     #[test]
-    fn phone_and_bubbles_default_off_and_read_off_from_older_files() {
+    fn phone_and_bubbles_default_on_and_read_on_from_older_files() {
         let defaults = Settings::default();
-        assert_eq!(defaults.duties.phone, Duty::Off);
-        assert_eq!(defaults.duties.bubbles, Duty::Off);
+        assert_eq!(defaults.duties.phone, Duty::On);
+        assert_eq!(defaults.duties.bubbles, Duty::On);
         // A 1.3.0 file knows neither duty.
         let older = Settings::from_bytes(
             br#"{"schema_version":1,"duties":{"idle":"on","wallpaper":"on"}}"#,
         )
         .expect("read");
-        assert_eq!(older.duties.phone, Duty::Off);
-        assert_eq!(older.duties.bubbles, Duty::Off);
+        assert_eq!(older.duties.phone, Duty::On);
+        assert_eq!(older.duties.bubbles, Duty::On);
         assert_eq!(older.duties.idle, Duty::On);
-        // An unknown value is off and costs the other duties nothing.
+        // An unknown value is the default, on, and costs the other duties nothing.
         let odd = Settings::from_bytes(br#"{"duties":{"phone":"maybe","bubbles":7,"idle":"on"}}"#)
             .expect("read");
-        assert_eq!(odd.duties.phone, Duty::Off);
-        assert_eq!(odd.duties.bubbles, Duty::Off);
+        assert_eq!(odd.duties.phone, Duty::On);
+        assert_eq!(odd.duties.bubbles, Duty::On);
         assert_eq!(odd.duties.idle, Duty::On);
     }
 
@@ -1271,6 +1434,7 @@ mod tests {
     fn phone_and_bubbles_survive_a_round_trip() {
         let mut settings = Settings::default();
         settings.duties.phone = Duty::On;
+        settings.duties.bubbles = Duty::Off;
         let bytes = settings.to_bytes().expect("serialize");
         let read = Settings::from_bytes(&bytes).expect("read");
         assert_eq!(read.duties.phone, Duty::On);
@@ -1280,17 +1444,17 @@ mod tests {
     }
 
     #[test]
-    fn the_media_duty_defaults_off_and_a_bad_value_degrades_without_losing_the_rest() {
-        assert_eq!(Settings::default().duties.media, Duty::Off);
+    fn the_media_duty_defaults_on_and_a_bad_value_degrades_without_losing_the_rest() {
+        assert_eq!(Settings::default().duties.media, Duty::On);
         let read = Settings::from_bytes(
             br#"{"do_not_disturb":true,"duties":{"media":"yes","idle":"on"}}"#,
         )
         .expect("the file is still read");
-        assert_eq!(read.duties.media, Duty::Off);
+        assert_eq!(read.duties.media, Duty::On);
         assert_eq!(read.duties.idle, Duty::On);
         assert!(read.do_not_disturb);
-        let on = Settings::from_bytes(br#"{"duties":{"media":"on"}}"#).expect("read");
-        assert_eq!(on.duties.media, Duty::On);
+        let off = Settings::from_bytes(br#"{"duties":{"media":"off"}}"#).expect("read");
+        assert_eq!(off.duties.media, Duty::Off);
     }
 
     #[test]
@@ -1319,11 +1483,11 @@ mod tests {
     }
 
     #[test]
-    fn the_clipboard_duty_is_off_by_default_and_in_an_old_file() {
-        assert_eq!(Settings::default().duties.clipboard, Duty::Off);
+    fn the_clipboard_duty_is_on_by_default_and_in_an_old_file() {
+        assert_eq!(Settings::default().duties.clipboard, Duty::On);
         let read = Settings::from_bytes(br#"{"schema_version":1,"do_not_disturb":true}"#)
             .expect("an old file is read");
-        assert_eq!(read.duties.clipboard, Duty::Off);
+        assert_eq!(read.duties.clipboard, Duty::On);
         let (_, duties) = written_keys(&Settings::default());
         assert_eq!(
             duties,
@@ -1346,19 +1510,29 @@ mod tests {
     #[test]
     fn the_clipboard_duty_survives_a_round_trip() {
         let mut settings = Settings::default();
-        settings.duties.clipboard = Duty::On;
+        settings.duties.clipboard = Duty::Off;
         let bytes = settings.to_bytes().expect("serialize");
-        assert!(String::from_utf8_lossy(&bytes).contains(r#""clipboard": "on""#));
+        assert!(String::from_utf8_lossy(&bytes).contains(r#""clipboard": "off""#));
         assert_eq!(Settings::from_bytes(&bytes), Some(settings));
     }
 
     #[test]
     fn a_hostile_clipboard_duty_degrades_to_off_without_losing_the_rest() {
+        // The clipboard fails closed (privacy): a value that is not "on" or
+        // "off" is read as off, where the other shipped duties would keep
+        // their default of on. A person who wrote `false` or "OFF" meant
+        // off; a person who wrote "yes" or "ON" gets the duty off and
+        // nothing recorded. This crate logs nothing, so the typo itself is
+        // not reported anywhere: the only sign is the duty being off. Only
+        // an absent key is on.
         for value in [
             r#""yes""#,
             r#""ON""#,
+            r#""OFF""#,
+            r#""disabled""#,
             "1",
             "true",
+            "false",
             "null",
             "[]",
             r#"{"on":true}"#,
@@ -1371,10 +1545,113 @@ mod tests {
             assert_eq!(read.duties.idle, Duty::On, "{value}");
             assert!(read.do_not_disturb, "{value}");
         }
+        let absent = Settings::from_bytes(br#"{"duties":{"idle":"on"}}"#).expect("read");
+        assert_eq!(absent.duties.clipboard, Duty::On, "absent: the default");
         let store = Store::new(Settings::default());
-        let pending = store.stage(|s| s.duties.clipboard = Duty::On);
-        assert_eq!(store.current().duties.clipboard, Duty::Off);
-        assert_eq!(pending.wanted().duties.clipboard, Duty::On);
+        let pending = store.stage(|s| s.duties.clipboard = Duty::Off);
+        assert_eq!(store.current().duties.clipboard, Duty::On);
+        assert_eq!(pending.wanted().duties.clipboard, Duty::Off);
+    }
+
+    #[test]
+    fn a_duties_value_that_is_not_an_object_reads_as_the_defaults_with_the_clipboard_off() {
+        // I-1 of the cutover re-review: `"duties": "off"` or `false`, meant
+        // as "all off", must not turn the clipboard on. Whatever is not an
+        // object reads as the defaults with the clipboard off, the lock and
+        // the polkit agent off as in the defaults, and the rest of the file
+        // is kept.
+        for value in [
+            r#""off""#,
+            r#""on""#,
+            r#""all off""#,
+            "false",
+            "true",
+            "null",
+            "5",
+            "[]",
+        ] {
+            let json = format!(
+                r#"{{"do_not_disturb":true,"duties":{value},"energy":{{"caffeine":true}}}}"#
+            );
+            let read = Settings::from_bytes(json.as_bytes()).expect("the file is still read");
+            assert_eq!(read.duties, Duties::unclear(), "{value}");
+            assert_eq!(read.duties.clipboard, Duty::Off, "{value}");
+            assert_eq!(read.duties.lock, Duty::Off, "{value}");
+            assert_eq!(read.duties.polkit, Duty::Off, "{value}");
+            assert_eq!(read.duties.idle, Duty::On, "{value}");
+            assert_eq!(read.duties.bubbles, Duty::On, "{value}");
+            assert!(read.do_not_disturb, "{value}");
+            assert!(read.energy.caffeine, "{value}");
+        }
+        // The unclear set is the defaults in everything but the clipboard.
+        assert_eq!(
+            Duties {
+                clipboard: Duty::On,
+                ..Duties::unclear()
+            },
+            Duties::default()
+        );
+    }
+
+    #[test]
+    fn a_duties_array_is_never_read_positionally() {
+        // serde would read `["off","off","off"]` into the first three fields
+        // (bubbles, caffeine, clipboard) and leave idle on: an accidental
+        // format. An array is not an object, so it reads as the unclear set,
+        // whatever its length or content.
+        for value in [
+            r#"["off","off","off"]"#,
+            r#"["on","on","on","on","on","on","on","on","on","on","on"]"#,
+            r#"[{"idle":"off"}]"#,
+        ] {
+            let json = format!(r#"{{"duties":{value}}}"#);
+            let read = Settings::from_bytes(json.as_bytes()).expect("read");
+            assert_eq!(read.duties, Duties::unclear(), "{value}");
+            assert_eq!(read.duties.bubbles, Duty::On, "{value}");
+            assert_eq!(read.duties.idle, Duty::On, "{value}");
+            assert_eq!(read.duties.clipboard, Duty::Off, "{value}");
+        }
+    }
+
+    #[test]
+    fn a_duties_object_keeps_its_per_field_leniency_and_round_trips() {
+        // The object path is unchanged: a known key is read, an unknown value
+        // degrades to that duty's own default, an absent key is the default,
+        // and the whole table survives a round trip.
+        let read = Settings::from_bytes(
+            br#"{"duties":{"idle":"off","clipboard":"maybe","nightlight":7,"lock":"on","stray":1}}"#,
+        )
+        .expect("read");
+        assert_eq!(read.duties.idle, Duty::Off);
+        assert_eq!(read.duties.clipboard, Duty::Off, "fails closed");
+        assert_eq!(read.duties.nightlight, Duty::On, "keeps its default");
+        assert_eq!(read.duties.lock, Duty::On);
+        assert_eq!(read.duties.osd, Duty::On, "absent: the default");
+        assert_eq!(read.duties.polkit, Duty::Off, "absent: the default");
+        let empty = Settings::from_bytes(br#"{"duties":{}}"#).expect("read");
+        assert_eq!(
+            empty.duties,
+            Duties::default(),
+            "an empty object is the defaults"
+        );
+        for duties in [
+            Duties::default(),
+            Duties::all_off(),
+            Duties::unclear(),
+            Duties {
+                idle: Duty::Off,
+                lock: Duty::On,
+                polkit: Duty::On,
+                ..Duties::default()
+            },
+        ] {
+            let settings = Settings {
+                duties,
+                ..Settings::default()
+            };
+            let bytes = settings.to_bytes().expect("serialize");
+            assert_eq!(Settings::from_bytes(&bytes), Some(settings), "{duties:?}");
+        }
     }
 
     #[test]
@@ -1464,32 +1741,35 @@ mod tests {
             ids(&["nm-applet", "blueman", "blueman-tray"])
         );
         assert_eq!(layout, BarLayout::default());
-        assert_eq!(settings.duties.bar(), Duty::Off);
-        assert!(settings.bar.is_unset() && settings.duties.bar.is_none());
+        assert!(settings.bar.is_unset());
     }
 
     #[test]
-    fn bar_and_duties_survive_a_round_trip() {
+    fn a_bar_layout_choice_survives_a_round_trip() {
         let mut settings = Settings::default();
         settings.bar.centre = Some(ids(&["clock"]));
         settings.bar.tray_hidden = Some(ids(&["x y"]));
-        settings.duties.bar = Some(Duty::On);
         let bytes = settings.to_bytes().expect("settings serialize");
         assert_eq!(Settings::from_bytes(&bytes), Some(settings));
     }
 
     #[test]
-    fn a_choice_that_equals_the_default_is_kept_as_a_choice() {
-        // "off" written by the person stays "off" when the default turns on.
-        let read = Settings::from_bytes(br#"{"duties":{"bar":"off"},"bar":{"end":["tray"]}}"#)
-            .expect("ours");
-        assert_eq!(read.duties.bar, Some(Duty::Off));
-        assert_eq!(read.bar.end, Some(ids(&["tray"])));
-        let (top, duties) = written_keys(&read);
-        assert!(top.contains(&"bar".to_owned()));
-        assert!(duties.contains(&"bar".to_owned()));
-        let again = Settings::from_bytes(&read.to_bytes().expect("serialize")).expect("ours");
-        assert_eq!(again, read);
+    fn an_older_files_bar_duty_is_read_past_and_not_written_back() {
+        // Before the cutover `duties.bar` switched the bar on; since it
+        // (CEL-2-M) the bar is always on, so a file that still carries the
+        // key reads as if it were not there, whatever its value, the layout
+        // beside it is kept, and the next write drops the key.
+        for value in [r#""off""#, r#""on""#, r#""maybe""#, "5", "null"] {
+            let json = format!(r#"{{"duties":{{"bar":{value}}},"bar":{{"end":["tray"]}}}}"#);
+            let read = Settings::from_bytes(json.as_bytes()).expect("ours");
+            assert_eq!(read.duties, Duties::default(), "{value}");
+            assert_eq!(read.bar.end, Some(ids(&["tray"])));
+            let (top, duties) = written_keys(&read);
+            assert!(top.contains(&"bar".to_owned()));
+            assert!(!duties.contains(&"bar".to_owned()), "{value}");
+            let again = Settings::from_bytes(&read.to_bytes().expect("serialize")).expect("ours");
+            assert_eq!(again, read);
+        }
     }
 
     #[test]
@@ -1544,7 +1824,6 @@ mod tests {
             .expect("a 1.0.0 file is ours");
         assert!(read.do_not_disturb);
         assert_eq!(read.bar_layout(), BarLayout::default());
-        assert_eq!(read.duties.bar(), Duty::Off);
 
         let written = read.to_bytes().expect("settings serialize");
         let again = Settings::from_bytes(&written).expect("written file is ours");
@@ -1561,9 +1840,11 @@ mod tests {
             br#"{"duties":{"bar":"on","future":"on"},"bar":{"wat":1},"extra":true}"#,
         )
         .expect("unknown keys do not make a file foreign");
-        assert_eq!(read.duties.bar(), Duty::On);
+        assert_eq!(read.duties, Duties::default());
         let written = String::from_utf8(read.to_bytes().expect("serialize")).expect("utf8");
         assert!(!written.contains("future") && !written.contains("extra"));
+        let (_, duties) = written_keys(&read);
+        assert!(!duties.contains(&"bar".to_owned()));
         assert!(
             !written.contains("\"bar\": {"),
             "an empty bar choice is not written"
@@ -1622,13 +1903,13 @@ mod tests {
         )
         .expect("the file is still read");
         assert!(read.do_not_disturb);
-        assert_eq!(read.duties.bar, None, "not a choice: the default holds");
-        assert_eq!(read.duties.idle, Duty::On, "the other duties are kept");
+        assert_eq!(read.duties.idle, Duty::On, "the duties are kept");
         assert_eq!(read.bar.start, Some(ids(&["clock"])));
         assert_eq!(read.bar.end, None);
         assert_eq!(read.bar.centre, None);
         assert_eq!(read.bar_layout().end, BarLayout::default().end);
-        // A bar table of the wrong shape is no choice at all.
+        // A bar table of the wrong shape is no choice at all, and the old
+        // `duties.bar` key means nothing whatever it holds.
         let read = Settings::from_bytes(br#"{"bar":[1],"duties":{"bar":5}}"#).expect("read");
         assert_eq!(read, Settings::default());
     }
@@ -1647,12 +1928,8 @@ mod tests {
         let pending = store.stage(|s| s.do_not_disturb = true);
         assert!(store.apply(pending, WriteOutcome::Durable));
         assert_eq!(store.current().bar, bar_before);
-        assert_eq!(store.current().duties.bar, None);
 
-        let pending = store.stage(|s| {
-            s.bar.centre = Some(ids(&["clock"]));
-            s.duties.bar = Some(Duty::On);
-        });
+        let pending = store.stage(|s| s.bar.centre = Some(ids(&["clock"])));
         assert!(store.apply(pending, WriteOutcome::Durable));
         assert!(store.current().do_not_disturb);
         assert_eq!(store.current().bar_layout().centre, ids(&["clock"]));
@@ -1797,9 +2074,9 @@ mod tests {
     }
 
     #[test]
-    fn the_osd_defaults_are_off_with_every_kind_on() {
+    fn the_osd_defaults_are_on_with_every_kind_on() {
         let settings = Settings::default();
-        assert_eq!(settings.duties.osd, Duty::Off);
+        assert_eq!(settings.duties.osd, Duty::On);
         assert_eq!(settings.osd.timeout_ms, 1500);
         assert_eq!(settings.osd.position, OsdPosition::Bottom);
         assert!(settings.osd.kinds.volume);
@@ -1807,7 +2084,7 @@ mod tests {
         assert!(settings.osd.kinds.brightness);
         // A file that predates the unit reads as the defaults.
         let read = Settings::from_bytes(br#"{"duties":{"idle":"on"}}"#).expect("read");
-        assert_eq!(read.duties.osd, Duty::Off);
+        assert_eq!(read.duties.osd, Duty::On);
         assert_eq!(read.osd, OsdSettings::default());
     }
 
@@ -1868,7 +2145,7 @@ mod tests {
                         "kinds":{"volume":false,"microphone":"no","brightness":7,"extra":1}}}"#,
         )
         .expect("read");
-        assert_eq!(read.duties.osd, Duty::Off);
+        assert_eq!(read.duties.osd, Duty::On);
         assert_eq!(read.osd.position, OsdPosition::Bottom);
         assert_eq!(read.osd.timeout_ms, 900);
         assert!(!read.osd.kinds.volume);

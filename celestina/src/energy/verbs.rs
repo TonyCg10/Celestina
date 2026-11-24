@@ -241,7 +241,8 @@ mod tests {
     #[test]
     fn a_verb_with_its_duty_off_does_nothing_and_saves_nothing() {
         let scratch = Scratch::new("duty-off");
-        let mut shell = scratch.shell("{}");
+        // Since the cutover (CEL-2-M) a duty is off only when the file says so.
+        let mut shell = scratch.shell(r#"{"duties":{"caffeine":"off","nightlight":"off"}}"#);
         let (energy, log) = Fake::handle();
         let before = std::fs::read(settings::path_in(&scratch.0)).expect("file");
         for (verb, flag) in [

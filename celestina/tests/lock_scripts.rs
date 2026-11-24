@@ -1,7 +1,9 @@
 //! Guards of the session lock's scripts and PAM text (CEL-2-H design §4.11,
 //! §4.14, §9.2, plan Task 7). `scripts/` at the repository root is outside
 //! this unit's commit roots, so these scan the project's own `scripts/` and
-//! `contrib/` from a test. Each cites the rule it enforces.
+//! `contrib/` from a test. Each cites the rule it enforces. The last one is
+//! the cutover's (CEL-2-M) and runs `dev-session.sh` against a fake niri:
+//! every nest starts with `CELESTINA_DDC=0` unless the caller chose a value.
 
 use std::fs;
 use std::path::PathBuf;
@@ -24,15 +26,18 @@ fn code(relative: &str) -> Vec<String> {
         .collect()
 }
 
-const SCRIPTS: [&str; 8] = [
+const SCRIPTS: [&str; 11] = [
     "scripts/build-production.sh",
     "scripts/verify-production.sh",
     "scripts/deploy-production.sh",
     "scripts/status-production.sh",
     "scripts/complete-production.sh",
     "scripts/smoke.sh",
+    "scripts/smoke-media.sh",
     "scripts/dev-session.sh",
     "scripts/lock-rehearsal.sh",
+    "scripts/cutover-config-probe.sh",
+    "scripts/wallpaper-backdrop-probe.sh",
 ];
 
 /// The spec's text of the PAM service, §4.11, byte for byte.
@@ -255,8 +260,28 @@ fn r10_is_registered_with_its_options_and_a_scale_1_5_nest() {
     // The other steps keep leaving the window where the host puts it.
     assert!(script.contains("nest_args=\"--monitor none\""));
     // The wallpaper duty is switched on in the nest's throwaway configuration,
-    // never in the author's.
-    assert!(script.contains("\"duties\":{\"lock\":\"on\",\"wallpaper\":\"on\"}"));
+    // never in the author's; since the cutover (CEL-2-M) every other shipped
+    // duty defaults to on, so the file names each one off and the nest runs
+    // the lock and the wallpaper alone.
+    let r10_file = code("scripts/lock-rehearsal.sh")
+        .into_iter()
+        .find(|l| l.contains("\"duties\":{\"lock\":\"on\",\"wallpaper\":\"on\","))
+        .expect("R-10 writes a file with the lock and the wallpaper on");
+    for duty in [
+        "bubbles",
+        "caffeine",
+        "clipboard",
+        "idle",
+        "media",
+        "nightlight",
+        "osd",
+        "phone",
+    ] {
+        assert!(
+            r10_file.contains(&format!("\"{duty}\":\"off\"")),
+            "R-10 leaves {duty} off: {r10_file}"
+        );
+    }
 }
 
 /// R-10 acts only on the verified nest: the display guard runs first, every
@@ -301,4 +326,121 @@ fn r10_touches_only_the_verified_nest_and_invents_no_frame_time() {
     // Without a frame time from the lock, the limit is recorded as a NOTE.
     assert!(joined.contains("result R-10 NOTE"));
     assert!(joined.contains("NOT the painter's frame time"));
+}
+
+/// What `dev-session.sh` hands the niri it starts as `CELESTINA_DDC`, and
+/// what it printed. The niri is a fake that records the variable and exits,
+/// the host's display is a name nobody listens on and `--monitor none` keeps
+/// the script off the host compositor's IPC, so no nest, no shell and no
+/// `ddcutil` ever starts. `caller` is the caller's own value, if any;
+/// `once` chooses the `--once` mode over the interactive one.
+fn ddc_a_nest_starts_with(
+    scratch: &std::path::Path,
+    caller: Option<&str>,
+    once: bool,
+) -> (String, String) {
+    use std::process::Command;
+
+    let fake = scratch.join("fake-niri");
+    let seen = scratch.join("seen");
+    let _ = fs::remove_file(&seen);
+    let mut command = Command::new("sh");
+    command
+        .arg(manifest().join("scripts/dev-session.sh"))
+        .args(["--monitor", "none", "--binary"])
+        .arg(&fake);
+    if once {
+        command.arg("--once").arg(scratch.join("run"));
+    }
+    command
+        .env("WAYLAND_DISPLAY", "celestina-test-no-such-display")
+        .env("XDG_RUNTIME_DIR", scratch)
+        .env("XDG_CONFIG_HOME", scratch.join("config"))
+        .env("HOME", scratch)
+        .env("CELESTINA_NEST_NIRI", &fake)
+        .env("FAKE_NIRI_SEEN", &seen)
+        .env_remove("CELESTINA_NEST_CONFIG")
+        .env_remove("NIRI_SOCKET")
+        .env_remove("CELESTINA_DDC");
+    if let Some(value) = caller {
+        command.env("CELESTINA_DDC", value);
+    }
+    let output = command.output().expect("sh runs dev-session.sh");
+    let notes = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "dev-session.sh failed: {notes}");
+    let seen = fs::read_to_string(&seen).unwrap_or_else(|err| panic!("the fake niri: {err}"));
+    (seen.trim().to_owned(), notes)
+}
+
+/// CEL-2-M: a nest never drives the host's monitors. Since the cutover the
+/// OSD duty is on and the default layout places the `brightness` piece, so
+/// a nested shell without `"osd": "off"` would run a real `ddcutil` at
+/// start; `dev-session.sh` therefore starts every nest, interactive or
+/// `--once`, with `CELESTINA_DDC=0` unless the caller chose a value. One
+/// test on purpose: nothing else in this file starts a process, so nothing
+/// forks while the fake below is being written (`ETXTBSY`).
+#[test]
+fn every_nest_starts_with_ddc_forbidden_unless_the_caller_chose() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let scratch = std::env::temp_dir().join(format!("celestina-nest-ddc-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&scratch);
+    fs::create_dir_all(&scratch).expect("the scratch directory");
+    let fake = scratch.join("fake-niri");
+    fs::write(
+        &fake,
+        "#!/bin/sh\n\
+         [ \"${1:-}\" = validate ] && exit 0\n\
+         printf '%s\\n' \"${CELESTINA_DDC-unset}\" > \"$FAKE_NIRI_SEEN\"\n",
+    )
+    .expect("the fake niri");
+    fs::set_permissions(&fake, fs::Permissions::from_mode(0o755)).expect("its mode");
+
+    for once in [false, true] {
+        // Nothing chosen, or chosen empty (which the shell reads as allowed
+        // and nobody means as a choice): forbidden.
+        for caller in [None, Some("")] {
+            let (seen, notes) = ddc_a_nest_starts_with(&scratch, caller, once);
+            assert_eq!(seen, "0", "once={once} caller={caller:?}: {notes}");
+            assert_eq!(
+                notes.contains(">> CELESTINA_DDC=0 in the nest"),
+                !once,
+                "the interactive nest says so, a `--once` run is silent: {notes}"
+            );
+        }
+        // The caller's own value is kept, whichever it is.
+        for value in ["1", "0", "false"] {
+            let (seen, notes) = ddc_a_nest_starts_with(&scratch, Some(value), once);
+            assert_eq!(seen, value, "once={once}: {notes}");
+            assert_eq!(
+                notes.contains(&format!(">> CELESTINA_DDC={value} kept from the caller")),
+                !once,
+                "{notes}"
+            );
+        }
+    }
+    let _ = fs::remove_dir_all(&scratch);
+
+    // The value the shell reads as "forbidden" is the one the script sets,
+    // and it is exported before either launch of the nest's niri.
+    assert_eq!(
+        celestina::providers::brightness::DDC_ENABLED_VAR,
+        "CELESTINA_DDC"
+    );
+    let lines = code("scripts/dev-session.sh");
+    let at = |needle: &str| {
+        lines
+            .iter()
+            .position(|l| l.contains(needle))
+            .unwrap_or_else(|| panic!("dev-session.sh has no `{needle}`"))
+    };
+    let exported = at("export CELESTINA_DDC");
+    let launches: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.contains("-c \"$generated_config\" --"))
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(launches.len(), 2, "the two ways niri is started");
+    assert!(launches.iter().all(|launch| exported < *launch));
 }

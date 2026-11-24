@@ -1,0 +1,37 @@
+// A trimmed niri config as the session runs it before the Celestina cutover
+// (CEL-2-M design §2.1): Noctalia is started, its caffeine and night light
+// are forced from a startup line, and three binds call `noctalia msg`. The
+// paths and names are placeholders, not anybody's.
+
+spawn-at-startup "noctalia"
+spawn-at-startup "sh" "-c" "sleep 1 && noctalia msg caffeine-enable && noctalia msg nightlight-force-toggle"
+spawn-at-startup "gnome-keyring-daemon" "--start" "--components=secrets"
+spawn-at-startup "systemctl" "--user" "start" "melibea.service"
+
+binds {
+    Mod+K repeat=false { spawn "noctalia" "msg" "panel-toggle" "person/bubbles:selector"; }
+    Mod+Space { spawn "noctalia" "msg" "panel-toggle" "launcher"; }
+    Mod+Shift+Escape { spawn "noctalia" "msg" "session" "lock-and-suspend"; }
+
+    // Mod+Space { spawn "celestina" "msg" "launcher-toggle"; }
+    // Mod+Shift+Escape { spawn "celestina" "msg" "lock-and-suspend"; }
+    // Mod+Ctrl+Escape { spawn "celestina" "msg" "lock"; }
+
+    Mod+Shift+A repeat=false { spawn "swaylock" "-f" "-c" "000000" "-u"; }
+
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+
+    XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
+    XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
+    XF86AudioStop allow-when-locked=true { spawn "playerctl" "stop"; }
+
+    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "+10%"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "10%-"; }
+
+    Mod+N { spawn "kitty" "--directory" "/home/person"; }
+    Mod+Shift+E { quit; }
+}

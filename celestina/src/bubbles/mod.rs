@@ -1,6 +1,7 @@
 //! The bubbles duty (CEL-2-J): the minimised windows Melibea keeps, shown as
-//! a group of bubbles and offered by the `Mod+K` selector. Off by default
-//! (parity design §4.1).
+//! a group of bubbles and offered by the `Mod+K` selector. Shipped off
+//! (parity design §4.1), on since the cutover (CEL-2-M) unless `shell.json`
+//! says off.
 //!
 //! [`BubblesHandle`] holds the Melibea worker the settings ask for and
 //! nothing else, like [`crate::phone::PhoneHandle`]: `duties.bubbles` on has
@@ -759,12 +760,23 @@ mod tests {
     }
 
     #[test]
-    fn a_file_from_1_3_0_starts_no_worker() {
+    fn a_file_from_1_3_0_starts_the_worker_and_an_explicit_off_does_not() {
+        // The older file has no `bubbles` key: since the cutover (CEL-2-M)
+        // the missing key reads on, so the worker starts.
         let older = Settings::from_bytes(br#"{"duties":{"idle":"on","wallpaper":"on"}}"#)
             .expect("a valid older file");
         let fake = Fake::default();
         let handle = BubblesHandle::with_spawner(Box::new(fake.clone()));
-        assert!(!handle.apply(&older));
+        assert!(handle.apply(&older));
+        assert!(handle.running());
+        assert_eq!(*fake.runs.lock().expect("lock"), vec![1]);
+        handle.stop();
+        // Only a file that says "off" keeps it from starting.
+        let off = Settings::from_bytes(br#"{"duties":{"bubbles":"off","idle":"on"}}"#)
+            .expect("a valid file");
+        let fake = Fake::default();
+        let handle = BubblesHandle::with_spawner(Box::new(fake.clone()));
+        assert!(!handle.apply(&off));
         assert!(!handle.running());
         assert!(fake.runs.lock().expect("lock").is_empty());
     }

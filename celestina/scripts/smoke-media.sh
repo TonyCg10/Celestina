@@ -14,6 +14,11 @@ set -eu
 #                       left at rest) or
 #                       `variant` (names compared, the duty flipped off and on)
 #   SMOKE_MEDIA_CONFIG  the `shell.json` the mode rewrites (variant only)
+#   SMOKE_MEDIA_OFF     the whole `shell.json` body with the media duty off
+#   SMOKE_MEDIA_ON      the same with the media duty on (both variant only;
+#                       the smoke writes them, so the other duties stay off
+#                       the way the run started: since the cutover a file
+#                       that names only `media` turns every other duty on)
 # Its own notes go to stderr, which the smoke keeps as the run's log.
 host_bus=${CELESTINA_HOST_BUS:-}
 bus=${DBUS_SESSION_BUS_ADDRESS:-}
@@ -95,11 +100,15 @@ case "${SMOKE_MEDIA_MODE:-}" in
         fi
         # The duty follows shell.json live: off joins the worker, on starts a
         # new one that finds the player again.
-        printf '{"schema_version":1,"duties":{"media":"off"}}\n' > "$SMOKE_MEDIA_CONFIG.tmp"
+        if [ -z "${SMOKE_MEDIA_OFF:-}" ] || [ -z "${SMOKE_MEDIA_ON:-}" ]; then
+            echo "smoke-media-failed: SMOKE_MEDIA_OFF and SMOKE_MEDIA_ON are not set" >&2
+            exit 2
+        fi
+        printf '%s\n' "$SMOKE_MEDIA_OFF" > "$SMOKE_MEDIA_CONFIG.tmp"
         mv "$SMOKE_MEDIA_CONFIG.tmp" "$SMOKE_MEDIA_CONFIG"
         sleep 1.5
         echo "smoke-media: duty flipped off" >&2
-        printf '{"schema_version":1,"duties":{"media":"on"}}\n' > "$SMOKE_MEDIA_CONFIG.tmp"
+        printf '%s\n' "$SMOKE_MEDIA_ON" > "$SMOKE_MEDIA_CONFIG.tmp"
         mv "$SMOKE_MEDIA_CONFIG.tmp" "$SMOKE_MEDIA_CONFIG"
         sleep 1.5
         echo "smoke-media: duty flipped on" >&2

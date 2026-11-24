@@ -1,6 +1,6 @@
 //! The on-screen display duty (CEL-2-C): volume, microphone and brightness
 //! changes shown on a `celestina-osd` layer surface, behind `duties.osd`,
-//! off by default.
+//! on since the cutover (CEL-2-M) unless `shell.json` says off.
 //!
 //! This module is the duty's wiring. [`OsdRuntime`] holds what exists only
 //! while the loop runs: the audio and brightness workers the duty asks for
@@ -509,6 +509,7 @@ mod tests {
     use celestina_shell::settings::Duties;
 
     use super::*;
+    use crate::test_support::quiet_settings;
 
     /// Counts the starts and stops of worker threads that run until their
     /// flag is raised, as the real ones do, taking `stop_delay` to stop.
@@ -617,14 +618,14 @@ mod tests {
         std::iter::from_fn(|| commands.try_recv().ok()).collect()
     }
 
-    /// The duty on, the bar on and the `brightness` piece in its end zone.
+    /// The duty on and the `brightness` piece in the bar's end zone.
     fn piece_placed() -> Settings {
-        control::test_settings(Duty::On, Duty::On, &["tray", "brightness"])
+        control::test_settings(Duty::On, &["tray", "brightness"])
     }
 
-    /// The duty on and the bar on, without the `brightness` piece.
+    /// The duty on, without the `brightness` piece.
     fn piece_absent() -> Settings {
-        control::test_settings(Duty::On, Duty::On, &["tray", "volume"])
+        control::test_settings(Duty::On, &["tray", "volume"])
     }
 
     #[test]
@@ -658,22 +659,9 @@ mod tests {
         // Placed again: a new consumer.
         runtime.apply(&piece_placed());
         assert_eq!(told(&commands), [BrightnessCommand::Show]);
-        // The bar going off takes its pieces with it.
-        runtime.apply(&control::test_settings(
-            Duty::On,
-            Duty::Off,
-            &["tray", "brightness"],
-        ));
-        assert_eq!(told(&commands), [BrightnessCommand::Hide]);
-        runtime.apply(&piece_placed());
-        assert_eq!(told(&commands), [BrightnessCommand::Show]);
         // The duty off: the workers that are about to stop hear the piece
         // leave (they share the test's queue with their successors).
-        runtime.apply(&control::test_settings(
-            Duty::Off,
-            Duty::On,
-            &["tray", "brightness"],
-        ));
+        runtime.apply(&control::test_settings(Duty::Off, &["tray", "brightness"]));
         assert!(!runtime.running());
         assert_eq!(told(&commands), [BrightnessCommand::Hide]);
         // New workers hear it once more, and once only.
@@ -696,11 +684,7 @@ mod tests {
         // Named layouts, never the default one: whether that places the
         // piece is not this test's to assume.
         runtime.apply(&piece_absent());
-        runtime.apply(&control::test_settings(
-            Duty::Off,
-            Duty::On,
-            &["tray", "volume"],
-        ));
+        runtime.apply(&control::test_settings(Duty::Off, &["tray", "volume"]));
         assert_eq!(told(&commands), []);
         // Deferred behind the reaper: there is no worker to tell yet.
         runtime.apply(&piece_placed());
@@ -720,19 +704,8 @@ mod tests {
         assert!(runtime.running());
         // Neither `Show` nor, for a piece that was never told, `Hide`.
         assert_eq!(told(&commands), []);
-        // The piece in a layout nobody draws (the bar off) is not placed.
-        runtime.apply(&control::test_settings(
-            Duty::On,
-            Duty::Off,
-            &["tray", "brightness"],
-        ));
-        assert_eq!(told(&commands), []);
         // And with the duty off there is no worker to tell.
-        runtime.apply(&control::test_settings(
-            Duty::Off,
-            Duty::On,
-            &["tray", "brightness"],
-        ));
+        runtime.apply(&control::test_settings(Duty::Off, &["tray", "brightness"]));
         assert_eq!(told(&commands), []);
     }
 
@@ -763,13 +736,25 @@ mod tests {
     #[test]
     fn the_duty_off_starts_no_worker() {
         let (runtime, counting) = runtime();
-        runtime.apply(&Settings::default());
+        runtime.apply(&quiet_settings());
         runtime.apply(&settings(Duty::Off));
         assert!(!runtime.running());
         assert_eq!(counting.started.load(Ordering::SeqCst), 0);
         assert!(runtime.audio().is_none() && runtime.brightness().is_none());
         // Nothing to tell a worker that does not exist.
         runtime.outputs_changed();
+    }
+
+    #[test]
+    fn the_defaults_start_the_workers() {
+        // Since the cutover (CEL-2-M) the duty is on unless the file says
+        // otherwise.
+        let (runtime, counting) = runtime();
+        runtime.apply(&Settings::default());
+        assert!(runtime.running());
+        assert_eq!(counting.started.load(Ordering::SeqCst), 1);
+        runtime.stop();
+        assert_eq!(counting.stopped.load(Ordering::SeqCst), 1);
     }
 
     #[test]

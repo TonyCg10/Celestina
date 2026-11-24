@@ -360,6 +360,7 @@ pub enum Routed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::quiet_settings;
     use std::cell::Cell;
     use std::rc::Rc;
     use std::sync::atomic::Ordering;
@@ -469,11 +470,18 @@ mod tests {
     }
 
     #[test]
-    fn off_by_default_starts_nothing() {
-        let rig = rig();
-        assert!(!rig.control.apply(&Settings::default()));
-        assert!(!rig.control.running());
-        assert_eq!(rig.spawned.get(), 0);
+    fn on_by_default_starts_the_worker_and_off_starts_nothing() {
+        // Since the cutover (CEL-2-M) the duty is on unless the file says
+        // otherwise.
+        let defaults = rig();
+        assert!(defaults.control.apply(&Settings::default()));
+        assert!(defaults.control.running());
+        assert_eq!(defaults.spawned.get(), 1);
+        defaults.control.stop();
+        let quiet = rig();
+        assert!(!quiet.control.apply(&quiet_settings()));
+        assert!(!quiet.control.running());
+        assert_eq!(quiet.spawned.get(), 0);
     }
 
     #[test]

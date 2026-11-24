@@ -1,0 +1,103 @@
+# CEL-2-M exact change inventory
+
+Base revision	a53f6db17fb189e7d07293ac0d204e3e4e89e5f5
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell/tests/salvage.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/decisions/0011-duties-switched-on-one-by-one.md
+Pathspec	celestina/docs/decisions/0024-cutover-defaults.md
+Pathspec	celestina/docs/decisions/0025-caffeine-inhibits-idle-only.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-11-23-cutover.md
+Pathspec	celestina/docs/handover.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-M.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/cutover-config-probe.sh
+Pathspec	celestina/scripts/dev-session.sh
+Pathspec	celestina/scripts/lock-rehearsal.sh
+Pathspec	celestina/scripts/smoke-media.sh
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/scripts/wallpaper-backdrop-probe.sh
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/bubbles/mod.rs
+Pathspec	celestina/src/clipboard/mod.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/energy/mod.rs
+Pathspec	celestina/src/energy/verbs.rs
+Pathspec	celestina/src/glance.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/clock.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/media/control.rs
+Pathspec	celestina/src/osd/control.rs
+Pathspec	celestina/src/osd/mod.rs
+Pathspec	celestina/src/osd/surface.rs
+Pathspec	celestina/src/phone/mod.rs
+Pathspec	celestina/src/providers/settings.rs
+Pathspec	celestina/src/test_support.rs
+Pathspec	celestina/src/wallpaper/surface.rs
+Pathspec	celestina/tests/cutover_probe.rs
+Pathspec	celestina/tests/duty_files.rs
+Pathspec	celestina/tests/fixtures/cutover/config-after.kdl
+Pathspec	celestina/tests/fixtures/cutover/config-before.kdl
+Pathspec	celestina/tests/lock_scripts.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+376	99	bc637028fe84fbf4aff5ebd6f3ab904d4dfa3bb0d137f013820fb0afd71942ed	celestina-rs/crates/celestina-shell/src/settings.rs
+8	5	e88811ecdc2c659632d13fe550356ec1b2e6f2ff5872347806ccdf98bb1c48bb	celestina-rs/crates/celestina-shell/tests/salvage.rs
+1	1	13b36421de176b6c534138767e322432d1461ea4f62a68f52f0331f6cbf554f9	celestina/Cargo.lock
+1	1	26f735e7904c96c6d267f9c440a0af1a4b78f1728e6ac965471b07c77af0c2a2	celestina/Cargo.toml
+68	23	89412941f82f797f17fba8f3c71b9e890235ba4a6e0820bf281204ee472ca132	celestina/README.md
+24	27	1866ae210c9b174a2dab477008e1c62d57476843c0e4e8f79fbfc5d53097985d	celestina/ROADMAP.md
+69	145	2247419f9d6e411cb02035b4f7609dc396c06dcb11d360a4c592843b7f7e3321	celestina/STATUS.md
+14	10	00512a1c26b52f44edca212f2c6a0a63757f2fedd327c40aff3e6caac7c76067	celestina/VALIDATION.md
+1	0	ec7359b6dd594bb427b5bacfe3b83200a038ccf89ae97c81184d3ea09d93aa95	celestina/docs/decisions/0011-duties-switched-on-one-by-one.md
+69	0	0fee642a023665b22879e7a2d31ad77bb448ceea73af6358d4d96f297226807d	celestina/docs/decisions/0024-cutover-defaults.md
+3	5	4d272545e7bde557a4c0195dbe6a9585704496bc7bd99be9dccedf197b911849	celestina/docs/decisions/0025-caffeine-inhibits-idle-only.md
+2	1	3ae70f756e6d8fc41d9e74c9850b6996a9ccea355e3ee02908bd239d2abaf20e	celestina/docs/decisions/README.md
+296	0	bd2448f98a6e2805396cf6a4285403c55b29535e53ccaf3345fd8a9262084115	celestina/docs/evidence/2026-11-23-cutover.md
+117	66	a17600bd51e8c06a1759ce0117219c3584114c72126762d9da983759ffb7f1a1	celestina/docs/handover.md
+103	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-M.numstat.tsv
+1	1	f906a233f6e3babe5fc2ae3c4085204c80c633243fd6a69412bba8baff5d22e1	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+266	0	73bab483b9b2e025efd8cad43d7cbdce7fa5bbec36bcdb333dbbde7df32af607	celestina/scripts/cutover-config-probe.sh
+34	0	a5ddc0ca840831d25dfd424ac54c68593bec569d8b66ecb448fde5a8cfe2edb5	celestina/scripts/dev-session.sh
+6	3	353f53d47ac19c402770e70d4ca4ec49aada39c190d368290927cf8c0b61394a	celestina/scripts/lock-rehearsal.sh
+11	2	b39b14b5b946158b3dc013dfe37b86152e4f3139195ce8ed2495ee19a842a9c2	celestina/scripts/smoke-media.sh
+363	43	9875636ae29abbe1d5d85e57650ea1cbc35446fefa4ea065447f805dac6f9591	celestina/scripts/smoke.sh
+7	3	fed25bbe76f5694d511bd5fe469b81c37e21aaa77730b0a8091d5cb8580a1cf2	celestina/scripts/wallpaper-backdrop-probe.sh
+85	314	c08a20c2cb5c2700f3896ef265f02bbf06c6101f7f5ba5fc85d72e275aa17a60	celestina/src/app.rs
+16	4	a7f55f0568b77def7f64f212354a79d8c1e9169782ee765b3172f0f9ae05a8a6	celestina/src/bubbles/mod.rs
+98	24	2e532252fcad5ac12f9f6b74d0b79bb56d038f2c2974bc24c87643cf6ae48925	celestina/src/clipboard/mod.rs
+3	3	f8e3c0c8106cb59d349ded7b15a7dcaf0c810ba94e151d7adf955e294b4354bc	celestina/src/copy.rs
+48	25	1ea8a82056632587fbc4588ed5c6fd6127c599c181b58a9e28b7d789cd5a5d0a	celestina/src/energy/mod.rs
+2	1	cca885d88d9acda04e629a4a1c8b3c5a56eacb3a802e4f8f74481633cbfa1dd5	celestina/src/energy/verbs.rs
+15	26	4570bdd2c1d2b6bdec80e4a88d270be6635d05ba873f5b322b8b6bc182e5d66b	celestina/src/glance.rs
+46	149	ddbccc27df4a0d0c0cea17a613937f470d812224aa83d132be1a005c47d5f646	celestina/src/island/mod.rs
+1	1	08216de6be059ae5dae3f5129d5950854bd807b0de44dbba25476f4a39c4b5e0	celestina/src/island/pages/clock.rs
+5	5	5adb5fb0c1c70c9b317b5769358a5461d8c2d063bc16c50af7f7efc39f4431ca	celestina/src/island/view.rs
+2	0	d2fba097b95f6a9e21aa0525f5f89ca4dfedaf1c5a5a8eca01163f2468f4a3f8	celestina/src/lib.rs
+18	11	73067a0cb571f1d2da1a9d298b786a8778659115f78a978bc5499b9e84883b16	celestina/src/main.rs
+13	5	a2b5db97ca9d608865300b025343398be137c398024c4242d7603f4620424eb1	celestina/src/media/control.rs
+12	15	c3cf42f34e0a959f620bc1dec8953b01a232b2270b1d0049709a596e3adab853	celestina/src/osd/control.rs
+22	37	9bb36a8edcf9c91b94858050c391cec315f418a713f2fc269240ee51232f468e	celestina/src/osd/mod.rs
+3	3	17cb383cbfe2d6f74a68e84660f66651332d8bde37f8e9879202daa61ce2a3dc	celestina/src/osd/surface.rs
+15	4	302c830b5b203da9fe530ac0e1749a2442298ea8f2360fcb718979da4074e193	celestina/src/phone/mod.rs
+185	240	87bf68e1b36bc2cdb304c066fab4847bc92721c9e2c8774682fe67643ca8e98e	celestina/src/providers/settings.rs
+42	0	c0a53834525bb9c18ecc1ad5545f6b288d67a93860bf9467545f92a76a0f4cef	celestina/src/test_support.rs
+5	5	ed82580f19fd1fd81d140d482b4846c1dd78215c3c136a0e89f72aacdd4fd9fe	celestina/src/wallpaper/surface.rs
+382	0	b7fca0a69a534b5c94eee29a4319b66f74ee1fe1469d71646bafdb53300e0ccb	celestina/tests/cutover_probe.rs
+555	0	44c5a008d67604a664a4908f2eca0617364cbf501d29439627c1b93fd2f878da	celestina/tests/duty_files.rs
+39	0	117d3c27d04b2f1b733cca5268b3f73e6844ede43fa2683a1e6b63ccf229e2b5	celestina/tests/fixtures/cutover/config-after.kdl
+37	0	4e8c9ef6e42cb42b391966cbf860b8e236f99789abb8804152ca123f6c45c8b6	celestina/tests/fixtures/cutover/config-before.kdl
+146	4	c8bffd92d18a0a28f3e120910046f47955021f914b779b9cada74dda8a898e6e	celestina/tests/lock_scripts.rs
+1	0	850db44f6fb85f988b66b005859978d5ebc5de1fdf1326a60926c154f8ec4c2d	docs/version-history.tsv

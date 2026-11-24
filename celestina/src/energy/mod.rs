@@ -1,6 +1,7 @@
 //! Energy and comfort (CEL-2-B): the idle chain, caffeine, the forced night
-//! light and the session verbs. Every duty is off by default (parity design
-//! §4.1); each worker owns its own blocking IO.
+//! light and the session verbs. Every duty shipped off (parity design §4.1)
+//! and is on since the cutover (CEL-2-M) unless `shell.json` says off; each
+//! worker owns its own blocking IO.
 //!
 //! This module is the wiring. [`EnergyHandle`] holds the workers the settings
 //! ask for and nothing else: a duty that is `on` has its worker, a duty that is
@@ -694,6 +695,7 @@ fn new_flag() -> Arc<AtomicBool> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::test_support::{quiet_duties, quiet_settings};
     use celestina_shell::settings::{Duties, Energy};
     use std::sync::atomic::Ordering;
     use std::sync::mpsc::sync_channel;
@@ -867,13 +869,34 @@ pub(crate) mod tests {
     const OFF: Duty = Duty::Off;
 
     #[test]
-    fn default_settings_start_nothing() {
+    fn the_defaults_start_the_idle_and_night_light_workers_and_hold_nothing() {
+        // Since the cutover (CEL-2-M) the idle, night-light and caffeine
+        // duties are on by default; the energy switches stay off, so nothing
+        // is held and logind is not started.
         let (handle, log) = Fake::handle();
         handle.apply(&Settings::default());
+        assert_eq!(
+            handle.running(),
+            Running {
+                idle: true,
+                night_light: true,
+                logind: false
+            }
+        );
+        let lines = said(&log);
+        assert!(lines.contains(&"idle enabled true".to_owned()), "{lines:?}");
+        assert!(lines.contains(&"night set None".to_owned()), "{lines:?}");
+        assert!(!lines.iter().any(|l| l.starts_with("logind ")), "{lines:?}");
+    }
+
+    #[test]
+    fn quiet_settings_start_nothing() {
+        let (handle, log) = Fake::handle();
+        handle.apply(&quiet_settings());
         assert_eq!(handle.running(), Running::default());
         // Switches without their duty do nothing either.
         handle.apply(&settings(
-            Duties::default(),
+            quiet_duties(),
             Energy {
                 caffeine: true,
                 night_light: true,
@@ -890,7 +913,7 @@ pub(crate) mod tests {
             (
                 Duties {
                     idle: ON,
-                    ..Duties::default()
+                    ..quiet_duties()
                 },
                 Running {
                     idle: true,
@@ -900,7 +923,7 @@ pub(crate) mod tests {
             (
                 Duties {
                     nightlight: ON,
-                    ..Duties::default()
+                    ..quiet_duties()
                 },
                 Running {
                     night_light: true,
@@ -919,7 +942,7 @@ pub(crate) mod tests {
         let (handle, log) = Fake::handle();
         let duties = Duties {
             caffeine: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         // Duty on, switch off: nothing is held, so nothing is started.
         handle.apply(&settings(duties, Energy::default()));
@@ -946,7 +969,7 @@ pub(crate) mod tests {
         let (handle, log) = Fake::handle();
         let duties = Duties {
             idle: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         let lockers = |log: &Log| lines_of(log, "idle locker");
         // No lock yet: the chain starts without a locker, as before.
@@ -977,7 +1000,7 @@ pub(crate) mod tests {
         let duties = Duties {
             idle: ON,
             caffeine: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         let caffeine = Energy {
             caffeine: true,
@@ -1010,7 +1033,7 @@ pub(crate) mod tests {
         handle.apply(&settings(
             Duties {
                 idle: ON,
-                ..Duties::default()
+                ..quiet_duties()
             },
             caffeine,
         ));
@@ -1022,7 +1045,7 @@ pub(crate) mod tests {
         let (handle, log) = Fake::handle();
         let duties = Duties {
             nightlight: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         handle.apply(&settings(duties, Energy::default()));
         handle.apply(&settings(
@@ -1060,7 +1083,7 @@ pub(crate) mod tests {
             idle: ON,
             caffeine: ON,
             nightlight: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         let energy = Energy {
             caffeine: true,
@@ -1089,7 +1112,7 @@ pub(crate) mod tests {
         // The idle worker is joined by a reaper, not by `apply`; dropping the
         // handle waits for it (the exit path), so its line is there then.
         assert!(said(&log).contains(&"idle enabled false".to_owned()));
-        handle.apply(&settings(Duties::default(), energy));
+        handle.apply(&settings(quiet_duties(), energy));
         assert_eq!(handle.running(), Running::default());
         handle.stop();
         let lines = said(&log);
@@ -1106,7 +1129,7 @@ pub(crate) mod tests {
     #[test]
     fn session_verbs_reach_logind_without_any_duty_and_keep_it() {
         let (handle, log) = Fake::handle();
-        handle.apply(&Settings::default());
+        handle.apply(&quiet_settings());
         assert_eq!(handle.running(), Running::default());
         handle.power(PowerAction::Reboot).expect("queued");
         handle.power(PowerAction::Suspend).expect("queued");
@@ -1122,14 +1145,14 @@ pub(crate) mod tests {
         // Switching a caffeine duty on and off does not take it from the verbs.
         let duties = Duties {
             caffeine: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         let held = Energy {
             caffeine: true,
             ..Energy::default()
         };
         handle.apply(&settings(duties, held));
-        handle.apply(&Settings::default());
+        handle.apply(&quiet_settings());
         assert!(handle.running().logind);
         assert!(said(&log).contains(&"logind caffeine false".to_owned()));
     }
@@ -1160,7 +1183,7 @@ pub(crate) mod tests {
                 idle: ON,
                 nightlight: ON,
                 caffeine: ON,
-                ..Duties::default()
+                ..quiet_duties()
             },
             Energy {
                 caffeine: true,
@@ -1318,7 +1341,7 @@ pub(crate) mod tests {
         let (handle, log, busy, _) = Fake::handle_with_controls();
         let duties = Duties {
             nightlight: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         let warm = Energy {
             night_light: true,
@@ -1348,7 +1371,7 @@ pub(crate) mod tests {
         let duties = Duties {
             idle: ON,
             caffeine: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         let held = Energy {
             caffeine: true,
@@ -1383,7 +1406,7 @@ pub(crate) mod tests {
         let (handle, log, busy, _) = Fake::handle_with_controls();
         let duties = Duties {
             idle: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         // The queue takes the first command and refuses the second, as a
         // 1-slot queue would; nothing after it may jump ahead of it.
@@ -1418,7 +1441,7 @@ pub(crate) mod tests {
         let (handle, log, busy, _) = Fake::handle_with_controls();
         let duties = Duties {
             caffeine: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         let held = Energy {
             caffeine: true,
@@ -1429,8 +1452,8 @@ pub(crate) mod tests {
         busy.lock()
             .expect("busy")
             .push("logind caffeine false".to_owned());
-        handle.apply(&settings(Duties::default(), held));
-        handle.apply(&settings(Duties::default(), held));
+        handle.apply(&settings(quiet_duties(), held));
+        handle.apply(&settings(quiet_duties(), held));
         let lines = lines_of(&log, "logind caffeine");
         assert_eq!(
             lines,
@@ -1448,13 +1471,13 @@ pub(crate) mod tests {
         let (handle, log, _, release) = Fake::handle_with_controls();
         let duties = Duties {
             nightlight: ON,
-            ..Duties::default()
+            ..quiet_duties()
         };
         release.store(false, Ordering::Release);
         handle.apply(&settings(duties, Energy::default()));
         // The worker is held after its flag: `apply` still returns, joined by
         // the reaper, and the old worker has not finished.
-        handle.apply(&settings(Duties::default(), Energy::default()));
+        handle.apply(&settings(quiet_duties(), Energy::default()));
         assert_eq!(handle.running(), Running::default());
         assert!(!said(&log).contains(&"night stopped".to_owned()));
         // Let it finish shortly while the duty comes back on: the new worker

@@ -85,8 +85,12 @@ open(sys.argv[1], "wb").write(
     + chunk(b"IEND", b"")
 )
 PNG
+# Every duty is named: since the cutover (CEL-2-M) a key left out reads as
+# on, and this nest has no fakes, no dead system bus and the host's
+# XDG_RUNTIME_DIR, so an unnamed OSD, DDC, phone or bubbles duty would reach
+# the host's PipeWire, monitors or Melibea socket. Only the wallpaper runs.
 cat > "$work/config/celestina/shell.json" <<JSON
-{"schema_version":1,"duties":{"wallpaper":"on"},"wallpaper":{"folder":"$fixture"}}
+{"schema_version":1,"duties":{"bubbles":"off","caffeine":"off","clipboard":"off","idle":"off","lock":"off","media":"off","nightlight":"off","osd":"off","phone":"off","polkit":"off","wallpaper":"on"},"wallpaper":{"folder":"$fixture"}}
 JSON
 
 echo "backdrop-probe: $(niri --version)"
@@ -170,8 +174,8 @@ variant() {
     shots=$work/shots-$name
     mkdir -p "$shots"
     status=0
-    # A throwaway state home too: a shell whose clipboard duty is off (the
-    # default of this config) deletes `$XDG_STATE_HOME/celestina/clipboard.json`.
+    # A throwaway state home too: a shell whose clipboard duty is off (this
+    # config names it off) deletes `$XDG_STATE_HOME/celestina/clipboard.json`.
     mkdir -p "$work/state"
     SHOT_DIR=$shots CELESTINA_NEST_CONFIG=$profile XDG_CONFIG_HOME=$work/config \
         XDG_STATE_HOME=$work/state \

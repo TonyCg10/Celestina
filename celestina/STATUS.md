@@ -1,149 +1,73 @@
 # Celestina status
 
-- **Updated:** 2026-10-23
+- **Updated:** 2026-11-23
 - **Version:** the one `celestina/Cargo.toml` carries, set by each landing
-- **Implementation:** the CEL-1 program is landed on `main` through CEL-1-H
-  (1.0.0), the tokens as data (CEL-1-C) included: the three toolkit crates
-  (`celestina-wayland`, `celestina-paint`, `celestina-ui`); one Island capsule
-  per output that grows into the Activity, Notifications and Tray pages, with
-  page tabs and the overflow popup; the launcher with IME and paste; the
-  notification server with banners, history, actions and do-not-disturb; and
-  the tray with nested DBusMenu popups. The shell claims
-  `org.freedesktop.Notifications` and `org.kde.StatusNotifierWatcher` only
-  when the name is free. Evidence per unit is in
-  [`docs/evidence/`](docs/evidence/README.md). The halted Qt/QML shell this
-  project replaces lived at `celestina-qt/` until CEL-QT-REMOVE removed it.
-- **Exit (CEL-1-H):** landed on `main` as celestina 1.0.0 (`00c6d0bb`), kind
-  `release`: the live rows queued in [VALIDATION.md](VALIDATION.md), the
-  [handover note](docs/handover.md) on what Noctalia still does for the
-  session, and the documents up to date
-  ([evidence](docs/evidence/2026-10-16-exit.md)). The author chose 1.0.0 as the
-  first stable version, not the definitive one. The CEL-1 plan was archived on 2026-10-16 by the unit that opened CEL-2.
-- **Energy (CEL-2-B):** landed with this unit: the idle chain on
-  `ext-idle-notify`, caffeine as a logind inhibitor, the forced night light on
-  `wlr-gamma-control` and the `session` verbs, each duty off by default behind
-  `duties.idle`, `duties.caffeine` and `duties.nightlight` in `shell.json`
-  ([evidence](docs/evidence/2026-10-16-energy.md)). The four VAL-CEL2 rows are
-  `pending`; the version is set by the landing.
-- **OSD (CEL-2-C):** in progress, not landed: the `osd` duty, off by default
-  behind `duties.osd` in `shell.json`: a `celestina-osd` overlay surface for
-  volume, microphone and brightness changes (audio through `pactl subscribe`
-  and `wpctl`, brightness through sysfs and a lazy, leased `ddcutil` thread),
-  the `volume`, `microphone` and `brightness` verbs, and the `volume` and
-  `brightness` bar pieces with a slider popup
-  ([evidence](docs/evidence/2026-10-17-osd.md)). The three VAL-CEL2-OSD rows are
-  `pending`; the lock-keys OSD is not delivered.
-- **Focus:** CEL-2, the parity program
-  ([plan](docs/plans/active/2026-10-16-cel-2-parity.md)): the bar and the piece
-  contract first, with CEL-2-B and CEL-2-E under way beside it; the author's
-  live validation of the nine VAL-CEL rows stays queued.
-- **CEL-2-E (in progress, not landed):** the `wallpaper` duty, off by default,
-  on `unit/celestina/CEL-2-E`: one still image per output on a
-  `celestina-wallpaper` Background layer surface, bounded decoding, and owner
-  detection so an output another client holds is refused. Its evidence is
-  [`docs/evidence/2026-10-16-wallpaper.md`](docs/evidence/2026-10-16-wallpaper.md);
-  its author row is `VAL-CEL2-WALLPAPER`, pending.
-- **CEL-2-K (in progress, not landed):** the glance pieces on
-  `unit/celestina/CEL-2-K`: `sysmon` (CPU and memory through
-  `hematita-core`), `weather` (Open-Meteo, only with a location written in
-  `shell.json`) and `clock` (the short date), none in the default zones, plus
-  the Sistema and Reloj pages of the Island. No location, no request
-  ([ADR 0016](docs/decisions/0016-weather-is-the-only-network-and-manual.md)).
-  Its evidence is
-  [`docs/evidence/2026-10-17-glance.md`](docs/evidence/2026-10-17-glance.md);
-  its author rows are `VAL-CEL2-SYSMON`, `VAL-CEL2-WEATHER`,
-  `VAL-CEL2-CALENDAR` and `VAL-CEL2-GLANCE-TABS`, pending. Review pending.
-- **CEL-2-J (implemented in its worktree, not landed):** the `phone` and
-  `bubbles` duties, both off by default: the Magnetita phone piece and its
-  Island page, and the minimised-window bubbles with the `Mod+K` selector over
-  Melibea's socket. Its evidence is
-  [`docs/evidence/2026-10-17-phone-and-bubbles.md`](docs/evidence/2026-10-17-phone-and-bubbles.md);
-  its author rows `VAL-CEL2-PHONE`, `VAL-CEL2-BUBBLES` and
-  `VAL-CEL2-BUBBLES-KEYS` are pending.
-- **CEL-2-D (in progress, not landed):** the `media` duty, off by default: an
-  MPRIS client on its own bus connection, the media piece, and the Medios page
-  with a session-only pin. Its evidence is
-  [`docs/evidence/2026-10-17-media.md`](docs/evidence/2026-10-17-media.md); its
-  author rows are `VAL-CEL2-MEDIA` and `VAL-CEL2-MEDIA-COVER`, pending.
-- **CEL-2-H-a (landed as 1.10.0 on 2026-10-23, `a5427f7a`; live validation pending):** the
-  session lock's security core on `unit/celestina/CEL-2-H-a`: `celestina-lock`
-  (an `ext-session-lock-v1` client with black covers, a CPU-painted password
-  field and the only unlock), `celestina-lock-verify` (the PAM child),
-  `celestina-lock-proto`, the shell's supervisor, sleep worker, `lock` and `lock
-  suspend` verbs and the idle chain's second step, behind `duties.lock`, **off by
-  default**. The PAM service `celestina-lock` is **not installed** (the author
-  installs it by hand; the README says how and how to get back in) and **nothing
-  has been validated live**: no run on the real session, with real PAM, real
-  logind or real hotplug; the nest rehearsal R-1 to R-9 passed against a fake
-  logind. The dimmed wallpaper and the clock are CEL-2-H-b (next entry). Its
-  evidence is
-  [`docs/evidence/2026-10-22-cel-2-h-a.md`](docs/evidence/2026-10-22-cel-2-h-a.md)
-  (spikes: [`2026-10-22-cel-2-h-spikes.md`](docs/evidence/2026-10-22-cel-2-h-spikes.md));
-  the decisions are
-  [ADR 0022](docs/decisions/0022-session-lock.md) (proposed); its author rows
-  `VAL-CEL2-LOCK-PAM`, `-LIVE`, `-SUSPEND`, `-HOTPLUG`, `-RECOVERY`, `-NOTICES`
-  and `-COEXIST` are pending. Review A and Review B have not run.
-- **CEL-2-L (in progress, not landed):** the overview and the shortcut sheet,
-  on `unit/celestina/CEL-2-L`: one centred overlay panel with the workspaces of
-  the focused output, one on-demand `wlr-screencopy` preview of the output the
-  panel opens on (for its active workspace, once per opening), and the keybinds
-  of niri's `config.kdl` grouped by mode; verbs `overview` and `shortcuts`, no
-  duty switch. Its evidence is
-  [`docs/evidence/2026-10-17-see-the-desktop.md`](docs/evidence/2026-10-17-see-the-desktop.md);
-  its author rows are `VAL-CEL2-OVERVIEW` and `VAL-CEL2-SHORTCUTS`, pending.
-- **CEL-2-H-b (implemented on its branch, not landed, reviews pending):** the
-  lock's presentation on `unit/celestina/CEL-2-H-b`, over H-a's frozen bundle
-  format (the proto crate, the machine, the policy and the closure allowlist
-  have no diff). With `duties.wallpaper` **on**, each output of the lock shows
-  its own wallpaper dimmed and blurred (a thumbnail derived on the wallpaper
-  worker, sent in the bundle, upscaled on the lock's `backdrop` worker, with the
-  scrim over it), and the prompt gains a large clock and the date (a realtime
-  timer; the clock is hidden when the UTC offset could not be read, the date
-  then reads in UTC). With the wallpaper duty **off** (Noctalia owning the
-  wallpaper) the backdrop is black. The lock duty is **off by default**; the
-  author installed the PAM service on 2026-10-23, and H-a's live rows are still
-  pending. **Validation is partial and in a nest only:** the automated tests
-  pass; the rehearsal step R-10 is written but **has not been run**, and
-  nothing ran on the real session. Evidence:
-  [`docs/evidence/2026-10-23-cel-2-h-b.md`](docs/evidence/2026-10-23-cel-2-h-b.md);
-  author rows `VAL-CEL2-LOCK-BACKDROP` and `VAL-CEL2-LOCK-CLOCK`, pending.
-- **CEL-2-I (in progress, not landed):** the `polkit` duty, off by default, on
-  `unit/celestina/CEL-2-I`: the shell as the session's polkit authentication
-  agent, with a keyboard-grabbing card, the helper conversation spoken over
-  polkit's socket, and the source guards of
-  [`tests/polkit_guards.rs`](tests/polkit_guards.rs). Its evidence is
-  [`docs/evidence/2026-10-17-cel-2-i.md`](docs/evidence/2026-10-17-cel-2-i.md)
-  (the review and the adversarial pass are still to run); its author row is
-  `VAL-CEL2-POLKIT-LIVE`, pending. The recovery is the duty switched off, or
-  Noctalia's agent re-enabled. The ADR is a draft, number provisional.
-- **CEL-2-I-CANCEL (in progress, not landed):** a bug fix of the polkit agent
-  on `unit/celestina/CEL-2-I-CANCEL`: cancelling its prompt counted as a failed
-  login in `pam_faillock` (the third cancel locked the account for ten
-  minutes), because the helper's socket was open with PAM waiting for the
-  password. The conversation is now lazy: nothing connects until the password
-  is submitted. Evidence:
-  [`docs/evidence/2026-11-23-cel-2-i-cancel.md`](docs/evidence/2026-11-23-cel-2-i-cancel.md);
-  the live check is `VAL-CEL2-POLKIT-LIVE` (step 3 changed), pending.
-- **Author validation:** all nine VAL-CEL rows are `pending`; the author has
-  not recorded a result in any of them. The author accepted 1.0.0 as stable
-  after trying the shell, without closing the rows; the recorded evidence is
-  unit tests, a private bus and a smoke over a nested niri.
+- **Implementation:** CEL-1 (1.0.0) and every unit of the parity program
+  CEL-2 but its last are landed on `main`; the last, CEL-2-M (the cutover),
+  closes the program: the author switched the session over on 2026-11-24
+  (Noctalia is no longer started) and the unit lands after it. One process draws a full-width bar per output with the Island
+  in its centre zone and the pieces of the `bar` table; it serves the
+  launcher, notifications and the tray, and performs the duties of
+  `shell.json`: idle, caffeine, night light, wallpaper, OSD, media, clipboard
+  history, phone, bubbles, the session lock and the polkit agent, plus the
+  desktop overview and the shortcut sheet. The halted Qt/QML shell was
+  removed from the tree on 2026-10-24
+  ([ADR 0023](docs/decisions/0023-qt-shell-retired.md)).
+- **Landed units (version each landing set):** CEL-2-E 1.1.0 (wallpaper),
+  CEL-2-B 1.2.0 (energy), CEL-2-A 1.3.0 (bar and pieces), CEL-2-K 1.4.0
+  (glance), CEL-2-G 1.5.0 and CEL-2-G-SYNC 1.5.1 (clipboard), CEL-2-F 1.6.0
+  (connectivity), CEL-2-C 1.7.0 (OSD), CEL-2-J 1.8.0 (phone and bubbles),
+  CEL-2-D 1.9.0 (media), CEL-2-H-a 1.10.0 (lock core), CEL-2-L 1.11.0 and
+  CEL-2-L-CLIPPY 1.11.1 (overview and shortcuts), CEL-2-H-b 1.12.0 (lock
+  backdrop and clock), CEL-2-I 1.13.0 (polkit agent), CEL-2-C-DDC 1.13.1 (the
+  placed brightness piece asks the DDC worker for its detection and reads),
+  CEL-2-B-GAMMA 1.13.2 (the night light paced by the compositor, and back
+  after a lost connection), CEL-2-C-KEYS 1.13.3 (the Volume and Brightness
+  pieces key their nodes from their own ids), CEL-2-B-CAFFEINE 1.13.4
+  (caffeine inhibits idling only: its logind lock is `idle`, a suspend asked
+  for by hand goes through, and switching it on withdraws an idle suspend in
+  flight;
+  [ADR 0025](docs/decisions/0025-caffeine-inhibits-idle-only.md)) and
+  CEL-2-I-CANCEL 1.13.5 (the polkit agent's helper conversation is lazy:
+  nothing connects until the password is submitted, so a cancelled prompt
+  never reaches PAM and cannot count as a failed login in `pam_faillock`;
+  the amendment of
+  [ADR 0021](docs/decisions/0021-polkit-agent.md)). Each
+  unit's evidence is linked from
+  [the plan's ledger](docs/plans/active/2026-10-16-cel-2-parity.md).
+- **CEL-2-M (implemented on its branch, not landed):** the cutover's code:
+  every shipped duty defaults to on, with `lock` and `polkit` off until their
+  live rows pass; the clipboard reads an unknown value as off; a `shell.json`
+  that cannot be read starts the shell with every duty off; the `bar` duty and
+  the capsule-only surface are gone, the bar is always drawn
+  ([ADR 0024](docs/decisions/0024-cutover-defaults.md)); the smoke runs the
+  cutover configuration in a nest and every script that writes a `shell.json`
+  names every duty; `scripts/cutover-config-probe.sh` checks a copy of the
+  niri configuration. Reviewed twice by a model other than the implementer.
+  The branch is rebased on 1.13.5. With these defaults and CEL-2-C-DDC, a
+  start that chooses nothing has the OSD duty on and the `brightness` piece
+  placed, so it runs one `ddcutil` detection and one read per monitor;
+  `scripts/dev-session.sh` therefore starts every nest with
+  `CELESTINA_DDC=0` unless the caller set the variable. The night-light duty
+  is on by default and holds no gamma until `energy.night_light` is switched
+  on.
+  [The handover note](docs/handover.md) holds the switch-over and the way
+  back.
+- **Focus:** the session runs Celestina since the author's switch-over of
+  2026-11-24 ([evidence](docs/evidence/2026-11-23-cutover.md), "The author's
+  switch-over"); what is left is the rows the author has not run and the two
+  default flips below.
+- **Author validation:** the author ran most rows live on 1.13.0 to 1.13.5
+  between 2026-11-23 and 2026-11-24 and reported them through the
+  coordinating session; the cutover's evidence lists what was reported to
+  pass and what was not run. No row of [VALIDATION.md](VALIDATION.md) has
+  been closed in the file: its statuses are the author's to write, and no
+  agent writes them. No agent has run anything in the author's session. The
+  author's live use produced the five defect reports that CEL-2-C-DDC,
+  CEL-2-B-GAMMA, CEL-2-C-KEYS, CEL-2-B-CAFFEINE and CEL-2-I-CANCEL fixed.
+  Not run: `VAL-CEL2-CLIPBOARD-SECRET` with a password manager.
+- **After CEL-2-M:** two small units flip the defaults of `lock` and `polkit`
+  once `VAL-CEL2-LOCK-*` and `VAL-CEL2-POLKIT-LIVE` pass; the lock's residual
+  (a pre-exec window of microseconds before the signal mask, accepted by the
+  author on 2026-10-23, ADR 0022 A5) is a unit of its own.
 - **Blockers:** none.
-- **In progress (CEL-2-A, not landed):** the bar and the piece table on
-  `unit/celestina/CEL-2-A`; evidence in
-  [`docs/evidence/2026-10-16-bar-and-pieces.md`](docs/evidence/2026-10-16-bar-and-pieces.md)
-  records the checks, the tests and the nested smoke green on the tree after
-  the review fix pass, and the gaps the unit leaves open.
-  `VAL-CEL2-BAR-LIVE` is pending.
-- **In progress (CEL-2-G, not landed):** the `clipboard` duty, off by default:
-  an `ext-data-control` history of text and PNG entries that skips selections
-  carrying the password-manager hint, keeps text only in a 0600 state file
-  deleted when the duty goes off, and offers a bar piece, an Island page and
-  verbs that never return content. Evidence in
-  [`docs/evidence/2026-10-17-clipboard.md`](docs/evidence/2026-10-17-clipboard.md);
-  its author rows `VAL-CEL2-CLIPBOARD-LIVE`, `-SECRET`, `-IMAGE` and `-LOOK` are pending.
-- **In progress (CEL-2-F, not landed):** the network, Bluetooth, battery and
-  power-profile pieces, read-only state from NetworkManager, BlueZ, UPower and
-  power-profiles-daemon with a closed list of actions, each popup an Island page;
-  evidence in [`docs/evidence/2026-10-17-connectivity.md`](docs/evidence/2026-10-17-connectivity.md);
-  `VAL-CEL2-NETWORK`, `VAL-CEL2-BLUETOOTH` and `VAL-CEL2-POWER` are pending.

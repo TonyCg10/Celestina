@@ -1,60 +1,115 @@
-# Handover: what Noctalia still does for the session
+# Handover: from Noctalia to Celestina
 
-- **Written:** 2026-10-16, by CEL-1-H; the night light, caffeine and idle rows updated by CEL-2-B; the audio and brightness OSD rows by CEL-2-C; the polkit row by CEL-2-I; the session lock rows and the lock section by CEL-2-H-a
-- **Purpose:** CEL-1 delivers the Island, the launcher, notifications and the
-  tray. It does not replace Noctalia as the session's shell. This note lists
-  what Noctalia keeps doing, so the author knows what the next deliveries
-  must cover before Noctalia can be stopped. It records state and intent; it
-  grants no authority and schedules nothing.
-- **Method:** the list comes from the design's exclusions
-  ([§1](../../docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md)),
-  from `~/.config/niri/config.kdl` and from `noctalia msg --help`, `status`
-  and `plugins list` on 2026-10-16. Nothing was changed in the session.
+- **Written:** 2026-10-16, by CEL-1-H; rewritten 2026-11-23 by CEL-2-M, the
+  cutover, when every duty Noctalia performed had a delivery in this shell
+- **Purpose:** what Noctalia did for the author's niri session, what does it
+  now, how the session is switched over and how it is switched back. It
+  records state and intent; it grants no authority and schedules nothing.
+- **Sources:** [the cutover design](../../docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md)
+  (the order of its §4, the configuration of its §5, the recovery of its §6),
+  [the live validation order](../../docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md)
+  and [ADR 0024](decisions/0024-cutover-defaults.md).
+- **What agents did and did not do:** every delivery was verified in a nested
+  niri on a private bus. No agent started, stopped or replaced the live
+  shell, edited `~/.config/niri/config.kdl` or `shell.json`, or ran a live
+  row: the switch-over below is the author's, by hand. The author did it on
+  2026-11-24; the cutover's evidence records the report.
 
-## What 1.0.0 means
+## Who does what
 
-The author accepted 1.0.0 on 2026-10-16 as the first stable version of the
-shell, not the definitive one. The next steps are new units that widen its
-capabilities and refine it; the duties below are their candidates. The nine
-VAL-CEL rows stay `pending` in [VALIDATION.md](../VALIDATION.md) until the
-author closes them.
+| Duty | Noctalia did it through | Celestina does it through | Switch | Live row(s) |
+|---|---|---|---|---|
+| Notifications | owning `org.freedesktop.Notifications` | the notification server, claimed when the name is free (CEL-1-F) | none: taken at the first start without Noctalia | VAL-CEL-BANNERS, VAL-CEL-NOCTALIA |
+| Tray | owning `org.kde.StatusNotifierWatcher` | the watcher and host, claimed when free (CEL-1-G) | none | VAL-CEL-POPUP, VAL-CEL-NOCTALIA |
+| Launcher | `Mod+Space` → `noctalia msg panel-toggle launcher` | `celestina launcher toggle` (CEL-1-E) | the key | VAL-CEL-KEYBOARD, VAL-CEL-IME |
+| Bar | its bar on every output | one wide surface per output, always drawn; the zones are the `bar` table of `shell.json` (CEL-2-A, CEL-2-M) | none (ADR 0024) | VAL-CEL2-BAR-LIVE |
+| Audio and brightness OSD | drawing over the `wpctl` and `brightnessctl` keys | `duties.osd`: the `celestina-osd` surface, the `volume`, `microphone` and `brightness` verbs (CEL-2-C) | `osd` | VAL-CEL2-OSD-AUDIO, -BRIGHTNESS, -PIECES |
+| Media | its player widget | `duties.media`: the MPRIS client, the piece and the page; the keys keep `playerctl` (CEL-2-D) | `media` | VAL-CEL2-MEDIA, -COVER |
+| Wallpaper | `noctalia-wallpaper` on the Background layer | `duties.wallpaper`: one `celestina-wallpaper` surface per output (CEL-2-E) | `wallpaper` | VAL-CEL2-WALLPAPER |
+| Night light | the startup line's `nightlight-force-toggle` | `duties.nightlight` with `energy.night_light` (CEL-2-B) | `nightlight` | VAL-CEL2-NIGHTLIGHT |
+| Caffeine | the startup line's `caffeine-enable` | `duties.caffeine` with `energy.caffeine`, a logind `idle` inhibitor: it stops idling only, and a suspend asked for by hand goes through (CEL-2-B, CEL-2-B-CAFFEINE, ADR 0025) | `caffeine` | VAL-CEL2-CAFFEINE |
+| Idle | screen off at 20 s, lock-and-suspend at 240 s | `duties.idle`: the same chain on `ext-idle-notify`; the second step needs the lock (CEL-2-B, CEL-2-H-a) | `idle` | VAL-CEL2-IDLE, VAL-CEL2-LOCK-SUSPEND |
+| Session lock | `Mod+Shift+Escape` → `noctalia msg session lock-and-suspend` | `duties.lock`: `celestina lock` and `celestina lock suspend`, three processes, PAM in a child (CEL-2-H-a, CEL-2-H-b) | `lock`, **off by default** until its rows pass | VAL-CEL2-LOCK-PAM, -RECOVERY, -LIVE, -SUSPEND, -HOTPLUG, -NOTICES, -COEXIST, -BACKDROP, -CLOCK |
+| Polkit agent | `polkit_agent = true` | `duties.polkit`: the agent, the prompt card, the helper conversation (CEL-2-I); the helper is contacted only once the password is submitted, so a cancelled prompt never reaches PAM and cannot count as a failed login (CEL-2-I-CANCEL, the amendment of ADR 0021, which lists the cases that can still count after a submit) | `polkit`, **off by default** until its row passes | VAL-CEL2-POLKIT-LIVE |
+| Clipboard history | its history and `clipboard-*` verbs | `duties.clipboard`: bounded, secret-aware, text persisted 0600 (CEL-2-G); an unknown value of the key reads as off | `clipboard` | VAL-CEL2-CLIPBOARD-LIVE, -SECRET, -IMAGE, -LOOK |
+| Phone state | the `tony/magnetita` plugin | `duties.phone`: the Magnetita piece and page (CEL-2-J) | `phone` | VAL-CEL2-PHONE |
+| Minimised windows | the `tony/bubbles` plugin, `Mod+K` | `duties.bubbles`: the bubble group and `celestina bubbles select` (CEL-2-J) | `bubbles`, the key | VAL-CEL2-BUBBLES, -BUBBLES-KEYS |
+| Network, Bluetooth, battery, power profile | bar widgets | pieces placed in the bar's zones; `nm-applet` and `blueman` stay the editors (CEL-2-F) | none: a piece shows when placed | VAL-CEL2-NETWORK, -BLUETOOTH, -POWER |
+| System monitor, weather, calendar | bar widgets | the `sysmon`, `weather` and `clock` pieces (CEL-2-K); the weather only with a manual location | none | VAL-CEL2-SYSMON, -WEATHER, -CALENDAR, -GLANCE-TABS |
+| Overview and shortcuts | the workspace-preview plugin | `celestina overview toggle`, `celestina shortcuts toggle` (CEL-2-L) | keys of the author's choice | VAL-CEL2-OVERVIEW, -SHORTCUTS |
+| Autostart | `spawn-at-startup "noctalia"` | `spawn-at-startup "sh" "-c" "exec systemd-cat -t celestina celestina"` | the line | the swap, below |
 
-## What the new shell does today
+Not carried over, by the program's decisions: Noctalia's other plugins (video
+wallpapers, wallhaven, notes, translator, the colour picker, the companions),
+screen corners, a dock, desktop and lock-screen widgets, and the greeter.
 
-The shell claims `org.freedesktop.Notifications` and
-`org.kde.StatusNotifierWatcher` only when the name is free, so beside Noctalia
-it serves neither and its pages say who owns them. Stopping Noctalia hands
-both names to the shell on its next start. The launcher answers
-`celestina launcher toggle`; the niri bindings still call Noctalia's.
+## The defaults since the cutover
 
-## What Noctalia still does
+With no `duties` key, or with a key missing, every shipped duty is **on**;
+`lock` and `polkit` are **off** until their live rows pass; the bar is always
+drawn. A `shell.json` that cannot be read starts the shell with **every duty
+off** until its first clean read, and the clipboard also reads an unknown
+value of its key as off ([ADR 0024](decisions/0024-cutover-defaults.md)). An
+explicit `"off"` the author wrote while Noctalia held a duty is honoured.
 
-| Duty | How the session uses it today | Covered by CEL-1 | Needed before stopping Noctalia |
-|---|---|---|---|
-| Notifications | owns the name unless stopped | yes (CEL-1-F) | VAL-CEL-BANNERS and VAL-CEL-NOCTALIA passed |
-| Tray | owns the watcher unless stopped | yes (CEL-1-G) | VAL-CEL-POPUP and VAL-CEL-NOCTALIA passed |
-| Launcher | `Mod+Space` runs `noctalia msg panel-toggle launcher` | yes (CEL-1-E) | rebind the key to `Mod+Space { spawn "celestina" "launcher" "toggle"; }` (the commented `celestina msg ...` lines in the niri config belong to the halted shell and the new binary rejects them with exit 2); VAL-CEL-KEYBOARD and VAL-CEL-IME passed |
-| Audio OSD | the volume and mute keys run `wpctl` directly; Noctalia draws the feedback | delivered in CEL-2-C, off by default (`duties.osd`), observing `pactl subscribe` | VAL-CEL2-OSD-AUDIO passed, with Noctalia's OSD off; the keys keep running `wpctl` until CEL-2-M rebinds them |
-| Brightness OSD | the brightness keys run `brightnessctl`; Noctalia draws the feedback | delivered in CEL-2-C, off by default (`duties.osd`), sysfs where present and DDC otherwise; the monitor's own buttons are not observed | VAL-CEL2-OSD-BRIGHTNESS passed, with Noctalia's OSD and brightness widget off so no two `ddcutil` run at once; a lock-keys OSD is not delivered |
-| Media (MPRIS) | the play, stop, previous and next keys run `playerctl`; Noctalia shows the player | no | a media delivery with an MPRIS client and its Island page or widget |
-| Clipboard history | Noctalia's history (`clipboard-*` verbs) | no | a clipboard delivery with a bounded, hostile-input-safe history and its own privacy design |
-| Session lock | `Mod+Shift+Escape` runs `noctalia msg session lock-and-suspend` | security core delivered in CEL-2-H-a, off by default (`duties.lock`); the PAM service is not installed; the dimmed wallpaper and the clock wait for CEL-2-H-b | VAL-CEL2-LOCK-PAM, -LIVE, -SUSPEND, -HOTPLUG, -RECOVERY, -NOTICES and -COEXIST passed, with Noctalia's idle lock off; `Mod+Shift+A` keeps using `swaylock` (the recovery path) until the author retires it; rebinding `Mod+Shift+Escape` to `celestina lock suspend` is CEL-2-M |
-| Polkit agent | Noctalia's authentication dialogs; the earlier roadmap named it the last blocker | delivered in CEL-2-I, off by default (`duties.polkit`) | VAL-CEL2-POLKIT-LIVE passed; set `duties.polkit` to `"on"` in `shell.json` with Noctalia's agent off (the shell refuses while another agent holds the session); recovery is the duty `"off"` or stopping the shell, then Noctalia's agent again; without any agent, privileged prompts have no UI |
-| Wallpaper | Noctalia draws it (the niri config pins the `wallpaper` namespace to the backdrop); today a still image, though the enabled `mpvpaper` plugin and its cache show video wallpapers have been used | no | a wallpaper delivery, including video if the author still wants it |
-| Night light | niri startup runs `noctalia msg nightlight-force-toggle` | delivered in CEL-2-B, off by default (`duties.nightlight`, `energy.night_light`) | VAL-CEL2-NIGHTLIGHT passed; replace the startup line by setting `duties.nightlight` to `"on"` and `energy.night_light` to `true` in `shell.json`, with Noctalia's night light off |
-| Caffeine (idle inhibitor) | niri startup runs `noctalia msg caffeine-enable` | delivered in CEL-2-B, off by default (`duties.caffeine`, `energy.caffeine`) | VAL-CEL2-CAFFEINE passed; replace the startup line by setting `duties.caffeine` to `"on"` and `energy.caffeine` to `true` in `shell.json`, with Noctalia's caffeine off |
-| Bar | Noctalia's bar is visible (`noctalia msg status`) with workspaces, clock, network, Bluetooth, volume, power and the session menu | no, only the Island | the design's full-width bar delivery, or the author's decision to live on the Island alone |
-| Idle management | Noctalia sets the screen-off idle behaviour and reacts to logind lock hints; stopping it ends idle screen-off, which matters on the OLED | screen-off delivered in CEL-2-B, off by default (`duties.idle`); the lock-and-suspend step is refused until a locker exists, and with `duties.lock` on it locks, then suspends once the compositor confirms the lock (CEL-2-H-a) | VAL-CEL2-IDLE passed, with Noctalia's idle behaviour off; suspend after idle waits for the lock screen |
-| Magnetita plugin | `tony/magnetita` shows the phone's battery, connection and media in a bar widget and panel, fed by `org.celestina.Magnetita` | no | decide where phone state shows once the bar is gone; the plugin dies with Noctalia |
-| Bubbles | `Mod+K` runs `noctalia msg panel-toggle tony/bubbles:selector`; `tony/bubbles` also has a bar widget | no | decide whether it survives; plugins are an exclusion of the design for good |
-| Autostart | `spawn-at-startup "noctalia"` | no | start `celestina` in its place, as the last step |
+Two consequences of these defaults. The default layout places the
+`brightness` piece and `osd` is on, so since 1.13.1 (CEL-2-C-DDC) a start
+that does not say `"osd": "off"`, take `brightness` out of the layout or set
+`CELESTINA_DDC=0` runs one `ddcutil` detection and one read per monitor when
+the duty's workers start: Noctalia's brightness widget stays closed then, as
+VAL-CEL2-OSD-BRIGHTNESS requires. And `nightlight` on only starts its
+worker: no output's gamma is held until `energy.night_light` is switched on.
 
-Noctalia has more enabled plugins (`noctalia msg plugins list`, for example a colour picker and a Claude companion); the list above does not judge them. It also exposes dock, desktop and lock-screen widgets, Bluetooth,
-keyboard backlight, DPMS, colour schemes and EasyEffects verbs. The session's
-niri configuration does not call them today, so none blocks stopping it; they
-are listed so a later feature does not appear to regress by surprise.
+## Switching over (the author, by hand)
 
-## The session lock: rehearsal and recovery (CEL-2-H-a)
+The order is the design's §4: one duty at a time while Noctalia still runs,
+its counterpart switched off through Noctalia's own verb or setting, the
+duty's live row run, and the autostart line swapped last.
+
+1. **Before anything:** `cp ~/.config/niri/config.kdl ~/.config/niri/config.kdl.pre-celestina-cutover`.
+2. The bar (`noctalia msg bar-hide`), then OSD (`noctalia msg osd-disable`,
+   its brightness widget closed), media, the wallpaper, caffeine and the night
+   light (their verbs, and the startup line with `caffeine-enable` deleted),
+   idle (both behaviours off in Noctalia's settings), the clipboard, the phone
+   and the bubbles (`Mod+K` rebound).
+3. The lock: the PAM service installed by hand (the README says how), the
+   recovery rehearsed from a VT **before** the first real lock, then
+   `"lock": "on"` and `Mod+Shift+Escape` rebound to `celestina lock suspend`.
+   `Mod+Shift+A` keeps `swaylock`.
+4. Polkit: `polkit_agent = false` in Noctalia's settings and
+   `noctalia msg config-reload`, then `"polkit": "on"`.
+5. `Mod+Space` rebound to `celestina launcher toggle`; the overview and the
+   shortcut sheet bound to keys of the author's choice.
+6. **The swap:** the `spawn-at-startup "noctalia"` line replaced by the
+   autostart line of the table, then a new login. The shell takes the
+   notification and tray names at that start; a running shell does not take
+   them when Noctalia stops.
+
+`celestina/scripts/cutover-config-probe.sh FILE` checks a **copy** of the niri
+configuration for the result (no `noctalia` left in a spawn, `swaylock` still
+on `Mod+Shift+A`, the startup line gone, `celestina` started); it refuses a
+path under the configuration home.
+
+## Switching back, in under a minute, without the shell
+
+- **One duty misbehaves while Noctalia still runs:** set it to `"off"` in
+  `~/.config/celestina/shell.json` (the shell follows the file, no restart)
+  and switch Noctalia's side back on. If the shell itself is wedged, stop it
+  by its pid (`pidof celestina`, then `kill -TERM` that pid; never by name):
+  its workers are joined, the inhibitor and the gamma released.
+- **After the swap, the shell does not come up or cannot be used:** from any
+  terminal, or from a VT (`Ctrl+Alt+F3`),
+  `cp ~/.config/niri/config.kdl.pre-celestina-cutover ~/.config/niri/config.kdl`
+  restores every bind at once (niri reloads the file live); stop the shell
+  with `celestina quit` or by pid, then `noctalia &` for this login. The next
+  login starts Noctalia from the restored line.
+- **Locked out:** the section below. For polkit there is nothing to recover:
+  without an agent every action fails closed, and `sudo` needs no agent.
+
+The backup copy, the `swaylock` bind and `sudo` are the three things no unit
+touches.
+
+## The session lock: rehearsal and recovery
 
 The lock has never run in the author's session. Everything agents ran was in a
 nested niri on a private session bus, against a fake logind on a private
@@ -96,13 +151,9 @@ lock from the console. When `faillock` or `pam_nologin` closes the console and
 `swaylock` too, the last resort is root (`faillock --user <name> --reset`).
 Switching `duties.lock` off never touches a running lock.
 
-## Order that follows from this
+## What stays the author's
 
-1. Land CEL-1 and let the author run the VAL-CEL rows.
-2. Cover the duties the session depends on every day: the two OSDs, media,
-   lock and the polkit agent. These are the ones a user notices missing.
-3. Replace the two autostart lines (night light, caffeine) and the wallpaper.
-4. Rebind the niri keys, then replace `spawn-at-startup "noctalia"`.
-
-Each item is a later delivery with its own design, as the program's
-exclusions say. This note orders nothing; the author does.
+The live rows of [VALIDATION.md](../VALIDATION.md), in
+[the order of the cutover](../../docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md);
+the two default flips that follow them (`lock`, `polkit`), each a small unit
+of its own; and the retirement of `swaylock`, which no agent proposes.

@@ -678,8 +678,8 @@ mod tests {
         use crate::osd::tests::{runtime_with_brightness_queue, told};
         use crate::providers::brightness::BrightnessCommand;
 
-        let before = test_settings(Duty::On, Duty::On, &["tray", "volume"]);
-        let after = test_settings(Duty::On, Duty::On, &["tray", "brightness"]);
+        let before = test_settings(Duty::On, &["tray", "volume"]);
+        let after = test_settings(Duty::On, &["tray", "brightness"]);
         let (runtime, commands) = runtime_with_brightness_queue();
         // The shell's start: the duty is on, the piece is not placed.
         runtime.apply(&before);
@@ -698,7 +698,7 @@ mod tests {
         assert!(!osds.workers_follow(&after, &before));
         assert_eq!(told(&commands), [BrightnessCommand::Hide]);
         // The duty's own change is the display's too.
-        let off = test_settings(Duty::Off, Duty::On, &["tray", "volume"]);
+        let off = test_settings(Duty::Off, &["tray", "volume"]);
         assert!(osds.workers_follow(&before, &off));
         assert!(slot.get().is_some_and(|runtime| !runtime.running()));
     }

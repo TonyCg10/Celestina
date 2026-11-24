@@ -318,9 +318,43 @@ STRIP
     echo "   keeps the global one" >&2
 fi
 
+# A nest never drives the host's monitors. The nested shell has the host's
+# I2C buses in reach whatever compositor it draws on, and since the cutover
+# (CEL-2-M) the OSD duty is on and the default layout places the `brightness`
+# piece, so a nest whose `shell.json` does not say `"osd": "off"` (the
+# interactive nest reads the author's real one, or none) would run a real
+# `ddcutil detect` and one `getvcp` per monitor at start, and a `setvcp` at
+# the first wheel step over the piece: on the monitors of the session the
+# nest is watched from, beside whatever `ddcutil` that session runs (two at
+# once on one bus lost the GPU twice in the halted shell). So every nest,
+# interactive or `--once`, starts the shell with `CELESTINA_DDC=0`, which
+# forbids every `ddcutil` call, unless the caller chose a value itself: a
+# caller that wants DDC inside a nest says `CELESTINA_DDC=1` and owns it.
+# niri hands its environment to what it starts, so the export reaches the
+# shell through either launch below.
+ddc_pinned=no
+if [ -z "${CELESTINA_DDC:-}" ]; then
+    CELESTINA_DDC=0
+    ddc_pinned=yes
+fi
+export CELESTINA_DDC
+
 echo ">> nested niri ($niri_binary): $config" >&2
 if [ -z "$once" ]; then
     echo ">> the shell runs inside it; Ctrl-C here stops the whole nest" >&2
+    # The interactive nest inherits the real XDG_CONFIG_HOME and
+    # XDG_STATE_HOME. Since the cutover (CEL-2-M) a missing `shell.json`
+    # means every shipped duty on, the clipboard (which records into the
+    # real state home) included, so say so once; nothing is written. DDC is
+    # the exception, pinned off above, and the notice says which it is.
+    if [ ! -f "${XDG_CONFIG_HOME:-$HOME/.config}/celestina/shell.json" ]; then
+        echo ">> no celestina/shell.json in ${XDG_CONFIG_HOME:-$HOME/.config}: every shipped duty will be on in the nest (the lock excepted)" >&2
+    fi
+    if [ "$ddc_pinned" = yes ]; then
+        echo ">> CELESTINA_DDC=0 in the nest: it never runs ddcutil on this session's monitors (start it with CELESTINA_DDC=1 to allow it)" >&2
+    else
+        echo ">> CELESTINA_DDC=$CELESTINA_DDC kept from the caller: unless it is 0 or false the nest may run ddcutil on this session's monitors" >&2
+    fi
 fi
 
 # The `--once` nest presents without waiting for the host (the `environment`

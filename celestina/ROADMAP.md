@@ -2,12 +2,10 @@
 
 - **Status:** active
 - **Active implementation checkpoint:** CEL-2
-- **Related author validation:** VAL-CEL2-BAR-LIVE and VAL-CEL2-POLKIT-LIVE (neither blocks); the CEL-1 rows stay queued: VAL-CEL-GLASS, VAL-CEL-ISLAND, VAL-CEL-REST,
-  VAL-CEL-POPUP, VAL-CEL-KEYBOARD, VAL-CEL-IME, VAL-CEL-SCALE,
-  VAL-CEL-NOCTALIA and VAL-CEL-BANNERS in [VALIDATION.md](VALIDATION.md) (they do not block);
-  the CEL-2-J rows VAL-CEL2-PHONE, VAL-CEL2-BUBBLES and VAL-CEL2-BUBBLES-KEYS are pending too;
-  the CEL-2-H-a rows VAL-CEL2-LOCK-PAM, -LIVE, -SUSPEND, -HOTPLUG, -RECOVERY, -NOTICES and -COEXIST are pending;
-  the CEL-2-H-b rows VAL-CEL2-LOCK-BACKDROP and VAL-CEL2-LOCK-CLOCK are pending too
+- **Related author validation:** every `VAL-CEL-*` and `VAL-CEL2-*` row of
+  [VALIDATION.md](VALIDATION.md), in the order of
+  [the cutover's validation list](../docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md)
+  (they do not block the implementation exit)
 
 ## CEL-2 — Shell parity with Noctalia
 
@@ -19,27 +17,26 @@ does in the author's niri session. **Plan:**
 (CEL-2-A to CEL-2-M) in the plan's order; its ledger is the source of each
 unit's status and exit.
 
-**CEL-2-J (implemented in its worktree, not landed):** the phone and bubbles
-duties, both off by default; evidence in
-[docs/evidence/2026-10-17-phone-and-bubbles.md](docs/evidence/2026-10-17-phone-and-bubbles.md).
+**Landed:** CEL-2-A to CEL-2-L, with CEL-2-H split into H-a and H-b and the
+corrective units CEL-2-G-SYNC, CEL-2-K-SMOKE, SMOKE-FIX, CEL-2-L-CLIPPY,
+CEL-2-C-DDC, CEL-2-B-GAMMA, CEL-2-C-KEYS, CEL-2-B-CAFFEINE and
+CEL-2-I-CANCEL; the ledger links each unit's inventory and evidence.
+celestina is at 1.13.5.
 
-**CEL-2-H-a (implemented in its worktree, not landed):** the session lock's
-security core, behind `duties.lock`, off by default; the ledger row is `active`.
-Agent evidence is [docs/evidence/2026-10-22-cel-2-h-a.md](docs/evidence/2026-10-22-cel-2-h-a.md):
-the table of every automated test id of the design with its result and command,
-the nest rehearsal R-1 to R-9, the dependency closure, the `ldd` of both
-binaries, the `unsafe` count, the spike answers, the residuals the author must
-accept and what did not run. Reviews A and B are open. The decisions are
-[ADR 0022](docs/decisions/0022-session-lock.md). CEL-2-H-b (the dimmed
-wallpaper and the clock) starts after H-a has landed.
+**CEL-2-M (implemented on its branch, not landed):** the cutover. Its code
+retires the `off` defaults of the shipped duties (`lock` and `polkit` keep
+`off` until their live rows pass), removes the `bar` duty and the capsule-only
+surface, adds the cutover run to the nested smoke and the probe of the niri
+configuration, and rewrites [the handover note](docs/handover.md);
+[ADR 0024](docs/decisions/0024-cutover-defaults.md) records the decisions.
+The design and the plan are
+[the cutover design](../docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md)
+and [its plan](../docs/superpowers/plans/2026-10-23-cel-2-m-cutover.md). The
+author switched the session over on 2026-11-24 and the unit lands after it;
+no agent edited the niri configuration or replaced the live shell.
 
-**CEL-2-H-b (implemented on its branch, not landed):** the lock's presentation
-over H-a's frozen bundle format: the dimmed, blurred wallpaper per output and
-the clock and date; the ledger row is `active`. Agent evidence is
-[docs/evidence/2026-10-23-cel-2-h-b.md](docs/evidence/2026-10-23-cel-2-h-b.md):
-the new tests by name, T-F1, T-T1, T-Z1 and T-D1 (allowlist unchanged), the
-empty diffs of the proto crate and of the machine, the implementation decisions
-and what did not run (the nest step R-10 and the live rows).
+**After CEL-2-M, in this program:** one unit each to flip the default of
+`lock` and of `polkit` once the author's rows pass.
 
 **Closed program, kept below:** CEL-1.
 

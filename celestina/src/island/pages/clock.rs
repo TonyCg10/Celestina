@@ -639,7 +639,7 @@ mod tests {
             );
             assert_eq!(Clock.wants(cx), PAGE_SIZE);
         });
-        assert!(copy::CLOCK_NO_DATE.contains("barra"));
+        assert!(copy::CLOCK_NO_DATE.contains("fecha"));
     }
 
     #[test]

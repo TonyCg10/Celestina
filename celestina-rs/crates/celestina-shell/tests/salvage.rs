@@ -25,14 +25,17 @@ fn settings_round_trips_only_the_shells_own_choices() {
         .map(String::as_str)
         .collect();
     // CEL-2-B adds the `energy` table, CEL-2-C the `osd` one and CEL-2-E the
-    // `wallpaper` one; the
-    // `duties` table carries both units' switches (all default-valued). The
-    // `bar` table and `duties.bar` (CEL-2-A) are written only once chosen.
+    // `wallpaper` one; the `duties` table carries both units' switches (all
+    // default-valued). The `bar` table (CEL-2-A) is written only once chosen,
+    // and the `duties.bar` switch of that unit is gone since the cutover
+    // (CEL-2-M): the bar is always on and the key is never written.
     assert!(value["duties"].get("bar").is_none());
     // CEL-2-K's `weather` location is likewise written only once chosen.
     assert!(value.get("weather").is_none());
-    // CEL-2-G adds `duties.clipboard`, written off like the other duties.
-    assert_eq!(value["duties"]["clipboard"], "off");
+    // CEL-2-G adds `duties.clipboard`; since the cutover (CEL-2-M) it is
+    // written on like the other shipped duties, while the lock stays off.
+    assert_eq!(value["duties"]["clipboard"], "on");
+    assert_eq!(value["duties"]["lock"], "off");
     assert_eq!(
         keys,
         [

@@ -290,3 +290,4 @@ celestina	1.13.2	bug	CEL-2-B-GAMMA	Fix the night light failing dark for good aft
 celestina	1.13.3	bug	CEL-2-C-KEYS	Fix the Volume and Brightness pieces drawing the same node keys: every node of the shared level widget is keyed from its piece's id, and a test draws the whole piece table for a key two pieces share
 celestina	1.13.4	bug	CEL-2-B-CAFFEINE	Fix caffeine refusing a suspend asked for by hand: the logind inhibitor blocks idle only, and switching caffeine on withdraws an idle suspend already in flight
 celestina	1.13.5	bug	CEL-2-I-CANCEL	Fix the polkit agent so cancelling a prompt never counts as a failed authentication: no helper connection opens before the first Enter
+celestina	1.14.0	milestone	CEL-2-M	Add the cutover: every shipped duty on by default with the lock and polkit off until their rows pass, the bar always drawn, the smoke's cutover run, the niri configuration probe and the handover note

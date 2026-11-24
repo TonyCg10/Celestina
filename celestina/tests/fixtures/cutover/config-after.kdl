@@ -1,0 +1,39 @@
+// The same trimmed niri config with the Celestina cutover applied (CEL-2-M
+// design §5.2 and §5.3): the shell is started through systemd-cat, the
+// Noctalia startup lines are gone, the three Noctalia binds call `celestina`
+// verbs, the brightness keys go through the shell's OSD, the swaylock
+// recovery bind and the wpctl and playerctl keys are kept verbatim. The paths
+// and names are placeholders, not anybody's.
+
+spawn-at-startup "sh" "-c" "exec systemd-cat -t celestina celestina"
+spawn-at-startup "gnome-keyring-daemon" "--start" "--components=secrets"
+spawn-at-startup "systemctl" "--user" "start" "melibea.service"
+
+binds {
+    Mod+K repeat=false { spawn "celestina" "bubbles" "select"; }
+    Mod+Space { spawn "celestina" "launcher" "toggle"; }
+    Mod+Shift+Escape { spawn "celestina" "lock" "suspend"; }
+    Mod+Ctrl+Escape { spawn "celestina" "lock"; }
+
+    Mod+Shift+A repeat=false { spawn "swaylock" "-f" "-c" "000000" "-u"; }
+
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.1-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+
+    XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
+    XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
+    XF86AudioStop allow-when-locked=true { spawn "playerctl" "stop"; }
+
+    XF86MonBrightnessUp allow-when-locked=true { spawn "celestina" "brightness" "up"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "celestina" "brightness" "down"; }
+
+    // CEL-2-L: the overview and the shortcuts sheet.
+    Mod+Shift+Tab repeat=false { spawn "celestina" "overview" "toggle"; }
+    Mod+Shift+Slash { spawn "celestina" "shortcuts" "toggle"; }
+
+    Mod+N { spawn "kitty" "--directory" "/home/person"; }
+    Mod+Shift+E { quit; }
+}

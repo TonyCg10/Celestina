@@ -9,11 +9,11 @@
 //! trees hold content laid out at its final place, so nothing in them moves
 //! while the Island grows.
 //!
-//! While the `bar` duty is on (parity spec §6) the surface spans the
-//! output, and a third tree, the bar's zone capsules ([`bar_tree`]), is
-//! painted before the Island; the regions are the union of every painted
-//! silhouette. With the bar off there is no third tree and the surface keeps
-//! its 1.0.0 shape.
+//! The surface spans the output (parity spec §6), and a third tree, the
+//! bar's zone capsules ([`bar_tree`]), is painted before the Island; the
+//! regions are the union of every painted silhouette. The bar's tree exists
+//! once the app hands the Island its layout ([`Island::set_bar`]), before
+//! the first frame.
 
 pub mod bar_tree;
 pub mod cadence;
@@ -323,7 +323,8 @@ pub struct Island {
     /// were decoded from and their texture.
     covers: HashMap<String, (String, PixmapId)>,
     scroll: ScrollRemainder,
-    /// The bar's zone capsules, while the `bar` duty is on.
+    /// The bar's zone capsules, from the first layout handed over
+    /// ([`Island::set_bar`]) on; `None` only between [`Island::new`] and it.
     bar: Option<BarTree>,
     /// The Volume or Brightness slider popup, while it is open. It hangs from
     /// the bar, so it outlives the page.
@@ -468,23 +469,25 @@ impl Island {
         self.state.is_open() && self.state.shown_page() == PageId::SYSMON
     }
 
-    /// Turns the bar on with `layout`, or off with `None`. Off, nothing of
-    /// the bar exists and the Island's regions and input are 1.0.0's (its
-    /// open page now also shows the seconds clock); the surface's shape is
-    /// the app's (its width comes with every frame). Takes effect on the
-    /// next frame, which the caller asks for.
-    pub fn set_bar(&mut self, layout: Option<&BarLayout>) {
-        match (layout, self.bar.as_mut()) {
-            (None, None) => return,
-            (None, Some(_)) => self.bar = None,
-            (Some(layout), Some(bar)) => {
+    /// The bar's layout in force on this Island: what [`Island::set_bar`]
+    /// handed over last, `None` before the first layout.
+    #[must_use]
+    pub fn bar_layout(&self) -> Option<&BarLayout> {
+        self.bar.as_ref().map(BarTree::layout)
+    }
+
+    /// Gives the bar `layout`: the first time it makes the bar's tree, after
+    /// that it lays the bar out again only when the layout differs. The
+    /// surface's shape is the app's (its width comes with every frame).
+    /// Takes effect on the next frame, which the caller asks for.
+    pub fn set_bar(&mut self, layout: &BarLayout) {
+        match self.bar.as_mut() {
+            Some(bar) => {
                 if !bar.set_layout(layout) {
                     return;
                 }
             }
-            (Some(layout), None) => {
-                self.bar = Some(BarTree::new(layout, &self.theme, self.reduced));
-            }
+            None => self.bar = Some(BarTree::new(layout, &self.theme, self.reduced)),
         }
         // The capsule's dots follow the bar.
         self.stale = true;
@@ -492,8 +495,8 @@ impl Island {
 
     /// The app's connectivity state changed: the pages and the bar's pieces
     /// read `state` from now on. Returns whether this Island shows any of it
-    /// (a page is open or the bar is on), so the caller asks for a frame
-    /// only then and a closed Island with the bar off stays at rest.
+    /// (a page is open or the bar has its layout), so the caller asks for a
+    /// frame only then.
     pub fn set_connectivity(&mut self, state: &ConnectivityState) -> bool {
         if *state == self.connectivity {
             return false;
@@ -503,12 +506,6 @@ impl Island {
         self.stale |= open;
         self.invalidate_bar();
         open || self.bar.is_some()
-    }
-
-    /// Whether the bar is on.
-    #[must_use]
-    pub fn bar_on(&self) -> bool {
-        self.bar.is_some()
     }
 
     /// What the bar's pieces read, from what the Island knows. The hidden
@@ -536,7 +533,7 @@ impl Island {
     }
 
     /// Runs `f` on the bar with the context its pieces read; `None` while
-    /// the bar is off.
+    /// the bar has no layout yet.
     fn with_bar<R>(&mut self, f: impl FnOnce(&mut BarTree, &BarCx<'_>) -> R) -> Option<R> {
         let mut bar = self.bar.take()?;
         let out = f(&mut bar, &self.bar_cx());
@@ -1750,49 +1747,6 @@ impl Island {
         }
     }
 
-    /// Its surface is about to be destroyed while the Island lives on (the
-    /// `bar` duty flipped and the app gives it a surface of the other
-    /// shape): its menus close through `ctl`, the open page closes at once,
-    /// and every hover, press and focus ends, so the Island starts at rest
-    /// on its new surface. The page it last showed, its motion setting and
-    /// what its pages read are kept. Returns whether a menu was open, whose
-    /// choice can no longer arrive.
-    pub fn detach(&mut self, ctl: &mut SurfaceCtl<'_>) -> bool {
-        let menus = self.detach_at(Instant::now());
-        for &id in &menus {
-            ctl.close_popup(id);
-        }
-        !menus.is_empty()
-    }
-
-    /// [`Island::detach`] without the surface: the menus it must close.
-    fn detach_at(&mut self, now: Instant) -> Vec<PopupId> {
-        self.tray_menu_on_bar = false;
-        self.bar_menu_asked = false;
-        let menus = [
-            self.menu.take(),
-            self.tray_menu.take(),
-            self.level_popup.take(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-        self.close(now);
-        // A single step back to the capsule, whatever the motion setting.
-        self.state.close(now, true);
-        self.capsule_input
-            .pointer(&mut self.capsule, &InputEvent::PointerLeave, now);
-        if let Some(bar) = self.bar.as_mut() {
-            bar.leave(now);
-        }
-        // The timers were the old surface's: the first frame on the new one
-        // arms them afresh.
-        self.tick = ClockTick::default();
-        self.second_tick = SecondTick::default();
-        self.stale = true;
-        menus
-    }
-
     /// Popup `id` is gone. A compositor dismissal is a click outside the
     /// shell (another window, another output), which for the page is a
     /// click outside: it closes too; the keyboard's leave that came with it
@@ -2102,7 +2056,7 @@ mod tests {
             has_menu: true,
             ..TrayRow::default()
         }];
-        island.set_bar(Some(&BarLayout::default()));
+        island.set_bar(&BarLayout::default());
         island.apply_views(t0);
         lay_fake(&mut island, t0);
         (island, t0)
@@ -2146,24 +2100,29 @@ mod tests {
     }
 
     #[test]
-    fn with_the_bar_off_the_island_is_the_strip_it_was() {
+    fn with_every_zone_empty_the_island_is_the_capsule_alone() {
         let t0 = Instant::now();
-        let mut island = Island::new("DP-1", (760.0, 560.0));
+        let mut island = Island::new("DP-1", (1920.0, 560.0));
         island.rows = rows_for(&model("DP-1", 1), "DP-1");
-        island.set_bar(None);
-        assert!(!island.bar_on());
+        island.set_bar(&BarLayout {
+            start: Vec::new(),
+            centre: Vec::new(),
+            end: Vec::new(),
+            ..BarLayout::default()
+        });
         island.apply_views(t0);
         lay_fake(&mut island, t0);
+        // No Workspaces piece placed: the capsule keeps its dots.
         assert!(island.capsule.node_by_key(Key::named("dots")).is_some());
         let radius = island.theme.radius_lg;
         assert_eq!(
             island.shapes(t0),
-            vec![(island.state.rect(t0, 760.0), radius)]
+            vec![(island.state.rect(t0, 1920.0), radius)]
         );
-        // The regions are the Island's silhouette alone, as in 1.0.0.
+        // The regions are the Island's silhouette alone.
         assert_eq!(
             silhouette::union(&island.shapes(t0)),
-            island.state.silhouette(t0, 760.0, radius)
+            island.state.silhouette(t0, 1920.0, radius)
         );
         // Nothing on the surface routes to a bar.
         assert!(!island.on_bar(10.0, 20.0, t0));
@@ -2282,31 +2241,8 @@ mod tests {
     }
 
     #[test]
-    fn a_new_surface_gets_the_minute_timer_again() {
-        let t0 = Instant::now();
-        let secs = Duration::from_secs;
-        let mut island = Island::new("DP-1", (760.0, 560.0));
-        let mut old = EarliestTimer::default();
-        clock_frame(&mut island, &mut old, t0, Duration::ZERO);
-        island.open(PageId::ACTIVITY, t0 + secs(5));
-        clock_frame(&mut island, &mut old, t0, secs(5));
-        // The duty flips: the old surface and its timer go, the Island
-        // draws its first frame on a surface with nothing armed.
-        let _menus = island.detach_at(t0 + secs(5));
-        let mut new = EarliestTimer::default();
-        clock_frame(&mut island, &mut new, t0, secs(5));
-        run_timer(&mut island, &mut new, t0, secs(130));
-        assert_eq!(island.clock_minute, Some(minute_at(secs(130))));
-        assert!(
-            new.0.is_some(),
-            "the minute timer is armed on the new surface"
-        );
-    }
-
-    #[test]
     fn the_bar_draws_its_zones_and_the_capsule_drops_its_dots() {
-        let (mut island, t0) = bar_island(1920.0);
-        assert!(island.bar_on());
+        let (island, _) = bar_island(1920.0);
         // The Workspaces piece shows the dots: the capsule is the clock.
         assert!(island.capsule.node_by_key(Key::named("dots")).is_none());
         let placement = island.bar.as_ref().and_then(BarTree::placement);
@@ -2324,12 +2260,6 @@ mod tests {
         }
         let icon = bar_rect(&island, tray_page::row_key(0));
         assert!(icon.x >= end.x && icon.x + icon.w <= end.x + end.w);
-        // The bar off again: the dots come back.
-        island.set_bar(None);
-        island.apply_views(t0);
-        lay_fake(&mut island, t0);
-        assert!(island.capsule.node_by_key(Key::named("dots")).is_some());
-        assert!(island.shapes(t0).len() == 1);
     }
 
     #[test]
@@ -2573,10 +2503,6 @@ mod tests {
         island.level_popup = Some(PopupId(8));
         assert!(island.menu_closed(PopupId(8), CloseReason::Dismissed, t0));
         assert!(!island.state.is_open());
-        // Detaching the Island closes the popup with its menus.
-        island.level_popup = Some(PopupId(9));
-        assert_eq!(island.detach_at(t0), vec![PopupId(9)]);
-        assert!(!island.level_popup_open());
     }
 
     #[test]
@@ -2705,11 +2631,11 @@ mod tests {
     fn a_new_layout_rebuilds_the_bar_and_the_same_one_changes_nothing() {
         let (mut island, t0) = bar_island(1920.0);
         island.stale = false;
-        island.set_bar(Some(&BarLayout::default()));
+        island.set_bar(&BarLayout::default());
         assert!(!island.stale, "the same layout");
         let mut only_tray = BarLayout::default();
         only_tray.start.clear();
-        island.set_bar(Some(&only_tray));
+        island.set_bar(&only_tray);
         assert!(island.stale);
         island.apply_views(t0);
         lay_fake(&mut island, t0);
@@ -2718,35 +2644,6 @@ mod tests {
         assert!(island.capsule.node_by_key(Key::named("dots")).is_some());
         let p = island.bar.as_ref().and_then(BarTree::placement);
         assert!(p.is_some_and(|p| p.start.is_none() && p.end.is_some()));
-    }
-
-    #[test]
-    fn leaving_a_surface_closes_the_menus_and_the_page_at_once_and_keeps_the_rest() {
-        let (mut island, t0) = bar_island(1920.0);
-        island.open(PageId::TRAY, t0);
-        island.menu = Some(PopupId(1));
-        island.tray_menu = Some(PopupId(2));
-        island.tray_menu_on_bar = true;
-        island.bar_menu_asked = true;
-
-        assert_eq!(island.detach_at(t0), [PopupId(1), PopupId(2)]);
-        assert!(island.menu.is_none() && island.tray_menu.is_none());
-        assert!(!island.tray_menu_on_bar && !island.bar_menu_asked);
-        // Closed, at once even with motion on.
-        assert!(!island.state.is_open());
-        assert_eq!(island.state.progress(t0), 0.0);
-        assert!(!island.state.wants_frame(t0));
-        assert!(!island.reduced, "the motion setting is kept");
-        assert!(island.detach_at(t0).is_empty(), "nothing left to close");
-
-        // On its new surface, the other shape: the bar goes, and the capsule
-        // opens the page it last showed.
-        island.set_bar(None);
-        island.apply_views(t0);
-        lay_fake(&mut island, t0);
-        assert!(island.capsule.node_by_key(Key::named("dots")).is_some());
-        island.activate(view::capsule_key(), t0);
-        assert_eq!(island.page(), Some(PageId::TRAY));
     }
 
     #[test]
@@ -2765,7 +2662,7 @@ mod tests {
             end: vec!["notifications".to_owned(), "tray".to_owned()],
             ..BarLayout::default()
         };
-        island.set_bar(Some(&edited));
+        island.set_bar(&edited);
         island.apply_views(t0);
         lay_fake(&mut island, t0);
 
@@ -3356,7 +3253,7 @@ mod tests {
             end: vec!["power-profile".to_owned()],
             ..BarLayout::default()
         };
-        island.set_bar(Some(&layout));
+        island.set_bar(&layout);
         island.apply_views(t0);
         lay_fake(&mut island, t0);
         let piece = centre(bar_rect(&island, Key::named("power-profile")));
@@ -3395,7 +3292,7 @@ mod tests {
         // Closed with the bar on: its pieces show the state.
         island.close(t0);
         island.state.close(t0, true);
-        island.set_bar(Some(&BarLayout::default()));
+        island.set_bar(&BarLayout::default());
         assert!(island.set_connectivity(&ready));
         assert!(!island.set_connectivity(&ready));
     }
@@ -3532,7 +3429,7 @@ mod tests {
     #[test]
     fn the_glance_pieces_read_the_bars_slices_and_a_click_opens_their_pages() {
         let (mut island, t0) = bar_island(1920.0);
-        island.set_bar(Some(&glance_layout()));
+        island.set_bar(&glance_layout());
         // Nothing to read yet: no sysmon, no weather; the date alone shows.
         island.apply_views(t0);
         lay_fake(&mut island, t0);
@@ -3970,7 +3867,7 @@ mod tests {
         let (mut island, t0) = bar_island(1920.0);
         let mut layout = BarLayout::default();
         layout.end.push("media".to_owned());
-        island.set_bar(Some(&layout));
+        island.set_bar(&layout);
         island.apply_views(t0);
         lay_fake(&mut island, t0);
         island.stale = false;

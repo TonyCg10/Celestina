@@ -1,5 +1,6 @@
 //! The phone duty (CEL-2-J): the author's phone as Magnetita lists it
-//! (battery, connection, media). Off by default (parity design §4.1).
+//! (battery, connection, media). Shipped off (parity design §4.1), on since
+//! the cutover (CEL-2-M) unless `shell.json` says off.
 //!
 //! [`PhoneHandle`] holds the Magnetita worker the settings ask for and
 //! nothing else: `duties.phone` on has the worker, off has none, and
@@ -315,13 +316,23 @@ mod tests {
     }
 
     #[test]
-    fn a_file_from_1_3_0_starts_no_worker() {
-        // The older file has no `phone` key: both new duties read off.
+    fn a_file_from_1_3_0_starts_the_worker_and_an_explicit_off_does_not() {
+        // The older file has no `phone` key: since the cutover (CEL-2-M) the
+        // missing key reads on, so the worker starts.
         let older =
             Settings::from_bytes(br#"{"duties":{"idle":"on"}}"#).expect("a valid older file");
         let fake = Fake::default();
         let handle = PhoneHandle::with_spawner(Box::new(fake.clone()));
-        assert!(!handle.apply(&older));
+        assert!(handle.apply(&older));
+        assert!(handle.running());
+        assert_eq!(*fake.runs.lock().expect("lock"), vec![1]);
+        handle.stop();
+        // Only a file that says "off" keeps it from starting.
+        let off = Settings::from_bytes(br#"{"duties":{"phone":"off","idle":"on"}}"#)
+            .expect("a valid file");
+        let fake = Fake::default();
+        let handle = PhoneHandle::with_spawner(Box::new(fake.clone()));
+        assert!(!handle.apply(&off));
         assert!(!handle.running());
         assert!(fake.runs.lock().expect("lock").is_empty());
     }

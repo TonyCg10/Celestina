@@ -2,6 +2,7 @@
 
 - **Date:** 2026-10-16
 - **Status:** accepted
+- **Superseded in part:** the `off` defaults, by [ADR 0024](0024-cutover-defaults.md) since the cutover (CEL-2-M)
 
 ## Context
 

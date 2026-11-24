@@ -8,8 +8,9 @@ the Celestina visual language over the compositor's glass. It is built in
 today it draws one Island capsule per output that grows into the Activity,
 Notifications and Tray pages, opens the launcher, serves notifications and the
 tray when no other program owns those names, and answers its command verbs.
-What Noctalia still does for the session is in
-[the handover note](docs/handover.md).
+Since the cutover (CEL-2-M) it is the session's shell: what Noctalia did, what
+does it now, how the session is switched over and how it is switched back are
+in [the handover note](docs/handover.md).
 
 ## User contract
 
@@ -17,8 +18,9 @@ What Noctalia still does for the session is in
   with the wallpaper when its duty is on; there is no dock
   ([ADR 0003](docs/decisions/0003-no-dock.md)).
 - The wallpaper duty (`duties.wallpaper` in `~/.config/celestina/shell.json`)
-  is `off` by default. When it is on, the shell paints one still image per
-  output from the folder `wallpaper.folder` names, on a `celestina-wallpaper`
+  is on unless the file says `off` (since the cutover, CEL-2-M). When it is
+  on, the shell paints one still image per output from the folder
+  `wallpaper.folder` names, on a `celestina-wallpaper`
   surface in the Background layer, scaled by `wallpaper.mode` (`fill`, `fit`,
   `stretch` or `center`). An output that another client holds in the
   Background layer, such as Noctalia's wallpaper, gets no surface and the
@@ -58,39 +60,49 @@ What Noctalia still does for the session is in
   request, no `curl` and no piece content; the shell never works out where the
   person is, and a reading older than 15 minutes is hidden
   ([ADR 0016](docs/decisions/0016-weather-is-the-only-network-and-manual.md)).
-- The clipboard duty (`duties.clipboard`) is `off` by default. When it is on,
-  the shell keeps a history of the regular selection (never the primary one):
+- The clipboard duty (`duties.clipboard`) is on unless the file says `off`
+  (since the cutover, CEL-2-M); it fails closed, so a value that is neither
+  `on` nor `off` reads as off, and a `shell.json` that exists but cannot be
+  read starts the shell with every duty off until the file reads cleanly.
+  When it is on, the shell keeps a history of the regular selection (never
+  the primary one):
   up to 200 texts of 256 KiB and 20 PNG images of 8 MiB, for seven days. A
   selection that offers `x-kde-passwordManagerHint` is skipped unread; no
   other heuristic exists, so a secret copied without the hint is kept. Text is
   persisted to `$XDG_STATE_HOME/celestina/clipboard.json` (mode 0600) and the
   file is deleted when the duty goes off; images stay in memory. A shell
-  whose clipboard duty is off (the default, also in a nest or a script that
-  does not name its own state home) therefore deletes
-  `$XDG_STATE_HOME/celestina/clipboard.json` at start: scripts that start the
-  binary export a throwaway `XDG_STATE_HOME`. The Island page `clipboard` and
+  whose clipboard duty is off (also in a nest or a script that does not name
+  its own state home) therefore deletes
+  `$XDG_STATE_HOME/celestina/clipboard.json` at start, and one whose duty is
+  on records into the history file of whichever state home it runs in:
+  scripts that start the binary export a throwaway `XDG_STATE_HOME` and name
+  every duty in their `shell.json`. The Island page `clipboard` and
   the bar piece show previews; the verbs `clipboard select N [S]`, `remove N
   [S]`, `clear`, `pause` and `resume` are answered `ok` by the bus as soon as
   the worker has queued them, and how they ended (a stale snapshot `S`, a
   missing entry) is told to the journal only; no verb returns an entry.
-- The OSD duty (`duties.osd`, `off` by default) shows a short on-screen
-  display for volume, microphone and brightness changes on a `celestina-osd`
+- The OSD duty (`duties.osd`, on unless the file says `off`) shows a short
+  on-screen display for volume, microphone and brightness changes on a
+  `celestina-osd`
   overlay surface that exists only while it shows, and gives the `volume` and
   `brightness` bar pieces their readings. Audio is observed through
   `pactl subscribe` and read with `wpctl`; brightness through sysfs and,
   lazily, `ddcutil` (never with `CELESTINA_DDC=0`): nothing runs before the
   first use, unless the `brightness` piece is placed, which asks for one
   detection and one read per monitor when the duty's workers start, so the
-  piece has a level to show. Once something was detected, outputs that
+  piece has a level to show. The default layout places the piece and the
+  duty is on by default, so a start that chooses nothing runs that detection
+  and those reads. Once something was detected, outputs that
   appear or go are followed by one more detection after they have settled
   for 5 s, and while the piece is placed by one read of each monitor whose
   level is then unknown. The lock-keys OSD is not
   delivered. With the duty off, the `volume`, `microphone` and `brightness`
   verbs are rejected. See
   [the evidence](docs/evidence/2026-10-17-osd.md).
-- The media duty (`duties.media` in `~/.config/celestina/shell.json`) is `off`
-  by default. When it is on, the shell follows the MPRIS players on the session
-  bus and shows the media piece and the Medios page: the shown player's cover,
+- The media duty (`duties.media` in `~/.config/celestina/shell.json`) is on
+  unless the file says `off`. When it is on, the shell follows the MPRIS
+  players on the session bus and shows the media piece and the Medios page:
+  the shown player's cover,
   title and artist, with previous, play/pause and next. A pin chosen on the page
   lasts for the session only. Keys stay with `playerctl`.
 - The polkit duty (`duties.polkit` in `~/.config/celestina/shell.json`) is
@@ -117,8 +129,9 @@ What Noctalia still does for the session is in
   claimed only when free, so the shell runs beside Noctalia
   ([ADR 0008](docs/decisions/0008-claim-free-names-only.md)).
 - The phone and bubbles duties (`duties.phone` and `duties.bubbles` in
-  `~/.config/celestina/shell.json`) are `off` by default. When on, the shell
-  reads the phone from Magnetita and the minimised windows from Melibea's
+  `~/.config/celestina/shell.json`) are on unless the file says `off`. When
+  on, the shell reads the phone from Magnetita and the minimised windows from
+  Melibea's
   socket; it never starts either service. Evidence:
   [CEL-2-J](docs/evidence/2026-10-17-phone-and-bubbles.md).
 - The lock duty (`duties.lock` in `~/.config/celestina/shell.json`) is `off` by
@@ -158,9 +171,11 @@ What Noctalia still does for the session is in
 The design is
 [the shell design](../docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md);
 its decisions are [the decision records](docs/decisions/README.md).
-The bar that replaces the capsule-only Island on each output, and its pieces,
-are in progress under the parity program: [ADR 0012](docs/decisions/0012-bar-one-surface-per-output.md)
-and [ADR 0013](docs/decisions/0013-everything-is-a-piece.md).
+The bar on each output and its pieces follow the parity program:
+[ADR 0012](docs/decisions/0012-bar-one-surface-per-output.md) and
+[ADR 0013](docs/decisions/0013-everything-is-a-piece.md). Since the cutover
+(CEL-2-M) the bar is always on: there is no `duties.bar` switch and no
+capsule-only layout; its zones are the `bar` table of `shell.json`.
 
 ## Build and use
 
@@ -210,6 +225,31 @@ follow `RUST_LOG` (default `info`; `RUST_LOG=celestina=debug` for the
 shell's own detail). `--no-blur` sends no blur region, to attribute frame
 cost.
 
+### Autostart and keys
+
+The shell starts from niri's configuration, and its verbs are bound there; the
+shell binds no key itself. The lines the cutover uses:
+
+```kdl
+spawn-at-startup "sh" "-c" "exec systemd-cat -t celestina celestina"
+
+binds {
+    Mod+Space { spawn "celestina" "launcher" "toggle"; }
+    Mod+K repeat=false { spawn "celestina" "bubbles" "select"; }
+    Mod+Shift+Escape { spawn "celestina" "lock" "suspend"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "celestina" "brightness" "up"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "celestina" "brightness" "down"; }
+}
+```
+
+`systemd-cat` sends the shell's log to `journalctl --user -t celestina`. The
+volume and media keys keep running `wpctl` and `playerctl`: the shell observes
+them and draws the OSD. `scripts/cutover-config-probe.sh FILE` checks a copy
+of the configuration (never the live file) for a leftover `noctalia` spawn, a
+missing `celestina` start and the `swaylock` recovery bind.
+[The handover note](docs/handover.md) has the order of the switch-over and the
+way back.
+
 ### The nested session
 
 `scripts/dev-session.sh` runs the shell in a nested niri window with
@@ -218,8 +258,13 @@ session: `--own-bus` gives the nest a session bus of its own (the shell
 claims its names there), `--binary PATH` names the binary (default the
 release build), `--scale` and `--monitor` set the nested output's factor and
 where the window goes, and `dev-session.sh --shell` opens a shell attached
-to the running nest. `scripts/smoke.sh --binary PATH` runs the shell once in
-such a nest with `--exit-after 3 --metrics` and checks the frame report.
+to the running nest. A nest never drives the monitors of the session it is
+watched from: the script starts every nest with `CELESTINA_DDC=0` unless the
+caller set the variable, because the nested shell reaches the same I2C buses
+and, with the defaults above, would run `ddcutil` at start. The interactive
+nest otherwise reads the real `shell.json` and state home.
+`scripts/smoke.sh --binary PATH` runs the shell once in such a nest with
+`--exit-after 3 --metrics` and checks the frame report.
 
 ## Installing the lock's PAM service
 

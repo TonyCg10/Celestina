@@ -318,9 +318,9 @@ pub const CALENDAR_TODAY: &str = "Hoy";
 /// The calendar's button to the next month ("Next").
 pub const CALENDAR_NEXT: &str = "Siguiente";
 
-/// The Clock page's only row while the shell has no date: the date comes from
-/// the bar's clock, so it says what to turn on ("No date: turn the bar on").
-pub const CLOCK_NO_DATE: &str = "Sin fecha: activa la barra para verla.";
+/// The Clock page's only row while the shell has no date yet: the date comes
+/// with the Island's first clock reading ("No date yet").
+pub const CLOCK_NO_DATE: &str = "Todavía no hay fecha.";
 
 /// The System page's only row while no reading exists: the sampler runs only
 /// for a placed piece ("No data: place the sysmon piece in the bar").

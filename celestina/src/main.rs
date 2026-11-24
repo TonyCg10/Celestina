@@ -218,7 +218,11 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!(%err, "no niri provider; the capsule shows its fallback"),
         }
-        // Every duty is off by default: with the defaults no worker starts.
+        // Since the cutover (CEL-2-M) every shipped duty is on unless
+        // `shell.json` says off, so with a file that chose nothing the idle
+        // and night-light workers start here; a protected start (the file
+        // exists but could not be read) runs quiet, every duty off, until
+        // the follower's first clean read.
         let loop_handle = handle;
         let handle = EnergyHandle::new(sender.clone(), compositor);
         handle.apply(&settings_read);
@@ -259,10 +263,13 @@ fn shell(cfg: Config) -> ExitCode {
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = glance.set(handle);
-        // Off by default: with the duty off the history file is deleted (by
-        // a reaper thread), with it on the worker loads the persisted
-        // history on its own thread. Protected defaults (an unreadable
-        // shell.json) delete nothing until a clean read says off.
+        // On unless the file says off (and off for a value that is neither,
+        // the clipboard failing closed): with the duty off the history file
+        // is deleted (by a reaper thread), with it on the worker loads the
+        // persisted history on its own thread. A protected start (an
+        // unreadable shell.json) is quiet: nothing starts, nothing is
+        // recorded and the history file is deleted only when a clean read
+        // says off.
         let duty = ClipboardDuty::new(sender.clone());
         duty.apply(&settings_read, settings_protected);
         // The slot is empty: `setup` runs once.
@@ -281,13 +288,13 @@ fn shell(cfg: Config) -> ExitCode {
                 handle.stop();
             }
         }
-        // The on-screen display: off by default, so no worker starts; on, its
-        // audio and brightness workers run with a flag of their own.
+        // The on-screen display: on unless the file says off; on, its audio
+        // and brightness workers run with a flag of their own.
         let runtime = OsdRuntime::new(sender.clone(), loop_handle.clone());
         runtime.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = osd.set(runtime);
-        // The phone and bubbles duties are off by default as well.
+        // The phone and bubbles duties: on unless the file says off as well.
         let handle = PhoneHandle::new(sender.clone());
         handle.apply(&settings_read);
         let _ = phone.set(handle);
@@ -351,9 +358,9 @@ fn shell(cfg: Config) -> ExitCode {
             }
             Err(err) => tracing::warn!(%err, "no wallpaper worker; no wallpaper is painted"),
         }
-        // `shell.json` live: the duties (bar, wallpaper and energy), the bar's
-        // layout, the energy switches and do-not-disturb follow the file.
-        match providers::settings::follow_shell(follow_from, sender.clone(), &shutdown) {
+        // `shell.json` live: the duties, the bar's layout, the energy
+        // switches and do-not-disturb follow the file.
+        match providers::settings::follow_shell(follow_from, sender.clone()) {
             Ok(watch) => shell_follower = Some(watch),
             Err(err) => {
                 tracing::warn!("the shell settings are not followed: {}", error_chain(&err))

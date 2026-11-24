@@ -1,9 +1,8 @@
 //! The glance workers (CEL-2-K): the system monitor and the weather, each
 //! running only while something placed on the bar reads it (design §4).
 //!
-//! [`GlanceHandle`] holds exactly the workers the settings ask for. Both
-//! need the `bar` duty on: a bar that is off shows no piece, so it reads
-//! nothing and costs nothing. With the bar on:
+//! [`GlanceHandle`] holds exactly the workers the settings ask for, read
+//! from the bar's layout:
 //!
 //! - the system monitor runs iff the `sysmon` piece is in a zone of the bar's
 //!   layout;
@@ -28,7 +27,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
-use celestina_shell::settings::{BarLayout, Duty, Location, Settings};
+use celestina_shell::settings::{BarLayout, Location, Settings};
 use celestina_wayland::Sender;
 
 use crate::message::Message;
@@ -76,12 +75,6 @@ impl Wants {
     /// The rules of the module head, over `settings`.
     #[must_use]
     pub fn of(settings: &Settings) -> Self {
-        if settings.duties.bar() != Duty::On {
-            return Self {
-                sysmon: false,
-                weather: None,
-            };
-        }
         let layout = settings.bar_layout();
         let reads_weather = placed(&layout, WEATHER_PIECE) || placed(&layout, CLOCK_PIECE);
         Self {
@@ -468,19 +461,17 @@ mod tests {
         (handle, log, flags.busy)
     }
 
-    /// The bar on, with `end` as its end zone and a location labelled
-    /// `place`, if any.
+    /// The bar with `end` as its end zone and a location labelled `place`,
+    /// if any.
     fn with(end: &[&str], place: Option<&str>) -> Settings {
-        let mut settings = Settings {
+        Settings {
             bar: BarChoice {
                 end: Some(end.iter().map(|id| (*id).to_owned()).collect()),
                 ..BarChoice::default()
             },
             weather: place.and_then(|label| Location::new(40.42, -3.70, label)),
             ..Settings::default()
-        };
-        settings.duties.bar = Some(Duty::On);
-        settings
+        }
     }
 
     const NOTHING: Running = Running {
@@ -622,25 +613,23 @@ mod tests {
     }
 
     #[test]
-    fn a_bar_that_is_off_runs_nothing_whatever_is_placed() {
+    fn unplacing_every_glance_piece_stops_both_workers() {
         let (handle, log, _) = fake();
-        let mut off = with(&["sysmon", "weather", "clock"], Some("Madrid"));
-        for bar in [None, Some(Duty::Off)] {
-            off.duties.bar = bar;
-            assert_eq!(handle.apply(&off), NOTHING);
-        }
+        // A location, but nothing placed that reads it, and no sysmon.
+        let bare = with(&["tray"], Some("Madrid"));
+        assert_eq!(handle.apply(&bare), NOTHING);
         assert!(said(&log).is_empty(), "{:?}", said(&log));
 
-        // On, both start; off again, both go.
-        let on = with(&["sysmon", "weather", "clock"], Some("Madrid"));
+        // Placed, both start; unplaced again, both go.
+        let placed = with(&["sysmon", "weather", "clock"], Some("Madrid"));
         assert_eq!(
-            handle.apply(&on),
+            handle.apply(&placed),
             Running {
                 sysmon: true,
                 weather: true
             }
         );
-        assert_eq!(handle.apply(&off), NOTHING);
+        assert_eq!(handle.apply(&bare), NOTHING);
         handle.stop();
         let lines = said(&log);
         assert!(lines.contains(&"sysmon stopped".to_owned()), "{lines:?}");

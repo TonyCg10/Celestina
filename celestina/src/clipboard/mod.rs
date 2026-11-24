@@ -19,12 +19,14 @@
 //!   which an off in this process has deleted. The worker never deletes on
 //!   stop, because the shell's own exit keeps the file
 //!   ([`ClipboardDuty::shutdown`]); only the duty being off removes it;
-//! - an `off` that comes from the protected defaults (the shell settings file
-//!   exists but could not be read, so `ShellSettings` runs on the defaults
-//!   and will not overwrite the file) is not trusted to delete anything: the
-//!   deletion is deferred until the first clean read of the settings says
-//!   `off` ([`ClipboardDuty::deletion_deferred`]), and a clean `on` loads the
-//!   file as usual.
+//! - a protected start (the shell settings file exists but could not be
+//!   read, so `ShellSettings` runs quiet, every duty off, and will not
+//!   overwrite the file) is not the person's word either way: its `off`
+//!   deletes nothing, the deletion being deferred until the first clean read
+//!   of the settings says `off` ([`ClipboardDuty::deletion_deferred`]), and
+//!   should the settings handed over with `protected` ever say `on`, no
+//!   worker starts and nothing is recorded until a clean read says so. A
+//!   clean `on` then loads the file as usual.
 //!
 //! Starting a worker is behind the [`Spawner`] seam so the rules are tested
 //! without a Wayland connection. The worker's news reaches the loop as
@@ -424,8 +426,9 @@ struct Inner {
     /// An `off` in this process deleted the history: the next worker starts
     /// empty instead of loading the file.
     forgotten: bool,
-    /// An `off` of the protected defaults was not trusted to delete; the
-    /// first clean `off` will.
+    /// A protected read was not acted on: its `off` was not trusted to
+    /// delete (the first clean `off` will), its `on` not to start. Also
+    /// guards the one warning about it.
     deferred: bool,
 }
 
@@ -482,8 +485,9 @@ impl ClipboardDuty {
         inner.running.is_some() && inner.generation == generation
     }
 
-    /// Whether an `off` read from protected default settings left the
-    /// history file in place, to be deleted by the first clean `off`.
+    /// Whether a protected read left the history file in place and no
+    /// worker running, for the first clean read to decide: its `off`
+    /// deletes, its `on` loads.
     #[must_use]
     pub fn deletion_deferred(&self) -> bool {
         self.inner.borrow().deferred
@@ -503,18 +507,20 @@ impl ClipboardDuty {
     /// file, and the join, to a reaper, whether or not a worker ran, so a
     /// duty found off at start removes what an earlier run left.
     ///
-    /// `protected` says `settings` are the defaults the shell fell back to
-    /// because its settings file exists but could not be read
-    /// (`ShellSettings::is_protected`). Such an `off` is not the person's
-    /// word: it stops a running worker but deletes nothing, and the deletion
-    /// waits for the first clean read that says `off`.
+    /// `protected` says `settings` are the quiet defaults the shell fell
+    /// back to because its settings file exists but could not be read
+    /// (`ShellSettings::is_protected`), so they are not the person's word:
+    /// a running worker is stopped, nothing is deleted and nothing starts,
+    /// whatever `settings` say (the quiet defaults say `off`; a second
+    /// guard here refuses an `on` too, so no selection is ever recorded on
+    /// a file nobody could read), and the first clean read decides.
     pub fn apply(&self, settings: &Settings, protected: bool) {
         let mut inner = self.inner.borrow_mut();
-        if settings.duties.clipboard == Duty::On {
+        if protected {
+            inner.hold(settings.duties.clipboard);
+        } else if settings.duties.clipboard == Duty::On {
             inner.deferred = false;
             inner.start();
-        } else if protected {
-            inner.defer();
         } else {
             inner.deferred = false;
             inner.stop_and_forget();
@@ -590,8 +596,9 @@ impl Inner {
         }
     }
 
-    /// An `off` of the protected defaults: stop what runs, delete nothing.
-    fn defer(&mut self) {
+    /// A protected read, saying `duty`: stop what runs, delete nothing,
+    /// start nothing; the reason is logged once per protected spell.
+    fn hold(&mut self, duty: Duty) {
         self.generation += 1;
         if let Some(slot) = self.running.take() {
             slot.control.stop();
@@ -602,10 +609,16 @@ impl Inner {
             }));
         }
         if !self.deferred {
-            tracing::warn!(
-                "clipboard: the shell settings could not be read; the history file is kept \
-                 until a clean read says the duty is off"
-            );
+            match duty {
+                Duty::Off => tracing::warn!(
+                    "clipboard: the shell settings could not be read; the history file is kept \
+                     until a clean read says the duty is off"
+                ),
+                Duty::On => tracing::warn!(
+                    "clipboard: the shell settings could not be read; no worker starts and \
+                     nothing is recorded until a clean read says the duty is on"
+                ),
+            }
         }
         self.deferred = true;
     }
@@ -982,6 +995,67 @@ mod tests {
         reaped(&duty);
         assert!(!store.path().exists(), "the first clean off deletes");
         assert!(!duty.deletion_deferred());
+    }
+
+    #[test]
+    fn a_protected_on_starts_no_worker_until_a_clean_read_says_on() {
+        // The second guard: whatever protected settings say, nothing starts
+        // and the file is neither read nor deleted.
+        let (_scratch, store) = seeded("protected-on-held", &["one"]);
+        let (fake, log) = Fake::new();
+        let duty = ClipboardDuty::with_spawner(Box::new(fake), Some(store.clone()));
+        duty.apply(&settings(true), true);
+        duty.apply(&settings(true), true);
+        assert!(!duty.running());
+        assert!(duty.deletion_deferred());
+        reaped(&duty);
+        assert!(said(&log).is_empty(), "no spawn");
+        assert!(store.path().exists(), "kept for the clean read");
+        // A worker that was running when the file broke is stopped.
+        duty.apply(&settings(true), false);
+        heard(&log, "worker entries=1");
+        duty.apply(&settings(true), true);
+        assert!(!duty.running());
+        heard(&log, "worker stopped");
+        reaped(&duty);
+        assert!(store.path().exists(), "stopped, not deleted");
+        // The clean read starts it, loading the file.
+        duty.apply(&settings(true), false);
+        assert!(duty.running());
+        assert!(!duty.deletion_deferred());
+        assert!(duty.accepts(5), "two holds, two starts and a hold again");
+        until("the second spawn", || {
+            said(&log).contains(&"spawn load=true generation=5 store=true".to_owned())
+        });
+        duty.shutdown();
+    }
+
+    #[test]
+    fn an_unreadable_all_off_file_starts_no_worker_and_creates_no_history_file() {
+        // C1 of the cutover review: a trailing comma makes a file that says
+        // every duty off unreadable; the shell starts protected and quiet,
+        // so the clipboard neither records nor creates its file.
+        let settings_dir = Scratch::new("unreadable-settings");
+        let file = settings_dir.0.join("celestina").join("shell.json");
+        std::fs::create_dir_all(file.parent().expect("a parent")).expect("the directory");
+        std::fs::write(
+            &file,
+            br#"{"schema_version":1,"duties":{"bubbles":"off","caffeine":"off","clipboard":"off","idle":"off","lock":"off","media":"off","nightlight":"off","osd":"off","phone":"off","wallpaper":"off",}}"#,
+        )
+        .expect("the file with the trailing comma");
+        let shell = crate::providers::settings::ShellSettings::load_from(Some(file));
+        assert!(shell.is_protected());
+        assert_eq!(shell.current().duties.clipboard, Duty::Off);
+        let scratch = Scratch::new("no-history");
+        let store = scratch.store();
+        let (fake, log) = Fake::new();
+        let duty = ClipboardDuty::with_spawner(Box::new(fake), Some(store.clone()));
+        duty.apply(shell.current(), shell.is_protected());
+        assert!(!duty.running());
+        reaped(&duty);
+        assert!(said(&log).is_empty(), "no worker");
+        assert!(!store.path().exists(), "no history file was created");
+        assert!(duty.deletion_deferred());
     }
 
     #[test]

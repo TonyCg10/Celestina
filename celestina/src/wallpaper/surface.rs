@@ -1118,6 +1118,7 @@ impl Host for AppHost<'_, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::quiet_settings;
     use celestina_shell::wallpaper::Mode;
     use std::path::PathBuf;
 
@@ -1398,7 +1399,7 @@ mod tests {
     #[test]
     fn with_the_duty_off_nothing_is_asked() {
         let (mut w, mut host) = (Wallpapers::default(), Fake::default());
-        w.added(&info(1, "DP-1"), &Settings::default(), &mut host);
+        w.added(&info(1, "DP-1"), &quiet_settings(), &mut host);
         assert!(host.requests.is_empty());
     }
 
@@ -1704,12 +1705,11 @@ mod tests {
     fn shell_settings(scratch: &Scratch) -> ShellSettings {
         let mut shell = ShellSettings::load_from(Some(scratch.file()));
         let wanted = on();
+        // The duty is on by default since the cutover (CEL-2-M); the folder
+        // is the shell's own write, so the file holds exactly `wanted`.
         let written = shell.update_wallpaper(|w| *w = wanted.wallpaper.clone());
         assert!(matches!(written, Ok(true)));
-        // The duty is turned on through the file, as the person would.
-        let bytes = wanted.to_bytes().expect("bytes");
-        std::fs::write(scratch.file(), bytes).expect("the file");
-        assert!(shell.adopt(wanted));
+        assert_eq!(shell.current(), &wanted);
         shell
     }
 

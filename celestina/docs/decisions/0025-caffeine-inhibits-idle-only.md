@@ -1,11 +1,9 @@
 # ADR 0025: Caffeine inhibits idling only
 
 - **Date:** 2026-11-23
-- **Status:** proposed
-- **Number:** written by the CEL-2-B-CAFFEINE unit; provisional until landing,
-  by the same rule as ADR 0022 (0024 is taken by the cutover unit, CEL-2-M).
-  If another unit lands a number first, the landing renumbers this file and
-  its index row. The author accepts the record with the landing.
+- **Status:** accepted
+- **Accepted:** by the author on 2026-11-24, after trying the change live on
+  1.13.4 (caffeine on, a suspend asked for by hand went through, locked)
 - **Supersedes:** the `what` of decision D6 of
   [the energy plan](../evidence/2026-10-16-energy-plan.md) (`idle:sleep`).
   The rest of D6 stands: the inhibitor is a descriptor the worker holds, not

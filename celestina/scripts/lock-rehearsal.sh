@@ -1142,6 +1142,9 @@ run_step() {
         R-7|R-8) shell=0 ;;
         R-10) shell=1; limit=360 ;;
     esac
+    # Since the cutover (CEL-2-M) every shipped duty is on unless the file
+    # says off, so each rehearsal file names every other duty off: the nest
+    # runs the lock alone (R-10 adds the wallpaper it paints).
     # The nest's window: R-10 asks for the 4K output at scale 1.5 (the author's
     # monitor); the others leave the window where the host puts it and never
     # touch the host compositor's IPC.
@@ -1153,12 +1156,12 @@ run_step() {
             folder=$work/wallpapers
             make_wallpaper "$folder"
         fi
-        printf '{"schema_version":1,"duties":{"lock":"on","wallpaper":"on"},"wallpaper":{"folder":"%s"}}\n' "$folder" > "$work/xdg/celestina/shell.json"
+        printf '{"schema_version":1,"duties":{"lock":"on","wallpaper":"on","bubbles":"off","caffeine":"off","clipboard":"off","idle":"off","media":"off","nightlight":"off","osd":"off","phone":"off","polkit":"off"},"wallpaper":{"folder":"%s"}}\n' "$folder" > "$work/xdg/celestina/shell.json"
         echo "R-10 setup: nest scale 1.5, window on $r10_monitor, wallpaper folder $folder" | tee -a "$summary"
     elif [ "$idle" = yes ]; then
-        printf '%s\n' '{"schema_version":1,"duties":{"lock":"on","idle":"on"}}' > "$work/xdg/celestina/shell.json"
+        printf '%s\n' '{"schema_version":1,"duties":{"lock":"on","idle":"on","bubbles":"off","caffeine":"off","clipboard":"off","media":"off","nightlight":"off","osd":"off","phone":"off","polkit":"off","wallpaper":"off"}}' > "$work/xdg/celestina/shell.json"
     else
-        printf '%s\n' '{"schema_version":1,"duties":{"lock":"on"}}' > "$work/xdg/celestina/shell.json"
+        printf '%s\n' '{"schema_version":1,"duties":{"lock":"on","idle":"off","bubbles":"off","caffeine":"off","clipboard":"off","media":"off","nightlight":"off","osd":"off","phone":"off","polkit":"off","wallpaper":"off"}}' > "$work/xdg/celestina/shell.json"
     fi
 
     # The fake logind, on a private bus, with a command pipe held open here.

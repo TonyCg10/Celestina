@@ -36,6 +36,7 @@ Open questions belong to the
 | [0021](0021-polkit-agent.md) | proposed | The shell is the session's polkit agent behind the `polkit` duty, off by default (number provisional) |
 | [0022](0022-session-lock.md) | proposed | The session lock is three processes, locked on every failure, with the PAM verdict as its only way out (number provisional) |
 | [0023](0023-qt-shell-retired.md) | accepted | The Qt shell is retired and removed from the tree; supersedes 0002 (number provisional) |
-| [0025](0025-caffeine-inhibits-idle-only.md) | proposed | Caffeine inhibits idling only; a suspend asked for by hand goes through (number provisional; 0024 is taken by the cutover unit) |
+| [0024](0024-cutover-defaults.md) | accepted | The cutover's defaults: every shipped duty on, the lock and polkit off, the clipboard failing closed, a protected start quiet, no `bar` duty |
+| [0025](0025-caffeine-inhibits-idle-only.md) | accepted | Caffeine inhibits idling only; a suspend asked for by hand goes through |
 
 New records use the suite [decision template](../../../docs/templates/decision.md).

@@ -46,10 +46,10 @@ use crate::providers::brightness::{BrightnessCommand, Change};
 const BRIGHTNESS_PIECE: &str = "brightness";
 
 /// Whether `settings` give the DDC worker a consumer without any reading: the
-/// duty is on, the bar is on and its layout holds the `brightness` piece.
+/// duty is on and the bar's layout holds the `brightness` piece.
 #[must_use]
 pub fn brightness_consumer(settings: &Settings) -> bool {
-    if settings.duties.osd != Duty::On || settings.duties.bar() != Duty::On {
+    if settings.duties.osd != Duty::On {
         return false;
     }
     let BarLayout {
@@ -343,16 +343,14 @@ impl Controls {
     }
 }
 
-/// Settings with the `osd` and `bar` duties as given and `end` as the bar's
-/// end zone, for the tests of whoever reads [`brightness_consumer`].
-/// The `bar` argument goes when CEL-2-M removes the `bar` duty.
+/// Settings with the `osd` duty as given and `end` as the bar's end zone, for
+/// the tests of whoever reads [`brightness_consumer`].
 #[cfg(test)]
-pub(crate) fn test_settings(osd: Duty, bar: Duty, end: &[&str]) -> Settings {
+pub(crate) fn test_settings(osd: Duty, end: &[&str]) -> Settings {
     use celestina_shell::settings::{BarChoice, Duties};
     Settings {
         duties: Duties {
             osd,
-            bar: Some(bar),
             ..Duties::default()
         },
         bar: BarChoice {
@@ -372,17 +370,16 @@ mod tests {
     use crate::providers::brightness::BrightnessSource;
 
     #[test]
-    fn ddc_has_a_consumer_only_with_the_duty_the_bar_and_the_piece() {
+    fn ddc_has_a_consumer_only_with_the_duty_and_the_piece() {
         let with = ["tray", "brightness"];
-        assert!(brightness_consumer(&settings(Duty::On, Duty::On, &with)));
-        assert!(!brightness_consumer(&settings(Duty::Off, Duty::On, &with)));
-        assert!(!brightness_consumer(&settings(Duty::On, Duty::Off, &with)));
+        assert!(brightness_consumer(&settings(Duty::On, &with)));
+        assert!(!brightness_consumer(&settings(Duty::Off, &with)));
         assert!(!brightness_consumer(&settings(
-            Duty::On,
             Duty::On,
             &["tray", "volume"]
         )));
-        assert!(!brightness_consumer(&Settings::default()));
+        // The default end zone places the piece and the default duty is on.
+        assert!(brightness_consumer(&Settings::default()));
     }
 
     #[test]
@@ -513,8 +510,8 @@ mod tests {
 
     #[test]
     fn readings_are_taken_only_while_the_duty_s_workers_run() {
-        let on = settings(Duty::On, Duty::On, &["volume"]);
-        let off = settings(Duty::Off, Duty::On, &["volume"]);
+        let on = settings(Duty::On, &["volume"]);
+        let off = settings(Duty::Off, &["volume"]);
         assert!(readings_accepted(&on, true));
         assert!(!readings_accepted(&on, false), "workers not running yet");
         assert!(

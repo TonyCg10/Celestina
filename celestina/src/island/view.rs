@@ -80,8 +80,8 @@ pub fn capsule(theme: &Theme, clock: &str, rows: &[Row], surface_w: f32) -> View
 }
 
 /// Whether the resting capsule shows the workspaces beside its clock: not
-/// while the bar is on (`bar` is the layout in force, `None` while it is
-/// off) and places the Workspaces piece in one of its zones, which then
+/// while the bar (`bar` is the layout in force, `None` only before the app
+/// has handed it) places the Workspaces piece in one of its zones, which then
 /// shows them; otherwise as in 1.0.0 (parity spec §6.3). One rule, no
 /// setting.
 #[must_use]
@@ -354,13 +354,13 @@ mod tests {
     fn the_capsule_drops_its_dots_only_while_the_bars_workspaces_show_them() {
         let theme = Theme::dark();
         let rows = [row(1, true), row(2, false)];
-        // Bar off: the dots, as in 1.0.0.
+        // No layout handed yet: the dots, as in 1.0.0.
         assert!(capsule_shows_workspaces(None));
-        // Bar on with the default layout: Workspaces is placed, so the
+        // The default layout: Workspaces is placed, so the
         // capsule is the clock alone.
         let on = BarLayout::default();
         assert!(!capsule_shows_workspaces(Some(&on)));
-        // Bar on without the piece (in any zone): the dots come back.
+        // A layout without the piece (in any zone): the dots come back.
         let mut without = on.clone();
         without.start.retain(|id| id != "workspaces");
         assert!(capsule_shows_workspaces(Some(&without)));
