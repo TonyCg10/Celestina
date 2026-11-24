@@ -24,8 +24,8 @@ CEL-2-I-CANCEL; the ledger links each unit's inventory and evidence.
 celestina is at 1.13.5.
 
 **CEL-2-M (implemented on its branch, not landed):** the cutover. Its code
-retires the `off` defaults of the shipped duties (`lock` and `polkit` keep
-`off` until their live rows pass), removes the `bar` duty and the capsule-only
+retires the `off` defaults of the shipped duties (`lock` and `polkit` kept
+`off` there; the unit below flips them), removes the `bar` duty and the capsule-only
 surface, adds the cutover run to the nested smoke and the probe of the niri
 configuration, and rewrites [the handover note](docs/handover.md);
 [ADR 0024](docs/decisions/0024-cutover-defaults.md) records the decisions.
@@ -35,8 +35,11 @@ and [its plan](../docs/superpowers/plans/2026-10-23-cel-2-m-cutover.md). The
 author switched the session over on 2026-11-24 and the unit lands after it;
 no agent edited the niri configuration or replaced the live shell.
 
-**After CEL-2-M, in this program:** one unit each to flip the default of
-`lock` and of `polkit` once the author's rows pass.
+**CEL-2-M-LOCK-POLKIT (implemented on its branch, not landed):** one unit
+that flips the defaults of `lock` and of `polkit` to on, after the author
+reported their live rows as passed on 2026-11-24, with both failing closed
+([ADR 0026](docs/decisions/0026-lock-and-polkit-on-by-default.md)). The five
+other lock rows stay pending and do not gate the default.
 
 **Closed program, kept below:** CEL-1.
 

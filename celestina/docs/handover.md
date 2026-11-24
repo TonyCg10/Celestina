@@ -29,8 +29,8 @@
 | Night light | the startup line's `nightlight-force-toggle` | `duties.nightlight` with `energy.night_light` (CEL-2-B) | `nightlight` | VAL-CEL2-NIGHTLIGHT |
 | Caffeine | the startup line's `caffeine-enable` | `duties.caffeine` with `energy.caffeine`, a logind `idle` inhibitor: it stops idling only, and a suspend asked for by hand goes through (CEL-2-B, CEL-2-B-CAFFEINE, ADR 0025) | `caffeine` | VAL-CEL2-CAFFEINE |
 | Idle | screen off at 20 s, lock-and-suspend at 240 s | `duties.idle`: the same chain on `ext-idle-notify`; the second step needs the lock (CEL-2-B, CEL-2-H-a) | `idle` | VAL-CEL2-IDLE, VAL-CEL2-LOCK-SUSPEND |
-| Session lock | `Mod+Shift+Escape` → `noctalia msg session lock-and-suspend` | `duties.lock`: `celestina lock` and `celestina lock suspend`, three processes, PAM in a child (CEL-2-H-a, CEL-2-H-b) | `lock`, **off by default** until its rows pass | VAL-CEL2-LOCK-PAM, -RECOVERY, -LIVE, -SUSPEND, -HOTPLUG, -NOTICES, -COEXIST, -BACKDROP, -CLOCK |
-| Polkit agent | `polkit_agent = true` | `duties.polkit`: the agent, the prompt card, the helper conversation (CEL-2-I); the helper is contacted only once the password is submitted, so a cancelled prompt never reaches PAM and cannot count as a failed login (CEL-2-I-CANCEL, the amendment of ADR 0021, which lists the cases that can still count after a submit) | `polkit`, **off by default** until its row passes | VAL-CEL2-POLKIT-LIVE |
+| Session lock | `Mod+Shift+Escape` → `noctalia msg session lock-and-suspend` | `duties.lock`: `celestina lock` and `celestina lock suspend`, three processes, PAM in a child (CEL-2-H-a, CEL-2-H-b) | `lock`, **on by default** ([ADR 0026](decisions/0026-lock-and-polkit-on-by-default.md)); install the PAM service first | VAL-CEL2-LOCK-PAM, -RECOVERY, -LIVE, -SUSPEND, -HOTPLUG, -NOTICES, -COEXIST, -BACKDROP, -CLOCK |
+| Polkit agent | `polkit_agent = true` | `duties.polkit`: the agent, the prompt card, the helper conversation (CEL-2-I); the helper is contacted only once the password is submitted, so a cancelled prompt never reaches PAM and cannot count as a failed login (CEL-2-I-CANCEL, the amendment of ADR 0021, which lists the cases that can still count after a submit) | `polkit`, **on by default** ([ADR 0026](decisions/0026-lock-and-polkit-on-by-default.md)) | VAL-CEL2-POLKIT-LIVE |
 | Clipboard history | its history and `clipboard-*` verbs | `duties.clipboard`: bounded, secret-aware, text persisted 0600 (CEL-2-G); an unknown value of the key reads as off | `clipboard` | VAL-CEL2-CLIPBOARD-LIVE, -SECRET, -IMAGE, -LOOK |
 | Phone state | the `tony/magnetita` plugin | `duties.phone`: the Magnetita piece and page (CEL-2-J) | `phone` | VAL-CEL2-PHONE |
 | Minimised windows | the `tony/bubbles` plugin, `Mod+K` | `duties.bubbles`: the bubble group and `celestina bubbles select` (CEL-2-J) | `bubbles`, the key | VAL-CEL2-BUBBLES, -BUBBLES-KEYS |
@@ -45,12 +45,32 @@ screen corners, a dock, desktop and lock-screen widgets, and the greeter.
 
 ## The defaults since the cutover
 
-With no `duties` key, or with a key missing, every shipped duty is **on**;
-`lock` and `polkit` are **off** until their live rows pass; the bar is always
-drawn. A `shell.json` that cannot be read starts the shell with **every duty
-off** until its first clean read, and the clipboard also reads an unknown
-value of its key as off ([ADR 0024](decisions/0024-cutover-defaults.md)). An
-explicit `"off"` the author wrote while Noctalia held a duty is honoured.
+With no `duties` key, or with a key missing, every shipped duty is **on**,
+`lock` and `polkit` included; the bar is always drawn. A `shell.json` that
+cannot be read starts the shell with **every duty off** until its first clean
+read ([ADR 0024](decisions/0024-cutover-defaults.md)). The clipboard, the lock
+and the polkit agent fail closed: a value of their key that is neither `"on"`
+nor `"off"` reads as off, so a mistyped `"off"` never turns a privileged duty
+on ([ADR 0026](decisions/0026-lock-and-polkit-on-by-default.md)). An explicit
+`"off"` already in the file, such as one the author wrote while Noctalia held
+a duty, is honoured.
+
+With `idle` and `lock` both on, a session whose file chose nothing turns its
+screens off after 20 s of idle and locks and suspends after 240 s; before ADR
+0026 the second step was refused for want of a locker. `"idle": "off"` or
+`"lock": "off"` keeps the machine from suspending on idle.
+
+The lock needs its PAM service installed before the first start (the README's
+"Installing the lock's PAM service"). Without it the shell warns at every
+start, the lock still covers and denies, and anything that starts the lock
+(a `lock` verb, the idle chain's lock-and-suspend step, or any sleep logind
+announces: a lid, the power key, `systemctl suspend`) locks a session that
+cannot be unlocked from the lock itself; the way back is "The session lock:
+rehearsal and recovery" below, and `"lock": "off"` is the alternative. The
+polkit agent asks to be the session's agent at start and is refused, never
+forced, while another agent holds it; polkitd keeps whichever agent
+registered first, so `"polkit": "off"` is how the session is left to another
+agent that starts later.
 
 Two consequences of these defaults. The default layout places the
 `brightness` piece and `osd` is on, so since 1.13.1 (CEL-2-C-DDC) a start
@@ -74,10 +94,12 @@ duty's live row run, and the autostart line swapped last.
    and the bubbles (`Mod+K` rebound).
 3. The lock: the PAM service installed by hand (the README says how), the
    recovery rehearsed from a VT **before** the first real lock, then
-   `"lock": "on"` and `Mod+Shift+Escape` rebound to `celestina lock suspend`.
+   `"lock": "on"` (written explicitly then; since ADR 0026 it is the
+   default) and `Mod+Shift+Escape` rebound to `celestina lock suspend`.
    `Mod+Shift+A` keeps `swaylock`.
 4. Polkit: `polkit_agent = false` in Noctalia's settings and
-   `noctalia msg config-reload`, then `"polkit": "on"`.
+   `noctalia msg config-reload`, then `"polkit": "on"` (written explicitly
+   then; since ADR 0026 it is the default).
 5. `Mod+Space` rebound to `celestina launcher toggle`; the overview and the
    shortcut sheet bound to keys of the author's choice.
 6. **The swap:** the `spawn-at-startup "noctalia"` line replaced by the
@@ -155,5 +177,9 @@ Switching `duties.lock` off never touches a running lock.
 
 The live rows of [VALIDATION.md](../VALIDATION.md), in
 [the order of the cutover](../../docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md);
-the two default flips that follow them (`lock`, `polkit`), each a small unit
-of its own; and the retirement of `swaylock`, which no agent proposes.
+the retirement of `swaylock`, which no agent proposes. The author reported
+four lock rows (`VAL-CEL2-LOCK-PAM`, `-LIVE`, `-RECOVERY`, `-SUSPEND`) and
+`VAL-CEL2-POLKIT-LIVE` as passed on 2026-11-24, and the defaults of `lock` and
+`polkit` were flipped in one unit
+([ADR 0026](decisions/0026-lock-and-polkit-on-by-default.md)); the other five
+lock rows stay pending and do not gate them.

@@ -33,9 +33,11 @@ fn settings_round_trips_only_the_shells_own_choices() {
     // CEL-2-K's `weather` location is likewise written only once chosen.
     assert!(value.get("weather").is_none());
     // CEL-2-G adds `duties.clipboard`; since the cutover (CEL-2-M) it is
-    // written on like the other shipped duties, while the lock stays off.
+    // written on like the other shipped duties, and so are the lock and the
+    // polkit agent since their live rows passed (CEL-2-M-LOCK-POLKIT).
     assert_eq!(value["duties"]["clipboard"], "on");
-    assert_eq!(value["duties"]["lock"], "off");
+    assert_eq!(value["duties"]["lock"], "on");
+    assert_eq!(value["duties"]["polkit"], "on");
     assert_eq!(
         keys,
         [

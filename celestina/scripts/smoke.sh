@@ -1791,7 +1791,8 @@ fi
 echo "smoke: polkit on over the dead system bus: the agent is unavailable and the shell did not panic"
 # The cutover (CEL-2-M, design §5.1 and §8): the shell started with the file
 # the author's session will run, every duty on, the lock and the polkit agent
-# included (`polkit` is a duty since CEL-2-I, off by default; here it starts
+# included (both on by default since CEL-2-M-LOCK-POLKIT, and named on here
+# all the same; here the agent starts
 # over the dead system bus, so the agent must report itself unavailable and
 # register nothing, as the polkit run above checks, and the switch below
 # must turn it off), the wallpaper folder at the fixture picture the wallpaper run

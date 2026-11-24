@@ -345,10 +345,13 @@ if [ -z "$once" ]; then
     # The interactive nest inherits the real XDG_CONFIG_HOME and
     # XDG_STATE_HOME. Since the cutover (CEL-2-M) a missing `shell.json`
     # means every shipped duty on, the clipboard (which records into the
-    # real state home) included, so say so once; nothing is written. DDC is
-    # the exception, pinned off above, and the notice says which it is.
+    # real state home) and, since CEL-2-M-LOCK-POLKIT, the lock and the
+    # polkit agent included (the nest reaches the host's system bus unless
+    # the caller points DBUS_SYSTEM_BUS_ADDRESS elsewhere), so say so once;
+    # nothing is written. DDC is the exception, pinned off above, and the
+    # notice says which it is.
     if [ ! -f "${XDG_CONFIG_HOME:-$HOME/.config}/celestina/shell.json" ]; then
-        echo ">> no celestina/shell.json in ${XDG_CONFIG_HOME:-$HOME/.config}: every shipped duty will be on in the nest (the lock excepted)" >&2
+        echo ">> no celestina/shell.json in ${XDG_CONFIG_HOME:-$HOME/.config}: every shipped duty will be on in the nest, the lock and the polkit agent included (write a shell.json naming what you want off)" >&2
     fi
     if [ "$ddc_pinned" = yes ]; then
         echo ">> CELESTINA_DDC=0 in the nest: it never runs ddcutil on this session's monitors (start it with CELESTINA_DDC=1 to allow it)" >&2

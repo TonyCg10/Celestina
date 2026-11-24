@@ -36,8 +36,9 @@
   unit's evidence is linked from
   [the plan's ledger](docs/plans/active/2026-10-16-cel-2-parity.md).
 - **CEL-2-M (implemented on its branch, not landed):** the cutover's code:
-  every shipped duty defaults to on, with `lock` and `polkit` off until their
-  live rows pass; the clipboard reads an unknown value as off; a `shell.json`
+  every shipped duty defaults to on, with `lock` and `polkit` off
+  (CEL-2-M-LOCK-POLKIT, below, turns those two on); the clipboard reads an
+  unknown value as off; a `shell.json`
   that cannot be read starts the shell with every duty off; the `bar` duty and
   the capsule-only surface are gone, the bar is always drawn
   ([ADR 0024](docs/decisions/0024-cutover-defaults.md)); the smoke runs the
@@ -53,10 +54,19 @@
   on.
   [The handover note](docs/handover.md) holds the switch-over and the way
   back.
+- **CEL-2-M-LOCK-POLKIT (implemented on its branch, not landed):** `lock` and
+  `polkit` default to on, both in one unit, after the author reported
+  `VAL-CEL2-LOCK-PAM`, `-LIVE`, `-RECOVERY`, `-SUSPEND` and
+  `VAL-CEL2-POLKIT-LIVE` as passed on 1.13.5 on 2026-11-24. Both fail closed:
+  a value that is neither `"on"` nor `"off"` reads as off. An explicit `"off"`
+  and a protected start are unchanged. The lock's behaviour is unchanged, so
+  the PAM service must be installed before the first start
+  ([ADR 0026](docs/decisions/0026-lock-and-polkit-on-by-default.md)). The five
+  other lock rows stay pending and do not gate the default.
 - **Focus:** the session runs Celestina since the author's switch-over of
   2026-11-24 ([evidence](docs/evidence/2026-11-23-cutover.md), "The author's
-  switch-over"); what is left is the rows the author has not run and the two
-  default flips below.
+  switch-over"); what is left is the rows the author has not run and the landing
+  of the two default flips above.
 - **Author validation:** the author ran most rows live on 1.13.0 to 1.13.5
   between 2026-11-23 and 2026-11-24 and reported them through the
   coordinating session; the cutover's evidence lists what was reported to
@@ -66,8 +76,7 @@
   author's live use produced the five defect reports that CEL-2-C-DDC,
   CEL-2-B-GAMMA, CEL-2-C-KEYS, CEL-2-B-CAFFEINE and CEL-2-I-CANCEL fixed.
   Not run: `VAL-CEL2-CLIPBOARD-SECRET` with a password manager.
-- **After CEL-2-M:** two small units flip the defaults of `lock` and `polkit`
-  once `VAL-CEL2-LOCK-*` and `VAL-CEL2-POLKIT-LIVE` pass; the lock's residual
+- **After CEL-2-M-LOCK-POLKIT:** the lock's residual
   (a pre-exec window of microseconds before the signal mask, accepted by the
   author on 2026-10-23, ADR 0022 A5) is a unit of its own.
 - **Blockers:** none.

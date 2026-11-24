@@ -67,3 +67,16 @@ history among them, against an `off` the author may have written.
 
 A live row shows a duty that must not default to on, or the author wants a
 way to hide the bar that a layout cannot express.
+
+## Amendment (2026-11-24): the lock and polkit defaults
+
+[ADR 0026](0026-lock-and-polkit-on-by-default.md) flips the defaults of `lock`
+and `polkit` to `on`, both in one unit, and makes both fail closed. It
+supersedes three statements of this record: Decision 1's "`lock` stays **off**
+until the author's `VAL-CEL2-LOCK-*` rows pass, and `polkit` stays **off**
+until `VAL-CEL2-POLKIT-LIVE` passes; each flips in a unit of its own that
+cites the passed row"; Decision 2's "for every duty but the clipboard", which
+becomes every duty but the clipboard, the lock and the polkit agent; and the
+last Consequences bullet ("`lock` and `polkit` keep a documented `off` default
+in the code until their rows pass: two small follow-up units"). The rest of
+this record stands.

@@ -33,10 +33,11 @@ Open questions belong to the
 | [0018](0018-connectivity-reads-state-and-offers-a-closed-action-list.md) | proposed | Connectivity state is read, and the shell sends only a closed list of actions |
 | [0019](0019-connectivity-secrets-never-pass-through-the-shell.md) | proposed | No secret passes through the shell |
 | [0020](0020-phone-and-bubbles.md) | accepted | Phone and bubbles: Melibea v1 by default with a per-action v2 hint, an absent socket is a state, one selector for the bubbles |
-| [0021](0021-polkit-agent.md) | proposed | The shell is the session's polkit agent behind the `polkit` duty, off by default (number provisional) |
-| [0022](0022-session-lock.md) | proposed | The session lock is three processes, locked on every failure, with the PAM verdict as its only way out (number provisional) |
+| [0021](0021-polkit-agent.md) | proposed | The shell is the session's polkit agent behind the `polkit` duty, on by default since 0026 (number provisional) |
+| [0022](0022-session-lock.md) | proposed | The session lock is three processes, locked on every failure, with the PAM verdict as its only way out; on by default since 0026 (number provisional) |
 | [0023](0023-qt-shell-retired.md) | accepted | The Qt shell is retired and removed from the tree; supersedes 0002 (number provisional) |
-| [0024](0024-cutover-defaults.md) | accepted | The cutover's defaults: every shipped duty on, the lock and polkit off, the clipboard failing closed, a protected start quiet, no `bar` duty |
+| [0024](0024-cutover-defaults.md) | accepted | The cutover's defaults: every shipped duty on, the clipboard failing closed, a protected start quiet, no `bar` duty (the lock and polkit defaults amended by 0026) |
 | [0025](0025-caffeine-inhibits-idle-only.md) | accepted | Caffeine inhibits idling only; a suspend asked for by hand goes through |
+| [0026](0026-lock-and-polkit-on-by-default.md) | proposed | The lock and the polkit agent are on by default and fail closed; amends 0024, 0021 and 0022 on the default |
 
 New records use the suite [decision template](../../../docs/templates/decision.md).

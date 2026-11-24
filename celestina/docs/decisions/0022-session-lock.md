@@ -257,3 +257,13 @@ keys to an input-method grab and to the accessibility monitor while locked
 frame of the CPU painter exceeds the budget (H-15); `celestina-style` gains a
 lock scrim and an idle-fade token (A3); or the author decides to retire
 `swaylock` (H-12).
+
+## Amendment (2026-11-24): the default
+
+[ADR 0026](0026-lock-and-polkit-on-by-default.md) makes the `lock` duty `on`
+by default, after the author reported `VAL-CEL2-LOCK-PAM`, `-LIVE`,
+`-RECOVERY` and `-SUSPEND` as passed. It supersedes the "off by default" of
+H-11. The duty fails closed: a value that is neither `"on"` nor `"off"` reads
+as off. Nothing else of this record changes; in particular a missing PAM
+service still does not make the lock unavailable, and H-12's recovery path
+stands.

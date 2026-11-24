@@ -228,9 +228,14 @@ fn shell(cfg: Config) -> ExitCode {
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = energy.set(handle);
-        // The polkit duty: with it off nothing starts, no bus connection is
-        // made and nothing is registered. On, the loop starts the agent through
-        // this launcher (now, and live whenever `shell.json` flips the duty).
+        // The polkit duty: on unless the file says off (and off for a value
+        // that is neither: it fails closed), so with a file that chose
+        // nothing the loop starts the agent through this launcher now, and
+        // live whenever `shell.json` flips the duty. The agent asks polkitd
+        // for the session once; while another agent holds it the
+        // registration is refused and nothing is forced. With the duty off,
+        // as in a protected start, nothing starts, no bus connection is made
+        // and nothing is registered.
         // The slot is empty: `setup` runs once.
         let launcher: Box<dyn AgentLauncher> =
             Box::new(SystemLauncher::new(sender.clone(), Arc::clone(&shutdown)));
@@ -242,9 +247,17 @@ fn shell(cfg: Config) -> ExitCode {
         {
             tracing::warn!("the loop did not take the polkit duty's start");
         }
-        // The session lock: off by default, so with the defaults no worker
-        // starts. Its availability is what the idle chain's second step
-        // follows; the energy handle is in its slot already.
+        // The session lock: on unless the file says off (and off for a value
+        // that is neither: it fails closed), so with a file that chose
+        // nothing its workers start here: the supervisor pins the binaries
+        // and looks for the PAM service once (a missing one is a warning
+        // and a notice, and the lock stays available), and with the binaries
+        // pinned the sleep worker holds logind's delay inhibitor. No lock
+        // child runs until a verb, the idle chain or a sleep announced by
+        // logind (a lid, the power key, `systemctl suspend`) asks. A
+        // protected start runs with the duty off, so no worker starts. Its
+        // availability is what the idle chain's second step follows; the
+        // energy handle is in its slot already.
         let availability = {
             let energy = Rc::clone(&energy);
             Box::new(move |available: bool| {

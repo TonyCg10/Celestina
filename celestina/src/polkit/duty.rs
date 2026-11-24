@@ -1,7 +1,12 @@
 //! The `polkit` duty's lifecycle on the loop's side (CEL-2-I; design 4.5 and
 //! 6.4 F-9, F-24, F-25).
 //!
-//! The duty is `off` by default and follows `shell.json` live, like the other
+//! The duty is `on` by default since its live row passed
+//! (CEL-2-M-LOCK-POLKIT), so a shell whose `shell.json` says `"on"` or does
+//! not name the duty asks to be the session's agent when it starts; a value
+//! that is neither `"on"` nor `"off"` reads as off, and a protected start (an
+//! unreadable `shell.json`) runs with it off until a clean read. It follows
+//! `shell.json` live, like the other
 //! duties: **off** means no worker, no bus connection and nothing registered
 //! with polkitd; **on** starts the agent ([`crate::providers::polkit`]) and
 //! the prompt state over it; switched **off** again, [`PolkitDuty::stop`]

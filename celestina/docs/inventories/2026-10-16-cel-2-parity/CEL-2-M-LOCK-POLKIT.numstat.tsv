@@ -1,0 +1,53 @@
+# CEL-2-M-LOCK-POLKIT exact change inventory
+
+Base revision	44b8cc2ad45d18264a15d91ede9d56144f2260a1
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina-rs/crates/celestina-shell/tests/salvage.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/decisions/0021-polkit-agent.md
+Pathspec	celestina/docs/decisions/0022-session-lock.md
+Pathspec	celestina/docs/decisions/0024-cutover-defaults.md
+Pathspec	celestina/docs/decisions/0026-lock-and-polkit-on-by-default.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-11-24-lock-polkit-defaults.md
+Pathspec	celestina/docs/handover.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-M-LOCK-POLKIT.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/dev-session.sh
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/src/main.rs
+Pathspec	celestina/src/polkit/duty.rs
+Pathspec	celestina/src/test_support.rs
+Pathspec	celestina/tests/lock_scripts.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+291	121	61d1982241a1516d50bd1e3a5536676080c770954c67d9d2419496961bcc9107	celestina-rs/crates/celestina-shell/src/settings.rs
+4	2	e28acfed0108a66bbabffa2e5f55f90245bac064ee49090ddbe7856cebb0d51c	celestina-rs/crates/celestina-shell/tests/salvage.rs
+1	1	2996fe578bbf1da4de426f7f77533b61477f31cb2059e5f02a6fff8052a717da	celestina/Cargo.lock
+1	1	9e097e681c8d6743b44cf84ceafb2d1fa70a18c202e7a1daa4cceceb022e5f1b	celestina/Cargo.toml
+32	10	e52b6047509cadfb2238fa51a6cae659f8c2a618312eada19530ae304308d865	celestina/README.md
+7	4	6c89d55518ef57081d6e71b8efa4048ab839016d84ca946dcb53b77b37057d6b	celestina/ROADMAP.md
+15	6	40f60baacdc75626574e5de4af46d0ec968e0a565e874d08bb32b6373704713c	celestina/STATUS.md
+10	0	73e7b843717c10cb1144e0e117302a6bf2e66f51e035dc4b83bcc244e282c996	celestina/docs/decisions/0021-polkit-agent.md
+10	0	046e98c1c70fd4d1d8f77527979c54e82c5a9090b2a1c743aa8c553190a97821	celestina/docs/decisions/0022-session-lock.md
+13	0	5a36d1e372741543cb9d2514d93cdae430089b2f5c59f9aa7502680e1c7ff55a	celestina/docs/decisions/0024-cutover-defaults.md
+142	0	c958308edcd8b2676721320561508398b94b66ed0aeb396c28c9fc9f2a17b9d6	celestina/docs/decisions/0026-lock-and-polkit-on-by-default.md
+4	3	1ae63eed0dcd295a872549858c7f88b8f55eb0b60a46cd559f483bf5d8fac318	celestina/docs/decisions/README.md
+202	0	a5cebf89af65a9ff03b37ed7d5824e28fca8455d092b2879c13f96b38943c148	celestina/docs/evidence/2026-11-24-lock-polkit-defaults.md
+38	12	82b0c793a586c7047ee27168985d10d497abba55fcd3cd06d209db468a66e30a	celestina/docs/handover.md
+53	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-M-LOCK-POLKIT.numstat.tsv
+1	0	3d3a2697c4a1e9b90ce24cd891526feeaca186b42692888d137e3e476f073e95	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+6	3	9a5d84631eb21b09876935e08f37061c10173dd800bbd25a721160ffdcc72f61	celestina/scripts/dev-session.sh
+2	1	68c0b775577702f807d02e49815cf56bb4b9cb0a09f777d47e110573a0c24d09	celestina/scripts/smoke.sh
+19	6	9f15ccf2c85221696a236883439c81b967752b1ec445429d5b792f42375e6b69	celestina/src/main.rs
+6	1	aee1251ba8838fbd6e24b485d0c7e9f4b8fb6b315702bd6ac2eb3a2ff53b14d4	celestina/src/polkit/duty.rs
+6	1	e6265d1a7cfd899bb7d838797e85a3f0420d1284258af6ba691fb7f94ea5e397	celestina/src/test_support.rs
+3	1	52ced5176c52df4df6f5f12bc2f5742dc34dcf4253cb8ec2b0d1af0f078d479b	celestina/tests/lock_scripts.rs
+1	0	3fdb57ecc5a3c2a3cfcd57677c7519f459cd0c90cbc22feb95797a10b74178ed	docs/version-history.tsv

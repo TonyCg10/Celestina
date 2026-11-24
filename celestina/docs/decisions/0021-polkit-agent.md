@@ -231,3 +231,13 @@ which is right: a wrong password was really sent.
   prompt: then the second-factor residual is no longer theoretical.
 - Polkit's helper stops treating an end of input as a failed conversation, or
   stops being a socket-activated process.
+
+## Amendment (2026-11-24): the default
+
+[ADR 0026](0026-lock-and-polkit-on-by-default.md) makes the `polkit` duty `on`
+by default, after the author reported `VAL-CEL2-POLKIT-LIVE` as passed. It
+supersedes Decision 16's "The duty is `off` by default" and the Consequences'
+"the duty's default flips to `on` only in CEL-2-M, and only if that row has
+passed". The duty fails closed: a value that is neither `"on"` nor `"off"`
+reads as off. The registration rule stands: another agent holding the session
+is refused, never forced.

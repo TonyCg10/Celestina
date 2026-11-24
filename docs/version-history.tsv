@@ -291,3 +291,4 @@ celestina	1.13.3	bug	CEL-2-C-KEYS	Fix the Volume and Brightness pieces drawing t
 celestina	1.13.4	bug	CEL-2-B-CAFFEINE	Fix caffeine refusing a suspend asked for by hand: the logind inhibitor blocks idle only, and switching caffeine on withdraws an idle suspend already in flight
 celestina	1.13.5	bug	CEL-2-I-CANCEL	Fix the polkit agent so cancelling a prompt never counts as a failed authentication: no helper connection opens before the first Enter
 celestina	1.14.0	milestone	CEL-2-M	Add the cutover: every shipped duty on by default with the lock and polkit off until their rows pass, the bar always drawn, the smoke's cutover run, the niri configuration probe and the handover note
+celestina	1.15.0	milestone	CEL-2-M-LOCK-POLKIT	Add the lock and the polkit agent to the duties on by default, both failing closed: a value that is neither on nor off reads as off, and an explicit off and a protected start are unchanged

@@ -1,7 +1,8 @@
 //! Fixtures the crate's unit tests share.
 //!
 //! Since the cutover (CEL-2-M) `Settings::default()` means "every shipped
-//! duty on, the lock off", so a test that wants nothing to start says so
+//! duty on", the session lock and the polkit agent included since
+//! CEL-2-M-LOCK-POLKIT, so a test that wants nothing to start says so
 //! explicitly through these instead of leaning on the defaults.
 
 use celestina_shell::settings::{Duties, Duty, Settings};
@@ -32,6 +33,10 @@ mod tests {
         assert_eq!(quiet.duties, quiet_duties());
         assert_eq!(quiet.duties, Duties::all_off());
         assert_eq!(quiet.duties.clipboard, Duty::Off);
+        // The two privileged duties default to on; the quiet set starts
+        // neither.
+        assert_eq!(quiet.duties.lock, Duty::Off);
+        assert_eq!(quiet.duties.polkit, Duty::Off);
         assert_ne!(quiet.duties, Settings::default().duties);
         let rest = Settings {
             duties: Settings::default().duties,

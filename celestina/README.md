@@ -106,7 +106,10 @@ in [the handover note](docs/handover.md).
   title and artist, with previous, play/pause and next. A pin chosen on the page
   lasts for the session only. Keys stay with `playerctl`.
 - The polkit duty (`duties.polkit` in `~/.config/celestina/shell.json`) is
-  `off` by default. When it is on, the shell is the session's polkit
+  on unless the file says `off`; it fails closed, so a value that is neither
+  `on` nor `off` reads as off
+  ([ADR 0026](docs/decisions/0026-lock-and-polkit-on-by-default.md)). When it
+  is on, the shell is the session's polkit
   authentication agent: a card over a dimmed overlay takes the keyboard
   exclusively, asks for the password (two attempts per prompt) and hands it
   only to polkit's own helper, which verifies it; the shell never decides a
@@ -117,9 +120,11 @@ in [the handover note](docs/handover.md).
   as a failed login. After a submit a few cases can still count, listed in
   ADR 0021's amendment (a second prompt of the PAM stack, the shell exiting
   in the instant before PAM's first prompt, PAM not asking within five
-  seconds of a cancel). Switch it on with Noctalia's agent
-  off: if another agent holds the session the shell refuses to register, logs
-  it and does not retry or evict. Recovery is to set the duty to `"off"` (the
+  seconds of a cancel). If another agent holds the session, such as
+  Noctalia's, the shell refuses to register, logs it and does not retry or
+  evict, so nothing changes for that agent; polkitd keeps whichever agent
+  registered first, so set `"polkit": "off"` to leave the session to an
+  agent that starts after the shell. Recovery is to set the duty to `"off"` (the
   shell cancels every request and unregisters) or stop the shell, then
   re-enable Noctalia's agent; without any agent, polkit refuses what needs
   interaction. The live check is `VAL-CEL2-POLKIT-LIVE` in
@@ -134,8 +139,18 @@ in [the handover note](docs/handover.md).
   Melibea's
   socket; it never starts either service. Evidence:
   [CEL-2-J](docs/evidence/2026-10-17-phone-and-bubbles.md).
-- The lock duty (`duties.lock` in `~/.config/celestina/shell.json`) is `off` by
-  default. When it is on, `celestina lock` starts `celestina-lock`, which holds
+- The lock duty (`duties.lock` in `~/.config/celestina/shell.json`) is on
+  unless the file says `off`; it fails closed, so a value that is neither `on`
+  nor `off` reads as off
+  ([ADR 0026](docs/decisions/0026-lock-and-polkit-on-by-default.md)). Install
+  the PAM service before the first start, or set `"lock": "off"`: without it
+  the shell warns at every start and the lock still covers the screen, but
+  nothing typed can unlock it, whether a `lock` verb, the idle chain or a
+  suspend (a lid, the power key, `systemctl suspend`) started it. With the
+  idle duty also on by default, a session that chose nothing locks and
+  suspends after 240 s of idle; `"idle": "off"` or `"lock": "off"` stops
+  that. When it is on, `celestina lock` starts
+  `celestina-lock`, which holds
   the `ext-session-lock-v1` lock, covers every output at once and asks
   for the password on the output with the keyboard focus; `celestina lock
   suspend` locks and suspends only once the compositor confirms the lock. The
@@ -262,7 +277,13 @@ to the running nest. A nest never drives the monitors of the session it is
 watched from: the script starts every nest with `CELESTINA_DDC=0` unless the
 caller set the variable, because the nested shell reaches the same I2C buses
 and, with the defaults above, would run `ddcutil` at start. The interactive
-nest otherwise reads the real `shell.json` and state home.
+nest otherwise reads the real `shell.json` and state home, and no nest
+started by hand gets a system bus of its own: with the lock and the polkit
+duties on (the defaults, when the configuration home has no `shell.json`)
+the nested shell reaches the host's system bus for both (logind for the
+lock's sleep inhibitor, polkitd for the agent's registration), unless the
+caller points `DBUS_SYSTEM_BUS_ADDRESS` elsewhere or the file names both
+`"off"`.
 `scripts/smoke.sh --binary PATH` runs the shell once in such a nest with
 `--exit-after 3 --metrics` and checks the frame report.
 
@@ -270,7 +291,7 @@ nest otherwise reads the real `shell.json` and state home.
 
 The session lock is `celestina-lock`, with its PAM verifier
 `celestina-lock-verify` beside it (both installed next to `celestina` by the
-production entries). It is **off** until you set `duties.lock` to `on`; with
+production entries). It is **on** unless you set `duties.lock` to `off`; with
 it on, `celestina lock` covers every output and `celestina lock suspend` locks
 and then suspends. The lock never decides the password itself: it asks PAM,
 through a service of its own, `celestina-lock`. That service is a file under
@@ -284,7 +305,7 @@ auth      include   system-auth
 account   include   system-auth
 ```
 
-The one command, from the repository root:
+The one command, from the repository root, before the first start:
 
 ```sh
 sudo install -m 0644 -o root -g root celestina/contrib/pam.d/celestina-lock /etc/pam.d/celestina-lock
@@ -292,7 +313,8 @@ sudo install -m 0644 -o root -g root celestina/contrib/pam.d/celestina-lock /etc
 
 Without the file the lock still covers the screen (it is never left
 uncovered), but it shows that the service is missing and nothing typed can
-unlock it; the shell warns once when the duty is turned on. There is no
+unlock it; the shell warns once when the duty starts (a log line and a
+desktop notice), which with the duty on by default is at every start. There is no
 fallback to another service. The text deliberately does not include
 `pam_nologin`, which `login` and `swaylock` do: `/run/nologin`, written before
 a scheduled shutdown, would otherwise refuse every unlock.

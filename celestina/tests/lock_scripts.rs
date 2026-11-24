@@ -261,7 +261,8 @@ fn r10_is_registered_with_its_options_and_a_scale_1_5_nest() {
     assert!(script.contains("nest_args=\"--monitor none\""));
     // The wallpaper duty is switched on in the nest's throwaway configuration,
     // never in the author's; since the cutover (CEL-2-M) every other shipped
-    // duty defaults to on, so the file names each one off and the nest runs
+    // duty defaults to on, the polkit agent included since
+    // CEL-2-M-LOCK-POLKIT, so the file names each one off and the nest runs
     // the lock and the wallpaper alone.
     let r10_file = code("scripts/lock-rehearsal.sh")
         .into_iter()
@@ -276,6 +277,7 @@ fn r10_is_registered_with_its_options_and_a_scale_1_5_nest() {
         "nightlight",
         "osd",
         "phone",
+        "polkit",
     ] {
         assert!(
             r10_file.contains(&format!("\"{duty}\":\"off\"")),
