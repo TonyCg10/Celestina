@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
 - **Status:** active
-- **Active implementation checkpoint:** RSH-1
+- **Active implementation checkpoint:** DEV-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -308,8 +308,33 @@ closed with CEL-2-M (celestina 1.14.0) after the author's cutover of
 not started.
 
 The build order, exclusions and ledger are in
-[the active plan](docs/plans/active/2026-10-14-rust-shell.md), and the design in
+[the archived plan](docs/plans/archive/2026-10-14-rust-shell.md), and the design in
 [the spec](docs/superpowers/specs/2026-10-14-celestina-rust-shell-design.md).
+
+## DEV-1 — Development speed
+
+**Hypothesis:** a session can read about 40 KB instead of 373 KB before acting,
+and build against a cache that stays under 40 GiB, without any landing
+verifying less than it does today.
+
+**Tangible outcome:** a session build cache that a cap bounds and that a landed
+unit's worktree no longer leaves behind, a lighter dev profile for session
+builds, an agent preflight in tiers whose first tier has a budget that cannot
+grow back unnoticed, and a light lane with a review cap and one list of
+sensitive paths.
+
+- [ ] Add a lighter session dev profile, a cap on the session Cargo target and
+      the closing of a landed unit's worktree (`DEV-1-A`).
+- [ ] Add tiers to the agent preflight and a budget for its first tier
+      (`DEV-1-B`).
+- [ ] Add the light lane, the review cap and the sensitive-path list
+      (`DEV-1-C`).
+
+The smoke in phases belongs to the shell and gets its row in a `celestina` plan.
+The build order, exclusions and ledger are in
+[the active plan](docs/plans/active/2026-11-24-dev-speed.md), the design in
+[the spec](docs/superpowers/specs/2026-11-24-suite-dev-speed-design.md) and the
+decision in [ADR 0013](docs/decisions/0013-development-speed.md).
 
 ## Project implementation fronts
 

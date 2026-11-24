@@ -2,8 +2,8 @@
 
 Suite-level plans appear here only while the root roadmap names the same active
 implementation checkpoint. The active suite plan is
-[`2026-10-14-rust-shell.md`](2026-10-14-rust-shell.md) (RSH-1). Closed and
-archived: PRV-2 closed on
+[`2026-11-24-dev-speed.md`](2026-11-24-dev-speed.md) (DEV-1). Closed and
+archived: RSH-1 closed on 2026-11-24, PRV-2 closed on
 2026-10-10, PRV-1 on 2026-10-10, EXT-1 on 2026-10-10, CONV-1 on 2026-10-09,
 AUD-1 on 2026-10-09, LND-1 on 2026-09-26, PRD-1 on 2026-09-25 and LNG-1 on
 2026-08-05, all moved to [`../archive/`](../archive/).

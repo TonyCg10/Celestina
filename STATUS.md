@@ -6,9 +6,9 @@
   Noctalia stopped being started; the shell's parity program, CEL-2, is
   complete: CEL-2-M landed as celestina 1.14.0, and CEL-2-M-LOCK-POLKIT
   turned the lock and the polkit agent on by default in 1.15.0. Every RSH-1 suite row has
-  landed; the plan awaits its archive. All project work follows each local
-  roadmap
-- **Implementation checkpoint:** RSH-1
+  landed and the plan is archived; the suite plan DEV-1 makes development
+  faster. All project work follows each local roadmap
+- **Implementation checkpoint:** DEV-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration
@@ -40,6 +40,20 @@ ledger rules currently written in five documents.
 
 ## Active cross-project work
 
+DEV-1 makes suite development faster. Measured on 2026-11-24, the shared
+session Cargo target held 407 GiB, the agent preflight read 373 KB and single
+units took up to ten review rounds. Its ledger has three units, none landed:
+a lighter session dev profile with a cap on the session target and the closing
+of a landed unit's worktree (`DEV-1-A`), tiers in the agent preflight with a
+budget (`DEV-1-B`), and a light lane with a review cap (`DEV-1-C`). The smoke
+in phases belongs to the shell's own plan. The ledger is
+[the active plan](docs/plans/active/2026-11-24-dev-speed.md) and the decision
+is [ADR 0013](docs/decisions/0013-development-speed.md). Other new
+cross-project work starts only when an accepted decision promotes it, as the
+root roadmap's later suite-level section requires.
+
+## Completed cross-project work
+
 RSH-1 moved the halted Qt shell to `celestina-qt/`, registered a Rust shell at
 `celestina/` and made the shared style tokens data that QML and Rust both read;
 every suite row has landed, and the shell's own program, CEL-1, landed its last
@@ -52,13 +66,8 @@ retirement of the Qt shell). CEL-2 is complete: every unit of its plan is
 and the polkit agent among the duties on by default; the shell's own plan
 awaits its archive. The
 halted Qt/QML shell left the tree on 2026-10-24 (CEL-QT-REMOVE) and is a
-retired project. The RSH-1 plan stays active until an administrative unit
-archives it. The ledger is
-[the active plan](docs/plans/active/2026-10-14-rust-shell.md). Other new
-cross-project work starts only when an accepted decision promotes it, as the
-root roadmap's later suite-level section requires.
-
-## Completed cross-project work
+retired project. The plan is archived (closed 2026-11-24). The ledger is
+[the archived plan](docs/plans/archive/2026-10-14-rust-shell.md).
 
 PRV-2 fixed what the first live use of the capture preview showed: the
 preview's niri rule (Qt appends the display name to the title), its

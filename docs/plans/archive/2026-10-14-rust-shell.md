@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-14
 - **Plan ID:** rust-shell
-- **Status:** active
+- **Closed:** 2026-11-24
+- **Successor:** DEV-1, [the development speed plan](../active/2026-11-24-dev-speed.md)
+- **Status:** done
 - **Authorization:** the author approved the design in brainstorming on
   2026-10-14 and asked for the implementation plan; the design is
   [the spec](../../superpowers/specs/2026-10-14-celestina-rust-shell-design.md)
@@ -48,6 +50,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 - `CEL-2-K-DEPS` — the suite documents the Celestina glance unit needs ahead of it: the design of CEL-2-K, the architecture standard's list of `hematita-core` consumers and `hematita-core` among the shell's production inputs.
 - `CEL-2-F-DEPS` — the suite documents the Celestina connectivity unit needs ahead of it: the architecture standard's list of `cuprita-core` consumers, `cuprita-core` among the shell's production inputs and the shell's tests among its verification inputs.
 - `CEL-2-L-DOCS` — the design and the plan of the Celestina desktop-overview unit (CEL-2-L), which the `celestina:` commit scope cannot carry.
+- `DEV-1-OPEN` — opens the development speed plan: the DEV-1 plan, its decision, design and task plan, and the move of this plan to the archive.
 
 ## Exclusions
 
@@ -57,7 +60,7 @@ binary at 0.1.0; the shared tokens as data consumed by QML and Rust.
 
 ## Build order
 
-1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`, then `RSH-1-DOCS` after CEL-1 landed, then `CEL-2-OPEN`, then `CEL-2-SALV`, then `CEL-2-K-DEPS` before `CEL-2-K`, then `CEL-2-F-DEPS` before `CEL-2-F`, then `CEL-2-L-DOCS` before `CEL-2-L`.
+1. `CEL-1-A0`, then `CEL-1-A1`, then `CEL-1-A2`, then `CEL-1-A3`, then `CEL-1-A4`, then `CEL-1-A` (the author), then `CEL-1-C` after `CEL-1-B`, then `RSH-1-DOCS` after CEL-1 landed, then `CEL-2-OPEN`, then `CEL-2-SALV`, then `CEL-2-K-DEPS` before `CEL-2-K`, then `CEL-2-F-DEPS` before `CEL-2-F`, then `CEL-2-L-DOCS` before `CEL-2-L`, then `DEV-1-OPEN` once the suite's other work has landed.
 
 ## Implementation exit
 
@@ -90,3 +93,4 @@ and the shell reads `celestina-tokens`.
 | CEL-QT-REMOVE | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-QT-REMOVE.numstat.tsv) | 554 files, +1320/-111676 | Remove the halted Qt shell and its core crate from the tree, register the shell as a retired project, retire its workflow and baselines, supersede ADR 0002 by ADR 0023 and rewrite every live reference; no tag or backup is kept | [evidence](../../evidence/2026-10-23-cel-qt-remove.md) | None |
 | CI-VISIBLE | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CI-VISIBLE.numstat.tsv) | 9 files, +603/-84 | Make a red workflow visible to the landing: the `celestina` workflow runs the toolchain `celestina/rust-toolchain.toml` pins instead of a moving `stable`, and the landing's preflight asks every workflow file on `origin/main` for its newest run on `main` and stops while any failed, where it read only `contracts` | [evidence](../../evidence/2026-11-24-ci-visible.md) | None |
 | CEL-2-DOCS-SYNC | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/CEL-2-DOCS-SYNC.numstat.tsv) | 11 files, +284/-24 | Update the root documents to the state after CEL-2: Celestina is the session's shell at 1.14.0, the cutover design and its validation order carry a status note and no longer name `idle:sleep` or a `bar` duty, and the lock and polkit designs refer to the caffeine and lazy-conversation amendments | [evidence](../../evidence/2026-11-24-cel-2-docs-sync.md) | None |
+| DEV-1-OPEN | `suite:` | done | [inventory](../../inventories/2026-10-14-rust-shell/DEV-1-OPEN.numstat.tsv) | 13 files, +864/-107 | Open the development speed plan: add the DEV-1 plan, its decision, design and task plan, and move the RSH-1 plan to the archive | [evidence](../../evidence/2026-11-24-dev-speed-open.md) | None |

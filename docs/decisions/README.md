@@ -17,6 +17,7 @@ authority or replace operational rules.
 | [0010](0010-one-shot-privilege-through-polkit.md) | accepted | Hematita acts with privilege one call at a time, through polkit, and never holds it |
 | [0011](0011-seal-at-landing.md) | accepted | A unit is sealed, bumped and built at landing, on the commit that will be its parent |
 | [0012](0012-suite-conventions.md) | accepted | One activation interface, one appearance file, explicit send and `text/uri-list` drops across the suite |
+| [0013](0013-development-speed.md) | accepted | Bound the session build cache, tier the agent preflight and lighten small units |
 
 An accepted decision is superseded by another ADR, never rewritten to hide its
 historical verdict. Every ADR retains at least Context, Decision, Consequences,

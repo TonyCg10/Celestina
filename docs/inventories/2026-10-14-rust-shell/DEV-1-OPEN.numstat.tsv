@@ -1,0 +1,33 @@
+# DEV-1-OPEN exact change inventory
+
+Base revision	d4382512b1e405a6b778f0c780316115b8f35904
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/decisions/0013-development-speed.md
+Pathspec	docs/decisions/README.md
+Pathspec	docs/evidence/2026-10-14-shell-rename.md
+Pathspec	docs/evidence/2026-11-24-dev-speed-open.md
+Pathspec	docs/inventories/2026-10-14-rust-shell/DEV-1-OPEN.numstat.tsv
+Pathspec	docs/plans/active/2026-10-14-rust-shell.md
+Pathspec	docs/plans/active/2026-11-24-dev-speed.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-10-14-rust-shell.md
+Pathspec	docs/superpowers/plans/2026-11-24-suite-dev-speed-plan-1.md
+Pathspec	docs/superpowers/specs/2026-11-24-suite-dev-speed-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+27	2	af1d3658395f879137707e6209f9e2385340a1b3d79ca1c73c5a7843690f27c2	ROADMAP.md
+19	10	03c7bef1bde31cf992656b2b3e1736791dafcd30f740c6a2cf3e64400e637437	STATUS.md
+61	0	f97f50e4d39b60384948bf02de25793e530ca531f5436ba54f4cbb6e98e1bcd2	docs/decisions/0013-development-speed.md
+1	0	f3e60ae12105fd81d6ef69a2a9ee7c74aaeca62c6843e49c53264016e9ea2d69	docs/decisions/README.md
+1	1	cb7ffecc5aeaf0f262c1c258f0656c9ed0c3f092e803e5d8c285f59b5726c0d7	docs/evidence/2026-10-14-shell-rename.md
+43	0	a92ac2c4c3c21c33436767052fbe560a63da6d0420397d79e652eb4c2d1fffd7	docs/evidence/2026-11-24-dev-speed-open.md
+33	0	self	docs/inventories/2026-10-14-rust-shell/DEV-1-OPEN.numstat.tsv
+0	92	deleted	docs/plans/active/2026-10-14-rust-shell.md
+70	0	3268abb463c16caf2d89f11383d57f616c704caa2c77aa4f83aaa3ca0a5ca323	docs/plans/active/2026-11-24-dev-speed.md
+2	2	4a9ba538b260b95ec68f7a5c9d8d26e6c9be53b049f3db06d8d4a8d7f89760e5	docs/plans/active/README.md
+96	0	d3280aa122c09ef32f0d3e499bf71aae6a02e2ba8f144f21b5ed9924fc2dec8c	docs/plans/archive/2026-10-14-rust-shell.md
+248	0	e1475c30672fa4e6ee6d48d4368a0c62c6353c2497276ad5d633ee9a1d0a9e0a	docs/superpowers/plans/2026-11-24-suite-dev-speed-plan-1.md
+263	0	f4b12112e4a3a33748cf6d77e4850916817e8b276417a48a763e07cffe588fd9	docs/superpowers/specs/2026-11-24-suite-dev-speed-design.md

@@ -29,7 +29,7 @@ Then the corrections the rehearsal commit does not carry:
 - `AGENTS.md` "Halted projects": the salvage paragraph as the plan words it,
   including "(there is no `bounded.rs`)".
 - This record, and the CEL-1-A row of
-  [the RSH-1 plan](../plans/active/2026-10-14-rust-shell.md), now `active`.
+  [the RSH-1 plan](../plans/archive/2026-10-14-rust-shell.md), now `active`.
 
 Everything staged with `git add -A`. The move is byte for byte: the tree of
 `celestina-qt/` in the index equals HEAD's `celestina/` tree
