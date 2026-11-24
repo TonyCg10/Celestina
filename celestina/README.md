@@ -289,6 +289,13 @@ caller points `DBUS_SYSTEM_BUS_ADDRESS` elsewhere or the file names both
 `"off"`.
 `scripts/smoke.sh --binary PATH` runs the shell once in such a nest with
 `--exit-after 3 --metrics` and checks the frame report.
+A measuring run (the smoke, `scripts/lock-rehearsal.sh`,
+`scripts/wallpaper-backdrop-probe.sh`) holds the host-wide nest lock
+(`$XDG_RUNTIME_DIR/celestina-nest.lock`, taken by `scripts/nest-run.sh`): a
+second one waits `CELESTINA_NEST_LOCK_WAIT` seconds (default 1800) and then
+fails with status 69, naming the holder, and `TERM` or `INT` ends a smoke
+together with its nest. `dev-session.sh` takes no lock; an interactive nest
+only says so when a measuring run holds it.
 
 ## Installing the lock's PAM service
 

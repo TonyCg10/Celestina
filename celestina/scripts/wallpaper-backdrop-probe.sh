@@ -37,8 +37,19 @@ done
 [ -n "${WAYLAND_DISPLAY:-}" ] ||
     { echo "backdrop-probe: WAYLAND_DISPLAY is empty; the nest needs a host" >&2; exit 1; }
 
+# A measuring run: it holds the host-wide nest lock (`nest-run.sh`) while it
+# runs, so it never overlaps a smoke or a rehearsal. TERM or INT ends it with
+# its nest.
+# shellcheck source=scripts/nest-run.sh
+. "$here/nest-run.sh"
+nest_lock_acquire "wallpaper-backdrop-probe.sh $*"
+
 work=$(mktemp -d "${TMPDIR:-/tmp}/celestina-backdrop.XXXXXX")
-trap 'rm -rf "$work"' EXIT INT TERM
+cleanup() {
+    nest_lock_release
+    rm -rf "$work"
+}
+nest_signals cleanup
 
 # Four profile copies: with and without the rule, each on the reference
 # profile's opaque workspace background and with the transparent one the
@@ -177,9 +188,9 @@ variant() {
     # A throwaway state home too: a shell whose clipboard duty is off (this
     # config names it off) deletes `$XDG_STATE_HOME/celestina/clipboard.json`.
     mkdir -p "$work/state"
-    SHOT_DIR=$shots CELESTINA_NEST_CONFIG=$profile XDG_CONFIG_HOME=$work/config \
-        XDG_STATE_HOME=$work/state \
-        timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$bin" \
+    nest 60 SHOT_DIR="$shots" CELESTINA_NEST_CONFIG="$profile" XDG_CONFIG_HOME="$work/config" \
+        XDG_STATE_HOME="$work/state" \
+        "$here/dev-session.sh" --own-bus --monitor none --binary "$bin" \
         --probe "$work/shots.sh" --once "$work/run-$name" -- --exit-after 14 \
         > "$work/niri-$name.log" 2>&1 || status=$?
     echo "backdrop-probe: ==== $name: nest exit=$status shell exit=$(cat "$work/run-$name.status" 2>/dev/null || echo none)"

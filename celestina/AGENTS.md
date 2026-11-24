@@ -50,6 +50,17 @@ the shell's constraints; it cannot relax the root or grant authority.
   nested niri, a fake logind and no PAM service only, never the live session;
   it stops processes by recorded pid, never by name)
 
+A measuring run (`smoke.sh`, `lock-rehearsal.sh`, `wallpaper-backdrop-probe.sh`)
+holds the host-wide nest lock (`scripts/nest-run.sh`): a second one waits
+`CELESTINA_NEST_LOCK_WAIT` seconds (default 1800), then fails with status 69
+naming the holder, and `TERM` ends a smoke together with its nest. Never run
+two at once by other means; the counts of both are worthless. A caller that
+bounds a smoke uses `TERM` first and a limit that covers the wait plus the run,
+for example `timeout -k 60 2700 sh scripts/smoke.sh --binary PATH`, or lowers
+`CELESTINA_NEST_LOCK_WAIT`; never `timeout -s KILL`, which cannot be handled
+(the run's nest would outlive it). `flock` does not serve waiters in arrival
+order, so a waiting run may be passed over until its patience ends.
+
 The fast checks a session runs from `celestina/`, on the toolchain
 `celestina/rust-toolchain.toml` pins:
 

@@ -1031,6 +1031,15 @@ if [ "$check" = yes ]; then
     exit 0
 fi
 
+# A measuring run: the host-wide nest lock (`nest-run.sh`) is held from here
+# to the end, so no smoke or probe counts frames while a rehearsal's nests are
+# open. Only this outer driver takes it: the inner invocations (the nest's
+# "binary" and "probe") end in the branch at the top of the file and never get
+# here.
+# shellcheck source=scripts/nest-run.sh
+. "$here/nest-run.sh"
+nest_lock_acquire "lock-rehearsal.sh $*"
+
 mkdir -p "$out"
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/celestina-lock-rehearsal.XXXXXX")
 summary=$out/task7-summary.txt
@@ -1179,6 +1188,7 @@ run_step() {
     system_bus=$(sed -n 's/^DBUS_SYSTEM_BUS_ADDRESS=//p' "$work/logind.out")
 
     echo "lock-rehearsal: $step ..."
+    nest_check
     set +e
     (
         LOCK_REHEARSAL_INSIDE=1
@@ -1207,8 +1217,12 @@ run_step() {
             8>&- > "$work/nest.log" 2>&1
     ) &
     nest_launcher=$!
+    # The subshell execs `timeout`, so `$!` leads the nest's process group:
+    # the registry keeps the lock while it lives even if this driver dies.
+    nest_register "$nest_launcher"
     wait "$nest_launcher"
     launcher_status=$?
+    nest_unregister "$nest_launcher"
     set -e
     nest_launcher=
     # The nest closes itself when the wrapper returns; anything left is
@@ -1262,4 +1276,5 @@ for step in $plan; do
     done
 done
 rm -rf "$scratch"
+nest_lock_release
 echo "lock-rehearsal: done; summary in $summary"

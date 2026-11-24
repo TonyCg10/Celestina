@@ -39,6 +39,8 @@ set -eu
 # the live session.
 
 here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=scripts/nest-run.sh
+. "$here/nest-run.sh"
 project_root=$(CDPATH= cd -- "$here/.." && pwd)
 # CELESTINA_NEST_CONFIG names a different profile, for comparing compositor
 # behaviour without editing the reference one.
@@ -355,6 +357,9 @@ say_nest_switch() {
 
 echo ">> nested niri ($niri_binary): $config" >&2
 if [ -z "$once" ]; then
+    # Takes no lock (an interactive nest may stay open for hours and must
+    # never block a landing), but says so when a measuring run holds it.
+    nest_lock_notice
     echo ">> the shell runs inside it; Ctrl-C here stops the whole nest" >&2
     # The interactive nest inherits the real XDG_CONFIG_HOME and
     # XDG_STATE_HOME. Since the cutover (CEL-2-M) a missing `shell.json`

@@ -1,0 +1,29 @@
+# SMOKE-LOCK exact change inventory
+
+Base revision	9e236bbbd8d6d5a006d4823a7160860ff6a30fb0
+Pathspec	celestina/AGENTS.md
+Pathspec	celestina/README.md
+Pathspec	celestina/docs/evidence/2026-11-24-smoke-lock.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/SMOKE-LOCK.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/dev-session.sh
+Pathspec	celestina/scripts/lock-rehearsal.sh
+Pathspec	celestina/scripts/nest-run.sh
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/scripts/wallpaper-backdrop-probe.sh
+Pathspec	celestina/tests/nest_run.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+11	0	d4e4e4cd9c5e2e2971d2d24e4efa444b4637a3301ac6c5653a2e0b05b8ca91a1	celestina/AGENTS.md
+7	0	aa2954d43a0ab9841ad41efbf960a58e6b74a6646b02af14cdecaa43eb1d2e6f	celestina/README.md
+193	0	b8d3f508e11b9825a1eb30362e88d9f3453f45b21da203c322b474f486080267	celestina/docs/evidence/2026-11-24-smoke-lock.md
+29	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/SMOKE-LOCK.numstat.tsv
+1	0	8df454a641ada35618978283d1e3467cef123812b1eecb26f86b8b9594cdf658	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+5	0	b4f8215a9245e634db9df2af894581c3d68deddd516ddafa261f3f1b128cfb3d	celestina/scripts/dev-session.sh
+15	0	e9afda85797c39f3d4a0f6cad41bf0aaf773ae6d85c8467eed61681be570088d	celestina/scripts/lock-rehearsal.sh
+481	0	38ddd2b39118a5987203b32c320b7642f12f3703e81e812a57fb58740ad18139	celestina/scripts/nest-run.sh
+55	29	8555d83e96b2d5d1a70314c0b9fc5768dff96569d16d07fcedbb195e1b6978c2	celestina/scripts/smoke.sh
+15	4	d936921264fcd923d92e58518c1adcb55db9fdbdca2167e33398c3dabcead8f5	celestina/scripts/wallpaper-backdrop-probe.sh
+842	0	19d303d3f35c4e803de81f8af662dc04a91933350c11d91ce27a44f58624f4ab	celestina/tests/nest_run.rs

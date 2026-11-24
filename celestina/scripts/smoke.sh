@@ -75,7 +75,6 @@ set -eu
 # unavailable, never register with a polkitd and not panic (the duty is never
 # activated against the real bus here). Without niri the nested session is
 # skipped with a notice; without busctl and gdbus the notification part is.
-# the script, `rest_fail`).
 # The cutover (CEL-2-M) adds two checks. Before the nest,
 # `cutover-config-probe.sh` runs on the two fixtures of
 # `tests/fixtures/cutover/`: the niri config as the session ran it with
@@ -102,12 +101,28 @@ set -eu
 # same one, and the clipboard's history file must be deleted. Since the
 # cutover a `shell.json` that chooses nothing has every duty on, so every
 # other run writes the duties it wants off (`duties` below).
+#
+# Measuring runs take turns. The smoke takes the host-wide nest lock
+# (`nest-run.sh`: `$XDG_RUNTIME_DIR/celestina-nest.lock`) before it
+# does anything else and keeps it, the three attempts included, until it ends,
+# so two smokes, or a smoke and `lock-rehearsal.sh`, never count frames at the
+# same time. A second run waits `CELESTINA_NEST_LOCK_WAIT` seconds (default
+# 1800) and then fails with status 69, naming the holder. TERM or INT ends the
+# run together with its nest (every nested run goes through `nest`, which keeps
+# it in a process group of its own), removes the work directory and exits 143
+# or 130. A caller that bounds the smoke uses TERM first and a limit that
+# covers the wait plus the run (`timeout -k 60 2700 sh scripts/smoke.sh
+# --binary PATH`), never `timeout -s KILL`.
 usage() {
     echo "usage: scripts/smoke.sh --binary PATH" >&2
     exit 2
 }
 [ "$#" -eq 2 ] && [ "$1" = "--binary" ] || usage
 bin=$2
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=scripts/nest-run.sh
+. "$here/nest-run.sh"
+nest_lock_acquire "smoke.sh $*"
 # The host compositor withholds frame callbacks from a window it does not show
 # (niri sends one about every second instead of every refresh), and a nest on
 # such a window serves its clients at that pace: start-up frames then land
@@ -116,11 +131,14 @@ bin=$2
 # below) is therefore inconclusive, not a verdict: the attempt exits 75 and
 # the smoke is started again, up to three attempts. A run that was not
 # throttled and fails still fails, and so does the third throttled one.
+# Each attempt runs in the background so that TERM or INT reaches this shell
+# while it waits (`nest_child`), which then ends the attempt and exits.
 if [ -z "${CELESTINA_SMOKE_ATTEMPT:-}" ]; then
+    nest_signals nest_lock_release
     attempt=1
     while :; do
         attempt_status=0
-        CELESTINA_SMOKE_ATTEMPT=$attempt sh "$0" "$@" || attempt_status=$?
+        nest_child env CELESTINA_SMOKE_ATTEMPT=$attempt sh "$0" "$@" || attempt_status=$?
         [ "$attempt_status" -eq 75 ] || exit "$attempt_status"
         if [ "$attempt" -ge 3 ]; then
             echo "smoke: the nest was throttled by the host in 3 attempts; show its window" >&2
@@ -135,7 +153,6 @@ case "$bin" in
     /*) ;;
     *) bin=$(pwd)/$bin ;;
 esac
-here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 # The artifact is three binaries (CEL-2-H): the shell finds the lock and its
 # verifier beside itself, so a smoke of a lone shell proves nothing about the
@@ -223,7 +240,16 @@ CELESTINA_HOST_BUS=${DBUS_SESSION_BUS_ADDRESS:-}
 export CELESTINA_HOST_BUS
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/celestina-smoke.XXXXXX")
-trap 'rm -rf "$work"' EXIT INT TERM
+# The one cleanup, run once on every way out (EXIT; TERM and INT exit 143 and
+# 130 after stopping the running nest): the fake Melibea when it was started,
+# the lock, the work directory.
+fake_pid=
+cleanup() {
+    [ -z "$fake_pid" ] || stop_fake
+    nest_lock_release
+    rm -rf "$work"
+}
+nest_signals cleanup
 # The generated wrapper below quotes paths with single quotes, so a path that
 # holds one cannot be written safely: refuse it rather than build a script
 # that means something else.
@@ -299,7 +325,7 @@ chmod +x "$shell_run"
 run=$work/run
 status=0
 # shellcheck disable=SC2086 # probe_args is two words or none
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$shell_run" \
+nest 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$shell_run" \
     $probe_args --once "$run" -- --exit-after 4 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 
@@ -446,7 +472,7 @@ WRAPPER
 chmod +x "$toggles"
 run=$work/launcher
 status=0
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$toggles" \
+nest 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$toggles" \
     --once "$run" -- --exit-after 6 \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (launcher run)"
@@ -484,7 +510,7 @@ mkdir -p "$work/xdg-bar/celestina"
 printf '{"schema_version":1,"duties":%s}\n' "$(duties)" > "$work/xdg-bar/celestina/shell.json"
 run=$work/bar
 status=0
-XDG_CONFIG_HOME=$work/xdg-bar timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
+nest 60 XDG_CONFIG_HOME="$work/xdg-bar" "$here/dev-session.sh" --own-bus --monitor none \
     --binary "$shell_run" --once "$run" -- --exit-after 4 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (bar run)"
@@ -573,7 +599,7 @@ status=0
 while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
     sleep 1
 done
-XDG_CONFIG_HOME=$config_home timeout 60 "$here/dev-session.sh" --own-bus \
+nest 60 XDG_CONFIG_HOME="$config_home" "$here/dev-session.sh" --own-bus \
     --monitor none --binary "$shell_run" --probe "$here/wallpaper-layers-probe.sh" \
     --once "$run" -- --exit-after 10 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
@@ -657,7 +683,7 @@ WRAPPER
 chmod +x "$energy"
 run=$work/energy
 status=0
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$energy" \
+nest 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$energy" \
     --once "$run" -- --exit-after 6 \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (energy run)"
@@ -725,7 +751,7 @@ WRAPPER
     while [ "$(date +%S)" -gt 40 ] || [ "$(date +%S)" -lt 2 ]; do
         sleep 1
     done
-    timeout 90 "$here/dev-session.sh" --own-bus --monitor none --binary "$work/$g_name-run" \
+    nest 90 "$here/dev-session.sh" --own-bus --monitor none --binary "$work/$g_name-run" \
         --once "$run" -- --exit-after 14 --metrics \
         > "$work/niri.log" 2>&1 || status=$?
     [ "$status" -eq 0 ] || fail "the nested niri exited with $status ($g_name run)"
@@ -921,7 +947,7 @@ status=0
 while [ "$(date +%S)" -gt 22 ] || [ "$(date +%S)" -lt 2 ]; do
     sleep 1
 done
-timeout 90 "$here/dev-session.sh" --own-bus --monitor none --binary "$clip" \
+nest 90 "$here/dev-session.sh" --own-bus --monitor none --binary "$clip" \
     --once "$run" -- --exit-after 30 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (clipboard run)"
@@ -1026,7 +1052,9 @@ esac
 command -v cargo >/dev/null 2>&1 || fail "cargo is absent: the fake system bus example cannot be built"
 target_dir=$(dirname -- "$(dirname -- "$bin")")
 # shellcheck disable=SC2086 # profile_flag is one word or none
-CARGO_TARGET_DIR=$target_dir cargo build --example fake_system_bus --locked --offline \
+# The build runs through `nest` (a process group of its own, an hour at most:
+# it may wait on the shared target directory's lock) so that TERM ends it too.
+nest 3600 CARGO_TARGET_DIR="$target_dir" cargo build --example fake_system_bus --locked --offline \
     $profile_flag --manifest-path "$here/../Cargo.toml" > "$work/fake-build.log" 2>&1 ||
     { tail -n 40 "$work/fake-build.log" >&2; fail "the fake system bus example did not build"; }
 fake=$target_dir/$profile/examples/fake_system_bus
@@ -1075,7 +1103,7 @@ while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
 done
 run=$work/connectivity
 status=0
-XDG_CONFIG_HOME=$conn_cfg timeout 90 "$here/dev-session.sh" --own-bus --monitor none \
+nest 90 XDG_CONFIG_HOME="$conn_cfg" "$here/dev-session.sh" --own-bus --monitor none \
     --binary "$fake_wrapper" --once "$run" -- --exit-after 6 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (connectivity run)"
@@ -1116,7 +1144,7 @@ exec "$bin" "\$@"
 WRAPPER
 chmod +x "$absent_wrapper"
 status=0
-XDG_CONFIG_HOME=$conn_cfg timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
+nest 60 XDG_CONFIG_HOME="$conn_cfg" "$here/dev-session.sh" --own-bus --monitor none \
     --binary "$absent_wrapper" --once "$run" -- --exit-after 4 --metrics \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (absent bus run)"
@@ -1230,7 +1258,7 @@ osd_run() {
     chmod +x "$work/$1-run"
     run=$work/$1
     status=0
-    timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
+    nest 60 "$here/dev-session.sh" --own-bus --monitor none \
         --binary "$work/$1-run" --once "$run" -- --exit-after "$4" \
         > "$work/niri.log" 2>&1 || status=$?
     [ "$status" -eq 0 ] || fail "the nested niri exited with $status ($1 run)"
@@ -1382,13 +1410,11 @@ phone_absent=$work/phone-absent
 } > "$phone_absent"
 chmod +x "$phone_absent"
 
-# The fake serves until SIGTERM and removes its socket then; the trap makes
+# The fake serves until SIGTERM and removes its socket then; `cleanup` makes
 # sure no failing exit leaves it running.
 run=$phone_home/fake
-fake_pid=
 python3 -I "$here/fake-melibea.py" "$phone_socket" > "$phone_home/fake.log" 2>&1 &
 fake_pid=$!
-trap 'stop_fake; rm -rf "$work"' EXIT INT TERM
 tries=0
 until [ -S "$phone_socket" ]; do
     tries=$((tries + 1))
@@ -1401,7 +1427,7 @@ status=0
 while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
     sleep 1
 done
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$phone_metrics" \
+nest 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$phone_metrics" \
     --once "$run" -- --exit-after 4 --metrics > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (phone metrics run)"
 [ -f "$run.status" ] || fail "the shell never ran inside the nest (phone metrics run)"
@@ -1431,7 +1457,7 @@ status=0
 while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
     sleep 1
 done
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$phone_verbs" \
+nest 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$phone_verbs" \
     --once "$run" -- --exit-after 12 > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (phone verbs run)"
 [ -f "$run.status" ] || fail "the shell never ran inside the nest (phone verbs run)"
@@ -1470,7 +1496,7 @@ status=0
 while [ "$(date +%S)" -gt 48 ] || [ "$(date +%S)" -lt 2 ]; do
     sleep 1
 done
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$phone_absent" \
+nest 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$phone_absent" \
     --once "$run" -- --exit-after 3 > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (phone absent run)"
 [ -f "$run.status" ] || fail "the shell never ran inside the nest (phone absent run)"
@@ -1537,13 +1563,13 @@ PNG
             sleep 1
         done
         media_status=0
-        XDG_CONFIG_HOME=$media_home SMOKE_MEDIA_SHELL=$bin SMOKE_MEDIA_PLAYER=$player \
-            SMOKE_MEDIA_MODE=$2 SMOKE_MEDIA_ART=$3 \
+        nest 60 XDG_CONFIG_HOME="$media_home" SMOKE_MEDIA_SHELL="$bin" SMOKE_MEDIA_PLAYER="$player" \
+            SMOKE_MEDIA_MODE="$2" SMOKE_MEDIA_ART="$3" \
             SMOKE_RUST_LOG=info,celestina::island=debug,celestina_wayland::runtime=debug \
-            SMOKE_MEDIA_CONFIG=$media_home/celestina/shell.json \
+            SMOKE_MEDIA_CONFIG="$media_home/celestina/shell.json" \
             SMOKE_MEDIA_OFF="{\"schema_version\":1,\"duties\":$(duties)}" \
             SMOKE_MEDIA_ON="{\"schema_version\":1,\"duties\":$(duties media)}" \
-            timeout 60 "$here/dev-session.sh" --own-bus --monitor none \
+            "$here/dev-session.sh" --own-bus --monitor none \
             --binary "$here/smoke-media.sh" --once "$1" -- --exit-after "$4" --metrics \
             > "$work/niri.log" 2>&1 || media_status=$?
         [ "$media_status" -eq 0 ] || fail "the nested niri exited with $media_status (media $2 run)"
@@ -1694,8 +1720,8 @@ WRAPPER
 chmod +x "$ov_wrapper"
 run=$work/overview
 status=0
-XDG_CONFIG_HOME=$ov_xdg NIRI_CONFIG=$ov_niri CELESTINA_NEST_CONFIG=$ov_niri \
-    timeout "$ov_timeout" "$here/dev-session.sh" --own-bus --monitor none --binary "$ov_wrapper" \
+nest "$ov_timeout" XDG_CONFIG_HOME="$ov_xdg" NIRI_CONFIG="$ov_niri" CELESTINA_NEST_CONFIG="$ov_niri" \
+    "$here/dev-session.sh" --own-bus --monitor none --binary "$ov_wrapper" \
     --once "$run" -- --exit-after "$ov_exit_after" \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (overview run)"
@@ -1810,7 +1836,7 @@ WRAPPER
 chmod +x "$polkit"
 run=$work/polkit
 status=0
-timeout 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$polkit" \
+nest 60 "$here/dev-session.sh" --own-bus --monitor none --binary "$polkit" \
     --once "$run" -- --exit-after 5 \
     > "$work/niri.log" 2>&1 || status=$?
 [ "$status" -eq 0 ] || fail "the nested niri exited with $status (polkit run)"
@@ -1963,7 +1989,7 @@ WRAPPER
         sleep 1
     done
     status=0
-    timeout 90 "$here/dev-session.sh" --own-bus --monitor none --binary "$cutover_wrapper" \
+    nest 90 "$here/dev-session.sh" --own-bus --monitor none --binary "$cutover_wrapper" \
         --probe "$here/wallpaper-layers-probe.sh" --once "$run" -- --exit-after 18 --metrics \
         > "$work/niri.log" 2>&1 || status=$?
     [ "$status" -eq 0 ] || fail "the nested niri exited with $status (cutover run)"
