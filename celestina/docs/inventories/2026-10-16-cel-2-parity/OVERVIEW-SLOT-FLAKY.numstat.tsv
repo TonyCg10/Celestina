@@ -1,0 +1,17 @@
+# OVERVIEW-SLOT-FLAKY exact change inventory
+
+Base revision	000f1081618d698465be809044f08fc9e831347a
+Pathspec	celestina/docs/evidence/2026-11-24-overview-slot-flaky.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/OVERVIEW-SLOT-FLAKY.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/capture/worker.rs
+Pathspec	celestina/src/overview/slot.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+142	0	72e6e440997a61f784b2cd70029764cf1fe08e803c9f7d0b5ea47844e8a16a86	celestina/docs/evidence/2026-11-24-overview-slot-flaky.md
+17	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/OVERVIEW-SLOT-FLAKY.numstat.tsv
+1	0	213e1ba3598f63596440006a3bd755a8e1a41d6dbccbbb7c0ded84df8ca097a4	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+7	1	78af9d188f913c21d4ab23bb97341780039e29644d218a3f2749c186446701f2	celestina/src/capture/worker.rs
+53	29	a8e2c564d0f983e09c95acd700a82a5d3655597bced1aacf5faf803e3bfa6d57	celestina/src/overview/slot.rs

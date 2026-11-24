@@ -926,10 +926,16 @@ mod tests {
         let (handle, worker) =
             spawn(Panicking, |_| true, &shutdown, mark).expect("the worker starts");
         assert_eq!(handle.request(CaptureRequest::default()), Ok(()));
+        // The panic unwinds through the ticket first, which clears the mark,
+        // and only then through the queue, which closes it. A request made
+        // between the two is taken (`Ok`), sits in the queue and is discarded
+        // with its own ticket when the queue closes, as `spawn` says; so
+        // until the worker is gone both answers mean "not yet", and neither
+        // may be the last one.
         let started = Instant::now();
         let refusal = loop {
             match handle.request(CaptureRequest::default()) {
-                Err(Busy::InFlight) if started.elapsed() < Duration::from_secs(2) => {
+                Err(Busy::InFlight) | Ok(()) if started.elapsed() < Duration::from_secs(2) => {
                     std::thread::sleep(Duration::from_millis(5));
                 }
                 other => break other,

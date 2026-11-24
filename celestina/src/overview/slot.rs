@@ -340,6 +340,11 @@ mod tests {
         assert_eq!(spawner.0.load(Ordering::Relaxed), 2);
     }
 
+    /// The gap the two tests below put between a capture's end and its mark
+    /// clearing: wide enough that a test which asked again inside it, as
+    /// these two once did every five milliseconds, would fail every time.
+    const LINGER: Duration = Duration::from_millis(60);
+
     /// A capturer that answers when told to, or when it is stopped, and
     /// says on `ended` that its capture is over (`true`: it saw the stop).
     struct Held {
@@ -349,6 +354,13 @@ mod tests {
         /// How long it keeps going after the stop, as a capture draining its
         /// last step would.
         drain: Duration,
+        /// How long it stays in `capture` after saying it has ended. The
+        /// worker clears the in-flight mark only once `capture` has returned,
+        /// so this is the gap between "ended" and "the next request is
+        /// taken", which a loaded machine makes as wide as it likes; a test
+        /// that sets it shows that it does not depend on that gap being
+        /// short.
+        linger: Duration,
     }
 
     impl crate::capture::worker::Capturer for Held {
@@ -370,6 +382,7 @@ mod tests {
                 thread::sleep(self.drain);
             }
             let _ = self.ended.send(stopped);
+            thread::sleep(self.linger);
             CaptureResult::Unavailable("test".to_owned())
         }
     }
@@ -382,6 +395,7 @@ mod tests {
         started: mpsc::Sender<()>,
         ended: mpsc::Sender<bool>,
         drain: Duration,
+        linger: Duration,
         /// One mark for every worker it starts, as the live ones share
         /// `IN_FLIGHT`; a test's own, so parallel tests never meet.
         mark: &'static AtomicBool,
@@ -402,6 +416,7 @@ mod tests {
                     started: self.started.clone(),
                     ended: self.ended.clone(),
                     drain: self.drain,
+                    linger: self.linger,
                 },
                 move |reply| replies.send(reply).is_ok(),
                 shutdown,
@@ -419,6 +434,12 @@ mod tests {
     }
 
     fn held_draining(n: usize, drain: Duration) -> HeldRig {
+        held_lingering(n, drain, Duration::ZERO)
+    }
+
+    /// [`held_draining`] whose captures stay `linger` in the worker after
+    /// they have said they ended (see [`Held::linger`]).
+    fn held_lingering(n: usize, drain: Duration, linger: Duration) -> HeldRig {
         let (replies, inbox) = mpsc::channel();
         let (ended_tx, ended) = mpsc::channel();
         let (started_tx, started) = mpsc::channel();
@@ -432,6 +453,7 @@ mod tests {
                 started: started_tx,
                 ended: ended_tx,
                 drain,
+                linger,
                 mark: Box::leak(Box::new(AtomicBool::new(false))),
             },
             release: senders,
@@ -439,6 +461,24 @@ mod tests {
             started,
             ended,
         }
+    }
+
+    /// Waits until the rig's in-flight mark is clear, which is what the next
+    /// request needs: the given-up capture has ended and the worker has
+    /// dropped its ticket. A test waits for this instead of asking again and
+    /// again: a request made while the mark is still set is refused as busy
+    /// and spends the worker started for it, so asking in a loop depends on
+    /// how long the worker takes between a capture's end and the ticket's
+    /// drop, and on how many spawns the rig has to spare.
+    fn mark_cleared(rig: &HeldRig) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while rig.spawner.mark.load(Ordering::Acquire) {
+            if Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        true
     }
 
     fn held(
@@ -471,10 +511,9 @@ mod tests {
 
     #[test]
     fn a_cancelled_capture_publishes_nothing_and_a_reopen_asks_anew() {
-        // Spawns to spare: a request made in the instant between the
-        // capture's end and its mark being cleared is refused as busy, and
-        // the fresh worker it started is let go, spent.
-        let rig = held_draining(8, Duration::ZERO);
+        // Two spawns and no more: the capture that is cancelled and the one
+        // that takes the reopening.
+        let rig = held_lingering(2, Duration::ZERO, LINGER);
         let mut slot = Slot::default();
         assert_eq!(slot.request_capture(&rig.spawner, request(1)), Ok(()));
         assert_eq!(rig.started.recv_timeout(Duration::from_secs(2)), Ok(()));
@@ -492,19 +531,12 @@ mod tests {
             Ok(true),
             "the capture saw the stop and ended"
         );
-        // Its mark clears right after it says so; until then the next
-        // opening is refused as busy.
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let asked = loop {
-            match slot.request_capture(&rig.spawner, request(2)) {
-                Err(NotAsked::Busy) if Instant::now() < deadline => {
-                    thread::sleep(Duration::from_millis(5));
-                }
-                other => break other,
-            }
-        };
+        // Its mark clears once the worker has dropped the ticket, some time
+        // after the capture said it ended; until then the next opening would
+        // be refused as busy.
+        assert!(mark_cleared(&rig), "the given-up capture's mark clears");
         assert_eq!(
-            asked,
+            slot.request_capture(&rig.spawner, request(2)),
             Ok(()),
             "a fresh worker takes the next opening's request"
         );
@@ -542,7 +574,7 @@ mod tests {
 
     #[test]
     fn a_draining_capture_keeps_the_next_opening_busy_until_it_ends() {
-        let rig = held_draining(3, Duration::from_millis(300));
+        let rig = held_lingering(3, Duration::from_millis(300), LINGER);
         let mut slot = Slot::default();
         assert_eq!(slot.request_capture(&rig.spawner, request(1)), Ok(()));
         assert_eq!(rig.started.recv_timeout(Duration::from_secs(2)), Ok(()));
@@ -555,18 +587,10 @@ mod tests {
         );
         assert!(slot.capture.is_none(), "the idle fresh worker is let go");
         assert_eq!(rig.ended.recv_timeout(Duration::from_secs(2)), Ok(true));
-        // Once it has ended (its ticket dropped right after), the next
-        // opening is taken.
-        let deadline = Instant::now() + Duration::from_secs(2);
-        let asked = loop {
-            match slot.request_capture(&rig.spawner, request(3)) {
-                Err(NotAsked::Busy) if Instant::now() < deadline => {
-                    thread::sleep(Duration::from_millis(5));
-                }
-                other => break other,
-            }
-        };
-        assert_eq!(asked, Ok(()));
+        // Once it has ended and its ticket has dropped, the next opening is
+        // taken, by the third and last spawn of the rig.
+        assert!(mark_cleared(&rig), "the drained capture's mark clears");
+        assert_eq!(slot.request_capture(&rig.spawner, request(3)), Ok(()));
         slot.cancel_capture();
     }
 
