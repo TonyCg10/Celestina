@@ -11,7 +11,13 @@
 //!    Island's place); its [`Piece::name`] is product copy from `copy.rs`.
 //!    A piece with a page returns its `PageView` (`island/pages/`) from
 //!    [`Piece::page`]; a [`PageId`] constant exists only for a page that code
-//!    outside its piece names (a verb, a launcher switch).
+//!    outside its piece names (a verb, a launcher switch). Every node key
+//!    its widget draws starts with the piece's id or is a name only that
+//!    piece uses, because the bar hands a node's input to the first piece
+//!    that drew its key; the table-wide key test
+//!    (`no_two_pieces_of_the_table_draw_the_same_node_key`) enforces it, and
+//!    fails for a piece its fixture (`tests_support::Everything`) draws
+//!    nothing for.
 //! 2. If the piece needs shared state the bar does not carry yet, add one
 //!    typed, read-only slice to [`BarCx`] (and fill it where the Island
 //!    builds the context). A piece reads only its context: never another
@@ -689,10 +695,90 @@ mod tests {
     }
 }
 
-/// Test support for the pieces' tests: a context over a given state.
+#[cfg(test)]
+mod key_tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    /// What the survey calls the bar when a piece draws one of its keys; no
+    /// piece id can spell it.
+    const THE_BAR: &str = "(the bar)";
+
+    /// Draws every piece of the table under `cx`: the ids of the pieces that
+    /// drew nothing, and the pairs of owners of every key drawn twice (two
+    /// pieces, or the bar itself and a piece).
+    fn survey(cx: &BarCx<'_>) -> (Vec<&'static str>, Vec<(&'static str, &'static str)>) {
+        let mut owners: HashMap<Key, &'static str> = crate::island::bar_tree::own_keys()
+            .into_iter()
+            .map(|key| (key, THE_BAR))
+            .collect();
+        let mut absent = Vec::new();
+        let mut clashes = Vec::new();
+        for piece in PIECES {
+            let id = piece.id().0;
+            let Some(view) = piece.bar(cx) else {
+                absent.push(id);
+                continue;
+            };
+            let mut stack = vec![&view];
+            while let Some(node) = stack.pop() {
+                match owners.get(&node.key) {
+                    Some(first) if *first != id => clashes.push((*first, id)),
+                    Some(_) => {}
+                    None => {
+                        owners.insert(node.key, id);
+                    }
+                }
+                stack.extend(node.children.iter());
+            }
+        }
+        (absent, clashes)
+    }
+
+    /// The bar hands a node's input to the piece that owns its key, the
+    /// first to draw it (`bar::view::own`), and finds its own capsules by
+    /// key, so no two pieces may draw the same key and no piece one of the
+    /// bar's. The Volume and Brightness pieces share one widget and once
+    /// shared its two inner keys (found live on 2026-11-23: a warning on
+    /// every rebuild of the bar).
+    ///
+    /// Every piece of the table is drawn: one that draws nothing under
+    /// `tests_support::Everything` fails here, so a new piece brings its
+    /// state to that fixture and is compared from its first commit.
+    #[test]
+    fn no_two_pieces_of_the_table_draw_the_same_node_key() {
+        let everything = tests_support::Everything::new();
+        let (absent, clashes) = everything.with(survey);
+        assert!(
+            absent.is_empty(),
+            "pieces the fixture draws nothing for: {absent:?}"
+        );
+        assert!(clashes.is_empty(), "sharing a node key: {clashes:?}");
+    }
+}
+
+/// Test support for the pieces' tests: a context over a given state, the
+/// fixtures more than one test module builds, and a state that draws every
+/// piece.
 #[cfg(test)]
 pub(crate) mod tests_support {
+    use celestina_shell::{
+        connectivity::{ChargeState, Service},
+        melibea::Window,
+        phone::Phone as Device,
+    };
+
     use super::*;
+    use crate::{
+        bubbles::Link,
+        connectivity::{power::PowerEvent, state::sample},
+        media::PlayerView,
+        providers::niri::Workspace,
+    };
+
+    /// The output every context here is built for.
+    const OUTPUT: &str = "DP-1";
 
     /// Runs `f` with a bar context that reads `state`.
     pub(crate) fn with_state<R>(state: &ConnectivityState, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
@@ -700,7 +786,7 @@ pub(crate) mod tests_support {
         let owners = NameOwner::default();
         f(&BarCx {
             theme: &theme,
-            output: "DP-1",
+            output: OUTPUT,
             model: None,
             owners: &owners,
             do_not_disturb: false,
@@ -717,5 +803,191 @@ pub(crate) mod tests_support {
             bubbles: &crate::bubbles::NONE,
             media: &crate::island::pages::media::NO_MEDIA,
         })
+    }
+
+    /// A workspace on `output`, active and focused or neither.
+    pub(crate) fn workspace(
+        id: u64,
+        idx: u8,
+        name: Option<&str>,
+        output: &str,
+        active: bool,
+    ) -> Workspace {
+        Workspace {
+            id,
+            idx,
+            name: name.map(str::to_owned),
+            output: Some(output.to_owned()),
+            is_active: active,
+            is_focused: active,
+            columns: 1,
+        }
+    }
+
+    /// A system monitor reading with no history and no temperature.
+    pub(crate) fn sys_reading(cpu: u8, ram: u8) -> SysReading {
+        SysReading {
+            cpu,
+            ram,
+            ram_used_kib: 0,
+            ram_total_kib: 0,
+            temp_c: None,
+            cpu_history: Vec::new(),
+            ram_history: Vec::new(),
+        }
+    }
+
+    /// A weather reading for a fixed place.
+    pub(crate) fn weather_reading(celsius: i16, code: u8, daylight: bool) -> WeatherReading {
+        WeatherReading {
+            celsius,
+            code,
+            daylight,
+            label: "Madrid".to_owned(),
+            taken_unix: 0,
+        }
+    }
+
+    /// A connected phone with no player.
+    pub(crate) fn phone_device(battery: Option<u8>, charging: bool) -> PhoneState {
+        PhoneState::Present(Device {
+            id: "dev".to_owned(),
+            name: "Pixel".to_owned(),
+            battery,
+            charging,
+            media: None,
+        })
+    }
+
+    /// A minimised window as Melibea lists it.
+    pub(crate) fn bubble_window(
+        id: u64,
+        title: Option<&str>,
+        app_id: Option<&str>,
+        icon: Option<&str>,
+    ) -> Window {
+        Window {
+            id,
+            app_id: app_id.map(str::to_owned),
+            title: title.map(str::to_owned),
+            icon_name: icon.map(str::to_owned),
+        }
+    }
+
+    /// `n` minimised windows without an icon, ids from 1, over `link`.
+    pub(crate) fn bubbles_state(n: u64, link: Link) -> Bubbles {
+        Bubbles {
+            windows: (1..=n)
+                .map(|id| bubble_window(id, Some(&format!("w{id}")), Some("app"), None))
+                .collect(),
+            link,
+        }
+    }
+
+    /// One player on the bus.
+    pub(crate) fn media_player(playing: bool, artist: &str, title: &str) -> PlayerView {
+        PlayerView {
+            bus_name: "org.mpris.MediaPlayer2.vlc".to_owned(),
+            identity: "vlc".to_owned(),
+            playing,
+            title: title.to_owned(),
+            artist: artist.to_owned(),
+            album: String::new(),
+            art_url: String::new(),
+            length_ms: 100_000,
+            position_ms: 5_000,
+            pinned: false,
+        }
+    }
+
+    /// The media state of a duty that is on and shows the first of `players`.
+    pub(crate) fn media_state(players: Vec<PlayerView>) -> MediaState {
+        let active = players.first().map(|p| p.bus_name.clone());
+        MediaState {
+            players,
+            active,
+            cover: None,
+            duty_on: true,
+            unavailable: false,
+        }
+    }
+
+    /// A shell state under which every piece of [`PIECES`] has something to
+    /// show, with the nodes a piece draws only sometimes where one state can
+    /// hold them (the unread mark, the paused mark, the charging bolt, the
+    /// Wi-Fi bars, the overflow bubble, a bubble with an icon and one
+    /// without). A new piece adds its state here: the table-wide key test
+    /// fails for a piece this draws nothing for.
+    pub(crate) struct Everything {
+        connectivity: ConnectivityState,
+        model: NiriModel,
+        history: Vec<HistoryRow>,
+        items: Vec<TrayRow>,
+        sysmon: SysReading,
+        weather: WeatherReading,
+        clipboard: ClipboardPanel,
+        phone: PhoneState,
+        bubbles: Bubbles,
+        media: MediaState,
+    }
+
+    impl Everything {
+        pub(crate) fn new() -> Everything {
+            let mut connectivity = sample::ready();
+            connectivity.apply_power(&PowerEvent::Battery(
+                sample::battery(ChargeState::Charging, 64.0)
+                    .map_or(Service::Unavailable, Service::Ready),
+            ));
+            let mut bubbles = bubbles_state(bubbles::MAX_VISIBLE as u64 + 1, Link::Live);
+            bubbles.windows[0].icon_name = Some("app".to_owned());
+            Everything {
+                connectivity,
+                model: NiriModel {
+                    workspaces: vec![workspace(1, 1, None, OUTPUT, true)],
+                    ..NiriModel::default()
+                },
+                history: vec![HistoryRow::default()],
+                items: vec![TrayRow::default()],
+                sysmon: sys_reading(23, 41),
+                weather: weather_reading(12, 3, true),
+                clipboard: ClipboardPanel {
+                    on: true,
+                    paused: true,
+                    ..ClipboardPanel::default()
+                },
+                phone: phone_device(Some(80), false),
+                bubbles,
+                media: media_state(vec![media_player(true, "Artist", "Title")]),
+            }
+        }
+
+        /// Runs `f` with a bar context that reads this state.
+        pub(crate) fn with<R>(&self, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
+            with_state(&self.connectivity, |base| {
+                f(&BarCx {
+                    model: Some(&self.model),
+                    history: &self.history,
+                    items: &self.items,
+                    sysmon: Some(&self.sysmon),
+                    weather: Some(&self.weather),
+                    today: Today::from_unix(1_792_281_480, 0),
+                    clipboard: &self.clipboard,
+                    levels: Levels {
+                        audio: AudioLevels {
+                            output: Some(Level {
+                                percent: 40,
+                                muted: false,
+                            }),
+                            input: None,
+                        },
+                        brightness: Some(70),
+                    },
+                    phone: &self.phone,
+                    bubbles: &self.bubbles,
+                    media: &self.media,
+                    ..*base
+                })
+            })
+        }
     }
 }

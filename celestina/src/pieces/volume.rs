@@ -20,8 +20,11 @@ use crate::{copy, osd::view::icon_of};
 #[derive(Clone, Copy, Debug)]
 pub struct Volume;
 
+/// The piece's id, its place in a layout and the root of its node keys.
+const ID: &str = "volume";
+
 fn key() -> Key {
-    Key::named("volume")
+    Key::named(ID)
 }
 
 impl Volume {
@@ -36,7 +39,7 @@ impl Volume {
 
 impl Piece for Volume {
     fn id(&self) -> PieceId {
-        PieceId("volume")
+        PieceId(ID)
     }
 
     fn name(&self) -> &'static str {
@@ -54,7 +57,7 @@ impl Piece for Volume {
                 muted: level.muted,
             },
         });
-        Some(level::widget(cx, key(), icon, level.percent, level.muted))
+        Some(level::widget(cx, ID, icon, level.percent, level.muted))
     }
 
     fn page(&self) -> Option<PageEntry> {

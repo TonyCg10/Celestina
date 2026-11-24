@@ -287,3 +287,4 @@ celestina	1.12.0	milestone	CEL-2-H-b	Add the lock backdrop, clock and date: the 
 celestina	1.13.0	milestone	CEL-2-I	Add the polkit authentication agent: the registration, the prompt card and the helper conversation, off by default
 celestina	1.13.1	bug	CEL-2-C-DDC	Fix the brightness piece never appearing: the runtime tells the DDC worker at every apply, the placed piece reads each unknown monitor once, and a redetection waits for the outputs to settle
 celestina	1.13.2	bug	CEL-2-B-GAMMA	Fix the night light failing dark for good after a slow sweep: each frame is confirmed before the next, frames the compositor left behind are skipped, and a lost connection is tried again while the light is wanted
+celestina	1.13.3	bug	CEL-2-C-KEYS	Fix the Volume and Brightness pieces drawing the same node keys: every node of the shared level widget is keyed from its piece's id, and a test draws the whole piece table for a key two pieces share

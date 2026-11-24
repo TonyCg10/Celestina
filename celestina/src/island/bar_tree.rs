@@ -45,6 +45,26 @@ fn zone_keys() -> [Key; 4] {
     [zone_key(0), zone_key(1), zone_key(2), zone_key(3)]
 }
 
+/// The key of the painted tree's root.
+fn root_key() -> Key {
+    Key::named("bar-root")
+}
+
+/// The key of the measuring tree's root.
+fn measure_key() -> Key {
+    Key::named("bar-measure")
+}
+
+/// Every key the bar draws itself, around the pieces' views. The bar finds
+/// its capsules by key, so no piece may draw one of these (the pieces' key
+/// test holds the table to it).
+#[cfg(test)]
+pub(crate) fn own_keys() -> Vec<Key> {
+    let mut keys = vec![root_key(), measure_key()];
+    keys.extend(zone_keys());
+    keys
+}
+
 /// What a pointer event on the bar asked of its pieces.
 #[derive(Debug, Default, PartialEq)]
 pub struct BarInput {
@@ -205,7 +225,7 @@ impl BarTree {
             &self.views.centre_right,
             &self.views.end,
         ];
-        let probe = centred(view::col(Key::named("bar-measure")))
+        let probe = centred(view::col(measure_key()))
             .children(views.iter().filter_map(|v| v.as_ref().cloned()));
         self.measure.apply(probe, now);
         lay(&mut self.measure, MEASURE_ROOM);
@@ -234,18 +254,16 @@ impl BarTree {
             (Some(v), Some(r)) => Some(v.clone().absolute(r.x, r.y).width(r.w).clip()),
             _ => None,
         };
-        view::row(Key::named("bar-root"))
-            .size(surface_w, BAR_H)
-            .children(
-                [
-                    at(&self.views.start, placement.start),
-                    at(&self.views.centre_left, placement.centre_left),
-                    at(&self.views.centre_right, placement.centre_right),
-                    at(&self.views.end, placement.end),
-                ]
-                .into_iter()
-                .flatten(),
-            )
+        view::row(root_key()).size(surface_w, BAR_H).children(
+            [
+                at(&self.views.start, placement.start),
+                at(&self.views.centre_left, placement.centre_left),
+                at(&self.views.centre_right, placement.centre_right),
+                at(&self.views.end, placement.end),
+            ]
+            .into_iter()
+            .flatten(),
+        )
     }
 
     /// Where the capsules sit since the last update; `None` before it.

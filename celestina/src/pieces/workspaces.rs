@@ -111,21 +111,9 @@ mod tests {
     use super::*;
     use crate::{
         island::pages::NameOwner,
-        pieces::Axis,
-        providers::niri::{NiriModel, Workspace},
+        pieces::{tests_support::workspace as ws, Axis},
+        providers::niri::NiriModel,
     };
-
-    fn ws(id: u64, idx: u8, name: Option<&str>, output: &str, active: bool) -> Workspace {
-        Workspace {
-            id,
-            idx,
-            name: name.map(str::to_owned),
-            output: Some(output.to_owned()),
-            is_active: active,
-            is_focused: active,
-            columns: 1,
-        }
-    }
 
     fn model() -> NiriModel {
         NiriModel {

@@ -128,33 +128,13 @@ mod tests {
     use celestina_ui::ViewKind;
 
     use super::*;
-    use crate::{island::pages::NameOwner, media::PlayerView, pieces::Axis};
-
-    fn player(playing: bool, artist: &str, title: &str) -> PlayerView {
-        PlayerView {
-            bus_name: "org.mpris.MediaPlayer2.vlc".to_owned(),
-            identity: "vlc".to_owned(),
-            playing,
-            title: title.to_owned(),
-            artist: artist.to_owned(),
-            album: String::new(),
-            art_url: String::new(),
-            length_ms: 100_000,
-            position_ms: 5_000,
-            pinned: false,
-        }
-    }
-
-    fn state(players: Vec<PlayerView>) -> MediaState {
-        let active = players.first().map(|p| p.bus_name.clone());
-        MediaState {
-            players,
-            active,
-            cover: None,
-            duty_on: true,
-            unavailable: false,
-        }
-    }
+    use crate::{
+        island::pages::NameOwner,
+        pieces::{
+            tests_support::{media_player as player, media_state as state},
+            Axis,
+        },
+    };
 
     fn with<R>(media: &MediaState, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
         let theme = Theme::dark();

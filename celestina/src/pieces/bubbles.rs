@@ -198,26 +198,12 @@ mod tests {
     use crate::{
         bubbles::{Bubbles as State, Link},
         island::pages::NameOwner,
-        pieces::{piece, Axis},
+        pieces::{
+            piece,
+            tests_support::{bubble_window as window, bubbles_state as state},
+            Axis,
+        },
     };
-
-    fn window(id: u64, title: Option<&str>, app_id: Option<&str>, icon: Option<&str>) -> Window {
-        Window {
-            id,
-            app_id: app_id.map(str::to_owned),
-            title: title.map(str::to_owned),
-            icon_name: icon.map(str::to_owned),
-        }
-    }
-
-    fn state(n: u64, link: Link) -> State {
-        State {
-            windows: (1..=n)
-                .map(|id| window(id, Some(&format!("w{id}")), Some("app"), None))
-                .collect(),
-            link,
-        }
-    }
 
     fn with<R>(bubbles: &State, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
         let theme = Theme::dark();

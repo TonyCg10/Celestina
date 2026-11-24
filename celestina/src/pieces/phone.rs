@@ -115,18 +115,8 @@ mod tests {
     use super::*;
     use crate::{
         island::pages::NameOwner,
-        pieces::{piece, Axis},
+        pieces::{piece, tests_support::phone_device as device, Axis},
     };
-
-    fn device(battery: Option<u8>, charging: bool) -> PhoneState {
-        PhoneState::Present(Device {
-            id: "dev".to_owned(),
-            name: "Pixel".to_owned(),
-            battery,
-            charging,
-            media: None,
-        })
-    }
 
     fn with<R>(phone: &PhoneState, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
         let theme = Theme::dark();

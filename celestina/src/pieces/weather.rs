@@ -90,17 +90,10 @@ mod tests {
     use celestina_ui::ViewKind;
 
     use super::*;
-    use crate::{island::pages::NameOwner, providers::weather::WeatherReading};
-
-    fn reading(celsius: i16, code: u8, daylight: bool) -> WeatherReading {
-        WeatherReading {
-            celsius,
-            code,
-            daylight,
-            label: "Madrid".to_owned(),
-            taken_unix: 0,
-        }
-    }
+    use crate::{
+        island::pages::NameOwner, pieces::tests_support::weather_reading as reading,
+        providers::weather::WeatherReading,
+    };
 
     fn with<R>(weather: Option<&WeatherReading>, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
         let theme = Theme::dark();

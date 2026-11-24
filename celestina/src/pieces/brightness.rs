@@ -22,8 +22,11 @@ const ICON: &str = "sun";
 #[derive(Clone, Copy, Debug)]
 pub struct Brightness;
 
+/// The piece's id, its place in a layout and the root of its node keys.
+const ID: &str = "brightness";
+
 fn key() -> Key {
-    Key::named("brightness")
+    Key::named(ID)
 }
 
 impl Brightness {
@@ -37,7 +40,7 @@ impl Brightness {
 
 impl Piece for Brightness {
     fn id(&self) -> PieceId {
-        PieceId("brightness")
+        PieceId(ID)
     }
 
     fn name(&self) -> &'static str {
@@ -47,7 +50,7 @@ impl Piece for Brightness {
     /// The sun and the level; absent while the output's monitor is unknown.
     fn bar(&self, cx: &BarCx<'_>) -> Option<View> {
         let percent = cx.levels.brightness?;
-        Some(level::widget(cx, key(), ICON, percent, false))
+        Some(level::widget(cx, ID, ICON, percent, false))
     }
 
     fn page(&self) -> Option<PageEntry> {

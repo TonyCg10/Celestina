@@ -89,21 +89,9 @@ mod tests {
     use super::*;
     use crate::{
         island::pages::NameOwner,
-        pieces::{Axis, BarCx},
+        pieces::{tests_support::sys_reading as reading, Axis, BarCx},
         providers::sysmon::SysReading,
     };
-
-    fn reading(cpu: u8, ram: u8) -> SysReading {
-        SysReading {
-            cpu,
-            ram,
-            ram_used_kib: 0,
-            ram_total_kib: 0,
-            temp_c: None,
-            cpu_history: Vec::new(),
-            ram_history: Vec::new(),
-        }
-    }
 
     fn with<R>(sysmon: Option<&SysReading>, f: impl FnOnce(&BarCx<'_>) -> R) -> R {
         let theme = Theme::dark();

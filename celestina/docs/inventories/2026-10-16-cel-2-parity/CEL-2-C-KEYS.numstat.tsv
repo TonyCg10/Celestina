@@ -1,0 +1,41 @@
+# CEL-2-C-KEYS exact change inventory
+
+Base revision	974a74905e2edc182195d35505128f58eccf7387
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/docs/evidence/2026-11-23-level-keys.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-C-KEYS.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/pieces/brightness.rs
+Pathspec	celestina/src/pieces/bubbles.rs
+Pathspec	celestina/src/pieces/level.rs
+Pathspec	celestina/src/pieces/media.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/phone.rs
+Pathspec	celestina/src/pieces/sysmon.rs
+Pathspec	celestina/src/pieces/volume.rs
+Pathspec	celestina/src/pieces/weather.rs
+Pathspec	celestina/src/pieces/workspaces.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	dde54cfca18ccf1c5faa8bbe209df1c369d396a519132c2b2069029158afe4e8	celestina/Cargo.lock
+1	1	10a8141ce7a1d2f7869e022726b866ddf9105bd5eeba11da782f620891569270	celestina/Cargo.toml
+131	0	4a27dac2df460f4e9663d5b0e64e1fa265d0d612435753289805bde2fb90b907	celestina/docs/evidence/2026-11-23-level-keys.md
+41	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-C-KEYS.numstat.tsv
+1	0	10f0713eade3efaeec27e65faab126b007933548def8477c4e91ad791973abe3	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+31	13	d03267126d60f0d3eb6564adf69305eac50b1030d696316460c9a63d450c3a5e	celestina/src/island/bar_tree.rs
+6	3	f5ccbe7e19d45f15ab81490782f0a221ab6a1cea9f028204aac7be86db5357e9	celestina/src/pieces/brightness.rs
+5	19	2e99cd3271b7d10edddd6087e1bab6baccf8d2275c6241549037e039c116defb	celestina/src/pieces/bubbles.rs
+9	6	334cd8e52738bec533821f290654396b041e5cc8dad80a3d9dc650153f2dce3a	celestina/src/pieces/level.rs
+7	27	d5fcde89c49509892477ca4bf60f2c1590d89dcf6c1471188b016ec2ce137839	celestina/src/pieces/media.rs
+275	3	44938002471f1fe9c255d4aa0f6a1ce359f2f2cc3d9226b78d03561e4d819de8	celestina/src/pieces/mod.rs
+1	11	8345a0ae717a0d0d726f79956208a379493878f3e8c349dcde9de2cec829c87f	celestina/src/pieces/phone.rs
+1	13	37e7d8523a6ee1bc79da584d8904eb48e88d05d16d6c58f07b2cd5eb2ebbd589	celestina/src/pieces/sysmon.rs
+6	3	d77aa92a8d6bf13f319602f9f37ba5f95a5a4781ff8427fc2446a325aac72eef	celestina/src/pieces/volume.rs
+4	11	0f7ffa5c09473785fab2fbad898fe9891c1b6b1af69ea13f9766f6917d46fb75	celestina/src/pieces/weather.rs
+2	14	55770d3c63d6b596c0e25f9bd8bafdcb203d33b4522b3850af39272e146eaf36	celestina/src/pieces/workspaces.rs
+1	0	6d4d3610a1a208150a10ed3ac05ee93c6629738345091f96c6450ac3781bf297	docs/version-history.tsv
