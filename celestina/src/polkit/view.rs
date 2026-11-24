@@ -73,9 +73,11 @@ impl Focus {
 /// Where the conversation with the helper stands, as the card shows it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
-    /// PAM has asked nothing yet.
+    /// The card is not ready yet: the keyboard is not proven.
     Preparing,
-    /// PAM asked: the card takes the answer.
+    /// The card takes the answer. It does not wait for PAM, which is not
+    /// contacted before the first submit; it shows PAM's own words only for a
+    /// second question.
     Asking,
     /// The answer is with the helper.
     Checking,
@@ -90,7 +92,8 @@ pub struct CardModel<'a> {
     pub action_id: &'a str,
     /// The account being asked for.
     pub account: &'a str,
-    /// PAM's prompt, once it asked (decoded and sanitised).
+    /// PAM's prompt of a second question (a second factor), decoded and
+    /// sanitised; `None` shows the card's own label.
     pub pam_prompt: Option<&'a str>,
     /// PAM's last words, an error or an information line.
     pub pam_line: Option<&'a str>,
@@ -274,7 +277,7 @@ pub fn card(theme: &Theme, model: &CardModel<'_>) -> View {
         ));
     let prompt = match model.phase {
         Phase::Preparing => copy::POLKIT_PREPARING,
-        Phase::Asking => model.pam_prompt.unwrap_or_default(),
+        Phase::Asking => model.pam_prompt.unwrap_or(copy::POLKIT_PASSWORD_PROMPT),
         Phase::Checking => copy::POLKIT_CHECKING,
     };
     let mut column = column
@@ -542,5 +545,20 @@ mod tests {
         let shown = texts(&card(&theme, &m));
         assert!(shown.contains(&copy::POLKIT_CHECKING.to_owned()));
         assert!(!shown.contains(&"Password:".to_owned()));
+    }
+
+    #[test]
+    fn asking_shows_the_cards_own_label_until_pam_asks_something_in_words_of_its_own() {
+        let theme = Theme::dark();
+        let mut m = model(SecretFieldState::Empty);
+        m.phase = Phase::Asking;
+        m.pam_prompt = None;
+        let shown = texts(&card(&theme, &m));
+        assert!(shown.contains(&copy::POLKIT_PASSWORD_PROMPT.to_owned()));
+        assert!(!shown.contains(&copy::POLKIT_PREPARING.to_owned()));
+        m.pam_prompt = Some("Verification code: ");
+        let shown = texts(&card(&theme, &m));
+        assert!(shown.contains(&"Verification code: ".to_owned()));
+        assert!(!shown.contains(&copy::POLKIT_PASSWORD_PROMPT.to_owned()));
     }
 }

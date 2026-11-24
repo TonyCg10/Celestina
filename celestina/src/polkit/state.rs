@@ -8,9 +8,16 @@
 //! prompt's deadlines; the helper's thread ([`HelperHandle`]) owns the socket.
 //! What is decided here is only what the person can do at the card, and when:
 //!
-//! - **No helper before the keyboard is proven.** The conversation opens
+//! - **No helper before the keyboard is proven.** The helper's thread starts
 //!   only once the card's surface has received `wl_keyboard.enter` and the
-//!   guard window after it has passed (N-24).
+//!   guard window after it has passed (N-24). That is also when the card is
+//!   ready to type, with its own generic label: it does not wait for PAM.
+//! - **No connection to PAM before a submit.** The thread idles with no
+//!   socket until the person submits a secret, so every way a prompt can end
+//!   before that (Escape, the cancel control, the idle timeout, a lost
+//!   keyboard, polkitd's own cancel, the duty off) closes nothing PAM waits
+//!   on, and `pam_faillock` is not told of a failure (ADR 0021's amendment of
+//!   2026-11-23).
 //! - **No key from before the enter.** A key whose serial is not newer than
 //!   the enter's began in another client; a key inside the guard window, or
 //!   while the keyboard is away, is dropped; an Enter on an empty field is
@@ -428,6 +435,8 @@ impl PolkitState {
             return;
         };
         match ev {
+            // PAM's second question (a second factor): the first prompt of a
+            // conversation never reaches the card.
             HelperEvent::Prompt(text) => {
                 active.pam_prompt = Some(text.display());
                 active.phase = Phase::Asking;
@@ -441,7 +450,9 @@ impl PolkitState {
                     MAX_ATTEMPTS.saturating_sub(active.failed),
                 ));
                 active.pam_prompt = None;
-                active.phase = Phase::Preparing;
+                // Back to asking at once: the helper has ended, nothing is
+                // open, and the next conversation opens at the next submit.
+                active.phase = Phase::Asking;
             }
             HelperEvent::Ended(ending) => {
                 self.finish(ending, ctx.now);
@@ -456,8 +467,9 @@ impl PolkitState {
     }
 
     /// Looks at the deadlines at `now`: gives up a prompt whose proof, loss
-    /// grace or idle cap is due, and opens the helper once the card has the
-    /// keyboard and the guard window has passed.
+    /// grace or idle cap is due, and starts the helper's thread (which holds
+    /// no connection) once the card has the keyboard and the guard window has
+    /// passed, which is when the card becomes ready to type.
     pub fn tick(&mut self, now: Instant) {
         let moment = self.moment(now);
         let Some(active) = self.active.as_ref() else {
@@ -494,6 +506,14 @@ impl PolkitState {
             Ok(helper) => {
                 if let Some(active) = self.active.as_mut() {
                     active.helper = Some(helper);
+                    // Ready to type: PAM has not been contacted and is not
+                    // waited for; the helper opens at the first submit.
+                    if active.phase == Phase::Preparing {
+                        active.phase = Phase::Asking;
+                        // The frame the guard window's end wakes the loop for
+                        // builds the view again.
+                        active.mark_stale();
+                    }
                 }
             }
             Err(err) => {
@@ -670,10 +690,15 @@ impl PolkitState {
     fn retire(&mut self, now: Instant) -> Option<(RequestId, bool)> {
         let mut active = self.active.take()?;
         active.secret.clear();
-        if let Some(helper) = active.helper.take() {
-            helper.cancel();
+        // The window outlives the request for as long as the helper's thread
+        // may still hold the typed answer (a cancel before PAM's first prompt
+        // is held back): the hold travels with the thread's reaper and the
+        // loop never waits for it (N-22).
+        let hold = self.dumpable.hold();
+        match active.helper.take() {
+            Some(helper) => helper.cancel(hold),
+            None => drop(hold),
         }
-        // The window covers the wipe and the helper's end.
         self.dumpable.close();
         self.garbage.extend(active.surfaces.iter().map(|s| s.id));
         self.last_end = Some(now);
@@ -1045,8 +1070,10 @@ impl Drop for PolkitState {
     fn drop(&mut self) {
         if let Some(mut active) = self.active.take() {
             active.secret.clear();
-            if let Some(helper) = active.helper.take() {
-                helper.cancel();
+            let hold = self.dumpable.hold();
+            match active.helper.take() {
+                Some(helper) => helper.cancel(hold),
+                None => drop(hold),
             }
         }
         // The window restores the previous value in its own `Drop`.

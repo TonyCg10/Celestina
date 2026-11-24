@@ -87,3 +87,147 @@ to.
 - A maintained standalone agent becomes something the author prefers, or a
   separate agent process becomes worth a second deployable.
 - Launch-environment control stops being out of scope.
+
+## Amendment (2026-11-23): lazy conversation
+
+Unit `CEL-2-I-CANCEL`, a bug found in the author's real session on 1.13.2.
+
+### What happened and why
+
+Cancelling the prompt card (Escape or the cancel control) counted as a failed
+authentication in `pam_faillock`: the third cancel in a row locked the account
+for ten minutes, for login, `sudo` and the lock screen alike. Cause, verified
+in polkit's `polkitagenthelper-pam.c` (`conversation_function`) and in this
+host's PAM stack (`/usr/lib/pam.d/polkit-1` includes `/etc/pam.d/system-auth`,
+whose `pam_unix.so` line is `[success=1 default=bad]` and is followed by
+`pam_faillock.so authfail`):
+
+1. The agent opened the helper's socket as soon as the card had the keyboard
+   (decision 20), and so PAM, running as root inside the helper, sat at its
+   first `PAM_PROMPT_ECHO_OFF` in `fgets` for as long as the person read the
+   card.
+2. Any close of the socket while PAM waits for input is an end of input:
+   `PAM_CONV_ERR` from the conversation function, which `pam_unix` turns into
+   `default=bad`, and `pam_faillock authfail` records a failure.
+
+Decision 23 ("two attempts per prompt, below `deny = 3`") assumed that only a
+wrong password counts. Every dismissal counted too, and it was three of those.
+
+### Decision
+
+25. **The conversation with the helper is lazy: no socket is opened until the
+    person submits a non-empty secret.**
+    - The helper's thread is still started when the card is ready (the
+      keyboard proven and the guard window passed, decision 20), but it idles
+      holding no connection. The card is ready to type at that moment, with
+      its own generic password label (`copy::POLKIT_PASSWORD_PROMPT`), and does
+      not wait for a PAM prompt.
+    - At the first submit the secret moves to the thread (decision 21,
+      unchanged). The thread connects, writes the account and the cookie,
+      shows PAM's notices (`PAM_TEXT_INFO`, `PAM_ERROR_MSG`) and, at the
+      **first** `PAM_PROMPT_ECHO_OFF`, writes the retained secret at once and
+      drops it. The card is not told of that prompt and stays in "checking".
+      `PAM_PROMPT_ECHO_ON` is still refused (`EchoOnPrompt`).
+    - A **second** `PAM_PROMPT_ECHO_OFF` in the same conversation (a second
+      factor) is shown to the person with PAM's own words and answered live.
+    - After a wrong answer below the cap the helper has already ended: the
+      thread closes its socket, publishes the failure and goes back to idle.
+      The card asks again with the attempts left, and the next submit opens
+      the next conversation (same cookie). The exchange keeps counting the
+      attempts across conversations. The helper's silence deadline does not
+      run while the thread idles: no line is owed.
+    - Escape, the cancel control, the idle timeout, the loss of the keyboard,
+      polkitd restarting, `CancelAuthentication`, the duty switched off or the
+      shell quitting, **before any submit**, touch PAM not at all: no
+      connection ever existed, so none can be closed.
+    - A cancel raised **between the connection and the first prompt** (PAM has
+      not yet read the secret, so closing now would be the same end of input)
+      is held back until the secret is written, for at most `CONNECT_GRACE`
+      (5 s), and then the socket closes. Nothing is published after the
+      cancel, held back or not, so the loop's reply is not delayed. The
+      shell's own shutdown flag is not held back.
+    - A cancel raised while the connection is still being made is held back
+      like any other between connect and prompt; one raised before the
+      connection started opens nothing, and the secret is dropped unwritten.
+    - After the secret was written, closing the socket no longer changes the
+      verdict: it is PAM's, already in flight.
+    - **The non-dumpable window outlives a held-back secret** (N-6, S-9). The
+      thread keeps the typed answer until PAM's first prompt or the grace, so
+      the loop no longer closes the window when it cancels the thread: it
+      lends the window's hold to the thread's reaper
+      (`Helper::cancel_holding`, `DumpableWindow::hold`), which drops it when
+      the thread has ended. The loop never waits for it (N-22).
+    - **The window and its holds are process-wide.** The flag is the
+      process's, so its counter and the saved previous value are too: every
+      window `DumpableWindow::process()` makes, whichever start of the duty
+      made it, shares one, so a hold that outlives the window of an earlier
+      start (the duty switched off and on while a thread still holds a
+      secret) neither restores `Dumpable` under a later request nor leaves
+      the process non-dumpable for good. The previous value comes back once,
+      when the last window or hold anywhere is gone. A window over a fake
+      flag, which only tests use, has a counter of its own.
+    - **If the thread does not end within the reaper's bound** (about
+      `CANCEL_WAIT + CONNECT_GRACE + WRITE_TIMEOUT`, 12 s, a practical bound
+      rather than a strict one: a connect has no timeout), the reaper gives
+      up and the window **fails closed**: the hold is leaked on purpose, an
+      error is journaled, and the process stays non-dumpable until it exits.
+      The bound is of the reaper's wait, not of the secret's life: a thread
+      stuck in a call keeps the secret as long as the call lasts, and the
+      window now stays shut for all of that time.
+    - **An ending is published only after the retained secret is dropped**, so
+      the loop never closes the window on a thread that still holds it.
+    - Decision 20's text is read with this one: the connection opens at the
+      first submit, which presupposes the keyboard proof and the guard window.
+    - The dismissal back-off (three prompts ended with no attempt in a row)
+      is unchanged: a cancel before any submit is a dismissal and counts, a
+      cancel after a submit is an attempt and does not. The notice about the
+      cool-down is still lost while another program holds
+      `org.freedesktop.Notifications`; that case is now one `warn` line per
+      occurrence in the journal, tested.
+
+### What a cancel after the secret does, and the faillock effect
+
+A cancel after a correct secret was sent (or one held back and then released
+after it was written) is still answered `Cancelled` to polkitd, never
+normally. In polkit main as read on 2026-11-23,
+`src/polkitbackend/polkitbackendinteractiveauthority.c`,
+`authentication_agent_begin_cb`: `gained_authorization` starts `FALSE` (line
+2145) and takes `session->is_authenticated` only in the branch where the
+agent's reply is not an error (line 2162); an error reply, which for
+`Cancelled` also sets `was_dismissed` (line 2156), leaves it `FALSE`, and that
+is the value handed to the session's callback (line 2176), even if the helper
+had already told polkitd of a success. The agent's rule that only
+`Ending::Authenticated` replies normally, and only after the helper's
+`SUCCESS` reached the loop, therefore gives a denied request in that case,
+which is the right outcome for a person who cancelled.
+
+The effect on `pam_faillock` follows from the stack above and is not
+affected by the reply. A **correct** password that was sent counts as a
+success there (`pam_faillock authsucc` resets the counter), even though the
+request ends denied. A **wrong** password that was sent counts as a failure,
+which is right: a wrong password was really sent.
+
+### Residuals (they can still count in `pam_faillock`)
+
+- A cancel while PAM waits for the answer to a **second** prompt (a second
+  factor): the person is the one holding up PAM, the socket must close, and
+  that is an end of input. This host asks for no second factor.
+- The **shell shutting down** (its own flag, `celestina quit` as the process
+  ends) between the connection and the first prompt, or at a second prompt.
+- A **grace overrun**: PAM did not ask within `CONNECT_GRACE` after a cancel.
+- A submit that is itself a wrong password counts, as it always did.
+
+### Revisit when
+
+- The first hidden prompt of the PAM stack is not the password (a one-time
+  code or a PIN asked first, `pam_u2f` with a PIN, `forward_pass`). The first
+  `PAM_PROMPT_ECHO_OFF` receives the submitted password without the person
+  having read PAM's text, so such a stack would count a failure and the card
+  would be calling a PIN a password. Not this host: `system-auth` asks
+  `pam_unix` first. The failures that now appear only after typing and
+  submitting (the helper's socket not trusted, `pam_faillock preauth` already
+  refusing) were found when the card opened before; that is accepted.
+- PAM's stack on this host asks a second `PAM_PROMPT_ECHO_OFF` or a fingerprint
+  prompt: then the second-factor residual is no longer theoretical.
+- Polkit's helper stops treating an end of input as a failed conversation, or
+  stops being a socket-activated process.

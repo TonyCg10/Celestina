@@ -1245,7 +1245,17 @@ None has been run and none is closed by an agent.
   and asks again; type the right one and check it succeeds. Do not fail twice
   in a row more than once in a session (see the faillock note). (3) Run it
   again and press Escape: the card closes and `pkexec` reports that the
-  request was dismissed. (4) Run it, and while the card is up start a second
+  request was dismissed. Then run `pkexec /usr/bin/true` and cancel it with
+  Escape (or the Cancel control) three times in a row, without typing
+  anything, and after each time, then once more after the third, check with
+  `faillock --user <your user>` that the failure counter has not risen and
+  that the account is not locked (you run `faillock` yourself; the agent never
+  does, and a cancel after typing a password is not part of this check).
+  (3b) Run it, type a wrong password and press Enter, then press Escape on the
+  card that asks again: `faillock --user` shows one more failure (the wrong
+  password) and not two (the Escape adds none). Finish this check with one
+  successful `pkexec /usr/bin/true`, which resets the counter.
+  (4) Run it, and while the card is up start a second
   overlay client that takes the keyboard (any layer-shell program that asks for
   exclusive keyboard, started from another terminal you opened before): the
   card loses the keyboard, the typed text is wiped, and the request is
@@ -1267,9 +1277,12 @@ None has been run and none is closed by an agent.
   check that `pkexec /usr/bin/true` prompts there. Stopping the shell has the
   same effect, since polkit removes an agent whose connection vanished
 - **Pass condition:** every step does what is described: the card on the
-  focused output with the exclusive keyboard; success only after the right
+  focused output with the exclusive keyboard, ready to take the password as
+  soon as it appears; success only after the right
   password; a wrong answer asks again and a second one in the same prompt
-  ends it; Escape and focus theft cancel (never grant); a polkit restart or a
+  ends it; Escape and focus theft cancel (never grant) and **three cancels
+  in a row with nothing typed leave `faillock --user` at no failures**; a
+  polkit restart or a
   killed shell ends the request and never grants; Hematita's action shows its
   own id and obeys the answer; the log holds no secret and no cookie; and the
   rollback returns the session to Noctalia's agent
@@ -1277,7 +1290,15 @@ None has been run and none is closed by an agent.
   - **faillock.** This host's `pam_faillock` is `deny = 3`, `unlock_time = 600`.
     A prompt allows two attempts (`MAX_ATTEMPTS = 2`), so one prompt cannot lock
     the account, but two prompts that each fail twice can, for login and `sudo`
-    too. Keep the failure count at one per prompt in this row.
+    too. Keep the failure count at one per prompt in this row. Before
+    CEL-2-I-CANCEL (1.13.2) a cancel also counted, because the agent had the
+    helper's socket open while PAM waited for the password: the third cancel
+    locked the account. The agent now opens nothing before you submit, so a
+    cancel with nothing typed counts for nothing. What can still count: a wrong
+    password that was sent, a cancel at a second prompt of the PAM stack (this
+    host has none), and the shell exiting in the instant between the
+    connection and PAM's first prompt. A cancel after a **correct** password
+    was sent ends denied, and `pam_faillock` records a success then.
   - **niri.** The prompt cannot be defended from a compositor that is hostile,
     and has no trusted path on Wayland. Recommended in the niri configuration
     (outside this repository, the author decides): a `layer-rule` for the

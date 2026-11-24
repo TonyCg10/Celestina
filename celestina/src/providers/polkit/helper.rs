@@ -29,12 +29,27 @@
 //! - **The secret's one-way trip** (design S-7). The card moves a [`Secret`]
 //!   through a one-slot channel; the helper thread writes it with
 //!   [`Secret::write_line_to`] and drops it, on every path.
+//! - **A lazy conversation** (CEL-2-I-CANCEL, ADR 0021's amendment of
+//!   2026-11-23). PAM, inside the helper, sits in `fgets` at its first
+//!   `PAM_PROMPT_ECHO_OFF`, and a socket closed while it waits is an end of
+//!   input: `PAM_CONV_ERR`, which `pam_faillock` counts as a failed
+//!   authentication. So **no socket is opened until the person submits a
+//!   secret**. The thread idles with no connection; at the first submit it
+//!   connects, shows PAM's notices, and writes the retained secret the moment
+//!   the first prompt arrives, without telling the card about that prompt. A
+//!   second prompt (a second factor) is shown to the person and answered
+//!   live. After a wrong answer the helper has ended, the socket is closed
+//!   and nothing is opened again until the person submits again (F-16).
+//!   A cancel raised between the connection and the first prompt is held
+//!   back until the secret is written, for at most [`CONNECT_GRACE`]; the
+//!   shell's own flag is never held back.
 //!
-//! The thread that owns a conversation ([`Helper`]) reconnects by itself after
-//! a wrong answer below the cap (row F-16, same cookie), and ends on every
-//! other [`Ending`]. It never starts before the loop starts it, and the loop
-//! does that only once the card has the keyboard (N-24).
+//! The thread that owns the conversations ([`Helper`]) ends on every
+//! [`Ending`] but a wrong answer below the cap. It never starts before the
+//! loop starts it, and the loop does that only once the card has the keyboard
+//! (N-24), which is also when the card is ready to type.
 
+use std::cell::Cell;
 use std::fs::Metadata;
 use std::io::{self, Read, Write};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
@@ -59,8 +74,14 @@ pub const HELPER_SOCKET: &str = "/run/polkit/agent-helper.socket";
 pub const POLL: Duration = Duration::from_millis(100);
 /// The longest a write to the helper may take.
 pub const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
-/// How long [`Helper::cancel`] waits for the thread to close its socket.
+/// How long [`Helper::cancel`]'s reaper waits for the thread to close its
+/// socket once the thread is free to (it comes on top of [`CONNECT_GRACE`]).
 pub const CANCEL_WAIT: Duration = Duration::from_secs(2);
+/// The longest a cancel is held back between the connection and the first
+/// prompt, where PAM has not yet read the secret and a closed socket would be
+/// an end of input that `pam_faillock` counts. Past it the socket closes
+/// whatever PAM is doing. The shell's own shutdown flag is never held back.
+pub const CONNECT_GRACE: Duration = Duration::from_secs(5);
 /// The most bytes asked of the socket at once.
 const READ_CHUNK: usize = 1024;
 
@@ -127,18 +148,21 @@ impl Trust {
 }
 
 /// How long a conversation waits. Production waits [`POLL`] between looks at
-/// the shutdown flag and [`celestina_shell::polkit::HELPER_SILENCE`] for a
-/// helper that owes a line; a test shortens both.
+/// the shutdown flag, [`celestina_shell::polkit::HELPER_SILENCE`] for a helper
+/// that owes a line, and holds a cancel back for [`CONNECT_GRACE`] at most
+/// before the first prompt; a test shortens them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Timing {
     pub(crate) poll: Duration,
     pub(crate) silence: Duration,
+    pub(crate) grace: Duration,
 }
 
 impl Timing {
     pub(crate) const PRODUCTION: Timing = Timing {
         poll: POLL,
         silence: celestina_shell::polkit::HELPER_SILENCE,
+        grace: CONNECT_GRACE,
     };
 }
 
@@ -252,13 +276,17 @@ fn acceptable_user(user: &str) -> bool {
 /// replies normally, so the invariant has one owner.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HelperEvent {
-    /// PAM asks for an answer that is not echoed: ask the person. Its text is
-    /// decoded and validated; paint it only through [`PamText::display`].
+    /// PAM asks a **second** time for an answer that is not echoed (a second
+    /// factor): ask the person, live. Its text is decoded and validated; paint
+    /// it only through [`PamText::display`]. The first such prompt of a
+    /// conversation is never published: it is answered by the secret the
+    /// person submitted before the conversation was opened.
     Prompt(PamText),
     /// PAM's words (an error or an information line): show them.
     Notice(PamText),
     /// The answer was wrong and attempts remain (F-16): this conversation is
-    /// closed, wipe the field, and a new one with the same cookie follows.
+    /// closed and the field is wiped. Nothing is opened again until the person
+    /// submits again; the next conversation then uses the same cookie.
     Failure,
     /// The request is over with this ending.
     Ended(Ending),
@@ -369,6 +397,11 @@ fn connect_at(
 }
 
 impl Conversation {
+    /// How long a cancel may be held back before the first prompt.
+    fn grace(&self) -> Duration {
+        self.timing.grace
+    }
+
     /// The next thing the helper's conversation does: `None` once `halted`
     /// says so or the conversation is over.
     ///
@@ -551,16 +584,43 @@ impl<S: Answer> Helper<S> {
         }
     }
 
-    /// Closes the conversation: the thread closes its socket and drops an
-    /// answer on its way, and nothing it says from now on is published.
+    /// Closes the conversation: the thread closes its socket (before the first
+    /// prompt, once the secret is written, for at most [`CONNECT_GRACE`]; see
+    /// the module's notes) and drops an answer on its way, and nothing it says
+    /// from now on is published.
     ///
     /// The loop calls this, so it **does not wait** for the thread (N-22):
     /// the flag is raised and the answer channel closed here, and the thread
-    /// is handed to a [`Reaper`], which joins it within [`CANCEL_WAIT`] and
-    /// leaves one that is stuck in a call without a timeout. The reaper is
-    /// returned for a caller that wants to wait; the loop drops it.
-    pub fn cancel(mut self) -> Reaper {
+    /// is handed to a [`Reaper`], which joins it within [`CANCEL_WAIT`] (plus
+    /// [`CONNECT_GRACE`], which a cancel raised before PAM's first prompt may
+    /// be held back for, plus [`WRITE_TIMEOUT`] for a connection still being
+    /// made) and leaves one that is stuck in a call without a
+    /// timeout. The reaper is returned for a caller that wants to wait; the
+    /// loop drops it.
+    pub fn cancel(self) -> Reaper {
+        self.cancel_holding(())
+    }
+
+    /// [`Helper::cancel`], handing `hold` to the reaper, which drops it once
+    /// the thread has ended (so the secret the thread may still retain, held
+    /// back for PAM, is gone). If the reaper gives up waiting, the hold is
+    /// kept for good instead (see [`Helper::cancel_holding_within`]). The loop passes
+    /// the non-dumpable window's hold here, so the process stays non-dumpable
+    /// for as long as a typed answer can still be in the thread (N-6, S-9).
+    pub fn cancel_holding(self, hold: impl Send + 'static) -> Reaper {
+        self.cancel_holding_within(hold, CANCEL_WAIT + CONNECT_GRACE + WRITE_TIMEOUT)
+    }
+
+    /// [`Helper::cancel_holding`] with the reaper's wait given.
+    ///
+    /// When the thread has not ended within `wait` (a call without a timeout,
+    /// or writes that all ran to their bound) it may still hold the secret,
+    /// so the hold is **not** released: it is leaked on purpose, with an
+    /// error in the journal, and the process stays non-dumpable until it
+    /// exits. That fails closed; the cost is a flag that stays set.
+    fn cancel_holding_within(mut self, hold: impl Send + 'static, wait: Duration) -> Reaper {
         let Some(worker) = self.worker.take() else {
+            drop(hold);
             return Reaper::default();
         };
         self.halt.store(true, Ordering::Release);
@@ -568,8 +628,13 @@ impl<S: Answer> Helper<S> {
         let Helper { answers, .. } = self;
         drop(answers);
         Reaper::spawn("polkit-helper", move || {
-            if !worker.join_within(CANCEL_WAIT) {
-                tracing::warn!("polkit: the helper thread did not stop in time");
+            if worker.join_within(wait) {
+                drop(hold);
+            } else {
+                tracing::error!(
+                    "polkit: the helper thread did not stop in time and may still hold a typed answer; a hold on the non-dumpable window is kept until the process exits"
+                );
+                std::mem::forget(hold);
             }
         })
     }
@@ -603,12 +668,13 @@ fn spawn_with<S: Answer>(
     // The thread's own flag: a finished conversation must not raise the
     // shell's (the worker raises its flag when it goes away).
     let own = Arc::new(AtomicBool::new(false));
-    let shell = Arc::clone(shutdown);
-    let flag = Arc::clone(&own);
+    let halt = Halt {
+        own: Arc::clone(&own),
+        shell: Arc::clone(shutdown),
+    };
     let publish: Publish = Box::new(publish);
     let worker = Worker::spawn("polkit-helper", &own, move || {
-        let halted = || flag.load(Ordering::Acquire) || shell.load(Ordering::Acquire);
-        run(&input, connector, &inbox, &*publish, &halted);
+        run(&input, connector, &inbox, &*publish, &halt);
     })?;
     Ok(Helper {
         answers,
@@ -617,11 +683,51 @@ fn spawn_with<S: Answer>(
     })
 }
 
-/// The thread's body: conversations until an ending, a halt, or nobody
-/// listening. Everything it owns (the socket, the cookie, the answer in the
-/// channel) is dropped when it returns, by any path including a panic.
+/// [`spawn_with`] for the loop's own tests, which run the real thread over a
+/// connector that never reaches a socket (it counts, or refuses). Test only:
+/// the production [`spawn`] is the one way to reach the real socket.
+#[cfg(test)]
+pub(crate) fn spawn_for_tests<S: Answer>(
+    input: HelperInput,
+    publish: impl Fn(HelperEvent) -> bool + Send + 'static,
+    shutdown: &Arc<AtomicBool>,
+    connector: impl FnMut(&HelperInput) -> Result<Conversation, ConnectRefusal> + Send + 'static,
+) -> io::Result<Helper<S>> {
+    spawn_with(input, publish, shutdown, connector)
+}
+
+/// The two ways the thread is told to stop, which are not the same. The
+/// thread's own flag is raised by [`Helper::cancel`] (or by the handle going
+/// away); it may be held back for a moment, because the person's cancel must
+/// not close a socket PAM is still waiting on. The shell's flag is the whole
+/// shell going down: nothing holds it back.
+struct Halt {
+    own: Arc<AtomicBool>,
+    shell: Arc<AtomicBool>,
+}
+
+impl Halt {
+    fn own(&self) -> bool {
+        self.own.load(Ordering::Acquire)
+    }
+
+    fn shell(&self) -> bool {
+        self.shell.load(Ordering::Acquire)
+    }
+
+    fn any(&self) -> bool {
+        self.own() || self.shell()
+    }
+}
+
+/// The thread's body: idle with no socket until the person submits a secret;
+/// then one conversation, and back to idle after a wrong answer below the
+/// cap; it ends on every other ending, a halt, or nobody listening.
+/// Everything it owns (the socket, the cookie, the retained secret, the
+/// answer in the channel) is dropped when it returns, by any path including a
+/// panic.
 ///
-/// Nothing is published once `halted` says so: a conversation the loop
+/// Nothing is published once a halt is raised: a conversation the loop
 /// cancelled, or one the shell is leaving, must not end a request that is no
 /// longer its own (the loop also ignores an id it does not know, but the
 /// thread does not rely on that).
@@ -630,57 +736,119 @@ fn run<S: Answer>(
     mut connector: impl FnMut(&HelperInput) -> Result<Conversation, ConnectRefusal>,
     inbox: &Receiver<S>,
     publish: &dyn Fn(HelperEvent) -> bool,
-    halted: &dyn Fn() -> bool,
+    halt: &Halt,
 ) {
-    let emit = |event: HelperEvent| !halted() && publish(event);
+    let emit = |event: HelperEvent| !halt.any() && publish(event);
     let mut exchange = Exchange::new();
     loop {
-        if halted() {
+        // Idle: no socket exists, so nothing can be closed on PAM.
+        let Some(secret) = wait_for_answer(inbox, &|| halt.any()) else {
+            return;
+        };
+        // Cancelled while the answer was on its way: PAM was never touched.
+        if halt.any() {
             return;
         }
         let mut conversation = match connector(input) {
             Ok(conversation) => conversation,
             Err(refusal) => {
                 tracing::warn!(error = %crate::error_chain(&refusal), "polkit: the helper's socket was not used");
+                // The secret goes before the loop hears the ending: the loop
+                // closes the non-dumpable window on it.
+                drop(secret);
                 if let Step::End(ending) = exchange.on_unreachable() {
                     emit(HelperEvent::Ended(ending));
                 }
                 return;
             }
         };
-        loop {
-            let Some(event) = conversation.next_event(&mut exchange, halted) else {
-                return;
-            };
-            match event {
-                HelperEvent::Prompt(text) => {
-                    if !emit(HelperEvent::Prompt(text)) {
-                        return;
+        if !converse(&mut conversation, &mut exchange, secret, inbox, &emit, halt) {
+            return;
+        }
+        // A wrong answer: the helper has ended and `conversation` closes here;
+        // the next one opens only when the person submits again (the exchange
+        // keeps the attempt count across conversations).
+    }
+}
+
+/// One conversation: PAM's notices are shown; at the first
+/// `PAM_PROMPT_ECHO_OFF` the retained `secret` is written at once and dropped;
+/// a later prompt is shown to the person and answered live. Returns whether
+/// the thread goes on (a wrong answer below the cap) or ends.
+fn converse<S: Answer>(
+    conversation: &mut Conversation,
+    exchange: &mut Exchange,
+    secret: S,
+    inbox: &Receiver<S>,
+    emit: &dyn Fn(HelperEvent) -> bool,
+    halt: &Halt,
+) -> bool {
+    let grace = conversation.grace();
+    // Whether the secret has not yet been written, and since when a cancel
+    // has been held back because of it.
+    let retained = Cell::new(true);
+    let held_since: Cell<Option<Instant>> = Cell::new(None);
+    let interrupted = || {
+        if halt.shell() {
+            return true;
+        }
+        if !halt.own() {
+            return false;
+        }
+        if !retained.get() {
+            return true;
+        }
+        let since = held_since.get().unwrap_or_else(|| {
+            let now = Instant::now();
+            held_since.set(Some(now));
+            now
+        });
+        since.elapsed() >= grace
+    };
+    let mut secret = Some(secret);
+    loop {
+        let Some(event) = conversation.next_event(exchange, &interrupted) else {
+            return false;
+        };
+        match event {
+            HelperEvent::Prompt(text) => {
+                let answer = match secret.take() {
+                    // The first prompt: PAM is waiting for exactly this, and
+                    // the person already typed it.
+                    Some(secret) => {
+                        retained.set(false);
+                        secret
                     }
-                    let Some(answer) = wait_for_answer(inbox, halted) else {
-                        return;
-                    };
-                    if let Err(ending) = conversation.answer(&mut exchange, answer) {
-                        emit(HelperEvent::Ended(ending));
-                        return;
+                    // A second one: the person answers it live.
+                    None => {
+                        if !emit(HelperEvent::Prompt(text)) {
+                            return false;
+                        }
+                        let Some(answer) = wait_for_answer(inbox, &|| halt.any()) else {
+                            return false;
+                        };
+                        answer
                     }
-                }
-                HelperEvent::Failure => {
-                    if !emit(HelperEvent::Failure) {
-                        return;
-                    }
-                    // Closes this socket; the next conversation reuses the
-                    // exchange and so the attempt count.
-                    break;
-                }
-                HelperEvent::Ended(ending) => {
+                };
+                if let Err(ending) = conversation.answer(exchange, answer) {
                     emit(HelperEvent::Ended(ending));
-                    return;
+                    return false;
                 }
-                notice @ HelperEvent::Notice(_) => {
-                    if !emit(notice) {
-                        return;
-                    }
+            }
+            HelperEvent::Failure => {
+                return emit(HelperEvent::Failure);
+            }
+            HelperEvent::Ended(ending) => {
+                // The retained secret goes before the loop hears the ending.
+                drop(secret.take());
+                emit(HelperEvent::Ended(ending));
+                return false;
+            }
+            notice @ HelperEvent::Notice(_) => {
+                // A cancel raised meanwhile suppresses the notice but must not
+                // end the conversation while PAM still waits for the secret.
+                if !emit(notice) && !retained.get() {
+                    return false;
                 }
             }
         }

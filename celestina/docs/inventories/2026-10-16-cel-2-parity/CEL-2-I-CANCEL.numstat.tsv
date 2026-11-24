@@ -1,0 +1,53 @@
+# CEL-2-I-CANCEL exact change inventory
+
+Base revision	4859d6e2a1c4ce677ab790be63b5148fdd93e2db
+Pathspec	celestina-rs/crates/celestina-shell/src/polkit.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/decisions/0021-polkit-agent.md
+Pathspec	celestina/docs/evidence/2026-11-23-cel-2-i-cancel.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-I-CANCEL.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/polkit/dumpable.rs
+Pathspec	celestina/src/polkit/mod.rs
+Pathspec	celestina/src/polkit/state.rs
+Pathspec	celestina/src/polkit/state/tests.rs
+Pathspec	celestina/src/polkit/view.rs
+Pathspec	celestina/src/providers/polkit/helper.rs
+Pathspec	celestina/src/providers/polkit/helper/tests.rs
+Pathspec	celestina/src/providers/polkit/testing.rs
+Pathspec	celestina/src/providers/polkit/tests.rs
+Pathspec	celestina/tests/polkit_guards.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+45	3	f60593968f1ffbbe94e14681edaa5f601f856b9901b3f973a730fa1c66e00710	celestina-rs/crates/celestina-shell/src/polkit.rs
+1	1	0e1323b803af73b8a150446cb46cff39a4bb9f81ba5a0af40a6bfb3132280cae	celestina/Cargo.lock
+1	1	b90db858cbb7c1106faf6faac5e01b2c97b21ec5da2ece0095befc8f8b7efbac	celestina/Cargo.toml
+8	1	0f2116f790c21f2d7e1690dfb19ae9082947e3fdc6b5813ac970922224836bab	celestina/README.md
+8	0	006e1ef44dccd004894a71b5290cf89b112532e74f8464a350cdc75cf28ed983	celestina/STATUS.md
+25	4	1cd88054e32c06a90e6f2a2a5eb43a0fa58573412e9ee928b4dc8ab298e6ac68	celestina/VALIDATION.md
+144	0	f96cf920ca6d50698f3bbb3f2b11dc7de1a604a00362e43e9339cec539e79cab	celestina/docs/decisions/0021-polkit-agent.md
+329	0	abfff53bdbb0daf6ed08d267efb304ac302d27b67aa78133bc4b62ebf0ca3822	celestina/docs/evidence/2026-11-23-cel-2-i-cancel.md
+53	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/CEL-2-I-CANCEL.numstat.tsv
+1	0	39f529937928235360c646a7293384a0b9f40baa0500849d2e01c3d7580df198	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+2	17	95607187426477394ad8167045fdae9d21fba393291ea74f04c7ce135a6d1718	celestina/src/app.rs
+9	2	74366061212ea8655cd00533eb638fd9350e069cc3bbdb29a86fe0bc80fdd23f	celestina/src/copy.rs
+264	60	6fc9ada39a628f93dc14dda0ddb8f1f12580e1f4c8d8ee4dd65f96db1d7cbffc	celestina/src/polkit/dumpable.rs
+74	13	0c4ac342f3b2263570705b4e3db7553f7686ec816c08ad5d8f2c94efc4f597a4	celestina/src/polkit/mod.rs
+37	10	296e6bad94a98cc6021dbd5fd70dac4f613c5ce684737696f3ab7465ab7a1340	celestina/src/polkit/state.rs
+418	36	f0594c52ed2e722aaaa86bd4c050b8241caa2599e1463d05f8a334322168c4fb	celestina/src/polkit/state/tests.rs
+22	4	6e127157e6c405f45b02217fcf9004cd3dae81b8f6126765a1098bb8185c697d	celestina/src/polkit/view.rs
+226	58	fccde398d8ee3d1918d1b56459b043aa796fd9463c288179b5040286c1b8c6d4	celestina/src/providers/polkit/helper.rs
+891	74	e1a7f9f8a5be4af536684d2ebab67b412633128ae40f013323e526f41104dcae	celestina/src/providers/polkit/helper/tests.rs
+12	0	9ab109ca0f094328f08aaae22f1bba47b00a46d7aff514e25b245b5c610aa6de	celestina/src/providers/polkit/testing.rs
+7	7	4b89fc2a377db580032da88048ae9c45497a03c763beebb2701627b0bec6f0c6	celestina/src/providers/polkit/tests.rs
+47	0	3e9a0288e03b991fe27bdd1513dfbeee6323481e0dad8dc384e3ff0341e18640	celestina/tests/polkit_guards.rs
+1	0	92ed1e2198daa0a64f8bcb93ef10be4a3e4cb90dfd4f1fecdb4addcf8eb9dee7	docs/version-history.tsv

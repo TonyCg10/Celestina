@@ -98,7 +98,14 @@ What Noctalia still does for the session is in
   authentication agent: a card over a dimmed overlay takes the keyboard
   exclusively, asks for the password (two attempts per prompt) and hands it
   only to polkit's own helper, which verifies it; the shell never decides a
-  success, and every failure is a refusal. Switch it on with Noctalia's agent
+  success, and every failure is a refusal. The helper is not contacted until
+  the password is submitted: cancelling the card before the first Enter, and
+  every other way a prompt can end before that (idle timeout, lost keyboard,
+  polkit's own cancel, the duty off), never touches PAM and so cannot count
+  as a failed login. After a submit a few cases can still count, listed in
+  ADR 0021's amendment (a second prompt of the PAM stack, the shell exiting
+  in the instant before PAM's first prompt, PAM not asking within five
+  seconds of a cancel). Switch it on with Noctalia's agent
   off: if another agent holds the session the shell refuses to register, logs
   it and does not retry or evict. Recovery is to set the duty to `"off"` (the
   shell cancels every request and unregisters) or stop the shell, then

@@ -116,6 +116,14 @@
   (the review and the adversarial pass are still to run); its author row is
   `VAL-CEL2-POLKIT-LIVE`, pending. The recovery is the duty switched off, or
   Noctalia's agent re-enabled. The ADR is a draft, number provisional.
+- **CEL-2-I-CANCEL (in progress, not landed):** a bug fix of the polkit agent
+  on `unit/celestina/CEL-2-I-CANCEL`: cancelling its prompt counted as a failed
+  login in `pam_faillock` (the third cancel locked the account for ten
+  minutes), because the helper's socket was open with PAM waiting for the
+  password. The conversation is now lazy: nothing connects until the password
+  is submitted. Evidence:
+  [`docs/evidence/2026-11-23-cel-2-i-cancel.md`](docs/evidence/2026-11-23-cel-2-i-cancel.md);
+  the live check is `VAL-CEL2-POLKIT-LIVE` (step 3 changed), pending.
 - **Author validation:** all nine VAL-CEL rows are `pending`; the author has
   not recorded a result in any of them. The author accepted 1.0.0 as stable
   after trying the shell, without closing the rows; the recorded evidence is

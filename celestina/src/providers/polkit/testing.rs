@@ -527,6 +527,18 @@ pub(crate) fn logged_line(needles: &[&str]) -> bool {
         .any(|line| needles.iter().all(|needle| line.contains(needle)))
 }
 
+/// How many logged lines contain every one of `needles`.
+pub(crate) fn logged_count(needles: &[&str]) -> usize {
+    let captured = match CAPTURED.lock() {
+        Ok(captured) => captured.clone(),
+        Err(poisoned) => poisoned.into_inner().clone(),
+    };
+    String::from_utf8_lossy(&captured)
+        .lines()
+        .filter(|line| needles.iter().all(|needle| line.contains(needle)))
+        .count()
+}
+
 /// Whether anything logged so far contains `needle`.
 pub(crate) fn logged(needle: &str) -> bool {
     let captured = match CAPTURED.lock() {

@@ -40,6 +40,7 @@ use crate::message::Message;
 use crate::providers::polkit::helper::{self, AnswerRefused, Helper, HelperInput};
 use crate::providers::polkit::{PolkitAgent, Prompt};
 use crate::providers::Reaper;
+use dumpable::DumpHold;
 
 pub use state::{InputOutcome, PolkitState};
 
@@ -143,17 +144,21 @@ impl AgentPort for PolkitAgent {
 
 /// A request's helper conversation, as the card sees it.
 pub trait HelperHandle {
-    /// Moves `secret` to the conversation's thread. Refused, it is dropped
-    /// (wiped) here.
+    /// Moves `secret` to the conversation's thread, which opens the
+    /// conversation with PAM for it (the first answer) or answers PAM's second
+    /// question with it. Refused, it is dropped (wiped) here.
     ///
     /// # Errors
     ///
     /// [`AnswerRefused`] when the thread cannot take it.
     fn answer(&self, secret: Secret) -> Result<(), AnswerRefused>;
-    /// Closes the conversation: the socket is closed and any answer on its
-    /// way is dropped, by its thread. Returns at once (N-22); nothing the
-    /// thread says afterwards is published.
-    fn cancel(self: Box<Self>);
+    /// Closes the conversation: the socket (if one was ever opened) is
+    /// closed and any answer on its way is dropped, by its thread. Returns at
+    /// once (N-22); nothing the thread says afterwards is published. `hold`
+    /// keeps the non-dumpable window shut until the thread has ended, because
+    /// a cancel before PAM's first prompt is held back and the thread keeps
+    /// the typed answer meanwhile.
+    fn cancel(self: Box<Self>, hold: DumpHold);
 }
 
 impl HelperHandle for Helper<Secret> {
@@ -161,17 +166,20 @@ impl HelperHandle for Helper<Secret> {
         Helper::answer(self, secret)
     }
 
-    fn cancel(self: Box<Self>) {
-        // The reaper joins the thread; the loop has nothing to wait for.
-        drop(Helper::cancel(*self));
+    fn cancel(self: Box<Self>, hold: DumpHold) {
+        // The reaper joins the thread and then drops the hold; the loop has
+        // nothing to wait for.
+        drop(Helper::cancel_holding(*self, hold));
     }
 }
 
-/// Starts the helper conversation of a request. Called only once the card has
-/// the keyboard and the guard window has passed (design N-24).
+/// Starts the helper's thread of a request. Called only once the card has
+/// the keyboard and the guard window has passed (design N-24), which is when
+/// the card is ready to type. The thread holds no connection to PAM: it opens
+/// one only when the person submits (ADR 0021's amendment of 2026-11-23).
 pub trait HelperSpawner {
-    /// Opens the conversation of request `id` with `input`, which owns the
-    /// account and a copy of the cookie.
+    /// Starts the thread of request `id` with `input`, which owns the account
+    /// and a copy of the cookie.
     ///
     /// # Errors
     ///
@@ -279,6 +287,30 @@ pub fn notice_incoming(notice: Notice) -> Incoming {
     }
 }
 
+/// Writes `notice` to the journal when its banner could not be raised
+/// because another program holds `org.freedesktop.Notifications` (or the
+/// notification worker is gone), once per occurrence. A proof failure means a
+/// request was cancelled unshown, which a client that suppressed the real
+/// prompt must not be able to hide, so that one is an error; the cool-down
+/// (after three prompts dismissed in a row) and the helper's absence are
+/// warnings.
+pub fn notice_unraised(notice: Notice) {
+    match notice {
+        Notice::PromptCouldNotBeShown => tracing::error!(
+            ?notice,
+            "polkit: a request was cancelled because its prompt could not be shown, and the notice could not be raised (the notification name is held elsewhere)"
+        ),
+        Notice::CooldownStarted => tracing::warn!(
+            ?notice,
+            "polkit: requests are cancelled unshown for a while, and the notice could not be raised (the notification name is held elsewhere)"
+        ),
+        Notice::HelperUnavailable => tracing::warn!(
+            ?notice,
+            "polkit: a request failed because polkit's helper could not be used, and the notice could not be raised (the notification name is held elsewhere)"
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,5 +328,34 @@ mod tests {
         let helper = notice_incoming(Notice::HelperUnavailable);
         assert_eq!(helper.urgency, Urgency::Normal);
         assert_eq!(helper.summary, crate::copy::POLKIT_HELPER_SUMMARY);
+    }
+
+    /// Another program may hold `org.freedesktop.Notifications`: then the
+    /// banner cannot be raised and the journal carries the notice instead,
+    /// once per occurrence, at `warn` (at `error` for the one a client that
+    /// suppressed the real prompt must not be able to hide).
+    #[test]
+    fn a_notice_that_cannot_be_raised_is_journaled_once_per_occurrence() {
+        use crate::providers::polkit::testing::{capture_logs, logged_count};
+        assert!(capture_logs(), "the log capture is in place");
+        let marker = "the notice could not be raised";
+        let held = "notification name is held elsewhere";
+        assert_eq!(logged_count(&["WARN", "CooldownStarted", marker]), 0);
+        notice_unraised(Notice::CooldownStarted);
+        assert_eq!(
+            logged_count(&["WARN", "CooldownStarted", marker, held]),
+            1,
+            "one occurrence, one warn line that says what and why"
+        );
+        notice_unraised(Notice::CooldownStarted);
+        assert_eq!(logged_count(&["WARN", "CooldownStarted", marker]), 2);
+        notice_unraised(Notice::HelperUnavailable);
+        assert_eq!(logged_count(&["WARN", "HelperUnavailable", marker]), 1);
+        notice_unraised(Notice::PromptCouldNotBeShown);
+        assert_eq!(
+            logged_count(&["ERROR", "PromptCouldNotBeShown", marker]),
+            1,
+            "the one a suppressing client must not hide stays an error"
+        );
     }
 }

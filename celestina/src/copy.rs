@@ -224,9 +224,16 @@ pub const POLKIT_FIELD_EMPTY: &str = "vacío";
 /// count can be read ("has content").
 pub const POLKIT_FIELD_HAS_CONTENT: &str = "con contenido";
 
-/// The line under the card's text before PAM has asked for anything
-/// ("Preparing the authentication...").
+/// The line under the card's text before the card is ready to take the
+/// password, while the keyboard is not yet proven ("Preparing the
+/// authentication...").
 pub const POLKIT_PREPARING: &str = "Preparando la autenticación…";
+
+/// The line under the card's text while the card waits for the password, when
+/// PAM has asked nothing in words of its own ("Password"). The card is ready to
+/// type before the system's helper has been contacted, so this is the card's
+/// own label; PAM's prompt replaces it only for a second question.
+pub const POLKIT_PASSWORD_PROMPT: &str = "Contraseña";
 
 /// The line shown while the answer is with the system's helper
 /// ("Checking...").

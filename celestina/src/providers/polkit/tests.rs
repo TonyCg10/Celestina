@@ -32,7 +32,7 @@ const QUIET: Duration = Duration::from_millis(400);
 
 /// One agent on a private bus with its fakes. Fields drop in order: the
 /// agent first, then the fakes, then the bus.
-struct Harness {
+pub(super) struct Harness {
     agent: Option<PolkitAgent>,
     events: Receiver<PolkitEvent>,
     polkitd: Option<FakePolkitd>,
@@ -43,7 +43,7 @@ struct Harness {
     bus: PrivateBus,
 }
 
-struct Options {
+pub(super) struct Options {
     polkitd: Option<bool>,
     /// A polkitd that behaves in a chosen way instead of `polkitd`.
     behaviour: Option<Behaviour>,
@@ -106,7 +106,7 @@ impl Harness {
     }
 
     /// A harness whose agent registered.
-    fn registered(name: &str, options: Options) -> Option<Harness> {
+    pub(super) fn registered(name: &str, options: Options) -> Option<Harness> {
         let harness = Harness::start(name, options)?;
         assert!(
             harness.until(|e| *e == PolkitEvent::Registration(RegistrationState::Registered)),
@@ -115,7 +115,7 @@ impl Harness {
         Some(harness)
     }
 
-    fn agent(&self) -> &PolkitAgent {
+    pub(super) fn agent(&self) -> &PolkitAgent {
         match &self.agent {
             Some(agent) => agent,
             None => panic!("the agent was already joined"),
@@ -143,7 +143,7 @@ impl Harness {
     }
 
     /// The id of the next admitted request.
-    fn admitted(&self) -> RequestId {
+    pub(super) fn admitted(&self) -> RequestId {
         let until = Instant::now() + WAIT;
         while let Some(left) = until.checked_duration_since(Instant::now()) {
             match self.events.recv_timeout(left) {
@@ -162,7 +162,7 @@ impl Harness {
 
     /// Begins a request from the fake polkitd with `cookie`, for the person's
     /// own account.
-    fn begin(&self, cookie: &str) -> Receiver<zbus::Result<zbus::Message>> {
+    pub(super) fn begin(&self, cookie: &str) -> Receiver<zbus::Result<zbus::Message>> {
         let polkitd = self.polkitd();
         begin(
             &polkitd.service.connection,
@@ -175,7 +175,7 @@ impl Harness {
     }
 }
 
-fn outcome(call: &Receiver<zbus::Result<zbus::Message>>) -> String {
+pub(super) fn outcome(call: &Receiver<zbus::Result<zbus::Message>>) -> String {
     match call.recv_timeout(WAIT) {
         Ok(outcome) => answer_name(&outcome),
         Err(_) => "no answer".to_owned(),

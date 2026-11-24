@@ -2616,23 +2616,8 @@ impl PromptHost for PolkitHost<'_, '_> {
             return;
         }
         // Another program holds the notification name (or the worker is gone):
-        // the banner cannot be shown, so the journal carries the notice. A
-        // proof failure means a request was cancelled unshown, which a client
-        // that suppressed the real prompt must not be able to hide.
-        match notice {
-            Notice::PromptCouldNotBeShown => tracing::error!(
-                ?notice,
-                "polkit: a request was cancelled because its prompt could not be shown, and the notice could not be raised (the notification name is held elsewhere)"
-            ),
-            Notice::CooldownStarted => tracing::warn!(
-                ?notice,
-                "polkit: requests are cancelled unshown for a while, and the notice could not be raised (the notification name is held elsewhere)"
-            ),
-            Notice::HelperUnavailable => tracing::warn!(
-                ?notice,
-                "polkit: a request failed because polkit's helper could not be used, and the notice could not be raised (the notification name is held elsewhere)"
-            ),
-        }
+        // the banner cannot be shown, so the journal carries the notice.
+        polkit::notice_unraised(notice);
     }
 }
 

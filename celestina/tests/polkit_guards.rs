@@ -1200,6 +1200,53 @@ fn n22_the_loop_side_modules_do_no_blocking_io() {
     );
 }
 
+/// CEL-2-I-CANCEL (ADR 0021's amendment of 2026-11-23): no connection to the
+/// helper before the person submits. PAM sits in `fgets` at its first prompt
+/// and a socket closed there counts in `pam_faillock`, so the one place the
+/// production code opens a conversation is the thread's body, after it took a
+/// secret from the card's slot, and nothing else reaches the connector or the
+/// socket path.
+#[test]
+fn the_helper_is_connected_only_after_a_secret_was_taken_from_the_slot() {
+    let files = production_sources();
+    let helper = only(&files, "src/providers/polkit/helper.rs");
+    assert_eq!(
+        helper.matches("connector(input)").count(),
+        1,
+        "the connector is called in one place"
+    );
+    let waits = helper.find("wait_for_answer(inbox").unwrap_or(usize::MAX);
+    let connects = helper.find("connector(input)").unwrap_or(0);
+    assert!(
+        waits < connects,
+        "the connector is called after the first wait for the person's secret"
+    );
+    // `spawn` and `spawn_with` hand the connector over and never call it, and
+    // the production `connect` is only ever passed as that argument.
+    let spawning = helper
+        .split("pub fn spawn(")
+        .nth(1)
+        .and_then(|rest| rest.split("fn run<").next())
+        .unwrap_or_default();
+    assert!(
+        !spawning.contains("connector(") && !spawning.contains("connect_at("),
+        "spawning a helper opens nothing"
+    );
+    for (file, code) in &files {
+        if *file == "src/providers/polkit/helper.rs" {
+            continue;
+        }
+        assert!(
+            !code.contains("helper::connect(") && !code.contains("connect_at("),
+            "{file} reaches the helper's socket outside the helper's thread"
+        );
+    }
+    // The loop starts the thread at readiness and says nothing to the socket
+    // itself: it holds no stream and no conversation.
+    let state = only(&files, "src/polkit/state.rs");
+    assert!(!state.contains("Conversation") && !state.contains("connect"));
+}
+
 // ---- the scanner proves it can fail -------------------------------------------------------
 
 /// A source in which every forbidden construct appears once as code, once in

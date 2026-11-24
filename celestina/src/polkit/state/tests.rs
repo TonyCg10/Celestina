@@ -5,6 +5,8 @@
 use std::cell::{Cell, RefCell};
 use std::io;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use celestina_paint::{TextStyle, Theme};
@@ -21,7 +23,7 @@ use celestina_wayland::{
 
 use super::*;
 use crate::polkit::view::{self, Focus};
-use crate::providers::polkit::helper::{AnswerRefused, HelperInput};
+use crate::providers::polkit::helper::{self, AnswerRefused, ConnectRefusal, HelperInput};
 use crate::providers::Reaper;
 
 const RETURN: u32 = 0xff0d;
@@ -185,6 +187,10 @@ struct HelperLog {
     spawned: Vec<(RequestId, String)>,
     answers: Vec<Vec<u8>>,
     cancelled: usize,
+    /// A cancelled thread that still holds its secret keeps the window's
+    /// hold until the test lets it go.
+    keep_holds: bool,
+    holds: Vec<crate::polkit::dumpable::DumpHold>,
 }
 
 struct FakeHelpers {
@@ -215,8 +221,35 @@ impl HelperHandle for FakeHandle {
         Ok(())
     }
 
-    fn cancel(self: Box<Self>) {
-        self.0.borrow_mut().cancelled += 1;
+    fn cancel(self: Box<Self>, hold: crate::polkit::dumpable::DumpHold) {
+        let mut log = self.0.borrow_mut();
+        log.cancelled += 1;
+        if log.keep_holds {
+            log.holds.push(hold);
+        }
+    }
+}
+
+/// The real helper thread over a connector that only counts: what the loop
+/// would open of PAM, and when. It never reaches a socket.
+struct CountingHelpers {
+    connects: Arc<AtomicUsize>,
+    shutdown: Arc<AtomicBool>,
+}
+
+impl HelperSpawner for CountingHelpers {
+    fn spawn(&self, _id: RequestId, input: HelperInput) -> io::Result<Box<dyn HelperHandle>> {
+        let connects = Arc::clone(&self.connects);
+        let helper = helper::spawn_for_tests::<Secret>(
+            input,
+            |_| true,
+            &self.shutdown,
+            move |_| {
+                connects.fetch_add(1, Ordering::AcqRel);
+                Err(ConnectRefusal::ListenerNotTrusted)
+            },
+        )?;
+        Ok(Box::new(helper))
     }
 }
 
@@ -304,16 +337,37 @@ fn fake_measure(s: &str, _: &TextStyle, max: Option<f32>) -> (f32, f32) {
 
 impl Fx {
     fn new() -> Fx {
-        let t0 = Instant::now();
-        let agent = FakeAgent::new(t0);
         let log = Rc::new(RefCell::new(HelperLog::default()));
         let spawn_fails = Rc::new(Cell::new(false));
+        let helpers = FakeHelpers {
+            log: Rc::clone(&log),
+            fail: Rc::clone(&spawn_fails),
+        };
+        Fx::build(Box::new(helpers), log, spawn_fails)
+    }
+
+    /// A fixture over the real helper thread and a connector that counts.
+    fn counting() -> (Fx, Arc<AtomicUsize>) {
+        let connects = Arc::new(AtomicUsize::new(0));
+        let helpers = CountingHelpers {
+            connects: Arc::clone(&connects),
+            shutdown: Arc::new(AtomicBool::new(false)),
+        };
+        let log = Rc::new(RefCell::new(HelperLog::default()));
+        let fx = Fx::build(Box::new(helpers), log, Rc::new(Cell::new(false)));
+        (fx, connects)
+    }
+
+    fn build(
+        helpers: Box<dyn HelperSpawner>,
+        log: Rc<RefCell<HelperLog>>,
+        spawn_fails: Rc<Cell<bool>>,
+    ) -> Fx {
+        let t0 = Instant::now();
+        let agent = FakeAgent::new(t0);
         let mut state = PolkitState::new(
             Box::new(Rc::clone(&agent)),
-            Box::new(FakeHelpers {
-                log: Rc::clone(&log),
-                fail: Rc::clone(&spawn_fails),
-            }),
+            helpers,
             t0,
             Theme::dark(),
             false,
@@ -439,16 +493,13 @@ impl Fx {
     }
 
     /// The card has the keyboard (enter at 100 ms, serial 10), the guard
-    /// window has passed, the helper is open and PAM asked at 610 ms.
+    /// window has passed (500 ms) and the card is ready to type. PAM has not
+    /// been asked anything, and has not asked anything: the conversation opens
+    /// only when the person submits.
     fn ready(&mut self) -> RequestId {
         let id = self.show();
         self.enter(10, 100);
         self.tick(100 + FOCUS_GUARD.as_millis() as u64);
-        self.helper(
-            id,
-            HelperEvent::Prompt(pam("PAM_PROMPT_ECHO_OFF Password: ")),
-            610,
-        );
         id
     }
 
@@ -832,20 +883,153 @@ fn enter_on_an_empty_field_is_ignored() {
 }
 
 #[test]
-fn typing_before_pam_asks_is_dropped() {
+fn typing_before_the_card_is_ready_is_dropped() {
     let mut fx = Fx::new();
-    let id = fx.show();
-    fx.enter(10, 100);
-    fx.tick(500);
-    fx.typed(11, "early", 600);
+    fx.show();
+    fx.typed(9, "no-keyboard", 50);
     assert_eq!(fx.state.field_state(), Some(SecretFieldState::Empty));
-    fx.helper(
-        id,
-        HelperEvent::Prompt(pam("PAM_PROMPT_ECHO_OFF Password: ")),
-        650,
+    fx.enter(10, 100);
+    fx.typed(11, "early", 300);
+    assert_eq!(
+        fx.state.field_state(),
+        Some(SecretFieldState::Empty),
+        "inside the guard window"
     );
+    fx.tick(100 + FOCUS_GUARD.as_millis() as u64);
     fx.typed(20, "x", 700);
     assert_eq!(fx.state.field_state(), Some(SecretFieldState::HasContent));
+}
+
+/// The cause of the faillock bug lived here: the card used to wait for PAM's
+/// first prompt, which meant the helper's socket was already open (and PAM
+/// waiting for input) while the person read the card, so any dismissal closed
+/// it on PAM. The card is ready as soon as the keyboard is proven, with its
+/// own generic label, and PAM has not been contacted.
+#[test]
+fn the_card_is_ready_to_type_without_a_pam_prompt() {
+    let (mut fx, connects) = Fx::counting();
+    fx.show();
+    fx.enter(10, 100);
+    assert_eq!(
+        fx.state.active.as_ref().map(|a| a.phase),
+        Some(Phase::Preparing),
+        "the keyboard is not proven yet"
+    );
+    fx.tick(100 + FOCUS_GUARD.as_millis() as u64);
+    assert_eq!(
+        fx.state.active.as_ref().map(|a| a.phase),
+        Some(Phase::Asking),
+        "ready as soon as the keyboard and the guard window allow"
+    );
+    assert!(
+        fx.texts()
+            .contains(&copy::POLKIT_PASSWORD_PROMPT.to_owned()),
+        "the card's own label: {:?}",
+        fx.texts()
+    );
+    assert!(!fx.texts().contains(&copy::POLKIT_PREPARING.to_owned()));
+    fx.typed(11, "pw", 700);
+    assert_eq!(fx.state.field_state(), Some(SecretFieldState::HasContent));
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        connects.load(Ordering::Acquire),
+        0,
+        "ready to type, and PAM not contacted"
+    );
+}
+
+/// Every way a prompt ends before the person submitted: the thread of the
+/// helper exists, holds no socket, and the connector was never called.
+#[test]
+fn cancelling_before_any_submit_opens_no_helper_connection_by_any_route() {
+    type Route = fn(&mut Fx, RequestId);
+    let routes: [(&str, Route); 11] = [
+        ("Escape", |fx, _| {
+            fx.key(11, ESCAPE, None, 800);
+        }),
+        ("the cancel control", |fx, _| {
+            fx.key(11, TAB, None, 800);
+            fx.key(12, TAB, None, 810);
+            fx.key(13, RETURN, None, 820);
+        }),
+        ("the idle timeout", |fx, _| {
+            fx.tick(10 + IDLE_TIMEOUT.as_millis() as u64);
+        }),
+        ("the loss of the keyboard", |fx, _| {
+            fx.leave(1_000);
+            fx.tick(1_000 + FOCUS_GRACE.as_millis() as u64);
+        }),
+        ("polkitd's own cancel", |fx, _| {
+            if let Some(event) = fx.agent.cancel("cookie-1", fx.at(800)) {
+                let ctx = fx.ctx(800);
+                fx.state.on_event(event, &ctx, &mut fx.host);
+            }
+        }),
+        ("polkitd restarting", |fx, id| {
+            let ctx = fx.ctx(800);
+            let event = PolkitEvent::Ended {
+                id,
+                ending: Ending::OwnerChanged,
+            };
+            fx.state.on_event(event, &ctx, &mut fx.host);
+        }),
+        ("the duty switched off", |fx, _| {
+            let mut host = std::mem::take(&mut fx.host);
+            fx.state.shut_down(fx.at(800), &mut host);
+            fx.host = host;
+        }),
+        ("the session locking", |fx, _| {
+            fx.state.set_locked(true, fx.at(800));
+        }),
+        ("the card's output going away", |fx, _| {
+            fx.state.output_removed(OutputId(2), fx.at(800));
+        }),
+        ("the state dropped with the card up", |fx, _| {
+            fx.state = PolkitState::new(
+                Box::new(NoAgent),
+                Box::new(FakeHelpers {
+                    log: Rc::new(RefCell::new(HelperLog::default())),
+                    fail: Rc::new(Cell::new(false)),
+                }),
+                fx.t0,
+                Theme::dark(),
+                false,
+            );
+        }),
+        ("Escape with another request waiting", |fx, _| {
+            fx.admit(700, "cookie-2", "second");
+            fx.key(11, ESCAPE, None, 800);
+        }),
+    ];
+    for (name, route) in routes {
+        let (mut fx, connects) = Fx::counting();
+        let id = fx.ready();
+        route(&mut fx, id);
+        std::thread::sleep(Duration::from_millis(250));
+        assert_eq!(
+            connects.load(Ordering::Acquire),
+            0,
+            "{name}: PAM was contacted although nothing was submitted"
+        );
+        assert!(fx.answers().is_empty());
+    }
+}
+
+#[test]
+fn the_helper_connects_only_when_the_first_secret_is_submitted() {
+    let (mut fx, connects) = Fx::counting();
+    fx.ready();
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(connects.load(Ordering::Acquire), 0);
+    fx.typed(11, "pw", 700);
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(connects.load(Ordering::Acquire), 0, "typed, not submitted");
+    fx.key(13, RETURN, None, 710);
+    let until = Instant::now() + Duration::from_secs(5);
+    while connects.load(Ordering::Acquire) == 0 && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(connects.load(Ordering::Acquire), 1, "the submit connects");
 }
 
 // ---- loss, grace and the idle cap ----------------------------------------------------------------------
@@ -1076,13 +1260,17 @@ fn a_wrong_answer_shows_the_attempts_left_and_asks_again() {
     fx.helper(id, HelperEvent::Failure, 800);
     let shown = fx.texts();
     assert!(shown.contains(&copy::polkit_attempts_left(1)), "{shown:?}");
-    assert_eq!(fx.state.field_state(), Some(SecretFieldState::Empty));
-    // The next conversation asks again; the card takes a second answer.
-    fx.helper(
-        id,
-        HelperEvent::Prompt(pam("PAM_PROMPT_ECHO_OFF Password: ")),
-        850,
+    assert!(
+        shown.contains(&copy::POLKIT_PASSWORD_PROMPT.to_owned()),
+        "back to asking, with the card's own label: {shown:?}"
     );
+    assert_eq!(fx.state.field_state(), Some(SecretFieldState::Empty));
+    assert_eq!(
+        fx.state.active.as_ref().map(|a| a.phase),
+        Some(Phase::Asking),
+        "ready for the next answer with no prompt from PAM"
+    );
+    // The next conversation opens when the person submits again.
     fx.typed(20, "good", 900);
     fx.key(24, RETURN, None, 910);
     assert_eq!(fx.answers(), vec![b"bad\n".to_vec(), b"good\n".to_vec()]);
@@ -1280,6 +1468,93 @@ fn three_dismissals_in_a_row_raise_the_cooldown_notice() {
     assert_eq!(fx.host.created.len(), created);
 }
 
+/// A prompt cancelled before the person typed anything still counts as a
+/// dismissal for the cool-down, through the cancel control as through Escape;
+/// one cancelled after a secret was sent is an attempt and does not.
+#[test]
+fn the_dismissal_backoff_still_counts_cancels_before_submit() {
+    let mut fx = Fx::new();
+    let mut ms = 0;
+    for round in 0..3u32 {
+        let id = fx.admit(ms, &format!("cookie-{round}"), "m");
+        fx.commit(ms + 10);
+        fx.enter(10 + round, ms + 100);
+        fx.tick(ms + 600);
+        assert_eq!(
+            fx.state.active.as_ref().map(|a| a.phase),
+            Some(Phase::Asking)
+        );
+        if round == 1 {
+            // The cancel control, reached by Tab.
+            fx.key(30, TAB, None, ms + 700);
+            fx.key(31, TAB, None, ms + 710);
+            fx.key(32, RETURN, None, ms + 720);
+        } else {
+            fx.key(20 + round, ESCAPE, None, ms + 700);
+        }
+        fx.settle(ms + 730);
+        assert!(fx.agent.replies().contains(&(id, Reply::Cancelled)));
+        assert_eq!(fx.agent.ends().last(), Some(&(Ending::Escaped, false)));
+        ms += 5_000;
+    }
+    assert_eq!(fx.host.notices, vec![Notice::CooldownStarted]);
+
+    // After a submit, a cancel is an attempt: three of those never start it.
+    let mut fx = Fx::new();
+    let mut ms = 0;
+    for round in 0..3u32 {
+        let id = fx.admit(ms, &format!("cookie-{round}"), "m");
+        fx.commit(ms + 10);
+        fx.enter(10 + round, ms + 100);
+        fx.tick(ms + 600);
+        fx.typed(100 + 10 * round, "pw", ms + 650);
+        fx.key(150 + round, RETURN, None, ms + 660);
+        fx.key(200 + round, ESCAPE, None, ms + 700);
+        fx.settle(ms + 710);
+        assert!(fx.agent.replies().contains(&(id, Reply::Cancelled)));
+        assert_eq!(fx.agent.ends().last(), Some(&(Ending::Escaped, true)));
+        ms += 5_000;
+    }
+    assert!(fx.host.notices.is_empty(), "{:?}", fx.host.notices);
+}
+
+/// A second `PAM_PROMPT_ECHO_OFF` (a second factor) is the only prompt the
+/// card is told of: it takes PAM's own words and is answered live.
+#[test]
+fn a_second_prompt_from_pam_is_shown_and_takes_a_live_answer() {
+    let mut fx = Fx::new();
+    let id = fx.ready();
+    fx.typed(11, "first", 700);
+    fx.key(14, RETURN, None, 710);
+    assert_eq!(
+        fx.state.active.as_ref().map(|a| a.phase),
+        Some(Phase::Checking)
+    );
+    fx.helper(
+        id,
+        HelperEvent::Notice(pam("PAM_TEXT_INFO Touch your security key")),
+        750,
+    );
+    fx.helper(
+        id,
+        HelperEvent::Prompt(pam("PAM_PROMPT_ECHO_OFF Code: ")),
+        800,
+    );
+    assert_eq!(
+        fx.state.active.as_ref().map(|a| a.phase),
+        Some(Phase::Asking)
+    );
+    let shown = fx.texts();
+    assert!(shown.contains(&"Code:".to_owned()), "{shown:?}");
+    assert!(shown.contains(&"Touch your security key".to_owned()));
+    fx.typed(20, "246810", 900);
+    fx.key(30, RETURN, None, 910);
+    assert_eq!(
+        fx.answers(),
+        vec![b"first\n".to_vec(), b"246810\n".to_vec()]
+    );
+}
+
 #[test]
 fn a_cancel_from_polkit_for_the_active_request_closes_the_prompt() {
     let mut fx = Fx::new();
@@ -1328,26 +1603,40 @@ fn the_wake_up_follows_the_prompts_deadlines() {
 
 // ---- the duty's end: teardown, and the non-dumpable window --------------------------------------
 
-/// A dumpable flag in a cell, for the window the state owns.
+/// A dumpable flag in a shared cell, for the window the state owns.
 #[derive(Clone)]
-struct CellFlag(Rc<Cell<rustix::process::DumpableBehavior>>);
+struct CellFlag(Arc<std::sync::Mutex<rustix::process::DumpableBehavior>>);
+
+impl CellFlag {
+    fn get(&self) -> rustix::process::DumpableBehavior {
+        match self.0.lock() {
+            Ok(guard) => *guard,
+            Err(poisoned) => *poisoned.into_inner(),
+        }
+    }
+}
 
 impl crate::polkit::dumpable::Dumpable for CellFlag {
     fn current(&mut self) -> io::Result<rustix::process::DumpableBehavior> {
-        Ok(self.0.get())
+        Ok(self.get())
     }
 
     fn set(&mut self, behavior: rustix::process::DumpableBehavior) -> io::Result<()> {
-        self.0.set(behavior);
+        match self.0.lock() {
+            Ok(mut guard) => *guard = behavior,
+            Err(poisoned) => *poisoned.into_inner() = behavior,
+        }
         Ok(())
     }
 }
 
-fn windowed(fx: &mut Fx) -> Rc<Cell<rustix::process::DumpableBehavior>> {
-    let flag = Rc::new(Cell::new(rustix::process::DumpableBehavior::Dumpable));
+fn windowed(fx: &mut Fx) -> CellFlag {
+    let flag = CellFlag(Arc::new(std::sync::Mutex::new(
+        rustix::process::DumpableBehavior::Dumpable,
+    )));
     fx.state
         .set_dumpable(crate::polkit::dumpable::DumpableWindow::over(Box::new(
-            CellFlag(Rc::clone(&flag)),
+            flag.clone(),
         )));
     flag
 }
@@ -1438,6 +1727,99 @@ fn the_state_opens_the_dumpable_window_while_a_prompt_is_up_and_restores_it() {
     fx.show();
     drop(fx);
     assert_eq!(flag.get(), Dumpable);
+}
+
+/// N-6 and S-9: a cancel raised before PAM's first prompt is held back, so
+/// the helper's thread keeps the typed answer for a moment after the request
+/// ended. The process stays non-dumpable until that thread is gone: the window
+/// is held by the thread's reaper, and the loop does not wait for it.
+#[test]
+fn the_window_stays_shut_while_a_cancelled_helper_may_still_hold_the_secret() {
+    use rustix::process::DumpableBehavior::{Dumpable, NotDumpable};
+    let mut fx = Fx::new();
+    let flag = windowed(&mut fx);
+    fx.log.borrow_mut().keep_holds = true;
+    fx.ready();
+    fx.typed(11, "held-back", 700);
+    fx.key(12, RETURN, None, 710);
+    fx.key(13, ESCAPE, None, 800);
+    assert!(!fx.is_up(), "the request is over");
+    assert_eq!(
+        fx.log.borrow().holds.len(),
+        1,
+        "the thread's reaper holds it"
+    );
+    assert_eq!(
+        flag.get(),
+        NotDumpable,
+        "the secret may still be in the thread"
+    );
+
+    // The next request opens and closes its own window meanwhile: nested
+    // windows keep the original value to restore.
+    fx.admit(5_000, "cookie-2", "Another program");
+    fx.settle(5_000);
+    fx.commit(5_010);
+    fx.enter(30, 5_100);
+    fx.tick(5_600);
+    assert_eq!(flag.get(), NotDumpable);
+    fx.key(40, ESCAPE, None, 5_700);
+    assert_eq!(flag.get(), NotDumpable, "the first thread is not gone yet");
+
+    // The thread has dropped its secret and ended: the reaper lets go.
+    let holds = std::mem::take(&mut fx.log.borrow_mut().holds);
+    drop(holds);
+    assert_eq!(flag.get(), Dumpable, "restored to what it was before");
+}
+
+/// The production glue: `HelperHandle::cancel` of a real thread must hand the
+/// window's hold to that thread's reaper, not drop it on the spot.
+#[test]
+fn a_real_helper_handle_keeps_the_hold_until_its_thread_has_ended() {
+    use rustix::process::DumpableBehavior::{Dumpable, NotDumpable};
+    let flag = CellFlag(Arc::new(std::sync::Mutex::new(Dumpable)));
+    let mut window = crate::polkit::dumpable::DumpableWindow::over(Box::new(flag.clone()));
+    window.open();
+
+    // A thread whose connection is slow: it holds the submitted secret.
+    let (release, gate) = std::sync::mpsc::channel::<()>();
+    let cookie = match Cookie::new("3-0123456789abcdef-1-fedcba98") {
+        Ok(cookie) => cookie,
+        Err(err) => panic!("a valid cookie: {err:?}"),
+    };
+    let input = HelperInput::new("toni".to_owned(), cookie);
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let thread = helper::spawn_for_tests::<Secret>(
+        input,
+        |_| true,
+        &shutdown,
+        move |_| {
+            let _ = gate.recv_timeout(Duration::from_secs(10));
+            Err(ConnectRefusal::ListenerNotTrusted)
+        },
+    );
+    let Ok(thread) = thread else {
+        panic!("the thread starts");
+    };
+    let handle: Box<dyn HelperHandle> = Box::new(thread);
+    let mut secret = Secret::new();
+    assert!(secret.push('x').is_ok());
+    assert!(handle.answer(secret).is_ok());
+    std::thread::sleep(Duration::from_millis(100));
+
+    // What `retire` does: the hold, the cancel, then the window's own close.
+    let hold = window.hold();
+    handle.cancel(hold);
+    window.close();
+    assert_eq!(flag.get(), NotDumpable, "the thread still holds the secret");
+
+    // The thread ends and the reaper lets go.
+    let _ = release.send(());
+    let until = Instant::now() + Duration::from_secs(5);
+    while flag.get() != Dumpable && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(flag.get(), Dumpable, "released after the thread ended");
 }
 
 #[test]

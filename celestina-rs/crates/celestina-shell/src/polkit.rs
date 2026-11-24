@@ -1125,13 +1125,19 @@ fn unescape(text: &[u8]) -> Result<Vec<u8>, LineError> {
 /// What the caller does after feeding the [`Exchange`] an event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Step {
-    /// Show this text and wait for the person's secret.
+    /// PAM asks for a secret that is not echoed. The agent answers the first
+    /// such prompt of a conversation with the secret the person submitted
+    /// before the conversation was opened, and shows the text only for a later
+    /// one (a second factor).
     Ask(PamText),
     /// Show this text (PAM's words) and keep reading.
     Notice(PamText),
     /// A wrong answer below the cap (F-16): close this conversation's socket,
-    /// wipe, show PAM's error text and open a new conversation with the same
-    /// cookie.
+    /// wipe, show PAM's error text, and wait. A new conversation with the
+    /// same cookie opens only when the person submits again (the helper has
+    /// ended, so closing the socket costs PAM nothing); this exchange keeps
+    /// counting the attempts across conversations, and stays silent while it
+    /// waits, because no line is owed.
     Retry,
     /// The request is over with this ending.
     End(Ending),
@@ -2589,6 +2595,42 @@ mod tests {
         exchange.answer_sent();
         assert_eq!(exchange.on_line(line("FAILURE")), Step::Retry);
         assert_eq!(exchange.failed_attempts(), 1);
+    }
+
+    /// The agent idles between a wrong answer and the next submit, opening
+    /// nothing; the exchange outlives that wait. The conversation that follows
+    /// is a fresh one: PAM owes its first prompt (so silence is a fault), the
+    /// secret answers it, and the count of wrong answers goes on.
+    #[test]
+    fn a_conversation_after_an_idle_retry_owes_its_prompt_and_the_count_goes_on() {
+        fn after_one_wrong_answer() -> Exchange {
+            let mut exchange = Exchange::new();
+            assert!(matches!(
+                exchange.on_line(line("PAM_PROMPT_ECHO_OFF Password: ")),
+                Step::Ask(_)
+            ));
+            exchange.answer_sent();
+            assert_eq!(exchange.on_line(line("FAILURE")), Step::Retry);
+            exchange
+        }
+        // PAM, asked to start again, says nothing: a fault, not a wait.
+        assert_eq!(
+            after_one_wrong_answer().on_silence(),
+            Step::End(Ending::HelperSilent)
+        );
+        // PAM asks, the retained secret answers, and the verdict counts.
+        let mut exchange = after_one_wrong_answer();
+        assert!(matches!(
+            exchange.on_line(line("PAM_PROMPT_ECHO_OFF Password: ")),
+            Step::Ask(_)
+        ));
+        assert_eq!(exchange.on_silence(), Step::Ignore, "the person's turn");
+        exchange.answer_sent();
+        assert_eq!(
+            exchange.on_line(line("FAILURE")),
+            Step::End(Ending::AttemptsExhausted)
+        );
+        assert_eq!(exchange.failed_attempts(), MAX_ATTEMPTS);
     }
 
     // ---- the invariant of the failure table -----------------------------------------
