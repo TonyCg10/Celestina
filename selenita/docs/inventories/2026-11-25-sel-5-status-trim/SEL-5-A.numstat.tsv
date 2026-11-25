@@ -1,0 +1,21 @@
+# SEL-5-A exact change inventory
+
+Base revision	daa55af245802c61cdd3a71a8f29759a68c6e3f0
+Pathspec	selenita/ROADMAP.md
+Pathspec	selenita/STATUS.md
+Pathspec	selenita/docs/evidence/2026-11-25-status-trim.md
+Pathspec	selenita/docs/history/status-through-2026-11-25.md
+Pathspec	selenita/docs/inventories/2026-11-25-sel-5-status-trim/SEL-5-A.numstat.tsv
+Pathspec	selenita/docs/plans/active/README.md
+Pathspec	selenita/docs/plans/archive/2026-11-25-sel-5-status-trim.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+6	0	e26a621e7a6df2398bf1a2903c9bb80bb0f1bfe983dbdc127eb53bd3eefceb89	selenita/ROADMAP.md
+10	187	928d42c59030ada0a3187cbc78b366d4f91034a66648d144641436f435b85cc2	selenita/STATUS.md
+36	0	e463d683c3b2c3d0d72a196d4d1b06ce68c8f44376b0f2c717e11c2d51aa9b6c	selenita/docs/evidence/2026-11-25-status-trim.md
+195	0	66f4c73c06b4f119154581975f256dbfcf9a57e2745641cbe536567be45de8bf	selenita/docs/history/status-through-2026-11-25.md
+21	0	self	selenita/docs/inventories/2026-11-25-sel-5-status-trim/SEL-5-A.numstat.tsv
+2	2	a3b404fa532ef5e9fffda6ad7609b7ea71909cf83db2855f7f04d76a2ae46e9a	selenita/docs/plans/active/README.md
+55	0	8b711e901da376ede74c97f712d5c73cec976c1e653c1e294aba6c9fc27c022e	selenita/docs/plans/archive/2026-11-25-sel-5-status-trim.md

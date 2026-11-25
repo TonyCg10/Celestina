@@ -1,7 +1,7 @@
 # Active Selenita plans
 
-No plan is active: SEL-4 closed on 2026-10-11, and SEL-3, SEL-2 and SEL-1
-on 2026-10-10; all moved to [`../archive/`](../archive/). A dated plan is
+No plan is active: SEL-5 closed on 2026-11-25, SEL-4 on 2026-10-11, and
+SEL-3, SEL-2 and SEL-1 on 2026-10-10; all moved to [`../archive/`](../archive/). A dated plan is
 added here only when the project roadmap names the same active
 implementation checkpoint.
 

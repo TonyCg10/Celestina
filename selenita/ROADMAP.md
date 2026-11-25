@@ -48,6 +48,7 @@ the terminal: one window with the capture, the recording and the history.
 | SEL-3-A | done | SEL-2-A | the preview decoded at its shown size, `FocusedOutput` for the screen binding, `Grabaciones`, `FolderPaths` | [preview fixes](docs/evidence/2026-10-10-preview-fixes.md) |
 | SEL-4-A | done | SEL-3-A | the recording bar, the discard job, the focused start's pick request, `--pick-output` | [recording bar](docs/evidence/2026-10-10-recording-bar.md) |
 | SEL-4-B | done | SEL-4-A | the `Paused` state, segments on one portal session, the `ffmpeg` join and its fallbacks, the bar's pause button | [recording pause](docs/evidence/2026-10-11-recording-pause.md) |
+| SEL-5-A | done | SEL-4-B | the status keeps a summary; its account of the checkout moves to the history | [status trim](docs/evidence/2026-11-25-status-trim.md) |
 
 SEL-1 closed on 2026-10-10 at 1.0.2, after the bug units SEL-1-D and SEL-1-E
 and the capture portal of SEL-1-F. The build order, exclusions, exit and
@@ -70,6 +71,11 @@ the recording bar, the focused recording without the portal's dialog and
 pausing by segments, and closed on 2026-10-11 at 1.3.0 with SEL-4-A and
 SEL-4-B. Its build order, exclusions, exit and ledger are in the
 [archived plan](docs/plans/archive/2026-10-10-sel-4-recording-controls.md).
+
+SEL-5, opened and closed on 2026-11-25 in one commit, moved the status's
+account of the checkout to its history so that a session reads less before
+acting. Its ledger is in the
+[archived plan](docs/plans/archive/2026-11-25-sel-5-status-trim.md).
 
 ## Implementation exit
 
