@@ -376,6 +376,16 @@ first entry, `CEL-I-004`.
 
 The plan is [TRK-1](docs/plans/active/2026-11-25-cel-tracks-docs.md).
 
+## VIS-1 — Preview visible changes before building them (closed 2026-11-25)
+
+A visible change now starts with a faithful preview the author approves,
+before its plan and its code.
+
+- [x] Add the rule to the root `AGENTS.md` (`VIS-1-A`).
+
+The plan, opened and closed in the same commit, is
+[the archived plan](docs/plans/archive/2026-11-25-visible-change-preview.md).
+
 ## Project implementation fronts
 
 | Project | Canonical implementation queue |

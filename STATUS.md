@@ -49,6 +49,10 @@ requires.
 
 ## Completed cross-project work
 
+VIS-1 added on 2026-11-25 the rule that a visible change starts with a
+faithful preview the author approves, in the root `AGENTS.md`; the ledger is
+[the archived plan](docs/plans/archive/2026-11-25-visible-change-preview.md).
+
 ARC-2 archived STYLE-G7 on 2026-11-25, recording `STYLE-G7-K` as delivered
 by `1e30380a` and `STYLE-G7-J` as obsolete; the ledger is
 [the archived plan](docs/plans/archive/2026-11-25-style-g7-archive.md).

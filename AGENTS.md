@@ -188,6 +188,31 @@ implementing it. Proximity to the open file does not determine ownership.
 - Manual C++ names the concrete CXX-Qt limitation that requires it, respects
   RAII and QObject affinity, and delegates pure testable logic to Rust.
 
+## Visible changes: preview before building
+
+A unit that changes anything a person sees (a screen, component, layout,
+motion, icon, colour, typography or visible text) shows the author a preview
+and waits for approval before its plan, if it has one, and its code. Light
+units too. A fix that only restores an approved look needs no preview; its
+evidence says so.
+
+- The preview is faithful, not a sketch: values from `celestina-style`'s
+  `tokens.toml`, its fonts and icons, `DESIGN.md`, real sizes, real text, the
+  states that apply (for example hover, focus, pressed, disabled, empty, error
+  and loading) and both themes. The current screen, when there is one, sits
+  beside the proposal.
+- Two or three variants side by side when there is a real choice, with a
+  recommendation. Motion is shown moving, not described.
+- When an HTML preview cannot show it faithfully (glass over the wallpaper,
+  compositor blur, fractional output scaling), say so and add a throwaway
+  prototype in the real stack, with screenshots from a nested compositor.
+- Iterate on the preview until approved. The unit's design or plan, or for a
+  light unit its evidence, links the approved preview and gives the date of
+  the approval; screenshots go under `docs/evidence/`. The preview is the
+  reference for the implementation and the final review.
+- Approving a preview does not replace the real-session check in
+  `VALIDATION.md`.
+
 ## Documents and two delivery lanes
 
 - `README.md`: current product, use, and structure.

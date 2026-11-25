@@ -112,7 +112,9 @@ A light unit:
   [the short template](../templates/evidence-light.md): at most 40 lines
   before the section the landing appends, with commands, exits and limits,
   and no narrative or review history;
-- takes one review round.
+- takes one review round;
+- when it changes something visible, links its approved preview from its
+  evidence (see "Visible changes" in the root `AGENTS.md`).
 
 Everything else is ordinary: the ledger row, the inventory, the version rule,
 and the landing's build, verification and full smoke.

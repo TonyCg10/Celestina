@@ -1,0 +1,21 @@
+# VIS-1-A exact change inventory
+
+Base revision	b912de11546135d60241c2f5454e4bc31f983434
+Pathspec	AGENTS.md
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-11-25-visible-change-preview.md
+Pathspec	docs/inventories/2026-11-25-visible-change-preview/VIS-1-A.numstat.tsv
+Pathspec	docs/plans/archive/2026-11-25-visible-change-preview.md
+Pathspec	docs/standards/verification.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+25	0	48a71ff74aac4e74b0f55fb80dda997eff95f0bcf57d5ccf8c6db1f7164c07f4	AGENTS.md
+10	0	0017e286b26d28cb9c53ed5891cad9a073122de0f11435dbb859d2908c615dd3	ROADMAP.md
+4	0	fbd382419f96b2a004922348a53eb1a0425c5217334e24cc32615ad1dbb2baf0	STATUS.md
+30	0	47d5a2231fbfbbf8aad554f75087610ef6cac2d0abae697c3ff5553465b7110f	docs/evidence/2026-11-25-visible-change-preview.md
+21	0	self	docs/inventories/2026-11-25-visible-change-preview/VIS-1-A.numstat.tsv
+54	0	caaf2312998e28318de795ad1e84006cf89ca24002005cf3ebce6e507a12cfb6	docs/plans/archive/2026-11-25-visible-change-preview.md
+3	1	ee87925957e7a88c4d5f6aafaed817975eadf7c03bf44cac73ca2aa0c44dd132	docs/standards/verification.md
