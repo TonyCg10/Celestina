@@ -64,9 +64,9 @@ pub const STEP_PERCENT: u8 = 5;
 /// above it (overdrive) is never lowered by a raise.
 pub const CEILING_PERCENT: u8 = 100;
 
-/// What a `pactl subscribe` line says changed. Only the three facilities that
-/// move what the panel shows are typed; every other line (clients, streams,
-/// cards, modules) is `None`, so a stream starting never wakes a reading.
+/// What a `pactl subscribe` line says changed. Only the facilities that move
+/// what the panel shows are typed; every other line (clients, recording
+/// streams, cards, modules) is `None`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AudioEvent {
     /// An output device: its level or mute changed, or it came or went.
@@ -75,6 +75,9 @@ pub enum AudioEvent {
     Source,
     /// The server itself, where the default device changes.
     Server,
+    /// A playback stream (`sink-input`): an application started, stopped or
+    /// changed what it plays. Recording streams are not shown.
+    Stream,
 }
 
 /// Reads one `pactl subscribe` line such as `Event 'change' on sink #51`.
@@ -98,6 +101,7 @@ pub fn parse_pactl_event(line: &str) -> Option<AudioEvent> {
         "sink" => AudioEvent::Sink,
         "source" => AudioEvent::Source,
         "server" => AudioEvent::Server,
+        "sink-input" => AudioEvent::Stream,
         _ => return None,
     };
     match (fields.next(), fields.next()) {
@@ -127,6 +131,89 @@ pub fn stepped(current: u8, direction: Direction, step: u8) -> u8 {
     match direction {
         Direction::Down => current.saturating_sub(step),
         Direction::Up => current.max(current.saturating_add(step).min(CEILING_PERCENT)),
+    }
+}
+
+/// The most output devices, input devices and playback streams the popup lists.
+pub const MAX_GRAPH_DEVICES: usize = 8;
+/// See [`MAX_GRAPH_DEVICES`].
+pub const MAX_GRAPH_STREAMS: usize = 8;
+
+/// One output or input device in the popup.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraphDevice {
+    pub id: u32,
+    pub name: String,
+    pub default: bool,
+}
+
+/// One application's playback stream in the popup.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GraphStream {
+    pub id: u32,
+    pub name: String,
+    pub level: Option<AudioLevel>,
+    /// Whether the stream has a port that is `[active]` now (sound is
+    /// flowing), as opposed to paused or just created.
+    pub playing: bool,
+}
+
+/// What the popup lists: the devices and streams the session has now.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AudioGraph {
+    pub outputs: Vec<GraphDevice>,
+    pub inputs: Vec<GraphDevice>,
+    pub streams: Vec<GraphStream>,
+}
+
+impl AudioGraph {
+    /// Cuts each list to its cap. A default device past the cap replaces the
+    /// last kept row, so the count stays at the cap and the default is shown.
+    #[must_use]
+    pub fn bounded(mut self) -> Self {
+        bound_devices(&mut self.outputs);
+        bound_devices(&mut self.inputs);
+        self.streams.truncate(MAX_GRAPH_STREAMS);
+        self
+    }
+
+    /// Whether `id` is a listed playback stream.
+    #[must_use]
+    pub fn has_stream(&self, id: u32) -> bool {
+        self.streams.iter().any(|stream| stream.id == id)
+    }
+
+    /// Whether `id` is a listed output or input device.
+    #[must_use]
+    pub fn has_device(&self, id: u32) -> bool {
+        self.outputs
+            .iter()
+            .chain(&self.inputs)
+            .any(|device| device.id == id)
+    }
+}
+
+fn bound_devices(devices: &mut Vec<GraphDevice>) {
+    if devices.len() <= MAX_GRAPH_DEVICES {
+        return;
+    }
+    let past_cap_default = devices
+        .iter()
+        .skip(MAX_GRAPH_DEVICES)
+        .position(|device| device.default)
+        .map(|offset| offset + MAX_GRAPH_DEVICES);
+    let kept_default = devices
+        .iter()
+        .take(MAX_GRAPH_DEVICES)
+        .any(|device| device.default);
+    let default = match (kept_default, past_cap_default) {
+        (false, Some(index)) => Some(devices.swap_remove(index)),
+        _ => None,
+    };
+    devices.truncate(MAX_GRAPH_DEVICES);
+    if let Some(default) = default {
+        devices.pop();
+        devices.push(default);
     }
 }
 
@@ -239,7 +326,7 @@ mod tests {
     fn a_line_that_is_not_a_device_event_is_none() {
         for line in [
             "",
-            "Event 'change' on sink-input #5",
+            "Event 'change' on source-output #5",
             "Event 'change' on client #5",
             "Event 'change' on card #5",
             "Event 'explode' on sink #5",
@@ -284,5 +371,79 @@ mod tests {
     fn a_raise_never_lowers_an_overdriven_device() {
         assert_eq!(stepped(150, Direction::Up, STEP_PERCENT), 150);
         assert_eq!(stepped(150, Direction::Down, STEP_PERCENT), 145);
+    }
+
+    fn device(id: u32, default: bool) -> GraphDevice {
+        GraphDevice {
+            id,
+            name: format!("device {id}"),
+            default,
+        }
+    }
+
+    fn stream(id: u32) -> GraphStream {
+        GraphStream {
+            id,
+            name: format!("stream {id}"),
+            level: None,
+            playing: false,
+        }
+    }
+
+    #[test]
+    fn a_sink_input_line_is_a_stream_event() {
+        assert_eq!(
+            parse_pactl_event("Event 'new' on sink-input #88"),
+            Some(AudioEvent::Stream)
+        );
+        assert_eq!(
+            parse_pactl_event("Event 'remove' on sink-input #88"),
+            Some(AudioEvent::Stream)
+        );
+        assert_eq!(parse_pactl_event("Event 'change' on sink-input"), None);
+        assert_eq!(
+            parse_pactl_event("Event 'change' on source-output #3"),
+            None
+        );
+    }
+
+    #[test]
+    fn bounded_keeps_eight_and_the_default() {
+        let graph = AudioGraph {
+            outputs: (0..12).map(|id| device(id, id == 10)).collect(),
+            inputs: (0..3).map(|id| device(id, id == 1)).collect(),
+            streams: (0..12).map(stream).collect(),
+        }
+        .bounded();
+        assert_eq!(graph.outputs.len(), MAX_GRAPH_DEVICES);
+        let ids: Vec<u32> = graph.outputs.iter().map(|d| d.id).collect();
+        assert_eq!(ids, [0, 1, 2, 3, 4, 5, 6, 10]);
+        assert!(graph.outputs.last().is_some_and(|d| d.default));
+        assert_eq!(graph.inputs.len(), 3);
+        assert_eq!(graph.streams.len(), MAX_GRAPH_STREAMS);
+        assert_eq!(graph.streams.last().map(|s| s.id), Some(7));
+
+        let early = AudioGraph {
+            outputs: (0..12).map(|id| device(id, id == 2)).collect(),
+            ..AudioGraph::default()
+        }
+        .bounded();
+        let ids: Vec<u32> = early.outputs.iter().map(|d| d.id).collect();
+        assert_eq!(ids, [0, 1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn has_stream_and_has_device_name_listed_ids_only() {
+        let graph = AudioGraph {
+            outputs: vec![device(1, true)],
+            inputs: vec![device(2, true)],
+            streams: vec![stream(3)],
+        };
+        assert!(graph.has_device(1));
+        assert!(graph.has_device(2));
+        assert!(!graph.has_device(3));
+        assert!(graph.has_stream(3));
+        assert!(!graph.has_stream(1));
+        assert!(!AudioGraph::default().has_device(0));
     }
 }

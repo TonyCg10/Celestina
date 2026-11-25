@@ -96,6 +96,10 @@ pub enum Message {
     /// A default audio device's level, from the audio worker; `None` is no
     /// reading, never 0 %.
     Audio(crate::providers::audio::AudioEvent),
+    /// The audio graph (devices and playback streams) from the audio worker,
+    /// published only while a consumer holds its gate and only when it
+    /// changed.
+    AudioGraph(celestina_shell::audio::AudioGraph),
     /// A monitor's brightness, from the brightness workers; `None` is
     /// unknown, never 0 %.
     Brightness(crate::providers::brightness::BrightnessEvent),

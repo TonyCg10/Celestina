@@ -904,6 +904,12 @@ impl App {
     /// popup shows the new levels.
     fn levels_changed(&mut self, ctl: &mut RuntimeCtl<'_>) {
         self.redraw_all(ctl);
+        self.popup_refreshed(ctl);
+    }
+
+    /// An open slider popup shows what the readings and the audio graph hold
+    /// now.
+    fn popup_refreshed(&mut self, ctl: &mut RuntimeCtl<'_>) {
         if let Some((_, popup)) = self.controls.refresh() {
             if let Some(mut surface) = ctl.popup_surface(popup).and_then(|s| ctl.surface(s)) {
                 surface.request_redraw();
@@ -3094,6 +3100,13 @@ impl Shell for App {
                 let theme = self.theme();
                 self.osds
                     .audio(event, focused_output(self.model.as_ref()), ctl, &theme);
+            }
+            // The volume popup's rows; no piece draws it, and the display
+            // never hears of it.
+            Message::AudioGraph(graph) => {
+                if self.controls.audio_graph(graph, self.levels_live()) {
+                    self.popup_refreshed(ctl);
+                }
             }
             // A monitor's reading; the first one of each monitor is its
             // baseline.

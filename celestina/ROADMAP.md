@@ -1,11 +1,27 @@
 # Celestina implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** CEL-TRACKS
 - **Related author validation:** every `VAL-CEL-*` and `VAL-CEL2-*` row of
   [VALIDATION.md](VALIDATION.md), in the order of
   [the cutover's validation list](../docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md)
   (they do not block the implementation exit)
+
+## CEL-TRACKS — The shell's standing design and improvement tracks (active)
+
+**Hypothesis:** after CEL-2, two tracks that never close, design (`CEL-D`)
+and improvements (`CEL-I`), can refine the shell one small unit at a time,
+each tried live by the author the day it lands. **Plan:**
+[CEL-TRACKS](docs/plans/active/2026-11-25-cel-tracks.md), a standing plan
+whose ledger is the source of each entry's status and exit. **Design:**
+[the standing-tracks design](../docs/superpowers/specs/2026-11-24-celestina-standing-tracks-design.md).
+
+**In progress:** `CEL-I-004`, the output and input device selector and the
+per-application volume and mute in the volume popup
+([design](../docs/superpowers/specs/2026-11-25-celestina-cel-i-004-audio-design.md),
+[plan](../docs/superpowers/plans/2026-11-25-celestina-cel-i-004-audio-plan.md)).
+It needs Cuprita's `CUP-WPCTL-STATUS`, which moves the pure `wpctl status`
+parser out of the `wpctl` feature of `cuprita-core`.
 
 ## CEL-2 — Shell parity with Noctalia (closed 2026-11-25)
 

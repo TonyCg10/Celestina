@@ -1,0 +1,2 @@
+SCRATCH/fakes/wpctl
+SCRATCH/fakes/pactl

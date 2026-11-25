@@ -902,6 +902,20 @@ pub const MUTE: &str = "Silenciar";
 /// ("Mute microphone").
 pub const MUTE_MICROPHONE: &str = "Silenciar micrófono";
 
+/// The volume popup's heading of the output devices ("Output").
+pub const AUDIO_OUTPUT_DEVICE: &str = "Salida";
+
+/// The volume popup's heading of the input devices ("Input").
+pub const AUDIO_INPUT_DEVICE: &str = "Entrada";
+
+/// The volume popup's heading of the applications that play sound
+/// ("Applications").
+pub const AUDIO_APPS: &str = "Aplicaciones";
+
+/// The line under that heading while no application plays sound ("No
+/// application is playing").
+pub const AUDIO_NO_APPS: &str = "Ninguna aplicación suena";
+
 /// The accessible state of the bar's Volume piece: the level, or that the
 /// output is muted ("Volume, 60 %" / "Volume, muted").
 #[must_use]

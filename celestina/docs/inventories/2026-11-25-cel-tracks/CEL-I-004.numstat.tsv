@@ -1,0 +1,63 @@
+# CEL-I-004 exact change inventory
+
+Base revision	ab807a018e28971335f1e08b5e92eb3c42c65bff
+Pathspec	celestina-rs/crates/celestina-shell/src/audio.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-ui/src/ellipsis.rs
+Pathspec	celestina/crates/celestina-ui/src/lib.rs
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-004-audio.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-004-audio/command-v.txt
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-folded.png
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-inputs-unfolded.png
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-outputs-unfolded.png
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-unfolded.png
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-004-audio/run-osd-lines.log
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-004.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/osd/audio_rows.rs
+Pathspec	celestina/src/osd/control.rs
+Pathspec	celestina/src/osd/mod.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	celestina/src/osd/readings.rs
+Pathspec	celestina/src/providers/audio.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+165	4	1625941c1aef06f637ca9b50db09c254fb436e7bf92a6757ef821065c0bab5f6	celestina-rs/crates/celestina-shell/src/audio.rs
+1	1	b7fbe5b8f8f942824697b4afac02a204bf7708404cd9b4ef4898b9e9431f1b6c	celestina/Cargo.lock
+1	1	41522af9f6f498f6047a6d7662f7e22852d8fa5af0cd4ca99930ba62a1022b2b	celestina/Cargo.toml
+18	2	c5156409e5183d74f708591934c4bf12be77b5bca859cca945deb0486665af6d	celestina/ROADMAP.md
+3	0	2e812fe4567036ff691f2198fda51d3c8e64eb3b9c382ff4ca3db3f1fc0aba91	celestina/STATUS.md
+42	1	85be7828c40983baef421edf71da09afe293147904429fc356c73433a210b094	celestina/VALIDATION.md
+108	0	43a3887c67d0571c9953c300870e53adf9b67c558f7572cd064a6859cc80a29d	celestina/crates/celestina-ui/src/ellipsis.rs
+2	0	80ee9ac40170d1bafd045c6c6d1cfa9657e57a0481ab099de1c3f4ff2dc008df	celestina/crates/celestina-ui/src/lib.rs
+206	0	6cb874f52f6931b83b4024773fe84f183e2a8f2cf481d80769f15946dd719d30	celestina/docs/evidence/2026-11-25-cel-i-004-audio.md
+2	0	938ba77b37e46a86fb5459d6a2d001468bbf0b5ac280e6e007d58db69547558c	celestina/docs/evidence/2026-11-25-cel-i-004-audio/command-v.txt
+-	-	d7160f8b9add1b7672493fa6e2ebf99c2942522c7a1a14e2681fa9c091861fd9	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-folded.png
+-	-	11d422755ccbfb42c386eb1e9bb2cf0fa54ac605e1d81c41e2367c8ab3096d6a	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-inputs-unfolded.png
+-	-	88ff2823178951b388664fff4b0c24eab5c9d71977369609b1d91ec9218af37d	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-outputs-unfolded.png
+-	-	1b837029aab645d41eec9eee3029d695379fffa673d753addb77d986f6dafb9b	celestina/docs/evidence/2026-11-25-cel-i-004-audio/popup-unfolded.png
+1	0	dee94e8034a60167f3c31701e35c8ec17f228db3471357b9f8a2fcd222001235	celestina/docs/evidence/2026-11-25-cel-i-004-audio/run-osd-lines.log
+63	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-004.numstat.tsv
+110	0	360098b04f7c54453e0fb1653b29429a629f358db8773a21553216f0e9994895	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+5	2	d0e6f8b2347600e41423f38caf136084971552a811b2af908a73a2c51cbbcbc6	celestina/docs/plans/active/README.md
+13	0	67958936368c4bc5d38e13cd44248c6fc0eceeedf0b40645d582087cad8c4afb	celestina/src/app.rs
+14	0	859fd8e57a68c736795597697bc61726fce554cf416d5e6aca28d8885866df30	celestina/src/copy.rs
+4	0	ceeceabddb75bc78d457121ae90ec8689c08b1c2eaf02e05174bbe37718d4ba8	celestina/src/message.rs
+893	0	c056b1ada7fae39d266493345e27c175bb9f95d69647c31ea43466c1b14fb154	celestina/src/osd/audio_rows.rs
+203	24	8f7798873099605dd19a6581f5f53c7c88a79e907a62f5388e01b0f3258b0a27	celestina/src/osd/control.rs
+134	4	27347abc7844da107cbccc36d35de0f786221c0a08a79f8e0fc8f311725547b8	celestina/src/osd/mod.rs
+1432	84	f65ac88b5a4272555b678388d76f5ba2d6205fb5ce7784a0ee1c436403e65786	celestina/src/osd/popup.rs
+43	1	2c489de9eab1f6b088950bbe5ea9dc83088c15636dbe3ed1c2413c3b6fbdf69b	celestina/src/osd/readings.rs
+945	23	e6e4569c9b9e8d7d74ff7add9fd39d74b7b64c45440edf0376f23ccb6d60285b	celestina/src/providers/audio.rs
+1	0	d9d5c2cd2b6323febe4a1b53d37954f4b0b67a1404292e7279404ca3b4c57d7b	docs/version-history.tsv

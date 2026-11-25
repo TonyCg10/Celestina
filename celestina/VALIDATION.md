@@ -20,7 +20,7 @@ VAL-CEL2-BUBBLES-KEYS; CEL-2-D queues VAL-CEL2-MEDIA and VAL-CEL2-MEDIA-COVER;
 CEL-2-H-a queues VAL-CEL2-LOCK-PAM, VAL-CEL2-LOCK-LIVE, VAL-CEL2-LOCK-SUSPEND,
 VAL-CEL2-LOCK-HOTPLUG, VAL-CEL2-LOCK-RECOVERY, VAL-CEL2-LOCK-NOTICES and
 VAL-CEL2-LOCK-COEXIST; CEL-2-H-b queues VAL-CEL2-LOCK-BACKDROP and
-VAL-CEL2-LOCK-CLOCK; CEL-2-I queues VAL-CEL2-POLKIT-LIVE.
+VAL-CEL2-LOCK-CLOCK; CEL-2-I queues VAL-CEL2-POLKIT-LIVE; CEL-I-004 queues VAL-CEL-I-004.
 None has been run and none is closed by an agent.
 
 ## VAL-CEL-GLASS — Haze and blur on the Island, a banner and a popup
@@ -1336,3 +1336,44 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [2026-10-17-cel-2-i.md](docs/evidence/2026-10-17-cel-2-i.md)
+
+## VAL-CEL-I-004 — Devices and per-application volume in the volume popup
+
+- **Status:** pending
+- **Related implementation:** CEL-I-004 (the audio graph in the audio worker,
+  the collapsible output, input and application sections of the volume popup)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session, after the landing of CEL-I-004 and with `duties.osd` set to `"on"`
+  in `~/.config/celestina/shell.json`; the `volume` piece in the bar; real
+  PipeWire with the SNOWSKY as the default output, a second sink (any other
+  one), Firefox or a game playing sound, and a second application that can
+  play sound (a browser tab and mpv do)
+- **Procedure:** click the `volume` piece to open the popup. Check that it
+  opens with the outputs, inputs and applications sections folded: the outputs
+  section shows only the current output with its check mark, the inputs section
+  only the current input with its check mark, and the applications section only
+  the applications that are playing now. Unfold each section by its header
+  (also with Tab and Enter) and check that the outputs and inputs sections list
+  every device and the applications section lists every application, and that
+  the popup grows downward with its top edge fixed under the piece. Fold them
+  again. Close and reopen the popup and check that it opens folded again. Then,
+  with the sections unfolded: (1) click another output and check that the sound
+  moves to it and the mark moves with it; click the SNOWSKY and check that the
+  sound and the mark come back. Then click another input and check that the
+  mark moves; click the first one again. (2) With sound playing in Firefox or a
+  game and in a second application, drag the slider of the first one down and
+  check that only that application gets quieter and the main volume slider does
+  not move. (3) Press the mute switch of one application and check that only
+  that one goes silent, then press it again. (4) Do steps 1 to 3 once with the
+  popup open and watch the screen edge where the OSD appears: no OSD may flash
+  while you do it. Close the popup with Escape or a click outside, and check
+  that no OSD appears either on closing
+- **Pass condition:** the popup opens folded with the current output, the
+  current input and only the playing applications; each header unfolds its full
+  list and the popup grows downward with its top edge fixed; the output and the
+  input each switch to the chosen device and back, and the mark follows;
+  lowering or muting one application leaves the others and the main volume
+  alone; no OSD flashes during the steps or on closing the popup
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [2026-11-25-cel-i-004-audio.md](docs/evidence/2026-11-25-cel-i-004-audio.md)

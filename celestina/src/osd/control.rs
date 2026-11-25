@@ -20,6 +20,11 @@
 //!   then detects once and reads once each monitor whose level is unknown,
 //!   so the piece has something to draw; a step or a slider is a change,
 //!   which the worker detects for lazily, never a detection request.
+//! - **The audio graph is gated** the same way: while the duty is on and a
+//!   layout holds the `volume` piece, the audio worker is told to read it
+//!   ([`volume_consumer`]); [`Controls`] hands the latest one to a volume
+//!   popup, which lists its devices and applications. The graph never
+//!   reaches the display.
 //! - **Closing a popup** releases the display's kinds with the last level the
 //!   popup asked of each, so their read-backs are not announced.
 
@@ -29,11 +34,14 @@ use std::{
 };
 
 use celestina_paint::Rect;
+use celestina_shell::audio::AudioGraph;
 use celestina_shell::osd::Kind as OsdKind;
 use celestina_shell::settings::{BarLayout, Duty, Settings};
 use celestina_wayland::{PopupId, SurfaceCtl, SurfaceId};
 
-use super::popup::{self, Command, Control, Kind, LevelPopup, Request, SharedLevels, Sink};
+use super::popup::{
+    self, Command, Control, Kind, LevelPopup, Request, SharedGraph, SharedLevels, Sink,
+};
 use super::readings::{Readings, Target};
 use super::verbs::Workers;
 use super::{OsdRuntime, Suppression};
@@ -45,10 +53,11 @@ use crate::providers::brightness::{BrightnessCommand, Change};
 /// The id of the brightness piece in a layout.
 const BRIGHTNESS_PIECE: &str = "brightness";
 
-/// Whether `settings` give the DDC worker a consumer without any reading: the
-/// duty is on and the bar's layout holds the `brightness` piece.
-#[must_use]
-pub fn brightness_consumer(settings: &Settings) -> bool {
+/// The id of the volume piece in a layout.
+const VOLUME_PIECE: &str = "volume";
+
+/// Whether the duty is on and the bar's layout holds the piece `id`.
+fn piece_placed(settings: &Settings, id: &str) -> bool {
     if settings.duties.osd != Duty::On {
         return false;
     }
@@ -57,7 +66,21 @@ pub fn brightness_consumer(settings: &Settings) -> bool {
     } = settings.bar_layout();
     [start, centre, end]
         .iter()
-        .any(|zone| zone.iter().any(|id| id == BRIGHTNESS_PIECE))
+        .any(|zone| zone.iter().any(|placed| placed == id))
+}
+
+/// Whether `settings` give the DDC worker a consumer without any reading: the
+/// duty is on and the bar's layout holds the `brightness` piece.
+#[must_use]
+pub fn brightness_consumer(settings: &Settings) -> bool {
+    piece_placed(settings, BRIGHTNESS_PIECE)
+}
+
+/// Whether `settings` give the audio graph a consumer: the duty is on and
+/// the bar's layout holds the `volume` piece, whose popup lists it.
+#[must_use]
+pub fn volume_consumer(settings: &Settings) -> bool {
+    piece_placed(settings, VOLUME_PIECE)
 }
 
 /// Whether the app takes in the workers' readings: only while the duty is on
@@ -81,21 +104,39 @@ pub fn kinds_of(kind: Kind) -> &'static [OsdKind] {
 /// toggle), in the order first asked.
 type Asked = Rc<RefCell<Vec<(OsdKind, Option<u8>)>>>;
 
-/// Records `request` as the last thing asked of its kind.
-fn record(asked: &Asked, request: Request) {
-    let (control, level) = match request {
-        Request::Set(control, percent) => (control, Some(percent)),
-        Request::ToggleMute(control) => (control, None),
-    };
-    let kind = match control {
-        Control::Output => OsdKind::Volume,
-        Control::Input => OsdKind::Microphone,
-        Control::Brightness => OsdKind::Brightness,
+/// Records `request` as the last thing asked of its kind. A stream is not a
+/// kind of the display, so its requests are not recorded. A new default
+/// device is a change of whichever direction it is in `graph`: the display
+/// stays quiet for the read-back of the device's level, as for a mute.
+fn record(asked: &Asked, request: Request, graph: &AudioGraph) {
+    let (kind, level) = match request {
+        Request::Set(Control::Stream(_), _) | Request::ToggleMute(Control::Stream(_)) => return,
+        Request::SetDefault(id) => {
+            let kind = if graph.outputs.iter().any(|d| d.id == id) {
+                OsdKind::Volume
+            } else if graph.inputs.iter().any(|d| d.id == id) {
+                OsdKind::Microphone
+            } else {
+                return;
+            };
+            (kind, None)
+        }
+        Request::Set(control, percent) => (kind_of(control), Some(percent)),
+        Request::ToggleMute(control) => (kind_of(control), None),
     };
     let mut asked = asked.borrow_mut();
     match asked.iter_mut().find(|(of, _)| *of == kind) {
         Some(entry) => entry.1 = level,
         None => asked.push((kind, level)),
+    }
+}
+
+/// The display's kind of a default device or a monitor (never a stream).
+fn kind_of(control: Control) -> OsdKind {
+    match control {
+        Control::Output | Control::Stream(_) => OsdKind::Volume,
+        Control::Input => OsdKind::Microphone,
+        Control::Brightness => OsdKind::Brightness,
     }
 }
 
@@ -171,6 +212,7 @@ struct Open {
     output: String,
     kind: Kind,
     cell: SharedLevels,
+    graph: SharedGraph,
     asked: Asked,
 }
 
@@ -252,12 +294,14 @@ impl Controls {
             return false;
         }
         let cell: SharedLevels = Rc::new(Cell::new(self.levels_for(&output)));
+        let graph: SharedGraph = Rc::new(RefCell::new(self.readings.graph().clone()));
         let asked = Asked::default();
         let sink: Sink = {
             let runtime = Rc::clone(runtime);
             let asked = Rc::clone(&asked);
+            let graph = Rc::clone(&graph);
             Rc::new(move |request: Request| {
-                record(&asked, request);
+                record(&asked, request, &graph.borrow());
                 if let Some(runtime) = runtime.get() {
                     deliver(runtime, popup::commands(request, target.as_ref()));
                 }
@@ -268,10 +312,11 @@ impl Controls {
             &theme,
             kind,
             Rc::clone(&cell),
+            Rc::clone(&graph),
             sink,
             reduced,
         );
-        let size = popup::popup_size(&theme, kind, shell.has_microphone());
+        let size = popup::popup_size(&theme, kind, shell.has_microphone(), shell.shape());
         let Some(popup) = island.open_level_popup(anchor, size, Box::new(shell), ctl) else {
             return false;
         };
@@ -281,11 +326,15 @@ impl Controls {
             output,
             kind,
             cell,
+            graph,
             asked,
         });
         // A fresh reading for what the popup shows; the DDC worker reads one
         // monitor at a time and never on a timer.
         if let Some(runtime) = runtime.get() {
+            if kind == Kind::Volume {
+                runtime.retry_graph_gate();
+            }
             let read = match kind {
                 Kind::Volume => Command::Audio(AudioCommand::ReadBoth),
                 Kind::Brightness => Command::Brightness(BrightnessCommand::Read),
@@ -295,17 +344,32 @@ impl Controls {
         true
     }
 
+    /// The audio worker's graph arrived: taken in only while the duty's
+    /// workers are `live` (a graph still queued when the duty went off is
+    /// dropped); whether the graph changed, so that an open popup is
+    /// refreshed ([`Controls::refresh`]). It touches the readings only: the
+    /// display is never told of a graph.
+    pub fn audio_graph(&mut self, graph: AudioGraph, live: bool) -> bool {
+        live && self.readings.audio_graph(graph)
+    }
+
     /// The popup (and its surface) to redraw because the readings changed:
     /// the cell it reads is brought up to date first.
     #[must_use]
     pub fn refresh(&self) -> Option<(SurfaceId, PopupId)> {
         let open = self.open.as_ref()?;
         let levels = self.levels_for(&open.output);
-        if open.cell.get() == levels {
-            return None;
+        let mut changed = false;
+        if open.cell.get() != levels {
+            open.cell.set(levels);
+            changed = true;
         }
-        open.cell.set(levels);
-        Some((open.surface, open.popup))
+        // Only a volume popup lists the graph.
+        if open.kind == Kind::Volume && *open.graph.borrow() != *self.readings.graph() {
+            open.graph.replace(self.readings.graph().clone());
+            changed = true;
+        }
+        changed.then_some((open.surface, open.popup))
     }
 
     /// Whether the open popup hangs from `surface`.
@@ -363,7 +427,7 @@ pub(crate) fn test_settings(osd: Duty, end: &[&str]) -> Settings {
 
 #[cfg(test)]
 mod tests {
-    use celestina_shell::audio::Direction;
+    use celestina_shell::audio::{Direction, GraphDevice};
 
     use super::test_settings as settings;
     use super::*;
@@ -461,6 +525,7 @@ mod tests {
             output: "DP-1".to_owned(),
             kind,
             cell: Rc::new(Cell::new(Levels::default())),
+            graph: Rc::new(RefCell::new(AudioGraph::default())),
             asked: Rc::clone(&asked),
         });
         asked
@@ -476,7 +541,7 @@ mod tests {
             Request::Set(popup::Control::Output, 45),
             Request::ToggleMute(popup::Control::Input),
         ] {
-            record(&asked, request);
+            record(&asked, request, &AudioGraph::default());
         }
         assert_eq!(
             controls.closed(),
@@ -490,6 +555,120 @@ mod tests {
             Suppression::Open(kinds_of(Kind::Brightness)),
             Suppression::Open(&[OsdKind::Brightness])
         );
+    }
+
+    fn device(id: u32, default: bool) -> GraphDevice {
+        GraphDevice {
+            id,
+            name: format!("device {id}"),
+            default,
+        }
+    }
+
+    #[test]
+    fn a_new_default_device_quiets_the_kind_of_its_direction_and_a_stream_none() {
+        let graph = AudioGraph {
+            outputs: vec![device(5, true), device(6, false)],
+            inputs: vec![device(9, true)],
+            ..AudioGraph::default()
+        };
+        let asked = Asked::default();
+        record(&asked, Request::Set(popup::Control::Output, 40), &graph);
+        record(&asked, Request::SetDefault(6), &graph);
+        record(&asked, Request::SetDefault(9), &graph);
+        // A stream and a device nobody lists are not the display's.
+        record(&asked, Request::Set(popup::Control::Stream(70), 10), &graph);
+        record(
+            &asked,
+            Request::ToggleMute(popup::Control::Stream(70)),
+            &graph,
+        );
+        record(&asked, Request::SetDefault(1234), &graph);
+        assert_eq!(
+            *asked.borrow(),
+            [(OsdKind::Volume, None), (OsdKind::Microphone, None)]
+        );
+    }
+
+    #[test]
+    fn a_new_graph_refreshes_only_an_open_volume_popup() {
+        let mut controls = Controls::new();
+        let sinks = AudioGraph {
+            outputs: vec![device(5, true)],
+            ..AudioGraph::default()
+        };
+        assert!(controls.readings.audio_graph(sinks.clone()));
+        assert!(controls.refresh().is_none(), "no popup, nothing to redraw");
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(
+            controls.open.as_ref().map(|o| o.graph.borrow().clone()),
+            Some(sinks)
+        );
+        assert!(controls.refresh().is_none(), "the same graph again");
+        controls.closed();
+        // A brightness popup lists no devices: the graph is none of its news.
+        opened(&mut controls, Kind::Brightness, SurfaceId(4));
+        assert!(controls.readings.audio_graph(AudioGraph::default()));
+        assert!(controls.refresh().is_none());
+    }
+
+    #[test]
+    fn no_graph_message_reaches_the_osd() {
+        // The app's arm for `Message::AudioGraph` is this call and a redraw
+        // of the popup it names. The display is told of a level (by the
+        // app, from `Message::Audio`) or of a popup opening and closing
+        // (a `Suppression`), and a graph is neither.
+        let mut controls = Controls::new();
+        let before = controls.levels_for("DP-1");
+        let asked = opened(&mut controls, Kind::Volume, SurfaceId(3));
+        let graph = AudioGraph {
+            outputs: vec![device(5, true), device(6, false)],
+            inputs: vec![device(9, true)],
+            ..AudioGraph::default()
+        };
+        // Live: the readings take it, and the popup is the one thing that
+        // redraws.
+        assert!(controls.audio_graph(graph.clone(), true));
+        assert_eq!(controls.readings.graph(), &graph);
+        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(
+            controls.open.as_ref().map(|o| o.graph.borrow().clone()),
+            Some(graph.clone())
+        );
+        // No level moved, so nothing for the display to compare; the popup
+        // is still open and asked nothing of the display.
+        assert_eq!(controls.levels_for("DP-1"), before);
+        assert!(asked.borrow().is_empty());
+        assert!(controls.is_open_on(SurfaceId(3)));
+        // The same graph again: nothing to redraw.
+        assert!(!controls.audio_graph(graph.clone(), true));
+        // A graph queued past the duty's end is dropped.
+        let other = AudioGraph {
+            outputs: vec![device(7, true)],
+            ..AudioGraph::default()
+        };
+        assert!(!controls.audio_graph(other, false));
+        assert_eq!(controls.readings.graph(), &graph);
+        // Closing the popup still releases only the display's kinds.
+        assert_eq!(
+            controls.closed(),
+            Some(Suppression::Closed {
+                kinds: &[OsdKind::Volume, OsdKind::Microphone],
+                asked: Vec::new(),
+            })
+        );
+    }
+
+    #[test]
+    fn the_graph_has_a_consumer_only_with_the_duty_and_the_volume_piece() {
+        let with = ["tray", "volume"];
+        assert!(volume_consumer(&settings(Duty::On, &with)));
+        assert!(!volume_consumer(&settings(Duty::Off, &with)));
+        assert!(!volume_consumer(&settings(
+            Duty::On,
+            &["tray", "brightness"]
+        )));
     }
 
     #[test]

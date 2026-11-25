@@ -16,6 +16,7 @@
 //! [`TimerLoop`], so the rules are tested without a compositor, a bus or a
 //! child process.
 
+pub mod audio_rows;
 pub mod control;
 pub mod popup;
 pub mod readings;
@@ -35,7 +36,7 @@ use celestina_shell::settings::{Duty, Settings};
 use celestina_wayland::Sender;
 
 use crate::message::Message;
-use crate::providers::audio::{self, AudioProvider};
+use crate::providers::audio::{self, AudioCommand, AudioProvider};
 use crate::providers::brightness::{self, BrightnessCommand, BrightnessHandle, BrightnessWorkers};
 use crate::providers::Worker;
 
@@ -298,6 +299,10 @@ struct Inner {
     consumer: bool,
     /// The running brightness workers were told so (one `Show` each).
     consumer_told: bool,
+    /// The settings in force give the audio graph a consumer.
+    graph_consumer: bool,
+    /// The running audio worker was told so (one `Graph(true)`).
+    graph_told: bool,
 }
 
 impl Inner {
@@ -318,6 +323,40 @@ impl Inner {
         });
         self.consumer_told = false;
         self.tell_consumer();
+        self.graph_told = false;
+        self.tell_graph_consumer();
+    }
+
+    /// Tells the audio worker the graph has a consumer, once per consumer
+    /// and per worker.
+    fn tell_graph_consumer(&mut self) {
+        if !self.graph_consumer || self.graph_told {
+            return;
+        }
+        let Some(handle) = self.running.as_ref().and_then(|r| r.audio.as_ref()) else {
+            return;
+        };
+        // A refusal is logged by the handle; the next settings change, or the
+        // next volume popup, asks again.
+        self.graph_told = handle.request(AudioCommand::Graph(true)).is_ok();
+    }
+
+    /// Takes whether the settings in force give the graph a consumer: one
+    /// that appears is told to the running worker, one that left is taken
+    /// back from it.
+    fn set_graph_consumer(&mut self, consumer: bool) {
+        self.graph_consumer = consumer;
+        if consumer {
+            self.tell_graph_consumer();
+            return;
+        }
+        if std::mem::take(&mut self.graph_told) {
+            if let Some(handle) = self.running.as_ref().and_then(|r| r.audio.as_ref()) {
+                // A refusal is logged by the handle; the worker then keeps
+                // reading a graph nobody lists, until it stops.
+                let _ = handle.request(AudioCommand::Graph(false));
+            }
+        }
     }
 
     /// Tells the brightness workers a consumer exists, once per consumer
@@ -388,6 +427,8 @@ impl OsdRuntime {
                 wanted: false,
                 consumer: false,
                 consumer_told: false,
+                graph_consumer: false,
+                graph_told: false,
             }),
             timer: RefCell::new(timer),
         }
@@ -405,8 +446,10 @@ impl OsdRuntime {
     /// reaper is done ([`OsdRuntime::resume`]). The brightness workers are
     /// also told whether a layout holds the brightness piece
     /// ([`control::brightness_consumer`]): `Show` once when it does, `Hide`
-    /// once when it no longer does. Idempotent, so it is called at start and
-    /// after every settings change.
+    /// once when it no longer does; and the audio worker whether one holds
+    /// the volume piece ([`control::volume_consumer`]): `Graph(true)` once
+    /// when it does, `Graph(false)` once when it no longer does. Idempotent,
+    /// so it is called at start and after every settings change.
     pub fn apply(&self, settings: &Settings) {
         let on = settings.duties.osd == Duty::On;
         let mut inner = self.inner.borrow_mut();
@@ -416,6 +459,7 @@ impl OsdRuntime {
         // outputs are announced before this runtime exists (a placed piece
         // then never asked for its detection).
         inner.set_consumer(control::brightness_consumer(settings));
+        inner.set_graph_consumer(control::volume_consumer(settings));
         match (on, inner.running.is_some()) {
             (true, false) => {
                 if inner.reaper.busy() {
@@ -435,6 +479,13 @@ impl OsdRuntime {
             }
             _ => {}
         }
+    }
+
+    /// Asks the audio worker again for the graph when the settings want it
+    /// and an earlier ask was refused (a full queue); nothing when it was
+    /// told or the volume piece is absent. Called when a volume popup opens.
+    pub fn retry_graph_gate(&self) {
+        self.inner.borrow_mut().tell_graph_consumer();
     }
 
     /// The reaper is done ([`OsdTick::Reaped`]): a duty wanted on meanwhile
@@ -520,6 +571,7 @@ mod tests {
         reaped: Arc<AtomicUsize>,
         stop_delay: Duration,
         brightness: Option<BrightnessHandle>,
+        audio: Option<AudioProvider>,
     }
 
     impl Spawner for Counting {
@@ -537,7 +589,7 @@ mod tests {
             })
             .expect("the thread starts");
             Started {
-                audio: None,
+                audio: self.audio.clone(),
                 brightness: self.brightness.clone(),
                 threads: vec![Box::new(worker)],
             }
@@ -707,6 +759,84 @@ mod tests {
         // And with the duty off there is no worker to tell.
         runtime.apply(&control::test_settings(Duty::Off, &["tray", "brightness"]));
         assert_eq!(told(&commands), []);
+    }
+
+    /// A runtime whose audio worker is only the returned queue, so a test
+    /// reads what it was told.
+    fn runtime_with_audio_queue() -> (OsdRuntime, std::sync::mpsc::Receiver<AudioCommand>) {
+        let (provider, commands) = audio::test_handle();
+        let counting = Counting {
+            audio: Some(provider),
+            ..Counting::default()
+        };
+        (
+            OsdRuntime::with(Box::new(counting), Box::new(NoTimer)),
+            commands,
+        )
+    }
+
+    /// What the audio worker was told since the last look, in order.
+    fn told_audio(commands: &std::sync::mpsc::Receiver<AudioCommand>) -> Vec<AudioCommand> {
+        std::iter::from_fn(|| commands.try_recv().ok()).collect()
+    }
+
+    #[test]
+    fn the_graph_gate_follows_the_volume_piece() {
+        let placed = || control::test_settings(Duty::On, &["tray", "volume"]);
+        let absent = || control::test_settings(Duty::On, &["tray", "brightness"]);
+        let (runtime, commands) = runtime_with_audio_queue();
+        // A start with the piece placed opens the gate once, and every later
+        // settings write with the piece still placed says nothing.
+        runtime.apply(&placed());
+        assert!(runtime.running());
+        assert_eq!(told_audio(&commands), [AudioCommand::Graph(true)]);
+        for _ in 0..10 {
+            runtime.apply(&placed());
+        }
+        assert_eq!(told_audio(&commands), []);
+        // The piece leaves the layout: the gate closes, once.
+        runtime.apply(&absent());
+        runtime.apply(&absent());
+        assert_eq!(told_audio(&commands), [AudioCommand::Graph(false)]);
+        // Placed again: open again, once.
+        runtime.apply(&placed());
+        assert_eq!(told_audio(&commands), [AudioCommand::Graph(true)]);
+        // The duty off: the worker about to stop hears the gate close.
+        runtime.apply(&control::test_settings(Duty::Off, &["tray", "volume"]));
+        assert!(!runtime.running());
+        assert_eq!(told_audio(&commands), [AudioCommand::Graph(false)]);
+        // New workers hear it once more, and once only.
+        runtime.stop();
+        runtime.apply(&placed());
+        runtime.apply(&placed());
+        assert_eq!(told_audio(&commands), [AudioCommand::Graph(true)]);
+        // Without the piece, a start never opens it and never closes it.
+        runtime.apply(&absent());
+        assert_eq!(told_audio(&commands), [AudioCommand::Graph(false)]);
+        runtime.stop();
+        runtime.apply(&absent());
+        assert_eq!(told_audio(&commands), []);
+    }
+
+    #[test]
+    fn a_refused_graph_gate_is_asked_again_when_a_volume_popup_opens() {
+        let placed = || control::test_settings(Duty::On, &["tray", "volume"]);
+        let (runtime, commands) = runtime_with_audio_queue();
+        // Workers up without the piece, then a full queue when it is placed.
+        runtime.apply(&control::test_settings(Duty::On, &["tray", "brightness"]));
+        let Some(worker) = runtime.audio() else {
+            panic!("the duty runs an audio worker");
+        };
+        for _ in 0..audio::COMMAND_QUEUE {
+            assert!(worker.request(AudioCommand::ReadBoth).is_ok());
+        }
+        runtime.apply(&placed());
+        assert_eq!(told_audio(&commands).len(), audio::COMMAND_QUEUE);
+        // Nothing asks it again by itself; the popup's opening does, once.
+        runtime.retry_graph_gate();
+        assert_eq!(told_audio(&commands), [AudioCommand::Graph(true)]);
+        runtime.retry_graph_gate();
+        assert_eq!(told_audio(&commands), []);
     }
 
     struct NoTimer;

@@ -17,6 +17,7 @@
 
 use std::collections::BTreeMap;
 
+use celestina_shell::audio::AudioGraph;
 use celestina_wayland::OutputId;
 
 use crate::pieces::{AudioLevels, Level};
@@ -42,6 +43,9 @@ pub struct Target {
 #[derive(Debug, Default)]
 pub struct Readings {
     audio: AudioLevels,
+    /// The devices and playback streams the audio worker last published,
+    /// bounded; empty until it publishes one.
+    graph: AudioGraph,
     /// The outputs, in announcement order: id and connector name.
     outputs: Vec<(OutputId, String)>,
     /// The last known level of each monitor; `None` is unknown.
@@ -66,6 +70,18 @@ impl Readings {
     #[must_use]
     pub fn by_output(&self) -> &BTreeMap<String, u8> {
         &self.by_output
+    }
+
+    /// The audio graph the worker last published.
+    #[must_use]
+    pub fn graph(&self) -> &AudioGraph {
+        &self.graph
+    }
+
+    /// Records the audio worker's graph (cut to its bounds again, whatever
+    /// the sender did); whether it differs from the one held.
+    pub fn audio_graph(&mut self, graph: AudioGraph) -> bool {
+        std::mem::replace(&mut self.graph, graph.bounded()) != self.graph
     }
 
     /// Records the audio worker's reading; whether anything changed.
@@ -106,8 +122,11 @@ impl Readings {
     /// The duty is off: every reading is forgotten (the outputs stay).
     /// Whether anything was held.
     pub fn clear(&mut self) -> bool {
-        let held = self.audio != AudioLevels::default() || !self.monitors.is_empty();
+        let held = self.audio != AudioLevels::default()
+            || !self.monitors.is_empty()
+            || self.graph != AudioGraph::default();
         self.audio = AudioLevels::default();
+        self.graph = AudioGraph::default();
         self.monitors.clear();
         self.by_output.clear();
         held
@@ -304,6 +323,29 @@ mod tests {
         );
         assert!(r.audio_event(event(Device::Output, None)));
         assert!(r.audio().output.is_none() && r.audio().input.is_some());
+    }
+
+    #[test]
+    fn the_graph_is_kept_bounded_and_clearing_forgets_it() {
+        use celestina_shell::audio::{GraphDevice, MAX_GRAPH_DEVICES};
+        let mut r = Readings::new();
+        assert!(!r.audio_graph(AudioGraph::default()), "nothing new");
+        let sinks = (0..12)
+            .map(|id| GraphDevice {
+                id,
+                name: format!("sink {id}"),
+                default: id == 0,
+            })
+            .collect();
+        let graph = AudioGraph {
+            outputs: sinks,
+            ..AudioGraph::default()
+        };
+        assert!(r.audio_graph(graph.clone()));
+        assert_eq!(r.graph().outputs.len(), MAX_GRAPH_DEVICES);
+        assert!(!r.audio_graph(graph), "the same graph changes nothing");
+        assert!(r.clear());
+        assert_eq!(r.graph(), &AudioGraph::default());
     }
 
     #[test]
