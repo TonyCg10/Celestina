@@ -37,6 +37,8 @@ the author's binary.
   step removes the debug profiles as
   [Pruning after deploy](#pruning-after-deploy) says.
 - Do not create an agent-only target when the canonical target can be deployed.
+- Do not use a parallel Cargo/CMake build as final evidence when it leaves a
+  different deployable binary.
 - Build all binaries deployed by the project as one unit without starting
   processes or reloading services.
 - Write the ignored manifest at the registry-declared path.

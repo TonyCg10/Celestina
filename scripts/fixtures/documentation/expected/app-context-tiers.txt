@@ -1,0 +1,16 @@
+# Read now, completely
+AGENTS.md
+app/AGENTS.md
+docs/standards/fixture.md
+app/STATUS.md
+
+# Read when its trigger applies, before acting on that matter
+CONTRIBUTING.md — before committing or asking for a landing
+app/docs/context.md — when the unit changes what this document designs
+app/README.md — when you need how the product is used or how its tree is laid out
+app/ROADMAP.md — when choosing, scoping or closing a unit
+app/VALIDATION.md — when adding or changing a manual check
+docs/contracts/app-only.md — when the unit touches what this contract governs
+docs/contracts/global.md — when the unit touches what this contract governs
+docs/plans/active/2026-08-03-fixture.md — when working on a unit of this plan: read its header and your unit's row
+app/docs/plans/active/2026-08-03-app.md — when working on a unit of this plan: read its header and your unit's row

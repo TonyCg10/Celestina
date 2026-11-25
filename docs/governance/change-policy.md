@@ -47,7 +47,10 @@ implementation. An ADR explains a decision but does not grant permission.
   The staged source must exactly match the new numeric row. Removing an
   architecture `lines` row also requires the exact
   ``- **Resolved architecture debt:** `path/to/source` `` field in that unit's
-  staged evidence; line count alone never proves resolution. A language row may
+  staged evidence; line count alone never proves resolution. A `lines`
+  row may disappear only when the same staged unit changes or deletes that source
+  and its evidence contains the exact field
+  ``- **Resolved architecture debt:** `path/to/source` ``. A language row may
   fall without the file that holds it in exactly one case: an accepted scanner
   migration, where the measuring rule changed and no source earned the
   reduction. That needs both halves in the same commit —
@@ -55,7 +58,12 @@ implementation. An ADR explains a decision but does not grant permission.
   ``- **Resolved language debt:** `scripts/check-language-contract.py` `` field
   in the unit's staged evidence. Either half alone is refused: evidence without
   a scanner change is a row being deleted, and a scanner change nobody wrote
-  down is indistinguishable from dropping inconvenient debt. Only the owning
+  down is indistinguishable from dropping inconvenient debt. While a migration
+  is staged, `pre-commit` measures the index against HEAD's language rows, so a
+  migration is a commit of its own: one that also deletes a file with a row, or
+  lowers the row of a file it edits, is refused; and a row it lowers for a file
+  it does not stage is checked by no hook of that commit, only afterwards by
+  the new scanner (CI, or the next commit's `pre-commit`). Only the owning
   project's canonical `docs/evidence/`, or root `docs/evidence/` for `suite:`,
   is valid. Component prefixes cannot retire the row through a nested lookalike
   evidence directory. Normal commit paths and prefixes must be authorized by
@@ -64,8 +72,8 @@ implementation. An ADR explains a decision but does not grant permission.
   source/baseline data, so neither INDEX nor worktree rule modules execute:
   every hook extracts `HEAD:scripts` to a temporary directory and runs the
   guards from there, and the language and documentation contracts read a copy
-  of the index, not the worktree. A guard HEAD lacks runs from the worktree
-  once, in the commit that adds it.
+  of the index, not the worktree. Only a guard or `scripts/git_hooks.py`
+  that HEAD lacks runs from the worktree, once, in the commit that adds it.
   Delivery layouts are the conservative HEAD/INDEX union and conflicting owner
   or prefix assignments fail. Merge commits cannot change ratchets and their
   staged guarded sources must match the INDEX rows exactly. A semantics-changing
@@ -118,13 +126,16 @@ An `active` or `blocked` roadmap names exactly one active implementation
 checkpoint and exactly one active plan of the same owner names that checkpoint.
 For `planned`, `idle`, or `done`, the field is `none`. Orphan plans are invalid.
 Suite ledgers use `suite:`; local ledgers use their owner's primary prefix.
+Component prefixes are for atomic code or manifest commits that do not close a
+ledger unit.
 
 ## Exact immutable inventories
 
 A `done` unit has one exclusive inventory at
 `<owner>/docs/inventories/<plan-slug>/<unit>.numstat.tsv`, or root `docs/` for
 suite work. It records one or more narrow Pathspecs and every changed path with
-no-rename numstat plus final content identity.
+no-rename numstat plus final content identity. Only `suite:` may use
+`Pathspec<TAB>.`.
 
 The format contains:
 
@@ -140,7 +151,9 @@ inventory row, `-/-` for binary numstat, and `0/0` for mode-only changes. Binary
 rows contribute zero to aggregate line counts.
 
 The inventory includes its plan, evidence, and itself. Before commit, its union
-must match staged paths, numstat, and SHA-256 exactly. The base is the `HEAD`
+must match staged paths, numstat, and SHA-256 exactly. Before commit, the
+guard compares exhaustive paths, numstat, and SHA-256 inside those boundaries
+while leaving external changes untouched. The base is the `HEAD`
 immediately before the unit. Once tracked, the commit that introduced the
 inventory must use that base as direct parent and contain the whole unit.
 `scripts/land-unit.py` writes the inventory on top of the current `main` when
@@ -182,6 +195,13 @@ Before commit:
   history;
 - partial staging does not change inventory truth;
 - merges finish before delivery units close.
+
+The main project prefix covers its tree, associated crates, and exact registered
+manifests. A component prefix covers only component code and those manifests,
+never plans, ledgers, status, or evidence. Both additionally cover
+`commit_policy.shared_ratchet_files`, so a change that shrinks a guarded file
+lowers its baseline row in the same commit instead of publishing a revision
+whose relevant guard is red.
 
 `.githooks/pre-commit`, `.githooks/pre-merge-commit`, `.githooks/commit-msg`,
 `scripts/check-staged-units.py`, and `scripts/commit_scope.py` enforce these

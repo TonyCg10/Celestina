@@ -27,6 +27,20 @@ shared_rules = [
   "docs/contracts/versioning.md",
   "docs/contracts/landing.md",
 ]
+# The shared rules a session reads before acting; every other shared rule is
+# read when its trigger below applies.
+now_rules = ["docs/standards/language.md"]
+
+[suite.reading_triggers]
+"CONTRIBUTING.md" = "before committing or asking for a landing"
+"docs/README.md" = "when you need to find where a kind of document lives"
+"docs/governance/change-policy.md" = "when the request's scope is unclear or the work would grow beyond it"
+"docs/governance/documentation.md" = "when creating, moving or closing a plan, an evidence record or an inventory"
+"docs/standards/architecture.md" = "when adding a module, a crate, a dependency or a call across projects"
+"docs/standards/rust-cpp-qt-qml.md" = "when writing Rust, C++, Qt or QML code"
+"docs/standards/verification.md" = "before claiming that a change works"
+"docs/contracts/versioning.md" = "before a landing of kind bug, milestone or release"
+"docs/contracts/landing.md" = "before opening a session worktree or asking for a landing"
 
 [commit_policy]
 subject_format = "<prefix>-<kind>: <English imperative>"

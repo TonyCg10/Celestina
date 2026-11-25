@@ -96,6 +96,13 @@ count cannot be reverified, remove it or label it with date/source.
 `[x]` means evidence exists. Code presence alone is not behavior proof. A build
 does not imply startup; offscreen does not imply real compositor behavior.
 
+The first reading tier has a byte budget. It measures what a session reads
+before acting: the root contract, the project's `AGENTS.md` and `STATUS.md`,
+and `suite.now_rules`. The limits live in `scripts/preflight-baseline.tsv`,
+one row per project plus `root-agents`, and the documentation guard enforces
+them. A row may only go down. To get back under a limit, move closed work out
+of `STATUS.md` into `docs/history`, or shorten the `AGENTS.md`.
+
 ## Decisions and discussions
 
 Decision records state context, ruling, consequences, alternatives, and revisit

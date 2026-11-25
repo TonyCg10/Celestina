@@ -13,6 +13,10 @@ validation = "VALIDATION.md"
 active_plans = "docs/plans/active"
 allow_all_commit_paths = true
 shared_rules = ["CONTRIBUTING.md", "docs/standards/fixture.md"]
+now_rules = ["docs/standards/fixture.md"]
+
+[suite.reading_triggers]
+"CONTRIBUTING.md" = "before committing or asking for a landing"
 
 [[projects]]
 id = "app"

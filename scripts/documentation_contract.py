@@ -383,6 +383,41 @@ class DocumentationContract:
             return None
         return candidate
 
+    def check_reading_tiers(self, suite: dict[str, object]) -> None:
+        """Every shared rule is read now or has a one-line trigger."""
+        registry = "docs/projects.toml"
+        rules = suite.get("shared_rules")
+        shared = {rule for rule in rules if isinstance(rule, str)} if isinstance(rules, list) else set()
+        now_rules = suite.get("now_rules", [])
+        now: set[str] = set()
+        if not isinstance(now_rules, list) or not all(isinstance(rule, str) for rule in now_rules):
+            self.error(registry, "suite.now_rules must be a list of registered shared rules")
+        else:
+            now = set(now_rules)
+            for rule in now_rules:
+                if rule not in shared:
+                    self.error(registry, f"suite.now_rules: {rule} is not in suite.shared_rules")
+        triggers = suite.get("reading_triggers", {})
+        if not isinstance(triggers, dict):
+            self.error(registry, "suite.reading_triggers must be a table of path = trigger")
+            triggers = {}
+        for key, trigger in triggers.items():
+            path = self.registry_path(key, f"suite.reading_triggers[{key!r}]")
+            if path is not None and not path.is_file():
+                self.error(registry, f"suite.reading_triggers: {key} does not exist")
+            if (
+                not isinstance(trigger, str)
+                or not trigger.strip()
+                or "\n" in trigger
+                or len(trigger) > 120
+            ):
+                self.error(
+                    registry,
+                    f"suite.reading_triggers: {key} needs a non-empty single line of at most 120 characters",
+                )
+        for rule in sorted(shared - now - set(triggers)):
+            self.error(registry, f"suite.reading_triggers: no trigger for {rule}")
+
     def read_document(self, path: Path) -> str | None:
         try:
             return path.read_text(encoding="utf-8")
@@ -488,6 +523,20 @@ class DocumentationContract:
         if not mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
             self.error(path, f"registered script is not executable ({field})")
 
+    def check_preflight_budget(self) -> None:
+        if not self.registry:
+            return
+        # Imported here: the landing, the staged-unit guard and the fixtures
+        # load this module alone for its parsers, without the budget module.
+        import preflight_budget
+
+        try:
+            messages = preflight_budget.check(self.root, self.registry)
+        except ValueError as error:
+            messages = [f"preflight budget: {error}"]
+        for message in messages:
+            self.error(preflight_budget.BASELINE, message)
+
     def check_registry(self) -> None:
         try:
             self.registry = load_registry(self.root)
@@ -556,6 +605,7 @@ class DocumentationContract:
             else:
                 for index, rule in enumerate(shared_rules):
                     self.require_document(rule, f"shared_rules[{index}]", "suite")
+            self.check_reading_tiers(suite)
 
         active_plans = self.registry_path(suite.get("active_plans"), "suite.active_plans")
         if active_plans is not None and not active_plans.is_dir():
@@ -2825,6 +2875,7 @@ class DocumentationContract:
 
     def check_all(self) -> list[str]:
         self.check_registry()
+        self.check_preflight_budget()
         files = iter_repository_files(self.root)
         self.check_vendor_files(files)
         self.check_markdown_links(files)

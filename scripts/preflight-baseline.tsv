@@ -1,0 +1,16 @@
+# Bytes a session reads before acting, per row: the root contract, or the suite or a project's
+# now tier. A row may only go down; to get under it, move closed work out of STATUS.md or shorten AGENTS.md.
+root-agents	16384
+calcita	40960
+celestina	40960
+celestina-rs	40960
+celestina-style	40960
+cuprita	40960
+fluorita	40960
+grafita	40960
+hematita	65536
+magnetita	40960
+magnetita-android	40960
+selenita	45056
+siderita	53248
+suite	40960

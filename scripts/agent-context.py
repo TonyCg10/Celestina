@@ -29,6 +29,19 @@ from project_registry import HaltedProject, halted_projects
 
 DOCUMENT_FIELDS = ("readme", "status", "roadmap", "validation")
 
+# A document is read `now` (trigger None) or `when` its trigger applies.
+Entry = tuple[Path, "str | None"]
+
+DEFAULT_TRIGGERS = {
+    "readme": "when you need how the product is used or how its tree is laid out",
+    "roadmap": "when choosing, scoping or closing a unit",
+    "validation": "when adding or changing a manual check",
+    "consumer_status": "when the change alters behaviour this consumer relies on",
+    "context_documents": "when the unit changes what this document designs",
+    "contract": "when the unit touches what this contract governs",
+    "plan": "when working on a unit of this plan: read its header and your unit's row",
+}
+
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -40,6 +53,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="repository root (defaults to the checkout containing this script)",
     )
     parser.add_argument("--json", action="store_true", help="emit a JSON array")
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="list every document in reading order, with no tiers",
+    )
     return parser.parse_args(argv)
 
 
@@ -193,6 +211,19 @@ def physical_agent_files(root: Path, target: Path) -> list[Path]:
     return agents
 
 
+def string_list(value: object) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def reading_triggers(registry: dict[str, object]) -> dict[str, str]:
+    suite = registry.get("suite")
+    assert isinstance(suite, dict)
+    table = suite.get("reading_triggers")
+    if not isinstance(table, dict):
+        return {}
+    return {key: value for key, value in table.items() if isinstance(value, str)}
+
+
 def shared_rule_documents(
     root: Path, registry: dict[str, object], errors: list[str]
 ) -> list[Path]:
@@ -216,8 +247,12 @@ def shared_rule_documents(
         return []
     result: list[Path] = []
     seen: set[Path] = set()
+    now_rules = set(string_list(suite.get("now_rules")))
+    triggers = reading_triggers(registry)
     for index, raw in enumerate(raw_rules):
         add_path(result, seen, errors, root, raw, f"suite.shared_rules[{index}]")
+        if isinstance(raw, str) and raw not in now_rules and raw not in triggers:
+            errors.append(f"suite.reading_triggers: no trigger for {raw}")
     return result
 
 
@@ -350,7 +385,7 @@ def halted_owners(
 
 def resolve_context(
     root: Path, raw_target: str
-) -> tuple[list[Path], list[str], list[HaltedProject]]:
+) -> tuple[list[Entry], list[str], list[HaltedProject]]:
     errors: list[str] = []
     try:
         registry = load_registry(root)
@@ -382,9 +417,22 @@ def resolve_context(
 
     result: list[Path] = []
     seen: set[Path] = set()
+    tiers: dict[Path, str | None] = {}
     suite = registry.get("suite")
     assert isinstance(suite, dict)
+    now_rules = set(string_list(suite.get("now_rules")))
+    triggers = reading_triggers(registry)
 
+    def tier(start: int, trigger) -> None:
+        """Give the documents added since `start` their tier; `trigger` is None
+        for `now`, else a function from the repository-relative path."""
+        for path in result[start:]:
+            tiers[path] = None if trigger is None else trigger(path.relative_to(root).as_posix())
+
+    def default(source: str):
+        return lambda relative: triggers.get(relative, DEFAULT_TRIGGERS[source])
+
+    mark = len(result)
     add_path(result, seen, errors, root, suite.get("agents"), "suite.agents")
     for target in targets:
         for agent_file in physical_agent_files(root, target):
@@ -400,35 +448,53 @@ def resolve_context(
             project.get("agents"),
             f"{project.get('id', 'project')}.agents",
         )
+    tier(mark, None)
 
+    mark = len(result)
     for rule in shared_rule_documents(root, registry, errors):
         if rule not in seen:
             seen.add(rule)
             result.append(rule)
+    # A shared rule with neither is already an error above.
+    tier(mark, lambda relative: None if relative in now_rules else triggers.get(relative))
 
     for project in projects:
+        mark = len(result)
         for document in owner_context_documents(root, project, errors):
             if document not in seen:
                 seen.add(document)
                 result.append(document)
+        tier(mark, default("context_documents"))
 
     document_owners = projects if projects else [suite]
     for owner in document_owners:
         owner_id = str(owner.get("id", "suite"))
+        # The owners of the path read their own STATUS now; a consumer's
+        # STATUS waits for a change to what the consumer relies on.
+        is_owner = not projects or id(owner) in owners
         for field in DOCUMENT_FIELDS:
+            mark = len(result)
             add_path(result, seen, errors, root, owner.get(field), f"{owner_id}.{field}")
+            if field == "status":
+                tier(mark, None if is_owner else default("consumer_status"))
+            else:
+                tier(mark, default(field))
 
+    mark = len(result)
     for contract in relevant_contracts(root, projects, errors):
         if contract not in seen:
             seen.add(contract)
             result.append(contract)
+    tier(mark, default("contract"))
+    mark = len(result)
     for plan in relevant_active_plans(
         root, registry, projects, relative_targets, errors
     ):
         if plan not in seen:
             seen.add(plan)
             result.append(plan)
-    return result, errors, halted
+    tier(mark, default("plan"))
+    return [(path, tiers.get(path)) for path in result], errors, halted
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -439,17 +505,29 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(f"agent-context: {error}", file=sys.stderr)
         return 1
-    relative_context = [path.relative_to(root).as_posix() for path in context]
     notices = [halt_notice(project) for project in halted]
+    relative_context = [(path.relative_to(root).as_posix(), trigger) for path, trigger in context]
+    # `--full` is the flat list: every document, as if all were read now.
+    now = [path for path, trigger in relative_context if arguments.full or trigger is None]
+    later = [
+        f"{path} \u2014 {trigger}"
+        for path, trigger in relative_context
+        if not arguments.full and trigger is not None
+    ]
     if arguments.json:
         # The JSON array stays a list of paths for its consumers; the halt is
         # announced on stderr, where a caller reading only stdout still sees it
         # in its terminal.
         for notice in notices:
             print(notice, file=sys.stderr)
-        print(json.dumps(relative_context, ensure_ascii=False, indent=2))
+        print(json.dumps(now, ensure_ascii=False, indent=2))
+    elif arguments.full:
+        print("\n".join([*notices, *now]))
     else:
-        print("\n".join([*notices, *relative_context]))
+        lines = [*notices, "# Read now, completely", *now]
+        if later:
+            lines += ["", "# Read when its trigger applies, before acting on that matter", *later]
+        print("\n".join(lines))
     return 0
 
 

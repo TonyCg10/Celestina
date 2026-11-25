@@ -1,0 +1,61 @@
+# DEV-1-B exact change inventory
+
+Base revision	3654837201f4b8163ed898a4b544313ee0c7a388
+Pathspec	.github/workflows/contracts.yml
+Pathspec	AGENTS.md
+Pathspec	docs/README.md
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/evidence/2026-11-24-dev-speed-preflight.md
+Pathspec	docs/governance/change-policy.md
+Pathspec	docs/governance/documentation.md
+Pathspec	docs/history/README.md
+Pathspec	docs/history/qt-shell-halt-and-salvage.md
+Pathspec	docs/inventories/2026-11-24-dev-speed/DEV-1-B.numstat.tsv
+Pathspec	docs/plans/active/2026-11-24-dev-speed.md
+Pathspec	docs/projects.toml
+Pathspec	docs/superpowers/plans/2026-11-24-suite-dev-speed-plan-2.md
+Pathspec	scripts/agent-context.py
+Pathspec	scripts/documentation_contract.py
+Pathspec	scripts/fixtures/documentation/expected/app-context-tiers.txt
+Pathspec	scripts/fixtures/documentation/invalid/missing-script/docs/projects.toml
+Pathspec	scripts/fixtures/documentation/invalid/now-rule-not-shared/docs/projects.toml
+Pathspec	scripts/fixtures/documentation/invalid/preflight-over-budget/scripts/preflight-baseline.tsv
+Pathspec	scripts/fixtures/documentation/invalid/shared-rule-without-trigger/docs/projects.toml
+Pathspec	scripts/fixtures/documentation/invalid/trigger-for-missing-file/docs/projects.toml
+Pathspec	scripts/fixtures/documentation/renamed-halted-owner/docs/projects.toml
+Pathspec	scripts/fixtures/documentation/valid/docs/projects.toml
+Pathspec	scripts/preflight-baseline.tsv
+Pathspec	scripts/preflight_budget.py
+Pathspec	scripts/test-documentation-contract.sh
+Pathspec	scripts/test-preflight-budget.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	0	061cae6f3f8485691cd1a29f86121849a8d2fd11ea532b9b2be68fdc54cde728	.github/workflows/contracts.yml
+25	193	ea9e646788f6af0282ac3997841414e8b4159cee84f212b04b575e4564dbaff1	AGENTS.md
+6	2	7f94ca84960ddcef481a901cd75ca6b3af65ee2daeb56776545458440683b02e	docs/README.md
+2	0	f2de4503a9740bd7e071988c3a82afc400bbe994ea627309128263194d303a82	docs/contracts/production-artifacts.md
+186	0	ed29fc070a20df0f05488ef7c7214db213fbdbf703f3aa000a9726caaf6a2b5e	docs/evidence/2026-11-24-dev-speed-preflight.md
+26	6	7c58951a1d6507b6f704f1a782af0a9c7c21f6e1399110ea054269aef519bf33	docs/governance/change-policy.md
+7	0	0d44d9be57bc2d578ab46d9ad698a6d5fb4224eb8433d166f38f037249257525	docs/governance/documentation.md
+1	0	0f48e26dd440f35b16da913419e7c7025f7ec585069838be2471df219b3cefae	docs/history/README.md
+78	0	52a59e536912ba02e357126d8e5b8ac554ce24a1b35223fdf0df764ff212615d	docs/history/qt-shell-halt-and-salvage.md
+61	0	self	docs/inventories/2026-11-24-dev-speed/DEV-1-B.numstat.tsv
+1	1	d0dd0a22ae7be83c0f6f6e984e79b075b8cdb6501f60642b6f8144b38665658e	docs/plans/active/2026-11-24-dev-speed.md
+14	0	187373c2402c71bf61d22a1a571790ca19e3c57190bd6b982fc135e859a7b239	docs/projects.toml
+252	0	2500cab520c71be3fb59aec3209eed3a6e7a836d36e055bb8d7d1f7dd8f17353	docs/superpowers/plans/2026-11-24-suite-dev-speed-plan-2.md
+83	5	f0466e1d5bde0abab2669ecba01279a75bf55ce1851d1325e6613966f64038f0	scripts/agent-context.py
+51	0	53fae72ade250cd53d60cce8d82a34dc1ecc02f2406ca9dd27650ebc3ea548ce	scripts/documentation_contract.py
+16	0	fc92be259707ce0b01057ce0453808e1d613627920106986e2d35ebb140da83f	scripts/fixtures/documentation/expected/app-context-tiers.txt
+4	0	c5249ac9ba15d3ce7ad817d4b0b8073911122f48ccefc6c81588ae970aaa3447	scripts/fixtures/documentation/invalid/missing-script/docs/projects.toml
+69	0	d315782f23c94adaccc6a91bedfd6b997ed361a4b11f48b05ae5890267546e15	scripts/fixtures/documentation/invalid/now-rule-not-shared/docs/projects.toml
+5	0	d3812a7cffbd751b932fe5d91090a6f0be65d7fa4e335cc1972db981cb73464b	scripts/fixtures/documentation/invalid/preflight-over-budget/scripts/preflight-baseline.tsv
+68	0	189d734bfbaeb3786380d61cc15d0b13668ea51aa0a5a0f99a1b2da69abb7383	scripts/fixtures/documentation/invalid/shared-rule-without-trigger/docs/projects.toml
+70	0	63a0dcf8e69ceb3d38b009eba16604bf726aa6daa0cdd0913bbfa494cf9bf6a5	scripts/fixtures/documentation/invalid/trigger-for-missing-file/docs/projects.toml
+4	0	abf60b0ed5e4500a250df125e4a65f0db88f32adfeca848b49289f69c22b52d8	scripts/fixtures/documentation/renamed-halted-owner/docs/projects.toml
+4	0	33b60a571ef829624fab3ee774963d70b25d0eec0e57678324e1f66d806e6d36	scripts/fixtures/documentation/valid/docs/projects.toml
+16	0	958968c9ac7985b61fba207d2363a1b19cd3b088a64372b901edb90fa4065cc1	scripts/preflight-baseline.tsv
+134	0	7d32e44c18d5e781a6c38f892b08d96783a45d997340d8a840f141628f8c9db2	scripts/preflight_budget.py
+79	18	b3c396e4d4e2feee747bb6e3a592219eb09cca57c794a73b155a9393c936bbec	scripts/test-documentation-contract.sh
+161	0	078094a9aa6b9984a7c971ac607f907bf24d0b48fa7e721b2d3fb829bf812da4	scripts/test-preflight-budget.py

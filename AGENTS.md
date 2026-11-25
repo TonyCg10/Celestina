@@ -46,97 +46,27 @@ still resolve (see
 [docs/contracts/versioning.md](docs/contracts/versioning.md), "Retiring a
 project").
 
-**History: the Qt/QML shell.** The author halted the Qt/QML Celestina shell
-on 2026-09-27: the `celestina-qt/` project (moved from `celestina/` on
-2026-10-14; id and prefix `celestina-qt`) and the crate registered only for it,
-`celestina-rs/crates/celestina-shell-core` (prefix `celestina-shell-core`).
-The unit CEL-QT-REMOVE removed both from the tree by the author's decision
-of 2026-10-23: no tag, branch or copy keeps them, their bytes remain only in
-the Git history before that commit, and `docs/projects.toml` lists the shell
-as a retired project.
-
-**Salvage record.** Before the removal, the Rust shell at `celestina/` copied
-or read these files of the halted tree, never editing them; each copy records
-in its head comment the source path and the commit it came from. The paths no
-longer exist in the tree; the list stays as the provenance those head comments
-cite:
-`celestina-rs/crates/celestina-shell-core/src/{notifications,launcher,coalesce,workspace_groups,workspace_map,settings,calendar}.rs`
-and the `bounded` helper of that crate's `src/lib.rs` (there is no
-`bounded.rs`) into `celestina-rs/crates/celestina-shell`;
-`celestina-qt/src/provider_adapter/{worker,notifications,launcher}.rs`
-and `celestina-qt/src/niri_adapter.rs` as reference for
-`celestina/src/providers`; `celestina-qt/scripts/dev-session.kdl` and
-`dev-session.sh` for `celestina/scripts`. The CEL-2 parity program extended
-the list in the same way, each time before the first commit of the unit it
-served:
-
-- CEL-2-B: `celestina-qt/src/provider_adapter/{nightlight,session,sessionholds}.rs`
-  as reference for `celestina/src/providers`, and
-  `celestina-rs/crates/celestina-shell-core/src/{nightlight,session,pending}.rs`
-  into `celestina-rs/crates/celestina-shell`.
-- CEL-2-E: from `celestina-qt/src/provider_adapter/wallpaper.rs` only the image
-  selection, as reference for `celestina/src/providers`, and
-  `celestina-rs/crates/celestina-shell-core/src/wallpaper.rs` into
-  `celestina-rs/crates/celestina-shell`.
-- CEL-2-C: `celestina-qt/src/provider_adapter/{audio,brightness}.rs` as
-  reference for `celestina/src/providers`, and
-  `celestina-rs/crates/celestina-shell-core/src/{audio,brightness}.rs` into
-  `celestina-rs/crates/celestina-shell`.
-- CEL-2-D: `celestina-qt/src/provider_adapter/media.rs` as reference for
-  `celestina/src/providers`, and
-  `celestina-rs/crates/celestina-shell-core/src/media.rs` into
-  `celestina-rs/crates/celestina-shell`.
-- CEL-2-F: `celestina-rs/crates/celestina-shell-core/src/{connectivity,network,bluetooth,power}.rs`
-  into `celestina-rs/crates/celestina-shell`, as far as read-only state needs.
-- CEL-2-G: `celestina-qt/src/provider_adapter/clipboard.rs` as reference for
-  `celestina/src/providers`, and
-  `celestina-rs/crates/celestina-shell-core/src/clipboard.rs` into
-  `celestina-rs/crates/celestina-shell`.
-- CEL-2-H (CEL-2-H-a and CEL-2-H-b): as reference only, nothing copied:
-  `celestina-qt/docs/decisions/0004-first-party-session-lock.md`,
-  `celestina-qt/src/lockverify/main.cpp`, `celestina-qt/src/lockauthenticator.cpp`,
-  `celestina-qt/src/lockcontroller.cpp` and `celestina-qt/src/lock/`, for
-  `celestina/crates/celestina-lock`, `celestina/crates/celestina-lock-verify`
-  and `celestina/src/lock`. ADR 0004 of the halted shell is re-decided in
-  `celestina/docs/decisions/`, adapted and re-reviewed; its file is not
-  copied.
-- CEL-2-I: nothing is copied. ADR 0005 of the halted shell is re-decided in
-  `celestina/docs/decisions/`, adapted and re-reviewed; its file is not copied.
-  `celestina-qt/src/polkit{agent,conversation,promptcontroller}.cpp` and
-  `celestina-qt/src/polkitconverse/main.cpp` are read-only reference for
-  `celestina/src/providers/polkit`.
-- CEL-2-J: `celestina-qt/src/provider_adapter/melibea.rs` as reference for
-  `celestina/src/providers`, and
-  `celestina-rs/crates/celestina-shell-core/src/melibea.rs` into
-  `celestina-rs/crates/celestina-shell`.
-- CEL-2-K: `celestina-qt/src/provider_adapter/{sysmon,weather}.rs` as
-  reference for `celestina/src/providers`, and
-  `celestina-rs/crates/celestina-shell-core/src/{sysmon,weather}.rs` into
-  `celestina-rs/crates/celestina-shell`; `calendar.rs` is already listed.
-- CEL-2-L: nothing beyond `workspace_map.rs`, which is already listed.
-- CEL-QT-RESCUE: `celestina-qt/packaging/niri/{README.md,per-layer-blur-strength.patch}`
-  and `celestina-qt/scripts/build-patched-niri.sh` into `celestina/packaging/niri`
-  (the script beside the patch it applies), and
-  `celestina-rs/crates/celestina-shell-core/src/niri_colours.rs` into
-  `celestina-rs/crates/celestina-tokens/src`, the last salvage before the
-  removal.
+The halt of the Qt/QML shell, its removal and the salvage record that copied
+files cite are in
+[docs/history/qt-shell-halt-and-salvage.md](docs/history/qt-shell-halt-and-salvage.md).
 
 ## Mandatory preflight
 
 Before acting:
 
-1. Run `python3 scripts/agent-context.py PATH` for the area you will touch and
-   read every document it prints, completely. Its output is the reading order,
-   not a summary: root and local `AGENTS.md`, the registered cross-cutting
-   rules, the owner's `README.md`, `STATUS.md`, `ROADMAP.md`, `VALIDATION.md`,
-   applicable contracts, and any active plan ledger.
-2. Read the active plan ledger completely when one exists; it is the
-   cross-session hand-off and it names the unit you may edit.
-3. Inspect `git status`, the real checkout, consumers, manifests, and guards.
+1. Run `python3 scripts/agent-context.py PATH` for the area you will touch.
+   Read every document under "Read now" completely.
+2. Each document under "Read when" names its trigger. Read it completely
+   when that trigger applies, before you act on that matter; not before.
+   `--full` prints every document in the old reading order.
+3. When you work on a planned unit, read its plan's header and your unit's
+   ledger row; the ledger is the cross-session hand-off and names the unit
+   you may edit.
+4. Inspect `git status`, the real checkout, consumers, manifests, and guards.
    Documentation may be stale.
-4. Search first with `rg` or `rg --files`; reuse existing contracts instead of
+5. Search first with `rg` or `rg --files`; reuse existing contracts instead of
    creating a parallel recipe.
-5. Declare or update the ledger unit before editing planned milestone work, in
+6. Declare or update the ledger unit before editing planned milestone work, in
    a session worktree opened with `scripts/worktree.sh`.
 
 Canonical sources are mapped in [docs/README.md](docs/README.md), the workflow
@@ -276,119 +206,21 @@ manual failure is recorded and creates a new corrective unit; never rewrite the
 milestone's history. See
 [docs/governance/documentation.md](docs/governance/documentation.md).
 
-Every plan has a ledger with ID, prefix, status, stable paths or symbols,
-intent, diffstat, evidence, and related validation. Line numbers are secondary
-because they drift; the ledger is the cross-session hand-off and commit source.
-
-The roadmap-to-plan link is strict. An `active` or `blocked` `ROADMAP.md` names
-one `Active implementation checkpoint` and has exactly one active plan owned by
-the same project with that ID. For `planned`, `idle`, or `done`, the field is
-`none`. Every plan declares a unique immutable `Plan ID` before its first
-inventory commit; prefer the basename without its date prefix. Archiving never
-changes it.
-
-A local plan ledger accepts only its owner's primary prefix; `suite:` is for a
-cross-suite plan. Component prefixes are for atomic code or manifest commits
-that do not close a ledger unit. A `done` unit records exact `N files, +X/-Y`,
-links one `.numstat.tsv` inventory from `Files / areas`, and links its real
-record from `Automated evidence`.
-
-Inventories live at
-`<owner>/docs/inventories/<plan-slug>/<unit>.numstat.tsv`, or under root `docs/`
-for suite work. They contain the base revision, every path, added/deleted lines,
-one or more narrow `Pathspec` boundaries, the plan, evidence, and their own
-`self` row. Only `suite:` may use `Pathspec<TAB>.`. Before commit, the guard
-compares exhaustive paths, numstat, and SHA-256 inside those boundaries while
-leaving external changes untouched. The base is the `HEAD` immediately before
-the unit and later must be the direct parent of the single commit containing
-change, plan, evidence, and inventory. `scripts/land-unit.py` computes the
-inventory, the ledger closure, the version transition and the production run
-on the current `main`; see [docs/contracts/landing.md](docs/contracts/landing.md).
-Binary rows use `-/-`; mode-only rows use `0/0`.
-
-The main project prefix covers its tree, associated crates, and exact registered
-manifests. A component prefix covers only component code and those manifests,
-never plans, ledgers, status, or evidence. Both additionally cover
-`commit_policy.shared_ratchet_files`, so a change that shrinks a guarded file
-lowers its baseline row in the same commit instead of publishing a revision
-whose relevant guard is red. Python rules committed in HEAD interpret source,
-baselines and registry TOML from INDEX; staged or unstaged rule modules never
-execute in the current hook, because every hook runs the guards from `HEAD:scripts`
-extracted to a temporary directory, over a copy of the index. Only a guard or
-`scripts/git_hooks.py` that HEAD lacks runs from the worktree, once, in the
-commit that adds it. HEAD and INDEX must both authorize every normal
-commit path and prefix, so staged policy cannot authorize its own expansion.
-Delivery discovery uses the conservative union of HEAD and INDEX layouts and
-rejects conflicting ownership. Merge commits cannot change ratchets and their
-staged guarded sources must still match the INDEX baselines. A semantic rule
-change becomes authority after landing: first add compatible dormant behavior,
-then activate it with any measurement update in a later commit. Hooks are
-repository-integrity controls, not an adversarial sandbox. A `lines`
-row may disappear only when the same staged unit changes or deletes that source
-and its evidence contains the exact field
-``- **Resolved architecture debt:** `path/to/source` ``. A language row may fall
-without its source only for a declared scanner migration, which needs both
-`scripts/check-language-contract.py` staged and the exact field
-``- **Resolved language debt:** `scripts/check-language-contract.py` `` in the
-same unit's evidence. While a migration is staged, `pre-commit` measures the
-index against HEAD's language rows, so a migration is a commit of its own: one
-that also deletes a file with a row, or lowers the row of a file it edits, is
-refused; and a row it lowers for a file it does not stage is checked by no
-hook of that commit, only afterwards by the new scanner (CI, or the next
-commit's `pre-commit`). This is qualitative
-architectural closure, not a line threshold. Local evidence lives under the
-project's canonical `docs/evidence/`; suite evidence lives under root
-`docs/evidence/`. A component prefix cannot create a nested lookalike evidence
-directory to retire debt; use the owning project's primary prefix.
-
-A tracked inventory is immutable: never edit, move, rename, or reuse it. Later
-work gets a new unit and inventory. Archiving moves only the plan from
-`plans/active/` to `plans/archive/` with the same basename, checkpoint, Plan ID,
-units, and links. Evidence and inventories stay at stable roots. If the move
-needs a separate traceable commit, first add an administrative unit with a new
-inventory.
-
-All uncommitted `done` units in one plan form one atomic batch under the owner's
-primary prefix. Do not commit the shared plan while leaving another inventory
-pending. `.githooks/pre-commit` discovers inventories and requires their union
-to match staged paths, numstat, and SHA-256 through
-`scripts/check-staged-units.py`.
+Ledger rows, inventories, commit prefixes, hooks and ratchets:
+`docs/governance/documentation.md`, `docs/governance/change-policy.md` and
+`docs/contracts/landing.md`, before closing a unit or changing a guard.
 
 ## Production artifacts
 
 Every project uses entries registered in `docs/projects.toml`:
-
-1. `build-production.sh` builds the canonical release artifact once.
-2. `verify-production.sh` verifies those same bytes while reusing caches.
-3. `deploy-production.sh` copies only a current verified artifact to the
-   author's normal test destination and never compiles.
-4. `complete-production.sh` runs build, verify, deploy, and status. It is the
-   exit condition for every bug fix or milestone that changes a deployable app,
-   unless the author explicitly opts out.
-5. The shell additionally has `activate-production.sh`; completion updates the
-   on-disk bundle but never replaces a live session.
-
-The landing runs these entries on the tree it commits, for the owner and for
-every other project whose production inputs the unit changed, such as a
-library's deployable consumers: when a project's artifact is not current, it
-runs `complete-production.sh` for a deployable project and
-`build-production.sh` then `verify-production.sh` for one that is not. A
-session never runs them in its worktree; see
-[docs/contracts/landing.md](docs/contracts/landing.md).
-
-For a product `bug`, `milestone` or `release`, the landing bumps the registered
-SemVer source and appends its history row before this build; a session never
-bumps. `maintenance` changes do neither. See
-[docs/contracts/versioning.md](docs/contracts/versioning.md).
-
-Do not use a parallel Cargo/CMake build as final evidence when it leaves a
-different deployable binary. Do not run `clean`: between a build and its
-deploy, production targets and caches are reusable monorepo resources. Once a
-landing has deployed and checked its artifacts, its last step removes the
-Cargo debug profiles from every build tree (`scripts/build_trees.py`), which
-nothing installed uses; the release caches stay so the next build is
-incremental. See
-[docs/contracts/production-artifacts.md](docs/contracts/production-artifacts.md).
+`build-production.sh`, `verify-production.sh`, `deploy-production.sh`,
+`complete-production.sh` and, for the shell, `activate-production.sh`.
+`complete-production.sh` is the exit condition for every bug fix or milestone
+that changes a deployable app, unless the author explicitly opts out. The
+landing runs these entries on the tree it commits. A session never runs them
+in its worktree. Do not run `clean`. Builds, caches, pruning and version bumps:
+[docs/contracts/production-artifacts.md](docs/contracts/production-artifacts.md)
+and [docs/contracts/versioning.md](docs/contracts/versioning.md).
 
 ## Minimum evidence
 

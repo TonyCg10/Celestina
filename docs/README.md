@@ -43,12 +43,16 @@ projects whose `path` or `source_roots` hold the path; after them come its
 consumers, every project whose production inputs hold it or lie below it, such
 as each app that links a shared crate. The production-input guard proves those inputs
 cover each app's Cargo path-package closure, so a crate's consumers are
-complete without the helper running Cargo.
+complete without the helper running Cargo. That flat list, in that order, is
+what `--full` prints. With no flag the helper prints the same documents in two
+tiers: `now`, read completely before acting, and `when`, each document read
+when its trigger applies.
 
 The output is meant to be complete, not merely sufficient: a local `AGENTS.md`
 names the workflow, governance and engineering standards it depends on, so the
 registry lists them once and the helper prints them rather than leaving an agent
-to rediscover them by following links. Adding a standard means registering it.
+to rediscover them by following links. Adding a standard means registering it,
+in `suite.now_rules` or with its trigger in `suite.reading_triggers`.
 Every project declares `context_documents`, using an explicit empty list when it
 has no additional local document. The documentation guard rejects missing
 configuration and registered paths that do not exist.

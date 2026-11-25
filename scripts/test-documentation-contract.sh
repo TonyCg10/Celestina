@@ -779,14 +779,14 @@ if ! python3 "$checker" --root "$worktree_case" --quiet; then
     fail "the guard traversed .claude/worktrees"
 fi
 
-if ! python3 "$context" --root "$valid" app/src/main.rs \
+if ! python3 "$context" --full --root "$valid" app/src/main.rs \
     > "$temporary/app-context.txt"; then
     fail "agent-context did not resolve a project path"
 elif ! diff -u "$expected/app-context.txt" "$temporary/app-context.txt"; then
     fail "agent-context returned the wrong order for app"
 fi
 
-if ! python3 "$context" --root "$valid" core/crates/app-core/src/lib.rs \
+if ! python3 "$context" --full --root "$valid" core/crates/app-core/src/lib.rs \
     > "$temporary/core-context.txt"; then
     fail "agent-context did not resolve a shared source root"
 elif ! diff -u "$expected/core-context.txt" "$temporary/core-context.txt"; then
@@ -800,7 +800,7 @@ consumer_case=$temporary/consumer
 cp -R "$valid/." "$consumer_case/"
 sed -i 's|^source_roots = \["app/src", "core/crates/app-core"\]$|source_roots = ["app/src"]|' \
     "$consumer_case/docs/projects.toml"
-if ! python3 "$context" --root "$consumer_case" core/crates/app-core/src/lib.rs \
+if ! python3 "$context" --full --root "$consumer_case" core/crates/app-core/src/lib.rs \
     > "$temporary/no-consumer-context.txt"; then
     fail "agent-context failed on a crate no project consumes"
 elif grep -Fx 'app/README.md' "$temporary/no-consumer-context.txt" >/dev/null; then
@@ -808,7 +808,7 @@ elif grep -Fx 'app/README.md' "$temporary/no-consumer-context.txt" >/dev/null; t
 fi
 sed -i 's|^source_roots = \["app/src"\]$|source_roots = ["app/src"]\nproduction_inputs = ["app/src", "core/crates/app-core"]|' \
     "$consumer_case/docs/projects.toml"
-if ! python3 "$context" --root "$consumer_case" core/crates/app-core/src/lib.rs \
+if ! python3 "$context" --full --root "$consumer_case" core/crates/app-core/src/lib.rs \
     > "$temporary/consumer-context.txt"; then
     fail "agent-context failed on a crate a project consumes"
 elif ! grep -Fx 'app/AGENTS.md' "$temporary/consumer-context.txt" >/dev/null \
@@ -818,7 +818,7 @@ elif ! grep -Fx 'app/AGENTS.md' "$temporary/consumer-context.txt" >/dev/null \
 fi
 # A directory above a crate holds everything below it, so the consumers of
 # every input under it are listed too.
-if ! python3 "$context" --root "$consumer_case" core/crates \
+if ! python3 "$context" --full --root "$consumer_case" core/crates \
     > "$temporary/consumer-directory-context.txt"; then
     fail "agent-context failed on a directory above a consumed crate"
 elif ! grep -Fx 'app/README.md' "$temporary/consumer-directory-context.txt" >/dev/null; then
@@ -829,7 +829,7 @@ fi
 # only send an agent to a project it must not touch.
 sed -i '/^commit_prefix = "app"$/a halted = "2026-09-27"' \
     "$consumer_case/docs/projects.toml"
-if ! python3 "$context" --root "$consumer_case" core/crates/app-core/src/lib.rs \
+if ! python3 "$context" --full --root "$consumer_case" core/crates/app-core/src/lib.rs \
     > "$temporary/halted-consumer-context.txt" 2>&1; then
     fail "agent-context failed on a crate a halted project consumes"
 elif grep -F 'app/' "$temporary/halted-consumer-context.txt" >/dev/null \
@@ -842,7 +842,7 @@ cross_owner_symlink=$temporary/cross-owner-symlink
 cp -R "$valid/." "$cross_owner_symlink/"
 ln -s ../../core/crates/app-core/src/lib.rs \
     "$cross_owner_symlink/app/src/core-link.rs"
-if ! python3 "$context" --root "$cross_owner_symlink" \
+if ! python3 "$context" --full --root "$cross_owner_symlink" \
     app/src/../src/core-link.rs > "$temporary/cross-owner-symlink-context.txt"; then
     fail "agent-context could not resolve a normalized cross-owner symlink"
 elif ! diff -u "$expected/cross-owner-symlink-context.txt" \
@@ -851,7 +851,7 @@ elif ! diff -u "$expected/cross-owner-symlink-context.txt" \
 fi
 
 ln -s ../../../outside "$cross_owner_symlink/app/src/outside-link"
-if python3 "$context" --root "$cross_owner_symlink" app/src/outside-link \
+if python3 "$context" --full --root "$cross_owner_symlink" app/src/outside-link \
     > "$temporary/outside-symlink.out" 2>&1; then
     fail "agent-context accepted a symlink whose resolved target leaves the repository"
 elif ! grep -F "resolved path leaves the repository" \
@@ -859,7 +859,7 @@ elif ! grep -F "resolved path leaves the repository" \
     fail "agent-context had no stable escaped symlink diagnostic"
 fi
 
-if python3 "$context" --root "$valid" ../outside \
+if python3 "$context" --full --root "$valid" ../outside \
     > "$temporary/outside.out" 2>&1; then
     fail "agent-context accepted a path outside the repository"
 elif ! grep -F "path leaves the repository" "$temporary/outside.out" >/dev/null; then
@@ -876,7 +876,7 @@ halted_notice='HALTED: App is halted since 2026-09-27; see AGENTS.md "Halted pro
 if ! python3 "$checker" --root "$halted_owner" --quiet; then
     fail "the documentation guard rejected a valid halt"
 fi
-if ! python3 "$context" --root "$halted_owner" app/src/main.rs \
+if ! python3 "$context" --full --root "$halted_owner" app/src/main.rs \
     > "$temporary/halted-app-context.txt"; then
     fail "agent-context failed for a halted owner"
 else
@@ -888,26 +888,72 @@ else
     fi
 fi
 # A shared root counts: the halted app owns core/crates/app-core as a source root.
-if ! python3 "$context" --root "$halted_owner" core/crates/app-core/src/lib.rs \
+if ! python3 "$context" --full --root "$halted_owner" core/crates/app-core/src/lib.rs \
     > "$temporary/halted-core-context.txt" ||
     [ "$(head -n 1 "$temporary/halted-core-context.txt")" != "$halted_notice" ]; then
     fail "agent-context did not announce a halted owner of a shared source root"
 fi
 # A path the halted project does not own is not announced.
-if ! python3 "$context" --root "$halted_owner" core/README.md \
+if ! python3 "$context" --full --root "$halted_owner" core/README.md \
     > "$temporary/halted-other-context.txt"; then
     fail "agent-context failed for a path outside the halted project"
 elif grep -F 'HALTED:' "$temporary/halted-other-context.txt" >/dev/null; then
     fail "agent-context announced a halt for a path the halted project does not own"
 fi
 # JSON keeps its array of paths; the notice goes to stderr.
-if ! python3 "$context" --root "$halted_owner" --json app/src/main.rs \
+if ! python3 "$context" --full --root "$halted_owner" --json app/src/main.rs \
     > "$temporary/halted-app-context.json" 2> "$temporary/halted-app-context.err"; then
     fail "agent-context --json failed for a halted owner"
 elif ! python3 -c 'import json, sys; json.load(open(sys.argv[1]))' \
     "$temporary/halted-app-context.json" ||
     [ "$(cat "$temporary/halted-app-context.err")" != "$halted_notice" ]; then
     fail "agent-context --json did not keep its array and announce the halt on stderr"
+fi
+
+# Tiers: the owner's STATUS is read now, everything else waits for its trigger.
+if ! python3 "$context" --root "$valid" app/src/main.rs \
+    > "$temporary/app-context-tiers.txt"; then
+    fail "agent-context failed to print the tiers"
+elif ! diff -u "$expected/app-context-tiers.txt" "$temporary/app-context-tiers.txt"; then
+    fail "agent-context printed the wrong tiers for app"
+fi
+if ! python3 "$context" --root "$valid" --json app/src/main.rs \
+    > "$temporary/app-context-tiers.json"; then
+    fail "agent-context --json failed"
+elif ! python3 - "$temporary/app-context-tiers.json" "$temporary/app-context-tiers.txt" <<'PYTHON'
+import json, sys
+paths = json.load(open(sys.argv[1]))
+now = []
+for line in open(sys.argv[2]).read().splitlines()[1:]:
+    if not line:
+        break
+    now.append(line)
+assert paths == now, (paths, now)
+PYTHON
+then
+    fail "agent-context --json is not the list under the first heading"
+fi
+consumer_tiers_case=$temporary/consumer-tiers
+cp -R "$consumer_case/." "$consumer_tiers_case/"
+sed -i '/^halted = /d' "$consumer_tiers_case/docs/projects.toml"
+if ! python3 "$context" --root "$consumer_tiers_case" core/crates/app-core/src/lib.rs \
+    > "$temporary/consumer-tiers.txt"; then
+    fail "agent-context failed the tiers of a consumed crate"
+else
+    consumer_now=$(sed -n '/^# Read now/,/^$/p' "$temporary/consumer-tiers.txt")
+    consumer_later=$(sed -n '/^# Read when/,$p' "$temporary/consumer-tiers.txt")
+    if ! printf '%s\n' "$consumer_now" | grep -Fx 'app/AGENTS.md' >/dev/null \
+        || printf '%s\n' "$consumer_now" | grep -F 'app/STATUS.md' >/dev/null \
+        || ! printf '%s\n' "$consumer_later" | grep -Fx \
+            'app/STATUS.md — when the change alters behaviour this consumer relies on' >/dev/null; then
+        fail "a consumer's STATUS is not in the second tier: $(cat "$temporary/consumer-tiers.txt")"
+    fi
+fi
+if ! python3 "$context" --root "$halted_owner" app/src/main.rs \
+    > "$temporary/halted-tiers.txt"; then
+    fail "agent-context failed the tiers of a halted owner"
+elif [ "$(head -n 1 "$temporary/halted-tiers.txt")" != "$halted_notice" ]; then
+    fail "agent-context did not print the halt notice first in the tiers"
 fi
 
 bad_halt=$temporary/bad-halt
@@ -921,7 +967,7 @@ elif ! grep -F 'invalid halt: projects[0].halted is not a calendar date' \
     "$temporary/bad-halt-checker.out" >/dev/null; then
     fail "the invalid halt date had no stable documentation diagnostic"
 fi
-if python3 "$context" --root "$bad_halt" app/src/main.rs \
+if python3 "$context" --full --root "$bad_halt" app/src/main.rs \
     > "$temporary/bad-halt-context.out" 2>&1; then
     fail "agent-context accepted a halt that is not a calendar date"
 elif ! grep -F 'projects[0].halted is not a calendar date' \
@@ -940,7 +986,7 @@ elif ! grep -F 'projects[0].context_documents is required' \
     "$temporary/missing-context-field-checker.out" >/dev/null; then
     fail "the missing context_documents field had no stable diagnostic"
 fi
-if python3 "$context" --root "$missing_context_field" app/src/main.rs \
+if python3 "$context" --full --root "$missing_context_field" app/src/main.rs \
     > "$temporary/missing-context-field-context.out" 2>&1; then
     fail "agent-context accepted an owner without context_documents"
 elif ! grep -F 'app.context_documents: required list' \
@@ -959,7 +1005,7 @@ elif ! grep -F 'projects[0].context_documents[0]' \
     "$temporary/missing-context-document-checker.out" >/dev/null; then
     fail "the missing owner context document had no stable diagnostic"
 fi
-if python3 "$context" --root "$missing_context_document" app/src/main.rs \
+if python3 "$context" --full --root "$missing_context_document" app/src/main.rs \
     > "$temporary/missing-context-document-context.out" 2>&1; then
     fail "agent-context accepted a missing owner context document"
 elif ! grep -F 'app.context_documents[0]: file does not exist' \
@@ -978,7 +1024,7 @@ elif ! grep -F 'suite.shared_rules must be a non-empty list' \
     "$temporary/empty-shared-rules-checker.out" >/dev/null; then
     fail "the empty suite.shared_rules field had no stable diagnostic"
 fi
-if python3 "$context" --root "$empty_shared_rules" app/src/main.rs \
+if python3 "$context" --full --root "$empty_shared_rules" app/src/main.rs \
     > "$temporary/empty-shared-rules-context.out" 2>&1; then
     fail "agent-context accepted an empty suite.shared_rules"
 elif ! grep -F 'suite.shared_rules: must be a non-empty list' \
@@ -1039,13 +1085,28 @@ for vendor_path in CLAUDE.md GEMINI.md .cursorrules \
     fi
 done
 expect_failure missing-shared-rule "suite.shared_rules is required"
-if python3 "$context" --root "$temporary/missing-shared-rule" app/src/main.rs \
+if python3 "$context" --full --root "$temporary/missing-shared-rule" app/src/main.rs \
     > "$temporary/missing-shared-rule-context.out" 2>&1; then
     fail "agent-context accepted a missing suite.shared_rules field"
 elif ! grep -F 'suite.shared_rules: required in docs/projects.toml' \
     "$temporary/missing-shared-rule-context.out" >/dev/null; then
     fail "agent-context had no stable missing suite.shared_rules diagnostic"
 fi
+expect_failure shared-rule-without-trigger \
+    "suite.reading_triggers: no trigger for CONTRIBUTING.md"
+if python3 "$context" --root "$temporary/shared-rule-without-trigger" app/src/main.rs \
+    > "$temporary/shared-rule-without-trigger-context.out" 2>&1; then
+    fail "agent-context printed a shared rule with no trigger"
+elif ! grep -F 'suite.reading_triggers: no trigger for CONTRIBUTING.md' \
+    "$temporary/shared-rule-without-trigger-context.out" >/dev/null; then
+    fail "agent-context had no stable missing-trigger diagnostic"
+fi
+expect_failure now-rule-not-shared \
+    "suite.now_rules: docs/standards/other.md is not in suite.shared_rules"
+expect_failure trigger-for-missing-file \
+    "suite.reading_triggers: docs/standards/missing.md does not exist"
+expect_failure preflight-over-budget \
+    "preflight budget: app reads 379 bytes before acting, over its limit of 100"
 expect_failure broken-link "broken local link"
 expect_failure broken-anchor "local anchor does not exist"
 expect_failure bad-plan 'a file under plans/active requires `Status: active`'

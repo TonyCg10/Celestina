@@ -1,0 +1,5 @@
+# Fixture: the app row is smaller than the documents it reads.
+root-agents	16384
+suite	40960
+app	100
+core	40960
