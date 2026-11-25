@@ -1090,3 +1090,117 @@ fn a_phase_refuses_to_run_outside_the_driver() {
         "{output:?}"
     );
 }
+
+/// What `smoke.sh --next-phase SECOND IDS` picks: the phase that would wait
+/// least at that second of the minute for its first window; on a tie, the
+/// narrowest window, a phase with no window counting as the widest; then the
+/// order of `--list`.
+fn next_phase(scratch: &Scratch, second: &str, ids: &str) -> std::process::Output {
+    smoke_while_locked(scratch, &["--next-phase", second, ids])
+}
+
+#[test]
+fn the_smoke_runs_next_the_phase_that_waits_least() {
+    let scratch = Scratch::new("next");
+    let mut holder = start_holder(&scratch, "driver-a");
+    for (second, ids, expected) in [
+        // clipboard fits now (2..22) and is the narrowest of those that fit.
+        ("10", "clipboard,launcher,bar", "clipboard"),
+        // clipboard would wait 32 s; bar fits (2..48) and is narrower than a
+        // phase with no window.
+        ("30", "clipboard,launcher,bar", "bar"),
+        // Nothing with a window fits: a phase with none fills the gap.
+        ("30", "clipboard,launcher", "launcher"),
+        // Both wait 12 s for the next minute: the narrower window first.
+        ("50", "bar,clipboard", "clipboard"),
+        // Both wait 1 s: the narrower window first.
+        ("1", "notify,cutover", "cutover"),
+        // Neither has a window: the order of --list.
+        ("50", "polkit,osd", "osd"),
+        // A second written with a leading zero is the same second.
+        ("05", "launcher,clipboard", "clipboard"),
+        ("09", "launcher,clipboard", "clipboard"),
+        // Second 0: every window opens at 2, so a phase with none goes first.
+        ("0", "clipboard,launcher", "launcher"),
+        // One past a window (49 for bar): it waits for the next minute.
+        ("49", "bar,launcher", "launcher"),
+        // Second 59: both wait 3 s, the narrower first.
+        ("59", "bar,clipboard", "clipboard"),
+    ] {
+        let output = next_phase(&scratch, second, ids);
+        assert_eq!(output.status.code(), Some(0), "{second} {ids}: {output:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            expected,
+            "at second {second} out of {ids}"
+        );
+        assert!(
+            !String::from_utf8_lossy(&output.stderr).contains("driver-a"),
+            "it asked for the lock: {output:?}"
+        );
+    }
+    fs::write(scratch.path("stop"), "").expect("stop file");
+    wait_for_exit(&mut holder, 10, "the holder");
+}
+
+#[test]
+fn every_phase_with_a_minute_wait_declares_its_window() {
+    // A phase whose first wait the driver cannot read would be scheduled as
+    // one with no window. At second 55 no window is open, so a phase with a
+    // window loses to one without: if it wins, its window was not read.
+    let scratch = Scratch::new("windows");
+    let mut holder = start_holder(&scratch, "driver-a");
+    for id in PHASES {
+        let text = fs::read_to_string(scripts().join("smoke").join(format!("{id}.sh")))
+            .expect("phase file");
+        if !text.contains("$(date +%S)") {
+            continue;
+        }
+        let output = next_phase(&scratch, "55", &format!("{id},polkit"));
+        assert_eq!(output.status.code(), Some(0), "{id}: {output:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "polkit",
+            "{id} waits for the minute but the driver read no window for it"
+        );
+    }
+    fs::write(scratch.path("stop"), "").expect("stop file");
+    wait_for_exit(&mut holder, 10, "the holder");
+}
+
+#[test]
+fn the_smoke_refuses_a_bad_order_or_choice() {
+    let scratch = Scratch::new("order");
+    let mut holder = start_holder(&scratch, "driver-a");
+    let binary = ["--binary", "/nonexistent/celestina"];
+    let cases: [(&[&str], &str); 8] = [
+        (&["--order", "nope"], "nope"),
+        (&["--order", "bar,bar"], "bar"),
+        (&["--order", ""], "--order"),
+        (&["--order", "bar", "--only", "osd"], "usage"),
+        (&["--next-phase", "60", "bar"], "second"),
+        (&["--next-phase", "x", "bar"], "second"),
+        (&["--next-phase", "008", "bar"], "second"),
+        (&["--next-phase", "10", "nope"], "nope"),
+    ];
+    for (args, named) in cases {
+        let mut all: Vec<&str> = Vec::new();
+        if args[0] != "--next-phase" {
+            all.extend(binary);
+        }
+        all.extend(args);
+        let output = smoke_while_locked(&scratch, &all);
+        assert_eq!(output.status.code(), Some(2), "{all:?}: {output:?}");
+        let message = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            message.contains(named),
+            "{all:?} does not name {named}: {message}"
+        );
+        assert!(
+            !message.contains("driver-a"),
+            "it asked for the lock: {message}"
+        );
+    }
+    fs::write(scratch.path("stop"), "").expect("stop file");
+    wait_for_exit(&mut holder, 10, "the holder");
+}

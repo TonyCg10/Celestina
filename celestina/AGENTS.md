@@ -47,7 +47,9 @@ the shell's constraints; it cannot relax the root or grant authority.
 - `celestina/scripts/deploy-production.sh`
 - `celestina/scripts/smoke.sh --binary PATH` (the full smoke: every phase)
 - `celestina/scripts/smoke.sh --binary PATH --only ID[,ID...]` (the named
-  phases, in the script's order)
+  phases; the driver picks their order as for the full smoke)
+- `celestina/scripts/smoke.sh --binary PATH --order ID[,ID...]` (exactly the
+  named phases, in that order: the order a failed run printed repeats it)
 - `celestina/scripts/smoke.sh --list` (prints the phase ids)
 - `celestina/scripts/lock-rehearsal.sh` (the session lock's steps R-1 to R-9;
   nested niri, a fake logind and no PAM service only, never the live session;

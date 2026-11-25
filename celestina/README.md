@@ -289,8 +289,11 @@ caller points `DBUS_SYSTEM_BUS_ADDRESS` elsewhere or the file names both
 `"off"`.
 `scripts/smoke.sh --binary PATH` runs every smoke phase, each in such a nest
 (the first, `notify`, runs the shell with `--exit-after 4 --metrics` and checks
-the frame report). `--only ID[,ID...]` runs the named phases, in the script's
-order; `--list` prints the phase ids. A phase whose rest-frame check is
+the frame report). The driver runs next the phase whose window of the minute
+is open (a phase measures frames at rest only where the clock will not
+redraw), so the order changes between runs and a run prints the order it
+used; `--order ID[,ID...]` repeats one exactly. `--only ID[,ID...]` runs the
+named phases; `--list` prints the phase ids. A phase whose rest-frame check is
 inconclusive is retried alone, up to three attempts. A session runs the phases
 of the area it touched; the landing always runs the full smoke.
 A measuring run (the smoke, `scripts/lock-rehearsal.sh`,

@@ -4,20 +4,34 @@ set -eu
 # Celestina smoke (design §8): the driver. The checks live in one file per
 # phase under `scripts/smoke/` (`common.sh` holds what they share); this script
 # reads the arguments, takes the nest lock, runs the checks that need no nest
-# and then each phase, in this order: notify, launcher, bar, wallpaper,
-# energy, glance, clipboard, connectivity, osd, phone, media, overview,
-# polkit, cutover. Each phase file's header says what it checks.
+# and then every phase. Each phase file's header says what it checks.
 #
-#   scripts/smoke.sh --binary PATH [--only ID[,ID...]]
+#   scripts/smoke.sh --binary PATH [--only ID[,ID...] | --order ID[,ID...]]
 #   scripts/smoke.sh --list
+#   scripts/smoke.sh --next-phase SECOND ID[,ID...]
 #
 # With niri installed every phase runs the shell in a nested niri on a session
 # bus of its own (`dev-session.sh --once`), so no name of the desktop's bus is
-# touched. `--list` prints the phase ids, one per line, and exits 0. `--only`
-# runs the named phases, still in the order above, and the last line is then
-# `smoke: OK (only: ID,ID)` instead of `smoke: OK`. Any other argument, and an
-# unknown, empty or repeated id, is a usage error (status 2); `--list` and the
-# usage errors come before the lock.
+# touched. `--list` prints the phase ids, one per line, and exits 0.
+#
+# The order. Most phases measure frames at rest in a stretch that must not
+# cross a minute (the clock redraws), so before measuring they wait for a
+# second of the minute in 2..H, their window (`while [ "$(date +%S)" -gt H ]`
+# in the phase file; the first such wait is the phase's window). Before each
+# phase the driver runs next the phase that would wait least at the second it
+# is (`choose_next`): one whose window is open, the narrowest first, and a
+# phase that never waits (no window) only when no window is open. The order
+# therefore differs between runs; each phase prints `smoke: phase ID (second
+# S)` as it starts, and the line before the last gives the whole order and the
+# `--order` that repeats it. `--order` runs exactly the named phases in the
+# named order. `--only` runs the named phases in the chosen order, and the last
+# line is then `smoke: OK (only: ID,ID)` (or `smoke: OK (order: ID,ID)`)
+# instead of `smoke: OK`. `--next-phase SECOND IDS` prints the phase the driver
+# would run next at that second out of IDS, for the tests.
+#
+# Any other argument, an unknown, empty or repeated id, `--only` with
+# `--order`, and a second outside 0..59 are usage errors (status 2);
+# `--list`, `--next-phase` and the usage errors come before the lock.
 #
 # Before any phase, once per invocation: the artifact's other two binaries,
 # `celestina-lock` and `celestina-lock-verify`, must sit beside the shell and
@@ -56,66 +70,155 @@ set -eu
 # failed; 2 a usage error; 69 the lock stayed busy; 70 the lock's holder or
 # this script vanished under a phase; 143 and 130 TERM and INT.
 usage() {
-    echo "usage: scripts/smoke.sh --binary PATH [--only ID[,ID...]]" >&2
+    echo "usage: scripts/smoke.sh --binary PATH [--only ID[,ID...] | --order ID[,ID...]]" >&2
     echo "       scripts/smoke.sh --list" >&2
+    echo "       scripts/smoke.sh --next-phase SECOND ID[,ID...]" >&2
     exit 2
 }
-# The phases in the order they run; each is scripts/smoke/ID.sh.
+# The phases; each is scripts/smoke/ID.sh. `--list` prints them in this order,
+# which also settles the last tie in `choose_next`.
 phases="notify launcher bar wallpaper energy glance clipboard connectivity osd phone media overview polkit cutover"
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 if [ "$#" -eq 1 ] && [ "$1" = "--list" ]; then
     printf '%s\n' $phases
+    exit 0
+fi
+# check_ids OPTION VALUE: the phase ids of VALUE, comma-separated, each a phase
+# and named once, printed space-separated. Anything else is a usage error that
+# names what is wrong (status 2; called in a command substitution, the caller
+# exits with it).
+check_ids() {
+    case ",$2," in
+        *,,*)
+            echo "smoke: $1 '$2' names an empty phase id (scripts/smoke.sh --list prints them)" >&2
+            exit 2
+            ;;
+    esac
+    case $2 in
+        *[!a-z,]*)
+            echo "smoke: $1 '$2': a phase id is lowercase letters (scripts/smoke.sh --list prints them)" >&2
+            exit 2
+            ;;
+    esac
+    c_ids=
+    for c_id in $(printf '%s\n' "$2" | tr ',' ' '); do
+        case " $phases " in
+            *" $c_id "*) ;;
+            *)
+                echo "smoke: $1: $c_id is not a phase (scripts/smoke.sh --list prints them)" >&2
+                exit 2
+                ;;
+        esac
+        case " $c_ids " in
+            *" $c_id "*)
+                echo "smoke: $1: $c_id is named twice" >&2
+                exit 2
+                ;;
+        esac
+        c_ids="$c_ids $c_id"
+    done
+    printf '%s\n' "$c_ids"
+}
+# phase_window ID: the H of the first minute wait in scripts/smoke/ID.sh
+# (`while [ "$(date +%S)" -gt H ] || ...`), the last second at which the phase
+# starts measuring; nothing for a phase that never waits for the minute.
+phase_window() {
+    sed -n 's/.*"\$(date +%S)" -gt \([0-9][0-9]*\) ].*/\1/p' "$here/smoke/$1.sh" | sed -n 1p
+}
+# window_wait SECOND H: the seconds a phase whose window ends at H waits from
+# SECOND of the minute (it waits for a second in 2..H).
+window_wait() {
+    if [ "$1" -lt 2 ]; then
+        echo $((2 - $1))
+    elif [ "$1" -le "$2" ]; then
+        echo 0
+    else
+        echo $((62 - $1))
+    fi
+}
+# choose_next SECOND IDS: the phase of IDS (space-separated) to run at SECOND:
+# the one that waits least for its window; on a tie the narrowest window, a
+# phase with none counting as 60, so it only fills a gap; then the order of
+# $phases.
+choose_next() {
+    cn_best=
+    cn_key=
+    for cn_id in $phases; do
+        case " $2 " in
+            *" $cn_id "*) ;;
+            *) continue ;;
+        esac
+        cn_window=$(phase_window "$cn_id")
+        if [ -n "$cn_window" ]; then
+            cn_wait=$(window_wait "$1" "$cn_window")
+        else
+            cn_wait=0
+            cn_window=60
+        fi
+        cn_this=$((cn_wait * 100 + cn_window))
+        if [ -z "$cn_best" ] || [ "$cn_this" -lt "$cn_key" ]; then
+            cn_best=$cn_id
+            cn_key=$cn_this
+        fi
+    done
+    printf '%s\n' "$cn_best"
+}
+# second_of TEXT: the second of the minute TEXT names, one or two digits
+# (`date +%S` writes 05), or a usage error; a leading zero is dropped so the
+# shell's arithmetic never reads 08 as octal.
+second_of() {
+    case $1 in
+        '' | *[!0-9]* | ???*)
+            echo "smoke: '$1' is not a second of the minute (0..59)" >&2
+            exit 2
+            ;;
+    esac
+    so_second=${1#0}
+    so_second=${so_second:-0}
+    [ "$so_second" -le 59 ] || {
+        echo "smoke: '$1' is not a second of the minute (0..59)" >&2
+        exit 2
+    }
+    echo "$so_second"
+}
+if [ "$#" -ge 1 ] && [ "$1" = "--next-phase" ]; then
+    [ "$#" -eq 3 ] || usage
+    np_second=$(second_of "$2") || exit 2
+    np_ids=$(check_ids --next-phase "$3") || exit 2
+    choose_next "$np_second" "$np_ids"
     exit 0
 fi
 bin=
 bin_given=no
 only=
 only_given=no
+order=
+order_given=no
 expect=
 for arg do
     case $expect in
         binary) bin=$arg; expect=; continue ;;
         only) only=$arg; expect=; continue ;;
+        order) order=$arg; expect=; continue ;;
     esac
     case $arg in
         --binary) [ "$bin_given" = no ] || usage; bin_given=yes; expect=binary ;;
         --only) [ "$only_given" = no ] || usage; only_given=yes; expect=only ;;
+        --order) [ "$order_given" = no ] || usage; order_given=yes; expect=order ;;
         *) usage ;;
     esac
 done
 [ -z "$expect" ] && [ "$bin_given" = yes ] || usage
+[ "$only_given" = no ] || [ "$order_given" = no ] || usage
 # The selection: ids of phases, each once, none empty. Refused before the lock.
 selected=
 if [ "$only_given" = yes ]; then
-    case ",$only," in
-        *,,*)
-            echo "smoke: --only '$only' names an empty phase id (scripts/smoke.sh --list prints them)" >&2
-            exit 2
-            ;;
-    esac
-    case $only in
-        *[!a-z,]*)
-            echo "smoke: --only '$only': a phase id is lowercase letters (scripts/smoke.sh --list prints them)" >&2
-            exit 2
-            ;;
-    esac
-    for id in $(printf '%s\n' "$only" | tr ',' ' '); do
-        case " $phases " in
-            *" $id "*) ;;
-            *)
-                echo "smoke: --only: $id is not a phase (scripts/smoke.sh --list prints them)" >&2
-                exit 2
-                ;;
-        esac
-        case " $selected " in
-            *" $id "*)
-                echo "smoke: --only: $id is named twice" >&2
-                exit 2
-                ;;
-        esac
-        selected="$selected $id"
-    done
+    selected=$(check_ids --only "$only") || exit 2
 fi
-here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+ordered=
+if [ "$order_given" = yes ]; then
+    ordered=$(check_ids --order "$order") || exit 2
+fi
 # shellcheck source=scripts/nest-run.sh
 . "$here/nest-run.sh"
 nest_lock_acquire "smoke.sh $*"
@@ -258,17 +361,37 @@ run_phase() {
         echo "smoke: $1: the rest-frame check was inconclusive; starting attempt $((attempt + 1))" >&2
     done
 }
+# The run: with --order, the named phases in that order; otherwise every
+# selected phase, the next one chosen at the second it is (`choose_next`).
 ran=
-for id in $phases; do
-    case " ${selected:-$phases} " in
-        *" $id "*)
-            run_phase "$id"
-            ran=$ran${ran:+,}$id
-            ;;
-    esac
-done
+if [ "$order_given" = yes ]; then
+    for id in $ordered; do
+        echo "smoke: phase $id"
+        run_phase "$id"
+        ran=$ran${ran:+,}$id
+    done
+else
+    remaining=${selected:-$phases}
+    while [ -n "$(echo $remaining)" ]; do
+        second=$(date +%S)
+        second=${second#0}
+        second=${second:-0}
+        id=$(choose_next "$second" "$remaining")
+        echo "smoke: phase $id (second $second)"
+        run_phase "$id"
+        ran=$ran${ran:+,}$id
+        rest=
+        for left in $remaining; do
+            [ "$left" = "$id" ] || rest="$rest $left"
+        done
+        remaining=$rest
+    done
+fi
+echo "smoke: the phases ran in the order $ran (scripts/smoke.sh --order $ran repeats it)"
 if [ "$only_given" = yes ]; then
     echo "smoke: OK (only: $ran)"
+elif [ "$order_given" = yes ]; then
+    echo "smoke: OK (order: $ran)"
 else
     echo "smoke: OK"
 fi
