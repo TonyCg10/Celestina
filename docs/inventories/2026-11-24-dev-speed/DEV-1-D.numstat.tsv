@@ -1,0 +1,19 @@
+# DEV-1-D exact change inventory
+
+Base revision	8a37eb463a5bb4f3e0713b4910bd795f55d87277
+Pathspec	docs/evidence/2026-11-25-dev-speed-smoke-inputs.md
+Pathspec	docs/inventories/2026-11-24-dev-speed/DEV-1-D.numstat.tsv
+Pathspec	docs/plans/active/2026-11-24-dev-speed.md
+Pathspec	docs/projects.toml
+Pathspec	docs/standards/verification.md
+Pathspec	docs/superpowers/plans/2026-11-25-celestina-smoke-phases-plan.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+47	0	3284b34d1d5c4f67ddd3eb2a175ceb5f8cdd7c9b2c670046e848a70f52e77ecf	docs/evidence/2026-11-25-dev-speed-smoke-inputs.md
+19	0	self	docs/inventories/2026-11-24-dev-speed/DEV-1-D.numstat.tsv
+1	0	03106f84ee7e3fd03dd89394ab4ae7eefd2392168a839f629336073597371606	docs/plans/active/2026-11-24-dev-speed.md
+10	1	e562520b21bd6d8912ebd8545076985292d8830d94a82be68551a49700d1569e	docs/projects.toml
+3	1	95e1b4a1b8cd841246dccc7f6609a294db648b51d51d79a8b1ac31bf839a1773	docs/standards/verification.md
+180	0	a63293fd2d6d7617dc676a588df6c09f5f753deeaeee983a9d40aead20889574	docs/superpowers/plans/2026-11-25-celestina-smoke-phases-plan.md

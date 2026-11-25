@@ -77,7 +77,9 @@ A change is sensitive when it touches any of these:
 - their source guards: `celestina/tests/lock_*.rs` and
   `celestina/tests/polkit_*.rs`;
 - what a landing runs: a `*-production.sh`, `smoke*.sh` or `qml-tests.sh`
-  script of any project;
+  script of any project, every file under a project's `scripts/smoke/`, and
+  every file under `celestina/scripts/` (the nest helpers, the probes and the
+  fakes the smoke runs);
 - the guards and the landing: `scripts/*.py` and `scripts/*.sh` at the
   repository root, `scripts/fixtures/`, `scripts/documentation-errata.tsv`,
   `.githooks/`, `.github/`;
