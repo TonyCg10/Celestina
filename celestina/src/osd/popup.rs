@@ -682,7 +682,8 @@ impl LevelCore {
         })
     }
 
-    /// How long until the popup's own default mark gives way, if one stands.
+    /// How long until the popup's own default mark, or a monitor row's held
+    /// level, gives way, if one stands: the frame then shows the reading.
     #[must_use]
     pub fn graph_wait(&self, now: Instant) -> Option<Duration> {
         // A drag defers adoption, so no frame is due for it: asking for one
@@ -690,7 +691,10 @@ impl LevelCore {
         if self.held() {
             None
         } else {
-            self.mirror.wait(now)
+            [self.mirror.wait(now), self.monitors.wait(now)]
+                .into_iter()
+                .flatten()
+                .min()
         }
     }
 
@@ -761,7 +765,7 @@ impl LevelCore {
             self.shown = external;
             changed = true;
         }
-        if !self.held() && self.monitors.adopt(&self.monitor_cell) {
+        if !self.held() && self.monitors.adopt(&self.monitor_cell, now) {
             changed = true;
         }
         if self.kind == Kind::Volume && !self.held() && self.mirror.sync(&self.graph.borrow(), now)
@@ -796,13 +800,13 @@ impl LevelCore {
         self.throttle.wait(now)
     }
 
-    fn set_shown(&mut self, control: Control, percent: u8) {
+    fn set_shown(&mut self, control: Control, percent: u8, now: Instant) {
         let slot = match control {
             Control::Output => self.shown.audio.output.as_mut().map(|l| &mut l.percent),
             Control::Input => self.shown.audio.input.as_mut().map(|l| &mut l.percent),
             Control::Brightness => self.shown.brightness.as_mut(),
             Control::Stream(id) => return self.mirror.set_level(id, percent),
-            Control::Monitor(at) => return self.monitors.set_level(usize::from(at), percent),
+            Control::Monitor(at) => return self.monitors.set_level(usize::from(at), percent, now),
             Control::AllMonitors => return,
         };
         if let Some(slot) = slot {
@@ -844,13 +848,13 @@ impl LevelCore {
                             // of each is the one that is sent.
                             for at in self.monitors.known() {
                                 let control = Control::Monitor(u8::try_from(at).unwrap_or(u8::MAX));
-                                self.set_shown(control, *percent);
+                                self.set_shown(control, *percent, now);
                                 self.throttle.push(control, *percent);
                             }
                             moved = true;
                         }
                         Some(control) => {
-                            self.set_shown(control, *percent);
+                            self.set_shown(control, *percent, now);
                             self.throttle.push(control, *percent);
                             moved = true;
                         }
@@ -2845,13 +2849,22 @@ mod tests {
         rig.core.input(&release(x, y), now);
         let value = |rig: &Rig, at| rig.core.tree.slider(monitor_slider(at)).map(Slider::value);
         assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(100), Some(100)));
-        // The second monitor's read-back arrives first: only its row moves,
-        // the first keeps what the popup set until its own reading comes.
+        // A read-back of an earlier write of the drag arrives for the second
+        // monitor: neither row moves, both keep what the popup set.
         *rig.monitor_cell.borrow_mut() = vec![Some(30), Some(70)];
-        assert!(rig.core.sync(&Theme::dark(), now, cut));
-        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(100), Some(70)));
-        *rig.monitor_cell.borrow_mut() = vec![Some(95), Some(70)];
-        assert!(rig.core.sync(&Theme::dark(), now, cut));
-        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(95), Some(70)));
+        rig.core.sync(&Theme::dark(), now, cut);
+        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(100), Some(100)));
+        // The second monitor reads the asked level back; the first still has
+        // not: each row follows its own monitor only.
+        *rig.monitor_cell.borrow_mut() = vec![Some(30), Some(100)];
+        rig.core.sync(&Theme::dark(), now, cut);
+        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(100), Some(100)));
+        // After the hold, a row the monitor never confirmed shows its reading.
+        rig.core.sync(
+            &Theme::dark(),
+            now + super::super::monitor_rows::ASK_HOLD,
+            cut,
+        );
+        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(30), Some(100)));
     }
 }

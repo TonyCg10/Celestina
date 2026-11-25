@@ -1477,3 +1477,18 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-006](docs/evidence/2026-11-25-cel-d-006-app-mute-button.md)
+
+## VAL-CEL-I-007 — Brightness rows stay where they are released
+
+- **Status:** pending
+- **Related implementation:** CEL-I-007 (the brightness popup's monitor rows)
+- **Requires:** the deployed shell after the landing of CEL-I-007 and at
+  least two DDC monitors
+- **Procedure:** open the brightness popup, drag the All slider quickly from
+  one end to a middle value and release; then drag one monitor's row and
+  release. Watch each row for the next ten seconds
+- **Pass condition:** every row stays at the released value and never jumps
+  to an earlier value of the drag; each monitor ends at that value
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-007](docs/evidence/2026-11-25-cel-i-007-brightness-hold.md)

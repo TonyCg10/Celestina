@@ -9,7 +9,13 @@
 //! place, as the readings arrive ([`MonitorMirror::adopt`]), and a monitor
 //! with no reading is greyed out and takes no input.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
+
+use celestina_shell::osd::BRIGHTNESS_SETTLE;
 
 use celestina_paint::{Role, Theme, Weight};
 use celestina_ui::{view, Key, View};
@@ -85,7 +91,16 @@ pub struct MonitorMirror {
     labels: Vec<String>,
     shown: Vec<Option<u8>>,
     seen: Vec<Option<u8>>,
+    /// The last level the popup asked of each row and when: until the
+    /// monitor reads it back, or [`ASK_HOLD`] after the ask, other readings
+    /// (the read-backs of the drag's earlier writes) are taken in but not
+    /// shown, so the row does not jump back after a release.
+    asked: Vec<Option<(u8, Instant)>>,
 }
+
+/// How long a row keeps showing the level the popup asked of it while the
+/// monitor's readings say otherwise: one DDC settle.
+pub const ASK_HOLD: Duration = BRIGHTNESS_SETTLE;
 
 impl MonitorMirror {
     /// A mirror opened over `feed`; names stand whole until [`cut`](Self::cut).
@@ -96,9 +111,11 @@ impl MonitorMirror {
             rows: feed.rows.clone(),
             shown: Vec::new(),
             seen: Vec::new(),
+            asked: Vec::new(),
         };
         mirror.seen = mirror.read(&feed.levels);
         mirror.shown = mirror.seen.clone();
+        mirror.asked = vec![None; mirror.rows.len()];
         mirror
     }
 
@@ -146,16 +163,28 @@ impl MonitorMirror {
             .find(|control| slider_key(*control) == key)
     }
 
-    /// Takes in the app's newest reading, row by row: a row is adopted only
-    /// when its own reading differs from the last one taken in for it, so a
-    /// late reading of one monitor never moves another that still shows what
-    /// the popup set. Whether anything changed.
-    pub fn adopt(&mut self, cell: &SharedMonitors) -> bool {
+    /// Takes in the app's newest reading at `now`, row by row: each row shows
+    /// its own monitor's reading, so a late reading of one monitor never
+    /// moves another. A row
+    /// the popup asked a level of keeps showing it until the monitor reads
+    /// that level back or [`ASK_HOLD`] passes; then it shows the last
+    /// reading. Whether anything changed.
+    pub fn adopt(&mut self, cell: &SharedMonitors, now: Instant) -> bool {
         let external = self.read(cell);
         let mut changed = false;
         for (at, level) in external.into_iter().enumerate() {
-            if self.seen[at] != level {
-                self.seen[at] = level;
+            self.seen[at] = level;
+            let holding = match self.asked[at] {
+                Some((want, since)) => {
+                    let done = level == Some(want) || now.duration_since(since) >= ASK_HOLD;
+                    if done {
+                        self.asked[at] = None;
+                    }
+                    !done
+                }
+                None => false,
+            };
+            if !holding && self.shown[at] != level {
                 self.shown[at] = level;
                 changed = true;
             }
@@ -163,11 +192,25 @@ impl MonitorMirror {
         changed
     }
 
-    /// The popup's own change of row `at`, shown until the reading follows.
-    /// A row with no reading takes none.
-    pub fn set_level(&mut self, at: usize, percent: u8) {
+    /// How long until the first row's held level gives way at `now`, if any
+    /// row holds one.
+    #[must_use]
+    pub fn wait(&self, now: Instant) -> Option<Duration> {
+        self.asked
+            .iter()
+            .flatten()
+            .map(|(_, since)| (*since + ASK_HOLD).saturating_duration_since(now))
+            .min()
+    }
+
+    /// The popup's own change of row `at` at `now`, shown until the reading
+    /// follows. A row with no reading takes none.
+    pub fn set_level(&mut self, at: usize, percent: u8, now: Instant) {
         if let Some(slot) = self.shown.get_mut(at).filter(|slot| slot.is_some()) {
             *slot = Some(percent);
+            if let Some(ask) = self.asked.get_mut(at) {
+                *ask = Some((percent, now));
+            }
         }
     }
 
@@ -264,6 +307,70 @@ pub fn monitors_card(theme: &Theme, mirror: &MonitorMirror) -> View {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn feed(levels: Vec<Option<u8>>) -> MonitorFeed {
+        MonitorFeed {
+            rows: (0..levels.len())
+                .map(|at| MonitorRow {
+                    name: format!("monitor {at}"),
+                    primary: at == 0,
+                })
+                .collect(),
+            levels: Rc::new(RefCell::new(levels)),
+        }
+    }
+
+    #[test]
+    fn a_row_keeps_the_level_it_was_set_to_until_the_monitor_reads_it_back() {
+        let feed = feed(vec![Some(30), Some(60)]);
+        let mut mirror = MonitorMirror::open(&feed);
+        let t0 = Instant::now();
+        mirror.set_level(0, 80, t0);
+        // The read-back of an earlier write of the drag arrives first: the
+        // row stays where the user left it, and the other row is untouched.
+        *feed.levels.borrow_mut() = vec![Some(50), Some(60)];
+        mirror.adopt(&feed.levels, t0 + Duration::from_secs(1));
+        assert_eq!(mirror.shown, vec![Some(80), Some(60)]);
+        // The monitor reads the asked level back: the hold ends.
+        *feed.levels.borrow_mut() = vec![Some(80), Some(60)];
+        mirror.adopt(&feed.levels, t0 + Duration::from_secs(2));
+        assert_eq!(mirror.shown, vec![Some(80), Some(60)]);
+        // From then on a reading from elsewhere shows at once.
+        *feed.levels.borrow_mut() = vec![Some(70), Some(60)];
+        assert!(mirror.adopt(&feed.levels, t0 + Duration::from_secs(3)));
+        assert_eq!(mirror.shown, vec![Some(70), Some(60)]);
+    }
+
+    #[test]
+    fn the_mirror_asks_for_a_frame_when_a_held_row_gives_way() {
+        let feed = feed(vec![Some(30), Some(60)]);
+        let mut mirror = MonitorMirror::open(&feed);
+        let t0 = Instant::now();
+        assert_eq!(mirror.wait(t0), None, "nothing held");
+        mirror.set_level(0, 80, t0);
+        assert_eq!(
+            mirror.wait(t0 + Duration::from_secs(2)),
+            Some(ASK_HOLD - Duration::from_secs(2))
+        );
+        *feed.levels.borrow_mut() = vec![Some(80), Some(60)];
+        mirror.adopt(&feed.levels, t0 + Duration::from_secs(3));
+        assert_eq!(mirror.wait(t0 + Duration::from_secs(3)), None, "read back");
+    }
+
+    #[test]
+    fn a_row_shows_the_reading_once_the_hold_passes_without_a_read_back() {
+        let feed = feed(vec![Some(30), Some(60)]);
+        let mut mirror = MonitorMirror::open(&feed);
+        let t0 = Instant::now();
+        mirror.set_level(0, 80, t0);
+        *feed.levels.borrow_mut() = vec![Some(50), Some(60)];
+        mirror.adopt(&feed.levels, t0 + Duration::from_secs(1));
+        assert_eq!(mirror.shown[0], Some(80));
+        // The monitor never confirmed 80: after the hold the row tells the
+        // truth, even with no new reading.
+        assert!(mirror.adopt(&feed.levels, t0 + ASK_HOLD));
+        assert_eq!(mirror.shown[0], Some(50));
+    }
 
     #[test]
     fn mean_level_rounds_half_up_and_skips_unknown() {
