@@ -3,7 +3,7 @@
 - **Opened:** 2026-10-14
 - **Plan ID:** rust-shell
 - **Closed:** 2026-11-24
-- **Successor:** DEV-1, [the development speed plan](../active/2026-11-24-dev-speed.md)
+- **Successor:** DEV-1, [the development speed plan](2026-11-24-dev-speed.md)
 - **Status:** done
 - **Authorization:** the author approved the design in brainstorming on
   2026-10-14 and asked for the implementation plan; the design is

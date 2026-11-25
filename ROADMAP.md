@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** DEV-1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -323,16 +323,19 @@ builds, an agent preflight in tiers whose first tier has a budget that cannot
 grow back unnoticed, and a light lane with a review cap and one list of
 sensitive paths.
 
-- [ ] Add a lighter session dev profile, a cap on the session Cargo target and
+- [x] Add a lighter session dev profile, a cap on the session Cargo target and
       the closing of a landed unit's worktree (`DEV-1-A`).
-- [ ] Add tiers to the agent preflight and a budget for its first tier
+- [x] Add tiers to the agent preflight and a budget for its first tier
       (`DEV-1-B`).
-- [ ] Add the light lane, the review cap and the sensitive-path list
+- [x] Add the light lane, the review cap and the sensitive-path list
       (`DEV-1-C`).
+- [x] Add the smoke's phases and helpers to the shell's verification inputs and
+      to the sensitive paths (`DEV-1-D`).
 
-The smoke in phases belongs to the shell and gets its row in a `celestina` plan.
+The smoke in phases (`SMOKE-PHASES`) and the order that runs next the phase
+whose minute window is open (`SMOKE-ORDER`) landed in the shell's own plan.
 The build order, exclusions and ledger are in
-[the active plan](docs/plans/active/2026-11-24-dev-speed.md), the design in
+[the archived plan](docs/plans/archive/2026-11-24-dev-speed.md), the design in
 [the spec](docs/superpowers/specs/2026-11-24-suite-dev-speed-design.md) and the
 decision in [ADR 0013](docs/decisions/0013-development-speed.md).
 

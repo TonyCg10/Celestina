@@ -1,0 +1,25 @@
+# DEV-1-CLOSE exact change inventory
+
+Base revision	629d434bd9eb669599e64ed8cffd04273b48a5aa
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/decisions/0013-development-speed.md
+Pathspec	docs/evidence/2026-11-25-dev-speed-close.md
+Pathspec	docs/inventories/2026-11-24-dev-speed/DEV-1-CLOSE.numstat.tsv
+Pathspec	docs/plans/active/2026-11-24-dev-speed.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-10-14-rust-shell.md
+Pathspec	docs/plans/archive/2026-11-24-dev-speed.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+10	7	064da5dfca60a3357fe1506caadeb232a40be482a97d32c58a9a67e70c657c73	ROADMAP.md
+20	16	366c9177e5e56731a4d1cb504e3af9b529fdfa4936c7af141aec52e5186ae221	STATUS.md
+1	1	c81e2b10cf8b8dec397820a6a5c545766d24c78b11876fad8ba02d3fc89541f8	docs/decisions/0013-development-speed.md
+29	0	496255080902c826295dec4137eec4ff5767391a5c59c1ec92d6f54204c9cf81	docs/evidence/2026-11-25-dev-speed-close.md
+25	0	self	docs/inventories/2026-11-24-dev-speed/DEV-1-CLOSE.numstat.tsv
+0	71	deleted	docs/plans/active/2026-11-24-dev-speed.md
+2	3	ceda6cbf7b712f8ed51152ca0621199a5c8c663cc66b15573058542e56c7361b	docs/plans/active/README.md
+1	1	eb4f9847e6f4b1ec7a523d29c336a0f00722f424e4ce3341aef42c84c5b922de	docs/plans/archive/2026-10-14-rust-shell.md
+79	0	5e8e7986826af4784da01c60340084ebc7cf38679ebe4135dbd1ed2ed193c042	docs/plans/archive/2026-11-24-dev-speed.md

@@ -19,7 +19,7 @@ times were not measured; the first unit records them as the baseline.
 
 The design is
 [the development speed spec](../superpowers/specs/2026-11-24-suite-dev-speed-design.md);
-the delivery is [the plan](../plans/active/2026-11-24-dev-speed.md).
+the delivery is [the plan](../plans/archive/2026-11-24-dev-speed.md).
 
 ## Decision
 
