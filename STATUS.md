@@ -6,10 +6,12 @@
   Noctalia stopped being started; the shell's parity program, CEL-2, is
   complete: CEL-2-M landed as celestina 1.14.0, and CEL-2-M-LOCK-POLKIT
   turned the lock and the polkit agent on by default in 1.15.0. Every RSH-1 and
-  DEV-1 suite row has landed and both plans are archived; no suite checkpoint
-  is active, and the next suite work starts from an accepted decision. All
-  project work follows each local roadmap
-- **Implementation checkpoint:** none
+  DEV-1 suite row has landed and both plans are archived. The suite's active
+  checkpoint is TRK-1, the standing plan for the documents of the shell's
+  standing tracks
+  ([TRK-1](docs/plans/active/2026-11-25-cel-tracks-docs.md)). All project work
+  follows each local roadmap
+- **Implementation checkpoint:** TRK-1
 - **Author-validation checkpoint:** VAL-GOV-1
 
 ## Completed governance migration

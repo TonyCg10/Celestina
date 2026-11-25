@@ -1,0 +1,27 @@
+# CEL-TRACKS-OPEN exact change inventory
+
+Base revision	ef84a451f71ad58b26fe5c3ce32a7003893aaec6
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	docs/evidence/2026-11-25-cel-tracks-open.md
+Pathspec	docs/inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-OPEN.numstat.tsv
+Pathspec	docs/plans/active/2026-11-25-cel-tracks-docs.md
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/superpowers/plans/2026-11-24-celestina-standing-tracks-plan-1.md
+Pathspec	docs/superpowers/plans/2026-11-25-celestina-cel-i-004-audio-plan.md
+Pathspec	docs/superpowers/specs/2026-11-24-celestina-standing-tracks-design.md
+Pathspec	docs/superpowers/specs/2026-11-25-celestina-cel-i-004-audio-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+14	2	6e732bc78b28029b681a44eb6bc3861e1b43a8c425243ab2e9259cd24fe092cf	ROADMAP.md
+6	4	6af4bfaed69de245e9f359819ee8ed1241327eb89f105071fd3e3ebc192ec8b8	STATUS.md
+35	0	a4ee301d8f9c13015936f10c55cc97a3298eb698571e647c47753c928f0be0a5	docs/evidence/2026-11-25-cel-tracks-open.md
+27	0	self	docs/inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-OPEN.numstat.tsv
+59	0	8835a4534cf63e73e71aaead7933da725e3651118da7c1d4810987801c80730f	docs/plans/active/2026-11-25-cel-tracks-docs.md
+3	1	f69af2d8e72c85de287fb38b87dcfdc4e00df1a6d04d1fb61097e433bd5e5fbf	docs/plans/active/README.md
+171	0	ab40e453b8547fbeadc7ddb6155c8b7a50259457f074fbfefac09757a99e191f	docs/superpowers/plans/2026-11-24-celestina-standing-tracks-plan-1.md
+248	0	104e1e72b305a5c49716e5328921de929e3a6cb34911226380d15762dbb39c3d	docs/superpowers/plans/2026-11-25-celestina-cel-i-004-audio-plan.md
+264	0	44902a10a8c2928a08a3c6a3233dc8159808b1943271a3642d79817320a8b7d4	docs/superpowers/specs/2026-11-24-celestina-standing-tracks-design.md
+73	0	44a9328eb82f3035e00b709bd52f67ac68da49ec0c174beacdac8d5ed8c92b7b	docs/superpowers/specs/2026-11-25-celestina-cel-i-004-audio-design.md

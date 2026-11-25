@@ -1,7 +1,9 @@
 # Active suite plans
 
 Suite-level plans appear here only while the root roadmap names the same active
-implementation checkpoint. No suite plan is active. Closed and archived:
+implementation checkpoint. The active suite plan is
+[TRK-1](2026-11-25-cel-tracks-docs.md), a standing plan for the documents of
+the shell's standing tracks. Closed and archived:
 ARC-2, ARC-1 and DEV-1 closed on 2026-11-25, RSH-1 on 2026-11-24, PRV-2 on
 2026-10-10, PRV-1 on 2026-10-10, EXT-1 on 2026-10-10, CONV-1 on 2026-10-09,
 AUD-1 on 2026-10-09, LND-1 on 2026-09-26, PRD-1 on 2026-09-25 and LNG-1 on

@@ -1,7 +1,7 @@
 # Celestina suite implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** TRK-1
 - **Author validation:** `VAL-GOV-1` in [VALIDATION.md](VALIDATION.md), independent
 
 This file contains only cross-project implementation. Each project's
@@ -363,6 +363,18 @@ archived the plan.
 
 The plan, opened and closed in the same commit, is
 [the archived plan](docs/plans/archive/2026-11-25-style-g7-archive.md).
+
+## TRK-1 — Documents of the shell's standing tracks (standing)
+
+The shell's standing tracks, design (`CEL-D`) and improvements (`CEL-I`), keep
+their design notes and task plans under `docs/superpowers/`. Documents-only
+suite units commit them, so each shell entry stays a shell-only unit. The
+tracks themselves are the shell's checkpoint `CEL-TRACKS`, opened by its
+first entry, `CEL-I-004`.
+
+- [ ] Add the tracks' design and first plans (`CEL-TRACKS-OPEN`).
+
+The plan is [TRK-1](docs/plans/active/2026-11-25-cel-tracks-docs.md).
 
 ## Project implementation fronts
 
