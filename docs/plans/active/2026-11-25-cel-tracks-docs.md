@@ -9,7 +9,8 @@
 - **Authorization:** the author approved
   [the standing-tracks design](../../superpowers/specs/2026-11-24-celestina-standing-tracks-design.md)
   and its first plan on 2026-11-24, and the CEL-I-004 audio design and plan on
-  2026-11-25
+  2026-11-25; on 2026-11-25 too, the previews of the session menu,
+  the icon tabs and the per-app mute button (variant A of each)
 - **Scope:** suite
 - **Implementation checkpoint:** TRK-1
 - **Author-validation checkpoint:** none
@@ -55,5 +56,6 @@ tracks.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | CEL-TRACKS-OPEN | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-OPEN.numstat.tsv) | 10 files, +900/-7 | Add the standing design and improvement tracks of the shell: their design and first plan, the CEL-I-004 audio design and plan, and this plan | [evidence](../../evidence/2026-11-25-cel-tracks-open.md) | None |
+| CEL-TRACKS-DOCS-2 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-2.numstat.tsv) | 6 files, +223/-3 | Record the audio entry's revisions (collapsible sections, the speaker mute button) in its design and add the session menu's task plan | [evidence](../../evidence/2026-11-25-cel-tracks-docs-2.md) | None |
 
 This plan records intent; it grants no authority.

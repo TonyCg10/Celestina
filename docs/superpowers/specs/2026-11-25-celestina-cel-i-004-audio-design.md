@@ -32,6 +32,18 @@ The volume popup, top to bottom:
 
 Copy is Spanish and lives in `src/copy.rs`.
 
+### 3.1 Revisions after the author's look (2026-11-25)
+
+- **Collapsible sections.** The output, input and applications sections are
+  collapsible and open folded each time the popup opens. Folded, they show
+  only the default output, the default input and the applications that are
+  playing now. Unfolding a section by its header shows every row and grows
+  the popup downward with its top edge fixed. Delivered in `CEL-I-004`.
+- **Per-application mute.** Each application's mute is a round speaker button,
+  struck through while muted, instead of a switch with no label. A muted
+  application's name dims. Preview approved 2026-11-25 (variant A); delivered
+  in `CEL-D-006`.
+
 ## 4. Decisions (Claude's calls, approved with the design)
 
 - **One audio model.** The shell's audio worker (`src/providers/audio.rs`) stays the only audio reader and writer. It grows a graph of devices and streams beside its two default levels. There is no second watcher and no `pw-mon`.
@@ -47,7 +59,7 @@ Copy is Spanish and lives in `src/copy.rs`.
   - At most 8 devices per direction and 8 streams are shown; the rest are logged and dropped.
   - Names are cut to the row's width by the text layout, not by bytes.
   - An unreadable `wpctl status` is an empty graph, never a crash.
-- **Size.**
+- **Size** (superseded in part by §3.1: folding and unfolding a section resizes the popup).
   - The popup's size is decided when it opens, from the graph at that moment, as today's popup decides on the microphone.
   - While it is open, existing rows update in place: the default mark, levels, mute.
   - A stream that ends greys out and stops taking input.

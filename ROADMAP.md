@@ -372,7 +372,9 @@ suite units commit them, so each shell entry stays a shell-only unit. The
 tracks themselves are the shell's checkpoint `CEL-TRACKS`, opened by its
 first entry, `CEL-I-004`.
 
-- [ ] Add the tracks' design and first plans (`CEL-TRACKS-OPEN`).
+- [x] Add the tracks' design and first plans (`CEL-TRACKS-OPEN`).
+- [ ] Record the audio entry's revisions and add the session menu's plan
+      (`CEL-TRACKS-DOCS-2`).
 
 The plan is [TRK-1](docs/plans/active/2026-11-25-cel-tracks-docs.md).
 
