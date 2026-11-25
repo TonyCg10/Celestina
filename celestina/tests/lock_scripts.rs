@@ -27,7 +27,7 @@ fn code(relative: &str) -> Vec<String> {
         .collect()
 }
 
-const SCRIPTS: [&str; 11] = [
+const OLD_SCRIPTS: [&str; 11] = [
     "scripts/build-production.sh",
     "scripts/verify-production.sh",
     "scripts/deploy-production.sh",
@@ -40,6 +40,36 @@ const SCRIPTS: [&str; 11] = [
     "scripts/cutover-config-probe.sh",
     "scripts/wallpaper-backdrop-probe.sh",
 ];
+
+/// The scripts the lock guards cover: the fixed list plus every file of
+/// `scripts/smoke/`, read from the directory so a new phase is covered
+/// without editing the list. Fails when the directory is missing or holds
+/// fewer than the 15 files of the layout (`common.sh` and 14 phases).
+fn scripts() -> Vec<String> {
+    let dir = manifest().join("scripts/smoke");
+    let mut phases: Vec<String> = fs::read_dir(&dir)
+        .unwrap_or_else(|err| panic!("{}: {err}", dir.display()))
+        .map(|entry| entry.expect("an entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "sh"))
+        .map(|path| {
+            format!(
+                "scripts/smoke/{}",
+                path.file_name().expect("a file name").to_string_lossy()
+            )
+        })
+        .collect();
+    phases.sort();
+    assert!(
+        phases.len() >= 15,
+        "scripts/smoke/ holds {} .sh files; the layout needs common.sh and 14 phases",
+        phases.len()
+    );
+    OLD_SCRIPTS
+        .iter()
+        .map(|script| (*script).to_owned())
+        .chain(phases)
+        .collect()
+}
 
 /// The spec's text of the PAM service, §4.11, byte for byte.
 const PAM_TEXT: &str = "#%PAM-1.0\n\
@@ -58,8 +88,8 @@ fn the_pam_text_is_exactly_the_one_of_the_design() {
 fn no_script_kills_a_process_by_name() {
     // The author's session was once ended by `pkill -x niri`. Every process
     // here is stopped by a pid its own launcher recorded.
-    for script in SCRIPTS {
-        for line in code(script) {
+    for script in scripts() {
+        for line in code(&script) {
             for word in ["pkill", "killall", "pgrep", "killproc"] {
                 assert!(
                     !line.contains(word),
@@ -112,11 +142,11 @@ fn no_script_installs_the_pam_service() {
     // design §4.11, plan P3). No production entry or helper touches `/etc`
     // or names the PAM text; the rehearsal's one existence test is guarded
     // by the previous test.
-    for script in SCRIPTS {
+    for script in scripts() {
         if script == "scripts/lock-rehearsal.sh" {
             continue;
         }
-        for line in code(script) {
+        for line in code(&script) {
             assert!(
                 !line.contains("pam.d"),
                 "{script} names a pam.d path: {line}"

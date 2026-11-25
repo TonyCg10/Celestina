@@ -318,13 +318,38 @@ fn keys_of(object: &str) -> Vec<String> {
     keys
 }
 
-/// The names in smoke.sh's `duties` helper (`for d_name in ...; do`), which
-/// prints the object every run of the smoke writes.
+/// `scripts/smoke.sh` plus every `*.sh` of `scripts/smoke/`, sorted, as
+/// (path relative to `scripts/`, text). Fails when the phase directory is
+/// missing or holds fewer than the 15 files of the layout (`common.sh` and
+/// the 14 phases).
+fn smoke_sources() -> Vec<(String, String)> {
+    let all = scripts();
+    let mut found: Vec<(String, String)> = all
+        .into_iter()
+        .filter(|(name, _)| {
+            name == "smoke.sh" || (name.starts_with("smoke/") && name.ends_with(".sh"))
+        })
+        .collect();
+    found.sort();
+    let phase_files = found
+        .iter()
+        .filter(|(n, _)| n.starts_with("smoke/"))
+        .count();
+    assert!(
+        phase_files >= 15,
+        "scripts/smoke/ holds {phase_files} .sh files; the layout needs common.sh and 14 phases"
+    );
+    assert!(found.iter().any(|(n, _)| n == "smoke.sh"), "smoke.sh");
+    found
+}
+
+/// The names in the smoke's `duties` helper (`for d_name in ...; do`, kept in
+/// `smoke/common.sh`), which prints the object every run of the smoke writes.
 fn smoke_helper_names(text: &str) -> BTreeSet<String> {
     let line = text
         .lines()
         .find(|line| line.trim_start().starts_with("for d_name in "))
-        .expect("smoke.sh keeps its duties helper");
+        .expect("the smoke keeps its duties helper");
     let names = line
         .trim_start()
         .strip_prefix("for d_name in ")
@@ -382,11 +407,36 @@ fn every_duties_object_a_script_writes_names_every_duty() {
 
 #[test]
 fn the_smoke_helper_lists_every_duty_and_nothing_else() {
-    let (_, smoke) = scripts()
+    let sources = smoke_sources();
+    let (_, common) = sources
+        .iter()
+        .find(|(name, _)| name == "smoke/common.sh")
+        .expect("smoke/common.sh");
+    assert_eq!(smoke_helper_names(common), duty_keys());
+    // The helper is the only one: no other file of the smoke repeats the loop.
+    for (name, text) in &sources {
+        if name != "smoke/common.sh" {
+            assert!(
+                !text
+                    .lines()
+                    .any(|line| line.trim_start().starts_with("for d_name in ")),
+                "{name} repeats the duties list of smoke/common.sh"
+            );
+        }
+    }
+}
+
+#[test]
+fn exactly_one_file_of_the_smoke_defines_the_duties_helper() {
+    let definers: Vec<String> = smoke_sources()
         .into_iter()
-        .find(|(name, _)| name == "smoke.sh")
-        .expect("smoke.sh");
-    assert_eq!(smoke_helper_names(&smoke), duty_keys());
+        .filter(|(_, text)| {
+            text.lines()
+                .any(|line| line.trim_start().starts_with("duties()"))
+        })
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(definers, ["smoke/common.sh"]);
 }
 
 #[test]

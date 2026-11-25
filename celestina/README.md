@@ -287,8 +287,12 @@ the nested shell reaches the host's system bus for both (logind for the
 lock's sleep inhibitor, polkitd for the agent's registration), unless the
 caller points `DBUS_SYSTEM_BUS_ADDRESS` elsewhere or the file names both
 `"off"`.
-`scripts/smoke.sh --binary PATH` runs the shell once in such a nest with
-`--exit-after 3 --metrics` and checks the frame report.
+`scripts/smoke.sh --binary PATH` runs every smoke phase, each in such a nest
+(the first, `notify`, runs the shell with `--exit-after 4 --metrics` and checks
+the frame report). `--only ID[,ID...]` runs the named phases, in the script's
+order; `--list` prints the phase ids. A phase whose rest-frame check is
+inconclusive is retried alone, up to three attempts. A session runs the phases
+of the area it touched; the landing always runs the full smoke.
 A measuring run (the smoke, `scripts/lock-rehearsal.sh`,
 `scripts/wallpaper-backdrop-probe.sh`) holds the host-wide nest lock
 (`$XDG_RUNTIME_DIR/celestina-nest.lock`, taken by `scripts/nest-run.sh`): a

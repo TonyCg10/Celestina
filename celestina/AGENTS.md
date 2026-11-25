@@ -45,10 +45,17 @@ the shell's constraints; it cannot relax the root or grant authority.
 - `celestina/scripts/complete-production.sh` for deployable bug and milestone
   exits
 - `celestina/scripts/deploy-production.sh`
-- `celestina/scripts/smoke.sh --binary PATH`
+- `celestina/scripts/smoke.sh --binary PATH` (the full smoke: every phase)
+- `celestina/scripts/smoke.sh --binary PATH --only ID[,ID...]` (the named
+  phases, in the script's order)
+- `celestina/scripts/smoke.sh --list` (prints the phase ids)
 - `celestina/scripts/lock-rehearsal.sh` (the session lock's steps R-1 to R-9;
   nested niri, a fake logind and no PAM service only, never the live session;
   it stops processes by recorded pid, never by name)
+
+A session runs the smoke phases of the area it touched; the landing always
+runs the full smoke. A phase whose rest-frame check is inconclusive is retried
+alone, up to three attempts.
 
 A measuring run (`smoke.sh`, `lock-rehearsal.sh`, `wallpaper-backdrop-probe.sh`)
 holds the host-wide nest lock (`scripts/nest-run.sh`): a second one waits

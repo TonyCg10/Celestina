@@ -9,7 +9,9 @@
 # at once (several agent sessions did, on 2026-11-24) disturb each other's
 # counts and prove nothing, so they take turns: `smoke.sh`,
 # `wallpaper-backdrop-probe.sh` and `lock-rehearsal.sh` take the lock in their
-# outermost invocation, before any nest and before any expensive step.
+# outermost invocation, before any nest and before any expensive step. The
+# smoke's phases (`scripts/smoke/ID.sh`, one child of `smoke.sh` per attempt)
+# ask for it too, and get it at once: their driver holds it (below).
 # `dev-session.sh` takes none (an interactive nest stays open for hours and
 # must never block a landing); it only says so when a run is measuring
 # (`nest_lock_notice`). `smoke-media.sh` is a client inside a nest: no lock.
@@ -47,11 +49,12 @@
 #   - The hold directory (`$XDG_RUNTIME_DIR/celestina-nest-hold.XXXXXX`) is
 #     the run's registry and its identity: `CELESTINA_NEST_LOCK_HELD` carries
 #     its path, exported to everything the run starts. A script started by a
-#     holder (`smoke.sh` runs itself again for each attempt) must not wait for
-#     its own parent, so `nest_lock_acquire` returns at once when the marker
-#     names a directory whose `ready` file exists and whose holder (the pid in
-#     `holder`) is alive; any other value (a leftover, a foreign `1`, a path
-#     that is gone) is ignored and the lock is taken in the normal way.
+#     holder (`smoke.sh` runs each attempt of a phase as a script of its own,
+#     `scripts/smoke/ID.sh`) must not wait for its own parent, so
+#     `nest_lock_acquire` returns at once when the marker names a directory
+#     whose `ready` file exists and whose holder (the pid in `holder`) is
+#     alive; any other value (a leftover, a foreign `1`, a path that is gone)
+#     is ignored and the lock is taken in the normal way.
 #     `nest` and `nest_child` refuse to start anything (status 70, the script
 #     ends through its cleanup) when the holder is gone or when the script that
 #     took the lock (`owner`) is dead: an orphaned attempt stops after the nest
@@ -68,16 +71,16 @@
 #     smoke takes four to five minutes and a landing runs one). `0` fails at
 #     once. A value that is not a whole number is a usage error (status 2).
 #     While waiting, one line on stderr says who holds the lock. When the wait
-#     runs out the run fails naming the holder with status 69 (`smoke.sh`
-#     already gives 75 the meaning "inconclusive, try again", and 1 and 2 are
-#     failure and usage; 69 is EX_UNAVAILABLE). A missing `flock` fails with
+#     runs out the run fails naming the holder with status 69 (a smoke
+#     phase already gives 75 the meaning "inconclusive, try again", and 1
+#     and 2 are failure and usage; 69 is EX_UNAVAILABLE). A missing `flock` fails with
 #     status 1, a missing `setsid` too.
 #   - `nest_lock_release` ends the holder at once (`stop` in the hold
 #     directory, KILL if it has not ended after three seconds); the callers'
 #     cleanup calls it so the lock is free the moment a run ends.
 #   - A caller that bounds a measuring run with `timeout` must use TERM first
 #     and a limit that covers the wait plus the run (a full smoke is four to
-#     five minutes, up to three attempts): `timeout -k 60 2700 sh
+#     five minutes, up to three attempts per phase): `timeout -k 60 2700 sh
 #     scripts/smoke.sh --binary PATH`, or a lower CELESTINA_NEST_LOCK_WAIT.
 #     Never `timeout -s KILL`: KILL cannot be handled, so the nest would
 #     outlive it and its work directory stay (the registry above still keeps

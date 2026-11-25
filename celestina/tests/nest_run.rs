@@ -20,17 +20,6 @@ fn scripts() -> PathBuf {
     manifest().join("scripts")
 }
 
-/// The lines of a script that are not comments.
-fn code(name: &str) -> Vec<String> {
-    let path = scripts().join(name);
-    fs::read_to_string(&path)
-        .unwrap_or_else(|err| panic!("{}: {err}", path.display()))
-        .lines()
-        .filter(|line| !line.trim_start().starts_with('#'))
-        .map(str::to_owned)
-        .collect()
-}
-
 /// The program words that start a driver with INT, QUIT and HUP at their
 /// default disposition. A test run started from a background job, `nohup` or
 /// a CI runner inherits them ignored, and a POSIX shell cannot trap a signal
@@ -738,16 +727,27 @@ echo "status=$status" > "$OUT"
 
 /// The logical statements of a script's code: continued lines joined.
 fn statements(name: &str) -> Vec<String> {
+    let path = scripts().join(name);
+    let text = fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+    statements_of(&text)
+}
+
+/// The logical statements of a script's text: comments dropped, continued
+/// lines joined.
+fn statements_of(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut open = String::new();
-    for line in code(name) {
+    for line in text
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+    {
         match line.trim_end().strip_suffix('\\') {
             Some(head) => {
                 open.push_str(head);
                 open.push(' ');
             }
             None => {
-                open.push_str(&line);
+                open.push_str(line);
                 out.push(std::mem::take(&mut open));
             }
         }
@@ -755,64 +755,166 @@ fn statements(name: &str) -> Vec<String> {
     out
 }
 
-fn is_nest_call(statement: &str) -> bool {
-    statement.split_whitespace().next() == Some("nest")
+/// `scripts/smoke.sh` plus every `*.sh` of `scripts/smoke/`, sorted, as
+/// (path relative to `scripts/`, text). Fails when the phase directory is
+/// missing or holds fewer than the 15 files of the layout (`common.sh` and
+/// the 14 phases).
+fn smoke_sources() -> Vec<(String, String)> {
+    let dir = scripts().join("smoke");
+    let entries = fs::read_dir(&dir).unwrap_or_else(|err| panic!("{}: {err}", dir.display()));
+    let mut found: Vec<(String, String)> = entries
+        .map(|entry| entry.expect("an entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "sh"))
+        .map(|path| {
+            let text =
+                fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+            let name = path.file_name().expect("a file name").to_string_lossy();
+            (format!("smoke/{name}"), text)
+        })
+        .collect();
+    assert!(
+        found.len() >= 15,
+        "scripts/smoke/ holds {} .sh files; the layout needs common.sh and 14 phases",
+        found.len()
+    );
+    let driver = scripts().join("smoke.sh");
+    found.push((
+        "smoke.sh".to_owned(),
+        fs::read_to_string(&driver).unwrap_or_else(|err| panic!("{}: {err}", driver.display())),
+    ));
+    found.sort();
+    found
+}
+
+/// Whether a statement sources the phases' shared file.
+fn sources_common(statement: &str) -> bool {
+    let statement = statement.trim_start();
+    statement.starts_with(". ") && statement.contains("smoke/common.sh")
+}
+
+/// The rules every script that starts nests keeps, checked on its statements:
+/// `dev-session.sh` only as `nest LIMIT …` with no `timeout` of its own, no
+/// INT or TERM trap, and `nest` only as a plain statement. Returns how many
+/// statements start a dev session.
+fn check_nest_statements(name: &str, statements: &[String]) -> usize {
+    let mut starts = 0;
+    for statement in statements {
+        if statement.contains("dev-session.sh") {
+            starts += 1;
+            let words: Vec<&str> = statement.split_whitespace().collect();
+            assert!(
+                words.first() == Some(&"nest"),
+                "{name} starts dev-session.sh other than as `nest LIMIT …`: {statement}"
+            );
+            assert!(
+                !words.contains(&"timeout"),
+                "{name} still wraps a nest in timeout itself: {statement}"
+            );
+        }
+        if statement.trim_start().starts_with("trap ") {
+            assert!(
+                !statement.contains("INT") && !statement.contains("TERM"),
+                "{name} installs its own signal trap (nest_signals owns them): {statement}"
+            );
+        }
+        for bad in ["| nest ", "(nest ", "$(nest ", "`nest "] {
+            assert!(
+                !statement.contains(bad),
+                "{name}: nest must be a plain statement of the main shell: {statement}"
+            );
+        }
+    }
+    starts
+}
+
+/// The index of the first statement whose first word is `word`.
+fn first_call(statements: &[String], word: &str) -> Option<usize> {
+    statements
+        .iter()
+        .position(|s| s.split_whitespace().next() == Some(word))
+}
+
+fn installs_cleanup(statements: &[String]) -> bool {
+    statements
+        .iter()
+        .any(|s| s.trim() == "nest_signals cleanup")
 }
 
 #[test]
 fn the_nest_scripts_start_dev_session_only_through_nest_and_own_no_signal_trap() {
-    for script in ["smoke.sh", "wallpaper-backdrop-probe.sh"] {
-        let statements = statements(script);
-        let mut starts = 0;
-        for statement in &statements {
-            if statement.contains("dev-session.sh") {
-                starts += 1;
-                let words: Vec<&str> = statement.split_whitespace().collect();
-                assert!(
-                    words.first() == Some(&"nest"),
-                    "{script} starts dev-session.sh other than as `nest LIMIT …`: {statement}"
-                );
-                assert!(
-                    !words.contains(&"timeout"),
-                    "{script} still wraps a nest in timeout itself: {statement}"
-                );
-            }
-            if statement.trim_start().starts_with("trap ") {
-                assert!(
-                    !statement.contains("INT") && !statement.contains("TERM"),
-                    "{script} installs its own signal trap (nest_signals owns them): {statement}"
-                );
-            }
-        }
-        for statement in &statements {
-            for bad in ["| nest ", "(nest ", "$(nest ", "`nest "] {
-                assert!(
-                    !statement.contains(bad),
-                    "{script}: nest must be a plain statement of the main shell: {statement}"
-                );
-            }
-        }
-        assert!(starts >= 1, "{script} starts no nest at all");
-        assert!(
-            statements
-                .iter()
-                .any(|s| s.trim() == "nest_signals cleanup"),
-            "{script} must install its traps with nest_signals cleanup"
-        );
+    let mut phase_starts = 0;
+    for (name, text) in smoke_sources() {
+        let statements = statements_of(&text);
+        let starts = check_nest_statements(&name, &statements);
 
-        let first_lock = statements
-            .iter()
-            .position(|s| s.trim_start().starts_with("nest_lock_acquire "))
-            .unwrap_or_else(|| panic!("{script} never takes the nest lock"));
-        let first_nest = statements
-            .iter()
-            .position(|s| is_nest_call(s))
-            .unwrap_or_else(|| panic!("{script} never calls nest"));
-        assert!(
-            first_lock < first_nest,
-            "{script} starts a nest before it takes the lock"
-        );
+        // The lock comes before any nest. A phase file reaches it through
+        // `smoke/common.sh`, which takes it; this is how the rule is read: the
+        // statement that sources `common.sh` stands for common.sh's
+        // statements at that point, so common.sh itself must hold the
+        // `nest_lock_acquire ` statement (and start no nest before it), and
+        // each phase must source it before its first `nest `.
+        let first_lock = first_call(&statements, "nest_lock_acquire");
+        let first_nest = first_call(&statements, "nest");
+        match name.as_str() {
+            "smoke.sh" => {
+                assert_eq!(
+                    starts, 0,
+                    "smoke.sh is a driver; the dev sessions belong to the phase files"
+                );
+                assert!(
+                    installs_cleanup(&statements),
+                    "smoke.sh must install its traps with nest_signals cleanup"
+                );
+                let first_lock = first_lock.expect("smoke.sh never takes the nest lock");
+                let first_child =
+                    first_call(&statements, "nest_child").expect("smoke.sh never calls nest_child");
+                assert!(
+                    first_lock < first_child,
+                    "smoke.sh starts an attempt before it takes the lock"
+                );
+            }
+            "smoke/common.sh" => {
+                let first_lock = first_lock.expect("smoke/common.sh never takes the nest lock");
+                assert!(
+                    first_nest.is_none_or(|nest| first_lock < nest),
+                    "smoke/common.sh starts a nest before it takes the lock"
+                );
+            }
+            _ => {
+                phase_starts += starts;
+                let sourced = statements
+                    .iter()
+                    .position(|s| sources_common(s))
+                    .unwrap_or_else(|| panic!("{name} never sources smoke/common.sh"));
+                assert!(
+                    first_nest.is_none_or(|nest| sourced < nest),
+                    "{name} starts a nest before it sources smoke/common.sh (the lock)"
+                );
+            }
+        }
     }
+    assert!(
+        phase_starts >= 1,
+        "the phase files start no dev session at all"
+    );
+
+    // The probe is one file: it starts its nests and takes the lock itself.
+    let script = "wallpaper-backdrop-probe.sh";
+    let statements = statements(script);
+    let starts = check_nest_statements(script, &statements);
+    assert!(starts >= 1, "{script} starts no nest at all");
+    assert!(
+        installs_cleanup(&statements),
+        "{script} must install its traps with nest_signals cleanup"
+    );
+    let first_lock = first_call(&statements, "nest_lock_acquire")
+        .unwrap_or_else(|| panic!("{script} never takes the nest lock"));
+    let first_nest =
+        first_call(&statements, "nest").unwrap_or_else(|| panic!("{script} never calls nest"));
+    assert!(
+        first_lock < first_nest,
+        "{script} starts a nest before it takes the lock"
+    );
 }
 
 #[test]
@@ -838,5 +940,153 @@ fn only_the_outer_drivers_take_the_lock() {
     assert!(
         !takes("smoke-media.sh"),
         "a client run inside a nest takes no lock"
+    );
+}
+
+const PHASES: [&str; 14] = [
+    "notify",
+    "launcher",
+    "bar",
+    "wallpaper",
+    "energy",
+    "glance",
+    "clipboard",
+    "connectivity",
+    "osd",
+    "phone",
+    "media",
+    "overview",
+    "polkit",
+    "cutover",
+];
+
+/// `sh scripts/smoke.sh ARGS` with the lock held by someone else and no wait:
+/// a smoke that took the lock would end with 69. Runs while `holder` holds it.
+fn smoke_while_locked(scratch: &Scratch, args: &[&str]) -> std::process::Output {
+    let mut command = scratch.sh(&scripts().join("smoke.sh"));
+    command
+        .args(args)
+        .env("CELESTINA_NEST_LOCK_WAIT", "0")
+        .output()
+        .expect("sh runs")
+}
+
+#[test]
+fn the_smoke_lists_its_phases() {
+    let scratch = Scratch::new("list");
+    let mut holder = start_holder(&scratch, "driver-a");
+    let output = smoke_while_locked(&scratch, &["--list"]);
+    fs::write(scratch.path("stop"), "").expect("stop file");
+    wait_for_exit(&mut holder, 10, "the holder");
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let listed: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(listed, PHASES, "{output:?}");
+}
+
+#[test]
+fn the_smoke_refuses_an_unknown_phase() {
+    let scratch = Scratch::new("unknown");
+    let mut holder = start_holder(&scratch, "driver-a");
+    let output = smoke_while_locked(
+        &scratch,
+        &["--binary", "/nonexistent/celestina", "--only", "nope"],
+    );
+    fs::write(scratch.path("stop"), "").expect("stop file");
+    wait_for_exit(&mut holder, 10, "the holder");
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    let message = String::from_utf8_lossy(&output.stderr);
+    assert!(message.contains("nope"), "names the phase: {message}");
+    assert!(
+        !message.contains("driver-a"),
+        "it asked for the lock: {message}"
+    );
+}
+
+#[test]
+fn the_smoke_refuses_an_empty_or_repeated_selection() {
+    let scratch = Scratch::new("selection");
+    let mut holder = start_holder(&scratch, "driver-a");
+    for (selection, named) in [("", "--only"), ("bar,bar", "bar")] {
+        let output = smoke_while_locked(
+            &scratch,
+            &["--binary", "/nonexistent/celestina", "--only", selection],
+        );
+        assert_eq!(output.status.code(), Some(2), "{selection:?}: {output:?}");
+        let message = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            message.contains(named),
+            "{selection:?} is refused without naming {named}: {message}"
+        );
+        assert!(
+            !message.contains("driver-a"),
+            "it asked for the lock: {message}"
+        );
+    }
+    fs::write(scratch.path("stop"), "").expect("stop file");
+    wait_for_exit(&mut holder, 10, "the holder");
+}
+
+#[test]
+fn every_listed_phase_has_its_file() {
+    let scratch = Scratch::new("files");
+    let output = scratch
+        .sh(&scripts().join("smoke.sh"))
+        .arg("--list")
+        .output()
+        .expect("sh runs");
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let listed: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert!(!listed.is_empty(), "--list printed nothing: {output:?}");
+    let mut expected: Vec<String> = listed
+        .iter()
+        .map(|id| {
+            let file = format!("{id}.sh");
+            let path = scripts().join("smoke").join(&file);
+            let text =
+                fs::read_to_string(&path).unwrap_or_else(|_| panic!("no scripts/smoke/{file}"));
+            // The file names its own id; it is what the refusal and the
+            // driver's retry hook read.
+            assert!(
+                text.lines().any(|line| line == format!("SMOKE_PHASE={id}")),
+                "scripts/smoke/{file} does not say SMOKE_PHASE={id}"
+            );
+            file
+        })
+        .collect();
+    expected.push("common.sh".to_owned());
+    expected.sort();
+    let dir = scripts().join("smoke");
+    let mut present: Vec<String> = fs::read_dir(&dir)
+        .unwrap_or_else(|err| panic!("{}: {err}", dir.display()))
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    present.sort();
+    assert_eq!(present, expected, "scripts/smoke/ holds other files");
+}
+
+#[test]
+fn a_phase_refuses_to_run_outside_the_driver() {
+    let scratch = Scratch::new("phase");
+    let output = scratch
+        .sh(&scripts().join("smoke/bar.sh"))
+        .env_remove("SMOKE_PHASE_WORK")
+        .output()
+        .expect("sh runs");
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("run it through smoke.sh --only bar"),
+        "{output:?}"
     );
 }

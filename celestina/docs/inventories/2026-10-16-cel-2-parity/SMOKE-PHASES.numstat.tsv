@@ -1,0 +1,57 @@
+# SMOKE-PHASES exact change inventory
+
+Base revision	2ed007e9bee6f9951d5620abbf650d88d705c05b
+Pathspec	celestina/AGENTS.md
+Pathspec	celestina/README.md
+Pathspec	celestina/docs/evidence/2026-11-25-smoke-phases.md
+Pathspec	celestina/docs/inventories/2026-10-16-cel-2-parity/SMOKE-PHASES.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/scripts/nest-run.sh
+Pathspec	celestina/scripts/smoke.sh
+Pathspec	celestina/scripts/smoke/bar.sh
+Pathspec	celestina/scripts/smoke/clipboard.sh
+Pathspec	celestina/scripts/smoke/common.sh
+Pathspec	celestina/scripts/smoke/connectivity.sh
+Pathspec	celestina/scripts/smoke/cutover.sh
+Pathspec	celestina/scripts/smoke/energy.sh
+Pathspec	celestina/scripts/smoke/glance.sh
+Pathspec	celestina/scripts/smoke/launcher.sh
+Pathspec	celestina/scripts/smoke/media.sh
+Pathspec	celestina/scripts/smoke/notify.sh
+Pathspec	celestina/scripts/smoke/osd.sh
+Pathspec	celestina/scripts/smoke/overview.sh
+Pathspec	celestina/scripts/smoke/phone.sh
+Pathspec	celestina/scripts/smoke/polkit.sh
+Pathspec	celestina/scripts/smoke/wallpaper.sh
+Pathspec	celestina/tests/duty_files.rs
+Pathspec	celestina/tests/lock_scripts.rs
+Pathspec	celestina/tests/nest_run.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+8	1	fcb5b9eb1bb0f4bf5d178a9ba0f5c55232ceec7a8c26d57074bd33c4b7f890ea	celestina/AGENTS.md
+6	2	167283634cbf7f6603a7892ce54d64893d226e4fa78d753740f85866db7bc424	celestina/README.md
+457	0	3302a385b8d5731f08a5252b367ee96a272027493a609ed40cef73b66c88cada	celestina/docs/evidence/2026-11-25-smoke-phases.md
+57	0	self	celestina/docs/inventories/2026-10-16-cel-2-parity/SMOKE-PHASES.numstat.tsv
+1	0	eaace720b41669fcb3e6e6e67550287fb632ade3d9f75e080a766fbeb7760a53	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+13	10	863d36d8dc72b24a61d90ac447badf4a8954c8d024fc996e414e7a56c6426eb5	celestina/scripts/nest-run.sh
+150	2041	acea604d87f64b1fddaa3a69f68d0b680cba498c3af2022a887c73c51face45c	celestina/scripts/smoke.sh
+53	0	f65728d93b515149129b8286620b4dfaa325a10678268c0a89ff8c5b7a011b43	celestina/scripts/smoke/bar.sh
+251	0	36666b9804e216292b0890afb950fdf9b50176fce857ae0b741f80a6df49da91	celestina/scripts/smoke/clipboard.sh
+253	0	fdb6cefbeee05b239ef3c1524d1eec343ac1665fe159baf0b59bf7eafbffcd91	celestina/scripts/smoke/common.sh
+139	0	e9f165511ac66761dca09a1dfda29ca0b00ecc2a394a65a56fc198421ae4a292	celestina/scripts/smoke/connectivity.sh
+341	0	06b9b77652275802eb0d647ab18d887b47ac7703e383454f850a2160ae9eee6d	celestina/scripts/smoke/cutover.sh
+83	0	9ba05eeff0f92541445e642e833b307ab574baa0486e735d253a385fc0511e77	celestina/scripts/smoke/energy.sh
+106	0	d3136f8e71f70b7b0cda1a7b86d62c2b01149077bf690da84d811f8f5b19c8c2	celestina/scripts/smoke/glance.sh
+65	0	fb9d8939623d9aa799aa9f21086c618b9f5fa0ed0e4c493be4558a0933792f83	celestina/scripts/smoke/launcher.sh
+116	0	c5c5e2ede66bee2a497f82133de6e05cae52d37ac5cc351b95512f55a411d7c4	celestina/scripts/smoke/media.sh
+76	0	5f539b7a4b707fff4da16d9bde5f99e09626d82cc9977d8e247d1df60a56d4a5	celestina/scripts/smoke/notify.sh
+151	0	9e2eaa668658c35c2ada9ad22421fb19df13dc5bdce41cef481416522f8ee6bc	celestina/scripts/smoke/osd.sh
+217	0	c830a34914f34b8deee7a6df168b50858c4df7cfa71e02228bd8c85a3dfb2b99	celestina/scripts/smoke/overview.sh
+191	0	f775d3aa2c25eea302d8da6a77fbb589d36f2fc95b5dc2e37e143e90bb053fbf	celestina/scripts/smoke/phone.sh
+52	0	d64d3ffacc10bc8844df1b8f7daa0f10a3769f0bbe2a579302c6ee252fb2a3d8	celestina/scripts/smoke/polkit.sh
+92	0	603723f49fdc2133b7210d7899ccb7d0af0ce92fd6b23e0d04399ba7267f7a72	celestina/scripts/smoke/wallpaper.sh
+57	7	7ef29b95d4fafa004dc4c620ced1ef612c703d875fdd3a0d3bb0556eda6190d2	celestina/tests/duty_files.rs
+35	5	67919ae8018b4ee131118d0aa051c21e56c486ceca99aca0fceec1ddf0f94bc9	celestina/tests/lock_scripts.rs
+304	54	667356908b7cf39f9d114a597dc407bc2bae9bc618fad5e2752f4aaa5ac148c8	celestina/tests/nest_run.rs
