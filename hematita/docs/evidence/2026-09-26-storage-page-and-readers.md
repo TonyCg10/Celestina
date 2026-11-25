@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `HEM-H1-B` (program unit P-18) of
-  [the hardening plan](../plans/active/2026-09-26-hardening.md); closes
+  [the hardening plan](../plans/archive/2026-09-26-hardening.md); closes
   HEM-1, HEM-2, HEM-5, HEM-6, HEM-7, HEM-11, HEM-12, HEM-13 and HEM-14 of
   [the Hematita and Grafita audit](../../../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md)
   and the Hematita half of RS-4 of

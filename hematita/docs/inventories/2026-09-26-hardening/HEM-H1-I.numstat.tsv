@@ -1,0 +1,27 @@
+# HEM-H1-I exact change inventory
+
+Base revision	fbfb9dfeb47d85b348f25ec12435be200534bdd3
+Pathspec	hematita/ROADMAP.md
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-09-26-mount-and-delete-safety.md
+Pathspec	hematita/docs/evidence/2026-09-26-storage-page-and-readers.md
+Pathspec	hematita/docs/evidence/2026-11-25-hardening-archive.md
+Pathspec	hematita/docs/history/status-through-2026-11-25.md
+Pathspec	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-I.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	hematita/docs/plans/active/README.md
+Pathspec	hematita/docs/plans/archive/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+9	6	f617474ac78a38681f15360c676959d34f8920552eb4365588f087b2f0d8c064	hematita/ROADMAP.md
+3	4	473a12680c4af0a55dee8891ef55014b95351d9728680d5a1f60e1018e16fcef	hematita/STATUS.md
+1	1	71b22532c4ba4e93dd561459ef8b9efb93d02918828f98cb79daf9a755cf8ce8	hematita/docs/evidence/2026-09-26-mount-and-delete-safety.md
+1	1	24a0c577bb64f8e4847f9bd2c42cfaf0c89c7dbf2000e3d618815cee0ea702cc	hematita/docs/evidence/2026-09-26-storage-page-and-readers.md
+29	0	5c9b6d1a9bb5969e3f5942536a432a6139e83931192d611ba96ae479973ebd29	hematita/docs/evidence/2026-11-25-hardening-archive.md
+1	1	815d835cfdd46e9a66fb16beb0fca51d3c0f81a44faa9735cd894ba92ef8bc6b	hematita/docs/history/status-through-2026-11-25.md
+27	0	self	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-I.numstat.tsv
+0	71	deleted	hematita/docs/plans/active/2026-09-26-hardening.md
+3	5	b6ad1f78bff10b9ab53cdb51bf42c7336bc0cbd4ae374f1d8003d190e8603f1f	hematita/docs/plans/active/README.md
+76	0	8d14323c6de75cb7b997ce3043eb13f121c3d7f395c71cc6aeaf6104eebae5d4	hematita/docs/plans/archive/2026-09-26-hardening.md

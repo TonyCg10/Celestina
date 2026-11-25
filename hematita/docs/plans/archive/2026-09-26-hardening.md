@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-09-26
 - **Plan ID:** hardening
-- **Status:** active
+- **Closed:** 2026-11-25
+- **Successor:** none; the author named no next Hematita checkpoint
+- **Status:** done
 - **Authorization:** after the 2026-09-26 monorepo audit the author asked
   for its whole program to be done; the findings and rulings are in
   [the audit evidence](../../../../docs/evidence/2026-09-26-monorepo-audit.md)
@@ -33,6 +35,7 @@ tests pass as root and as a user.
   duplicate readers in `hematita-core`, with root-safe tests.
 - `HEM-H1-B` (P-18) — bounded, coalesced storage publication and honest
   services, sampler and documents in the app.
+- `HEM-H1-I` — moves this plan to the archive and marks the roadmap idle.
 
 ## Exclusions
 
@@ -45,6 +48,7 @@ tests pass as root and as a user.
 1. `HEM-H1-A` on its own branch; it lands after the pipeline units of the
    suite plan (P-2).
 2. `HEM-H1-B`, stacked on `HEM-H1-A`, after `RS-H1-A` (P-6) landed.
+3. `HEM-H1-I`, once every other row is done.
 
 ## Implementation exit
 
@@ -67,5 +71,6 @@ program id and the audit findings it closes.
 | HEM-H1-F | `hematita:` | done | [inventory](../../inventories/2026-09-26-hardening/HEM-H1-F.numstat.tsv) | 6 files, +348/-70 | Fix the duplicate window of two simultaneous launches by claiming the activation name before any window exists: `RequestName` with `DoNotQueue` on a connection that already serves `Activate` and `Open`; on `NameTaken` ask the owner to raise itself with a three-second timeout and exit 0; on a bus error say so and carry on. Requests that arrive before QML attaches wait in a bounded inbox and are replayed onto the Qt thread. Until now the launch probed `Activate` first and claimed the name only after the QML loaded, so two launches within that window (a double-pressed key binding) both found nobody and both opened, the loser's claim failing silently. Author report of 2026-10-08; no audit finding (HEM-16, the shared helper, stays unscheduled). | [evidence](../../evidence/2026-10-08-claim-first-activation.md) | None |
 | HEM-H1-G | `hematita:` | done | [inventory](../../inventories/2026-09-26-hardening/HEM-H1-G.numstat.tsv) | 5 files, +75/-2 | Read the race's exit codes from their own line and keep bus-activated services out of the private bus, so a service's shutdown message no longer fails the smoke | [evidence](../../evidence/2026-10-15-smoke-race-log.md) | None |
 | HEM-H1-H | `hematita:` | done | [inventory](../../inventories/2026-09-26-hardening/HEM-H1-H.numstat.tsv) | 5 files, +600/-511 | Move the delivered checkpoints and the per-unit records out of the status into its history | [evidence](../../evidence/2026-11-25-status-trim.md) | None |
+| HEM-H1-I | `hematita:` | done | [inventory](../../inventories/2026-09-26-hardening/HEM-H1-I.numstat.tsv) | 10 files, +150/-89 | Archive the hardening plan and mark the roadmap idle | [evidence](../../evidence/2026-11-25-hardening-archive.md) | None |
 
 This plan records intent; it grants no authority.

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `HEM-H1-A` (program unit P-9) of
-  [the hardening plan](../plans/active/2026-09-26-hardening.md); closes
+  [the hardening plan](../plans/archive/2026-09-26-hardening.md); closes
   HEM-3, HEM-4, HEM-8, HEM-9, HEM-10 and HEM-15 of
   [the Hematita and Grafita audit](../../../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md).
   Code: `celestina-rs/crates/hematita-core/src/usage/` (`identity.rs` new,

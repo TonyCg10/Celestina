@@ -1,11 +1,11 @@
 # Hematita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** HEM-H1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-S3` in [VALIDATION.md](VALIDATION.md)
   (does not block)
 
-## HEM-H1 — Hardening after the monorepo audit
+## HEM-H1 — Hardening after the monorepo audit (closed 2026-11-25)
 
 The falsifiable problem found by the audit: the storage analyser matches mount
 boundaries by lexical path against a root that was never canonicalised, so a
@@ -19,10 +19,13 @@ readers, and the app's `src/` for publication, services and the sampler. The
 tangible outcome is a delete that cannot leave its mount, a bounded scan and
 publication, a real timeout, and core tests that pass as root.
 
-The plan is
-[Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
+Every row landed, the last delivery at `1.3.2` (`HEM-H1-E`); the checkpoint
+closed on 2026-11-25 and the next one is not opened. The plan is
+[Hardening after the monorepo audit](docs/plans/archive/2026-09-26-hardening.md):
 `HEM-H1-A` (mount identity and bounded core readers) and `HEM-H1-B` (bounded
-publication and honest services). The findings are in
+publication and honest services), followed by `HEM-H1-C` to `HEM-H1-I`, the
+corrections and smoke fixes the landings found, the status trim and this
+archive. The findings are in
 [the Hematita and Grafita audit record](../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md).
 
 ## Hypothesis and tangible outcome

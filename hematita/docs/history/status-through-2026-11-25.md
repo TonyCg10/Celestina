@@ -7,7 +7,7 @@ that were true when written (versions, "not landed") and are not any more.
 ## From the status header
 
 - **Active checkpoint:** `HEM-H1`, the hardening that follows the 2026-09-26
-  monorepo audit ([plan](../../docs/plans/active/2026-09-26-hardening.md)):
+  monorepo audit ([plan](../../docs/plans/archive/2026-09-26-hardening.md)):
   `HEM-H1-A` active — the storage walk, the permanent deletion and the
   trash admission tell a mount by its mount id (a bind mount reached
   through a link included), the walk resolves its root on the scan thread

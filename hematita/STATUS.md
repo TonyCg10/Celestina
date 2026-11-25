@@ -1,10 +1,9 @@
 # Hematita status
 
 - **Updated:** 2026-11-25
-- **Active checkpoint:** `HEM-H1`, the hardening that follows the 2026-09-26
-  monorepo audit: every row of its
-  [plan](docs/plans/active/2026-09-26-hardening.md), `HEM-H1-A` to `HEM-H1-G`,
-  is done; the plan is not yet archived
+- **Active checkpoint:** none. `HEM-H1`, the hardening that follows the
+  2026-09-26 monorepo audit, closed on 2026-11-25 with every row done; its
+  [plan](docs/plans/archive/2026-09-26-hardening.md) is archived
 - **Author validation pending:** `VAL-S1`, `VAL-S2` and `VAL-S3` (storage),
   in [VALIDATION.md](VALIDATION.md)
 - **Follow-ups recorded by `HEM-H1-B`, not scheduled:** a deadline for
