@@ -1,0 +1,25 @@
+# CUP-WPCTL-STATUS exact change inventory
+
+Base revision	b77fb722654d94325b4608fbed5ba39285d153e1
+Pathspec	celestina-rs/crates/cuprita-core/src/lib.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/wpctl.rs
+Pathspec	celestina-rs/crates/cuprita-core/src/wpctl_status.rs
+Pathspec	cuprita/ROADMAP.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/docs/evidence/2026-11-25-wpctl-status.md
+Pathspec	cuprita/docs/inventories/2026-11-25-wpctl-status/CUP-WPCTL-STATUS.numstat.tsv
+Pathspec	cuprita/docs/plans/active/2026-11-25-wpctl-status.md
+Pathspec	cuprita/docs/plans/active/README.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	1	f18656134f3f6312c236b069fdc0da6e4cc5a7ab89018d0dfc07000669fc791a	celestina-rs/crates/cuprita-core/src/lib.rs
+4	233	df97c3562c20b70bc862712bd77803aaa72a968e2e283fc71108c3f4764bafad	celestina-rs/crates/cuprita-core/src/wpctl.rs
+283	0	cf6de2f4e459b325706aa94384be3c0526b5fb9496c93569813e0489fdacbc5d	celestina-rs/crates/cuprita-core/src/wpctl_status.rs
+8	2	d09e97739f1a9353e7c2090cfe26b27f820c2207df78842f4e8ffb229dabb7d2	cuprita/ROADMAP.md
+2	0	6b1c667c189f641293630138dd9cfd3236234ac9fc80408f86125c6845b13fcd	cuprita/STATUS.md
+67	0	e667fc3a6d7a2abaf1c1000245b3fc15514280ca3a75d496a7d93c7b61f1c1a3	cuprita/docs/evidence/2026-11-25-wpctl-status.md
+25	0	self	cuprita/docs/inventories/2026-11-25-wpctl-status/CUP-WPCTL-STATUS.numstat.tsv
+61	0	7e53eb65d50045e52389be90937d78c4be7b307a52211bd9ed7e87d4910494ce	cuprita/docs/plans/active/2026-11-25-wpctl-status.md
+2	2	d997710df2d25f79de519d464af00063803c0094e17bec08ec86f2e8f7552e66	cuprita/docs/plans/active/README.md

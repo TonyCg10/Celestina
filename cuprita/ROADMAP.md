@@ -1,7 +1,7 @@
 # Cuprita implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** CUP-2
 - **Related author validation:** `VAL-C`, `VAL-D` and `VAL-E` in
   [VALIDATION.md](VALIDATION.md) (do not block)
 
@@ -44,6 +44,12 @@ CUP-1-A to CUP-1-I are done and 1.0.0 is published; CUP-1 closed on
 | CUP-1-E | done | CUP-1-B | PipeWire client and the Audio page | `scripts/verify-production.sh` |
 | CUP-1-F | done | CUP-1-C, CUP-1-D, CUP-1-E | keyboard and accessibility pass, glass and motion check; its landing published 1.0.0 | `scripts/qml-tests.sh` (`tst_keyboard.qml`), [exit](docs/evidence/2026-10-08-exit.md) |
 | CUP-1-G | done | CUP-1-F | the final review's fixes: NetworkManager call timeout, Spanish notices for D-Bus and `wpctl` errors, no audio poll while `pw-mon` runs, passphrase length, WEP label | `cargo test -p cuprita-core`, `scripts/qml-tests.sh`, [final review](docs/evidence/2026-10-08-final-review.md) |
+
+## CUP-2 (active)
+
+CUP-2 moves the pure `wpctl status` parser into `cuprita_core::wpctl_status`,
+outside the `wpctl` feature, so the shell can reuse it. No behaviour change.
+Plan: [wpctl-status](docs/plans/active/2026-11-25-wpctl-status.md).
 
 ## Implementation exit
 

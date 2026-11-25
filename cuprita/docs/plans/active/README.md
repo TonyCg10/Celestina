@@ -1,7 +1,7 @@
 # Active Cuprita plans
 
-No plan is active. CUP-1 closed on 2026-11-25 and moved to
-[`../archive/`](../archive/).
+- [CUP-2 — Ungate the pure wpctl status parser](2026-11-25-wpctl-status.md)
+  (`wpctl-status`): one open row, `CUP-WPCTL-STATUS`.
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

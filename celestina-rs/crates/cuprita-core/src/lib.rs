@@ -4,7 +4,8 @@
 //! and no D-Bus in the traits: the NetworkManager client (`nm`, feature `nm`)
 //! and the BlueZ client (`bluez`, feature `bluez`) are the modules that speak
 //! to the bus, over the mechanics they share in `bus`; the audio client
-//! (`wpctl`, feature `wpctl`) drives WirePlumber's command line. The adapter
+//! (`wpctl`, feature `wpctl`) drives WirePlumber's command line; its pure
+//! status parser (`wpctl_status`) needs no feature. The adapter
 //! lives in `cuprita/src`.
 
 pub mod agent;
@@ -24,3 +25,4 @@ pub mod order;
 pub mod volume;
 #[cfg(feature = "wpctl")]
 pub mod wpctl;
+pub mod wpctl_status;
