@@ -38,7 +38,7 @@ now_rules = ["docs/standards/language.md"]
 "docs/governance/documentation.md" = "when creating, moving or closing a plan, an evidence record or an inventory"
 "docs/standards/architecture.md" = "when adding a module, a crate, a dependency or a call across projects"
 "docs/standards/rust-cpp-qt-qml.md" = "when writing Rust, C++, Qt or QML code"
-"docs/standards/verification.md" = "before claiming that a change works"
+"docs/standards/verification.md" = "before claiming that a change works, and when sizing a unit or a review"
 "docs/contracts/versioning.md" = "before a landing of kind bug, milestone or release"
 "docs/contracts/landing.md" = "before opening a session worktree or asking for a landing"
 

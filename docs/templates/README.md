@@ -10,6 +10,7 @@ These templates preserve structure and responsibility boundaries:
 - [decision.md](decision.md)
 - [discussion.md](discussion.md)
 - [evidence.md](evidence.md)
+- [evidence-light.md](evidence-light.md)
 
 Use one only when its canonical document does not already exist. Adapt content
 without duplicating rules owned elsewhere.

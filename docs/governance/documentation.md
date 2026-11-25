@@ -117,7 +117,9 @@ Indexes list each record once and the guard checks lifecycle consistency.
 Evidence records exact date, scope, environment, artifact, command/procedure,
 exit/result, observed facts, limitations, skipped checks, and follow-up.
 Simulation and offscreen results are labelled. Do not infer appearance,
-interaction, hardware, or accessibility from compilation.
+interaction, hardware, or accessibility from compilation. A light unit uses
+the short template; see
+[the verification standard](../standards/verification.md#light-units).
 
 ## Project creation
 

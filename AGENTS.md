@@ -237,6 +237,9 @@ Neither alone proves Wayland, compositor, portals, hardware, interaction,
 appearance, or AT-SPI. Record exactly what ran and what remains in
 `VALIDATION.md`.
 
+Size the unit first (light units, review cap):
+[verification.md](docs/standards/verification.md).
+
 ## Git and commits
 
 Celestina is one repository. Do not commit or push without a request. When the

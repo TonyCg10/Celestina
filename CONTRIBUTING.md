@@ -65,7 +65,9 @@ Every active plan has a change ledger. Before editing, its active unit declares:
 - related author validation, if any.
 
 Update the ledger when scope or status changes. Line numbers may supplement but
-never replace stable locations. The ledger is the cross-session hand-off.
+never replace stable locations. The ledger is the cross-session hand-off. A
+light unit needs the ledger row and no other plan document; see
+[the verification standard](docs/standards/verification.md#light-units).
 
 An `active` or `blocked` roadmap names exactly one `Active implementation
 checkpoint` and has one active plan with the same owner and checkpoint. For

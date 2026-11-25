@@ -1,0 +1,29 @@
+# DEV-1-C exact change inventory
+
+Base revision	00d0861c091c3c7b1ededb4a98e56246f1a90ee7
+Pathspec	AGENTS.md
+Pathspec	CONTRIBUTING.md
+Pathspec	docs/evidence/2026-11-25-dev-speed-light-units.md
+Pathspec	docs/governance/documentation.md
+Pathspec	docs/inventories/2026-11-24-dev-speed/DEV-1-C.numstat.tsv
+Pathspec	docs/plans/active/2026-11-24-dev-speed.md
+Pathspec	docs/projects.toml
+Pathspec	docs/standards/verification.md
+Pathspec	docs/superpowers/plans/2026-11-24-suite-dev-speed-plan-3.md
+Pathspec	docs/templates/README.md
+Pathspec	docs/templates/evidence-light.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	0	bf3c6029e63d60aac66375bd1a720785376e9a0176a181781d5c30652f13c4f1	AGENTS.md
+3	1	30d0ce9d6f6bb6b9fb9f6808a07b38dc9bb2c6a82e18b515eed952c3be3db5f0	CONTRIBUTING.md
+39	0	ea0965d5e37d7924e7f62b69834bb47f40d276330e30979f081154e764a39549	docs/evidence/2026-11-25-dev-speed-light-units.md
+3	1	af44b77a00a775220f467c37d490a3ce7522c8efbcb8091cd141687b39006dc3	docs/governance/documentation.md
+29	0	self	docs/inventories/2026-11-24-dev-speed/DEV-1-C.numstat.tsv
+1	1	f0153cd2c111e6ab99c0695bced45bb9a475b7dd6686529e49fd003704904ee5	docs/plans/active/2026-11-24-dev-speed.md
+1	1	85795a529ea54d6890ad07940aa2b1573cba30bab7296043275bef358fa5e585	docs/projects.toml
+75	0	ce29d6d17a846a854e82f91dee0424dc6d27c210781ec9b42895c0a23668da4c	docs/standards/verification.md
+195	0	a7cebe0c4afc10f857a5b895a998137a8971c7c0c9bd8c6f8b9e63f4e9e3b232	docs/superpowers/plans/2026-11-24-suite-dev-speed-plan-3.md
+1	0	73564a39a1ca664872af75428f003b3138866e80631ef79f0d0a853ef0e0c897	docs/templates/README.md
+28	0	517f52429425311c63f8be317fdddd611f1f77741ad039318e46f7e253a65950	docs/templates/evidence-light.md
