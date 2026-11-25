@@ -48,7 +48,9 @@ mkdir -p "$repo/docs"
     printf 'commit_roots = ["app/"]\n'
     printf 'include_workspace_manifests = false\n'
 } > "$repo/docs/projects.toml"
-git -C "$repo" add docs/projects.toml
+# The real repository ignores target/ in its root .gitignore.
+printf '**/target/\n' > "$repo/.gitignore"
+git -C "$repo" add docs/projects.toml .gitignore
 git -C "$repo" commit -qm "fixture: establish the registry"
 git -C "$repo" remote add origin "$origin"
 git -C "$repo" push -q origin main
@@ -88,6 +90,11 @@ grep -Fx "canonical = \"$repo\"" "$unit_dir/.celestina-worktree" >/dev/null \
     || fail "open app APP-1: marker lacks the canonical checkout"
 grep -Fx "target-dir = \"$worktrees/.cargo-target\"" "$unit_dir/.cargo/config.toml" \
     >/dev/null || fail "open app APP-1: Cargo config lacks the shared target directory"
+for line in '[profile.dev]' 'debug = "line-tables-only"' '[profile.dev.package."*"]' \
+    'debug = false'; do
+    grep -Fx -- "$line" "$unit_dir/.cargo/config.toml" >/dev/null \
+        || fail "open app APP-1: Cargo config lacks the line $line"
+done
 [ "$(git -C "$unit_dir" rev-parse HEAD)" = "$(git -C "$repo" rev-parse origin/main)" ] \
     || fail "open app APP-1: HEAD is not origin/main"
 printf 'ok %s\n' "open creates the unit branch, worktree, marker and Cargo config"
@@ -123,25 +130,82 @@ if git -C "$repo" show-ref --verify --quiet refs/heads/unit/app/APP-1; then
 fi
 printf 'ok %s\n' "close refuses unpublished work and removes a published unit"
 
-# 4b. Closing the last session removes the shared session Cargo target, and
-#     the landing worktree does not count as a session.
+# 4b. Closing a session removes its own target/ directory and trims the shared
+#     session Cargo target instead of deleting it; the landing worktree does
+#     not count as a session. A worktree opened before the dev profile, with the
+#     old two-line Cargo config, still closes.
 mkdir -p "$worktrees/.cargo-target/debug" "$worktrees/.landing"
 printf 'cache\n' > "$worktrees/.cargo-target/debug/cache.rlib"
 run_entry open app APP-7
 expect_status 0 "open app APP-7"
 run_entry open app APP-8
 expect_status 0 "open app APP-8"
+mkdir -p "$worktrees/app-APP-7/target/private"
+printf 'x\n' > "$worktrees/app-APP-7/target/private/x"
 run_entry close app APP-7
 expect_status 0 "close app APP-7 while APP-8 is open"
+[ ! -e "$worktrees/app-APP-7" ] || fail "close app APP-7: the worktree still exists"
 [ -f "$worktrees/.cargo-target/debug/cache.rlib" ] \
     || fail "close app APP-7: removed the Cargo target another session uses"
+printf '[build]\ntarget-dir = "%s"\n' "$worktrees/.cargo-target" \
+    > "$worktrees/app-APP-8/.cargo/config.toml"
 run_entry close app APP-8
-expect_status 0 "close app APP-8, the last session"
-[ ! -e "$worktrees/.cargo-target" ] \
-    || fail "close app APP-8: the last session left the shared Cargo target"
+expect_status 0 "close app APP-8 with the old Cargo config"
+[ ! -e "$worktrees/app-APP-8" ] || fail "close app APP-8: the worktree still exists"
+[ -f "$worktrees/.cargo-target/debug/cache.rlib" ] \
+    || fail "close app APP-8: the last session deleted the shared Cargo target"
 [ -d "$worktrees/.landing" ] || fail "close app APP-8: removed the landing worktree"
 rmdir -- "$worktrees/.landing"
-printf 'ok %s\n' "closing the last session removes the shared Cargo target"
+printf 'ok %s\n' "close removes target/, trims the shared target and accepts the old config"
+
+# 4c. A shared target over its cap is trimmed in place, and a trim that fails
+#     only warns. A python3 double ahead in PATH lowers the cap to zero or
+#     fails the trim; every other call reaches the real interpreter.
+real_python=$(command -v python3)
+mkdir -p "$temporary/bin"
+cat > "$temporary/bin/python3" <<EOF
+#!/bin/sh
+case " \$* " in
+    *" trim-session-target "*)
+        case \${TRIM_DOUBLE:-} in
+            fail) exit 3 ;;
+            zero) exec "$real_python" "\$@" --cap-gib 0 ;;
+        esac
+        ;;
+esac
+exec "$real_python" "\$@"
+EOF
+chmod +x "$temporary/bin/python3"
+saved_path=$PATH
+PATH=$temporary/bin:$PATH
+export PATH
+run_entry open app APP-T1
+expect_status 0 "open app APP-T1"
+run_entry open app APP-T2
+expect_status 0 "open app APP-T2"
+TRIM_DOUBLE=zero
+export TRIM_DOUBLE
+run_entry close app APP-T1
+expect_status 0 "close app APP-T1 with the shared target over its cap"
+grep -F 'build-trees: freed' "$stdout_file" >/dev/null \
+    || fail "close app APP-T1: stdout lacks the trim's report: $(cat "$stdout_file")"
+[ ! -e "$worktrees/.cargo-target/debug/cache.rlib" ] \
+    || fail "close app APP-T1: the trim left the artifact over the cap"
+[ -d "$worktrees/.cargo-target" ] \
+    || fail "close app APP-T1: the trim deleted the shared Cargo target"
+TRIM_DOUBLE=fail
+run_entry close app APP-T2
+expect_status 0 "close app APP-T2 with a failing trim"
+expect_stderr 'worktree: warning: the session Cargo target was not trimmed' \
+    "close app APP-T2 with a failing trim"
+[ ! -e "$worktrees/app-APP-T2" ] || fail "close app APP-T2: the worktree still exists"
+if git -C "$repo" show-ref --verify --quiet refs/heads/unit/app/APP-T2; then
+    fail "close app APP-T2: the branch still exists"
+fi
+unset TRIM_DOUBLE
+PATH=$saved_path
+export PATH
+printf 'ok %s\n' "close trims a shared target over its cap and only warns when the trim fails"
 
 # 5. The suite is a valid project id.
 run_entry open suite LND-9

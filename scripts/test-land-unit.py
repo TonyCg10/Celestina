@@ -65,6 +65,8 @@ maintenance_increment = "none"
 [[projects]]
 id = "app"
 commit_prefix = "app"
+# worktree.sh close finds the owner's inventory root through it.
+path = "app"
 version_source = { kind = "cargo-package", path = "app/Cargo.toml", package = "app" }
 version_mirrors = [{ kind = "cargo-lock", path = "app/Cargo.lock", package = "app" }]
 active_plans = "app/docs/plans/active"
@@ -84,6 +86,8 @@ verification_inputs = ["app/tests"]
 [[projects]]
 id = "lib"
 commit_prefix = "lib"
+# worktree.sh close finds the owner's inventory root through it.
+path = "lib"
 versioned = false
 active_plans = "lib/docs/plans/active"
 commit_roots = ["lib/"]
@@ -1538,6 +1542,14 @@ class LandingFunctions(unittest.TestCase):
         self.assertEqual(landing.LandState.load(state.dump()), state)
         with self.assertRaises(landing.LandingError):
             landing.LandState.load('step = "rebase"\n')
+        state.snapshot = "0123456789abcdef0123456789abcdef01234567"
+        self.assertEqual(landing.LandState.load(state.dump()), state)
+        # A state file written before the field existed still loads.
+        older = "".join(
+            line for line in state.dump().splitlines(keepends=True)
+            if not line.startswith("snapshot = ")
+        )
+        self.assertEqual(landing.LandState.load(older).snapshot, "")
 
     def test_land_state_round_trip_outside_the_bmp(self) -> None:
         state = landing.LandState(
@@ -1701,6 +1713,8 @@ COPIED_SCRIPTS = (
     "landing.py",
     "build_trees.py",
     "land-unit.py",
+    # The prune step closes the landed unit's session worktree through it.
+    "worktree.sh",
 )
 PYTHON_GUARDS = (
     "check-staged-units.py",
@@ -1969,6 +1983,15 @@ def repository_hook(name: str) -> str:
 set -eu
 # Fixture repository hook {name}: record the run and pass unless told to fail.
 printf '%s\\n' '{name}' >> "$LAND_FIXTURE_RECORDS/.hooks-ran"
+# LAND_FIXTURE_SESSION_COMMIT=<branch>: the session commits on <branch> while
+# the landing seals, after unbump took its snapshot; the commit keeps the tree,
+# so the session worktree stays clean.
+if [ '{name}' = pre-commit ] && [ -n "${{LAND_FIXTURE_SESSION_COMMIT:-}}" ]; then
+    branch=refs/heads/$LAND_FIXTURE_SESSION_COMMIT
+    late=$(git commit-tree "$branch^{{tree}}" -p "$branch" -m 'Late session work')
+    git update-ref "$branch" "$late"
+    printf '%s\\n' "$late" > "$LAND_FIXTURE_RECORDS/session-commit"
+fi
 if [ "${{LAND_FIXTURE_FAIL_HOOK:-}}" = '{name}' ]; then
     printf '%s\\n' 'fixture hook {name} failed' >&2
     exit 1
@@ -3481,6 +3504,10 @@ class LandUnitFixture(unittest.TestCase):
     def test_stacked_branch_lands_after_its_dependency(self) -> None:
         self.stack_units()
         before = self.land_dependency()
+        # The dependency's landing closed its session: its branch is gone, and
+        # the stacked branch keeps its commits.
+        self.assertEqual(self.git(self.repo, "branch", "--list", "unit/app/FX-A"), "")
+        self.assertFalse((self.worktrees / "app-FX-A").exists())
 
         result = self.land("unit/app/FX-B", "--kind", "maintenance")
 
@@ -3763,7 +3790,11 @@ class LandUnitFixture(unittest.TestCase):
         worktree = self.open_branch("FX-A")
         self.write_unit(worktree, "FX-A")
         before = self.origin_main()
+        tip = self.git(self.repo, "rev-parse", "unit/app/FX-A").strip()
         head = self.assert_landed(self.land("unit/app/FX-A", "--kind", "bug"), before)
+        # The landing closed the session; a branch kept elsewhere brings it back.
+        self.assertEqual(self.git(self.repo, "branch", "--list", "unit/app/FX-A"), "")
+        self.git(self.repo, "branch", "unit/app/FX-A", tip)
 
         result = self.land("unit/app/FX-A", "--kind", "bug")
 
@@ -3992,6 +4023,150 @@ class LandUnitFixture(unittest.TestCase):
             env=self.environment,
         )
         self.assertEqual(status.returncode, 0, msg=status.stdout + status.stderr)
+
+    def test_a_landing_closes_the_session_worktree(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertIn("land-unit: closed the session worktree of FX-A", result.stdout)
+        self.assertFalse(worktree.exists())
+        self.assertEqual(self.git(self.repo, "branch", "--list", "unit/app/FX-A"), "")
+        self.assertNotIn(str(worktree), self.git(self.repo, "worktree", "list"))
+
+    def test_a_refused_close_only_warns(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        self.write(worktree, "notes.txt", "Session notes.\n")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertIn(
+            "land-unit: warning: the session worktree stays: worktree: the worktree "
+            f"{worktree} has uncommitted changes",
+            result.stderr,
+        )
+        self.assertNotIn("closed the session worktree", result.stdout)
+        self.assertEqual((worktree / "notes.txt").read_text(encoding="utf-8"), "Session notes.\n")
+        self.assertNotEqual(self.git(self.repo, "branch", "--list", "unit/app/FX-A"), "")
+
+    def test_a_branch_that_moved_during_the_landing_is_not_closed(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        snapshot = self.git(self.repo, "rev-parse", "unit/app/FX-A").strip()
+        before = self.origin_main()
+
+        result = self.land(
+            "unit/app/FX-A", "--kind", "maintenance", LAND_FIXTURE_SESSION_COMMIT="unit/app/FX-A"
+        )
+
+        self.assert_landed(result, before)
+        late = self.records_of("session-commit")[0]
+        self.assertIn(
+            "land-unit: warning: the session worktree stays: unit/app/FX-A moved during the "
+            f"landing ({snapshot[:12]} -> {late[:12]})",
+            result.stderr,
+        )
+        self.assertNotIn("closed the session worktree", result.stdout)
+        self.assertTrue(worktree.is_dir())
+        self.assertEqual(self.git(self.repo, "rev-parse", "unit/app/FX-A").strip(), late)
+        self.assertEqual(self.git(self.repo, "rev-parse", f"{late}^").strip(), snapshot)
+
+    def close_session_with(
+        self, branch: str, snapshot: str | None = None, **environment: str
+    ) -> mock.MagicMock:
+        """Call close_session on a landed state for `branch`; return the mocked say.
+
+        The recorded snapshot defaults to the branch's current commit.
+        """
+        state = landing.LandState("prune", branch, "maintenance", "", "app", "FX-A", 0)
+        state.pushed = "yes"
+        if snapshot is None:
+            snapshot = self.git(
+                self.repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", check=False
+            ).strip()
+        state.snapshot = snapshot
+        ctx = LAND_UNIT.LandContext(self.repo, self.landing_dir, {}, state, None)
+        with mock.patch.dict(os.environ, environment), mock.patch.object(
+            LAND_UNIT, "say"
+        ) as said, mock.patch.object(LAND_UNIT, "print", create=True) as printed:
+            LAND_UNIT.close_session(ctx)
+        said.printed = printed
+        return said
+
+    def test_a_branch_outside_the_unit_namespace_is_not_closed(self) -> None:
+        marker = self.top / "closed"
+        stub = self.bin / "worktree-stub.sh"
+        self.write(self.top, "bin/worktree-stub.sh", f"#!/bin/sh\necho \"$@\" > '{marker}'\n", 0o755)
+        for branch in (
+            "feature/FX-A",
+            "unit/app",
+            "unit/app/FX-A/extra",
+            "unit//FX-A",
+            "unit/app/",
+            "units/app/FX-A",
+        ):
+            with self.subTest(branch=branch):
+                said = self.close_session_with(branch, LAND_UNIT_WORKTREE=str(stub))
+                self.assertFalse(marker.exists())
+                said.assert_not_called()
+        # The same stub runs for a unit branch, so its silence above is the parse.
+        self.git(self.repo, "branch", "unit/app/FX-A")
+        said = self.close_session_with("unit/app/FX-A", LAND_UNIT_WORKTREE=str(stub))
+        self.assertEqual(marker.read_text(encoding="utf-8"), "close app FX-A\n")
+        said.assert_not_called()
+        said.printed.assert_called_once_with("land-unit: closed the session worktree of FX-A")
+
+    def test_a_close_needs_the_recorded_branch_commit(self) -> None:
+        marker = self.top / "closed"
+        stub = self.bin / "worktree-stub.sh"
+        self.write(self.top, "bin/worktree-stub.sh", f"#!/bin/sh\necho \"$@\" > '{marker}'\n", 0o755)
+        # No branch: nothing to close, nothing to say.
+        said = self.close_session_with("unit/app/FX-A", "", LAND_UNIT_WORKTREE=str(stub))
+        said.assert_not_called()
+        self.assertFalse(marker.exists())
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        tip = self.git(self.repo, "rev-parse", "unit/app/FX-A").strip()
+        parent = self.git(self.repo, "rev-parse", "unit/app/FX-A^").strip()
+        cases = {
+            "": "the landing did not record the branch commit",
+            parent: f"unit/app/FX-A moved during the landing ({parent[:12]} -> {tip[:12]})",
+        }
+        for snapshot, detail in cases.items():
+            with self.subTest(snapshot=snapshot):
+                said = self.close_session_with(
+                    "unit/app/FX-A", snapshot, LAND_UNIT_WORKTREE=str(stub)
+                )
+                said.assert_called_once_with(f"warning: the session worktree stays: {detail}")
+                self.assertFalse(marker.exists())
+        self.assertTrue(worktree.is_dir())
+
+    def test_a_close_that_cannot_run_only_warns(self) -> None:
+        self.git(self.repo, "branch", "unit/app/FX-A")
+        hanging = self.bin / "worktree-hang.sh"
+        self.write(self.top, "bin/worktree-hang.sh", "#!/bin/sh\nexec sleep 30\n", 0o755)
+        cases = {
+            "missing": ({"LAND_UNIT_WORKTREE": str(self.top / "absent.sh")}, "absent.sh"),
+            "timeout": (
+                {"LAND_UNIT_WORKTREE": str(hanging), "LAND_UNIT_NETWORK_TIMEOUT": "0.5"},
+                "timed out",
+            ),
+        }
+        for name, (environment, detail) in cases.items():
+            with self.subTest(name):
+                said = self.close_session_with("unit/app/FX-A", **environment)
+                said.assert_called_once()
+                message = said.call_args.args[0]
+                self.assertTrue(
+                    message.startswith("warning: the session worktree stays: "), msg=message
+                )
+                self.assertIn(detail, message)
 
     def test_missing_registered_input_stops_at_the_build(self) -> None:
         def register_a_missing_input(worktree: Path) -> None:

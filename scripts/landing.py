@@ -133,6 +133,9 @@ class LandState:
     pushed: str = ""
     # The failed workflow runs (`file url`, joined by `; `) the author landed over with --accept-red-ci.
     red_ci: str = ""
+    # The commit of refs/heads/<branch> that unbump snapshotted; the prune
+    # step closes the session only while the branch still points at it.
+    snapshot: str = ""
 
     def dump(self) -> str:
         lines = []

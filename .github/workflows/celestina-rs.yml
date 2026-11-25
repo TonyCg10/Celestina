@@ -19,6 +19,9 @@ on:
 jobs:
   celestina-rs:
     runs-on: ubuntu-latest
+    env:
+      # The session profile of scripts/worktree.sh: line tables only, no full debug info.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     defaults:
       run:
         working-directory: celestina-rs

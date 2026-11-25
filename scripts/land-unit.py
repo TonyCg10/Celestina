@@ -16,9 +16,11 @@ checkout through the repository hooks.
 
 Exit 0 when the unit landed, 1 when the landing stopped or failed, 2 on usage
 errors. LAND_UNIT_GIT, LAND_UNIT_CARGO and LAND_UNIT_PYTHON override the
-programs it runs; LAND_UNIT_NETWORK_TIMEOUT bounds a fetch or push (300 s) and
+programs it runs; LAND_UNIT_NETWORK_TIMEOUT bounds a fetch or push (300 s);
 LAND_UNIT_CI_STATUS replaces, or with `off` skips, the read of the latest
-GitHub run on main of each workflow (`{workflow}` in it stands for the file name).
+GitHub run on main of each workflow (`{workflow}` in it stands for the file name);
+LAND_UNIT_WORKTREE replaces scripts/worktree.sh, whose `close` the prune step
+runs on the landed unit's session worktree.
 """
 
 from __future__ import annotations
@@ -675,13 +677,17 @@ def unbump(ctx: LandContext) -> None:
     state.sealed = ""
     state.previous = ""
     landing = ctx.landing_dir
-    run(ctx, "checkout", "--quiet", "--force", "--detach", state.branch, cwd=landing)
-    fork = run(ctx, "merge-base", "origin/main", state.branch).stdout.strip()
+    # One commit of the branch for the whole landing: the session may commit
+    # on it meanwhile, and prune keeps a branch that moved.
+    state.snapshot = revision(ctx, f"refs/heads/{state.branch}")
+    snapshot = state.snapshot
+    run(ctx, "checkout", "--quiet", "--force", "--detach", snapshot, cwd=landing)
+    fork = run(ctx, "merge-base", "origin/main", snapshot).stdout.strip()
     rewrites = unbumped_files(
         ctx.registry,
-        registry_at(ctx, state.branch),
+        registry_at(ctx, snapshot),
         lambda path: blob(ctx, f"{fork}:{path}"),
-        lambda path: blob(ctx, f"{state.branch}:{path}"),
+        lambda path: blob(ctx, f"{snapshot}:{path}"),
     )
     for path, raw in rewrites.items():
         write_file(landing / path, raw)
@@ -846,7 +852,7 @@ def rebase(ctx: LandContext) -> None:
         refuse_landed(
             ctx, state.base, "rebase", "the unit is on main already: run land-unit.py --abort"
         )
-        fork = run(ctx, "merge-base", state.base, state.branch).stdout.strip()
+        fork = run(ctx, "merge-base", state.base, state.snapshot or state.branch).stdout.strip()
         if blob(ctx, f"{fork}:{plan}") is not None and blob(ctx, f"{state.base}:{plan}") is None:
             raise LandingStop(
                 "rebase",
@@ -1302,6 +1308,61 @@ def prune(ctx: LandContext) -> None:
         gib = report.freed_bytes / 1024**3
         print(f"land-unit: pruned the debug builds from the build trees; freed {gib:.1f} GiB")
     remove_landing(ctx)
+    close_session(ctx)
+
+
+def close_session(ctx: LandContext) -> None:
+    """Close the session worktree and branch of the unit that just landed.
+
+    Only a branch `unit/<project>/<unit>` names a session, and only while it
+    still points at the commit unbump snapshotted: a commit made during the
+    landing never landed. `worktree.sh close` refuses while the session holds
+    uncommitted work or a commit made after the landing, so that work stays;
+    a refusal, or a close that cannot run, only warns: the unit has landed.
+    """
+    branch = ctx.state.branch
+    parts = branch.split("/")
+    if len(parts) != 3 or parts[0] != "unit" or not parts[1] or not parts[2]:
+        return
+    project, unit = parts[1], parts[2]
+    try:
+        current = run(
+            ctx, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}^{{commit}}", check=False
+        ).stdout.strip()
+    except LandingError as error:
+        say(f"warning: the session worktree stays: {error}")
+        return
+    if not current:
+        return
+    recorded = ctx.state.snapshot
+    if not recorded:
+        say("warning: the session worktree stays: the landing did not record the branch commit")
+        return
+    if recorded != current:
+        say(
+            f"warning: the session worktree stays: {branch} moved during the landing "
+            f"({recorded[:12]} -> {current[:12]})"
+        )
+        return
+    script = program("LAND_UNIT_WORKTREE", str(Path(__file__).resolve().parent / "worktree.sh"))
+    try:
+        # close bounds its fetch by CELESTINA_NETWORK_TIMEOUT (300 s by
+        # default); twice the landing's network bound also covers removing the
+        # worktree's target/ and trimming the shared one.
+        closed = run_process(
+            ["sh", script, "close", project, unit],
+            ctx.root,
+            check=False,
+            timeout=2 * network_timeout(),
+        )
+    except LandingError as error:
+        say(f"warning: the session worktree stays: {error}")
+        return
+    if closed.returncode != 0:
+        detail = closed.stderr.strip() or f"`{script} close` exited {closed.returncode}"
+        say(f"warning: the session worktree stays: {detail}")
+        return
+    print(f"land-unit: closed the session worktree of {unit}")
 
 
 def commit_and_push(ctx: LandContext) -> str | None:

@@ -205,9 +205,13 @@ application crate and relinks instead of rebuilding every dependency.
 
 `--dry-run` lists what would go and how much it frees without removing
 anything. The tool refuses to run in a session worktree, whose builds use the
-shared session target instead; `scripts/worktree.sh close` removes that
-target when it closes the last session. The landing runs the prune as its
-last step; see [the landing contract](landing.md).
+shared session target instead. `scripts/worktree.sh close` never deletes that
+target: it trims it with `scripts/build_trees.py trim-session-target` once it
+passes 40 GiB, removing the workspace members' debug artifacts first and the
+`debug` and `release` profiles whole only if that is not enough, and it skips
+the trim while a build holds Cargo's lock on either profile. The landing runs
+the prune as its last step, and then closes the landed unit's session
+worktree; see [the landing contract](landing.md).
 
 ## Development QML
 

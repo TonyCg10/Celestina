@@ -1,0 +1,35 @@
+# DEV-1-A exact change inventory
+
+Base revision	12c228d8d9d6a1c61eb864037c49b764fcabfd83
+Pathspec	.github/workflows/celestina-rs.yml
+Pathspec	.github/workflows/celestina.yml
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/contracts/production-artifacts.md
+Pathspec	docs/evidence/2026-11-24-dev-speed-cache.md
+Pathspec	docs/inventories/2026-11-24-dev-speed/DEV-1-A.numstat.tsv
+Pathspec	docs/plans/active/2026-11-24-dev-speed.md
+Pathspec	scripts/build_trees.py
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/test-build-trees.py
+Pathspec	scripts/test-land-unit.py
+Pathspec	scripts/test-worktree.sh
+Pathspec	scripts/worktree.sh
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+3	0	9128ae10f3348db5a57ed60caa73f75f66edd9014976283415d6b58c7a6ab8a2	.github/workflows/celestina-rs.yml
+3	0	19f27eba955a8797c6a231cda844258c0167b068a0a9dc1dadcc214d4e7d5ec1	.github/workflows/celestina.yml
+44	9	af9670e8edccc5869b5071cce51eebf36ee6c4d8645df5ca8ffae752a3591942	docs/contracts/landing.md
+7	3	34cc6d8a8f942b48bb5586d818591cfc9a6746fc3463e65fe7ea32fdce7370ac	docs/contracts/production-artifacts.md
+121	0	fa268760eda0c553500e14404976531c8c8d050bb42b23f4620376eec8beefe7	docs/evidence/2026-11-24-dev-speed-cache.md
+35	0	self	docs/inventories/2026-11-24-dev-speed/DEV-1-A.numstat.tsv
+1	1	52a4dd7c0a15cd1ccc2ffdbefe21317d4ba1cc57c7b02ed6c20ed081214ba0e1	docs/plans/active/2026-11-24-dev-speed.md
+171	5	8189271cca7a1523c55338d1942a9688e69788eb150eee4e640d95c2fb483015	scripts/build_trees.py
+68	7	861ca5cc13a8c468332fcd76696c617ef86119da194a10294495c1eddeee7d7d	scripts/land-unit.py
+3	0	adabafe7e8e9c048e3e6f5b836941f5dcbef37a261595eb7523be4e850f19829	scripts/landing.py
+153	0	5e70a9a49f4483f81623f4312b8aa3d1160925c76094ea0fd71e6db69dc29c51	scripts/test-build-trees.py
+175	0	1aa7c202fa2b063742321cf9bf1d02e62353ba6d5da2adc9bd3ec134f4b4290c	scripts/test-land-unit.py
+71	7	a96fa03b32a9cd61c549367a32c800a9878fb530e0677ea9631ad087c9f61380	scripts/test-worktree.sh
+23	14	07760211ad20efdfb7076b9c33b4b8105ff1927e667a50fb71327a4b05ce1320	scripts/worktree.sh

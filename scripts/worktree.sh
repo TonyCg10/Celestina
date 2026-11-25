@@ -12,7 +12,9 @@ set -eu
 #       .cargo/config.toml (one Cargo target directory shared by every session)
 #       and .celestina-worktree (the marker production_artifact.py refuses
 #       production runs under), and exclude both through the repository's
-#       shared info/exclude so that a session never stages them.
+#       shared info/exclude so that a session never stages them. The Cargo
+#       config also sets the lighter dev profile: line tables only for
+#       workspace members and no debug information for dependencies.
 #   worktree.sh close PROJECT UNIT
 #       Refuse while the worktree holds uncommitted changes, or while the
 #       branch has commits that are not on origin/main and origin/main tracks
@@ -22,9 +24,12 @@ set -eu
 #       commit, so after a landing only its inventory proves the unit landed);
 #       also refuse while the branch holds a commit made after the landing
 #       commit that added that inventory, which the landing never saw;
-#       then remove the worktree and delete the branch. When no other session
-#       worktree remains, also remove the shared session Cargo target, a cache
-#       the next session's first build regenerates.
+#       then remove the worktree's own target/ directory (a symlink is
+#       unlinked, never followed), remove the worktree and delete the branch.
+#       The shared session Cargo target is never deleted: build_trees.py
+#       trim-session-target trims it to its size cap, and a failed trim is a
+#       warning on stderr, not a refusal. A worktree opened with the older
+#       two-line Cargo config closes the same way.
 #
 # A fetch that takes longer than CELESTINA_NETWORK_TIMEOUT seconds (300 by
 # default) is a refusal, not a hang.
@@ -171,8 +176,9 @@ if [ "$command" = open ]; then
         fi
     done
     mkdir -p -- "$unit_dir/.cargo"
-    printf '[build]\ntarget-dir = "%s"\n' "$worktrees/.cargo-target" \
-        > "$unit_dir/.cargo/config.toml"
+    printf '[build]\ntarget-dir = "%s"\n\n[profile.dev]\ndebug = "line-tables-only"\n\n' \
+        "$worktrees/.cargo-target" > "$unit_dir/.cargo/config.toml"
+    printf '[profile.dev.package."*"]\ndebug = false\n' >> "$unit_dir/.cargo/config.toml"
     printf 'project = "%s"\nunit = "%s"\ncanonical = "%s"\n' \
         "$project" "$unit" "$repo_root" > "$unit_dir/$marker_name"
     printf '%s\n' "$unit_dir"
@@ -225,17 +231,20 @@ if [ -d "$unit_dir" ]; then
     [ -z "$foreign" ] || refuse "the worktree $unit_dir has uncommitted changes"
     rm -f -- "$unit_dir/$marker_name" "$unit_dir/.cargo/config.toml"
     rmdir -- "$unit_dir/.cargo" 2>/dev/null || :
+    # The root .gitignore ignores target/, so the status check never saw it.
+    if [ -L "$unit_dir/target" ]; then
+        rm -f -- "$unit_dir/target"
+    elif [ -d "$unit_dir/target" ]; then
+        rm -rf -- "$unit_dir/target" \
+            || refuse "cannot remove $unit_dir/target"
+    fi
     git -C "$repo_root" worktree remove "$unit_dir" \
         || refuse "cannot remove the worktree $unit_dir"
 fi
 git -C "$repo_root" branch --quiet -D "$branch" \
     || refuse "cannot delete the branch $branch"
 
-# The shared Cargo target serves open sessions only; the landing worktree
-# never builds, so it does not keep the cache alive.
-session=$(find "$worktrees" -mindepth 1 -maxdepth 1 ! -name .cargo-target \
-    ! -name .landing -print 2>/dev/null | head -n 1)
-if [ -z "$session" ] && [ -d "$worktrees/.cargo-target" ]; then
-    rm -rf -- "$worktrees/.cargo-target" \
-        || refuse "cannot remove the session Cargo target $worktrees/.cargo-target"
-fi
+# The shared Cargo target serves every session and is never deleted here;
+# trimming it to its cap is housekeeping, so a failure only warns.
+python3 "$script_dir/build_trees.py" trim-session-target "$worktrees/.cargo-target" \
+    || printf 'worktree: warning: the session Cargo target was not trimmed\n' >&2

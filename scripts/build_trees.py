@@ -2,6 +2,7 @@
 """Prune the debug builds from the production build trees once the landing deployed.
 
     build_trees.py [--root DIR] [--registry PATH] prune [--dry-run]
+    build_trees.py trim-session-target TARGET [--cap-gib N] [--dry-run]
 
 A registered project builds its release artifact into a Cargo `target/` or a
 CMake or Gradle `build/` directory. Most of a Cargo target is the debug
@@ -19,6 +20,10 @@ The build roots are derived from the registry: the first `target` or `build`
 component of each artifact path or manifest of a project that is not halted.
 A halted project's own tree is never touched (AGENTS.md "Halted projects").
 
+`trim-session-target` keeps the shared session Cargo target under a size cap
+without a registry: it removes the workspace members' debug artifacts first,
+then the profiles whole, and does nothing while Cargo holds a profile lock.
+
 Exit 0 on success, 1 when the tool refuses (a session worktree, a registry it
 cannot read, a path outside the checkout), 2 on usage errors.
 """
@@ -26,7 +31,9 @@ cannot read, a path outside the checkout), 2 on usage errors.
 from __future__ import annotations
 
 import argparse
+import contextlib
 from dataclasses import dataclass, field
+import fcntl
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -41,6 +48,10 @@ BUILD_DIRECTORY_NAMES = ("target", "build")
 PRUNED_PROFILE = "debug"
 # Written by scripts/worktree.sh at the root of every session worktree.
 WORKTREE_MARKER = ".celestina-worktree"
+SESSION_TARGET_CAP_GIB = 40
+# Cargo's own lock file inside a profile directory.
+CARGO_LOCK = ".cargo-lock"
+TRIMMED_PROFILES = ("debug", "release")
 
 
 class PruneError(RuntimeError):
@@ -51,6 +62,9 @@ class PruneError(RuntimeError):
 class PruneReport:
     removed: list[str] = field(default_factory=list)
     freed_bytes: int = 0
+    busy: bool = False
+    # What the tree measured before anything was removed; not part of equality.
+    size: int = field(default=0, compare=False)
 
 
 def relative_path(text: object, label: str) -> PurePosixPath:
@@ -127,19 +141,37 @@ def debug_directories(root: Path, build: str) -> list[str]:
     return found
 
 
-def tree_size(path: Path) -> int:
+def tree_size(path: Path, seen: set[tuple[int, int]] | None = None) -> int:
+    """The bytes under `path`, counting a hard-linked file once.
+
+    Cargo hard-links a member's binary from `deps/` into the profile directory
+    and object files between incremental sessions. `seen` carries the files
+    already counted from one call to the next.
+    """
+    seen = set() if seen is None else seen
+
+    def size(entry: os.stat_result) -> int:
+        if stat.S_ISDIR(entry.st_mode):
+            return 0
+        # Looked up before the link count: removing one link of a counted
+        # file leaves the other with a count of one.
+        key = (entry.st_dev, entry.st_ino)
+        if key in seen:
+            return 0
+        if entry.st_nlink > 1:
+            seen.add(key)
+        return entry.st_size
+
     info = path.lstat()
     if not stat.S_ISDIR(info.st_mode):
-        return info.st_size
+        return size(info)
     total = 0
     for directory, subdirectories, files in os.walk(path, followlinks=False):
         for name in files + subdirectories:
             try:
-                entry = os.lstat(os.path.join(directory, name))
+                total += size(os.lstat(os.path.join(directory, name)))
             except FileNotFoundError:
                 continue
-            if not stat.S_ISDIR(entry.st_mode):
-                total += entry.st_size
     return total
 
 
@@ -177,6 +209,110 @@ def prune(root: Path, registry: dict[str, Any], *, dry_run: bool = False) -> Pru
     return report
 
 
+def empty_profile(profile: Path) -> None:
+    """Remove a profile directory's contents but keep Cargo's lock file.
+
+    A Cargo that is waiting on the lock holds that very file open; were it
+    unlinked, the next Cargo would create and lock another one, and both would
+    build in the same profile.
+    """
+    if not os.path.lexists(profile / CARGO_LOCK):
+        remove(profile)
+        return
+    for entry in os.listdir(profile):
+        if entry != CARGO_LOCK:
+            remove(profile / entry)
+
+
+def crate_name(entry: str) -> str:
+    """`my-app-9f` and `my_app-9f.d` both read as `my_app`."""
+    return (entry.rpartition("-")[0] or entry).replace("-", "_")
+
+
+def is_member_artifact(entry: str, members: set[str]) -> bool:
+    return crate_name(entry) in members or crate_name(entry.removeprefix("lib")) in members
+
+
+def take_profile_lock(stack: contextlib.ExitStack, profile: Path) -> bool:
+    """Take Cargo's lock on `profile` without waiting; False when a build holds it."""
+    lock = profile / CARGO_LOCK
+    try:
+        descriptor = os.open(lock, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return True  # No lock file: no build has run, so none is running.
+    stack.callback(os.close, descriptor)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
+def trim_session_target(target: Path, cap_bytes: int, *, dry_run: bool = False) -> PruneReport:
+    """Bring a session Cargo target under `cap_bytes`; `removed` is relative to `target`."""
+    report = PruneReport()
+    if not real_directory(target):
+        return report
+    total = report.size = tree_size(target)
+    if total <= cap_bytes:
+        return report
+    profiles = [name for name in TRIMMED_PROFILES if real_directory(target / name)]
+    with contextlib.ExitStack() as stack:
+        # Removing artifacts under a running Cargo corrupts its build, so the
+        # locks stay held until every removal is done.
+        for name in profiles:
+            if not take_profile_lock(stack, target / name):
+                report.busy = True
+                return report
+
+        # One set for every removal: a file linked from two removed paths
+        # frees its bytes once.
+        counted: set[tuple[int, int]] = set()
+
+        def drop(path: Path, *, whole_profile: bool = False) -> None:
+            report.freed_bytes += tree_size(path, counted)
+            report.removed.append(path.relative_to(target).as_posix())
+            if not dry_run:
+                if whole_profile and real_directory(path):
+                    empty_profile(path)
+                else:
+                    remove(path)
+
+        debug = target / PRUNED_PROFILE
+        if PRUNED_PROFILE in profiles:
+            incremental = debug / "incremental"
+            members = (
+                {crate_name(entry) for entry in os.listdir(incremental)}
+                if real_directory(incremental)
+                else set()
+            )
+            for entry in (incremental, debug / "examples"):
+                if os.path.lexists(entry):
+                    drop(entry)
+            for name in sorted(os.listdir(debug)):
+                path = debug / name
+                if name != CARGO_LOCK and stat.S_ISREG(path.lstat().st_mode):
+                    drop(path)
+            for directory in ("deps", "build", ".fingerprint"):
+                if not real_directory(debug / directory):
+                    continue
+                for name in sorted(os.listdir(debug / directory)):
+                    if is_member_artifact(name, members):
+                        drop(debug / directory / name)
+        remaining = total - report.freed_bytes
+        if remaining > cap_bytes:
+            # The profiles contain every path listed so far.
+            report.removed = []
+            if dry_run:
+                # Nothing was removed above, so the profiles still measure whole.
+                report.freed_bytes = 0
+            counted.clear()
+            for name in TRIMMED_PROFILES:
+                if os.path.lexists(target / name):
+                    drop(target / name, whole_profile=True)
+    return report
+
+
 def human_size(size: int) -> str:
     value = float(size)
     for unit in ("B", "KiB", "MiB", "GiB"):
@@ -186,6 +322,30 @@ def human_size(size: int) -> str:
     raise AssertionError(size)
 
 
+def trim_command(args: argparse.Namespace) -> int:
+    cap = args.cap_gib * 1024**3
+    try:
+        report = trim_session_target(args.target, cap, dry_run=args.dry_run)
+    except OSError as error:
+        print(f"build-trees: {error}", file=sys.stderr)
+        return 1
+    if report.busy:
+        print("build-trees: session target is in use; not trimmed")
+    elif report.removed:
+        for path in report.removed:
+            print(f"{'would remove' if args.dry_run else 'removed'} {path}")
+        verb = "would free" if args.dry_run else "freed"
+        print(f"build-trees: {verb} {human_size(report.freed_bytes)}")
+    elif report.size <= cap:
+        print(f"build-trees: session target {human_size(report.size)}, under the cap of {args.cap_gib} GiB")
+    else:
+        print(
+            f"build-trees: session target {human_size(report.size)}, "
+            f"over the cap of {args.cap_gib} GiB; nothing to trim"
+        )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
@@ -193,8 +353,14 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     command = subparsers.add_parser("prune")
     command.add_argument("--dry-run", action="store_true")
+    trim = subparsers.add_parser("trim-session-target")
+    trim.add_argument("target", type=Path)
+    trim.add_argument("--cap-gib", type=int, default=SESSION_TARGET_CAP_GIB)
+    trim.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
+    if args.command == "trim-session-target":
+        return trim_command(args)
     root = args.root.resolve()
     try:
         if (root / WORKTREE_MARKER).exists():

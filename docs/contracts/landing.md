@@ -24,7 +24,7 @@ Every path below is derived from the canonical checkout `<parent>/<name>/`:
 ```text
 <parent>/<name>/                                 canonical checkout, on main
 <parent>/<name>.worktrees/<project>-<unit>/      one session worktree per unit
-<parent>/<name>.worktrees/.cargo-target/         Cargo target directory shared by sessions
+<parent>/<name>.worktrees/.cargo-target/         Cargo target directory shared by sessions, trimmed at 40 GiB
 <parent>/<name>.worktrees/.landing/              landing worktree and its state file
 ```
 
@@ -57,7 +57,15 @@ writes two untracked files at the worktree's root:
 - `.cargo/config.toml`, whose `[build]` table sets `target-dir` to
   `<parent>/<name>.worktrees/.cargo-target`, so `cargo test` and
   `cargo clippy` from every session reuse one set of compiled crates. Cargo
-  locks that directory and fingerprints crates by content.
+  locks that directory and fingerprints crates by content. The file also sets
+  the session dev profile: `[profile.dev] debug = "line-tables-only"` for the
+  workspace members and `[profile.dev.package."*"] debug = false` for every
+  dependency, which shrinks the debug build and its test binaries. A session
+  that needs a target of its own sets `CARGO_TARGET_DIR` to
+  `<worktree>/target/<name>`; no session creates a directory beside the
+  worktrees. The CI workflows `celestina.yml` and `celestina-rs.yml` set
+  `CARGO_PROFILE_DEV_DEBUG: line-tables-only`; the dependencies' `debug = false`
+  has no single environment variable and is not mirrored there.
 - `.celestina-worktree`, the session marker, which records `project`, `unit`
   and `canonical` (the canonical checkout's path).
 
@@ -75,10 +83,23 @@ id anywhere else, such as another project's unit or a tracked fixture, does
 not count. It also refuses while the branch has a commit, not on
 `origin/main`, whose committer time is later than that of the commit that
 added the inventory: the landing never saw it, and deleting the branch would
-lose it. Otherwise it removes those two files and the worktree, then deletes
-the branch; when no other session worktree remains (`.landing` does not
-count, since the landing never builds there), it also removes
-`.cargo-target`, a cache the next session's first build regenerates. Both entries give up on a fetch that takes longer than
+lose it. Otherwise it removes those two files, then the worktree's own `target/`
+directory (a symbolic link there is unlinked, never followed), then the
+worktree, and deletes the branch. A worktree opened with the older two-line
+Cargo config closes the same way. `close` never deletes `.cargo-target`; after
+the branch is gone it runs `scripts/build_trees.py trim-session-target` on it.
+Under 40 GiB the trim does nothing. Above it, the trim takes Cargo's lock on
+the `debug` and `release` profiles without waiting, and when either is held by
+a running build it skips the whole trim and prints `session target is in use;
+not trimmed`. Otherwise it removes `debug/incremental`, `debug/examples`, the
+regular files directly in `debug` (except `.cargo-lock`) and the workspace
+members' entries in `debug/deps`, `debug/build` and `debug/.fingerprint`; the
+members are the crates named under `debug/incremental`. If the target is still
+over the cap, it removes `debug` and `release` whole, except a profile's
+`.cargo-lock`, which a waiting Cargo holds open. A target that is missing,
+is not a directory or is a symbolic link is left alone. A failed trim prints
+`worktree: warning: the session Cargo target was not trimmed` on stderr and
+`close` still exits 0. Both entries give up on a fetch that takes longer than
 `CELESTINA_NETWORK_TIMEOUT` seconds (300 by default) instead of hanging. The landing publishes one new sealed commit, so the session's own
 commits never reach `origin/main`; after a landing, the unit's inventory on
 `origin/main` is what lets `close` accept the branch.
@@ -407,7 +428,20 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
     [Pruning after deploy](production-artifacts.md#pruning-after-deploy)). It
     prints `land-unit: pruned the debug builds from the build trees; freed <N> GiB`.
     A failure only warns, since the unit has landed. Then the tool removes the
-    landing worktree.
+    landing worktree, and last closes the landed unit's session worktree: for
+    a branch `unit/<project>/<unit>` it runs `scripts/worktree.sh close
+    <project> <unit>` from the canonical checkout, bounded by twice
+    `LAND_UNIT_NETWORK_TIMEOUT`, and prints `land-unit: closed the session
+    worktree of <unit>`. `close` refuses while the session holds uncommitted
+    work or a commit made after the landing; a refusal or a close that cannot
+    run prints `land-unit: warning: the session worktree stays: <reason>`, the
+    work stays, and the landing still exits 0. A branch outside
+    `unit/<project>/<unit>` is not closed, and neither is a branch that no
+    longer points at the commit `unbump` took: a commit made on it during the
+    landing never landed, so the tool warns
+    `<branch> moved during the landing (<old> -> <new>)` and keeps it. A unit
+    that changes `land-unit.py` itself lands with the old script, so its own session worktree is closed by
+    hand with `scripts/worktree.sh close`.
 
 The sealed commit is derived, never rebased: every retry recomputes the
 version, the build decision and the inventory against the parent the commit
@@ -610,8 +644,9 @@ project still to deploy with the entries to run by hand, and prints
 `land-unit: aborted after the push; main keeps the landed unit`. The
 branch is never changed, so a new landing starts from the same session work.
 
-`LAND_UNIT_GIT`, `LAND_UNIT_CARGO` and `LAND_UNIT_PYTHON` replace the programs
-the tool runs; the tests use them. `LAND_UNIT_CI_STATUS` replaces the GitHub API
+`LAND_UNIT_GIT`, `LAND_UNIT_CARGO`, `LAND_UNIT_PYTHON` and `LAND_UNIT_WORKTREE`
+(which replaces `scripts/worktree.sh`, whose `close` the prune step runs) replace
+the programs the tool runs; the tests use them. `LAND_UNIT_CI_STATUS` replaces the GitHub API
 URL read for each workflow (the text `{workflow}` in it is replaced by the workflow's file name, percent-quoted as in the default URL, which a `file://` URL decodes again; a value without it is read as it stands once per workflow), or skips the read with `off`.
 
 ## A red main
