@@ -38,6 +38,10 @@ const FALLBACK_ICON: &str = "app-window";
 pub struct Activity;
 
 impl PageView for Activity {
+    fn icon(&self) -> &'static str {
+        "view-grid"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_ACTIVITY
     }

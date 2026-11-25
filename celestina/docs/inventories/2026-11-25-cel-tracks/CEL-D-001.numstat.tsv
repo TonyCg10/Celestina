@@ -1,0 +1,49 @@
+# CEL-D-001 exact change inventory
+
+Base revision	1b1c610ecc4f27cf1ecf5ad4d7becf4c98d0882a
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-001-tab-icons.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-001-tab-icons/tabs-full.png
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-001-tab-icons/tabs.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-001.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/island/pages/bluetooth.rs
+Pathspec	celestina/src/island/pages/clipboard.rs
+Pathspec	celestina/src/island/pages/clock.rs
+Pathspec	celestina/src/island/pages/media.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/network.rs
+Pathspec	celestina/src/island/pages/notifications.rs
+Pathspec	celestina/src/island/pages/phone.rs
+Pathspec	celestina/src/island/pages/power.rs
+Pathspec	celestina/src/island/pages/sysmon.rs
+Pathspec	celestina/src/island/pages/tabs.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/island/view.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+17	0	c8a6dc24aef7f466e57399bc5dd38837b862d1fb2c6606aea460dee30fde091e	celestina/VALIDATION.md
+74	0	13efe90b85dbb6e2e8c31dc54964294dc0cd4302586affc7c05994d745ba6d58	celestina/docs/evidence/2026-11-25-cel-d-001-tab-icons.md
+-	-	58e2e5a6c40cbfabcde69f04bfae940d3db0e1e1b4d90827bf07ff8470f9bd85	celestina/docs/evidence/2026-11-25-cel-d-001-tab-icons/tabs-full.png
+-	-	a6378dcdb993fe3b6d502c62cf14ba7861c0993c70078414da883358fb9ea1de	celestina/docs/evidence/2026-11-25-cel-d-001-tab-icons/tabs.png
+49	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-001.numstat.tsv
+1	1	ad8ca494b732fbe143307cc7a3708430dc8ec105cb7265b68c4812b6d3ecf81d	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+0	8	3d676a39e89769f130d2a7195c8c833c8b722140f244a1591db26636e7a7103a	celestina/src/copy.rs
+4	0	4716a0707f6e556b854a7b793b6de2aa4f5aad2db0ea962e5c1e6b7c0d4de6c4	celestina/src/island/pages/activity.rs
+4	0	ba69d5418d8bb846c6a498a9af2a1467547d67efa454d5b7150a43d171f79acd	celestina/src/island/pages/bluetooth.rs
+4	0	b8522aef310968aaa0e9849344678a87f908955ff829190256582bd3caec8cac	celestina/src/island/pages/clipboard.rs
+4	0	ac28e6ab43bb436c58f8ead8c04f0d8bb09e7ccc424c4c6d462d242f8df4d207	celestina/src/island/pages/clock.rs
+4	0	962978071829d5b82a71f40aac000b2aa4cc92e2bbd81c5850e6440f94bd59a2	celestina/src/island/pages/media.rs
+12	0	5df40e04802fa9ad0a338dcbc7a935a87b2c16ed9593620aaec1445e7943ba6b	celestina/src/island/pages/mod.rs
+4	0	ae29e96b02c544276866dd0d0f2762bd2347724a1a07946222776201c9081181	celestina/src/island/pages/network.rs
+4	0	f30cd6d7001b3bd1b0e7b8134ac676662ec17ea37d0d10b5078c5ac7a3532e9a	celestina/src/island/pages/notifications.rs
+4	0	b19181ccf1154b8068c5dd1cffd674bfda16595d64a9d0f260d2f11b25334f33	celestina/src/island/pages/phone.rs
+4	0	d5d070a4d3f2cb2c0759aaeffcb8a26d347e716ad72344b3d2d9f469bd3cda91	celestina/src/island/pages/power.rs
+4	0	651c6e554b2a04ff8c909948f3d54e9ab44280d899894f40712d2564613bfab3	celestina/src/island/pages/sysmon.rs
+78	165	e3b008f96d5f09d09eac522aaa6103af18298a39d6cc712f2f581e073ef01eed	celestina/src/island/pages/tabs.rs
+4	0	7b72686e7084da480d038f9539b8a71fca21f887f94a6989c0629e5fb7884fbd	celestina/src/island/pages/tray.rs
+30	0	368b5abfaafe7e0f20890a059584a602e860e7576a4759363b8d185627ce8744	celestina/src/island/view.rs

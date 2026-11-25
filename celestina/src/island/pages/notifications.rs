@@ -66,6 +66,10 @@ pub fn action_key(id: u32, index: usize) -> Key {
 }
 
 impl PageView for Notifications {
+    fn icon(&self) -> &'static str {
+        "bell"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_NOTIFICATIONS
     }

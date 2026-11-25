@@ -190,6 +190,10 @@ pub fn action_for(
 }
 
 impl PageView for Network {
+    fn icon(&self) -> &'static str {
+        "wifi"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_NETWORK
     }

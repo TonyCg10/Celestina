@@ -110,6 +110,10 @@ fn cell_width(cx: &PageCx<'_>) -> f32 {
 pub struct Clock;
 
 impl PageView for Clock {
+    fn icon(&self) -> &'static str {
+        "calendar"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_CLOCK
     }

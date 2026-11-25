@@ -176,6 +176,10 @@ pub fn action_for(
 }
 
 impl PageView for Bluetooth {
+    fn icon(&self) -> &'static str {
+        "bluetooth"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_BLUETOOTH
     }

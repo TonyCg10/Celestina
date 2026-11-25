@@ -570,6 +570,8 @@ None has been run and none is closed by an agent.
   thumbnail alpha)
 - **Requires:** as above; try the text scales Compact, Normal, Large and Larger
   and a light and a dark wallpaper behind the Island
+- **Note:** since CEL-D-001 the tabs show icons; their look is checked by
+  `VAL-CEL-D-001`, and the tab part of this procedure no longer applies
 - **Procedure:** open the Island and look at the six tabs (about 58 px each,
   at the caption size; the Notifications and Clipboard tabs show their short
   forms "Notific." and "Portap.") at each text scale; fill the history past what the page shows and check the last line says how
@@ -1411,3 +1413,18 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [2026-11-25-cel-i-006-session-menu.md](docs/evidence/2026-11-25-cel-i-006-session-menu.md)
+
+## VAL-CEL-D-001 — Icons in the Island's tab row
+
+- **Status:** pending
+- **Related implementation:** CEL-D-001 (the Island's tab row)
+- **Requires:** the deployed shell after the landing of CEL-D-001
+- **Procedure:** open the Island (`celestina island open clock`). Check that
+  the row at its foot shows nine equal pills with an icon each and no text.
+  Open each tab from the row and check that its icon names its page, that the
+  page title above matches, and that the open tab is plainly the selected one
+- **Pass condition:** nine icon pills of equal width, none cut or overlapping;
+  every icon says its page; the open tab stands out in the accent fill
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-001](docs/evidence/2026-11-25-cel-d-001-tab-icons.md)

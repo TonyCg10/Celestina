@@ -329,6 +329,10 @@ pub fn action_for(
 pub struct Clipboard;
 
 impl PageView for Clipboard {
+    fn icon(&self) -> &'static str {
+        "clipboard-paste"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_CLIPBOARD
     }

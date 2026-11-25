@@ -283,10 +283,6 @@ pub const POLKIT_HELPER_BODY: &str =
 
 // Glance: the system monitor, the weather and the calendar (CEL-2-K).
 
-/// The Notifications tab's short label ("Notif."): the full title does not
-/// fit one of the equal pills, and the toolkit has no ellipsis.
-pub const TAB_NOTIFICATIONS: &str = "Notific.";
-
 /// The title of the Clock page ("Clock").
 pub const PAGE_CLOCK: &str = "Reloj";
 
@@ -517,10 +513,6 @@ pub fn weather_updated(time: &str) -> String {
 
 /// The title of the Clipboard page ("Clipboard").
 pub const PAGE_CLIPBOARD: &str = "Portapapeles";
-
-/// The Clipboard tab's short label ("Clipb."): the full title does not fit
-/// one of six equal pills, and the toolkit has no ellipsis.
-pub const TAB_CLIPBOARD: &str = "Portap.";
 
 /// The Clipboard page's only row while the history holds nothing
 /// ("No entries").

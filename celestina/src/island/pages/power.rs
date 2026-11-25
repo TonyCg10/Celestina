@@ -180,6 +180,10 @@ pub fn action_for(
 }
 
 impl PageView for Power {
+    fn icon(&self) -> &'static str {
+        "zap"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_POWER
     }

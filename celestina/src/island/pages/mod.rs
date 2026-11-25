@@ -139,6 +139,10 @@ pub struct PageCx<'a> {
 
 /// One of the Island's pages.
 pub trait PageView {
+    /// The page's icon, a semantic name of `celestina-style/icons`: what its
+    /// tab in the Island's row shows. No default, so a new page cannot leave
+    /// its tab empty.
+    fn icon(&self) -> &'static str;
     /// The page's title, as the title row shows it.
     fn title(&self) -> &str;
     /// The page's content for `cx`.
@@ -172,6 +176,10 @@ pub(super) fn note_list(theme: &Theme, key: Key, text: &str) -> View {
 struct Absent;
 
 impl PageView for Absent {
+    fn icon(&self) -> &'static str {
+        "app-window"
+    }
+
     fn title(&self) -> &str {
         ""
     }
@@ -249,6 +257,10 @@ mod tests {
     struct Counts;
 
     impl PageView for Counts {
+        fn icon(&self) -> &'static str {
+            "app-window"
+        }
+
         fn title(&self) -> &str {
             "counts"
         }

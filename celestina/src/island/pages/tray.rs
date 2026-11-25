@@ -236,6 +236,10 @@ fn drawn<'a>(items: &'a [TrayRow], cx: &PageCx<'_>) -> &'a [TrayRow] {
 pub struct Tray;
 
 impl PageView for Tray {
+    fn icon(&self) -> &'static str {
+        "system-tray"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_TRAY
     }

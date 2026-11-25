@@ -202,6 +202,10 @@ fn rows_fit(state: &MediaState, theme: &Theme, max_size: (f32, f32)) -> usize {
 }
 
 impl PageView for Media {
+    fn icon(&self) -> &'static str {
+        "music"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_MEDIA
     }

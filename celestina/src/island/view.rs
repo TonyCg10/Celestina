@@ -56,6 +56,12 @@ pub fn page_title(page: PageId) -> &'static str {
     page_view(page).title()
 }
 
+/// The icon of `page`'s tab.
+#[must_use]
+pub fn page_icon(page: PageId) -> &'static str {
+    page_view(page).icon()
+}
+
 pub(crate) fn centred(mut v: View) -> View {
     v.style.align_items = AlignItems::CENTER;
     v
@@ -462,6 +468,30 @@ mod tests {
         assert_eq!(x(&right, Key::named("probe")), body.x + body.w / 2.0);
         for key in [close_key(), tabs::tab_key(PageId::TRAY), Key::named("body")] {
             assert_eq!(x(&rest, key), x(&left, key));
+        }
+    }
+
+    #[test]
+    fn every_page_icon_has_a_file() {
+        let want = [
+            (PageId::ACTIVITY, "view-grid"),
+            (PageId::NOTIFICATIONS, "bell"),
+            (PageId::TRAY, "system-tray"),
+            (PageId::SYSMON, "gauge"),
+            (PageId::CLOCK, "calendar"),
+            (PageId::CLIPBOARD, "clipboard-paste"),
+            (PageId::NETWORK, "wifi"),
+            (PageId::BLUETOOTH, "bluetooth"),
+            (PageId::POWER, "zap"),
+            (PageId::PHONE, "phone"),
+            (PageId::MEDIA, "music"),
+        ];
+        assert_eq!(want.len(), PageId::all().len(), "every page is named");
+        let icons =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../celestina-style/icons");
+        for (page, name) in want {
+            assert_eq!(page_icon(page), name, "{page:?}");
+            assert!(icons.join(format!("{name}.svg")).is_file(), "{name}.svg");
         }
     }
 

@@ -43,6 +43,10 @@ pub fn open_key() -> Key {
 pub struct Sysmon;
 
 impl PageView for Sysmon {
+    fn icon(&self) -> &'static str {
+        "gauge"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_SYSMON
     }

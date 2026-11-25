@@ -82,6 +82,10 @@ pub fn action_for(phone: &PhoneState, key: Key) -> Option<IslandAction> {
 }
 
 impl PageView for Phone {
+    fn icon(&self) -> &'static str {
+        "phone"
+    }
+
     fn title(&self) -> &str {
         copy::PAGE_PHONE
     }
