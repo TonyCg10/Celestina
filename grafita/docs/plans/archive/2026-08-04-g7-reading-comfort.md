@@ -43,7 +43,7 @@ owner's prefix, and the suite checkpoint is spent on `ACT-1` for unrelated
 in-flight work. The author chose local checkpoints over waiting for a suite
 one, so the promotion and its second consumer are delivered by two sibling
 plans that land before and after this one:
-[`STYLE-G7`](../../../../celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md)
+[`STYLE-G7`](../../../../celestina-style/docs/plans/archive/2026-08-04-shared-reading-controls.md)
 publishes `CelestinaLineGutter` and `CelestinaScrollBar`, and
 [`SID-G7`](../../../../siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md)
 adopts them in Siderita's two text surfaces. This plan owns Grafita and

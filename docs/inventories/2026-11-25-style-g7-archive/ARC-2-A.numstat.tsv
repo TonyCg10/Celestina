@@ -1,0 +1,57 @@
+# ARC-2-A exact change inventory
+
+Base revision	fe8540197c7c97cc75ad803f6c0e27e691bbcbc3
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	celestina-style/ROADMAP.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/VALIDATION.md
+Pathspec	celestina-style/docs/evidence/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/docs/evidence/2026-08-05-qmllint-ordering.md
+Pathspec	celestina-style/docs/evidence/2026-08-05-static-audit-corrections.md
+Pathspec	celestina-style/docs/evidence/2026-08-06-label-plain-text.md
+Pathspec	celestina-style/docs/evidence/2026-08-08-panel-status-glyphs.md
+Pathspec	celestina-style/docs/evidence/2026-08-11-edge-attached-glass-silhouette.md
+Pathspec	celestina-style/docs/evidence/2026-08-11-external-backdrop-glass.md
+Pathspec	celestina-style/docs/evidence/2026-08-11-semantic-glass-material-roles.md
+Pathspec	celestina-style/docs/evidence/2026-09-26-tokens-and-lock-contrast.md
+Pathspec	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+Pathspec	celestina-style/docs/plans/active/README.md
+Pathspec	celestina-style/docs/plans/archive/2026-08-04-shared-reading-controls.md
+Pathspec	docs/evidence/2026-11-25-style-g7-archive.md
+Pathspec	docs/inventories/2026-11-25-style-g7-archive/ARC-2-A.numstat.tsv
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-11-25-style-g7-archive.md
+Pathspec	grafita/docs/evidence/2026-08-04-g7-reading-comfort.md
+Pathspec	grafita/docs/plans/archive/2026-08-04-g7-reading-comfort.md
+Pathspec	siderita/docs/evidence/2026-08-04-shared-reading-surface.md
+Pathspec	siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	0	0df734a1d4e3826022b0b3945d326cb207d7ffaf55235b03ba957460d9b40d7f	ROADMAP.md
+4	0	74b36f209810f9df5aa74ea5518ef71617bb8758bd886632ab25796f89c2199a	STATUS.md
+8	4	3e04e052f6441563ce033035488752cc119193adf901d7c11ea4dc5da77bf591	celestina-style/ROADMAP.md
+6	6	291f6797f4bd38328a7ef5b4c83c50cc0a95f609bdfa13fea7473831b424f134	celestina-style/STATUS.md
+3	2	6feb65ebcc38d9612901c67637178438d4967ebf86c79a43ade98934a7a916cf	celestina-style/VALIDATION.md
+1	1	8cea5eff8a216596f774fd5ecb48548ae7eab3ff7c0bfbd57be1bfa5df6f77a0	celestina-style/docs/evidence/2026-08-04-shared-reading-controls.md
+1	1	4eff6d2d96ded5ec18676b0704abe33c147a78654e648a310e6e2db7042ec2ba	celestina-style/docs/evidence/2026-08-05-qmllint-ordering.md
+1	1	860145e820ae938b126b93dee22194364ad6485dbf6f59b8c80e757372cd4a49	celestina-style/docs/evidence/2026-08-05-static-audit-corrections.md
+1	1	01813de606f2862f0fcfb3ab31a5c2421b5900c0b10fc914d1740085919959d3	celestina-style/docs/evidence/2026-08-06-label-plain-text.md
+1	1	ddc45ffc73eaa8cb469fc6e1ba4b19262ba2791c2a238a4b7b61c51a3b210e7a	celestina-style/docs/evidence/2026-08-08-panel-status-glyphs.md
+1	1	398ef6722f5f1a79bb764502461803416bd5249829891fc956f9bda1839c4eb9	celestina-style/docs/evidence/2026-08-11-edge-attached-glass-silhouette.md
+1	1	b8510dba407017562e8ed21cbe34c63b234354f8a612ee7c4df7f704589cbf56	celestina-style/docs/evidence/2026-08-11-external-backdrop-glass.md
+1	1	793faf0b151c73e3801eab9a4b27d446bce56de16b1cc0e37926f2d543f938dd	celestina-style/docs/evidence/2026-08-11-semantic-glass-material-roles.md
+1	1	30a358a0a9e2797f0e3ee94a6e5a16a5903557fb7f019f27292120ae5a3fee1e	celestina-style/docs/evidence/2026-09-26-tokens-and-lock-contrast.md
+0	312	deleted	celestina-style/docs/plans/active/2026-08-04-shared-reading-controls.md
+2	1	3a2a40b37856f08544ae8e5e8eb38bf031ef1bba61ab2979548d2b1ea60248fc	celestina-style/docs/plans/active/README.md
+343	0	e14e4171eb5fbe5814dcbd289b9b20fad21146a79b8be85d01d4cc936f0840fb	celestina-style/docs/plans/archive/2026-08-04-shared-reading-controls.md
+33	0	11d93e065a686b13f425544d37c6d78e669b6175f5ea22e236c5f7a31893bc88	docs/evidence/2026-11-25-style-g7-archive.md
+57	0	self	docs/inventories/2026-11-25-style-g7-archive/ARC-2-A.numstat.tsv
+1	1	cdaa8062f615c27ac657cf710f5d8fd44ecbe9dcfac8a21624cc935ec5373e59	docs/plans/active/README.md
+54	0	10463740a5fb69ee78802dd9a90fe15a930d6798aaf3c6eb35919b183c4899b7	docs/plans/archive/2026-11-25-style-g7-archive.md
+1	1	c88d1476c6e3f55a7cb84da5ef455e11317d629be993347cd16bef4cca7be79e	grafita/docs/evidence/2026-08-04-g7-reading-comfort.md
+1	1	e6e5e7e51bc8c62d355acd16e6504eb2819d9a24dca080b789a5b500262253b9	grafita/docs/plans/archive/2026-08-04-g7-reading-comfort.md
+1	1	ff5fd5e2b9d745cbbdfcd7595df69a87007f87e7df3f311d6d6ec29f7452f837	siderita/docs/evidence/2026-08-04-shared-reading-surface.md
+1	1	dd1fc66af745d782a9f125b9d2819b16b31c677082f8616e303094e84c5045e9	siderita/docs/plans/archive/2026-08-04-shared-reading-surface.md

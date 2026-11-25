@@ -1,12 +1,12 @@
 # CelestinaStyle status
 
-- **Updated:** 2026-10-05
-- **Implementation:** the shared source contract is at 1.9.2 with
-  `STYLE-G7-O` and `STYLE-G7-P` active, with the
+- **Updated:** 2026-11-25
+- **Implementation:** the shared source contract is at 1.13.4, with the
   reading controls, the shared treemap and usage list, the glass material
-  roles and the vendored icon catalogue published; `STYLE-G7-J` and
-  `STYLE-G7-K` remain `active`, `STYLE-G7` stays active and `STYLE-M1`
-  remains planned with no execution plan
+  roles and the vendored icon catalogue published; `STYLE-G7` closed on
+  2026-11-25 and its plan is archived (`STYLE-G7-K` delivered by `1e30380a`,
+  `STYLE-G7-J` obsolete with the Qt shell); `STYLE-M1` remains planned with
+  no execution plan
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 

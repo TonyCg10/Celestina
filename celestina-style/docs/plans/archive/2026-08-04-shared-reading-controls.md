@@ -1,7 +1,9 @@
 # Shared reading controls
 
 - **Opened:** 2026-08-04
-- **Status:** active
+- **Closed:** 2026-11-25
+- **Successor:** none; the author named no next STYLE-G7 successor. Archived by the suite unit `ARC-2-A` ([its plan](../../../../docs/plans/archive/2026-11-25-style-g7-archive.md))
+- **Status:** done
 - **Plan ID:** shared-reading-controls
 - **Scope:** celestina-style
 - **Implementation checkpoint:** STYLE-G7
@@ -123,9 +125,39 @@ records work but grants no authorization beyond the repository rules.
   `ContentSurface` changes shape or material.
 
 The current shell-material prototype batch closes on that evidence. `STYLE-G7`
-remains active for the next demonstrated reusable need from `PANEL-1`; whether
+remained active for the next demonstrated reusable need from `PANEL-1` until
+the Qt shell, and with it `PANEL-1`, left the tree; the plan closed on
+2026-11-25 (see "Rows closed outside the ledger"). Whether
 the bar's contrast and the gutter's numerals hold at the author's display scale
 is `VAL-STYLE-04`.
+
+## Rows closed outside the ledger
+
+Two rows never reached `done` through a landing and leave the ledger as the
+plan is archived on 2026-11-25 by the suite unit `ARC-2-A`; their rows are
+kept here verbatim.
+
+- `STYLE-G7-K` was delivered by `1e30380a` (2026-08-12, "Fix icon
+  rasterization and thicken the glyph strokes"), committed before it had an
+  inventory: `CelestinaIcon.qml` asks for each SVG at its size times the
+  screen's device pixel ratio, and every icon of the catalogue (113 on
+  2026-11-25) is drawn at `stroke-width="2.5"`. Its evidence lived in the
+  halted Qt shell's tree and left with it (CEL-QT-REMOVE).
+- `STYLE-G7-J` is obsolete. Its API is in `GlassSurface.qml`
+  (`silhouettePath`, `silhouetteEdgePath`, the `ContextualVeil` role), but
+  its one consumer, the Qt shell's bar-edge membrane, left the tree with
+  CEL-QT-REMOVE on 2026-10-24, and no other project uses it. Removing that
+  API, or keeping it for a new consumer, is a later unit's decision.
+- Three other ids never had a row: `STYLE-G7-I` is a historical prototype
+  label folded into `STYLE-G7-F` (its evidence says so), and `STYLE-G7-L`
+  (1.6.0, the `minus` glyph) and `STYLE-G7-M` (1.7.0, the blur-seam paint
+  retired) landed with a version row in `docs/version-history.tsv` but no
+  ledger row.
+
+```text
+| STYLE-G7-K | `celestina-style:` | active | `CelestinaIcon.qml`; the vendored Lucide catalogue | — | Draw the shared glyphs at the weight the author asked for without changing any icon size, and rasterize every vendored icon at the density it will really be drawn at so a scaled output receives a pixmap the size of the area it fills rather than a smaller one stretched | per-output sizing and raster fidelity (`celestina-qt/docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md`, removed by CEL-QT-REMOVE) | `VAL-PANEL-1` in Celestina |
+| STYLE-G7-J | `celestina-style:` | active | `GlassSurface.qml`; `CelestinaTheme.qml`; `DESIGN.md`; `VALIDATION.md`; focused glass tests; style version/status/roadmap/evidence and the root version history | — | Keep rounded `GlassSurface` defaults pixel-compatible while retaining one opt-in ExternalBackdrop silhouette and open edge-stroke path for Celestina's bar-edge `ContextualVeil` membrane; keep that role genuinely shadow- and edge-halo-free, retain only the demonstrated vertical attachment-gap bounds, and leave the droplet mouth, meniscus, hanging neck, tangent landing, tension geometry and opener feedback entirely with the shell without adding Style tokens or an API that mutates dense content surfaces | [continuous veil and membrane evidence](../../evidence/2026-08-11-edge-attached-glass-silhouette.md) | `VAL-PANEL-1` in Celestina |
+```
 
 ## Change and commit ledger
 
@@ -144,8 +176,6 @@ stable symbols are authoritative; line counts are a hand-off aid and may drift.
 | STYLE-G7-Q | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-Q.numstat.tsv) | 11 files, +175/-21 | Make the window canvas compositor glass (transparent window, Niri blur, `CelestinaBackdrop` painting the Haze tint with `glassCanvasNoiseOpacity` 0.05), paint cards in the opaque black a tinted bar shows over it (`card` `#0b0c10`) and pills in the Haze tint (`controlFill`); open a modal without a keyboard focus reason so no ring lights on show; make `GlassContextMenu` modeless behind a pointer shield so the wheel still scrolls the view | [evidence](../../evidence/2026-10-05-glass-canvas.md) | `VAL-STYLE-07` |
 | STYLE-G7-P | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-P.numstat.tsv) | 15 files, +866/-3 | Publish the two components every application's fixed top bar needs: `CelestinaTopBar` (a `topBarHeight` canvas strip spanning sidebar and content with a leading slot, left-aligned eliding title and subtitle, and an icon-only trailing slot the style guard keeps free of text buttons) and `CelestinaSegmentedControl` (peer destinations in one `radiusButton` plate, concentric selected segment, one Tab stop with arrow keys, `PageTabList`/`PageTab` roles) | [evidence](../../evidence/2026-09-30-top-bar-and-segments.md) | `VAL-STYLE-08` |
 | STYLE-G7-O | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-O.numstat.tsv) | 26 files, +1041/-301 | Paint the phone's Haze recipe in `GlassSurface` (σ ≈ 12 px blur, canvas tint at 0.70, Haze's grain at 0.15 under the tint, opaque canvas fallback, no outline and no lit edge), move the token ladder to desktop values behind the existing names (`radiusLg` 20, `radiusMd` 12, `radiusSm` 8, `radiusButton` 10, `radiusInput` 12 (multi-line input areas; search fields are pills inside `CelestinaTextField`), `rowHeight` 40, `windowMargin` 16) with `spaceCardGap`, `spaceCardInset`, `topBarHeight`, `compSegmentHeight`, `iconLg` and `cornerInset()`, and show a Pillow-rendered σ = 12 reference beside the live glass in the gallery | [evidence](../../evidence/2026-09-30-haze-recipe-and-desktop-scale.md) | `VAL-STYLE-07` |
-| STYLE-G7-K | `celestina-style:` | active | `CelestinaIcon.qml`; the vendored Lucide catalogue | — | Draw the shared glyphs at the weight the author asked for without changing any icon size, and rasterize every vendored icon at the density it will really be drawn at so a scaled output receives a pixmap the size of the area it fills rather than a smaller one stretched | per-output sizing and raster fidelity (`celestina-qt/docs/evidence/2026-08-12-output-sizing-and-raster-fidelity.md`, removed by CEL-QT-REMOVE) | `VAL-PANEL-1` in Celestina |
-| STYLE-G7-J | `celestina-style:` | active | `GlassSurface.qml`; `CelestinaTheme.qml`; `DESIGN.md`; `VALIDATION.md`; focused glass tests; style version/status/roadmap/evidence and the root version history | — | Keep rounded `GlassSurface` defaults pixel-compatible while retaining one opt-in ExternalBackdrop silhouette and open edge-stroke path for Celestina's bar-edge `ContextualVeil` membrane; keep that role genuinely shadow- and edge-halo-free, retain only the demonstrated vertical attachment-gap bounds, and leave the droplet mouth, meniscus, hanging neck, tangent landing, tension geometry and opener feedback entirely with the shell without adding Style tokens or an API that mutates dense content surfaces | [continuous veil and membrane evidence](../../evidence/2026-08-11-edge-attached-glass-silhouette.md) | `VAL-PANEL-1` in Celestina |
 | STYLE-G7-H | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-H.numstat.tsv); `CelestinaTreemap.qml`; `CelestinaUsageList.qml`; `CelestinaTheme.qml`; their tests; `CMakeLists.txt`; `DESIGN.md`; `STATUS.md`; root version history | 12 files, +220/-16 | Give the shared treemap and usage list concentric corners (a `radiusMd` panel, content inset `spaceSm`, nothing drawn in the inset), `spaceSm` tile gaps with padded labels shown only where they fit, right-eliding row names beside a fixed-width numbers column, and add the six-hue `usagePalette` rank palette; move the module to 1.9.1 | [evidence](../../evidence/2026-09-25-usage-controls-corners.md) | `VAL-STYLE-04` |
 | STYLE-G7-G | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-G.numstat.tsv); `CelestinaTreemap.qml`; `CelestinaUsageList.qml`; their tests; `qmldir`; `CMakeLists.txt`; `DESIGN.md`; `STATUS.md`; root version history | 12 files, +761/-9 | Publish a shared treemap and usage list extracted from Hematita's local controls, with navigation-only contracts (host-supplied tone colours, marked and dimmed ids; Space and Delete left to the host), so Siderita can become their second consumer; move the module to 1.9.0 | [evidence](../../evidence/2026-09-25-usage-controls.md) | `VAL-STYLE-04` |
 | STYLE-G7-F | `celestina-style:` | done | [inventory](../../inventories/2026-08-04-shared-reading-controls/STYLE-G7-F.numstat.tsv) | 23 files, +690/-69 | Deliver the demonstrated toolbox, pin, visibility and system-tray glyphs together with external-backdrop, dense content-surface and contextual-veil roles as one compatible shared-style prototype snapshot | [external-backdrop evidence](../../evidence/2026-08-11-external-backdrop-glass.md); [semantic-role evidence](../../evidence/2026-08-11-semantic-glass-material-roles.md) | `VAL-PANEL-1` in Celestina |
@@ -270,7 +300,8 @@ warnings, CTest 1/1 and the eight-second smoke. Registered Celestina completion
 passes the full Rust suites, CTest 17/17 and its eight-second release smoke,
 then reports the deployed artifacts current and verified without activating a
 session. The immutable inventory, commit and author-visible validation remain
-pending; `STYLE-G7-J` stays `active`.
+pending; `STYLE-G7-J` stayed `active` until the plan closed (see "Rows
+closed outside the ledger").
 
 
 ## STYLE-G7-N boundary

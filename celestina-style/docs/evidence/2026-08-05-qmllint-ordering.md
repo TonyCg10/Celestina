@@ -1,7 +1,7 @@
 # Evidence: the module's lint is ordered behind the module
 
 - **Date:** 2026-08-05
-- **Scope:** `STYLE-G7-B` of [the shared reading controls plan](../plans/active/2026-08-04-shared-reading-controls.md)
+- **Scope:** `STYLE-G7-B` of [the shared reading controls plan](../plans/archive/2026-08-04-shared-reading-controls.md)
 - **Environment:** Arch Linux, CMake 4.4.2, Qt 6.11.1, existing incremental build in `celestina-style/build`
 - **Artifact:** none of its own; this changes how the existing build tree is ordered
 

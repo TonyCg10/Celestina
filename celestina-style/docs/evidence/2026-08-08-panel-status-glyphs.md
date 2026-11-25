@@ -5,7 +5,7 @@
 - **Artifact:** CelestinaStyle 1.2.0, canonical compiled QML module
 - **Environment:** Linux, Qt 6.9 compiled-module floor, CMake Release build and
   offscreen Qt platform for automated construction
-- **Plan:** [shared reading controls ledger](../plans/active/2026-08-04-shared-reading-controls.md)
+- **Plan:** [shared reading controls ledger](../plans/archive/2026-08-04-shared-reading-controls.md)
 - **Consumer validation:** Celestina `VAL-PANEL-1`
 
 ## What changed

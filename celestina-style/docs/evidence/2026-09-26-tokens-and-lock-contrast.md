@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `STYLE-G7-N` of the
-  [shared reading controls plan](../plans/active/2026-08-04-shared-reading-controls.md),
+  [shared reading controls plan](../plans/archive/2026-08-04-shared-reading-controls.md),
   program unit P-16 of the
   [monorepo audit](../../../docs/evidence/2026-09-26-monorepo-audit.md). It
   closes STY-1, STY-2 and STY-3 and the token and contract half of SH-6 from

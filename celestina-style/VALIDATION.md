@@ -121,7 +121,8 @@ perception, input devices or assistive-technology stack. It does not block
 
 - **Status:** pending
 - **Related implementation:** completed S2/S5 glass, the cumulative
-  `STYLE-G7-F` prototype snapshot and active `STYLE-G7-J`
+  `STYLE-G7-F` prototype snapshot and `STYLE-G7-J` (obsolete since the Qt
+  shell left; the plan was archived on 2026-11-25)
 - **Requires:** verified production artifacts on the real Niri/Wayland session
 - **Procedure:** inspect regular/strong in-scene glass, then the shell's nearly
   transparent external-backdrop carrier, dense matte contextual cards, matching
@@ -208,7 +209,7 @@ perception, input devices or assistive-technology stack. It does not block
 
 - **Status:** pending
 - **Related implementation:** checkpoint STYLE-G7,
-  [plan](docs/plans/active/2026-08-04-shared-reading-controls.md)
+  [plan](docs/plans/archive/2026-08-04-shared-reading-controls.md)
 - **Requires:** the author's real display scale, compositor and pointer, with
   the verified Grafita and Siderita artifacts that consume both components
 - **Procedure:** open a long document in Grafita's window and in Siderita's

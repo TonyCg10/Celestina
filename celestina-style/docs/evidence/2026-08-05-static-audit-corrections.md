@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-05
 - **Scope:** `STYLE-G7-C` of
-  [the shared reading controls plan](../plans/active/2026-08-04-shared-reading-controls.md).
+  [the shared reading controls plan](../plans/archive/2026-08-04-shared-reading-controls.md).
   The findings come from the suite's
   [static audit](../../../docs/evidence/2026-08-05-static-suite-audit.md):
   `STY-M1`, `STY-M2`, `STY-M3`, `STY-M4`, `STY-B1`, `STY-B2`, `STY-B3` and

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-06
 - **Scope:** `STYLE-G7-D`; plan
-  [shared-reading-controls](../plans/active/2026-08-04-shared-reading-controls.md);
+  [shared-reading-controls](../plans/archive/2026-08-04-shared-reading-controls.md);
   finding `H4` of the
   [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md)
 - **Environment:** source correction with the module's own contract checks and

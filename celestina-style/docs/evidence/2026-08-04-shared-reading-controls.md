@@ -2,7 +2,7 @@
 
 - **Date:** 2026-08-04
 - **Scope:** CelestinaStyle `STYLE-G7-A`; plan
-  [shared-reading-controls](../plans/active/2026-08-04-shared-reading-controls.md)
+  [shared-reading-controls](../plans/archive/2026-08-04-shared-reading-controls.md)
 - **Environment:** Linux 7.1.5-1-cachyos, Qt 6, offscreen Qt platform for the
   gallery smoke; the author's checkout carried the two consuming units
   (Grafita `G7-A` and Siderita `SID-G7-A`) uncommitted while this ran, since

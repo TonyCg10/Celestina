@@ -47,6 +47,10 @@ requires.
 
 ## Completed cross-project work
 
+ARC-2 archived STYLE-G7 on 2026-11-25, recording `STYLE-G7-K` as delivered
+by `1e30380a` and `STYLE-G7-J` as obsolete; the ledger is
+[the archived plan](docs/plans/archive/2026-11-25-style-g7-archive.md).
+
 ARC-1 archived, on 2026-11-25, four project plans whose rows were all done:
 CEL-2, CUP-1, GRA-H1 and RS-H1. The ledger is
 [the archived plan](docs/plans/archive/2026-11-25-plan-archives.md).

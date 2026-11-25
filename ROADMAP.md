@@ -352,6 +352,18 @@ because documents of the suite link to CEL-2.
 The plan, opened and closed in the same commit, is
 [the archived plan](docs/plans/archive/2026-11-25-plan-archives.md).
 
+## ARC-2 — Archive the STYLE-G7 plan (closed 2026-11-25)
+
+STYLE-G7 stayed active for two rows a landing never closed: `STYLE-G7-K`,
+delivered by `1e30380a` before it had an inventory, and `STYLE-G7-J`, whose
+one consumer left with the Qt shell. One suite unit recorded both and
+archived the plan.
+
+- [x] Archive the STYLE-G7 plan with its two open rows recorded (`ARC-2-A`).
+
+The plan, opened and closed in the same commit, is
+[the archived plan](docs/plans/archive/2026-11-25-style-g7-archive.md).
+
 ## Project implementation fronts
 
 | Project | Canonical implementation queue |

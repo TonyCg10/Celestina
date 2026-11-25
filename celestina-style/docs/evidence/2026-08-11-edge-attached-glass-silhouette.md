@@ -5,7 +5,7 @@
 - **Artifact:** CelestinaStyle 1.4.0 milestone prototype
 - **Environment:** Linux, Qt 6.9 compiled-module floor, CMake Release build and
   offscreen Qt platform for automated construction and smoke
-- **Plan:** [shared reading controls ledger](../plans/active/2026-08-04-shared-reading-controls.md)
+- **Plan:** [shared reading controls ledger](../plans/archive/2026-08-04-shared-reading-controls.md)
 - **Consumer validation:** Celestina `PANEL-1-I` and `VAL-PANEL-1`
 
 ## Procedure
